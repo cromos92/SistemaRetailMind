@@ -58,6 +58,8 @@ def marcar_para_reevaluacion(sender, instance, created, **kwargs):
     """Solo marca el producto para reevaluación — NO calcula nada pesado."""
     if not created:
         return
+    if not instance.ProductoTalla_id:
+        return
     try:
         producto = instance.ProductoTalla.producto
         for tipo in ('velocidad', 'quiebre_talle'):

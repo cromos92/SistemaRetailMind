@@ -229,3 +229,19 @@ class VentasConciliacionOrigenTest(TestCase):
         body = resp.json()
         self.assertEqual(body['total'], 1, body)
         self.assertEqual(body['data'][0]['numero_documento'], '410979')
+
+    def test_referencia_no_matchea_voucher_de_pago_no_internet(self):
+        """El voucher de un pago TBK/EFECTIVO (código de autorización numérico,
+        parecido a un N° de pedido) NO debe cruzar con la referencia: solo el
+        voucher de un pago 'Venta por Internet' identifica un pedido."""
+        dte = self._dte(410980)
+        # Boleta presencial cuyo voucher TBK coincide con la referencia buscada.
+        self._pago_dte(dte, metodo='TBK_CREDITO_POS', plataforma='', voucher='778899')
+
+        resp = self.client.get(
+            self.url,
+            {'rut_empresa': self.empresa.rut, 'referencia': '778899'},
+            **self.auth,
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(resp.json()['total'], 0, resp.content)

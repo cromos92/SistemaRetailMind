@@ -4728,8 +4728,11 @@ def convertir_ticket_a_factura(request):
                 'error': 'ID de documento requerido'
             })
 
-        # Obtener el ticket original
-        ticket = get_object_or_404(Ticket, id=documento_id)
+        # Obtener el ticket original (prefetch para evitar N+1 al recorrer líneas)
+        ticket = get_object_or_404(
+            Ticket.objects.prefetch_related('ticket_productos__ProductoTalla__producto'),
+            id=documento_id,
+        )
         
         # Verificar que el ticket esté pagado
         if ticket.estado != 'PAGADO':

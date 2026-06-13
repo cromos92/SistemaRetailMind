@@ -12,20 +12,20 @@ Configuración en settings / .env:
     ALLCONNECTED_API_BASE_URL    = "https://<allconnected-host>"
     ALLCONNECTED_API_KEY         = "<key de auth saliente>"
     ALLCONNECTED_API_HEADER_NAME = "X-AllConnected-Key"        (default)
-    ALLCONNECTED_PEDIDOS_PATH    = "/api/pedidos/pendientes/"  (default)
+    ALLCONNECTED_PEDIDOS_PATH    = "/app/pedidos/pendientes/"  (default)
 
 Si ``ALLCONNECTED_API_BASE_URL`` está vacía, el pull está deshabilitado y se
 devuelve ``{ok: True, configurado: False}`` (la UI solo refresca la tabla con
 los pedidos ya recibidos por push).
 
 Contrato esperado del endpoint remoto:
-    GET <base><path>?estado=PENDIENTE[&rut_empresa=XX-X]
+    GET <base><path>[?rut_empresa=XX-X&desde=YYYY-MM-DD&hasta=YYYY-MM-DD]
     Header: <header_name>: <api_key>
     Respuesta 200 JSON:
         [ {pedido}, ... ]   ó   {"pedidos": [ {pedido}, ... ]}
     donde {pedido} = MISMO shape que el body del POST push
     (numero_pedido_canal, canal_origen, sucursal_id, cliente_nombre,
-     items[...], subtotal/descuento/costo_envio/total, rut_empresa).
+     items[...], subtotal/descuento/impuestos/costo_envio/total, rut_empresa).
 """
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ def _config() -> dict:
         'base_url': (getattr(settings, 'ALLCONNECTED_API_BASE_URL', '') or '').strip().rstrip('/'),
         'api_key': getattr(settings, 'ALLCONNECTED_API_KEY', '') or '',
         'header_name': getattr(settings, 'ALLCONNECTED_API_HEADER_NAME', '') or 'X-AllConnected-Key',
-        'pedidos_path': getattr(settings, 'ALLCONNECTED_PEDIDOS_PATH', '') or '/api/pedidos/pendientes/',
+        'pedidos_path': getattr(settings, 'ALLCONNECTED_PEDIDOS_PATH', '') or '/app/pedidos/pendientes/',
     }
 
 
@@ -110,7 +110,7 @@ def traer_pedidos_pendientes(rut_empresa: Optional[str] = None,
         'Accept': 'application/json',
         'User-Agent': 'RetailMind-PedidosPull/1.0',
     }
-    params = {'estado': 'PENDIENTE'}
+    params = {}
     if rut_empresa:
         params['rut_empresa'] = rut_empresa
     if desde:

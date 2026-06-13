@@ -1467,10 +1467,18 @@ class VentasView(APIView):
                 )
                 .values_list('dte_id', flat=True)
             )
+            # Solo el voucher de un pago "Venta por Internet" identifica un
+            # pedido del marketplace. NO matchear vouchers de otros métodos:
+            # el código de autorización TBK es numérico (se parece a un N° de
+            # pedido) y la migración asigna vouchers sintéticos 'MIG-{id}' a
+            # TODO pago — sin este guard, ?referencia=123456 podría cruzar una
+            # boleta presencial ajena. Mismo criterio que es_metodo_pago_internet.
             dte_ids_ref.update(
-                Dte_Detalle_Pago.objects
-                .filter(voucher__iexact=referencia)
-                .values_list('dte_id', flat=True)
+                p['dte_id']
+                for p in Dte_Detalle_Pago.objects
+                    .filter(voucher__iexact=referencia)
+                    .values('dte_id', 'metodo_pago')
+                if es_metodo_pago_internet(p['metodo_pago'])
             )
             dtes_qs = dtes_qs.filter(id__in=dte_ids_ref)
 

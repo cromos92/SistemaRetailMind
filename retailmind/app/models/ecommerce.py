@@ -14,6 +14,10 @@ CANAL_ECOMMERCE_CHOICES = [
     ('PARIS', 'Paris'),
     ('RIPLEY', 'Ripley'),
     ('WALMART', 'Walmart'),
+    # Ecommerces propios Django: AllConnected manda el código del tipo_marketplace
+    # en MAYÚSCULAS (REALSPORT = realsport.cl, PAOLA = calzadospaola.cl).
+    ('REALSPORT', 'Realsport'),
+    ('PAOLA', 'Paola'),
     ('OTRO', 'Otro'),
 ]
 
@@ -152,6 +156,12 @@ class PedidoEcommerce(models.Model):
     # Montos
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     descuento = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    impuestos = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text='Impuestos informados por el marketplace; trazabilidad, no base de recalculo.',
+    )
     costo_envio = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
@@ -263,6 +273,12 @@ class PedidoEcommerce(models.Model):
             models.Index(fields=['canal_origen', 'estado']),
             models.Index(fields=['sucursal', 'estado']),
             models.Index(fields=['sub_estado', 'fecha_recepcion']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['canal_origen', 'numero_pedido_canal'],
+                name='uniq_pedido_ecom_canal_numero',
+            ),
         ]
 
     def __str__(self):

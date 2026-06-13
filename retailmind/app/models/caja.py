@@ -914,15 +914,8 @@ class CreditoTrabajador(models.Model):
                         
                         # Calcular valor de cuota si está aprobado
                         if self.estado == 'APROBADO' and self.monto_aprobado and self.numero_cuotas > 0:
-                            if self.tasa_interes > 0:
-                                # Cálculo con interés compuesto
-                                tasa_mensual = float(self.tasa_interes) / 100
-                                factor = (1 + tasa_mensual) ** self.numero_cuotas
-                                self.valor_cuota = (float(self.monto_aprobado) * tasa_mensual * factor) / (factor - 1)
-                            else:
-                                # Sin interés
-                                self.valor_cuota = float(self.monto_aprobado) / self.numero_cuotas
-                        
+                            self.valor_cuota = self._calcular_valor_cuota()
+
                         super().save(*args, **kwargs)
                         break  # Si llegó aquí, el save fue exitoso
                         
@@ -936,14 +929,27 @@ class CreditoTrabajador(models.Model):
         else:
             # Si ya tiene numero_credito, solo calcular cuota si es necesario
             if self.estado == 'APROBADO' and self.monto_aprobado and self.numero_cuotas > 0:
-                if self.tasa_interes > 0:
-                    tasa_mensual = float(self.tasa_interes) / 100
-                    factor = (1 + tasa_mensual) ** self.numero_cuotas
-                    self.valor_cuota = (float(self.monto_aprobado) * tasa_mensual * factor) / (factor - 1)
-                else:
-                    self.valor_cuota = float(self.monto_aprobado) / self.numero_cuotas
-            
+                self.valor_cuota = self._calcular_valor_cuota()
+
             super().save(*args, **kwargs)
+
+    def _calcular_valor_cuota(self):
+        """
+        Valor de cada cuota usando Decimal para evitar imprecisión de float
+        en montos. Con interés: cuota fija (sistema francés). Sin interés:
+        reparto simple. Resultado cuantizado a 2 decimales (campo DecimalField).
+        """
+        from decimal import Decimal, ROUND_HALF_UP
+
+        monto = Decimal(self.monto_aprobado)
+        cuotas = Decimal(self.numero_cuotas)
+        if self.tasa_interes and self.tasa_interes > 0:
+            tasa_mensual = Decimal(self.tasa_interes) / Decimal(100)
+            factor = (Decimal(1) + tasa_mensual) ** int(self.numero_cuotas)
+            valor = (monto * tasa_mensual * factor) / (factor - Decimal(1))
+        else:
+            valor = monto / cuotas
+        return valor.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     
     @property
     def saldo_pendiente(self):

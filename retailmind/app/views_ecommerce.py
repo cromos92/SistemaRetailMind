@@ -9,7 +9,7 @@ import logging
 import uuid
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone
@@ -52,6 +52,17 @@ PLATAFORMA_INTERNET_POR_CANAL = {
     'WALMART': 'Walmart',
     'OTRO': 'Internet',
 }
+
+# Tipos de documento de VENTA (mismos que VentasView._TIPOS_VENTA en
+# api/external/views.py). Se usan al resolver el DTE de un ticket por folio:
+# los folios son secuencias independientes por tipo, así que sin acotar el
+# tipo se podría enlazar una factura/NC con el mismo número.
+TIPOS_VENTA_DTE = (
+    'BOLETA ELECTRONICA',
+    'BOLETA PAPEL',
+    'FACTURA ELECTRONICA',
+    'FACTURA EXENTA',
+)
 
 
 # Alias de canal que AllConnected / los marketplaces mandan con variantes de
@@ -275,6 +286,22 @@ def _generar_numero_ticket_rm():
     return f'RM-{base}'
 
 
+def _respuesta_pedido_existente(existente, correlativo_in='', correlativo_numero_in=None):
+    """Respuesta idempotente para un pedido ya ingresado."""
+    if correlativo_in and correlativo_in != (existente.correlativo or ''):
+        existente.correlativo = correlativo_in
+        existente.correlativo_numero = correlativo_numero_in
+        existente.save(update_fields=['correlativo', 'correlativo_numero'])
+    return {
+        'ok': True,
+        'numero_ticket_rm': existente.numero_ticket_rm,
+        'pedido_ecommerce_id': existente.id,
+        'ya_existia': True,
+        'correlativo': existente.correlativo,
+        'status': 200,
+    }
+
+
 def _ingestar_pedido_dict(data):
     """
     Valida y crea (o recupera, idempotente) un PedidoEcommerce a partir de un dict
@@ -341,18 +368,7 @@ def _ingestar_pedido_dict(data):
     if existente:
         # Actualizar el folio si AllConnected ya lo asignó y antes estaba vacío
         # (o cambió). NUNCA pisar un folio ya seteado con un valor vacío entrante.
-        if correlativo_in and correlativo_in != (existente.correlativo or ''):
-            existente.correlativo = correlativo_in
-            existente.correlativo_numero = correlativo_numero_in
-            existente.save(update_fields=['correlativo', 'correlativo_numero'])
-        return {
-            'ok': True,
-            'numero_ticket_rm': existente.numero_ticket_rm,
-            'pedido_ecommerce_id': existente.id,
-            'ya_existia': True,
-            'correlativo': existente.correlativo,
-            'status': 200,
-        }
+        return _respuesta_pedido_existente(existente, correlativo_in, correlativo_numero_in)
 
     try:
         # Validar stock en la sucursal para determinar sub-estado inicial
@@ -372,6 +388,7 @@ def _ingestar_pedido_dict(data):
             cliente_documento=data.get('cliente_documento', ''),
             subtotal=data.get('subtotal', 0),
             descuento=data.get('descuento', 0),
+            impuestos=data.get('impuestos', 0),
             costo_envio=data.get('costo_envio', 0),
             total=data.get('total', 0),
             items=items_data,
@@ -410,6 +427,14 @@ def _ingestar_pedido_dict(data):
             items_sin_stock=items_sin,
         )
 
+    except IntegrityError:
+        existente = PedidoEcommerce.objects.filter(
+            numero_pedido_canal=numero_pedido_canal,
+            canal_origen=canal_origen,
+        ).first()
+        if existente:
+            return _respuesta_pedido_existente(existente, correlativo_in, correlativo_numero_in)
+        return {'ok': False, 'error': 'Pedido duplicado no pudo recuperarse', 'status': 409}
     except Exception as e:
         return {'ok': False, 'error': str(e), 'status': 500}
 
@@ -446,6 +471,7 @@ def api_recibir_pedido_ecommerce(request):
         "cliente_documento": "...",      (opcional, RUT para DTE)
         "subtotal": 0.0,
         "descuento": 0.0,
+        "impuestos": 0.0,              (opcional; trazabilidad)
         "costo_envio": 0.0,
         "total": 0.0,
         "items": [
@@ -885,15 +911,24 @@ def pedido_ecommerce_detalle(request, pedido_id):
                     # esto la boleta no cruza con el pedido en GET /api/ventas/
                     # ni en el webhook de facturación (queda sin numero_ticket_rm
                     # ni folio_despacho).
+                    #
+                    # Los folios son secuencias independientes POR TIPO de
+                    # documento: en una sucursal coexisten BOLETA ELECTRONICA #N,
+                    # FACTURA #N y NOTA DE CREDITO #N. Restringimos a los mismos
+                    # tipos de venta que GET /api/ventas/ lista (y excluimos NC y
+                    # RECHAZADO) para no enlazar el pedido a un documento ajeno.
                     if not pedido.dte_id and ticket.dte_generado and ticket.folio_dte:
                         pedido.dte = (
                             Dte.objects
                             .filter(
                                 sucursal=ticket.sucursal,
                                 numero_documento=ticket.folio_dte,
+                                tipo_documento__in=TIPOS_VENTA_DTE,
+                                tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
                                 es_nota_credito=False,
                                 descartado=False,
                             )
+                            .exclude(estado_dte='RECHAZADO')
                             .order_by('-id')
                             .first()
                         )

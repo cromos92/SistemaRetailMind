@@ -575,13 +575,18 @@ def cargarDteCompra(request):
                     'error': 'El archivo debe ser formato XML'
                 })
             
-            # TODO: Implementar parser XML para DTEs
-            # Por ahora retornamos éxito simulado
-            
+            # El parser XML de DTEs aún no está implementado. Devolver éxito
+            # aquí engañaría al usuario (el archivo no se guarda ni procesa),
+            # así que respondemos un error honesto en lugar de un falso OK.
+            logger.warning(
+                "cargarDteCompra: intento de carga XML '%s' — parser no implementado",
+                xml_file.name,
+            )
             return JsonResponse({
-                'success': True,
-                'message': 'DTE cargado exitosamente (funcionalidad en desarrollo)'
-            })
+                'success': False,
+                'error': 'La carga de DTE por XML aún no está disponible. '
+                         'Ingresa el documento de compra de forma manual.'
+            }, status=501)
             
         except Exception as e:
             return JsonResponse({

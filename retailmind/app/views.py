@@ -10340,10 +10340,10 @@ def facturasPendientesPorMes(request):
                 anio = int(partes[0])
                 mes_num = int(partes[1])
             else:
-                ahora = datetime.now()
+                ahora = timezone.localdate()
                 anio, mes_num = ahora.year, ahora.month
         except (TypeError, ValueError, IndexError):
-            ahora = datetime.now()
+            ahora = timezone.localdate()
             anio, mes_num = ahora.year, ahora.month
 
         if not (1 <= mes_num <= 12):
@@ -10419,7 +10419,7 @@ def facturasPendientesPorMes(request):
                 .values_list('dte_id', 'total')
         )
 
-        hoy = datetime.now().date()
+        hoy = timezone.localdate()
 
         facturas = []
         total_recepcionado = 0
@@ -17680,7 +17680,7 @@ def crear_producto(data, responsable, fecha_creacion=None):
             precio=producto.precioventa,
             fecha=fecha_creacion.date(),
             hora=fecha_creacion.time(),
-            concepto='Ingreso Inicial' if (created and talla_created) else 'Recepción Compra',
+            concepto='INGRESO_INICIAL' if (created and talla_created) else 'RECEPCION_COMPRA',
             tipo_movimiento='INGRESO',
             responsable=responsable,
             sucursal_origen=data['sucursal'],
@@ -23248,7 +23248,7 @@ def obtener_datos_dashboard_productos(request):
         # ========== STOCK MUERTO (sin movimiento en 90 días) ==========
         fecha_90dias = timezone.now() - timedelta(days=90)
         productos_con_movimiento = Movimientos_Producto.objects.filter(
-            created_at__gte=fecha_90dias
+            fecha__gte=fecha_90dias.date()
         ).values_list('ProductoTalla_id', flat=True).distinct()
         
         stock_muerto = productos_talla.filter(
@@ -23743,7 +23743,7 @@ def dashboard_productos_mejorado_api(request):
         
         # ========== MOVIMIENTOS (UNA CONSULTA AGREGADA) ==========
         movimientos_agg = Movimientos_Producto.objects.filter(
-            created_at__gte=fecha_inicio,
+            fecha__gte=fecha_inicio.date(),
             estado='COMPLETADO'
         ).aggregate(
             compras=Coalesce(Sum('cantidad', filter=Q(concepto__in=['RECEPCION_COMPRA', 'INGRESO_INICIAL'])), 0),
@@ -23762,7 +23762,7 @@ def dashboard_productos_mejorado_api(request):
         # ========== STOCK MUERTO (OPTIMIZADO) ==========
         productos_con_movimiento_ids = set(
             Movimientos_Producto.objects.filter(
-                created_at__gte=fecha_90dias
+                fecha__gte=fecha_90dias.date()
             ).values_list('ProductoTalla_id', flat=True).distinct()
         )
         
@@ -23806,10 +23806,10 @@ def dashboard_productos_mejorado_api(request):
         # ========== FLUJO MENSUAL (UNA SOLA CONSULTA CON TRUNC) ==========
         fecha_6meses = timezone.now() - timedelta(days=180)
         flujo_raw = Movimientos_Producto.objects.filter(
-            created_at__gte=fecha_6meses,
+            fecha__gte=fecha_6meses.date(),
             estado='COMPLETADO'
         ).annotate(
-            mes=TruncMonth('created_at')
+            mes=TruncMonth('fecha')
         ).values('mes').annotate(
             ingresos=Coalesce(Sum('cantidad', filter=Q(tipo_movimiento='INGRESO')), 0),
             egresos=Coalesce(Sum('cantidad', filter=Q(tipo_movimiento='EGRESO')), 0)
