@@ -285,6 +285,18 @@ class StockPorSkusView(APIView):
     una lista de SKUs para evitar overfetch. Usado por AllConnected cuando
     resuelve dinámicamente a qué sucursal enviar un pedido.
 
+    Soporta dos modos:
+      * GET  /api/stock/por-skus/?rut_empresa=X[&skus=A,B,C]  (legacy)
+      * POST /api/stock/por-skus/  body={"rut_empresa": "X", "skus": [...]}
+
+    El POST permite listas de SKUs de cualquier tamaño sin chocar con el
+    límite de URL del servidor (~4 KB para Request Line). El cliente
+    AllConnected debe usarlo cuando la lista es grande (miles de SKUs en una
+    sola request en vez de cientos de GET troceados).
+
+    SKUs no-numéricos en la lista se IGNORAN (RetailMind almacena `sku` como
+    BigIntegerField) y se reportan en `skus_invalidos` cuando los haya.
+
     Respuesta:
     {
       "success": true,
@@ -297,29 +309,41 @@ class StockPorSkusView(APIView):
           ]
         }
       ],
-      "total": 1
+      "total": 1,
+      "skus_invalidos": ["4775856-792BF6", ...],   # solo si hubo
+      "error": null
     }
     """
     authentication_classes = [ApiKeyAuthentication]
     permission_classes = [ApiKeyPermission]
 
-    def get(self, request):
-        rut = request.query_params.get('rut_empresa', '').strip()
-        if not rut:
-            return Response(
-                {'success': False, 'data': [], 'total': 0,
-                 'error': 'El parámetro rut_empresa es obligatorio.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+    # ── Helpers ──────────────────────────────────────────────────────────
+    @staticmethod
+    def _parse_skus(raw_skus):
+        """Acepta lista|str CSV. Separa válidos (numéricos) e inválidos.
 
-        skus_raw = request.query_params.get('skus', '').strip()
-        skus_list: list[str] = [s.strip() for s in skus_raw.split(',') if s.strip()]
+        RetailMind almacena `sku` como BigIntegerField; SKUs con guiones u
+        otros caracteres no existen en este lado. Filtrarlos antes del query
+        evita el cast implícito string→bigint y permite reportarlos.
+        """
+        if isinstance(raw_skus, str):
+            items = [s.strip() for s in raw_skus.split(',') if s.strip()]
+        elif isinstance(raw_skus, (list, tuple)):
+            items = [str(s).strip() for s in raw_skus if str(s).strip()]
+        else:
+            items = []
+        validos, invalidos = [], []
+        for s in items:
+            if s.isdigit():
+                validos.append(int(s))
+            else:
+                invalidos.append(s)
+        return validos, invalidos
 
-        qs = Producto_Talla.objects.filter(
-            producto__sucursal__empresa__rut=rut,
-        )
-        if skus_list:
-            qs = qs.filter(sku__in=skus_list)
+    def _build_response(self, rut, skus_validos, skus_invalidos):
+        qs = Producto_Talla.objects.filter(producto__sucursal__empresa__rut=rut)
+        if skus_validos:
+            qs = qs.filter(sku__in=skus_validos)
 
         rows = list(qs.values(
             'sku', 'stock',
@@ -340,9 +364,44 @@ class StockPorSkusView(APIView):
 
         data = list(grupos.values())
         logger.info(
-            f"[external/stock/por-skus] rut={rut} skus={len(skus_list)} → {len(data)} SKUs"
+            "[external/stock/por-skus] rut=%s validos=%d invalidos=%d -> %d SKUs",
+            rut, len(skus_validos), len(skus_invalidos), len(data),
         )
-        return Response({'success': True, 'data': data, 'total': len(data), 'error': None})
+
+        payload = {'success': True, 'data': data, 'total': len(data), 'error': None}
+        if skus_invalidos:
+            payload['skus_invalidos'] = skus_invalidos[:50]  # acotado por log
+            payload['skus_invalidos_total'] = len(skus_invalidos)
+        return Response(payload)
+
+    # ── GET (legacy, soporta query string) ───────────────────────────────
+    def get(self, request):
+        rut = request.query_params.get('rut_empresa', '').strip()
+        if not rut:
+            return Response(
+                {'success': False, 'data': [], 'total': 0,
+                 'error': 'El parámetro rut_empresa es obligatorio.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        skus_validos, skus_invalidos = self._parse_skus(
+            request.query_params.get('skus', '')
+        )
+        return self._build_response(rut, skus_validos, skus_invalidos)
+
+    # ── POST (preferido para listas grandes, sin límite de URL) ──────────
+    def post(self, request):
+        body = request.data if isinstance(request.data, dict) else {}
+        rut = str(body.get('rut_empresa') or '').strip()
+        if not rut:
+            return Response(
+                {'success': False, 'data': [], 'total': 0,
+                 'error': 'rut_empresa es obligatorio en el body JSON.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        skus_validos, skus_invalidos = self._parse_skus(body.get('skus') or [])
+        return self._build_response(rut, skus_validos, skus_invalidos)
 
 
 # ──────────────────────────────────────────────
