@@ -6008,6 +6008,11 @@ document.addEventListener('DOMContentLoaded', function() {
             nombre: 'Cliente Genérico',
             email: 'generico@test.cl',
             telefono: '999999999',
+            // Celular y fecha de nacimiento son valores dummy solo para el
+            // genérico: rellenan los campos obligatorios y pasan la validación
+            // rápida sin frenar la venta al público.
+            celular: '999999999',
+            fecha_nacimiento: '2000-01-01',
             giro: 'Particular',
             comuna: 'Santiago',
             ciudad: 'Santiago',
@@ -10332,6 +10337,12 @@ body {
     window.cancelarVenta = cancelarVenta;
     window.buscarTicketPorNumero = buscarTicketPorNumero;
     window.crearNuevoTicket = crearNuevoTicket;
+    // Dashboard: navegación a tickets de cambio y badge de condición de pago DTE.
+    // Declaradas dentro del DOMContentLoaded; sus handlers on* inline (KPI, botón
+    // "volver", radios Contado/Crédito) las resuelven en el scope global -> exponer.
+    window.verTicketsCambio = verTicketsCambio;
+    window.volverADashboard = volverADashboard;
+    window.actualizarBadgeCondicionPago = actualizarBadgeCondicionPago;
     // Funciones de cotizaciones
     window.abrirModalCotizaciones = abrirModalCotizaciones;
     window.cargarCotizacionesVigentes = cargarCotizacionesVigentes;
