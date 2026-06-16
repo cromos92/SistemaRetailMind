@@ -6095,6 +6095,14 @@ document.addEventListener('DOMContentLoaded', function() {
         return edad >= 0 && edad <= 120;
     }
 
+    // Cliente genérico = boleta anónima (RUT 66666666-6). Cuando se usa, NO se
+    // exigen datos de contacto (email/celular/fecha) para no bloquear la venta
+    // al público. Acepta el RUT con o sin puntos/guion.
+    function esClienteGenerico(rut) {
+        if (!rut) return false;
+        return String(rut).replace(/[^0-9kK]/g, '').toLowerCase() === '666666666';
+    }
+
     function validarDatosCliente() {
         if (!ticketActual || !ticketActual.productos || ticketActual.productos.length === 0) {
             mostrarNotificacion('Debe agregar al menos un producto al ticket antes de continuar', 'warning');
@@ -6111,6 +6119,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // BOLETAS ELECTRONICAS Y BOLETAS PAPEL: Validar datos básicos
         if (tipoDocumento === 'BOLETA_ELECTRONICA' || tipoDocumento === 'BOLETA_PAPEL') {
+            // Cliente genérico → boleta anónima: se permite avanzar sin exigir
+            // email/celular/fecha. Solo se garantiza un nombre por defecto.
+            if (esClienteGenerico(rut)) {
+                const elNombre = document.getElementById('clienteNombre');
+                if (elNombre && !elNombre.value.trim()) {
+                    elNombre.value = 'Cliente Genérico';
+                }
+                return true;
+            }
+
             if (!nombre) {
                 mostrarNotificacion('El nombre del cliente es obligatorio', 'warning');
                 document.getElementById('clienteNombre').focus();

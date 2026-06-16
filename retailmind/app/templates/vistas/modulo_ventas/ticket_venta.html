@@ -3644,6 +3644,17 @@ $(document).ready(function() {
         }
     }
 
+    // El panel "Cliente / Fidelización" usa atributos on* inline (onclick/oninput/
+    // onblur), que resuelven los identificadores en el scope GLOBAL. Como estas
+    // funciones están declaradas dentro del closure de $(document).ready, hay que
+    // exponerlas explícitamente en window; de lo contrario el navegador lanza
+    // "ReferenceError: togglePanelCliente is not defined" y el panel no fideliza.
+    Object.assign(window, {
+        togglePanelCliente, actualizarResumenCliente, tkBuscarClientePorRut,
+        limpiarClienteTicket, tkMarcar, tkValidarRut, tkNormalizarCelular,
+        tkValidarEmail, tkValidarFecha,
+    });
+
     // Devuelve {datos, valido}. Si el panel está vacío -> valido (cliente opcional).
     function obtenerDatosClienteTicket() {
         const nombre = (document.getElementById('tkClienteNombre')?.value || '').trim();
