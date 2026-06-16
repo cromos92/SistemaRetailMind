@@ -354,6 +354,17 @@
                                                         <label class="form-label small text-muted" id="labelTelefono">Teléfono <span class="badge bg-secondary bg-opacity-50 ms-1" style="font-size:9px; vertical-align:middle;">OPCIONAL</span></label>
                                                         <input type="tel" class="form-control form-control-sm" id="clienteTelefono" placeholder="+56 9 1234 5678">
                                                     </div>
+                                                    <!-- Campos para fidelización -->
+                                                    <div class="col-md-6">
+                                                        <label class="form-label small fw-medium" id="labelCelular">Celular <span class="badge bg-danger bg-opacity-75 ms-1" style="font-size:9px; vertical-align:middle;">OBLIGATORIO</span></label>
+                                                        <input type="tel" class="form-control form-control-sm border-danger border-opacity-50" id="clienteCelular" placeholder="+56 9 1234 5678" maxlength="15">
+                                                        <div class="invalid-feedback" id="celularError"></div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label small text-muted" id="labelFechaNac">Fecha de nacimiento <span class="badge bg-secondary bg-opacity-50 ms-1" style="font-size:9px; vertical-align:middle;">OPCIONAL</span></label>
+                                                        <input type="date" class="form-control form-control-sm" id="clienteFechaNacimiento">
+                                                        <div class="invalid-feedback" id="fechaNacError"></div>
+                                                    </div>
                                                 </div>
                                                 <!-- Campos SII (usados por factura, ocultos en boleta) -->
                                                 <div id="seccionFacturacion" style="display:none;">
@@ -6044,6 +6055,44 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('clienteDireccion').value = cliente.direccion || '';
         document.getElementById('clienteTelefono2').value = cliente.telefono_secundario || '';
         document.getElementById('clienteEmailFactura').value = cliente.email_facturacion || '';
+        // Campos de fidelización precargados desde el ticket del vendedor.
+        const celEl = document.getElementById('clienteCelular');
+        if (celEl) celEl.value = cliente.celular || cliente.telefono_secundario || '';
+        const fnEl = document.getElementById('clienteFechaNacimiento');
+        if (fnEl) fnEl.value = cliente.fecha_nacimiento || '';
+    }
+
+    // ===== Validaciones de datos del cliente (fidelización) =====
+    // Email: formato básico RFC. Devuelve true si es válido.
+    function validarEmailFormato(email) {
+        if (!email) return false;
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+    }
+
+    // Celular chileno: normaliza a 9 dígitos (móvil parte con 9). Acepta
+    // formatos con +56, espacios o guiones. Devuelve los 9 dígitos o '' si inválido.
+    function normalizarCelularChileno(celular) {
+        if (!celular) return '';
+        let n = String(celular).replace(/[^0-9]/g, '');
+        // Quitar prefijo país 56 si viene (+56 9 ... -> 569........)
+        if (n.length === 11 && n.startsWith('56')) n = n.slice(2);
+        if (n.length === 9 && n.startsWith('9')) return n;
+        return '';
+    }
+    function validarCelularChileno(celular) {
+        return normalizarCelularChileno(celular) !== '';
+    }
+
+    // Fecha de nacimiento: válida, no futura y con edad razonable (<=120 años).
+    // Vacío se considera válido (campo opcional).
+    function validarFechaNacimiento(valor) {
+        if (!valor) return true;
+        const f = new Date(valor + 'T00:00:00');
+        if (isNaN(f.getTime())) return false;
+        const hoy = new Date();
+        if (f > hoy) return false;
+        const edad = (hoy - f) / (365.25 * 24 * 3600 * 1000);
+        return edad >= 0 && edad <= 120;
     }
 
     function validarDatosCliente() {
@@ -6057,6 +6106,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const rut = document.getElementById('clienteRut').value.trim();
         const email = document.getElementById('clienteEmail').value.trim();
         const telefono = document.getElementById('clienteTelefono').value.trim();
+        const celular = document.getElementById('clienteCelular')?.value.trim() || '';
+        const fechaNac = document.getElementById('clienteFechaNacimiento')?.value || '';
 
         // BOLETAS ELECTRONICAS Y BOLETAS PAPEL: Validar datos básicos
         if (tipoDocumento === 'BOLETA_ELECTRONICA' || tipoDocumento === 'BOLETA_PAPEL') {
@@ -6072,18 +6123,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
 
-            if (!email) {
-                mostrarNotificacion('El email es obligatorio', 'warning');
+            if (!email || !validarEmailFormato(email)) {
+                mostrarNotificacion('Ingrese un email válido (correo@ejemplo.com)', 'warning');
                 document.getElementById('clienteEmail').focus();
                 return false;
             }
 
-            // Teléfono es opcional
-            // if (!telefono) {
-            //     mostrarNotificacion('El teléfono es obligatorio', 'warning');
-            //     document.getElementById('clienteTelefono').focus();
-            //     return false;
-            // }
+            // Celular obligatorio y válido (clave para fidelización / app)
+            if (!validarCelularChileno(celular)) {
+                mostrarNotificacion('Ingrese un celular válido (ej: +56 9 1234 5678)', 'warning');
+                document.getElementById('clienteCelular').focus();
+                return false;
+            }
+
+            // Fecha de nacimiento opcional, pero si se ingresa debe ser válida
+            if (fechaNac && !validarFechaNacimiento(fechaNac)) {
+                mostrarNotificacion('La fecha de nacimiento no es válida', 'warning');
+                document.getElementById('clienteFechaNacimiento').focus();
+                return false;
+            }
 
             return true;
         }
@@ -6155,9 +6213,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const rut = document.getElementById('clienteRut').value.trim();
         const email = document.getElementById('clienteEmail').value.trim();
         const telefono = document.getElementById('clienteTelefono').value.trim();
-        
+        const celular = document.getElementById('clienteCelular')?.value.trim() || '';
+        const fechaNac = document.getElementById('clienteFechaNacimiento')?.value || '';
+
         // Solo guardar si hay datos ingresados
-        if (!nombre && !rut && !email && !telefono) {
+        if (!nombre && !rut && !email && !telefono && !celular) {
             console.log('No hay datos de cliente para guardar');
             return;
         }
@@ -6167,6 +6227,8 @@ document.addEventListener('DOMContentLoaded', function() {
             rut: rut,
             email: email,
             telefono: telefono,
+            celular: celular,
+            fecha_nacimiento: fechaNac,
             tipo_documento: tipoDocumento
         };
 
@@ -8377,6 +8439,8 @@ document.addEventListener('DOMContentLoaded', function() {
             rut: document.getElementById('clienteRut').value.trim(),
             email: document.getElementById('clienteEmail').value.trim(),
             telefono: document.getElementById('clienteTelefono').value.trim(),
+            celular: document.getElementById('clienteCelular')?.value.trim() || '',
+            fecha_nacimiento: document.getElementById('clienteFechaNacimiento')?.value || '',
             giro: document.getElementById('clienteGiro').value.trim(),
             comuna: document.getElementById('clienteComuna').value.trim(),
             ciudad: document.getElementById('clienteCiudad').value.trim(),

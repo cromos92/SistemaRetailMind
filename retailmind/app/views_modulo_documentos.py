@@ -3559,6 +3559,211 @@ def generar_dte_desde_ticket_api(request):
         }, status=500)
 
 
+def construir_datos_txt_desde_dte(dte):
+    """
+    Arma el dict `datos` para `generar_txt_dte_acepta` a partir de un DTE ya
+    persistido. Fuente UNICA de verdad del detalle TXT Acepta: lee
+    monto_item / descuento_monto / descuento_pct de Dte_Productos (vía
+    `construir_detalle_txt_desde_dte_productos`), normaliza las líneas a la base
+    del tipo de documento (`normalizar_detalle_para_tipo`) y arrastra el descuento
+    global (`dte.descuento`) y los descuentos/recargos globales de BD.
+
+    Sin efectos secundarios y sin `request`, para que lo reúsen tanto la vista de
+    documentos (`generar_txt_desde_dte_existente`) como las descargas de ecommerce
+    (`descargar_txt_dte_ecommerce` y la regeneración al facturar). Así el TXT de
+    Acepta queda idéntico en todas las vías para un mismo DTE.
+    """
+    # Mapear tipo de documento a código numérico
+    tipo_mapping = {
+        'FACTURA_ELECTRONICA': 33,
+        'FACTURA ELECTRONICA': 33,
+        'FACTURA_EXENTA': 34,
+        'FACTURA EXENTA': 34,
+        'BOLETA_ELECTRONICA': 39,
+        'BOLETA ELECTRONICA': 39,
+        'BOLETA_EXENTA': 41,
+        'BOLETA EXENTA': 41,
+        'GUIA_DESPACHO': 52,
+        'GUIA DESPACHO': 52,
+        'GUIA': 52,  # ✅ Para traspasos internos
+        'NOTA_CREDITO': 61,
+        'NOTA DE CREDITO': 61
+    }
+    tipo_numerico = tipo_mapping.get(dte.tipo_documento, 33)
+
+    # Calcular IVA desde monto_con_iva y monto_neto
+    es_exenta = tipo_numerico == 34
+    if es_exenta:
+        iva_calculado = 0
+    else:
+        iva_calculado = int(dte.monto_con_iva - dte.monto_neto)
+
+    # ✅ CORREGIDO: Buscar sucursal_destino para usar su dirección en lugar de la empresa receptora
+    sucursal_destino = None
+    movimiento_con_destino = dte.dte_movimientos.filter(
+        sucursal_destino__isnull=False
+    ).select_related('sucursal_destino').first()
+    if movimiento_con_destino:
+        sucursal_destino = movimiento_con_destino.sucursal_destino
+
+    # Para Boleta (39/41) la observación del TXT lleva V:/T:/D:/Dc:/pagos,
+    # así que reconstruimos código de vendedor, correlativo de ticket y
+    # métodos de pago desde el Ticket asociado y Dte_Detalle_Pago. Para
+    # Factura (33/34) y Guía (52) estos datos se ignoran en el generador,
+    # así que no vale la pena pagar las queries.
+    ticket_asoc = None
+    metodos_pago_texto = ''
+    if tipo_numerico in (39, 41):
+        from .models import Ticket
+        ticket_asoc = Ticket.objects.filter(
+            folio_dte=dte.numero_documento, sucursal=dte.sucursal
+        ).select_related('vendedor').first()
+
+        pagos_str = []
+        for p in dte.dte_asociado.all():
+            partes = [f"{p.metodo_pago}: ${p.monto:,}"]
+            if p.tipo_tarjeta:
+                partes.append(f"Tarj: {p.tipo_tarjeta}")
+            if p.voucher:
+                partes.append(f"Auth: {p.voucher}")
+            if p.notas:
+                partes.append(' '.join(str(p.notas).split())[:80])
+            pagos_str.append(' - '.join(partes))
+        # Limpiar cada trozo por separado (acentos, pipes internos de notas
+        # Transbank, etc.) y recién después unir con '|'. Si limpiáramos la
+        # cadena ya unida, limpiar_texto() borraría los '|' separadores y
+        # _resumir_metodos_pago() solo vería el primer método de pago.
+        metodos_pago_texto = ' | '.join(limpiar_texto(s) for s in pagos_str)
+
+    codigo_vendedor_boleta = (
+        ticket_asoc.vendedor.codigo_vendedor
+        if (ticket_asoc and ticket_asoc.vendedor) else None
+    )
+
+    # --- Guía de Despacho: detectar si es traspaso interno ---
+    # Indicador de traslado SII (campo 6 del IdDoc en el TXT):
+    #   1 = Operación constituye venta
+    #   5 = Traslado interno (entre sucursales/bodegas)
+    # Para DTEs distintos a GUIA el indicador es ignorado, pero
+    # lo fijamos coherentemente igual.
+    es_traspaso_interno = (
+        tipo_numerico == 52 and (
+            dte.tipo_transaccion == 'TRASPASO'
+            # Mismo emisor/receptor también implica traspaso interno.
+            or (dte.receptor_id and dte.receptor_id == dte.emisor_id)
+            # Hay un movimiento con sucursal destino y sin facturación
+            # externa explícita.
+            or (sucursal_destino is not None and dte.tipo_transaccion != 'VENTA')
+        )
+    )
+    if tipo_numerico == 52:
+        ind_traslado_valor = 5 if es_traspaso_interno else 1
+    else:
+        ind_traslado_valor = 1
+
+    # Construir diccionario de datos desde el DTE
+    # ✅ Aplicar limpiar_texto para eliminar acentos y caracteres especiales
+    datos = {
+        'documento': {
+            'tipo_documento': tipo_numerico,
+            'folio': dte.numero_documento,  # ✅ Campo correcto
+            'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d'),
+            'fecha_vencimiento': dte.fecha_vencimiento.strftime('%Y-%m-%d') if dte.fecha_vencimiento else '',
+            'forma_pago': 1 if dte.fecha_vencimiento == dte.fecha_emision else 2,
+            'tipo_despacho': 2,  # Por cuenta del emisor (default operativo)
+            'ind_traslado': ind_traslado_valor,
+            'timestamp': timezone.now().strftime('%Y-%m-%dT%H:%M:%S')
+        },
+        'emisor': {
+            'rut': dte.emisor.rut,
+            'razon_social': limpiar_texto(dte.emisor.razon_social or ''),
+            'giro': limpiar_texto(dte.emisor.giro or ''),
+            'acteco': dte.emisor.acteco or '',
+            # Dirección/comuna/ciudad de la SUCURSAL con fallback a la empresa emisora.
+            'direccion': limpiar_texto((dte.sucursal.direccion if dte.sucursal else '') or (dte.emisor.direccion if dte.emisor else '') or ''),
+            'comuna': limpiar_texto((dte.sucursal.comuna if dte.sucursal else '') or (dte.emisor.comuna if dte.emisor else '') or ''),
+            'ciudad': limpiar_texto((dte.sucursal.ciudad if dte.sucursal else '') or (dte.emisor.ciudad if dte.emisor else '') or ''),
+            'codigo_vendedor': limpiar_texto(codigo_vendedor_boleta or dte.responsable or 'USUARIO'),
+            'correlativo_ticket': ticket_asoc.correlativo if ticket_asoc else '',
+            # Ya viene limpio trozo a trozo (preservando los '|' entre métodos).
+            'metodos_pago': metodos_pago_texto,
+            'sucursal': limpiar_texto(dte.sucursal.alias if dte.sucursal else ''),
+            'telefono': dte.emisor.contacto1 or '',
+            'nombre_impresora_boleta': getattr(dte.sucursal, 'nombre_impresora_boleta', 'boleta') if dte.sucursal else 'boleta',
+            'nombre_impresora_factura': getattr(dte.sucursal, 'nombre_impresora_factura', 'factura') if dte.sucursal else 'factura',
+        },
+        'receptor': {
+            'rut': dte.receptor.rut if dte.receptor else '66666666-6',
+            'razon_social': limpiar_texto(dte.receptor.razon_social if dte.receptor else 'CONSUMIDOR FINAL'),
+            'giro': limpiar_texto(dte.receptor.giro if dte.receptor else ''),
+            'direccion': limpiar_texto(sucursal_destino.direccion if sucursal_destino and sucursal_destino.direccion else (dte.receptor.direccion if dte.receptor else '')),
+            'comuna': limpiar_texto((sucursal_destino.comuna if sucursal_destino else None) or (dte.receptor.comuna if dte.receptor else '')),
+            'ciudad': limpiar_texto((sucursal_destino.ciudad if sucursal_destino else None) or (dte.receptor.ciudad if dte.receptor else '')),
+            'sucursal': limpiar_texto(sucursal_destino.alias if sucursal_destino else '')
+        },
+        'totales': {
+            'monto_neto': 0 if es_exenta else int(dte.monto_neto),
+            'monto_exento': int(dte.monto_neto) if es_exenta else 0,
+            'tasa_iva': 0 if es_exenta else 19,
+            'iva': iva_calculado,
+            'monto_total': int(dte.monto_con_iva),
+            'descuento_global': int(dte.descuento) if dte.descuento else 0
+        },
+        'detalle': [],
+        'referencias': []
+    }
+
+    # Referencia comercial estructurada (Orden de Compra 801 / Nota de Pedido 802).
+    # El generador de TXT consume las claves tipo_documento/folio/fecha/razon.
+    if dte.referencia_tipo and dte.referencia_folio:
+        datos['referencias'] = [{
+            'tipo_documento': dte.referencia_tipo,
+            'folio': dte.referencia_folio,
+            'fecha': (dte.referencia_fecha or dte.fecha_emision).strftime('%Y-%m-%d'),
+            'razon': 'ORDEN DE COMPRA' if str(dte.referencia_tipo) == '801' else 'NOTA DE PEDIDO',
+        }]
+
+    datos['detalle'] = construir_detalle_txt_desde_dte_productos(
+        dte.dte_productos.select_related(
+            'productoTalla__producto__atributo1',
+            'productoTalla__producto__atributo2',
+        ),
+        tipo_numerico,
+    )
+
+    # Las líneas en BD pueden estar CON IVA (boletas/ventas POS) o NETAS
+    # (emisión-DTE/traspasos). Acepta exige que para factura/NC/guía sumen
+    # el neto y para boleta sumen el total. Normalizamos contra el cabezal:
+    # es idempotente, así que los DTE que ya estaban bien (netos) no cambian.
+    normalizar_detalle_para_tipo(datos['detalle'], datos['totales'], tipo_numerico)
+
+    # Poblar descuentos/recargos globales desde BD
+    from .models import DescuentoRecargo
+    drs = dte.descuentos_recargos.all()
+    if drs.exists():
+        datos['descuentos_recargos'] = [
+            {
+                'tpo_mov': dr.tpo_mov,
+                'glosa_dr': dr.glosa_dr,
+                'tpo_valor': dr.tpo_valor,
+                'valor_dr': dr.valor_dr,
+                'ind_exe_dr': dr.ind_exe_dr,
+            }
+            for dr in drs
+        ]
+
+    # Agregar referencias si existen
+    if dte.referencias:
+        try:
+            import json as json_lib
+            refs = json_lib.loads(dte.referencias) if isinstance(dte.referencias, str) else []
+            datos['referencias'] = refs
+        except:
+            pass
+
+    return datos
+
+
 @require_POST
 @login_required
 def generar_txt_desde_dte_existente(request):
@@ -3621,184 +3826,12 @@ def generar_txt_desde_dte_existente(request):
                 'error': 'Las Boletas de Papel no generan archivo TXT'
             }, status=400)
         
-        # Mapear tipo de documento a código numérico
-        tipo_mapping = {
-            'FACTURA_ELECTRONICA': 33,
-            'FACTURA ELECTRONICA': 33,
-            'FACTURA_EXENTA': 34,
-            'FACTURA EXENTA': 34,
-            'BOLETA_ELECTRONICA': 39,
-            'BOLETA ELECTRONICA': 39,
-            'BOLETA_EXENTA': 41,
-            'BOLETA EXENTA': 41,
-            'GUIA_DESPACHO': 52,
-            'GUIA DESPACHO': 52,
-            'GUIA': 52,  # ✅ Para traspasos internos
-            'NOTA_CREDITO': 61,
-            'NOTA DE CREDITO': 61
-        }
-        tipo_numerico = tipo_mapping.get(dte.tipo_documento, 33)
-        
-        # Calcular IVA desde monto_con_iva y monto_neto
-        es_exenta = tipo_numerico == 34
-        if es_exenta:
-            iva_calculado = 0
-        else:
-            iva_calculado = int(dte.monto_con_iva - dte.monto_neto)
-        
-        # ✅ CORREGIDO: Buscar sucursal_destino para usar su dirección en lugar de la empresa receptora
-        sucursal_destino = None
-        movimiento_con_destino = dte.dte_movimientos.filter(
-            sucursal_destino__isnull=False
-        ).select_related('sucursal_destino').first()
-        if movimiento_con_destino:
-            sucursal_destino = movimiento_con_destino.sucursal_destino
-        
-        # Para Boleta (39/41) la observación del TXT lleva V:/T:/D:/Dc:/pagos,
-        # así que reconstruimos código de vendedor, correlativo de ticket y
-        # métodos de pago desde el Ticket asociado y Dte_Detalle_Pago. Para
-        # Factura (33/34) y Guía (52) estos datos se ignoran en el generador,
-        # así que no vale la pena pagar las queries.
-        ticket_asoc = None
-        metodos_pago_texto = ''
-        if tipo_numerico in (39, 41):
-            from .models import Ticket
-            ticket_asoc = Ticket.objects.filter(
-                folio_dte=dte.numero_documento, sucursal=dte.sucursal
-            ).select_related('vendedor').first()
+        # Construcción del payload TXT centralizada: misma fuente de verdad que
+        # usan las descargas de ecommerce, para que el TXT sea idéntico en todas
+        # las vías (documentos, botón ecommerce, auto-descarga al facturar).
+        datos = construir_datos_txt_desde_dte(dte)
+        tipo_numerico = datos['documento']['tipo_documento']
 
-            pagos_str = []
-            for p in dte.dte_asociado.all():
-                partes = [f"{p.metodo_pago}: ${p.monto:,}"]
-                if p.tipo_tarjeta:
-                    partes.append(f"Tarj: {p.tipo_tarjeta}")
-                if p.voucher:
-                    partes.append(f"Auth: {p.voucher}")
-                if p.notas:
-                    partes.append(' '.join(str(p.notas).split())[:80])
-                pagos_str.append(' - '.join(partes))
-            # Limpiar cada trozo por separado (acentos, pipes internos de notas
-            # Transbank, etc.) y recién después unir con '|'. Si limpiáramos la
-            # cadena ya unida, limpiar_texto() borraría los '|' separadores y
-            # _resumir_metodos_pago() solo vería el primer método de pago.
-            metodos_pago_texto = ' | '.join(limpiar_texto(s) for s in pagos_str)
-
-        codigo_vendedor_boleta = (
-            ticket_asoc.vendedor.codigo_vendedor
-            if (ticket_asoc and ticket_asoc.vendedor) else None
-        )
-
-        # --- Guía de Despacho: detectar si es traspaso interno ---
-        # Indicador de traslado SII (campo 6 del IdDoc en el TXT):
-        #   1 = Operación constituye venta
-        #   5 = Traslado interno (entre sucursales/bodegas)
-        # Para DTEs distintos a GUIA el indicador es ignorado, pero
-        # lo fijamos coherentemente igual.
-        es_traspaso_interno = (
-            tipo_numerico == 52 and (
-                dte.tipo_transaccion == 'TRASPASO'
-                # Mismo emisor/receptor también implica traspaso interno.
-                or (dte.receptor_id and dte.receptor_id == dte.emisor_id)
-                # Hay un movimiento con sucursal destino y sin facturación
-                # externa explícita.
-                or (sucursal_destino is not None and dte.tipo_transaccion != 'VENTA')
-            )
-        )
-        if tipo_numerico == 52:
-            ind_traslado_valor = 5 if es_traspaso_interno else 1
-        else:
-            ind_traslado_valor = 1
-
-        # Construir diccionario de datos desde el DTE
-        # ✅ Aplicar limpiar_texto para eliminar acentos y caracteres especiales
-        datos = {
-            'documento': {
-                'tipo_documento': tipo_numerico,
-                'folio': dte.numero_documento,  # ✅ Campo correcto
-                'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d'),
-                'fecha_vencimiento': dte.fecha_vencimiento.strftime('%Y-%m-%d') if dte.fecha_vencimiento else '',
-                'forma_pago': 1 if dte.fecha_vencimiento == dte.fecha_emision else 2,
-                'tipo_despacho': 2,  # Por cuenta del emisor (default operativo)
-                'ind_traslado': ind_traslado_valor,
-                'timestamp': timezone.now().strftime('%Y-%m-%dT%H:%M:%S')
-            },
-            'emisor': {
-                'rut': dte.emisor.rut,
-                'razon_social': limpiar_texto(dte.emisor.razon_social or ''),
-                'giro': limpiar_texto(dte.emisor.giro or ''),
-                'acteco': dte.emisor.acteco or '',
-                # Dirección/comuna/ciudad de la SUCURSAL con fallback a la empresa emisora.
-                'direccion': limpiar_texto((dte.sucursal.direccion if dte.sucursal else '') or (dte.emisor.direccion if dte.emisor else '') or ''),
-                'comuna': limpiar_texto((dte.sucursal.comuna if dte.sucursal else '') or (dte.emisor.comuna if dte.emisor else '') or ''),
-                'ciudad': limpiar_texto((dte.sucursal.ciudad if dte.sucursal else '') or (dte.emisor.ciudad if dte.emisor else '') or ''),
-                'codigo_vendedor': limpiar_texto(codigo_vendedor_boleta or dte.responsable or 'USUARIO'),
-                'correlativo_ticket': ticket_asoc.correlativo if ticket_asoc else '',
-                # Ya viene limpio trozo a trozo (preservando los '|' entre métodos).
-                'metodos_pago': metodos_pago_texto,
-                'sucursal': limpiar_texto(dte.sucursal.alias if dte.sucursal else ''),
-                'telefono': dte.emisor.contacto1 or '',
-                'nombre_impresora_boleta': getattr(dte.sucursal, 'nombre_impresora_boleta', 'boleta') if dte.sucursal else 'boleta',
-                'nombre_impresora_factura': getattr(dte.sucursal, 'nombre_impresora_factura', 'factura') if dte.sucursal else 'factura',
-            },
-            'receptor': {
-                'rut': dte.receptor.rut if dte.receptor else '66666666-6',
-                'razon_social': limpiar_texto(dte.receptor.razon_social if dte.receptor else 'CONSUMIDOR FINAL'),
-                'giro': limpiar_texto(dte.receptor.giro if dte.receptor else ''),
-                'direccion': limpiar_texto(sucursal_destino.direccion if sucursal_destino and sucursal_destino.direccion else (dte.receptor.direccion if dte.receptor else '')),
-                'comuna': limpiar_texto((sucursal_destino.comuna if sucursal_destino else None) or (dte.receptor.comuna if dte.receptor else '')),
-                'ciudad': limpiar_texto((sucursal_destino.ciudad if sucursal_destino else None) or (dte.receptor.ciudad if dte.receptor else '')),
-                'sucursal': limpiar_texto(sucursal_destino.alias if sucursal_destino else '')
-            },
-            'totales': {
-                'monto_neto': 0 if es_exenta else int(dte.monto_neto),
-                'monto_exento': int(dte.monto_neto) if es_exenta else 0,
-                'tasa_iva': 0 if es_exenta else 19,
-                'iva': iva_calculado,
-                'monto_total': int(dte.monto_con_iva),
-                'descuento_global': int(dte.descuento) if dte.descuento else 0
-            },
-            'detalle': [],
-            'referencias': []
-        }
-        
-        datos['detalle'] = construir_detalle_txt_desde_dte_productos(
-            dte.dte_productos.select_related(
-                'productoTalla__producto__atributo1',
-                'productoTalla__producto__atributo2',
-            ),
-            tipo_numerico,
-        )
-
-        # Las líneas en BD pueden estar CON IVA (boletas/ventas POS) o NETAS
-        # (emisión-DTE/traspasos). Acepta exige que para factura/NC/guía sumen
-        # el neto y para boleta sumen el total. Normalizamos contra el cabezal:
-        # es idempotente, así que los DTE que ya estaban bien (netos) no cambian.
-        normalizar_detalle_para_tipo(datos['detalle'], datos['totales'], tipo_numerico)
-
-        # Poblar descuentos/recargos globales desde BD
-        from .models import DescuentoRecargo
-        drs = dte.descuentos_recargos.all()
-        if drs.exists():
-            datos['descuentos_recargos'] = [
-                {
-                    'tpo_mov': dr.tpo_mov,
-                    'glosa_dr': dr.glosa_dr,
-                    'tpo_valor': dr.tpo_valor,
-                    'valor_dr': dr.valor_dr,
-                    'ind_exe_dr': dr.ind_exe_dr,
-                }
-                for dr in drs
-            ]
-
-        # Agregar referencias si existen
-        if dte.referencias:
-            try:
-                import json as json_lib
-                refs = json_lib.loads(dte.referencias) if isinstance(dte.referencias, str) else []
-                datos['referencias'] = refs
-            except:
-                pass
-        
         # Generar TXT
         contenido_txt = generar_txt_dte_acepta(datos)
 

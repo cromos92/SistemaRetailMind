@@ -1094,7 +1094,7 @@
                     <span class="badge bg-danger small" id="badgePrecioExterno">Requerido</span>
                 </div>
                 <div class="row g-2">
-                    <div class="col-4">
+                    <div class="col-6 col-md-3">
                         <div class="method-selector shadow-sm precio-externo-selector" data-precio-mode="costo">
                             <div class="mb-1" style="font-size: 1.3rem; color: #6c757d;">
                                 <i class="bi bi-cash-stack"></i>
@@ -1103,7 +1103,7 @@
                             <p class="text-muted mb-0" style="font-size: 0.65rem;">Solo costo proveedor</p>
                         </div>
                     </div>
-                    <div class="col-4">
+                    <div class="col-6 col-md-3">
                         <div class="method-selector shadow-sm precio-externo-selector" data-precio-mode="sobreprecio">
                             <div class="mb-1" style="font-size: 1.3rem; color: #6c757d;">
                                 <i class="bi bi-graph-up-arrow"></i>
@@ -1112,13 +1112,22 @@
                             <p class="text-muted mb-0" style="font-size: 0.65rem;">Costo + sobreprecio</p>
                         </div>
                     </div>
-                    <div class="col-4">
+                    <div class="col-6 col-md-3">
                         <div class="method-selector shadow-sm precio-externo-selector" data-precio-mode="custom_pct">
                             <div class="mb-1" style="font-size: 1.3rem; color: #6c757d;">
                                 <i class="bi bi-percent"></i>
                             </div>
                             <h6 class="fw-bold mb-1 small">% Custom</h6>
                             <p class="text-muted mb-0" style="font-size: 0.65rem;">Margen sobre costo</p>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="method-selector shadow-sm precio-externo-selector" data-precio-mode="precio_venta">
+                            <div class="mb-1" style="font-size: 1.3rem; color: #6c757d;">
+                                <i class="bi bi-tags-fill"></i>
+                            </div>
+                            <h6 class="fw-bold mb-1 small">Precios de venta</h6>
+                            <p class="text-muted mb-0" style="font-size: 0.65rem;">Precio normal de góndola</p>
                         </div>
                     </div>
                 </div>
@@ -1134,6 +1143,37 @@
                         Ejemplo: Costo $10.000 + 30% = <strong>$13.000</strong>
                     </small>
                 </div>
+            </div>
+
+            <!-- Referencia comercial opcional (Orden de Compra / Nota de Pedido) — solo despacho externo -->
+            <div id="referenciaExternaContainer" style="display: none;" class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label class="form-label fw-bold mb-0">
+                        <i class="bi bi-link-45deg text-primary me-1"></i>Referencia (opcional)
+                    </label>
+                    <span class="badge bg-secondary small">Opcional</span>
+                </div>
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label for="referenciaTipo" class="form-label small mb-1">Tipo documento</label>
+                        <select id="referenciaTipo" class="form-select form-select-sm">
+                            <option value="">— Sin referencia —</option>
+                            <option value="801">801 - Orden de Compra</option>
+                            <option value="802">802 - Nota de Pedido</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="referenciaFolio" class="form-label small mb-1">Folio / N° documento</label>
+                        <input type="text" id="referenciaFolio" class="form-control form-control-sm" maxlength="100" placeholder="Ej: OC-12345">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="referenciaFecha" class="form-label small mb-1">Fecha documento</label>
+                        <input type="date" id="referenciaFecha" class="form-control form-control-sm">
+                    </div>
+                </div>
+                <small class="text-muted mt-1 d-block">
+                    <i class="bi bi-info-circle me-1"></i>Se incluye en el DTE como referencia SII (TpoDocRef 801/802).
+                </small>
             </div>
 
             <!-- Resumen de Selección - compacto -->
@@ -2036,11 +2076,13 @@ function initializeEventListeners() {
                 $('#receptorSelect').val('');
                 loadSucursalesDestino();
                 $('#precioExternoContainer').slideUp(300);
+                $('#referenciaExternaContainer').slideUp(300);
                 $('#resumenPrecio').closest('.badge').hide();
             } else {
                 $('#sucursalDestinoSelect').val('');
                 loadReceptores();
                 $('#precioExternoContainer').slideDown(300);
+                $('#referenciaExternaContainer').slideDown(300);
             }
 
             // Refrescar precios en detalle de despacho
@@ -2098,7 +2140,7 @@ function initializeEventListeners() {
         }
 
         // Actualizar resumen
-        const modeLabels = { costo: 'Al Costo', sobreprecio: 'Sobreprecio', custom_pct: `% Custom (${customPctValue}%)` };
+        const modeLabels = { costo: 'Al Costo', sobreprecio: 'Sobreprecio', custom_pct: `% Custom (${customPctValue}%)`, precio_venta: 'Precios de venta' };
         $('#resumenPrecio').text(modeLabels[mode] || mode).closest('.badge').show();
 
         recalcularPreciosExterno();
@@ -2329,7 +2371,7 @@ $(document).on('click', '#btnConfirmarCargarPendientes', function() {
                                value="${src.cantidad_final}" min="1" max="${src.disponible_en_origen || src.cantidad_final}"
                                data-precio="${precio}" data-stock-max="${src.disponible_en_origen || src.cantidad_final}"
                                data-sku="${src.sku || ''}"
-                               data-costo="${src.costo || 0}" data-sobreprecio="${src.sobreprecio || 0}">
+                               data-costo="${src.costo || 0}" data-sobreprecio="${src.sobreprecio || 0}" data-precio-venta="${src.precio_venta || 0}">
                     </td>
                     <td class="text-end text-muted"><small>$${(src.costo || 0).toLocaleString()}</small></td>
                     <td class="text-end text-muted"><small>$${(src.sobreprecio || 0).toLocaleString()}</small></td>
@@ -3588,7 +3630,7 @@ function selectProduct(productId) {
     if (selectedMethod === 'interno') {
         $('#thPrecioModal').text('P. Interno');
     } else if (selectedMethod === 'externo') {
-        const labels = { costo: 'Al Costo', sobreprecio: 'P. Interno', custom_pct: `+${customPctValue}%` };
+        const labels = { costo: 'Al Costo', sobreprecio: 'P. Interno', custom_pct: `+${customPctValue}%`, precio_venta: 'P. Venta' };
         $('#thPrecioModal').text(labels[selectedPrecioExterno] || 'Precio');
     } else {
         $('#thPrecioModal').text('Precio');
@@ -3652,6 +3694,14 @@ function getPrecioSegunMetodo(product) {
             const precio = Math.round(costo * (1 + customPctValue / 100));
             console.log(`💰 Despacho EXTERNO [Custom ${customPctValue}%]: Costo=${costo} → ${precio}`);
             return precio;
+        } else if (selectedPrecioExterno === 'precio_venta') {
+            // precio_venta es el precio público CON IVA; el backend trata el precio
+            // de línea como NETO y le suma 19%, así que enviamos el neto = bruto/1.19
+            // para que el total con IVA quede igual al precio normal de venta.
+            const precioVentaBruto = parseInt(product.precio_venta || 0);
+            const precioNeto = Math.round(precioVentaBruto / 1.19);
+            console.log(`💰 Despacho EXTERNO [Precio Venta]: Bruto=${precioVentaBruto} → Neto=${precioNeto}`);
+            return precioNeto;
         }
         return costo;
     }
@@ -3664,7 +3714,7 @@ function recalcularPreciosExterno() {
     if (selectedMethod === 'interno') {
         $('#thPrecioModal').text('P. Interno');
     } else if (selectedMethod === 'externo') {
-        const labels = { costo: 'Al Costo', sobreprecio: 'P. Interno', custom_pct: `+${customPctValue}%` };
+        const labels = { costo: 'Al Costo', sobreprecio: 'P. Interno', custom_pct: `+${customPctValue}%`, precio_venta: 'P. Venta' };
         $('#thPrecioModal').text(labels[selectedPrecioExterno] || 'Precio');
     }
 
@@ -3679,7 +3729,8 @@ function recalcularPreciosExterno() {
         const $row = $(this);
         const costo = parseInt($row.data('costo') || 0);
         const sobreprecio = parseInt($row.data('sobreprecio') || 0);
-        const product = { costo: costo, sobreprecio: sobreprecio };
+        const precioVenta = parseInt($row.data('precio-venta') || 0);
+        const product = { costo: costo, sobreprecio: sobreprecio, precio_venta: precioVenta };
         const nuevoPrecio = getPrecioSegunMetodo(product);
 
         $row.find('.cantidad-input').data('precio', nuevoPrecio);
@@ -3696,7 +3747,8 @@ function recalcularPreciosExterno() {
         const $input = $row.find('.cantidad-detalle-input');
         const costo = parseInt($input.data('costo') || 0);
         const sobreprecio = parseInt($input.data('sobreprecio') || 0);
-        const product = { costo: costo, sobreprecio: sobreprecio };
+        const precioVenta = parseInt($input.data('precio-venta') || 0);
+        const product = { costo: costo, sobreprecio: sobreprecio, precio_venta: precioVenta };
         const nuevoPrecio = getPrecioSegunMetodo(product);
 
         $input.data('precio', nuevoPrecio);
@@ -3790,13 +3842,14 @@ function loadTallasDisponibles(product) {
         
         console.log(`   Stock: ${stockTotal}, En despacho: ${cantidadEnDespacho}, Disponible: ${disponibleParaAgregar}`);
         
-        // Obtener costo y sobreprecio de la talla o del producto
+        // Obtener costo, sobreprecio y precio de venta de la talla o del producto
         const costoTalla = talla.costo || product.costo || 0;
         const sobrepreioTalla = talla.sobreprecio || product.sobreprecio || 0;
-        
+        const precioVentaTalla = talla.precio_venta || product.precio_venta || 0;
+
         const rowHtml = `
-            <tr data-talla-id="${talla.id || index}" data-sku="${talla.sku || ''}" data-stock="${stockTotal}" 
-                data-en-despacho="${cantidadEnDespacho}" data-costo="${costoTalla}" data-sobreprecio="${sobrepreioTalla}"
+            <tr data-talla-id="${talla.id || index}" data-sku="${talla.sku || ''}" data-stock="${stockTotal}"
+                data-en-despacho="${cantidadEnDespacho}" data-costo="${costoTalla}" data-sobreprecio="${sobrepreioTalla}" data-precio-venta="${precioVentaTalla}"
                 ${disponibleParaAgregar === 0 ? 'style="opacity:0.55;"' : ''}>
                 <td class="text-center fw-bold sku-cell" style="font-size:0.78rem;">${talla.sku || '-'}</td>
                 <td class="text-center">
@@ -3819,9 +3872,9 @@ function loadTallasDisponibles(product) {
                 <td class="text-center">
                     <input type="number" class="form-control form-control-sm cantidad-input text-center" 
                            min="0" max="${disponibleParaAgregar}" value="0" 
-                           data-talla-id="${talla.id || index}" data-precio="${precioAUsar}" 
+                           data-talla-id="${talla.id || index}" data-precio="${precioAUsar}"
                            data-sku="${talla.sku || ''}" data-disponible="${disponibleParaAgregar}"
-                           data-costo="${costoTalla}" data-sobreprecio="${sobrepreioTalla}"
+                           data-costo="${costoTalla}" data-sobreprecio="${sobrepreioTalla}" data-precio-venta="${precioVentaTalla}"
                            ${disponibleParaAgregar === 0 ? 'disabled' : ''}
                            style="padding: 2px 4px;">
                 </td>
@@ -3964,7 +4017,8 @@ function getSelectedTallasFromModal() {
             const talla = row.find('.talla-badge').text().trim();
             const stock = parseInt(row.data('stock')) || 0;
             const precio = parseInt(row.find('.cantidad-input').data('precio')) || 0;
-            
+            const precioVenta = parseInt(row.data('precio-venta')) || 0;
+
             selectedTallas.push({
                 id: tallaId,
                 sku: sku,
@@ -3972,6 +4026,7 @@ function getSelectedTallasFromModal() {
                 cantidad: cantidad,
                 stock: stock,
                 precio: precio,
+                precio_venta: precioVenta,
                 subtotal: cantidad * precio
             });
         }
@@ -4105,11 +4160,12 @@ function addTallasToDetalle(tallas, productOverride = null) {
             return; // No crear fila
         }
         
-        // Costo y sobreprecio desde los datos del producto
+        // Costo, sobreprecio y precio de venta desde los datos del producto
         const costo = parseInt(talla.costo || currentProduct.costo || 0);
         const sobreprecio = parseInt(talla.sobreprecio || currentProduct.sobreprecio || 0);
-        
-        console.log(`💰 Desglose para fila: Costo: ${costo}, Sobreprecio: ${sobreprecio}, Precio: ${talla.precio}`);
+        const precioVenta = parseInt(talla.precio_venta || currentProduct.precio_venta || 0);
+
+        console.log(`💰 Desglose para fila: Costo: ${costo}, Sobreprecio: ${sobreprecio}, P.Venta: ${precioVenta}, Precio: ${talla.precio}`);
         
         const rowHtml = `
             <tr data-producto-id="${currentProduct.id}" data-talla-id="${talla.id}">
@@ -4122,8 +4178,8 @@ function addTallasToDetalle(tallas, productOverride = null) {
                 <td class="text-center">
                     <input type="number" class="form-control form-control-sm cantidad-detalle-input text-center" 
                            value="${talla.cantidad}" min="1" max="${talla.stock}" 
-                           data-precio="${talla.precio}" data-stock-max="${talla.stock}" data-sku="${talla.sku}" 
-                           data-costo="${costo}" data-sobreprecio="${sobreprecio}">
+                           data-precio="${talla.precio}" data-stock-max="${talla.stock}" data-sku="${talla.sku}"
+                           data-costo="${costo}" data-sobreprecio="${sobreprecio}" data-precio-venta="${precioVenta}">
                 </td>
                 <td class="text-end text-muted"><small>$${costo.toLocaleString()}</small></td>
                 <td class="text-end text-muted"><small>$${sobreprecio.toLocaleString()}</small></td>
@@ -4362,13 +4418,14 @@ function agregarTallaIndividual(tallaId) {
         return;
     }
     
-    // Costo y sobreprecio desde los datos del producto
+    // Costo, sobreprecio y precio de venta desde los datos del producto
     const inputCantidad = row.find('.cantidad-input');
     const costoProducto = parseInt(inputCantidad.data('costo')) || parseInt(window.currentProduct.costo) || 0;
     const sobrepreioProducto = parseInt(inputCantidad.data('sobreprecio')) || parseInt(window.currentProduct.sobreprecio) || 0;
-    
-    console.log('💰 Costo y Sobreprecio:', {costo: costoProducto, sobreprecio: sobrepreioProducto, precio: precio});
-    
+    const precioVentaProducto = parseInt(inputCantidad.data('precio-venta')) || parseInt(window.currentProduct.precio_venta) || 0;
+
+    console.log('💰 Costo y Sobreprecio:', {costo: costoProducto, sobreprecio: sobrepreioProducto, precioVenta: precioVentaProducto, precio: precio});
+
     const tallaData = [{
         id: tallaId,
         sku: sku,
@@ -4378,6 +4435,7 @@ function agregarTallaIndividual(tallaId) {
         precio: precio,
         costo: costoProducto,
         sobreprecio: sobrepreioProducto,
+        precio_venta: precioVentaProducto,
         subtotal: cantidad * precio
     }];
     
@@ -5443,6 +5501,15 @@ function procesarEmision() {
         data.tipo_precio_externo = selectedPrecioExterno;
         if (selectedPrecioExterno === 'custom_pct') {
             data.porcentaje_custom = customPctValue;
+        }
+
+        // Referencia comercial opcional (Orden de Compra 801 / Nota de Pedido 802)
+        const refTipo = $('#referenciaTipo').val();
+        const refFolio = $('#referenciaFolio').val().trim();
+        if (refTipo && refFolio) {
+            data.referencia_tipo = refTipo;
+            data.referencia_folio = refFolio;
+            data.referencia_fecha = $('#referenciaFecha').val() || null;
         }
     }
     

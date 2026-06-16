@@ -306,6 +306,15 @@
                         </div>
                     </div>
                     <div class="col-6 col-md-3">
+                        <div class="method-selector shadow-sm" data-tipo="BOLETA ELECTRONICA">
+                            <div class="mb-1" style="font-size:1.5rem; color:#6c757d;">
+                                <i class="bi bi-bag-check"></i>
+                            </div>
+                            <h6 class="fw-bold mb-1 small">Boleta Electrónica</h6>
+                            <p class="text-muted mb-0" style="font-size:0.7rem;">Tipo 39 - Consumidor Final</p>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
                         <div class="method-selector shadow-sm" data-tipo="NOTA DE CREDITO">
                             <div class="mb-1" style="font-size:1.5rem; color:#6c757d;">
                                 <i class="bi bi-file-earmark-minus"></i>
@@ -382,6 +391,7 @@
                                 <select id="tipoDocRef" class="form-select form-select-sm">
                                     <option value="33">Factura Electrónica (33)</option>
                                     <option value="34">Factura Exenta (34)</option>
+                                    <option value="39">Boleta Electrónica (39)</option>
                                     <option value="52">Guía de Despacho (52)</option>
                                 </select>
                             </div>
@@ -412,6 +422,10 @@
                     <div id="infoFacturaExenta" class="alert alert-info py-2 mb-0 small" style="display:none;">
                         <i class="bi bi-info-circle me-1"></i>
                         <strong>Factura Exenta:</strong> Los montos se registran como exentos de IVA. El total será igual al monto exento.
+                    </div>
+                    <div id="infoBoleta" class="alert alert-info py-2 mb-0 small" style="display:none;">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <strong>Boleta Electrónica:</strong> Documento afecto (IVA incluido). El receptor es opcional; si no se selecciona una empresa se emite a "Consumidor Final".
                     </div>
                     <div id="infoNotaCredito" class="alert alert-warning py-2 mb-0 small" style="display:none;">
                         <i class="bi bi-exclamation-triangle me-1"></i>
@@ -698,6 +712,10 @@ function esNotaCredito() {
     return selectedTipoDocumento === 'NOTA DE CREDITO';
 }
 
+function esBoleta() {
+    return selectedTipoDocumento === 'BOLETA ELECTRONICA';
+}
+
 // ========== PASO 1: CONFIGURACIÓN ==========
 
 // Selección de tipo de documento
@@ -711,10 +729,18 @@ document.querySelectorAll('.method-selector[data-tipo]').forEach(el => {
         const ncContainer = document.getElementById('referenciaNCContainer');
         const infoExenta = document.getElementById('infoFacturaExenta');
         const infoNC = document.getElementById('infoNotaCredito');
+        const infoBoleta = document.getElementById('infoBoleta');
 
         ncContainer.style.display = esNotaCredito() ? 'block' : 'none';
         infoExenta.style.display = esExenta() ? 'block' : 'none';
         infoNC.style.display = esNotaCredito() ? 'block' : 'none';
+        infoBoleta.style.display = esBoleta() ? 'block' : 'none';
+
+        // La boleta a consumidor final es de contado: ajustamos forma de pago.
+        if (esBoleta()) {
+            document.getElementById('formaPago').value = 'Contado';
+            toggleDiasCredito();
+        }
 
         document.getElementById('badgeTipoDocumento').style.display = 'none';
         validarPaso1();
@@ -728,7 +754,8 @@ function toggleDiasCredito() {
 
 function validarPaso1() {
     const tipoOk = !!selectedTipoDocumento;
-    const receptorOk = !!document.getElementById('receptorSelect').value;
+    // La boleta a consumidor final no exige receptor; el resto sí.
+    const receptorOk = esBoleta() ? true : !!document.getElementById('receptorSelect').value;
     const fechaOk = !!document.getElementById('fechaEmision').value;
 
     let ncOk = true;
@@ -783,11 +810,14 @@ document.getElementById('btnSiguientePaso1').addEventListener('click', function(
     const tipoTextos = {
         'FACTURA ELECTRONICA': 'Factura Electrónica (33)',
         'FACTURA EXENTA': 'Factura Exenta (34)',
+        'BOLETA ELECTRONICA': 'Boleta Electrónica (39)',
         'NOTA DE CREDITO': 'Nota de Crédito (61)',
         'GUIA': 'Guía de Despacho (52)'
     };
     document.getElementById('resumenTipo').textContent = tipoTextos[selectedTipoDocumento] || selectedTipoDocumento;
-    document.getElementById('resumenReceptor').textContent = $('#receptorSelect option:selected').text() || '-';
+    document.getElementById('resumenReceptor').textContent = $('#receptorSelect').val()
+        ? $('#receptorSelect option:selected').text()
+        : (esBoleta() ? 'Consumidor Final' : '-');
     document.getElementById('resumenFecha').textContent = document.getElementById('fechaEmision').value;
 
     actualizarTotales();
@@ -1007,11 +1037,14 @@ document.getElementById('btnEmitir').addEventListener('click', function() {
     let sumaTotal = 0;
     conceptos.forEach(c => { sumaTotal += Math.round(c.cantidad * c.precio_unitario); });
     const totalFinal = esExenta() ? sumaTotal : sumaTotal + Math.round(sumaTotal * 0.19);
-    const receptorTexto = $('#receptorSelect option:selected').text() || '-';
+    const receptorTexto = $('#receptorSelect').val()
+        ? $('#receptorSelect option:selected').text()
+        : (esBoleta() ? 'Consumidor Final' : '-');
 
     const tipoTextos = {
         'FACTURA ELECTRONICA': 'Factura Electrónica',
         'FACTURA EXENTA': 'Factura Exenta',
+        'BOLETA ELECTRONICA': 'Boleta Electrónica',
         'NOTA DE CREDITO': 'Nota de Crédito',
         'GUIA': 'Guía de Despacho Electrónica'
     };

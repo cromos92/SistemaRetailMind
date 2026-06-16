@@ -28,6 +28,7 @@ METODO_PAGO_TICKET_CHOICES = [
     ('CREDITO_TRABAJADOR', 'Crédito Trabajador'),
     ('CREDITO_EXTERNO', 'Crédito Externo'),
     ('CONVENIO', 'Convenio'),
+    ('GIFTCARD', 'Gift Card'),
     ('MULTIPLE', 'Pagos Combinados'),
 ]
 
@@ -164,6 +165,17 @@ class Ticket(models.Model):
     responsable = models.CharField(max_length=50)
     
     # === NUEVOS CAMPOS ===
+    # FK opcional al Cliente del CRM (fidelización). Nullable: no altera los
+    # flujos que solo usan los campos desnormalizados de abajo. El hook de
+    # cobro lo setea cuando identifica al cliente por RUT.
+    cliente = models.ForeignKey(
+        'app.Cliente',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tickets',
+        db_index=True,
+    )
     cliente_nombre = models.CharField(max_length=200, blank=True, null=True)
     cliente_rut = models.CharField(max_length=20, blank=True, null=True)
     cliente_email = models.EmailField(blank=True, null=True)

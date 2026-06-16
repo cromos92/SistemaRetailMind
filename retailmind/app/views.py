@@ -24459,7 +24459,7 @@ def emitir_dte_concepto(request):
         data = json.loads(request.body)
 
         tipo_documento = data.get('tipo_documento')
-        receptor_id = data.get('receptor_id')
+        receptor_id = data.get('receptor_id') or None
         fecha_emision = data.get('fecha_emision')
         detalle_conceptos = data.get('detalle_conceptos', [])
         observaciones = data.get('observaciones', '')
@@ -24467,13 +24467,23 @@ def emitir_dte_concepto(request):
         dias_credito = int(data.get('dias_credito', 0) or 0)
         referencia = data.get('referencia')
 
-        if not all([tipo_documento, receptor_id, fecha_emision]):
+        # La Boleta Electrónica (39) se emite a consumidor final: el receptor es
+        # opcional. Si no se indica, el DTE queda sin receptor y el generador de
+        # TXT lo emite a "66666666-6 / CONSUMIDOR FINAL". El resto de los DTE sí
+        # requieren empresa receptora.
+        es_boleta = tipo_documento == 'BOLETA ELECTRONICA'
+        obligatorios = (
+            [tipo_documento, fecha_emision]
+            if es_boleta else
+            [tipo_documento, receptor_id, fecha_emision]
+        )
+        if not all(obligatorios):
             return JsonResponse({
                 'success': False,
                 'error': 'Faltan datos obligatorios (tipo documento, receptor, fecha)'
             }, status=400)
 
-        tipos_validos = ['FACTURA ELECTRONICA', 'FACTURA EXENTA', 'NOTA DE CREDITO', 'GUIA']
+        tipos_validos = ['FACTURA ELECTRONICA', 'FACTURA EXENTA', 'BOLETA ELECTRONICA', 'NOTA DE CREDITO', 'GUIA']
         if tipo_documento not in tipos_validos:
             return JsonResponse({
                 'success': False,
@@ -24503,7 +24513,7 @@ def emitir_dte_concepto(request):
 
         emisor = get_object_or_404(Empresa, id=empresa_id)
         sucursal = get_object_or_404(Sucursal, id=sucursal_id)
-        receptor = get_object_or_404(Empresa, id=receptor_id)
+        receptor = get_object_or_404(Empresa, id=receptor_id) if receptor_id else None
 
         with transaction.atomic():
             subtotal_neto = 0
@@ -25465,6 +25475,10 @@ def emitir_dte(request):
         dias_credito = int(data.get('dias_credito', 0) or 0)
         tipo_precio_externo = data.get('tipo_precio_externo')
         porcentaje_custom_raw = data.get('porcentaje_custom')
+        # Referencia comercial opcional (Orden de Compra 801 / Nota de Pedido 802)
+        referencia_tipo = (data.get('referencia_tipo') or '').strip() or None
+        referencia_folio = (data.get('referencia_folio') or '').strip() or None
+        referencia_fecha = data.get('referencia_fecha') or None
         from decimal import Decimal, InvalidOperation
         porcentaje_custom = None
         if porcentaje_custom_raw is not None:
@@ -25753,10 +25767,15 @@ def emitir_dte(request):
                     sucursal=sucursal,
                 )
                 if metodo_despacho == 'externo' and tipo_precio_externo:
-                    tipo_map = {'costo': 'COSTO', 'sobreprecio': 'SOBREPRECIO', 'custom_pct': 'CUSTOM_PCT'}
+                    tipo_map = {'costo': 'COSTO', 'sobreprecio': 'SOBREPRECIO', 'custom_pct': 'CUSTOM_PCT', 'precio_venta': 'PRECIO_VENTA'}
                     dte_kwargs['tipo_precio_externo'] = tipo_map.get(tipo_precio_externo, 'COSTO')
                     if tipo_precio_externo == 'custom_pct' and porcentaje_custom is not None:
                         dte_kwargs['porcentaje_custom'] = porcentaje_custom
+                # Referencia comercial opcional (Orden de Compra 801 / Nota de Pedido 802)
+                if referencia_tipo and referencia_folio:
+                    dte_kwargs['referencia_tipo'] = referencia_tipo
+                    dte_kwargs['referencia_folio'] = referencia_folio
+                    dte_kwargs['referencia_fecha'] = parse_date(referencia_fecha) if referencia_fecha else None
                 dte = Dte.objects.create(**dte_kwargs)
                 logger.info("DTE emitido creado: dte_id=%s numero=%s tipo=%s", dte.id, numero_documento, tipo_doc)
             except Exception as e:
@@ -27273,6 +27292,7 @@ def crear_ticket(request):
         productos = data.get('productos', [])
         total = data.get('total', 0)
         total_items = data.get('total_items', 0)
+        datos_cliente = data.get('cliente') or {}
 
         sucursal_id = (
             request.session.get('idSucursalActual')
@@ -27333,7 +27353,29 @@ def crear_ticket(request):
                 total=total,
                 responsable=request.user.username if request.user.is_authenticated else 'Sistema'
             )
-            
+
+            # Datos del cliente capturados por el vendedor (opcional, fidelización).
+            # Se persisten en el ticket para que el cajero los vea precargados al
+            # cobrar, y se crea/actualiza el Cliente del CRM para enlazarlo.
+            if datos_cliente and (datos_cliente.get('nombre') or datos_cliente.get('rut')):
+                from .views_modulo_ventas import formatear_rut, guardar_o_actualizar_cliente
+                celular_cli = (datos_cliente.get('celular') or '').strip()
+                ticket.cliente_nombre = (datos_cliente.get('nombre') or '').strip()
+                if datos_cliente.get('rut'):
+                    ticket.cliente_rut = formatear_rut(datos_cliente.get('rut'))
+                ticket.cliente_email = (datos_cliente.get('email') or '').strip()
+                # El celular se guarda en el campo de teléfono secundario del ticket.
+                ticket.cliente_telefono_secundario = celular_cli
+                # Crear/actualizar Cliente CRM (con celular + fecha de nacimiento)
+                if datos_cliente.get('nombre') and datos_cliente.get('rut'):
+                    cliente_crm = guardar_o_actualizar_cliente(datos_cliente, request.user)
+                    if cliente_crm:
+                        ticket.cliente = cliente_crm
+                ticket.save(update_fields=[
+                    'cliente', 'cliente_nombre', 'cliente_rut', 'cliente_email',
+                    'cliente_telefono_secundario',
+                ])
+
             # Agregar productos al ticket
             for producto_data in productos:
                 sku = producto_data.get('sku')

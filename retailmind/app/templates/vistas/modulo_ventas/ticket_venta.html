@@ -1130,6 +1130,21 @@ div[style*="border: 1px solid #000"] {
 }
 
 /* --- Barra inferior sticky: totales + imprimir --- */
+/* ===== Panel Cliente (Fidelización) ===== */
+.pos-cliente-card { border:1px solid rgba(0,102,255,0.18); border-radius:12px; overflow:hidden; }
+.pos-cliente-header {
+    cursor:pointer; background:linear-gradient(90deg,#eef4ff,#e9fbf6);
+    border-bottom:1px solid rgba(0,102,255,0.12); user-select:none;
+}
+.pos-cliente-header:hover { background:linear-gradient(90deg,#e4eeff,#dff7f0); }
+.pos-cliente-icon {
+    width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(135deg,#0066FF,#00D4AA); color:#fff; font-size:1.1rem;
+}
+.pos-cliente-header.abierto #posClienteChevron { transform:rotate(180deg); }
+.pos-cli-label { font-size:0.7rem; font-weight:600; color:#475569; margin-bottom:2px; }
+.pos-cliente-card.tiene-datos .pos-cliente-icon { box-shadow:0 0 0 3px rgba(0,212,170,0.25); }
+
 .pos-bottom-bar {
     position: sticky !important;
     bottom: 0;
@@ -1637,6 +1652,72 @@ div[style*="border: 1px solid #000"] {
                         </div>
                     </div>
                 </div><!-- /pos-unified-panel -->
+
+                <!-- ===== PANEL CLIENTE (FIDELIZACIÓN) ===== -->
+                <div class="card mt-2 pos-cliente-card">
+                    <div class="card-header py-2 pos-cliente-header" id="posClienteToggle" role="button"
+                         onclick="togglePanelCliente()">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="pos-cliente-icon"><i class="ri-user-star-line"></i></span>
+                                <div>
+                                    <h6 class="mb-0" style="font-size:0.85rem;font-weight:700;">Cliente
+                                        <span class="badge ms-1" style="background:linear-gradient(135deg,#0066FF,#00D4AA);font-size:0.6rem;">FIDELIZACIÓN</span>
+                                    </h6>
+                                    <small class="text-muted" id="posClienteResumen" style="font-size:0.7rem;">
+                                        Registra al cliente para que sume puntos en su compra
+                                    </small>
+                                </div>
+                            </div>
+                            <i class="ri-arrow-down-s-line fs-4" id="posClienteChevron" style="transition:transform .2s;"></i>
+                        </div>
+                    </div>
+                    <div class="card-body pos-cliente-body d-none" id="posClienteBody">
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <label class="pos-cli-label">Nombre</label>
+                                <input type="text" class="form-control form-control-sm" id="tkClienteNombre" placeholder="Nombre del cliente" oninput="actualizarResumenCliente()">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="pos-cli-label">RUT</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control form-control-sm" id="tkClienteRut" placeholder="12345678-9"
+                                           oninput="actualizarResumenCliente()" onblur="if(this.value.trim())tkMarcar('tkClienteRut',tkValidarRut(this.value))"
+                                           onkeydown="if(event.key==='Enter'){event.preventDefault();tkBuscarClientePorRut();}">
+                                    <button type="button" class="btn btn-outline-primary" onclick="tkBuscarClientePorRut()" title="Buscar cliente existente">
+                                        <i class="ri-search-line"></i>
+                                    </button>
+                                    <div class="invalid-feedback">RUT inválido.</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="pos-cli-label">Celular <span class="text-info">★ fideliza</span></label>
+                                <input type="tel" class="form-control form-control-sm" id="tkClienteCelular" placeholder="+56 9 1234 5678" maxlength="15"
+                                       onblur="if(this.value.trim())tkMarcar('tkClienteCelular',tkNormalizarCelular(this.value)!=='')">
+                                <div class="invalid-feedback">Celular inválido.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="pos-cli-label">Email</label>
+                                <input type="email" class="form-control form-control-sm" id="tkClienteEmail" placeholder="correo@ejemplo.com"
+                                       onblur="tkMarcar('tkClienteEmail',tkValidarEmail(this.value))">
+                                <div class="invalid-feedback">Email inválido.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="pos-cli-label">Fecha nacimiento</label>
+                                <input type="date" class="form-control form-control-sm" id="tkClienteFechaNac"
+                                       onblur="tkMarcar('tkClienteFechaNac',tkValidarFecha(this.value))">
+                                <div class="invalid-feedback">Fecha inválida.</div>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 mt-2">
+                            <i class="ri-gift-line text-success"></i>
+                            <small class="text-muted">Estos datos se cargarán automáticamente al cobrar el ticket. El cajero no tendrá que reingresarlos.</small>
+                            <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="limpiarClienteTicket()">
+                                <i class="ri-eraser-line"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Barra inferior sticky: totales + imprimir -->
                 <div class="pos-bottom-bar card mt-2">
@@ -3464,6 +3545,132 @@ $(document).ready(function() {
     });
 
     // Procesar e imprimir ticket
+    // ===== Cliente (fidelización) en ticket-venta =====
+    function tkValidarRut(rut) {
+        if (!rut) return false;
+        const limpio = rut.replace(/[^0-9kK]/g, '').toUpperCase();
+        if (limpio.length < 2) return false;
+        const cuerpo = limpio.slice(0, -1), dv = limpio.slice(-1);
+        if (!/^\d+$/.test(cuerpo)) return false;
+        let suma = 0, mul = 2;
+        for (let i = cuerpo.length - 1; i >= 0; i--) { suma += parseInt(cuerpo[i]) * mul; mul = mul < 7 ? mul + 1 : 2; }
+        let dvc = 11 - (suma % 11);
+        dvc = dvc === 11 ? '0' : dvc === 10 ? 'K' : String(dvc);
+        return dv === dvc;
+    }
+    function tkValidarEmail(e) { return !e || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim()); }
+    function tkNormalizarCelular(c) {
+        if (!c) return '';
+        let n = String(c).replace(/[^0-9]/g, '');
+        if (n.length === 11 && n.startsWith('56')) n = n.slice(2);
+        return (n.length === 9 && n.startsWith('9')) ? n : '';
+    }
+    function tkValidarFecha(v) {
+        if (!v) return true;
+        const f = new Date(v + 'T00:00:00');
+        if (isNaN(f.getTime())) return false;
+        const hoy = new Date();
+        if (f > hoy) return false;
+        const edad = (hoy - f) / (365.25 * 24 * 3600 * 1000);
+        return edad >= 0 && edad <= 120;
+    }
+    function tkMarcar(id, ok) {
+        const el = document.getElementById(id);
+        if (!el) return ok;
+        el.classList.toggle('is-invalid', !ok);
+        return ok;
+    }
+
+    function togglePanelCliente() {
+        const body = document.getElementById('posClienteBody');
+        const header = document.getElementById('posClienteToggle');
+        body.classList.toggle('d-none');
+        header.classList.toggle('abierto', !body.classList.contains('d-none'));
+    }
+
+    function limpiarClienteTicket() {
+        ['tkClienteNombre','tkClienteRut','tkClienteCelular','tkClienteEmail','tkClienteFechaNac'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { el.value = ''; el.classList.remove('is-invalid'); }
+        });
+        actualizarResumenCliente();
+    }
+
+    // Busca un cliente existente por RUT y autocompleta el panel (paridad con el POS).
+    function tkBuscarClientePorRut() {
+        const rut = (document.getElementById('tkClienteRut')?.value || '').trim();
+        if (!rut) { return; }
+        if (!tkValidarRut(rut)) {
+            tkMarcar('tkClienteRut', false);
+            Swal.fire({ icon: 'warning', title: 'RUT inválido', toast: true, position: 'top-end',
+                showConfirmButton: false, timer: 2500 });
+            return;
+        }
+        fetch(`{% url "buscar_cliente_rut" %}?rut=${encodeURIComponent(rut)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.cliente) {
+                    const c = data.cliente;
+                    if (c.nombre) document.getElementById('tkClienteNombre').value = c.nombre;
+                    if (c.email) document.getElementById('tkClienteEmail').value = c.email;
+                    const cel = c.celular || c.telefono_secundario || c.telefono || '';
+                    if (cel) document.getElementById('tkClienteCelular').value = cel;
+                    if (c.fecha_nacimiento) document.getElementById('tkClienteFechaNac').value = c.fecha_nacimiento;
+                    actualizarResumenCliente();
+                    Swal.fire({ icon: 'success', title: 'Cliente encontrado', toast: true, position: 'top-end',
+                        showConfirmButton: false, timer: 2000 });
+                } else {
+                    Swal.fire({ icon: 'info', title: 'Cliente nuevo — complétalo a mano', toast: true,
+                        position: 'top-end', showConfirmButton: false, timer: 2500 });
+                }
+            })
+            .catch(() => {
+                Swal.fire({ icon: 'error', title: 'Error al buscar', toast: true, position: 'top-end',
+                    showConfirmButton: false, timer: 2500 });
+            });
+    }
+
+    function actualizarResumenCliente() {
+        const nombre = (document.getElementById('tkClienteNombre')?.value || '').trim();
+        const rut = (document.getElementById('tkClienteRut')?.value || '').trim();
+        const resumen = document.getElementById('posClienteResumen');
+        const card = document.querySelector('.pos-cliente-card');
+        if (nombre || rut) {
+            resumen.textContent = `${nombre || 'Sin nombre'}${rut ? ' · ' + rut : ''} — sumará puntos`;
+            card?.classList.add('tiene-datos');
+        } else {
+            resumen.textContent = 'Registra al cliente para que sume puntos en su compra';
+            card?.classList.remove('tiene-datos');
+        }
+    }
+
+    // Devuelve {datos, valido}. Si el panel está vacío -> valido (cliente opcional).
+    function obtenerDatosClienteTicket() {
+        const nombre = (document.getElementById('tkClienteNombre')?.value || '').trim();
+        const rut = (document.getElementById('tkClienteRut')?.value || '').trim();
+        const celular = (document.getElementById('tkClienteCelular')?.value || '').trim();
+        const email = (document.getElementById('tkClienteEmail')?.value || '').trim();
+        const fechaNac = document.getElementById('tkClienteFechaNac')?.value || '';
+
+        // Sin datos => no se registra cliente, sigue siendo válido.
+        if (!nombre && !rut && !celular && !email && !fechaNac) {
+            return { datos: null, valido: true };
+        }
+
+        let ok = true;
+        // Si va a registrar cliente, nombre + RUT válido son necesarios para fidelizar.
+        ok = tkMarcar('tkClienteNombre', nombre !== '') && ok;
+        ok = tkMarcar('tkClienteRut', tkValidarRut(rut)) && ok;
+        if (celular) ok = tkMarcar('tkClienteCelular', tkNormalizarCelular(celular) !== '') && ok;
+        if (email) ok = tkMarcar('tkClienteEmail', tkValidarEmail(email)) && ok;
+        if (fechaNac) ok = tkMarcar('tkClienteFechaNac', tkValidarFecha(fechaNac)) && ok;
+
+        return {
+            datos: { nombre, rut, celular, email, fecha_nacimiento: fechaNac || '' },
+            valido: ok,
+        };
+    }
+
     function procesarTicket() {
         // Validar que existe correlativo antes de procesar
         if (!tieneCorrelativo) {
@@ -3471,6 +3678,21 @@ $(document).ready(function() {
                 icon: 'error',
                 title: 'Sin correlativo',
                 text: 'No existe un correlativo configurado para TICKET en esta sucursal. Por favor, contacte al administrador.',
+                confirmButtonText: 'Entendido'
+            });
+            return;
+        }
+
+        // Cliente (opcional): si el vendedor lo registró, validar antes de enviar.
+        const cliente = obtenerDatosClienteTicket();
+        if (!cliente.valido) {
+            // Abrir el panel para que el vendedor corrija
+            const body = document.getElementById('posClienteBody');
+            if (body.classList.contains('d-none')) togglePanelCliente();
+            Swal.fire({
+                icon: 'warning',
+                title: 'Datos del cliente incompletos',
+                text: 'Revisa el nombre, RUT, celular o email del cliente (o limpia el panel para crear el ticket sin cliente).',
                 confirmButtonText: 'Entendido'
             });
             return;
@@ -3484,7 +3706,8 @@ $(document).ready(function() {
                 precio: p.precio
             })),
             total: parseInt($('#totalTicket').val(), 10),
-            total_items: parseInt($('#totalItems').val(), 10)
+            total_items: parseInt($('#totalItems').val(), 10),
+            cliente: cliente.datos
         };
 
         fetch('{% url "crear_ticket" %}', {

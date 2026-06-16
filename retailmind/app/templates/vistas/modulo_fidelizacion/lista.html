@@ -1,0 +1,161 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<style>
+    .page-content { background:#fff !important; min-height: calc(100vh - 70px); }
+    .card.shadow { border:none; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px rgba(64,81,137,.1); }
+    .module-header {
+        background: linear-gradient(135deg,#405189 0%,#0ab39c 100%); color:white; padding:16px 24px;
+        display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;
+    }
+    .module-header-left { display:flex; align-items:center; gap:14px; }
+    .module-header-icon { width:48px; height:48px; background:rgba(255,255,255,.2); border-radius:12px;
+        display:flex; align-items:center; justify-content:center; font-size:24px; }
+    .module-header-info h5 { margin:0; font-size:18px; font-weight:600; color:white; }
+    .module-header-status { display:flex; align-items:center; gap:6px; font-size:13px; opacity:.9; margin-top:4px; }
+    .status-dot { width:8px; height:8px; background:#4ade80; border-radius:50%; animation:pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.5;} }
+    .pagination-controls { background: linear-gradient(135deg,#f8f9fa,#e9ecef); border-radius:12px; padding:16px; margin-bottom:16px; }
+    .kpi-card { border-radius:12px; border:none; transition:all .3s ease; }
+    .kpi-card:hover { transform: translateY(-4px); box-shadow:0 8px 25px rgba(0,0,0,.15); }
+    .pts-badge { font-weight:700; color:#0ab39c; }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+        <div class="card shadow">
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon"><i class="ri-user-star-line"></i></div>
+                    <div class="module-header-info">
+                        <h5>Clientes y Puntos</h5>
+                        <div class="module-header-status"><span class="status-dot"></span>
+                            {% if programa %}{{ programa.nombre }} · {{ programa.tasa_descuento_efectiva }}% retorno{% else %}Sin programa activo{% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="module-header-actions">
+                    <a href="{% url 'registrar_cliente_vista' %}" class="btn btn-success">
+                        <i class="ri-user-add-line"></i> Registrar cliente
+                    </a>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-4 col-6">
+                        <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9); border-left:4px solid #0ab39c;">
+                            <div class="card-body text-center py-2">
+                                <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-clientes">0</h4>
+                                <p class="text-muted mb-0 small">Clientes con cuenta</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 col-6">
+                        <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb); border-left:4px solid #299cdb;">
+                            <div class="card-body text-center py-2">
+                                <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-puntos">0</h4>
+                                <p class="text-muted mb-0 small">Puntos circulantes</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 col-12">
+                        <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#fff3e0,#ffe0b2); border-left:4px solid #fb8c00;">
+                            <div class="card-body text-center py-2">
+                                <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-pasivo">$0</h4>
+                                <p class="text-muted mb-0 small">Pasivo estimado</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pagination-controls">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-8">
+                            <input type="text" id="fid-busqueda" class="form-control" placeholder="Buscar cliente por nombre o RUT...">
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-primary w-100" onclick="cargarCuentas(1)"><i class="ri-filter-line"></i> Buscar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Cliente</th><th>RUT</th>
+                                <th class="text-end">Puntos</th><th class="text-end">Valor</th>
+                                <th class="text-center">Ficha</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fid-tbody">
+                            <tr><td colspan="5" class="text-center text-muted py-4">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                    <span class="text-muted small" id="fid-info"></span>
+                    <div class="btn-group" id="fid-paginacion"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const URLS_FID = {
+    listar: "{% url 'api_listar_cuentas' %}",
+    reporte: "{% url 'api_reporte_fidelizacion' %}",
+};
+function fmt(n) { return '$' + (n||0).toLocaleString('es-CL'); }
+
+function cargarKpis() {
+    fetch(URLS_FID.reporte).then(r=>r.json()).then(d=>{
+        if (!d.success) return;
+        document.getElementById('kpi-clientes').textContent = d.total_clientes;
+        document.getElementById('kpi-puntos').textContent = (d.puntos_circulantes||0).toLocaleString('es-CL');
+        document.getElementById('kpi-pasivo').textContent = fmt(d.pasivo_estimado_pesos);
+    });
+}
+
+function cargarCuentas(page) {
+    const q = document.getElementById('fid-busqueda').value;
+    fetch(`${URLS_FID.listar}?q=${encodeURIComponent(q)}&page=${page||1}`).then(r=>r.json()).then(d=>{
+        const tbody = document.getElementById('fid-tbody');
+        if (!d.success || !d.items.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">Sin resultados</td></tr>';
+            document.getElementById('fid-info').textContent = '';
+            document.getElementById('fid-paginacion').innerHTML = '';
+            return;
+        }
+        tbody.innerHTML = d.items.map(c => `
+            <tr>
+                <td>${c.cliente}</td>
+                <td class="small">${c.rut || '—'}</td>
+                <td class="text-end pts-badge">${(c.saldo_puntos||0).toLocaleString('es-CL')}</td>
+                <td class="text-end">${fmt(c.valor_pesos)}</td>
+                <td class="text-center">
+                    <a class="btn btn-sm btn-outline-primary" href="/app/fidelizacion/cliente/${c.cliente_id}/"><i class="ri-eye-line"></i></a>
+                </td>
+            </tr>`).join('');
+        document.getElementById('fid-info').textContent = `${d.total} clientes · página ${d.page}/${d.num_pages}`;
+        let html = '';
+        if (d.page > 1) html += `<button class="btn btn-sm btn-outline-secondary" onclick="cargarCuentas(${d.page-1})">«</button>`;
+        if (d.page < d.num_pages) html += `<button class="btn btn-sm btn-outline-secondary" onclick="cargarCuentas(${d.page+1})">»</button>`;
+        document.getElementById('fid-paginacion').innerHTML = html;
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    cargarKpis();
+    cargarCuentas(1);
+    document.getElementById('fid-busqueda').addEventListener('keyup', e => { if (e.key==='Enter') cargarCuentas(1); });
+});
+</script>
+
+{% include '../../layout/footer.html' %}

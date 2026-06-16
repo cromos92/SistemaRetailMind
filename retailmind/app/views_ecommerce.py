@@ -1160,6 +1160,8 @@ def api_facturar_pedido_individual(request, pedido_id):
             ticket.estado = 'PAGADO'
             ticket.save(update_fields=['estado'])
             dte = generar_dte_desde_ticket(ticket, tipo_documento, request.user)
+            # TXT Acepta canónico (idéntico a documentos), sobreescribe el bespoke.
+            _regenerar_txt_acepta_ecommerce(dte)
             sub_estado_anterior = pedido.sub_estado
             pedido.ticket = ticket
             pedido.dte = dte
@@ -1614,6 +1616,8 @@ def facturar_ecommerce_masivo(request):
                 ticket.save(update_fields=['estado'])
 
                 dte = generar_dte_desde_ticket(ticket, tipo_documento, request.user)
+                # TXT Acepta canónico (idéntico a documentos), sobreescribe el bespoke.
+                _regenerar_txt_acepta_ecommerce(dte)
 
                 sub_estado_ant = pedido.sub_estado
                 pedido.ticket = ticket
@@ -1697,151 +1701,73 @@ def facturar_ecommerce_masivo(request):
 # Regenerar / descargar TXT de un DTE ya emitido
 # ---------------------------------------------------------------------------
 
+def _regenerar_txt_acepta_ecommerce(dte):
+    """Reescribe el atributo transitorio ``dte.archivo_txt_data`` usando el
+    generador CANONICO (``construir_datos_txt_desde_dte``) — el mismo de
+    /app/ventas/documentos/ y del botón de re-descarga — para que el TXT que se
+    auto-descarga al facturar un pedido coincida exactamente con ellos.
+
+    NO toca la rama POS de ``generar_dte_desde_ticket`` (compartida con el POS):
+    solo lee el DTE ya persistido y setea un atributo en memoria
+    (``archivo_txt_data`` no es campo de BD), así que es seguro dentro del
+    ``transaction.atomic()`` de la facturación. Si algo falla se conserva el
+    valor previo y nunca rompe la emisión.
+    """
+    if not dte or getattr(dte, 'tipo_documento', '') == 'BOLETA PAPEL':
+        return
+    try:
+        from app.views_modulo_documentos import construir_datos_txt_desde_dte, generar_txt_dte_acepta
+        datos = construir_datos_txt_desde_dte(dte)
+        contenido = generar_txt_dte_acepta(datos)
+        nombre = f"{dte.tipo_documento.replace(' ', '_')}_{dte.numero_documento}.txt"
+        dte.archivo_txt_data = {'contenido': contenido, 'nombre_archivo': nombre}
+    except Exception as e:
+        logger.error(
+            'No se pudo regenerar TXT canonico ecommerce dte=%s: %s',
+            getattr(dte, 'id', '?'), e, exc_info=True,
+        )
+        # Se conserva el archivo_txt_data previo: nunca rompemos la facturación.
+
+
 @login_required
 def descargar_txt_dte_ecommerce(request, dte_id):
     """
     GET /app/ecommerce/dte/<dte_id>/txt/
     Regenera y descarga el archivo TXT Acepta de un DTE ya emitido.
     """
+    from django.http import HttpResponse
     from app.models import Dte
-    dte = get_object_or_404(Dte.objects.select_related('sucursal', 'emisor', 'receptor', 'vendedor'), id=dte_id)
+    from app.views_modulo_documentos import construir_datos_txt_desde_dte, generar_txt_dte_acepta
+    dte = get_object_or_404(
+        Dte.objects.select_related('sucursal', 'emisor', 'receptor', 'vendedor'),
+        id=dte_id,
+    )
 
-    try:
-        from app.views_modulo_ventas import generar_dte_desde_ticket
-        from app.views_modulo_documentos import generar_txt_dte_acepta, limpiar_texto
-        from decimal import Decimal
-
-        ticket = dte.ticket_set.first() or getattr(dte, 'vendedor_ticket', None)
-
-        # Regenerar TXT a partir del DTE existente
-        empresa = dte.emisor
-        receptor = dte.receptor
-        es_boleta = 'BOLETA' in dte.tipo_documento
-
-        neto = dte.monto_neto
-        total = dte.monto_con_iva
-        iva = total - neto
-
-        # Info enriquecida de métodos de pago para la observación del TXT Acepta.
-        # Incluye tipo de tarjeta, voucher/autorización Transbank y notas (terminal + op del POS).
-        from app.models import METODO_PAGO_TICKET_CHOICES
-        metodos_pago_info = []
-        for pago in dte.dte_detalle_pagos.all():
-            metodo_nombre = dict(METODO_PAGO_TICKET_CHOICES).get(pago.metodo_pago, pago.metodo_pago)
-            partes = [f"{metodo_nombre}: ${pago.monto:,}"]
-            if pago.tipo_tarjeta:
-                partes.append(f"Tarj: {pago.tipo_tarjeta}")
-            if pago.voucher:
-                partes.append(f"Auth: {pago.voucher}")
-            if getattr(pago, 'notas', None):
-                notas_compactas = ' '.join(str(pago.notas).split())[:80]
-                partes.append(notas_compactas)
-            metodos_pago_info.append(' - '.join(partes))
-        # Limpiar cada método por separado y unir con '|' DESPUÉS. Limpiar la
-        # cadena ya unida borraría los '|' (separador de campos Acepta) y la
-        # observación del TXT perdería todos los métodos salvo el primero.
-        metodos_pago_texto = (
-            ' | '.join(limpiar_texto(m) for m in metodos_pago_info)
-            if metodos_pago_info else 'VENTA INTERNET'
+    # BOLETA PAPEL no genera TXT Acepta (paridad con el endpoint de documentos).
+    if dte.tipo_documento == 'BOLETA PAPEL':
+        return HttpResponse(
+            'Las Boletas de Papel no generan archivo TXT',
+            status=400, content_type='text/plain',
         )
 
-        productos_txt = []
-        for dp in dte.dte_productos.all():
-            if dp.productoTalla:
-                sku = str(dp.productoTalla.sku)
-                nombre = (dp.productoTalla.producto.descripcion or dp.productoTalla.producto.articulo) if dp.productoTalla.producto else sku
-            else:
-                sku = 'ITEM'
-                nombre = dp.descripcion or 'Ítem ecommerce'
-            # En FACTURA las líneas del TXT van NETAS (÷1.19); en BOLETA van con
-            # IVA incluido. dp.precio está con IVA, así que para factura lo
-            # convertimos a neto igual que el camino de emisión inicial
-            # (generar_dte_desde_ticket), evitando que las líneas salgan 19% altas.
-            if es_boleta:
-                precio_linea = int(dp.precio)
-            else:
-                precio_linea = int(round(Decimal(dp.precio) / Decimal('1.19')))
-            productos_txt.append({
-                'sku': sku,
-                'nombre': nombre[:80],
-                'cantidad': dp.stock,
-                'precio_unitario': precio_linea,
-                'total': precio_linea * dp.stock,
-            })
-
-        datos_txt = {
-            'documento': {
-                'tipo_documento': 39 if es_boleta else 33,
-                'folio': dte.numero_documento,
-                'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d'),
-                'forma_pago': 1,
-                'ind_servicio': 3,
-                'timestamp': dte.fecha_emision.strftime('%Y-%m-%dT%H:%M:%S'),
-            },
-            'emisor': {
-                'rut': empresa.rut,
-                'razon_social': limpiar_texto(empresa.razon_social or empresa.nombre),
-                'giro': limpiar_texto(empresa.giro or 'Sin giro'),
-                'acteco': empresa.acteco or '',
-                # Priorizar dirección/comuna/ciudad de la SUCURSAL que emite el DTE.
-                # Si la sucursal no tiene el dato (algunas sucursales viejas no cargaron
-                # comuna/ciudad), se cae al dato de la empresa como fallback.
-                'direccion': limpiar_texto((dte.sucursal.direccion if dte.sucursal else '') or empresa.direccion or ''),
-                'comuna': limpiar_texto((dte.sucursal.comuna if dte.sucursal else '') or empresa.comuna or ''),
-                'ciudad': limpiar_texto((dte.sucursal.ciudad if dte.sucursal else '') or empresa.ciudad or ''),
-                'codigo_vendedor': limpiar_texto(str(dte.vendedor.codigo_vendedor) if dte.vendedor else '1000'),
-                'nombre_vendedor': limpiar_texto(dte.vendedor.nombre if dte.vendedor else 'Venta Internet'),
-                # Ya viene limpio método a método (preservando los '|').
-                'metodos_pago': metodos_pago_texto,
-                'correlativo_ticket': dte.referencias or '',
-                'telefono': empresa.contacto1 or '',
-                'nombre_impresora_boleta': getattr(dte.sucursal, 'nombre_impresora_boleta', 'boleta') or 'boleta',
-                'nombre_impresora_factura': getattr(dte.sucursal, 'nombre_impresora_factura', 'factura') or 'factura',
-                'sucursal': limpiar_texto(dte.sucursal.alias if dte.sucursal else ''),
-            },
-            'receptor': {
-                'rut': receptor.rut if receptor and not es_boleta else '66666666-6',
-                'razon_social': limpiar_texto(receptor.razon_social if receptor and not es_boleta else 'CONSUMIDOR FINAL'),
-                'giro': limpiar_texto(receptor.giro if receptor and not es_boleta else ''),
-                'direccion': limpiar_texto(receptor.direccion if receptor and not es_boleta else ''),
-                'comuna': limpiar_texto(receptor.comuna if receptor and not es_boleta else ''),
-                'ciudad': limpiar_texto(receptor.ciudad if receptor and not es_boleta else ''),
-            },
-            'totales': {
-                'monto_neto': int(neto),
-                'monto_exento': 0,
-                'tasa_iva': 19,
-                'iva': int(iva),
-                'monto_total': int(total),
-            },
-            'detalle': [
-                {
-                    'codigo': limpiar_texto(str(p['sku'])[:35]),
-                    'sku': limpiar_texto(str(p['sku'])),
-                    'nombre': limpiar_texto(p['nombre']),
-                    'descripcion': '',
-                    'cantidad': p['cantidad'],
-                    'unidad': 'UN',
-                    'precio_unitario': p['precio_unitario'],
-                    'monto_item': p['total'],
-                }
-                for p in productos_txt
-            ],
-            'observaciones': '',
-            'observaciones_adicionales': '',
-        }
-
-        contenido_txt = generar_txt_dte_acepta(datos_txt)
+    try:
+        # Fuente UNICA de verdad: el MISMO generador canónico que usa
+        # /app/ventas/documentos/. Lee monto_item / descuento_monto /
+        # descuento_pct de Dte_Productos, normaliza el detalle a neto (factura) o
+        # total (boleta) y arrastra los descuentos globales. Antes este endpoint
+        # recalculaba precio/1.19 por línea e ignoraba monto_item y los
+        # descuentos, por lo que los precios/descuentos del TXT no coincidían con
+        # el DTE mostrado en documentos.
+        datos = construir_datos_txt_desde_dte(dte)
+        contenido_txt = generar_txt_dte_acepta(datos)
         nombre_archivo = f"{dte.tipo_documento.replace(' ', '_')}_{dte.numero_documento}.txt"
 
-        from django.http import HttpResponse
         response = HttpResponse(contenido_txt, content_type='text/plain; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename="{nombre_archivo}"'
         return response
 
     except Exception as e:
         logger.error('Error regenerando TXT para DTE %s: %s', dte_id, e, exc_info=True)
-        from django.http import HttpResponse
         return HttpResponse(f'Error generando TXT: {e}', status=500, content_type='text/plain')
 
 

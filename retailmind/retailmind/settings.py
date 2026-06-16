@@ -510,7 +510,22 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
+    # Rates para los scopes de la API de clientes finales (app fidelización).
+    # Solo aplican donde la vista declara ScopedRateThrottle + throttle_scope;
+    # no afectan a los endpoints de staff/desktop.
+    'DEFAULT_THROTTLE_RATES': {
+        'otp_solicitar': '5/hour',
+        'otp_verificar': '10/hour',
+        'vincular_cliente': '5/hour',
+    },
 }
+
+# ========== APP DE CLIENTES FINALES (fidelización móvil) ==========
+# OTP de login del cliente (ver app/models/cliente_app.py y cliente_app_service.py).
+OTP_EXPIRACION_MINUTOS = 10   # vigencia de un código OTP
+MAX_INTENTOS_OTP = 5          # intentos por código antes de invalidarlo
+MAX_LOGIN_FALLIDOS = 5        # fallos antes de bloquear la cuenta
+BLOQUEO_LOGIN_MINUTOS = 15    # duración del bloqueo por fuerza bruta
 
 # ========== CONFIGURACIÓN JWT PARA APP DESKTOP ==========
 from datetime import timedelta

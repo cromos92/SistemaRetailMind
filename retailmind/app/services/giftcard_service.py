@@ -1,0 +1,297 @@
+"""
+Servicio de Gift Cards (function-based, estilo `pos_service.py`).
+
+Encapsula TODA la lógica de saldos para que el hook de cobro, las vistas de
+gestión, la API desktop y los flujos de reversa compartan una sola fuente de
+verdad.
+
+Garantías:
+- Cada operación que mueve saldo abre su propia `transaction.atomic()` y bloquea
+  la giftcard con `select_for_update()` (anti-carrera entre cobros simultáneos).
+- Idempotencia: los movimientos llevan `idempotency_key` única; reintentos del
+  POS no vuelven a descontar/cargar.
+
+NO se confía en un rollback del request porque `registrar_pagos_ticket` no es
+atómico de forma global.
+"""
+import logging
+
+from django.db import transaction, IntegrityError
+from django.utils import timezone
+
+from app.models import GiftCard, MovimientoGiftCard
+
+logger = logging.getLogger('app')
+
+
+class GiftCardError(Exception):
+    """Error de negocio de gift cards (saldo insuficiente, vencida, etc.)."""
+
+
+def _registrar_movimiento(giftcard, tipo, monto, *, ticket=None, pago_ticket=None,
+                          sucursal=None, usuario=None, idempotency_key=None,
+                          observaciones=''):
+    """
+    Crea un MovimientoGiftCard y actualiza el saldo denormalizado de la
+    giftcard. Debe llamarse DENTRO de una transacción con la giftcard bloqueada.
+    """
+    nuevo_saldo = giftcard.saldo_actual + monto
+    mov = MovimientoGiftCard.objects.create(
+        giftcard=giftcard,
+        tipo=tipo,
+        monto=monto,
+        saldo_resultante=nuevo_saldo,
+        ticket=ticket,
+        pago_ticket=pago_ticket,
+        sucursal=sucursal,
+        usuario=usuario,
+        idempotency_key=idempotency_key,
+        observaciones=observaciones,
+    )
+    giftcard.saldo_actual = nuevo_saldo
+    # Recalcular estado por saldo (sin pisar estados terminales ANULADA/BLOQUEADA)
+    if giftcard.estado in ('ACTIVA', 'AGOTADA'):
+        giftcard.estado = 'AGOTADA' if nuevo_saldo <= 0 else 'ACTIVA'
+    giftcard.save(update_fields=['saldo_actual', 'estado', 'updated_at'])
+    return mov
+
+
+def emitir(monto, *, sucursal=None, cliente=None, vendedor=None,
+           ticket=None, vencimiento=None, pin=None, usuario=None,
+           observaciones=''):
+    """
+    Emite una nueva gift card con `monto` de saldo inicial.
+    Devuelve la GiftCard creada. El código se genera de forma segura y única.
+    """
+    monto = int(monto)
+    if monto <= 0:
+        raise GiftCardError('El monto de la gift card debe ser mayor a 0.')
+
+    if vencimiento is None:
+        from app.models import GIFTCARD_VIGENCIA_MESES_DEFAULT
+        # Vigencia por defecto: hoy + N meses (aprox. 30 días/mes).
+        vencimiento = timezone.localdate() + timezone.timedelta(
+            days=30 * GIFTCARD_VIGENCIA_MESES_DEFAULT
+        )
+
+    with transaction.atomic():
+        giftcard = GiftCard(
+            saldo_inicial=monto,
+            saldo_actual=0,  # se sube con el movimiento EMISION para dejar ledger
+            estado='ACTIVA',
+            fecha_vencimiento=vencimiento,
+            sucursal_emision=sucursal,
+            cliente=cliente,
+            vendedor=vendedor,
+            ticket_emision=ticket,
+            pin=pin,
+            observaciones=observaciones,
+            created_by=usuario,
+            updated_by=usuario,
+        )
+        giftcard.save()  # genera código único (con reintento)
+        _registrar_movimiento(
+            giftcard, 'EMISION', monto,
+            ticket=ticket, sucursal=sucursal, usuario=usuario,
+            idempotency_key=f"emision:{giftcard.id}",
+            observaciones='Emisión de gift card',
+        )
+    logger.info("GiftCard emitida codigo=%s monto=%s", giftcard.codigo, monto)
+    return giftcard
+
+
+def consultar_saldo(codigo):
+    """
+    Devuelve un dict con el estado y saldo de la gift card (sin descontar).
+    Lanza GiftCardError si no existe.
+    """
+    codigo = (codigo or '').strip().upper()
+    try:
+        gc = GiftCard.objects.get(codigo=codigo)
+    except GiftCard.DoesNotExist:
+        raise GiftCardError('Gift card no encontrada.')
+    return {
+        'codigo': gc.codigo,
+        'estado': gc.estado,
+        'estado_display': gc.get_estado_display(),
+        'saldo_actual': gc.saldo_actual,
+        'fecha_vencimiento': gc.fecha_vencimiento.isoformat() if gc.fecha_vencimiento else None,
+        'vencida': gc.esta_vencida,
+        'valida': gc.estado == 'ACTIVA' and not gc.esta_vencida and gc.saldo_actual > 0,
+    }
+
+
+def validar(codigo, monto, *, pin=None):
+    """
+    Pre-validación SIN descontar (usada antes de cobrar).
+    Devuelve dict con `valida`, `saldo_suficiente`, `saldo_actual` y `motivo`.
+    Nunca lanza por saldo/estado; solo informa.
+    """
+    codigo = (codigo or '').strip().upper()
+    monto = int(monto or 0)
+    gc = GiftCard.objects.filter(codigo=codigo).first()
+    if not gc:
+        return {'valida': False, 'motivo': 'No encontrada', 'saldo_actual': 0,
+                'saldo_suficiente': False}
+    if gc.estado != 'ACTIVA':
+        return {'valida': False, 'motivo': f'Estado {gc.get_estado_display()}',
+                'saldo_actual': gc.saldo_actual, 'saldo_suficiente': False}
+    if gc.esta_vencida:
+        return {'valida': False, 'motivo': 'Vencida', 'saldo_actual': gc.saldo_actual,
+                'saldo_suficiente': False}
+    if gc.pin and pin is not None and str(pin) != str(gc.pin):
+        return {'valida': False, 'motivo': 'PIN incorrecto', 'saldo_actual': gc.saldo_actual,
+                'saldo_suficiente': False}
+    suficiente = gc.saldo_actual >= monto
+    return {
+        'valida': suficiente,
+        'motivo': '' if suficiente else 'Saldo insuficiente',
+        'saldo_actual': gc.saldo_actual,
+        'saldo_suficiente': suficiente,
+    }
+
+
+def consumir(codigo, monto, *, ticket=None, pago_ticket=None, sucursal=None,
+             usuario=None, pin=None, idempotency_key=None):
+    """
+    Descuenta `monto` de la gift card (pago de una venta).
+
+    Bloquea la giftcard con select_for_update. Idempotente: si ya existe un
+    movimiento con la misma `idempotency_key`, devuelve sin volver a descontar.
+
+    Lanza GiftCardError si la giftcard no es válida o no tiene saldo.
+    """
+    codigo = (codigo or '').strip().upper()
+    monto = int(monto)
+    if monto <= 0:
+        raise GiftCardError('El monto a consumir debe ser mayor a 0.')
+
+    # idempotencia preferente: por pago concreto
+    if not idempotency_key and pago_ticket is not None:
+        idempotency_key = f"consumo:{pago_ticket.id}"
+
+    with transaction.atomic():
+        # Si ya se procesó este consumo, no repetir.
+        if idempotency_key:
+            existente = MovimientoGiftCard.objects.filter(
+                idempotency_key=idempotency_key
+            ).first()
+            if existente:
+                logger.info("Consumo giftcard idempotente codigo=%s key=%s (ya aplicado)",
+                            codigo, idempotency_key)
+                return existente
+
+        try:
+            gc = GiftCard.objects.select_for_update().get(codigo=codigo)
+        except GiftCard.DoesNotExist:
+            raise GiftCardError('Gift card no encontrada.')
+
+        if gc.estado != 'ACTIVA':
+            raise GiftCardError(f'Gift card no disponible (estado: {gc.get_estado_display()}).')
+        if gc.esta_vencida:
+            raise GiftCardError('Gift card vencida.')
+        if gc.pin and pin is not None and str(pin) != str(gc.pin):
+            raise GiftCardError('PIN incorrecto.')
+        if gc.saldo_actual < monto:
+            raise GiftCardError(
+                f'Saldo insuficiente (disponible ${gc.saldo_actual:,}, requerido ${monto:,}).'
+            )
+
+        try:
+            mov = _registrar_movimiento(
+                gc, 'CONSUMO', -monto,
+                ticket=ticket, pago_ticket=pago_ticket, sucursal=sucursal,
+                usuario=usuario, idempotency_key=idempotency_key,
+                observaciones=f'Pago de venta (ticket {getattr(ticket, "correlativo", "")})',
+            )
+        except IntegrityError:
+            # Carrera: otro proceso insertó el mismo idempotency_key. Recuperar.
+            mov = MovimientoGiftCard.objects.filter(idempotency_key=idempotency_key).first()
+            if not mov:
+                raise
+    logger.info("GiftCard consumida codigo=%s monto=%s saldo=%s", gc.codigo, monto, gc.saldo_actual)
+    return mov
+
+
+def recargar(codigo, monto, *, sucursal=None, usuario=None, observaciones=''):
+    """Agrega saldo a una gift card existente."""
+    codigo = (codigo or '').strip().upper()
+    monto = int(monto)
+    if monto <= 0:
+        raise GiftCardError('El monto a recargar debe ser mayor a 0.')
+    with transaction.atomic():
+        try:
+            gc = GiftCard.objects.select_for_update().get(codigo=codigo)
+        except GiftCard.DoesNotExist:
+            raise GiftCardError('Gift card no encontrada.')
+        if gc.estado in ('ANULADA', 'BLOQUEADA'):
+            raise GiftCardError(f'No se puede recargar (estado: {gc.get_estado_display()}).')
+        mov = _registrar_movimiento(
+            gc, 'CARGA', monto, sucursal=sucursal, usuario=usuario,
+            observaciones=observaciones or 'Recarga manual',
+        )
+    return mov
+
+
+def anular(codigo, *, usuario=None, observaciones=''):
+    """
+    Anula la gift card: lleva el saldo a 0 (movimiento ANULACION) y marca el
+    estado ANULADA. Irreversible.
+    """
+    codigo = (codigo or '').strip().upper()
+    with transaction.atomic():
+        try:
+            gc = GiftCard.objects.select_for_update().get(codigo=codigo)
+        except GiftCard.DoesNotExist:
+            raise GiftCardError('Gift card no encontrada.')
+        if gc.estado == 'ANULADA':
+            return gc
+        if gc.saldo_actual > 0:
+            MovimientoGiftCard.objects.create(
+                giftcard=gc,
+                tipo='ANULACION',
+                monto=-gc.saldo_actual,
+                saldo_resultante=0,
+                usuario=usuario,
+                observaciones=observaciones or 'Anulación de gift card',
+            )
+        gc.saldo_actual = 0
+        gc.estado = 'ANULADA'
+        gc.updated_by = usuario
+        gc.save(update_fields=['saldo_actual', 'estado', 'updated_by', 'updated_at'])
+    logger.info("GiftCard anulada codigo=%s", gc.codigo)
+    return gc
+
+
+def reversar(codigo, monto, *, ticket=None, usuario=None, idempotency_key=None,
+             observaciones=''):
+    """
+    Recarga la gift card por una devolución/anulación de venta que la consumió.
+    Idempotente por `idempotency_key`.
+    """
+    codigo = (codigo or '').strip().upper()
+    monto = int(monto)
+    if monto <= 0:
+        return None
+    if not idempotency_key and ticket is not None:
+        idempotency_key = f"reversa_gc:{ticket.id}:{codigo}"
+    with transaction.atomic():
+        if idempotency_key:
+            existente = MovimientoGiftCard.objects.filter(
+                idempotency_key=idempotency_key
+            ).first()
+            if existente:
+                return existente
+        try:
+            gc = GiftCard.objects.select_for_update().get(codigo=codigo)
+        except GiftCard.DoesNotExist:
+            raise GiftCardError('Gift card no encontrada.')
+        # Reactivar si estaba AGOTADA; respetar ANULADA/BLOQUEADA.
+        if gc.estado == 'AGOTADA':
+            gc.estado = 'ACTIVA'
+        mov = _registrar_movimiento(
+            gc, 'REVERSA', monto, ticket=ticket, usuario=usuario,
+            idempotency_key=idempotency_key,
+            observaciones=observaciones or 'Reversa por devolución/anulación de venta',
+        )
+    return mov

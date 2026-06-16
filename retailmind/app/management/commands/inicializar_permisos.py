@@ -22,6 +22,7 @@ class Command(BaseCommand):
         self.crear_modulo_reportes()
         self.crear_modulo_configuracion()
         self.crear_modulo_ecommerce()
+        self.crear_modulo_fidelizacion()  # GiftCards + Puntos de fidelizaci?n
         self.crear_modulo_usuario()  # Nuevo m?dulo para opciones de usuario
         
         # Crear permisos por defecto para cada rol
@@ -418,6 +419,41 @@ class Command(BaseCommand):
         
         self.stdout.write('[Usuario] Modulo Mi Cuenta creado')
 
+    def crear_modulo_fidelizacion(self):
+        """Crear modulo Fidelizacion (GiftCards + Puntos) y sus opciones"""
+        modulo, created = ModuloSistema.objects.get_or_create(
+            codigo='fidelizacion',
+            defaults={
+                'nombre': 'Fidelizaci?n',
+                'descripcion': 'Gift cards y programa de puntos de clientes',
+                'icono': 'ri-gift-line',
+                'orden': 8
+            }
+        )
+
+        opciones = [
+            ('giftcards_listado', 'Gift Cards', None, '/app/giftcards/', 'ri-gift-line', 1),
+            ('giftcards_emitir', 'Emitir Gift Card', None, '/app/giftcards/emitir/', 'ri-add-circle-line', 2),
+            ('fidelizacion_cuentas', 'Clientes y Puntos', None, '/app/fidelizacion/', 'ri-user-star-line', 3),
+            ('fidelizacion_programa', 'Configuraci?n Programa', None, '/app/fidelizacion/configuracion/', 'ri-settings-3-line', 4),
+            ('fidelizacion_reporte', 'Reporte Fidelizaci?n', None, '/app/fidelizacion/reporte/', 'ri-bar-chart-box-line', 5),
+        ]
+
+        for codigo, nombre, url_name, url_path, icono, orden in opciones:
+            OpcionMenu.objects.get_or_create(
+                codigo=codigo,
+                defaults={
+                    'modulo': modulo,
+                    'nombre': nombre,
+                    'url_name': url_name,
+                    'url_path': url_path,
+                    'icono': icono,
+                    'orden': orden
+                }
+            )
+
+        self.stdout.write('[Fidelizacion] Modulo Fidelizacion creado')
+
     def crear_permisos_administrador(self):
         """Crear permisos para el rol Administrador (acceso total)"""
         self.stdout.write('[ADMIN] Creando permisos para Administrador...')
@@ -493,10 +529,13 @@ class Command(BaseCommand):
             'reporte_rendimiento_proveedor',
             # Configuraci?n
             'gestion_clientes', 'gestion_vendedores',
+            # Fidelizaci?n (sin config del programa)
+            'giftcards_listado', 'giftcards_emitir', 'fidelizacion_cuentas',
+            'fidelizacion_reporte',
             # Mi Cuenta
             'mi_perfil', 'ajuste_stock_rapido', 'cambiar_empresa',
         ]
-        
+
         opciones = OpcionMenu.objects.filter(codigo__in=codigos_permitidos)
         for opcion in opciones:
             PermisoRol.objects.get_or_create(
@@ -530,10 +569,12 @@ class Command(BaseCommand):
             'lista_requerimientos', 'crear_requerimiento',
             # Documentos internos: puede recibir/reportar problemas, no aprobar regularizaciones
             'recepcion_dte',
+            # Fidelizaci?n: solo consultar gift cards (redime al cobrar) y ver puntos
+            'giftcards_listado', 'fidelizacion_cuentas',
             # Mi Cuenta
             'mi_perfil', 'ajuste_stock_rapido',
         ]
-        
+
         opciones = OpcionMenu.objects.filter(codigo__in=codigos_permitidos)
         for opcion in opciones:
             # Determinar permisos seg?n la opci?n
@@ -574,15 +615,19 @@ class Command(BaseCommand):
             'buscar_productos_sucursal',
             # Requerimientos
             'lista_requerimientos', 'crear_requerimiento',
+            # Fidelizaci?n: solo lectura
+            'giftcards_listado', 'fidelizacion_cuentas',
             # Mi Cuenta
             'mi_perfil',
         ]
-        
+
+        # Fidelizaci?n es solo lectura para el vendedor (no crea gift cards)
+        solo_lectura = {'giftcards_listado', 'fidelizacion_cuentas'}
         opciones = OpcionMenu.objects.filter(codigo__in=codigos_permitidos)
         for opcion in opciones:
             # Solo puede crear ventas y requerimientos
-            puede_crear = True
-            
+            puede_crear = opcion.codigo not in solo_lectura
+
             PermisoRol.objects.get_or_create(
                 rol='vendedor',
                 opcion_menu=opcion,

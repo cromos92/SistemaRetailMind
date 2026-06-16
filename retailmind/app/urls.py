@@ -296,6 +296,36 @@ from .views_modulo_requerimientos import (
     exportar_requerimientos,
     obtener_tipos_foto,
 )
+from .views_modulo_giftcards import (
+    # Vistas HTML
+    modulo_giftcards,
+    emitir_giftcard_vista,
+    detalle_giftcard_vista,
+    # APIs
+    api_emitir_giftcard,
+    api_listar_giftcards,
+    api_detalle_giftcard,
+    api_consultar_saldo_giftcard,
+    api_validar_giftcard,
+    api_recargar_giftcard,
+    api_anular_giftcard,
+    api_reporte_giftcards,
+)
+from .views_modulo_fidelizacion import (
+    # Vistas HTML
+    modulo_fidelizacion,
+    configurar_programa_vista,
+    ficha_cliente_puntos_vista,
+    registrar_cliente_vista,
+    # APIs
+    api_listar_cuentas,
+    api_detalle_cuenta,
+    api_consultar_saldo_puntos,
+    api_guardar_programa,
+    api_ajuste_manual_puntos,
+    api_registrar_cliente,
+    api_reporte_fidelizacion,
+)
 from .views_permisos import (
     # Gestión de permisos por rol
     gestion_permisos,
@@ -1194,6 +1224,36 @@ urlpatterns = [
     path('api/requerimientos/estadisticas/', obtener_estadisticas_requerimientos, name='api_estadisticas_requerimientos'),
     path('api/requerimientos/exportar/', exportar_requerimientos, name='api_exportar_requerimientos'),
     path('api/requerimientos/tipos-foto/', obtener_tipos_foto, name='api_tipos_foto_requerimiento'),
+
+    # ========== MÓDULO GIFT CARDS ==========
+    # Vistas HTML
+    path('giftcards/', modulo_giftcards, name='modulo_giftcards'),
+    path('giftcards/emitir/', emitir_giftcard_vista, name='emitir_giftcard_vista'),
+    path('giftcards/<int:giftcard_id>/', detalle_giftcard_vista, name='detalle_giftcard_vista'),
+    # APIs
+    path('api/giftcards/emitir/', api_emitir_giftcard, name='api_emitir_giftcard'),
+    path('api/giftcards/listar/', api_listar_giftcards, name='api_listar_giftcards'),
+    path('api/giftcards/<int:giftcard_id>/', api_detalle_giftcard, name='api_detalle_giftcard'),
+    path('api/giftcards/consultar/', api_consultar_saldo_giftcard, name='api_consultar_saldo_giftcard'),
+    path('api/giftcards/validar/', api_validar_giftcard, name='api_validar_giftcard'),
+    path('api/giftcards/recargar/', api_recargar_giftcard, name='api_recargar_giftcard'),
+    path('api/giftcards/anular/', api_anular_giftcard, name='api_anular_giftcard'),
+    path('api/giftcards/reporte/', api_reporte_giftcards, name='api_reporte_giftcards'),
+
+    # ========== MÓDULO FIDELIZACIÓN (PUNTOS) ==========
+    # Vistas HTML
+    path('fidelizacion/', modulo_fidelizacion, name='modulo_fidelizacion'),
+    path('fidelizacion/configuracion/', configurar_programa_vista, name='configurar_programa_vista'),
+    path('fidelizacion/registrar-cliente/', registrar_cliente_vista, name='registrar_cliente_vista'),
+    path('fidelizacion/cliente/<int:cliente_id>/', ficha_cliente_puntos_vista, name='ficha_cliente_puntos_vista'),
+    # APIs
+    path('api/fidelizacion/cuentas/', api_listar_cuentas, name='api_listar_cuentas'),
+    path('api/fidelizacion/cuenta/<int:cliente_id>/', api_detalle_cuenta, name='api_detalle_cuenta'),
+    path('api/fidelizacion/saldo/', api_consultar_saldo_puntos, name='api_consultar_saldo_puntos'),
+    path('api/fidelizacion/programa/guardar/', api_guardar_programa, name='api_guardar_programa'),
+    path('api/fidelizacion/ajuste/', api_ajuste_manual_puntos, name='api_ajuste_manual_puntos'),
+    path('api/fidelizacion/registrar-cliente/', api_registrar_cliente, name='api_registrar_cliente'),
+    path('api/fidelizacion/reporte/', api_reporte_fidelizacion, name='api_reporte_fidelizacion'),
 
     # ========== MÓDULO DE GESTIÓN DE PERMISOS ==========
     # Vista principal de gestión de permisos

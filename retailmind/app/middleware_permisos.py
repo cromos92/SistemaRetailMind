@@ -30,6 +30,17 @@ URL_PERMISO_MAP = {
     '/app/gestion-ventas-documentos/': 'gestion_documentos_ventas',
     '/app/ventas/cuadratura-caja/': 'cuadratura_caja',
     '/app/transbank/': 'pos_transbank',
+
+    # Fidelización (GiftCards + Puntos)
+    # ⚠️ Orden importa: el match es por substring, así que las rutas más
+    # específicas van ANTES que las genéricas (/app/giftcards/ es substring
+    # de /app/giftcards/emitir/).
+    '/app/giftcards/emitir/': 'giftcards_emitir',
+    '/app/giftcards/': 'giftcards_listado',
+    '/app/fidelizacion/configuracion/': 'fidelizacion_programa',
+    '/app/fidelizacion/reporte/': 'fidelizacion_reporte',
+    '/app/fidelizacion/registrar-cliente/': 'fidelizacion_cuentas',
+    '/app/fidelizacion/': 'fidelizacion_cuentas',
     
     # Documentos
     '/app/emisionDTE/': 'emision_dte',

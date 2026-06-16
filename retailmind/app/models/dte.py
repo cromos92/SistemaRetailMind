@@ -210,6 +210,7 @@ class Dte(models.Model):
         ('COSTO', 'Solo Costo'),
         ('SOBREPRECIO', 'Costo + Sobreprecio'),
         ('CUSTOM_PCT', 'Porcentaje Custom'),
+        ('PRECIO_VENTA', 'Precio de Venta'),
     ]
     tipo_precio_externo = models.CharField(
         max_length=20,
@@ -224,6 +225,27 @@ class Dte(models.Model):
         null=True,
         blank=True,
         help_text="Porcentaje de margen custom sobre el costo (solo si tipo_precio_externo=CUSTOM_PCT)"
+    )
+
+    # === REFERENCIA COMERCIAL OPCIONAL (Orden de Compra / Nota de Pedido) ===
+    # Referencia estructurada SII que viaja en el TXT (TpoDocRef/FolioRef/FchRef).
+    # Espejo del patrón de Ticket.referencia_tipo/folio/fecha.
+    referencia_tipo = models.CharField(
+        max_length=10,
+        null=True,
+        blank=True,
+        help_text="Código SII del documento referenciado: 801=Orden de Compra, 802=Nota de Pedido"
+    )
+    referencia_folio = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Folio/Número del documento referenciado (ej. N° de orden de compra)"
+    )
+    referencia_fecha = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Fecha del documento referenciado"
     )
 
     # Transiciones de estado permitidas: origen -> {destinos válidos}

@@ -26,6 +26,9 @@ urlpatterns = [
     # API móvil (JWT)
     path('mobile/', include('app.api.mobile.urls', namespace='mobile')),
 
+    # API de clientes finales (app de fidelización: RUT + OTP)
+    path('cliente/', include('app.api.cliente.urls', namespace='cliente')),
+
     # Sincronización
     path('sync/', include('app.api.sync.urls', namespace='sync')),
 

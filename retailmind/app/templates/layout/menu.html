@@ -62,6 +62,11 @@
 {% puede_ver_opcion_tag 'ticket_venta' as permiso_ticket_venta %}
 {% puede_ver_opcion_tag 'trazabilidad_producto' as permiso_trazabilidad_producto %}
 {% puede_ver_opcion_tag 'ver_guias_talla' as permiso_ver_guias_talla %}
+{% puede_ver_opcion_tag 'giftcards_listado' as permiso_giftcards_listado %}
+{% puede_ver_opcion_tag 'giftcards_emitir' as permiso_giftcards_emitir %}
+{% puede_ver_opcion_tag 'fidelizacion_cuentas' as permiso_fidelizacion_cuentas %}
+{% puede_ver_opcion_tag 'fidelizacion_programa' as permiso_fidelizacion_programa %}
+{% puede_ver_opcion_tag 'fidelizacion_reporte' as permiso_fidelizacion_reporte %}
 
 
 <body{% if pos_kiosk %} class="pos-kiosk{% if pos_kiosk_strict %} pos-kiosk-strict{% endif %}"{% endif %}{% if pos_kiosk_strict and request.GET.no_cursor %} data-cursor-hidden="1"{% endif %}>
@@ -2421,6 +2426,62 @@
                                     <li class="nav-item">
                                         <a href="{% url 'gestionar_requerimientos_vista' %}" class="nav-link" data-key="t-gestionar-requerimientos">
                                             <i class="ri-settings-3-line"></i> Gestionar Requerimientos
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                </ul>
+                            </div>
+                        </li>
+                        {% endif %}
+                        <!-- ========== MÓDULO FIDELIZACIÓN (GiftCards + Puntos) ========== -->
+                        {% contar_opciones_disponibles user 'fidelizacion' as total_fidelizacion %}
+                        {% if total_fidelizacion == 1 %}
+                            {% if permiso_giftcards_listado %}
+                            <li class="nav-item">
+                                <a href="{% url 'modulo_giftcards' %}" class="nav-link menu-link">
+                                    <i class="ri-gift-line"></i> <span>Gift Cards</span>
+                                </a>
+                            </li>
+                            {% elif permiso_fidelizacion_cuentas %}
+                            <li class="nav-item">
+                                <a href="{% url 'modulo_fidelizacion' %}" class="nav-link menu-link">
+                                    <i class="ri-user-star-line"></i> <span>Fidelización</span>
+                                </a>
+                            </li>
+                            {% endif %}
+                        {% elif total_fidelizacion > 1 %}
+                        <li class="nav-item">
+                            <a class="nav-link menu-link collapsed" href="#moduloFidelizacion" data-bs-toggle="collapse"
+                                role="button" aria-expanded="false" aria-controls="moduloFidelizacion">
+                                <i class="ri-gift-line"></i> <span>Fidelización</span>
+                            </a>
+                            <div class="menu-dropdown collapse" id="moduloFidelizacion">
+                                <ul class="nav nav-sm flex-column">
+                                    {% if permiso_giftcards_listado %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'modulo_giftcards' %}" class="nav-link">
+                                            <i class="ri-gift-line"></i> Gift Cards
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if permiso_giftcards_emitir %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'emitir_giftcard_vista' %}" class="nav-link">
+                                            <i class="ri-add-circle-line"></i> Emitir Gift Card
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if permiso_fidelizacion_cuentas %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'modulo_fidelizacion' %}" class="nav-link">
+                                            <i class="ri-user-star-line"></i> Clientes y Puntos
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if permiso_fidelizacion_programa %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'configurar_programa_vista' %}" class="nav-link">
+                                            <i class="ri-settings-3-line"></i> Configuración Programa
                                         </a>
                                     </li>
                                     {% endif %}

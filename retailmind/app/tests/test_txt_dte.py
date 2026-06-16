@@ -11,6 +11,7 @@ from app.views_modulo_documentos import (
     parsear_txt_acepta,
     construir_nombre_y_descripcion_item,
     construir_detalle_txt_desde_dte_productos,
+    normalizar_detalle_para_tipo,
     truncar_campo_sii,
     MAX_LENGTHS_SII,
 )
@@ -787,6 +788,87 @@ class TestObservacionFacturaMinimalista(TestCase):
         self.assertNotIn('V:', obs)
         self.assertNotIn('T:2002', obs)
         self.assertNotIn('EFE', obs)
+
+
+class TestTxtEcommerceDetalleSumaNeto(TestCase):
+    """
+    Regresión del bug de TXT de Acepta en pedidos ecommerce.
+
+    El TXT de ecommerce (auto-descarga al facturar y botón de re-descarga) hoy
+    delega en `construir_datos_txt_desde_dte`, que arma el detalle con
+    `construir_detalle_txt_desde_dte_productos` + `normalizar_detalle_para_tipo`,
+    el MISMO camino que /app/ventas/documentos/. Para una FACTURA (33), las
+    líneas de `Dte_Productos` vienen CON IVA (bruto) y el detalle del TXT debe
+    sumar EXACTAMENTE `monto_neto`.
+
+    El generador viejo de ecommerce hacía `round(precio/1.19)*cantidad` por línea
+    sin normalizar, y la suma se desviaba del neto (y perdía descuentos). Estos
+    tests reproducen el camino correcto sin tocar la BD (mocks SimpleNamespace,
+    igual que TestAgrupacionDetalleDteExistente).
+    """
+
+    def _dp(self, articulo, color, precio_bruto, stock=1):
+        producto = SimpleNamespace(
+            articulo=articulo,
+            costo=0,
+            atributo1=SimpleNamespace(valor='ACME'),
+            atributo2=SimpleNamespace(valor=color),
+        )
+        producto_talla = SimpleNamespace(producto=producto, talla='U')
+        return SimpleNamespace(
+            productoTalla=producto_talla,
+            descripcion='',
+            costo=0,
+            precio=precio_bruto,
+            precio_unitario=precio_bruto,
+            descuento_pct=0,
+            descuento_monto=0,
+            monto_item=precio_bruto * stock,  # bruto realmente cobrado (= tp.subtotal)
+            stock=stock,
+        )
+
+    def test_detalle_factura_ecommerce_suma_neto_exacto(self):
+        # 3 líneas en base BRUTA (con IVA) y precio que genera residuo de redondeo.
+        dps = [
+            self._dp('A', 'AZUL', 9999),
+            self._dp('B', 'ROJO', 9999),
+            self._dp('C', 'VERDE', 9999),
+        ]
+        total_bruto = sum(dp.monto_item for dp in dps)          # 29997
+        monto_neto = round(total_bruto / 1.19)                  # 25208
+
+        detalle = construir_detalle_txt_desde_dte_productos(dps, tipo_numerico=33)
+        # 3 variantes distintas (color) → 3 líneas, en base BRUTA antes de normalizar.
+        self.assertEqual(len(detalle), 3)
+        self.assertEqual(sum(int(i['monto_item']) for i in detalle), total_bruto)
+
+        totales = {'monto_neto': monto_neto, 'monto_total': total_bruto}
+        normalizar_detalle_para_tipo(detalle, totales, 33)
+
+        # Tras normalizar el detalle suma EXACTAMENTE el neto (clave para Acepta).
+        self.assertEqual(sum(int(i['monto_item']) for i in detalle), monto_neto)
+
+    def test_camino_viejo_round_por_linea_no_cuadraba_con_neto(self):
+        # Demuestra por qué el fix importa: el camino viejo (round(precio/1.19)
+        # por línea) NO sumaba el neto del documento.
+        precios = [9999, 9999, 9999]
+        total_bruto = sum(precios)                              # 29997
+        monto_neto = round(total_bruto / 1.19)                  # 25208
+        suma_vieja = sum(round(p / 1.19) for p in precios)      # 3 * 8403 = 25209
+        self.assertNotEqual(suma_vieja, monto_neto)
+
+    def test_detalle_factura_con_descuento_monto_se_conserva(self):
+        # Una línea con descuento_monto materializado: construir_detalle debe
+        # arrastrar monto_descuento y monto_item (neto de descuento) hacia el TXT.
+        dp = self._dp('POLERA', 'AZUL', 10000, stock=2)
+        dp.descuento_pct = 10.0
+        dp.descuento_monto = 2000          # total línea
+        dp.monto_item = 18000              # 2*10000 - 2000
+        detalle = construir_detalle_txt_desde_dte_productos([dp], tipo_numerico=33)
+        self.assertEqual(len(detalle), 1)
+        self.assertEqual(int(detalle[0]['monto_descuento']), 2000)
+        self.assertEqual(int(detalle[0]['monto_item']), 18000)
+        self.assertEqual(float(detalle[0]['descuento_pct']), 10.0)
 
 
 class TestValidacionLargosSII(TestCase):

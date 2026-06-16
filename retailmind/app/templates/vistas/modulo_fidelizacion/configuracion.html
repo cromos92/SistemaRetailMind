@@ -1,0 +1,162 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<style>
+    .page-content { background:#fff !important; min-height: calc(100vh - 70px); }
+    .card.shadow { border:none; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px rgba(64,81,137,.1); }
+    .module-header {
+        background: linear-gradient(135deg,#405189 0%,#0ab39c 100%); color:white; padding:16px 24px;
+        display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;
+    }
+    .module-header-left { display:flex; align-items:center; gap:14px; }
+    .module-header-icon { width:48px; height:48px; background:rgba(255,255,255,.2); border-radius:12px;
+        display:flex; align-items:center; justify-content:center; font-size:24px; }
+    .module-header-info h5 { margin:0; font-size:18px; font-weight:600; color:white; }
+    .tasa-box {
+        background: linear-gradient(135deg,#e8f5e9,#c8e6c9); border-radius:12px; padding:20px; text-align:center;
+        border-left:4px solid #0ab39c;
+    }
+    .tasa-num { font-size:42px; font-weight:800; color:#0ab39c; }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+        <div class="card shadow">
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon"><i class="ri-settings-3-line"></i></div>
+                    <div class="module-header-info"><h5>Configuración del Programa de Puntos</h5></div>
+                </div>
+                <div class="module-header-actions">
+                    <a href="{% url 'modulo_fidelizacion' %}" class="btn btn-light"><i class="ri-arrow-left-line"></i> Volver</a>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="mb-3">
+                            <label class="form-label">Nombre del programa</label>
+                            <input type="text" id="cf-nombre" class="form-control" value="{{ programa.nombre|default:'Programa de Puntos' }}">
+                        </div>
+
+                        <h6 class="fw-bold text-muted mt-4">Acumulación</h6>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Puntos otorgados</label>
+                                <input type="number" id="cf-puntos" class="form-control" min="1" value="{{ programa.puntos_por_monto|default:1 }}" oninput="calcularTasa()">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Por cada (pesos de compra)</label>
+                                <input type="number" id="cf-base" class="form-control" min="1" value="{{ programa.monto_base_acumulacion|default:1000 }}" oninput="calcularTasa()">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Redondeo</label>
+                                <select id="cf-redondeo" class="form-select">
+                                    {% for val, label in redondeo_choices %}
+                                    <option value="{{ val }}" {% if programa.redondeo == val %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Acumula sobre</label>
+                                <select id="cf-acumula" class="form-select">
+                                    {% for val, label in acumula_choices %}
+                                    <option value="{{ val }}" {% if programa.acumula_sobre == val %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <h6 class="fw-bold text-muted mt-2">Canje</h6>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Valor de 1 punto (pesos)</label>
+                                <input type="number" id="cf-valor" class="form-control" min="0" value="{{ programa.valor_punto_en_pesos|default:10 }}" oninput="calcularTasa()">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Mínimo de canje (puntos)</label>
+                                <input type="number" id="cf-minimo" class="form-control" min="0" value="{{ programa.minimo_canje_puntos|default:50 }}">
+                            </div>
+                        </div>
+
+                        <h6 class="fw-bold text-muted mt-2">Vigencia y bienvenida</h6>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Vigencia de puntos (días)</label>
+                                <input type="number" id="cf-vigencia" class="form-control" min="0" value="{{ programa.vigencia_dias|default:365 }}">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Puntos de bienvenida</label>
+                                <input type="number" id="cf-bienvenida" class="form-control" min="0" value="{{ programa.puntos_bienvenida|default:20 }}">
+                            </div>
+                        </div>
+
+                        <button class="btn btn-success btn-lg" onclick="guardar()" id="btn-guardar">
+                            <i class="ri-save-line"></i> Guardar configuración
+                        </button>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="tasa-box">
+                            <div class="text-muted">Tasa de descuento efectiva</div>
+                            <div class="tasa-num" id="tasa-efectiva">{{ programa.tasa_descuento_efectiva|default:0 }}%</div>
+                            <small class="text-muted">% del valor de la venta que devuelves al cliente. Recomendado mantener ≤ 5%.</small>
+                            <hr>
+                            <div class="text-start small">
+                                <div id="ejemplo-acum">—</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const URL_GUARDAR = "{% url 'api_guardar_programa' %}";
+function csrf() { return document.querySelector('[name=csrfmiddlewaretoken]').value; }
+function fmt(n) { return '$' + Math.round(n||0).toLocaleString('es-CL'); }
+
+function calcularTasa() {
+    const puntos = parseFloat(document.getElementById('cf-puntos').value || 0);
+    const base = parseFloat(document.getElementById('cf-base').value || 1);
+    const valor = parseFloat(document.getElementById('cf-valor').value || 0);
+    const tasa = base > 0 ? (puntos * valor / base * 100) : 0;
+    document.getElementById('tasa-efectiva').textContent = tasa.toFixed(2) + '%';
+    const tasaEl = document.getElementById('tasa-efectiva');
+    tasaEl.style.color = tasa > 5 ? '#f06548' : '#0ab39c';
+    document.getElementById('ejemplo-acum').innerHTML =
+        `En una compra de <strong>$10.000</strong> el cliente gana <strong>${Math.floor(10000/base*puntos)}</strong> puntos ` +
+        `(equivalen a <strong>${fmt(Math.floor(10000/base*puntos)*valor)}</strong>).`;
+}
+
+function guardar() {
+    const payload = {
+        nombre: document.getElementById('cf-nombre').value,
+        puntos_por_monto: document.getElementById('cf-puntos').value,
+        monto_base_acumulacion: document.getElementById('cf-base').value,
+        valor_punto_en_pesos: document.getElementById('cf-valor').value,
+        minimo_canje_puntos: document.getElementById('cf-minimo').value,
+        vigencia_dias: document.getElementById('cf-vigencia').value,
+        puntos_bienvenida: document.getElementById('cf-bienvenida').value,
+        redondeo: document.getElementById('cf-redondeo').value,
+        acumula_sobre: document.getElementById('cf-acumula').value,
+    };
+    document.getElementById('btn-guardar').disabled = true;
+    fetch(URL_GUARDAR, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+        body: JSON.stringify(payload)}).then(r=>r.json()).then(d=>{
+        document.getElementById('btn-guardar').disabled = false;
+        if (d.success) Swal.fire('Guardado', `Tasa efectiva: ${d.tasa_descuento_efectiva}%`, 'success');
+        else Swal.fire('Error', d.error || 'No se pudo guardar', 'error');
+    });
+}
+
+document.addEventListener('DOMContentLoaded', calcularTasa);
+</script>
+
+{% include '../../layout/footer.html' %}

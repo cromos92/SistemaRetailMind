@@ -1760,7 +1760,27 @@ def anular_ticket_pendiente(request):
             ticket.estado = 'ANULADO'
             ticket.observaciones = (ticket.observaciones or '') + f'\n[ANULADO] {timezone.now().strftime("%Y-%m-%d %H:%M")} - {motivo}'
             ticket.save()
-        
+
+            # ===== FIDELIZACIÓN / GIFT CARD: reversa de la venta anulada =====
+            # Devuelve los puntos acumulados por esta venta y recarga las gift
+            # cards consumidas. Idempotente: re-anular no duplica la reversa.
+            try:
+                from .services import fidelizacion_service
+                fidelizacion_service.reversar_venta(ticket, usuario=request.user)
+            except Exception:
+                logger.exception("Error al reversar puntos ticket=%s", ticket.correlativo)
+            try:
+                from .services import giftcard_service
+                for pago_gc in ticket.pagos.filter(metodo_pago='GIFTCARD'):
+                    codigo_gc = (pago_gc.voucher or '').strip()
+                    if codigo_gc:
+                        giftcard_service.reversar(
+                            codigo_gc, pago_gc.monto,
+                            ticket=ticket, usuario=request.user,
+                        )
+            except Exception:
+                logger.exception("Error al reversar gift cards ticket=%s", ticket.correlativo)
+
         return JsonResponse({
             'success': True,
             'message': f'Ticket #{correlativo} anulado exitosamente',
@@ -1835,6 +1855,8 @@ def buscar_cliente_rut(request):
                 'ciudad': empresa_cliente.ciudad or '',
                 'direccion': empresa_cliente.direccion or '',
                 'telefono_secundario': empresa_cliente.contacto2 or '',
+                'celular': '',
+                'fecha_nacimiento': '',
                 'email_facturacion': empresa_cliente.correoAdministrador or '',
             }
             return JsonResponse({
@@ -1864,6 +1886,9 @@ def buscar_cliente_rut(request):
                 'ciudad': cliente.ciudad or '',
                 'direccion': cliente.direccion or '',
                 'telefono_secundario': cliente.celular if cliente.telefono else '',
+                # Campos de fidelización para autocompletar en POS / ticket-venta
+                'celular': cliente.celular or '',
+                'fecha_nacimiento': cliente.fecha_nacimiento.isoformat() if cliente.fecha_nacimiento else '',
                 'email_facturacion': cliente.email or '',
             }
             return JsonResponse({
@@ -1896,6 +1921,9 @@ def buscar_cliente_rut(request):
                 'ciudad': ticket_con_cliente.cliente_ciudad or '',
                 'direccion': ticket_con_cliente.cliente_direccion or '',
                 'telefono_secundario': ticket_con_cliente.cliente_telefono_secundario or '',
+                # Celular: el ticket lo guarda en teléfono secundario
+                'celular': ticket_con_cliente.cliente_telefono_secundario or '',
+                'fecha_nacimiento': '',
                 'email_facturacion': ticket_con_cliente.cliente_email_facturacion or '',
             }
             return JsonResponse({
@@ -1953,25 +1981,31 @@ def guardar_o_actualizar_cliente(datos_cliente, usuario=None):
         cliente = Cliente.objects.filter(rut=rut).first()
         
         if cliente:
-            # Actualizar datos si están vacíos o han cambiado
-            if not cliente.email and datos_cliente.get('email'):
-                cliente.email = datos_cliente['email']
-            if not cliente.telefono and datos_cliente.get('telefono'):
-                cliente.telefono = datos_cliente['telefono']
-            if not cliente.direccion and datos_cliente.get('direccion'):
-                cliente.direccion = datos_cliente['direccion']
-            if not cliente.comuna and datos_cliente.get('comuna'):
-                cliente.comuna = datos_cliente['comuna']
-            if not cliente.ciudad and datos_cliente.get('ciudad'):
-                cliente.ciudad = datos_cliente['ciudad']
-            if not cliente.celular and datos_cliente.get('telefono_secundario'):
-                cliente.celular = datos_cliente['telefono_secundario']
-            
-            # Actualizar nombre si cambió
+            # Política de actualización (cliente ya existente):
+            #  - Si llega un valor NUEVO y no vacío -> se actualiza (permite corregir).
+            #  - Si el campo llega vacío -> NO se pisa el dato existente.
+            # Así, aunque el operador no confirme los datos precargados, nunca se
+            # pierde un dato bueno; solo se sobrescribe cuando hay un valor nuevo.
+            def _set_si_viene(attr, valor):
+                v = (valor or '').strip() if isinstance(valor, str) else valor
+                if v:
+                    setattr(cliente, attr, v)
+
+            _set_si_viene('email', datos_cliente.get('email'))
+            _set_si_viene('telefono', datos_cliente.get('telefono'))
+            _set_si_viene('direccion', datos_cliente.get('direccion'))
+            _set_si_viene('comuna', datos_cliente.get('comuna'))
+            _set_si_viene('ciudad', datos_cliente.get('ciudad'))
+            # Celular: prioriza el campo propio; fallback al teléfono secundario.
+            _set_si_viene('celular', datos_cliente.get('celular') or datos_cliente.get('telefono_secundario'))
+            # Fecha de nacimiento (para fidelización: campañas de cumpleaños).
+            _set_si_viene('fecha_nacimiento', datos_cliente.get('fecha_nacimiento'))
+
+            # Nombre/apellido: actualizar solo si vienen (no borrar con vacío).
             if nombre and apellido:
                 cliente.nombre = nombre
                 cliente.apellido = apellido
-            
+
             if usuario:
                 cliente.updated_by = usuario
             cliente.save()
@@ -1989,7 +2023,8 @@ def guardar_o_actualizar_cliente(datos_cliente, usuario=None):
                 rut=rut,
                 email=datos_cliente.get('email', ''),
                 telefono=datos_cliente.get('telefono', ''),
-                celular=datos_cliente.get('telefono_secundario', ''),
+                celular=datos_cliente.get('celular') or datos_cliente.get('telefono_secundario', ''),
+                fecha_nacimiento=datos_cliente.get('fecha_nacimiento') or None,
                 direccion=datos_cliente.get('direccion', ''),
                 comuna=datos_cliente.get('comuna', ''),
                 ciudad=datos_cliente.get('ciudad', ''),
@@ -2120,6 +2155,12 @@ def construir_ticket_data(ticket):
             'direccion': ticket.cliente_direccion or '',
             'telefono': ticket.cliente_telefono or '',
             'telefono_secundario': ticket.cliente_telefono_secundario or '',
+            # Celular: el ticket lo guarda en teléfono secundario; se expone como
+            # 'celular' para precargar el campo nuevo del POS (fidelización).
+            'celular': ticket.cliente_telefono_secundario or (ticket.cliente.celular if ticket.cliente_id and ticket.cliente else ''),
+            # Fecha de nacimiento: vive en el Cliente CRM enlazado.
+            'fecha_nacimiento': (ticket.cliente.fecha_nacimiento.isoformat()
+                                 if ticket.cliente_id and ticket.cliente and ticket.cliente.fecha_nacimiento else ''),
             'email': ticket.cliente_email or '',
             'email_facturacion': ticket.cliente_email_facturacion or '',
         },
@@ -2149,7 +2190,7 @@ def _obtener_ticket_para_pos(request, correlativo):
     # Primero buscar en la sucursal activa
     ticket = (
         Ticket.objects
-        .select_related('sucursal', 'vendedor')
+        .select_related('sucursal', 'vendedor', 'cliente')
         .prefetch_related('ticket_productos__ProductoTalla__producto', 'pagos')
         .filter(sucursal_id=sucursal_id, correlativo=correlativo)
         .first()
@@ -2161,7 +2202,7 @@ def _obtener_ticket_para_pos(request, correlativo):
         # Buscar en cualquier sucursal que el usuario tenga acceso
         ticket = (
             Ticket.objects
-            .select_related('sucursal', 'vendedor')
+            .select_related('sucursal', 'vendedor', 'cliente')
             .prefetch_related('ticket_productos__ProductoTalla__producto', 'pagos')
             .filter(correlativo=correlativo)
             .order_by('-fecha', '-hora')  # El más reciente primero
@@ -2173,7 +2214,7 @@ def _obtener_ticket_para_pos(request, correlativo):
     if not ticket:
         ticket = (
             Ticket.objects
-            .select_related('sucursal', 'vendedor')
+            .select_related('sucursal', 'vendedor', 'cliente')
             .prefetch_related('ticket_productos__ProductoTalla__producto', 'pagos')
             .filter(folio_dte=correlativo)
             .order_by('-fecha', '-hora')
@@ -3581,6 +3622,30 @@ def registrar_pagos_ticket(request, correlativo):
 
     ticket.save()
 
+    # ===== GIFT CARD: descontar saldo por cada pago con método GIFTCARD =====
+    # Se procesa con su propia transacción + lock (el servicio lo maneja) y es
+    # idempotente por pago, así que un reintento del POS no descuenta dos veces.
+    # El código de la gift card viaja en el campo `voucher` del pago.
+    if ticket_se_pago:
+        from .services import giftcard_service
+        for pago_gc in ticket.pagos.filter(metodo_pago='GIFTCARD'):
+            codigo_gc = (pago_gc.voucher or '').strip()
+            if not codigo_gc:
+                continue
+            try:
+                giftcard_service.consumir(
+                    codigo_gc, pago_gc.monto,
+                    ticket=ticket, pago_ticket=pago_gc,
+                    sucursal=ticket.sucursal, usuario=request.user,
+                )
+            except giftcard_service.GiftCardError:
+                # No tumbar la venta (el cobro ya se confirmó); registrar para
+                # revisión. La pre-validación AJAX debió evitar este caso.
+                logger.exception(
+                    "Error al consumir gift card en cobro ticket=%s codigo=%s",
+                    ticket.correlativo, codigo_gc,
+                )
+
     # Si el ticket se acaba de pagar, consumir stock FIFO y crear movimientos
     # ⚠️ IMPORTANTE: NO descontar stock si el ticket viene de CAMBIO_DEVOLUCION
     # porque el stock ya se ajustó al aprobar el cambio
@@ -3944,7 +4009,24 @@ def registrar_pagos_ticket(request, correlativo):
             'numero_cotizacion': cotizacion_obj.numero_cotizacion,
             'numero_factura': cotizacion_obj.numero_factura
         }
-    
+
+    # ===== FIDELIZACIÓN: acumular puntos al cliente identificado por RUT =====
+    # Solo si el ticket quedó PAGADO. Venta anónima (sin cliente en CRM) no
+    # acumula. Idempotente por ticket. No debe tumbar la respuesta del cobro.
+    if ticket.estado == 'PAGADO':
+        try:
+            from .services import fidelizacion_service
+            resultado_pts = fidelizacion_service.acumular_puntos_por_venta(
+                ticket, usuario=request.user
+            )
+            if resultado_pts:
+                response_data['fidelizacion'] = resultado_pts
+        except Exception:
+            logger.exception(
+                "Error al acumular puntos de fidelización ticket=%s",
+                ticket.correlativo,
+            )
+
     logger.debug("Fin registrar_pagos_ticket ticket=%s", correlativo)
     return JsonResponse(response_data)
 
