@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from app.models import (
     Cliente, CuentaPuntos, MovimientoPuntos, ProgramaFidelizacion, Ticket,
+    CanjeVale,
 )
 from app.services import fidelizacion_service
 from app.services.fidelizacion_service import FidelizacionError
@@ -184,6 +185,94 @@ class FidelizacionServiceTest(TestCase):
             fidelizacion_service.registrar_cliente_manual(
                 nombre='X', rut='5.126.663-3', celular='221234567',  # no móvil
             )
+
+    # ===== CANJE CON CÓDIGO (vales) =====
+
+    def _con_puntos(self, puntos):
+        """Deja al cliente con `puntos` disponibles (cuenta sin bienvenida)."""
+        fidelizacion_service.get_or_create_cuenta(self.cliente, otorgar_bienvenida=False)
+        fidelizacion_service.ajuste_manual(self.cliente, puntos)
+
+    def test_generar_vale_compromete_sin_debitar(self):
+        self._con_puntos(200)
+        vale = fidelizacion_service.generar_vale_canje(self.cliente, 120)
+        self.assertEqual(vale.estado, 'PENDIENTE')
+        self.assertTrue(vale.codigo.startswith('RM-'))
+        self.assertEqual(vale.valor_pesos, 1200)  # 120 * $10
+        cuenta = CuentaPuntos.objects.get(cliente=self.cliente)
+        # El saldo NO baja (no se debitó), pero el disponible sí.
+        self.assertEqual(cuenta.saldo_puntos, 200)
+        self.assertEqual(fidelizacion_service.saldo_disponible_para_reserva(cuenta), 80)
+        # No hay movimiento de canje todavía.
+        self.assertFalse(MovimientoPuntos.objects.filter(cuenta=cuenta, tipo='CANJE').exists())
+
+    def test_generar_vale_respeta_minimo_y_disponible(self):
+        self._con_puntos(60)
+        with self.assertRaises(FidelizacionError):
+            fidelizacion_service.generar_vale_canje(self.cliente, 10)  # bajo mínimo (50)
+        fidelizacion_service.generar_vale_canje(self.cliente, 60)      # toma todo el disponible
+        with self.assertRaises(FidelizacionError):
+            fidelizacion_service.generar_vale_canje(self.cliente, 50)  # ya no hay disponible
+
+    def test_canjear_vale_debita_fifo_y_es_idempotente(self):
+        self._con_puntos(200)
+        vale = fidelizacion_service.generar_vale_canje(self.cliente, 120)
+        res = fidelizacion_service.canjear_vale(vale.codigo, sucursal=self.sucursal)
+        self.assertEqual(res['valor_pesos'], 1200)
+        self.assertFalse(res['ya_canjeado'])
+        cuenta = CuentaPuntos.objects.get(cliente=self.cliente)
+        self.assertEqual(cuenta.saldo_puntos, 80)  # 200 - 120
+        vale.refresh_from_db()
+        self.assertEqual(vale.estado, 'CANJEADO')
+        self.assertIsNotNone(vale.canjeado_en)
+        self.assertEqual(vale.sucursal_canje_id, self.sucursal.id)
+        # Reintento: no vuelve a debitar.
+        res2 = fidelizacion_service.canjear_vale(vale.codigo)
+        self.assertTrue(res2['ya_canjeado'])
+        cuenta.refresh_from_db()
+        self.assertEqual(cuenta.saldo_puntos, 80)
+        self.assertEqual(MovimientoPuntos.objects.filter(cuenta=cuenta, tipo='CANJE').count(), 1)
+
+    def test_canjear_vale_inexistente_o_expirado(self):
+        with self.assertRaises(FidelizacionError):
+            fidelizacion_service.canjear_vale('RM-NOEXISTE')
+        self._con_puntos(200)
+        vale = fidelizacion_service.generar_vale_canje(self.cliente, 120)
+        # Forzar expiración
+        vale.expira_en = timezone.now() - timedelta(minutes=1)
+        vale.save(update_fields=['expira_en'])
+        with self.assertRaises(FidelizacionError):
+            fidelizacion_service.canjear_vale(vale.codigo)
+        vale.refresh_from_db()
+        self.assertEqual(vale.estado, 'EXPIRADO')
+
+    def test_expirar_vales_libera_disponible_sin_tocar_ledger(self):
+        self._con_puntos(200)
+        vale = fidelizacion_service.generar_vale_canje(self.cliente, 120)
+        vale.expira_en = timezone.now() - timedelta(minutes=1)
+        vale.save(update_fields=['expira_en'])
+        total = fidelizacion_service.expirar_vales_vencidos()
+        self.assertEqual(total, 1)
+        cuenta = CuentaPuntos.objects.get(cliente=self.cliente)
+        self.assertEqual(cuenta.saldo_puntos, 200)  # nada debitado
+        self.assertEqual(fidelizacion_service.saldo_disponible_para_reserva(cuenta), 200)
+        self.assertFalse(MovimientoPuntos.objects.filter(cuenta=cuenta, tipo='CANJE').exists())
+
+    def test_anular_vale_recupera_disponible(self):
+        self._con_puntos(200)
+        vale = fidelizacion_service.generar_vale_canje(self.cliente, 120)
+        fidelizacion_service.anular_vale(vale, motivo='test')
+        vale.refresh_from_db()
+        self.assertEqual(vale.estado, 'ANULADO')
+        cuenta = CuentaPuntos.objects.get(cliente=self.cliente)
+        self.assertEqual(fidelizacion_service.saldo_disponible_para_reserva(cuenta), 200)
+
+    def test_generar_vale_idempotente_por_key(self):
+        self._con_puntos(200)
+        v1 = fidelizacion_service.generar_vale_canje(self.cliente, 120, idempotency_key='k1')
+        v2 = fidelizacion_service.generar_vale_canje(self.cliente, 120, idempotency_key='k1')
+        self.assertEqual(v1.id, v2.id)
+        self.assertEqual(CanjeVale.objects.filter(cliente=self.cliente).count(), 1)
 
     def test_registrar_cliente_existente_actualiza_sin_pisar_con_vacio(self):
         # Alta inicial con email

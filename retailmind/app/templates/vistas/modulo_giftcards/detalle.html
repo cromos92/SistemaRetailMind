@@ -43,6 +43,10 @@
                     <div class="col-md-8">
                         <div class="row">
                             <div class="col-6 mb-2"><small class="text-muted">Monto inicial</small><div class="fw-bold">${{ giftcard.saldo_inicial }}</div></div>
+                            <div class="col-6 mb-2"><small class="text-muted">Tipo</small><div class="fw-bold">{{ giftcard.get_tipo_tarjeta_display }}</div></div>
+                            {% if giftcard.codigo_fisico %}
+                            <div class="col-6 mb-2"><small class="text-muted">Código físico</small><div class="fw-bold gc-codigo">{{ giftcard.codigo_fisico }}</div></div>
+                            {% endif %}
                             <div class="col-6 mb-2"><small class="text-muted">Cliente</small><div class="fw-bold">{% if giftcard.cliente %}{{ giftcard.cliente.nombre_completo }}{% else %}—{% endif %}</div></div>
                             <div class="col-6 mb-2"><small class="text-muted">Emisión</small><div>{{ giftcard.fecha_emision|date:"Y-m-d H:i" }}</div></div>
                             <div class="col-6 mb-2"><small class="text-muted">Vencimiento</small><div>{{ giftcard.fecha_vencimiento|default:"Sin vencimiento" }}</div></div>

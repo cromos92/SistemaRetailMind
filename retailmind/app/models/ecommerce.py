@@ -153,6 +153,18 @@ class PedidoEcommerce(models.Model):
         help_text='RUT o documento para emisión de DTE',
     )
 
+    # Compra desde la app móvil de fidelización (puntos + dinero)
+    coupon_code = models.CharField(
+        max_length=50, blank=True, default='', db_index=True,
+        verbose_name='Cupón',
+        help_text='Código de cupón del pedido. PTS-<id> = cupón de puntos de la app móvil.',
+    )
+    from_app = models.BooleanField(
+        default=False, db_index=True,
+        verbose_name='Compra desde app',
+        help_text='El pedido se originó en la app móvil de fidelización (acumula puntos por la parte en dinero).',
+    )
+
     # Montos
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     descuento = models.DecimalField(max_digits=12, decimal_places=2, default=0)

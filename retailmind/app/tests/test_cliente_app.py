@@ -63,6 +63,27 @@ class ClienteAppAuthTest(TestCase):
         self.assertTrue(CuentaClienteApp.objects.filter(cliente=self.cliente).exists())
         self.assertTrue(CodigoOTPCliente.objects.filter(cliente=self.cliente, usado=False).exists())
 
+    def test_email_otp_es_html_con_marca_y_logo(self):
+        """El correo del código va con plantilla HTML de marca + logo incrustado."""
+        from django.core import mail
+        self.client.post('/api/v1/cliente/auth/solicitar-otp/',
+                         {'rut': RUT_CLIENTE}, format='json')
+        msg = mail.outbox[0]
+        # Lleva alternativa HTML
+        tipos = [c for _, c in msg.alternatives]
+        self.assertIn('text/html', tipos)
+        html = msg.alternatives[0][0]
+        self.assertIn('cid:logo_realsport', html)     # logo corporativo inline
+        self.assertIn('cid:logo_paola', html)         # logo del programa inline
+        self.assertIn('Paola', html)
+        self.assertIn('Realsport', html)
+        # Adjunta las dos imágenes (un logo por marca)
+        imagenes = [
+            part for part in msg.message().walk()
+            if part.get_content_type() == 'image/png'
+        ]
+        self.assertEqual(len(imagenes), 2)
+
     def test_solicitar_otp_rut_inexistente_respuesta_generica_sin_email(self):
         from django.core import mail
         resp = self.client.post('/api/v1/cliente/auth/solicitar-otp/',

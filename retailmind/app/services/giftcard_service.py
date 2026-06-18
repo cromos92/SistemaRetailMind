@@ -17,6 +17,7 @@ atómico de forma global.
 import logging
 
 from django.db import transaction, IntegrityError
+from django.db.models import Q
 from django.utils import timezone
 
 from app.models import GiftCard, MovimientoGiftCard
@@ -26,6 +27,24 @@ logger = logging.getLogger('app')
 
 class GiftCardError(Exception):
     """Error de negocio de gift cards (saldo insuficiente, vencida, etc.)."""
+
+
+def _normalizar_codigo(codigo):
+    return (codigo or '').strip().upper()
+
+
+def _resolver_giftcard(codigo, *, lock=False):
+    """
+    Busca una gift card por su código de sistema (GC-XXXX...) o por el código
+    impreso de la tarjeta física. Devuelve la GiftCard o None.
+
+    `lock=True` aplica select_for_update (usar solo dentro de una transacción).
+    """
+    codigo = _normalizar_codigo(codigo)
+    if not codigo:
+        return None
+    qs = GiftCard.objects.select_for_update() if lock else GiftCard.objects
+    return qs.filter(Q(codigo=codigo) | Q(codigo_fisico=codigo)).first()
 
 
 def _registrar_movimiento(giftcard, tipo, monto, *, ticket=None, pago_ticket=None,
@@ -58,14 +77,35 @@ def _registrar_movimiento(giftcard, tipo, monto, *, ticket=None, pago_ticket=Non
 
 def emitir(monto, *, sucursal=None, cliente=None, vendedor=None,
            ticket=None, vencimiento=None, pin=None, usuario=None,
-           observaciones=''):
+           observaciones='', tipo_tarjeta='DIGITAL', codigo_fisico=None):
     """
     Emite una nueva gift card con `monto` de saldo inicial.
-    Devuelve la GiftCard creada. El código se genera de forma segura y única.
+    Devuelve la GiftCard creada. El código de sistema se genera de forma segura
+    y única.
+
+    - tipo_tarjeta='DIGITAL': vinculada a un cliente (se recomienda pasar cliente).
+    - tipo_tarjeta='FISICA':  requiere `codigo_fisico` (el impreso en la tarjeta);
+      el cliente es opcional y puede vincularse al canjear.
     """
     monto = int(monto)
     if monto <= 0:
         raise GiftCardError('El monto de la gift card debe ser mayor a 0.')
+
+    tipo_tarjeta = (tipo_tarjeta or 'DIGITAL').upper()
+    if tipo_tarjeta not in ('DIGITAL', 'FISICA'):
+        raise GiftCardError('Tipo de tarjeta inválido.')
+
+    codigo_fisico = _normalizar_codigo(codigo_fisico) or None
+    if tipo_tarjeta == 'FISICA':
+        if not codigo_fisico:
+            raise GiftCardError('Ingresa el código impreso de la tarjeta física.')
+        if GiftCard.objects.filter(codigo_fisico=codigo_fisico).exists():
+            raise GiftCardError('Ya existe una gift card con ese código físico.')
+        # El código físico no debe chocar con un código de sistema existente.
+        if GiftCard.objects.filter(codigo=codigo_fisico).exists():
+            raise GiftCardError('Ese código físico ya está en uso.')
+    else:
+        codigo_fisico = None  # las digitales no llevan código impreso
 
     if vencimiento is None:
         from app.models import GIFTCARD_VIGENCIA_MESES_DEFAULT
@@ -79,6 +119,8 @@ def emitir(monto, *, sucursal=None, cliente=None, vendedor=None,
             saldo_inicial=monto,
             saldo_actual=0,  # se sube con el movimiento EMISION para dejar ledger
             estado='ACTIVA',
+            tipo_tarjeta=tipo_tarjeta,
+            codigo_fisico=codigo_fisico,
             fecha_vencimiento=vencimiento,
             sucursal_emision=sucursal,
             cliente=cliente,
@@ -105,13 +147,13 @@ def consultar_saldo(codigo):
     Devuelve un dict con el estado y saldo de la gift card (sin descontar).
     Lanza GiftCardError si no existe.
     """
-    codigo = (codigo or '').strip().upper()
-    try:
-        gc = GiftCard.objects.get(codigo=codigo)
-    except GiftCard.DoesNotExist:
+    gc = _resolver_giftcard(codigo)
+    if gc is None:
         raise GiftCardError('Gift card no encontrada.')
     return {
         'codigo': gc.codigo,
+        'codigo_fisico': gc.codigo_fisico,
+        'tipo_tarjeta': gc.tipo_tarjeta,
         'estado': gc.estado,
         'estado_display': gc.get_estado_display(),
         'saldo_actual': gc.saldo_actual,
@@ -127,9 +169,8 @@ def validar(codigo, monto, *, pin=None):
     Devuelve dict con `valida`, `saldo_suficiente`, `saldo_actual` y `motivo`.
     Nunca lanza por saldo/estado; solo informa.
     """
-    codigo = (codigo or '').strip().upper()
     monto = int(monto or 0)
-    gc = GiftCard.objects.filter(codigo=codigo).first()
+    gc = _resolver_giftcard(codigo)
     if not gc:
         return {'valida': False, 'motivo': 'No encontrada', 'saldo_actual': 0,
                 'saldo_suficiente': False}
@@ -152,16 +193,19 @@ def validar(codigo, monto, *, pin=None):
 
 
 def consumir(codigo, monto, *, ticket=None, pago_ticket=None, sucursal=None,
-             usuario=None, pin=None, idempotency_key=None):
+             usuario=None, pin=None, idempotency_key=None, cliente=None):
     """
     Descuenta `monto` de la gift card (pago de una venta).
 
     Bloquea la giftcard con select_for_update. Idempotente: si ya existe un
     movimiento con la misma `idempotency_key`, devuelve sin volver a descontar.
 
+    Acepta código de sistema o código físico impreso. Si la tarjeta no tiene
+    titular y se entrega `cliente`, lo vincula en este primer canje (caso de la
+    tarjeta física que se activó sin RUT).
+
     Lanza GiftCardError si la giftcard no es válida o no tiene saldo.
     """
-    codigo = (codigo or '').strip().upper()
     monto = int(monto)
     if monto <= 0:
         raise GiftCardError('El monto a consumir debe ser mayor a 0.')
@@ -181,9 +225,8 @@ def consumir(codigo, monto, *, ticket=None, pago_ticket=None, sucursal=None,
                             codigo, idempotency_key)
                 return existente
 
-        try:
-            gc = GiftCard.objects.select_for_update().get(codigo=codigo)
-        except GiftCard.DoesNotExist:
+        gc = _resolver_giftcard(codigo, lock=True)
+        if gc is None:
             raise GiftCardError('Gift card no encontrada.')
 
         if gc.estado != 'ACTIVA':
@@ -196,6 +239,11 @@ def consumir(codigo, monto, *, ticket=None, pago_ticket=None, sucursal=None,
             raise GiftCardError(
                 f'Saldo insuficiente (disponible ${gc.saldo_actual:,}, requerido ${monto:,}).'
             )
+
+        # Vincular titular en el primer canje si la tarjeta circulaba sin RUT.
+        if cliente is not None and gc.cliente_id is None:
+            gc.cliente = cliente
+            gc.save(update_fields=['cliente', 'updated_at'])
 
         try:
             mov = _registrar_movimiento(
@@ -215,14 +263,12 @@ def consumir(codigo, monto, *, ticket=None, pago_ticket=None, sucursal=None,
 
 def recargar(codigo, monto, *, sucursal=None, usuario=None, observaciones=''):
     """Agrega saldo a una gift card existente."""
-    codigo = (codigo or '').strip().upper()
     monto = int(monto)
     if monto <= 0:
         raise GiftCardError('El monto a recargar debe ser mayor a 0.')
     with transaction.atomic():
-        try:
-            gc = GiftCard.objects.select_for_update().get(codigo=codigo)
-        except GiftCard.DoesNotExist:
+        gc = _resolver_giftcard(codigo, lock=True)
+        if gc is None:
             raise GiftCardError('Gift card no encontrada.')
         if gc.estado in ('ANULADA', 'BLOQUEADA'):
             raise GiftCardError(f'No se puede recargar (estado: {gc.get_estado_display()}).')
@@ -238,11 +284,9 @@ def anular(codigo, *, usuario=None, observaciones=''):
     Anula la gift card: lleva el saldo a 0 (movimiento ANULACION) y marca el
     estado ANULADA. Irreversible.
     """
-    codigo = (codigo or '').strip().upper()
     with transaction.atomic():
-        try:
-            gc = GiftCard.objects.select_for_update().get(codigo=codigo)
-        except GiftCard.DoesNotExist:
+        gc = _resolver_giftcard(codigo, lock=True)
+        if gc is None:
             raise GiftCardError('Gift card no encontrada.')
         if gc.estado == 'ANULADA':
             return gc
@@ -269,7 +313,7 @@ def reversar(codigo, monto, *, ticket=None, usuario=None, idempotency_key=None,
     Recarga la gift card por una devolución/anulación de venta que la consumió.
     Idempotente por `idempotency_key`.
     """
-    codigo = (codigo or '').strip().upper()
+    codigo = _normalizar_codigo(codigo)
     monto = int(monto)
     if monto <= 0:
         return None
@@ -282,9 +326,8 @@ def reversar(codigo, monto, *, ticket=None, usuario=None, idempotency_key=None,
             ).first()
             if existente:
                 return existente
-        try:
-            gc = GiftCard.objects.select_for_update().get(codigo=codigo)
-        except GiftCard.DoesNotExist:
+        gc = _resolver_giftcard(codigo, lock=True)
+        if gc is None:
             raise GiftCardError('Gift card no encontrada.')
         # Reactivar si estaba AGOTADA; respetar ANULADA/BLOQUEADA.
         if gc.estado == 'AGOTADA':

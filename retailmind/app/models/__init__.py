@@ -209,6 +209,7 @@ from .configuracion import (  # noqa: F401
 from .giftcards import (  # noqa: F401
     ESTADO_GIFTCARD_CHOICES,
     TIPO_MOV_GIFTCARD_CHOICES,
+    TIPO_TARJETA_GIFTCARD_CHOICES,
     GIFTCARD_VIGENCIA_MESES_DEFAULT,
     generar_codigo_giftcard,
     GiftCard,
@@ -224,6 +225,10 @@ from .fidelizacion import (  # noqa: F401
     ProgramaFidelizacion,
     CuentaPuntos,
     MovimientoPuntos,
+    ReservaPuntos,
+    ESTADO_RESERVA_CHOICES,
+    CanjeVale,
+    ESTADO_VALE_CHOICES,
 )
 
 from .cliente_app import (  # noqa: F401

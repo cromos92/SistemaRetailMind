@@ -715,6 +715,24 @@ CONCEPTOS_RECEPCION_STOCK = (
 REF_SALDO_INICIAL_SINTETICO = 'MIGRACION_LARAVEL'
 
 
+# Conceptos que cuentan como ENTRADA REAL de mercadería a las tiendas de la
+# empresa para `ultima_fecha_ingreso`. Es un set DISTINTO de
+# CONCEPTOS_RECEPCION_STOCK (que mide la antigüedad FIFO de stock COMPRADO).
+#
+# La diferencia es deliberada y viene de la definición de negocio heredada del
+# ERP legado (Vicent): "último ingreso" = DESPACHO INTERNO de la bodega central
+# a las tiendas, es decir
+#     MAX(fecha) WHERE tipo_movimiento='Ingreso' AND concepto='VentaXInterna'.
+# La migración (migrate_from_laravel.CONCEPTO_MAP) mapeó ese 'VentaXInterna'
+# (Ingreso) → concepto 'TRASPASO_SUCURSAL' con tipo_movimiento='INGRESO'. Por eso
+# hay que incluir TRASPASO_SUCURSAL aquí: sin él, TODA la data migrada caía al
+# fallback de catálogo y `ultima_fecha_ingreso` quedaba mal calculada.
+#
+# NO se incluye TRASPASO_ENTRADA (traspaso inter-tienda del flujo NUEVO): no es
+# "llegada de mercadería nueva" y la antigüedad FIFO lo excluye a propósito.
+CONCEPTOS_INGRESO_MERCADERIA = CONCEPTOS_RECEPCION_STOCK + ('TRASPASO_SUCURSAL',)
+
+
 class PreciosActualesView(APIView):
     """
     Retorna precios, costos y última fecha de ingreso a nivel EMPRESA, una fila
@@ -887,6 +905,27 @@ class PreciosActualesView(APIView):
                     (m['fecha'], int(m['cantidad'] or 0))
                 )
 
+        # ── 2b. Última fecha de INGRESO de mercadería por SKU ──
+        # Definición de negocio legada (Vicent): MAX(fecha) de las ENTRADAS
+        # reales a tienda, que INCLUYE el despacho interno bodega→tienda
+        # (VentaXInterna migrado → concepto TRASPASO_SUCURSAL, tipo INGRESO).
+        # A diferencia del FIFO de arriba, NO se acota a stock>0: el legado
+        # devuelve esta fecha para todo SKU del catálogo. Se sigue excluyendo el
+        # saldo de apertura sintético (su fecha es la de la carga, no la real).
+        ultima_ingreso_por_sku: dict = {}
+        for r in (
+            Movimientos_Producto.objects
+            .filter(
+                concepto__in=CONCEPTOS_INGRESO_MERCADERIA,
+                tipo_movimiento='INGRESO',
+                ProductoTalla__producto__sucursal__empresa__rut=rut,
+            )
+            .exclude(referencia_externa=REF_SALDO_INICIAL_SINTETICO)
+            .values('ProductoTalla__sku')
+            .annotate(ultima=Max('fecha'))
+        ):
+            ultima_ingreso_por_sku[str(r['ProductoTalla__sku'])] = r['ultima']
+
         # ── 3. Última venta (EGRESO) por SKU ──
         ultima_venta_por_sku: dict = {}
         if skus_con_stock:
@@ -910,8 +949,11 @@ class PreciosActualesView(APIView):
             stock = info['stock_actual']
             ingresos = ingresos_por_sku.get(sku, [])  # ya ordenado desc por fecha
 
-            # Última recepción real (MAX) = primer elemento (orden desc).
-            ultima_ingreso = ingresos[0][0] if ingresos else None
+            # Última fecha de ingreso de mercadería (def. de negocio legada):
+            # MAX(fecha) de entradas reales a tienda, incluido el despacho
+            # interno (TRASPASO_SUCURSAL). NO se deriva del bucket FIFO de arriba
+            # (CONCEPTOS_RECEPCION_STOCK), que excluye traspasos a propósito.
+            ultima_ingreso = ultima_ingreso_por_sku.get(sku)
 
             # FIFO: por convención se vende primero lo más antiguo, así que el
             # stock en mano son las entradas más recientes. Recorremos los

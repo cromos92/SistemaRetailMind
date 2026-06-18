@@ -17,6 +17,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
+from app.models import Sucursal
 from app.services import fidelizacion_service, giftcard_service
 
 from .permissions import IsAuthorizedDevice
@@ -38,6 +39,51 @@ class SaldoPuntosView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
         info = fidelizacion_service.consultar_saldo(rut=rut)
         return Response({'success': True, **info})
+
+
+class ValeCanjeConsultaView(APIView):
+    """
+    GET /api/v1/desktop/canje/<codigo>/
+
+    Valida (sin debitar) un vale de canje con código para que el POS muestre su
+    valor antes de aplicarlo. Devuelve estado, puntos, valor en pesos y a qué
+    cliente pertenece.
+    """
+    permission_classes = [IsAuthenticated, IsAuthorizedDevice]
+
+    def get(self, request, codigo):
+        info = fidelizacion_service.validar_vale(codigo)
+        if not info.get('existe'):
+            return Response({'success': False, 'error': 'El código no existe.'},
+                            status=status.HTTP_404_NOT_FOUND)
+        return Response({'success': True, **info})
+
+
+class ValeCanjeAplicarView(APIView):
+    """
+    POST /api/v1/desktop/canje/aplicar/
+    Body: { "codigo": "RM-XXXXXXXX", "sucursal_id": 3 }
+
+    Canjea el vale: debita los puntos del cliente (FIFO) y devuelve el
+    `valor_pesos` que el POS debe aplicar como descuento. Idempotente por código:
+    repetirlo no vuelve a debitar. El usuario que canjea queda registrado.
+    """
+    permission_classes = [IsAuthenticated, IsAuthorizedDevice]
+
+    def post(self, request):
+        codigo = (request.data.get('codigo') or '').strip()
+        sucursal = None
+        sucursal_id = request.data.get('sucursal_id')
+        if sucursal_id:
+            sucursal = Sucursal.objects.filter(pk=sucursal_id).first()
+        try:
+            resultado = fidelizacion_service.canjear_vale(
+                codigo, sucursal=sucursal, usuario=request.user,
+            )
+        except fidelizacion_service.FidelizacionError as e:
+            return Response({'success': False, 'error': str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return Response({'success': True, **resultado})
 
 
 class GiftCardConsultaView(APIView):

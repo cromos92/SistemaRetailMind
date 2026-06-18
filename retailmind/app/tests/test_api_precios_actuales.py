@@ -141,6 +141,47 @@ class PreciosActualesFechasTest(TestCase):
         self.assertEqual(item['ultima_fecha_venta'],
                          (timezone.localdate() - timedelta(days=3)).strftime('%Y-%m-%d'))
 
+    def test_traspaso_sucursal_cuenta_como_ultima_fecha_ingreso(self):
+        # El despacho interno bodega→tienda del legado (VentaXInterna) se migró
+        # como concepto TRASPASO_SUCURSAL / tipo INGRESO. Esa ES la definición de
+        # negocio de `ultima_fecha_ingreso`, así que debe contar como la última
+        # entrada de mercadería (a diferencia de TRASPASO_ENTRADA del flujo nuevo).
+        self._mov(dias_atras=300, cantidad=10, concepto='INGRESO_INICIAL')
+        self._mov(dias_atras=12, cantidad=10, concepto='TRASPASO_SUCURSAL',
+                  tipo='INGRESO', ref='MIG:99999')
+
+        item = self._item()
+
+        self.assertEqual(item['ultima_fecha_ingreso'],
+                         (timezone.localdate() - timedelta(days=12)).strftime('%Y-%m-%d'))
+        # Pero la antigüedad FIFO de stock COMPRADO no se mueve por el traspaso.
+        self.assertEqual(item['dias_antiguedad_stock'], 300)
+
+    def test_traspaso_entrada_no_cuenta_como_ultima_fecha_ingreso(self):
+        # TRASPASO_ENTRADA (traspaso inter-tienda del flujo NUEVO) NO es llegada
+        # de mercadería nueva: no debe mover `ultima_fecha_ingreso`.
+        self._mov(dias_atras=200, cantidad=10, concepto='RECEPCION_COMPRA')
+        self._mov(dias_atras=4, cantidad=10, concepto='TRASPASO_ENTRADA',
+                  tipo='INGRESO')
+
+        item = self._item()
+
+        self.assertEqual(item['ultima_fecha_ingreso'],
+                         (timezone.localdate() - timedelta(days=200)).strftime('%Y-%m-%d'))
+
+    def test_traspaso_sucursal_para_sku_sin_stock(self):
+        # El legado devuelve ultima_fecha_ingreso para TODO SKU, también con
+        # stock 0. La nueva agregación no se acota a stock>0.
+        self.producto_talla.stock = 0
+        self.producto_talla.save(update_fields=['stock'])
+        self._mov(dias_atras=30, cantidad=10, concepto='TRASPASO_SUCURSAL',
+                  tipo='INGRESO', ref='MIG:88888')
+
+        item = self._item()
+
+        self.assertEqual(item['ultima_fecha_ingreso'],
+                         (timezone.localdate() - timedelta(days=30)).strftime('%Y-%m-%d'))
+
     def test_sin_stock_antiguedad_none(self):
         Movimientos_Producto.objects.create(
             ProductoTalla=self.producto_talla, tipo_movimiento='INGRESO',

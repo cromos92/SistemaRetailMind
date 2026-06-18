@@ -277,13 +277,32 @@ if not DEBUG:
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
-    SECURE_HSTS_SECONDS = 86400
+    # HSTS a 1 año (requisito para el preload list). 86400 (1 día) era demasiado
+    # corto para que un MITM no pudiera degradar a HTTP entre visitas.
+    SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-    
+
+    # Detrás del balanceador de Digital Ocean (y Railway) el TLS termina en el LB
+    # y al backend le llega HTTP con la cabecera X-Forwarded-Proto. Sin esto,
+    # request.is_secure() sería False y las cookies "secure"/los redirects de
+    # seguridad no funcionarían correctamente.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+    # Redirige HTTP→HTTPS. Default OFF: con el health check de App Platform por
+    # HTTP interno, forzarlo puede romper el chequeo. Actívalo (env var) solo si
+    # confirmaste que el health check usa HTTPS o una ruta exenta.
+    SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'False').lower() == 'true'
+
     # CSRF settings
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_SECURE = True
+    # Endurecimiento de cookies: no accesibles por JS y enviadas solo en
+    # navegación same-site (mitiga XSS-robo-de-sesión y CSRF cross-site).
+    SESSION_COOKIE_HTTPONLY = True
+    CSRF_COOKIE_HTTPONLY = False  # el front lee el token CSRF por JS (AJAX del POS)
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    CSRF_COOKIE_SAMESITE = 'Lax'
 
 # Configuración de autenticación
 LOGIN_URL = 'login'
@@ -517,6 +536,14 @@ REST_FRAMEWORK = {
         'otp_solicitar': '5/hour',
         'otp_verificar': '10/hour',
         'vincular_cliente': '5/hour',
+        # Protección de carga de la app móvil (por cliente autenticado). Topan el
+        # ritmo de requests para que un pico (o un cliente abusivo) no tumbe a
+        # RetailMind ni, vía el proxy de catálogo, a los ecommerce.
+        # NOTA: el cache de throttle es LocMem (por worker); para un tope GLOBAL
+        # exacto se requiere un cache compartido (Redis). Aun así, capa por worker.
+        'app_catalogo': '120/min',   # navegación de catálogo/categorías (proxy al ecommerce)
+        'app_consulta': '90/min',    # saldo/movimientos/cotizar/estado (lecturas)
+        'app_checkout': '20/min',    # reservar/iniciar (escrituras, tocan el ecommerce)
     },
 }
 

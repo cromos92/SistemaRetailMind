@@ -10,6 +10,7 @@ from . import views_dashboard_home
 from . import views_gestion_inventarios
 from . import views_etiquetas_zebra
 from . import views_ecommerce
+from . import views_cron
 from .views_modulo_ventas import (
     # Funciones POS Dashboard
     pos_dashboard,
@@ -1385,6 +1386,8 @@ urlpatterns = [
     # MÓDULO ECOMMERCE — Pedidos online externos
     # =====================================================
     path('api/ecommerce/pedidos/', views_ecommerce.api_recibir_pedido_ecommerce, name='api_ecommerce_recibir_pedido'),
+    path('api/ecommerce/pedidos/pagado/', views_ecommerce.api_pedido_pagado, name='api_ecommerce_pedido_pagado'),
+    path('api/cron/tareas/', views_cron.ejecutar_tareas_periodicas, name='api_cron_tareas'),
     path('api/ecommerce/pedidos/consultar/', views_ecommerce.api_asignar_ticket_rm, name='api_ecommerce_consultar_pedido'),
     path('api/ecommerce/pedidos/cancelar/', views_ecommerce.api_cancelar_pedido_ecommerce, name='api_ecommerce_cancelar_pedido'),
     path('api/ecommerce/facturar-masivo/', views_ecommerce.facturar_ecommerce_masivo, name='facturar_ecommerce_masivo'),

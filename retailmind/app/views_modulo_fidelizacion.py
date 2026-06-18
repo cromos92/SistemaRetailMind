@@ -8,7 +8,7 @@ La lógica vive en `app/services/fidelizacion_service.py`.
 import json
 import logging
 
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
 from django.core.paginator import Paginator
@@ -18,10 +18,30 @@ from django.utils import timezone
 from .decorators import requiere_permiso
 from .models import (
     Cliente, CuentaPuntos, MovimientoPuntos, ProgramaFidelizacion,
+    Empresa, EmpresaUser,
 )
 from .services import fidelizacion_service
+from .utils_permisos import usuario_puede_ver_todas_sucursales
 
 logger = logging.getLogger('app')
+
+
+def _empresa_ids_usuario(usuario):
+    """IDs de empresas a las que el usuario tiene acceso (vía EmpresaUser)."""
+    return list(
+        EmpresaUser.objects
+        .filter(user=usuario, status=True, empresa__isnull=False)
+        .values_list('empresa_id', flat=True)
+        .distinct()
+    )
+
+
+def _empresa_actual(request):
+    """Empresa activa en sesión (para asociar clientes nuevos)."""
+    eid = request.session.get('idEmpresaActual') or request.session.get('empresaActual')
+    if not eid:
+        return None
+    return Empresa.objects.filter(id=eid).first()
 
 
 # ========== VISTAS HTML ==========
@@ -48,10 +68,11 @@ def configurar_programa_vista(request):
 
 @requiere_permiso('fidelizacion_cuentas', 'puede_crear')
 def registrar_cliente_vista(request):
-    """Alta manual de cliente para fidelización (sin esperar a que compre)."""
-    programa = ProgramaFidelizacion.get_activo()
-    return render(request, 'vistas/modulo_fidelizacion/registrar_cliente.html',
-                  {'programa': programa})
+    """
+    Alta manual movida a un modal dentro del listado. Esta ruta se conserva y
+    redirige al listado abriendo el modal de registro.
+    """
+    return redirect('/app/fidelizacion/?nuevo=1')
 
 
 @requiere_permiso('fidelizacion_cuentas', 'puede_ver')
@@ -76,14 +97,26 @@ def ficha_cliente_puntos_vista(request, cliente_id):
 @require_GET
 @requiere_permiso('fidelizacion_cuentas', 'puede_ver')
 def api_listar_cuentas(request):
-    """Listado paginado de cuentas de puntos."""
-    qs = CuentaPuntos.objects.select_related('cliente').all()
+    """
+    Listado paginado de TODAS las personas registradas en las empresas a las que
+    el usuario tiene acceso (no solo las que ya tienen cuenta de puntos).
+    Muestra su saldo de puntos (0 si aún no acumula).
+    """
+    qs = Cliente.objects.filter(activo=True).select_related('empresa', 'cuenta_puntos')
+
+    # Multi-empresa: el admin (o quien ve todas las sucursales) ve todo; el resto
+    # ve los clientes de sus empresas + los clientes sin empresa asignada.
+    if not usuario_puede_ver_todas_sucursales(request.user):
+        empresas = _empresa_ids_usuario(request.user)
+        qs = qs.filter(Q(empresa__isnull=True) | Q(empresa_id__in=empresas))
+
     busqueda = (request.GET.get('q') or '').strip()
     if busqueda:
         qs = qs.filter(
-            Q(cliente__nombre__icontains=busqueda) |
-            Q(cliente__apellido__icontains=busqueda) |
-            Q(cliente__rut__icontains=busqueda)
+            Q(nombre__icontains=busqueda) |
+            Q(apellido__icontains=busqueda) |
+            Q(rut__icontains=busqueda) |
+            Q(empresa__nombre__icontains=busqueda)
         )
 
     programa = ProgramaFidelizacion.get_activo()
@@ -91,14 +124,20 @@ def api_listar_cuentas(request):
 
     paginator = Paginator(qs, int(request.GET.get('per_page', 20)))
     page = paginator.get_page(request.GET.get('page', 1))
-    items = [{
-        'cliente_id': c.cliente_id,
-        'cliente': c.cliente.nombre_completo,
-        'rut': c.cliente.rut or '',
-        'saldo_puntos': c.saldo_puntos,
-        'valor_pesos': c.saldo_puntos * valor_pto,
-        'activa': c.activa,
-    } for c in page]
+
+    items = []
+    for c in page:
+        cuenta = getattr(c, 'cuenta_puntos', None)
+        saldo = cuenta.saldo_puntos if cuenta else 0
+        items.append({
+            'cliente_id': c.id,
+            'cliente': c.nombre_completo,
+            'rut': c.rut or '',
+            'empresa': c.empresa.nombre if c.empresa else '',
+            'saldo_puntos': saldo,
+            'valor_pesos': saldo * valor_pto,
+            'tiene_cuenta': cuenta is not None,
+        })
 
     return JsonResponse({
         'success': True,
@@ -218,6 +257,7 @@ def api_registrar_cliente(request):
             fecha_nacimiento=(data.get('fecha_nacimiento') or None),
             genero=data.get('genero', ''),
             usuario=request.user,
+            empresa=_empresa_actual(request),
         )
         return JsonResponse({
             'success': True,

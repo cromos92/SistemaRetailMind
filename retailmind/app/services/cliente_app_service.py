@@ -17,9 +17,12 @@ Decisiones clave (ver `app/models/cliente_app.py` y el plan):
   refresh es un UUID opaco con hash en BD (`RefreshTokenClienteApp`), revocable.
 """
 import logging
+import os
+from email.mime.image import MIMEImage
 
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMultiAlternatives
+from django.template.loader import render_to_string
 from django.utils import timezone
 
 from rest_framework_simplejwt.tokens import AccessToken
@@ -53,7 +56,7 @@ def get_or_create_cuenta_app(cliente):
 
 # ========== OTP ==========
 
-def solicitar_otp(rut, *, canal='EMAIL', ip=None):
+def solicitar_otp(identificador, *, canal='EMAIL', ip=None):
     """
     Solicita un OTP para un cliente EXISTENTE. Anti-enumeración: responde siempre
     el mismo mensaje genérico, exista o no el cliente o tenga o no canal.
@@ -61,7 +64,7 @@ def solicitar_otp(rut, *, canal='EMAIL', ip=None):
     Crea la CuentaClienteApp si el cliente existe (vinculación implícita) pero NO
     crea clientes nuevos.
     """
-    cliente = fidelizacion_service.resolver_cliente_por_rut(rut)
+    cliente = fidelizacion_service.resolver_cliente_por_identificador(identificador)
     if not cliente:
         logger.info("Solicitud OTP RUT no encontrado (respuesta genérica)")
         return {'mensaje': MSG_OTP_ENVIADO}
@@ -85,13 +88,13 @@ def solicitar_otp(rut, *, canal='EMAIL', ip=None):
     return {'mensaje': MSG_OTP_ENVIADO}
 
 
-def verificar_otp(rut, codigo, *, ip=None, user_agent=None):
+def verificar_otp(identificador, codigo, *, ip=None, user_agent=None):
     """
     Verifica el OTP y, si es válido, emite los tokens.
     Devuelve dict con access/refresh/expires_at/cliente.
     Lanza ClienteAppError genérico si falla (no distingue RUT de código).
     """
-    cliente = fidelizacion_service.resolver_cliente_por_rut(rut)
+    cliente = fidelizacion_service.resolver_cliente_por_identificador(identificador)
     if not cliente:
         raise ClienteAppError('Código inválido o expirado.')
 
@@ -220,25 +223,68 @@ def enviar_otp(cliente, codigo, *, canal='EMAIL', destino=''):
     return False
 
 
+# Logos de marca incrustados en el correo (viven en el backend para que el
+# deploy los incluya; se adjuntan como imágenes inline vía Content-ID).
+_DIR_LOGOS_EMAIL = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)),  # app/
+    'static', 'img', 'email',
+)
+# (Content-ID en la plantilla, archivo en disco)
+_LOGOS_EMAIL = [
+    ('logo_realsport', 'logo_realsport.png'),
+    ('logo_paola', 'marca_paola.png'),
+]
+
+
 def enviar_otp_email(email, codigo):
-    """Envía el OTP por email con el backend SMTP ya configurado."""
+    """
+    Envía el OTP por email con plantilla HTML de marca (Puntos Paola / Realsport)
+    y logo incrustado, con fallback de texto plano. Usa el backend SMTP ya
+    configurado (MailerSend / Gmail según env).
+    """
     if not email:
         return False
     minutos = getattr(settings, 'OTP_EXPIRACION_MINUTOS', 10)
     asunto = 'Tu código de acceso'
-    cuerpo = (
+    # Fallback de texto plano (clientes sin HTML y mejor entregabilidad).
+    texto = (
         f"Tu código de acceso es: {codigo}\n\n"
-        f"Vence en {minutos} minutos. Si no solicitaste este código, ignora este mensaje."
+        f"Vence en {minutos} minutos. Si no solicitaste este código, ignora este mensaje.\n\n"
+        f"Puntos Paola · Realsport"
     )
     try:
-        send_mail(
-            asunto, cuerpo, settings.DEFAULT_FROM_EMAIL, [email],
-            fail_silently=False,
+        html = render_to_string('emails/otp_codigo.html', {
+            'codigo': codigo,
+            'minutos': minutos,
+        })
+        msg = EmailMultiAlternatives(
+            asunto, texto, settings.DEFAULT_FROM_EMAIL, [email],
         )
+        msg.attach_alternative(html, 'text/html')
+        # Incrustar los logos como imágenes inline (cid:logo_realsport / cid:logo_paola).
+        for cid, filename in _LOGOS_EMAIL:
+            ruta = os.path.join(_DIR_LOGOS_EMAIL, filename)
+            try:
+                with open(ruta, 'rb') as f:
+                    logo = MIMEImage(f.read())
+                logo.add_header('Content-ID', f'<{cid}>')
+                logo.add_header('Content-Disposition', 'inline', filename=filename)
+                msg.attach(logo)
+            except OSError:
+                # Si un logo no está disponible, el correo igual se envía.
+                logger.warning("Logo de email no encontrado en %s", ruta)
+        msg.send(fail_silently=False)
         return True
     except Exception:
         logger.exception("Fallo enviando OTP por email")
-        return False
+        # Último recurso: intentar el envío plano para no dejar al cliente sin código.
+        try:
+            send_mail(asunto, texto, settings.DEFAULT_FROM_EMAIL, [email],
+                      fail_silently=False)
+            return True
+        except Exception:
+            logger.exception("Fallo también el envío plano del OTP")
+            return False
 
 
 def enviar_otp_sms(celular, codigo):

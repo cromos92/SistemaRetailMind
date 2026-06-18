@@ -8,7 +8,7 @@ La lógica de saldos vive en `app/services/giftcard_service.py`.
 import json
 import logging
 
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_GET
@@ -17,8 +17,8 @@ from django.db.models import Q, Sum, Count
 from django.utils import timezone
 
 from .decorators import requiere_permiso
-from .models import GiftCard, MovimientoGiftCard, Sucursal, Cliente, Vendedor
-from .services import giftcard_service
+from .models import GiftCard, MovimientoGiftCard, Sucursal, Cliente, Vendedor, Empresa
+from .services import giftcard_service, fidelizacion_service
 
 logger = logging.getLogger('app')
 
@@ -30,25 +30,33 @@ def _sucursal_actual(request):
     return Sucursal.objects.filter(id=sid).first()
 
 
+def _empresa_actual(request):
+    eid = request.session.get('idEmpresaActual') or request.session.get('empresaActual')
+    if not eid:
+        return None
+    return Empresa.objects.filter(id=eid).first()
+
+
 # ========== VISTAS HTML ==========
 
 @requiere_permiso('giftcards_listado', 'puede_ver')
 def modulo_giftcards(request):
-    """Listado / gestión de gift cards."""
+    """Listado / gestión de gift cards. La emisión se hace en un modal aquí."""
     context = {
         'sucursal_actual': _sucursal_actual(request),
         'estado_choices': GiftCard._meta.get_field('estado').choices,
+        'tipo_tarjeta_choices': GiftCard._meta.get_field('tipo_tarjeta').choices,
     }
     return render(request, 'vistas/modulo_giftcards/lista.html', context)
 
 
 @requiere_permiso('giftcards_emitir', 'puede_crear')
 def emitir_giftcard_vista(request):
-    """Formulario de emisión de gift card."""
-    context = {
-        'sucursal_actual': _sucursal_actual(request),
-    }
-    return render(request, 'vistas/modulo_giftcards/emitir.html', context)
+    """
+    Emisión movida a un modal dentro del listado. Esta ruta se conserva (la usa
+    el menú/permiso `giftcards_emitir`) y redirige al listado abriendo el modal.
+    """
+    return redirect('/app/giftcards/?nueva=1')
 
 
 @requiere_permiso('giftcards_listado', 'puede_ver')
@@ -67,23 +75,62 @@ def detalle_giftcard_vista(request, giftcard_id):
 @require_POST
 @requiere_permiso('giftcards_emitir', 'puede_crear')
 def api_emitir_giftcard(request):
-    """Emite una nueva gift card."""
+    """
+    Emite una nueva gift card desde el modal del listado.
+
+    Tipos:
+    - DIGITAL: requiere un cliente (se resuelve por RUT o cliente_id).
+    - FISICA:  requiere `codigo_fisico` (impreso en la tarjeta); el RUT/cliente
+      es opcional (se puede vincular al canjear).
+    """
     try:
         data = json.loads(request.body or '{}')
         monto = int(data.get('monto') or 0)
         if monto <= 0:
             return JsonResponse({'success': False, 'error': 'Monto inválido.'}, status=400)
 
+        tipo_tarjeta = (data.get('tipo_tarjeta') or 'DIGITAL').upper()
+
+        # Resolver titular: por cliente_id explícito o por RUT.
         cliente = None
         if data.get('cliente_id'):
             cliente = Cliente.objects.filter(id=data['cliente_id']).first()
+        rut = (data.get('rut') or '').strip()
+        nombre_nuevo = (data.get('nombre') or '').strip()
+        if cliente is None and rut:
+            cliente = fidelizacion_service.resolver_cliente_por_rut(rut)
+            if cliente is None:
+                if nombre_nuevo:
+                    # El RUT no existe: crear el cliente al vuelo (mínimo nombre + RUT).
+                    try:
+                        cliente, _, _ = fidelizacion_service.registrar_cliente_manual(
+                            nombre=nombre_nuevo,
+                            rut=rut,
+                            usuario=request.user,
+                            empresa=_empresa_actual(request),
+                        )
+                    except fidelizacion_service.FidelizacionError as e:
+                        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+                elif tipo_tarjeta == 'DIGITAL':
+                    # Pedir el nombre para poder crearlo (lo maneja el modal).
+                    return JsonResponse({
+                        'success': False,
+                        'need_nombre': True,
+                        'error': 'No existe un cliente con ese RUT. Ingresa el nombre para crearlo.',
+                    }, status=400)
+                # FÍSICA con RUT no encontrado y sin nombre → se emite sin titular.
+
+        if tipo_tarjeta == 'DIGITAL' and cliente is None:
+            return JsonResponse({
+                'success': False,
+                'error': 'Para una gift card digital debes indicar el RUT del cliente.',
+            }, status=400)
+
         vendedor = None
         if data.get('vendedor_id'):
             vendedor = Vendedor.objects.filter(id=data['vendedor_id']).first()
 
-        vencimiento = None
-        if data.get('fecha_vencimiento'):
-            vencimiento = data['fecha_vencimiento']
+        vencimiento = data.get('fecha_vencimiento') or None
 
         giftcard = giftcard_service.emitir(
             monto,
@@ -94,12 +141,17 @@ def api_emitir_giftcard(request):
             pin=(data.get('pin') or None),
             usuario=request.user,
             observaciones=data.get('observaciones', ''),
+            tipo_tarjeta=tipo_tarjeta,
+            codigo_fisico=(data.get('codigo_fisico') or None),
         )
         return JsonResponse({
             'success': True,
             'giftcard': {
                 'id': giftcard.id,
                 'codigo': giftcard.codigo,
+                'codigo_fisico': giftcard.codigo_fisico,
+                'tipo_tarjeta': giftcard.tipo_tarjeta,
+                'cliente': giftcard.cliente.nombre_completo if giftcard.cliente else '',
                 'saldo_actual': giftcard.saldo_actual,
                 'fecha_vencimiento': giftcard.fecha_vencimiento.isoformat() if giftcard.fecha_vencimiento else None,
             },
@@ -135,6 +187,9 @@ def api_listar_giftcards(request):
     items = [{
         'id': gc.id,
         'codigo': gc.codigo,
+        'codigo_fisico': gc.codigo_fisico,
+        'tipo_tarjeta': gc.tipo_tarjeta,
+        'tipo_display': gc.get_tipo_tarjeta_display(),
         'saldo_inicial': gc.saldo_inicial,
         'saldo_actual': gc.saldo_actual,
         'estado': gc.estado,
@@ -174,6 +229,9 @@ def api_detalle_giftcard(request, giftcard_id):
         'giftcard': {
             'id': gc.id,
             'codigo': gc.codigo,
+            'codigo_fisico': gc.codigo_fisico,
+            'tipo_tarjeta': gc.tipo_tarjeta,
+            'tipo_display': gc.get_tipo_tarjeta_display(),
             'saldo_inicial': gc.saldo_inicial,
             'saldo_actual': gc.saldo_actual,
             'estado': gc.estado,

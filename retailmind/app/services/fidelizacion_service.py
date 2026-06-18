@@ -14,9 +14,10 @@ Garantías:
   el canje y la expiración consumen los lotes más antiguos primero.
 """
 import logging
+from datetime import timedelta
 
 from django.db import transaction, IntegrityError
-from django.db.models import F, Q
+from django.db.models import F, Q, Sum
 from django.utils import timezone
 
 from app.models import (
@@ -24,6 +25,8 @@ from app.models import (
     CuentaPuntos,
     MovimientoPuntos,
     ProgramaFidelizacion,
+    ReservaPuntos,
+    CanjeVale,
     calcular_fecha_expiracion,
     validar_rut_chileno,
 )
@@ -84,6 +87,32 @@ def resolver_cliente_por_rut(rut):
         if normalizar_rut(c.rut) == rut_norm:
             return c
     return None
+
+
+def resolver_cliente_por_email(email):
+    """
+    Devuelve el Cliente del CRM cuyo email coincide (case-insensitive), SOLO si
+    hay exactamente UNA coincidencia activa. Si hay 0 o varias, devuelve None:
+    el email NO es único en el CRM, así que un correo ambiguo no permite
+    identificar de forma segura. NO crea el cliente.
+    """
+    if not validar_email(email):
+        return None
+    email_norm = email.strip().lower()
+    candidatos = list(
+        Cliente.objects.filter(email__iexact=email_norm, activo=True)[:2]
+    )
+    return candidatos[0] if len(candidatos) == 1 else None
+
+
+def resolver_cliente_por_identificador(identificador):
+    """
+    Resuelve un Cliente por correo (si el texto parece email) o por RUT.
+    Devuelve None si no hay coincidencia, o si el email no es único.
+    """
+    if identificador and '@' in str(identificador):
+        return resolver_cliente_por_email(identificador)
+    return resolver_cliente_por_rut(identificador)
 
 
 def get_or_create_cuenta(cliente, *, programa=None, otorgar_bienvenida=True,
@@ -284,6 +313,531 @@ def canjear_puntos(cliente, puntos, *, ticket=None, sucursal=None, usuario=None,
             'saldo_total': cuenta.saldo_puntos}
 
 
+# ========== RESERVA DE PUNTOS (compra híbrida desde la app) ==========
+
+def _puntos_comprometidos(cuenta):
+    """
+    Puntos comprometidos pero aún NO debitados del ledger: la suma de las
+    reservas de compra app (RESERVADA) y los vales de canje con código
+    (PENDIENTE). Ambos bloquean saldo sin moverlo hasta que se confirman
+    (pago / canje en POS) o se liberan (expiración / anulación). Contar AMBOS
+    evita que el cliente comprometa los mismos puntos en una compra y en un vale.
+
+    Cuenta TODO compromiso vivo aunque su TTL ya pasó: la liberación efectiva del
+    saldo ocurre solo al confirmar/cancelar/expirar (que sí cambian el estado),
+    no en el instante en que cruza `expira_en`. Liberar antes permitiría
+    doble-compromiso de puntos sin débito.
+    """
+    if cuenta is None:
+        return 0
+    reservas = (
+        ReservaPuntos.objects
+        .filter(cuenta=cuenta, estado='RESERVADA')
+        .aggregate(total=Sum('puntos_reservados'))['total'] or 0
+    )
+    vales = (
+        CanjeVale.objects
+        .filter(cuenta=cuenta, estado='PENDIENTE')
+        .aggregate(total=Sum('puntos'))['total'] or 0
+    )
+    return reservas + vales
+
+
+def saldo_disponible_para_reserva(cuenta):
+    """
+    Puntos que el cliente puede comprometer AHORA (reservar para una compra o
+    canjear por código): el saldo menos lo ya comprometido (ver
+    `_puntos_comprometidos`).
+    """
+    if cuenta is None:
+        return 0
+    return max(0, cuenta.saldo_puntos - _puntos_comprometidos(cuenta))
+
+
+def cotizar_canje(cliente, puntos):
+    """
+    Datos para que la app muestre cuántos puntos puede aplicar y su valor en $.
+    No reserva ni lanza por saldo: devuelve los límites para la UI.
+    """
+    programa = ProgramaFidelizacion.get_activo()
+    if not programa:
+        raise FidelizacionError('No hay un programa de fidelización activo.')
+    puntos = max(0, int(puntos or 0))
+    cuenta = getattr(cliente, 'cuenta_puntos', None)
+    # Libera compromisos vencidos (reservas y vales) sin depender del cron global.
+    _expirar_reservas_de_cuenta(cuenta)
+    _expirar_vales_de_cuenta(cuenta)
+    saldo = cuenta.saldo_puntos if cuenta else 0
+    disponible = saldo_disponible_para_reserva(cuenta)
+    return {
+        'puntos': puntos,
+        'valor_pesos': puntos * programa.valor_punto_en_pesos,
+        'valor_punto': programa.valor_punto_en_pesos,
+        'saldo_total': saldo,
+        'saldo_disponible': disponible,
+        'minimo_canje': programa.minimo_canje_puntos,
+    }
+
+
+def reservar_puntos(cliente, puntos, *, tienda, empresa=None, idempotency_key=None,
+                    ttl_minutos=60):
+    """
+    Reserva (bloqueo lógico) `puntos` del cliente para una compra en `tienda`.
+    NO debita el ledger; solo crea una ReservaPuntos RESERVADA con TTL. El
+    `codigo_cupon` (PTS-<id>) se materializa como cupón en el ecommerce aparte.
+
+    Devuelve la ReservaPuntos. Lanza FidelizacionError si no alcanza el saldo
+    disponible o no cumple el mínimo. Idempotente por `idempotency_key`.
+    """
+    programa = ProgramaFidelizacion.get_activo()
+    if not programa:
+        raise FidelizacionError('No hay un programa de fidelización activo.')
+    puntos = int(puntos)
+    if puntos <= 0:
+        raise FidelizacionError('La cantidad a reservar debe ser mayor a 0.')
+    if puntos < programa.minimo_canje_puntos:
+        raise FidelizacionError(
+            f'El mínimo para usar puntos es {programa.minimo_canje_puntos}.'
+        )
+
+    # Liberar compromisos vencidos de este cliente antes de calcular el disponible
+    # (no dependemos del cron global para que su saldo sea correcto).
+    _cuenta_prev = getattr(cliente, 'cuenta_puntos', None)
+    _expirar_reservas_de_cuenta(_cuenta_prev)
+    _expirar_vales_de_cuenta(_cuenta_prev)
+
+    with transaction.atomic():
+        if idempotency_key:
+            existente = ReservaPuntos.objects.filter(
+                idempotency_key=idempotency_key).first()
+            if existente:
+                return existente
+        try:
+            # El lock de la cuenta serializa las reservas concurrentes del mismo
+            # cliente: el segundo espera y recalcula el disponible ya restado.
+            cuenta = CuentaPuntos.objects.select_for_update().get(cliente=cliente)
+        except CuentaPuntos.DoesNotExist:
+            raise FidelizacionError('El cliente no tiene cuenta de puntos.')
+
+        disponible = saldo_disponible_para_reserva(cuenta)
+        if disponible < puntos:
+            raise FidelizacionError(
+                f'Saldo disponible insuficiente (disponible {disponible}, requerido {puntos}).'
+            )
+        reserva = ReservaPuntos.objects.create(
+            cuenta=cuenta,
+            cliente=cliente,
+            puntos_reservados=puntos,
+            valor_pesos=puntos * programa.valor_punto_en_pesos,
+            tienda=tienda,
+            empresa=empresa,
+            estado='RESERVADA',
+            expira_en=timezone.now() + timedelta(minutes=ttl_minutos),
+            idempotency_key=idempotency_key,
+        )
+        reserva.codigo_cupon = f'PTS-{reserva.id}'
+        reserva.save(update_fields=['codigo_cupon', 'updated_at'])
+    return reserva
+
+
+def confirmar_reserva(reserva, *, puntos_reales, order_number=None, ticket=None,
+                      sucursal=None, usuario=None):
+    """
+    Confirma una reserva tras un pago real: debita del ledger (FIFO) los
+    `puntos_reales` efectivamente aplicados (el descuento del pedido pagado),
+    nunca más que lo reservado ni que el saldo. El sobrante reservado se libera
+    de facto (no se debita). Idempotente: una reserva ya CONFIRMADA no vuelve a
+    debitar.
+
+    Devuelve dict {puntos_consumidos, saldo_total}.
+    """
+    puntos_reales = max(0, int(puntos_reales))
+    with transaction.atomic():
+        reserva = ReservaPuntos.objects.select_for_update().get(pk=reserva.pk)
+        cuenta = CuentaPuntos.objects.select_for_update().get(pk=reserva.cuenta_id)
+        if reserva.estado == 'CONFIRMADA':
+            return {'puntos_consumidos': reserva.puntos_consumidos,
+                    'saldo_total': cuenta.saldo_puntos}
+
+        a_consumir = min(puntos_reales, reserva.puntos_reservados, cuenta.saldo_puntos)
+        consumido = 0
+        if a_consumir > 0:
+            _movs, restante = _consumir_lotes_fifo(
+                cuenta, a_consumir, 'CANJE',
+                ticket=ticket, sucursal=sucursal, usuario=usuario,
+                idempotency_key=f'canje_pts:{reserva.id}',
+                observaciones=f'Canje por compra app (pedido {order_number or reserva.codigo_cupon})',
+            )
+            consumido = a_consumir - restante
+
+        reserva.estado = 'CONFIRMADA'
+        reserva.puntos_consumidos = consumido
+        if order_number:
+            reserva.order_number = order_number
+        reserva.save(update_fields=['estado', 'puntos_consumidos', 'order_number',
+                                    'updated_at'])
+    logger.info('Reserva confirmada id=%s puntos=%s pedido=%s',
+                reserva.id, consumido, order_number)
+    return {'puntos_consumidos': consumido, 'saldo_total': cuenta.saldo_puntos}
+
+
+def liberar_reserva(reserva, motivo=''):
+    """
+    Libera una reserva sin tocar el ledger (no había débito). Idempotente: solo
+    actúa si está RESERVADA. Devuelve la reserva.
+    """
+    with transaction.atomic():
+        reserva = ReservaPuntos.objects.select_for_update().get(pk=reserva.pk)
+        if reserva.estado != 'RESERVADA':
+            return reserva
+        reserva.estado = 'LIBERADA'
+        reserva.save(update_fields=['estado', 'updated_at'])
+    if motivo:
+        logger.info('Reserva %s liberada (%s)', reserva.id, motivo)
+    return reserva
+
+
+def cancelar_reserva(reserva):
+    """
+    Cancela una reserva por abandono / fallo de pago: la libera (sin tocar el
+    ledger) y DESACTIVA su cupón en el ecommerce para que no quede vivo. Solo
+    actúa si está RESERVADA (no cancela una ya CONFIRMADA = pagada). Idempotente.
+    Devuelve la reserva.
+    """
+    from app.services import ecommerce_cupon_service
+    reserva = liberar_reserva(reserva, motivo='cancelada')
+    if reserva.estado == 'LIBERADA' and reserva.codigo_cupon:
+        ecommerce_cupon_service.desactivar_cupon(reserva.tienda, reserva.codigo_cupon)
+    return reserva
+
+
+def _expirar_reservas_de_cuenta(cuenta):
+    """
+    Expira (lazy) las reservas vencidas de UNA cuenta y desactiva sus cupones.
+
+    Permite que el saldo del cliente se libere aunque el cron global no haya
+    corrido: cada vez que el cliente cotiza/reserva de nuevo, sus propias reservas
+    vencidas se limpian. Así la compra app no queda "rota" si falta el scheduler.
+    No toca el ledger (una reserva nunca debitó). Best-effort: nunca lanza.
+    """
+    if cuenta is None:
+        return
+    from app.services import ecommerce_cupon_service
+    vencidas = list(ReservaPuntos.objects.filter(
+        cuenta=cuenta, estado='RESERVADA', expira_en__lt=timezone.now()))
+    for reserva in vencidas:
+        codigo = tienda = None
+        try:
+            with transaction.atomic():
+                r = ReservaPuntos.objects.select_for_update().get(pk=reserva.pk)
+                if r.estado != 'RESERVADA':
+                    continue
+                r.estado = 'EXPIRADA'
+                r.save(update_fields=['estado', 'updated_at'])
+                codigo, tienda = r.codigo_cupon, r.tienda
+            if codigo:
+                ecommerce_cupon_service.desactivar_cupon(tienda, codigo)
+        except Exception:
+            logger.exception('Expiración lazy de reserva %s falló', reserva.pk)
+
+
+def expirar_reservas_vencidas():
+    """
+    Marca EXPIRADA las reservas RESERVADA cuyo TTL venció y DESACTIVA su cupón en
+    el ecommerce. No toca el ledger (nunca se debitó). Devuelve la cantidad de
+    reservas expiradas.
+
+    Usado por el command `expirar_reservas_puntos`.
+    """
+    from app.services import ecommerce_cupon_service
+
+    vencidas = ReservaPuntos.objects.filter(
+        estado='RESERVADA', expira_en__lt=timezone.now(),
+    )
+    total = 0
+    for reserva in vencidas.iterator():
+        with transaction.atomic():
+            r = ReservaPuntos.objects.select_for_update().get(pk=reserva.pk)
+            if r.estado != 'RESERVADA':
+                continue
+            r.estado = 'EXPIRADA'
+            r.save(update_fields=['estado', 'updated_at'])
+            total += 1
+            codigo, tienda = r.codigo_cupon, r.tienda
+        # Desactivar el cupón fuera de la transacción (I/O remoto, nunca lanza).
+        if codigo:
+            ecommerce_cupon_service.desactivar_cupon(tienda, codigo)
+    return total
+
+
+def conciliar_reserva_por_pedido(pedido, codigo_cupon, descuento_pesos):
+    """
+    Cierra el loop de puntos de una compra de la app: confirma la reserva asociada
+    al `codigo_cupon` (PTS-<id>) debitando los puntos por el descuento REALMENTE
+    aplicado en el pedido pagado (no por lo reservado: el cupón TYPE_FIXED aplica
+    min(monto, subtotal), así que el descuento real puede ser menor).
+
+    Idempotente: una reserva ya CONFIRMADA no vuelve a debitar. No-op si no hay
+    reserva para ese cupón. Funciona aunque la reserva ya haya EXPIRADO por TTL
+    (el pedido se pagó de verdad, hay que debitar).
+    """
+    codigo = (codigo_cupon or '').strip()
+    if not codigo:
+        return None
+    reserva = ReservaPuntos.objects.filter(codigo_cupon=codigo).first()
+    if reserva is None or reserva.estado == 'CONFIRMADA':
+        return reserva
+
+    # Tasa del SNAPSHOT de la reserva: `valor_pesos` se fijó al reservar como
+    # `puntos_reservados * valor_punto_en_pesos`. Usarla evita dos bugs: que el
+    # programa cambie su tasa entre reserva y conciliación, y el fallback erróneo
+    # a 1 (que con la tasa real de $10 inflaba 10x los puntos a debitar).
+    if reserva.puntos_reservados > 0 and reserva.valor_pesos > 0:
+        valor_punto = reserva.valor_pesos / reserva.puntos_reservados
+    else:
+        programa = ProgramaFidelizacion.get_activo()
+        valor_punto = programa.valor_punto_en_pesos if programa else 0
+    if not valor_punto or valor_punto <= 0:
+        logger.warning('conciliar_reserva_por_pedido: sin valor_punto para reserva '
+                       '%s; no se debita', reserva.id)
+        return reserva
+
+    try:
+        descuento = int(float(descuento_pesos or 0))
+    except (TypeError, ValueError):
+        descuento = 0
+    puntos_reales = int(descuento // valor_punto)
+    order_number = getattr(pedido, 'numero_pedido_canal', '') or ''
+    confirmar_reserva(reserva, puntos_reales=puntos_reales, order_number=order_number)
+    return reserva
+
+
+# ========== CANJE CON CÓDIGO (vale para tienda física) ==========
+
+import secrets as _secrets
+
+# Alfabeto sin caracteres ambiguos (sin 0/O, 1/I/L) para dictar/teclear el código.
+_VALE_ALFABETO = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+
+
+def _generar_codigo_vale(longitud=8):
+    """Código de vale ininteligible y legible: 'RM-XXXXXXXX' (secrets, no random)."""
+    cuerpo = ''.join(_secrets.choice(_VALE_ALFABETO) for _ in range(longitud))
+    return f'RM-{cuerpo}'
+
+
+def _expirar_vales_de_cuenta(cuenta):
+    """
+    Expira (lazy) los vales PENDIENTE vencidos de UNA cuenta. No toca el ledger
+    (un vale nunca debitó hasta canjearse). Devuelve el saldo disponible correcto
+    sin depender del cron global. Best-effort: nunca lanza.
+    """
+    if cuenta is None:
+        return
+    vencidos = list(CanjeVale.objects.filter(
+        cuenta=cuenta, estado='PENDIENTE', expira_en__lt=timezone.now()))
+    for vale in vencidos:
+        try:
+            with transaction.atomic():
+                v = CanjeVale.objects.select_for_update().get(pk=vale.pk)
+                if v.estado != 'PENDIENTE':
+                    continue
+                v.estado = 'EXPIRADO'
+                v.save(update_fields=['estado', 'updated_at'])
+        except Exception:
+            logger.exception('Expiración lazy de vale %s falló', vale.pk)
+
+
+def generar_vale_canje(cliente, puntos, *, empresa=None, idempotency_key=None,
+                       ttl_horas=72):
+    """
+    Genera un vale de canje "con código": compromete `puntos` del cliente y
+    devuelve un `CanjeVale` PENDIENTE con un código de un solo uso para presentar
+    en tienda. NO debita el ledger (el débito ocurre al canjear en el POS).
+
+    Valida programa activo, mínimo de canje y saldo DISPONIBLE (descontando otros
+    compromisos vivos). Idempotente por `idempotency_key`. Lanza FidelizacionError.
+    """
+    programa = ProgramaFidelizacion.get_activo()
+    if not programa:
+        raise FidelizacionError('No hay un programa de fidelización activo.')
+    puntos = int(puntos)
+    if puntos <= 0:
+        raise FidelizacionError('La cantidad a canjear debe ser mayor a 0.')
+    if puntos < programa.minimo_canje_puntos:
+        raise FidelizacionError(
+            f'El canje mínimo es {programa.minimo_canje_puntos} puntos.'
+        )
+
+    # Liberar compromisos vencidos antes de calcular el disponible (no dependemos
+    # del cron global para que su saldo sea correcto).
+    cuenta_prev = getattr(cliente, 'cuenta_puntos', None)
+    _expirar_reservas_de_cuenta(cuenta_prev)
+    _expirar_vales_de_cuenta(cuenta_prev)
+
+    with transaction.atomic():
+        if idempotency_key:
+            existente = CanjeVale.objects.filter(
+                idempotency_key=idempotency_key).first()
+            if existente:
+                return existente
+        try:
+            cuenta = CuentaPuntos.objects.select_for_update().get(cliente=cliente)
+        except CuentaPuntos.DoesNotExist:
+            raise FidelizacionError('El cliente no tiene cuenta de puntos.')
+
+        disponible = saldo_disponible_para_reserva(cuenta)
+        if disponible < puntos:
+            raise FidelizacionError(
+                f'Saldo disponible insuficiente (disponible {disponible}, requerido {puntos}).'
+            )
+
+        # Código único: reintenta ante la rarísima colisión (unique en BD).
+        codigo = _generar_codigo_vale()
+        for _ in range(5):
+            if not CanjeVale.objects.filter(codigo=codigo).exists():
+                break
+            codigo = _generar_codigo_vale()
+
+        vale = CanjeVale.objects.create(
+            cuenta=cuenta,
+            cliente=cliente,
+            puntos=puntos,
+            valor_pesos=puntos * programa.valor_punto_en_pesos,
+            codigo=codigo,
+            estado='PENDIENTE',
+            empresa=empresa,
+            expira_en=timezone.now() + timedelta(hours=ttl_horas),
+            idempotency_key=idempotency_key,
+        )
+    logger.info('Vale de canje generado id=%s codigo=%s puntos=%s cliente=%s',
+                vale.id, vale.codigo, puntos, cliente.id)
+    return vale
+
+
+def validar_vale(codigo):
+    """
+    Consulta (sin debitar) el estado de un vale por código, para que el POS lo
+    muestre antes de canjear. Devuelve dict con su estado/valor. No lanza por
+    "no encontrado": devuelve estado='NO_EXISTE'.
+    """
+    codigo = (codigo or '').strip().upper()
+    vale = CanjeVale.objects.filter(codigo=codigo).first()
+    if vale is None:
+        return {'existe': False, 'estado': 'NO_EXISTE'}
+    expirado = vale.estado == 'PENDIENTE' and vale.expira_en <= timezone.now()
+    return {
+        'existe': True,
+        'codigo': vale.codigo,
+        'estado': 'EXPIRADO' if expirado else vale.estado,
+        'puntos': vale.puntos,
+        'valor_pesos': vale.valor_pesos,
+        'canjeable': vale.estado == 'PENDIENTE' and not expirado,
+        'cliente_nombre': vale.cliente.nombre_completo,
+        'cliente_rut': vale.cliente.rut or '',
+        'expira_en': vale.expira_en.isoformat(),
+    }
+
+
+def canjear_vale(codigo, *, sucursal=None, usuario=None, ticket=None):
+    """
+    Canjea un vale en el POS: debita del ledger (FIFO) los puntos del vale y lo
+    marca CANJEADO. Devuelve dict {valor_pesos, puntos, codigo} para que el POS
+    aplique el descuento. Idempotente (un vale ya CANJEADO no vuelve a debitar).
+    Lanza FidelizacionError si el código no existe, ya se usó o expiró.
+    """
+    codigo = (codigo or '').strip().upper()
+    if not codigo:
+        raise FidelizacionError('Falta el código del vale.')
+
+    # Acumulamos el error y lo lanzamos FUERA del bloque atómico: si lo
+    # lanzáramos dentro, el rollback descartaría también el marcado EXPIRADO.
+    resultado = None
+    error = None
+    with transaction.atomic():
+        vale = (CanjeVale.objects.select_for_update()
+                .filter(codigo=codigo).first())
+        if vale is None:
+            error = 'El código no existe.'
+        elif vale.estado == 'CANJEADO':
+            # Idempotente: mismo resultado, no vuelve a debitar.
+            resultado = {'valor_pesos': vale.valor_pesos, 'puntos': vale.puntos,
+                         'codigo': vale.codigo, 'ya_canjeado': True}
+        elif vale.estado == 'ANULADO':
+            error = 'El vale fue anulado.'
+        elif vale.estado == 'EXPIRADO' or vale.expira_en <= timezone.now():
+            if vale.estado == 'PENDIENTE':
+                vale.estado = 'EXPIRADO'
+                vale.save(update_fields=['estado', 'updated_at'])
+            error = 'El vale expiró.'
+        else:
+            cuenta = CuentaPuntos.objects.select_for_update().get(pk=vale.cuenta_id)
+            if cuenta.saldo_puntos < vale.puntos:
+                # El saldo cambió desde la emisión (otra operación lo consumió).
+                error = (f'Saldo insuficiente para canjear el vale '
+                         f'(disponible {cuenta.saldo_puntos}, vale {vale.puntos}).')
+            else:
+                _consumir_lotes_fifo(
+                    cuenta, vale.puntos, 'CANJE',
+                    ticket=ticket, sucursal=sucursal, usuario=usuario,
+                    idempotency_key=f'vale:{vale.id}',
+                    observaciones=f'Canje vale {vale.codigo}',
+                )
+                vale.estado = 'CANJEADO'
+                vale.canjeado_en = timezone.now()
+                vale.sucursal_canje = sucursal
+                vale.usuario_canje = usuario
+                vale.ticket = ticket
+                vale.save(update_fields=['estado', 'canjeado_en', 'sucursal_canje',
+                                         'usuario_canje', 'ticket', 'updated_at'])
+                logger.info('Vale canjeado codigo=%s puntos=%s sucursal=%s usuario=%s',
+                            vale.codigo, vale.puntos, getattr(sucursal, 'id', None),
+                            getattr(usuario, 'id', None))
+                resultado = {'valor_pesos': vale.valor_pesos, 'puntos': vale.puntos,
+                             'codigo': vale.codigo, 'ya_canjeado': False}
+
+    if error:
+        raise FidelizacionError(error)
+    return resultado
+
+
+def anular_vale(vale, motivo=''):
+    """
+    Anula un vale PENDIENTE (lo cancela el cliente o un admin): vuelve a dejar sus
+    puntos disponibles sin tocar el ledger. Idempotente: solo actúa si está
+    PENDIENTE. Devuelve el vale.
+    """
+    with transaction.atomic():
+        vale = CanjeVale.objects.select_for_update().get(pk=vale.pk)
+        if vale.estado != 'PENDIENTE':
+            return vale
+        vale.estado = 'ANULADO'
+        vale.save(update_fields=['estado', 'updated_at'])
+    if motivo:
+        logger.info('Vale %s anulado (%s)', vale.codigo, motivo)
+    return vale
+
+
+def expirar_vales_vencidos():
+    """
+    Marca EXPIRADO los vales PENDIENTE cuyo TTL venció (no toca el ledger: nunca
+    se debitó). Devuelve la cantidad expirada. Usado por el scheduler / command.
+    """
+    vencidos = CanjeVale.objects.filter(
+        estado='PENDIENTE', expira_en__lt=timezone.now(),
+    )
+    total = 0
+    for vale in vencidos.iterator():
+        with transaction.atomic():
+            v = CanjeVale.objects.select_for_update().get(pk=vale.pk)
+            if v.estado != 'PENDIENTE':
+                continue
+            v.estado = 'EXPIRADO'
+            v.save(update_fields=['estado', 'updated_at'])
+            total += 1
+    return total
+
+
 def ajuste_manual(cliente, puntos, *, usuario=None, observaciones=''):
     """
     Ajuste manual de puntos (positivo suma como lote nuevo; negativo consume
@@ -418,11 +972,16 @@ def consultar_saldo(cliente=None, rut=None):
 
 
 def registrar_cliente_manual(*, nombre, apellido='', rut, email='', celular='',
-                             fecha_nacimiento=None, genero='', usuario=None):
+                             fecha_nacimiento=None, genero='', usuario=None,
+                             empresa=None):
     """
     Alta manual de un cliente para fidelización (sin esperar a que compre).
     Valida los campos, crea/actualiza el Cliente del CRM y su CuentaPuntos
     (con bono de bienvenida si el programa lo define).
+
+    `empresa` (opcional): empresa a la que se asocia el cliente nuevo. Si el
+    cliente ya existe sin empresa, se le asigna; nunca se pisa una empresa ya
+    existente.
 
     Devuelve (cliente, cuenta, creado_cliente: bool).
     Lanza FidelizacionError con un mensaje claro ante datos inválidos.
@@ -434,12 +993,15 @@ def registrar_cliente_manual(*, nombre, apellido='', rut, email='', celular='',
     celular = (celular or '').strip()
 
     # Validaciones (server-side; el front valida en paralelo).
+    # Mínimo histórico: solo nombre + RUT. Celular/email/fecha son opcionales
+    # (muchos clientes antiguos se cargaron solo con RUT y nombre); si vienen,
+    # se validan; si no, se guardan vacíos.
     if not nombre:
         raise FidelizacionError('El nombre es obligatorio.')
     if not validar_rut_chileno(rut):
         raise FidelizacionError('El RUT no es válido.')
     cel_norm = normalizar_celular(celular)
-    if not cel_norm:
+    if celular and not cel_norm:
         raise FidelizacionError('El celular no es válido (ej: +56 9 1234 5678).')
     if email and not validar_email(email):
         raise FidelizacionError('El email no tiene un formato válido.')
@@ -459,6 +1021,8 @@ def registrar_cliente_manual(*, nombre, apellido='', rut, email='', celular='',
                 cliente.nombre = nombre
             if apellido:
                 cliente.apellido = apellido
+            if empresa and not cliente.empresa_id:
+                cliente.empresa = empresa
             if usuario:
                 cliente.updated_by = usuario
             cliente.save()
@@ -469,6 +1033,7 @@ def registrar_cliente_manual(*, nombre, apellido='', rut, email='', celular='',
                 email=email, celular=cel_norm,
                 fecha_nacimiento=fecha_nacimiento or None,
                 genero=(genero or None),
+                empresa=empresa,
                 tipo_cliente='INDIVIDUAL', activo=True,
                 created_by=usuario,
                 observaciones='Alta manual desde Fidelización',

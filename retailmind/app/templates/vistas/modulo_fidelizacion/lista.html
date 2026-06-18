@@ -18,10 +18,14 @@
     .module-header-status { display:flex; align-items:center; gap:6px; font-size:13px; opacity:.9; margin-top:4px; }
     .status-dot { width:8px; height:8px; background:#4ade80; border-radius:50%; animation:pulse 2s infinite; }
     @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.5;} }
+    .module-header-actions .btn { border-radius:10px; font-weight:500; }
     .pagination-controls { background: linear-gradient(135deg,#f8f9fa,#e9ecef); border-radius:12px; padding:16px; margin-bottom:16px; }
     .kpi-card { border-radius:12px; border:none; transition:all .3s ease; }
     .kpi-card:hover { transform: translateY(-4px); box-shadow:0 8px 25px rgba(0,0,0,.15); }
     .pts-badge { font-weight:700; color:#0ab39c; }
+    .req { color:#f06548; }
+    .badge-empresa { font-size:11px; padding:4px 10px; border-radius:12px; background:#eef2ff; color:#405189; font-weight:600; }
+    .modal-header-nexo { background:linear-gradient(135deg,#405189,#0ab39c); color:white; }
 </style>
 
 <div class="page-content">
@@ -38,9 +42,9 @@
                     </div>
                 </div>
                 <div class="module-header-actions">
-                    <a href="{% url 'registrar_cliente_vista' %}" class="btn btn-success">
+                    <button class="btn btn-success" onclick="abrirModalRegistro()">
                         <i class="ri-user-add-line"></i> Registrar cliente
-                    </a>
+                    </button>
                 </div>
             </div>
 
@@ -74,8 +78,8 @@
 
                 <div class="pagination-controls">
                     <div class="row g-2 align-items-center">
-                        <div class="col-md-8">
-                            <input type="text" id="fid-busqueda" class="form-control" placeholder="Buscar cliente por nombre o RUT...">
+                        <div class="col-md-10">
+                            <input type="text" id="fid-busqueda" class="form-control" placeholder="Buscar por nombre, RUT o empresa...">
                         </div>
                         <div class="col-md-2">
                             <button class="btn btn-primary w-100" onclick="cargarCuentas(1)"><i class="ri-filter-line"></i> Buscar</button>
@@ -87,13 +91,13 @@
                     <table class="table table-hover align-middle">
                         <thead class="table-light">
                             <tr>
-                                <th>Cliente</th><th>RUT</th>
+                                <th>Cliente</th><th>RUT</th><th>Empresa</th>
                                 <th class="text-end">Puntos</th><th class="text-end">Valor</th>
                                 <th class="text-center">Ficha</th>
                             </tr>
                         </thead>
                         <tbody id="fid-tbody">
-                            <tr><td colspan="5" class="text-center text-muted py-4">Cargando...</td></tr>
+                            <tr><td colspan="6" class="text-center text-muted py-4">Cargando...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -107,13 +111,85 @@
     </div>
 </div>
 
+<!-- ===== Modal Registrar Cliente ===== -->
+<div class="modal fade" id="modalRegistro" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header modal-header-nexo">
+                <h5 class="modal-title"><i class="ri-user-add-line me-2"></i>Registrar cliente para fidelización</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                {% if programa.puntos_bienvenida %}
+                <div class="alert alert-success d-flex align-items-center py-2">
+                    <i class="ri-gift-line me-2"></i>
+                    Al registrarse, el cliente recibe <strong class="mx-1">{{ programa.puntos_bienvenida }} puntos</strong> de bienvenida.
+                </div>
+                {% endif %}
+                <form id="formRegistro" autocomplete="off" novalidate>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Nombre <span class="req">*</span></label>
+                            <input type="text" id="rc-nombre" class="form-control" required>
+                            <div class="invalid-feedback">Ingresa el nombre.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Apellido</label>
+                            <input type="text" id="rc-apellido" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">RUT <span class="req">*</span></label>
+                            <input type="text" id="rc-rut" class="form-control" placeholder="12345678-9" required>
+                            <div class="invalid-feedback" id="rc-rut-err">RUT inválido.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Celular <span class="text-muted small">(opcional)</span></label>
+                            <input type="tel" id="rc-celular" class="form-control" placeholder="+56 9 1234 5678">
+                            <div class="invalid-feedback" id="rc-celular-err">Celular inválido.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email</label>
+                            <input type="email" id="rc-email" class="form-control" placeholder="correo@ejemplo.com">
+                            <div class="invalid-feedback" id="rc-email-err">Email inválido.</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Fecha de nacimiento</label>
+                            <input type="date" id="rc-fecha" class="form-control">
+                            <div class="invalid-feedback" id="rc-fecha-err">Fecha inválida.</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Género</label>
+                            <select id="rc-genero" class="form-select">
+                                <option value="">—</option>
+                                <option value="M">Masculino</option>
+                                <option value="F">Femenino</option>
+                                <option value="O">Otro</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="registrarCliente()" id="rc-btn">
+                    <i class="ri-user-add-line"></i> Registrar cliente
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 const URLS_FID = {
     listar: "{% url 'api_listar_cuentas' %}",
     reporte: "{% url 'api_reporte_fidelizacion' %}",
+    registrar: "{% url 'api_registrar_cliente' %}",
 };
+let modalRegistro = null;
+function csrf() { return document.querySelector('[name=csrfmiddlewaretoken]').value; }
 function fmt(n) { return '$' + (n||0).toLocaleString('es-CL'); }
 
+/* ===== Listado ===== */
 function cargarKpis() {
     fetch(URLS_FID.reporte).then(r=>r.json()).then(d=>{
         if (!d.success) return;
@@ -128,7 +204,7 @@ function cargarCuentas(page) {
     fetch(`${URLS_FID.listar}?q=${encodeURIComponent(q)}&page=${page||1}`).then(r=>r.json()).then(d=>{
         const tbody = document.getElementById('fid-tbody');
         if (!d.success || !d.items.length) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">Sin resultados</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Sin resultados</td></tr>';
             document.getElementById('fid-info').textContent = '';
             document.getElementById('fid-paginacion').innerHTML = '';
             return;
@@ -137,6 +213,7 @@ function cargarCuentas(page) {
             <tr>
                 <td>${c.cliente}</td>
                 <td class="small">${c.rut || '—'}</td>
+                <td>${c.empresa ? `<span class="badge-empresa">${c.empresa}</span>` : '<span class="text-muted">—</span>'}</td>
                 <td class="text-end pts-badge">${(c.saldo_puntos||0).toLocaleString('es-CL')}</td>
                 <td class="text-end">${fmt(c.valor_pesos)}</td>
                 <td class="text-center">
@@ -151,10 +228,108 @@ function cargarCuentas(page) {
     });
 }
 
+/* ===== Modal registro ===== */
+function abrirModalRegistro() {
+    document.getElementById('formRegistro').reset();
+    ['rc-nombre','rc-rut','rc-celular','rc-email','rc-fecha'].forEach(id=>{
+        const el = document.getElementById(id);
+        el.classList.remove('is-invalid','is-valid');
+    });
+    if (!modalRegistro) modalRegistro = new bootstrap.Modal(document.getElementById('modalRegistro'));
+    modalRegistro.show();
+}
+
+/* Validaciones (mismas reglas que el backend) */
+function validarRutChileno(rut) {
+    if (!rut) return false;
+    const limpio = rut.replace(/[^0-9kK]/g, '').toUpperCase();
+    if (limpio.length < 2) return false;
+    const cuerpo = limpio.slice(0, -1);
+    const dv = limpio.slice(-1);
+    if (!/^\d+$/.test(cuerpo)) return false;
+    let suma = 0, mul = 2;
+    for (let i = cuerpo.length - 1; i >= 0; i--) {
+        suma += parseInt(cuerpo[i]) * mul;
+        mul = mul < 7 ? mul + 1 : 2;
+    }
+    const resto = suma % 11;
+    let dvCalc = 11 - resto;
+    dvCalc = dvCalc === 11 ? '0' : dvCalc === 10 ? 'K' : String(dvCalc);
+    return dv === dvCalc;
+}
+function validarEmail(email) { return !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()); }
+function normalizarCelular(c) {
+    if (!c) return '';
+    let n = String(c).replace(/[^0-9]/g, '');
+    if (n.length === 11 && n.startsWith('56')) n = n.slice(2);
+    return (n.length === 9 && n.startsWith('9')) ? n : '';
+}
+function validarFecha(v) {
+    if (!v) return true;
+    const f = new Date(v + 'T00:00:00');
+    if (isNaN(f.getTime())) return false;
+    const hoy = new Date();
+    if (f > hoy) return false;
+    const edad = (hoy - f) / (365.25 * 24 * 3600 * 1000);
+    return edad >= 0 && edad <= 120;
+}
+function marcar(id, ok) {
+    const el = document.getElementById(id);
+    el.classList.toggle('is-invalid', !ok);
+    el.classList.toggle('is-valid', ok && el.value.trim() !== '');
+    return ok;
+}
+
+function registrarCliente() {
+    const nombre = document.getElementById('rc-nombre').value.trim();
+    const rut = document.getElementById('rc-rut').value.trim();
+    const email = document.getElementById('rc-email').value.trim();
+    const celular = document.getElementById('rc-celular').value.trim();
+    const fecha = document.getElementById('rc-fecha').value;
+
+    // Mínimo: nombre + RUT. Celular/email/fecha solo se validan si vienen.
+    let ok = true;
+    ok = marcar('rc-nombre', nombre !== '') && ok;
+    ok = marcar('rc-rut', validarRutChileno(rut)) && ok;
+    ok = marcar('rc-celular', celular === '' || normalizarCelular(celular) !== '') && ok;
+    ok = marcar('rc-email', validarEmail(email)) && ok;
+    ok = marcar('rc-fecha', validarFecha(fecha)) && ok;
+    if (!ok) { Swal.fire('Revisa los datos', 'Hay campos con errores.', 'warning'); return; }
+
+    const payload = {
+        nombre, rut, email, celular,
+        apellido: document.getElementById('rc-apellido').value.trim(),
+        fecha_nacimiento: fecha || null,
+        genero: document.getElementById('rc-genero').value,
+    };
+    const btn = document.getElementById('rc-btn');
+    btn.disabled = true;
+    fetch(URLS_FID.registrar, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+        body: JSON.stringify(payload)}).then(r=>r.json()).then(d=>{
+        btn.disabled = false;
+        if (d.success) {
+            if (modalRegistro) modalRegistro.hide();
+            const msg = d.creado ? 'Cliente registrado' : 'Cliente ya existía (cuenta actualizada)';
+            Swal.fire({
+                icon:'success', title: msg,
+                html:`Saldo de puntos: <strong>${(d.saldo_puntos||0).toLocaleString('es-CL')}</strong>`,
+                showCancelButton:true, confirmButtonText:'Ver ficha', cancelButtonText:'Seguir aquí',
+            }).then(res=>{
+                if (res.isConfirmed) window.location.href = `/app/fidelizacion/cliente/${d.cliente_id}/`;
+                else { cargarCuentas(1); cargarKpis(); }
+            });
+        } else {
+            Swal.fire('Error', d.error, 'error');
+        }
+    }).catch(()=>{ btn.disabled = false; Swal.fire('Error', 'No se pudo registrar el cliente.', 'error'); });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     cargarKpis();
     cargarCuentas(1);
     document.getElementById('fid-busqueda').addEventListener('keyup', e => { if (e.key==='Enter') cargarCuentas(1); });
+    // Auto-abrir el modal si se llegó desde el enlace antiguo (/registrar-cliente/).
+    if (new URLSearchParams(window.location.search).get('nuevo') === '1') abrirModalRegistro();
 });
 </script>
 

@@ -12,6 +12,7 @@ from app.models import (
     CuentaPuntos,
     MovimientoPuntos,
     GiftCard,
+    CanjeVale,
     validar_rut_chileno,
 )
 from app.services import fidelizacion_service
@@ -19,30 +20,84 @@ from app.services import fidelizacion_service
 
 # ========== AUTH ==========
 
+def _validar_identificador(attrs):
+    """
+    Acepta RUT o email (al menos uno). Valida el RUT si viene y deja el
+    identificador a usar en `attrs['identificador']` (el email tiene prioridad
+    si se enviaran ambos). El email se valida con DRF (EmailField).
+    """
+    rut = (attrs.get('rut') or '').strip()
+    email = (attrs.get('email') or '').strip()
+    if not rut and not email:
+        raise serializers.ValidationError('Ingresa tu RUT o tu correo.')
+    if rut and not validar_rut_chileno(rut):
+        raise serializers.ValidationError({'rut': 'El RUT no es válido.'})
+    attrs['identificador'] = email if email else rut
+    return attrs
+
+
 class SolicitarOTPSerializer(serializers.Serializer):
-    rut = serializers.CharField(max_length=20)
+    rut = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
     canal = serializers.ChoiceField(
         choices=['EMAIL', 'SMS'], default='EMAIL', required=False,
     )
 
-    def validate_rut(self, value):
-        if not validar_rut_chileno(value):
-            raise serializers.ValidationError('El RUT no es válido.')
-        return value
+    def validate(self, attrs):
+        return _validar_identificador(attrs)
 
 
 class VerificarOTPSerializer(serializers.Serializer):
-    rut = serializers.CharField(max_length=20)
+    rut = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
     codigo = serializers.CharField(min_length=6, max_length=6)
 
-    def validate_rut(self, value):
-        if not validar_rut_chileno(value):
-            raise serializers.ValidationError('El RUT no es válido.')
-        return value
+    def validate(self, attrs):
+        return _validar_identificador(attrs)
 
 
 class RefreshSerializer(serializers.Serializer):
     refresh = serializers.CharField()
+
+
+class CotizarCanjeSerializer(serializers.Serializer):
+    """Cuántos puntos quiere aplicar el cliente (para mostrar su valor en $)."""
+    puntos = serializers.IntegerField(min_value=1)
+
+
+class ReservarPuntosSerializer(serializers.Serializer):
+    """Reserva de puntos para una compra en una tienda."""
+    puntos = serializers.IntegerField(min_value=1)
+    tienda = serializers.CharField(max_length=20)
+    idempotency_key = serializers.CharField(
+        max_length=100, required=False, allow_blank=True,
+    )
+
+
+class CheckoutItemSerializer(serializers.Serializer):
+    sku = serializers.CharField(max_length=120)
+    quantity = serializers.IntegerField(min_value=1)
+
+
+class IniciarCheckoutSerializer(serializers.Serializer):
+    """
+    Inicia el checkout en el ecommerce. Con `reserva_id` aplica el cupón de
+    puntos; sin él (compra 100% dinero) se requiere `tienda`.
+    """
+    reserva_id = serializers.IntegerField(required=False, allow_null=True)
+    tienda = serializers.CharField(max_length=20, required=False, allow_blank=True, default='')
+    items = CheckoutItemSerializer(many=True)
+    first_name = serializers.CharField(required=False, allow_blank=True, default='')
+    last_name = serializers.CharField(required=False, allow_blank=True, default='')
+    phone = serializers.CharField(required=False, allow_blank=True, default='')
+
+
+class GenerarValeCanjeSerializer(serializers.Serializer):
+    """Genera un vale de canje con código por `puntos`."""
+    puntos = serializers.IntegerField(min_value=1)
+    idempotency_key = serializers.CharField(
+        max_length=100, required=False, allow_blank=True,
+    )
 
 
 class LogoutSerializer(serializers.Serializer):
@@ -111,4 +166,18 @@ class GiftCardClienteSerializer(serializers.ModelSerializer):
         fields = [
             'codigo', 'saldo_actual', 'estado', 'estado_display',
             'fecha_vencimiento', 'esta_vencida',
+        ]
+
+
+class CanjeValeSerializer(serializers.ModelSerializer):
+    """Vale de canje del cliente (lo que muestra la app para presentar en tienda)."""
+
+    estado_display = serializers.CharField(source='get_estado_display', read_only=True)
+    vigente = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = CanjeVale
+        fields = [
+            'id', 'codigo', 'puntos', 'valor_pesos', 'estado', 'estado_display',
+            'vigente', 'expira_en', 'canjeado_en', 'created_at',
         ]

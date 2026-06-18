@@ -1144,6 +1144,23 @@ div[style*="border: 1px solid #000"] {
 .pos-cliente-header.abierto #posClienteChevron { transform:rotate(180deg); }
 .pos-cli-label { font-size:0.7rem; font-weight:600; color:#475569; margin-bottom:2px; }
 .pos-cliente-card.tiene-datos .pos-cliente-icon { box-shadow:0 0 0 3px rgba(0,212,170,0.25); }
+/* Gating visual: campos del cliente bloqueados hasta tener un RUT válido */
+.pos-cli-locked[readonly] { background:var(--nexo-gray-100); opacity:.7; cursor:not-allowed; }
+.tk-spin { animation:tk-rot 1s linear infinite; }
+@keyframes tk-rot { to { transform:rotate(360deg); } }
+/* --- Estado de completitud de fidelización: qué datos hay / cuáles faltan --- */
+.tk-fideliza-estado { background:#f8fafc; border:1px dashed rgba(0,102,255,0.25); border-radius:9px; padding:7px 10px; }
+.tk-fideliza-titulo { font-size:0.7rem; font-weight:700; color:#475569; margin-right:2px; }
+.tk-chip {
+    display:inline-flex; align-items:center; gap:3px; font-size:0.68rem; font-weight:600;
+    padding:2px 8px; border-radius:20px; border:1px solid #e2e8f0; background:#fff; color:#94a3b8;
+    transition:all .15s; cursor:default;
+}
+.tk-chip i { font-size:0.8rem; }
+.tk-chip.falta { background:#fff4e5; color:#b45309; border-color:#fcd9a8; }
+.tk-chip.ok    { background:#e8fbf4; color:#047857; border-color:#9be8cf; }
+.tk-chip.falta:hover { background:#ffe9cc; }
+#tkFidelizaFaltan { font-size:0.68rem; font-weight:600; }
 
 .pos-bottom-bar {
     position: sticky !important;
@@ -1653,7 +1670,7 @@ div[style*="border: 1px solid #000"] {
                     </div>
                 </div><!-- /pos-unified-panel -->
 
-                <!-- ===== PANEL CLIENTE (FIDELIZACIÓN) ===== -->
+                <!-- ===== PANEL CLIENTE (FIDELIZACIÓN) — RUT FIRST ===== -->
                 <div class="card mt-2 pos-cliente-card">
                     <div class="card-header py-2 pos-cliente-header" id="posClienteToggle" role="button"
                          onclick="togglePanelCliente()">
@@ -1663,9 +1680,10 @@ div[style*="border: 1px solid #000"] {
                                 <div>
                                     <h6 class="mb-0" style="font-size:0.85rem;font-weight:700;">Cliente
                                         <span class="badge ms-1" style="background:linear-gradient(135deg,#0066FF,#00D4AA);font-size:0.6rem;">FIDELIZACIÓN</span>
+                                        <span class="nexo-badge nexo-badge-success ms-1 d-none" id="posClientePuntos" title=""></span>
                                     </h6>
                                     <small class="text-muted" id="posClienteResumen" style="font-size:0.7rem;">
-                                        Registra al cliente para que sume puntos en su compra
+                                        Ingresa el RUT del cliente para sumar puntos
                                     </small>
                                 </div>
                             </div>
@@ -1673,45 +1691,71 @@ div[style*="border: 1px solid #000"] {
                         </div>
                     </div>
                     <div class="card-body pos-cliente-body d-none" id="posClienteBody">
+                        <!-- PASO 1: RUT primero, ancho completo -->
                         <div class="row g-2">
-                            <div class="col-md-6">
-                                <label class="pos-cli-label">Nombre</label>
-                                <input type="text" class="form-control form-control-sm" id="tkClienteNombre" placeholder="Nombre del cliente" oninput="actualizarResumenCliente()">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="pos-cli-label">RUT</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="text" class="form-control form-control-sm" id="tkClienteRut" placeholder="12345678-9"
-                                           oninput="actualizarResumenCliente()" onblur="if(this.value.trim())tkMarcar('tkClienteRut',tkValidarRut(this.value))"
-                                           onkeydown="if(event.key==='Enter'){event.preventDefault();tkBuscarClientePorRut();}">
-                                    <button type="button" class="btn btn-outline-primary" onclick="tkBuscarClientePorRut()" title="Buscar cliente existente">
-                                        <i class="ri-search-line"></i>
+                            <div class="col-12">
+                                <label class="pos-cli-label" for="tkClienteRut">RUT del cliente <span class="text-danger">*</span></label>
+                                <div class="input-group input-group-sm has-validation">
+                                    <span class="input-group-text bg-light"><i class="ri-fingerprint-line text-muted"></i></span>
+                                    <input type="text" class="form-control" id="tkClienteRut" inputmode="text" autocomplete="off"
+                                           placeholder="12345678-9" maxlength="12"
+                                           oninput="tkOnInputRut(this)" onblur="tkOnBlurRut(this)"
+                                           onkeydown="if(event.key==='Enter'){event.preventDefault();tkBuscarClientePorRut(true);}">
+                                    <button type="button" class="btn btn-outline-primary" id="tkBtnBuscarRut"
+                                            onclick="tkBuscarClientePorRut(true)" title="Buscar cliente (Enter)">
+                                        <i class="ri-search-line" id="tkBtnBuscarIcon"></i>
                                     </button>
-                                    <div class="invalid-feedback">RUT inválido.</div>
+                                    <div class="invalid-feedback">RUT inválido — revisa el dígito verificador.</div>
+                                    <div class="valid-feedback">RUT válido.</div>
                                 </div>
                             </div>
-                            <div class="col-md-4">
-                                <label class="pos-cli-label">Celular <span class="text-info">★ fideliza</span></label>
-                                <input type="tel" class="form-control form-control-sm" id="tkClienteCelular" placeholder="+56 9 1234 5678" maxlength="15"
-                                       onblur="if(this.value.trim())tkMarcar('tkClienteCelular',tkNormalizarCelular(this.value)!=='')">
-                                <div class="invalid-feedback">Celular inválido.</div>
+                        </div>
+                        <!-- PASO 2: datos del cliente (bloqueados hasta tener un RUT válido) -->
+                        <div class="row g-2 mt-1" id="tkCamposCliente">
+                            <div class="col-md-6">
+                                <label class="pos-cli-label" for="tkClienteNombre">Nombre <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control form-control-sm pos-cli-locked" id="tkClienteNombre"
+                                       placeholder="Nombre del cliente" readonly oninput="actualizarResumenCliente()">
                             </div>
-                            <div class="col-md-4">
-                                <label class="pos-cli-label">Email</label>
-                                <input type="email" class="form-control form-control-sm" id="tkClienteEmail" placeholder="correo@ejemplo.com"
+                            <div class="col-md-6">
+                                <label class="pos-cli-label" for="tkClienteCelular">Celular <span class="text-info">★ fideliza</span></label>
+                                <input type="tel" class="form-control form-control-sm pos-cli-locked" id="tkClienteCelular"
+                                       placeholder="9 1234 5678  ·  +54 9 11 ..." maxlength="20" readonly
+                                       oninput="actualizarResumenCliente()"
+                                       onblur="if(this.value.trim())tkMarcar('tkClienteCelular',tkValidarCelular(this.value))">
+                                <div class="invalid-feedback">Número demasiado corto — usa al menos 8 dígitos.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="pos-cli-label" for="tkClienteEmail">Email</label>
+                                <input type="email" class="form-control form-control-sm pos-cli-locked" id="tkClienteEmail"
+                                       placeholder="correo@ejemplo.com" readonly
+                                       oninput="actualizarResumenCliente()"
                                        onblur="tkMarcar('tkClienteEmail',tkValidarEmail(this.value))">
                                 <div class="invalid-feedback">Email inválido.</div>
                             </div>
-                            <div class="col-md-4">
-                                <label class="pos-cli-label">Fecha nacimiento</label>
-                                <input type="date" class="form-control form-control-sm" id="tkClienteFechaNac"
+                            <div class="col-md-6">
+                                <label class="pos-cli-label" for="tkClienteFechaNac">Fecha nacimiento</label>
+                                <input type="date" class="form-control form-control-sm pos-cli-locked" id="tkClienteFechaNac" readonly
+                                       onchange="actualizarResumenCliente()"
                                        onblur="tkMarcar('tkClienteFechaNac',tkValidarFecha(this.value))">
                                 <div class="invalid-feedback">Fecha inválida.</div>
                             </div>
                         </div>
+                        <!-- Estado de completitud de fidelización: qué datos hay y cuáles faltan -->
+                        <div class="tk-fideliza-estado mt-2 d-none" id="tkFidelizaEstado">
+                            <div class="d-flex align-items-center flex-wrap gap-1">
+                                <span class="tk-fideliza-titulo">Datos para fidelizar:</span>
+                                <span class="tk-chip" id="tkChipNombre"><i class="ri-checkbox-blank-circle-line"></i> Nombre</span>
+                                <span class="tk-chip" id="tkChipCelular"><i class="ri-checkbox-blank-circle-line"></i> Celular</span>
+                                <span class="tk-chip" id="tkChipEmail"><i class="ri-checkbox-blank-circle-line"></i> Email</span>
+                                <span class="tk-chip" id="tkChipFecha"><i class="ri-checkbox-blank-circle-line"></i> Cumpleaños</span>
+                            </div>
+                            <small class="d-block mt-1" id="tkFidelizaFaltan"></small>
+                        </div>
+                        <!-- hint contextual + limpiar -->
                         <div class="d-flex align-items-center gap-2 mt-2">
                             <i class="ri-gift-line text-success"></i>
-                            <small class="text-muted">Estos datos se cargarán automáticamente al cobrar el ticket. El cajero no tendrá que reingresarlos.</small>
+                            <small class="text-muted" id="tkClienteHint">Completa un RUT válido para habilitar los datos. Se guardan al cobrar.</small>
                             <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="limpiarClienteTicket()">
                                 <i class="ri-eraser-line"></i> Limpiar
                             </button>
@@ -3546,6 +3590,95 @@ $(document).ready(function() {
 
     // Procesar e imprimir ticket
     // ===== Cliente (fidelización) en ticket-venta =====
+    // RUT del último cliente buscado (normalizado, sin formato) para no repetir fetch.
+    let tkUltimoRutBuscado = '';
+
+    // Auto-formato de RUT: solo guion, SIN puntos de miles (coherente con
+    // formatear_rut() del backend y con el POS de generación de ventas).
+    function tkFormatearRut(rut) {
+        const l = String(rut || '').replace(/[^0-9kK]/g, '').toUpperCase();
+        if (l.length < 2) return l;
+        return l.slice(0, -1) + '-' + l.slice(-1);
+    }
+    // RUT normalizado (sin formato) para comparar / anti doble-fetch.
+    function tkNormRut(r) { return String(r || '').replace(/[^0-9kK]/g, '').toUpperCase(); }
+
+    // Bloquea/desbloquea los datos del cliente. Usa readonly (NO disabled) para
+    // que SIEMPRE envíen su valor al cobrar y nunca rompan la fidelización.
+    function tkSetCamposBloqueados(bloq) {
+        ['tkClienteNombre','tkClienteCelular','tkClienteEmail','tkClienteFechaNac'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.readOnly = bloq;
+            el.classList.toggle('pos-cli-locked', bloq);
+        });
+    }
+
+    // Spinner en la lupa mientras se consulta el cliente.
+    function tkSpinBuscar(on) {
+        const ic = document.getElementById('tkBtnBuscarIcon');
+        const b = document.getElementById('tkBtnBuscarRut');
+        if (!ic || !b) return;
+        b.disabled = on;
+        ic.className = on ? 'ri-loader-4-line tk-spin' : 'ri-search-line';
+    }
+
+    // input del RUT: auto-formato + validación de DV en vivo + auto-búsqueda al
+    // pasar a válido (>=8 dígitos limpios para no regañar mientras se teclea).
+    function tkOnInputRut(input) {
+        input.value = tkFormatearRut(input.value);
+        input.classList.remove('is-valid', 'is-invalid');
+        actualizarResumenCliente();
+        const dig = tkNormRut(input.value).length;
+        if (dig >= 8) {
+            const ok = tkValidarRut(input.value);
+            tkMarcar('tkClienteRut', ok);
+            if (ok && tkNormRut(input.value) !== tkUltimoRutBuscado) tkBuscarClientePorRut(false);
+        }
+    }
+    // blur del RUT: validación definitiva + auto-búsqueda si quedó válido.
+    function tkOnBlurRut(input) {
+        const v = input.value.trim();
+        if (!v) { input.classList.remove('is-valid', 'is-invalid'); return; }
+        const ok = tkValidarRut(v);
+        tkMarcar('tkClienteRut', ok);
+        if (ok && tkNormRut(v) !== tkUltimoRutBuscado) tkBuscarClientePorRut(false);
+    }
+
+    // Saldo de puntos en el header (endpoint aparte; best-effort, no bloquea).
+    // Solo se pinta si el RUT resolvió a un cliente real del CRM (d.cliente).
+    function tkConsultarSaldo(rut) {
+        fetch(`{% url "api_consultar_saldo_puntos" %}?rut=${encodeURIComponent(rut)}`)
+            .then(r => r.json())
+            .then(d => {
+                const badge = document.getElementById('posClientePuntos');
+                if (!badge) return;
+                if (d && d.success && d.cliente) {
+                    let txt = `${(d.saldo_puntos || 0).toLocaleString('es-CL')} pts`;
+                    if (d.valor_pesos) txt += ` ($${(d.valor_pesos).toLocaleString('es-CL')})`;
+                    badge.textContent = 'Saldo: ' + txt;
+                    badge.classList.remove('d-none', 'nexo-badge-warning');
+                    badge.classList.add('nexo-badge-success');
+                    if (d.puntos_por_vencer > 0) {
+                        badge.classList.remove('nexo-badge-success');
+                        badge.classList.add('nexo-badge-warning');
+                        badge.title = `${d.puntos_por_vencer} pts por vencer (30 días)`;
+                    } else { badge.title = ''; }
+                } else {
+                    badge.classList.add('d-none');
+                }
+            })
+            .catch(() => document.getElementById('posClientePuntos')?.classList.add('d-none'));
+    }
+
+    // Tras autocompletar, salta al primer campo vacío (no roba foco si está completo).
+    function tkFocoPrimerFaltante() {
+        for (const id of ['tkClienteNombre','tkClienteCelular','tkClienteEmail']) {
+            const e = document.getElementById(id);
+            if (e && !e.value.trim()) { e.focus(); return; }
+        }
+    }
+
     function tkValidarRut(rut) {
         if (!rut) return false;
         const limpio = rut.replace(/[^0-9kK]/g, '').toUpperCase();
@@ -3565,6 +3698,14 @@ $(document).ready(function() {
         if (n.length === 11 && n.startsWith('56')) n = n.slice(2);
         return (n.length === 9 && n.startsWith('9')) ? n : '';
     }
+    // Validación TOLERANTE del celular: el campo es opcional, no se obliga a
+    // escribir +56 9 y se aceptan números de otros países. Solo se rechaza lo que
+    // claramente no es un teléfono. Rango E.164: 8 a 15 dígitos (sin contar '+').
+    function tkValidarCelular(c) {
+        if (!c || !c.trim()) return true;                  // vacío = ok (opcional)
+        const digitos = c.replace(/\D/g, '');
+        return digitos.length >= 8 && digitos.length <= 15;
+    }
     function tkValidarFecha(v) {
         if (!v) return true;
         const f = new Date(v + 'T00:00:00');
@@ -3578,6 +3719,8 @@ $(document).ready(function() {
         const el = document.getElementById(id);
         if (!el) return ok;
         el.classList.toggle('is-invalid', !ok);
+        // Confirmación positiva en verde, solo si el campo tiene contenido.
+        el.classList.toggle('is-valid', !!ok && el.value.trim() !== '');
         return ok;
     }
 
@@ -3585,30 +3728,45 @@ $(document).ready(function() {
         const body = document.getElementById('posClienteBody');
         const header = document.getElementById('posClienteToggle');
         body.classList.toggle('d-none');
-        header.classList.toggle('abierto', !body.classList.contains('d-none'));
+        const abierto = !body.classList.contains('d-none');
+        header.classList.toggle('abierto', abierto);
+        // Al abrir, foco al RUT (RUT-first). No se hace en el arranque para no
+        // robarle el foco al input de SKU/escáner.
+        if (abierto) setTimeout(() => document.getElementById('tkClienteRut')?.focus(), 50);
     }
 
     function limpiarClienteTicket() {
         ['tkClienteNombre','tkClienteRut','tkClienteCelular','tkClienteEmail','tkClienteFechaNac'].forEach(id => {
             const el = document.getElementById(id);
-            if (el) { el.value = ''; el.classList.remove('is-invalid'); }
+            if (el) { el.value = ''; el.classList.remove('is-invalid', 'is-valid'); }
         });
+        tkUltimoRutBuscado = '';
+        tkSetCamposBloqueados(true);
+        document.getElementById('posClientePuntos')?.classList.add('d-none');
+        const hint = document.getElementById('tkClienteHint');
+        if (hint) hint.textContent = 'Completa un RUT válido para habilitar los datos. Se guardan al cobrar.';
         actualizarResumenCliente();
+        document.getElementById('tkClienteRut')?.focus();
     }
 
-    // Busca un cliente existente por RUT y autocompleta el panel (paridad con el POS).
-    function tkBuscarClientePorRut() {
+    // Busca un cliente existente por RUT, autocompleta el panel y trae su saldo de
+    // puntos. manual=true (lupa/Enter) muestra toasts; auto (input/blur) es silencioso.
+    // Guard anti doble-fetch vía tkUltimoRutBuscado.
+    function tkBuscarClientePorRut(manual) {
         const rut = (document.getElementById('tkClienteRut')?.value || '').trim();
         if (!rut) { return; }
         if (!tkValidarRut(rut)) {
             tkMarcar('tkClienteRut', false);
-            Swal.fire({ icon: 'warning', title: 'RUT inválido', toast: true, position: 'top-end',
+            if (manual) Swal.fire({ icon: 'warning', title: 'RUT inválido', toast: true, position: 'top-end',
                 showConfirmButton: false, timer: 2500 });
             return;
         }
+        tkUltimoRutBuscado = tkNormRut(rut);   // setear ANTES del fetch evita re-disparo
+        tkSpinBuscar(true);
         fetch(`{% url "buscar_cliente_rut" %}?rut=${encodeURIComponent(rut)}`)
             .then(r => r.json())
             .then(data => {
+                tkSetCamposBloqueados(false);  // desbloquea (encontrado o nuevo)
                 if (data.success && data.cliente) {
                     const c = data.cliente;
                     if (c.nombre) document.getElementById('tkClienteNombre').value = c.nombre;
@@ -3616,18 +3774,35 @@ $(document).ready(function() {
                     const cel = c.celular || c.telefono_secundario || c.telefono || '';
                     if (cel) document.getElementById('tkClienteCelular').value = cel;
                     if (c.fecha_nacimiento) document.getElementById('tkClienteFechaNac').value = c.fecha_nacimiento;
+                    ['tkClienteNombre','tkClienteEmail','tkClienteCelular','tkClienteFechaNac']
+                        .forEach(id => { const e = document.getElementById(id); if (e && e.value.trim()) tkMarcar(id, true); });
+                    document.querySelector('.pos-cliente-card')?.classList.add('tiene-datos');
+                    const hint = document.getElementById('tkClienteHint');
+                    if (hint) hint.textContent = 'Cliente encontrado. Sus datos se guardan al cobrar.';
                     actualizarResumenCliente();
-                    Swal.fire({ icon: 'success', title: 'Cliente encontrado', toast: true, position: 'top-end',
+                    tkConsultarSaldo(rut);     // best-effort, no bloquea
+                    if (manual) Swal.fire({ icon: 'success', title: 'Cliente encontrado', toast: true, position: 'top-end',
                         showConfirmButton: false, timer: 2000 });
+                    tkFocoPrimerFaltante();
                 } else {
-                    Swal.fire({ icon: 'info', title: 'Cliente nuevo — complétalo a mano', toast: true,
+                    document.getElementById('posClientePuntos')?.classList.add('d-none');
+                    const hint = document.getElementById('tkClienteHint');
+                    if (hint) hint.textContent = 'Cliente nuevo: escribe el Nombre para crear su ficha.';
+                    actualizarResumenCliente();   // muestra los chips: todo "falta"
+                    document.getElementById('tkClienteNombre')?.focus();
+                    if (manual) Swal.fire({ icon: 'info', title: 'Cliente nuevo — completa el Nombre', toast: true,
                         position: 'top-end', showConfirmButton: false, timer: 2500 });
                 }
             })
             .catch(() => {
-                Swal.fire({ icon: 'error', title: 'Error al buscar', toast: true, position: 'top-end',
+                // Error de red: desbloquear igualmente para permitir registro manual.
+                tkSetCamposBloqueados(false);
+                const hint = document.getElementById('tkClienteHint');
+                if (hint) hint.textContent = 'No se pudo buscar. Completa los datos a mano; se guardan al cobrar.';
+                if (manual) Swal.fire({ icon: 'error', title: 'Error al buscar', toast: true, position: 'top-end',
                     showConfirmButton: false, timer: 2500 });
-            });
+            })
+            .finally(() => tkSpinBuscar(false));
     }
 
     function actualizarResumenCliente() {
@@ -3639,8 +3814,49 @@ $(document).ready(function() {
             resumen.textContent = `${nombre || 'Sin nombre'}${rut ? ' · ' + rut : ''} — sumará puntos`;
             card?.classList.add('tiene-datos');
         } else {
-            resumen.textContent = 'Registra al cliente para que sume puntos en su compra';
+            resumen.textContent = 'Ingresa el RUT del cliente para sumar puntos';
             card?.classList.remove('tiene-datos');
+        }
+        tkActualizarCompletitud();
+    }
+
+    // Refresca los chips de completitud de fidelización: pinta en verde lo que ya
+    // hay y en ámbar lo que falta, y arma la línea "Faltan: …". Solo se muestra
+    // cuando hay un RUT en juego (antes de eso no aporta nada visual).
+    function tkActualizarCompletitud() {
+        const cont = document.getElementById('tkFidelizaEstado');
+        if (!cont) return;
+        const rut = (document.getElementById('tkClienteRut')?.value || '').trim();
+        if (!rut) { cont.classList.add('d-none'); return; }
+        cont.classList.remove('d-none');
+
+        const campos = [
+            ['tkChipNombre',  'tkClienteNombre',   'Nombre'],
+            ['tkChipCelular', 'tkClienteCelular',  'Celular'],
+            ['tkChipEmail',   'tkClienteEmail',    'Email'],
+            ['tkChipFecha',   'tkClienteFechaNac', 'Cumpleaños'],
+        ];
+        const faltan = [];
+        campos.forEach(([chipId, inputId, label]) => {
+            const chip = document.getElementById(chipId);
+            if (!chip) return;
+            const ok = (document.getElementById(inputId)?.value || '').trim() !== '';
+            chip.classList.toggle('ok', ok);
+            chip.classList.toggle('falta', !ok);
+            const ic = chip.querySelector('i');
+            if (ic) ic.className = ok ? 'ri-checkbox-circle-fill' : 'ri-error-warning-line';
+            if (!ok) faltan.push(label);
+        });
+
+        const lbl = document.getElementById('tkFidelizaFaltan');
+        if (!lbl) return;
+        if (faltan.length === 0) {
+            lbl.className = 'd-block mt-1 text-success';
+            lbl.innerHTML = '<i class="ri-shield-check-line"></i> Ficha completa — se fideliza al cobrar.';
+        } else {
+            lbl.className = 'd-block mt-1 text-warning';
+            lbl.innerHTML = `<i class="ri-information-line"></i> Faltan: <strong>${faltan.join(', ')}</strong> ` +
+                            '<span class="text-muted">(opcionales, mejoran la fidelización)</span>';
         }
     }
 
@@ -3652,8 +3868,15 @@ $(document).ready(function() {
     Object.assign(window, {
         togglePanelCliente, actualizarResumenCliente, tkBuscarClientePorRut,
         limpiarClienteTicket, tkMarcar, tkValidarRut, tkNormalizarCelular,
-        tkValidarEmail, tkValidarFecha,
+        tkValidarCelular, tkValidarEmail, tkValidarFecha,
+        tkFormatearRut, tkNormRut, tkOnInputRut, tkOnBlurRut,
+        tkConsultarSaldo, tkSetCamposBloqueados, tkActualizarCompletitud,
     });
+
+    // Arranque: el panel inicia con los datos del cliente bloqueados hasta que se
+    // ingrese un RUT válido (flujo RUT-first). No se hace focus aquí (el panel
+    // está colapsado y el foco primario del POS es el SKU/escáner).
+    tkSetCamposBloqueados(true);
 
     // Devuelve {datos, valido}. Si el panel está vacío -> valido (cliente opcional).
     function obtenerDatosClienteTicket() {
@@ -3672,7 +3895,7 @@ $(document).ready(function() {
         // Si va a registrar cliente, nombre + RUT válido son necesarios para fidelizar.
         ok = tkMarcar('tkClienteNombre', nombre !== '') && ok;
         ok = tkMarcar('tkClienteRut', tkValidarRut(rut)) && ok;
-        if (celular) ok = tkMarcar('tkClienteCelular', tkNormalizarCelular(celular) !== '') && ok;
+        if (celular) ok = tkMarcar('tkClienteCelular', tkValidarCelular(celular)) && ok;
         if (email) ok = tkMarcar('tkClienteEmail', tkValidarEmail(email)) && ok;
         if (fechaNac) ok = tkMarcar('tkClienteFechaNac', tkValidarFecha(fechaNac)) && ok;
 
@@ -3680,6 +3903,44 @@ $(document).ready(function() {
             datos: { nombre, rut, celular, email, fecha_nacimiento: fechaNac || '' },
             valido: ok,
         };
+    }
+
+    // Arma el HTML de confirmación post-creación. Toma `ticket_data.cliente` que
+    // devuelve el backend (lo REALMENTE persistido en el ticket), de modo que el
+    // cajero ve con qué quedó guardado el cliente — no lo que tecleó, sino lo que
+    // quedó en la BD. Esa es la prueba de que la fidelización está cargada.
+    function tkResumenClienteGuardado(response) {
+        const id = response.ticket_id || response.correlativo || '';
+        const base = `<div style="font-size:.9rem;">Ticket de Venta <strong>#${id}</strong> creado exitosamente.</div>`;
+        const cli = (response.ticket_data && response.ticket_data.cliente) || {};
+        const tiene = (cli.nombre || '').trim() || (cli.rut || '').trim();
+        if (!tiene) {
+            return base + '<div style="margin-top:10px;font-size:.78rem;color:#94a3b8;">' +
+                   '<i class="ri-user-line"></i> Ticket sin cliente — no acumula fidelización.</div>';
+        }
+        const filas = [
+            ['Nombre',     cli.nombre],
+            ['RUT',        cli.rut],
+            ['Celular',    cli.celular],
+            ['Email',      cli.email],
+            ['Cumpleaños', cli.fecha_nacimiento],
+        ];
+        const items = filas.map(([k, v]) => {
+            const ok = (v == null ? '' : String(v)).trim() !== '';
+            return `<div style="display:flex;justify-content:space-between;gap:12px;font-size:.8rem;padding:3px 0;border-bottom:1px solid #f1f5f9;">
+                <span style="color:#64748b;">${k}</span>
+                <span style="font-weight:600;color:${ok ? '#047857' : '#cbd5e1'};">${ok ? v : '— sin dato'}</span>
+            </div>`;
+        }).join('');
+        return base +
+            `<div style="text-align:left;margin-top:12px;border:1px solid #e2e8f0;border-radius:10px;padding:8px 12px;background:#f8fafc;">
+                <div style="font-size:.72rem;font-weight:800;color:#0066FF;margin-bottom:6px;letter-spacing:.3px;">
+                    <i class="ri-user-star-line"></i> CLIENTE GUARDADO EN EL TICKET
+                </div>${items}
+                <div style="font-size:.7rem;color:#94a3b8;margin-top:6px;">
+                    Estos datos quedan precargados al cobrar; el cajero no los reingresa.
+                </div>
+            </div>`;
     }
 
     function procesarTicket() {
@@ -3735,7 +3996,7 @@ $(document).ready(function() {
                 Swal.fire({
                     icon: 'success',
                     title: '¡Ticket creado!',
-                    text: `Ticket de Venta #${response.ticket_id || response.correlativo} creado exitosamente`,
+                    html: tkResumenClienteGuardado(response),
                     confirmButtonText: 'OK'
                 }).then(() => {
                     resetearVistaTicket();

@@ -30,6 +30,25 @@
     .kpi-card:hover { transform: translateY(-4px); box-shadow: 0 8px 25px rgba(0,0,0,.15); }
     .gc-codigo { font-family: monospace; font-weight: 700; letter-spacing: 1px; }
     .badge-estado { font-size: 11px; padding: 4px 10px; border-radius: 12px; }
+    .badge-tipo { font-size: 11px; padding: 4px 10px; border-radius: 12px; font-weight:600; }
+    .badge-tipo.digital { background:#e3f2fd; color:#0b5ed7; }
+    .badge-tipo.fisica  { background:#fff3e0; color:#b35e00; }
+    .modal-header-nexo { background:linear-gradient(135deg,#405189,#0ab39c); color:white; }
+    /* Toggle tipo de tarjeta */
+    .tipo-toggle { display:flex; gap:10px; }
+    .tipo-toggle .tipo-btn {
+        flex:1; border:2px solid #e9ecef; border-radius:12px; padding:12px; cursor:pointer;
+        text-align:center; transition:all .2s ease; background:#fff;
+    }
+    .tipo-toggle .tipo-btn i { font-size:22px; display:block; margin-bottom:4px; color:#405189; }
+    .tipo-toggle .tipo-btn small { color:#6c757d; }
+    .tipo-toggle .tipo-btn.active { border-color:#0ab39c; background:linear-gradient(135deg,#e8f5e9,#f1fbf7); box-shadow:0 4px 12px rgba(10,179,156,.15); }
+    .gc-preview {
+        background: linear-gradient(135deg,#1A1A2E 0%,#0066FF 100%); color:white; border-radius:16px;
+        padding:24px; text-align:center; box-shadow:0 8px 24px rgba(0,0,0,.2);
+    }
+    .gc-preview .codigo { font-family: monospace; font-size:18px; letter-spacing:2px; font-weight:700; margin-top:8px; word-break:break-all; }
+    .gc-preview .monto { font-size:30px; font-weight:800; }
 </style>
 
 <div class="page-content">
@@ -44,14 +63,12 @@
                     </div>
                 </div>
                 <div class="module-header-actions">
-                    {% if user|default:'' %}
                     <button class="btn btn-light" onclick="abrirModalConsultar()">
                         <i class="ri-search-line"></i> Consultar saldo
                     </button>
-                    {% endif %}
-                    <a href="{% url 'emitir_giftcard_vista' %}" class="btn btn-success" id="btn-emitir-gc">
+                    <button class="btn btn-success" id="btn-emitir-gc" onclick="abrirModalEmitir()">
                         <i class="ri-add-circle-line"></i> Emitir Gift Card
-                    </a>
+                    </button>
                 </div>
             </div>
 
@@ -120,6 +137,7 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Código</th>
+                                <th>Tipo</th>
                                 <th>Cliente</th>
                                 <th class="text-end">Saldo</th>
                                 <th>Estado</th>
@@ -129,7 +147,7 @@
                             </tr>
                         </thead>
                         <tbody id="gc-tbody">
-                            <tr><td colspan="7" class="text-center text-muted py-4">Cargando...</td></tr>
+                            <tr><td colspan="8" class="text-center text-muted py-4">Cargando...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -143,17 +161,107 @@
     </div>
 </div>
 
-<!-- Modal Consultar / Acciones -->
+<!-- ===== Modal Emitir Gift Card ===== -->
+<div class="modal fade" id="modalEmitir" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header modal-header-nexo">
+                <h5 class="modal-title"><i class="ri-add-circle-line me-2"></i>Emitir Gift Card</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-4">
+                    <div class="col-md-7">
+                        <!-- Tipo de tarjeta -->
+                        <label class="form-label fw-bold mb-2">Tipo de tarjeta</label>
+                        <div class="tipo-toggle mb-3">
+                            <div class="tipo-btn active" data-tipo="DIGITAL" onclick="setTipoGc('DIGITAL')">
+                                <i class="ri-smartphone-line"></i>
+                                <div class="fw-semibold">Digital</div>
+                                <small>Vinculada a un cliente (RUT)</small>
+                            </div>
+                            <div class="tipo-btn" data-tipo="FISICA" onclick="setTipoGc('FISICA')">
+                                <i class="ri-bank-card-line"></i>
+                                <div class="fw-semibold">Física</div>
+                                <small>Tarjeta con código impreso</small>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Monto inicial <span class="text-danger">*</span></label>
+                            <input type="number" id="em-monto" class="form-control form-control-lg" min="1" placeholder="$ 0" oninput="actualizarPreview()">
+                        </div>
+
+                        <!-- Código físico (solo FISICA) -->
+                        <div class="mb-3 d-none" id="grp-codigo-fisico">
+                            <label class="form-label">Código impreso de la tarjeta <span class="text-danger">*</span></label>
+                            <input type="text" id="em-codigo-fisico" class="form-control gc-codigo" placeholder="Ej: 7891234567890" oninput="actualizarPreview()">
+                            <small class="text-muted">El código que viene impreso/grabado en la tarjeta física.</small>
+                        </div>
+
+                        <!-- RUT cliente -->
+                        <div class="mb-3">
+                            <label class="form-label" id="em-rut-label">RUT del cliente <span class="text-danger" id="em-rut-req">*</span></label>
+                            <div class="input-group">
+                                <input type="text" id="em-rut" class="form-control" placeholder="12345678-9" oninput="onRutInput()">
+                                <button class="btn btn-outline-secondary" type="button" onclick="buscarClienteGc()"><i class="ri-search-line"></i></button>
+                            </div>
+                            <small class="text-muted" id="em-cliente-nombre"></small>
+                        </div>
+
+                        <!-- Nombre para crear cliente nuevo (aparece si el RUT no existe) -->
+                        <div class="mb-3 d-none" id="grp-nuevo-cliente">
+                            <label class="form-label">Nombre del cliente nuevo <span class="text-danger">*</span></label>
+                            <input type="text" id="em-nuevo-nombre" class="form-control" placeholder="Nombre y apellido">
+                            <small class="text-muted">Ese RUT no existe: se creará el cliente con este nombre.</small>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Vencimiento (opcional)</label>
+                                <input type="date" id="em-vencimiento" class="form-control">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">PIN (opcional)</label>
+                                <input type="text" id="em-pin" class="form-control" maxlength="8" placeholder="Sin PIN">
+                            </div>
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label">Observaciones</label>
+                            <textarea id="em-obs" class="form-control" rows="2"></textarea>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <div class="gc-preview">
+                            <div><i class="ri-gift-line" style="font-size:30px;"></i></div>
+                            <div class="mt-2" style="opacity:.8;">GIFT CARD <span id="pv-tipo">DIGITAL</span></div>
+                            <div class="monto" id="pv-monto">$0</div>
+                            <div class="codigo" id="pv-codigo">GC-••••-••••-••••</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btn-emitir" onclick="emitirGc()">
+                    <i class="ri-gift-line"></i> Emitir Gift Card
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Modal Consultar / Acciones ===== -->
 <div class="modal fade" id="modalGc" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header" style="background:linear-gradient(135deg,#405189,#0ab39c); color:white;">
+            <div class="modal-header modal-header-nexo">
                 <h5 class="modal-title" id="modalGcTitulo">Consultar Gift Card</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label">Código</label>
+                    <label class="form-label">Código (sistema o físico)</label>
                     <input type="text" id="gc-codigo-input" class="form-control gc-codigo" placeholder="GC-XXXX-XXXX-XXXX">
                 </div>
                 <div id="gc-resultado" class="d-none alert"></div>
@@ -180,11 +288,17 @@ const URLS_GC = {
     consultar: "{% url 'api_consultar_saldo_giftcard' %}",
     recargar: "{% url 'api_recargar_giftcard' %}",
     anular: "{% url 'api_anular_giftcard' %}",
+    emitir: "{% url 'api_emitir_giftcard' %}",
+    buscarCliente: "{% url 'api_buscar_cliente_requerimiento' %}",
 };
-const PUEDE_EMITIR = {% if perms %}true{% else %}true{% endif %};
+const PUEDE_EMITIR = true;
+let TIPO_GC = 'DIGITAL';
+let CLIENTE_ID = null;
+let modalEmitir = null, modalConsultar = null;
 function csrf() { return document.querySelector('[name=csrfmiddlewaretoken]').value; }
 function fmt(n) { return '$' + (n||0).toLocaleString('es-CL'); }
 
+/* ===== KPIs + Listado ===== */
 function cargarKpis() {
     fetch(URLS_GC.reporte).then(r=>r.json()).then(d=>{
         if (!d.success) return;
@@ -202,15 +316,19 @@ function cargarGiftCards(page) {
     fetch(url).then(r=>r.json()).then(d=>{
         const tbody = document.getElementById('gc-tbody');
         if (!d.success || !d.items.length) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Sin resultados</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Sin resultados</td></tr>';
             document.getElementById('gc-info').textContent = '';
             document.getElementById('gc-paginacion').innerHTML = '';
             return;
         }
         const colores = {ACTIVA:'success', AGOTADA:'secondary', ANULADA:'danger', VENCIDA:'warning', BLOQUEADA:'dark'};
-        tbody.innerHTML = d.items.map(gc => `
+        tbody.innerHTML = d.items.map(gc => {
+            const esFisica = gc.tipo_tarjeta === 'FISICA';
+            const codigoMostrar = esFisica && gc.codigo_fisico ? gc.codigo_fisico : gc.codigo;
+            return `
             <tr>
-                <td class="gc-codigo">${gc.codigo}</td>
+                <td class="gc-codigo">${codigoMostrar}</td>
+                <td><span class="badge-tipo ${esFisica?'fisica':'digital'}">${esFisica?'Física':'Digital'}</span></td>
                 <td>${gc.cliente || '<span class="text-muted">—</span>'}</td>
                 <td class="text-end fw-bold">${fmt(gc.saldo_actual)}</td>
                 <td><span class="badge bg-${colores[gc.estado]||'secondary'} badge-estado">${gc.estado_display}</span></td>
@@ -219,7 +337,8 @@ function cargarGiftCards(page) {
                 <td class="text-center">
                     <button class="btn btn-sm btn-outline-primary" onclick="verDetalle(${gc.id})"><i class="ri-eye-line"></i></button>
                 </td>
-            </tr>`).join('');
+            </tr>`;
+        }).join('');
         document.getElementById('gc-info').textContent = `${d.total} gift cards · página ${d.page}/${d.num_pages}`;
         renderPaginacion(d.page, d.num_pages);
     });
@@ -235,13 +354,147 @@ function renderPaginacion(page, total) {
 
 function verDetalle(id) { window.location.href = `/app/giftcards/${id}/`; }
 
+/* ===== Emitir (modal) ===== */
+function abrirModalEmitir() {
+    CLIENTE_ID = null;
+    document.getElementById('em-monto').value = '';
+    document.getElementById('em-codigo-fisico').value = '';
+    document.getElementById('em-rut').value = '';
+    document.getElementById('em-vencimiento').value = '';
+    document.getElementById('em-pin').value = '';
+    document.getElementById('em-obs').value = '';
+    document.getElementById('em-cliente-nombre').textContent = '';
+    document.getElementById('em-nuevo-nombre').value = '';
+    document.getElementById('grp-nuevo-cliente').classList.add('d-none');
+    setTipoGc('DIGITAL');
+    actualizarPreview();
+    if (!modalEmitir) modalEmitir = new bootstrap.Modal(document.getElementById('modalEmitir'));
+    modalEmitir.show();
+}
+
+/* Al cambiar el RUT se invalida el cliente resuelto y se oculta el alta inline. */
+function onRutInput() {
+    CLIENTE_ID = null;
+    document.getElementById('em-cliente-nombre').textContent = '';
+    document.getElementById('grp-nuevo-cliente').classList.add('d-none');
+}
+
+function setTipoGc(tipo) {
+    TIPO_GC = tipo;
+    document.querySelectorAll('#modalEmitir .tipo-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.tipo === tipo);
+    });
+    const esFisica = tipo === 'FISICA';
+    document.getElementById('grp-codigo-fisico').classList.toggle('d-none', !esFisica);
+    document.getElementById('em-rut-label').childNodes[0].nodeValue =
+        esFisica ? 'RUT del titular (opcional) ' : 'RUT del cliente ';
+    document.getElementById('em-rut-req').classList.toggle('d-none', esFisica);
+    // El alta inline de cliente solo aplica al flujo digital; ocultarla al cambiar.
+    document.getElementById('grp-nuevo-cliente').classList.add('d-none');
+    document.getElementById('pv-tipo').textContent = tipo;
+    actualizarPreview();
+}
+
+function actualizarPreview() {
+    const m = parseInt(document.getElementById('em-monto').value || 0);
+    document.getElementById('pv-monto').textContent = fmt(m);
+    if (TIPO_GC === 'FISICA') {
+        const cf = document.getElementById('em-codigo-fisico').value.trim();
+        document.getElementById('pv-codigo').textContent = cf ? cf.toUpperCase() : 'CÓDIGO FÍSICO';
+    } else {
+        document.getElementById('pv-codigo').textContent = 'GC-••••-••••-••••';
+    }
+}
+
+function buscarClienteGc() {
+    const rut = document.getElementById('em-rut').value.trim();
+    const lbl = document.getElementById('em-cliente-nombre');
+    const grpNuevo = document.getElementById('grp-nuevo-cliente');
+    if (!rut) { lbl.textContent = ''; CLIENTE_ID = null; grpNuevo.classList.add('d-none'); return; }
+    return fetch(`${URLS_GC.buscarCliente}?rut=${encodeURIComponent(rut)}`).then(r=>r.json()).then(d=>{
+        if (d.success && d.cliente) {
+            CLIENTE_ID = d.cliente.id || null;
+            lbl.className = 'text-success';
+            lbl.textContent = '✓ ' + (d.cliente.nombre || '');
+            grpNuevo.classList.add('d-none');
+        } else {
+            CLIENTE_ID = null;
+            lbl.className = 'text-warning';
+            // RUT no existe: en digital ofrecemos crearlo al vuelo; en física se emite sin titular.
+            if (TIPO_GC === 'DIGITAL') {
+                lbl.textContent = 'Cliente no encontrado — ingresa el nombre para crearlo';
+                grpNuevo.classList.remove('d-none');
+                document.getElementById('em-nuevo-nombre').focus();
+            } else {
+                lbl.textContent = 'Cliente no encontrado (se emitirá sin titular)';
+                grpNuevo.classList.add('d-none');
+            }
+        }
+    });
+}
+
+function emitirGc() {
+    const monto = parseInt(document.getElementById('em-monto').value || 0);
+    if (!monto || monto <= 0) { Swal.fire('Atención', 'Ingresa un monto válido.', 'warning'); return; }
+    const rut = document.getElementById('em-rut').value.trim();
+    const codigoFisico = document.getElementById('em-codigo-fisico').value.trim();
+
+    if (TIPO_GC === 'DIGITAL' && !rut) {
+        Swal.fire('Atención', 'Para una gift card digital ingresa el RUT del cliente.', 'warning'); return;
+    }
+    if (TIPO_GC === 'FISICA' && !codigoFisico) {
+        Swal.fire('Atención', 'Ingresa el código impreso de la tarjeta física.', 'warning'); return;
+    }
+
+    const payload = {
+        tipo_tarjeta: TIPO_GC,
+        monto,
+        cliente_id: CLIENTE_ID,
+        rut: rut || null,
+        nombre: document.getElementById('em-nuevo-nombre').value.trim() || null,
+        codigo_fisico: TIPO_GC === 'FISICA' ? codigoFisico : null,
+        fecha_vencimiento: document.getElementById('em-vencimiento').value || null,
+        pin: document.getElementById('em-pin').value.trim() || null,
+        observaciones: document.getElementById('em-obs').value.trim(),
+    };
+    const btn = document.getElementById('btn-emitir');
+    btn.disabled = true;
+    fetch(URLS_GC.emitir, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+        body: JSON.stringify(payload)}).then(r=>r.json()).then(d=>{
+        btn.disabled = false;
+        if (d.success) {
+            if (modalEmitir) modalEmitir.hide();
+            const codSys = `<strong class="gc-codigo" style="font-size:18px;">${d.giftcard.codigo}</strong>`;
+            const codFis = d.giftcard.codigo_fisico ? `<br><small class="text-muted">Código físico: ${d.giftcard.codigo_fisico}</small>` : '';
+            const titular = d.giftcard.cliente ? `<br><small>Titular: ${d.giftcard.cliente}</small>` : '';
+            Swal.fire({
+                icon:'success', title:'Gift Card emitida',
+                html:`${codSys}${codFis}${titular}<br>Saldo: ${fmt(d.giftcard.saldo_actual)}`,
+                showCancelButton:true, confirmButtonText:'Ver detalle', cancelButtonText:'Seguir aquí',
+            }).then(res=>{
+                if (res.isConfirmed) window.location.href = `/app/giftcards/${d.giftcard.id}/`;
+                else { cargarGiftCards(1); cargarKpis(); }
+            });
+        } else {
+            // Si el RUT no existe, mostrar el campo de nombre para crear el cliente al vuelo.
+            if (d.need_nombre) {
+                document.getElementById('grp-nuevo-cliente').classList.remove('d-none');
+                document.getElementById('em-nuevo-nombre').focus();
+            }
+            Swal.fire('Atención', d.error, d.need_nombre ? 'info' : 'error');
+        }
+    }).catch(()=>{ btn.disabled = false; Swal.fire('Error', 'No se pudo emitir la gift card.', 'error'); });
+}
+
+/* ===== Consultar / Recargar / Anular ===== */
 function abrirModalConsultar() {
     document.getElementById('gc-resultado').className = 'd-none alert';
     document.getElementById('gc-acciones-extra').classList.add('d-none');
     document.getElementById('btn-recargar-gc').classList.add('d-none');
     document.getElementById('btn-anular-gc').classList.add('d-none');
     document.getElementById('gc-codigo-input').value = '';
-    new bootstrap.Modal(document.getElementById('modalGc')).show();
+    if (!modalConsultar) modalConsultar = new bootstrap.Modal(document.getElementById('modalGc'));
+    modalConsultar.show();
 }
 
 function consultarSaldoGc() {
@@ -252,7 +505,9 @@ function consultarSaldoGc() {
         box.classList.remove('d-none');
         if (!d.success) { box.className = 'alert alert-danger'; box.textContent = d.error; return; }
         box.className = d.valida ? 'alert alert-success' : 'alert alert-warning';
-        box.innerHTML = `<strong>${d.codigo}</strong><br>Saldo: ${fmt(d.saldo_actual)}<br>Estado: ${d.estado_display}` +
+        box.innerHTML = `<strong>${d.codigo}</strong>` +
+            (d.codigo_fisico ? ` <span class="badge-tipo fisica">Física</span>` : ` <span class="badge-tipo digital">Digital</span>`) +
+            `<br>Saldo: ${fmt(d.saldo_actual)}<br>Estado: ${d.estado_display}` +
             (d.fecha_vencimiento ? `<br>Vence: ${d.fecha_vencimiento}` : '');
         if (PUEDE_EMITIR) {
             document.getElementById('gc-acciones-extra').classList.remove('d-none');
@@ -268,7 +523,7 @@ function recargarGc() {
     if (!monto) { return; }
     fetch(URLS_GC.recargar, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
         body: JSON.stringify({codigo, monto})}).then(r=>r.json()).then(d=>{
-        if (d.success) { Swal.fire('Recargada', 'Nuevo saldo: '+fmt(d.saldo_actual), 'success'); consultarSaldoGc(); cargarKpis(); }
+        if (d.success) { Swal.fire('Recargada', 'Nuevo saldo: '+fmt(d.saldo_actual), 'success'); consultarSaldoGc(); cargarKpis(); cargarGiftCards(1); }
         else Swal.fire('Error', d.error, 'error');
     });
 }
@@ -290,6 +545,8 @@ document.addEventListener('DOMContentLoaded', () => {
     cargarKpis();
     cargarGiftCards(1);
     document.getElementById('gc-busqueda').addEventListener('keyup', e => { if (e.key==='Enter') cargarGiftCards(1); });
+    // Auto-abrir el modal de emisión si se llegó desde el enlace antiguo (/emitir/).
+    if (new URLSearchParams(window.location.search).get('nueva') === '1') abrirModalEmitir();
 });
 </script>
 

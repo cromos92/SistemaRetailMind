@@ -386,6 +386,8 @@ def _ingestar_pedido_dict(data):
             cliente_nombre=cliente_nombre,
             cliente_email=data.get('cliente_email', ''),
             cliente_documento=data.get('cliente_documento', ''),
+            coupon_code=(data.get('coupon_code', '') or ''),
+            from_app=bool(data.get('from_app')),
             subtotal=data.get('subtotal', 0),
             descuento=data.get('descuento', 0),
             impuestos=data.get('impuestos', 0),
@@ -426,6 +428,21 @@ def _ingestar_pedido_dict(data):
             todos_items_con_stock=todos_con_stock,
             items_sin_stock=items_sin,
         )
+
+        # Compra de la app (puntos): si el pedido ya viene PAGADO y trae cupón
+        # PTS-, confirmar los puntos por la vía rápida. La facturación lo
+        # reconfirma idempotentemente (es la red de seguridad si llega sin pagar).
+        _estado_pagado = (data.get('estado') or '').strip().upper() in (
+            'PREPARANDO', 'CONFIRMADO', 'ENVIADO', 'ENTREGADO', 'COMPLETADO', 'PAGADO',
+        )
+        if _estado_pagado and (pedido.coupon_code or '').upper().startswith('PTS-'):
+            try:
+                from app.services import fidelizacion_service
+                fidelizacion_service.conciliar_reserva_por_pedido(
+                    pedido, pedido.coupon_code, pedido.descuento)
+            except Exception:
+                logger.exception('Conciliación de puntos (ingesta) falló para %s',
+                                 numero_pedido_canal)
 
     except IntegrityError:
         existente = PedidoEcommerce.objects.filter(
@@ -501,6 +518,54 @@ def api_recibir_pedido_ecommerce(request):
     resultado = _ingestar_pedido_dict(data)
     status = resultado.pop('status', 200)
     return JsonResponse(resultado, status=status)
+
+
+@csrf_exempt
+def api_pedido_pagado(request):
+    """
+    POST /api/ecommerce/pedidos/pagado/   (Header X-RetailMind-Key)
+
+    Aviso idempotente de que un pedido de ecommerce pasó a PAGADO. Dispara la
+    conciliación de puntos de la app (débito real por el descuento del cupón
+    PTS-) aunque el pedido se haya ingerido ANTES de pagarse — cierra el hueco de
+    que la conciliación quedara dependiendo solo de la facturación manual.
+    No falla si el pedido aún no se ingirió o no usó puntos.
+
+    Body: { "canal_origen": "...", "numero_pedido_canal": "..." }
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Método no permitido'}, status=405)
+    if not _verificar_api_key(request):
+        return JsonResponse({'ok': False, 'error': 'API key inválida'}, status=401)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'Body JSON inválido'}, status=400)
+
+    numero = (data.get('numero_pedido_canal') or '').strip()
+    canal = _normalizar_canal(data.get('canal_origen'))
+    if not numero or not canal:
+        return JsonResponse(
+            {'ok': False, 'error': 'numero_pedido_canal y canal_origen son obligatorios'},
+            status=400)
+
+    pedido = PedidoEcommerce.objects.filter(
+        numero_pedido_canal=numero, canal_origen=canal).first()
+    if pedido is None:
+        # Aún no ingerido: la ingesta lo conciliará cuando llegue pagado.
+        return JsonResponse({'ok': True, 'conciliado': False,
+                             'detalle': 'pedido aún no ingerido'})
+
+    conciliado = False
+    if (pedido.coupon_code or '').upper().startswith('PTS-'):
+        try:
+            from app.services import fidelizacion_service
+            fidelizacion_service.conciliar_reserva_por_pedido(
+                pedido, pedido.coupon_code, pedido.descuento)
+            conciliado = True
+        except Exception:
+            logger.exception('api_pedido_pagado: conciliación falló para %s', numero)
+    return JsonResponse({'ok': True, 'conciliado': conciliado})
 
 
 @csrf_exempt
@@ -1193,6 +1258,23 @@ def api_facturar_pedido_individual(request, pedido_id):
             MetricaAsignacionPedido.objects.filter(pedido=pedido).update(
                 tiempo_procesamiento_min=tiempo_min,
             )
+
+        # Fidelización de la compra de la app, FUERA de la transacción de la
+        # boleta (la boleta ya está emitida; los puntos son secundarios y no
+        # deben tumbarla). Ambas operaciones son idempotentes:
+        #   - conciliar: debita los puntos por el descuento real (cupón PTS-).
+        #   - acumular: suma puntos por la parte en dinero (ticket.total ya viene
+        #     neto del descuento, así que acumula solo sobre lo pagado).
+        try:
+            from .services import fidelizacion_service
+            if (pedido.coupon_code or '').upper().startswith('PTS-'):
+                fidelizacion_service.conciliar_reserva_por_pedido(
+                    pedido, pedido.coupon_code, pedido.descuento)
+            if pedido.from_app:
+                fidelizacion_service.acumular_puntos_por_venta(ticket, usuario=request.user)
+        except Exception:
+            logger.exception('Fidelización app falló tras facturar pedido %s', pedido_id)
+
         return JsonResponse({
             'ok': True,
             'numero_ticket_rm': pedido.numero_ticket_rm,
@@ -1648,6 +1730,22 @@ def facturar_ecommerce_masivo(request):
                 MetricaAsignacionPedido.objects.filter(pedido=pedido).update(
                     tiempo_procesamiento_min=tiempo_min,
                 )
+
+            # Fidelización de la compra de la app (fuera de la transacción de la
+            # boleta; idempotente). MISMO hook que la facturación individual: sin
+            # esto, un pedido de app facturado por la vía masiva perdía para
+            # siempre la acumulación de puntos por la parte en dinero.
+            try:
+                from .services import fidelizacion_service
+                if (pedido.coupon_code or '').upper().startswith('PTS-'):
+                    fidelizacion_service.conciliar_reserva_por_pedido(
+                        pedido, pedido.coupon_code, pedido.descuento)
+                if pedido.from_app:
+                    fidelizacion_service.acumular_puntos_por_venta(
+                        ticket, usuario=request.user)
+            except Exception:
+                logger.exception(
+                    'Fidelización app falló al facturar (masivo) pedido %s', pedido.id)
 
             resultados.append({
                 'pedido_id': pedido.id,

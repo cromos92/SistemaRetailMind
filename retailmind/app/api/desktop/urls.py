@@ -17,6 +17,8 @@ from .fidelizacion_views import (
     SaldoPuntosView,
     GiftCardConsultaView,
     GiftCardValidarView,
+    ValeCanjeConsultaView,
+    ValeCanjeAplicarView,
 )
 
 app_name = 'desktop'
@@ -37,4 +39,8 @@ urlpatterns = [
     path('fidelizacion/saldo/', SaldoPuntosView.as_view(), name='fidelizacion-saldo'),
     path('giftcards/validar/', GiftCardValidarView.as_view(), name='giftcards-validar'),
     path('giftcards/<str:codigo>/', GiftCardConsultaView.as_view(), name='giftcards-consulta'),
+
+    # Canje con código (vale de puntos validado en el POS)
+    path('canje/aplicar/', ValeCanjeAplicarView.as_view(), name='canje-aplicar'),
+    path('canje/<str:codigo>/', ValeCanjeConsultaView.as_view(), name='canje-consulta'),
 ]

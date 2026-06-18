@@ -38,6 +38,16 @@ TIPO_MOV_GIFTCARD_CHOICES = [
     ('REVERSA', 'Reversa (devolución/anulación de venta)'),
 ]
 
+# Tipo de gift card:
+# - DIGITAL: se emite vinculada a un cliente (RUT). No tiene tarjeta plástica.
+# - FISICA:  tarjeta plástica con un código impreso que se activa en el sistema.
+#            El RUT del titular es opcional al activar; si va vacío, se vincula
+#            al cliente la primera vez que se canjea en tienda.
+TIPO_TARJETA_GIFTCARD_CHOICES = [
+    ('DIGITAL', 'Digital (vinculada a cliente)'),
+    ('FISICA', 'Física (código impreso)'),
+]
+
 # Alfabeto Crockford base32 sin caracteres ambiguos (I, O, 0, 1, U)
 _CODIGO_ALFABETO = 'ABCDEFGHJKLMNPQRSTVWXYZ23456789'
 GIFTCARD_PREFIJO = 'GC'
@@ -68,6 +78,20 @@ class GiftCard(models.Model):
         unique=True,
         db_index=True,
         help_text="Código legible único (GC-XXXX-XXXX-XXXX)",
+    )
+    tipo_tarjeta = models.CharField(
+        max_length=10,
+        choices=TIPO_TARJETA_GIFTCARD_CHOICES,
+        default='DIGITAL',
+        db_index=True,
+        help_text="Digital (vinculada a cliente) o Física (código impreso)",
+    )
+    codigo_fisico = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        unique=True,
+        help_text="Código impreso de la tarjeta física (null en digitales)",
     )
     pin = models.CharField(
         max_length=8,

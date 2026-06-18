@@ -22,7 +22,7 @@ from django.db import models
 from django.utils import timezone
 from django.conf import settings
 
-from .organizacion import Sucursal
+from .organizacion import Sucursal, Empresa
 from .crm import Cliente
 
 
@@ -320,3 +320,169 @@ def calcular_fecha_expiracion(programa, desde=None):
     if not programa or not programa.vigencia_dias:
         return None
     return desde + timedelta(days=programa.vigencia_dias)
+
+
+ESTADO_RESERVA_CHOICES = [
+    ('RESERVADA', 'Reservada'),
+    ('CONFIRMADA', 'Confirmada'),
+    ('LIBERADA', 'Liberada'),
+    ('EXPIRADA', 'Expirada'),
+]
+
+
+class ReservaPuntos(models.Model):
+    """
+    Reserva (bloqueo lógico) de puntos para una compra híbrida desde la app móvil.
+
+    NO debita el ledger: solo marca puntos como comprometidos mientras el cliente
+    paga en el checkout del ecommerce. El "saldo disponible para reservar" =
+    `CuentaPuntos.saldo_puntos` − Σ(reservas RESERVADA vivas). El débito real
+    (movimiento CANJE) ocurre al CONFIRMAR, por los puntos REALMENTE aplicados
+    (el descuento del pedido pagado). Si el pago se abandona, la reserva expira y
+    NUNCA se debitan puntos. Cada reserva se materializa como un cupón de descuento
+    en el ecommerce (`codigo_cupon` = ``PTS-<id>``).
+    """
+
+    cuenta = models.ForeignKey(
+        CuentaPuntos, on_delete=models.CASCADE, related_name='reservas',
+    )
+    cliente = models.ForeignKey(
+        Cliente, on_delete=models.CASCADE, related_name='reservas_puntos',
+    )
+    puntos_reservados = models.IntegerField()
+    valor_pesos = models.IntegerField(
+        help_text='Valor en pesos de los puntos reservados (snapshot al reservar)',
+    )
+    tienda = models.CharField(
+        max_length=20,
+        help_text='Código de la tienda/ecommerce destino (realsport/paola)',
+    )
+    empresa = models.ForeignKey(
+        Empresa, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='reservas_puntos',
+    )
+    codigo_cupon = models.CharField(
+        max_length=40, unique=True, null=True, blank=True, db_index=True,
+        help_text='Código del cupón creado en el ecommerce (PTS-<id>)',
+    )
+    estado = models.CharField(
+        max_length=12, choices=ESTADO_RESERVA_CHOICES, default='RESERVADA',
+        db_index=True,
+    )
+    puntos_consumidos = models.IntegerField(
+        default=0,
+        help_text='Puntos realmente debitados al confirmar (por el descuento real)',
+    )
+    order_number = models.CharField(
+        max_length=80, blank=True, default='',
+        help_text='Número del pedido del ecommerce que usó la reserva',
+    )
+    expira_en = models.DateTimeField(db_index=True)
+    idempotency_key = models.CharField(
+        max_length=100, unique=True, null=True, blank=True, db_index=True,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Reserva de Puntos'
+        verbose_name_plural = 'Reservas de Puntos'
+        indexes = [
+            models.Index(fields=['estado', 'expira_en']),
+            models.Index(fields=['cuenta', 'estado']),
+        ]
+
+    def __str__(self):
+        return f"{self.codigo_cupon or self.pk} · {self.estado} · {self.puntos_reservados} pts"
+
+    @property
+    def vigente(self):
+        return self.estado == 'RESERVADA' and self.expira_en > timezone.now()
+
+
+ESTADO_VALE_CHOICES = [
+    ('PENDIENTE', 'Pendiente de canje'),
+    ('CANJEADO', 'Canjeado'),
+    ('EXPIRADO', 'Expirado'),
+    ('ANULADO', 'Anulado'),
+]
+
+
+class CanjeVale(models.Model):
+    """
+    Vale de canje "con código": el cliente convierte puntos en un código de
+    descuento que presenta en tienda física para que el cajero lo aplique.
+
+    Mismo principio de oro que `ReservaPuntos`: NO debita el ledger al generarse.
+    Solo COMPROMETE puntos (el "saldo disponible" los descuenta) mientras el vale
+    está PENDIENTE. El débito real (movimiento CANJE FIFO) ocurre en
+    `canjear_vale()` cuando el cajero valida el código en el POS. Si el vale
+    expira o se anula sin usarse, NUNCA se debitan puntos: vuelven al disponible.
+    El código es de un solo uso e ininteligible (generado con `secrets`).
+    """
+
+    cuenta = models.ForeignKey(
+        CuentaPuntos, on_delete=models.CASCADE, related_name='vales_canje',
+    )
+    cliente = models.ForeignKey(
+        Cliente, on_delete=models.CASCADE, related_name='vales_canje',
+    )
+    puntos = models.IntegerField(help_text='Puntos que canjea el vale')
+    valor_pesos = models.IntegerField(
+        help_text='Valor en pesos del vale (snapshot al generarse)',
+    )
+    codigo = models.CharField(
+        max_length=24, unique=True, db_index=True,
+        help_text='Código de un solo uso que el cliente presenta en tienda',
+    )
+    estado = models.CharField(
+        max_length=12, choices=ESTADO_VALE_CHOICES, default='PENDIENTE',
+        db_index=True,
+    )
+    empresa = models.ForeignKey(
+        Empresa, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='vales_canje',
+        help_text='Empresa/holding donde puede canjearse (opcional: global si vacío)',
+    )
+
+    # === Datos del canje efectivo (al validar en POS) ===
+    sucursal_canje = models.ForeignKey(
+        Sucursal, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='vales_canjeados',
+    )
+    usuario_canje = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='vales_canjeados',
+    )
+    ticket = models.ForeignKey(
+        'app.Ticket', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='vales_canje',
+        help_text='Venta donde se aplicó el vale',
+    )
+    canjeado_en = models.DateTimeField(null=True, blank=True)
+
+    expira_en = models.DateTimeField(db_index=True)
+    idempotency_key = models.CharField(
+        max_length=100, unique=True, null=True, blank=True, db_index=True,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Vale de Canje'
+        verbose_name_plural = 'Vales de Canje'
+        indexes = [
+            models.Index(fields=['estado', 'expira_en']),
+            models.Index(fields=['cuenta', 'estado']),
+        ]
+
+    def __str__(self):
+        return f"{self.codigo} · {self.estado} · {self.puntos} pts"
+
+    @property
+    def vigente(self):
+        return self.estado == 'PENDIENTE' and self.expira_en > timezone.now()
