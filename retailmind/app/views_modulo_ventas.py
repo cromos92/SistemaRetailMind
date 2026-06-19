@@ -7925,18 +7925,30 @@ def guardar_cuadratura_completa(request):
         )
         
         # === CREAR DEPÓSITOS BANCARIOS ===
+        deposito_confirmado_por_supervisor = getattr(request.user, 'rol', None) in [
+            'administrador',
+            'administracion',
+        ]
         depositos_creados = []
         for dep in depositos_data:
             try:
                 fecha_dep = datetime.strptime(dep['fecha'], '%Y-%m-%d').date()
+                monto_dep = int(dep['monto'])
                 deposito = DepositoBancario.objects.create(
                     arqueo=arqueo,
                     fecha_deposito=fecha_dep,
-                    monto=int(dep['monto']),
+                    monto=monto_dep if deposito_confirmado_por_supervisor else 0,
+                    monto_declarado=monto_dep,
+                    monto_confirmado=monto_dep if deposito_confirmado_por_supervisor else 0,
                     banco=dep.get('banco', 'ESTADO'),
                     numero_comprobante=dep.get('comprobante', ''),
                     observaciones=dep.get('observaciones', ''),
-                    registrado_por=request.user
+                    declarado_por=request.user,
+                    fecha_declaracion=timezone.now(),
+                    registrado_por=request.user,
+                    verificado=deposito_confirmado_por_supervisor,
+                    verificado_por=request.user if deposito_confirmado_por_supervisor else None,
+                    fecha_verificacion=timezone.now() if deposito_confirmado_por_supervisor else None,
                 )
                 depositos_creados.append({
                     'id': deposito.id,
@@ -8522,11 +8534,20 @@ def agregar_deposito_arqueo(request):
             arqueo=arqueo,
             fecha_deposito=fecha_obj,
             monto=monto,
+            monto_declarado=monto,
+            monto_confirmado=monto,
             banco=banco,
             numero_comprobante=numero_comprobante,
             observaciones=observaciones,
-            registrado_por=request.user
+            declarado_por=request.user,
+            fecha_declaracion=timezone.now(),
+            registrado_por=request.user,
+            verificado=True,
+            verificado_por=request.user,
+            fecha_verificacion=timezone.now(),
         )
+
+        arqueo.refresh_from_db()
         
         # Usar properties del modelo para cálculos
         total_depositos = arqueo.total_depositos
@@ -8540,7 +8561,7 @@ def agregar_deposito_arqueo(request):
         else:
             arqueo.estado = 'CON_DIFERENCIAS'
         
-        arqueo.save()
+        ArqueoCaja.objects.filter(id=arqueo.id).update(estado=arqueo.estado)
         
         logger.info(
             "Deposito agregado al arqueo %s: monto=%s, total_depositos=%s, efectivo_fisico=%s, "
@@ -8907,6 +8928,7 @@ def confirmar_deposito(request, deposito_id):
         log_accion_caja(request, 'CONFIRMAR_DEPOSITO', deposito.arqueo, monto=monto_confirmado)
 
         arqueo = deposito.arqueo
+        arqueo.refresh_from_db()
         total_depositos = arqueo.total_depositos
         efectivo_en_caja = arqueo.efectivo_en_caja
         diferencia_efectivo_real = arqueo.diferencia_efectivo_real
@@ -9119,10 +9141,17 @@ def crear_deposito_multidia(request):
                 grupo=grupo,
                 fecha_deposito=fecha_obj,
                 monto=monto_dia,
+                monto_declarado=monto_dia,
+                monto_confirmado=monto_dia,
                 banco=banco,
                 numero_comprobante=numero_comprobante,
                 observaciones=f"Depósito multi-día (Grupo #{grupo.id})",
+                declarado_por=request.user,
+                fecha_declaracion=timezone.now(),
                 registrado_por=request.user,
+                verificado=True,
+                verificado_por=request.user,
+                fecha_verificacion=timezone.now(),
             )
             depositos_creados.append({
                 'id': dep.id,
@@ -9131,11 +9160,12 @@ def crear_deposito_multidia(request):
                 'monto': dep.monto,
             })
 
+            arqueo.refresh_from_db()
             if abs(arqueo.diferencia_efectivo_real) <= 1000 and abs(arqueo.diferencia_transbank) <= 1000:
-                arqueo.estado = 'CERRADO'
+                estado_actualizado = 'CERRADO'
             else:
-                arqueo.estado = 'CON_DIFERENCIAS'
-            arqueo.save()
+                estado_actualizado = 'CON_DIFERENCIAS'
+            ArqueoCaja.objects.filter(id=arqueo.id).update(estado=estado_actualizado)
 
         return JsonResponse({
             'success': True,
@@ -9249,15 +9279,27 @@ def editar_cuadratura(request, arqueo_id):
             arqueo.depositos.all().delete()
             
             # Crear nuevos depósitos
+            deposito_confirmado_por_supervisor = getattr(request.user, 'rol', None) in [
+                'administrador',
+                'administracion',
+            ]
             for dep in data['depositos']:
+                monto_dep = int(dep['monto'])
                 DepositoBancario.objects.create(
                     arqueo=arqueo,
                     fecha_deposito=dep['fecha'],
-                    monto=dep['monto'],
+                    monto=monto_dep if deposito_confirmado_por_supervisor else 0,
+                    monto_declarado=monto_dep,
+                    monto_confirmado=monto_dep if deposito_confirmado_por_supervisor else 0,
                     banco=dep['banco'],
                     numero_comprobante=dep.get('comprobante', ''),
                     observaciones=dep.get('observaciones', ''),
-                    registrado_por=request.user
+                    declarado_por=request.user,
+                    fecha_declaracion=timezone.now(),
+                    registrado_por=request.user,
+                    verificado=deposito_confirmado_por_supervisor,
+                    verificado_por=request.user if deposito_confirmado_por_supervisor else None,
+                    fecha_verificacion=timezone.now() if deposito_confirmado_por_supervisor else None,
                 )
         
         # Recalcular estado
@@ -9704,7 +9746,16 @@ def listar_arqueos(request):
                 'id', filter=Q(verificado=False, monto_declarado__gt=0)
             ),
             total_depositado_mes=Sum(
-                'monto_confirmado', filter=Q(verificado=True)
+                Case(
+                    When(
+                        verificado=True,
+                        monto_confirmado__gt=0,
+                        then=F('monto_confirmado'),
+                    ),
+                    When(verificado=True, then=F('monto')),
+                    default=Value(0),
+                    output_field=IntegerField(),
+                )
             ),
         )
 
@@ -9781,6 +9832,20 @@ def listar_arqueos(request):
             total_dep_cheque = arqueo.cache_total_dep_cheque_verif or 0
             total_dep_verif_all = arqueo.cache_total_dep_verificado or 0
 
+            if (
+                total_dep_verif_all == 0
+                and (arqueo.cache_depositos_confirmados or 0) > 0
+                and (arqueo.cache_total_depositos or 0) > 0
+            ):
+                fallback_dep = arqueo.depositos.filter(verificado=True).aggregate(
+                    total=Sum('monto'),
+                    efectivo=Sum('monto', filter=Q(tipo_medio='EFECTIVO')),
+                    cheque=Sum('monto', filter=Q(tipo_medio='CHEQUE')),
+                )
+                total_dep_verif_all = fallback_dep['total'] or 0
+                total_dep_efectivo = fallback_dep['efectivo'] or 0
+                total_dep_cheque = fallback_dep['cheque'] or 0
+
             teorico_ef = arqueo.total_efectivo_teorico or 0
             teorico_ch = arqueo.total_cheque_teorico or 0
             dif_dep_vs_teorico = total_dep_efectivo - teorico_ef
@@ -9823,7 +9888,7 @@ def listar_arqueos(request):
                 'supervisor': arqueo.supervisor_revision.username if arqueo.supervisor_revision else '',
                 'fecha_cierre': arqueo.fecha_cierre.strftime('%d/%m/%Y %H:%M') if arqueo.fecha_cierre else '',
                 'tiene_comprobante': bool(arqueo.ann_tiene_comprobante),
-                'total_depositado_verificado': arqueo.cache_total_depositos or 0,
+                'total_depositado_verificado': total_dep_verif_all,
                 'depositos_declarados': depositos_declarados,
                 'depositos_confirmados': arqueo.cache_depositos_confirmados or 0,
                 'depositos_pendientes': arqueo.cache_depositos_pendientes or 0,
@@ -10114,7 +10179,11 @@ def guardar_conteo_fisico(request):
                 'error': 'ID de arqueo requerido'
             })
         
-        arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id)
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        arqueos_qs = ArqueoCaja.objects.all()
+        if sucursal_id:
+            arqueos_qs = arqueos_qs.filter(sucursal_id=sucursal_id)
+        arqueo = get_object_or_404(arqueos_qs, id=arqueo_id)
         
         # Verificar que el usuario puede modificar este arqueo
         if arqueo.estado not in ['ABIERTO', 'CON_DIFERENCIAS']:
@@ -10435,6 +10504,51 @@ def revisar_arqueo(request):
             })
         
         arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id)
+
+        es_aprobacion_ok = resultado == 'OK' or (
+            aprobar and resultado not in ('OK_CON_OBS', 'REQUIERE_ACCION')
+        )
+        if es_aprobacion_ok:
+            esperado_deposito = (
+                (arqueo.total_efectivo_teorico or 0)
+                + (arqueo.total_cheque_teorico or 0)
+            )
+            if esperado_deposito > 0:
+                dep_agg = arqueo.depositos.aggregate(
+                    total_verificado=Sum(
+                        Case(
+                            When(
+                                verificado=True,
+                                monto_confirmado__gt=0,
+                                then=F('monto_confirmado'),
+                            ),
+                            When(verificado=True, then=F('monto')),
+                            default=Value(0),
+                            output_field=IntegerField(),
+                        )
+                    )
+                )
+                total_verificado = dep_agg['total_verificado'] or 0
+                if total_verificado == 0:
+                    estado_deposito = 'SIN_DEPOSITO'
+                elif abs(total_verificado - esperado_deposito) <= 1000:
+                    estado_deposito = 'COMPLETO'
+                else:
+                    estado_deposito = 'PARCIAL'
+
+                if estado_deposito != 'COMPLETO':
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            'No se puede aprobar OK: el deposito bancario '
+                            'no esta completo. Confirme el deposito o use '
+                            'OK con observaciones / Requiere accion.'
+                        ),
+                        'estado_deposito': estado_deposito,
+                        'total_depositado_verificado': total_verificado,
+                        'total_esperado_deposito': esperado_deposito,
+                        'diferencia_deposito': total_verificado - esperado_deposito,
+                    }, status=400)
         
         if resultado == 'REQUIERE_ACCION':
             if not observaciones_supervisor or len(observaciones_supervisor.strip()) < 10:
@@ -10776,10 +10890,14 @@ def registrar_comprobante_supervisor(request):
             arqueo=arqueo,
             fecha_deposito=fecha_dep,
             monto=monto,
+            monto_declarado=monto,
+            monto_confirmado=monto,
             banco=banco,
             numero_comprobante=numero_comprobante,
             observaciones=observaciones,
             imagen_comprobante=imagen,
+            declarado_por=request.user,
+            fecha_declaracion=timezone.now(),
             registrado_por=request.user,
             verificado=True,  # Registrado por supervisor = verificado automáticamente
             verificado_por=request.user,
@@ -10865,7 +10983,7 @@ def obtener_depositos_arqueo(request, arqueo_id):
     try:
         arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id)
         
-        depositos = DepositoBancario.objects.filter(arqueo=arqueo).order_by('-fecha_deposito')
+        depositos = DepositoBancario.objects.filter(arqueo=arqueo).order_by('-fecha_declaracion', '-fecha_deposito')
         
         depositos_data = []
         for dep in depositos:
@@ -10873,6 +10991,10 @@ def obtener_depositos_arqueo(request, arqueo_id):
                 'id': dep.id,
                 'fecha_deposito': dep.fecha_deposito.strftime('%d/%m/%Y'),
                 'monto': dep.monto,
+                'monto_declarado': dep.monto_declarado,
+                'monto_confirmado': dep.monto_confirmado,
+                'tipo_medio': dep.tipo_medio,
+                'tipo_medio_display': dep.get_tipo_medio_display(),
                 'banco': dep.banco,
                 'banco_display': dep.get_banco_display(),
                 'numero_comprobante': dep.numero_comprobante,
@@ -10881,14 +11003,16 @@ def obtener_depositos_arqueo(request, arqueo_id):
                 'imagen_url': dep.imagen_comprobante.url if dep.imagen_comprobante else None,
                 'verificado': dep.verificado,
                 'verificado_por': dep.verificado_por.username if dep.verificado_por else None,
-                'registrado_por': dep.registrado_por.username,
-                'fecha_registro': dep.fecha_registro.strftime('%d/%m/%Y %H:%M')
+                'declarado_por': (dep.declarado_por.get_full_name() or dep.declarado_por.username) if dep.declarado_por else None,
+                'fecha_declaracion': dep.fecha_declaracion.strftime('%d/%m/%Y %H:%M') if dep.fecha_declaracion else None,
+                'registrado_por': dep.registrado_por.username if dep.registrado_por else None,
+                'fecha_registro': dep.fecha_registro.strftime('%d/%m/%Y %H:%M') if dep.fecha_registro else None
             })
         
         return JsonResponse({
             'success': True,
             'depositos': depositos_data,
-            'total': sum(d['monto'] for d in depositos_data)
+            'total': sum((d['monto_confirmado'] or d['monto'] or d['monto_declarado'] or 0) for d in depositos_data)
         })
         
     except Exception as e:

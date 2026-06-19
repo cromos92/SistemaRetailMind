@@ -55,15 +55,15 @@ TIPOS_LOTE = ('ACUMULACION', 'BIENVENIDA')
 class ProgramaFidelizacion(models.Model):
     """
     Configuración del programa de puntos. Se espera un único registro activo.
-    Valores por defecto = estrategia de arranque investigada:
-    1 punto por cada $1.000, 1 punto = $10, vence a 12 meses.
+    Valores por defecto = estrategia "1 punto = $1":
+    10 puntos por cada $1.000, 1 punto = $1, vence a 12 meses.
     """
 
     nombre = models.CharField(max_length=100, default='Programa de Puntos')
 
     # === ACUMULACIÓN ===
     puntos_por_monto = models.IntegerField(
-        default=1,
+        default=10,
         help_text="Puntos otorgados por cada `monto_base_acumulacion` pesos",
     )
     monto_base_acumulacion = models.IntegerField(
@@ -83,11 +83,11 @@ class ProgramaFidelizacion(models.Model):
 
     # === CANJE ===
     valor_punto_en_pesos = models.IntegerField(
-        default=10,
+        default=1,
         help_text="Cuántos pesos de descuento vale 1 punto al canjear",
     )
     minimo_canje_puntos = models.IntegerField(
-        default=50,
+        default=500,
         help_text="Puntos mínimos para poder canjear",
     )
 
@@ -99,7 +99,7 @@ class ProgramaFidelizacion(models.Model):
 
     # === BIENVENIDA ===
     puntos_bienvenida = models.IntegerField(
-        default=20,
+        default=200,
         help_text="Puntos al crear la cuenta del cliente (0 = sin bono)",
     )
 
@@ -148,7 +148,7 @@ class ProgramaFidelizacion(models.Model):
         """
         % del valor de la venta que se devuelve al cliente como puntos.
         Sirve para mostrar el costo del programa en la UI de configuración.
-        Ej.: 1 pto/$1.000 y $10/pto => 1 * 10 / 1000 = 1%.
+        Ej.: 10 pts/$1.000 y $1/pto => 10 * 1 / 1000 = 1%.
         """
         if self.monto_base_acumulacion <= 0:
             return 0.0

@@ -192,6 +192,29 @@
     .banner-declaracion { border-radius: var(--nexo-radius-lg); border: 2px solid var(--nexo-warning); background: linear-gradient(135deg, rgba(255,176,32,.07), #fff); padding: 1.25rem; }
     .deposito-pendiente-row { transition: background .15s; }
     .deposito-pendiente-row:hover { background: var(--nexo-primary-light); }
+    .deposit-flow { display: flex; align-items: stretch; gap: .75rem; margin-top: 1rem; }
+    .deposit-flow-step { flex: 1 1 0; display: flex; align-items: center; gap: .6rem; min-width: 155px; padding: .75rem .85rem; border-radius: var(--nexo-radius-md); border: 1px solid var(--nexo-gray-300); background: #fff; }
+    .deposit-flow-step .step-dot { width: 28px; height: 28px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; font-size: .95rem; }
+    .deposit-flow-step strong { display: block; font-size: .78rem; color: var(--nexo-gray-900); line-height: 1.15; }
+    .deposit-flow-step small { display: block; font-size: .68rem; color: var(--nexo-gray-500); line-height: 1.2; }
+    .deposit-flow-step.done { border-color: rgba(0,212,170,.45); background: rgba(0,212,170,.05); }
+    .deposit-flow-step.done .step-dot { background: rgba(0,212,170,.16); color: var(--nexo-success); }
+    .deposit-flow-step.active { border-color: rgba(255,176,32,.5); background: rgba(255,176,32,.08); }
+    .deposit-flow-step.active .step-dot { background: rgba(255,176,32,.18); color: #996B00; }
+    .deposit-flow-step.pending .step-dot { background: var(--nexo-gray-100); color: var(--nexo-gray-700); }
+    .deposit-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+    .deposit-summary-item { border: 1px solid var(--nexo-gray-200); border-radius: var(--nexo-radius-md); background: #fff; padding: .85rem; min-height: 78px; }
+    .deposit-summary-label { display: flex; align-items: center; gap: .35rem; color: var(--nexo-gray-500); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; margin-bottom: .35rem; }
+    .deposit-summary-value { color: var(--nexo-gray-900); font-weight: 800; font-family: monospace; font-size: 1rem; line-height: 1.2; word-break: break-word; }
+    .deposit-summary-value.text-body { color: var(--nexo-gray-900) !important; font-family: inherit; font-size: .85rem; font-weight: 700; }
+    .deposit-id-pill { display: inline-flex; align-items: center; gap: .25rem; padding: .2rem .45rem; border-radius: 999px; background: var(--nexo-primary-light); color: var(--nexo-primary); font-size: .72rem; font-weight: 800; font-family: monospace; white-space: nowrap; }
+    .deposit-status-pill { display: inline-flex; align-items: center; gap: .25rem; padding: .2rem .45rem; border-radius: 999px; font-size: .7rem; font-weight: 800; white-space: nowrap; }
+    .deposit-status-pill.pending { background: rgba(255,176,32,.15); color: #996B00; }
+    .deposit-voucher-badge { display: inline-flex; align-items: center; gap: .25rem; padding: .2rem .45rem; border-radius: 999px; font-size: .7rem; font-weight: 700; }
+    .deposit-voucher-badge.ok { background: rgba(0,212,170,.12); color: var(--nexo-success); }
+    .deposit-voucher-badge.warn { background: rgba(255,71,87,.1); color: var(--nexo-error); }
+    .deposit-table-compact td, .deposit-table-compact th { vertical-align: middle; }
+    .deposit-declared-head + h6 { display: none; }
 
     /* ========== NETEO DE DEPÓSITOS ========== */
     .neteo-row-declarado  { background: rgba(255,176,32,.07); }
@@ -219,6 +242,9 @@
         .col-hide-md { display: none !important; }
         .banner-deposito, .banner-declaracion { padding: 1rem; }
         .banner-deposito .btn, .banner-declaracion .btn { font-size: .8rem; padding: .4rem .8rem; min-height: 36px; }
+        .deposit-flow { flex-wrap: wrap; }
+        .deposit-flow-step { min-width: 185px; }
+        .deposit-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
     /* Mobile (<768px) */
@@ -250,6 +276,7 @@
         /* card body padding */
         .card-body { padding: .875rem !important; }
         .p-md-4 { padding: .875rem !important; }
+        .deposit-summary-grid { grid-template-columns: 1fr; }
     }
 
     /* Small mobile (<480px) */
@@ -516,6 +543,20 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                    <div class="deposit-flow" aria-label="Flujo de deposito">
+                        <div class="deposit-flow-step done">
+                            <span class="step-dot"><i class="ri-lock-line"></i></span>
+                            <span><strong>Arqueo cerrado</strong><small>Efectivo contado y listo</small></span>
+                        </div>
+                        <div class="deposit-flow-step active">
+                            <span class="step-dot"><i class="ri-receipt-line"></i></span>
+                            <span><strong>Comprobante</strong><small>Cajero declara o supervisor registra</small></span>
+                        </div>
+                        <div class="deposit-flow-step pending">
+                            <span class="step-dot"><i class="ri-shield-check-line"></i></span>
+                            <span><strong>Confirmacion</strong><small>Impacta la cuadratura final</small></span>
                         </div>
                     </div>
                 </div>
@@ -1548,24 +1589,49 @@
                     Declare cada depósito por separado (ej: efectivo y cheque van en comprobantes distintos). Adjunte el comprobante bancario de cada uno. Al terminar, presione <strong>"Finalizar Declaración"</strong>.
                 </div>
 
-                <!-- Info del arqueo -->
-                <div class="row g-2 mb-3">
+                <!-- Resumen del arqueo -->
+                <input type="hidden" id="arqueoIdDeclaracion">
+                <div class="deposit-summary-grid">
+                    <div class="deposit-summary-item">
+                        <div class="deposit-summary-label"><i class="ri-calendar-check-line"></i>Arqueo</div>
+                        <div class="deposit-summary-value text-body" id="infoArqueoDeclaracion">Cargando...</div>
+                    </div>
+                    <div class="deposit-summary-item">
+                        <div class="deposit-summary-label"><i class="ri-money-dollar-circle-line"></i>Efectivo contado</div>
+                        <div class="deposit-summary-value text-success">$<span id="referenciaEfectivoDeclaracion">0</span></div>
+                    </div>
+                    <div class="deposit-summary-item">
+                        <div class="deposit-summary-label"><i class="ri-receipt-line"></i>Ya declarado</div>
+                        <div class="deposit-summary-value text-warning">$<span id="resumenDeclaradoDepositos">0</span></div>
+                    </div>
+                    <div class="deposit-summary-item">
+                        <div class="deposit-summary-label"><i class="ri-compass-3-line"></i>Pendiente sugerido</div>
+                        <div class="deposit-summary-value text-primary">$<span id="resumenPendienteDepositos">0</span></div>
+                    </div>
+                </div>
+
+                <!-- Info del arqueo legacy -->
+                <div class="row g-2 mb-3 d-none">
                     <div class="col-md-6">
                         <label class="form-label fw-bold" style="font-size:.8rem;">Arqueo del Día</label>
-                        <input type="text" class="form-control form-control-sm" id="infoArqueoDeclaracion" readonly style="background:var(--nexo-gray-100);">
-                        <input type="hidden" id="arqueoIdDeclaracion">
+                        <input type="text" class="form-control form-control-sm" id="infoArqueoDeclaracionLegacy" readonly style="background:var(--nexo-gray-100);">
+                        <input type="hidden" id="arqueoIdDeclaracionLegacy">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold" style="font-size:.8rem;">Efectivo Contado (ref.)</label>
                         <div class="input-group input-group-sm">
                             <span class="input-group-text">$</span>
-                            <input type="text" class="form-control" id="referenciaEfectivoDeclaracion" readonly style="background:var(--nexo-gray-100);font-family:monospace;">
+                            <input type="text" class="form-control" id="referenciaEfectivoDeclaracionLegacy" readonly style="background:var(--nexo-gray-100);font-family:monospace;">
                         </div>
                     </div>
                 </div>
 
                 <!-- Depósitos ya declarados -->
                 <div id="listaDepositosDeclarados" class="mb-3" style="display:none;">
+                    <div class="deposit-declared-head d-flex align-items-center justify-content-between mb-2">
+                        <h6 class="mb-0" style="font-size:.85rem;font-weight:700;color:var(--nexo-gray-700);"><i class="ri-list-check me-1"></i>Depositos declarados</h6>
+                        <span class="deposit-status-pill pending"><i class="ri-stack-line"></i><span id="contadorDepositosDeclarados">0</span> comprobante(s)</span>
+                    </div>
                     <h6 style="font-size:.85rem;font-weight:700;color:var(--nexo-gray-700);"><i class="ri-list-check me-1"></i>Depósitos Declarados</h6>
                     <div id="tablaDepositosDeclarados"></div>
                 </div>
@@ -4288,26 +4354,33 @@ function abrirModalDeclararDeposito() {
     $('#btnFinalizarDeclaracion').hide();
     $('#tablaDepositosDeclarados').html('');
     $('#listaDepositosDeclarados').hide();
+    $('#contadorDepositosDeclarados').text('0');
+    $('#resumenDeclaradoDepositos').text('0');
+    $('#resumenPendienteDepositos').text('0');
+    window.efectivoDeclaracionActual = 0;
 
     $.ajax({
-        url: '/app/api/cuadratura/listar/',
+        url: '/app/api/arqueos/',
         method: 'GET',
         data: { fecha_desde: hoyStr, fecha_hasta: hoyStr, per_page: 1 },
         success: function(r) {
             if (r.success && r.arqueos && r.arqueos.length > 0) {
                 const a = r.arqueos[0];
+                const efectivoRef = parseInt(a.efectivo_fisico || 0);
+                window.efectivoDeclaracionActual = efectivoRef;
                 $('#arqueoIdDeclaracion').val(a.id);
-                $('#infoArqueoDeclaracion').val('Arqueo ' + new Date(a.fecha_arqueo + 'T12:00:00').toLocaleDateString('es-CL') + ' — ' + (a.estado_display || a.estado));
-                $('#referenciaEfectivoDeclaracion').val(formatearNumero(a.efectivo_fisico || 0));
+                $('#infoArqueoDeclaracion').text('Arqueo ' + new Date(a.fecha_arqueo + 'T12:00:00').toLocaleDateString('es-CL') + ' - ' + (a.estado_display || a.estado));
+                $('#referenciaEfectivoDeclaracion').text(formatearNumero(efectivoRef));
+                $('#resumenPendienteDepositos').text(formatearNumero(efectivoRef));
                 // Cargar depositos ya declarados
                 cargarDepositosDeclaradosModal(a.id);
             } else {
                 $('#arqueoIdDeclaracion').val('');
-                $('#infoArqueoDeclaracion').val('Sin arqueo registrado para hoy');
-                $('#referenciaEfectivoDeclaracion').val('0');
+                $('#infoArqueoDeclaracion').text('Sin arqueo registrado para hoy');
+                $('#referenciaEfectivoDeclaracion').text('0');
             }
         },
-        error: function() { $('#infoArqueoDeclaracion').val('Error al cargar arqueo'); }
+        error: function() { $('#infoArqueoDeclaracion').text('Error al cargar arqueo'); }
     });
     $('#modalDeclararDeposito').modal('show');
 }
@@ -4327,33 +4400,68 @@ $('#imagenComprobanteDeclaracion').on('change', function() {
     }
 });
 
+function escaparDepositoHtml(valor) {
+    return $('<div>').text(valor == null || valor === '' ? '-' : valor).html();
+}
+
+function actualizarResumenDepositosDeclarados(totalDeclarado, cantidad) {
+    const efectivoRef = parseInt(window.efectivoDeclaracionActual || 0);
+    const pendiente = Math.max(efectivoRef - totalDeclarado, 0);
+    $('#resumenDeclaradoDepositos').text(formatearNumero(totalDeclarado));
+    $('#resumenPendienteDepositos').text(formatearNumero(pendiente));
+    $('#contadorDepositosDeclarados').text(cantidad);
+}
+
 function cargarDepositosDeclaradosModal(arqueoId) {
     $.ajax({
-        url: '/app/api/cuadratura/deposito/pendientes/',
+        url: '/app/api/arqueo/depositos/' + arqueoId + '/',
         method: 'GET',
-        data: { fecha: new Date().toISOString().split('T')[0] },
         success: function(r) {
-            if (!r.success || !r.depositos || r.depositos.length === 0) {
+            const depositos = (r.success && r.depositos) ? r.depositos : [];
+            if (depositos.length === 0) {
+                actualizarResumenDepositosDeclarados(0, 0);
                 $('#listaDepositosDeclarados').hide();
                 $('#btnFinalizarDeclaracion').hide();
                 return;
             }
-            let html = '<table class="table table-sm table-bordered mb-0" style="font-size:.8rem;">';
-            html += '<thead><tr><th>Tipo</th><th>Monto</th><th>Banco</th><th>Comprobante</th><th>Estado</th></tr></thead><tbody>';
-            r.depositos.forEach(d => {
+
+            let totalDeclarado = 0;
+            let html = '<div class="table-responsive" style="max-height:260px;overflow:auto;">';
+            html += '<table class="table table-sm table-bordered mb-0 deposit-table-compact" style="font-size:.8rem;">';
+            html += '<thead><tr><th>ID</th><th>Tipo</th><th class="text-end">Monto</th><th>Banco</th><th>Comprobante</th><th>Estado</th></tr></thead><tbody>';
+            depositos.forEach(d => {
+                const monto = parseInt(d.monto_declarado || d.monto_confirmado || d.monto || 0);
+                totalDeclarado += monto;
+                const tipo = d.tipo_medio === 'CHEQUE' ? 'Cheque' : (d.tipo_medio_display || 'Efectivo');
                 const icono = d.tipo_medio === 'CHEQUE' ? '<i class="ri-file-text-line" style="color:var(--nexo-primary);"></i>' : '<i class="ri-money-dollar-circle-line" style="color:var(--nexo-success);"></i>';
+                const comprobante = d.numero_comprobante
+                    ? `<span class="deposit-voucher-badge ok"><i class="ri-receipt-line"></i>${escaparDepositoHtml(d.numero_comprobante)}</span>`
+                    : '<span class="deposit-voucher-badge warn"><i class="ri-error-warning-line"></i>Sin numero</span>';
+                const imagen = d.tiene_imagen && d.imagen_url
+                    ? ` <a href="${escaparDepositoHtml(d.imagen_url)}" target="_blank" title="Ver imagen"><i class="ri-image-line text-success"></i></a>`
+                    : '';
+                const estado = d.verificado
+                    ? '<span class="deposit-status-pill" style="background:rgba(0,212,170,.12);color:var(--nexo-success);"><i class="ri-check-line"></i>Confirmado</span>'
+                    : '<span class="deposit-status-pill pending"><i class="ri-time-line"></i>Pendiente</span>';
                 html += `<tr>
-                    <td>${icono} ${d.tipo_medio_display || d.tipo_medio || 'Efectivo'}</td>
-                    <td class="fw-bold">$${formatearNumero(d.monto_declarado)}</td>
-                    <td>${d.banco_display || d.banco || '-'}</td>
-                    <td>${d.numero_comprobante || '-'} ${d.tiene_imagen ? '<i class="ri-image-line text-success"></i>' : ''}</td>
-                    <td><span class="badge bg-warning text-dark" style="font-size:.7rem;">Pendiente</span></td>
+                    <td><span class="deposit-id-pill">DEP-${d.id}</span></td>
+                    <td>${icono} ${escaparDepositoHtml(tipo)}</td>
+                    <td class="text-end fw-bold">$${formatearNumero(monto)}</td>
+                    <td>${escaparDepositoHtml(d.banco_display || d.banco)}</td>
+                    <td>${comprobante}${imagen}</td>
+                    <td>${estado}</td>
                 </tr>`;
             });
-            html += '</tbody></table>';
+            html += '</tbody></table></div>';
+            actualizarResumenDepositosDeclarados(totalDeclarado, depositos.length);
             $('#tablaDepositosDeclarados').html(html);
             $('#listaDepositosDeclarados').show();
             $('#btnFinalizarDeclaracion').show();
+        },
+        error: function() {
+            actualizarResumenDepositosDeclarados(0, 0);
+            $('#listaDepositosDeclarados').hide();
+            $('#btnFinalizarDeclaracion').hide();
         }
     });
 }

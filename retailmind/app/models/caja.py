@@ -303,9 +303,16 @@ class ArqueoCaja(models.Model):
     def total_depositado_efectivo_verificado(self):
         """Total de depósitos en efectivo verificados (lee cache denormalizado)."""
         if self.cache_depositos_actualizado is not None:
-            return self.cache_total_dep_efectivo_verif or 0
+            total = self.cache_total_dep_efectivo_verif or 0
+            if total == 0 and self.cache_depositos_confirmados and self.cache_total_depositos:
+                return sum(
+                    (d.monto_confirmado or d.monto) for d in self.depositos.filter(
+                        verificado=True, tipo_medio='EFECTIVO'
+                    )
+                )
+            return total
         return sum(
-            d.monto_confirmado for d in self.depositos.filter(
+            (d.monto_confirmado or d.monto) for d in self.depositos.filter(
                 verificado=True, tipo_medio='EFECTIVO'
             )
         )
@@ -314,9 +321,16 @@ class ArqueoCaja(models.Model):
     def total_depositado_cheque_verificado(self):
         """Total de depósitos en cheque verificados (lee cache denormalizado)."""
         if self.cache_depositos_actualizado is not None:
-            return self.cache_total_dep_cheque_verif or 0
+            total = self.cache_total_dep_cheque_verif or 0
+            if total == 0 and self.cache_depositos_confirmados and self.cache_total_depositos:
+                return sum(
+                    (d.monto_confirmado or d.monto) for d in self.depositos.filter(
+                        verificado=True, tipo_medio='CHEQUE'
+                    )
+                )
+            return total
         return sum(
-            d.monto_confirmado for d in self.depositos.filter(
+            (d.monto_confirmado or d.monto) for d in self.depositos.filter(
                 verificado=True, tipo_medio='CHEQUE'
             )
         )
@@ -325,9 +339,12 @@ class ArqueoCaja(models.Model):
     def total_depositado_verificado(self):
         """Total de todos los depósitos verificados (lee cache denormalizado)."""
         if self.cache_depositos_actualizado is not None:
-            return self.cache_total_dep_verificado or 0
+            total = self.cache_total_dep_verificado or 0
+            if total == 0 and self.cache_depositos_confirmados and self.cache_total_depositos:
+                return self.cache_total_depositos or 0
+            return total
         return sum(
-            d.monto_confirmado for d in self.depositos.filter(verificado=True)
+            (d.monto_confirmado or d.monto) for d in self.depositos.filter(verificado=True)
         )
 
     def recalcular_cache_depositos(self, save: bool = True) -> None:
@@ -337,17 +354,26 @@ class ArqueoCaja(models.Model):
         Llamado desde el signal `post_save`/`post_delete` de DepositoBancario
         y desde el management command de backfill.
         """
-        from django.db.models import Sum as _Sum, Count as _Count, Q as _Q
+        from django.db.models import (
+            Sum as _Sum, Count as _Count, Q as _Q, Case as _Case,
+            When as _When, F as _F, IntegerField as _IntegerField,
+        )
+
+        monto_verificado = _Case(
+            _When(monto_confirmado__gt=0, then=_F('monto_confirmado')),
+            default=_F('monto'),
+            output_field=_IntegerField(),
+        )
 
         agg = self.depositos.aggregate(
             total_depositos=_Sum('monto'),
-            total_verif=_Sum('monto_confirmado', filter=_Q(verificado=True)),
+            total_verif=_Sum(monto_verificado, filter=_Q(verificado=True)),
             total_efectivo_verif=_Sum(
-                'monto_confirmado',
+                monto_verificado,
                 filter=_Q(verificado=True, tipo_medio='EFECTIVO'),
             ),
             total_cheque_verif=_Sum(
-                'monto_confirmado',
+                monto_verificado,
                 filter=_Q(verificado=True, tipo_medio='CHEQUE'),
             ),
             declarados=_Count('id', filter=_Q(monto_declarado__gt=0)),
@@ -1176,4 +1202,3 @@ class FirmaCreditoTrabajador(models.Model):
         self.firma_aval_data = firma_data
         self.ip_firma_aval = ip_address
         self.save()
-

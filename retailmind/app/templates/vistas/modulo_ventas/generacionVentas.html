@@ -8304,6 +8304,17 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </div>
                             `;
                             
+                            if (data.fidelizacion && data.fidelizacion.puntos_ganados > 0) {
+                                const f = data.fidelizacion;
+                                htmlMensaje += `
+                                    <hr>
+                                    <div class="alert alert-success mb-0">
+                                        <i class="ri-coin-line"></i> <strong>Puntos de fidelización</strong><br>
+                                        <small>Ganó <strong>${f.puntos_ganados.toLocaleString('es-CL')} pts</strong>${f.valor_ganado_pesos ? ' (' + formatearMoneda(f.valor_ganado_pesos) + ')' : ''}</small><br>
+                                        <small>Saldo total: <strong>${(f.saldo_total||0).toLocaleString('es-CL')} pts</strong>${f.saldo_pesos ? ' (' + formatearMoneda(f.saldo_pesos) + ')' : ''}</small>
+                                    </div>`;
+                            }
+
                             Swal.fire({
                                 icon: 'success',
                                 title: '¡Venta Completada!',
@@ -8377,6 +8388,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         htmlMensaje = `<p><strong>Ticket #${ticketActual.ticket_id}</strong> procesado exitosamente</p>`;
                     }
                     
+                    if (data.fidelizacion && data.fidelizacion.puntos_ganados > 0) {
+                        const f = data.fidelizacion;
+                        htmlMensaje += `
+                            <hr>
+                            <div class="alert alert-success mb-0">
+                                <i class="ri-coin-line"></i> <strong>Puntos de fidelización</strong><br>
+                                <small>Ganó <strong>${f.puntos_ganados.toLocaleString('es-CL')} pts</strong>${f.valor_ganado_pesos ? ' (' + formatearMoneda(f.valor_ganado_pesos) + ')' : ''}</small><br>
+                                <small>Saldo total: <strong>${(f.saldo_total||0).toLocaleString('es-CL')} pts</strong>${f.saldo_pesos ? ' (' + formatearMoneda(f.saldo_pesos) + ')' : ''}</small>
+                            </div>`;
+                    }
+
                     if (typeof Swal !== 'undefined') {
                         if (htmlMensaje && htmlMensaje.trim()) {
                             // Hay info de DTE — mostrarla y luego preguntar ticket de cambio

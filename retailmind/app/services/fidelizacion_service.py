@@ -223,7 +223,8 @@ def acumular_puntos_por_venta(ticket, usuario=None):
     - Setea `ticket.cliente` si lo encuentra.
     - Idempotente por `acum:{ticket.id}`.
 
-    Devuelve dict {puntos_ganados, saldo_total} o None.
+    Devuelve dict {puntos_ganados, saldo_total, valor_punto, valor_ganado_pesos,
+    saldo_pesos} o None.
     """
     programa = ProgramaFidelizacion.get_activo()
     if not programa:
@@ -232,6 +233,19 @@ def acumular_puntos_por_venta(ticket, usuario=None):
     cliente = resolver_cliente_por_rut(getattr(ticket, 'cliente_rut', ''))
     if not cliente:
         return None  # venta anónima → no acumula
+
+    # Resultado uniforme para el POS: además de los puntos, expone el valor en
+    # pesos (puntos × valor_punto_en_pesos) para que el front muestre
+    # "ganó X pts ($X)" sin tener que conocer la tasa de canje.
+    def _resultado(puntos_ganados, saldo_total):
+        vp = programa.valor_punto_en_pesos or 0
+        return {
+            'puntos_ganados': puntos_ganados,
+            'saldo_total': saldo_total,
+            'valor_punto': vp,
+            'valor_ganado_pesos': puntos_ganados * vp,
+            'saldo_pesos': saldo_total * vp,
+        }
 
     # Enlazar el ticket al cliente (trazabilidad), sin romper si ya estaba.
     if getattr(ticket, 'cliente_id', None) != cliente.id:
@@ -246,14 +260,14 @@ def acumular_puntos_por_venta(ticket, usuario=None):
     if puntos <= 0:
         # Igual aseguramos cuenta + bienvenida para el cliente nuevo.
         get_or_create_cuenta(cliente, programa=programa, usuario=usuario)
-        return {'puntos_ganados': 0, 'saldo_total': cliente.cuenta_puntos.saldo_puntos}
+        return _resultado(0, cliente.cuenta_puntos.saldo_puntos)
 
     idem = f"acum:{ticket.id}"
     with transaction.atomic():
         existente = MovimientoPuntos.objects.filter(idempotency_key=idem).first()
         if existente:
             cuenta = CuentaPuntos.objects.get(pk=existente.cuenta_id)
-            return {'puntos_ganados': existente.puntos, 'saldo_total': cuenta.saldo_puntos}
+            return _resultado(existente.puntos, cuenta.saldo_puntos)
 
         cuenta, _ = get_or_create_cuenta(cliente, programa=programa, usuario=usuario)
         cuenta = CuentaPuntos.objects.select_for_update().get(pk=cuenta.pk)
@@ -272,7 +286,7 @@ def acumular_puntos_por_venta(ticket, usuario=None):
 
     logger.info("Puntos acumulados cliente=%s ticket=%s puntos=%s saldo=%s",
                 cliente.id, ticket.correlativo, puntos, cuenta.saldo_puntos)
-    return {'puntos_ganados': puntos, 'saldo_total': cuenta.saldo_puntos}
+    return _resultado(puntos, cuenta.saldo_puntos)
 
 
 def canjear_puntos(cliente, puntos, *, ticket=None, sucursal=None, usuario=None,

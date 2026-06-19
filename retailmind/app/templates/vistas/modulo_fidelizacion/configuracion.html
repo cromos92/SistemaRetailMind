@@ -20,6 +20,24 @@
         border-left:4px solid #0ab39c;
     }
     .tasa-num { font-size:42px; font-weight:800; color:#0ab39c; }
+    .strategy-callout {
+        background: linear-gradient(135deg,#e3f2fd,#bbdefb); border-left:4px solid #299cdb;
+        border-radius:12px; padding:14px 16px; display:flex; justify-content:space-between;
+        align-items:center; gap:12px; flex-wrap:wrap;
+    }
+    .strategy-callout strong { color:#405189; }
+    .sim-box, .categoria-box {
+        background:#fff; border:1px solid rgba(64,81,137,.12); border-radius:12px;
+        padding:16px; box-shadow:0 2px 10px rgba(64,81,137,.06);
+    }
+    .sim-box h6, .categoria-box h6 { color:#405189; font-weight:700; margin-bottom:12px; }
+    .sim-table { font-size:12px; margin-bottom:0; }
+    .sim-table th { color:#6c757d; font-weight:700; }
+    .categoria-pill {
+        display:inline-flex; align-items:center; justify-content:center; min-width:68px;
+        border-radius:14px; padding:3px 10px; font-size:12px; font-weight:700;
+        background:#eef2ff; color:#405189;
+    }
 </style>
 
 <div class="page-content">
@@ -43,11 +61,21 @@
                             <input type="text" id="cf-nombre" class="form-control" value="{{ programa.nombre|default:'Programa de Puntos' }}">
                         </div>
 
+                        <div class="strategy-callout mb-3">
+                            <div>
+                                <strong><i class="ri-exchange-dollar-line me-1"></i> Estrategia 1 punto = $1</strong>
+                                <div class="small text-muted">10 puntos por cada $1.000 mantiene 1% de retorno y hace que los puntos se lean como pesos.</div>
+                            </div>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="aplicarEstrategiaPeso()">
+                                <i class="ri-magic-line"></i> Aplicar valores
+                            </button>
+                        </div>
+
                         <h6 class="fw-bold text-muted mt-4">Acumulación</h6>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Puntos otorgados</label>
-                                <input type="number" id="cf-puntos" class="form-control" min="1" value="{{ programa.puntos_por_monto|default:1 }}" oninput="calcularTasa()">
+                                <input type="number" id="cf-puntos" class="form-control" min="1" value="{{ programa.puntos_por_monto|default:10 }}" oninput="calcularTasa()">
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Por cada (pesos de compra)</label>
@@ -55,7 +83,7 @@
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Redondeo</label>
-                                <select id="cf-redondeo" class="form-select">
+                                <select id="cf-redondeo" class="form-select" onchange="calcularTasa()">
                                     {% for val, label in redondeo_choices %}
                                     <option value="{{ val }}" {% if programa.redondeo == val %}selected{% endif %}>{{ label }}</option>
                                     {% endfor %}
@@ -63,7 +91,7 @@
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Acumula sobre</label>
-                                <select id="cf-acumula" class="form-select">
+                                <select id="cf-acumula" class="form-select" onchange="calcularTasa()">
                                     {% for val, label in acumula_choices %}
                                     <option value="{{ val }}" {% if programa.acumula_sobre == val %}selected{% endif %}>{{ label }}</option>
                                     {% endfor %}
@@ -75,11 +103,11 @@
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Valor de 1 punto (pesos)</label>
-                                <input type="number" id="cf-valor" class="form-control" min="0" value="{{ programa.valor_punto_en_pesos|default:10 }}" oninput="calcularTasa()">
+                                <input type="number" id="cf-valor" class="form-control" min="0" value="{{ programa.valor_punto_en_pesos|default:1 }}" oninput="calcularTasa()">
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Mínimo de canje (puntos)</label>
-                                <input type="number" id="cf-minimo" class="form-control" min="0" value="{{ programa.minimo_canje_puntos|default:50 }}">
+                                <input type="number" id="cf-minimo" class="form-control" min="0" value="{{ programa.minimo_canje_puntos|default:500 }}">
                             </div>
                         </div>
 
@@ -91,7 +119,7 @@
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Puntos de bienvenida</label>
-                                <input type="number" id="cf-bienvenida" class="form-control" min="0" value="{{ programa.puntos_bienvenida|default:20 }}">
+                                <input type="number" id="cf-bienvenida" class="form-control" min="0" value="{{ programa.puntos_bienvenida|default:200 }}">
                             </div>
                         </div>
 
@@ -103,13 +131,49 @@
                     <div class="col-md-4">
                         <div class="tasa-box">
                             <div class="text-muted">Tasa de descuento efectiva</div>
-                            <div class="tasa-num" id="tasa-efectiva">{{ programa.tasa_descuento_efectiva|default:0 }}%</div>
+                            <div class="tasa-num" id="tasa-efectiva">{{ programa.tasa_descuento_efectiva|default:1 }}%</div>
                             <small class="text-muted">% del valor de la venta que devuelves al cliente. Recomendado mantener ≤ 5%.</small>
                             <hr>
                             <div class="text-start small">
                                 <div id="ejemplo-acum">—</div>
                             </div>
+                            <div id="tasa-warning" class="alert mt-2 mb-0 py-2 px-2 small d-none"></div>
                         </div>
+
+                        <div class="sim-box mt-3">
+                            <h6><i class="ri-calculator-line me-1"></i> Simulación por compra</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm sim-table align-middle">
+                                    <thead>
+                                        <tr><th>Compra</th><th class="text-end">Puntos</th><th class="text-end">Valor</th></tr>
+                                    </thead>
+                                    <tbody id="simulacion-tbody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="categoria-box mt-4">
+                    <h6><i class="ri-vip-crown-line me-1"></i> Categorías comerciales sugeridas</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Categoría</th>
+                                    <th>Compra anual</th>
+                                    <th class="text-end">Retorno</th>
+                                    <th>Regla equivalente</th>
+                                    <th class="text-end">Compra $50.000</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><span class="categoria-pill">Bronce</span></td><td>$0 a $149.999</td><td class="text-end">1.0%</td><td>10 pts por $1.000</td><td class="text-end">500 pts = $500</td></tr>
+                                <tr><td><span class="categoria-pill">Plata</span></td><td>$150.000 a $399.999</td><td class="text-end">1.5%</td><td>15 pts por $1.000</td><td class="text-end">750 pts = $750</td></tr>
+                                <tr><td><span class="categoria-pill">Oro</span></td><td>$400.000 a $799.999</td><td class="text-end">2.0%</td><td>20 pts por $1.000</td><td class="text-end">1.000 pts = $1.000</td></tr>
+                                <tr><td><span class="categoria-pill">VIP</span></td><td>$800.000+</td><td class="text-end">3.0%</td><td>30 pts por $1.000</td><td class="text-end">1.500 pts = $1.500</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -119,23 +183,72 @@
 
 <script>
 const URL_GUARDAR = "{% url 'api_guardar_programa' %}";
+const ESTRATEGIA_PESO = {
+    puntos_por_monto: 10,
+    monto_base_acumulacion: 1000,
+    valor_punto_en_pesos: 1,
+    minimo_canje_puntos: 500,
+    vigencia_dias: 365,
+    puntos_bienvenida: 200,
+    redondeo: 'FLOOR',
+    acumula_sobre: 'TOTAL',
+};
+const MONTOS_SIMULACION = [10000, 25000, 50000, 100000, 250000];
 function csrf() { return document.querySelector('[name=csrfmiddlewaretoken]').value; }
 function fmt(n) { return '$' + Math.round(n||0).toLocaleString('es-CL'); }
+function fmtPts(n) { return Math.round(n||0).toLocaleString('es-CL') + ' pts'; }
+
+function aplicarEstrategiaPeso() {
+    document.getElementById('cf-puntos').value = ESTRATEGIA_PESO.puntos_por_monto;
+    document.getElementById('cf-base').value = ESTRATEGIA_PESO.monto_base_acumulacion;
+    document.getElementById('cf-valor').value = ESTRATEGIA_PESO.valor_punto_en_pesos;
+    document.getElementById('cf-minimo').value = ESTRATEGIA_PESO.minimo_canje_puntos;
+    document.getElementById('cf-vigencia').value = ESTRATEGIA_PESO.vigencia_dias;
+    document.getElementById('cf-bienvenida').value = ESTRATEGIA_PESO.puntos_bienvenida;
+    document.getElementById('cf-redondeo').value = ESTRATEGIA_PESO.redondeo;
+    document.getElementById('cf-acumula').value = ESTRATEGIA_PESO.acumula_sobre;
+    calcularTasa();
+}
+
+function puntosParaMonto(monto, puntos, base) {
+    const bruto = base > 0 ? (monto / base * puntos) : 0;
+    const redondeo = document.getElementById('cf-redondeo').value;
+    if (redondeo === 'CEIL') return Math.ceil(bruto);
+    if (redondeo === 'ROUND') return Math.floor(bruto + 0.5);
+    return Math.floor(bruto);
+}
 
 function calcularTasa() {
     const puntos = parseFloat(document.getElementById('cf-puntos').value || 0);
     const base = parseFloat(document.getElementById('cf-base').value || 1);
     const valor = parseFloat(document.getElementById('cf-valor').value || 0);
     const tasa = base > 0 ? (puntos * valor / base * 100) : 0;
-    document.getElementById('tasa-efectiva').textContent = tasa.toFixed(2) + '%';
     const tasaEl = document.getElementById('tasa-efectiva');
-    tasaEl.style.color = tasa > 5 ? '#f06548' : '#0ab39c';
+    tasaEl.textContent = tasa.toFixed(2) + '%';
+    // Escala de 3 niveles: ≤5% verde, >5% ámbar, >10% rojo.
+    tasaEl.style.color = tasa > 10 ? '#f06548' : (tasa > 5 ? '#f7b84b' : '#0ab39c');
+    const warn = document.getElementById('tasa-warning');
+    if (tasa > 10) {
+        warn.className = 'alert alert-danger mt-2 mb-0 py-2 px-2 small';
+        warn.innerHTML = `<i class="ri-error-warning-line"></i> Tasa muy alta: devuelves <strong>${tasa.toFixed(1)}%</strong> de cada venta en puntos. Pedirá confirmación al guardar.`;
+    } else if (tasa > 5) {
+        warn.className = 'alert alert-warning mt-2 mb-0 py-2 px-2 small';
+        warn.innerHTML = `<i class="ri-alert-line"></i> Tasa sobre lo recomendado (>5%): devuelves <strong>${tasa.toFixed(1)}%</strong> en puntos.`;
+    } else {
+        warn.className = 'alert mt-2 mb-0 py-2 px-2 small d-none';
+        warn.innerHTML = '';
+    }
+    const ejemploPts = puntosParaMonto(10000, puntos, base);
     document.getElementById('ejemplo-acum').innerHTML =
-        `En una compra de <strong>$10.000</strong> el cliente gana <strong>${Math.floor(10000/base*puntos)}</strong> puntos ` +
-        `(equivalen a <strong>${fmt(Math.floor(10000/base*puntos)*valor)}</strong>).`;
+        `En una compra de <strong>$10.000</strong> el cliente gana <strong>${fmtPts(ejemploPts)}</strong> ` +
+        `(equivalen a <strong>${fmt(ejemploPts*valor)}</strong>).`;
+    document.getElementById('simulacion-tbody').innerHTML = MONTOS_SIMULACION.map(monto => {
+        const pts = puntosParaMonto(monto, puntos, base);
+        return `<tr><td>${fmt(monto)}</td><td class="text-end fw-semibold">${fmtPts(pts)}</td><td class="text-end">${fmt(pts*valor)}</td></tr>`;
+    }).join('');
 }
 
-function guardar() {
+function guardar(confirmarTasaAlta) {
     const payload = {
         nombre: document.getElementById('cf-nombre').value,
         puntos_por_monto: document.getElementById('cf-puntos').value,
@@ -146,13 +259,35 @@ function guardar() {
         puntos_bienvenida: document.getElementById('cf-bienvenida').value,
         redondeo: document.getElementById('cf-redondeo').value,
         acumula_sobre: document.getElementById('cf-acumula').value,
+        confirmar_tasa_alta: confirmarTasaAlta ? 'true' : '',
     };
     document.getElementById('btn-guardar').disabled = true;
     fetch(URL_GUARDAR, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
         body: JSON.stringify(payload)}).then(r=>r.json()).then(d=>{
         document.getElementById('btn-guardar').disabled = false;
-        if (d.success) Swal.fire('Guardado', `Tasa efectiva: ${d.tasa_descuento_efectiva}%`, 'success');
-        else Swal.fire('Error', d.error || 'No se pudo guardar', 'error');
+        // Tasa sobre el tope duro: pedir confirmación y reenviar con el flag.
+        if (d.requiere_confirmacion) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Tasa muy alta',
+                text: d.warning || `Tasa efectiva ${d.tasa_descuento_efectiva}%. ¿Confirmas?`,
+                showCancelButton: true,
+                confirmButtonText: 'Sí, guardar igual',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#f06548',
+            }).then(res => { if (res.isConfirmed) guardar(true); });
+            return;
+        }
+        if (d.success) {
+            if (d.warning) {
+                Swal.fire({ icon: 'warning', title: 'Guardado con aviso',
+                    html: `Tasa efectiva: <strong>${d.tasa_descuento_efectiva}%</strong><br><small>${d.warning}</small>` });
+            } else {
+                Swal.fire('Guardado', `Tasa efectiva: ${d.tasa_descuento_efectiva}%`, 'success');
+            }
+        } else {
+            Swal.fire('Error', d.error || 'No se pudo guardar', 'error');
+        }
     });
 }
 

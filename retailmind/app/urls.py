@@ -316,6 +316,7 @@ from .views_modulo_fidelizacion import (
     # Vistas HTML
     modulo_fidelizacion,
     configurar_programa_vista,
+    reporte_fidelizacion_vista,
     ficha_cliente_puntos_vista,
     registrar_cliente_vista,
     # APIs
@@ -1249,6 +1250,7 @@ urlpatterns = [
     # Vistas HTML
     path('fidelizacion/', modulo_fidelizacion, name='modulo_fidelizacion'),
     path('fidelizacion/configuracion/', configurar_programa_vista, name='configurar_programa_vista'),
+    path('fidelizacion/reporte/', reporte_fidelizacion_vista, name='reporte_fidelizacion_vista'),
     path('fidelizacion/registrar-cliente/', registrar_cliente_vista, name='registrar_cliente_vista'),
     path('fidelizacion/cliente/<int:cliente_id>/', ficha_cliente_puntos_vista, name='ficha_cliente_puntos_vista'),
     # APIs
