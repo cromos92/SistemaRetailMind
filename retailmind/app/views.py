@@ -12392,6 +12392,7 @@ def obtener_asociaciones_dte(request, dte_id):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
+@transaction.atomic
 def guardar_recepcion(request):
     try:
         data = json.loads(request.body)
@@ -12422,7 +12423,9 @@ def guardar_recepcion(request):
             sucursales_cache[suc_id] = suc
             return suc or sucursal_destino_global
 
-        for item in recepciones:
+        # Orden consistente por talla → evita deadlocks entre requests
+        # concurrentes que recepcionan el mismo set de tallas en distinto orden.
+        for item in sorted(recepciones, key=lambda i: i.get('compra_producto_talla_id') or 0):
             compra_talla_id = item['compra_producto_talla_id']
             cantidad = item['recepcionado']
             factura_id = item.get('factura_id')
@@ -12433,7 +12436,15 @@ def guardar_recepcion(request):
             sucursal_raw = item.get('sucursal_destino_id')
             sucursal_item = resolver_sucursal_item(sucursal_raw)
 
-            compra_talla = Compras_Producto_Talla.objects.select_related('compra_producto').get(id=compra_talla_id)
+            # Lock de la talla: serializa recepciones concurrentes de la misma
+            # talla para que el check de recepcion_existente + el create/update
+            # de abajo sean atómicos (cierra la race que duplicaría la fila).
+            compra_talla = (
+                Compras_Producto_Talla.objects
+                .select_for_update(of=('self',))
+                .select_related('compra_producto')
+                .get(id=compra_talla_id)
+            )
             compra_producto = compra_talla.compra_producto
 
             # Caso especial: recepción sin cantidad nueva pero con factura
@@ -23746,7 +23757,7 @@ def dashboard_productos_mejorado_api(request):
             fecha__gte=fecha_inicio.date(),
             estado='COMPLETADO'
         ).aggregate(
-            compras=Coalesce(Sum('cantidad', filter=Q(concepto__in=['RECEPCION_COMPRA', 'INGRESO_INICIAL'])), 0),
+            compras=Coalesce(Sum('cantidad', filter=Q(concepto__in=['RECEPCION_COMPRA', 'INGRESO_INICIAL', 'INGRESO_MANUAL'])), 0),
             ventas=Coalesce(Sum('cantidad', filter=Q(concepto__in=['VENTA_PUBLICO', 'VENTA_MAYORISTA'])), 0),
             traspasos_out=Coalesce(Sum('cantidad', filter=Q(concepto='TRASPASO_SALIDA')), 0),
             traspasos_in=Coalesce(Sum('cantidad', filter=Q(concepto='TRASPASO_ENTRADA')), 0),

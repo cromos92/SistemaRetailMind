@@ -533,9 +533,9 @@ class GiftCardsView(APIView):
 class PerfilView(APIView):
     """
     GET   /api/v1/cliente/perfil/   → perfil del cliente
-    PATCH /api/v1/cliente/perfil/   → edita email/celular
+    PATCH /api/v1/cliente/perfil/   → edita celular (email/rut son presenciales)
 
-    Al cambiar email/celular se resetea la verificación del canal.
+    Al cambiar el celular se resetea su verificación.
     """
     authentication_classes = [ClienteJWTAuthentication]
     permission_classes = [IsClienteApp]
@@ -550,12 +550,10 @@ class PerfilView(APIView):
         serializer = PerfilClienteSerializer(cliente, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
-        email_nuevo = serializer.validated_data.get('email')
+        # El email es de gestión presencial (read_only en el serializer): solo el
+        # celular se edita desde la app.
         celular_nuevo = serializer.validated_data.get('celular')
         reset_fields = []
-        if email_nuevo is not None and email_nuevo != cliente.email:
-            cuenta.email_verificado = False
-            reset_fields.append('email_verificado')
         if celular_nuevo is not None and celular_nuevo != cliente.celular:
             cuenta.celular_verificado = False
             reset_fields.append('celular_verificado')

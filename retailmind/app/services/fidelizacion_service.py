@@ -358,12 +358,25 @@ def cotizar_canje(cliente, puntos):
     """
     Datos para que la app muestre cuántos puntos puede aplicar y su valor en $.
     No reserva ni lanza por saldo: devuelve los límites para la UI.
+
+    Si NO hay programa de fidelización activo, NO bloquea: devuelve los límites en
+    0 (`puntos_disponibles=False`) para que la app pueda seguir y cobrar a precio
+    normal. Solo `reservar_puntos`/`generar_vale_canje` (que mueven puntos) exigen
+    programa activo, porque sin tasa no hay con qué calcular el descuento.
     """
-    programa = ProgramaFidelizacion.get_activo()
-    if not programa:
-        raise FidelizacionError('No hay un programa de fidelización activo.')
     puntos = max(0, int(puntos or 0))
     cuenta = getattr(cliente, 'cuenta_puntos', None)
+    programa = ProgramaFidelizacion.get_activo()
+    if not programa:
+        return {
+            'puntos': puntos,
+            'valor_pesos': 0,
+            'valor_punto': 0,
+            'saldo_total': cuenta.saldo_puntos if cuenta else 0,
+            'saldo_disponible': 0,
+            'minimo_canje': 0,
+            'puntos_disponibles': False,
+        }
     # Libera compromisos vencidos (reservas y vales) sin depender del cron global.
     _expirar_reservas_de_cuenta(cuenta)
     _expirar_vales_de_cuenta(cuenta)
@@ -376,6 +389,7 @@ def cotizar_canje(cliente, puntos):
         'saldo_total': saldo,
         'saldo_disponible': disponible,
         'minimo_canje': programa.minimo_canje_puntos,
+        'puntos_disponibles': True,
     }
 
 

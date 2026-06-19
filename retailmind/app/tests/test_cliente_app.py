@@ -216,18 +216,35 @@ class ClienteAppDatosTest(TestCase):
         self.assertEqual(resp.data['qr_payload'], '111111111')
         self.assertEqual(resp.data['rut_formateado'], '11.111.111-1')
 
-    def test_perfil_patch_resetea_verificacion(self):
+    def test_perfil_patch_email_es_presencial_ignorado(self):
+        """El email NO se edita desde la app (gestión presencial): el PATCH lo ignora
+        y no toca su verificación."""
         cuenta = CuentaClienteApp.objects.get(cliente=self.cliente)
         cuenta.email_verificado = True
         cuenta.save(update_fields=['email_verificado'])
+        email_original = self.cliente.email
         self._auth()
         resp = self.client.patch('/api/v1/cliente/perfil/',
                                  {'email': 'nuevo@test.com'}, format='json')
         self.assertEqual(resp.status_code, 200)
         cuenta.refresh_from_db()
         self.cliente.refresh_from_db()
-        self.assertEqual(self.cliente.email, 'nuevo@test.com')
-        self.assertFalse(cuenta.email_verificado)
+        self.assertEqual(self.cliente.email, email_original)
+        self.assertTrue(cuenta.email_verificado)
+
+    def test_perfil_patch_celular_resetea_verificacion(self):
+        """El celular SÍ se edita desde la app y resetea su verificación."""
+        cuenta = CuentaClienteApp.objects.get(cliente=self.cliente)
+        cuenta.celular_verificado = True
+        cuenta.save(update_fields=['celular_verificado'])
+        self._auth()
+        resp = self.client.patch('/api/v1/cliente/perfil/',
+                                 {'celular': '+56 9 8765 4321'}, format='json')
+        self.assertEqual(resp.status_code, 200)
+        cuenta.refresh_from_db()
+        self.cliente.refresh_from_db()
+        self.assertTrue(self.cliente.celular)
+        self.assertFalse(cuenta.celular_verificado)
 
 
 @override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)

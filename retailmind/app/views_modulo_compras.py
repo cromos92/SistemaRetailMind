@@ -1065,24 +1065,35 @@ def dashboard_compras_estrategico(request):
         cumplimiento_proveedores = []
         proveedores = compras_query.values('empresa__id', 'empresa__nombre').distinct()
         
+        # PERF: antes este bloque hacía 2 aggregates POR proveedor (N+1).
+        # Ahora son 2 queries agrupadas por empresa y el loop solo lee de dicts.
+        esperadas_por_prov = {
+            r['compra_producto__compras__empresa_id']: (r['total'] or 0)
+            for r in (
+                Compras_Producto_Talla.objects
+                .filter(compra_producto__compras__in=compras_query)
+                .values('compra_producto__compras__empresa_id')
+                .annotate(total=Sum('stock'))
+            )
+        }
+        recep_por_prov = {
+            r['compra_producto_talla__compra_producto__compras__empresa_id']: (r['total'] or 0)
+            for r in (
+                Productos_Recepcionados.objects
+                .filter(compra_producto_talla__compra_producto__compras__in=compras_query)
+                .values('compra_producto_talla__compra_producto__compras__empresa_id')
+                .annotate(total=Sum('stockArribado'))
+            )
+        }
         for proveedor in proveedores:
-            compras_proveedor = compras_query.filter(empresa_id=proveedor['empresa__id'])
-            compras_proveedor_ids = list(compras_proveedor.values_list('id', flat=True))
-            
-            tallas_proveedor = Compras_Producto_Talla.objects.filter(
-                compra_producto__compras__in=compras_proveedor_ids
-            )
-            esperadas_proveedor = tallas_proveedor.aggregate(total=Sum('stock'))['total'] or 0
-            
-            recepciones_proveedor = Productos_Recepcionados.objects.filter(
-                compra_producto_talla__compra_producto__compras__in=compras_proveedor_ids
-            )
-            recepcionadas_proveedor = recepciones_proveedor.aggregate(total=Sum('stockArribado'))['total'] or 0
-            
+            eid = proveedor['empresa__id']
+            esperadas_proveedor = esperadas_por_prov.get(eid, 0)
+            recepcionadas_proveedor = recep_por_prov.get(eid, 0)
+
             cumplimiento = 0
             if esperadas_proveedor > 0:
                 cumplimiento = round((recepcionadas_proveedor / esperadas_proveedor) * 100, 1)
-            
+
             cumplimiento_proveedores.append({
                 'proveedor': proveedor['empresa__nombre'],
                 'cumplimiento': cumplimiento

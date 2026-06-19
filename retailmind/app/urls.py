@@ -1166,6 +1166,10 @@ urlpatterns = [
     path('api/exportar-reporte-compras-excel/', views_modulo_reportes.exportar_reporte_compras_excel, name='exportar_reporte_compras_excel'),
     path('api/rendimiento-compras/', views_modulo_reportes.api_rendimiento_compras, name='api_rendimiento_compras'),
 
+    # Reporte: productos creados por origen (alta por compra / manual / traspaso / ajuste)
+    path('reportes/productos-origen/', views_modulo_reportes.ver_reporte_productos_origen, name='ver_reporte_productos_origen'),
+    path('api/reportes/productos-origen/', views_modulo_reportes.api_productos_por_origen, name='api_productos_por_origen'),
+
     # Reporte de rendimiento por proveedor (compra -> recepcion -> venta)
     path('reportes/rendimiento-proveedor/', views_modulo_reportes.ver_reporte_rendimiento_proveedor, name='ver_reporte_rendimiento_proveedor'),
     path('api/reporte-rendimiento-proveedor/', views_modulo_reportes.api_reporte_rendimiento_proveedor, name='api_reporte_rendimiento_proveedor'),

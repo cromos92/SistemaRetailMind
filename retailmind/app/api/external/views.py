@@ -905,26 +905,36 @@ class PreciosActualesView(APIView):
                     (m['fecha'], int(m['cantidad'] or 0))
                 )
 
-        # ── 2b. Última fecha de INGRESO de mercadería por SKU ──
+        # ── 2b. Última fecha de INGRESO de mercadería por SKU (acotado a stock) ──
         # Definición de negocio legada (Vicent): MAX(fecha) de las ENTRADAS
         # reales a tienda, que INCLUYE el despacho interno bodega→tienda
-        # (VentaXInterna migrado → concepto TRASPASO_SUCURSAL, tipo INGRESO).
-        # A diferencia del FIFO de arriba, NO se acota a stock>0: el legado
-        # devuelve esta fecha para todo SKU del catálogo. Se sigue excluyendo el
-        # saldo de apertura sintético (su fecha es la de la carga, no la real).
+        # (VentaXInterna migrado → concepto TRASPASO_SUCURSAL).
+        #
+        # PERF: se acota a `skus_con_stock` (igual que el bloque 2). Sin ese tope
+        # la consulta agregaba MAX(fecha) sobre TODOS los movimientos de INGRESO
+        # de la empresa (millones de filas migradas, sin índice por concepto) y
+        # tardaba ~37s → AllConnected corta a los 30s y el sync quedaba colgado.
+        # Los SKU sin stock no se descuentan en el ecommerce, así que su fecha no
+        # se usa: caen al fallback `fecha_creacion` de abajo (no quedan en null).
+        #
+        # Se omite el filtro `tipo_movimiento='INGRESO'`: es redundante con los
+        # conceptos (todos son de entrada) y además los TRASPASO_SUCURSAL NUEVOS
+        # se guardan con tipo='TRASPASO', así que filtrar por 'INGRESO' los perdía.
+        # Se sigue excluyendo el saldo de apertura sintético de la migración.
         ultima_ingreso_por_sku: dict = {}
-        for r in (
-            Movimientos_Producto.objects
-            .filter(
-                concepto__in=CONCEPTOS_INGRESO_MERCADERIA,
-                tipo_movimiento='INGRESO',
-                ProductoTalla__producto__sucursal__empresa__rut=rut,
-            )
-            .exclude(referencia_externa=REF_SALDO_INICIAL_SINTETICO)
-            .values('ProductoTalla__sku')
-            .annotate(ultima=Max('fecha'))
-        ):
-            ultima_ingreso_por_sku[str(r['ProductoTalla__sku'])] = r['ultima']
+        if skus_con_stock:
+            for r in (
+                Movimientos_Producto.objects
+                .filter(
+                    concepto__in=CONCEPTOS_INGRESO_MERCADERIA,
+                    ProductoTalla__sku__in=skus_con_stock,
+                    ProductoTalla__producto__sucursal__empresa__rut=rut,
+                )
+                .exclude(referencia_externa=REF_SALDO_INICIAL_SINTETICO)
+                .values('ProductoTalla__sku')
+                .annotate(ultima=Max('fecha'))
+            ):
+                ultima_ingreso_por_sku[str(r['ProductoTalla__sku'])] = r['ultima']
 
         # ── 3. Última venta (EGRESO) por SKU ──
         ultima_venta_por_sku: dict = {}

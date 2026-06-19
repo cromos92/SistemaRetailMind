@@ -4498,6 +4498,137 @@ def ver_reporte_compras(request):
     return render(request, 'vistas/modulo_reportes/reporte_compras.html')
 
 
+# ========== REPORTE: PRODUCTOS CREADOS POR ORIGEN (gap H4) ==========
+# El ORIGEN de un SKU = el concepto de su PRIMER movimiento de INGRESO.
+# Permite ver, de forma agregada, cuántos SKU nacieron por compra vs alta
+# manual vs traspaso vs ajuste, en lugar de auditar SKU por SKU.
+
+ORIGEN_LABELS = {
+    'RECEPCION_COMPRA': 'Recepción de compra',
+    'INGRESO_INICIAL': 'Alta inicial / saldo',
+    'INGRESO_MANUAL': 'Alta manual',
+    # En datos migrados de Laravel el primer ingreso del SKU a la tienda suele ser
+    # el despacho interno bodega→tienda, registrado como TRASPASO_SUCURSAL (INGRESO).
+    'TRASPASO_SUCURSAL': 'Despacho interno (traspaso)',
+    'TRASPASO_ENTRADA': 'Traspaso desde otra sucursal',
+    'REPOSICION_STOCK': 'Reposición',
+    'AJUSTE_POSITIVO': 'Ajuste de inventario',
+    'AJUSTE_INVENTARIO': 'Ajuste de inventario',
+    'DEVOLUCION_CLIENTE': 'Devolución de cliente',
+}
+
+
+@login_required
+def ver_reporte_productos_origen(request):
+    """Vista principal: productos creados en el período clasificados por origen."""
+    return render(request, 'vistas/modulo_reportes/productos_por_origen.html')
+
+
+@login_required
+@require_GET
+def api_productos_por_origen(request):
+    """
+    Altas de catálogo del período, clasificadas por el ORIGEN del SKU = el
+    concepto de su PRIMER movimiento de INGRESO. Responde el gap H4 de la
+    auditoría de trazabilidad.
+
+    GET params:
+        anio      — año a analizar (default = actual)
+        sucursal  — id de sucursal (opcional)
+    """
+    from django.db.models import Min
+    from .utils_analitica import ids_producto_talla_activos
+
+    try:
+        anio = int(request.GET.get('anio', timezone.localdate().year))
+    except (TypeError, ValueError):
+        anio = timezone.localdate().year
+    sucursal_id = request.GET.get('sucursal') or None
+
+    pt_ids = ids_producto_talla_activos(sucursal_id=sucursal_id)
+
+    base = Movimientos_Producto.objects.filter(
+        tipo_movimiento='INGRESO', estado='COMPLETADO',
+        ProductoTalla_id__in=pt_ids,
+    )
+
+    # 1) Primer ingreso (fecha mínima) por SKU
+    primeras = {
+        r['ProductoTalla_id']: r['primera']
+        for r in base.values('ProductoTalla_id').annotate(primera=Min('fecha'))
+    }
+    # SKU cuyo primer ingreso cae en el año pedido = "creados" ese año
+    pt_anio = [pt for pt, f in primeras.items() if f and f.year == anio]
+
+    # 2) Concepto / costo / cantidad del PRIMER movimiento de esos SKU.
+    #    Recorremos ordenado por (SKU, fecha, hora, id) y tomamos el primero por SKU.
+    por_origen = defaultdict(lambda: {'skus': 0, 'unidades': 0, 'costo': 0.0})
+    por_mes = defaultdict(lambda: {'skus': 0, 'unidades': 0})
+    vistos = set()
+    total_skus = total_unidades = 0
+    total_costo = 0.0
+
+    if pt_anio:
+        movs = (
+            base.filter(ProductoTalla_id__in=pt_anio)
+            .values('ProductoTalla_id', 'fecha', 'hora', 'concepto', 'cantidad', 'costo')
+            .order_by('ProductoTalla_id', 'fecha', 'hora', 'id')
+        )
+        for m in movs.iterator(chunk_size=5000):
+            pt = m['ProductoTalla_id']
+            if pt in vistos:
+                continue   # ya tomamos su primer movimiento
+            vistos.add(pt)
+            uds = abs(int(m['cantidad'] or 0))
+            costo = float(m['costo'] or 0) * uds
+            o = por_origen[m['concepto'] or 'OTRO']
+            o['skus'] += 1
+            o['unidades'] += uds
+            o['costo'] += costo
+            pm = por_mes[m['fecha'].month if m['fecha'] else 0]
+            pm['skus'] += 1
+            pm['unidades'] += uds
+            total_skus += 1
+            total_unidades += uds
+            total_costo += costo
+
+    por_origen_data = sorted((
+        {
+            'concepto': concepto,
+            'origen': ORIGEN_LABELS.get(concepto, 'Otro'),
+            'skus': v['skus'],
+            'unidades': v['unidades'],
+            'costo': round(v['costo'], 0),
+            'pct': round(v['skus'] / total_skus * 100, 1) if total_skus else 0,
+        }
+        for concepto, v in por_origen.items()
+    ), key=lambda x: x['skus'], reverse=True)
+
+    por_mes_data = [
+        {'mes': mm, 'skus': por_mes.get(mm, {}).get('skus', 0),
+         'unidades': por_mes.get(mm, {}).get('unidades', 0)}
+        for mm in range(1, 13)
+    ]
+
+    anios = sorted({f.year for f in primeras.values() if f}, reverse=True)
+    anio_actual = timezone.localdate().year
+    if anio_actual not in anios:
+        anios.insert(0, anio_actual)
+
+    return JsonResponse({
+        'success': True,
+        'anio': anio,
+        'resumen': {
+            'total_skus': total_skus,
+            'total_unidades': total_unidades,
+            'total_costo': round(total_costo, 0),
+        },
+        'por_origen': por_origen_data,
+        'por_mes': por_mes_data,
+        'anios_disponibles': anios,
+    })
+
+
 @login_required
 @require_GET
 def api_reporte_compras(request):
@@ -5568,16 +5699,32 @@ def exportar_reporte_compras_excel(request):
 # ========== API RENDIMIENTO DE COMPRAS: ROTACIÓN REAL + TRAZABILIDAD ==========
 # Estrategia: Reconstruir ciclo de vida COMPLETO desde Movimientos_Producto
 #
-# ENTRADA (comprado):   concepto RECEPCION_COMPRA + INGRESO_INICIAL
-# DESPACHO (sucursales): concepto TRASPASO_SUCURSAL + DTEs TRASPASO
+# ENTRADA (comprado):   concepto RECEPCION_COMPRA + INGRESO_INICIAL + INGRESO_MANUAL
+# DESPACHO (sucursales): concepto TRASPASO_SALIDA (saliente real) + DTEs TRASPASO
 # VENTA (al cliente):   concepto VENTA_PUBLICO/MAYORISTA + Ticket_Productos
+# OTROS EGRESOS:        ajustes a la baja, pérdidas, devoluciones a proveedor, cambios
 #
 # Esto cubre TANTO datos migrados de Laravel como datos nuevos del sistema.
 # Laravel no tenía módulo de Compras, todo se registraba como movimientos.
 
-CONCEPTOS_ENTRADA = ['RECEPCION_COMPRA', 'INGRESO_INICIAL']
-CONCEPTOS_DESPACHO = ['TRASPASO_SUCURSAL', 'TRASPASO_SALIDA']
+# INGRESO_MANUAL cuenta como entrada: el alta manual de catálogo deja kardex
+# (igual que FIFO/trazabilidad, que ya lo tratan como ingreso). Antes quedaba
+# fuera del embudo y distorsionaba rotación/inversión de los SKU creados a mano.
+CONCEPTOS_ENTRADA = ['RECEPCION_COMPRA', 'INGRESO_INICIAL', 'INGRESO_MANUAL']
+# Despacho SALIENTE a sucursales = solo TRASPASO_SALIDA (egreso, cantidad
+# negativa → se normaliza con abs() al consumir). TRASPASO_SUCURSAL NO va aquí:
+# en datos migrados es la pata de ENTRADA a la tienda (tipo INGRESO), así que
+# sumarlo mezclaba signos y el "despachado" salía negativo.
+CONCEPTOS_DESPACHO = ['TRASPASO_SALIDA']
 CONCEPTOS_VENTA = ['VENTA_PUBLICO', 'VENTA_MAYORISTA']
+# Egresos que NO son venta ni traspaso interno: mermas, ajustes a la baja,
+# devoluciones a proveedor y salida por cambio. Se cuentan aparte para cerrar la
+# reconciliación entrada → (venta + despacho + otros egresos + remanente), en vez
+# de que ese stock que salió aparezca como "no vendido" en góndola.
+CONCEPTOS_OTROS_EGRESOS = [
+    'AJUSTE_NEGATIVO', 'PERDIDA_ROBO', 'PERDIDA_DETERIORO',
+    'DONACION_ENTREGADA', 'DEVOLUCION_PROVEEDOR', 'CAMBIO_PRODUCTO_SALIDA',
+]
 
 
 @login_required
@@ -5612,6 +5759,11 @@ def api_rendimiento_compras(request):
             uds=Sum('cantidad'),
             ingreso=Sum(F('precio') * F('cantidad')),
         )
+        # Otros egresos (mermas/ajustes a la baja/devoluciones a proveedor/cambios).
+        # Son EGRESO → cantidad negativa; se normaliza a positivo con abs() abajo.
+        otros = Movimientos_Producto.objects.filter(concepto__in=CONCEPTOS_OTROS_EGRESOS, **bf).aggregate(
+            uds=Sum('cantidad'),
+        )
         q_tk = {'idTicket__fecha__year': anio, 'idTicket__estado__in': ['PAGADO', 'PENDIENTE'],
                 'ProductoTalla_id__in': pt_ids}
         if sucursal_id:
@@ -5622,11 +5774,12 @@ def api_rendimiento_compras(request):
         return {
             'entrada': int(ent['uds'] or 0),
             'inversion': float(ent['costo'] or 0),
-            'despacho': int(desp['uds'] or 0),
+            'despacho': abs(int(desp['uds'] or 0)),
             'venta_mov': int(vtas['uds'] or 0),
             'venta_tk': int(vtas_tk['uds'] or 0),
             'ingreso_mov': float(vtas['ingreso'] or 0),
             'ingreso_tk': float(vtas_tk['ingreso'] or 0),
+            'otros_egresos': abs(int(otros['uds'] or 0)),
             'fuente': 'movimientos',
             '_bf': bf,
         }
@@ -5671,11 +5824,12 @@ def api_rendimiento_compras(request):
         return {
             'entrada': int(ent['uds'] or 0),
             'inversion': float(ent['costo'] or 0),
-            'despacho': int(desp['uds'] or 0),
+            'despacho': abs(int(desp['uds'] or 0)),
             'venta_mov': int(vtas['uds'] or 0),
             'venta_tk': 0,
             'ingreso_mov': float(vtas['ingreso'] or 0),
             'ingreso_tk': 0,
+            'otros_egresos': 0,  # DTEs migrados no registran mermas/ajustes
             'fuente': 'dte',
             '_bf': dte_f,
         }
@@ -5789,6 +5943,7 @@ def api_rendimiento_compras(request):
         entrada = d['entrada']
         inversion = d['inversion']
         despacho = d['despacho']
+        otros_egresos = d.get('otros_egresos', 0)
         vendido = max(d['venta_mov'], d['venta_tk'])
         ingreso = max(d['ingreso_mov'], d['ingreso_tk'])
 
@@ -5811,7 +5966,11 @@ def api_rendimiento_compras(request):
             'ventas_superan_entrada': vendido > entrada,
             'roi_real': roi,
             'tasa_despacho': round((despacho / entrada) * 100, 1) if entrada > 0 else 0,
-            'stock_sin_vender': entrada - vendido,
+            'total_otros_egresos': otros_egresos,
+            # Remanente real = lo que entró menos lo que salió por CUALQUIER vía
+            # (venta + otros egresos). Antes solo restaba ventas, así que las
+            # mermas/devoluciones inflaban el "no vendido".
+            'stock_sin_vender': entrada - vendido - otros_egresos,
             'productos_analizados': entrada,
         }
 
@@ -5967,11 +6126,11 @@ def api_rendimiento_compras(request):
                 vt = ventas_suc_ticket.get(sid, {})
 
                 uds_ent = e.get('uds', 0) or 0
-                uds_desp = d.get('uds', 0) or 0
+                uds_desp = abs(d.get('uds', 0) or 0)
                 uds_vend = max(vm.get('uds', 0) or 0, vt.get('uds', 0) or 0)
                 ingreso = max(float(vm.get('ingreso', 0) or 0), float(vt.get('ingreso', 0) or 0))
                 costo_e = float(e.get('costo', 0) or 0)
-                costo_d = float(d.get('costo', 0) or 0)
+                costo_d = abs(float(d.get('costo', 0) or 0))
                 suc_nombre = (e.get('sucursal_origen__alias') or d.get('sucursal_origen__alias') or
                               vm.get('sucursal_origen__alias') or vt.get('idTicket__sucursal__alias') or 'Sin sucursal')
 
@@ -6046,7 +6205,7 @@ def api_rendimiento_compras(request):
                     ProductoTalla_id__in=top_pt_ids,
                     concepto__in=CONCEPTOS_DESPACHO, fecha__year=anio, estado='COMPLETADO',
                 ).values('ProductoTalla_id').annotate(uds=Sum('cantidad')):
-                    despachos_top[d['ProductoTalla_id']] = d['uds'] or 0
+                    despachos_top[d['ProductoTalla_id']] = abs(d['uds'] or 0)
 
             for tv in top_vendidos:
                 pt_id = tv['ProductoTalla_id']

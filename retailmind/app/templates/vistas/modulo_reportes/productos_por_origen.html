@@ -1,0 +1,194 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<style>
+    .ppo-wrap { background:#F5F5F7; min-height:100vh; padding-bottom:40px; }
+    .ppo-header {
+        background:linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        color:#fff; padding:24px 0; margin-bottom:22px;
+    }
+    .ppo-header h4 { margin:0; font-weight:700; }
+    .ppo-header p { margin:4px 0 0; opacity:.85; font-size:.85rem; }
+    .ppo-card { background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(26,26,46,.08); padding:18px; }
+    .ppo-kpi { background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(26,26,46,.08);
+        padding:16px 18px; border-left:4px solid var(--acc, #0066FF); height:100%; }
+    .ppo-kpi .lbl { font-size:.72rem; font-weight:600; color:#8A8A9A; text-transform:uppercase; letter-spacing:.3px; }
+    .ppo-kpi .val { font-size:1.7rem; font-weight:800; color:#1A1A2E; line-height:1.1; margin-top:4px; }
+    .ppo-kpi .sub { font-size:.72rem; color:#8A8A9A; }
+    .ppo-bar { height:8px; border-radius:6px; background:#eef0f4; overflow:hidden; }
+    .ppo-bar > span { display:block; height:100%; background:linear-gradient(90deg,#0066FF,#00D4AA); }
+    .ppo-table { width:100%; font-size:.85rem; }
+    .ppo-table th { font-size:.7rem; text-transform:uppercase; color:#8A8A9A; font-weight:700;
+        border-bottom:2px solid #eef0f4; padding:8px 10px; }
+    .ppo-table td { padding:9px 10px; border-bottom:1px solid #f2f3f6; }
+    .ppo-chip { display:inline-block; padding:2px 9px; border-radius:20px; font-size:.7rem; font-weight:700; }
+    .ppo-muted { color:#8A8A9A; font-size:.8rem; }
+    .ppo-mes-bar { display:flex; align-items:flex-end; gap:6px; height:120px; padding-top:10px; }
+    .ppo-mes-bar .col { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
+    .ppo-mes-bar .col .b { width:60%; min-height:2px; border-radius:4px 4px 0 0; background:linear-gradient(180deg,#0066FF,#00D4AA); }
+    .ppo-mes-bar .col .m { font-size:.62rem; color:#8A8A9A; }
+</style>
+
+<div class="page-content">
+  <div class="ppo-wrap">
+    <div class="ppo-header">
+      <div class="container-fluid">
+        <h4><i class="ri-seedling-line me-2"></i>Productos creados por origen</h4>
+        <p>Cada SKU se clasifica por el concepto de su <strong>primer ingreso</strong>: compra, alta manual, traspaso o ajuste.</p>
+      </div>
+    </div>
+
+    <div class="container-fluid">
+      <!-- Filtros -->
+      <div class="ppo-card mb-3">
+        <div class="row g-2 align-items-end">
+          <div class="col-auto">
+            <label class="ppo-muted d-block mb-1">Año</label>
+            <select id="ppoAnio" class="form-select form-select-sm" style="min-width:120px;"></select>
+          </div>
+          <div class="col-auto">
+            <label class="ppo-muted d-block mb-1">Sucursal</label>
+            <select id="ppoSucursal" class="form-select form-select-sm" style="min-width:180px;">
+              <option value="">Todas</option>
+            </select>
+          </div>
+          <div class="col-auto">
+            <button id="ppoRefrescar" class="btn btn-sm btn-primary"><i class="ri-refresh-line me-1"></i>Actualizar</button>
+          </div>
+          <div class="col text-end ppo-muted" id="ppoEstado">—</div>
+        </div>
+      </div>
+
+      <!-- KPIs -->
+      <div class="row g-3 mb-3">
+        <div class="col-md-4"><div class="ppo-kpi" style="--acc:#0066FF;">
+          <div class="lbl">SKU creados</div><div class="val" id="kpiSkus">0</div><div class="sub">en el año</div>
+        </div></div>
+        <div class="col-md-4"><div class="ppo-kpi" style="--acc:#00D4AA;">
+          <div class="lbl">Unidades de alta</div><div class="val" id="kpiUds">0</div><div class="sub">del primer ingreso</div>
+        </div></div>
+        <div class="col-md-4"><div class="ppo-kpi" style="--acc:#FFB020;">
+          <div class="lbl">Costo de alta</div><div class="val" id="kpiCosto">$0</div><div class="sub">costo × unidades</div>
+        </div></div>
+      </div>
+
+      <div class="row g-3">
+        <!-- Por origen -->
+        <div class="col-lg-7">
+          <div class="ppo-card">
+            <h6 class="mb-3" style="font-weight:700;">Altas por origen</h6>
+            <table class="ppo-table">
+              <thead><tr><th>Origen</th><th class="text-end">SKU</th><th style="width:32%;">Participación</th><th class="text-end">Unidades</th></tr></thead>
+              <tbody id="ppoOrigenBody">
+                <tr><td colspan="4" class="ppo-muted text-center py-4">Cargando…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- Por mes -->
+        <div class="col-lg-5">
+          <div class="ppo-card">
+            <h6 class="mb-3" style="font-weight:700;">Altas por mes (SKU)</h6>
+            <div class="ppo-mes-bar" id="ppoMesBar"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+    const fmt = n => (n || 0).toLocaleString('es-CL');
+    const fmtMoney = n => '$' + Math.round(n || 0).toLocaleString('es-CL');
+    const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const colorOrigen = {
+        'RECEPCION_COMPRA':'#0066FF', 'INGRESO_INICIAL':'#6f42c1', 'INGRESO_MANUAL':'#FFB020',
+        'TRASPASO_ENTRADA':'#00D4AA', 'AJUSTE_POSITIVO':'#FF4D4D', 'REPOSICION_STOCK':'#0ab39c',
+        'DEVOLUCION_CLIENTE':'#8A8A9A'
+    };
+
+    const $anio = document.getElementById('ppoAnio');
+    const $suc = document.getElementById('ppoSucursal');
+    const $estado = document.getElementById('ppoEstado');
+
+    function cargar() {
+        const params = new URLSearchParams();
+        if ($anio.value) params.set('anio', $anio.value);
+        if ($suc.value) params.set('sucursal', $suc.value);
+        $estado.textContent = 'Cargando…';
+        fetch('/app/api/reportes/productos-origen/?' + params.toString())
+            .then(r => r.json())
+            .then(render)
+            .catch(() => { $estado.textContent = 'Error al cargar'; });
+    }
+
+    function render(data) {
+        if (!data || !data.success) { $estado.textContent = 'Sin datos'; return; }
+
+        // Año selector (una sola vez, según años disponibles)
+        if (!$anio.dataset.poblado && Array.isArray(data.anios_disponibles)) {
+            $anio.innerHTML = data.anios_disponibles.map(a =>
+                `<option value="${a}" ${a === data.anio ? 'selected' : ''}>${a}</option>`).join('');
+            $anio.dataset.poblado = '1';
+        }
+
+        document.getElementById('kpiSkus').textContent = fmt(data.resumen.total_skus);
+        document.getElementById('kpiUds').textContent = fmt(data.resumen.total_unidades);
+        document.getElementById('kpiCosto').textContent = fmtMoney(data.resumen.total_costo);
+
+        // Tabla por origen
+        const body = document.getElementById('ppoOrigenBody');
+        if (!data.por_origen.length) {
+            body.innerHTML = '<tr><td colspan="4" class="ppo-muted text-center py-4">No hay altas en este período.</td></tr>';
+        } else {
+            body.innerHTML = data.por_origen.map(o => {
+                const c = colorOrigen[o.concepto] || '#8A8A9A';
+                return `<tr>
+                    <td><span class="ppo-chip" style="background:${c}22;color:${c};">${o.origen}</span></td>
+                    <td class="text-end fw-bold">${fmt(o.skus)}</td>
+                    <td><div class="ppo-bar"><span style="width:${o.pct}%;"></span></div>
+                        <span class="ppo-muted">${o.pct}%</span></td>
+                    <td class="text-end">${fmt(o.unidades)}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        // Barras por mes
+        const maxMes = Math.max(1, ...data.por_mes.map(m => m.skus));
+        document.getElementById('ppoMesBar').innerHTML = data.por_mes.map(m => {
+            const h = Math.round((m.skus / maxMes) * 100);
+            return `<div class="col" title="${MESES[m.mes-1]}: ${m.skus} SKU">
+                        <div class="b" style="height:${h}%;"></div>
+                        <div class="m">${MESES[m.mes-1]}</div>
+                    </div>`;
+        }).join('');
+
+        $estado.textContent = `${fmt(data.resumen.total_skus)} SKU creados en ${data.anio}`;
+    }
+
+    // Sucursales (best-effort; si falla, queda "Todas")
+    fetch('/app/api/reportes/sucursales/')
+        .then(r => r.json())
+        .then(d => {
+            const lista = (d && (d.sucursales || d.data)) || [];
+            lista.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.nombre || s.alias || ('Sucursal ' + s.id);
+                $suc.appendChild(opt);
+            });
+        })
+        .catch(() => {});
+
+    document.getElementById('ppoRefrescar').addEventListener('click', cargar);
+    $anio.addEventListener('change', cargar);
+    $suc.addEventListener('change', cargar);
+    cargar();
+})();
+</script>
+
+{% include '../../layout/footer.html' %}

@@ -1105,6 +1105,13 @@
                                             </div>
                                         </div>
                                         <div class="col-lg-2 col-md-4 col-6 mb-3">
+                                            <div class="kpi-card" style="--kpi-accent: var(--nexo-error)">
+                                                <div class="kpi-label">Otros egresos</div>
+                                                <div class="kpi-value" id="rend_otros_egresos">0</div>
+                                                <div class="kpi-sublabel">mermas/ajustes/dev.</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-lg-2 col-md-4 col-6 mb-3">
                                             <div class="kpi-card" style="--kpi-accent: var(--nexo-info)">
                                                 <div class="kpi-label">Rotación</div>
                                                 <div class="kpi-value" id="rend_rotacion">0%</div>
@@ -2285,6 +2292,8 @@ function renderKPIsRendimiento(r, comparacion) {
     if (invEl) invEl.textContent = formatearMoneda(r.total_inversion);
     document.getElementById('rend_despachado').textContent = formatearNumero(r.total_despachado);
     document.getElementById('rend_vendido').textContent = formatearNumero(r.total_vendido);
+    const otrosEl = document.getElementById('rend_otros_egresos');
+    if (otrosEl) otrosEl.textContent = formatearNumero(r.total_otros_egresos || 0);
     const rotPct = r.rotacion_raw_pct != null ? r.rotacion_raw_pct : r.rotacion_global;
     document.getElementById('rend_rotacion').textContent = (r.ventas_superan_entrada ? '~' : '') + rotPct + '%';
     document.getElementById('rend_roi').textContent = r.roi_real + '%';

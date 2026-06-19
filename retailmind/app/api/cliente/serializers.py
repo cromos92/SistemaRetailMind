@@ -107,7 +107,12 @@ class LogoutSerializer(serializers.Serializer):
 # ========== DATOS ==========
 
 class PerfilClienteSerializer(serializers.ModelSerializer):
-    """Perfil del cliente. Solo `email`/`celular` son editables (PATCH)."""
+    """Perfil del cliente. Solo `celular` es editable (PATCH).
+
+    `email` y `rut` son de gestión PRESENCIAL (se cambian en caja/POS), por eso
+    van en `read_only_fields`: aunque la app o un cliente los manden en el PATCH,
+    el serializer los ignora.
+    """
 
     nombre_completo = serializers.CharField(read_only=True)
 
@@ -117,12 +122,7 @@ class PerfilClienteSerializer(serializers.ModelSerializer):
             'id', 'nombre', 'apellido', 'nombre_completo', 'rut',
             'email', 'celular', 'tipo_cliente',
         ]
-        read_only_fields = ['id', 'nombre', 'apellido', 'rut', 'tipo_cliente']
-
-    def validate_email(self, value):
-        if value and not fidelizacion_service.validar_email(value):
-            raise serializers.ValidationError('El email no tiene un formato válido.')
-        return value
+        read_only_fields = ['id', 'nombre', 'apellido', 'rut', 'email', 'tipo_cliente']
 
     def validate_celular(self, value):
         if not value:
