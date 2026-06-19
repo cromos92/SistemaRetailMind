@@ -5,13 +5,13 @@
 {% include '../../layout/menu.html' %}
 {% csrf_token %}
 
-{% tiene_permiso 'revision_arqueos' 'puede_editar' as _puede_editar_dep %}
-{% tiene_permiso 'revision_arqueos' 'puede_eliminar' as _puede_eliminar_dep %}
+{% tiene_permiso 'revision_arqueos' 'puede_editar' as puede_editar_dep %}
+{% tiene_permiso 'revision_arqueos' 'puede_eliminar' as puede_eliminar_dep %}
 <script>
   // Permisos para acciones sobre depósitos. Se gestionan en la UI de permisos:
   // opción "Revisión Arqueos y Depósitos" → flags Editar / Eliminar por rol.
-  window.PUEDE_EDITAR_DEP = {{ _puede_editar_dep|yesno:"true,false" }};
-  window.PUEDE_ELIMINAR_DEP = {{ _puede_eliminar_dep|yesno:"true,false" }};
+  window.PUEDE_EDITAR_DEP = {{ puede_editar_dep|yesno:"true,false" }};
+  window.PUEDE_ELIMINAR_DEP = {{ puede_eliminar_dep|yesno:"true,false" }};
 </script>
 
 <style>
