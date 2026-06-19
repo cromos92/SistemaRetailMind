@@ -8613,8 +8613,7 @@ def agregar_deposito_arqueo(request):
 def eliminar_deposito_bancario(request):
     """Eliminar un depósito bancario específico (solo supervisores o quien lo declaró si aún no está verificado)"""
     try:
-        rol_usuario = getattr(request.user, 'rol', None)
-        es_supervisor = rol_usuario in ['administrador', 'administracion']
+        from .models import PermisoRol
 
         data = json.loads(request.body)
         deposito_id = data.get('deposito_id')
@@ -8626,10 +8625,18 @@ def eliminar_deposito_bancario(request):
             })
         
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        
+
+        # Permiso de eliminación: flag "Eliminar" (puede_eliminar) de la opción
+        # Revisión Arqueos y Depósitos (revision_arqueos), gestionable por rol
+        # en la UI de permisos.
+        puede_eliminar = PermisoRol.tiene_permiso(
+            request.user, 'revision_arqueos', 'puede_eliminar',
+            sucursal_id=int(sucursal_id) if sucursal_id else None,
+        )
+
         # Obtener el depósito
         deposito = get_object_or_404(DepositoBancario, id=deposito_id)
-        
+
         # Verificar que el arqueo pertenece a la sucursal actual
         if deposito.arqueo.sucursal_id != int(sucursal_id):
             return JsonResponse({
@@ -8637,8 +8644,9 @@ def eliminar_deposito_bancario(request):
                 'error': 'No tiene permisos para eliminar este depósito'
             })
 
-        # Cajeros solo pueden eliminar sus propios depósitos no verificados
-        if not es_supervisor:
+        # Sin permiso de eliminar: solo se permite borrar el PROPIO depósito aún
+        # no verificado (caso cajero). Con el permiso, puede borrar cualquiera.
+        if not puede_eliminar:
             es_propio = getattr(deposito, 'declarado_por_id', None) == request.user.id
             if not es_propio or deposito.verificado:
                 return JsonResponse({
@@ -8701,6 +8709,64 @@ def eliminar_deposito_bancario(request):
             'success': False,
             'error': f'Error: {str(e)}'
         })
+
+
+@login_required
+@require_POST
+def cambiar_fecha_deposito(request):
+    """
+    Corrige la fecha de un depósito bancario existente. Gateado por el flag
+    'Editar' (puede_editar) de la opción Revisión Arqueos y Depósitos
+    (revision_arqueos), gestionable por rol en la UI de permisos.
+    Solo cambia la fecha: no toca montos ni el cache del arqueo.
+    """
+    from .models import PermisoRol
+    from datetime import datetime
+    try:
+        data = json.loads(request.body)
+        deposito_id = data.get('deposito_id')
+        nueva_fecha = data.get('fecha_deposito') or data.get('fecha')
+
+        if not deposito_id or not nueva_fecha:
+            return JsonResponse({'success': False, 'error': 'deposito_id y fecha_deposito son requeridos'}, status=400)
+
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+
+        if not PermisoRol.tiene_permiso(
+            request.user, 'revision_arqueos', 'puede_editar',
+            sucursal_id=int(sucursal_id) if sucursal_id else None,
+        ):
+            return JsonResponse({'success': False, 'error': 'No tiene permiso para cambiar la fecha de depósitos.'}, status=403)
+
+        deposito = get_object_or_404(DepositoBancario, id=deposito_id)
+
+        if sucursal_id and deposito.arqueo.sucursal_id != int(sucursal_id):
+            return JsonResponse({'success': False, 'error': 'El depósito no pertenece a su sucursal.'}, status=403)
+
+        try:
+            fecha_obj = datetime.strptime(nueva_fecha, '%Y-%m-%d').date()
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Fecha inválida (formato AAAA-MM-DD).'}, status=400)
+
+        fecha_anterior = deposito.fecha_deposito
+        deposito.fecha_deposito = fecha_obj
+        deposito.save(update_fields=['fecha_deposito'])
+
+        try:
+            log_accion_caja(request, 'EDITAR_FECHA_DEPOSITO', deposito.arqueo)
+        except Exception:
+            pass
+        logger.info("Fecha de deposito %s cambiada: %s -> %s por %s",
+                    deposito_id, fecha_anterior, fecha_obj, request.user)
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Fecha del depósito actualizada.',
+            'fecha_deposito': fecha_obj.strftime('%Y-%m-%d'),
+        })
+    except Exception as e:
+        logger.exception("Error al cambiar fecha de deposito")
+        return JsonResponse({'success': False, 'error': f'Error: {str(e)}'}, status=500)
 
 
 @login_required

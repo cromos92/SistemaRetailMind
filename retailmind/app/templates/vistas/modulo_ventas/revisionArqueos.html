@@ -1,8 +1,18 @@
 {% load static %}
+{% load permisos_tags %}
 
 {% include '../../layout/header.html' %}
 {% include '../../layout/menu.html' %}
 {% csrf_token %}
+
+{% tiene_permiso 'revision_arqueos' 'puede_editar' as _puede_editar_dep %}
+{% tiene_permiso 'revision_arqueos' 'puede_eliminar' as _puede_eliminar_dep %}
+<script>
+  // Permisos para acciones sobre depósitos. Se gestionan en la UI de permisos:
+  // opción "Revisión Arqueos y Depósitos" → flags Editar / Eliminar por rol.
+  window.PUEDE_EDITAR_DEP = {{ _puede_editar_dep|yesno:"true,false" }};
+  window.PUEDE_ELIMINAR_DEP = {{ _puede_eliminar_dep|yesno:"true,false" }};
+</script>
 
 <style>
     :root {
@@ -710,9 +720,17 @@ function verDetalle(id) {
             let dep_html = '';
             const deps = a.depositos || [];
             if (deps.length > 0) {
-                dep_html = '<h6 class="mt-3 fw-bold" style="font-size:.85rem;"><i class="ri-bank-line me-1 text-success"></i>Depósitos Bancarios</h6><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Fecha</th><th>Banco</th><th class="text-end">Monto</th><th>Comprobante</th><th>Estado</th></tr></thead><tbody>';
+                var _depAcc = (window.PUEDE_EDITAR_DEP || window.PUEDE_ELIMINAR_DEP);
+                dep_html = '<h6 class="mt-3 fw-bold" style="font-size:.85rem;"><i class="ri-bank-line me-1 text-success"></i>Depósitos Bancarios</h6><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Fecha</th><th>Banco</th><th class="text-end">Monto</th><th>Comprobante</th><th>Estado</th>' + (_depAcc ? '<th class="text-end">Acciones</th>' : '') + '</tr></thead><tbody>';
                 deps.forEach(d => {
-                    dep_html += '<tr><td>' + (d.fecha_deposito||'—') + '</td><td>' + (d.banco_display||d.banco) + '</td><td class="text-end" style="font-family:monospace;font-weight:700;">' + fmt(d.monto) + '</td><td>' + (d.numero_comprobante||'—') + '</td><td>' + (d.verificado?'<span class="badge bg-success">Verificado</span>':'<span class="badge bg-warning text-dark">Pendiente</span>') + '</td></tr>';
+                    var _acc = '';
+                    if (_depAcc) {
+                        _acc = '<td class="text-end" style="white-space:nowrap;">';
+                        if (window.PUEDE_EDITAR_DEP) _acc += '<button class="btn btn-sm btn-outline-primary me-1" onclick="cambiarFechaDeposito(' + d.id + ',\'' + (d.fecha_deposito_iso||'') + '\')" title="Cambiar fecha"><i class="ri-calendar-event-line"></i></button>';
+                        if (window.PUEDE_ELIMINAR_DEP) _acc += '<button class="btn btn-sm btn-outline-danger" onclick="eliminarDepositoDetalle(' + d.id + ')" title="Eliminar depósito"><i class="ri-delete-bin-line"></i></button>';
+                        _acc += '</td>';
+                    }
+                    dep_html += '<tr><td>' + (d.fecha_deposito||'—') + '</td><td>' + (d.banco_display||d.banco) + '</td><td class="text-end" style="font-family:monospace;font-weight:700;">' + fmt(d.monto) + '</td><td>' + (d.numero_comprobante||'—') + '</td><td>' + (d.verificado?'<span class="badge bg-success">Verificado</span>':'<span class="badge bg-warning text-dark">Pendiente</span>') + '</td>' + _acc + '</tr>';
                 });
                 dep_html += '</tbody></table></div>';
             }
@@ -778,6 +796,63 @@ function agregarObsDetalle() {
     }).then(r => r.json()).then(res => {
         if (res.success) { verDetalle(arqueoDetalleId); }
         else Swal.fire('Error', res.error, 'error');
+    });
+}
+
+// ===== ACCIONES SOBRE DEPÓSITOS (gateadas por permiso) =====
+function cambiarFechaDeposito(depositoId, fechaIso) {
+    Swal.fire({
+        title: 'Cambiar fecha del depósito',
+        html: '<input type="date" id="swalFechaDep" class="form-control" value="' + (fechaIso || '') + '">',
+        showCancelButton: true,
+        confirmButtonText: '<i class="ri-save-line me-1"></i>Guardar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0066FF',
+        preConfirm: () => {
+            const v = document.getElementById('swalFechaDep').value;
+            if (!v) { Swal.showValidationMessage('Selecciona una fecha'); return false; }
+            return v;
+        }
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        fetch('/app/api/cuadratura/cambiar-fecha-deposito/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deposito_id: depositoId, fecha_deposito: r.value })
+        }).then(res => res.json()).then(res => {
+            if (res.success) {
+                Swal.fire({ icon: 'success', title: 'Fecha actualizada', timer: 1200, showConfirmButton: false });
+                verDetalle(arqueoDetalleId);
+            } else {
+                Swal.fire('Error', res.error || 'No se pudo cambiar la fecha', 'error');
+            }
+        }).catch(() => Swal.fire('Error', 'Error de red', 'error'));
+    });
+}
+
+function eliminarDepositoDetalle(depositoId) {
+    Swal.fire({
+        title: '¿Eliminar depósito?',
+        text: 'Esta acción no se puede deshacer.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '<i class="ri-delete-bin-line me-1"></i>Eliminar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#FF4D4D'
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        fetch('/app/api/cuadratura/eliminar-deposito/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deposito_id: depositoId })
+        }).then(res => res.json()).then(res => {
+            if (res.success) {
+                Swal.fire({ icon: 'success', title: 'Depósito eliminado', timer: 1200, showConfirmButton: false });
+                verDetalle(arqueoDetalleId);
+            } else {
+                Swal.fire('Error', res.error || 'No se pudo eliminar', 'error');
+            }
+        }).catch(() => Swal.fire('Error', 'Error de red', 'error'));
     });
 }
 
