@@ -472,6 +472,17 @@ CACHES = {
             'CULL_FREQUENCY': 4,
         },
     },
+    # Cache para el rate-limiting de la API de cliente (S2). LocMem por defecto;
+    # se sube a Redis si hay REDIS_URL (abajo) para un tope EXACTO entre workers.
+    'throttle': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'retailmind-throttle',
+        'TIMEOUT': None,
+        'OPTIONS': {
+            'MAX_ENTRIES': 5000,
+            'CULL_FREQUENCY': 4,
+        },
+    },
 }
 
 # Cache `ventas`: dashboards/indicadores globales del módulo ventas.
@@ -496,6 +507,32 @@ else:
             'MAX_ENTRIES': 3000,
             'CULL_FREQUENCY': 4,
         },
+    }
+
+# R3/S2: con Redis, el catálogo (proxy) y el throttle de la API de cliente se
+# comparten entre workers → un solo fetch al ecommerce sirve a todos, y el tope
+# de rate-limit es EXACTO (no se multiplica por nº de workers). Sin Redis, ambos
+# quedan en LocMem (definidos arriba) como degradación.
+if REDIS_URL:
+    CACHES['catalogo'] = {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_URL,
+        'TIMEOUT': 900,
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'IGNORE_EXCEPTIONS': True,
+        },
+        'KEY_PREFIX': 'rm:catalogo',
+    }
+    CACHES['throttle'] = {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_URL,
+        'TIMEOUT': None,
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'IGNORE_EXCEPTIONS': True,
+        },
+        'KEY_PREFIX': 'rm:throttle',
     }
 
 # django-redis: cuando se producen excepciones de red, devolver None en vez de crashear

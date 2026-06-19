@@ -1358,6 +1358,64 @@ def _distribuir_diferencia_en_lineas(lineas, diff, ticket, fallback_descripcion=
             )
 
 
+def _reducir_lineas_a_total(ticket, total_objetivo):
+    """Recorta proporcionalmente las líneas del ticket para que sumen EXACTO
+    ``total_objetivo`` (CLP entero, > 0). Espejo de
+    ``_distribuir_diferencia_en_lineas`` para el caso inverso: los ítems del canal
+    suman MÁS que el total realmente cobrado (ej. Walmart manda precios de lista
+    pero el ``total`` del pedido es menor). Sin esto, el DTE se sobre-facturaba.
+
+    Pondera el recorte por el subtotal actual de cada línea (``precio × qty``), así
+    que las líneas en $0 no se tocan y NINGUNA queda en negativo. Mantiene
+    ``precio × qty == subtotal`` por línea y reabsorbe la bolsa de redondeo (de
+    qty > 1) para que la suma sea EXACTA = ``total_objetivo``.
+    """
+    tps = list(ticket.ticket_productos.all())
+    pesos = [max(int(tp.precio) * max(int(tp.stock), 1), 0) for tp in tps]
+    suma = sum(pesos)
+    # Si las líneas ya cuadran (o están por debajo) o todas están en $0, no hay
+    # nada que recortar de forma proporcional.
+    if suma <= 0 or total_objetivo >= suma:
+        return
+
+    # 1) Subtotal objetivo por línea (mayor-resto) → suman EXACTO total_objetivo.
+    objetivos = [total_objetivo * p // suma for p in pesos]
+    resto = total_objetivo - sum(objetivos)
+    orden = sorted(range(len(tps)), key=lambda i: pesos[i], reverse=True)
+    for k in range(resto):
+        objetivos[orden[k % len(orden)]] += 1
+
+    # 2) Aplicar manteniendo precio × qty == subtotal. La indivisibilidad de
+    #    qty > 1 deja "bolsa" de pesos que se reabsorbe en el paso 3.
+    bolsa = 0
+    for i, tp in enumerate(tps):
+        qty = max(int(tp.stock), 1)
+        nuevo_sub = objetivos[i]
+        precio_u = nuevo_sub // qty
+        bolsa += nuevo_sub - precio_u * qty
+        tp.precio = precio_u
+        tp.precio_original = precio_u
+        tp.subtotal = precio_u * qty
+        tp.save(update_fields=['precio', 'precio_original', 'subtotal'])
+
+    # 3) Reabsorber la bolsa (unos pocos pesos por redondeo de qty > 1) en una
+    #    línea de qty == 1; si no hay ninguna, en la de mayor precio (rompe
+    #    levemente precio×qty pero conserva la suma total exacta).
+    if bolsa > 0:
+        unitarias = [tp for tp in tps if int(tp.stock) == 1 and int(tp.precio) > 0]
+        objetivo_tp = (
+            max(unitarias, key=lambda t: int(t.precio)) if unitarias
+            else max(tps, key=lambda t: int(t.precio) * max(int(t.stock), 1))
+        )
+        objetivo_tp.subtotal = int(objetivo_tp.subtotal) + bolsa
+        if int(objetivo_tp.stock) == 1:
+            objetivo_tp.precio = int(objetivo_tp.precio) + bolsa
+            objetivo_tp.precio_original = objetivo_tp.precio
+            objetivo_tp.save(update_fields=['precio', 'precio_original', 'subtotal'])
+        else:
+            objetivo_tp.save(update_fields=['subtotal'])
+
+
 def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMMERCE', sucursal=None, datos_receptor=None):
     """
     Crea un Ticket en estado PENDIENTE con sus Ticket_Productos a partir
@@ -1535,14 +1593,19 @@ def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMM
             _distribuir_diferencia_en_lineas(lineas_producto, diff, ticket)
             total_lineas += diff
         elif diff < 0:
-            # Fuera de contrato (líneas > total). No emitimos líneas negativas;
-            # dejamos el DTE en la suma de líneas y lo marcamos para revisión.
-            logger.error(
+            # Líneas > total del canal: el marketplace mandó precios de lista que
+            # suman MÁS que lo realmente cobrado (caso típico de Walmart). El total
+            # del canal es AUTORITATIVO (regla de oro), así que recortamos las
+            # líneas proporcionalmente para que sumen EXACTO `total_autoritativo`,
+            # sin emitir líneas negativas. Antes el DTE se quedaba en la suma de
+            # líneas y la boleta salía sobre-facturada respecto al monto de la tabla.
+            logger.warning(
                 'Pedido %s: ítems+despacho (%s) exceden el total del canal (%s). '
-                'DTE quedará en %s — revisar payload del canal.',
-                pedido.numero_ticket_rm, total_lineas, total_autoritativo, total_lineas,
+                'Recortando líneas al total del canal.',
+                pedido.numero_ticket_rm, total_lineas, total_autoritativo,
             )
-            total_autoritativo = total_lineas
+            _reducir_lineas_a_total(ticket, total_autoritativo)
+            total_lineas = total_autoritativo
         final_total = total_autoritativo
     else:
         # Sin total fiable (no debería pasar): caer a la suma de líneas.

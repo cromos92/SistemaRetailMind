@@ -12,12 +12,14 @@ en los POST móviles) y `permission_classes = [IsClienteApp]`.
 import logging
 
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.gzip import gzip_page
 
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from rest_framework.throttling import ScopedRateThrottle
+from .throttling import SharedScopedRateThrottle
 from rest_framework.pagination import PageNumberPagination
 
 from app.models import MovimientoPuntos, GiftCard, ReservaPuntos, CanjeVale
@@ -65,21 +67,24 @@ class _ClienteView(APIView):
     permission_classes = [IsClienteApp]
 
 
+@method_decorator(gzip_page, name='dispatch')
 class _ClienteCatalogoView(_ClienteView):
-    """Navegación de catálogo: throttle app_catalogo (protege al ecommerce vía proxy)."""
-    throttle_classes = [ScopedRateThrottle]
+    """Navegación de catálogo: throttle app_catalogo (protege al ecommerce vía proxy)
+    + gzip de la respuesta JSON (R4). Se aplica SOLO al catálogo (sin secretos de
+    usuario, consumido por la app) para no exponer el admin navegador a BREACH."""
+    throttle_classes = [SharedScopedRateThrottle]
     throttle_scope = 'app_catalogo'
 
 
 class _ClienteConsultaView(_ClienteView):
     """Lecturas livianas: throttle app_consulta."""
-    throttle_classes = [ScopedRateThrottle]
+    throttle_classes = [SharedScopedRateThrottle]
     throttle_scope = 'app_consulta'
 
 
 class _ClienteCheckoutView(_ClienteView):
     """Escrituras de checkout (reservar/iniciar): throttle app_checkout."""
-    throttle_classes = [ScopedRateThrottle]
+    throttle_classes = [SharedScopedRateThrottle]
     throttle_scope = 'app_checkout'
 
 
@@ -96,7 +101,7 @@ class SolicitarOTPView(APIView):
     """
     authentication_classes = []
     permission_classes = [AllowAny]
-    throttle_classes = [ScopedRateThrottle]
+    throttle_classes = [SharedScopedRateThrottle]
     throttle_scope = 'otp_solicitar'
 
     def post(self, request):
@@ -130,7 +135,7 @@ class VerificarOTPView(APIView):
     """
     authentication_classes = []
     permission_classes = [AllowAny]
-    throttle_classes = [ScopedRateThrottle]
+    throttle_classes = [SharedScopedRateThrottle]
     throttle_scope = 'otp_verificar'
 
     def post(self, request):

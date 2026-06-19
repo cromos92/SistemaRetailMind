@@ -211,8 +211,9 @@ class DistribuirAjusteEcommerceTest(TestCase):
         self.assertNotIn('AJUSTE', self._descripciones(ticket))
         self.assertEqual(self._suma_lineas(ticket), 50000)
 
-    def test_diff_negativo_no_crea_lineas_negativas(self):
-        """Ítems > total (fuera de contrato): no se emiten líneas negativas ni AJUSTE."""
+    def test_diff_negativo_recorta_al_total_del_canal(self):
+        """Ítems > total (caso Walmart): se recortan las líneas al total del canal,
+        sin líneas negativas ni AJUSTE. El total de la tabla es autoritativo."""
         items = [
             {'sku': '1001', 'nombre': 'A', 'cantidad': 1, 'precio_unitario': 40000},
         ]
@@ -220,5 +221,25 @@ class DistribuirAjusteEcommerceTest(TestCase):
             self._pedido(items, 30000, num='4'), self.vendedor, 4, sucursal=self.sucursal)
 
         self.assertNotIn('AJUSTE', self._descripciones(ticket))
+        self.assertEqual(self._suma_lineas(ticket), 30000)
+        self.assertEqual(int(ticket.total), 30000)
         for tp in ticket.ticket_productos.all():
             self.assertGreaterEqual(int(tp.precio), 0)
+
+    def test_walmart_varios_items_recorte_proporcional_suma_exacta(self):
+        """Varios ítems de lista que exceden el total: recorte proporcional y
+        suma EXACTA = total del canal (con qty > 1, sin negativos)."""
+        items = [
+            {'sku': '1001', 'nombre': 'A', 'cantidad': 2, 'precio_unitario': 30000},
+            {'sku': '1002', 'nombre': 'B', 'cantidad': 1, 'precio_unitario': 20000},
+        ]
+        # Líneas suman 80000; total real del canal 37980 (caso del ticket WAL-...).
+        ticket = _crear_ticket_desde_pedido(
+            self._pedido(items, 37980, num='5'), self.vendedor, 5, sucursal=self.sucursal)
+
+        self.assertNotIn('AJUSTE', self._descripciones(ticket))
+        self.assertEqual(self._suma_lineas(ticket), 37980)
+        self.assertEqual(int(ticket.total), 37980)
+        for tp in ticket.ticket_productos.all():
+            self.assertGreaterEqual(int(tp.precio), 0)
+            self.assertEqual(int(tp.precio) * int(tp.stock), int(tp.subtotal))

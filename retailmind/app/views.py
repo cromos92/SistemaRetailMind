@@ -19167,7 +19167,7 @@ def crear_producto_desde_recepcion(request):
                     # Registrar movimiento con la cantidad específica de este DTE
                     # ✅ crear_lote_fifo=True (el movimiento crea el lote automáticamente)
                     ref_externa = f'{dte.tipo_documento} #{dte.numero_documento}' if dte else None
-                    registrar_movimiento_producto(
+                    mov_ing = registrar_movimiento_producto(
                         producto_talla=pt,
                         concepto='INGRESO_INICIAL',
                         cantidad=cantidad_dte,
@@ -19180,6 +19180,22 @@ def crear_producto_desde_recepcion(request):
                         crear_lote_fifo=True
                     )
                     logger.debug("Movimiento inicial registrado desde recepcion: producto_talla_id=%s cantidad=%s", pt.id, cantidad_dte)
+                    # Traza recepción↔kardex: vincular este movimiento a las filas
+                    # de recepción de su mismo DTE/talla (aún sin producto_talla).
+                    # .update() independiente: si no matchea, el campo queda NULL
+                    # (= comportamiento previo) — nunca rompe la creación.
+                    if mov_ing is not None and dte_id:
+                        _link_filtro = dict(
+                            compra_producto_talla__compra_producto_id=producto_compra_id,
+                            dte_id=dte_id,
+                            producto_talla__isnull=True,
+                            movimiento_ingreso__isnull=True,
+                        )
+                        if not es_sin_guia:
+                            _link_filtro['compra_producto_talla__talla__in'] = variantes_talla
+                        Productos_Recepcionados.objects.filter(**_link_filtro).filter(
+                            filtro_sucursal_mov
+                        ).update(movimiento_ingreso=mov_ing)
             else:
                 # Si no hay recepciones pendientes, crear movimiento sin DTE
                 logger.warning("No hay recepciones pendientes; se usara stock del formulario: producto_talla_id=%s stock=%s", pt.id, stock)

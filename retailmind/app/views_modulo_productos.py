@@ -783,7 +783,11 @@ def consumir_stock_fifo(producto_talla, cantidad_requerida, responsable, ticket=
         
         registrar_movimiento_producto(
             producto_talla=producto_talla,
-            concepto='VENTA' if ticket else 'SALIDA',
+            # 'VENTA'/'SALIDA' NO son conceptos válidos (no están en
+            # CONCEPTO_MOVIMIENTO_CHOICES) → quedaban invisibles en los reportes.
+            # Con ticket = venta real; sin ticket los llamadores son ajustes de
+            # inventario / ajuste manual de stock → AJUSTE_NEGATIVO.
+            concepto='VENTA_PUBLICO' if ticket else 'AJUSTE_NEGATIVO',
             cantidad=-cantidad_requerida,  # Negativo para salida
             responsable=responsable,
             ticket=ticket,
