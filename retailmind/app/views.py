@@ -21125,14 +21125,19 @@ def buscar_productos_existentes(request):
         ).select_related(
             'categoria',
             'atributo1',
-            'atributo2', 
+            'atributo2',
             'atributo3'
-        )[:10]  # Limitar a 10 resultados
-        
+        ).prefetch_related('producto_tallas')[:20]
+
         logger.debug("Productos encontrados en busqueda existente: total=%s", productos.count())
-        
+
         resultados = []
         for producto in productos:
+            tallas_qs = list(producto.producto_tallas.values('talla', 'sku', 'stock'))
+            try:
+                tallas_ordenadas = sorted(tallas_qs, key=lambda x: float(str(x['talla']).replace(',', '.') or 0))
+            except (ValueError, TypeError):
+                tallas_ordenadas = tallas_qs
             resultado = {
                 'id': producto.id,
                 'articulo': producto.articulo,
@@ -21143,7 +21148,8 @@ def buscar_productos_existentes(request):
                 'genero': producto.atributo3.valor if producto.atributo3 else '',
                 'costo': float(producto.costo),
                 'sobreprecio': float(producto.sobreprecio),
-                'precioventa': float(producto.precioventa)
+                'precioventa': float(producto.precioventa),
+                'tallas': tallas_ordenadas,
             }
             resultados.append(resultado)
             logger.debug("Producto procesado para busqueda existente: producto_id=%s articulo=%s", producto.id, resultado['articulo'])

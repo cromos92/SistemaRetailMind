@@ -226,6 +226,19 @@
     .precio-markup-badge.bajo { background: #f8d7da !important; border-color: #f5c6cb !important; }
     .btn-markup-rapido.active { background: #405189 !important; color: #fff !important; border-color: #405189 !important; }
 
+    /* Tabs panel derecho Crear Manual */
+    #tabsCrearManual .nav-link {
+        font-size: .78rem; padding: 6px 10px; color: #495057;
+        border-radius: 8px 8px 0 0;
+    }
+    #tabsCrearManual .nav-link.active { color: #0ab39c; border-bottom-color: transparent; font-weight: 600; }
+    #tabContentCrearManual { border: 1px solid #dee2e6; border-top: none; border-radius: 0 0 10px 10px; }
+    .talla-badge-mini {
+        font-size: .62rem; padding: 1px 5px; border-radius: 4px;
+        background: #f0f4ff; color: #405189; border: 1px solid #c9d0e8;
+        display: inline-block; margin: 1px 1px;
+    }
+
     /* Labels compactos */
     #modalCrearProductoDesdeRecepcion .form-label,
     #modalCrearProductoManual .form-label {
@@ -2882,111 +2895,115 @@
                                 </div>
                             </div>
 
-                            <!-- Columna derecha -->
+                            <!-- Columna derecha: TABS -->
                             <div class="col-md-7">
-                                <!-- Buscador de Productos Existentes -->
-                                <div class="crear-seccion" style="padding:0;overflow:hidden;">
-                                    <div class="d-flex align-items-center justify-content-between px-3 py-2" data-bs-toggle="collapse" data-bs-target="#collapseBusqueda" style="cursor:pointer;background:linear-gradient(135deg,#e3f2fd,#bbdefb);border-radius:12px 12px 0 0;">
-                                        <span class="fw-semibold" style="font-size:.82rem;color:#1565c0;">
-                                            <i class="bi bi-search me-2"></i>Buscar Producto Similar
-                                            <span class="badge bg-primary ms-1" style="font-size:.6rem;font-weight:500;vertical-align:middle;">Copiar atributos</span>
-                                        </span>
-                                        <i class="bi bi-chevron-up text-primary" id="iconChevronBusqueda"></i>
-                                    </div>
-                                    <div class="collapse show" id="collapseBusqueda">
-                                        <div class="p-3">
-                                            <div class="mb-1">
-                                                <div class="input-group input-group-sm">
-                                                    <input type="text" class="form-control" id="buscadorProductoExistente"
-                                                           placeholder="Ej: 2026, BAMBOO, NIKE..."
-                                                           title="Búsqueda parcial — escribe cualquier parte del artículo o descripción">
-                                                    <button class="btn btn-outline-primary" type="button" id="btnBuscarProducto">
-                                                        <i class="bi bi-search me-1"></i>Buscar
-                                                    </button>
-                                                </div>
-                                                <small class="text-muted d-block mt-1" style="font-size:.68rem;">
-                                                    <i class="bi bi-info-circle me-1"></i>Búsqueda parcial — no necesitas wildcards. Busca en artículo y descripción.
-                                                </small>
+                                <!-- Tabs header -->
+                                <ul class="nav nav-tabs" id="tabsCrearManual" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link active" id="tab-buscar-btn"
+                                                data-bs-toggle="tab" data-bs-target="#tabBuscarProducto"
+                                                type="button" role="tab">
+                                            <i class="bi bi-search me-1"></i>Buscar Producto
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="tab-tallas-btn"
+                                                data-bs-toggle="tab" data-bs-target="#tabTallasStock"
+                                                type="button" role="tab">
+                                            <i class="bi bi-grid-3x3-gap me-1"></i>Tallas y Stock
+                                            <span class="badge bg-secondary ms-1" id="badgeCantTallas" style="font-size:.6rem;">0</span>
+                                        </button>
+                                    </li>
+                                </ul>
+
+                                <div class="tab-content" id="tabContentCrearManual">
+
+                                    <!-- TAB 1: Buscar Producto -->
+                                    <div class="tab-pane fade show active p-2" id="tabBuscarProducto" role="tabpanel">
+                                        <div class="mb-2">
+                                            <div class="input-group input-group-sm">
+                                                <input type="text" class="form-control" id="buscadorProductoExistente"
+                                                       placeholder="Ej: 2026, BAMBOO, NIKE..."
+                                                       title="Búsqueda parcial — escribe cualquier parte del artículo o descripción">
+                                                <button class="btn btn-outline-primary" type="button" id="btnBuscarProducto">
+                                                    <i class="bi bi-search me-1"></i>Buscar
+                                                </button>
                                             </div>
-                                            <div id="resultadosBusqueda" style="display: none;">
-                                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                                    <span class="badge bg-primary" id="contadorResultados">0 resultados</span>
-                                                    <input type="text" class="form-control form-control-sm" id="busquedaTabla" placeholder="Filtrar..." style="width: 130px;">
-                                                </div>
-                                                <div style="max-height: 180px; overflow-y: auto;">
-                                                    <table class="table table-sm table-hover mb-0" id="tablaResultadosBusqueda">
-                                                        <thead class="table-light sticky-top">
-                                                            <tr>
-                                                                <th>Artículo</th>
-                                                                <th>Descripción</th>
-                                                                <th>Marca</th>
-                                                                <th>Color</th>
-                                                                <th>Género</th>
-                                                                <th>Precio</th>
-                                                                <th>Acciones</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody id="cuerpoTablaResultados"></tbody>
-                                                    </table>
-                                                </div>
-                                                <div class="d-flex justify-content-between align-items-center mt-2">
-                                                    <select class="form-select form-select-sm" id="tamanoPaginaBusqueda" style="width: 70px;">
-                                                        <option value="5">5</option>
-                                                        <option value="10" selected>10</option>
-                                                    </select>
-                                                    <ul class="pagination pagination-sm mb-0" id="paginacionBusqueda"></ul>
-                                                </div>
+                                            <small class="text-muted d-block mt-1" style="font-size:.68rem;">
+                                                <i class="bi bi-info-circle me-1"></i>Búsqueda parcial — no necesitas wildcards.
+                                            </small>
+                                        </div>
+                                        <!-- Loading indicator -->
+                                        <div id="loadingBusquedaProducto" style="display:none;" class="text-center py-3">
+                                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                            <small class="ms-2 text-muted">Buscando...</small>
+                                        </div>
+                                        <!-- Resultados -->
+                                        <div id="resultadosBusqueda" style="display:none;">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <span class="badge bg-primary" id="contadorResultados">0 resultados</span>
+                                                <input type="text" class="form-control form-control-sm" id="busquedaTabla"
+                                                       placeholder="Filtrar..." style="width:120px;">
                                             </div>
-                                            <div id="productoSeleccionado" style="display: none;">
-                                                <div class="d-flex justify-content-between align-items-center p-2 rounded" style="background:#e8f5e9;">
-                                                    <span id="detallesProductoSeleccionado" class="small"></span>
-                                                    <div class="d-flex gap-1">
-                                                        <button type="button" class="btn btn-sm btn-success" id="btnCopiarProducto"><i class="bi bi-copy me-1"></i>Copiar</button>
-                                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnLimpiarSeleccion"><i class="bi bi-x"></i></button>
-                                                    </div>
-                                                </div>
+                                            <div style="max-height:380px;overflow-y:auto;">
+                                                <table class="table table-sm table-hover mb-0" id="tablaResultadosBusqueda">
+                                                    <thead class="table-light sticky-top">
+                                                        <tr>
+                                                            <th>Artículo</th>
+                                                            <th>Marca / Color</th>
+                                                            <th>Tallas</th>
+                                                            <th class="text-end">Precio</th>
+                                                            <th></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody id="cuerpoTablaResultados"></tbody>
+                                                </table>
+                                            </div>
+                                            <div class="d-flex justify-content-between align-items-center mt-1">
+                                                <select class="form-select form-select-sm" id="tamanoPaginaBusqueda" style="width:65px;">
+                                                    <option value="10" selected>10</option>
+                                                    <option value="20">20</option>
+                                                </select>
+                                                <ul class="pagination pagination-sm mb-0" id="paginacionBusqueda"></ul>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                <!-- Tallas y Stock -->
-                                <div class="crear-seccion mt-3" style="min-height:180px;">
-                                    <div class="crear-seccion-titulo tallas"><i class="bi bi-grid-3x3-gap"></i> Tallas y Stock</div>
-                                    <table class="table table-bordered mb-0" id="tablaTallasManual">
-                                        <thead>
-                                            <tr>
-                                                <th>Talla</th>
-                                                <th>Stock</th>
-                                                <th>SKU</th>
-                                                <th width="60">Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody></tbody>
-                                    </table>
-                                </div>
-
-                                <!-- Resumen de tallas -->
-                                <div class="resumen-stock-crear mt-2 mb-2" id="resumenTallasManual">
-                                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                                        <div class="d-flex align-items-center gap-2 flex-wrap" id="listaTallasResumen">
-                                            <span class="text-muted small"><i class="bi bi-box-seam me-1"></i>Sin tallas agregadas</span>
+                                    <!-- TAB 2: Tallas y Stock -->
+                                    <div class="tab-pane fade p-2" id="tabTallasStock" role="tabpanel">
+                                        <table class="table table-bordered mb-0" id="tablaTallasManual">
+                                            <thead>
+                                                <tr>
+                                                    <th>Talla</th><th>Stock</th><th>SKU</th><th width="60">Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody></tbody>
+                                        </table>
+                                        <!-- Resumen de tallas -->
+                                        <div class="resumen-stock-crear mt-2 mb-2" id="resumenTallasManual">
+                                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                                <div class="d-flex align-items-center gap-2 flex-wrap" id="listaTallasResumen">
+                                                    <span class="text-muted small"><i class="bi bi-box-seam me-1"></i>Sin tallas agregadas</span>
+                                                </div>
+                                                <div class="resumen-stock-total">
+                                                    <span class="text-white small d-block">Total a crear</span>
+                                                    <span class="text-white fw-bold fs-4" id="totalUnidadesResumen">0</span>
+                                                    <span class="text-white-50 small"> uds</span>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div class="resumen-stock-total">
-                                            <span class="text-white small d-block">Total a crear</span>
-                                            <span class="text-white fw-bold fs-4" id="totalUnidadesResumen">0</span>
-                                            <span class="text-white-50 small"> uds</span>
+                                        <div class="d-flex gap-2 align-items-center">
+                                            <button type="button" class="btn btn-outline-primary btn-sm" id="btnAgregarTallaManual">
+                                                <i class="bi bi-plus-circle me-1"></i>Agregar Talla
+                                            </button>
+                                            <small class="text-muted" style="font-size:.72rem;">
+                                                <i class="bi bi-info-circle me-1"></i>La Guía de Talla se aplica desde el selector de la izquierda
+                                            </small>
                                         </div>
                                     </div>
-                                </div>
 
-                                <div class="d-flex gap-2 align-items-center">
-                                    <button type="button" class="btn btn-outline-primary btn-sm" id="btnAgregarTallaManual">
-                                        <i class="bi bi-plus-circle me-1"></i> Agregar Talla
-                                    </button>
-                                    <small class="text-muted" style="font-size:.72rem;"><i class="bi bi-info-circle me-1"></i>La Guía de Talla se aplica desde el selector principal</small>
-                                </div>
-                            </div>
+                                </div><!-- /tab-content -->
+                            </div><!-- /col-md-7 -->
                         </div>
                     </div>
                     
@@ -9470,7 +9487,13 @@ function actualizarResumenTallasManual() {
     
     $listaResumen.html(tallasHtml);
     $totalResumen.text(totalUnidades);
-    
+
+    // Sincronizar badge del tab Tallas y Stock
+    const nTallasActual = $filas.length;
+    $('#badgeCantTallas').text(nTallasActual)
+        .removeClass('bg-secondary bg-success')
+        .addClass(nTallasActual > 0 ? 'bg-success' : 'bg-secondary');
+
     // Animar el total si cambió
     $totalResumen.addClass('pulse-animation');
     setTimeout(() => $totalResumen.removeClass('pulse-animation'), 300);
@@ -11657,7 +11680,6 @@ $('#btnConfirmarActualizacion').on('click', function() {
     // ========== FUNCIONES PARA BUSCADOR DE PRODUCTOS EXISTENTES ==========
     
     // Variables globales para el buscador
-    let productoSeleccionadoParaCopiar = null;
     let productosEncontrados = [];
     let productosFiltrados = [];
     let paginaActualBusqueda = 1;
@@ -11722,14 +11744,8 @@ $('#btnConfirmarActualizacion').on('click', function() {
         console.log('✅ Modal está abierto, procediendo con búsqueda');
         
         // Mostrar indicador de carga
-        $('#resultadosBusqueda').html(`
-            <div class="text-center py-4">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Buscando...</span>
-                </div>
-                <p class="mt-2 text-muted">Buscando productos...</p>
-            </div>
-        `).show().css('display', 'block');
+        $('#resultadosBusqueda').hide();
+        $('#loadingBusquedaProducto').show();
         
         $.get('/app/buscar_productos_existentes/', { q: termino }, function(response) {
             console.log('📋 Respuesta del servidor:', response);
@@ -11759,75 +11775,10 @@ $('#btnConfirmarActualizacion').on('click', function() {
     
     // Función para mostrar resultados en tabla
     function mostrarResultadosTabla() {
-        console.log('🎨 Mostrando resultados en tabla:', productosFiltrados.length, 'productos');
-        
-        // Restaurar estructura HTML si se perdió
-        if ($('#resultadosBusqueda .table-responsive').length === 0) {
-            $('#resultadosBusqueda').html(`
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="text-muted mb-0">Productos encontrados:</h6>
-                    <div class="d-flex gap-2">
-                        <input type="text" class="form-control form-control-sm" id="busquedaTabla" placeholder="Buscar en resultados..." style="width: 200px;">
-                        <span class="badge bg-primary" id="contadorResultados">0</span>
-                    </div>
-                </div>
-                
-                <!-- Tabla de resultados -->
-                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                    <table class="table table-sm table-hover" id="tablaResultadosBusqueda">
-                        <thead class="table-light sticky-top">
-                            <tr>
-                                <th>Artículo</th>
-                                <th>Descripción</th>
-                                <th>Marca</th>
-                                <th>Color</th>
-                                <th>Género</th>
-                                <th>Precio</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="cuerpoTablaResultados">
-                            <!-- Se llenará dinámicamente -->
-                        </tbody>
-                    </table>
-                </div>
-                
-                <!-- Paginación -->
-                <div class="d-flex justify-content-between align-items-center mt-3">
-                    <div class="d-flex align-items-center gap-2">
-                        <label class="form-label mb-0 small">Mostrar:</label>
-                        <select class="form-select form-select-sm" id="tamanoPaginaBusqueda" style="width: auto;">
-                            <option value="5">5</option>
-                            <option value="10" selected>10</option>
-                            <option value="20">20</option>
-                        </select>
-                        <span class="text-muted small">por página</span>
-                    </div>
-                    <nav aria-label="Paginación de resultados">
-                        <ul class="pagination pagination-sm mb-0" id="paginacionBusqueda">
-                            <!-- Se llenará dinámicamente -->
-                        </ul>
-                    </nav>
-                </div>
-            `);
-            
-            // Reconfigurar eventos
-            $('#busquedaTabla').on('input', filtrarResultadosTabla);
-            $('#tamanoPaginaBusqueda').on('change', function() {
-                tamanoPaginaBusqueda = parseInt($(this).val());
-                paginaActualBusqueda = 1;
-                mostrarResultadosPaginados();
-            });
-        }
-        
-        // Actualizar contador
-        $('#contadorResultados').text(productosFiltrados.length);
-        
-        // Mostrar resultados paginados
+        $('#loadingBusquedaProducto').hide();
+        $('#contadorResultados').text(productosFiltrados.length + ' resultado' + (productosFiltrados.length !== 1 ? 's' : ''));
         mostrarResultadosPaginados();
-        
-        // Mostrar contenedor
-        $('#resultadosBusqueda').show().css('display', 'block');
+        $('#resultadosBusqueda').show();
     }
     
     // Función para filtrar resultados de la tabla
@@ -11857,11 +11808,11 @@ $('#btnConfirmarActualizacion').on('click', function() {
     function mostrarResultadosPaginados() {
         const tbody = $('#cuerpoTablaResultados');
         tbody.empty();
-        
+
         if (productosFiltrados.length === 0) {
             tbody.append(`
                 <tr>
-                    <td colspan="7" class="text-center text-muted py-4">
+                    <td colspan="5" class="text-center text-muted py-4">
                         <i class="bi bi-search me-2"></i>
                         No se encontraron productos que coincidan con la búsqueda
                     </td>
@@ -11870,47 +11821,41 @@ $('#btnConfirmarActualizacion').on('click', function() {
             $('#paginacionBusqueda').empty();
             return;
         }
-        
-        // Calcular paginación
+
         const totalPaginas = Math.ceil(productosFiltrados.length / tamanoPaginaBusqueda);
         const inicio = (paginaActualBusqueda - 1) * tamanoPaginaBusqueda;
-        const fin = inicio + tamanoPaginaBusqueda;
-        const productosPagina = productosFiltrados.slice(inicio, fin);
-        
-        // Llenar tabla
+        const productosPagina = productosFiltrados.slice(inicio, inicio + tamanoPaginaBusqueda);
+
         productosPagina.forEach(producto => {
-            const articulo = producto.articulo || '';
-            const descripcion = producto.descripcion || 'Sin descripción';
-            const marca = producto.marca || 'N/A';
-            const color = producto.color || 'N/A';
-            const genero = producto.genero || 'N/A';
-            const precioventa = producto.precioventa || 0;
-            
+            const tallas = producto.tallas || [];
+            const tallasBadges = tallas.slice(0, 6)
+                .map(t => `<span class="talla-badge-mini">${t.talla}</span>`)
+                .join('') + (tallas.length > 6 ? ` <small class="text-muted">+${tallas.length - 6}</small>` : '');
+
             const fila = `
                 <tr class="producto-busqueda-item" data-producto-id="${producto.id}">
-                    <td><strong class="text-primary">${articulo}</strong></td>
-                    <td><small class="text-muted">${descripcion}</small></td>
-                    <td><span class="badge bg-light text-dark">${marca}</span></td>
-                    <td><span class="badge bg-light text-dark">${color}</span></td>
-                    <td><span class="badge bg-light text-dark">${genero}</span></td>
-                    <td><strong class="text-success">$${precioventa.toLocaleString()}</strong></td>
                     <td>
-                        <div class="btn-group btn-group-sm" role="group">
-                            <button type="button" class="btn btn-outline-primary btnSeleccionarProducto" 
-                                    data-producto-id="${producto.id}" title="Copiar datos">
-                                <i class="bi bi-clipboard-check me-1"></i>Copiar
-                            </button>
-                            <button type="button" class="btn btn-outline-info btnVerTallas" 
-                                    data-producto-id="${producto.id}" title="Ver tallas">
-                                <i class="bi bi-list-ul me-1"></i>Tallas
-                            </button>
-                        </div>
+                        <strong class="text-primary" style="font-size:.82rem;">${producto.articulo || ''}</strong>
+                        ${producto.descripcion ? `<br><small class="text-muted" style="font-size:.7rem;">${producto.descripcion}</small>` : ''}
+                    </td>
+                    <td>
+                        <span class="badge bg-secondary" style="font-size:.65rem;">${producto.marca || 'N/A'}</span><br>
+                        <span class="badge bg-info text-dark mt-1" style="font-size:.65rem;">${producto.color || 'N/A'}</span>
+                    </td>
+                    <td style="min-width:80px;">${tallasBadges || '<small class="text-muted">-</small>'}</td>
+                    <td class="text-end fw-bold text-success" style="white-space:nowrap;">
+                        $${(producto.precioventa || 0).toLocaleString('es-CL')}
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-success btnSeleccionarProducto"
+                                data-producto-id="${producto.id}" title="Copiar todos los datos al formulario">
+                            <i class="bi bi-copy me-1"></i>Copiar
+                        </button>
                     </td>
                 </tr>`;
             tbody.append(fila);
         });
-        
-        // Generar paginación
+
         generarPaginacionBusqueda(totalPaginas);
     }
     
@@ -11962,110 +11907,31 @@ $('#btnConfirmarActualizacion').on('click', function() {
         }
     });
     
-    // Evento para seleccionar un producto de la búsqueda
+    // Evento para seleccionar y copiar un producto (1 clic directo)
     $(document).on('click', '.btnSeleccionarProducto', function() {
         const productoId = $(this).data('producto-id');
-        seleccionarProductoParaCopiar(productoId);
-    });
-    
-    // Evento para ver tallas de un producto
-    $(document).on('click', '.btnVerTallas', function() {
-        const productoId = $(this).data('producto-id');
-        mostrarTallasProducto(productoId);
-    });
-    
-    // Función para seleccionar un producto para copiar
-    function seleccionarProductoParaCopiar(productoId) {
+        const $btn = $(this);
+        $btn.prop('disabled', true).html('<i class="bi bi-hourglass-split"></i>');
+
         $.get(`/app/detalle_producto_para_copiar/${productoId}/`, function(response) {
-            if (response.success) {
-                productoSeleccionadoParaCopiar = response.producto;
-                mostrarProductoSeleccionado(response.producto);
-                $('#resultadosBusqueda').data('intentional-hide', true).hide();
+            if (response.success && response.producto) {
+                copiarDatosProducto(response.producto);
+
+                // Cambiar al tab de Tallas para que el usuario ingrese stock
+                bootstrap.Tab.getOrCreateInstance(
+                    document.querySelector('[data-bs-target="#tabTallasStock"]')
+                ).show();
+
+                const nTallas = (response.producto.tallas || []).length;
+                $('#badgeCantTallas').text(nTallas).removeClass('bg-secondary').addClass('bg-success');
             } else {
                 showErrorAlert('Error', 'No se pudo obtener los detalles del producto');
             }
         }).fail(function() {
             showErrorAlert('Error', 'Error al obtener detalles del producto');
+        }).always(function() {
+            $btn.prop('disabled', false).html('<i class="bi bi-copy me-1"></i>Copiar');
         });
-    }
-    
-    // Función para mostrar el producto seleccionado
-    function mostrarProductoSeleccionado(producto) {
-        const detalles = `
-            <div class="row producto-seleccionado-info p-3 rounded">
-                <div class="col-md-6">
-                    <div class="mb-2">
-                        <i class="bi bi-box me-2 text-primary"></i>
-                        <strong>Artículo:</strong> <span class="text-primary">${producto.articulo}</span>
-                    </div>
-                    <div class="mb-2">
-                        <i class="bi bi-card-text me-2 text-info"></i>
-                        <strong>Descripción:</strong> ${producto.descripcion || 'Sin descripción'}
-                    </div>
-                    <div class="mb-2">
-                        <i class="bi bi-folder me-2 text-warning"></i>
-                        <strong>Categoría:</strong> ${producto.categoria}
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="mb-2">
-                        <i class="bi bi-tag me-2 text-success"></i>
-                        <strong>Marca:</strong> ${producto.marca}
-                    </div>
-                    <div class="mb-2">
-                        <i class="bi bi-palette me-2 text-danger"></i>
-                        <strong>Color:</strong> ${producto.color}
-                    </div>
-                    <div class="mb-2">
-                        <i class="bi bi-person me-2 text-info"></i>
-                        <strong>Género:</strong> ${producto.genero}
-                    </div>
-                </div>
-            </div>
-            <div class="row mt-3">
-                <div class="col-md-12">
-                    <div class="alert alert-light border">
-                        <h6 class="mb-2"><i class="bi bi-currency-dollar me-2"></i>Información de Precios</h6>
-                        <div class="row text-center">
-                            <div class="col-md-4">
-                                <small class="text-muted">Costo</small><br>
-                                <strong class="text-danger">$${producto.costo.toLocaleString()}</strong>
-                            </div>
-                            <div class="col-md-4">
-                                <small class="text-muted">Sobreprecio</small><br>
-                                <strong class="text-warning">$${producto.sobreprecio.toLocaleString()}</strong>
-                            </div>
-                            <div class="col-md-4">
-                                <small class="text-muted">Precio Venta</small><br>
-                                <strong class="text-success">$${producto.precioventa.toLocaleString()}</strong>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-        
-        $('#detallesProductoSeleccionado').html(detalles);
-        $('#productoSeleccionado').show().addClass('fade-in');
-    }
-    
-    // Evento para copiar datos del producto seleccionado
-    $('#btnCopiarProducto').on('click', function() {
-        if (productoSeleccionadoParaCopiar) {
-            Swal.fire({
-                title: '¿Copiar datos?',
-                text: `¿Estás seguro de que quieres copiar los datos de "${productoSeleccionadoParaCopiar.articulo}"?`,
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: 'Sí, copiar',
-                cancelButtonText: 'Cancelar',
-                confirmButtonColor: '#28a745',
-                cancelButtonColor: '#6c757d'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    copiarDatosProducto(productoSeleccionadoParaCopiar);
-                }
-            });
-        }
     });
     
     // Función para copiar datos del producto
@@ -12134,62 +12000,30 @@ $('#btnConfirmarActualizacion').on('click', function() {
         showSuccessAlert('Datos copiados', 'Los datos del producto han sido copiados correctamente');
     }
     
-    // Evento para limpiar selección
-    $('#btnLimpiarSeleccion').on('click', function() {
-        productoSeleccionadoParaCopiar = null;
-        $('#productoSeleccionado').hide();
-        $('#resultadosBusqueda').data('intentional-hide', true).hide();
-        $('#buscadorProductoExistente').val('');
-    });
-    
-    // Inicializar con una talla por defecto al abrir el modal
+    // Inicializar al abrir el modal
     $('#modalCrearProductoManual').on('shown.bs.modal', function() {
         if ($('#tablaTallasManual tbody tr').length === 0) {
             agregarFilaTallaManual();
         }
-        
+
         $('#buscadorProductoExistente').val('');
-        $('#resultadosBusqueda').data('intentional-hide', true).hide();
-        $('#productoSeleccionado').hide();
-        productoSeleccionadoParaCopiar = null;
-        
-        mostrarAyudaBuscador();
+        $('#resultadosBusqueda').hide();
+        $('#loadingBusquedaProducto').hide();
+
+        // Reset al tab "Buscar Producto"
+        bootstrap.Tab.getOrCreateInstance(
+            document.querySelector('[data-bs-target="#tabBuscarProducto"]')
+        ).show();
+        $('#badgeCantTallas').text('0').removeClass('bg-success').addClass('bg-secondary');
+
         actualizarIndicadoresMargen($(this));
-        
-        // Reinicializar Select2 después de que el modal esté completamente visible
+
         setTimeout(() => {
             inicializarSelect2Manual();
         }, 200);
-        
-        // Debug: Verificar que los eventos estén funcionando
-        console.log('🔍 Modal manual abierto - Verificando eventos...');
-        console.log('Proveedores cargados:', $('#selectProveedorManual option').length);
-        console.log('Atributos cargados:', $('#modalCrearProductoManual select[name="atributo1"] option').length);
-        
-        // Cerrar resultados de búsqueda solo al hacer clic en el área del buscador colapsado
-        // NO usar evento global en document para evitar conflictos con la tabla de tallas
     });
     
-    // Chevron rotación + limpiar al colapsar
-    $('#collapseBusqueda').on('hidden.bs.collapse', function() {
-        $('#resultadosBusqueda').hide();
-        $('#buscadorProductoExistente').val('');
-        $('#iconChevronBusqueda').removeClass('bi-chevron-up').addClass('bi-chevron-down');
-    }).on('shown.bs.collapse', function() {
-        $('#iconChevronBusqueda').removeClass('bi-chevron-down').addClass('bi-chevron-up');
-    });
-    
-    // Función para mostrar ayuda del buscador
-    function mostrarAyudaBuscador() {
-        if ($('#ayudaBuscador').length === 0) {
-            const ayuda = `
-                <div id="ayudaBuscador" class="alert alert-info alert-sm mb-3">
-                    <i class="bi bi-lightbulb me-2"></i>
-                    <strong>Consejo:</strong> Busca productos existentes por nombre o descripción para copiar sus datos y agilizar la creación.
-                </div>`;
-            $('#resultadosBusqueda').before(ayuda);
-        }
-    }
+    // (collapseBusqueda eliminado — reemplazado por tabs)
     
     // ========== FUNCIONES PARA VER TALLAS DE PRODUCTOS ==========
     
