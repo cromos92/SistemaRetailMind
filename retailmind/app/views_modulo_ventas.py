@@ -1845,11 +1845,17 @@ def buscar_cliente_rut(request):
         ).filter(esProveedor=False).order_by('-id').first()
 
         if empresa_cliente:
+            # contacto1 acepta emails o teléfonos — no usarlo como teléfono si tiene '@'.
+            telefono_empresa = ''
+            if empresa_cliente.contacto1 and '@' not in empresa_cliente.contacto1:
+                telefono_empresa = empresa_cliente.contacto1
+            telefono_empresa = telefono_empresa or empresa_cliente.telefono or ''
+
             cliente_data = {
                 'nombre': empresa_cliente.nombre or empresa_cliente.razon_social or '',
                 'rut': empresa_cliente.rut,
                 'email': empresa_cliente.correoVendedor or empresa_cliente.email or '',
-                'telefono': empresa_cliente.contacto1 or empresa_cliente.telefono or '',
+                'telefono': telefono_empresa,
                 'giro': empresa_cliente.giro or '',
                 'comuna': empresa_cliente.comuna or '',
                 'ciudad': empresa_cliente.ciudad or '',
@@ -1859,6 +1865,19 @@ def buscar_cliente_rut(request):
                 'fecha_nacimiento': '',
                 'email_facturacion': empresa_cliente.correoAdministrador or '',
             }
+
+            # Enriquecer celular + fecha_nacimiento desde CRM si el mismo RUT tiene registro ahí.
+            crm_cliente = Cliente.objects.filter(
+                Q(rut__iexact=rut_formateado) | Q(rut__icontains=rut_limpio),
+                activo=True,
+            ).only('celular', 'fecha_nacimiento').first()
+
+            if crm_cliente:
+                if crm_cliente.celular:
+                    cliente_data['celular'] = crm_cliente.celular
+                if crm_cliente.fecha_nacimiento:
+                    cliente_data['fecha_nacimiento'] = crm_cliente.fecha_nacimiento.isoformat()
+
             return JsonResponse({
                 'success': True,
                 'cliente': cliente_data,
