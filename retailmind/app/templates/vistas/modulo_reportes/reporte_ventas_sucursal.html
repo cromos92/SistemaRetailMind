@@ -930,6 +930,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         datos.forEach((vendedor, index) => {
+            if (vendedor.sin_vendedor) return;
             const ticketPromedio = vendedor.documentos > 0 ? vendedor.ventas / vendedor.documentos : 0;
             const dcto = vendedor.descuentos || 0;
             const sinVendedor = !!vendedor.sin_vendedor;

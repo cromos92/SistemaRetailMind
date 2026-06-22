@@ -7,6 +7,7 @@ la caja.
 
 Configuración en settings / .env:
     ALLCONNECTED_WEBHOOK_URL = "http://<allconnected-host>/app/sincronizacion-stock/"
+    ALLCONNECTED_API_KEY = "<api key compartida>"  # recomendado
 
 Opcional (legacy, fallback):
     ALLCONNECTED_CANAL_ORIGEN_ID = <ID del canal RetailMind en AllConnected>
@@ -51,13 +52,22 @@ def _get_config() -> tuple[str, int]:
     return url.rstrip('/'), int(canal_id)
 
 
+def _auth_headers() -> dict:
+    key = getattr(settings, 'ALLCONNECTED_API_KEY', '') or ''
+    if not key:
+        return {}
+    header_name = getattr(settings, 'ALLCONNECTED_API_HEADER_NAME', 'X-AllConnected-Key')
+    return {header_name: key}
+
+
 def _do_post(url: str, payload: dict, timeout: int = 5) -> None:
     """POST fire-and-forget en thread. Loguea resultado, nunca lanza."""
     try:
+        headers = {'Content-Type': 'application/json', **_auth_headers()}
         resp = requests.post(
             url,
             json=payload,
-            headers={'Content-Type': 'application/json'},
+            headers=headers,
             timeout=timeout,
         )
         if resp.ok:

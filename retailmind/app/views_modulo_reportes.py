@@ -1265,10 +1265,13 @@ def obtener_ventas_por_vendedor_reporte(request):
                 'sin_vendedor': True,
             }
 
-        # Total general (ventas netas = brutas − devoluciones)
+        # Total general (ventas netas = brutas − devoluciones).
+        # NCs sin vendedor se excluyen: existen en SII pero no pertenecen
+        # a ningún vendedor y no deben restar del total del reporte.
         total_general = sum(
             v['ventas_brutas'] - v['devoluciones']
             for v in ventas_acumuladas.values()
+            if not v.get('sin_vendedor')
         )
 
         # Armar salida
@@ -1302,14 +1305,14 @@ def obtener_ventas_por_vendedor_reporte(request):
         # KPIs.
         # `top_vendedor` ignora la fila virtual "Sin vendedor" para que
         # nunca aparezca como ranking #1.
-        total_documentos = sum(v['documentos'] for v in ventas_acumuladas.values())
+        total_documentos = sum(v['documentos'] for v in ventas_acumuladas.values() if not v.get('sin_vendedor'))
         ticket_promedio = total_general / total_documentos if total_documentos > 0 else 0
         top_vendedor = next(
             (v['nombre'] for v in vendedores_data if not v.get('sin_vendedor')),
             '-',
         )
         total_devoluciones_general = sum(
-            v['devoluciones'] for v in ventas_acumuladas.values()
+            v['devoluciones'] for v in ventas_acumuladas.values() if not v.get('sin_vendedor')
         )
 
         return JsonResponse({
