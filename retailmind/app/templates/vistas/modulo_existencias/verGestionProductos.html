@@ -134,13 +134,17 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 7px 12px;
+        padding: 8px 12px;
         cursor: pointer;
         border-bottom: 1px solid #f1f1f1;
+        border-left: 3px solid transparent;
         font-size: .8rem;
-        transition: background .15s;
+        transition: background .15s, border-left-color .15s;
     }
-    .articulo-ac-item:hover { background: #e8f5e9; }
+    .articulo-ac-item:hover {
+        background: #e8f5e9;
+        border-left-color: #0ab39c;
+    }
     .articulo-ac-item:last-child { border-bottom: none; }
     .articulo-ac-item .ac-nombre {
         font-weight: 600;
@@ -148,7 +152,7 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 120px;
+        max-width: 140px;
     }
     .articulo-ac-item .ac-badges {
         display: flex;
@@ -169,8 +173,27 @@
     }
     .articulo-ac-item .ac-stock {
         font-size: .7rem;
-        color: #666;
+        color: #888;
         white-space: nowrap;
+    }
+    .articulo-ac-item .ac-copiar-btn {
+        display: none;
+        align-items: center;
+        gap: 3px;
+        font-size: .65rem;
+        padding: 2px 8px;
+        border-radius: 20px;
+        flex-shrink: 0;
+        pointer-events: none;
+    }
+    .articulo-ac-item:hover .ac-copiar-btn { display: inline-flex; }
+    .articulo-autocomplete-dropdown > .ac-hint {
+        padding: 5px 12px;
+        font-size: .67rem;
+        color: #888;
+        background: #fafafa;
+        border-top: 1px solid #f0f0f0;
+        border-radius: 0 0 10px 10px;
     }
     .articulo-search-feedback {
         font-size: .72rem;
@@ -178,7 +201,7 @@
         line-height: 1.3;
     }
     .articulo-search-feedback.encontrado {
-        color: #e65100;
+        color: #0d6efd;
     }
     .articulo-search-feedback.no-encontrado {
         color: #2e7d32;
@@ -2865,11 +2888,12 @@
                                 <div class="crear-seccion" style="padding:0;overflow:hidden;">
                                     <div class="d-flex align-items-center justify-content-between px-3 py-2" data-bs-toggle="collapse" data-bs-target="#collapseBusqueda" style="cursor:pointer;background:linear-gradient(135deg,#e3f2fd,#bbdefb);border-radius:12px 12px 0 0;">
                                         <span class="fw-semibold" style="font-size:.82rem;color:#1565c0;">
-                                            <i class="bi bi-search me-2"></i>Buscar Producto Similar (opcional)
+                                            <i class="bi bi-search me-2"></i>Buscar Producto Similar
+                                            <span class="badge bg-primary ms-1" style="font-size:.6rem;font-weight:500;vertical-align:middle;">Copiar atributos</span>
                                         </span>
-                                        <i class="bi bi-chevron-down text-primary"></i>
+                                        <i class="bi bi-chevron-up text-primary" id="iconChevronBusqueda"></i>
                                     </div>
-                                    <div class="collapse" id="collapseBusqueda">
+                                    <div class="collapse show" id="collapseBusqueda">
                                         <div class="p-3">
                                             <div class="mb-2">
                                                 <div class="input-group input-group-sm">
@@ -10045,11 +10069,12 @@ $(document).on('click', '#btnCopiarDatosProducto', function() {
                 }
 
                 $feedback.show().removeClass('no-encontrado').addClass('encontrado')
-                    .html(`<i class="bi bi-exclamation-triangle me-1"></i><strong>${data.total}</strong> producto(s) coinciden con "<strong>${q}</strong>". Verifica que no sea duplicado.`);
+                    .html(`<i class="bi bi-info-circle me-1"></i><strong>${data.total}</strong> producto(s) encontrados — haz clic en uno para copiar sus datos al formulario.`);
 
                 data.resultados.forEach(function(p) {
                     const item = $(`
-                        <div class="articulo-ac-item" data-producto='${JSON.stringify(p).replace(/'/g, "&#39;")}'>
+                        <div class="articulo-ac-item" data-producto='${JSON.stringify(p).replace(/'/g, "&#39;")}'
+                             title="Clic para copiar datos de ${p.articulo}">
                             <span class="ac-nombre" title="${p.articulo}">${resaltar(p.articulo, q)}</span>
                             <span class="ac-badges">
                                 <span class="badge bg-secondary">${p.marca}</span>
@@ -10058,6 +10083,9 @@ $(document).on('click', '#btnCopiarDatosProducto', function() {
                             </span>
                             <span class="ac-precio">$${p.precio.toLocaleString('es-CL')}</span>
                             <span class="ac-stock">${p.stock} uds · ${p.tallas || '-'}</span>
+                            <span class="btn btn-sm btn-outline-success ac-copiar-btn">
+                                <i class="bi bi-copy"></i> Copiar
+                            </span>
                         </div>
                     `);
                     $dropdown.append(item);
@@ -10066,6 +10094,8 @@ $(document).on('click', '#btnCopiarDatosProducto', function() {
                 if (data.total > data.resultados.length) {
                     $dropdown.append(`<div class="text-center text-muted py-1" style="font-size:.7rem">...y ${data.total - data.resultados.length} más</div>`);
                 }
+
+                $dropdown.append(`<div class="ac-hint"><i class="bi bi-hand-index me-1"></i>Haz clic en un resultado para copiar sus atributos y precios al formulario</div>`);
 
                 $dropdown.show();
             });
@@ -10149,7 +10179,17 @@ $(document).on('click', '#btnCopiarDatosProducto', function() {
         setTimeout(() => actualizarIndicadoresMargen($modal), 100);
 
         $wrapper.find('.articulo-search-feedback').show().removeClass('no-encontrado').addClass('encontrado')
-            .html(`<i class="bi bi-arrow-right-circle me-1"></i>Seleccionado: <strong>${p.articulo}</strong> — ${p.marca} / ${p.color} / $${p.precio.toLocaleString('es-CL')}${p.guia_talla_nombre ? ' · Guía: ' + p.guia_talla_nombre : ''}`);
+            .html(`<i class="bi bi-check-circle-fill me-1 text-success"></i><strong style="color:#157347">Datos copiados:</strong> ${p.articulo} — ${p.marca} / ${p.color} / $${p.precio.toLocaleString('es-CL')}${p.guia_talla_nombre ? ' · Guía: ' + p.guia_talla_nombre : ''}`);
+
+        if (typeof Toastify !== 'undefined') {
+            Toastify({
+                text: '✓ Datos copiados de ' + p.articulo,
+                duration: 2500,
+                gravity: 'bottom',
+                position: 'right',
+                style: { background: '#0ab39c', borderRadius: '8px', fontSize: '.82rem' },
+            }).showToast();
+        }
     });
 
     // Cerrar dropdown al hacer click fuera
@@ -12084,10 +12124,13 @@ $('#btnConfirmarActualizacion').on('click', function() {
         // NO usar evento global en document para evitar conflictos con la tabla de tallas
     });
     
-    // Cerrar resultados solo cuando se colapsa el card del buscador
+    // Chevron rotación + limpiar al colapsar
     $('#collapseBusqueda').on('hidden.bs.collapse', function() {
         $('#resultadosBusqueda').hide();
         $('#buscadorProductoExistente').val('');
+        $('#iconChevronBusqueda').removeClass('bi-chevron-up').addClass('bi-chevron-down');
+    }).on('shown.bs.collapse', function() {
+        $('#iconChevronBusqueda').removeClass('bi-chevron-down').addClass('bi-chevron-up');
     });
     
     // Función para mostrar ayuda del buscador
