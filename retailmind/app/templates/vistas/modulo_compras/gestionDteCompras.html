@@ -1218,8 +1218,13 @@
                             </button>
                             <button class="btn btn-outline-danger" id="btnComprobantePago" style="display: none;"
                                 onclick="generarComprobantePago()"
-                                title="Comprobante de pago programado (PDF)">
-                                <i class="bi bi-filetype-pdf me-1"></i>Comprobante Pago
+                                title="Descargar comprobante de pago (PDF)">
+                                <i class="bi bi-filetype-pdf me-1"></i>Comprobante PDF
+                            </button>
+                            <button class="btn btn-outline-success" id="btnEnviarComprobanteMasivo" style="display: none;"
+                                onclick="abrirModalEnviarComprobanteMasivo()"
+                                title="Enviar comprobante de pago por correo al proveedor">
+                                <i class="bi bi-envelope-paper me-1"></i>Enviar comprobante por correo
                             </button>
                         </div>
                         <div>
@@ -1727,11 +1732,11 @@
                     </div>
                 </div>
 
-                <!-- Aviso modo estado de cuenta -->
+                <!-- Aviso filtro proveedor activo -->
                 <div id="avisoEstadoCuenta" class="alert alert-info py-2 px-3 mb-3" style="display:none; font-size:0.85rem;">
-                    <i class="bi bi-info-circle me-1"></i>
-                    <strong>Modo Estado de Cuenta:</strong>
-                    Mostrando <span id="avisoEstadoCuentaNombre"></span> — todas las facturas pendientes (se ignora el filtro de mes).
+                    <i class="bi bi-filter-circle me-1"></i>
+                    <strong>Filtro proveedor:</strong>
+                    Mostrando todos los documentos (pagados y pendientes) de <span id="avisoEstadoCuentaNombre"></span>.
                 </div>
 
                 <!-- Tarjetas resumen (las etiquetas cambian según el modo: mes / estado de cuenta) -->
@@ -2217,6 +2222,68 @@
             <div class="rm-modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-success" id="btnEnviarComprobante">
+                    <i class="bi bi-send me-1"></i>Enviar por correo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Enviar Comprobante Masivo (múltiples facturas mismo proveedor) -->
+<div class="modal fade rm-modal" id="modalEnviarComprobanteMasivo" tabindex="-1" aria-labelledby="modalEnviarComprobanteMasivoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content rm-accent--green">
+            <div class="rm-modal-header">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rm-modal-icon rm-modal-icon--green">
+                        <i class="bi bi-envelope-paper-fill"></i>
+                    </div>
+                    <div>
+                        <h5 class="rm-modal-title" id="modalEnviarComprobanteMasivoLabel">Enviar comprobante masivo</h5>
+                        <p class="rm-modal-subtitle" id="envioMasivoSubtitulo">Envío al correo del proveedor</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="rm-modal-body rm-modal-body--scroll">
+                <input type="hidden" id="envioMasivoDteIds">
+
+                <div id="envioMasivoAviso" class="p-2 mb-3" style="display:none;border-radius:10px;font-size:0.85rem;"></div>
+
+                <div class="row g-3">
+                    <div class="col-lg-5">
+                        <div class="mb-3">
+                            <label class="form-label">Facturas seleccionadas</label>
+                            <div id="envioMasivoListaFacturas" class="p-2" style="background:#f8fafc;border:1px solid #edf0f5;border-radius:8px;font-size:0.82rem;max-height:100px;overflow:auto;"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="envioMasivoEmail" class="form-label">Correo del proveedor <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" id="envioMasivoEmail" placeholder="correo@proveedor.cl">
+                            <div class="form-text">Puedes editarlo antes de enviar.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="envioMasivoAsunto" class="form-label">Asunto</label>
+                            <input type="text" class="form-control" id="envioMasivoAsunto" maxlength="200">
+                        </div>
+                        <div class="mb-3">
+                            <label for="envioMasivoMensaje" class="form-label">Mensaje</label>
+                            <textarea class="form-control" id="envioMasivoMensaje" rows="6"></textarea>
+                        </div>
+                    </div>
+                    <div class="col-lg-7">
+                        <label class="form-label">Vista previa del comprobante</label>
+                        <div id="envioMasivoPreviewHtml" style="border:1px solid #edf0f5;border-radius:10px;padding:14px;height:430px;overflow:auto;background:#fff;">
+                            <div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando vista previa...</div>
+                        </div>
+                        <div class="form-text mt-1">
+                            <a href="#" id="envioMasivoAbrirPdf" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-1"></i>Ver/descargar el PDF real</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="rm-modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btnConfirmarEnvioMasivo">
                     <i class="bi bi-send me-1"></i>Enviar por correo
                 </button>
             </div>
@@ -3207,6 +3274,7 @@
                       data-monto="${saldoPendiente}"
                       data-numero="${dte.numero_documento}"
                       data-pagado="${estaPagada ? '1' : '0'}"
+                      data-estado-pago="${(dte.estado_pago || '').toUpperCase()}"
                       data-pago-masivo="${(elegiblePagoMasivo && saldoPendiente > 0) ? '1' : '0'}"
                       onchange="actualizarSeleccionMasiva()">`
                                     : '')
@@ -4503,23 +4571,20 @@
         const proveedor = $('#filtroPendientesProveedor').val() || '';
         const params = {
             tipo_fecha: $('#filtroPendientesTipoFecha').val() || 'recepcion',
-            tipo_documento: $('#filtroPendientesTipoDoc').val() || ''
+            tipo_documento: $('#filtroPendientesTipoDoc').val() || '',
+            mes: getMesSeleccionado(),
         };
         if (proveedor) {
-            // Modo estado de cuenta: ignora mes
             params.proveedor = proveedor;
-        } else {
-            params.mes = getMesSeleccionado();
         }
         return params;
     }
 
     function cargarPendientesMes() {
         const params = getParamsPendientesMes();
-        const proveedorActivo = !!params.proveedor;
 
-        // Aplicar bloqueo visual al filtro de mes cuando hay proveedor
-        $('#filtroPendientesMes').prop('disabled', proveedorActivo);
+        // El filtro de mes siempre está activo
+        $('#filtroPendientesMes').prop('disabled', false);
 
         const $tbody = $('#tablaPendientesMesBody');
         $tbody.html('<tr><td colspan="10" class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm me-2"></div>Cargando…</td></tr>');
@@ -4547,12 +4612,13 @@
         const $tbody = $('#tablaPendientesMesBody');
         $tbody.empty();
 
-        // Banner modo estado de cuenta
+        // Banner modo proveedor + mes
         const $aviso = $('#avisoEstadoCuenta');
         if (resp.modo_estado_cuenta) {
             const nombre = resp.proveedor_nombre || 'proveedor';
             const rut = resp.proveedor_rut ? ` (${resp.proveedor_rut})` : '';
-            $('#avisoEstadoCuentaNombre').text(`${nombre}${rut}`);
+            const mesLabel = resp.mes_label ? ` — ${resp.mes_label}` : '';
+            $('#avisoEstadoCuentaNombre').text(`${nombre}${rut}${mesLabel}`);
             $aviso.show();
         } else {
             $aviso.hide();
@@ -4560,7 +4626,7 @@
 
         if (facturas.length === 0) {
             const msg = resp.modo_estado_cuenta
-                ? 'Este proveedor no tiene facturas pendientes.'
+                ? 'Este proveedor no tiene documentos en el período seleccionado.'
                 : 'Sin documentos recepcionados en este mes.';
             $tbody.html(`<tr><td colspan="10" class="text-center text-muted py-3">${msg}</td></tr>`);
         } else {
@@ -4616,17 +4682,17 @@
 
         // Resumen — las tarjetas cambian de significado según el modo
         if (resp.modo_estado_cuenta) {
-            // Estado de cuenta: deuda pendiente del proveedor
-            $('#lblResumen1').text('Total pendiente');
-            $('#resResumen1').text('$' + (resp.total_pendiente || 0).toLocaleString());
-            $('#lblResumen2').text('N° de facturas');
+            // Proveedor + mes: muestra totales del período para ese proveedor
+            $('#lblResumen1').text('Total recepcionado');
+            $('#resResumen1').text('$' + (resp.total_recepcionado || 0).toLocaleString());
+            $('#lblResumen2').text('N° de documentos');
             $('#resResumen2').text((resp.total_cantidad || 0).toLocaleString());
-            $('#lblResumen3').text('Vencidas');
-            $('#resResumen3').text((resp.total_vencidas || 0).toLocaleString());
-            $('#lblResumen4').text('Por vencer (≤7d)');
-            $('#resResumen4').text((resp.total_proximas || 0).toLocaleString());
+            $('#lblResumen3').text('Pendiente');
+            $('#resResumen3').text('$' + (resp.total_pendiente || 0).toLocaleString());
+            $('#lblResumen4').text('Pagado');
+            $('#resResumen4').text('$' + (resp.total_pagado || 0).toLocaleString());
         } else {
-            // Mes: todo lo recepcionado
+            // Solo mes: todo lo recepcionado del mes
             $('#lblResumen1').text('Total recepcionado');
             $('#resResumen1').text('$' + (resp.total_recepcionado || 0).toLocaleString());
             $('#lblResumen2').text('N° de documentos');
@@ -5036,6 +5102,7 @@
         if (cantidad === 0) {
             $('#btnPagoMasivo').hide();
             $('#btnComprobantePago').hide();
+            $('#btnEnviarComprobanteMasivo').hide();
             return;
         }
 
@@ -5044,21 +5111,35 @@
         // Validar que todas sean del mismo proveedor (requerido para comprobante)
         const proveedores = new Set();
         let todasAptasPagoMasivo = true;
+        let todasPagadas = true;
         checkboxes.each(function () {
             proveedores.add($(this).data('proveedor-id'));
             const apta = String($(this).attr('data-pago-masivo')) === '1';
             if (!apta) todasAptasPagoMasivo = false;
+            const estadoPago = ($(this).data('estado-pago') || '').toUpperCase();
+            if (estadoPago !== 'PAGADO') todasPagadas = false;
         });
 
         const unSoloProveedor = proveedores.size === 1;
 
-        // Comprobante: exige un solo proveedor
+        // Comprobante PDF: exige un solo proveedor
         if (unSoloProveedor) {
             $('#btnComprobantePago').prop('disabled', false)
-                .attr('title', 'Comprobante de pago programado (PDF)');
+                .attr('title', 'Descargar comprobante de pago (PDF)');
         } else {
             $('#btnComprobantePago').prop('disabled', true)
                 .attr('title', 'El comprobante requiere que todas las facturas sean del mismo proveedor');
+        }
+
+        // Enviar comprobante masivo por correo: mismo proveedor + todas pagadas
+        if (unSoloProveedor && todasPagadas) {
+            $('#btnEnviarComprobanteMasivo').show().prop('disabled', false)
+                .attr('title', 'Enviar comprobante de pago por correo al proveedor');
+        } else if (unSoloProveedor && !todasPagadas) {
+            $('#btnEnviarComprobanteMasivo').show().prop('disabled', true)
+                .attr('title', 'Solo se puede enviar el comprobante de facturas pagadas');
+        } else {
+            $('#btnEnviarComprobanteMasivo').hide();
         }
 
         // Pago Masivo: solo aparece si todas las seleccionadas son aptas (con saldo pendiente).
@@ -5819,11 +5900,12 @@
         const cont = $('#envioComprobantePreviewHtml');
         if (!p) { cont.html('<div class="text-muted small">Sin datos para previsualizar.</div>'); return; }
 
-        const th = 'style="padding:5px 6px;border:1px solid #2f3e6e;background:#405189;color:#fff;font-weight:700;text-align:center;font-size:.66rem;"';
-        const td = 'style="padding:4px 6px;border:1px solid #d8dee9;text-align:center;"';
-        const tdR = 'style="padding:4px 6px;border:1px solid #d8dee9;text-align:right;"';
-        const tdT = 'style="padding:5px 6px;border:1px solid #0a9d88;background:#0ab39c;color:#fff;font-weight:700;"';
-        const tdTR = 'style="padding:5px 6px;border:1px solid #0a9d88;background:#0ab39c;color:#fff;font-weight:700;text-align:right;"';
+        const th = 'style="padding:4px 5px;border:1px solid #2f3e6e;background:#405189;color:#fff;font-weight:700;text-align:center;font-size:.6rem;"';
+        const td = 'style="padding:3px 5px;border:1px solid #d8dee9;text-align:center;font-size:.68rem;"';
+        const tdR = 'style="padding:3px 5px;border:1px solid #d8dee9;text-align:right;font-size:.68rem;"';
+        const tdTot = 'style="padding:4px 8px;border:1px solid #d8dee9;font-size:.72rem;font-weight:700;"';
+        const tdTotR = 'style="padding:4px 8px;border:1px solid #d8dee9;text-align:right;font-size:.72rem;font-weight:700;"';
+        const e = p.empresa || {};
 
         let filas = '';
         (p.filas || []).forEach(f => {
@@ -5840,27 +5922,49 @@
         });
         const t = p.totales || {};
 
+        const piePartes = [e.nombre, e.rut ? 'Rut: ' + e.rut : '', e.direccion,
+                           e.telefono ? 'Fono ' + e.telefono : '', e.email, e.ciudad]
+                          .filter(Boolean).join('  ·  ');
+
         cont.html(`
-            <p style="font-size:.8rem;color:#334155;margin-bottom:8px;">${p.intro || ''}</p>
-            <h6 style="text-align:center;color:#405189;font-weight:700;margin:8px 0 12px;">${(p.proveedor || '').toUpperCase()}${p.rut ? ' — ' + p.rut : ''}</h6>
-            <table style="width:100%;border-collapse:collapse;font-size:.7rem;">
-                <thead>
-                    <tr>
-                        <th ${th}>FACTURA</th><th ${th}>F. EMISIÓN</th><th ${th}>MONTO</th>
-                        <th ${th}>NOTA CRÉDITO</th><th ${th}>VALOR N/C</th>
-                        <th ${th}>CHEQUE N°</th><th ${th}>MONTOS</th><th ${th}>F. PAGO</th>
+            <div style="font-family:Arial,sans-serif;padding:8px;max-width:100%;">
+                <div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
+                    <span style="font-size:.75rem;font-weight:700;">FECHA: ${p.fecha_doc || ''}</span>
+                </div>
+                <div style="margin-bottom:8px;font-size:.78rem;">
+                    <div><strong>Proveedor:</strong> ${(p.proveedor || '').toUpperCase()}</div>
+                    ${p.rut ? '<div><strong>Rut:</strong> ' + p.rut + '</div>' : ''}
+                </div>
+                <p style="font-size:.76rem;color:#334155;margin-bottom:4px;">Estimados Señores:</p>
+                <p style="font-size:.76rem;color:#334155;margin-bottom:8px;">${p.intro || ''}</p>
+                <table style="width:100%;border-collapse:collapse;font-size:.66rem;margin-bottom:8px;">
+                    <thead>
+                        <tr>
+                            <th ${th}>FACTURA</th><th ${th}>FECHA DE<br>EMISIÓN</th><th ${th}>MONTO</th>
+                            <th ${th}>NOTA DE<br>CRÉDITO N°</th><th ${th}>MONTO N/C</th>
+                            <th ${th}>TRANSF. Y/O<br>CHEQUE N°</th><th ${th}>MONTO</th><th ${th}>FECHA</th>
+                        </tr>
+                    </thead>
+                    <tbody>${filas}</tbody>
+                </table>
+                <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+                    <tr style="background:#EBF0FF;">
+                        <td ${tdTot}>TOTAL FACTURA</td><td ${tdTotR}>${t.factura || ''}</td>
                     </tr>
-                </thead>
-                <tbody>
-                    ${filas}
-                    <tr>
-                        <td ${tdT}>TOTAL</td><td ${tdT}></td><td ${tdTR}>${t.factura || ''}</td>
-                        <td ${tdT}></td><td ${tdTR}>${t.nc || ''}</td>
-                        <td ${tdT}></td><td ${tdTR}>${t.pago || ''}</td><td ${tdT}></td>
+                    <tr style="background:#FFF8E1;">
+                        <td ${tdTot}>TOTAL NOTA DE CRÉDITO</td><td ${tdTotR}>${t.nc || '$0'}</td>
                     </tr>
-                </tbody>
-            </table>
-            <p style="font-size:.8rem;color:#334155;margin-top:12px;">${p.cierre || ''}</p>
+                    <tr style="background:#E8F5E9;">
+                        <td ${tdTot}>TOTAL A PAGAR</td><td ${tdTotR}>${t.pago || ''}</td>
+                    </tr>
+                </table>
+                <div style="font-size:.74rem;margin-bottom:6px;"><strong>OBSERVACIÓN:</strong></div>
+                <div style="border:1px solid #d8dee9;border-radius:4px;height:36px;margin-bottom:12px;background:#fafbfc;"></div>
+                <p style="font-size:.76rem;color:#334155;margin-bottom:4px;">${p.cierre || ''}</p>
+                ${e.nombre ? '<p style="font-size:.76rem;font-weight:700;margin:2px 0;">' + e.nombre + '</p>' : ''}
+                ${e.rut ? '<p style="font-size:.74rem;margin:0;">Rut: ' + e.rut + '</p>' : ''}
+                ${piePartes ? '<hr style="margin:8px 0;border-color:#d8dee9;"><p style="font-size:.65rem;color:#666;text-align:center;margin:0;">' + piePartes + '</p>' : ''}
+            </div>
         `);
     }
 
@@ -5930,6 +6034,122 @@
                 if (resp.success) {
                     Swal.fire('Enviado', resp.message || 'Comprobante enviado correctamente', 'success');
                     $('#modalEnviarComprobante').modal('hide');
+                    cargarDTEs(currentPageDTE, currentSearchDTE);
+                } else {
+                    Swal.fire('Error', resp.error || 'No se pudo enviar el comprobante', 'error');
+                }
+            },
+            error: function (xhr) {
+                const msg = (xhr.responseJSON && xhr.responseJSON.error) ? xhr.responseJSON.error : 'Error de conexión al enviar el comprobante';
+                Swal.fire('Error', msg, 'error');
+            },
+            complete: function () {
+                $btn.prop('disabled', false).html('<i class="bi bi-send me-1"></i>Enviar por correo');
+            }
+        });
+    });
+
+    // ========== ENVÍO MASIVO DE COMPROBANTE ==========
+
+    function abrirModalEnviarComprobanteMasivo() {
+        const checkboxes = $('.checkbox-factura:checked');
+        if (checkboxes.length === 0) {
+            return Swal.fire('Sin selección', 'Selecciona al menos una factura pagada.', 'info');
+        }
+
+        const proveedores = new Set();
+        const ids = [];
+        const numeros = [];
+        let email = '';
+
+        checkboxes.each(function () {
+            ids.push($(this).val());
+            numeros.push('#' + $(this).data('numero'));
+            proveedores.add($(this).data('proveedor-id'));
+        });
+
+        if (proveedores.size > 1) {
+            return Swal.fire('Proveedores distintos',
+                'El comprobante masivo debe ser de un solo proveedor. Selecciona facturas del mismo proveedor.',
+                'warning');
+        }
+
+        const idsStr = ids.join(',');
+        $('#envioMasivoDteIds').val(idsStr);
+        $('#envioMasivoEmail').val('');
+        $('#envioMasivoAsunto').val('');
+        $('#envioMasivoMensaje').val('');
+        $('#envioMasivoAviso').hide();
+        $('#envioMasivoListaFacturas').html(numeros.join(', '));
+        $('#envioMasivoSubtitulo').text(`${checkboxes.length} factura(s) seleccionada(s)`);
+        $('#btnConfirmarEnvioMasivo').prop('disabled', false).html('<i class="bi bi-send me-1"></i>Enviar por correo');
+        $('#envioMasivoPreviewHtml').html('<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando vista previa...</div>');
+        $('#envioMasivoAbrirPdf').attr('href', `/app/comprobantePagoDTE/?dte_ids=${idsStr}&inline=1`);
+
+        // Cargar datos del primer DTE para obtener email y datos del proveedor
+        $.ajax({
+            url: `/app/datos_envio_comprobante/${ids[0]}/`,
+            method: 'GET',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function (resp) {
+                if (resp.success) {
+                    $('#envioMasivoEmail').val(resp.email || '');
+                    const provNombre = resp.proveedor || 'Proveedor';
+                    $('#envioMasivoAsunto').val(`Comprobante de pago — ${provNombre}`);
+                    $('#envioMasivoMensaje').val(
+                        `Estimados ${provNombre}:\n\n` +
+                        `Junto con saludar, adjuntamos el comprobante de pago correspondiente ` +
+                        `a las facturas: ${numeros.join(', ')}.\n\n` +
+                        `Quedamos atentos a cualquier consulta.\n\nSaludos cordiales.`
+                    );
+                    $('#envioMasivoSubtitulo').text(`${checkboxes.length} factura(s) · ${provNombre}`);
+                    // Preview del PDF completo (todas las facturas)
+                    cargarPreviewMasivo(idsStr);
+                }
+            },
+            error: function () {
+                cargarPreviewMasivo(idsStr);
+            }
+        });
+
+        new bootstrap.Modal(document.getElementById('modalEnviarComprobanteMasivo')).show();
+    }
+
+    function cargarPreviewMasivo(idsStr) {
+        // Para el preview masivo pedimos los datos del primer DTE y construimos el HTML
+        // El PDF real se genera en el servidor con todos los IDs
+        $('#envioMasivoPreviewHtml').html(
+            '<div class="text-center text-muted py-3" style="font-size:.85rem;">' +
+            '<i class="bi bi-file-earmark-pdf me-2 text-danger"></i>' +
+            'La vista previa exacta está disponible en el PDF adjunto.<br>' +
+            '<a href="' + $('#envioMasivoAbrirPdf').attr('href') + '" target="_blank" class="btn btn-sm btn-outline-danger mt-2">' +
+            '<i class="bi bi-eye me-1"></i>Ver PDF completo</a></div>'
+        );
+    }
+
+    $('#btnConfirmarEnvioMasivo').on('click', function () {
+        const idsStr = $('#envioMasivoDteIds').val();
+        const ids = (idsStr || '').split(',').filter(Boolean);
+        const email = $('#envioMasivoEmail').val().trim();
+        const asunto = $('#envioMasivoAsunto').val().trim();
+        const mensaje = $('#envioMasivoMensaje').val().trim();
+
+        if (!ids.length) { Swal.fire('Error', 'No hay facturas seleccionadas.', 'error'); return; }
+        if (!email) { Swal.fire('Atención', 'Indica el correo del proveedor.', 'warning'); return; }
+
+        const $btn = $(this);
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1" role="status"></span>Enviando...');
+
+        $.ajax({
+            url: '/app/enviar_comprobante_pago/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({ dte_ids: ids, email: email, asunto: asunto, mensaje: mensaje }),
+            success: function (resp) {
+                if (resp.success) {
+                    Swal.fire('Enviado', resp.message || 'Comprobante enviado correctamente', 'success');
+                    $('#modalEnviarComprobanteMasivo').modal('hide');
                     cargarDTEs(currentPageDTE, currentSearchDTE);
                 } else {
                     Swal.fire('Error', resp.error || 'No se pudo enviar el comprobante', 'error');

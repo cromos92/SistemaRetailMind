@@ -1756,9 +1756,21 @@
                     <div class="col-md-4">
                         <label class="form-label fw-bold">Banco *</label>
                         <select class="form-select" id="mdBanco" required>
+                            {% with nombre_emp=sucursal_actual.empresa.nombre|upper|default:"" %}
+                            {% if "REALSPORT" in nombre_emp %}
+                            <option value="SANTANDER" selected>Santander</option>
+                            <option value="CHILE">Banco de Chile</option>
+                            <option value="ESTADO">BancoEstado</option>
+                            {% elif "PAOLA" in nombre_emp or "EDELMIRA" in nombre_emp %}
+                            <option value="CHILE" selected>Banco de Chile</option>
+                            <option value="SANTANDER">Santander</option>
+                            <option value="ESTADO">BancoEstado</option>
+                            {% else %}
                             <option value="ESTADO">BancoEstado</option>
                             <option value="SANTANDER">Santander</option>
                             <option value="CHILE">Banco de Chile</option>
+                            {% endif %}
+                            {% endwith %}
                             <option value="BCI">BCI</option>
                             <option value="SCOTIABANK">Scotiabank</option>
                             <option value="ITAU">Itaú</option>
@@ -4163,11 +4175,16 @@ function validarSumaMultidia() {
         $('#panelValidacionMultidia').show();
     }
 
-    const cuadra = montoTotal > 0 && sumaDesglose === montoTotal && diasSeleccionados > 0;
     const diff = montoTotal - sumaDesglose;
+    const cuadra = montoTotal > 0 && sumaDesglose === montoTotal && diasSeleccionados > 0;
+    const cuadraTolerado = montoTotal > 0 && Math.abs(diff) <= 1 && diasSeleccionados > 0;
 
     if (cuadra) {
         $('#mdEstadoValidacion').html('<span class="badge bg-success" style="font-size:.85rem;"><i class="ri-check-line me-1"></i>Cuadra perfectamente</span>');
+        $('#btnGuardarMultidia').prop('disabled', false);
+    } else if (cuadraTolerado) {
+        const signo = diff > 0 ? '+' : '';
+        $('#mdEstadoValidacion').html(`<span class="badge bg-success" style="font-size:.85rem;"><i class="ri-check-line me-1"></i>Cuadra (dif. ${signo}$${Math.abs(diff)} ajustada)</span>`);
         $('#btnGuardarMultidia').prop('disabled', false);
     } else if (diasSeleccionados === 0) {
         $('#mdEstadoValidacion').html('<span class="badge bg-secondary" style="font-size:.85rem;"><i class="ri-alert-line me-1"></i>Seleccione al menos un día</span>');
@@ -4198,7 +4215,7 @@ function guardarDepositoMultidia() {
     if (desglose.length === 0) { mostrarError('Seleccione al menos un día con monto'); return; }
 
     const sumaDesglose = desglose.reduce((a, b) => a + b.monto, 0);
-    if (sumaDesglose !== montoTotal) {
+    if (Math.abs(sumaDesglose - montoTotal) > 1) {
         mostrarError(`La suma ($${sumaDesglose.toLocaleString('es-CL')}) no coincide con el comprobante ($${montoTotal.toLocaleString('es-CL')})`);
         return;
     }

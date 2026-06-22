@@ -10375,17 +10375,23 @@ def facturasPendientesPorMes(request):
 
         fecha_field = 'fecha_recepcion' if tipo_fecha == 'recepcion' else 'fecha_emision'
 
-        # Modo estado de cuenta (proveedor seleccionado): se omite el filtro de mes
-        # y se muestran SOLO los documentos con saldo pendiente del proveedor
-        # (es un estado de cuenta de deuda, no un historial completo).
-        #
-        # Modo mes (sin proveedor): se muestra TODO lo recepcionado del mes del
-        # filtro, incluyendo documentos ya pagados.
+        # Modos de operación:
+        # - Proveedor + mes: muestra TODOS los documentos de ese proveedor en ese mes
+        #   (pagados y pendientes), para ver el historial del período.
+        # - Solo proveedor (sin mes en la sesión): estado de cuenta, solo pendientes
+        #   — pero el frontend ahora siempre envía mes, así que este caso ya no aplica.
+        # - Solo mes (sin proveedor): todo lo recepcionado del mes (pagados y pendientes).
+        _meses_nombre = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                         'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+        mes_label = f"{_meses_nombre[mes_num - 1].capitalize()} {anio}" if 1 <= mes_num <= 12 else ''
+
         if proveedor_id:
-            qs = qs.filter(emisor_id=proveedor_id).exclude(
-                estado_pago__in=['Pagado', 'PAGADO']
+            # Con proveedor: filtra por proveedor Y por mes — muestra todos los estados
+            qs = qs.filter(
+                emisor_id=proveedor_id,
+                **{f'{fecha_field}__year': anio, f'{fecha_field}__month': mes_num},
             )
-            solo_pendientes = True
+            solo_pendientes = False
         else:
             qs = qs.filter(**{
                 f'{fecha_field}__year': anio,
@@ -10751,6 +10757,7 @@ def facturasPendientesPorMes(request):
             'success': True,
             'anio': anio,
             'mes': mes_num,
+            'mes_label': mes_label,
             'tipo_fecha': tipo_fecha,
             'tipo_documento': tipo_documento,
             'proveedor_id': proveedor_id,
@@ -10821,13 +10828,22 @@ def _construir_pdf_comprobante_pago(empresa_id, dte_ids):
     for n in ncs_qs:
         ncs_por_dte.setdefault(n.dte_id, []).append(n)
 
+    # Datos de la empresa propia (para el pie de página)
+    empresa_propia = Empresa.objects.filter(id=empresa_id).first()
+    empresa_nombre = (empresa_propia.nombre or '') if empresa_propia else ''
+    empresa_rut = (empresa_propia.rut or '') if empresa_propia else ''
+    empresa_dir = (empresa_propia.direccion or '') if empresa_propia else ''
+    empresa_ciudad = (empresa_propia.ciudad or '') if empresa_propia else ''
+    empresa_tel = (empresa_propia.telefono or empresa_propia.contacto1 or '') if empresa_propia else ''
+    empresa_email = (empresa_propia.email or empresa_propia.correoAdministrador or '') if empresa_propia else ''
+
     # === PDF (vertical / portrait) ===
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.units import cm
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-    from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
+    from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_RIGHT, TA_LEFT
     from io import BytesIO
     import re as _re
 
@@ -10835,76 +10851,117 @@ def _construir_pdf_comprobante_pago(empresa_id, dte_ids):
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        leftMargin=1.5 * cm,
-        rightMargin=1.5 * cm,
+        leftMargin=1.8 * cm,
+        rightMargin=1.8 * cm,
         topMargin=1.5 * cm,
-        bottomMargin=1.5 * cm,
+        bottomMargin=2.0 * cm,
     )
 
     styles = getSampleStyleSheet()
     azul = colors.HexColor('#405189')
     verde = colors.HexColor('#0ab39c')
     gris_claro = colors.HexColor('#F8F9FA')
+    gris_borde = colors.HexColor('#B7C4D8')
+    negro = colors.HexColor('#1a1a1a')
 
-    intro_style = ParagraphStyle(
-        'Intro', parent=styles['Normal'], fontSize=10, leading=13,
-        alignment=TA_JUSTIFY, spaceAfter=12,
-    )
-    proveedor_style = ParagraphStyle(
-        'Prov', parent=styles['Title'], fontSize=14, textColor=azul,
-        alignment=TA_CENTER, spaceAfter=10,
-    )
-    cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=8, leading=10, alignment=1)
-    cell_left = ParagraphStyle('CellL', parent=styles['Normal'], fontSize=8, leading=10, alignment=0)
-    cell_right = ParagraphStyle('CellR', parent=styles['Normal'], fontSize=8, leading=10, alignment=2)
+    normal_style = ParagraphStyle('Normal2', parent=styles['Normal'], fontSize=10, leading=14)
+    bold_style = ParagraphStyle('Bold2', parent=styles['Normal'], fontSize=10, leading=14,
+                                fontName='Helvetica-Bold')
+    right_style = ParagraphStyle('Right2', parent=styles['Normal'], fontSize=10, leading=14,
+                                 alignment=TA_RIGHT)
+    center_style = ParagraphStyle('Center2', parent=styles['Normal'], fontSize=10, leading=14,
+                                  alignment=TA_CENTER)
+    cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=8, leading=10, alignment=TA_CENTER)
+    cell_left = ParagraphStyle('CellL', parent=styles['Normal'], fontSize=8, leading=10, alignment=TA_LEFT)
+    cell_right = ParagraphStyle('CellR', parent=styles['Normal'], fontSize=8, leading=10, alignment=TA_RIGHT)
+    cell_bold_right = ParagraphStyle('CellBR', parent=styles['Normal'], fontSize=8, leading=10,
+                                     alignment=TA_RIGHT, fontName='Helvetica-Bold')
+    cell_bold_left = ParagraphStyle('CellBL', parent=styles['Normal'], fontSize=8, leading=10,
+                                    alignment=TA_LEFT, fontName='Helvetica-Bold')
 
     _re_prefijo_cheque = _re.compile(r'^\s*(cheque|cheq\.?|chq\.?)\s*(n[°º\.]?)?\s*:?\s*', _re.IGNORECASE)
 
     def limpiar_voucher(v):
-        """Quita prefijos tipo 'Cheque N°' del voucher para no duplicar el header."""
         if not v:
             return '-'
         return _re_prefijo_cheque.sub('', str(v)).strip() or '-'
 
     def fecha_pago_efectiva(p):
-        """fecha_pago tiene prioridad; si no, cae a fecha_cheque (migración 0153)."""
         return getattr(p, 'fecha_pago', None) or getattr(p, 'fecha_cheque', None)
 
-    elements = []
-
-    # Cabecera
-    elements.append(Paragraph(
-        "Por medio del presente, le informamos que nuestro compromiso de pago "
-        "ha sido gestionado y está programado para la siguiente fecha:",
-        intro_style
-    ))
-    titulo_proveedor = proveedor_nombre.upper()
-    if proveedor_rut:
-        titulo_proveedor = f"{titulo_proveedor}  —  {proveedor_rut}"
-    elements.append(Paragraph(titulo_proveedor, proveedor_style))
-
-    # Tabla principal (portrait A4 útil ≈ 18 cm)
-    headers = [
-        'FACTURA', 'FECHA EMISIÓN', 'MONTO',
-        'NOTA DE CRÉDITO', 'VALOR N/C',
-        'CHEQUE N°', 'MONTOS', 'FECHA PAGO'
-    ]
-    col_widths = [1.9*cm, 2.0*cm, 2.3*cm, 2.4*cm, 2.3*cm, 2.4*cm, 2.4*cm, 2.3*cm]
+    _meses_largo = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+    _meses_corto = ['ene', 'feb', 'mar', 'abr', 'may', 'jun',
+                    'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 
     def fmt_fecha(d):
         if not d:
             return '-'
-        meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun',
-                 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
-        return f"{d.day:02d}-{meses[d.month - 1]}"
+        return f"{d.day:02d}/{d.month:02d}/{d.year}"
+
+    def fmt_fecha_corta(d):
+        if not d:
+            return '-'
+        return f"{d.day:02d}-{_meses_corto[d.month - 1]}"
 
     def fmt_monto(v):
+        try:
+            return f"${int(round(float(v))):,}".replace(',', '.')
+        except (TypeError, ValueError):
+            return '-'
+
+    def fmt_monto_num(v):
         try:
             return f"{int(round(float(v))):,}".replace(',', '.')
         except (TypeError, ValueError):
             return '-'
 
-    table_data = [headers]
+    hoy = timezone.localdate()
+    fecha_doc = f"{_meses_largo[hoy.month - 1].capitalize()} {hoy.year}"
+
+    elements = []
+
+    # --- Encabezado: fecha a la derecha ---
+    encabezado_data = [
+        [Paragraph('', normal_style),
+         Paragraph(f'<b>FECHA:</b> {fecha_doc}', right_style)]
+    ]
+    encabezado_tabla = Table(encabezado_data, colWidths=[12*cm, 5*cm])
+    encabezado_tabla.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(encabezado_tabla)
+    elements.append(Spacer(1, 6))
+
+    # --- Datos del proveedor ---
+    elements.append(Paragraph(f'<b>Proveedor:</b> {proveedor_nombre.upper()}', normal_style))
+    if proveedor_rut:
+        elements.append(Paragraph(f'<b>Rut:</b> {proveedor_rut}', normal_style))
+    elements.append(Spacer(1, 10))
+
+    # --- Saludo e intro ---
+    elements.append(Paragraph('Estimados Señores:', normal_style))
+    elements.append(Spacer(1, 6))
+    elements.append(Paragraph(
+        'Por medio de la presente informamos pagos de facturas:',
+        normal_style
+    ))
+    elements.append(Spacer(1, 10))
+
+    # --- Tabla principal ---
+    headers = [
+        'FACTURA', 'FECHA DE\nEMISIÓN', 'MONTO',
+        'NOTA DE CRÉDITO N°', 'MONTO N/C',
+        'TRANSFERENCIA Y/O\nCHEQUE N°', 'MONTO', 'FECHA'
+    ]
+    col_widths = [1.8*cm, 2.0*cm, 2.2*cm, 2.5*cm, 2.0*cm, 2.8*cm, 2.0*cm, 1.7*cm]
+
+    table_data = [[Paragraph(h, ParagraphStyle('Hdr', parent=styles['Normal'], fontSize=7,
+                                               leading=9, alignment=TA_CENTER,
+                                               fontName='Helvetica-Bold')) for h in headers]]
+
     total_factura = 0
     total_nc = 0
     total_pago = 0
@@ -10923,7 +10980,6 @@ def _construir_pdf_comprobante_pago(empresa_id, dte_ids):
             pagos_fechas = '<br/>'.join(fmt_fecha(fecha_pago_efectiva(p)) for p in pagos)
             pago_total = sum(int(p.monto or 0) for p in pagos)
         else:
-            # Sin pagos registrados: estima monto sugerido = monto - NCs
             cheques_numeros = '-'
             pago_sugerido = max(int(round(float(dte.monto_con_iva or 0))) - ncs_montos_total, 0)
             pagos_montos = fmt_monto(pago_sugerido)
@@ -10946,52 +11002,94 @@ def _construir_pdf_comprobante_pago(empresa_id, dte_ids):
         total_nc += ncs_montos_total
         total_pago += pago_total
 
-    # Fila de totales
-    total_row = [
-        Paragraph('<b>TOTAL</b>', cell_left),
-        Paragraph('', cell_style),
-        Paragraph(f'<b>{fmt_monto(total_factura)}</b>', cell_right),
-        Paragraph('', cell_style),
-        Paragraph(f'<b>{fmt_monto(total_nc)}</b>', cell_right),
-        Paragraph('', cell_style),
-        Paragraph(f'<b>{fmt_monto(total_pago)}</b>', cell_right),
-        Paragraph('', cell_style),
-    ]
-    table_data.append(total_row)
-
     table = Table(table_data, colWidths=col_widths, repeatRows=1)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), azul),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('FONTSIZE', (0, 0), (-1, 0), 7),
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#B7C4D8')),
+        ('GRID', (0, 0), (-1, -1), 0.4, gris_borde),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, gris_claro]),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, gris_claro]),
         ('TOPPADDING', (0, 0), (-1, -1), 5),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-        ('BACKGROUND', (0, -1), (-1, -1), verde),
-        ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
     ]))
     elements.append(table)
+    elements.append(Spacer(1, 10))
 
-    elements.append(Spacer(1, 24))
-    elements.append(Paragraph(
-        "Sin otro particular, le saluda atentamente.",
-        ParagraphStyle('Closing', parent=styles['Normal'], fontSize=10, leading=13, alignment=0)
-    ))
+    # --- Totales (3 filas separadas como en el modelo) ---
+    totales_data = [
+        [Paragraph('<b>TOTAL FACTURA</b>', cell_bold_left),
+         Paragraph(fmt_monto(total_factura), cell_bold_right)],
+        [Paragraph('<b>TOTAL NOTA DE CRÉDITO</b>', cell_bold_left),
+         Paragraph(fmt_monto(total_nc) if total_nc else '$0', cell_bold_right)],
+        [Paragraph('<b>TOTAL A PAGAR</b>', cell_bold_left),
+         Paragraph(fmt_monto(total_pago), cell_bold_right)],
+    ]
+    totales_tabla = Table(totales_data, colWidths=[10*cm, 7*cm])
+    totales_tabla.setStyle(TableStyle([
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ('GRID', (0, 0), (-1, -1), 0.4, gris_borde),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#EBF0FF')),
+        ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#FFF8E1')),
+        ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#E8F5E9')),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    elements.append(totales_tabla)
+    elements.append(Spacer(1, 14))
+
+    # --- Observación ---
+    elements.append(Paragraph('<b>OBSERVACIÓN:</b>', normal_style))
+    elements.append(Spacer(1, 4))
+    obs_data = [['']]
+    obs_tabla = Table(obs_data, colWidths=[17*cm], rowHeights=[1.8*cm])
+    obs_tabla.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 0.4, gris_borde),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+    ]))
+    elements.append(obs_tabla)
+    elements.append(Spacer(1, 16))
+
+    # --- Cierre ---
+    elements.append(Paragraph('Saludos cordiales,', normal_style))
+    elements.append(Spacer(1, 20))
+    if empresa_nombre:
+        elements.append(Paragraph(f'<b>{empresa_nombre}</b>', normal_style))
+    if empresa_rut:
+        elements.append(Paragraph(f'Rut: {empresa_rut}', normal_style))
 
     def footer(canvas, doc_):
         canvas.saveState()
-        canvas.setFont('Helvetica', 7)
+        # Línea separadora
+        canvas.setStrokeColor(colors.HexColor('#B7C4D8'))
+        canvas.setLineWidth(0.5)
+        canvas.line(1.8*cm, 1.8*cm, A4[0] - 1.8*cm, 1.8*cm)
+
+        canvas.setFont('Helvetica', 7.5)
+        canvas.setFillColor(colors.HexColor('#444444'))
+        partes_pie = []
+        if empresa_nombre:
+            partes_pie.append(empresa_nombre)
+        if empresa_rut:
+            partes_pie.append(f'Rut: {empresa_rut}')
+        if empresa_dir:
+            partes_pie.append(empresa_dir)
+        if empresa_tel:
+            partes_pie.append(f'Fono {empresa_tel}')
+        if empresa_email:
+            partes_pie.append(empresa_email)
+        if empresa_ciudad:
+            partes_pie.append(empresa_ciudad)
+        pie_txt = '  ·  '.join(partes_pie) if partes_pie else 'Comprobante de pago'
+        canvas.drawCentredString(A4[0] / 2, 1.2*cm, pie_txt)
+
+        canvas.setFont('Helvetica', 6.5)
         canvas.setFillColor(colors.grey)
-        canvas.drawString(
-            1.5*cm, 1*cm,
-            f"Comprobante de pago programado — {proveedor_nombre}  —  "
-            f"Generado {timezone.localdate().strftime('%d/%m/%Y')}"
-        )
-        canvas.drawRightString(A4[0] - 1.5*cm, 1*cm, f"Página {doc_.page}")
+        canvas.drawRightString(A4[0] - 1.8*cm, 0.7*cm, f"Página {doc_.page}")
         canvas.restoreState()
 
     doc.build(elements, onFirstPage=footer, onLaterPages=footer)
@@ -11131,15 +11229,39 @@ def datos_envio_comprobante(request, dte_id):
             pago_monto = _fmt_monto(pago_total)
             pago_fecha = '-'
 
+        _meses_largo_preview = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                                'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+        hoy_preview = timezone.localdate()
+        fecha_doc_preview = f"{_meses_largo_preview[hoy_preview.month - 1].capitalize()} {hoy_preview.year}"
+
+        def _fmt_fecha_completa(f):
+            return f"{f.day:02d}/{f.month:02d}/{f.year}" if f else '-'
+
+        empresa_propia_preview = Empresa.objects.filter(id=empresa_id).first()
+        empresa_nombre_preview = (empresa_propia_preview.nombre or '') if empresa_propia_preview else ''
+        empresa_rut_preview = (empresa_propia_preview.rut or '') if empresa_propia_preview else ''
+        empresa_dir_preview = (empresa_propia_preview.direccion or '') if empresa_propia_preview else ''
+        empresa_ciudad_preview = (empresa_propia_preview.ciudad or '') if empresa_propia_preview else ''
+        empresa_tel_preview = (empresa_propia_preview.telefono or getattr(empresa_propia_preview, 'contacto1', '') or '') if empresa_propia_preview else ''
+        empresa_email_preview = (empresa_propia_preview.email or getattr(empresa_propia_preview, 'correoAdministrador', '') or '') if empresa_propia_preview else ''
+
         preview = {
             'proveedor': proveedor_nombre,
             'rut': emisor_rut,
-            'intro': ('Por medio del presente, le informamos que nuestro compromiso de pago '
-                      'ha sido gestionado y está programado para la siguiente fecha:'),
-            'cierre': 'Sin otro particular, le saluda atentamente.',
+            'fecha_doc': fecha_doc_preview,
+            'intro': 'Por medio de la presente informamos pagos de facturas:',
+            'cierre': 'Saludos cordiales,',
+            'empresa': {
+                'nombre': empresa_nombre_preview,
+                'rut': empresa_rut_preview,
+                'direccion': empresa_dir_preview,
+                'ciudad': empresa_ciudad_preview,
+                'telefono': empresa_tel_preview,
+                'email': empresa_email_preview,
+            },
             'filas': [{
                 'numero': dte.numero_documento,
-                'fecha_emision': _fmt_fecha(dte.fecha_emision),
+                'fecha_emision': _fmt_fecha_completa(dte.fecha_emision),
                 'monto': _fmt_monto(dte.monto_con_iva),
                 'nc_numeros': nc_numeros,
                 'nc_valor': _fmt_monto(nc_total) if ncs else '-',
@@ -11149,7 +11271,7 @@ def datos_envio_comprobante(request, dte_id):
             }],
             'totales': {
                 'factura': _fmt_monto(int(round(float(dte.monto_con_iva or 0)))),
-                'nc': _fmt_monto(nc_total),
+                'nc': _fmt_monto(nc_total) if nc_total else '$0',
                 'pago': _fmt_monto(pago_total),
             },
         }

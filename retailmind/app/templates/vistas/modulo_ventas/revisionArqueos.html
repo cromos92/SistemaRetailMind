@@ -87,6 +87,71 @@
         .arqueo-row .estado-badge { font-size: 0.688rem; }
         .arqueos-filters { flex-direction: column; }
     }
+    /* ---- Select2 overrides para #modalComprobante ---- */
+    #modalComprobante .select2-container { width: 100% !important; }
+    #modalComprobante .select2-container--default .select2-selection--single {
+        height: 38px; border-radius: var(--nexo-radius-md);
+        border: 1px solid var(--nexo-gray-300); background: #fff; display: flex; align-items: center;
+    }
+    #modalComprobante .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 1; color: var(--nexo-gray-900); padding-left: 10px; font-size: .88rem;
+    }
+    #modalComprobante .select2-container--default .select2-selection--single .select2-selection__arrow { height: 36px; }
+    #modalComprobante .select2-container--default.select2-container--focus .select2-selection--single,
+    #modalComprobante .select2-container--default.select2-container--open .select2-selection--single {
+        border-color: var(--nexo-primary); box-shadow: 0 0 0 3px rgba(0,102,255,.12);
+    }
+    #modalComprobante .select2-container--default .select2-selection--single .select2-selection__placeholder { color: #aaa; }
+    .cb-arqueo-resumen {
+        border-radius: var(--nexo-radius-md); padding: .65rem .85rem;
+        background: var(--nexo-primary-light); border: 1px solid rgba(0,102,255,.18);
+    }
+    .cb-resumen-kpi { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .cb-resumen-item {
+        flex: 1; min-width: 90px; background: #fff; border-radius: var(--nexo-radius-md);
+        padding: .45rem .65rem; border: 1px solid rgba(0,102,255,.12);
+    }
+    .cb-resumen-item small { display: block; font-size: .66rem; color: var(--nexo-gray-700); text-transform: uppercase; letter-spacing: .03em; }
+    .cb-resumen-item strong { display: block; font-family: monospace; font-size: .88rem; }
+
+    /* === SISTEMA DE URGENCIA === */
+    .urgencia-chip { display:inline-flex; align-items:center; gap:.25rem; padding:.15rem .5rem; border-radius:2rem; font-size:.65rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; margin-bottom:.3rem; white-space:nowrap; }
+    .urgencia-CRITICO  { background:rgba(255,71,87,.18);  color:#C0392B; }
+    .urgencia-URGENTE  { background:rgba(255,176,32,.22); color:#7D4E00; }
+    .urgencia-ATENCION { background:rgba(246,201,14,.22); color:#6B5500; }
+    .urgencia-NUEVO    { background:rgba(0,102,255,.1);   color:var(--nexo-primary); }
+    .urgencia-OK       { background:rgba(0,212,170,.12);  color:var(--nexo-success); }
+    @keyframes pulseUrgencia { 0%,100%{opacity:1;} 50%{opacity:.65;} }
+    .urgencia-CRITICO { animation:pulseUrgencia 1.8s infinite; }
+    .arqueo-row.urg-CRITICO  { border-left-color:var(--nexo-error)!important;   background:rgba(255,71,87,.03)!important; }
+    .arqueo-row.urg-URGENTE  { border-left-color:var(--nexo-warning)!important; background:rgba(255,176,32,.02)!important; }
+    .arqueo-row.urg-ATENCION { border-left-color:#F6C90E!important;             background:rgba(246,201,14,.02)!important; }
+    .arqueo-row.urg-OK       { border-left-color:var(--nexo-success)!important; }
+
+    /* === PIPELINE DE DEPÓSITO === */
+    .deposit-pipeline-header { font-size:.6rem; color:var(--nexo-gray-700); text-transform:uppercase; letter-spacing:.05em; margin-bottom:.3rem; font-weight:700; }
+    .deposit-pipeline { display:flex; align-items:center; gap:.3rem; flex-wrap:wrap; }
+    .dp-step { text-align:center; min-width:72px; }
+    .dp-step-label { font-size:.58rem; color:var(--nexo-gray-700); text-transform:uppercase; letter-spacing:.03em; }
+    .dp-step-amount { font-size:.83rem; font-family:monospace; font-weight:700; color:var(--nexo-gray-900); }
+    .dp-step-note { font-size:.58rem; color:var(--nexo-warning); font-weight:600; }
+    .dp-step-empty .dp-step-amount   { color:var(--nexo-gray-300); }
+    .dp-step-pending .dp-step-amount { color:var(--nexo-warning); }
+    .dp-step-done .dp-step-amount    { color:var(--nexo-success); }
+    .dp-arrow { color:var(--nexo-gray-300); font-size:1.1rem; line-height:1; flex-shrink:0; }
+    .dp-result { display:flex; flex-direction:column; align-items:center; padding:.3rem .5rem; border-radius:var(--nexo-radius-md); min-width:70px; text-align:center; font-size:.72rem; font-weight:700; gap:.1rem; }
+    .dp-result i { font-size:1.1rem; }
+    .dp-result small { font-size:.6rem; font-family:monospace; font-weight:400; opacity:.85; }
+    .dp-result-ok   { background:rgba(0,212,170,.12);  color:var(--nexo-success); }
+    .dp-result-warn { background:rgba(255,71,87,.12);  color:var(--nexo-error); }
+    .dp-result-pend { background:rgba(255,176,32,.12); color:#7D4E00; }
+    .dp-result-empty{ background:var(--nexo-gray-100); color:var(--nexo-gray-700); }
+
+    /* === SECCIÓN CONTEO === */
+    .conteo-section-label { font-size:.6rem; color:var(--nexo-gray-700); text-transform:uppercase; letter-spacing:.04em; }
+    .conteo-expl { font-size:.62rem; color:var(--nexo-gray-700); margin-top:.15rem; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .conteo-expl-warn { color:var(--nexo-error) !important; }
+    .conteo-ok-context { display:inline-flex; align-items:center; gap:.2rem; margin-top:.3rem; font-size:.62rem; padding:.1rem .4rem; border-radius:2rem; background:rgba(0,212,170,.1); color:var(--nexo-success); font-weight:700; }
 </style>
 
 <div class="page-content">
@@ -268,37 +333,94 @@
                     <h6 class="modal-title text-white mb-0"><i class="ri-bank-line me-2"></i>Registrar Comprobante Bancario</h6>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Arqueo Asociado *</label>
-                            <select class="form-select" id="cbArqueo" required></select>
+                <div class="modal-body p-0">
+                    <div class="px-4 py-2 d-flex align-items-center gap-2" style="background:var(--nexo-gray-100);border-bottom:1px solid var(--nexo-gray-300);">
+                        <i class="ri-information-line text-primary" style="font-size:1rem;flex-shrink:0;"></i>
+                        <span style="font-size:.82rem;color:var(--nexo-gray-700);">Seleccione el arqueo y complete los datos del depósito bancario. El monto debe coincidir con el comprobante.</span>
+                    </div>
+                    <div class="px-4 py-3">
+                        <div class="row g-3">
+
+                            <!-- Arqueo full-width con Select2 -->
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Arqueo Asociado <span class="text-danger">*</span></label>
+                                <select id="cbArqueo" style="width:100%;" required></select>
+                                <!-- Resumen del arqueo seleccionado -->
+                                <div id="cbArqueoResumen" class="cb-arqueo-resumen mt-2" style="display:none;">
+                                    <div class="cb-resumen-kpi">
+                                        <div class="cb-resumen-item">
+                                            <small>Ef. Teórico</small>
+                                            <strong id="cbResEfTeorico">—</strong>
+                                        </div>
+                                        <div class="cb-resumen-item">
+                                            <small>Ya Depositado</small>
+                                            <strong id="cbResDepositado">—</strong>
+                                        </div>
+                                        <div class="cb-resumen-item">
+                                            <small>Pendiente</small>
+                                            <strong id="cbResPendiente" style="color:var(--nexo-warning);">—</strong>
+                                        </div>
+                                        <div class="cb-resumen-item">
+                                            <small>Estado</small>
+                                            <strong id="cbResEstado" style="font-family:sans-serif;font-size:.78rem;">—</strong>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-primary mt-2 py-0 px-2" onclick="cbAutoFillMonto()" style="font-size:.75rem;">
+                                        <i class="ri-magic-line me-1"></i>Usar monto pendiente
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Fecha + Monto -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Fecha del Depósito <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" id="cbFecha" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Monto <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="cbMonto" min="1" placeholder="0" required>
+                                </div>
+                                <div id="cbMontoHint" class="text-muted mt-1" style="font-size:.74rem;display:none;"></div>
+                            </div>
+
+                            <!-- Banco + N° Comprobante -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Banco <span class="text-danger">*</span></label>
+                                <select class="form-select" id="cbBanco">
+                                    <option value="ESTADO">BancoEstado</option>
+                                    <option value="SANTANDER">Santander</option>
+                                    <option value="CHILE">Banco de Chile</option>
+                                    <option value="BCI">BCI</option>
+                                    <option value="SCOTIABANK">Scotiabank</option>
+                                    <option value="ITAU">Itaú</option>
+                                    <option value="SECURITY">Banco Security</option>
+                                    <option value="FALABELLA">Banco Falabella</option>
+                                    <option value="RIPLEY">Banco Ripley</option>
+                                    <option value="OTRO">Otro</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">N° Comprobante</label>
+                                <input type="text" class="form-control" id="cbNumero" placeholder="ej. 123456789">
+                            </div>
+
+                            <!-- Imagen + Observaciones -->
+                            <div class="col-md-6">
+                                <label class="form-label">Imagen del Comprobante</label>
+                                <input type="file" class="form-control" id="cbImagen" accept="image/*">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Observaciones</label>
+                                <textarea class="form-control" id="cbObs" rows="2"></textarea>
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Fecha del Depósito *</label>
-                            <input type="date" class="form-control" id="cbFecha" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Monto *</label>
-                            <div class="input-group"><span class="input-group-text">$</span><input type="number" class="form-control" id="cbMonto" min="1" required></div>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Banco *</label>
-                            <select class="form-select" id="cbBanco">
-                                <option value="ESTADO">BancoEstado</option><option value="SANTANDER">Santander</option>
-                                <option value="CHILE">Banco de Chile</option><option value="BCI">BCI</option>
-                                <option value="SCOTIABANK">Scotiabank</option><option value="ITAU">Itaú</option>
-                                <option value="FALABELLA">Banco Falabella</option><option value="OTRO">Otro</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6"><label class="form-label">N° Comprobante</label><input type="text" class="form-control" id="cbNumero" placeholder="123456789"></div>
-                        <div class="col-md-6"><label class="form-label">Imagen</label><input type="file" class="form-control" id="cbImagen" accept="image/*"></div>
-                        <div class="col-12"><label class="form-label">Observaciones</label><textarea class="form-control" id="cbObs" rows="2"></textarea></div>
                     </div>
                 </div>
                 <div class="modal-footer py-2">
                     <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button class="btn btn-success btn-sm" onclick="guardarComprobante()"><i class="ri-save-line me-1"></i>Registrar</button>
+                    <button class="btn btn-success btn-sm" onclick="guardarComprobante()"><i class="ri-save-line me-1"></i>Registrar Comprobante</button>
                 </div>
             </div>
         </div>
@@ -329,9 +451,25 @@
                         <div class="col-md-4">
                             <label class="form-label fw-bold">Banco *</label>
                             <select class="form-select" id="mdBancoSel">
-                                <option value="ESTADO">BancoEstado</option><option value="SANTANDER">Santander</option>
-                                <option value="CHILE">Banco de Chile</option><option value="BCI">BCI</option>
-                                <option value="SCOTIABANK">Scotiabank</option><option value="OTRO">Otro</option>
+                                {% with nombre_emp=sucursal_actual.empresa.nombre|upper|default:"" %}
+                                {% if "REALSPORT" in nombre_emp %}
+                                <option value="SANTANDER" selected>Santander</option>
+                                <option value="CHILE">Banco de Chile</option>
+                                <option value="ESTADO">BancoEstado</option>
+                                {% elif "PAOLA" in nombre_emp or "EDELMIRA" in nombre_emp %}
+                                <option value="CHILE" selected>Banco de Chile</option>
+                                <option value="SANTANDER">Santander</option>
+                                <option value="ESTADO">BancoEstado</option>
+                                {% else %}
+                                <option value="ESTADO">BancoEstado</option>
+                                <option value="SANTANDER">Santander</option>
+                                <option value="CHILE">Banco de Chile</option>
+                                {% endif %}
+                                {% endwith %}
+                                <option value="BCI">BCI</option>
+                                <option value="SCOTIABANK">Scotiabank</option>
+                                <option value="ITAU">Itaú</option>
+                                <option value="OTRO">Otro</option>
                             </select>
                         </div>
                         <div class="col-md-4"><label class="form-label">N° Comprobante</label><input type="text" class="form-control" id="mdNumComp"></div>
@@ -482,6 +620,15 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fechaDesde').value = primerDia.toISOString().split('T')[0];
     document.getElementById('fechaHasta').value = hoy.toISOString().split('T')[0];
 
+    // Select2 estático para banco (modal comprobante)
+    if (typeof $.fn.select2 !== 'undefined') {
+        $('#cbBanco').select2({
+            dropdownParent: $('#modalComprobante'),
+            minimumResultsForSearch: Infinity,
+            width: '100%'
+        });
+    }
+
     cargarSucursales();
     cargarDatos();
 });
@@ -580,6 +727,80 @@ function estadoBadgeColor(estado) {
     return colors[estado] || ['rgba(128,128,128,.15)','#888'];
 }
 
+// ===== HELPERS DE RENDERING =====
+function getUrgencyLevel(a) {
+    if (a.resultado_revision === 'OK' && a.estado === 'REVISADO') return 'OK';
+    const dias = a.dias_sin_revision || 0;
+    if (dias > 7) return 'CRITICO';
+    if (dias > 3 || a.requiere_revision_urgente) return 'URGENTE';
+    if (dias > 1) return 'ATENCION';
+    return 'NUEVO';
+}
+
+function renderDepositoPipeline(a) {
+    const teorico   = a.efectivo_teorico || 0;
+    const verif     = a.total_depositado_verificado || 0;
+    const difDep    = a.diferencia_deposito_vs_teorico || 0;
+    const estadoDep = a.estado_deposito;
+    const numDec    = a.depositos_declarados || 0;
+    const numConf   = a.depositos_confirmados || 0;
+
+    const teorHtml = `<div class="dp-step"><div class="dp-step-label">Ef. Teórico</div><div class="dp-step-amount">${fmt(teorico)}</div></div>`;
+    const arrow    = `<span class="dp-arrow"><i class="ri-arrow-right-s-line"></i></span>`;
+
+    let midHtml;
+    if (numConf > 0) {
+        midHtml = `<div class="dp-step dp-step-done"><div class="dp-step-label">Depositado</div><div class="dp-step-amount">${fmt(verif)}</div></div>`;
+    } else if (numDec > 0) {
+        midHtml = `<div class="dp-step dp-step-pending"><div class="dp-step-label">Declarado</div><div class="dp-step-amount">${fmt(verif || teorico)}</div><div class="dp-step-note">Sin confirmar</div></div>`;
+    } else {
+        midHtml = `<div class="dp-step dp-step-empty"><div class="dp-step-label">Sin Depósito</div><div class="dp-step-amount">—</div></div>`;
+    }
+
+    let resultHtml;
+    if (estadoDep === 'COMPLETO') {
+        resultHtml = `<div class="dp-result dp-result-ok"><i class="ri-check-circle-fill"></i><span>Cuadra</span><small>Dif: $0</small></div>`;
+    } else if (estadoDep === 'PARCIAL') {
+        resultHtml = `<div class="dp-result dp-result-warn"><i class="ri-error-warning-fill"></i><span>Parcial</span><small>${(difDep > 0 ? '+' : '') + fmt(difDep)}</small></div>`;
+    } else if (numDec > 0) {
+        resultHtml = `<div class="dp-result dp-result-pend"><i class="ri-time-line"></i><span>Pend. conf.</span></div>`;
+    } else {
+        resultHtml = `<div class="dp-result dp-result-empty"><i class="ri-inbox-fill"></i><span>Sin dep.</span></div>`;
+    }
+
+    return `<div class="deposit-pipeline">${teorHtml}${arrow}${midHtml}${arrow}${resultHtml}</div>`;
+}
+
+function renderConteoSection(a) {
+    const diffEf    = a.diferencia_efectivo || 0;
+    const diffTbk   = a.diferencia_transbank || 0;
+    const diffColor = diffEf === 0 ? 'var(--nexo-success)' : 'var(--nexo-error)';
+    const diffSign  = diffEf > 0 ? '+' : '';
+
+    let explHtml = '';
+    if (diffEf !== 0) {
+        if (a.observaciones_diferencia) {
+            const obs = escHtml((a.observaciones_diferencia || '').substring(0, 45));
+            explHtml = `<div class="conteo-expl" title="${(a.observaciones_diferencia || '').replace(/"/g, '&quot;')}"><i class="ri-chat-3-line"></i> ${obs}</div>`;
+        } else {
+            explHtml = `<div class="conteo-expl conteo-expl-warn"><i class="ri-alert-line"></i> Sin explicación</div>`;
+        }
+    }
+    if (a.observaciones_supervisor) {
+        explHtml += `<div class="conteo-expl" style="color:var(--nexo-primary);" title="Sup: ${(a.observaciones_supervisor||'').replace(/"/g,'&quot;')}"><i class="ri-shield-check-line"></i> ${escHtml((a.observaciones_supervisor||'').substring(0,40))}</div>`;
+    }
+
+    const contextoHtml = (diffEf !== 0 && a.estado_deposito === 'COMPLETO')
+        ? `<div class="conteo-ok-context"><i class="ri-bank-line"></i> Dep. cuadra ✓</div>`
+        : '';
+
+    const tbkHtml = diffTbk !== 0 ? `<div style="font-size:.63rem;color:var(--nexo-error);">POS: ${fmt(diffTbk)}</div>` : '';
+
+    return `<div class="conteo-section-label">Dif. Conteo</div>
+        <strong style="font-family:monospace;color:${diffColor};font-size:.88rem;">${diffSign}${fmt(diffEf)}</strong>
+        ${tbkHtml}${explHtml}${contextoHtml}`;
+}
+
 function renderArqueos(arqueos) {
     const container = document.getElementById('listaArqueos');
 
@@ -595,91 +816,64 @@ function renderArqueos(arqueos) {
         container.innerHTML = '<div class="text-center py-5"><i class="ri-folder-open-line" style="font-size:3rem;color:var(--nexo-gray-300);"></i><p class="text-muted mt-2">No hay arqueos en el periodo seleccionado</p></div>';
         return;
     }
+
+    const urgLabels = { 'CRITICO': '⚑ CRÍTICO', 'URGENTE': '⚠ URGENTE', 'ATENCION': '↺ ATENCIÓN', 'NUEVO': '● NUEVO', 'OK': '✓ OK' };
     let html = '';
     filtered.forEach(a => {
+        const urgLevel = getUrgencyLevel(a);
         const estadoClassMap = {
-            'CERRADO':'estado-cerrado','CON_DIFERENCIAS':'estado-diferencias','ABIERTO':'estado-abierto',
-            'DEPOSITO_DECLARADO':'estado-deposito-declarado','DEPOSITO_CONFIRMADO':'estado-deposito-confirmado','REVISADO':'estado-revisado'
+            'CERRADO': 'estado-cerrado', 'CON_DIFERENCIAS': 'estado-diferencias', 'ABIERTO': 'estado-abierto',
+            'DEPOSITO_DECLARADO': 'estado-deposito-declarado', 'DEPOSITO_CONFIRMADO': 'estado-deposito-confirmado', 'REVISADO': 'estado-revisado'
         };
         const estadoClass = estadoClassMap[a.estado] || 'estado-abierto';
-        const diffEf = a.diferencia_efectivo || 0;
-        const diffTbk = a.diferencia_transbank || 0;
-        const diffColor = diffEf === 0 ? 'var(--nexo-success)' : 'var(--nexo-error)';
-        const diffSign = diffEf > 0 ? '+' : '';
-        const fechaDisplay = new Date(a.fecha_arqueo + 'T12:00:00').toLocaleDateString('es-CL', {weekday:'short', day:'numeric', month:'short'});
+        const fechaDisplay = new Date(a.fecha_arqueo + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' });
         const [bgBadge, colorBadge] = estadoBadgeColor(a.estado);
         const stepper = miniStepperHtml(a.estado);
 
-        const difDep = a.diferencia_deposito_vs_teorico || 0;
-        const difDepColor = a.estado_deposito === 'COMPLETO' ? 'var(--nexo-success)' : a.estado_deposito === 'SIN_DEPOSITO' ? 'var(--nexo-gray-400)' : 'var(--nexo-error)';
-        const urgentBadge = a.requiere_revision_urgente ? '<span class="badge bg-danger ms-1" style="font-size:.65rem;">URGENTE ' + a.dias_sin_revision + 'd</span>' : '';
-        const expressBadge = a.requiere_revision_express ? '<span class="badge ms-1" style="font-size:.65rem;background:rgba(255,176,32,.15);color:var(--nexo-warning);">Express</span>' : '';
-        const fondoFijo = a.fondo_fijo ? '<div style="font-size:.68rem;color:var(--nexo-gray-500);">F.Fijo: ' + fmt(a.fondo_fijo) + '</div>' : '';
+        const dias = a.dias_sin_revision || 0;
+        const urgChipHtml = `<div class="urgencia-chip urgencia-${urgLevel}">${urgLabels[urgLevel]}${dias > 0 ? ' ' + dias + 'd' : ''}</div>`;
 
-        // Resultado revision badge
         const resRev = a.resultado_revision || 'PENDIENTE';
         let revBadge = '';
         if (resRev === 'OK') revBadge = '<span class="badge ms-1" style="font-size:.6rem;background:rgba(0,212,170,.15);color:var(--nexo-success);">OK</span>';
         else if (resRev === 'OK_CON_OBS') revBadge = '<span class="badge ms-1" style="font-size:.6rem;background:rgba(108,99,255,.15);color:#6C63FF;">OK c/Obs</span>';
         else if (resRev === 'REQUIERE_ACCION') revBadge = '<span class="badge ms-1" style="font-size:.6rem;background:rgba(255,71,87,.15);color:var(--nexo-error);">Req. Acción</span>';
 
-        // Observaciones inline: cajera explanation + supervisor note indicator
-        let obsSection = '';
-        if (a.diferencia_efectivo !== 0 && a.observaciones_diferencia) {
-            obsSection += '<div style="font-size:.72rem;color:var(--nexo-gray-700);margin-top:2px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + (a.observaciones_diferencia||'').replace(/"/g,'&quot;') + '"><i class="ri-chat-3-line me-1" style="color:var(--nexo-success);"></i>' + (a.observaciones_diferencia||'').substring(0,60) + '</div>';
-        } else if (a.diferencia_efectivo !== 0) {
-            obsSection += '<div style="font-size:.68rem;color:var(--nexo-error);"><i class="ri-alert-line me-1"></i>Sin explicación</div>';
-        }
-        if (a.observaciones_supervisor) {
-            obsSection += '<div style="font-size:.68rem;color:var(--nexo-primary);margin-top:1px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="Supervisor: ' + (a.observaciones_supervisor||'').replace(/"/g,'&quot;') + '"><i class="ri-shield-check-line me-1"></i>' + (a.observaciones_supervisor||'').substring(0,50) + '</div>';
-        }
+        const expressBadge = a.requiere_revision_express ? '<span class="badge ms-1" style="font-size:.6rem;background:rgba(255,176,32,.12);color:#7D4E00;">Express</span>' : '';
         const obsCount = a.cantidad_observaciones || 0;
-        const obsCountBadge = obsCount > 0 ? '<span class="badge ms-1" style="font-size:.55rem;background:var(--nexo-primary-light);color:var(--nexo-primary);">' + obsCount + ' notas</span>' : '';
+        const obsCountBadge = obsCount > 0 ? `<span class="badge ms-1" style="font-size:.55rem;background:var(--nexo-primary-light);color:var(--nexo-primary);">${obsCount} notas</span>` : '';
+        const fondoFijo = a.fondo_fijo ? `<div style="font-size:.63rem;color:var(--nexo-gray-500);">F.Fijo: ${fmt(a.fondo_fijo)}</div>` : '';
 
-        // Action buttons
-        let actionBtns = '<button class="btn btn-sm btn-outline-primary me-1" onclick="verDetalle(' + a.id + ')" title="Ver detalle"><i class="ri-eye-line"></i></button>';
-        if (['CON_DIFERENCIAS','DEPOSITO_CONFIRMADO','CERRADO'].includes(a.estado) && resRev !== 'OK') {
-            actionBtns += '<div class="btn-group btn-group-sm ms-1"><button class="btn btn-success btn-sm" onclick="aprobarArqueoDirecto(' + a.id + ',\'OK\')" title="Aprobar OK"><i class="ri-check-line"></i></button>';
-            actionBtns += '<button class="btn btn-success btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown"></button>';
-            actionBtns += '<ul class="dropdown-menu dropdown-menu-end">';
-            actionBtns += '<li><a class="dropdown-item" href="#" onclick="aprobarArqueoDirecto(' + a.id + ',\'OK\');return false;"><i class="ri-check-line me-2 text-success"></i>Aprobar OK</a></li>';
-            actionBtns += '<li><a class="dropdown-item" href="#" onclick="aprobarArqueoDirecto(' + a.id + ',\'OK_CON_OBS\');return false;"><i class="ri-message-3-line me-2 text-primary"></i>OK con Observaciones</a></li>';
-            actionBtns += '<li><a class="dropdown-item" href="#" onclick="aprobarArqueoDirecto(' + a.id + ',\'REQUIERE_ACCION\');return false;"><i class="ri-alarm-warning-line me-2 text-danger"></i>Requiere Acción</a></li>';
-            actionBtns += '</ul></div>';
+        let actionBtns = `<button class="btn btn-sm btn-outline-primary me-1" onclick="verDetalle(${a.id})" title="Ver detalle"><i class="ri-eye-line"></i></button>`;
+        if (['CON_DIFERENCIAS', 'DEPOSITO_CONFIRMADO', 'CERRADO'].includes(a.estado) && resRev !== 'OK') {
+            actionBtns += `<div class="btn-group btn-group-sm"><button class="btn btn-success btn-sm" onclick="aprobarArqueoDirecto(${a.id},'OK')" title="Aprobar OK"><i class="ri-check-line"></i></button><button class="btn btn-success btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown"></button><ul class="dropdown-menu dropdown-menu-end"><li><a class="dropdown-item" href="#" onclick="aprobarArqueoDirecto(${a.id},'OK');return false;"><i class="ri-check-line me-2 text-success"></i>Aprobar OK</a></li><li><a class="dropdown-item" href="#" onclick="aprobarArqueoDirecto(${a.id},'OK_CON_OBS');return false;"><i class="ri-message-3-line me-2 text-primary"></i>OK con Observaciones</a></li><li><a class="dropdown-item" href="#" onclick="aprobarArqueoDirecto(${a.id},'REQUIERE_ACCION');return false;"><i class="ri-alarm-warning-line me-2 text-danger"></i>Requiere Acción</a></li></ul></div>`;
         }
 
-        html += '<div class="arqueo-row ' + estadoClass + '" ' + (a.requiere_revision_urgente ? 'style="background:rgba(255,71,87,.04);"' : '') + '>' +
-            '<div class="row align-items-center g-2">' +
-                '<div class="col-md-2">' +
-                    '<strong style="font-size:.92rem;">' + fechaDisplay + '</strong>' +
-                    '<div class="d-flex align-items-center gap-1 flex-wrap mt-1">' +
-                        '<span class="badge" style="font-size:.68rem;background:' + bgBadge + ';color:' + colorBadge + ';">' + a.estado_display + '</span>' +
-                        revBadge + stepper + urgentBadge + expressBadge + obsCountBadge +
-                    '</div>' +
-                '</div>' +
-                '<div class="col-md-2 text-center">' +
-                    '<div style="font-size:.72rem;color:var(--nexo-gray-700);">Efectivo Teórico</div>' +
-                    '<strong style="font-family:monospace;">' + fmt(a.efectivo_teorico) + '</strong>' +
-                    fondoFijo +
-                '</div>' +
-                '<div class="col-md-2 text-center">' +
-                    '<div style="font-size:.72rem;color:var(--nexo-gray-700);">Depositado Verif.</div>' +
-                    '<strong style="font-family:monospace;color:' + difDepColor + ';">' + fmt(a.total_depositado_verificado || 0) + '</strong>' +
-                    (a.total_deposito_cheque ? '<div style="font-size:.68rem;color:var(--nexo-gray-500);">Cheq: ' + fmt(a.total_deposito_cheque) + '</div>' : '') +
-                '</div>' +
-                '<div class="col-md-2 text-center">' +
-                    '<div style="font-size:.72rem;color:var(--nexo-gray-700);">Dif. Depósito</div>' +
-                    '<strong style="font-family:monospace;color:' + difDepColor + ';">' + (difDep > 0 ? '+' : '') + fmt(difDep) + '</strong>' +
-                    '<div style="font-size:.68rem;"><span class="badge" style="font-size:.6rem;background:' + (a.estado_deposito==='COMPLETO'?'rgba(0,212,170,.15)':a.estado_deposito==='SIN_DEPOSITO'?'rgba(128,128,128,.15)':'rgba(255,71,87,.15)') + ';color:' + difDepColor + ';">' + (a.estado_deposito === 'COMPLETO' ? 'Cuadra' : a.estado_deposito === 'SIN_DEPOSITO' ? 'Sin depósito' : 'Parcial') + '</span></div>' +
-                    obsSection +
-                '</div>' +
-                '<div class="col-md-2 text-center">' +
-                    '<div style="font-size:.72rem;color:var(--nexo-gray-700);">Dif. Conteo</div>' +
-                    '<strong style="font-family:monospace;color:' + diffColor + ';">' + diffSign + fmt(diffEf) + '</strong>' +
-                    (diffTbk!==0?'<small style="color:var(--nexo-error);font-size:.7rem;"> POS: '+fmt(diffTbk)+'</small>':'') +
-                '</div>' +
-                '<div class="col-md-2 text-end">' + actionBtns + '</div>' +
-            '</div></div>';
+        html += `<div class="arqueo-row ${estadoClass} urg-${urgLevel}">
+            <div class="row align-items-center g-2">
+                <div class="col-12 col-md-2">
+                    ${urgChipHtml}
+                    <strong style="font-size:.9rem;">${fechaDisplay}</strong>
+                    <div style="font-size:.72rem;color:var(--nexo-gray-700);">${escHtml(a.usuario_responsable)}</div>
+                    ${fondoFijo}
+                    <div class="d-flex flex-wrap align-items-center gap-1 mt-1">
+                        <span class="badge" style="font-size:.65rem;background:${bgBadge};color:${colorBadge};">${a.estado_display}</span>
+                        ${revBadge}${expressBadge}${obsCountBadge}
+                    </div>
+                    <div class="d-flex align-items-center gap-1 mt-1">${stepper}</div>
+                </div>
+                <div class="col-12 col-md-5">
+                    <div class="deposit-pipeline-header">Depósito de Efectivo</div>
+                    ${renderDepositoPipeline(a)}
+                </div>
+                <div class="col-6 col-md-2 text-center">
+                    ${renderConteoSection(a)}
+                </div>
+                <div class="col-6 col-md-3 text-end">
+                    ${actionBtns}
+                </div>
+            </div>
+        </div>`;
     });
     container.innerHTML = html;
 }
@@ -918,29 +1112,89 @@ function aprobarArqueo(id) { aprobarArqueoDirecto(id, 'OK'); }
 function aprobarArqueoDetalle() { if (arqueoDetalleId) aprobarArqueoDirecto(arqueoDetalleId, 'OK'); }
 
 // ===== COMPROBANTE BANCARIO =====
+let cbArqueosData = [];
+
 function abrirComprobanteBancario() {
-    fetch('/app/api/arqueos/?per_page=100&sucursal_id=' + sucursalActualId)
-        .then(r => r.json())
-        .then(data => {
-            if (!data.success) return;
-            const sinComprobante = (data.arqueos || []).filter(a => !a.tiene_comprobante);
-            let opts = '<option value="">Seleccione un arqueo...</option>';
-            if (sinComprobante.length === 0) {
-                opts += '<option value="" disabled>Todos los arqueos ya tienen comprobante</option>';
-            } else {
-                sinComprobante.forEach(a => {
-                    const fecha = new Date(a.fecha_arqueo + 'T12:00:00').toLocaleDateString('es-CL');
-                    const efTeorico = '$' + parseInt(a.efectivo_teorico || 0).toLocaleString('es-CL');
-                    opts += `<option value="${a.id}">${fecha} — ${a.estado_display} — Ef. Teórico: ${efTeorico}</option>`;
-                });
-            }
-            document.getElementById('cbArqueo').innerHTML = opts;
-        });
+    // Reset campos
     document.getElementById('cbFecha').value = new Date().toISOString().split('T')[0];
     document.getElementById('cbMonto').value = '';
     document.getElementById('cbNumero').value = '';
     document.getElementById('cbObs').value = '';
+    document.getElementById('cbArqueoResumen').style.display = 'none';
+    document.getElementById('cbMontoHint').style.display = 'none';
+
+    const $sel = $('#cbArqueo');
+
+    // Destruir instancia previa si existe
+    if ($sel.hasClass('select2-hidden-accessible')) {
+        try { $sel.select2('destroy'); } catch(e) {}
+    }
+    $sel.empty().append('<option value="">Cargando arqueos...</option>');
+
+    // Init Select2 inmediato (placeholder mientras carga)
+    $sel.select2({
+        dropdownParent: $('#modalComprobante'),
+        placeholder: 'Buscar por fecha, estado o monto...',
+        allowClear: true,
+        width: '100%',
+        language: {
+            noResults: function() { return 'Sin resultados'; },
+            searching: function() { return 'Buscando...'; }
+        }
+    });
+
+    // Handler de cambio → mostrar resumen
+    $sel.off('change.cb').on('change.cb', function() {
+        const id = parseInt($(this).val());
+        const arqueo = cbArqueosData.find(a => a.id === id);
+        if (arqueo) {
+            const pendiente = (arqueo.efectivo_teorico || 0) - (arqueo.total_depositado_verificado || 0);
+            document.getElementById('cbResEfTeorico').textContent = fmt(arqueo.efectivo_teorico);
+            document.getElementById('cbResDepositado').textContent = fmt(arqueo.total_depositado_verificado || 0);
+            document.getElementById('cbResPendiente').textContent = fmt(Math.max(0, pendiente));
+            document.getElementById('cbResEstado').textContent = arqueo.estado_display || arqueo.estado;
+            document.getElementById('cbArqueoResumen').style.display = '';
+            if (pendiente > 0) {
+                document.getElementById('cbMontoHint').textContent = 'Pendiente de depositar: ' + fmt(pendiente);
+                document.getElementById('cbMontoHint').style.display = '';
+            } else {
+                document.getElementById('cbMontoHint').style.display = 'none';
+            }
+        } else {
+            document.getElementById('cbArqueoResumen').style.display = 'none';
+            document.getElementById('cbMontoHint').style.display = 'none';
+        }
+    });
+
+    fetch('/app/api/arqueos/?per_page=100&sucursal_id=' + sucursalActualId)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return;
+            cbArqueosData = (data.arqueos || []).filter(a => !a.tiene_comprobante);
+            $sel.empty().append('<option value=""></option>');
+            if (cbArqueosData.length === 0) {
+                $sel.append('<option value="" disabled>Todos los arqueos ya tienen comprobante</option>');
+            } else {
+                cbArqueosData.forEach(a => {
+                    const fecha = new Date(a.fecha_arqueo + 'T12:00:00')
+                        .toLocaleDateString('es-CL', {weekday:'short', day:'numeric', month:'short', year:'numeric'});
+                    const efTeorico = '$' + parseInt(a.efectivo_teorico || 0).toLocaleString('es-CL');
+                    $sel.append(new Option(fecha + ' — ' + (a.estado_display || a.estado) + ' — Ef. Teórico: ' + efTeorico, a.id));
+                });
+            }
+            $sel.trigger('change');
+        });
+
     new bootstrap.Modal(document.getElementById('modalComprobante')).show();
+}
+
+function cbAutoFillMonto() {
+    const id = parseInt($('#cbArqueo').val());
+    const arqueo = cbArqueosData.find(a => a.id === id);
+    if (arqueo) {
+        const pendiente = (arqueo.efectivo_teorico || 0) - (arqueo.total_depositado_verificado || 0);
+        if (pendiente > 0) document.getElementById('cbMonto').value = pendiente;
+    }
 }
 
 function guardarComprobante() {
@@ -1011,14 +1265,18 @@ function validarMultidia() {
     });
     document.getElementById('mdSuma').textContent = fmt(suma);
     document.getElementById('mdComp').textContent = fmt(total);
+    const diff = total - suma;
     const ok = total > 0 && suma === total && dias > 0;
+    const okTolerado = total > 0 && Math.abs(diff) <= 1 && dias > 0;
     document.getElementById('mdValidacion').style.display = (dias > 0 || total > 0) ? '' : 'none';
     document.getElementById('mdEstado').innerHTML = ok
         ? '<span class="badge bg-success"><i class="ri-check-line me-1"></i>Cuadra</span>'
-        : dias === 0
-            ? '<span class="badge bg-secondary">Seleccione días</span>'
-            : `<span class="badge bg-danger">Dif: ${fmt(total - suma)}</span>`;
-    document.getElementById('btnMdGuardar').disabled = !ok;
+        : okTolerado
+            ? `<span class="badge bg-success"><i class="ri-check-line me-1"></i>Cuadra (dif. ${diff > 0 ? '+' : ''}$${Math.abs(diff)} ajustada)</span>`
+            : dias === 0
+                ? '<span class="badge bg-secondary">Seleccione días</span>'
+                : `<span class="badge bg-danger">Dif: ${fmt(diff)}</span>`;
+    document.getElementById('btnMdGuardar').disabled = !(ok || okTolerado);
 }
 
 function guardarMultidia() {
@@ -1028,7 +1286,7 @@ function guardarMultidia() {
         const m = parseInt(document.querySelector(`.mdMontoInput[data-id="${c.dataset.id}"]`).value) || 0;
         if (m > 0) desglose.push({ arqueo_id: parseInt(c.dataset.id), monto: m });
     });
-    if (desglose.reduce((a,b) => a + b.monto, 0) !== total) { Swal.fire('Error','Montos no cuadran','error'); return; }
+    if (Math.abs(desglose.reduce((a,b) => a + b.monto, 0) - total) > 1) { Swal.fire('Error','Montos no cuadran','error'); return; }
     const fd = new FormData();
     fd.append('fecha_deposito', document.getElementById('mdFecha').value);
     fd.append('monto_total', total);

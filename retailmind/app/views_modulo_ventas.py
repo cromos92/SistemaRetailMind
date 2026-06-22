@@ -9173,11 +9173,14 @@ def crear_deposito_multidia(request):
             return JsonResponse({'success': False, 'error': 'Debe incluir al menos un día en el desglose'})
 
         suma_desglose = sum(int(d.get('monto', 0)) for d in desglose)
-        if suma_desglose != monto_total:
+        if abs(suma_desglose - monto_total) > 1:
             return JsonResponse({
                 'success': False,
                 'error': f'La suma del desglose (${suma_desglose:,}) no coincide con el monto del comprobante (${monto_total:,})'
             })
+        # Si hay diferencia de exactamente $1, se ajusta el monto_total al valor real del desglose
+        if suma_desglose != monto_total:
+            monto_total = suma_desglose
 
         fecha_obj = datetime.strptime(fecha_deposito, '%Y-%m-%d').date()
 
