@@ -21127,13 +21127,13 @@ def buscar_productos_existentes(request):
             'atributo1',
             'atributo2',
             'atributo3'
-        ).prefetch_related('producto_tallas')[:20]
+        ).prefetch_related('producto_talla')[:20]
 
         logger.debug("Productos encontrados en busqueda existente: total=%s", productos.count())
 
         resultados = []
         for producto in productos:
-            tallas_qs = list(producto.producto_tallas.values('talla', 'sku', 'stock'))
+            tallas_qs = list(producto.producto_talla.values('talla', 'sku', 'stock'))
             try:
                 tallas_ordenadas = sorted(tallas_qs, key=lambda x: float(str(x['talla']).replace(',', '.') or 0))
             except (ValueError, TypeError):

@@ -10345,19 +10345,11 @@ function copiarProductoCoincidencia(producto) {
     $('#modalCrearProductoManual input[name="sobreprecio"]').val(producto.sobreprecio || 0);
     $('#modalCrearProductoManual input[name="precioventa"]').val(producto.precioventa || 0);
     
-    // Seleccionar atributos en los selects
-    if (producto.marca_id) {
-        $('#modalCrearProductoManual select[name="atributo1"]').val(producto.marca_id).trigger('change');
-    }
-    if (producto.color_id) {
-        $('#modalCrearProductoManual select[name="atributo2"]').val(producto.color_id).trigger('change');
-    }
-    if (producto.genero_id) {
-        $('#modalCrearProductoManual select[name="atributo3"]').val(producto.genero_id).trigger('change');
-    }
-    if (producto.categoria_id) {
-        $('#modalCrearProductoManual select[name="categoria"]').val(producto.categoria_id).trigger('change');
-    }
+    // Seleccionar atributos — mismo patrón que copiarDatosProducto (carga opciones + selecciona por ID)
+    if (producto.atributo1) cargarOpcionesAtributoYSeleccionar(ID_ATRIBUTO_MARCA, 'atributo1', producto.atributo1);
+    if (producto.atributo2) cargarOpcionesAtributoYSeleccionar(ID_ATRIBUTO_COLOR, 'atributo2', producto.atributo2);
+    if (producto.atributo3) cargarOpcionesAtributoYSeleccionar(ID_ATRIBUTO_GENERO, 'atributo3', producto.atributo3);
+    if (producto.categoria_id) cargarCategoriasYSeleccionar(producto.categoria_id);
 
     // Copiar tipo de talla
     if (producto.tipo_talla) {
@@ -10365,9 +10357,9 @@ function copiarProductoCoincidencia(producto) {
     }
 
     // Copiar guía de talla si existe
-    if (producto.guia_talla_id && producto.marca_id) {
+    if (producto.guia_talla_id && producto.atributo1) {
         setTimeout(function() {
-            cargarGuiasTallaManual(producto.marca_id);
+            cargarGuiasTallaManual(producto.atributo1);
             setTimeout(function() {
                 $('#selectGuiaTallaManual').val(producto.guia_talla_id).trigger('change');
             }, 400);
