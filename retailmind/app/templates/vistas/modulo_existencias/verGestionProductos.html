@@ -2895,11 +2895,18 @@
                                     </div>
                                     <div class="collapse show" id="collapseBusqueda">
                                         <div class="p-3">
-                                            <div class="mb-2">
+                                            <div class="mb-1">
                                                 <div class="input-group input-group-sm">
-                                                    <input type="text" class="form-control" id="buscadorProductoExistente" placeholder="Buscar artículo...">
-                                                    <button class="btn btn-outline-primary" type="button" id="btnBuscarProducto"><i class="bi bi-search"></i></button>
+                                                    <input type="text" class="form-control" id="buscadorProductoExistente"
+                                                           placeholder="Ej: 2026, BAMBOO, NIKE..."
+                                                           title="Búsqueda parcial — escribe cualquier parte del artículo o descripción">
+                                                    <button class="btn btn-outline-primary" type="button" id="btnBuscarProducto">
+                                                        <i class="bi bi-search me-1"></i>Buscar
+                                                    </button>
                                                 </div>
+                                                <small class="text-muted d-block mt-1" style="font-size:.68rem;">
+                                                    <i class="bi bi-info-circle me-1"></i>Búsqueda parcial — no necesitas wildcards. Busca en artículo y descripción.
+                                                </small>
                                             </div>
                                             <div id="resultadosBusqueda" style="display: none;">
                                                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -10447,54 +10454,62 @@ function mostrarAlertaPreciosOtrasSucursales(productosOtrasSucursales) {
         const esDiferente = precioFormulario > 0 && p.precioventa !== precioFormulario;
         const diferencia = precioFormulario > 0 ? p.precioventa - precioFormulario : 0;
         const porcentaje = precioFormulario > 0 ? ((diferencia / precioFormulario) * 100).toFixed(1) : 0;
-        
-        // Mostrar marca/color si están disponibles
-        const infoExtra = (p.marca && p.marca !== '-') || (p.color && p.color !== '-') 
-            ? `<br><small class="text-muted">${p.marca || ''} ${p.color || ''}</small>` 
-            : '';
-        
+        const marcaColor = [p.marca, p.color].filter(v => v && v !== '-').join(' / ');
+        const tienePid = p.producto_id ? true : false;
+
         filasSucursales += `
             <tr class="${esDiferente ? 'table-warning' : ''}">
-                <td><strong>${p.sucursal_nombre}</strong>${infoExtra}</td>
-                <td class="text-end">$${p.precioventa.toLocaleString('es-CL')}</td>
-                <td class="text-end">$${p.costo.toLocaleString('es-CL')}</td>
+                <td>
+                    <strong>${p.sucursal_nombre}</strong>
+                    ${p.es_sucursal_actual ? '<span class="badge bg-primary ms-1" style="font-size:.58rem;">actual</span>' : ''}
+                    ${marcaColor ? `<br><small class="text-muted" style="font-size:.72rem;">${marcaColor}</small>` : ''}
+                </td>
+                <td class="text-end fw-semibold">$${p.precioventa.toLocaleString('es-CL')}</td>
+                <td class="text-end text-muted">$${p.costo.toLocaleString('es-CL')}</td>
                 <td class="text-center">
-                    ${esDiferente ? 
-                        `<span class="badge ${diferencia > 0 ? 'bg-danger' : 'bg-success'}">${diferencia > 0 ? '+' : ''}${porcentaje}%</span>` : 
-                        '<span class="badge bg-success">Igual</span>'
+                    ${esDiferente ?
+                        `<span class="badge ${diferencia > 0 ? 'bg-danger' : 'bg-success'}">${diferencia > 0 ? '+' : ''}${porcentaje}%</span>` :
+                        '<span class="badge bg-secondary">Igual</span>'
                     }
                 </td>
                 <td class="text-center">
-                    <button type="button" class="btn btn-sm btn-outline-primary btnCopiarPrecioSucursal" 
+                    ${tienePid ? `
+                    <button type="button" class="btn btn-sm btn-success btnCopiarTodoSucursal"
+                            data-producto-id="${p.producto_id}"
                             data-precio="${p.precioventa}" data-costo="${p.costo}" data-sobreprecio="${p.sobreprecio}"
-                            title="Usar estos precios">
-                        <i class="bi bi-arrow-down-circle"></i>
-                    </button>
+                            title="Copiar todos los datos de ${p.sucursal_nombre}">
+                        <i class="bi bi-copy me-1"></i>Copiar
+                    </button>` : `
+                    <button type="button" class="btn btn-sm btn-outline-primary btnCopiarPrecioSucursal"
+                            data-precio="${p.precioventa}" data-costo="${p.costo}" data-sobreprecio="${p.sobreprecio}"
+                            title="Usar solo los precios de ${p.sucursal_nombre}">
+                        <i class="bi bi-currency-dollar"></i>
+                    </button>`}
                 </td>
             </tr>
         `;
     });
-    
+
     const html = `
         <div id="alertaPreciosOtrasSucursales" class="alert alert-${colorAlerta} mb-3 py-2">
             <div class="d-flex align-items-start">
                 <i class="bi bi-${iconoAlerta} fs-5 me-2 mt-1"></i>
                 <div class="flex-grow-1">
                     <strong>
-                        ${hayDiferencias ? 
-                            '⚠️ Este producto tiene PRECIOS DIFERENTES en otras sucursales' : 
-                            'ℹ️ Este producto existe en otras sucursales'
+                        ${hayDiferencias ?
+                            '⚠️ Este producto tiene precios diferentes en otras sucursales' :
+                            'ℹ️ Este artículo ya existe en otras sucursales — puedes copiar sus datos'
                         }
                     </strong>
-                    <div class="table-responsive mt-2" style="max-height: 150px; overflow-y: auto;">
-                        <table class="table table-sm table-bordered mb-0" style="font-size: 0.85rem;">
+                    <div class="table-responsive mt-2" style="max-height: 200px; overflow-y: auto;">
+                        <table class="table table-sm table-bordered mb-0" style="font-size: 0.82rem;">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Sucursal</th>
-                                    <th class="text-end">Precio Venta</th>
+                                    <th>Sucursal / Atributos</th>
+                                    <th class="text-end">Precio</th>
                                     <th class="text-end">Costo</th>
-                                    <th class="text-center">Diferencia</th>
-                                    <th class="text-center">Usar</th>
+                                    <th class="text-center">Precio</th>
+                                    <th class="text-center">Acción</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -10522,20 +10537,51 @@ function mostrarAlertaPreciosOtrasSucursales(productosOtrasSucursales) {
     }
 }
 
-// Evento para copiar precios de otra sucursal
+// Evento: copiar precios solamente desde otra sucursal
 $(document).on('click', '.btnCopiarPrecioSucursal', function() {
     const precio = $(this).data('precio');
     const costo = $(this).data('costo');
     const sobreprecio = $(this).data('sobreprecio');
-    
+
     $('#modalCrearProductoManual input[name="precioventa"]').val(precio);
     $('#modalCrearProductoManual input[name="costo"]').val(costo);
     $('#modalCrearProductoManual input[name="sobreprecio"]').val(sobreprecio);
-    
-    // Actualizar la alerta para reflejar que ahora son iguales
+
     verificarProductoExistenteManual();
-    
     showToast('success', 'Precios copiados desde otra sucursal');
+});
+
+// Evento: copiar TODOS los datos del producto desde otra sucursal
+$(document).on('click', '.btnCopiarTodoSucursal', function() {
+    const productoId = $(this).data('producto-id');
+    const $btn = $(this);
+
+    if (!productoId) {
+        // Fallback: solo precios si no hay producto_id
+        const precio = $btn.data('precio');
+        const costo = $btn.data('costo');
+        const sobreprecio = $btn.data('sobreprecio');
+        $('#modalCrearProductoManual input[name="precioventa"]').val(precio);
+        $('#modalCrearProductoManual input[name="costo"]').val(costo);
+        $('#modalCrearProductoManual input[name="sobreprecio"]').val(sobreprecio);
+        showToast('success', 'Precios copiados');
+        return;
+    }
+
+    $btn.prop('disabled', true).html('<i class="bi bi-hourglass-split me-1"></i>Copiando...');
+
+    $.get(`/app/detalle_producto_para_copiar/${productoId}/`, function(response) {
+        if (response.success && response.producto) {
+            copiarProductoCoincidencia(response.producto);
+            $('#alertaPreciosOtrasSucursales').slideUp(300);
+        } else {
+            showToast('error', 'No se pudo obtener el detalle del producto');
+            $btn.prop('disabled', false).html('<i class="bi bi-copy me-1"></i>Copiar');
+        }
+    }).fail(function() {
+        showToast('error', 'Error al obtener datos del producto');
+        $btn.prop('disabled', false).html('<i class="bi bi-copy me-1"></i>Copiar');
+    });
 });
 
 // 📋 MOSTRAR ADVERTENCIA DE PRODUCTOS SIMILARES EN MODAL MANUAL

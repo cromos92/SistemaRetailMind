@@ -18408,6 +18408,7 @@ def verificar_producto_existente(request):
             # Incluir la sucursal actual primero (siempre existe porque producto fue encontrado aquí)
             sucursal_actual_obj = producto.sucursal
             productos_otras_sucursales.append({
+                'producto_id': producto.id,
                 'sucursal_id': producto.sucursal_id,
                 'sucursal_nombre': sucursal_actual_obj.alias if sucursal_actual_obj else 'Sucursal actual',
                 'precioventa': int(producto.precioventa or 0),
@@ -18440,6 +18441,7 @@ def verificar_producto_existente(request):
             
             for op in otros_productos:
                 productos_otras_sucursales.append({
+                    'producto_id': op.id,
                     'sucursal_id': op.sucursal_id,
                     'sucursal_nombre': op.sucursal.alias if op.sucursal else 'Sin sucursal',
                     'precioventa': int(op.precioventa or 0),
@@ -18525,6 +18527,7 @@ def verificar_producto_existente(request):
                 
                 for op in otros_productos:
                     productos_otras_sucursales.append({
+                        'producto_id': op.id,
                         'sucursal_id': op.sucursal_id,
                         'sucursal_nombre': op.sucursal.alias if op.sucursal else 'Sin sucursal',
                         'precioventa': int(op.precioventa or 0),
