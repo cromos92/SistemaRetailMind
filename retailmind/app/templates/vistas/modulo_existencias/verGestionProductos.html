@@ -6364,14 +6364,6 @@ function showError(msg) {
         });
     });
 
-    // Al volver a abrir el modal de guía de talla, restablece el tipo de talla y dispara el evento change
-    $('#modalGuiaTalla').on('shown.bs.modal', function () {
-        if (ultimoTipoTallaSeleccionado) {
-            const selectTipoTalla = $('select[name="tipo_talla"]');
-            selectTipoTalla.val(ultimoTipoTallaSeleccionado).trigger('change');
-        }
-    });
-
     $(document).on('click', '#btnEliminarGuiaTalla', function () {
         const guiaId = $('#selectGuiaTalla').val();
         if (!guiaId) {
@@ -8972,26 +8964,25 @@ function abrirModalCrearProductoManual() {
     $('#panelProductoExistenteManual').remove();
     $('#advertenciaProductosSimilaresManual').remove();
     $('#advertenciaPrecioDiferenteManual').remove();
-    
+    $('#alertaPreciosOtrasSucursales').remove();
+
     // Cargar proveedores
     cargarProveedoresManual();
-    
+
     // Cargar atributos
     cargarOpcionesAtributo(ID_ATRIBUTO_MARCA, 'atributo1');
     cargarOpcionesAtributo(ID_ATRIBUTO_COLOR, 'atributo2');
     cargarOpcionesAtributo(ID_ATRIBUTO_GENERO, 'atributo3');
     cargarCategorias();
-    
-    // Inicializar selects
-    inicializarSelect2Manual();
-    
+
+    // inicializarSelect2Manual() se llama en shown.bs.modal con setTimeout para evitar race condition
+
     // Resetear stepper al paso 1
     actualizarStepperManual(1);
     
     // Mostrar modal usando la nueva función de inicialización
     inicializarModal('modalCrearProductoManual');
     
-    console.log('✅ Modal Crear Producto Manual abierto - todo limpio');
 }
 
 /**
@@ -9014,6 +9005,12 @@ function actualizarStepperManual(pasoActivo) {
     }
 }
 
+// Click en step 3 (Tallas/Stock) abre el tab correspondiente
+$(document).on('click', '#step3', function() {
+    const $tabBtn = document.querySelector('[data-bs-target="#tabTallasStock"]');
+    if ($tabBtn) bootstrap.Tab.getOrCreateInstance($tabBtn).show();
+});
+
 function detectarPasoManual() {
     const proveedor = $('#selectProveedorManual').val();
     const dte = $('#hiddenDteManual').val();
@@ -9033,28 +9030,21 @@ $(document).on('change input', '#selectProveedorManual, #hiddenDteManual, #formC
     actualizarStepperManual(detectarPasoManual());
 });
 $(document).on('change', '#selectDteManual', function() {
+    $('#hiddenDteManual').val($(this).val());
     setTimeout(() => actualizarStepperManual(detectarPasoManual()), 200);
 });
 
 function cargarProveedoresManual() {
-    console.log('🔄 Cargando proveedores...');
     const select = $('#selectProveedorManual');
-    
-    // Mostrar loading
     select.empty().append('<option value="">Cargando proveedores...</option>');
-    
     $.get('/app/proveedores/', function(data) {
-        console.log('✅ Proveedores cargados:', data);
         select.empty().append('<option value="">-- Seleccionar proveedor --</option>');
-        
         if (data && data.length > 0) {
             data.forEach(prov => {
                 select.append(`<option value="${prov.id}">${prov.nombre}</option>`);
             });
-            console.log(`✅ ${data.length} proveedores agregados al select`);
         } else {
             select.append('<option value="" disabled>No hay proveedores disponibles</option>');
-            console.log('⚠️ No se encontraron proveedores');
         }
         
         // ✅ Reinicializar Select2 después de cargar opciones
@@ -9342,7 +9332,6 @@ function inicializarSelect2Manual() {
         inicializarSelect2EnModalManual($(this), 'Seleccionar...');
     });
     
-    console.log("✅ Select2 inicializados en modal manual");
 }
 
 // Limpiar Select2 y datos al cerrar el modal manual
@@ -9356,21 +9345,20 @@ $('#modalCrearProductoManual').on('hidden.bs.modal', function() {
     $('#panelProductoExistenteManual').remove();
     $('#advertenciaPrecioDiferenteManual').remove();
     $('#indicadorVerificacionManual').remove();
+    $('#advertenciaProductosSimilaresManual').remove();
+    $('#alertaPreciosOtrasSucursales').remove();
     
     $selects.each(function() {
         if ($(this).hasClass('select2-hidden-accessible')) {
             try {
                 $(this).select2('destroy');
-            } catch(e) {
-                console.log('Select2 ya destruido o no inicializado');
-            }
+            } catch(e) { /* ya destruido */ }
         }
     });
     
     // Limpiar cualquier dropdown huérfano de Select2
     $('.select2-container--open').remove();
     
-    console.log("🧹 Select2 destruidos al cerrar modal manual");
 });
 
 // Evento para cargar DTEs ya registrado en inicializarSelect2Manual()
@@ -9557,35 +9545,31 @@ $(document).on('keydown', '#tablaTallasManual input[name="stock[]"]', function(e
 // Evento para cargar guías de talla cuando se selecciona marca
 $(document).on('change', '#modalCrearProductoManual select[name="atributo1"]', function() {
     const marcaId = $(this).val();
-    console.log('🎯 Cambio de marca en modal manual:', marcaId);
-    if (marcaId) {
-        cargarGuiasTallaManual(marcaId);
-    }
+    cargarGuiasTallaManual(marcaId);
     
     // Verificar producto existente cuando cambia marca
     verificarProductoExistenteManual();
 });
 
 function cargarGuiasTallaManual(marcaId) {
-    console.log('🔄 Cargando guías de talla para marca:', marcaId);
+    const $select = $('#selectGuiaTallaManual');
+    if (!marcaId) {
+        $select.empty().append('<option value="">-- Selecciona marca primero --</option>');
+        return;
+    }
+    $select.prop('disabled', true).empty().append('<option value="">Cargando...</option>');
     $.get(`/app/guias_talla/?marca=${marcaId}`, function(data) {
-        console.log('✅ Guías de talla cargadas:', data);
-        // Cargar en el select principal de guía de talla + opción "Sin guía"
-        const selectPrincipal = $('#selectGuiaTallaManual');
-        selectPrincipal.empty()
+        $select.empty()
             .append('<option value="">-- Seleccionar guía --</option>')
             .append('<option value="SIN_GUIA">⚡ Sin guía (talla única 00 — rápido)</option>');
         data.forEach(g => {
-            selectPrincipal.append(`<option value="${g.id}">${g.text}</option>`);
+            $select.append(`<option value="${g.id}">${g.text}</option>`);
         });
-        selectPrincipal.trigger('change.select2');
-        
-        // Ya no hay selects de guía de talla por fila
-    }).fail(function(xhr, status, error) {
-        console.error('❌ Error cargando guías de talla:', error);
-        console.error('Status:', status);
-        console.error('Response:', xhr.responseText);
-        $('#selectGuiaTallaManual').empty().append('<option value="">Error cargando guías</option>');
+        $select.trigger('change.select2');
+    }).fail(function() {
+        $select.empty().append('<option value="">Error cargando guías</option>');
+    }).always(function() {
+        $select.prop('disabled', false);
     });
 }
 
@@ -10366,25 +10350,25 @@ function copiarProductoCoincidencia(producto) {
         }, 200);
     }
     
-    // Copiar tallas con valores y clase correcta
+    // Copiar tallas — nuevo producto, SKUs se generarán frescos
     if (producto.tallas && producto.tallas.length > 0) {
         $('#tablaTallasManual tbody').empty();
-        
+        window.tallasExistentesManual = null;
+
         const tallasOrdenadas = [...producto.tallas].sort((a, b) => {
             const tallaA = parseFloat(String(a.talla).replace(',', '.')) || 0;
             const tallaB = parseFloat(String(b.talla).replace(',', '.')) || 0;
             return tallaA - tallaB;
         });
-        
+
         tallasOrdenadas.forEach((t, i) => {
             const tabIdx = 100 + i;
             const fila = `
-                <tr class="talla-existente">
+                <tr>
                     <td><input type="text" name="talla[]" class="form-control form-control-sm bg-light" value="${t.talla}" readonly tabindex="-1"></td>
                     <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold" value="0" min="0" tabindex="${tabIdx}" style="max-width: 80px;"></td>
                     <td>
-                        <span class="badge bg-success px-2 py-1" title="SKU: ${t.sku}">${t.sku}</span>
-                        <input type="hidden" name="sku[]" class="sku-manual" value="${t.sku}">
+                        <input type="text" name="sku[]" class="form-control form-control-sm sku-manual bg-light" readonly placeholder="Se generará..." tabindex="-1">
                     </td>
                     <td class="text-center">
                         <button type="button" class="btn btn-sm btn-outline-danger btnEliminarTallaManual" title="Quitar talla" tabindex="-1">
@@ -10394,8 +10378,9 @@ function copiarProductoCoincidencia(producto) {
                 </tr>`;
             $('#tablaTallasManual tbody').append(fila);
         });
-        
+
         actualizarResumenTallasManual();
+        setTimeout(() => generarTodosLosSkusManual(), 200);
     }
     
     // Actualizar panel e indicadores de margen
@@ -11075,28 +11060,30 @@ function generarTodosLosSkusManual() {
     });
     
     if (inputsNecesitanSku.length === 0) {
-        console.log('✅ Todos los SKUs ya tienen valor');
         return;
     }
-    
-    console.log(`🔢 Generando ${inputsNecesitanSku.length} SKUs NUEVOS para tallas nuevas...`);
-    
-    // Obtener SKUs nuevos del sistema secuencial
+
+    // Mostrar estado "generando" en los inputs pendientes
+    inputsNecesitanSku.forEach(input => {
+        input.val('').attr('placeholder', 'Generando...').addClass('bg-warning-subtle');
+    });
+
     $.get('/app/obtener_multiples_skus/', { cantidad: inputsNecesitanSku.length }, function(res) {
         if (res.success && res.skus) {
             inputsNecesitanSku.forEach((input, i) => {
                 if (i < res.skus.length) {
-                    input.val(res.skus[i]);
-                    input.removeClass('bg-light bg-success-subtle').addClass('bg-warning-subtle').attr('title', 'SKU nuevo generado: ' + res.skus[i]);
-                    console.log(`🆕 Talla nueva: SKU generado ${res.skus[i]}`);
+                    input.val(res.skus[i])
+                        .attr('placeholder', 'Se generará...')
+                        .removeClass('bg-light bg-success-subtle bg-warning-subtle')
+                        .addClass('bg-warning-subtle')
+                        .attr('title', 'SKU nuevo generado: ' + res.skus[i]);
                 }
             });
-            console.log('✅ SKUs nuevos generados:', res.skus);
-        } else {
-            console.error('Error al obtener SKUs:', res.error);
         }
     }).fail(function() {
-        console.error('Error al conectar con el servidor para obtener SKUs');
+        inputsNecesitanSku.forEach(input => {
+            input.attr('placeholder', 'Error — reintenta').removeClass('bg-warning-subtle');
+        });
     });
 }
 
@@ -11194,7 +11181,10 @@ $('#formCrearProductoManual').on('submit', function(e) {
     const $filasTallas = $('#tablaTallasManual tbody tr');
     if ($filasTallas.length === 0) {
         valido = false;
-        mensajes.push('Debes agregar al menos una talla.');
+        mensajes.push('Debes agregar al menos una talla en el tab "Tallas y Stock".');
+        // Llevar al usuario al tab de tallas para que la agregue
+        const $tabTallas = document.querySelector('[data-bs-target="#tabTallasStock"]');
+        if ($tabTallas) bootstrap.Tab.getOrCreateInstance($tabTallas).show();
     } else {
         // ✅ Validar stocks de tallas
         let hayStockValido = false;
@@ -11381,7 +11371,7 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
     }
     const formData = $.param(formDataArr);
     
-    // ✅ DEBUG: Verificar cuántas tallas se están enviando
+    // Verificar tallas que se están enviando
     const tallasEnviadas = $('#formCrearProductoManual').find('input[name="talla[]"]').map(function() {
         return $(this).val();
     }).get();
@@ -11954,27 +11944,25 @@ $('#btnConfirmarActualizacion').on('click', function() {
         if (producto.tallas && producto.tallas.length > 0) {
             $('#tablaTallasManual tbody').empty();
             
-            // Guardar en variables globales para evitar regeneración
+            // Es un NUEVO producto — no preservar SKUs existentes; se generarán nuevos
             window.productoExistenteManual = producto;
-            window.tallasExistentesManual = producto.tallas;
-            
+            window.tallasExistentesManual = null;
+
             // Ordenar tallas de menor a mayor
             const tallasOrdenadas = [...producto.tallas].sort((a, b) => {
                 const tallaA = parseFloat(String(a.talla).replace(',', '.')) || 0;
                 const tallaB = parseFloat(String(b.talla).replace(',', '.')) || 0;
                 return tallaA - tallaB;
             });
-            
+
             tallasOrdenadas.forEach((talla, idx) => {
-                console.log(`📋 Copiando talla: ${talla.talla} con SKU: ${talla.sku}`);
                 const tabIdx = 100 + idx;
                 const fila = `
-                    <tr class="talla-existente">
+                    <tr>
                         <td><input type="text" name="talla[]" class="form-control form-control-sm bg-light" value="${talla.talla}" readonly tabindex="-1"></td>
                         <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold" value="0" min="0" tabindex="${tabIdx}" style="max-width: 80px;"></td>
                         <td>
-                            <span class="badge bg-success px-2 py-1" title="SKU: ${talla.sku}">${talla.sku}</span>
-                            <input type="hidden" name="sku[]" class="sku-manual" value="${talla.sku}">
+                            <input type="text" name="sku[]" class="form-control form-control-sm sku-manual bg-light" readonly placeholder="Se generará..." tabindex="-1">
                         </td>
                         <td class="text-center">
                             <button type="button" class="btn btn-sm btn-outline-danger btnEliminarTallaManual" title="Quitar talla" tabindex="-1">
@@ -11984,9 +11972,10 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     </tr>`;
                 $('#tablaTallasManual tbody').append(fila);
             });
-            
-            // ✅ Actualizar resumen de tallas
+
+            // Actualizar resumen y solicitar nuevos SKUs para todas las tallas
             actualizarResumenTallasManual();
+            setTimeout(() => generarTodosLosSkusManual(), 200);
         }
         
         showSuccessAlert('Datos copiados', 'Los datos del producto han sido copiados correctamente');
