@@ -1664,8 +1664,23 @@ def obtener_dtes_rechazados_api(request):
             **filtros
         ).select_related('receptor', 'sucursal').order_by('-fecha_emision')[:200]
 
+        # Prefetch NC hijas para mostrar badge en la lista. Solo se consideran
+        # NC vigentes (EMITIDO/ACEPTADO) — una NC ANULADA/RECHAZADA no vincula.
+        # Orden '-id' + setdefault: si hay varias NC por padre, gana la más
+        # reciente (determinista), evitando que el badge muestre una arbitraria.
+        ids_rechazados = [d.id for d in dtes_rechazados]
+        ncs_por_padre = {}
+        if ids_rechazados:
+            for nc in Dte.objects.filter(
+                documento_afectado_id__in=ids_rechazados,
+                es_nota_credito=True,
+                estado_dte__in=['EMITIDO', 'ACEPTADO'],
+            ).order_by('-id').values('documento_afectado_id', 'id', 'numero_documento', 'monto_con_iva'):
+                ncs_por_padre.setdefault(nc['documento_afectado_id'], nc)
+
         items = []
         for dte in dtes_rechazados:
+            nc = ncs_por_padre.get(dte.id)
             items.append({
                 'id': dte.id,
                 'numero_documento': dte.numero_documento,
@@ -1675,7 +1690,12 @@ def obtener_dtes_rechazados_api(request):
                 'receptor': dte.receptor.nombre if dte.receptor else '-',
                 'monto': float(dte.monto_con_iva),
                 'motivo_rechazo': dte.motivo_rechazo or 'Sin motivo',
-                'referencias': dte.referencias or ''
+                'referencias': dte.referencias or '',
+                'nc_vinculada': {
+                    'id': nc['id'],
+                    'numero': nc['numero_documento'],
+                    'monto': float(nc['monto_con_iva']) if nc['monto_con_iva'] else 0,
+                } if nc else None,
             })
         
         return JsonResponse({
@@ -2493,6 +2513,16 @@ def ajustar_dte_emisor_api(request):
                     }, status=400)
 
                 if es_post_recepcion:
+                    # Guard anti doble-emisión por línea (C3): en post-recepción
+                    # dp.stock NO se reduce, así que sin esto se podían emitir
+                    # varias NC por la cantidad completa de la misma línea,
+                    # descontando stock de destino repetidamente. Validamos que
+                    # lo que se acredita ahora + lo ya acreditado por NC vivas
+                    # no exceda la cantidad original de la línea.
+                    err_disp = _validar_disponible_nc_linea(dte, dp, diferencia)
+                    if err_disp:
+                        return JsonResponse({'success': False, 'error': err_disp}, status=409)
+
                     # Buscar Producto_Talla en la sucursal destino para
                     # validar existencia y stock; los movimientos reales se
                     # crean DESPUÉS, cuando `doc_nuevo` ya exista, para que
@@ -14726,6 +14756,17 @@ def api_detalle_dte_completo(request, dte_id):
     """API que retorna el detalle completo de un DTE (compras o ventas)"""
     try:
         dte = get_object_or_404(Dte, id=dte_id)
+
+        # Autorización a nivel de objeto: el DTE debe pertenecer a la empresa
+        # activa, ya sea como emisor (ventas/traspasos) o receptor (compras).
+        # Sin esto cualquier usuario autenticado podía leer costos, montos y
+        # pagos de DTEs de otras empresas iterando el id (IDOR de lectura).
+        empresa_actual_id = request.session.get('idEmpresaActual')
+        if empresa_actual_id and dte.emisor_id != empresa_actual_id and dte.receptor_id != empresa_actual_id:
+            return JsonResponse(
+                {'success': False, 'error': 'No tiene acceso a este documento.'},
+                status=403,
+            )
 
         # Para traspasos, identificar la sucursal destino para cotejar stock.
         sucursal_destino_traspaso_id = None
@@ -27841,6 +27882,7 @@ def gestion_dte(request):
 
 
 @login_required
+@require_POST
 def anular_factura_dte(request):
     """
     Genera una Nota de Crédito (total o parcial) para una Factura Electrónica
@@ -28076,6 +28118,17 @@ def anular_factura_dte(request):
     empresa_actual_id = request.session.get('idEmpresaActual')
     if dte.emisor_id != empresa_actual_id:
         return JsonResponse({'error': 'Sin permiso sobre este DTE'}, status=403)
+
+    # Autorización a nivel de sucursal: además de pertenecer a la empresa, el
+    # usuario debe tener acceso a la sucursal emisora del DTE. Cierra el hueco
+    # de emitir NC (que mueve stock y caja) sobre DTEs de otra sucursal de la
+    # misma empresa. puede_ver_sucursal respeta admins y el flag "ve todas".
+    from app.utils_permisos import puede_ver_sucursal
+    if not puede_ver_sucursal(request.user, dte.sucursal_id):
+        return JsonResponse(
+            {'error': 'No tiene acceso a documentos de esta sucursal.'},
+            status=403,
+        )
 
     # ------------------------------------------------------------------
     # Detección TRASPASO: cuando el DTE original es FACTURA/BOLETA pero
@@ -28349,6 +28402,26 @@ def anular_factura_dte(request):
     tipo_sii_original = MAPA_TIPO_SII.get(dte.tipo_documento, 33)
 
     with transaction.atomic():
+        # Re-validación bajo lock (anti doble-emisión concurrente): la validación
+        # de saldo de arriba se hace sin lock, así que dos requests simultáneas
+        # sobre el mismo DTE podían pasarla ambas y crear dos NC + revertir stock
+        # dos veces. Aquí lockeamos el DTE (serializa todas las emisiones de NC
+        # sobre él) y recalculamos el saldo ya dentro de la sección crítica.
+        # NOTA: el guard fino por talla (ya_acreditado_por_talla) sigue
+        # calculándose pre-lock; el lock del DTE serializa igual las emisiones,
+        # pero una NC parcial-por-línea concurrente es una mejora pendiente.
+        Dte.objects.select_for_update().get(pk=dte.pk)
+        _nc_previas_lock = Dte.objects.filter(
+            documento_afectado=dte,
+            es_nota_credito=True,
+            estado_dte__in=['EMITIDO', 'ACEPTADO'],
+        ).aggregate(total=Sum('monto_con_iva'))['total'] or 0
+        if (monto_original - int(_nc_previas_lock)) <= 0:
+            transaction.set_rollback(True)
+            return JsonResponse({
+                'error': f'El documento ya tiene NC por el monto total (${monto_original:,}). No se puede generar otra NC.'
+            }, status=409)
+
         numero_nc = obtener_siguiente_correlativo(dte.sucursal, 'NOTA DE CREDITO')
 
         motivo_nc_texto = motivo_anulacion or (
@@ -29018,6 +29091,21 @@ def anular_factura_dte(request):
     # 7. Generar TXT y retornar
     contenido_txt = generar_txt_nota_credito_acepta(datos)
     nombre_archivo = f"NC_61_{nc.numero_documento}_{nc.fecha_emision.strftime('%Y%m%d')}.txt"
+
+    # Si el cliente solicita JSON (wizard frontend), devolver metadatos + URL de descarga.
+    if body.get('return_json'):
+        return JsonResponse({
+            'success': True,
+            'nc_id': nc.id,
+            'nc_numero': nc.numero_documento,
+            'nc_fecha': nc.fecha_emision.strftime('%d/%m/%Y'),
+            'monto_neto': int(nc.monto_neto) if nc.monto_neto else 0,
+            'iva': datos['totales'].get('iva', 0),
+            'monto_total': int(nc.monto_con_iva) if nc.monto_con_iva else 0,
+            'txt_acepta_url': f'/app/dte/{nc.id}/txt-acepta/',
+            'nombre_archivo': nombre_archivo,
+        })
+
     response = HttpResponse(contenido_txt, content_type='text/plain; charset=utf-8')
     response['Content-Disposition'] = f'attachment; filename="{nombre_archivo}"'
     return response

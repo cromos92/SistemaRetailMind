@@ -746,6 +746,33 @@
                                     </div>
                                 </div>
 
+                                <!-- ===== TARJETA FIDELIZACIÓN (solo si hay cliente fidelizado) ===== -->
+                                <div id="fidelCard" class="card shadow-sm mt-2 border-0" style="display:none; border-left:3px solid #5c6bc0 !important;">
+                                    <div class="card-body py-2 px-3">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="flex-shrink-0">
+                                                <span id="fidelNivelIcon" style="font-size:1.4rem;">⭐</span>
+                                            </div>
+                                            <div class="flex-grow-1" style="min-width:0;">
+                                                <div class="d-flex align-items-center gap-1 mb-1">
+                                                    <span id="fidelNivelBadge" class="badge" style="font-size:0.65rem; font-weight:700;">PLATA</span>
+                                                    <span class="fw-semibold text-truncate small" id="fidelNombre" style="font-size:0.8rem;"></span>
+                                                </div>
+                                                <div class="text-muted" style="font-size:0.7rem; line-height:1.2;">
+                                                    <i class="ri-coins-line"></i>
+                                                    <strong id="fidelSaldo" class="text-dark">0</strong> pts
+                                                    <span class="mx-1">·</span>
+                                                    <span id="fidelValor">$0</span>
+                                                </div>
+                                            </div>
+                                            <div class="text-end flex-shrink-0" id="fidelEstimadoWrap" style="display:none;">
+                                                <div class="fw-bold text-success" style="font-size:0.78rem;" id="fidelEstimadoPts"></div>
+                                                <div class="text-muted" style="font-size:0.62rem;">pts estimados</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- ===== MÉTODOS DE PAGO ===== -->
                                 <div class="card shadow-sm mt-2">
                                     <div class="card-header bg-success text-white py-2">
@@ -3730,6 +3757,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let ticketActual = null;
     let clienteActual = null;
     let pagosActuales = [];
+    let fidelizacionActual = null; // Datos de fidelización del cliente buscado por RUT
     let estadisticasDashboard = {};
     let cotizacionActual = null;  // Variable para cotización cargada
     let cotizacionesVigentes = []; // Lista de cotizaciones vigentes
@@ -4573,6 +4601,8 @@ document.addEventListener('DOMContentLoaded', function() {
         clienteActual = null;
         pagosActuales = [];
         cotizacionActual = null;
+        fidelizacionActual = null;
+        document.getElementById('fidelCard').style.display = 'none';
         
         // Limpiar formularios
         document.getElementById('inputTicket').value = '';
@@ -4636,11 +4666,56 @@ document.addEventListener('DOMContentLoaded', function() {
                 const qa = document.getElementById('quickAddInput');
                 if (qa) qa.focus();
             }, 150);
+            mostrarTarjetaFidelizacion();
         }
         
         actualizarProgreso();
         actualizarStepper();
         actualizarBotones();
+    }
+
+    function mostrarTarjetaFidelizacion() {
+        const card = document.getElementById('fidelCard');
+        if (!card) return;
+        if (!fidelizacionActual) { card.style.display = 'none'; return; }
+
+        const f = fidelizacionActual;
+        const nivel = f.nivel || 'PLATA';
+        const colores = {
+            PLATA:   { bg: '#e8eaf6', color: '#5c6bc0', border: '#5c6bc0', icon: '⭐' },
+            ORO:     { bg: '#fff8e1', color: '#f9a825', border: '#f9a825', icon: '🥇' },
+            PLATINO: { bg: '#f3e5f5', color: '#8e24aa', border: '#8e24aa', icon: '💎' },
+        };
+        const c = colores[nivel] || colores.PLATA;
+
+        card.style.borderLeftColor = c.border;
+
+        const badge = document.getElementById('fidelNivelBadge');
+        badge.textContent = nivel;
+        badge.style.background = c.bg;
+        badge.style.color = c.color;
+
+        document.getElementById('fidelNivelIcon').textContent = c.icon;
+
+        const nombre = (clienteActual && clienteActual.nombre) || '';
+        document.getElementById('fidelNombre').textContent = nombre;
+
+        document.getElementById('fidelSaldo').textContent = (f.saldo_puntos || 0).toLocaleString('es-CL');
+        document.getElementById('fidelValor').textContent = formatearMoneda(f.valor_pesos || 0);
+
+        // Puntos estimados para esta compra
+        const total = ticketActual ? (ticketActual.total || 0) : 0;
+        const tasa = f.tasa || 3;
+        const estimado = Math.round(total * tasa / 100);
+        const wrapEstimado = document.getElementById('fidelEstimadoWrap');
+        if (estimado > 0) {
+            document.getElementById('fidelEstimadoPts').textContent = '+' + estimado.toLocaleString('es-CL') + ' pts';
+            wrapEstimado.style.display = 'block';
+        } else {
+            wrapEstimado.style.display = 'none';
+        }
+
+        card.style.display = 'block';
     }
 
     function cargarCorrelativos() {
@@ -5951,6 +6026,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.success && data.cliente) {
                     llenarFormularioCliente(data.cliente);
+                    fidelizacionActual = data.fidelizacion || null;
                     document.getElementById('clienteEncontrado').classList.remove('d-none');
                     mostrarNotificacion('Cliente encontrado en el sistema', 'success');
 

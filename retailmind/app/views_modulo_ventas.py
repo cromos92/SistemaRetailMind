@@ -1870,13 +1870,27 @@ def buscar_cliente_rut(request):
             crm_cliente = Cliente.objects.filter(
                 Q(rut__iexact=rut_formateado) | Q(rut__icontains=rut_limpio),
                 activo=True,
-            ).only('celular', 'fecha_nacimiento').first()
+            ).first()
 
+            fidelizacion_data = None
             if crm_cliente:
                 if crm_cliente.celular:
                     cliente_data['celular'] = crm_cliente.celular
                 if crm_cliente.fecha_nacimiento:
                     cliente_data['fecha_nacimiento'] = crm_cliente.fecha_nacimiento.isoformat()
+                try:
+                    from .services import fidelizacion_service
+                    saldo_info = fidelizacion_service.consultar_saldo(cliente=crm_cliente)
+                    if saldo_info.get('nivel'):
+                        _tasas = {'PLATA': 3, 'ORO': 4, 'PLATINO': 5}
+                        fidelizacion_data = {
+                            'saldo_puntos': saldo_info.get('saldo_puntos', 0),
+                            'valor_pesos': saldo_info.get('valor_pesos', 0),
+                            'nivel': saldo_info.get('nivel', 'PLATA'),
+                            'tasa': _tasas.get(saldo_info.get('nivel', 'PLATA'), 3),
+                        }
+                except Exception:
+                    pass
 
             return JsonResponse({
                 'success': True,
@@ -1884,6 +1898,7 @@ def buscar_cliente_rut(request):
                 'mensaje': 'Cliente encontrado en empresas',
                 'cliente_id': empresa_cliente.id,
                 'cliente_origen': 'EMPRESA',
+                'fidelizacion': fidelizacion_data,
             })
 
         # 2) Tabla Cliente (CRM): solo enriquece datos para auto-llenar el form.
@@ -1910,11 +1925,26 @@ def buscar_cliente_rut(request):
                 'fecha_nacimiento': cliente.fecha_nacimiento.isoformat() if cliente.fecha_nacimiento else '',
                 'email_facturacion': cliente.email or '',
             }
+            fidelizacion_data = None
+            try:
+                from .services import fidelizacion_service
+                saldo_info = fidelizacion_service.consultar_saldo(cliente=cliente)
+                if saldo_info.get('nivel'):
+                    _tasas = {'PLATA': 3, 'ORO': 4, 'PLATINO': 5}
+                    fidelizacion_data = {
+                        'saldo_puntos': saldo_info.get('saldo_puntos', 0),
+                        'valor_pesos': saldo_info.get('valor_pesos', 0),
+                        'nivel': saldo_info.get('nivel', 'PLATA'),
+                        'tasa': _tasas.get(saldo_info.get('nivel', 'PLATA'), 3),
+                    }
+            except Exception:
+                pass
             return JsonResponse({
                 'success': True,
                 'cliente': cliente_data,
                 'mensaje': 'Cliente encontrado en CRM (se creará Empresa al asignar)',
                 'cliente_origen': 'CRM',
+                'fidelizacion': fidelizacion_data,
                 # No incluimos cliente_id: el backend resolverá por RUT y, si
                 # es necesario, creará la Empresa con los datos del cliente.
             })

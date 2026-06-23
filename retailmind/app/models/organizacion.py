@@ -281,13 +281,26 @@ class Correlativo(models.Model):
         return self.inicio <= self.termino
 
     def obtener_siguiente_numero(self):
-        if not self.puede_emitir():
-            raise ValueError(f"Correlativo agotado para {self.tipo_dte} en {self.sucursal.alias}")
-        numero_actual = self.inicio
-        self.inicio += 1
-        self.fecha_actualizacion = timezone.localdate()
-        self.save()
-        return numero_actual
+        from django.db import transaction
+        # Lock de fila para evitar folios SII duplicados bajo concurrencia: dos
+        # emisiones simultáneas del mismo correlativo (sucursal+tipo_dte) se
+        # serializan en vez de leer ambas el mismo 'inicio'. select_for_update
+        # exige una transacción; el atomic la provee (y se anida como savepoint
+        # si ya hay una transacción abierta en el caller).
+        with transaction.atomic():
+            correlativo = type(self).objects.select_for_update().get(pk=self.pk)
+            if not correlativo.puede_emitir():
+                raise ValueError(
+                    f"Correlativo agotado para {correlativo.tipo_dte} en {correlativo.sucursal.alias}"
+                )
+            numero_actual = correlativo.inicio
+            correlativo.inicio += 1
+            correlativo.fecha_actualizacion = timezone.localdate()
+            correlativo.save(update_fields=['inicio', 'fecha_actualizacion'])
+            # Sincronizar la instancia en memoria con lo persistido.
+            self.inicio = correlativo.inicio
+            self.fecha_actualizacion = correlativo.fecha_actualizacion
+            return numero_actual
 
     class Meta:
         unique_together = ['sucursal', 'tipo_dte']

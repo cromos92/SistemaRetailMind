@@ -16,6 +16,7 @@ Garantías:
 import logging
 from datetime import timedelta
 
+from django.apps import apps
 from django.db import transaction, IntegrityError
 from django.db.models import F, Q, Sum
 from django.utils import timezone
@@ -115,6 +116,25 @@ def resolver_cliente_por_identificador(identificador):
     return resolver_cliente_por_rut(identificador)
 
 
+def _actualizar_nivel_cuenta(cuenta, cliente, programa):
+    """
+    Recalcula gasto 12m desde tickets y actualiza nivel de la cuenta.
+    Debe llamarse dentro de una transacción con la cuenta bloqueada.
+    """
+    Ticket = apps.get_model('app', 'Ticket')
+    hace_12m = timezone.now() - timedelta(days=365)
+    gasto = int(
+        Ticket.objects.filter(
+            cliente=cliente, estado='PAGADO', fecha__gte=hace_12m,
+        ).aggregate(total=Sum('total'))['total'] or 0
+    )
+    nuevo_nivel = programa.calcular_nivel(gasto)
+    cuenta.gasto_12_meses = gasto
+    cuenta.nivel = nuevo_nivel
+    cuenta.nivel_actualizado = timezone.now()
+    cuenta.save(update_fields=['gasto_12_meses', 'nivel', 'nivel_actualizado', 'updated_at'])
+
+
 def get_or_create_cuenta(cliente, *, programa=None, otorgar_bienvenida=True,
                          usuario=None):
     """
@@ -131,12 +151,15 @@ def get_or_create_cuenta(cliente, *, programa=None, otorgar_bienvenida=True,
                 programa=programa, usuario=usuario,
                 idempotency_key=f"bienvenida:{cuenta.id}",
                 observaciones='Bono de bienvenida',
+                rut_cliente=getattr(cliente, 'rut', None),
+                canal='AUTO',
             )
     return cuenta, creada
 
 
 def _otorgar(cuenta, tipo, puntos, *, programa=None, ticket=None, sucursal=None,
-             usuario=None, idempotency_key=None, observaciones=''):
+             usuario=None, idempotency_key=None, observaciones='',
+             rut_cliente=None, canal='AUTO'):
     """
     Crea un lote de puntos positivo (ACUMULACION/BIENVENIDA/AJUSTE+/REVERSA+) y
     actualiza el saldo. Todo crédito de puntos es un lote consumible por FIFO;
@@ -157,6 +180,8 @@ def _otorgar(cuenta, tipo, puntos, *, programa=None, ticket=None, sucursal=None,
         usuario=usuario,
         idempotency_key=idempotency_key,
         observaciones=observaciones,
+        rut_cliente=rut_cliente,
+        canal=canal,
     )
     cuenta.saldo_puntos = nuevo_saldo
     cuenta.save(update_fields=['saldo_puntos', 'updated_at'])
@@ -164,7 +189,8 @@ def _otorgar(cuenta, tipo, puntos, *, programa=None, ticket=None, sucursal=None,
 
 
 def _consumir_lotes_fifo(cuenta, puntos, tipo, *, ticket=None, sucursal=None,
-                         usuario=None, idempotency_key=None, observaciones=''):
+                         usuario=None, idempotency_key=None, observaciones='',
+                         rut_cliente=None, canal='POS'):
     """
     Consume `puntos` (cantidad positiva) de los lotes más antiguos primero,
     creando movimientos negativos enlazados al lote origen. Actualiza saldo.
@@ -206,6 +232,8 @@ def _consumir_lotes_fifo(cuenta, puntos, tipo, *, ticket=None, sucursal=None,
             # idempotency_key solo en el primer consumo para no violar unique
             idempotency_key=(idempotency_key if not movimientos else None),
             observaciones=observaciones,
+            rut_cliente=rut_cliente,
+            canal=canal,
         )
         movimientos.append(mov)
         restante -= tomar
@@ -214,12 +242,90 @@ def _consumir_lotes_fifo(cuenta, puntos, tipo, *, ticket=None, sucursal=None,
     return movimientos, restante
 
 
+def _auto_registrar_cliente_desde_historial(rut, *, ticket_actual=None, usuario=None):
+    """
+    Crea un registro Cliente en el CRM a partir de los datos del ticket actual
+    (o del historial de tickets anteriores) cuando el RUT existe en el sistema
+    pero nunca fue dado de alta manualmente.
+
+    Devuelve (cliente, True) si creó el registro, (None, False) si no fue posible.
+    """
+    rut_norm = normalizar_rut(rut)
+    if not rut_norm:
+        return None, False
+
+    # Fuente 1: datos del ticket que se está cobrando ahora.
+    fuentes = []
+    if ticket_actual and (getattr(ticket_actual, 'cliente_nombre', '') or '').strip():
+        fuentes.append(ticket_actual)
+
+    # Fuente 2: último ticket con nombre en el historial del mismo RUT.
+    if not fuentes:
+        try:
+            Ticket = apps.get_model('app', 'Ticket')
+            cuerpo = rut_norm[:-1]
+            hist = (
+                Ticket.objects
+                .filter(cliente_rut__icontains=cuerpo)
+                .exclude(cliente_nombre__isnull=True)
+                .exclude(cliente_nombre__exact='')
+                .order_by('-fecha')
+                .first()
+            )
+            if hist:
+                fuentes.append(hist)
+        except Exception:
+            logger.warning("Error buscando historial de tickets para rut=%s", rut)
+
+    if not fuentes:
+        return None, False
+
+    fuente = fuentes[0]
+    nombre_completo = (getattr(fuente, 'cliente_nombre', '') or '').strip()
+    if not nombre_completo:
+        return None, False
+
+    partes = nombre_completo.split(' ', 1)
+    nombre = partes[0]
+    apellido = partes[1] if len(partes) > 1 else '-'
+
+    email = (getattr(fuente, 'cliente_email', '') or '').strip()
+    celular = (
+        getattr(fuente, 'cliente_telefono_secundario', '') or
+        getattr(fuente, 'cliente_telefono', '') or ''
+    ).strip()
+
+    try:
+        cliente, _cuenta, creado = registrar_cliente_manual(
+            nombre=nombre,
+            apellido=apellido,
+            rut=rut,
+            email=email,
+            celular=celular,
+            usuario=usuario,
+        )
+        if creado:
+            logger.info(
+                "Cliente auto-registrado desde historial rut=%s nombre='%s %s'",
+                rut, nombre, apellido,
+            )
+        return cliente, creado
+    except FidelizacionError as exc:
+        logger.warning("No se pudo auto-registrar cliente rut=%s: %s", rut, exc)
+        return None, False
+    except Exception:
+        logger.exception("Error inesperado al auto-registrar cliente rut=%s", rut)
+        return None, False
+
+
 def acumular_puntos_por_venta(ticket, usuario=None):
     """
     Hook de cobro: acumula puntos por una venta pagada.
 
     - Resuelve el Cliente por `ticket.cliente_rut`. Si no hay cliente
       identificado → venta anónima → no acumula (devuelve None sin error).
+    - Si el RUT existe en historial de tickets pero no en el CRM, auto-registra
+      al cliente (con bono de bienvenida) antes de acumular.
     - Setea `ticket.cliente` si lo encuentra.
     - Idempotente por `acum:{ticket.id}`.
 
@@ -230,14 +336,18 @@ def acumular_puntos_por_venta(ticket, usuario=None):
     if not programa:
         return None
 
-    cliente = resolver_cliente_por_rut(getattr(ticket, 'cliente_rut', ''))
+    rut_ticket = getattr(ticket, 'cliente_rut', '') or ''
+    cliente = resolver_cliente_por_rut(rut_ticket)
+    if not cliente and rut_ticket:
+        # RUT presente pero sin registro CRM → auto-registrar desde historial.
+        cliente, _creado = _auto_registrar_cliente_desde_historial(
+            rut_ticket, ticket_actual=ticket, usuario=usuario,
+        )
     if not cliente:
         return None  # venta anónima → no acumula
 
-    # Resultado uniforme para el POS: además de los puntos, expone el valor en
-    # pesos (puntos × valor_punto_en_pesos) para que el front muestre
-    # "ganó X pts ($X)" sin tener que conocer la tasa de canje.
-    def _resultado(puntos_ganados, saldo_total):
+    # Resultado uniforme para el POS
+    def _resultado(puntos_ganados, saldo_total, nivel='PLATA'):
         vp = programa.valor_punto_en_pesos or 0
         return {
             'puntos_ganados': puntos_ganados,
@@ -245,6 +355,7 @@ def acumular_puntos_por_venta(ticket, usuario=None):
             'valor_punto': vp,
             'valor_ganado_pesos': puntos_ganados * vp,
             'saldo_pesos': saldo_total * vp,
+            'nivel': nivel,
         }
 
     # Enlazar el ticket al cliente (trazabilidad), sin romper si ya estaba.
@@ -255,19 +366,23 @@ def acumular_puntos_por_venta(ticket, usuario=None):
         except Exception:
             logger.exception("No se pudo setear ticket.cliente ticket=%s", ticket.id)
 
+    # Nivel vigente ANTES de acumular (para aplicar la tasa correcta).
+    cuenta_previa = getattr(cliente, 'cuenta_puntos', None)
+    nivel_actual = cuenta_previa.nivel if cuenta_previa else 'PLATA'
+
     base = ticket.total or 0
-    puntos = programa.calcular_puntos(base)
+    puntos = programa.calcular_puntos_con_nivel(base, nivel_actual)
     if puntos <= 0:
-        # Igual aseguramos cuenta + bienvenida para el cliente nuevo.
-        get_or_create_cuenta(cliente, programa=programa, usuario=usuario)
-        return _resultado(0, cliente.cuenta_puntos.saldo_puntos)
+        cuenta, _ = get_or_create_cuenta(cliente, programa=programa, usuario=usuario)
+        nivel = getattr(cuenta, 'nivel', 'PLATA')
+        return _resultado(0, cuenta.saldo_puntos, nivel)
 
     idem = f"acum:{ticket.id}"
     with transaction.atomic():
         existente = MovimientoPuntos.objects.filter(idempotency_key=idem).first()
         if existente:
             cuenta = CuentaPuntos.objects.get(pk=existente.cuenta_id)
-            return _resultado(existente.puntos, cuenta.saldo_puntos)
+            return _resultado(existente.puntos, cuenta.saldo_puntos, getattr(cuenta, 'nivel', 'PLATA'))
 
         cuenta, _ = get_or_create_cuenta(cliente, programa=programa, usuario=usuario)
         cuenta = CuentaPuntos.objects.select_for_update().get(pk=cuenta.pk)
@@ -278,19 +393,32 @@ def acumular_puntos_por_venta(ticket, usuario=None):
                 sucursal=getattr(ticket, 'sucursal', None), usuario=usuario,
                 idempotency_key=idem,
                 observaciones=f'Compra ticket {ticket.correlativo} (${base:,})',
+                rut_cliente=getattr(cliente, 'rut', None),
+                canal='POS',
             )
         except IntegrityError:
             mov = MovimientoPuntos.objects.filter(idempotency_key=idem).first()
             if not mov:
                 raise
 
-    logger.info("Puntos acumulados cliente=%s ticket=%s puntos=%s saldo=%s",
-                cliente.id, ticket.correlativo, puntos, cuenta.saldo_puntos)
-    return _resultado(puntos, cuenta.saldo_puntos)
+    # Actualizar gasto 12m y nivel FUERA del bloque principal: si la migración
+    # aún no se aplicó (columnas inexistentes) no cancela la acumulación.
+    try:
+        with transaction.atomic():
+            cuenta_fresca = CuentaPuntos.objects.select_for_update().get(pk=cuenta.pk)
+            _actualizar_nivel_cuenta(cuenta_fresca, cliente, programa)
+            cuenta.nivel = cuenta_fresca.nivel
+            cuenta.gasto_12_meses = cuenta_fresca.gasto_12_meses
+    except Exception:
+        logger.warning("No se pudo actualizar nivel cliente=%s (¿falta migración?)", cliente.id)
+
+    logger.info("Puntos acumulados cliente=%s ticket=%s puntos=%s saldo=%s nivel=%s",
+                cliente.id, ticket.correlativo, puntos, cuenta.saldo_puntos, cuenta.nivel)
+    return _resultado(puntos, cuenta.saldo_puntos, cuenta.nivel)
 
 
 def canjear_puntos(cliente, puntos, *, ticket=None, sucursal=None, usuario=None,
-                   idempotency_key=None):
+                   idempotency_key=None, canal='POS'):
     """
     Canjea `puntos` (positivo) del cliente, consumiendo lotes FIFO.
     Devuelve dict {puntos_canjeados, valor_pesos, saldo_total}.
@@ -305,6 +433,10 @@ def canjear_puntos(cliente, puntos, *, ticket=None, sucursal=None, usuario=None,
     if puntos < programa.minimo_canje_puntos:
         raise FidelizacionError(
             f'El canje mínimo es {programa.minimo_canje_puntos} puntos.'
+        )
+    if programa.incremento_canje > 0 and puntos % programa.incremento_canje != 0:
+        raise FidelizacionError(
+            f'El canje debe ser múltiplo de {programa.incremento_canje} puntos.'
         )
 
     with transaction.atomic():
@@ -321,6 +453,8 @@ def canjear_puntos(cliente, puntos, *, ticket=None, sucursal=None, usuario=None,
             ticket=ticket, sucursal=sucursal, usuario=usuario,
             idempotency_key=idempotency_key,
             observaciones=f'Canje de {puntos} puntos',
+            rut_cliente=getattr(cliente, 'rut', None),
+            canal=canal,
         )
     valor = puntos * programa.valor_punto_en_pesos
     return {'puntos_canjeados': puntos, 'valor_pesos': valor,
@@ -403,6 +537,7 @@ def cotizar_canje(cliente, puntos):
         'saldo_total': saldo,
         'saldo_disponible': disponible,
         'minimo_canje': programa.minimo_canje_puntos,
+        'incremento_canje': programa.incremento_canje,
         'puntos_disponibles': True,
     }
 
@@ -495,6 +630,8 @@ def confirmar_reserva(reserva, *, puntos_reales, order_number=None, ticket=None,
                 ticket=ticket, sucursal=sucursal, usuario=usuario,
                 idempotency_key=f'canje_pts:{reserva.id}',
                 observaciones=f'Canje por compra app (pedido {order_number or reserva.codigo_cupon})',
+                rut_cliente=getattr(reserva.cliente, 'rut', None),
+                canal='APP',
             )
             consumido = a_consumir - restante
 
@@ -810,6 +947,8 @@ def canjear_vale(codigo, *, sucursal=None, usuario=None, ticket=None):
                     ticket=ticket, sucursal=sucursal, usuario=usuario,
                     idempotency_key=f'vale:{vale.id}',
                     observaciones=f'Canje vale {vale.codigo}',
+                    rut_cliente=getattr(vale.cliente, 'rut', None),
+                    canal='POS',
                 )
                 vale.estado = 'CANJEADO'
                 vale.canjeado_en = timezone.now()
@@ -877,15 +1016,69 @@ def ajuste_manual(cliente, puntos, *, usuario=None, observaciones=''):
     with transaction.atomic():
         cuenta, _ = CuentaPuntos.objects.get_or_create(cliente=cliente)
         cuenta = CuentaPuntos.objects.select_for_update().get(pk=cuenta.pk)
+        rut = getattr(cliente, 'rut', None)
         if puntos > 0:
             _otorgar(cuenta, 'AJUSTE', puntos, usuario=usuario,
-                     observaciones=observaciones or 'Ajuste manual (+)')
+                     observaciones=observaciones or 'Ajuste manual (+)',
+                     rut_cliente=rut, canal='MANUAL')
         else:
             if cuenta.saldo_puntos < abs(puntos):
                 raise FidelizacionError('Saldo insuficiente para el ajuste negativo.')
             _consumir_lotes_fifo(cuenta, abs(puntos), 'AJUSTE', usuario=usuario,
-                                 observaciones=observaciones or 'Ajuste manual (-)')
+                                 observaciones=observaciones or 'Ajuste manual (-)',
+                                 rut_cliente=rut, canal='MANUAL')
     return cuenta.saldo_puntos
+
+
+def otorgar_bono_cumpleanos(cliente, usuario=None):
+    """
+    Otorga el bono de cumpleaños si:
+    - El programa está activo y tiene puntos_cumpleanos > 0
+    - El cliente tiene fecha_nacimiento y coincide con mes/día de hoy
+    - No se otorgó ya este año (chequeado por anio_ultimo_bono_cumpleanos)
+    Devuelve dict {puntos, saldo_total} o None si no corresponde.
+    Idempotente: segunda llamada en el mismo año devuelve None.
+    """
+    programa = ProgramaFidelizacion.get_activo()
+    if not programa or programa.puntos_cumpleanos <= 0:
+        return None
+
+    fecha_nac = getattr(cliente, 'fecha_nacimiento', None)
+    if not fecha_nac:
+        return None
+
+    hoy = timezone.localdate()
+    if fecha_nac.month != hoy.month or fecha_nac.day != hoy.day:
+        return None  # no es cumpleaños hoy
+
+    anio_actual = hoy.year
+    with transaction.atomic():
+        cuenta, _ = get_or_create_cuenta(cliente, programa=programa,
+                                         otorgar_bienvenida=False, usuario=usuario)
+        cuenta = CuentaPuntos.objects.select_for_update().get(pk=cuenta.pk)
+        if cuenta.anio_ultimo_bono_cumpleanos == anio_actual:
+            return None  # ya se otorgó este año
+
+        idem = f"cumpleanos:{cuenta.id}:{anio_actual}"
+        if MovimientoPuntos.objects.filter(idempotency_key=idem).exists():
+            cuenta.anio_ultimo_bono_cumpleanos = anio_actual
+            cuenta.save(update_fields=['anio_ultimo_bono_cumpleanos', 'updated_at'])
+            return None
+
+        _otorgar(
+            cuenta, 'CUMPLEANOS', programa.puntos_cumpleanos,
+            programa=programa, usuario=usuario,
+            idempotency_key=idem,
+            observaciones=f'Bono de cumpleaños {anio_actual}',
+            rut_cliente=getattr(cliente, 'rut', None),
+            canal='AUTO',
+        )
+        cuenta.anio_ultimo_bono_cumpleanos = anio_actual
+        cuenta.save(update_fields=['anio_ultimo_bono_cumpleanos', 'updated_at'])
+
+    logger.info('Bono cumpleaños cliente=%s puntos=%s año=%s',
+                cliente.id, programa.puntos_cumpleanos, anio_actual)
+    return {'puntos': programa.puntos_cumpleanos, 'saldo_total': cuenta.saldo_puntos}
 
 
 def reversar_venta(ticket, *, usuario=None):
@@ -918,6 +1111,8 @@ def reversar_venta(ticket, *, usuario=None):
             usuario=usuario,
             idempotency_key=idem,
             observaciones=f'Reversa por anulación/devolución de venta {ticket.correlativo}',
+            rut_cliente=acum.rut_cliente,
+            canal='POS',
         )
         cuenta.save(update_fields=['saldo_puntos', 'updated_at'])
     logger.info("Puntos reversados ticket=%s puntos=%s", ticket.correlativo, a_revertir)
@@ -958,6 +1153,8 @@ def expirar_lotes_vencidos(usuario=None):
                 lote_origen=lote_locked,
                 usuario=usuario,
                 observaciones=f'Expiración de lote del {lote_locked.fecha.date()}',
+                rut_cliente=lote_locked.rut_cliente,
+                canal='AUTO',
             )
             cuenta.save(update_fields=['saldo_puntos', 'updated_at'])
             total_expirado += disponible
@@ -996,6 +1193,8 @@ def consultar_saldo(cliente=None, rut=None):
         'saldo_puntos': cuenta.saldo_puntos,
         'valor_pesos': valor,
         'puntos_por_vencer': por_vencer,
+        'nivel': cuenta.nivel,
+        'gasto_12_meses': cuenta.gasto_12_meses,
     }
 
 

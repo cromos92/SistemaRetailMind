@@ -111,15 +111,51 @@
                             </div>
                         </div>
 
-                        <h6 class="fw-bold text-muted mt-2">Vigencia y bienvenida</h6>
+                        <h6 class="fw-bold text-muted mt-2">Vigencia y bonos</h6>
                         <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Vigencia de puntos (días)</label>
                                 <input type="number" id="cf-vigencia" class="form-control" min="0" value="{{ programa.vigencia_dias|default:365 }}">
                             </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Puntos de bienvenida</label>
-                                <input type="number" id="cf-bienvenida" class="form-control" min="0" value="{{ programa.puntos_bienvenida|default:200 }}">
+                                <input type="number" id="cf-bienvenida" class="form-control" min="0" value="{{ programa.puntos_bienvenida|default:3000 }}">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Bono cumpleaños (puntos)</label>
+                                <input type="number" id="cf-cumpleanos" class="form-control" min="0" value="{{ programa.puntos_cumpleanos|default:3000 }}">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Incremento mínimo de canje (pts)</label>
+                                <input type="number" id="cf-incremento" class="form-control" min="0" value="{{ programa.incremento_canje|default:100 }}">
+                                <div class="form-text">El canje debe ser múltiplo de este valor (0 = sin restricción).</div>
+                            </div>
+                        </div>
+
+                        <h6 class="fw-bold text-muted mt-2"><i class="ri-vip-crown-line me-1"></i> Niveles de fidelización</h6>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label"><span style="color:#5c6bc0; font-weight:700;">⬤</span> Tasa Plata (%)</label>
+                                <input type="number" id="cf-tasa-plata" class="form-control" step="0.01" min="0" value="{{ programa.tasa_plata|default:'3.00' }}">
+                                <div class="form-text">Todos los clientes por defecto.</div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label"><span style="color:#f9a825; font-weight:700;">⬤</span> Tasa Oro (%)</label>
+                                <input type="number" id="cf-tasa-oro" class="form-control" step="0.01" min="0" value="{{ programa.tasa_oro|default:'4.00' }}">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label"><span style="color:#8e24aa; font-weight:700;">⬤</span> Tasa Platino (%)</label>
+                                <input type="number" id="cf-tasa-platino" class="form-control" step="0.01" min="0" value="{{ programa.tasa_platino|default:'5.00' }}">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Umbral Oro ($ gasto 12 meses)</label>
+                                <input type="number" id="cf-umbral-oro" class="form-control" min="0" value="{{ programa.umbral_oro|default:300000 }}">
+                                <div class="form-text">Gasto acumulado en últimos 12 meses para alcanzar nivel Oro.</div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Umbral Platino ($ gasto 12 meses)</label>
+                                <input type="number" id="cf-umbral-platino" class="form-control" min="0" value="{{ programa.umbral_platino|default:800000 }}">
+                                <div class="form-text">Gasto acumulado en últimos 12 meses para alcanzar nivel Platino.</div>
                             </div>
                         </div>
 
@@ -188,10 +224,17 @@ const ESTRATEGIA_PESO = {
     monto_base_acumulacion: 1000,
     valor_punto_en_pesos: 1,
     minimo_canje_puntos: 500,
+    incremento_canje: 100,
     vigencia_dias: 365,
-    puntos_bienvenida: 200,
+    puntos_bienvenida: 3000,
+    puntos_cumpleanos: 3000,
     redondeo: 'FLOOR',
     acumula_sobre: 'TOTAL',
+    tasa_plata: 3.00,
+    tasa_oro: 4.00,
+    tasa_platino: 5.00,
+    umbral_oro: 300000,
+    umbral_platino: 800000,
 };
 const MONTOS_SIMULACION = [10000, 25000, 50000, 100000, 250000];
 function csrf() { return document.querySelector('[name=csrfmiddlewaretoken]').value; }
@@ -203,10 +246,17 @@ function aplicarEstrategiaPeso() {
     document.getElementById('cf-base').value = ESTRATEGIA_PESO.monto_base_acumulacion;
     document.getElementById('cf-valor').value = ESTRATEGIA_PESO.valor_punto_en_pesos;
     document.getElementById('cf-minimo').value = ESTRATEGIA_PESO.minimo_canje_puntos;
+    document.getElementById('cf-incremento').value = ESTRATEGIA_PESO.incremento_canje;
     document.getElementById('cf-vigencia').value = ESTRATEGIA_PESO.vigencia_dias;
     document.getElementById('cf-bienvenida').value = ESTRATEGIA_PESO.puntos_bienvenida;
+    document.getElementById('cf-cumpleanos').value = ESTRATEGIA_PESO.puntos_cumpleanos;
     document.getElementById('cf-redondeo').value = ESTRATEGIA_PESO.redondeo;
     document.getElementById('cf-acumula').value = ESTRATEGIA_PESO.acumula_sobre;
+    document.getElementById('cf-tasa-plata').value = ESTRATEGIA_PESO.tasa_plata;
+    document.getElementById('cf-tasa-oro').value = ESTRATEGIA_PESO.tasa_oro;
+    document.getElementById('cf-tasa-platino').value = ESTRATEGIA_PESO.tasa_platino;
+    document.getElementById('cf-umbral-oro').value = ESTRATEGIA_PESO.umbral_oro;
+    document.getElementById('cf-umbral-platino').value = ESTRATEGIA_PESO.umbral_platino;
     calcularTasa();
 }
 
@@ -255,10 +305,17 @@ function guardar(confirmarTasaAlta) {
         monto_base_acumulacion: document.getElementById('cf-base').value,
         valor_punto_en_pesos: document.getElementById('cf-valor').value,
         minimo_canje_puntos: document.getElementById('cf-minimo').value,
+        incremento_canje: document.getElementById('cf-incremento').value,
         vigencia_dias: document.getElementById('cf-vigencia').value,
         puntos_bienvenida: document.getElementById('cf-bienvenida').value,
+        puntos_cumpleanos: document.getElementById('cf-cumpleanos').value,
         redondeo: document.getElementById('cf-redondeo').value,
         acumula_sobre: document.getElementById('cf-acumula').value,
+        tasa_plata: document.getElementById('cf-tasa-plata').value,
+        tasa_oro: document.getElementById('cf-tasa-oro').value,
+        tasa_platino: document.getElementById('cf-tasa-platino').value,
+        umbral_oro: document.getElementById('cf-umbral-oro').value,
+        umbral_platino: document.getElementById('cf-umbral-platino').value,
         confirmar_tasa_alta: confirmarTasaAlta ? 'true' : '',
     };
     document.getElementById('btn-guardar').disabled = true;

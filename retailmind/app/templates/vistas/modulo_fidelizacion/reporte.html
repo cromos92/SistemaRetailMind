@@ -130,6 +130,39 @@
                     </div>
                 </div>
 
+                <div class="section-box mb-3">
+                    <div class="section-title"><i class="ri-vip-crown-line"></i> Distribución por nivel</div>
+                    <div class="row g-2" id="niveles-row">
+                        <div class="col-md-4">
+                            <div class="card h-100" style="border-left:4px solid #5c6bc0; background:#f8f9ff;">
+                                <div class="card-body py-2 text-center">
+                                    <h5 class="mb-0 fw-bold" style="color:#5c6bc0;" id="niv-plata-qty">0</h5>
+                                    <small class="text-muted">Plata · 3%</small>
+                                    <div class="fw-semibold small" id="niv-plata-pts">0 pts</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card h-100" style="border-left:4px solid #f9a825; background:#fffdf0;">
+                                <div class="card-body py-2 text-center">
+                                    <h5 class="mb-0 fw-bold" style="color:#f9a825;" id="niv-oro-qty">0</h5>
+                                    <small class="text-muted">Oro · 4%</small>
+                                    <div class="fw-semibold small" id="niv-oro-pts">0 pts</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card h-100" style="border-left:4px solid #8e24aa; background:#fdf4ff;">
+                                <div class="card-body py-2 text-center">
+                                    <h5 class="mb-0 fw-bold" style="color:#8e24aa;" id="niv-platino-qty">0</h5>
+                                    <small class="text-muted">Platino · 5%</small>
+                                    <div class="fw-semibold small" id="niv-platino-pts">0 pts</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="row">
                     <div class="col-lg-6">
                         <div class="section-box">
@@ -215,6 +248,15 @@ function cargarReporte() {
         document.getElementById('kpi-vencer-valor').textContent = fmt(r.valor_por_vencer);
         document.getElementById('kpi-alertas').textContent = pts(r.alertas_concentracion);
         document.getElementById('kpi-expirados').textContent = `Expirados ${fmt(r.valor_expirado_periodo)}`;
+
+        const niv = d.desglose_niveles || {};
+        const nivData = (key) => niv[key] || {cantidad:0, puntos:0};
+        document.getElementById('niv-plata-qty').textContent   = (nivData('PLATA').cantidad||0).toLocaleString('es-CL');
+        document.getElementById('niv-plata-pts').textContent   = pts(nivData('PLATA').puntos) + ' pts';
+        document.getElementById('niv-oro-qty').textContent     = (nivData('ORO').cantidad||0).toLocaleString('es-CL');
+        document.getElementById('niv-oro-pts').textContent     = pts(nivData('ORO').puntos) + ' pts';
+        document.getElementById('niv-platino-qty').textContent = (nivData('PLATINO').cantidad||0).toLocaleString('es-CL');
+        document.getElementById('niv-platino-pts').textContent = pts(nivData('PLATINO').puntos) + ' pts';
 
         const vencen = d.puntos_por_vencer || [];
         document.getElementById('tb-vencer').innerHTML = vencen.length ? vencen.map(i => `

@@ -679,14 +679,71 @@
     .spinner-border.text-success {
         color: var(--nexo-success) !important;
     }
-    
+
     .spinner-border.text-warning {
         color: var(--nexo-warning) !important;
     }
-    
+
     .spinner-border.text-primary {
         color: var(--nexo-primary) !important;
     }
+
+    /* Skeleton loaders */
+    .skeleton-cell {
+        height: 14px;
+        border-radius: 4px;
+        background: linear-gradient(90deg, var(--nexo-gray-100) 25%, var(--nexo-gray-300) 50%, var(--nexo-gray-100) 75%);
+        background-size: 200% 100%;
+        animation: skeleton-shimmer 1.4s infinite;
+        display: inline-block;
+    }
+    @keyframes skeleton-shimmer {
+        from { background-position: 200% 0; }
+        to   { background-position: -200% 0; }
+    }
+    .skeleton-row td { padding: 10px 12px; vertical-align: middle; }
+
+    /* ── Wizard Nota de Crédito ─────────────────────────────── */
+    .nc-step-indicator {
+        width: 28px; height: 28px;
+        border-radius: 50%;
+        background: var(--nexo-gray-300);
+        color: var(--nexo-gray-700);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 12px; font-weight: 700;
+        flex-shrink: 0;
+        transition: background var(--nexo-transition-fast), color var(--nexo-transition-fast);
+    }
+    .nc-step-indicator.active    { background: var(--nexo-error); color: #fff; }
+    .nc-step-indicator.completed { background: var(--nexo-success); color: #fff; }
+    .nc-progress-bar {
+        height: 3px; border-radius: 2px;
+        background: var(--nexo-gray-300);
+        flex: 1;
+        overflow: hidden;
+    }
+    .nc-progress-bar-fill {
+        height: 100%;
+        background: var(--nexo-error);
+        border-radius: 2px;
+        transition: width 0.35s ease;
+    }
+    .nc-tipo-card {
+        border: 2px solid var(--nexo-gray-300) !important;
+        border-radius: var(--nexo-radius-lg) !important;
+        cursor: pointer;
+        transition: border-color var(--nexo-transition-fast), background var(--nexo-transition-fast);
+    }
+    .nc-tipo-card:hover { border-color: var(--nexo-primary) !important; background: var(--nexo-primary-light); }
+    .nc-tipo-card.selected { border-color: var(--nexo-error) !important; background: rgba(255,77,77,0.05); }
+    .nc-fila-seleccionada { background: rgba(0, 212, 170, 0.06) !important; }
+    .nc-fila-excluida { opacity: 0.45; background: var(--nexo-gray-100) !important; }
+    #modalGestionarNC .modal-header { color: #fff; }
+    #ncPaso2ProductosBody tr td { vertical-align: middle; }
+    .nc-qty-input { width: 80px; display: inline-block; }
+    #ncResumenFooter .card { border-radius: var(--nexo-radius-md); }
+    .nc-paso { animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
     
     /* Table success header override */
     .table thead.table-success th,
@@ -1179,7 +1236,7 @@
                 <div class="card recepcion-card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div>
-                            <h5 class="mb-0" id="tituloSeccionDocumentos">Documentos de Traspaso</h5>
+                            <h5 class="mb-0" id="tituloSeccionDocumentos">Documentos de Traspaso <small id="spanResultadosCount" class="text-muted fw-normal" style="font-size:13px;"></small></h5>
                             <small class="text-muted" id="subtituloSeccionDocumentos">Documentos donde mi sucursal es origen o destino, filtrables por estado</small>
                         </div>
                         <div class="d-flex gap-3 align-items-center">
@@ -1556,34 +1613,109 @@
                                 <th style="width: 70px;">Talla</th>
                                 <th style="width: 90px;" class="text-center">Original</th>
                                 <th style="width: 110px;" class="text-center">Nueva cant.</th>
+                                <th style="width: 105px;" class="text-end text-danger">Monto NC</th>
                                 <th style="width: 70px;" class="text-center">Acción</th>
                             </tr>
                         </thead>
                         <tbody id="ajusteProductosBody">
-                            <tr><td colspan="6" class="text-center text-muted py-3">Seleccione un DTE para cargar productos...</td></tr>
+                            <tr><td colspan="7" class="text-center text-muted py-3">Seleccione un DTE para cargar productos...</td></tr>
                         </tbody>
                     </table>
                 </div>
 
-                <div class="d-flex justify-content-between align-items-center mt-3 small text-muted">
-                    <div>
-                        <i class="bi bi-info-circle me-1"></i>
-                        Al poner cantidad 0 se quita el producto. Para aumentar, emitir otro DTE.
-                    </div>
-                    <div>
-                        Diferencial neto: <strong id="ajusteDiferencialNeto">$0</strong> · Unidades a retirar: <strong id="ajusteDiferencialUnidades">0</strong>
+                <div class="small text-muted mt-2">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Al poner cantidad 0 se quita el producto. Para aumentar, emitir otro DTE.
+                </div>
+                <!-- Footer financiero sticky -->
+                <div class="border-top pt-2 mt-2" id="ajusteFooterFinanciero">
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body py-1 px-2 text-center">
+                                    <small class="text-muted d-block" style="font-size:11px;">Unidades NC</small>
+                                    <strong id="ajusteDiferencialUnidades" class="text-danger fs-6">0</strong>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body py-1 px-2 text-center">
+                                    <small class="text-muted d-block" style="font-size:11px;">Monto neto NC</small>
+                                    <strong id="ajusteDiferencialNeto" class="text-danger fs-6">$0</strong>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="card border-danger" style="border-radius:var(--nexo-radius-md);">
+                                <div class="card-body py-1 px-2 text-center">
+                                    <small class="text-muted d-block" style="font-size:11px;">Total con IVA</small>
+                                    <strong id="ajusteDiferencialTotal" class="text-danger fs-6">$0</strong>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div id="ajusteResumenCambios" class="alert alert-light border mt-2 mb-0 small">
                     Sin cambios seleccionados.
                 </div>
             </div>
-            <div class="modal-footer">
+            <!-- Panel resultado persistente (oculto hasta que el ajuste se confirme) -->
+            <div id="ajusteResultadoPanel" class="d-none px-4 pb-3">
+                <div class="text-center mb-3">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size:44px;"></i>
+                    <h6 class="mt-2 text-success fw-bold">Ajuste aplicado correctamente</h6>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <div class="card border-0 bg-light">
+                            <div class="card-body py-2">
+                                <table class="table table-sm mb-0">
+                                    <tr><td class="text-muted small">Documento:</td><td class="fw-bold" id="ajusteResDoc">-</td></tr>
+                                    <tr><td class="text-muted small">Es NC SII:</td><td id="ajusteResEsNC">-</td></tr>
+                                    <tr><td class="text-muted small">Unidades:</td><td id="ajusteResUnidades">-</td></tr>
+                                    <tr><td class="text-muted small">Monto neto:</td><td class="text-warning fw-bold" id="ajusteResNeto">-</td></tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card border-0" style="background:var(--nexo-primary-light);">
+                            <div class="card-body py-2">
+                                <p class="small mb-2"><strong>TXT Acepta generado</strong> — descárgalo y súbelo a tu proveedor DTE.</p>
+                                <a href="#" id="ajusteResTxtBtn" class="btn btn-success btn-sm w-100 d-none" download>
+                                    <i class="bi bi-download me-1"></i>Descargar TXT Acepta
+                                </a>
+                                <div id="ajusteResSinTxt" class="small text-muted d-none">
+                                    <i class="bi bi-info-circle me-1"></i>Ajuste interno (no genera TXT Acepta).
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="ajusteResStockPanel" class="d-none">
+                    <p class="small fw-bold mb-1"><i class="bi bi-box-seam me-1"></i>Stock actualizado:</p>
+                    <div class="table-responsive" style="max-height:140px;overflow-y:auto;">
+                        <table class="table table-sm table-bordered mb-0">
+                            <thead class="table-light"><tr><th>SKU</th><th>Talla</th><th>Sucursal</th><th class="text-end">Stock</th></tr></thead>
+                            <tbody id="ajusteResStockBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer" id="ajusteModalFooter">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                     <i class="bi bi-x-circle me-1"></i>Cancelar
                 </button>
                 <button type="button" class="btn btn-warning" id="btnConfirmarAjusteEmisor">
                     <i class="bi bi-check-circle me-1"></i>Confirmar ajuste y generar documento
+                </button>
+            </div>
+            <div class="modal-footer d-none" id="ajusteFooterResultado">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="btnVerTrazabilidadAjuste">
+                    <i class="bi bi-diagram-3 me-1"></i>Ver trazabilidad
                 </button>
             </div>
         </div>
@@ -1604,6 +1736,15 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
+                <!-- Barra de progreso de verificación -->
+                <div class="d-flex justify-content-between align-items-center mb-1 px-1">
+                    <small class="text-muted">Progreso de verificación</small>
+                    <small class="fw-bold text-primary" id="textoProgresoVerif">0 / 0 productos</small>
+                </div>
+                <div class="progress mb-3" style="height:6px;border-radius:3px;">
+                    <div id="barraProgresoVerif" class="progress-bar bg-success" role="progressbar" aria-label="Progreso de verificación" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="width:0%;transition:width 0.3s ease;"></div>
+                </div>
+
                 <!-- Banner: ajuste previo del emisor -->
                 <div id="bannerAjustePrevio" class="alert alert-warning d-none mb-3" style="border-left: 4px solid #e69a00;">
                     <div class="d-flex align-items-start">
@@ -2097,6 +2238,226 @@
         </div>
     </div>
 </div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     MODAL GESTIONAR NC — Wizard 3 pasos para Nota de Crédito
+     Reemplaza el flujo SweetAlert de anularFacturaRechazada
+     ══════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modalGestionarNC" tabindex="-1" aria-hidden="true" aria-labelledby="modalGestionarNCLabel" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <!-- Header rojo NC -->
+            <div class="modal-header" style="background: linear-gradient(135deg, #FF4D4D 0%, #CC2222 100%);">
+                <div>
+                    <h5 class="modal-title mb-0" id="modalGestionarNCLabel">
+                        <i class="bi bi-receipt-cutoff me-2"></i>Generar Nota de Crédito &mdash; <span id="ncDteNumero">-</span>
+                    </h5>
+                    <small class="opacity-75" id="ncDteTipo">-</small>
+                </div>
+                <button type="button" class="btn-close btn-close-white" id="btnCerrarModalNC" aria-label="Cerrar"></button>
+            </div>
+
+            <!-- Barra de progreso del wizard -->
+            <div class="px-4 pt-3 pb-1">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="nc-step-indicator active" id="ncStepInd1">1</div>
+                    <div class="nc-progress-bar" aria-hidden="true"><div class="nc-progress-bar-fill" id="ncProgressBar1" style="width:0%"></div></div>
+                    <div class="nc-step-indicator" id="ncStepInd2">2</div>
+                    <div class="nc-progress-bar" aria-hidden="true"><div class="nc-progress-bar-fill" id="ncProgressBar2" style="width:0%"></div></div>
+                    <div class="nc-step-indicator" id="ncStepInd3">3</div>
+                </div>
+                <div class="d-flex small text-muted mt-1">
+                    <span class="flex-fill text-start">Tipo de NC</span>
+                    <span class="flex-fill text-center">Selección de productos</span>
+                    <span class="flex-fill text-end">Resultado</span>
+                </div>
+            </div>
+
+            <div class="modal-body">
+                <!-- ── PASO 1: Tipo de NC ── -->
+                <div id="ncPaso1" class="nc-paso">
+                    <h6 class="fw-bold mb-3">¿Qué tipo de Nota de Crédito necesitas emitir?</h6>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="nc-tipo-card p-3" data-tipo="ANULACION" id="cardNcAnulacion">
+                                <div class="d-flex align-items-start gap-3">
+                                    <div class="fs-2 text-danger"><i class="bi bi-x-circle-fill"></i></div>
+                                    <div>
+                                        <div class="fw-bold mb-1">Anulación (Error en emisión)</div>
+                                        <small class="text-muted">El DTE fue emitido con error: datos incorrectos, productos equivocados o duplicado. La NC anula el documento. El stock <strong>no se modifica</strong>.</small>
+                                        <div class="mt-2">
+                                            <span class="badge bg-secondary">Sin retorno de stock</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="nc-tipo-card p-3" data-tipo="DEVOLUCION" id="cardNcDevolucion">
+                                <div class="d-flex align-items-start gap-3">
+                                    <div class="fs-2 text-warning"><i class="bi bi-arrow-return-left"></i></div>
+                                    <div>
+                                        <div class="fw-bold mb-1">Devolución (Rechazado por destino)</div>
+                                        <small class="text-muted">El destino rechazó el despacho. Los productos regresan al emisor. El stock será <strong>devuelto a la bodega de origen</strong>.</small>
+                                        <div class="mt-2">
+                                            <span class="badge bg-success">Revierte stock a origen</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label fw-bold">Motivo <span class="text-danger">*</span></label>
+                        <textarea id="ncMotivo" class="form-control" rows="2" maxlength="500"
+                                  placeholder="Ej: Producto devuelto por rechazo de destino, error en cantidad emitida..."></textarea>
+                        <div class="invalid-feedback">El motivo es requerido.</div>
+                    </div>
+                </div>
+
+                <!-- ── PASO 2: Selección de productos ── -->
+                <div id="ncPaso2" class="nc-paso d-none">
+                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                        <div>
+                            <span class="fw-bold">Selecciona los productos a acreditar</span>
+                            <small class="text-muted ms-2" id="ncContadorSeleccion">0 seleccionados</small>
+                        </div>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-primary" id="btnNcSeleccionarTodo">
+                                <i class="bi bi-check2-all me-1"></i>Seleccionar todo
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="btnNcQuitarTodo">
+                                <i class="bi bi-x-circle me-1"></i>Quitar todo
+                            </button>
+                        </div>
+                    </div>
+                    <div id="ncAlertaPaso2" class="alert alert-info small mb-2 py-2 d-none">
+                        <i class="bi bi-info-circle me-1"></i><span id="ncAlertaPaso2Texto"></span>
+                    </div>
+                    <div class="table-responsive" style="max-height:42vh;overflow-y:auto;border:1px solid var(--nexo-gray-300);border-radius:var(--nexo-radius-md);">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="sticky-top" style="top:0;z-index:10;background:var(--nexo-secondary);">
+                                <tr>
+                                    <th class="text-white" style="width:36px;">
+                                        <input type="checkbox" id="ncCheckTodos" class="form-check-input" checked title="Marcar/desmarcar todos">
+                                    </th>
+                                    <th class="text-white" style="width:100px;">SKU</th>
+                                    <th class="text-white">Producto</th>
+                                    <th class="text-white text-center" style="width:65px;">Talla</th>
+                                    <th class="text-white text-center" style="width:80px;">Cant. DTE</th>
+                                    <th class="text-white text-center" style="width:90px;">Cant. NC</th>
+                                    <th class="text-white text-end" style="width:95px;">P. unit.</th>
+                                    <th class="text-white text-end" style="width:100px;background:rgba(255,77,77,0.3);">Monto NC</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ncPaso2ProductosBody">
+                                <tr><td colspan="8" class="text-center py-3 text-muted">Cargando productos...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Footer resumen financiero -->
+                    <div class="mt-3" id="ncResumenFooter">
+                        <div class="row g-2">
+                            <div class="col-3">
+                                <div class="card border-0 bg-light text-center py-1">
+                                    <small class="text-muted" style="font-size:11px;">Líneas</small>
+                                    <strong id="ncResumenLineas" class="text-danger">0</strong>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="card border-0 bg-light text-center py-1">
+                                    <small class="text-muted" style="font-size:11px;">Unidades NC</small>
+                                    <strong id="ncResumenUnidades" class="text-danger">0</strong>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="card border-0 bg-light text-center py-1">
+                                    <small class="text-muted" style="font-size:11px;">Monto neto</small>
+                                    <strong id="ncResumenNeto" class="text-danger">$0</strong>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="card border-danger text-center py-1">
+                                    <small class="text-muted" style="font-size:11px;">Total c/IVA</small>
+                                    <strong id="ncResumenTotal" class="text-danger">$0</strong>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="ncAlertaImpactoStock" class="alert alert-warning small mt-2 py-2 d-none">
+                            <i class="bi bi-box-seam me-1"></i>
+                            <strong>Impacto en stock:</strong> <span id="ncTextoImpactoStock"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── PASO 3: Resultado persistente ── -->
+                <div id="ncPaso3" class="nc-paso d-none">
+                    <div class="text-center mb-4">
+                        <i class="bi bi-check-circle-fill text-success" style="font-size:52px;"></i>
+                        <h5 class="mt-3 text-success fw-bold">Nota de Crédito generada exitosamente</h5>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h6 class="fw-bold mb-3"><i class="bi bi-file-earmark-text me-1 text-danger"></i>Datos de la NC</h6>
+                                    <table class="table table-sm mb-0">
+                                        <tr><td class="text-muted small">Número NC:</td><td class="fw-bold" id="ncResultNumero">-</td></tr>
+                                        <tr><td class="text-muted small">Tipo:</td><td>Nota de Crédito (Tipo 61)</td></tr>
+                                        <tr><td class="text-muted small">Fecha:</td><td id="ncResultFecha">-</td></tr>
+                                        <tr><td class="text-muted small">Monto neto:</td><td class="text-danger fw-bold" id="ncResultNeto">-</td></tr>
+                                        <tr><td class="text-muted small">IVA (19%):</td><td id="ncResultIva">-</td></tr>
+                                        <tr><td class="text-muted small fw-bold">Total:</td><td class="fw-bold fs-6 text-danger" id="ncResultTotal">-</td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-0" style="background:var(--nexo-primary-light);">
+                                <div class="card-body">
+                                    <h6 class="fw-bold mb-2"><i class="bi bi-cloud-upload me-1 text-primary"></i>¿Qué hacer ahora?</h6>
+                                    <ol class="small mb-3 ps-3">
+                                        <li class="mb-1">Descarga el <strong>TXT Acepta</strong> con el botón de abajo.</li>
+                                        <li class="mb-1">Ingresa a tu <strong>proveedor de facturación electrónica</strong>.</li>
+                                        <li class="mb-1">Sube el TXT como <strong>respuesta de aceptación</strong> al documento.</li>
+                                        <li class="mb-0">Guarda el acuse de recibo del SII.</li>
+                                    </ol>
+                                    <a href="#" id="btnDescargarTxtNC" class="btn btn-success w-100" download>
+                                        <i class="bi bi-download me-2"></i>Descargar TXT Acepta
+                                    </a>
+                                    <button type="button" class="btn btn-outline-primary btn-sm w-100 mt-2" id="btnVerTrazabilidadNC">
+                                        <i class="bi bi-diagram-3 me-1"></i>Ver trazabilidad del DTE original
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer dinámico del wizard -->
+            <div class="modal-footer" id="ncModalFooter">
+                <button type="button" class="btn btn-outline-secondary d-none" id="btnNcAtras">
+                    <i class="bi bi-arrow-left me-1"></i>Atrás
+                </button>
+                <div class="ms-auto d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary" id="btnNcCancelar" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnNcSiguiente">
+                        Siguiente <i class="bi bi-arrow-right ms-1"></i>
+                    </button>
+                    <button type="button" class="btn btn-danger d-none" id="btnNcConfirmar">
+                        <i class="bi bi-check-circle me-1"></i>Emitir Nota de Crédito
+                    </button>
+                    <button type="button" class="btn btn-secondary d-none" id="btnNcCerrarFinal" data-bs-dismiss="modal">
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- ═══════════════════════════════════════════════════════════ -->
 
 {% include '../../layout/footer.html' %}
 <script src="{% static 'js/trazabilidad_dte.js' %}"></script>
@@ -2823,6 +3184,15 @@ function verDTERecepcionadoPorNumero(numero) {
     }
 }
 
+function _generarSkeletonRows(cols, filas) {
+    const widths = [45, 70, 55, 80, 60, 65, 50, 75];
+    return Array.from({length: filas}, () =>
+        `<tr class="skeleton-row">${Array.from({length: cols}, (_, i) =>
+            `<td><div class="skeleton-cell" style="width:${widths[i % widths.length]}%">&nbsp;</div></td>`
+        ).join('')}</tr>`
+    ).join('');
+}
+
 function cargarRecepciones(forzarActualizacion = false) {
     // La vista unificada aplica si puedo recepcionar (soy destino) o si
     // puedo ajustar emitidos (soy origen). Si no tengo ninguno, redirigir.
@@ -2839,16 +3209,8 @@ function cargarRecepciones(forzarActualizacion = false) {
         alcance: obtenerAlcanceDte()
     };
 
-    $('#recepcionesBody').html(`
-        <tr>
-            <td colspan="8" class="text-center py-4">
-                <div class="spinner-border text-success" role="status">
-                    <span class="visually-hidden">Cargando...</span>
-                </div>
-                <p class="mt-2 mb-0 text-muted">Cargando documentos pendientes...</p>
-            </td>
-        </tr>
-    `);
+    $('#recepcionesBody').html(_generarSkeletonRows(8, 5));
+    $('#spanResultadosCount').text('');
 
     $.ajax({
         url: '/app/dte/recepciones_pendientes/',
@@ -2858,6 +3220,8 @@ function cargarRecepciones(forzarActualizacion = false) {
     }).done(response => {
         recepcionesData = response.items || [];
         totalPaginas = response.pagination ? response.pagination.total_pages : 1;
+        const totalItems = response.pagination ? (response.pagination.total || recepcionesData.length) : recepcionesData.length;
+        if (totalItems > 0) $('#spanResultadosCount').text(`— ${totalItems} resultado${totalItems !== 1 ? 's' : ''}`);
 
         renderTablaRecepciones();
         actualizarResumen(response.resumen || {});
@@ -3756,9 +4120,12 @@ function actualizarResumenVerificacion() {
     $('#contadorProductos').text(`${verificados} de ${productosVerificacion.length}`);
     
     // Actualizar barra de progreso
-    const porcentaje = productosVerificacion.length > 0 ? (verificados / productosVerificacion.length) * 100 : 0;
-    $('#barraProgreso').css('width', `${porcentaje}%`);
-    
+    const total = productosVerificacion.length;
+    const porcentaje = total > 0 ? (verificados / total) * 100 : 0;
+    $('#barraProgreso').css('width', `${Math.round(porcentaje)}%`);
+    $('#barraProgresoVerif').css('width', Math.round(porcentaje) + '%').attr('aria-valuenow', Math.round(porcentaje));
+    $('#textoProgresoVerif').text(verificados + ' / ' + total + ' productos');
+
     // ✅ MEJORADO: Detectar productos desmarcados (con problemas)
     const productosDesmarcados = productosVerificacion.filter(p => !p.marcado_ok).length;
     const hayProductosDesmarcados = productosDesmarcados > 0;
@@ -4425,26 +4792,45 @@ function verDTEsRechazados() {
             }
             const mostrarOrigen = response.items.some(i => i.sucursal_origen);
             const rows = response.items.map(item => {
-                const tipoEsc = String(item.tipo_documento || '').replace(/'/g, "\\'");
+                // Escapes: *Safe para texto HTML; *Attr para argumentos string en onclick.
+                const tipoEsc      = String(item.tipo_documento || '').replace(/['\\]/g, '\\$&');
+                const numDocAttr   = String(item.numero_documento ?? '').replace(/['\\]/g, '\\$&');
+                const numDocSafe   = _escapeHtmlDte(item.numero_documento);
+                const tipoSafe     = _escapeHtmlDte(item.tipo_documento);
+                const fechaSafe    = _escapeHtmlDte(item.fecha_emision);
+                const receptorSafe = _escapeHtmlDte(item.receptor);
+                const motivoSafe   = _escapeHtmlDte(item.motivo_rechazo);
+                const origenSafe   = _escapeHtmlDte(item.sucursal_origen || '-');
+                const nc = item.nc_vinculada;
+                const ncBadge = nc
+                    ? `<span class="badge bg-danger ms-1" title="NC #${nc.numero} — $${Number(nc.monto).toLocaleString('es-CL')}" data-bs-toggle="tooltip">
+                           <i class="bi bi-receipt-cutoff me-1"></i>NC #${nc.numero}
+                       </span>`
+                    : '';
+                const btnAnular = nc
+                    ? `<button class="btn btn-secondary btn-sm" disabled title="Ya tiene NC #${nc.numero} emitida">
+                           <i class="bi bi-check2 me-1"></i>NC emitida
+                       </button>`
+                    : `<button class="btn btn-danger btn-sm" onclick="anularDteRechazadoSegunTipo(${item.id}, '${numDocAttr}', '${tipoEsc}')" title="Anular (genera NC si es factura)">
+                           <i class="bi bi-x-circle me-1"></i>Anular
+                       </button>`;
                 return `
                 <tr>
-                    <td><strong>#${item.numero_documento}</strong></td>
-                    <td>${item.tipo_documento}</td>
-                    <td>${item.fecha_emision}</td>
-                    ${mostrarOrigen ? `<td><span class="badge bg-light text-dark">${item.sucursal_origen || '-'}</span></td>` : ''}
-                    <td>${item.receptor}</td>
-                    <td><span class="text-danger">${item.motivo_rechazo}</span></td>
+                    <td><strong>#${numDocSafe}</strong>${ncBadge}</td>
+                    <td>${tipoSafe}</td>
+                    <td>${fechaSafe}</td>
+                    ${mostrarOrigen ? `<td><span class="badge bg-light text-dark">${origenSafe}</span></td>` : ''}
+                    <td>${receptorSafe}</td>
+                    <td><span class="text-danger">${motivoSafe}</span></td>
                     <td class="text-end">$${Number(item.monto).toLocaleString('es-CL')}</td>
                     <td class="text-nowrap">
                         <button class="btn btn-outline-secondary btn-sm" onclick="verDTERecepcionado(${item.id})" title="Ver detalle">
                             <i class="bi bi-eye"></i>
                         </button>
-                        <button class="btn btn-success btn-sm" onclick="rehabilitarDTE(${item.id}, '${item.numero_documento}')" title="Rehabilitar">
+                        <button class="btn btn-success btn-sm ${nc ? 'd-none' : ''}" onclick="rehabilitarDTE(${item.id}, '${numDocAttr}')" title="Rehabilitar">
                             <i class="bi bi-arrow-clockwise me-1"></i>Rehabilitar
                         </button>
-                        <button class="btn btn-danger btn-sm" onclick="anularDteRechazadoSegunTipo(${item.id}, '${item.numero_documento}', '${tipoEsc}')" title="Anular (genera NC si es factura)">
-                            <i class="bi bi-x-circle me-1"></i>Anular
-                        </button>
+                        ${btnAnular}
                     </td>
                 </tr>
             `;
@@ -4474,6 +4860,10 @@ function verDTEsRechazados() {
                     </table>
                 </div>
             `);
+            // Activar tooltips de Bootstrap en los badges NC
+            document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+                bootstrap.Tooltip.getOrCreateInstance(el);
+            });
         })
         .fail(() => {
             $('#listaRechazadosContainer').html(`
@@ -4695,122 +5085,10 @@ function anularDTERechazado(dteId, numeroDocumento) {
     });
 }
 
-function anularFacturaRechazada(dteId, numeroDocumento, tipoDocumento) {
-    Swal.fire({
-        title: '📄 Anular Factura con Nota de Crédito',
-        html: `
-            <div class="text-start">
-                <p>¿Deseas anular la <strong>${tipoDocumento} #${numeroDocumento}</strong>?</p>
-                <div class="alert alert-warning">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                    <strong>Se realizarán las siguientes acciones:</strong>
-                    <ul class="mb-0 mt-2">
-                        <li>Se generará una <strong>Nota de Crédito</strong> (tipo 61 SII)</li>
-                        <li>El stock será <strong>devuelto a la bodega de origen</strong></li>
-                        <li>Los movimientos de salida quedarán <strong>cancelados</strong></li>
-                        <li>La factura quedará en estado <strong>ANULADO</strong></li>
-                        <li>Se generará el <strong>TXT Acepta</strong> de la NC</li>
-                    </ul>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Tipo de anulación:</label>
-                    <select id="tipoAnulacionFactura" class="form-select">
-                        <option value="DEVOLUCION">Devolución (fue rechazada por destino)</option>
-                        <option value="ANULACION">Anulación (error en emisión)</option>
-                    </select>
-                </div>
-            </div>
-        `,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: '<i class="bi bi-file-earmark-text me-1"></i>Anular con NC',
-        cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#e67e22',
-        width: '580px',
-        focusConfirm: false
-    }).then(result => {
-        if (!result.isConfirmed) return;
-
-        const tipoAnulacion = document.getElementById('tipoAnulacionFactura').value;
-
-        Swal.fire({
-            title: 'Procesando...',
-            html: 'Generando Nota de Crédito y revirtiendo stock...',
-            allowOutsideClick: false,
-            didOpen: () => Swal.showLoading()
-        });
-
-        $.ajax({
-            url: '/app/documentos/anular-factura/',
-            method: 'POST',
-            contentType: 'application/json',
-            headers: { 'X-CSRFToken': getCookie('csrftoken') },
-            data: JSON.stringify({
-                dte_id: dteId,
-                tipo_anulacion: tipoAnulacion
-            }),
-            xhrFields: { responseType: 'blob' }
-        }).done(function(blob, statusText, xhr) {
-            const contentType = xhr.getResponseHeader('Content-Type') || '';
-            if (contentType.includes('text/plain')) {
-                const disposition = xhr.getResponseHeader('Content-Disposition') || '';
-                const match = disposition.match(/filename="?([^"]+)"?/);
-                const filename = match ? match[1] : `NC_${numeroDocumento}.txt`;
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url; a.download = filename;
-                document.body.appendChild(a); a.click();
-                document.body.removeChild(a); URL.revokeObjectURL(url);
-
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Factura Anulada con NC',
-                    html: `<p>Se anuló la factura <strong>#${numeroDocumento}</strong> y se generó la Nota de Crédito.</p>
-                           <div class="alert alert-success mt-2">
-                               <i class="bi bi-check-circle me-2"></i>
-                               El TXT Acepta fue descargado. Súbelo a tu proveedor de facturación electrónica.
-                           </div>
-                           <div class="alert alert-info mt-2">
-                               <i class="bi bi-box-seam me-2"></i>
-                               El stock fue devuelto a la bodega de origen.
-                           </div>`,
-                    confirmButtonText: 'Entendido'
-                });
-
-                const modalEl = document.getElementById('modalDTEsRechazados');
-                if (modalEl) {
-                    const modal = bootstrap.Modal.getInstance(modalEl);
-                    if (modal) modal.hide();
-                }
-                cargarDTEsRechazados();
-                cargarRecepciones();
-                if (window.modoVista === 'regularizar') cargarRegularizaciones();
-            } else {
-                blob.text().then(text => {
-                    try {
-                        const resp = JSON.parse(text);
-                        Swal.fire('Error', resp.error || 'No se pudo anular la factura', 'error');
-                    } catch(e) {
-                        Swal.fire('Error', 'Respuesta inesperada del servidor', 'error');
-                    }
-                });
-            }
-        }).fail(function(xhr) {
-            if (xhr.responseType === 'blob' && xhr.response) {
-                xhr.response.text().then(text => {
-                    try {
-                        const resp = JSON.parse(text);
-                        Swal.fire('Error', resp.error || 'Error al anular factura', 'error');
-                    } catch(e) {
-                        Swal.fire('Error', 'Error de conexión al anular factura', 'error');
-                    }
-                });
-            } else {
-                Swal.fire('Error', 'Error de conexión al anular factura', 'error');
-            }
-        });
-    });
-}
+// NOTA: la función anularFacturaRechazada() vive más abajo, en el wizard
+// modalGestionarNC (búscala por "_ncWizardState"). La versión SweetAlert
+// encadenada que existía aquí fue reemplazada por ese wizard y eliminada
+// para evitar confusión (por hoisting ganaba la del wizard de todos modos).
 
 function cargarHistorial(refrescar = false) {
     $.getJSON('/app/dte/historial_recepciones/?limite=5')
@@ -5397,14 +5675,8 @@ function _cargarListadoEmisor(opts) {
         estado: estadoBackend,
     };
 
-    $('#recepcionesBody').html(`
-        <tr>
-            <td colspan="7" class="text-center py-4">
-                <div class="spinner-border ${opts.spinnerClass}" role="status"></div>
-                <p class="mt-2 mb-0 text-muted">${opts.mensajeCargando}</p>
-            </td>
-        </tr>
-    `);
+    $('#recepcionesBody').html(_generarSkeletonRows(7, 5));
+    $('#spanResultadosCount').text('');
 
     $.ajax({
         url: opts.url,
@@ -5418,6 +5690,8 @@ function _cargarListadoEmisor(opts) {
         }
         window.emitidosData = resp.items || [];
         totalPaginas = resp.total_paginas || 1;
+        const totalEm = resp.items ? resp.items.length : 0;
+        if (totalEm > 0) $('#spanResultadosCount').text(`— ${totalEm} resultado${totalEm !== 1 ? 's' : ''}`);
         opts.renderFn();
         actualizarPaginacion();
     }).fail(xhr => {
@@ -5873,7 +6147,7 @@ function abrirModalAjusteEmisor(dteId, opciones) {
         );
     }
 
-    const colspan = esPostRecepcion ? 7 : 6;
+    const colspan = esPostRecepcion ? 8 : 7;
     $('#ajusteProductosBody').html(`
         <tr><td colspan="${colspan}" class="text-center py-3">
             <div class="spinner-border ${esPostRecepcion ? 'text-danger' : 'text-warning'} spinner-border-sm"></div>
@@ -5953,6 +6227,7 @@ function abrirModalAjusteEmisor(dteId, opciones) {
                                    min="${cantidad - maxDevolver}" max="${cantidad}" value="${cantidad}" style="width: 95px; display:inline-block;">
                             <div class="small text-muted">NC: <span class="ajuste-cantidad-nc">0</span></div>
                         </td>
+                        <td class="text-end ajuste-monto-nc-celda text-danger fw-bold small">$0</td>
                         <td class="text-center">
                             <button class="btn btn-sm btn-outline-danger btn-poner-cero" title="Devolver el máximo permitido">
                                 <i class="bi bi-x-circle"></i>
@@ -5995,9 +6270,12 @@ function actualizarDiferencialAjuste() {
         if (String(nuevaCant) !== String($input.val())) $input.val(nuevaCant);
         const dif = cantOriginal - nuevaCant;
         $tr.find('.ajuste-cantidad-nc').text(dif);
+        const montoNcFila = dif > 0 ? dif * precio : 0;
+        $tr.find('.ajuste-monto-nc-celda').text(dif > 0 ? _ajusteFormatearPesos(montoNcFila) : '$0');
+        $tr.toggleClass('table-danger', dif > 0);
         if (dif > 0) {
             difUnidades += dif;
-            difNeto += dif * precio;
+            difNeto += montoNcFila;
             resumen.push({
                 sku: $tr.data('sku') || '-',
                 nombre: $tr.data('nombre') || '-',
@@ -6008,8 +6286,10 @@ function actualizarDiferencialAjuste() {
             });
         }
     });
+    const difTotal = Math.round(difNeto * 1.19);
     $('#ajusteDiferencialNeto').text(_ajusteFormatearPesos(difNeto));
     $('#ajusteDiferencialUnidades').text(difUnidades);
+    $('#ajusteDiferencialTotal').text(_ajusteFormatearPesos(difTotal));
     if (!resumen.length) {
         $('#ajusteResumenCambios')
             .removeClass('alert-warning alert-danger')
@@ -6136,82 +6416,50 @@ function confirmarAjusteEmisor() {
                 return;
             }
             const doc = resp.doc_trazador || {};
-            bootstrap.Modal.getInstance(document.getElementById('modalAjustarDteEmisor')).hide();
 
-            let extraHtml = '';
-            if (doc.es_nota_credito) {
-                if (doc.archivo_txt_url) {
-                    extraHtml = `
-                        <div class="alert alert-success mt-3 mb-0 text-start small">
-                            <i class="bi bi-file-earmark-text me-1"></i>
-                            <strong>TXT Acepta generado.</strong>
-                            <a href="${doc.archivo_txt_url}" download class="btn btn-success btn-sm ms-2">
-                                <i class="bi bi-download me-1"></i>Descargar TXT
-                            </a>
-                        </div>
-                    `;
-                } else if (doc.error_txt) {
-                    extraHtml = `
-                        <div class="alert alert-warning mt-3 mb-0 text-start small">
-                            <i class="bi bi-exclamation-triangle me-1"></i>
-                            <strong>NC generada</strong> pero no se pudo crear el TXT Acepta: ${doc.error_txt}
-                        </div>
-                    `;
-                }
+            // ── Mostrar panel resultado dentro del modal (no cerrar) ──
+            // 1. Ocultar contenido de edición
+            $('#modalAjustarDteEmisor .modal-body > *').not('#ajusteResultadoPanel').hide();
+            $('#ajusteModalFooter').addClass('d-none');
+            $('#ajusteFooterResultado').removeClass('d-none');
+
+            // 2. Poblar panel resultado
+            const tipoDoc = doc.tipo_documento || (resp.es_post_recepcion ? 'NC post-rec.' : 'Ajuste');
+            const numDoc  = doc.numero_documento || '-';
+            $('#ajusteResDoc').text(tipoDoc + ' #' + numDoc);
+            $('#ajusteResEsNC').html(doc.es_nota_credito
+                ? '<span class="badge bg-danger">Sí — NC SII</span>'
+                : '<span class="badge bg-secondary">No (ajuste interno)</span>');
+            $('#ajusteResUnidades').text(doc.unidades || '-');
+            $('#ajusteResNeto').text(_ajusteFormatearPesos(doc.monto_neto));
+
+            if (doc.archivo_txt_url) {
+                $('#ajusteResTxtBtn').attr('href', doc.archivo_txt_url).attr('download', 'TXT_' + numDoc + '.txt').removeClass('d-none');
+                $('#ajusteResSinTxt').addClass('d-none');
+            } else {
+                $('#ajusteResTxtBtn').addClass('d-none');
+                $('#ajusteResSinTxt').removeClass('d-none');
             }
 
-            // Feedback concreto del delta de stock por sucursal.
-            let stockHtml = '';
+            // 3. Tabla de stock
             const deltas = resp.stock_delta || [];
             if (deltas.length) {
-                const filas = deltas.map(d => `
-                    <tr>
-                        <td><small class="font-monospace">${d.sku}</small></td>
-                        <td><small>${d.talla || '-'}</small></td>
-                        <td><small>${d.sucursal_alias || d.sucursal_id}</small></td>
-                        <td class="text-end"><strong>${d.stock}</strong></td>
-                    </tr>
-                `).join('');
-                stockHtml = `
-                    <div class="mt-3">
-                        <p class="small mb-1"><strong>Stock actual tras el ajuste:</strong></p>
-                        <table class="table table-sm table-bordered mb-0">
-                            <thead class="table-light"><tr>
-                                <th>SKU</th><th>Talla</th><th>Sucursal</th><th class="text-end">Stock</th>
-                            </tr></thead>
-                            <tbody>${filas}</tbody>
-                        </table>
-                    </div>`;
+                $('#ajusteResStockBody').html(deltas.map(d =>
+                    `<tr><td><small class="font-monospace">${d.sku}</small></td>` +
+                    `<td><small>${d.talla||'-'}</small></td>` +
+                    `<td><small>${d.sucursal_alias||d.sucursal_id}</small></td>` +
+                    `<td class="text-end"><strong>${d.stock}</strong></td></tr>`
+                ).join(''));
+                $('#ajusteResStockPanel').removeClass('d-none');
             }
+            $('#ajusteResultadoPanel').removeClass('d-none');
 
-            const bannerFase = resp.es_post_recepcion
-                ? '<div class="alert alert-info mt-3 mb-0 small text-start"><i class="bi bi-arrow-counterclockwise me-1"></i> NC <strong>post-recepción</strong>: stock descontado del destino y reingresado al origen.</div>'
-                : '';
-
-            Swal.fire({
-                icon: 'success',
-                title: resp.es_post_recepcion ? 'NC post-recepción emitida' : 'Ajuste aplicado',
-                html: `
-                    <p>${resp.message || 'Ajuste realizado correctamente.'}</p>
-                    <ul class="list-unstyled text-start small mb-0">
-                        <li><strong>Documento generado:</strong> ${doc.tipo_documento} #${doc.numero_documento}</li>
-                        <li><strong>Es Nota de Crédito:</strong> ${doc.es_nota_credito ? 'Sí' : 'No (ajuste interno)'}</li>
-                        <li><strong>Unidades retiradas:</strong> ${doc.unidades}</li>
-                        <li><strong>Monto neto:</strong> ${_ajusteFormatearPesos(doc.monto_neto)}</li>
-                    </ul>
-                    ${bannerFase}
-                    ${stockHtml}
-                    ${extraHtml}
-                `,
-                confirmButtonText: 'Entendido',
-                width: deltas.length ? '640px' : undefined,
-            }).then(() => {
-                if (window.modoVista === 'recepcionados') {
-                    cargarRecepcionados();
-                } else {
-                    cargarEmitidos();
-                }
-            });
+            // 4. Refrescar listas en segundo plano
+            if (window.modoVista === 'recepcionados') {
+                cargarRecepcionados();
+            } else {
+                cargarEmitidos();
+            }
         }).fail(xhr => {
             const msg = (xhr.responseJSON && xhr.responseJSON.error) || 'Error al aplicar el ajuste.';
             Swal.fire('Error', msg, 'error');
@@ -6220,6 +6468,25 @@ function confirmarAjusteEmisor() {
         });
     });
 }
+
+// Resetear panel resultado al cerrar el modal de ajuste
+$(document).ready(function() {
+    document.getElementById('modalAjustarDteEmisor').addEventListener('hidden.bs.modal', function() {
+        $('#ajusteResultadoPanel').addClass('d-none');
+        $('#ajusteResStockPanel').addClass('d-none');
+        $('#ajusteResStockBody').empty();
+        $('#ajusteModalFooter').removeClass('d-none');
+        $('#ajusteFooterResultado').addClass('d-none');
+        $('#modalAjustarDteEmisor .modal-body > *').not('#ajusteResultadoPanel').show();
+    });
+
+    $('#btnVerTrazabilidadAjuste').on('click', function() {
+        if (window.TrazabilidadDTE && window.ajusteDteActual && window.ajusteDteActual.id) {
+            bootstrap.Modal.getInstance(document.getElementById('modalAjustarDteEmisor'))?.hide();
+            window.TrazabilidadDTE.abrir(window.ajusteDteActual.id);
+        }
+    });
+});
 
 // Wiring de los eventos de modo emisor (no rompe nada si no existen los botones)
 $(document).ready(function () {
@@ -6268,6 +6535,419 @@ $(document).ready(function () {
     // Confirmar
     $('#btnConfirmarAjusteEmisor').on('click', confirmarAjusteEmisor);
 });
+
+// ══════════════════════════════════════════════════════════════════════
+// WIZARD MODAL GESTIONAR NC
+// Reemplaza el flujo SweetAlert de anularFacturaRechazada (facturas/boletas).
+// Para guías u otros no-tributarios sigue usando anularDTERechazado (sin cambio).
+// ══════════════════════════════════════════════════════════════════════
+
+var _ncWizardState = {
+    dteId: null, numeroDocumento: null, tipoDocumento: null,
+    tipoNc: null, motivo: null, paso: 1,
+    productos: [],          // [{dpId, sku, nombre, talla, cantidad, precio, seleccionado, cantNC}]
+    ncId: null, ncNumero: null, ncFecha: null,
+    ncNeto: 0, ncIva: 0, ncTotal: 0,
+    txtUrl: null,
+};
+
+// Punto de entrada: reemplaza anularFacturaRechazada
+function anularFacturaRechazada(dteId, numeroDocumento, tipoDocumento) {
+    _ncWizardState = {
+        dteId, numeroDocumento, tipoDocumento,
+        tipoNc: null, motivo: null, paso: 1,
+        productos: [], ncId: null, ncNumero: null, ncFecha: null,
+        ncNeto: 0, ncIva: 0, ncTotal: 0, txtUrl: null,
+    };
+    $('#ncDteNumero').text('#' + numeroDocumento);
+    $('#ncDteTipo').text(tipoDocumento);
+    $('.nc-tipo-card').removeClass('selected');
+    $('#ncMotivo').val('').removeClass('is-invalid');
+    $('#ncAlertaPaso2').addClass('d-none');
+    _ncIrPaso(1);
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('modalGestionarNC')).show();
+}
+
+function _ncIrPaso(paso) {
+    _ncWizardState.paso = paso;
+    $('.nc-paso').addClass('d-none');
+    $('#ncPaso' + paso).removeClass('d-none');
+
+    // Indicadores
+    [1, 2, 3].forEach(i => {
+        const $ind = $('#ncStepInd' + i);
+        $ind.removeClass('active completed');
+        if (i < paso) { $ind.addClass('completed').html('<i class="bi bi-check-lg"></i>'); }
+        else if (i === paso) { $ind.addClass('active').text(i); }
+        else { $ind.text(i); }
+    });
+    $('#ncProgressBar1').css('width', paso > 1 ? '100%' : '0%');
+    $('#ncProgressBar2').css('width', paso > 2 ? '100%' : '0%');
+
+    // Botones footer
+    $('#btnNcAtras').toggleClass('d-none', paso <= 1 || paso === 3);
+    $('#btnNcSiguiente').toggleClass('d-none', paso !== 1);
+    $('#btnNcConfirmar').toggleClass('d-none', paso !== 2);
+    $('#btnNcCancelar').toggleClass('d-none', paso === 3);
+    $('#btnNcCerrarFinal').toggleClass('d-none', paso !== 3);
+
+    if (paso === 2) {
+        // Cachear: solo se consulta al backend la primera vez. Al volver al
+        // Paso 2 (p.ej. tras pulsar Atrás) se preserva la selección/cantidades
+        // que el usuario ya había ajustado, en vez de reiniciarlas.
+        if (!_ncWizardState.productos || !_ncWizardState.productos.length) {
+            _ncCargarProductos();
+        } else {
+            _ncRenderProductos();
+            _ncConfigurarBannerPaso2();
+            _ncRecalcularTotales();
+        }
+    }
+}
+
+// Configura el banner del Paso 2 (texto + visibilidad del impacto de stock)
+// según el tipo de NC actual. El conteo de unidades lo refresca
+// _ncRecalcularTotales() en cada cambio de selección/cantidad.
+function _ncConfigurarBannerPaso2() {
+    if (_ncWizardState.tipoNc === 'DEVOLUCION') {
+        $('#ncAlertaPaso2Texto').text(
+            'Los productos seleccionados serán acreditados mediante NC. El stock retornará a la bodega de origen.'
+        );
+        $('#ncAlertaImpactoStock').removeClass('d-none');
+    } else {
+        $('#ncAlertaPaso2Texto').text(
+            'Los productos seleccionados serán anulados por error de emisión. El stock NO se modifica.'
+        );
+        $('#ncAlertaImpactoStock').addClass('d-none');
+    }
+    $('#ncAlertaPaso2').removeClass('d-none');
+}
+
+function _ncCargarProductos() {
+    $('#ncPaso2ProductosBody').html(
+        '<tr><td colspan="8" class="text-center py-3">' +
+        '<div class="spinner-border spinner-border-sm text-danger me-2"></div>Cargando productos...</td></tr>'
+    );
+    $.get('/app/api/detalle_dte_completo/' + _ncWizardState.dteId + '/').done(function(resp) {
+        const prods = ((resp && resp.productos) || []).filter(function(p) {
+            return p.activo === undefined || p.activo;
+        });
+        _ncWizardState.productos = prods.map(function(p) {
+            const cant = parseInt(p.cantidad || 0, 10);
+            return {
+                dpId: p.id || p.dte_producto_id,
+                sku: p.sku || '-',
+                nombre: p.descripcion || p.producto || '-',
+                talla: p.talla || '-',
+                cantidad: cant,
+                precio: parseFloat(p.precio_unitario || p.precio || 0) || 0,
+                seleccionado: true,
+                cantNC: cant,
+            };
+        });
+        _ncRenderProductos();
+        _ncConfigurarBannerPaso2();
+        _ncRecalcularTotales();
+    }).fail(function() {
+        $('#ncPaso2ProductosBody').html(
+            '<tr><td colspan="8" class="text-center text-danger py-3">' +
+            '<i class="bi bi-exclamation-triangle me-1"></i>Error al cargar productos. Intenta de nuevo.</td></tr>'
+        );
+    });
+}
+
+function _ncRenderProductos() {
+    const filas = _ncWizardState.productos.map(function(p, idx) {
+        const montoLinea = p.seleccionado ? p.cantNC * p.precio : 0;
+        const rowClass = p.seleccionado ? 'nc-fila-seleccionada' : 'nc-fila-excluida';
+        const skuSafe = _escapeHtmlDte(p.sku);
+        const nombreSafe = _escapeHtmlDte(p.nombre);
+        const tallaSafe = _escapeHtmlDte(p.talla);
+        return '<tr class="' + rowClass + '" data-nc-idx="' + idx + '">' +
+            '<td><input type="checkbox" class="form-check-input nc-check-prod" data-idx="' + idx + '"' + (p.seleccionado ? ' checked' : '') + ' aria-label="Incluir ' + skuSafe + ' en la nota de crédito"></td>' +
+            '<td><small class="font-monospace">' + skuSafe + '</small></td>' +
+            '<td><small>' + nombreSafe + '</small></td>' +
+            '<td class="text-center"><span class="badge bg-secondary">' + tallaSafe + '</span></td>' +
+            '<td class="text-center fw-bold">' + p.cantidad + '</td>' +
+            '<td class="text-center">' +
+                '<input type="number" class="form-control form-control-sm text-center nc-qty-input nc-qty-prod" ' +
+                       'data-idx="' + idx + '" min="1" max="' + p.cantidad + '" value="' + p.cantNC + '"' +
+                       (p.seleccionado ? '' : ' disabled') + ' aria-label="Cantidad a acreditar de ' + skuSafe + '" style="width:72px;display:inline-block;">' +
+            '</td>' +
+            '<td class="text-end small">' + _ajusteFormatearPesos(p.precio) + '</td>' +
+            '<td class="text-end fw-bold text-danger nc-monto-celda">' + (p.seleccionado && montoLinea > 0 ? _ajusteFormatearPesos(montoLinea) : '$0') + '</td>' +
+        '</tr>';
+    }).join('');
+    $('#ncPaso2ProductosBody').html(filas || '<tr><td colspan="8" class="text-center text-muted py-3">Sin productos en este DTE.</td></tr>');
+    // Sincronizar checkbox master
+    const totalSel = _ncWizardState.productos.filter(function(p) { return p.seleccionado; }).length;
+    $('#ncCheckTodos').prop('checked', totalSel === _ncWizardState.productos.length)
+                      .prop('indeterminate', totalSel > 0 && totalSel < _ncWizardState.productos.length);
+}
+
+function _ncRecalcularTotales() {
+    let lineas = 0, unidades = 0, neto = 0;
+    _ncWizardState.productos.forEach(function(p) {
+        if (p.seleccionado && p.cantNC > 0) {
+            lineas++;
+            unidades += p.cantNC;
+            neto += p.cantNC * p.precio;
+        }
+    });
+    const iva = Math.round(neto * 0.19);
+    const total = neto + iva;
+    _ncWizardState.ncNeto = neto;
+    _ncWizardState.ncIva  = iva;
+    _ncWizardState.ncTotal = total;
+
+    $('#ncResumenLineas').text(lineas);
+    $('#ncResumenUnidades').text(unidades);
+    $('#ncResumenNeto').text(_ajusteFormatearPesos(neto));
+    $('#ncResumenTotal').text(_ajusteFormatearPesos(total));
+    $('#ncContadorSeleccion').text(lineas + ' seleccionado' + (lineas !== 1 ? 's' : ''));
+
+    // Banner de impacto de stock (solo devolución): refleja las unidades
+    // realmente seleccionadas, se actualiza en cada cambio.
+    if (_ncWizardState.tipoNc === 'DEVOLUCION') {
+        $('#ncTextoImpactoStock').text(
+            unidades + ' unidad' + (unidades === 1 ? '' : 'es') + ' retornarán a la bodega de origen al confirmar.'
+        );
+    }
+
+    // No re-habilitar el botón si hay una emisión en curso (evita doble submit).
+    const sinSel = lineas === 0;
+    $('#btnNcConfirmar').prop('disabled', sinSel || _ncWizardState.emitiendo === true)
+        .attr('title', sinSel ? 'Selecciona al menos un producto' : '');
+}
+
+function _ncActualizarFilaYTotales(idx) {
+    const p = _ncWizardState.productos[idx];
+    if (!p) return;
+    const $tr = $('#ncPaso2ProductosBody tr[data-nc-idx="' + idx + '"]');
+    const montoLinea = p.seleccionado ? p.cantNC * p.precio : 0;
+    $tr.find('.nc-monto-celda').text(p.seleccionado && montoLinea > 0 ? _ajusteFormatearPesos(montoLinea) : '$0');
+    $tr.toggleClass('nc-fila-seleccionada', p.seleccionado).toggleClass('nc-fila-excluida', !p.seleccionado);
+    $tr.find('.nc-qty-prod').prop('disabled', !p.seleccionado);
+    _ncRecalcularTotales();
+}
+
+function _ncEmitir() {
+    const productosSeleccionados = _ncWizardState.productos.filter(function(p) { return p.seleccionado && p.cantNC > 0; });
+    if (!productosSeleccionados.length) {
+        Swal.fire('Sin selección', 'Selecciona al menos un producto para emitir la NC.', 'warning');
+        return;
+    }
+
+    const totalProductos = _ncWizardState.productos.length;
+    const esTotal = productosSeleccionados.length === totalProductos &&
+                    productosSeleccionados.every(function(p) { return p.cantNC === p.cantidad; });
+
+    const $btn = $('#btnNcConfirmar');
+    _ncWizardState.emitiendo = true;
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Generando NC...');
+
+    function _mostrarPaso3(ncNum, ncFecha, neto, iva, total, txtUrl) {
+        $('#ncResultNumero').text(ncNum || '(ver listado de documentos)');
+        $('#ncResultFecha').text(ncFecha || new Date().toLocaleDateString('es-CL'));
+        $('#ncResultNeto').text(_ajusteFormatearPesos(neto));
+        $('#ncResultIva').text(_ajusteFormatearPesos(iva));
+        $('#ncResultTotal').text(_ajusteFormatearPesos(total));
+        if (txtUrl) {
+            $('#btnDescargarTxtNC').attr('href', txtUrl).attr('download', 'NC_' + (ncNum || _ncWizardState.numeroDocumento) + '.txt').show();
+        } else {
+            $('#btnDescargarTxtNC').hide();
+        }
+        _ncIrPaso(3);
+        // Refrescar listas en segundo plano: siempre la de rechazados (es desde
+        // donde se abre el wizard) + la tabla principal del modo de vista activo.
+        cargarDTEsRechazados();
+        if (window.modoVista === 'regularizar') cargarRegularizaciones();
+        else if (window.modoVista === 'mis_regularizaciones' && typeof cargarMisRegularizaciones === 'function') cargarMisRegularizaciones();
+        else if (window.modoVista === 'emitidos') cargarEmitidos();
+        else if (window.modoVista === 'recepcionados') cargarRecepcionados();
+        else cargarRecepciones();
+    }
+
+    if (esTotal) {
+        // NC TOTAL: usa el endpoint existente con return_json
+        $.ajax({
+            url: '/app/documentos/anular-factura/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: {'X-CSRFToken': getCookie('csrftoken')},
+            data: JSON.stringify({
+                dte_id: _ncWizardState.dteId,
+                tipo_anulacion: _ncWizardState.tipoNc,
+                return_json: true,
+            }),
+        }).done(function(resp) {
+            if (!resp || !resp.success) {
+                Swal.fire('Error', (resp && resp.error) || 'No se pudo generar la NC.', 'error');
+                return;
+            }
+            _mostrarPaso3(resp.nc_numero, resp.nc_fecha, resp.monto_neto, resp.iva, resp.monto_total, resp.txt_acepta_url);
+        }).fail(function(xhr) {
+            Swal.fire('Error', (xhr.responseJSON && xhr.responseJSON.error) || 'Error al generar la NC.', 'error');
+        }).always(function() {
+            _ncWizardState.emitiendo = false;
+            $btn.prop('disabled', false).html('<i class="bi bi-check-circle me-1"></i>Emitir Nota de Crédito');
+        });
+    } else {
+        // NC PARCIAL: usa ajustar_traspaso con los productos seleccionados
+        const ajustes = _ncWizardState.productos.map(function(p) {
+            const cantNC  = p.seleccionado ? p.cantNC : 0;
+            const nuevaCant = p.cantidad - cantNC;
+            return {
+                dte_producto_id: p.dpId,
+                nueva_cantidad:   nuevaCant,
+                cantidad_original: p.cantidad,
+                cantidad_nc:       cantNC,
+                sku:  p.sku,
+                nombre: p.nombre,
+                talla:  p.talla,
+            };
+        }).filter(function(a) { return a.cantidad_nc > 0; });
+
+        $.ajax({
+            url: '/app/dte/ajustar_traspaso/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: {'X-CSRFToken': getCookie('csrftoken')},
+            data: JSON.stringify({
+                dte_id: _ncWizardState.dteId,
+                ajustes: ajustes,
+                motivo: _ncWizardState.motivo || ('NC ' + _ncWizardState.tipoNc + ' parcial'),
+            }),
+        }).done(function(resp) {
+            if (!resp || !resp.success) {
+                Swal.fire('Error', (resp && resp.error) || 'No se pudo generar la NC parcial.', 'error');
+                return;
+            }
+            const doc = resp.doc_trazador || {};
+            const tieneMontos = (doc.monto_neto != null && doc.monto_con_iva != null);
+            const neto  = tieneMontos ? doc.monto_neto : _ncWizardState.ncNeto;
+            const total = tieneMontos ? doc.monto_con_iva : _ncWizardState.ncTotal;
+            const iva   = tieneMontos ? Math.max(0, Math.round(total - neto)) : _ncWizardState.ncIva;
+            _mostrarPaso3(doc.numero_documento, null, neto, iva, total, doc.archivo_txt_url || null);
+        }).fail(function(xhr) {
+            Swal.fire('Error', (xhr.responseJSON && xhr.responseJSON.error) || 'Error al generar la NC parcial.', 'error');
+        }).always(function() {
+            _ncWizardState.emitiendo = false;
+            $btn.prop('disabled', false).html('<i class="bi bi-check-circle me-1"></i>Emitir Nota de Crédito');
+        });
+    }
+}
+
+// ── Wiring de eventos del wizard ────────────────────────────
+$(document).ready(function() {
+    // Cards de tipo NC
+    $(document).on('click', '.nc-tipo-card', function() {
+        $('.nc-tipo-card').removeClass('selected');
+        $(this).addClass('selected');
+        _ncWizardState.tipoNc = $(this).data('tipo');
+    });
+
+    // Check master (incluir/excluir todos) — preserva las cantidades parciales
+    // que el usuario haya ajustado; solo restaura a la cantidad completa las
+    // líneas que estaban en 0 (para que al re-incluirlas tengan un valor válido).
+    $(document).on('change', '#ncCheckTodos', function() {
+        const checked = $(this).prop('checked');
+        _ncWizardState.productos.forEach(function(p) {
+            p.seleccionado = checked;
+            if (checked && (!p.cantNC || p.cantNC <= 0)) p.cantNC = p.cantidad;
+        });
+        _ncRenderProductos();
+        _ncRecalcularTotales();
+    });
+
+    // Checkbox individual
+    $(document).on('change', '.nc-check-prod', function() {
+        const idx = parseInt($(this).data('idx'), 10);
+        _ncWizardState.productos[idx].seleccionado = $(this).prop('checked');
+        _ncActualizarFilaYTotales(idx);
+        const totalSel = _ncWizardState.productos.filter(function(p) { return p.seleccionado; }).length;
+        const total = _ncWizardState.productos.length;
+        $('#ncCheckTodos').prop('checked', totalSel === total).prop('indeterminate', totalSel > 0 && totalSel < total);
+    });
+
+    // Input cantidad NC por fila
+    $(document).on('input', '.nc-qty-prod', function() {
+        const idx = parseInt($(this).data('idx'), 10);
+        const p   = _ncWizardState.productos[idx];
+        if (!p) return;
+        let v = parseInt($(this).val(), 10);
+        if (isNaN(v) || v < 0) v = 0;
+        if (v > p.cantidad) { v = p.cantidad; $(this).val(v); }
+        p.cantNC = v;
+        if (v === 0) { p.seleccionado = false; $(this).closest('tr').find('.nc-check-prod').prop('checked', false); }
+        _ncActualizarFilaYTotales(idx);
+    });
+
+    // Botón Seleccionar todo
+    $('#btnNcSeleccionarTodo').on('click', function() {
+        _ncWizardState.productos.forEach(function(p) { p.seleccionado = true; p.cantNC = p.cantidad; });
+        _ncRenderProductos();
+        _ncRecalcularTotales();
+    });
+
+    // Botón Quitar todo
+    $('#btnNcQuitarTodo').on('click', function() {
+        _ncWizardState.productos.forEach(function(p) { p.seleccionado = false; });
+        _ncRenderProductos();
+        _ncRecalcularTotales();
+    });
+
+    // Botón Siguiente (Paso 1 → 2)
+    $('#btnNcSiguiente').on('click', function() {
+        if (!_ncWizardState.tipoNc) {
+            Swal.fire('Tipo requerido', 'Elige "Anulación" o "Devolución" para continuar.', 'warning');
+            return;
+        }
+        _ncWizardState.motivo = $('#ncMotivo').val().trim();
+        _ncIrPaso(2);
+    });
+
+    // Botón Atrás (Paso 2 → 1)
+    $('#btnNcAtras').on('click', function() {
+        if (_ncWizardState.paso === 2) _ncIrPaso(1);
+    });
+
+    // Botón Emitir NC (Paso 2)
+    $('#btnNcConfirmar').on('click', _ncEmitir);
+
+    // Ver trazabilidad desde resultado
+    $('#btnVerTrazabilidadNC').on('click', function() {
+        if (window.TrazabilidadDTE && _ncWizardState.dteId) {
+            bootstrap.Modal.getInstance(document.getElementById('modalGestionarNC'))?.hide();
+            window.TrazabilidadDTE.abrir(_ncWizardState.dteId);
+        }
+    });
+
+    // Al cerrar modal: limpiar blob si existiera
+    document.getElementById('modalGestionarNC').addEventListener('hidden.bs.modal', function() {
+        _ncWizardState.txtUrl = null;
+    });
+
+    // Botón cerrar en header (no usa data-bs-dismiss para no cerrar con teclado accidentalmente en paso 2)
+    $('#btnCerrarModalNC').on('click', function() {
+        if (_ncWizardState.paso === 3) {
+            bootstrap.Modal.getInstance(document.getElementById('modalGestionarNC')).hide();
+            return;
+        }
+        Swal.fire({
+            title: '¿Cancelar NC?',
+            text: 'Si cierras ahora no se generará ninguna Nota de Crédito.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, cancelar',
+            cancelButtonText: 'Volver al wizard',
+            confirmButtonColor: '#6c757d',
+        }).then(function(r) {
+            if (r.isConfirmed) bootstrap.Modal.getInstance(document.getElementById('modalGestionarNC')).hide();
+        });
+    });
+});
+// ── Fin wizard NC ────────────────────────────────────────────
 </script>
 
 

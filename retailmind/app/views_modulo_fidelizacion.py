@@ -147,6 +147,7 @@ def api_listar_cuentas(request):
             'saldo_puntos': saldo,
             'valor_pesos': saldo * valor_pto,
             'tiene_cuenta': cuenta is not None,
+            'nivel': cuenta.nivel if cuenta else 'PLATA',
         })
 
     return JsonResponse({
@@ -365,20 +366,41 @@ def construir_reporte_fidelizacion(*, fecha_inicio_dt, fecha_fin_dt,
             ),
         })
 
+    # Desglose por nivel
+    niveles_qs = cuentas.values('nivel').annotate(
+        cantidad=Count('id'),
+        puntos_total=Sum('saldo_puntos'),
+    )
+    desglose_niveles = {row['nivel']: {
+        'cantidad': row['cantidad'],
+        'puntos': row['puntos_total'] or 0,
+        'valor_pesos': (row['puntos_total'] or 0) * valor_pto,
+    } for row in niveles_qs}
+
+    # Bonos cumpleaños en el período
+    cumpleanos_qs = periodo_qs.filter(tipo='CUMPLEANOS', puntos__gt=0)
+    puntos_cumpleanos = cumpleanos_qs.aggregate(s=Sum('puntos'))['s'] or 0
+
     return {
         'programa': {
             'nombre': programa.nombre if programa else '',
             'valor_punto': valor_pto,
             'tasa_descuento_efectiva': programa.tasa_descuento_efectiva if programa else 0,
+            'tasa_plata': float(programa.tasa_plata) if programa else 3.0,
+            'tasa_oro': float(programa.tasa_oro) if programa else 4.0,
+            'tasa_platino': float(programa.tasa_platino) if programa else 5.0,
+            'umbral_oro': programa.umbral_oro if programa else 300000,
+            'umbral_platino': programa.umbral_platino if programa else 800000,
         },
         'resumen': {
             'total_clientes': cuentas.count(),
             'puntos_circulantes': total_puntos,
             'pasivo_estimado_pesos': total_puntos * valor_pto,
-            'puntos_emitidos_periodo': puntos_acumulados + puntos_bienvenida,
+            'puntos_emitidos_periodo': puntos_acumulados + puntos_bienvenida + puntos_cumpleanos,
             'puntos_acumulados_periodo': puntos_acumulados,
             'puntos_bienvenida_periodo': puntos_bienvenida,
-            'valor_emitido_periodo': (puntos_acumulados + puntos_bienvenida) * valor_pto,
+            'puntos_cumpleanos_periodo': puntos_cumpleanos,
+            'valor_emitido_periodo': (puntos_acumulados + puntos_bienvenida + puntos_cumpleanos) * valor_pto,
             'puntos_canjeados_periodo': puntos_canjeados,
             'valor_canjeado_periodo': puntos_canjeados * valor_pto,
             'puntos_expirados_periodo': puntos_expirados,
@@ -391,6 +413,7 @@ def construir_reporte_fidelizacion(*, fecha_inicio_dt, fecha_fin_dt,
                 fecha__gte=timezone.now() - timezone.timedelta(days=30),
             ).count(),
         },
+        'desglose_niveles': desglose_niveles,
         'puntos_por_vencer': [{
             **item,
             'proximo_vencimiento': item['proximo_vencimiento'].isoformat(),
@@ -416,10 +439,15 @@ def api_guardar_programa(request):
     campos_int = [
         'puntos_por_monto', 'monto_base_acumulacion', 'valor_punto_en_pesos',
         'minimo_canje_puntos', 'vigencia_dias', 'puntos_bienvenida',
+        'puntos_cumpleanos', 'incremento_canje', 'umbral_oro', 'umbral_platino',
     ]
     for campo in campos_int:
         if data.get(campo) not in (None, ''):
-            setattr(programa, campo, int(data[campo]))
+            setattr(programa, campo, int(float(data[campo])))
+    campos_decimal = ['tasa_plata', 'tasa_oro', 'tasa_platino']
+    for campo in campos_decimal:
+        if data.get(campo) not in (None, ''):
+            setattr(programa, campo, float(data[campo]))
     if data.get('nombre'):
         programa.nombre = data['nombre']
     if data.get('redondeo'):
@@ -512,6 +540,29 @@ def api_registrar_cliente(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
     except Exception as e:
         logger.exception("Error en alta manual de cliente fidelización")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@require_POST
+@requiere_permiso('fidelizacion_cuentas', 'puede_editar')
+def api_bono_cumpleanos(request):
+    """Otorga el bono de cumpleaños al cliente (si hoy es su cumpleaños y no se otorgó aún este año)."""
+    try:
+        data = json.loads(request.body or '{}')
+        cliente = get_object_or_404(Cliente, id=data.get('cliente_id'))
+        resultado = fidelizacion_service.otorgar_bono_cumpleanos(
+            cliente, usuario=request.user
+        )
+        if resultado is None:
+            return JsonResponse({
+                'success': False,
+                'error': 'No corresponde bono: hoy no es el cumpleaños del cliente, ya se otorgó este año, o el cliente no tiene fecha de nacimiento registrada.',
+            }, status=400)
+        return JsonResponse({'success': True, **resultado})
+    except fidelizacion_service.FidelizacionError as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+    except Exception as e:
+        logger.exception("Error al otorgar bono de cumpleaños")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 

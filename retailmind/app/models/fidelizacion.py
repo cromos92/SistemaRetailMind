@@ -46,10 +46,25 @@ TIPO_MOV_PUNTOS_CHOICES = [
     ('AJUSTE', 'Ajuste manual'),
     ('REVERSA', 'Reversa (devolución/anulación de venta)'),
     ('BIENVENIDA', 'Bono de bienvenida'),
+    ('CUMPLEANOS', 'Bono de cumpleaños'),
+]
+
+NIVEL_CHOICES = [
+    ('PLATA', 'Plata'),
+    ('ORO', 'Oro'),
+    ('PLATINO', 'Platino'),
 ]
 
 # Tipos que CREAN un lote consumible (suman puntos con fecha de expiración)
-TIPOS_LOTE = ('ACUMULACION', 'BIENVENIDA')
+TIPOS_LOTE = ('ACUMULACION', 'BIENVENIDA', 'CUMPLEANOS')
+
+CANAL_MOV_CHOICES = [
+    ('POS',    'Caja POS'),
+    ('APP',    'App Móvil'),
+    ('WEB',    'Ecommerce'),
+    ('MANUAL', 'Ajuste Manual'),
+    ('AUTO',   'Automático'),
+]
 
 
 class ProgramaFidelizacion(models.Model):
@@ -97,10 +112,42 @@ class ProgramaFidelizacion(models.Model):
         help_text="Días hasta que un lote de puntos expira",
     )
 
-    # === BIENVENIDA ===
+    # === BIENVENIDA Y CUMPLEAÑOS ===
     puntos_bienvenida = models.IntegerField(
-        default=200,
+        default=3000,
         help_text="Puntos al crear la cuenta del cliente (0 = sin bono)",
+    )
+    puntos_cumpleanos = models.IntegerField(
+        default=3000,
+        help_text="Puntos de regalo en el mes de cumpleaños (0 = sin bono)",
+    )
+
+    # === NIVELES (Plata / Oro / Platino) ===
+    tasa_plata = models.DecimalField(
+        max_digits=5, decimal_places=2, default=3.00,
+        help_text="% de cashback en puntos para nivel Plata",
+    )
+    tasa_oro = models.DecimalField(
+        max_digits=5, decimal_places=2, default=4.00,
+        help_text="% de cashback en puntos para nivel Oro",
+    )
+    tasa_platino = models.DecimalField(
+        max_digits=5, decimal_places=2, default=5.00,
+        help_text="% de cashback en puntos para nivel Platino",
+    )
+    umbral_oro = models.IntegerField(
+        default=300000,
+        help_text="Gasto acumulado en 12 meses (pesos) para alcanzar nivel Oro",
+    )
+    umbral_platino = models.IntegerField(
+        default=800000,
+        help_text="Gasto acumulado en 12 meses (pesos) para alcanzar nivel Platino",
+    )
+
+    # === CANJE INCREMENTAL ===
+    incremento_canje = models.IntegerField(
+        default=100,
+        help_text="El canje debe ser múltiplo de este valor (0 = sin restricción)",
     )
 
     activo = models.BooleanField(default=True, db_index=True)
@@ -126,11 +173,8 @@ class ProgramaFidelizacion(models.Model):
 
     def calcular_puntos(self, monto):
         """
-        Regla central de acumulación. Devuelve los puntos enteros que otorga
-        `monto` pesos según la tasa configurada y el modo de redondeo.
-
-        Único punto de verdad: lo usan el hook de cobro, la API desktop y los
-        reportes para que el resultado siempre coincida.
+        Tasa plana (puntos_por_monto / monto_base_acumulacion). Se mantiene
+        para compatibilidad; el hook de cobro usa `calcular_puntos_con_nivel`.
         """
         if not monto or monto <= 0 or self.monto_base_acumulacion <= 0:
             return 0
@@ -139,9 +183,37 @@ class ProgramaFidelizacion(models.Model):
         if self.redondeo == 'CEIL':
             return int(math.ceil(bruto))
         if self.redondeo == 'ROUND':
-            # Half-up explícito (evita banker's rounding de round(): round(10.5)==10).
             return int(math.floor(bruto + 0.5))
         return int(bruto)  # FLOOR
+
+    def calcular_puntos_con_nivel(self, monto, nivel='PLATA'):
+        """
+        Regla de acumulación con niveles (Plata/Oro/Platino). Cashback en %.
+        1 punto = 1 peso → puntos = monto × tasa%.
+        """
+        if not monto or monto <= 0:
+            return 0
+        import math
+        tasa_map = {
+            'PLATA': float(self.tasa_plata),
+            'ORO': float(self.tasa_oro),
+            'PLATINO': float(self.tasa_platino),
+        }
+        tasa = tasa_map.get(nivel, float(self.tasa_plata))
+        bruto = monto * tasa / 100
+        if self.redondeo == 'CEIL':
+            return int(math.ceil(bruto))
+        if self.redondeo == 'ROUND':
+            return int(math.floor(bruto + 0.5))
+        return int(bruto)  # FLOOR
+
+    def calcular_nivel(self, gasto_12_meses):
+        """Devuelve el nivel (PLATA/ORO/PLATINO) según el gasto acumulado."""
+        if gasto_12_meses >= self.umbral_platino:
+            return 'PLATINO'
+        if gasto_12_meses >= self.umbral_oro:
+            return 'ORO'
+        return 'PLATA'
 
     @property
     def tasa_descuento_efectiva(self):
@@ -180,6 +252,29 @@ class CuentaPuntos(models.Model):
     activa = models.BooleanField(default=True)
     fecha_alta = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # === NIVELES ===
+    nivel = models.CharField(
+        max_length=10,
+        choices=NIVEL_CHOICES,
+        default='PLATA',
+        db_index=True,
+        help_text="Nivel del cliente (Plata/Oro/Platino) según gasto 12 meses",
+    )
+    gasto_12_meses = models.IntegerField(
+        default=0,
+        help_text="Cache de gasto acumulado en los últimos 12 meses (pesos)",
+    )
+    nivel_actualizado = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Última vez que se recalculó el nivel",
+    )
+
+    # === CUMPLEAÑOS ===
+    anio_ultimo_bono_cumpleanos = models.IntegerField(
+        null=True, blank=True,
+        help_text="Año en que se otorgó el último bono de cumpleaños (evita duplicar)",
+    )
 
     class Meta:
         ordering = ['-saldo_puntos']
@@ -281,6 +376,16 @@ class MovimientoPuntos(models.Model):
     fecha = models.DateTimeField(auto_now_add=True, db_index=True)
     observaciones = models.TextField(blank=True, null=True)
 
+    # === AUDITORÍA / TRAZABILIDAD ===
+    rut_cliente = models.CharField(
+        max_length=20, blank=True, null=True, db_index=True,
+        help_text='RUT denormalizado del cliente (reportes sin join, prueba de presentación)',
+    )
+    canal = models.CharField(
+        max_length=10, choices=CANAL_MOV_CHOICES, default='POS', db_index=True,
+        help_text='Canal que originó el movimiento (POS/APP/WEB/MANUAL/AUTO)',
+    )
+
     class Meta:
         ordering = ['fecha']
         verbose_name = 'Movimiento de Puntos'
@@ -290,6 +395,7 @@ class MovimientoPuntos(models.Model):
             models.Index(fields=['cuenta', 'fecha_expiracion']),
             models.Index(fields=['ticket']),
             models.Index(fields=['idempotency_key']),
+            models.Index(fields=['rut_cliente', 'tipo']),
         ]
 
     def __str__(self):

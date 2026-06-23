@@ -221,6 +221,8 @@ from .fidelizacion import (  # noqa: F401
     ACUMULA_SOBRE_CHOICES,
     TIPO_MOV_PUNTOS_CHOICES,
     TIPOS_LOTE,
+    NIVEL_CHOICES,
+    CANAL_MOV_CHOICES,
     calcular_fecha_expiracion,
     ProgramaFidelizacion,
     CuentaPuntos,

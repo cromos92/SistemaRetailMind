@@ -27,6 +27,10 @@
     .req { color:#f06548; }
     .badge-empresa { font-size:11px; padding:4px 10px; border-radius:12px; background:#eef2ff; color:#405189; font-weight:600; }
     .modal-header-nexo { background:linear-gradient(135deg,#405189,#0ab39c); color:white; }
+    .nivel-badge { font-size:11px; font-weight:700; padding:3px 10px; border-radius:12px; display:inline-block; }
+    .nivel-PLATA { background:#e8eaf6; color:#5c6bc0; }
+    .nivel-ORO   { background:#fff8e1; color:#f9a825; }
+    .nivel-PLATINO { background:#f3e5f5; color:#8e24aa; }
 </style>
 
 <div class="page-content">
@@ -54,27 +58,51 @@
 
             <div class="card-body">
                 <div class="row mb-3">
-                    <div class="col-md-4 col-6">
+                    <div class="col-md-2 col-6 mb-2">
                         <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9); border-left:4px solid #0ab39c;">
                             <div class="card-body text-center py-2">
                                 <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-clientes">0</h4>
-                                <p class="text-muted mb-0 small">Clientes con cuenta</p>
+                                <p class="text-muted mb-0 small">Clientes</p>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4 col-6">
+                    <div class="col-md-2 col-6 mb-2">
                         <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb); border-left:4px solid #299cdb;">
                             <div class="card-body text-center py-2">
                                 <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-puntos">0</h4>
-                                <p class="text-muted mb-0 small">Puntos circulantes</p>
+                                <p class="text-muted mb-0 small">Puntos</p>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4 col-12">
+                    <div class="col-md-2 col-6 mb-2">
                         <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#fff3e0,#ffe0b2); border-left:4px solid #fb8c00;">
                             <div class="card-body text-center py-2">
                                 <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-pasivo">$0</h4>
-                                <p class="text-muted mb-0 small">Pasivo estimado</p>
+                                <p class="text-muted mb-0 small">Pasivo</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2 col-6 mb-2">
+                        <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#e8eaf6,#c5cae9); border-left:4px solid #5c6bc0;">
+                            <div class="card-body text-center py-2">
+                                <h4 class="mb-0 fw-bold" style="color:#5c6bc0;" id="kpi-plata">0</h4>
+                                <p class="text-muted mb-0 small">Plata (3%)</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2 col-6 mb-2">
+                        <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#fff8e1,#ffecb3); border-left:4px solid #f9a825;">
+                            <div class="card-body text-center py-2">
+                                <h4 class="mb-0 fw-bold" style="color:#f9a825;" id="kpi-oro">0</h4>
+                                <p class="text-muted mb-0 small">Oro (4%)</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2 col-12 mb-2">
+                        <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#f3e5f5,#e1bee7); border-left:4px solid #8e24aa;">
+                            <div class="card-body text-center py-2">
+                                <h4 class="mb-0 fw-bold" style="color:#8e24aa;" id="kpi-platino">0</h4>
+                                <p class="text-muted mb-0 small">Platino (5%)</p>
                             </div>
                         </div>
                     </div>
@@ -96,6 +124,7 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Cliente</th><th>RUT</th><th>Empresa</th>
+                                <th class="text-center">Nivel</th>
                                 <th class="text-end">Puntos</th><th class="text-end">Valor</th>
                                 <th class="text-center">Ficha</th>
                             </tr>
@@ -200,6 +229,10 @@ function cargarKpis() {
         document.getElementById('kpi-clientes').textContent = d.total_clientes;
         document.getElementById('kpi-puntos').textContent = (d.puntos_circulantes||0).toLocaleString('es-CL');
         document.getElementById('kpi-pasivo').textContent = fmt(d.pasivo_estimado_pesos);
+        const niv = d.desglose_niveles || {};
+        document.getElementById('kpi-plata').textContent   = ((niv.PLATA   || {}).cantidad || 0).toLocaleString('es-CL');
+        document.getElementById('kpi-oro').textContent     = ((niv.ORO     || {}).cantidad || 0).toLocaleString('es-CL');
+        document.getElementById('kpi-platino').textContent = ((niv.PLATINO || {}).cantidad || 0).toLocaleString('es-CL');
     });
 }
 
@@ -218,6 +251,7 @@ function cargarCuentas(page) {
                 <td>${c.cliente}</td>
                 <td class="small">${c.rut || '—'}</td>
                 <td>${c.empresa ? `<span class="badge-empresa">${c.empresa}</span>` : '<span class="text-muted">—</span>'}</td>
+                <td class="text-center"><span class="nivel-badge nivel-${c.nivel||'PLATA'}">${c.nivel||'PLATA'}</span></td>
                 <td class="text-end pts-badge">${(c.saldo_puntos||0).toLocaleString('es-CL')}</td>
                 <td class="text-end">${fmt(c.valor_pesos)}</td>
                 <td class="text-center">

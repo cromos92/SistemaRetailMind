@@ -328,6 +328,7 @@ from .views_modulo_fidelizacion import (
     api_ajuste_manual_puntos,
     api_registrar_cliente,
     api_reporte_fidelizacion,
+    api_bono_cumpleanos,
 )
 from .views_permisos import (
     # Gestión de permisos por rol
@@ -1263,6 +1264,7 @@ urlpatterns = [
     path('api/fidelizacion/ajuste/', api_ajuste_manual_puntos, name='api_ajuste_manual_puntos'),
     path('api/fidelizacion/registrar-cliente/', api_registrar_cliente, name='api_registrar_cliente'),
     path('api/fidelizacion/reporte/', api_reporte_fidelizacion, name='api_reporte_fidelizacion'),
+    path('api/fidelizacion/bono-cumpleanos/', api_bono_cumpleanos, name='api_bono_cumpleanos'),
 
     # ========== MÓDULO DE GESTIÓN DE PERMISOS ==========
     # Vista principal de gestión de permisos
