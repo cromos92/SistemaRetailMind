@@ -3315,6 +3315,21 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
             'valor_dr': valor_dr_para_dte,
         })
 
+    # Descuento por canje de vale de puntos (campo separado del descuento de línea).
+    # Para boleta: bruto (IVA inclusive). Para factura: neto (/1.19).
+    _dscto_fid = getattr(ticket, 'descuento_fidelizacion', None) or 0
+    if _dscto_fid > 0:
+        if 'FACTURA' in tipo_dte:
+            _valor_fid_dr = int(round(Decimal(_dscto_fid) / Decimal('1.19')))
+        else:
+            _valor_fid_dr = int(_dscto_fid)
+        descuentos_recargos.append({
+            'tpo_mov': 'D',
+            'glosa_dr': 'Descuento Puntos Fidelizacion',
+            'tpo_valor': '$',
+            'valor_dr': _valor_fid_dr,
+        })
+
     # Estructura completa para generar TXT
     datos = {
         'documento': documento,

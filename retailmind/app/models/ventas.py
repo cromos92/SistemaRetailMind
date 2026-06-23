@@ -159,6 +159,10 @@ class Ticket(models.Model):
     estado = models.CharField(max_length=20, choices=ESTADO_TICKET_CHOICES, default='PENDIENTE')
     subTotal = models.IntegerField()
     descuento = models.IntegerField(null=True, blank=True)
+    descuento_fidelizacion = models.IntegerField(
+        null=True, blank=True,
+        help_text='Descuento aplicado por canje de vale de puntos (pesos brutos, IVA incluido)',
+    )
     total = models.IntegerField()
     fecha = models.DateField(auto_now=True)
     hora = models.TimeField(auto_now=True)

@@ -71,6 +71,10 @@ class ArqueoCaja(models.Model):
     
     # Total general
     venta_total_teorica = models.IntegerField(default=0)
+    total_descuento_puntos_teorico = models.IntegerField(
+        default=0,
+        help_text='Suma de descuentos por puntos canjeados en el período (fidelización)',
+    )
     
     # === CONTEO FÍSICO (SOLO EFECTIVO) ===
     # Billetes

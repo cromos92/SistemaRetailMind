@@ -3607,6 +3607,34 @@ def registrar_pagos_ticket(request, correlativo):
             ticket.descuento or 0,
         )
 
+    # ── Vale de puntos fidelización ──────────────────────────────────────────
+    # El POS envía el código del vale (leído/escaneado en paso 3) como campo
+    # opcional `codigo_vale_canje`. Se valida sin debitar aquí; el débito real
+    # ocurre después de `ticket_se_pago` (mismo patrón que GIFTCARD).
+    _codigo_vale_pts = (payload.get('codigo_vale_canje') or '').strip().upper()
+    _vale_descuento_pts = 0
+    if _codigo_vale_pts:
+        from .services import fidelizacion_service as _fid_svc
+        _info_vale = _fid_svc.validar_vale(_codigo_vale_pts)
+        if not _info_vale.get('canjeable'):
+            return JsonResponse(
+                {'success': False,
+                 'error': (f"Vale de puntos no válido o ya utilizado "
+                           f"({_info_vale.get('estado', '?')}).")},
+                status=400,
+            )
+        _vale_descuento_pts = int(_info_vale.get('valor_pesos') or 0)
+        _vale_descuento_pts = min(_vale_descuento_pts, ticket.total)  # no negativos
+        ticket.descuento_fidelizacion = _vale_descuento_pts
+        ticket.total = ticket.total - _vale_descuento_pts
+        logger.debug(
+            "Vale pts aplicado ticket=%s codigo=%s descuento=%s nuevo_total=%s",
+            ticket.correlativo, _codigo_vale_pts, _vale_descuento_pts, ticket.total,
+        )
+    else:
+        ticket.descuento_fidelizacion = None
+    # ─────────────────────────────────────────────────────────────────────────
+
     pagos = payload.get('pagos') or []
     ids_existentes = list(ticket.pagos.values_list('id', flat=True))
 
@@ -3694,6 +3722,25 @@ def registrar_pagos_ticket(request, correlativo):
                     "Error al consumir gift card en cobro ticket=%s codigo=%s",
                     ticket.correlativo, codigo_gc,
                 )
+
+    # ── Debitar vale de puntos (después de confirmar el pago) ────────────────
+    if ticket_se_pago and _codigo_vale_pts:
+        from .services import fidelizacion_service as _fid_svc
+        try:
+            _fid_svc.canjear_vale(
+                _codigo_vale_pts,
+                ticket=ticket,
+                sucursal=ticket.sucursal,
+                usuario=request.user,
+            )
+        except _fid_svc.FidelizacionError:
+            # Race condition extrema: la pre-validación debió impedirlo.
+            # No tumbar la venta; queda registrado para revisión manual.
+            logger.exception(
+                "Error al debitar vale de puntos ticket=%s codigo=%s",
+                ticket.correlativo, _codigo_vale_pts,
+            )
+    # ─────────────────────────────────────────────────────────────────────────
 
     # Si el ticket se acaba de pagar, consumir stock FIFO y crear movimientos
     # ⚠️ IMPORTANTE: NO descontar stock si el ticket viene de CAMBIO_DEVOLUCION
@@ -6634,6 +6681,7 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         'total_orden_compra': 0,
         'total_nota_credito': 0,
         'total_descuentos': 0,  # Descuentos aplicados
+        'total_descuento_puntos': 0,  # Descuentos por canje de puntos de fidelización
         # Documentos
         'total_tickets': 0,
         'total_boletas': 0,
@@ -6676,7 +6724,8 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
     for ticket in tickets_del_dia:
         cuadratura_data['total_tickets'] += ticket.total or 0
         cuadratura_data['cantidad_tickets'] += 1
-        
+        cuadratura_data['total_descuento_puntos'] += ticket.descuento_fidelizacion or 0
+
         # Procesar pagos del ticket
         for pago in ticket.pagos.all():
             metodo = pago.metodo_pago
@@ -7042,6 +7091,7 @@ _MAPEO_TEORICOS_ARQUEO = (
     ('cantidad_facturas', 'cantidad_facturas'),
     ('cantidad_facturas_exentas', 'cantidad_facturas_exentas'),
     ('venta_total_teorica', 'venta_total'),
+    ('total_descuento_puntos_teorico', 'total_descuento_puntos'),
 )
 
 
@@ -7933,7 +7983,8 @@ def guardar_cuadratura_completa(request):
             # Otros
             total_transferencia_teorico=cuadratura_completa.get('total_transferencia', 0),
             total_credito_trabajador_teorico=cuadratura_completa.get('total_credito_trabajador', 0),
-            
+            total_descuento_puntos_teorico=cuadratura_completa.get('total_descuento_puntos', 0),
+
             # Cierre POS
             numero_lote_pos=numero_lote,
             

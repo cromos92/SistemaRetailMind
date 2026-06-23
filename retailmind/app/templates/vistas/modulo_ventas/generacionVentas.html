@@ -773,6 +773,29 @@
                                     </div>
                                 </div>
 
+                                <!-- ===== VALE DE PUNTOS FIDELIZACIÓN ===== -->
+                                <div id="valeCanjeCard" class="card shadow-sm mt-2 border-0" style="border-left:3px solid #0ab39c !important;">
+                                    <div class="card-body py-2 px-3">
+                                        <div class="d-flex align-items-center gap-1 mb-1">
+                                            <i class="ri-gift-line text-success" style="font-size:0.95rem;"></i>
+                                            <span class="fw-semibold" style="font-size:0.82rem;">Vale de Puntos</span>
+                                        </div>
+                                        <div class="input-group input-group-sm">
+                                            <input type="text" id="valeCanjeInput" class="form-control form-control-sm"
+                                                   placeholder="Código del vale (ej: RM-XXXXXXXX)" maxlength="24"
+                                                   style="text-transform:uppercase; letter-spacing:0.5px; font-size:0.78rem;"
+                                                   onkeydown="if(event.key==='Enter'){event.preventDefault();validarVale();}">
+                                            <button class="btn btn-outline-success btn-sm" type="button" onclick="validarVale()" title="Validar vale">
+                                                <i class="ri-search-line"></i> Validar
+                                            </button>
+                                            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="limpiarVale()" title="Quitar vale">
+                                                <i class="ri-close-line"></i>
+                                            </button>
+                                        </div>
+                                        <div id="valeCanjeMsg" class="mt-1" style="font-size:0.75rem; min-height:1.1em;"></div>
+                                    </div>
+                                </div>
+
                                 <!-- ===== MÉTODOS DE PAGO ===== -->
                                 <div class="card shadow-sm mt-2">
                                     <div class="card-header bg-success text-white py-2">
@@ -3758,6 +3781,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let clienteActual = null;
     let pagosActuales = [];
     let fidelizacionActual = null; // Datos de fidelización del cliente buscado por RUT
+    let valeCanjeActual = null;    // Vale de puntos validado { codigo, valor_pesos, cliente_nombre }
     let estadisticasDashboard = {};
     let cotizacionActual = null;  // Variable para cotización cargada
     let cotizacionesVigentes = []; // Lista de cotizaciones vigentes
@@ -4603,6 +4627,11 @@ document.addEventListener('DOMContentLoaded', function() {
         cotizacionActual = null;
         fidelizacionActual = null;
         document.getElementById('fidelCard').style.display = 'none';
+        valeCanjeActual = null;
+        const _vcInput = document.getElementById('valeCanjeInput');
+        if (_vcInput) { _vcInput.value = ''; }
+        const _vcMsg = document.getElementById('valeCanjeMsg');
+        if (_vcMsg) { _vcMsg.innerHTML = ''; }
         
         // Limpiar formularios
         document.getElementById('inputTicket').value = '';
@@ -4673,6 +4702,66 @@ document.addEventListener('DOMContentLoaded', function() {
         actualizarStepper();
         actualizarBotones();
     }
+
+    // ── Funciones de Vale de Puntos ──────────────────────────────────────────
+    function validarVale() {
+        const codigo = (document.getElementById('valeCanjeInput').value || '').trim().toUpperCase();
+        if (!codigo) { mostrarNotificacion('Ingrese el código del vale', 'warning'); return; }
+        const msgEl = document.getElementById('valeCanjeMsg');
+        msgEl.innerHTML = '<span class="text-muted"><i class="ri-loader-2-line"></i> Validando…</span>';
+        const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        fetch(`/api/v1/desktop/canje/${encodeURIComponent(codigo)}/`, {
+            headers: { 'X-CSRFToken': csrf, 'Accept': 'application/json' }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.canjeable) {
+                valeCanjeActual = { codigo: data.codigo, valor_pesos: data.valor_pesos,
+                                    cliente_nombre: data.cliente_nombre };
+                msgEl.innerHTML = `<span class="text-success fw-semibold">
+                    <i class="ri-checkbox-circle-line"></i>
+                    ${data.cliente_nombre} &middot; Descuento: <strong>$${Number(data.valor_pesos).toLocaleString('es-CL')}</strong>
+                </span>`;
+                actualizarResumenConVale();
+            } else {
+                valeCanjeActual = null;
+                const motivo = data.error || (`Estado: ${data.estado || '?'}`);
+                msgEl.innerHTML = `<span class="text-danger"><i class="ri-error-warning-line"></i> ${motivo}</span>`;
+                actualizarResumenConVale();
+            }
+        })
+        .catch(() => {
+            msgEl.innerHTML = '<span class="text-danger"><i class="ri-wifi-off-line"></i> Error de conexión.</span>';
+        });
+    }
+
+    function limpiarVale() {
+        valeCanjeActual = null;
+        const inp = document.getElementById('valeCanjeInput');
+        if (inp) inp.value = '';
+        const msg = document.getElementById('valeCanjeMsg');
+        if (msg) msg.innerHTML = '';
+        actualizarResumenConVale();
+    }
+
+    function actualizarResumenConVale() {
+        // Refleja el descuento del vale en el resumen del paso 3.
+        // Busca el elemento de total ya existente en el sticky resumen y agrega/actualiza
+        // una fila de "Descuento Puntos" debajo del subtotal.
+        const existente = document.getElementById('valeDescuentoRow');
+        const totalEl = document.getElementById('resumenTotal') || document.getElementById('totalTicketDisplay');
+        if (!totalEl) return;
+        if (existente) existente.remove();
+        if (valeCanjeActual && valeCanjeActual.valor_pesos > 0) {
+            const row = document.createElement('div');
+            row.id = 'valeDescuentoRow';
+            row.className = 'd-flex justify-content-between text-success small fw-semibold mt-1';
+            row.innerHTML = `<span><i class="ri-gift-line"></i> Desc. Puntos</span>
+                             <span>-$${Number(valeCanjeActual.valor_pesos).toLocaleString('es-CL')}</span>`;
+            totalEl.parentNode.insertBefore(row, totalEl);
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     function mostrarTarjetaFidelizacion() {
         const card = document.getElementById('fidelCard');
@@ -8251,7 +8340,8 @@ document.addEventListener('DOMContentLoaded', function() {
             estado: 'PAGADO',
             metodo_pago_principal: pagosActuales.length > 0 ? pagosActuales[0].metodo_pago : 'EFECTIVO',
             referencias: referencias,  // ✅ Array de referencias múltiples
-            condicion_pago_dte: tipoDocumento === 'FACTURA_ELECTRONICA' ? obtenerCondicionPagoDTE() : 1
+            condicion_pago_dte: tipoDocumento === 'FACTURA_ELECTRONICA' ? obtenerCondicionPagoDTE() : 1,
+            codigo_vale_canje: valeCanjeActual ? valeCanjeActual.codigo : null,
         };
         
         // =========================================================================

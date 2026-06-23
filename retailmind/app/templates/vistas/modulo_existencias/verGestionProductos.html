@@ -11539,12 +11539,19 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
     }
     
     // Forzar actualización de valores de select2
+    // EXCLUIR selectProveedorManual: su handler 'change' llama cargarDtesPorProveedor()
+    // que borra #hiddenDteManual de forma síncrona antes de que el formulario se serialice.
     modal.find('select').each(function() {
-        if ($(this).data('select2')) {
+        if ($(this).data('select2') && this.id !== 'selectProveedorManual') {
             $(this).trigger('change');
         }
     });
-    
+
+    // Restaurar el DTE después del trigger loop, por si algún handler lo limpió
+    if (dteVal) {
+        $('#hiddenDteManual').val(dteVal);
+    }
+
     console.log('🔍 Valor final DTE hidden:', $('#hiddenDteManual').val());
     
     // En modo "Sin guía" normalizamos a guia_talla vacío antes de enviar.
