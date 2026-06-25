@@ -51,7 +51,8 @@
       "Bash(grep -n \"^class.*Historial\\\\|^class.*Log\\\\|^class.*Auditoria\" /c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/models/*.py)",
       "Bash(DJANGO_SETTINGS_MODULE=retailmind.settings python -c \"import django; django.setup\\(\\); from app.views_ecommerce import api_cambiar_sub_estado, api_reasignar_pedido, api_sugerir_sucursal, api_distribuir_pedidos, api_historial_pedido, ecommerce_dashboard_asignacion; print\\('OK'\\)\")",
       "Bash(python manage.py check --deploy)",
-      "Bash(python manage.py makemigrations app --name=\"mejora_cuadratura_caja_v2\" --dry-run)"
+      "Bash(python manage.py makemigrations app --name=\"mejora_cuadratura_caja_v2\" --dry-run)",
+      "PowerShell(Set-Location 'c:\\\\Users\\\\cromo\\\\Documents\\\\DjangoProyects\\\\SistemaRetailMind\\\\retailmind'; $env:DATABASE_URL=\"sqlite://:memory:\"; python manage.py test app.tests.test_txt_dte -v 1 2>&1 | Select-String -NotMatch 'Applying |Rendering|Synchroniz|Creating table|Running deferred|Logging error|charmap|stream.write|return codecs|UnicodeEncode|File \"|main\\\\\\(\\\\\\)|execute|self\\\\.|super\\\\\\(\\\\\\)|output =|failures =|result =|return runner|test\\\\\\(result|return self\\\\.run|self\\\\._|method\\\\\\(\\\\\\)|if method|txt = gener|logger\\\\.warning|Message:|Arguments:|Call stack:|Traceback')"
     ]
   }
 }

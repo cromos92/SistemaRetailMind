@@ -82,6 +82,7 @@ URL_PERMISO_MAP = {
     '/app/reporte-existencias-sucursal/': 'reporte_existencias_sucursal',
     '/app/resumen-existencias/': 'resumen_existencias',
     '/app/reporte-movimientos-sucursal/': 'reporte_movimientos_sucursal',
+    '/app/reportes/despachos-tiendas/': 'reporte_movimientos_sucursal',
     '/app/verReporteDespachosProveedor/': 'reporte_despachos_proveedor',
     '/app/reportes/compras/': 'reporte_compras',
     '/app/reportes/rendimiento-proveedor/': 'reporte_rendimiento_proveedor',

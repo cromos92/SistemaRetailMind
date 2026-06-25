@@ -2795,8 +2795,11 @@ def generar_txt_dte_acepta(datos):
     if tipo_doc in (39, 41):
         logger.warning(f"🔍 Detectado tipo BOLETA ({tipo_doc}), usando formato específico de boletas")
         return generar_txt_boleta_acepta(datos)
-    elif tipo_doc == 61:
-        logger.warning(f"🔍 Detectado tipo NOTA DE CRÉDITO ({tipo_doc}), usando formato específico de NC")
+    elif tipo_doc in (56, 61):
+        logger.warning(f"🔍 Detectado tipo NOTA DE CRÉDITO/DÉBITO ({tipo_doc}), usando formato específico de NC/ND")
+        # NC (61) y ND (56) comparten el mismo formato Acepta (montos positivos,
+        # referencia obligatoria, doble separador). El tipo se escribe desde
+        # doc['tipo_documento'], así que 56 sale correctamente.
         return generar_txt_nota_credito_acepta(datos)
     elif tipo_doc == 52:
         logger.warning(f"🔍 Detectado tipo GUÍA DE DESPACHO ({tipo_doc}), usando formato de factura")
@@ -3437,13 +3440,19 @@ def generar_txt_acepta_api(request):
         }, status=500)
 
 
-def construir_detalle_txt_desde_dte_productos(dte_productos, tipo_numerico):
+def construir_detalle_txt_desde_dte_productos(dte_productos, tipo_numerico, es_exenta=False):
     """
     Agrupa el detalle para TXT Acepta por variante real de producto.
 
     El articulo por si solo no identifica una variante en inventario: un mismo
     articulo puede existir con distinta marca, color o costo.
+
+    `es_exenta` marca cada línea con IndExe=1 (exención de IVA). Necesario para
+    NC/ND que referencian documentos exentos, donde el tipo (56/61) no basta para
+    inferir la exención. Por compatibilidad, Factura Exenta (34) sigue siendo
+    exenta aunque el caller no pase el flag.
     """
+    es_exenta = es_exenta or tipo_numerico == 34
     from collections import defaultdict
 
     detalle = []
@@ -3472,7 +3481,7 @@ def construir_detalle_txt_desde_dte_productos(dte_productos, tipo_numerico):
                 'monto_descuento': int(dte_producto.descuento_monto or 0),
                 'monto_item': dte_producto.monto_item or (dte_producto.stock * dte_producto.precio),
                 'codigo': 'SRV',
-                'indicador_exencion': 1 if tipo_numerico == 34 else '',
+                'indicador_exencion': 1 if es_exenta else '',
             })
             continue
 
@@ -3602,12 +3611,20 @@ def construir_datos_txt_desde_dte(dte):
         'GUIA DESPACHO': 52,
         'GUIA': 52,  # ✅ Para traspasos internos
         'NOTA_CREDITO': 61,
-        'NOTA DE CREDITO': 61
+        'NOTA DE CREDITO': 61,
+        'NOTA_DEBITO': 56,
+        'NOTA DE DEBITO': 56
     }
     tipo_numerico = tipo_mapping.get(dte.tipo_documento, 33)
 
-    # Calcular IVA desde monto_con_iva y monto_neto
-    es_exenta = tipo_numerico == 34
+    # Calcular IVA desde monto_con_iva y monto_neto.
+    # Factura Exenta (34) es exenta por su propio tipo. Una NC (61) / ND (56)
+    # hereda la exención del documento referenciado: al emitirse exenta quedó
+    # monto_con_iva == monto_neto (IVA 0), así que lo detectamos por los montos.
+    es_exenta = (
+        tipo_numerico == 34
+        or (tipo_numerico in (56, 61) and int(dte.monto_con_iva) == int(dte.monto_neto))
+    )
     if es_exenta:
         iva_calculado = 0
     else:
@@ -3744,6 +3761,7 @@ def construir_datos_txt_desde_dte(dte):
             'productoTalla__producto__atributo2',
         ),
         tipo_numerico,
+        es_exenta=es_exenta,
     )
 
     # Las líneas en BD pueden estar CON IVA (boletas/ventas POS) o NETAS

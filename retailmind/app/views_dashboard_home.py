@@ -216,16 +216,28 @@ def dashboard_home(request):
                 'total_pendientes': 0, 'urgentes': 0, 'impacto_estimado': 0,
             }
 
-        # ========== 8. ALERTAS CRÍTICAS ==========
+        # ========== 8. DTEs CON PROBLEMAS (rechazados / en regularización) ==========
+        try:
+            dte_problemas = calcular_kpis_dte_problemas(sucursal_id, empresa_id)
+        except Exception:
+            dte_problemas = {'rechazados': 0, 'en_regularizacion': 0, 'total': 0}
+
+        # ========== 9. TOP PRODUCTOS DEL MES ==========
+        try:
+            top_productos = obtener_top_productos(sucursal_id, inicio_mes, hoy)
+        except Exception:
+            top_productos = []
+
+        # ========== 10. ALERTAS CRÍTICAS ==========
         alertas = generar_alertas_criticas(
             stock_data, compras_data, requerimientos_data, operaciones_data,
-            caja_data, precios_data
+            caja_data, precios_data, dte_problemas
         )
-        
+
         context = {
             'sucursal_actual': sucursal_actual,
             'fecha_actual': hoy,
-            
+
             'ventas': ventas_data,
             'stock': stock_data,
             'compras': compras_data,
@@ -233,10 +245,12 @@ def dashboard_home(request):
             'operaciones': operaciones_data,
             'caja': caja_data,
             'precios': precios_data,
-            
+            'dte_problemas': dte_problemas,
+            'top_productos': top_productos,
+
             'alertas': alertas,
         }
-        
+
         return render(request, 'vistas/dashboard_home.html', context)
         
     except Exception as e:
@@ -246,10 +260,11 @@ def dashboard_home(request):
         return render(request, 'vistas/dashboard_home.html', {
             'error': str(e),
             'ventas': {'hoy': 0, 'semana': 0, 'mes': 0, 'unidades_hoy': 0, 'ticket_promedio': 0},
-            'stock': {'total_skus': 0, 'stock_critico': 0, 'sin_stock': 0, 'valor_inventario': 0},
-            'compras': {'pendientes_recepcion': 0, 'dtes_pendientes': 0, 'monto_pendiente': 0},
-            'requerimientos': {'pendientes': 0, 'en_proceso': 0, 'total_mes': 0},
-            'operaciones': {'traspasos_pendientes': 0, 'ajustes_pendientes': 0, 'cambios_pendientes': 0, 'regularizaciones': 0},
+            'stock': {'total_skus': 0, 'stock_critico': 0, 'sin_stock': 0, 'valor_inventario': 0,
+                      'quiebres_rotantes': 0, 'quiebres_lista': [], 'total_unidades': 0, 'rotacion_mes': 0},
+            'compras': {'pendientes_recepcion': 0, 'dtes_pendientes': 0, 'monto_pendiente': 0, 'compras_mes': 0, 'lista_pendientes': []},
+            'requerimientos': {'pendientes': 0, 'en_proceso': 0, 'total_mes': 0, 'esperando': 0, 'tasa_aprobacion': 0, 'dias_promedio': 0},
+            'operaciones': {'traspasos_pendientes': 0, 'ajustes_pendientes': 0, 'cambios_pendientes': 0, 'regularizaciones': 0, 'dtes_por_cobrar': 0, 'monto_por_cobrar': 0},
             'caja': {
                 'arqueos_abiertos': 0, 'arqueos_con_diferencias': 0,
                 'diferencia_efectivo': 0, 'diferencia_transbank': 0,
@@ -258,6 +273,8 @@ def dashboard_home(request):
                 'total_arqueos_mes': 0,
             },
             'precios': {'total_pendientes': 0, 'urgentes': 0, 'impacto_estimado': 0},
+            'dte_problemas': {'rechazados': 0, 'en_regularizacion': 0, 'total': 0},
+            'top_productos': [],
             'alertas': [],
             'fecha_actual': timezone.localdate(),
         })
@@ -399,28 +416,82 @@ def calcular_kpis_stock(sucursal_id, empresa_id):
     
     total_vendido = ventas_mes_query.aggregate(total=Sum('stock'))['total'] or 0
     rotacion = round((total_vendido / total_stock) * 100, 1) if total_stock > 0 else 0
-    
+
+    # ===== QUIEBRES ACCIONABLES =====
+    # SKUs que SÍ rotan (vendieron en los últimos 30 días) y hoy están en cero.
+    # Esto es lo accionable de verdad, a diferencia de "22.307 sin stock" (catálogo muerto).
+    fecha_30 = timezone.localdate() - timedelta(days=30)
+    vendidos_30d = Ticket_Productos.objects.filter(
+        idTicket__fecha__gte=fecha_30,
+        idTicket__estado='PAGADO',
+    )
+    if sucursal_id:
+        vendidos_30d = vendidos_30d.filter(idTicket__sucursal_id=sucursal_id)
+
+    quiebres_qs = Producto_Talla.objects.filter(
+        Q(stock=0) | Q(stock__isnull=True),
+        id__in=vendidos_30d.values('ProductoTalla_id'),
+    )
+    if sucursal_id:
+        quiebres_qs = quiebres_qs.filter(producto__sucursal_id=sucursal_id)
+    quiebres_rotantes = quiebres_qs.count()
+
+    # Top quiebres por unidades vendidas en el período (lo más urgente de reponer)
+    top_quiebres = vendidos_30d.filter(ProductoTalla__in=quiebres_qs).values(
+        'ProductoTalla__producto__articulo', 'ProductoTalla__talla'
+    ).annotate(vendidas=Sum('stock')).order_by('-vendidas')[:8]
+    quiebres_lista = [{
+        'producto': (it['ProductoTalla__producto__articulo'] or 'N/A')[:30],
+        'talla': it['ProductoTalla__talla'],
+        'vendidas': int(it['vendidas'] or 0),
+    } for it in top_quiebres]
+
     logger.debug(
         "KPIs stock dashboard: sucursal_id=%s total_skus=%s con_stock=%s sin_stock=%s "
-        "stock_critico=%s total_unidades=%s valor_inventario=%s",
+        "stock_critico=%s quiebres_rotantes=%s total_unidades=%s valor_inventario=%s",
         sucursal_id,
         total_skus,
         skus_con_stock,
         sin_stock_count,
         stock_critico_count,
+        quiebres_rotantes,
         total_stock,
         valor_inventario_total,
     )
-    
+
     return {
         'total_skus': total_skus,
         'skus_con_stock': skus_con_stock,
         'stock_critico': stock_critico_count,
         'sin_stock': sin_stock_count,
+        'quiebres_rotantes': quiebres_rotantes,
+        'quiebres_lista': quiebres_lista,
         'valor_inventario': int(valor_inventario_total),
         'productos_criticos': productos_criticos,
         'total_unidades': total_stock,
         'rotacion_mes': rotacion,
+    }
+
+
+def calcular_kpis_dte_problemas(sucursal_id, empresa_id):
+    """
+    DTEs que requieren acción: rechazados o en regularización.
+    Lo que el usuario llama "DTEs por actualizar / con problemas".
+    """
+    qs = Dte.objects.filter(
+        estado_dte__in=['RECHAZADO', 'EN_REGULARIZACION'],
+        descartado=False,
+    )
+    if sucursal_id:
+        qs = qs.filter(sucursal_id=sucursal_id)
+
+    rechazados = qs.filter(estado_dte='RECHAZADO').count()
+    en_regularizacion = qs.filter(estado_dte='EN_REGULARIZACION').count()
+
+    return {
+        'rechazados': rechazados,
+        'en_regularizacion': en_regularizacion,
+        'total': rechazados + en_regularizacion,
     }
 
 
@@ -650,33 +721,34 @@ def calcular_kpis_precios_pendientes(sucursal_id):
     }
 
 
-def generar_alertas_criticas(stock_data, compras_data, requerimientos_data, operaciones_data, caja_data=None, precios_data=None):
+def generar_alertas_criticas(stock_data, compras_data, requerimientos_data, operaciones_data, caja_data=None, precios_data=None, dte_problemas=None):
     """Genera lista de alertas críticas ordenadas por prioridad"""
     alertas = []
-    
-    # Alerta de stock crítico
-    if stock_data['sin_stock'] > 0:
+
+    # Alerta de QUIEBRES ACCIONABLES (productos que rotan y hoy están en cero)
+    if stock_data.get('quiebres_rotantes', 0) > 0:
         alertas.append({
             'tipo': 'danger',
             'icono': 'ri-error-warning-fill',
-            'titulo': f"{stock_data['sin_stock']} productos sin stock",
-            'descripcion': 'Requiere atención inmediata para evitar quiebres de venta',
-            'accion': 'Ver productos',
-            'url': '/app/existencias/resumen/',
+            'titulo': f"{stock_data['quiebres_rotantes']} quiebres de productos que rotan",
+            'descripcion': 'SKUs vendidos en los últimos 30 días y hoy en cero — repón para no perder ventas',
+            'accion': 'Ver quiebres',
+            'url': '/app/resumen-existencias/',
             'prioridad': 1
         })
-    
-    if stock_data['stock_critico'] > 5:
+
+    # DTEs con problemas (rechazados / en regularización)
+    if dte_problemas and dte_problemas.get('total', 0) > 0:
         alertas.append({
             'tipo': 'warning',
-            'icono': 'ri-alert-fill',
-            'titulo': f"{stock_data['stock_critico']} productos con stock crítico",
-            'descripcion': 'Productos con menos de 5 unidades disponibles',
-            'accion': 'Revisar stock',
-            'url': '/app/existencias/resumen/',
+            'icono': 'ri-file-warning-fill',
+            'titulo': f"{dte_problemas['total']} DTEs con problemas",
+            'descripcion': f"Rechazados: {dte_problemas['rechazados']} · En regularización: {dte_problemas['en_regularizacion']}",
+            'accion': 'Revisar DTEs',
+            'url': '/app/documentos/gestion-dte/',
             'prioridad': 2
         })
-    
+
     # Alerta de compras pendientes
     if compras_data['dtes_pendientes'] > 0:
         alertas.append({

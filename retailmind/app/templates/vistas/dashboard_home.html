@@ -181,12 +181,12 @@
         <div class="home-kpi kpi-stock">
             <div class="home-kpi-top">
                 <div class="home-kpi-icon stock"><i class="ri-box-3-line"></i></div>
-                {% if stock.sin_stock > 0 %}<span class="badge bg-danger" style="font-size:.65rem"><i class="ri-alert-fill"></i> {{ stock.sin_stock }} sin stock</span>{% endif %}
+                {% if stock.quiebres_rotantes > 0 %}<span class="badge bg-danger" style="font-size:.65rem"><i class="ri-alert-fill"></i> reponer</span>{% else %}<span class="badge bg-success" style="font-size:.65rem"><i class="ri-check-line"></i> al día</span>{% endif %}
             </div>
-            <div class="home-kpi-val">{{ stock.stock_critico }}</div>
-            <div class="home-kpi-label">Stock Critico</div>
+            <div class="home-kpi-val">{{ stock.quiebres_rotantes|intcomma }}</div>
+            <div class="home-kpi-label">Quiebres que Rotan</div>
             <div class="home-kpi-footer">
-                <div class="home-kpi-stat"><div class="home-kpi-sv">{{ stock.total_skus|intcomma }}</div><div class="home-kpi-sl">SKUs</div></div>
+                <div class="home-kpi-stat"><div class="home-kpi-sv">{{ stock.skus_con_stock|intcomma }}</div><div class="home-kpi-sl">SKUs c/Stock</div></div>
                 <div class="home-kpi-stat"><div class="home-kpi-sv">{{ stock.total_unidades|intcomma }}</div><div class="home-kpi-sl">Unidades</div></div>
                 <div class="home-kpi-stat"><div class="home-kpi-sv">{{ stock.rotacion_mes }}%</div><div class="home-kpi-sl">Rotacion</div></div>
             </div>
@@ -263,6 +263,17 @@
             <div class="home-pending-info">
                 <div class="home-pending-label">Regularizaciones DTE</div>
                 <div class="home-pending-count {% if operaciones.regularizaciones > 0 %}has-items{% else %}ok{% endif %}">{{ operaciones.regularizaciones }}</div>
+            </div>
+            <i class="ri-arrow-right-s-line home-pending-arrow"></i>
+        </a>
+
+        <a href="/app/documentos/gestion-dte/" class="home-pending-item">
+            <div class="home-pending-icon" style="background:rgba(255,77,77,.12); color:var(--nexo-error);">
+                <i class="ri-file-warning-fill"></i>
+            </div>
+            <div class="home-pending-info">
+                <div class="home-pending-label">DTEs con Problemas</div>
+                <div class="home-pending-count {% if dte_problemas.total > 0 %}has-items{% else %}ok{% endif %}">{{ dte_problemas.total }}</div>
             </div>
             <i class="ri-arrow-right-s-line home-pending-arrow"></i>
         </a>
@@ -442,6 +453,59 @@
             </div>
             <div class="home-panel-footer">
                 <a href="{% url 'ver_resumen_existencias' %}" class="home-panel-link">Ver Existencias <i class="ri-arrow-right-line"></i></a>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ===== Top Productos + Quiebres que Rotan ===== -->
+    <div class="home-panels-row" style="grid-template-columns:1fr 1fr;">
+
+        <!-- Top Productos del Mes -->
+        <div class="home-panel">
+            <div class="home-panel-header operaciones">
+                <span class="home-panel-title"><i class="ri-trophy-line"></i> Top Productos del Mes</span>
+                <span class="home-panel-badge">por unidades</span>
+            </div>
+            <div class="home-panel-body" style="padding:.4rem 1.15rem;">
+                {% for p in top_productos %}
+                <div class="home-panel-stat">
+                    <span class="home-panel-stat-label">
+                        <strong style="color:var(--nexo-primary);">{{ p.posicion }}.</strong>&nbsp; {{ p.producto }}
+                        {% if p.marca %}<span style="color:var(--nexo-gray-500); font-size:.72rem;">· {{ p.marca }}</span>{% endif %}
+                    </span>
+                    <span class="home-panel-stat-val">{{ p.unidades|intcomma }}<span style="color:var(--nexo-gray-500); font-weight:500; font-size:.72rem;"> · ${{ p.monto|floatformat:0|intcomma }}</span></span>
+                </div>
+                {% empty %}
+                <div style="text-align:center; padding:1.5rem 0; color:var(--nexo-gray-500); font-size:.85rem;">Sin ventas en el período</div>
+                {% endfor %}
+            </div>
+            <div class="home-panel-footer">
+                <a href="{% url 'dashboard_ventas_mejorado' %}" class="home-panel-link">Dashboard Ventas <i class="ri-arrow-right-line"></i></a>
+            </div>
+        </div>
+
+        <!-- Quiebres que Rotan -->
+        <div class="home-panel">
+            <div class="home-panel-header" style="background:linear-gradient(135deg,#FF4D4D 0%,#cc2e2e 100%);">
+                <span class="home-panel-title"><i class="ri-error-warning-line"></i> Quiebres que Rotan</span>
+                <span class="home-panel-badge">{{ stock.quiebres_rotantes|intcomma }} SKUs</span>
+            </div>
+            <div class="home-panel-body" style="padding:.4rem 1.15rem;">
+                {% for q in stock.quiebres_lista %}
+                <div class="home-panel-stat">
+                    <span class="home-panel-stat-label"><i class="ri-t-shirt-line"></i> {{ q.producto }} <span style="color:var(--nexo-gray-500); font-size:.72rem;">talla {{ q.talla }}</span></span>
+                    <span class="home-panel-stat-val danger">{{ q.vendidas }} vend. · 0 stock</span>
+                </div>
+                {% empty %}
+                <div style="text-align:center; padding:1.5rem 0; color:var(--nexo-accent);">
+                    <i class="ri-checkbox-circle-fill" style="font-size:2rem; display:block; margin-bottom:.4rem;"></i>
+                    <span style="font-size:.85rem; font-weight:600;">Sin quiebres de productos que rotan</span>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="home-panel-footer">
+                <a href="/app/resumen-existencias/" class="home-panel-link">Ver Existencias <i class="ri-arrow-right-line"></i></a>
             </div>
         </div>
 

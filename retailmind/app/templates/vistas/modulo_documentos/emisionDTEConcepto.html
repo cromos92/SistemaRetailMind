@@ -324,6 +324,15 @@
                         </div>
                     </div>
                     <div class="col-6 col-md-3">
+                        <div class="method-selector shadow-sm" data-tipo="NOTA DE DEBITO">
+                            <div class="mb-1" style="font-size:1.5rem; color:#6c757d;">
+                                <i class="bi bi-file-earmark-plus"></i>
+                            </div>
+                            <h6 class="fw-bold mb-1 small">Nota de Débito</h6>
+                            <p class="text-muted mb-0" style="font-size:0.7rem;">Tipo 56 - Cargo adicional</p>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
                         <div class="method-selector shadow-sm" data-tipo="GUIA">
                             <div class="mb-1" style="font-size:1.5rem; color:#6c757d;">
                                 <i class="bi bi-clipboard-check"></i>
@@ -382,7 +391,7 @@
             <div id="referenciaNCContainer" style="display:none;" class="mt-3">
                 <div class="card border-warning">
                     <div class="card-header bg-warning bg-opacity-10 py-2">
-                        <h6 class="mb-0 small fw-bold"><i class="bi bi-link-45deg me-1"></i>Documento de Referencia (Nota de Crédito)</h6>
+                        <h6 class="mb-0 small fw-bold"><i class="bi bi-link-45deg me-1"></i>Documento de Referencia (Nota de Crédito/Débito)</h6>
                     </div>
                     <div class="card-body py-2">
                         <div class="row g-2">
@@ -392,7 +401,9 @@
                                     <option value="33">Factura Electrónica (33)</option>
                                     <option value="34">Factura Exenta (34)</option>
                                     <option value="39">Boleta Electrónica (39)</option>
+                                    <option value="41">Boleta Exenta (41)</option>
                                     <option value="52">Guía de Despacho (52)</option>
+                                    <option value="61">Nota de Crédito (61)</option>
                                 </select>
                             </div>
                             <div class="col-md-3">
@@ -429,7 +440,7 @@
                     </div>
                     <div id="infoNotaCredito" class="alert alert-warning py-2 mb-0 small" style="display:none;">
                         <i class="bi bi-exclamation-triangle me-1"></i>
-                        <strong>Nota de Crédito:</strong> Debe referenciar un documento original (factura o guía).
+                        <strong>Nota de Crédito/Débito:</strong> Debe referenciar un documento original. Si el documento referenciado es exento (34/41), los montos se emiten sin IVA.
                     </div>
                 </div>
             </div>
@@ -705,11 +716,21 @@ function showLoading() { document.getElementById('loadingOverlay').style.display
 function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
 
 function esExenta() {
-    return selectedTipoDocumento === 'FACTURA EXENTA';
+    if (selectedTipoDocumento === 'FACTURA EXENTA') return true;
+    // Para NC/ND la exención la hereda el documento referenciado (34/41).
+    if (esNotaCredito() || esNotaDebito()) {
+        const ref = document.getElementById('tipoDocRef').value;
+        return ref === '34' || ref === '41';
+    }
+    return false;
 }
 
 function esNotaCredito() {
     return selectedTipoDocumento === 'NOTA DE CREDITO';
+}
+
+function esNotaDebito() {
+    return selectedTipoDocumento === 'NOTA DE DEBITO';
 }
 
 function esBoleta() {
@@ -731,9 +752,10 @@ document.querySelectorAll('.method-selector[data-tipo]').forEach(el => {
         const infoNC = document.getElementById('infoNotaCredito');
         const infoBoleta = document.getElementById('infoBoleta');
 
-        ncContainer.style.display = esNotaCredito() ? 'block' : 'none';
+        const requiereReferencia = esNotaCredito() || esNotaDebito();
+        ncContainer.style.display = requiereReferencia ? 'block' : 'none';
         infoExenta.style.display = esExenta() ? 'block' : 'none';
-        infoNC.style.display = esNotaCredito() ? 'block' : 'none';
+        infoNC.style.display = requiereReferencia ? 'block' : 'none';
         infoBoleta.style.display = esBoleta() ? 'block' : 'none';
 
         // La boleta a consumidor final es de contado: ajustamos forma de pago.
@@ -759,7 +781,7 @@ function validarPaso1() {
     const fechaOk = !!document.getElementById('fechaEmision').value;
 
     let ncOk = true;
-    if (esNotaCredito()) {
+    if (esNotaCredito() || esNotaDebito()) {
         ncOk = !!document.getElementById('folioRef').value;
     }
 
@@ -772,6 +794,13 @@ function validarPaso1() {
     if (el) el.addEventListener('change', validarPaso1);
     if (el) el.addEventListener('input', validarPaso1);
 });
+
+// Cambiar el tipo de documento referenciado recalcula la exención (sin/con IVA)
+// de la NC/ND en el resumen de totales.
+(function () {
+    const tipoDocRef = document.getElementById('tipoDocRef');
+    if (tipoDocRef) tipoDocRef.addEventListener('change', actualizarTotales);
+})();
 
 // Cargar empresas clientes
 function cargarEmpresas() {
@@ -812,6 +841,7 @@ document.getElementById('btnSiguientePaso1').addEventListener('click', function(
         'FACTURA EXENTA': 'Factura Exenta (34)',
         'BOLETA ELECTRONICA': 'Boleta Electrónica (39)',
         'NOTA DE CREDITO': 'Nota de Crédito (61)',
+        'NOTA DE DEBITO': 'Nota de Débito (56)',
         'GUIA': 'Guía de Despacho (52)'
     };
     document.getElementById('resumenTipo').textContent = tipoTextos[selectedTipoDocumento] || selectedTipoDocumento;
@@ -1046,6 +1076,7 @@ document.getElementById('btnEmitir').addEventListener('click', function() {
         'FACTURA EXENTA': 'Factura Exenta',
         'BOLETA ELECTRONICA': 'Boleta Electrónica',
         'NOTA DE CREDITO': 'Nota de Crédito',
+        'NOTA DE DEBITO': 'Nota de Débito',
         'GUIA': 'Guía de Despacho Electrónica'
     };
 
@@ -1131,7 +1162,7 @@ function procesarEmision(conceptos) {
         detalle_conceptos: conceptos
     };
 
-    if (esNotaCredito()) {
+    if (esNotaCredito() || esNotaDebito()) {
         data.referencia = {
             tipo_documento: document.getElementById('tipoDocRef').value,
             folio: document.getElementById('folioRef').value,

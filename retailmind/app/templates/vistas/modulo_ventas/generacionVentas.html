@@ -293,12 +293,7 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="mt-2">
-                                        <div class="alert alert-info mb-0 py-2" id="infoTipoDocumento" style="font-size:0.82rem">
-                                            <i class="ri-information-line"></i>
-                                            <strong>Boleta Electrónica:</strong> Documento tributario oficial para ventas al público. Requiere datos básicos del cliente.
-                                        </div>
-                                    </div>
+                                    <div class="mt-2" id="infoTipoDocumento" style="display:none;"></div>
                                 </div>
                             </div>
 
@@ -747,6 +742,10 @@
                                 </div>
 
                                 <!-- ===== TARJETA FIDELIZACIÓN (solo si hay cliente fidelizado) ===== -->
+                                <div id="empresaNoFidelizaAviso" class="alert alert-info py-2 small mb-0 mt-2" style="display:none;">
+                                    <i class="ri-building-line me-1"></i>
+                                    RUT de empresa — no acumula puntos de fidelización.
+                                </div>
                                 <div id="fidelCard" class="card shadow-sm mt-2 border-0" style="display:none; border-left:3px solid #5c6bc0 !important;">
                                     <div class="card-body py-2 px-3">
                                         <div class="d-flex align-items-center gap-2">
@@ -764,10 +763,6 @@
                                                     <span class="mx-1">·</span>
                                                     <span id="fidelValor">$0</span>
                                                 </div>
-                                            </div>
-                                            <div class="text-end flex-shrink-0" id="fidelEstimadoWrap" style="display:none;">
-                                                <div class="fw-bold text-success" style="font-size:0.78rem;" id="fidelEstimadoPts"></div>
-                                                <div class="text-muted" style="font-size:0.62rem;">pts estimados</div>
                                             </div>
                                         </div>
                                     </div>
@@ -4792,18 +4787,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('fidelSaldo').textContent = (f.saldo_puntos || 0).toLocaleString('es-CL');
         document.getElementById('fidelValor').textContent = formatearMoneda(f.valor_pesos || 0);
 
-        // Puntos estimados para esta compra
-        const total = ticketActual ? (ticketActual.total || 0) : 0;
-        const tasa = f.tasa || 3;
-        const estimado = Math.round(total * tasa / 100);
-        const wrapEstimado = document.getElementById('fidelEstimadoWrap');
-        if (estimado > 0) {
-            document.getElementById('fidelEstimadoPts').textContent = '+' + estimado.toLocaleString('es-CL') + ' pts';
-            wrapEstimado.style.display = 'block';
-        } else {
-            wrapEstimado.style.display = 'none';
-        }
-
         card.style.display = 'block';
     }
 
@@ -6115,13 +6098,18 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.success && data.cliente) {
                     llenarFormularioCliente(data.cliente);
-                    fidelizacionActual = data.fidelizacion || null;
+                    // Si es empresa (RUT >= 50M): limpiar fidelización y mostrar aviso
+                    const _esEmpresaFinal = esEmpresa || data.es_empresa;
+                    fidelizacionActual = _esEmpresaFinal ? null : (data.fidelizacion || null);
+                    const _avisoEmp = document.getElementById('empresaNoFidelizaAviso');
+                    if (_avisoEmp) _avisoEmp.style.display = _esEmpresaFinal ? '' : 'none';
+                    mostrarTarjetaFidelizacion();
                     document.getElementById('clienteEncontrado').classList.remove('d-none');
                     mostrarNotificacion('Cliente encontrado en el sistema', 'success');
 
                     // Solo sugerir factura si NO hay tipo de documento ya seleccionado por el usuario
                     // (es decir, solo sugerir si el usuario NO eligió explícitamente boleta)
-                    if (esEmpresa || data.cliente.giro) {
+                    if (_esEmpresaFinal || data.cliente.giro) {
                         if (!tipoDocAntesBusqueda || tipoDocAntesBusqueda === 'FACTURA_ELECTRONICA') {
                             sugerirTipoDocumento('FACTURA_ELECTRONICA', 'El RUT corresponde a una empresa. Se recomienda Factura Electrónica.');
                         } else {
@@ -6142,6 +6130,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Llenar solo el RUT formateado (sin puntos)
                     const rutFormateado = data.rut_formateado || formatearRut(rut);
                     document.getElementById('clienteRut').value = rutFormateado;
+
+                    // Aviso empresa para cliente nuevo
+                    const _avisoEmpNuevo = document.getElementById('empresaNoFidelizaAviso');
+                    if (_avisoEmpNuevo) _avisoEmpNuevo.style.display = esEmpresa ? '' : 'none';
+                    if (esEmpresa) { fidelizacionActual = null; mostrarTarjetaFidelizacion(); }
 
                     // Solo sugerir factura si el usuario NO eligió explícitamente boleta
                     if (esEmpresa) {

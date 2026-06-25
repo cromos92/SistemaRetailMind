@@ -1214,7 +1214,7 @@
 <!-- ============================================================== -->
 <!-- Modal: Generar Nota de Crédito (reemplaza el SweetAlert) -->
 <!-- ============================================================== -->
-<div class="modal fade nexo-modal" id="modalGenerarNC" tabindex="-1" aria-hidden="true">
+<div class="modal fade nexo-modal" id="modalGenerarNC" tabindex="-1" aria-hidden="true" aria-labelledby="modalGenerarNC_title">
     <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 14px; overflow: hidden;">
             <div class="modal-header text-white py-3" style="background: linear-gradient(135deg, #f06548 0%, #d9534f 100%); border: 0;">
@@ -1456,7 +1456,7 @@
             if (modal) modal.hide();
 
             // Refrescar la tabla del listado para mostrar el nuevo estado del DTE.
-            if (typeof cargarDTEs === 'function') cargarDTEs();
+            if (typeof cargarDTEs === 'function') cargarDTEs(currentPageDTE || 1, currentSearchDTE || '');
         } catch (e) {
             Swal.fire('Error', e.message || 'No se pudo aplicar.', 'error');
         } finally {
@@ -1735,7 +1735,7 @@
             Swal.fire('Reparación aplicada', data.message || 'DTE reparado correctamente.', 'success');
             const modal = _ensureModalDiagTraspaso();
             if (modal) modal.hide();
-            if (typeof cargarDTEs === 'function') cargarDTEs();
+            if (typeof cargarDTEs === 'function') cargarDTEs(currentPageDTE || 1, currentSearchDTE || '');
         } catch (e) {
             Swal.fire('Error', e.message || 'No se pudo aplicar la reparación.', 'error');
         } finally {
@@ -1863,10 +1863,12 @@
 
     $('#formBuscarDTE').on('submit', function (e) {
         e.preventDefault();
+        // No borrar la búsqueda activa: permite combinar rango de fechas + término
+        // de búsqueda (antes el submit del filtro de fechas la descartaba).
+        const s = ($('#searchDTE').val() || '').trim();
         currentPageDTE = 1;
-        currentSearchDTE = '';
-        $('#searchDTE').val('');
-        cargarDTEs(1, '');
+        currentSearchDTE = s;
+        cargarDTEs(1, s);
     });
 
     $('#btnPrevPageDTE').on('click', function() {
@@ -1974,7 +1976,7 @@
                     if (!data.items || data.items.length === 0) {
                         tbody.append(`<tr><td colspan="7" class="text-center text-muted py-4">
                             <i class="bi bi-inbox display-6 d-block mb-2"></i>
-                            No se encontraron DTEs${search ? ' con la búsqueda "' + search + '"' : ''}
+                            No se encontraron DTEs${search ? ' con la búsqueda "' + _esc(search) + '"' : ''}
                         </td></tr>`);
                     } else {
                         data.items.forEach(dte => {
@@ -1984,25 +1986,25 @@
                             // ✅ NUEVO: Generar información de asociación NC ↔ Factura / AJUSTE TRASPASO ↔ DTE
                             let asociacionNC = '';
                             if (dte.es_nota_credito && dte.documento_afectado_numero) {
-                                asociacionNC = `<br><a href="#" class="nc-link" onclick="buscarDTE('${dte.documento_afectado_numero}'); return false;" title="Ver factura original">
-                                    <i class="bi bi-link-45deg"></i> Ref: #${dte.documento_afectado_numero}
+                                asociacionNC = `<br><a href="#" class="nc-link" onclick='buscarDTE(${JSON.stringify(String(dte.documento_afectado_numero || ""))}); return false;' title="Ver factura original">
+                                    <i class="bi bi-link-45deg"></i> Ref: #${_esc(dte.documento_afectado_numero)}
                                 </a>`;
                                 if (dte.origen_devolucion) {
-                                    asociacionNC += `<br><a href="/app/ventas/cambios-devoluciones/" class="text-info small" title="${dte.origen_devolucion.tipo_operacion} - ${dte.origen_devolucion.metodo_devolucion}">
-                                        <i class="bi bi-arrow-return-left"></i> ${dte.origen_devolucion.numero_operacion}
+                                    asociacionNC += `<br><a href="/app/ventas/cambios-devoluciones/" class="text-info small" title="${_esc(dte.origen_devolucion.tipo_operacion)} - ${_esc(dte.origen_devolucion.metodo_devolucion)}">
+                                        <i class="bi bi-arrow-return-left"></i> ${_esc(dte.origen_devolucion.numero_operacion)}
                                     </a>`;
                                 }
                             } else if (dte.es_ajuste_traspaso && dte.documento_afectado_numero) {
                                 // Documento tipo "AJUSTE TRASPASO": vincula al DTE original
-                                asociacionNC = `<br><a href="#" class="nc-link text-warning" onclick="buscarDTE('${dte.documento_afectado_numero}'); return false;" title="Ver DTE original (${dte.documento_afectado_tipo || ''})">
-                                    <i class="bi bi-pencil-square"></i> Ajuste de DTE #${dte.documento_afectado_numero}
+                                asociacionNC = `<br><a href="#" class="nc-link text-warning" onclick='buscarDTE(${JSON.stringify(String(dte.documento_afectado_numero || ""))}); return false;' title="Ver DTE original (${_esc(dte.documento_afectado_tipo || '')})">
+                                    <i class="bi bi-pencil-square"></i> Ajuste de DTE #${_esc(dte.documento_afectado_numero)}
                                 </a>`;
                             } else {
                                 // Parent DTE: indicadores si tiene NC o ajustes asociados
                                 let indicadores = '';
                                 if (dte.nc_asociadas && dte.nc_asociadas.length > 0) {
                                     const ncNumeros = dte.nc_asociadas.map(nc => '#' + nc.numero_documento).join(', ');
-                                    indicadores += `<span class="nc-indicator" title="NC asociadas: ${ncNumeros}">
+                                    indicadores += `<span class="nc-indicator" title="NC asociadas: ${_esc(ncNumeros)}">
                                         <i class="bi bi-receipt-cutoff"></i> ${dte.nc_asociadas.length} NC
                                     </span>`;
                                 }
@@ -2010,7 +2012,7 @@
                                     const ajustesNumeros = dte.ajustes_asociados.map(a => '#' + a.numero_documento).join(', ');
                                     const totalUnidades = dte.ajustes_asociados.reduce((s, a) => s + (a.unidades_productos || 0), 0);
                                     if (indicadores) indicadores += ' ';
-                                    indicadores += `<span class="nc-indicator text-warning" title="Ajustes de traspaso (${ajustesNumeros}) - ${totalUnidades} uds retiradas">
+                                    indicadores += `<span class="nc-indicator text-warning" title="Ajustes de traspaso (${_esc(ajustesNumeros)}) - ${totalUnidades} uds retiradas">
                                         <i class="bi bi-pencil-square"></i> ${dte.ajustes_asociados.length} Ajuste${dte.ajustes_asociados.length > 1 ? 's' : ''}
                                     </span>`;
                                 }
@@ -2031,7 +2033,7 @@
             <span class="fw-medium">${resaltarBusqueda(dte.receptor_nombre || '', search)}</span>
             <br><code class="small text-muted">${resaltarBusqueda(dte.receptor_rut || '', search)}</code>
         `}
-        ${dte.vendedor ? `<br><small class="text-muted"><i class="bi bi-person me-1"></i>${dte.vendedor}</small>` : ''}
+        ${dte.vendedor ? `<br><small class="text-muted"><i class="bi bi-person me-1"></i>${_esc(dte.vendedor)}</small>` : ''}
     </td>
     <td>
         <strong>${resaltarBusqueda(dte.numero_documento || '', search)}</strong>
@@ -2072,13 +2074,13 @@
                 'NOTA DE CREDITO', 'NOTA_CREDITO',
                 'NOTA DE DEBITO', 'NOTA_DEBITO'
             ].includes(dte.tipo_documento) ? `
-            <button class="nexo-action-btn warning" title="Descargar TXT Acepta" onclick="descargarTXTAcepta(${dte.id || 0}, '${dte.tipo_documento}', '${dte.numero_documento}')">
+            <button class="nexo-action-btn warning" title="Descargar TXT Acepta" onclick='descargarTXTAcepta(${dte.id || 0}, ${JSON.stringify(String(dte.tipo_documento || ""))}, ${JSON.stringify(String(dte.numero_documento || ""))})'>
                 <i class="bi bi-file-earmark-text"></i>
             </button>` : ''}
             {% endif %}
             {% if es_admin %}
             ${['FACTURA ELECTRONICA','FACTURA_ELECTRONICA','BOLETA ELECTRONICA','BOLETA_ELECTRONICA'].includes(dte.tipo_documento) && dte.estado_dte !== 'ANULADO' && (dte.monto_con_iva - (dte.total_nc_acumulado || 0)) > 0 ? `
-            <button class="nexo-action-btn danger" title="Generar NC para ${dte.tipo_documento}" onclick="anularDocumento(${dte.id || 0}, '${dte.numero_documento}', '${dte.tipo_documento}', ${dte.monto_con_iva || 0}, ${dte.total_nc_acumulado || 0})">
+            <button class="nexo-action-btn danger" title="Generar NC" onclick='anularDocumento(${dte.id || 0}, ${JSON.stringify(String(dte.numero_documento || ""))}, ${JSON.stringify(String(dte.tipo_documento || ""))}, ${dte.monto_con_iva || 0}, ${dte.total_nc_acumulado || 0})'>
                 <i class="bi bi-x-circle"></i>
             </button>` : ''}
             ${['NOTA DE CREDITO','NOTA_CREDITO'].includes(dte.tipo_documento) ? `
@@ -2086,12 +2088,12 @@
                 <i class="bi bi-pencil-square"></i>
             </button>` : ''}
             ${(!dte.receptor_id && (dte.es_nota_credito || ['NOTA DE CREDITO','NOTA_CREDITO'].includes(dte.tipo_documento))) ? `
-            <button class="nexo-action-btn" style="background:#0dcaf0;color:white;" title="Asignar receptor a esta NC (necesario para descargar el TXT Acepta)" onclick="asignarReceptorNC(${dte.id || 0}, '${dte.numero_documento}')">
+            <button class="nexo-action-btn" style="background:#0dcaf0;color:white;" title="Asignar receptor a esta NC (necesario para descargar el TXT Acepta)" onclick='asignarReceptorNC(${dte.id || 0}, ${JSON.stringify(String(dte.numero_documento || ""))})'>
                 <i class="bi bi-person-plus"></i>
             </button>` : ''}
             {% endif %}
             ${dte.es_traspaso && dte.sucursal_destino && (!dte.nc_asociadas || dte.nc_asociadas.length === 0) && (!dte.ajustes_asociados || dte.ajustes_asociados.length === 0) && dte.estado_dte !== 'ANULADO' && dte.estado_dte !== 'CANCELADO' ? `
-            <button class="nexo-action-btn btn-crear-stock-destino" style="background: var(--nexo-accent); color: white;" title="Crear stock manualmente en sucursal destino (${dte.sucursal_destino.alias})" data-dte-id="${dte.id || 0}">
+            <button class="nexo-action-btn btn-crear-stock-destino" style="background: var(--nexo-accent); color: white;" title="Crear stock manualmente en sucursal destino (${_esc(dte.sucursal_destino.alias)})" data-dte-id="${dte.id || 0}">
                 <i class="bi bi-box-arrow-in-down"></i>
             </button>` : ''}
             {% if es_admin %}
@@ -2140,11 +2142,14 @@
     }
 
     function resaltarBusqueda(texto, busqueda) {
-        if (!busqueda || !texto) return texto;
-        const textoStr = String(texto);
-        const busquedaStr = String(busqueda);
-        const regex = new RegExp(`(${busquedaStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-        return textoStr.replace(regex, '<span class="search-highlight">$1</span>');
+        // Escapa SIEMPRE el texto antes de devolverlo: estos valores (nombre de
+        // receptor, RUT, nº y tipo de documento) vienen de la BD y se inyectan
+        // con .append()/.html() en la tabla — sin escapar serían XSS almacenado.
+        const textoEsc = _esc(texto);
+        if (!busqueda || !texto) return textoEsc;
+        const busquedaEsc = _esc(String(busqueda));
+        const regex = new RegExp(`(${busquedaEsc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        return textoEsc.replace(regex, '<span class="search-highlight">$1</span>');
     }
 
     function verDetalleDTE(dteId) {
@@ -2261,9 +2266,9 @@
                         }
                         productosBody.append(`
                             <tr>
-                                <td class="text-start">${item.producto || item.descripcion || '-'}</td>
-                                <td><code>${item.sku ?? '-'}</code></td>
-                                <td><span class="nexo-badge nexo-badge-info">${item.talla ?? '-'}</span></td>
+                                <td class="text-start">${_esc(item.producto || item.descripcion || '-')}</td>
+                                <td><code>${_esc(item.sku ?? '-')}</code></td>
+                                <td><span class="nexo-badge nexo-badge-info">${_esc(item.talla ?? '-')}</span></td>
                                 <td class="text-end">${item.cantidad ?? 0}</td>
                                 <td class="text-end">${formatearMoneda(item.precio_unitario)}</td>
                                 <td class="text-end"><strong>${formatearMoneda(item.subtotal)}</strong></td>
@@ -2295,13 +2300,13 @@
                         const tipoCls = h.es_nota_credito ? 'bg-warning text-dark' : 'bg-secondary';
                         hijosBody.append(`
                             <tr>
-                                <td><span class="badge ${tipoCls}">${h.tipo_documento}</span></td>
-                                <td><strong>#${h.numero_documento}</strong></td>
-                                <td><small>${h.fecha_emision || '-'}</small></td>
+                                <td><span class="badge ${tipoCls}">${_esc(h.tipo_documento)}</span></td>
+                                <td><strong>#${_esc(h.numero_documento)}</strong></td>
+                                <td><small>${_esc(h.fecha_emision || '-')}</small></td>
                                 <td class="text-end">${h.unidades_productos}</td>
                                 <td class="text-end">${formatearMoneda(h.monto_con_iva)}</td>
-                                <td><span class="badge ${estadoCls}">${h.estado_dte}</span></td>
-                                <td><small class="text-muted">${(h.motivo || '').substring(0, 80)}${(h.motivo || '').length > 80 ? '…' : ''}</small></td>
+                                <td><span class="badge ${estadoCls}">${_esc(h.estado_dte)}</span></td>
+                                <td><small class="text-muted">${_esc((h.motivo || '').substring(0, 80))}${(h.motivo || '').length > 80 ? '…' : ''}</small></td>
                                 <td class="text-end">
                                     <button class="btn btn-sm btn-outline-primary btn-ver-hijo-dte" data-dte-id="${h.id}">
                                         <i class="bi bi-eye"></i>
@@ -2331,10 +2336,10 @@
                     skusFaltantes.forEach(s => {
                         skusBody.append(`
                             <tr>
-                                <td><input type="checkbox" class="chk-sku-faltante" value="${s.sku}" checked></td>
-                                <td><code>${s.sku}</code></td>
-                                <td><span class="badge bg-info text-dark">${s.talla || '-'}</span></td>
-                                <td>${s.articulo || s.descripcion || '-'}</td>
+                                <td><input type="checkbox" class="chk-sku-faltante" value="${_esc(s.sku)}" checked></td>
+                                <td><code>${_esc(s.sku)}</code></td>
+                                <td><span class="badge bg-info text-dark">${_esc(s.talla || '-')}</span></td>
+                                <td>${_esc(s.articulo || s.descripcion || '-')}</td>
                                 <td class="text-end">${s.cantidad}</td>
                             </tr>
                         `);
@@ -2351,9 +2356,9 @@
                     pagos.forEach(pago => {
                         pagosBody.append(`
                             <tr>
-                                <td><span class="nexo-badge nexo-badge-secondary">${pago.metodo_pago || '-'}</span></td>
-                                <td>${pago.voucher || '-'}</td>
-                                <td>${pago.tipo_tarjeta || '-'}</td>
+                                <td><span class="nexo-badge nexo-badge-secondary">${_esc(pago.metodo_pago || '-')}</span></td>
+                                <td>${_esc(pago.voucher || '-')}</td>
+                                <td>${_esc(pago.tipo_tarjeta || '-')}</td>
                                 <td class="text-end"><strong>${formatearMoneda(pago.monto)}</strong></td>
                             </tr>
                         `);
@@ -2382,10 +2387,15 @@
 
     // ✅ Función para buscar un DTE específico (usado en enlaces NC → Factura)
     function buscarDTE(numeroDocumento) {
-        // Poner el número en el campo de búsqueda y ejecutar
-        document.getElementById('searchDTE').value = numeroDocumento;
-        cargarDTEs();
-        
+        // cargarDTEs(page, search) NO lee el input #searchDTE: el término debe
+        // pasarse por argumento. Llamarla sin args mandaba el request sin filtro
+        // y rompía la navegación NC/ajuste → documento original.
+        const term = String(numeroDocumento || '');
+        document.getElementById('searchDTE').value = term;
+        currentPageDTE = 1;
+        currentSearchDTE = term;
+        cargarDTEs(1, term);
+
         // Resaltar visualmente después de cargar
         setTimeout(() => {
             const filas = document.querySelectorAll('#tablaDTEBody tr');
@@ -2597,7 +2607,7 @@
         };
 
         const receptorActualHTML = tieneReceptor
-            ? `<strong>${receptorNombre || '-'}</strong>${receptorRut ? ` <code>${receptorRut}</code>` : ''}`
+            ? `<strong>${_esc(receptorNombre || '-')}</strong>${receptorRut ? ` <code>${_esc(receptorRut)}</code>` : ''}`
             : '<span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Sin receptor</span>';
 
         const { value: formValues } = await Swal.fire({
@@ -3206,12 +3216,12 @@
                 title: 'Cliente encontrado',
                 html: `
                     <div class="text-start small">
-                        <div><strong>Nombre:</strong> ${c.nombre || '-'}</div>
-                        <div><strong>RUT:</strong> <code>${c.rut || rutFormateado}</code></div>
-                        ${c.giro ? `<div><strong>Giro:</strong> ${c.giro}</div>` : ''}
-                        ${c.direccion ? `<div><strong>Dirección:</strong> ${c.direccion}</div>` : ''}
-                        ${c.comuna ? `<div><strong>Comuna:</strong> ${c.comuna}</div>` : ''}
-                        ${c.ciudad ? `<div><strong>Ciudad:</strong> ${c.ciudad}</div>` : ''}
+                        <div><strong>Nombre:</strong> ${_esc(c.nombre || '-')}</div>
+                        <div><strong>RUT:</strong> <code>${_esc(c.rut || rutFormateado)}</code></div>
+                        ${c.giro ? `<div><strong>Giro:</strong> ${_esc(c.giro)}</div>` : ''}
+                        ${c.direccion ? `<div><strong>Dirección:</strong> ${_esc(c.direccion)}</div>` : ''}
+                        ${c.comuna ? `<div><strong>Comuna:</strong> ${_esc(c.comuna)}</div>` : ''}
+                        ${c.ciudad ? `<div><strong>Ciudad:</strong> ${_esc(c.ciudad)}</div>` : ''}
                         <hr class="my-2">
                         <div class="text-muted">¿Asignarlo como receptor de la NC?</div>
                     </div>
@@ -3344,8 +3354,8 @@
                 title: 'Receptor asignado',
                 html: `
                     <div class="text-start small">
-                        <div><strong>${data.receptor.nombre}</strong></div>
-                        <div><code>${data.receptor.rut}</code></div>
+                        <div><strong>${_esc(data.receptor.nombre)}</strong></div>
+                        <div><code>${_esc(data.receptor.rut)}</code></div>
                         <hr class="my-2">
                         <div class="text-muted">Ahora puede descargar el TXT Acepta de la NC.</div>
                     </div>
@@ -3394,6 +3404,12 @@
         const montoRestante = montoOriginal - (ncAcumulado || 0);
         const tieneNCPrevias = (ncAcumulado || 0) > 0;
         const fmtCLP = (n) => '$' + Math.round(n).toLocaleString('es-CL');
+        // Escapa texto libre antes de insertarlo en innerHTML / Swal html.
+        // Sin esto, datos de la BD (nombre de cliente, descripción de producto,
+        // SKU, nº de documento) podían inyectar HTML/JS en el panel del admin.
+        const escapeHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+            { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+        ));
 
         // Pre-cargar las líneas del DTE con info de NCs previas por línea.
         // Permite mostrar la tabla de productos en el modal y bloquear las
@@ -3444,9 +3460,9 @@
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
                             <div class="small text-muted mb-1"><i class="bi bi-file-earmark-text me-1"></i>DTE a acreditar</div>
-                            <div class="fw-bold" style="font-size: 0.95rem;">${nombreDoc} <span class="text-primary">#${numeroDoc}</span></div>
-                            ${dteCliente ? `<div class="small mt-1"><i class="bi bi-person me-1"></i>${dteCliente}${dteRut ? ` · <code>${dteRut}</code>` : ''}</div>` : ''}
-                            ${dteFecha ? `<div class="small text-muted"><i class="bi bi-calendar me-1"></i>${dteFecha}</div>` : ''}
+                            <div class="fw-bold" style="font-size: 0.95rem;">${nombreDoc} <span class="text-primary">#${escapeHtml(numeroDoc)}</span></div>
+                            ${dteCliente ? `<div class="small mt-1"><i class="bi bi-person me-1"></i>${escapeHtml(dteCliente)}${dteRut ? ` · <code>${escapeHtml(dteRut)}</code>` : ''}</div>` : ''}
+                            ${dteFecha ? `<div class="small text-muted"><i class="bi bi-calendar me-1"></i>${escapeHtml(dteFecha)}</div>` : ''}
                         </div>
                         <div class="text-end">
                             <div class="small text-muted">Monto original</div>
@@ -3491,7 +3507,7 @@
             const parcial = !disabled && l.cantidad_ya_acreditada > 0;
             let estadoHtml = '';
             if (disabled) {
-                const numeros = (l.ncs_previas || []).map(n => `#${n.numero_documento}`).join(', ');
+                const numeros = (l.ncs_previas || []).map(n => `#${escapeHtml(n.numero_documento)}`).join(', ');
                 estadoHtml = `<span class="badge bg-danger" title="NC previas: ${numeros}"><i class="bi bi-shield-x me-1"></i>Ya regularizada</span>`;
             } else if (parcial) {
                 estadoHtml = `<span class="badge bg-warning text-dark"><i class="bi bi-pie-chart me-1"></i>${l.cantidad_ya_acreditada} de ${l.cantidad_original} ya NC</span>`;
@@ -3514,8 +3530,8 @@
                             ${disabled ? 'disabled' : 'checked'}>
                     </td>
                     <td style="${rowTd}">
-                        <div class="small"><strong>${l.sku}</strong> · ${l.talla}</div>
-                        <div class="text-muted" style="font-size:0.72rem;">${l.descripcion || ''}</div>
+                        <div class="small"><strong>${escapeHtml(l.sku)}</strong> · ${escapeHtml(l.talla)}</div>
+                        <div class="text-muted" style="font-size:0.72rem;">${escapeHtml(l.descripcion || '')}</div>
                     </td>
                     <td class="text-end">
                         <div>${fmtCLP(l.precio_unitario)}</div>
@@ -3551,6 +3567,15 @@
                     <i class="bi bi-info-circle"></i> ¿qué precio usa?
                 </span>
             </p>
+            <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" id="anulBtnSelTodo" style="font-size:0.75rem;">
+                    <i class="bi bi-check2-all me-1"></i>Seleccionar todo
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" id="anulBtnQuitarTodo" style="font-size:0.75rem;">
+                    <i class="bi bi-x-square me-1"></i>Quitar todo
+                </button>
+                <span class="badge bg-primary ms-auto" id="anulContadorLineas" aria-live="polite">0 líneas</span>
+            </div>
             <div style="max-height:280px; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px;">
                 <table class="table table-sm table-hover mb-0" style="font-size:0.8rem;">
                     <thead class="table-light" style="position:sticky; top:0;">
@@ -3825,6 +3850,7 @@
                     const esCorrige = (tipo === 'CORRIGE_MONTO');
                     let baseSum = 0;     // PRODUCTOS (neto o bruto según precioEsBruto)
                     let montoSum = 0;    // CORRIGE_MONTO (con IVA directo)
+                    let incluidas = 0;   // líneas efectivamente marcadas (para el contador)
                     document.querySelectorAll('tr[data-dte-prod-id]').forEach(row => {
                         const chk = row.querySelector('.nc-linea-check');
                         const cantInput = row.querySelector('.nc-linea-cant');
@@ -3850,6 +3876,7 @@
                             }
                         }
                         if (incluida) {
+                            incluidas++;
                             if (esCorrige) montoSum += montoLinea;
                             else baseSum += precio * cant;
                         }
@@ -3859,6 +3886,8 @@
                         : (precioEsBruto ? Math.round(baseSum) : Math.round(baseSum * 1.19));
                     if (totalLabel) totalLabel.textContent = fmtCLP(conIva);
                     if (montoEl) montoEl.value = conIva;
+                    const contEl = document.getElementById('anulContadorLineas');
+                    if (contEl) contEl.textContent = incluidas + (incluidas === 1 ? ' línea' : ' líneas');
                     return conIva;
                 };
 
@@ -3964,6 +3993,20 @@
                 document.querySelectorAll('input[name="tipoNC"]').forEach(r => r.addEventListener('change', toggleTipoNC));
 
                 document.querySelectorAll('input[name="modalidadNC"]').forEach(r => r.addEventListener('change', actualizarInfo));
+
+                // Selección masiva: marca/desmarca todas las líneas con disponibilidad
+                // (las líneas ya regularizadas están disabled y no se tocan).
+                const _btnSelTodo = document.getElementById('anulBtnSelTodo');
+                const _btnQuitarTodo = document.getElementById('anulBtnQuitarTodo');
+                if (_btnSelTodo) _btnSelTodo.addEventListener('click', () => {
+                    document.querySelectorAll('.nc-linea-check').forEach(chk => { if (!chk.disabled) chk.checked = true; });
+                    actualizarInfo();
+                });
+                if (_btnQuitarTodo) _btnQuitarTodo.addEventListener('click', () => {
+                    document.querySelectorAll('.nc-linea-check').forEach(chk => { if (!chk.disabled) chk.checked = false; });
+                    actualizarInfo();
+                });
+
                 toggleTipoNC();  // aplica el estado inicial (PRODUCTOS) y llama a actualizarInfo()
 
                 const setBadge = (id, ok, label) => {
@@ -4191,12 +4234,12 @@
         const lineasResumen = formData.esCorreccionMonto
             ? (formData.correcciones || []).map(c => {
                 const meta = lineasNC.find(l => l.dte_producto_id === c.dte_producto_id);
-                const nombre = meta ? `${meta.sku} · ${meta.talla}` : `Línea #${c.dte_producto_id}`;
+                const nombre = meta ? escapeHtml(`${meta.sku} · ${meta.talla}`) : `Línea #${c.dte_producto_id}`;
                 return `<li>${nombre} — <strong>${fmtCLP(c.monto_acreditar)}</strong></li>`;
             }).join('')
             : (formData.productosAfectados || []).map(p => {
                 const meta = lineasNC.find(l => l.dte_producto_id === p.dte_producto_id);
-                const nombre = meta ? `${meta.sku} · ${meta.talla}` : `Línea #${p.dte_producto_id}`;
+                const nombre = meta ? escapeHtml(`${meta.sku} · ${meta.talla}`) : `Línea #${p.dte_producto_id}`;
                 return `<li>${nombre} — <strong>${p.cantidad}</strong> uds</li>`;
             }).join('');
 
@@ -4204,15 +4247,15 @@
             title: 'Confirmar Generación de NC',
             html: `
                 <div class="text-start small">
-                    <div class="mb-2"><strong>Documento:</strong> ${nombreDoc} #${numeroDoc}</div>
+                    <div class="mb-2"><strong>Documento:</strong> ${nombreDoc} #${escapeHtml(numeroDoc)}</div>
                     <div class="mb-2"><strong>${formData.esCorreccionMonto ? 'Correcciones' : 'Productos'}:</strong>
                         <ul class="mb-0 mt-1" style="padding-left:1.2rem;">${lineasResumen || '<li class="text-muted">(ninguno)</li>'}</ul>
                     </div>
                     <div class="mb-2"><strong>${formData.esCorreccionMonto ? 'Monto a corregir' : 'Monto NC'}:</strong> ${fmtCLP(formData.montoNC)} ${formData.esCorreccionMonto ? '<span class="badge bg-warning text-dark ms-1">Corrige montos (razón 3)</span>' : (formData.montoNC >= montoRestante ? '<span class="badge bg-danger ms-1">Total — anulará el documento</span>' : '<span class="badge bg-info text-dark ms-1">Parcial</span>')}</div>
                     <div class="mb-2"><strong>Modalidad:</strong> ${tituloModalidad}</div>
                     ${modalidadNC === 'DEVOLUCION' && formData.fechaDevolucionCaja ? `<div class="mb-2"><strong>Afecta cuadratura del:</strong> ${formData.fechaDevolucionCaja.split('-').reverse().join('/')}${formData.fechaDevolucionCaja === hoyISO ? ' <span class="badge bg-secondary ms-1">hoy</span>' : ' <span class="badge bg-warning text-dark ms-1">día anterior</span>'}</div>` : ''}
-                    <div class="mb-2"><strong>Motivo:</strong> ${formData.motivo}</div>
-                    ${formData.clienteNombre ? `<div class="mb-2"><strong>Cliente:</strong> ${formData.clienteNombre}${formData.clienteRut ? ` (${formData.clienteRut})` : ''}</div>` : ''}
+                    <div class="mb-2"><strong>Motivo:</strong> ${escapeHtml(formData.motivo)}</div>
+                    ${formData.clienteNombre ? `<div class="mb-2"><strong>Cliente:</strong> ${escapeHtml(formData.clienteNombre)}${formData.clienteRut ? ` (${escapeHtml(formData.clienteRut)})` : ''}</div>` : ''}
                     <hr class="my-2">
                     <div class="fw-bold mb-1">Efecto en cuadratura del día:</div>
                     <div class="d-flex flex-wrap gap-1">${efectoChips}</div>
@@ -4265,16 +4308,21 @@
             // folio real de la NC, no el de la boleta original). Cae al
             // patrón legacy si por algún motivo no llega Content-Disposition.
             const blob = await resp.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
+            const txtUrl = URL.createObjectURL(blob);
             const cd = resp.headers.get('Content-Disposition') || '';
             const m = cd.match(/filename="?([^";]+)"?/);
-            a.download = (m && m[1]) ? m[1] : `NC_anula_${numeroDoc}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const txtNombre = (m && m[1]) ? m[1] : `NC_anula_${numeroDoc}.txt`;
+            // Descarga el TXT. Reutilizable: el resumen de éxito ofrece un botón
+            // para volver a descargarlo sin tener que regenerar la NC.
+            const _descargarTxt = () => {
+                const a = document.createElement('a');
+                a.href = txtUrl;
+                a.download = txtNombre;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            };
+            _descargarTxt();  // primera descarga automática para no perder el TXT
 
             const esTotal = !formData.esCorreccionMonto && formData.montoNC >= montoRestante;
             // Resumen del efecto real en cuadratura segun la modalidad seleccionada.
@@ -4294,12 +4342,33 @@
                     ? `<br><span class="text-primary"><i class="bi bi-pie-chart me-1"></i>NC parcial por ${fmtCLP(formData.montoNC)} de ${fmtCLP(montoOriginal)}</span>`
                     : '');
 
+            const _detalleDoc = formData.esCorreccionMonto
+                ? `${nombreDoc} #${escapeHtml(numeroDoc)} sigue vigente (corrección de cobro, sin devolución de productos).`
+                : (esTotal
+                    ? `${nombreDoc} #${escapeHtml(numeroDoc)} marcada como ANULADO.`
+                    : `${nombreDoc} #${escapeHtml(numeroDoc)} sigue vigente. Puede generar otra NC por el restante.`);
             await Swal.fire({
                 icon: 'success',
                 title: formData.esCorreccionMonto ? 'Corrección de Monto Generada' : (esTotal ? 'Documento Anulado' : 'NC Parcial Generada'),
-                html: `Nota de Crédito por <strong>${fmtCLP(formData.montoNC)}</strong> creada.<br>TXT Acepta descargado.${formData.esCorreccionMonto ? `<br><small class="text-muted">${nombreDoc} #${numeroDoc} sigue vigente (corrección de cobro, sin devolución de productos).</small>` : (esTotal ? `<br><small class="text-muted">${nombreDoc} #${numeroDoc} marcada como ANULADO.</small>` : `<br><small class="text-muted">${nombreDoc} #${numeroDoc} sigue vigente. Puede generar otra NC por el restante.</small>`)}${resumenModalidad}${resumenMonto}`,
-                confirmButtonText: 'Aceptar'
+                html: `
+                    <div class="text-start">
+                        <p class="mb-2">Nota de Crédito por <strong>${fmtCLP(formData.montoNC)}</strong> creada.</p>
+                        <div class="alert alert-success py-2 px-3 mb-2 small d-flex align-items-center justify-content-between gap-2">
+                            <span><i class="bi bi-filetype-txt me-1"></i>TXT Acepta descargado. Súbelo a tu facturador electrónico / SII para timbrar la NC.</span>
+                            <button type="button" id="swalRedescargarTxt" class="btn btn-sm btn-outline-success flex-shrink-0">
+                                <i class="bi bi-download me-1"></i>Descargar de nuevo
+                            </button>
+                        </div>
+                        <p class="small text-muted mb-1">${_detalleDoc}</p>
+                        <div class="small">${resumenModalidad}${resumenMonto}</div>
+                    </div>`,
+                confirmButtonText: 'Aceptar',
+                didOpen: () => {
+                    const b = document.getElementById('swalRedescargarTxt');
+                    if (b) b.addEventListener('click', _descargarTxt);
+                }
             });
+            URL.revokeObjectURL(txtUrl);
             cargarDTEs(currentPageDTE, currentSearchDTE);
         } catch (e) {
             Swal.fire('Error', e.message, 'error');

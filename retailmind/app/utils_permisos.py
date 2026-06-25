@@ -8,6 +8,7 @@ from datetime import timedelta
 from django.utils import timezone
 
 from .models import (
+    Empresa,
     Sucursal,
     EmpresaUser,
     PermisoUsuario,
@@ -179,6 +180,29 @@ def obtener_sucursales_usuario(usuario):
     ).values_list('sucursal_id', flat=True)
 
     return Sucursal.objects.filter(id__in=sucursal_ids, activa=True).order_by('alias')
+
+
+def obtener_empresas_usuario(usuario):
+    """
+    Retorna un queryset de empresas a las que el usuario tiene acceso.
+
+    Espejo de ``obtener_sucursales_usuario`` a nivel de empresa:
+    - Administradores: todas las empresas activas
+    - Usuarios con flag puede_ver_todas_sucursales: todas las empresas activas
+    - Demás usuarios: solo las empresas asignadas via EmpresaUser (status=True)
+    """
+    if getattr(usuario, 'rol', '') == 'administrador':
+        return Empresa.objects.filter(activo=True).order_by('nombre')
+
+    if PermisoUsuario.usuario_ve_todas_sucursales(usuario):
+        return Empresa.objects.filter(activo=True).order_by('nombre')
+
+    empresa_ids = EmpresaUser.objects.filter(
+        user=usuario,
+        status=True,
+    ).values_list('empresa_id', flat=True).distinct()
+
+    return Empresa.objects.filter(id__in=empresa_ids, activo=True).order_by('nombre')
 
 
 def puede_ver_sucursal(usuario, sucursal_id):

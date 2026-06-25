@@ -546,10 +546,16 @@ class PerfilView(APIView):
     permission_classes = [IsClienteApp]
 
     def get(self, request):
-        serializer = PerfilClienteSerializer(request.user.cliente)
-        return Response({'success': True, 'perfil': serializer.data})
+        cliente = request.user.cliente
+        serializer = PerfilClienteSerializer(cliente)
+        data = dict(serializer.data)
+        data['fecha_nacimiento'] = (
+            cliente.fecha_nacimiento.isoformat() if cliente.fecha_nacimiento else None
+        )
+        return Response({'success': True, 'perfil': data})
 
     def patch(self, request):
+        from datetime import date as _date
         cliente = request.user.cliente
         cuenta = request.user
         serializer = PerfilClienteSerializer(cliente, data=request.data, partial=True)
@@ -568,7 +574,27 @@ class PerfilView(APIView):
             reset_fields.append('updated_at')
             cuenta.save(update_fields=reset_fields)
 
-        return Response({'success': True, 'perfil': PerfilClienteSerializer(cliente).data})
+        # Manejar fecha_nacimiento (campo no en el serializer)
+        fecha_nac_raw = request.data.get('fecha_nacimiento')
+        if fecha_nac_raw is not None:
+            if fecha_nac_raw == '' or fecha_nac_raw is None:
+                cliente.fecha_nacimiento = None
+                cliente.save(update_fields=['fecha_nacimiento'])
+            else:
+                try:
+                    cliente.fecha_nacimiento = _date.fromisoformat(str(fecha_nac_raw))
+                    cliente.save(update_fields=['fecha_nacimiento'])
+                except ValueError:
+                    return Response(
+                        {'success': False, 'error': 'Formato de fecha inválido (YYYY-MM-DD)'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+        data = dict(PerfilClienteSerializer(cliente).data)
+        data['fecha_nacimiento'] = (
+            cliente.fecha_nacimiento.isoformat() if cliente.fecha_nacimiento else None
+        )
+        return Response({'success': True, 'perfil': data})
 
 
 class CarnetView(APIView):

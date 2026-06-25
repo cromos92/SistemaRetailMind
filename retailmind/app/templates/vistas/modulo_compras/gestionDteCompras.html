@@ -2360,6 +2360,117 @@
     </div>
 </div>
 
+<!-- Modal Compensar con Factura EMITIDA al proveedor (EDEL/nosotros) -->
+<div class="modal fade rm-modal" id="modalCompensarEmitida" tabindex="-1" aria-labelledby="modalCompensarEmitidaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content rm-accent--blue">
+            <div class="rm-modal-header">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rm-modal-icon rm-modal-icon--blue">
+                        <i class="bi bi-receipt"></i>
+                    </div>
+                    <div>
+                        <h5 class="rm-modal-title" id="modalCompensarEmitidaLabel">Compensar con factura emitida</h5>
+                        <p class="rm-modal-subtitle">Rebajar el saldo asociando una factura que le emitimos a este proveedor</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="rm-modal-body rm-modal-body--scroll">
+                <input type="hidden" id="compensarEmitidaTargetDteId">
+
+                <div class="p-3 mb-3" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; font-size: 0.85rem; color: #1e40af;">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Cuando el proveedor ya no puede emitirte una Nota de Crédito, usa una factura que <strong>tú o EDEL le emitieron</strong> para rebajar su saldo a pagar.
+                    <strong>Es una compensación de tesorería; ambos documentos siguen siendo tributariamente válidos.</strong>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Saldo de esta factura</label>
+                    <div class="form-control bg-light" id="compensarEmitidaSaldoObjetivo">—</div>
+                </div>
+
+                <ul class="nav nav-tabs mb-3" id="tabsCompensarEmitida" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="tab-emitida-sistema-btn" data-bs-toggle="tab"
+                                data-bs-target="#tab-emitida-sistema" type="button" role="tab">
+                            <i class="bi bi-search me-1"></i>Buscar en sistema
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="tab-emitida-manual-btn" data-bs-toggle="tab"
+                                data-bs-target="#tab-emitida-manual" type="button" role="tab">
+                            <i class="bi bi-pencil-square me-1"></i>Registrar manual
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <!-- Tab: buscar factura emitida en el sistema -->
+                    <div class="tab-pane fade show active" id="tab-emitida-sistema" role="tabpanel">
+                        <div class="mb-3">
+                            <label for="buscarDocumentoEmitido" class="form-label">Buscar por número</label>
+                            <input type="text" id="buscarDocumentoEmitido" class="form-control" placeholder="Número de factura emitida...">
+                        </div>
+                        <div class="table-responsive" style="border-radius: 10px; overflow: hidden; border: 1px solid #edf0f5;">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th class="py-3">Seleccionar</th>
+                                        <th class="py-3">Número</th>
+                                        <th class="py-3">Emisor</th>
+                                        <th class="py-3">Fecha</th>
+                                        <th class="py-3">Monto</th>
+                                        <th class="py-3">Saldo disp.</th>
+                                        <th class="py-3">Monto a aplicar</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tablaDocumentosEmitidosBody">
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted py-4">
+                                            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                            Cargando facturas emitidas...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Tab: registrar manualmente (factura emitida fuera del sistema) -->
+                    <div class="tab-pane fade" id="tab-emitida-manual" role="tabpanel">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label for="emitidaManualNumero" class="form-label">N° documento <span class="text-danger">*</span></label>
+                                <input type="text" id="emitidaManualNumero" class="form-control" placeholder="Ej. 12345">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="emitidaManualFecha" class="form-label">Fecha emisión</label>
+                                <input type="date" id="emitidaManualFecha" class="form-control">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="emitidaManualEmisor" class="form-label">Emisor</label>
+                                <input type="text" id="emitidaManualEmisor" class="form-control" placeholder="EDEL / nuestra empresa">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="emitidaManualMonto" class="form-label">Monto a aplicar <span class="text-danger">*</span></label>
+                                <input type="number" min="1" step="1" id="emitidaManualMonto" class="form-control" placeholder="0">
+                                <div class="form-text">No puede exceder el saldo de la factura de compra.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="rm-modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnCompensarEmitida">
+                    <i class="bi bi-receipt me-1"></i>Compensar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Incidencias DTE -->
 <div class="modal fade rm-modal" id="modalIncidencias" tabindex="-1" aria-labelledby="modalIncidenciasLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
@@ -3819,6 +3930,22 @@
             } else {
                 items.push(`<li><a class="dropdown-item action-anexar" href="#" onclick="abrirModalCompensarFactura(${id}); return false;">
                                 <i class="bi bi-arrow-left-right"></i> Compensar con Factura
+                            </a></li>`);
+            }
+
+            // Compensar con factura EMITIDA al proveedor (EDEL/nosotros) cuando no se puede cargar una NC
+            if (rechazado || tieneIncPend || estaPagadaFc) {
+                const tipE = rechazado
+                    ? 'No disponible para DTEs rechazados'
+                    : estaPagadaFc
+                        ? 'La factura ya está pagada/saldada'
+                        : 'Resuelve incidencias pendientes antes de compensar';
+                items.push(`<li><span class="dropdown-item action-anexar disabled" title="${tipE}">
+                                <i class="bi bi-receipt"></i> Compensar con factura emitida
+                            </span></li>`);
+            } else {
+                items.push(`<li><a class="dropdown-item action-anexar" href="#" onclick="abrirModalCompensarEmitida(${id}); return false;">
+                                <i class="bi bi-receipt"></i> Compensar con factura emitida
                             </a></li>`);
             }
 
@@ -5723,14 +5850,20 @@
         if (!items.length) {
             html += '<div class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i>Sin compensaciones registradas.</div>';
         } else {
-            html += '<div class="table-responsive" style="border-radius:10px;overflow:hidden;border:1px solid #edf0f5;"><table class="table table-sm mb-0"><thead><tr><th class="py-2">Factura</th><th class="py-2">Monto</th><th class="py-2">Fecha</th><th class="py-2 text-end">Acción</th></tr></thead><tbody>';
+            html += '<div class="table-responsive" style="border-radius:10px;overflow:hidden;border:1px solid #edf0f5;"><table class="table table-sm mb-0"><thead><tr><th class="py-2">Factura</th><th class="py-2">Tipo</th><th class="py-2">Monto</th><th class="py-2">Fecha</th><th class="py-2 text-end">Acción</th></tr></thead><tbody>';
             items.forEach(c => {
-                html += `<tr><td>#${c.numero}</td><td class="text-danger">-$${parseFloat(c.monto || 0).toLocaleString('es-CL')}</td><td>${c.fecha || '-'}</td><td class="text-end"><button class="btn btn-sm btn-outline-danger" onclick="desasociarCompensacionDesdeHub(${c.pago_id}); return false;"><i class="bi bi-x-lg"></i> Revertir</button></td></tr>`;
+                const tipo = c.es_emitida
+                    ? '<span class="badge bg-info-subtle text-info">Emitida</span>'
+                    : '<span class="badge bg-secondary-subtle text-secondary">Mismo prov.</span>';
+                html += `<tr><td>#${c.numero}</td><td>${tipo}</td><td class="text-danger">-$${parseFloat(c.monto || 0).toLocaleString('es-CL')}</td><td>${c.fecha || '-'}</td><td class="text-end"><button class="btn btn-sm btn-outline-danger" onclick="desasociarCompensacionDesdeHub(${c.pago_id}, ${c.es_emitida ? 'true' : 'false'}); return false;"><i class="bi bi-x-lg"></i> Revertir</button></td></tr>`;
             });
             html += '</tbody></table></div>';
         }
         if (asociacionesDteEsFactura) {
-            html += `<div class="mt-2"><button class="btn btn-sm btn-outline-secondary" onclick="compensarDesdeHub('${dteId}'); return false;"><i class="bi bi-arrow-left-right"></i> Compensar con Factura</button></div>`;
+            html += `<div class="mt-2 d-flex flex-wrap gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="compensarDesdeHub('${dteId}'); return false;"><i class="bi bi-arrow-left-right"></i> Compensar con Factura</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="compensarEmitidaDesdeHub('${dteId}'); return false;"><i class="bi bi-receipt"></i> Compensar con factura emitida</button>
+                     </div>`;
         }
         cont.html(html);
     }
@@ -5776,8 +5909,11 @@
         });
     }
 
-    function desasociarCompensacionDesdeHub(pagoId) {
+    function desasociarCompensacionDesdeHub(pagoId, esEmitida) {
         const dteId = $('#asociacionesDteId').val();
+        const url = esEmitida
+            ? `/app/desasociar_documento_emitido_compensacion/${pagoId}/`
+            : `/app/desasociar_factura_compensacion/${pagoId}/`;
         Swal.fire({
             title: '¿Revertir compensación?',
             text: 'Se eliminará el neteo y se recalculará el saldo de la factura.',
@@ -5786,7 +5922,7 @@
         }).then(r => {
             if (!r.isConfirmed) return;
             $.ajax({
-                url: `/app/desasociar_factura_compensacion/${pagoId}/`, method: 'POST',
+                url: url, method: 'POST',
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
                 success: function (resp) {
                     if (resp.success) { cargarAsociaciones(dteId); cargarDTEs(currentPageDTE, currentSearchDTE); }
@@ -6281,6 +6417,150 @@
             }
         });
     });
+
+    // ========== COMPENSAR CON FACTURA EMITIDA (EDEL / nosotros) ==========
+
+    let compensarEmitidaSaldoObjetivoVal = 0;
+
+    function abrirModalCompensarEmitida(dteId) {
+        $('#compensarEmitidaTargetDteId').val(dteId);
+        $('#buscarDocumentoEmitido').val('');
+        $('#compensarEmitidaSaldoObjetivo').text('—');
+        compensarEmitidaSaldoObjetivoVal = 0;
+        // reset manual
+        $('#emitidaManualNumero').val('');
+        $('#emitidaManualFecha').val('');
+        $('#emitidaManualEmisor').val('');
+        $('#emitidaManualMonto').val('').removeAttr('max');
+        // volver a la pestaña "Buscar en sistema"
+        const tabSistema = document.getElementById('tab-emitida-sistema-btn');
+        if (tabSistema) bootstrap.Tab.getOrCreateInstance(tabSistema).show();
+
+        cargarDocumentosEmitidos(dteId);
+        const modal = new bootstrap.Modal(document.getElementById('modalCompensarEmitida'));
+        modal.show();
+    }
+
+    function cargarDocumentosEmitidos(dteId, busqueda = '') {
+        const tbody = $('#tablaDocumentosEmitidosBody');
+        tbody.html('<tr><td colspan="7" class="text-center text-muted"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando facturas emitidas...</td></tr>');
+
+        // Saldo de la factura objetivo: para acotar y prellenar el monto a aplicar.
+        $.get(`/app/obtenerDetallePago/${dteId}/`, function (resp) {
+            compensarEmitidaSaldoObjetivoVal = Math.max((resp.total_dte || 0) - (resp.total_abonado || 0), 0);
+            $('#compensarEmitidaSaldoObjetivo').text('$' + Math.round(compensarEmitidaSaldoObjetivoVal).toLocaleString('es-CL'));
+            $('#emitidaManualMonto').attr('max', Math.round(compensarEmitidaSaldoObjetivoVal));
+        });
+
+        $.ajax({
+            url: '/app/obtener_documentos_emitidos_compensar_disponibles/',
+            method: 'GET',
+            data: { dte_id: dteId, busqueda: busqueda },
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function (response) {
+                tbody.empty();
+                if (response.success && response.documentos && response.documentos.length > 0) {
+                    response.documentos.forEach(f => {
+                        const tope = Math.min(compensarEmitidaSaldoObjetivoVal || f.saldo_disponible, f.saldo_disponible);
+                        const fila = `
+                        <tr>
+                            <td><input type="radio" name="documentoEmitidoCompensar" value="${f.id}" class="form-check-input"
+                                       onchange="seleccionarDocumentoEmitido(${f.id}, ${f.saldo_disponible})"></td>
+                            <td>${f.numero_documento}</td>
+                            <td>${f.emisor || '-'}</td>
+                            <td>${f.fecha_emision}</td>
+                            <td>$${parseFloat(f.monto_con_iva).toLocaleString('es-CL')}</td>
+                            <td>$${parseFloat(f.saldo_disponible).toLocaleString('es-CL')}</td>
+                            <td style="max-width:150px;">
+                                <input type="number" min="1" step="1" class="form-control form-control-sm monto-aplicar-emitida-input"
+                                       id="montoAplicarEmitida_${f.id}" value="${Math.round(tope)}" disabled>
+                            </td>
+                        </tr>`;
+                        tbody.append(fila);
+                    });
+                } else {
+                    tbody.append('<tr><td colspan="7" class="text-center text-muted">No hay facturas emitidas a este proveedor disponibles. Usa "Registrar manual" si la emitió EDEL fuera del sistema.</td></tr>');
+                }
+            },
+            error: function () {
+                tbody.html('<tr><td colspan="7" class="text-center text-danger">Error al cargar las facturas emitidas</td></tr>');
+            }
+        });
+    }
+
+    function seleccionarDocumentoEmitido(docId, saldoDisponible) {
+        $('.monto-aplicar-emitida-input').prop('disabled', true);
+        const tope = Math.round(Math.min(compensarEmitidaSaldoObjetivoVal || saldoDisponible, saldoDisponible));
+        const input = $('#montoAplicarEmitida_' + docId);
+        input.prop('disabled', false).attr('max', tope);
+        const actual = parseFloat(input.val());
+        if (!actual || actual > tope || actual <= 0) {
+            input.val(tope);
+        }
+    }
+
+    $('#buscarDocumentoEmitido').on('keyup', function () {
+        const dteId = $('#compensarEmitidaTargetDteId').val();
+        if (dteId) cargarDocumentosEmitidos(dteId, $(this).val());
+    });
+
+    $('#btnCompensarEmitida').on('click', function () {
+        const dteId = $('#compensarEmitidaTargetDteId').val();
+        const esManual = $('#tab-emitida-manual').hasClass('active');
+        const btn = $(this);
+        let payload;
+
+        if (esManual) {
+            const numero = ($('#emitidaManualNumero').val() || '').trim();
+            const monto = parseInt($('#emitidaManualMonto').val(), 10);
+            if (!numero) { Swal.fire('Atención', 'Indica el número de la factura emitida', 'warning'); return; }
+            if (!monto || monto <= 0) { Swal.fire('Atención', 'Indica un monto a aplicar mayor a cero', 'warning'); return; }
+            if (monto > Math.round(compensarEmitidaSaldoObjetivoVal)) {
+                Swal.fire('Atención', 'El monto no puede exceder el saldo de la factura', 'warning'); return;
+            }
+            payload = {
+                dte_id: dteId, modo: 'manual', numero: numero, monto: monto,
+                fecha: $('#emitidaManualFecha').val() || '',
+                emisor_label: ($('#emitidaManualEmisor').val() || '').trim(),
+            };
+        } else {
+            const docId = $('input[name="documentoEmitidoCompensar"]:checked').val();
+            if (!docId) { Swal.fire('Atención', 'Selecciona una factura emitida', 'warning'); return; }
+            const monto = parseInt($('#montoAplicarEmitida_' + docId).val(), 10);
+            if (!monto || monto <= 0) { Swal.fire('Atención', 'Indica un monto a aplicar mayor a cero', 'warning'); return; }
+            payload = { dte_id: dteId, modo: 'existente', documento_emitido_id: docId, monto: monto };
+        }
+
+        btn.prop('disabled', true);
+        $.ajax({
+            url: '/app/asociar_documento_emitido_compensacion/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify(payload),
+            success: function (response) {
+                btn.prop('disabled', false);
+                if (response.success) {
+                    Swal.fire('Éxito', response.message || 'Factura emitida compensada correctamente', 'success');
+                    $('#modalCompensarEmitida').modal('hide');
+                    cargarDTEs(currentPageDTE, currentSearchDTE);
+                } else {
+                    Swal.fire('Error', response.error || 'No se pudo compensar', 'error');
+                }
+            },
+            error: function (xhr) {
+                btn.prop('disabled', false);
+                let msg = 'Error de conexión al compensar';
+                try { msg = JSON.parse(xhr.responseText).error || msg; } catch (e) { }
+                Swal.fire('Error', msg, 'error');
+            }
+        });
+    });
+
+    function compensarEmitidaDesdeHub(dteId) {
+        $('#modalAsociaciones').modal('hide');
+        setTimeout(() => abrirModalCompensarEmitida(dteId), 300);
+    }
 
     // ========== GESTIÓN DE INCIDENCIAS ==========
 

@@ -1,0 +1,1112 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<div class="page-content">
+    <div class="container-fluid">
+
+<style>
+    /* ========== NEXO DESIGN SYSTEM ========== */
+    :root {
+        --nexo-primary: #0066FF;
+        --nexo-primary-dark: #0052CC;
+        --nexo-primary-light: #E6F0FF;
+        --nexo-secondary: #1A1A2E;
+        --nexo-accent: #00D4AA;
+        --nexo-success: #00D4AA;
+        --nexo-warning: #FFB020;
+        --nexo-error: #FF4D4D;
+        --nexo-info: #0066FF;
+        --nexo-gray-900: #1A1A2E;
+        --nexo-gray-700: #4A4A5A;
+        --nexo-gray-500: #8A8A9A;
+        --nexo-gray-300: #D1D1D9;
+        --nexo-gray-100: #F5F5F7;
+        --nexo-white: #FFFFFF;
+        --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+        --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+        --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+        --nexo-radius-sm: 4px;
+        --nexo-radius-md: 8px;
+        --nexo-radius-lg: 12px;
+        --nexo-radius-xl: 16px;
+        --nexo-transition-fast: 150ms ease;
+    }
+
+    .nexo-container {
+        max-width: 100%;
+        margin: 0 auto;
+        background: var(--nexo-gray-100);
+        min-height: calc(100vh - 70px);
+        padding-bottom: 40px;
+    }
+
+    /* ========== HEADER ========== */
+    .nexo-header {
+        background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%);
+        color: var(--nexo-white);
+        padding: 24px 40px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .nexo-header::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -10%;
+        width: 400px;
+        height: 300%;
+        background: linear-gradient(135deg, var(--nexo-accent) 0%, transparent 60%);
+        opacity: 0.08;
+        transform: rotate(-15deg);
+    }
+
+    .nexo-header-content {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .nexo-header h1 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin: 0 0 4px 0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .nexo-header p {
+        font-size: 0.8rem;
+        color: var(--nexo-gray-300);
+        margin: 0;
+    }
+
+    .nexo-header-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(0, 212, 170, 0.15);
+        border: 1px solid rgba(0, 212, 170, 0.3);
+        color: var(--nexo-accent);
+        padding: 8px 16px;
+        border-radius: 9999px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    /* ========== KPI ROW ========== */
+    .nexo-kpi-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 14px;
+        padding: 16px 40px;
+        background: var(--nexo-white);
+        border-bottom: 1px solid var(--nexo-gray-300);
+    }
+
+    .nexo-kpi-card {
+        background: var(--nexo-white);
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-lg);
+        padding: 14px 18px;
+        position: relative;
+        overflow: hidden;
+        transition: var(--nexo-transition-fast);
+    }
+
+    .nexo-kpi-card:hover {
+        box-shadow: var(--nexo-shadow-md);
+        transform: translateY(-2px);
+    }
+
+    .nexo-kpi-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+    }
+
+    .nexo-kpi-card.kpi-primary::before { background: var(--nexo-primary); }
+    .nexo-kpi-card.kpi-success::before { background: var(--nexo-success); }
+    .nexo-kpi-card.kpi-warning::before { background: var(--nexo-warning); }
+    .nexo-kpi-card.kpi-error::before { background: var(--nexo-error); }
+
+    .nexo-kpi-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: var(--nexo-radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        margin-bottom: 8px;
+    }
+
+    .nexo-kpi-icon.icon-primary { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+    .nexo-kpi-icon.icon-success { background: rgba(0, 212, 170, 0.1); color: var(--nexo-success); }
+    .nexo-kpi-icon.icon-warning { background: rgba(255, 176, 32, 0.1); color: var(--nexo-warning); }
+    .nexo-kpi-icon.icon-error { background: rgba(255, 77, 77, 0.1); color: var(--nexo-error); }
+
+    .nexo-kpi-label {
+        font-size: 0.65rem;
+        font-weight: 600;
+        color: var(--nexo-gray-500);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 2px;
+    }
+
+    .nexo-kpi-value {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: var(--nexo-gray-900);
+        line-height: 1.2;
+    }
+
+    .nexo-kpi-sub {
+        font-size: 0.65rem;
+        color: var(--nexo-gray-500);
+        margin-top: 2px;
+    }
+
+    /* ========== CONTROLES ========== */
+    .nexo-controls {
+        padding: 16px 40px;
+        background: var(--nexo-white);
+        border-bottom: 1px solid var(--nexo-gray-300);
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+    }
+
+    .nexo-control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: 1;
+        min-width: 160px;
+        max-width: 220px;
+    }
+
+    .nexo-control-group.control-search {
+        min-width: 220px;
+        max-width: 300px;
+    }
+
+    .nexo-control-label {
+        font-size: 0.65rem;
+        font-weight: 600;
+        color: var(--nexo-gray-700);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .nexo-input,
+    .nexo-select {
+        padding: 8px 12px;
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        font-size: 0.8rem;
+        color: var(--nexo-gray-900);
+        background: var(--nexo-white);
+        transition: var(--nexo-transition-fast);
+        width: 100%;
+    }
+
+    .nexo-input:focus,
+    .nexo-select:focus {
+        outline: none;
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+    }
+
+    /* ========== BOTONES ========== */
+    .nexo-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border: none;
+        border-radius: var(--nexo-radius-md);
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: var(--nexo-transition-fast);
+        white-space: nowrap;
+    }
+
+    .nexo-btn-primary { background: var(--nexo-primary); color: var(--nexo-white); }
+    .nexo-btn-primary:hover { background: var(--nexo-primary-dark); transform: translateY(-1px); box-shadow: var(--nexo-shadow-md); }
+    .nexo-btn-success { background: var(--nexo-success); color: var(--nexo-white); }
+    .nexo-btn-success:hover { background: #00b894; }
+    .nexo-btn-success:disabled { background: var(--nexo-gray-300); cursor: not-allowed; }
+    .nexo-btn-secondary { background: var(--nexo-gray-100); color: var(--nexo-gray-700); border: 1px solid var(--nexo-gray-300); }
+    .nexo-btn-group { display: flex; gap: 8px; margin-left: auto; }
+
+    /* ========== TOGGLE DE VISTA ========== */
+    .nexo-view-toggle {
+        display: flex;
+        gap: 8px;
+        padding: 14px 40px 0;
+        background: var(--nexo-gray-100);
+    }
+    .view-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 18px;
+        border: 1px solid var(--nexo-gray-300);
+        background: var(--nexo-white);
+        color: var(--nexo-gray-700);
+        border-radius: var(--nexo-radius-md);
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: var(--nexo-transition-fast);
+    }
+    .view-tab:hover { border-color: var(--nexo-primary); color: var(--nexo-primary); }
+    .view-tab.active { background: var(--nexo-primary); color: var(--nexo-white); border-color: var(--nexo-primary); }
+
+    /* ========== CONTENIDO ========== */
+    .nexo-content { padding: 20px 40px; }
+
+    /* ========== TABLA PRINCIPAL ========== */
+    .nexo-table-card {
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg);
+        box-shadow: var(--nexo-shadow-sm);
+        overflow: hidden;
+        border: 1px solid var(--nexo-gray-300);
+    }
+
+    .nexo-table-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 20px;
+        background: var(--nexo-secondary);
+        color: var(--nexo-white);
+    }
+
+    .nexo-table-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .nexo-table-info {
+        font-size: 0.75rem;
+        color: var(--nexo-gray-300);
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .nexo-table-wrapper {
+        overflow-x: auto;
+        max-height: calc(100vh - 420px);
+        overflow-y: auto;
+    }
+
+    .nexo-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.75rem;
+    }
+
+    .nexo-table thead {
+        background: var(--nexo-gray-100);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    .nexo-table th {
+        padding: 10px 8px;
+        text-align: center;
+        font-weight: 700;
+        color: var(--nexo-gray-700);
+        border-bottom: 2px solid var(--nexo-gray-300);
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+    }
+
+    .nexo-table td {
+        padding: 8px 6px;
+        text-align: center;
+        border-bottom: 1px solid var(--nexo-gray-200);
+        vertical-align: middle;
+    }
+
+    .nexo-table tbody tr:hover { background: var(--nexo-primary-light); }
+    .nexo-table tbody tr:nth-child(even) { background: rgba(245, 245, 247, 0.5); }
+    .nexo-table tbody tr:nth-child(even):hover { background: var(--nexo-primary-light); }
+
+    .td-articulo {
+        text-align: left !important;
+        font-weight: 600;
+        color: var(--nexo-gray-900);
+        max-width: 160px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .td-descripcion {
+        text-align: left !important;
+        font-size: 0.7rem;
+        color: var(--nexo-gray-700);
+        max-width: 200px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .td-proveedor {
+        text-align: left !important;
+        font-size: 0.7rem;
+        color: var(--nexo-primary);
+        font-weight: 600;
+        max-width: 200px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .td-money {
+        text-align: right !important;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-weight: 600;
+        white-space: nowrap;
+        color: var(--nexo-gray-700);
+    }
+    .td-money.money-pos { color: #00a884; }
+
+    /* ========== HEADERS TIENDAS ========== */
+    .th-tienda {
+        background: linear-gradient(135deg, var(--nexo-primary-light) 0%, #d4e4ff 100%) !important;
+        color: var(--nexo-primary-dark) !important;
+        min-width: 70px;
+    }
+    .th-total { background: var(--nexo-secondary) !important; color: var(--nexo-white) !important; min-width: 70px; }
+
+    /* ========== BADGES ========== */
+    .despacho-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 32px;
+        padding: 2px 6px;
+        border-radius: var(--nexo-radius-sm);
+        font-weight: 700;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 0.7rem;
+        background: rgba(0, 102, 255, 0.1);
+        color: var(--nexo-primary);
+    }
+    .despacho-badge.badge-total { background: rgba(0, 212, 170, 0.12); color: #00a884; }
+    .despacho-empty { background: var(--nexo-gray-100); color: var(--nexo-gray-400); font-size: 0.6rem; }
+
+    .pct-pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 9999px;
+        background: var(--nexo-primary-light);
+        color: var(--nexo-primary-dark);
+        font-weight: 700;
+        font-size: 0.68rem;
+    }
+
+    /* ========== BARRA DE TASA ========== */
+    .tasa-cell { display: flex; align-items: center; gap: 8px; justify-content: center; }
+    .tasa-bar {
+        position: relative;
+        height: 8px;
+        width: 70px;
+        background: var(--nexo-gray-100);
+        border-radius: 9999px;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+    .tasa-bar-fill { position: absolute; top: 0; left: 0; bottom: 0; border-radius: 9999px; }
+    .tasa-bar-fill.ok { background: var(--nexo-success); }
+    .tasa-bar-fill.warn { background: var(--nexo-warning); }
+    .tasa-bar-fill.bad { background: var(--nexo-error); }
+    .tasa-txt { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 0.7rem; min-width: 42px; text-align: right; }
+    .tasa-txt.ok { color: #00a884; }
+    .tasa-txt.warn { color: #cc8c00; }
+    .tasa-txt.bad { color: var(--nexo-error); }
+
+    /* ========== PAGINACIÓN ========== */
+    .nexo-pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 20px;
+        background: var(--nexo-gray-100);
+        border-top: 1px solid var(--nexo-gray-300);
+    }
+    .nexo-pagination-info { font-size: 0.75rem; color: var(--nexo-gray-600); }
+    .nexo-pagination-controls { display: flex; align-items: center; gap: 8px; }
+    .nexo-pagination-btn {
+        padding: 6px 12px;
+        border: 1px solid var(--nexo-gray-300);
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-sm);
+        font-size: 0.75rem;
+        cursor: pointer;
+        transition: var(--nexo-transition-fast);
+    }
+    .nexo-pagination-btn:hover:not(:disabled) { background: var(--nexo-primary-light); border-color: var(--nexo-primary); }
+    .nexo-pagination-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .nexo-pagination-select { padding: 6px 10px; border: 1px solid var(--nexo-gray-300); border-radius: var(--nexo-radius-sm); font-size: 0.75rem; }
+
+    /* ========== EMPTY STATE ========== */
+    .nexo-empty-state { text-align: center; padding: 50px 20px; color: var(--nexo-gray-500); }
+    .nexo-empty-icon { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
+    .nexo-empty-title { font-size: 1.1rem; font-weight: 700; color: var(--nexo-gray-700); margin-bottom: 6px; }
+    .nexo-empty-text { font-size: 0.8rem; color: var(--nexo-gray-500); max-width: 460px; margin: 0 auto; }
+
+    /* ========== LOADING ========== */
+    .nexo-loading-overlay {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(26, 26, 46, 0.85);
+        backdrop-filter: blur(4px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    }
+    .nexo-loading-content { background: var(--nexo-white); padding: 36px 50px; border-radius: var(--nexo-radius-xl); text-align: center; box-shadow: var(--nexo-shadow-lg); }
+    .nexo-spinner { width: 40px; height: 40px; border: 4px solid var(--nexo-gray-300); border-top-color: var(--nexo-primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 14px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .nexo-loading-text { font-size: 0.9rem; color: var(--nexo-gray-700); font-weight: 600; }
+    .spin { display: inline-block; animation: spin .8s linear infinite; }
+    .nexo-btn:disabled { opacity: .55; cursor: not-allowed; pointer-events: none; }
+
+    /* ========== SELECT2 NEXO OVERRIDE ========== */
+    .select2-container--default .select2-selection--single {
+        height: 38px !important;
+        border: 1px solid var(--nexo-gray-300) !important;
+        border-radius: var(--nexo-radius-md) !important;
+        background: var(--nexo-white) !important;
+        font-size: 0.82rem !important;
+        padding: 4px 0 !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 30px !important; padding-left: 12px !important; color: var(--nexo-gray-700) !important; }
+    .select2-container--default .select2-selection--single .select2-selection__arrow { height: 36px !important; }
+    .select2-container--default .select2-selection--single .select2-selection__placeholder { color: var(--nexo-gray-500) !important; }
+    .select2-dropdown { border: 1px solid var(--nexo-gray-300) !important; border-radius: var(--nexo-radius-md) !important; box-shadow: var(--nexo-shadow-md) !important; }
+    .select2-results__option--highlighted[aria-selected] { background-color: var(--nexo-primary) !important; }
+
+    input[type="date"].nexo-input { font-size: 0.82rem; color: var(--nexo-gray-700); }
+
+    /* ========== RESPONSIVE ========== */
+    @media (max-width: 1200px) {
+        .nexo-header, .nexo-kpi-row, .nexo-controls, .nexo-content, .nexo-view-toggle {
+            padding-left: 16px;
+            padding-right: 16px;
+        }
+    }
+    @media (max-width: 768px) {
+        .nexo-header-content { flex-direction: column; align-items: flex-start; gap: 12px; }
+        .nexo-header-badge { display: none; }
+        .nexo-controls { flex-direction: column; }
+        .nexo-control-group, .nexo-control-group.control-search { min-width: 100%; max-width: 100%; }
+        .nexo-btn-group { margin-left: 0; width: 100%; }
+        .nexo-btn { flex: 1; }
+        .nexo-kpi-row { grid-template-columns: repeat(2, 1fr); }
+        .nexo-table-wrapper { max-height: calc(100vh - 320px); }
+        .nexo-pagination { flex-direction: column; gap: 8px; }
+    }
+    @media (max-width: 576px) {
+        .nexo-header h1 { font-size: 1.1rem; }
+        .nexo-header, .nexo-kpi-row, .nexo-controls, .nexo-content, .nexo-view-toggle { padding-left: 12px; padding-right: 12px; }
+        .nexo-kpi-row { grid-template-columns: 1fr; gap: 8px; }
+        .nexo-kpi-value { font-size: 1.1rem; }
+        .nexo-btn-group { flex-direction: column; gap: 0.5rem; }
+        .nexo-btn { width: 100%; }
+        .nexo-table { font-size: 0.7rem; }
+        .nexo-table th, .nexo-table td { padding: 0.375rem 0.5rem; white-space: nowrap; }
+        .td-articulo { max-width: 100px; }
+    }
+</style>
+
+<!-- ========== LOADING OVERLAY ========== -->
+<div class="nexo-loading-overlay" id="loading-overlay" style="display: none;">
+    <div class="nexo-loading-content">
+        <div class="nexo-spinner"></div>
+        <div class="nexo-loading-text" id="loading-text">Cargando despachos...</div>
+    </div>
+</div>
+
+<div class="nexo-container">
+    <!-- ========== HEADER ========== -->
+    <div class="nexo-header">
+        <div class="nexo-header-content">
+            <div>
+                <h1>
+                    <i class="ri-truck-line"></i>
+                    Despachos a Tiendas
+                </h1>
+                <p>Qué se despachó a cada tienda en el período, por artículo y proveedor (traspasos de salida)</p>
+            </div>
+            <div class="nexo-header-badge">
+                <i class="ri-store-3-line"></i>
+                <span>{{ sucursales|length }} Sucursales</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== KPI ROW ========== -->
+    <div class="nexo-kpi-row" id="kpi-row">
+        <div class="nexo-kpi-card kpi-primary">
+            <div class="nexo-kpi-icon icon-primary"><i class="ri-price-tag-3-line"></i></div>
+            <div class="nexo-kpi-label">Artículos Despachados</div>
+            <div class="nexo-kpi-value" id="kpi-articulos">-</div>
+            <div class="nexo-kpi-sub" id="kpi-proveedores">&nbsp;</div>
+        </div>
+        <div class="nexo-kpi-card kpi-primary">
+            <div class="nexo-kpi-icon icon-primary"><i class="ri-truck-line"></i></div>
+            <div class="nexo-kpi-label">Unidades Despachadas</div>
+            <div class="nexo-kpi-value" id="kpi-despachado">-</div>
+            <div class="nexo-kpi-sub" id="kpi-tiendas">&nbsp;</div>
+        </div>
+        <div class="nexo-kpi-card kpi-success">
+            <div class="nexo-kpi-icon icon-success"><i class="ri-money-dollar-circle-line"></i></div>
+            <div class="nexo-kpi-label">Valor Despachado (costo)</div>
+            <div class="nexo-kpi-value" id="kpi-valor">-</div>
+            <div class="nexo-kpi-sub" id="kpi-valor-sub">&nbsp;</div>
+        </div>
+        <div class="nexo-kpi-card kpi-success">
+            <div class="nexo-kpi-icon icon-success"><i class="ri-inbox-archive-line"></i></div>
+            <div class="nexo-kpi-label">Recibido en Destino</div>
+            <div class="nexo-kpi-value" id="kpi-recibido">-</div>
+            <div class="nexo-kpi-sub">unidades confirmadas</div>
+        </div>
+        <div class="nexo-kpi-card kpi-warning">
+            <div class="nexo-kpi-icon icon-warning"><i class="ri-pie-chart-2-line"></i></div>
+            <div class="nexo-kpi-label">Tasa de Recepción</div>
+            <div class="nexo-kpi-value" id="kpi-tasa">-</div>
+            <div class="nexo-kpi-sub">recibido / despachado</div>
+        </div>
+        <div class="nexo-kpi-card kpi-error">
+            <div class="nexo-kpi-icon icon-error"><i class="ri-time-line"></i></div>
+            <div class="nexo-kpi-label">Pendiente por Recibir</div>
+            <div class="nexo-kpi-value" id="kpi-pendiente">-</div>
+            <div class="nexo-kpi-sub">aún no confirmado</div>
+        </div>
+    </div>
+
+    <!-- ========== CONTROLES ========== -->
+    <div class="nexo-controls">
+        <div class="nexo-control-group" style="min-width: 130px;">
+            <label class="nexo-control-label"><i class="ri-calendar-line"></i> Desde</label>
+            <input type="date" id="filtro-fecha-desde" class="nexo-input" value="{{ fecha_desde_default }}">
+        </div>
+
+        <div class="nexo-control-group" style="min-width: 130px;">
+            <label class="nexo-control-label"><i class="ri-calendar-check-line"></i> Hasta</label>
+            <input type="date" id="filtro-fecha-hasta" class="nexo-input" value="{{ fecha_hasta_default }}">
+        </div>
+
+        <div class="nexo-control-group" style="min-width: 170px;">
+            <label class="nexo-control-label"><i class="ri-store-2-line"></i> Tienda Destino</label>
+            <select id="filtro-tienda" class="nexo-select">
+                <option value="">-- Todas las tiendas --</option>
+                {% for s in sucursales %}
+                <option value="{{ s.id }}">{{ s.alias }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="nexo-control-group" style="min-width: 200px;">
+            <label class="nexo-control-label"><i class="ri-building-line"></i> Proveedor</label>
+            <select id="filtro-proveedor" class="nexo-select select2-proveedor" style="width: 100%;">
+                <option value="">-- Todos los proveedores --</option>
+            </select>
+        </div>
+
+        <div class="nexo-control-group control-search">
+            <label class="nexo-control-label"><i class="ri-search-line"></i> Buscar</label>
+            <input type="text" id="busqueda-articulo" class="nexo-input"
+                   placeholder="Artículo, descripción o proveedor..." onkeyup="filtrarLocal()">
+        </div>
+
+        <div class="nexo-btn-group">
+            <button class="nexo-btn nexo-btn-secondary" onclick="limpiarFiltros()">
+                <i class="ri-delete-bin-line"></i> Limpiar
+            </button>
+            <button class="nexo-btn nexo-btn-primary" id="btn-buscar" onclick="cargarReporte()">
+                <i class="ri-search-line"></i> Buscar
+            </button>
+            <button class="nexo-btn nexo-btn-success" onclick="exportarCSV()" id="btn-exportar" disabled>
+                <i class="ri-file-excel-2-line"></i> Exportar
+            </button>
+        </div>
+    </div>
+
+    <!-- ========== TOGGLE DE VISTA ========== -->
+    <div class="nexo-view-toggle">
+        <button class="view-tab active" id="tab-articulo" onclick="cambiarVista('articulo')">
+            <i class="ri-price-tag-3-line"></i> Por Artículo
+        </button>
+        <button class="view-tab" id="tab-proveedor" onclick="cambiarVista('proveedor')">
+            <i class="ri-building-line"></i> Por Proveedor
+        </button>
+    </div>
+
+    <!-- ========== CONTENIDO PRINCIPAL ========== -->
+    <div class="nexo-content" id="contenido-reporte">
+        <div class="nexo-empty-state">
+            <div class="nexo-empty-icon"><i class="ri-truck-line" style="font-size: 2.5rem; color: var(--nexo-primary);"></i></div>
+            <div class="nexo-empty-title">Reporte de Despachos a Tiendas</div>
+            <div class="nexo-empty-text">
+                El período viene predefinido en <strong>esta semana</strong>. Ajusta filtros y haz clic en <strong>"Buscar"</strong>.
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let datosCompletos = [];        // pivote por artículo
+let porProveedorData = [];      // indicadores por proveedor
+let resumenActual = {};
+let tiendasDisponibles = [];
+let vistaActual = 'articulo';
+let terminoBusqueda = '';
+
+// Paginación (sólo vista por artículo)
+let paginaActual = 1;
+let registrosPorPagina = 50;
+
+// ========== INICIALIZACIÓN ==========
+document.addEventListener('DOMContentLoaded', function() {
+    cargarProveedoresSelect2();
+    cargarReporte();   // carga automática con la semana actual
+});
+
+// ========== LOADING ==========
+function mostrarLoading(mostrar, texto = 'Cargando despachos...') {
+    const overlay = document.getElementById('loading-overlay');
+    const loadingText = document.getElementById('loading-text');
+    if (overlay) {
+        overlay.style.display = mostrar ? 'flex' : 'none';
+        if (loadingText) loadingText.textContent = texto;
+    }
+}
+
+// ========== CARGAR PROVEEDORES ==========
+async function cargarProveedoresSelect2() {
+    try {
+        const response = await fetch('/app/obtener_proveedores_para_reporte/');
+        const data = await response.json();
+        if (data.success) {
+            const select = document.getElementById('filtro-proveedor');
+            (data.proveedores || []).forEach(prov => {
+                const option = document.createElement('option');
+                option.value = prov.id;
+                option.textContent = prov.nombre;
+                select.appendChild(option);
+            });
+        }
+        $('.select2-proveedor').select2({
+            placeholder: 'Buscar proveedor...',
+            allowClear: true,
+            width: '100%',
+            language: { noResults: function() { return 'Sin resultados'; } }
+        });
+        // Recargar al cambiar el proveedor server-side
+        $('.select2-proveedor').on('change', function() { cargarReporte(); });
+    } catch (error) {
+        console.error('Error cargando proveedores:', error);
+    }
+}
+
+// ========== CARGAR REPORTE ==========
+async function cargarReporte() {
+    const btnBuscar = document.getElementById('btn-buscar');
+    if (btnBuscar.disabled) return;
+
+    const fechaDesde = document.getElementById('filtro-fecha-desde').value;
+    const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
+    const tiendaId = document.getElementById('filtro-tienda').value;
+    const proveedorId = $('#filtro-proveedor').val();
+
+    btnBuscar.disabled = true;
+    btnBuscar.innerHTML = '<i class="ri-loader-4-line spin"></i> Consultando...';
+    mostrarLoading(true);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+    try {
+        let url = '/app/api/reporte-despachos-tiendas/';
+        const params = new URLSearchParams();
+        if (fechaDesde) params.append('fecha_desde', fechaDesde);
+        if (fechaHasta) params.append('fecha_hasta', fechaHasta);
+        if (tiendaId) params.append('sucursal_destino_id', tiendaId);
+        if (proveedorId) params.append('proveedor_id', proveedorId);
+        if (params.toString()) url += '?' + params.toString();
+
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        const data = await response.json();
+        mostrarLoading(false);
+
+        if (data.success) {
+            datosCompletos = data.datos || [];
+            porProveedorData = data.por_proveedor || [];
+            resumenActual = data.resumen || {};
+            tiendasDisponibles = data.tiendas || [];
+            paginaActual = 1;
+
+            actualizarKPIs(resumenActual);
+            render();
+
+            document.getElementById('btn-exportar').disabled = datosCompletos.length === 0;
+        } else {
+            mostrarError(data.error || 'Error desconocido');
+        }
+    } catch (error) {
+        clearTimeout(timeoutId);
+        mostrarLoading(false);
+        if (error.name === 'AbortError') {
+            mostrarError('La consulta tomó demasiado tiempo. Reduce el rango de fechas o filtra por tienda.');
+        } else {
+            console.error('Error:', error);
+            mostrarError('No se pudo conectar con el servidor. Intenta de nuevo.');
+        }
+    } finally {
+        btnBuscar.disabled = false;
+        btnBuscar.innerHTML = '<i class="ri-search-line"></i> Buscar';
+    }
+}
+
+function mostrarError(mensaje) {
+    document.getElementById('contenido-reporte').innerHTML = `
+        <div class="nexo-empty-state">
+            <div class="nexo-empty-icon"><i class="ri-error-warning-line" style="font-size:2rem;color:var(--nexo-warning);"></i></div>
+            <div class="nexo-empty-title">No se pudo cargar</div>
+            <div class="nexo-empty-text">${mensaje}</div>
+        </div>
+    `;
+}
+
+// ========== KPIs ==========
+function actualizarKPIs(r) {
+    document.getElementById('kpi-articulos').textContent = formatearNumero(r.total_articulos);
+    document.getElementById('kpi-proveedores').textContent = (r.total_proveedores || 0) + ' proveedores';
+    document.getElementById('kpi-despachado').textContent = formatearNumero(r.total_despachado);
+    document.getElementById('kpi-tiendas').textContent = (r.total_tiendas || 0) + ' tiendas';
+    document.getElementById('kpi-valor').textContent = formatearMoneda(r.valor_costo);
+    document.getElementById('kpi-valor-sub').textContent = '+ sobreprecio ' + formatearMoneda(r.valor_sobreprecio);
+    document.getElementById('kpi-recibido').textContent = formatearNumero(r.total_recibido);
+    document.getElementById('kpi-tasa').textContent = (r.tasa_recepcion != null ? r.tasa_recepcion : 0) + '%';
+    document.getElementById('kpi-pendiente').textContent = formatearNumero(r.total_pendiente);
+}
+
+// ========== TOGGLE DE VISTA ==========
+function cambiarVista(v) {
+    vistaActual = v;
+    document.getElementById('tab-articulo').classList.toggle('active', v === 'articulo');
+    document.getElementById('tab-proveedor').classList.toggle('active', v === 'proveedor');
+    paginaActual = 1;
+    render();
+}
+
+// ========== FILTRO LOCAL ==========
+function filtrarLocal() {
+    terminoBusqueda = document.getElementById('busqueda-articulo').value.trim().toLowerCase();
+    paginaActual = 1;
+    render();
+}
+
+// ========== RENDER DISPATCHER ==========
+function render() {
+    if (vistaActual === 'proveedor') {
+        renderProveedores();
+    } else {
+        renderArticulos();
+    }
+}
+
+// ========== RENDER: POR ARTÍCULO ==========
+function renderArticulos() {
+    const contenido = document.getElementById('contenido-reporte');
+
+    const datos = datosCompletos.filter(p => coincideBusqueda(
+        [p.articulo, p.descripcion, p.proveedor]
+    ));
+
+    if (!datos.length) { renderVacio(contenido); return; }
+
+    const tiendasSet = new Set();
+    datos.forEach(item => Object.keys(item.tiendas || {}).forEach(t => tiendasSet.add(t)));
+    const tiendasList = Array.from(tiendasSet).sort();
+
+    const totalRegistros = datos.length;
+    const totalPaginas = Math.ceil(totalRegistros / registrosPorPagina);
+    const inicio = (paginaActual - 1) * registrosPorPagina;
+    const fin = Math.min(inicio + registrosPorPagina, totalRegistros);
+    const datosPagina = datos.slice(inicio, fin);
+
+    let html = `
+        <div class="nexo-table-card">
+            <div class="nexo-table-header">
+                <div class="nexo-table-title"><i class="ri-table-line"></i> Detalle por Artículo y Tienda</div>
+                <div class="nexo-table-info">
+                    <span><i class="ri-file-list-line"></i> ${formatearNumero(totalRegistros)} artículos</span>
+                    <span><i class="ri-store-2-line"></i> ${tiendasList.length} tiendas</span>
+                </div>
+            </div>
+            <div class="nexo-table-wrapper">
+                <table class="nexo-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">Artículo</th>
+                            <th style="text-align: left;">Descripción</th>
+                            <th style="text-align: left;">Proveedor</th>
+    `;
+    tiendasList.forEach(t => { html += `<th class="th-tienda">${escapeHtml(t)}</th>`; });
+    html += `<th class="th-total">TOTAL</th><th class="th-total">COSTO $</th></tr></thead><tbody>`;
+
+    datosPagina.forEach(p => {
+        html += `
+            <tr>
+                <td class="td-articulo" title="${escapeHtml(p.articulo)}">${escapeHtml(p.articulo)}</td>
+                <td class="td-descripcion" title="${escapeHtml(p.descripcion)}">${escapeHtml(p.descripcion) || '-'}</td>
+                <td class="td-proveedor" title="${escapeHtml(p.proveedor)}">${escapeHtml(p.proveedor)}</td>
+        `;
+        tiendasList.forEach(t => {
+            const val = (p.tiendas || {})[t];
+            html += val && val > 0
+                ? `<td><span class="despacho-badge">${formatearNumero(val)}</span></td>`
+                : `<td><span class="despacho-badge despacho-empty">-</span></td>`;
+        });
+        html += `<td><span class="despacho-badge badge-total">${formatearNumero(p.total)}</span></td>`;
+        html += `<td class="td-money">${formatearMoneda(p.valor_costo)}</td></tr>`;
+    });
+
+    html += `</tbody></table></div>`;
+    html += paginacionHtml(inicio, fin, totalRegistros, totalPaginas);
+    html += `</div>`;
+    contenido.innerHTML = html;
+}
+
+// ========== RENDER: POR PROVEEDOR ==========
+function renderProveedores() {
+    const contenido = document.getElementById('contenido-reporte');
+
+    const datos = porProveedorData.filter(p => coincideBusqueda([p.proveedor]));
+    if (!datos.length) { renderVacio(contenido); return; }
+
+    const totalDesp = datos.reduce((a, p) => a + (p.despachado || 0), 0);
+
+    let html = `
+        <div class="nexo-table-card">
+            <div class="nexo-table-header">
+                <div class="nexo-table-title"><i class="ri-building-line"></i> Indicadores por Proveedor</div>
+                <div class="nexo-table-info">
+                    <span><i class="ri-group-line"></i> ${datos.length} proveedores</span>
+                    <span><i class="ri-truck-line"></i> ${formatearNumero(totalDesp)} uds</span>
+                </div>
+            </div>
+            <div class="nexo-table-wrapper">
+                <table class="nexo-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">Proveedor</th>
+                            <th>Despachado</th>
+                            <th>% del Total</th>
+                            <th>Artículos</th>
+                            <th>Tiendas</th>
+                            <th>Costo origen</th>
+                            <th>Sobreprecio</th>
+                            <th>Costo destino</th>
+                            <th>Recibido</th>
+                            <th>Tasa Recepción</th>
+                            <th>Pendiente</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+
+    datos.forEach(p => {
+        const cls = claseTasa(p.tasa_recepcion);
+        const pend = p.pendiente || 0;
+        html += `
+            <tr>
+                <td class="td-proveedor" title="${escapeHtml(p.proveedor)}">${escapeHtml(p.proveedor)}</td>
+                <td><span class="despacho-badge badge-total">${formatearNumero(p.despachado)}</span></td>
+                <td><span class="pct-pill">${p.pct_unidades}%</span></td>
+                <td>${formatearNumero(p.articulos)}</td>
+                <td>${formatearNumero(p.tiendas)}</td>
+                <td class="td-money">${formatearMoneda(p.valor_costo)}</td>
+                <td class="td-money money-pos">${formatearMoneda(p.valor_sobreprecio)}</td>
+                <td class="td-money">${formatearMoneda(p.valor_destino)}</td>
+                <td>${formatearNumero(p.recibido)}</td>
+                <td>
+                    <div class="tasa-cell">
+                        <div class="tasa-bar"><div class="tasa-bar-fill ${cls}" style="width:${Math.min(p.tasa_recepcion,100)}%"></div></div>
+                        <span class="tasa-txt ${cls}">${p.tasa_recepcion}%</span>
+                    </div>
+                </td>
+                <td>${pend > 0 ? `<span class="despacho-badge" style="background:rgba(255,77,77,0.1);color:var(--nexo-error);">${formatearNumero(pend)}</span>` : '<span class="despacho-empty despacho-badge">0</span>'}</td>
+            </tr>
+        `;
+    });
+
+    html += `</tbody></table></div></div>`;
+    contenido.innerHTML = html;
+}
+
+// ========== HELPERS DE RENDER ==========
+function coincideBusqueda(campos) {
+    if (!terminoBusqueda) return true;
+    return campos.some(c => (c || '').toString().toLowerCase().includes(terminoBusqueda));
+}
+
+function claseTasa(t) {
+    if (t >= 95) return 'ok';
+    if (t >= 80) return 'warn';
+    return 'bad';
+}
+
+function renderVacio(contenido) {
+    contenido.innerHTML = `
+        <div class="nexo-empty-state">
+            <div class="nexo-empty-icon">📦</div>
+            <div class="nexo-empty-title">Sin resultados</div>
+            <div class="nexo-empty-text">No se encontraron despachos con los filtros seleccionados.</div>
+        </div>
+    `;
+}
+
+function paginacionHtml(inicio, fin, totalRegistros, totalPaginas) {
+    return `
+        <div class="nexo-pagination">
+            <div class="nexo-pagination-info">
+                Mostrando ${inicio + 1} - ${fin} de ${formatearNumero(totalRegistros)} artículos
+            </div>
+            <div class="nexo-pagination-controls">
+                <select class="nexo-pagination-select" onchange="cambiarRegistrosPorPagina(this.value)">
+                    <option value="25" ${registrosPorPagina === 25 ? 'selected' : ''}>25 por página</option>
+                    <option value="50" ${registrosPorPagina === 50 ? 'selected' : ''}>50 por página</option>
+                    <option value="100" ${registrosPorPagina === 100 ? 'selected' : ''}>100 por página</option>
+                    <option value="200" ${registrosPorPagina === 200 ? 'selected' : ''}>200 por página</option>
+                </select>
+                <button class="nexo-pagination-btn" onclick="irPagina(1)" ${paginaActual === 1 ? 'disabled' : ''}><i class="ri-skip-back-line"></i></button>
+                <button class="nexo-pagination-btn" onclick="irPagina(${paginaActual - 1})" ${paginaActual === 1 ? 'disabled' : ''}><i class="ri-arrow-left-s-line"></i></button>
+                <span style="font-size: 0.75rem; padding: 0 8px;">Página ${paginaActual} de ${totalPaginas}</span>
+                <button class="nexo-pagination-btn" onclick="irPagina(${paginaActual + 1})" ${paginaActual === totalPaginas ? 'disabled' : ''}><i class="ri-arrow-right-s-line"></i></button>
+                <button class="nexo-pagination-btn" onclick="irPagina(${totalPaginas})" ${paginaActual === totalPaginas ? 'disabled' : ''}><i class="ri-skip-forward-line"></i></button>
+            </div>
+        </div>
+    `;
+}
+
+// ========== PAGINACIÓN ==========
+function irPagina(pagina) {
+    const datos = datosCompletos.filter(p => coincideBusqueda([p.articulo, p.descripcion, p.proveedor]));
+    const totalPaginas = Math.ceil(datos.length / registrosPorPagina);
+    if (pagina < 1 || pagina > totalPaginas) return;
+    paginaActual = pagina;
+    renderArticulos();
+    document.querySelector('.nexo-table-wrapper')?.scrollTo(0, 0);
+}
+
+function cambiarRegistrosPorPagina(valor) {
+    registrosPorPagina = parseInt(valor);
+    paginaActual = 1;
+    renderArticulos();
+}
+
+// ========== EXPORTAR CSV (cliente) ==========
+function exportarCSV() {
+    let cab, filas;
+    if (vistaActual === 'proveedor') {
+        const datos = porProveedorData.filter(p => coincideBusqueda([p.proveedor]));
+        if (!datos.length) { alert('No hay datos para exportar'); return; }
+        cab = ['Proveedor', 'Despachado', '% Total', 'Articulos', 'Tiendas', 'Costo origen', 'Sobreprecio', 'Costo destino', 'Recibido', 'Tasa recepcion %', 'Pendiente'];
+        filas = [cab];
+        datos.forEach(p => filas.push([
+            p.proveedor, p.despachado, p.pct_unidades, p.articulos, p.tiendas,
+            p.valor_costo, p.valor_sobreprecio, p.valor_destino, p.recibido, p.tasa_recepcion, p.pendiente
+        ]));
+    } else {
+        const datos = datosCompletos.filter(p => coincideBusqueda([p.articulo, p.descripcion, p.proveedor]));
+        if (!datos.length) { alert('No hay datos para exportar'); return; }
+        const tiendasSet = new Set();
+        datos.forEach(item => Object.keys(item.tiendas || {}).forEach(t => tiendasSet.add(t)));
+        const tiendasList = Array.from(tiendasSet).sort();
+        cab = ['Articulo', 'Descripcion', 'Proveedor', ...tiendasList, 'TOTAL', 'Costo origen'];
+        filas = [cab];
+        datos.forEach(p => {
+            const fila = [p.articulo, p.descripcion, p.proveedor];
+            tiendasList.forEach(t => fila.push((p.tiendas || {})[t] || 0));
+            fila.push(p.total, p.valor_costo);
+            filas.push(fila);
+        });
+    }
+
+    const csv = filas.map(f => f.map(c => {
+        const s = (c === null || c === undefined) ? '' : String(c);
+        return '"' + s.replace(/"/g, '""') + '"';
+    }).join(';')).join('\n');
+
+    const desde = document.getElementById('filtro-fecha-desde').value || 'periodo';
+    const hasta = document.getElementById('filtro-fecha-hasta').value || '';
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `despachos_${vistaActual}_${desde}_${hasta}.csv`;
+    link.click();
+}
+
+// ========== HELPERS ==========
+function formatearNumero(num) {
+    if (!num) return '0';
+    return parseFloat(num).toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function formatearMoneda(num) {
+    if (num === null || num === undefined || isNaN(num)) return '$0';
+    return '$' + parseFloat(num).toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function limpiarFiltros() {
+    document.getElementById('filtro-fecha-desde').value = '{{ fecha_desde_default }}';
+    document.getElementById('filtro-fecha-hasta').value = '{{ fecha_hasta_default }}';
+    document.getElementById('filtro-tienda').value = '';
+    $('.select2-proveedor').val('').trigger('change.select2');
+    document.getElementById('busqueda-articulo').value = '';
+    terminoBusqueda = '';
+    cargarReporte();
+}
+</script>
+
+    </div>
+</div>
+
+{% include 'layout/footer.html' %}

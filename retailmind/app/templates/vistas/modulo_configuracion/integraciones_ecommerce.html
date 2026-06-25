@@ -162,8 +162,35 @@
         font-size: 0.75rem;
         color: var(--nexo-gray-500);
         line-height: 1.3;
+        word-break: break-word;
+        max-width: 280px;
     }
     .ultima-sync-info strong { color: var(--nexo-gray-900); display: block; }
+    .ultima-sync-info .verif-line {
+        margin-top: 0.35rem;
+        padding-top: 0.35rem;
+        border-top: 1px dashed var(--nexo-gray-300);
+    }
+    .verif-line .verif-label { font-weight: 600; color: var(--nexo-gray-700); }
+    .badge-muertas {
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 10px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        background: #f9eaea;
+        color: #a13030;
+    }
+    .badge-muertas.cero { background: #e8f9f3; color: #008060; }
+    .cobertura-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .cobertura-table th, .cobertura-table td { padding: 4px 8px; border-bottom: 1px solid var(--nexo-gray-100); text-align: left; }
+    .cobertura-table th { color: var(--nexo-gray-500); text-transform: uppercase; font-size: 0.7rem; }
+    .liveness-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0; }
+    .liveness-chip { padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; background: var(--nexo-gray-100); color: var(--nexo-gray-700); }
+    .liveness-chip.ok { background: #e8f9f3; color: #008060; }
+    .liveness-chip.bad { background: #f9eaea; color: #a13030; }
+    .muertas-list { max-height: 220px; overflow-y: auto; font-size: 0.75rem; }
+    .muertas-list .motivo { font-weight: 600; color: #a13030; }
 
     .resultado-log {
         background: #1A1A2E;
@@ -265,9 +292,16 @@
                             <div class="ultima-sync-info">
                                 {% if c.ultima_sync_at %}
                                     <strong>{{ c.ultima_sync_at|date:"d/m/Y H:i" }}</strong>
-                                    {{ c.ultima_sync_resultado|truncatechars:60 }}
+                                    {{ c.ultima_sync_resultado }}
                                 {% else %}
                                     Nunca sincronizado
+                                {% endif %}
+                                {% if c.ultima_verif_at %}
+                                    <div class="verif-line">
+                                        <span class="verif-label">Verificado:</span>
+                                        {{ c.ultima_verif_at|date:"d/m/Y H:i" }}<br>
+                                        {{ c.ultima_verif_resultado }}
+                                    </div>
                                 {% endif %}
                             </div>
                         </td>
@@ -277,6 +311,9 @@
                             </button>
                             <button class="btn-icon-action" title="Sincronizar ahora" onclick="sincronizarAhora({{ c.id }}, '{{ c.nombre|escapejs }}')">
                                 <i class="ri-refresh-line"></i>
+                            </button>
+                            <button class="btn-icon-action" title="Verificar fotos" onclick="verificarFotos({{ c.id }}, '{{ c.nombre|escapejs }}')">
+                                <i class="ri-shield-check-line"></i>
                             </button>
                             <button class="btn-icon-action" title="Editar" onclick="abrirModalEditar({{ c.id }})">
                                 <i class="ri-pencil-line"></i>
@@ -519,6 +556,102 @@ function sincronizarAhora(id, nombre) {
         .catch(err => {
             document.getElementById('modalResultadoCuerpo').innerHTML =
                 `<div class="alert alert-danger">Error: ${err}</div>`;
+        });
+}
+
+function escHtml(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function renderReporteVerif(data) {
+    if (!data.ok) {
+        return `<div class="alert alert-danger">Error: ${escHtml(data.error || 'desconocido')}</div>`;
+    }
+    const r = data.resultado;
+    const cob = r.cobertura;
+    const u = r.urls;
+
+    let html = `<div class="alert alert-info" style="margin-bottom:0.75rem;">
+        <strong>Cobertura de ${escHtml(cob.empresa)}:</strong>
+        ${cob.con_foto}/${cob.articulos} artículos con foto (${cob.sin_foto} sin foto)
+    </div>`;
+
+    // Cobertura por sucursal
+    if (cob.por_sucursal && cob.por_sucursal.length) {
+        html += `<table class="cobertura-table"><thead><tr>
+            <th>Sucursal</th><th>Artículos</th><th>Con foto</th><th>Sin foto</th><th>%</th>
+        </tr></thead><tbody>`;
+        cob.por_sucursal.forEach(s => {
+            const pct = s.articulos ? Math.round(100 * s.con_foto / s.articulos) : 0;
+            html += `<tr>
+                <td>${escHtml(s.sucursal)}</td>
+                <td>${s.articulos}</td>
+                <td>${s.con_foto}</td>
+                <td>${s.sin_foto}</td>
+                <td>${pct}%</td>
+            </tr>`;
+        });
+        html += `</tbody></table>`;
+    }
+
+    // Liveness de URLs
+    if (u.verificadas) {
+        const c = u.counters;
+        const marca = u.muestra ? ` (muestra de ${u.verificadas}/${u.total_urls})` : ` (${u.verificadas} URLs)`;
+        html += `<p style="margin:0.9rem 0 0.3rem;"><strong>URLs verificadas${marca}:</strong></p>`;
+        html += `<div class="liveness-chips">
+            <span class="liveness-chip ok">${c.ok} ok</span>
+            <span class="liveness-chip ${c.http_404 ? 'bad' : ''}">${c.http_404} 404</span>
+            <span class="liveness-chip ${c.no_imagen ? 'bad' : ''}">${c.no_imagen} no-imagen</span>
+            <span class="liveness-chip ${c.http_otro ? 'bad' : ''}">${c.http_otro} otro</span>
+            <span class="liveness-chip ${c.error_red ? 'bad' : ''}">${c.error_red} red</span>
+        </div>`;
+
+        if (u.muertas_ejemplos && u.muertas_ejemplos.length) {
+            html += `<details open><summary>URLs con problema (${u.muertas_ejemplos.length})</summary>
+                <div class="muertas-list mt-2">`;
+            u.muertas_ejemplos.forEach(m => {
+                html += `<div>
+                    <span class="motivo">[${escHtml(m.motivo)}${m.status ? ' ' + m.status : ''}]</span>
+                    ${escHtml(m.articulo)} →
+                    <a href="${escHtml(m.url)}" target="_blank" rel="noopener">${escHtml(m.url)}</a>
+                </div>`;
+            });
+            html += `</div></details>`;
+        } else {
+            html += `<div class="alert alert-success mt-2">Todas las URLs verificadas devuelven una imagen viva.</div>`;
+        }
+    } else {
+        html += `<p class="text-muted">Liveness de URL omitido (solo cobertura).</p>`;
+    }
+
+    html += `<p class="text-muted mt-2"><small>Para el barrido completo (todas las URLs):
+        <code>python manage.py verificar_fotos_ecommerce --codigo ${escHtml(r.codigo)}</code></small></p>`;
+    return html;
+}
+
+function verificarFotos(id, nombre) {
+    document.getElementById('modalResultadoTitulo').textContent = `Verificar fotos: ${nombre}`;
+    document.getElementById('modalResultadoCuerpo').innerHTML = `
+        <div class="text-center" style="padding:1rem;">
+            <div class="spinner-border text-primary"></div>
+            <p class="mt-2">Verificando cobertura y URLs (muestra)...</p>
+        </div>`;
+    new bootstrap.Modal(document.getElementById('modalResultado')).show();
+
+    fetch(`/app/configuracion/integraciones-ecommerce/${id}/verificar/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': csrfToken()},
+    })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('modalResultadoCuerpo').innerHTML = renderReporteVerif(data);
+        })
+        .catch(err => {
+            document.getElementById('modalResultadoCuerpo').innerHTML =
+                `<div class="alert alert-danger">Error: ${escHtml(err)}</div>`;
         });
 }
 

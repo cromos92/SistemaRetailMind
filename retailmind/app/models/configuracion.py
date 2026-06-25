@@ -61,6 +61,16 @@ class CredencialesEcommerce(models.Model):
     ultima_sync_at = models.DateTimeField(null=True, blank=True)
     ultima_sync_resultado = models.CharField(max_length=255, blank=True, default='')
 
+    # Resultado de la última VERIFICACIÓN (cobertura + liveness de URL). Espeja
+    # ``ultima_sync_*``: el sync dice cuántos SKU matchearon; la verificación dice
+    # si esas URLs realmente devuelven una imagen viva.
+    ultima_verif_at = models.DateTimeField(null=True, blank=True)
+    ultima_verif_resultado = models.CharField(max_length=255, blank=True, default='')
+    ultima_verif_detalle = models.TextField(
+        blank=True, default='',
+        help_text='JSON con la muestra de URLs muertas de la última verificación.',
+    )
+
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
 

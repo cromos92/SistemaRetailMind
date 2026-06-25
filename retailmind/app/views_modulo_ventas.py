@@ -836,7 +836,18 @@ def crear_ticket(request):
     """Crear nuevo ticket de venta"""
     try:
         data = json.loads(request.body)
-        
+
+        # ticket_venta.html envía { cliente: {...} } anidado; aplanar para que el
+        # resto de la vista pueda usar data.get('cliente_nombre') etc.
+        _cli_raw = data.get('cliente')
+        if isinstance(_cli_raw, dict):
+            data.setdefault('cliente_nombre', _cli_raw.get('nombre', ''))
+            data.setdefault('cliente_rut', _cli_raw.get('rut', ''))
+            data.setdefault('cliente_email', _cli_raw.get('email', ''))
+            data.setdefault('cliente_telefono', _cli_raw.get('telefono', '') or _cli_raw.get('celular', ''))
+            data.setdefault('cliente_celular', _cli_raw.get('celular', ''))
+            data.setdefault('cliente_fecha_nacimiento', _cli_raw.get('fecha_nacimiento', ''))
+
         # Validaciones básicas
         vendedor_id = data.get('vendedor_id')
         productos = data.get('productos', [])
@@ -1000,9 +1011,11 @@ def crear_ticket(request):
                     'rut': ticket.cliente_rut,
                     'email': ticket.cliente_email,
                     'telefono': ticket.cliente_telefono,
+                    'celular': data.get('cliente_celular', '') or '',
+                    'fecha_nacimiento': data.get('cliente_fecha_nacimiento', '') or '',
                 }
                 guardar_o_actualizar_cliente(cliente_datos, request.user)
-        
+
         return JsonResponse({
             'success': True,
             'message': 'Ticket creado exitosamente',
@@ -1156,9 +1169,11 @@ def crear_ticket_venta(request):
                 'rut': ticket.cliente_rut,
                 'email': ticket.cliente_email,
                 'telefono': ticket.cliente_telefono,
+                'celular': data.get('cliente_celular', '') or '',
+                'fecha_nacimiento': data.get('cliente_fecha_nacimiento', '') or '',
             }
             guardar_o_actualizar_cliente(cliente_datos, request.user)
-        
+
         return JsonResponse({
             'success': True,
             'message': 'Ticket creado exitosamente',
@@ -1837,6 +1852,22 @@ def buscar_cliente_rut(request):
         rut_limpio = rut.replace('.', '').replace('-', '').strip()
         rut_formateado = formatear_rut(rut_limpio)
 
+        # Detectar RUT de persona jurídica (no fideliza)
+        from .services.fidelizacion_service import es_rut_empresa as _es_empresa
+        _cliente_es_empresa = _es_empresa(rut_formateado)
+
+        # Tasas dinámicas desde el programa activo (fallback a defaults)
+        try:
+            from app.models import ProgramaFidelizacion as _Prog
+            _prog_activo = _Prog.get_activo()
+            _tasas_fid = {
+                'PLATA': float(_prog_activo.tasa_plata),
+                'ORO':   float(_prog_activo.tasa_oro),
+                'PLATINO': float(_prog_activo.tasa_platino),
+            }
+        except Exception:
+            _tasas_fid = {'PLATA': 3.0, 'ORO': 4.0, 'PLATINO': 5.0}
+
         # 1) Tabla Empresa — match aquí da cliente_id usable como receptor.
         empresa_cliente = Empresa.objects.filter(
             Q(rut__iexact=rut_formateado) |
@@ -1873,7 +1904,7 @@ def buscar_cliente_rut(request):
             ).first()
 
             fidelizacion_data = None
-            if crm_cliente:
+            if crm_cliente and not _cliente_es_empresa:
                 if crm_cliente.celular:
                     cliente_data['celular'] = crm_cliente.celular
                 if crm_cliente.fecha_nacimiento:
@@ -1882,12 +1913,11 @@ def buscar_cliente_rut(request):
                     from .services import fidelizacion_service
                     saldo_info = fidelizacion_service.consultar_saldo(cliente=crm_cliente)
                     if saldo_info.get('nivel'):
-                        _tasas = {'PLATA': 3, 'ORO': 4, 'PLATINO': 5}
                         fidelizacion_data = {
                             'saldo_puntos': saldo_info.get('saldo_puntos', 0),
                             'valor_pesos': saldo_info.get('valor_pesos', 0),
                             'nivel': saldo_info.get('nivel', 'PLATA'),
-                            'tasa': _tasas.get(saldo_info.get('nivel', 'PLATA'), 3),
+                            'tasa': _tasas_fid.get(saldo_info.get('nivel', 'PLATA'), 3.0),
                         }
                 except Exception:
                     pass
@@ -1899,6 +1929,7 @@ def buscar_cliente_rut(request):
                 'cliente_id': empresa_cliente.id,
                 'cliente_origen': 'EMPRESA',
                 'fidelizacion': fidelizacion_data,
+                'es_empresa': _cliente_es_empresa,
             })
 
         # 2) Tabla Cliente (CRM): solo enriquece datos para auto-llenar el form.
@@ -1926,25 +1957,26 @@ def buscar_cliente_rut(request):
                 'email_facturacion': cliente.email or '',
             }
             fidelizacion_data = None
-            try:
-                from .services import fidelizacion_service
-                saldo_info = fidelizacion_service.consultar_saldo(cliente=cliente)
-                if saldo_info.get('nivel'):
-                    _tasas = {'PLATA': 3, 'ORO': 4, 'PLATINO': 5}
-                    fidelizacion_data = {
-                        'saldo_puntos': saldo_info.get('saldo_puntos', 0),
-                        'valor_pesos': saldo_info.get('valor_pesos', 0),
-                        'nivel': saldo_info.get('nivel', 'PLATA'),
-                        'tasa': _tasas.get(saldo_info.get('nivel', 'PLATA'), 3),
-                    }
-            except Exception:
-                pass
+            if not _cliente_es_empresa:
+                try:
+                    from .services import fidelizacion_service
+                    saldo_info = fidelizacion_service.consultar_saldo(cliente=cliente)
+                    if saldo_info.get('nivel'):
+                        fidelizacion_data = {
+                            'saldo_puntos': saldo_info.get('saldo_puntos', 0),
+                            'valor_pesos': saldo_info.get('valor_pesos', 0),
+                            'nivel': saldo_info.get('nivel', 'PLATA'),
+                            'tasa': _tasas_fid.get(saldo_info.get('nivel', 'PLATA'), 3.0),
+                        }
+                except Exception:
+                    pass
             return JsonResponse({
                 'success': True,
                 'cliente': cliente_data,
                 'mensaje': 'Cliente encontrado en CRM (se creará Empresa al asignar)',
                 'cliente_origen': 'CRM',
                 'fidelizacion': fidelizacion_data,
+                'es_empresa': _cliente_es_empresa,
                 # No incluimos cliente_id: el backend resolverá por RUT y, si
                 # es necesario, creará la Empresa con los datos del cliente.
             })
@@ -1975,11 +2007,40 @@ def buscar_cliente_rut(request):
                 'fecha_nacimiento': '',
                 'email_facturacion': ticket_con_cliente.cliente_email_facturacion or '',
             }
+            # Enriquecer fecha_nacimiento y celular desde CRM si el cliente ya existe ahí.
+            # El ticket no almacena fecha_nacimiento, así que siempre hay que leerla del CRM.
+            crm_tk = Cliente.objects.filter(
+                Q(rut__iexact=rut_formateado) | Q(rut__icontains=rut_limpio)
+            ).first()
+            if crm_tk:
+                if crm_tk.fecha_nacimiento:
+                    cliente_data['fecha_nacimiento'] = crm_tk.fecha_nacimiento.isoformat()
+                if crm_tk.celular and not cliente_data['celular']:
+                    cliente_data['celular'] = crm_tk.celular
+            # Intentar cargar fidelización (igual que paths EMPRESA/CRM)
+            _fid_ticket = None
+            if not _cliente_es_empresa:
+                try:
+                    from .services import fidelizacion_service as _fid_svc
+                    _saldo_tk = _fid_svc.consultar_saldo(rut=rut_formateado)
+                    if _saldo_tk and _saldo_tk.get('saldo_puntos', 0) > 0:
+                        _nivel_tk = _saldo_tk.get('nivel', 'PLATA')
+                        _fid_ticket = {
+                            'saldo_puntos': _saldo_tk.get('saldo_puntos', 0),
+                            'valor_pesos':  _saldo_tk.get('valor_pesos', 0),
+                            'nivel': _nivel_tk,
+                            'tasa': _tasas_fid.get(_nivel_tk, 3.0),
+                        }
+                except Exception:
+                    pass
+
             return JsonResponse({
                 'success': True,
                 'cliente': cliente_data,
                 'mensaje': 'Cliente encontrado en tickets anteriores',
                 'cliente_origen': 'TICKET',
+                'fidelizacion': _fid_ticket,
+                'es_empresa': _cliente_es_empresa,
             })
 
         return JsonResponse({
@@ -16430,6 +16491,8 @@ def guardar_cliente_pos(request):
         ciudad = (data.get('ciudad') or '').strip()
         telefono_secundario = (data.get('telefono_secundario') or '').strip()
         email_facturacion = (data.get('email_facturacion') or '').strip()
+        fecha_nacimiento_str = (data.get('fecha_nacimiento') or '').strip()
+        celular_fid = (data.get('celular') or telefono_secundario or '').strip()
 
         if not nombre and not rut_raw:
             return JsonResponse({
@@ -16496,6 +16559,33 @@ def guardar_cliente_pos(request):
                 contacto2=telefono_secundario or '',
             )
             _log.info("Cliente creado (Empresa ID %s) - giro: %s", cliente.id, cliente.giro)
+
+        # Sync fecha_nacimiento y celular al CRM (tabla Cliente) para personas naturales.
+        # La tabla Empresa no tiene esos campos; los guardamos en el CRM para fidelización.
+        if (fecha_nacimiento_str or celular_fid) and rut:
+            try:
+                from .services.fidelizacion_service import es_rut_empresa as _is_emp
+                if not _is_emp(rut):
+                    from app.models import Cliente as _Cliente
+                    from datetime import date as _date
+                    crm_cli, _ = _Cliente.objects.get_or_create(
+                        rut=rut,
+                        defaults={'nombre': nombre or rut, 'activo': True}
+                    )
+                    _changed = []
+                    if fecha_nacimiento_str and not crm_cli.fecha_nacimiento:
+                        try:
+                            crm_cli.fecha_nacimiento = _date.fromisoformat(fecha_nacimiento_str)
+                            _changed.append('fecha_nacimiento')
+                        except ValueError:
+                            pass
+                    if celular_fid and not crm_cli.celular:
+                        crm_cli.celular = celular_fid
+                        _changed.append('celular')
+                    if _changed:
+                        crm_cli.save(update_fields=_changed)
+            except Exception:
+                _log.exception("Error sync CRM en guardar_cliente_pos rut=%s", rut)
 
         return JsonResponse({
             'success': True,

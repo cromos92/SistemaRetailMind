@@ -17,17 +17,16 @@ Resiliencia bajo carga (que un pico de usuarios no tumbe nada):
 """
 from __future__ import annotations
 
-import html as _html
 import logging
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 
 from django.core.cache import caches
 from django.db.models import Q
-from django.utils.html import strip_tags
 
 from app.models import CredencialesEcommerce
 from app.services import ecommerce_http
+from app.utils_texto import limpiar_html
 
 logger = logging.getLogger('app')
 
@@ -79,7 +78,7 @@ def _clp(value) -> Optional[int]:
 def _normalizar_variante(v: dict) -> dict:
     return {
         'sku': v.get('sku') or '',
-        'nombre': v.get('name') or '',
+        'nombre': limpiar_html(v.get('name')),
         'atributos': v.get('attributes') or {},
         'stock': v.get('stock') or 0,
         'precio': _clp(v.get('price_override')),  # None → hereda el del producto
@@ -103,11 +102,12 @@ def _normalizar_producto(p: dict) -> dict:
 
     return {
         'sku': p.get('sku') or '',
-        'nombre': p.get('name') or '',
-        # La descripción es HTML (CKEditor); la app la muestra como texto plano,
-        # así que limpiamos las etiquetas y desescapamos las entidades.
-        'descripcion': _html.unescape(strip_tags(p.get('description') or '')).strip(),
-        'marca': p.get('brand') or '',
+        # nombre/descripcion/marca pueden venir con HTML (CKEditor); la app los
+        # muestra como texto plano, así que los saneamos con limpiar_html (única
+        # fuente de verdad). Antes solo se saneaba la descripción.
+        'nombre': limpiar_html(p.get('name')),
+        'descripcion': limpiar_html(p.get('description')),
+        'marca': limpiar_html(p.get('brand')),
         # Disponibilidad canónica del ecommerce (cubre track_inventory=False y el
         # stock agregado de variantes); cae a stock>0 si el campo no viene.
         'disponible': p.get('is_available'),
@@ -219,7 +219,7 @@ def listar_categorias(tienda: str) -> dict:
         categorias = [
             {
                 'id': str(c.get('id') or ''),
-                'nombre': c.get('name') or '',
+                'nombre': limpiar_html(c.get('name')),
                 'slug': c.get('slug') or '',
             }
             for c in (data.get('results') or [])

@@ -2,12 +2,16 @@
 Tests para generación y parseo de archivos TXT DTE en formato Acepta.
 Cubre: factura con/sin descuento, boleta, descuentos globales, parser, retrocompatibilidad.
 """
+import json
+from datetime import date
 from types import SimpleNamespace
 
 from django.test import TestCase
 from app.views_modulo_documentos import (
     generar_txt_dte_acepta,
     generar_txt_boleta_acepta,
+    generar_txt_nota_credito_acepta,
+    construir_datos_txt_desde_dte,
     parsear_txt_acepta,
     construir_nombre_y_descripcion_item,
     construir_detalle_txt_desde_dte_productos,
@@ -890,3 +894,211 @@ class TestValidacionLargosSII(TestCase):
         resultado = truncar_campo_sii(texto, 'CampoInexistente')
         # No trunca porque no está en MAX_LENGTHS_SII
         self.assertEqual(len(resultado), 500)
+
+
+def _datos_nc_base(tipo_documento=61):
+    """Datos mínimos para una Nota de Crédito/Débito (61/56) afecta."""
+    return {
+        'documento': {
+            'tipo_documento': tipo_documento,
+            'folio': 408,
+            'fecha_emision': '2026-02-28',
+            'forma_pago': 2,
+            'fecha_vencimiento': '2026-02-28',
+        },
+        'emisor': {
+            'rut': '76123456-7',
+            'razon_social': 'Empresa Test',
+            'giro': 'Comercio',
+            'acteco': '461000',
+            'sucursal': 'CASA MATRIZ',
+            'direccion': 'Av Test 123',
+            'comuna': 'Santiago',
+            'ciudad': 'Santiago',
+            'codigo_vendedor': 'V01',
+        },
+        'receptor': {
+            'rut': '77888999-K',
+            'razon_social': 'Cliente Test',
+            'giro': 'Comercio',
+            'direccion': 'Calle 1',
+            'comuna': 'Las Condes',
+            'ciudad': 'Santiago',
+        },
+        'totales': {
+            'monto_neto': 100000,
+            'monto_exento': 0,
+            'tasa_iva': 19,
+            'iva': 19000,
+            'monto_total': 119000,
+        },
+        'detalle': [{
+            'codigo': 'SRV', 'nombre': 'Servicio', 'descripcion': '',
+            'cantidad': 1, 'unidad': 'UN', 'precio_unitario': 100000,
+            'monto_item': 100000, 'indicador_exencion': '',
+        }],
+        'referencias': [{
+            'tipo_documento': 33, 'folio': '709', 'fecha': '2026-02-20', 'razon': '1',
+        }],
+    }
+
+
+class TestNotaCreditoDebitoExencion(TestCase):
+    """NC (61) / ND (56): exención heredada del documento referenciado y ND comparte formato Acepta de la NC."""
+
+    def _linea_totales(self, txt):
+        # En el formato NC/ND la línea de totales es la 5ª (índice 4):
+        # IdDoc, Emisor, Receptor, Transporte, Totales.
+        return txt.split('\n')[4].split('|')
+
+    def test_nc_afecta_lleva_iva(self):
+        # NC que referencia una factura afecta (33): tasa 19 e IVA presentes.
+        datos = _datos_nc_base(61)
+        txt = generar_txt_nota_credito_acepta(datos)
+        campos = self._linea_totales(txt)
+        self.assertEqual(campos[0], '100000')   # neto
+        self.assertEqual(campos[2], '19')        # tasa IVA
+        self.assertEqual(campos[3], '19000')     # iva
+        self.assertEqual(campos[4], '119000')   # total
+
+    def test_nc_exenta_sin_iva(self):
+        # NC que anula una factura exenta (34): monto a EXENTO, tasa/IVA vacíos.
+        datos = _datos_nc_base(61)
+        datos['totales'] = {
+            'monto_neto': 0, 'monto_exento': 415000,
+            'tasa_iva': 0, 'iva': 0, 'monto_total': 415000,
+        }
+        datos['detalle'][0].update({
+            'precio_unitario': 415000, 'monto_item': 415000, 'indicador_exencion': 1,
+        })
+        datos['referencias'] = [
+            {'tipo_documento': 34, 'folio': '366', 'fecha': '2026-02-28', 'razon': '1'},
+        ]
+        txt = generar_txt_nota_credito_acepta(datos)
+        campos = self._linea_totales(txt)
+        self.assertEqual(campos[1], '415000')   # exento
+        self.assertEqual(campos[2], '')          # tasa vacía → sin IVA
+        self.assertEqual(campos[4], '415000')   # total = exento
+        # La línea de detalle (índice 6: 5 cabeceras + '~') lleva IndExe=1.
+        detalle = txt.split('\n')[6]
+        self.assertEqual(detalle.split('|')[0], '1')
+
+    def test_nd_56_usa_formato_nc_y_escribe_tipo_56(self):
+        # El dispatcher rutea el 56 al generador de NC y escribe 56 en el IdDoc.
+        datos = _datos_nc_base(56)
+        txt = generar_txt_dte_acepta(datos)
+        primera_linea = txt.split('\n')[0]
+        self.assertTrue(primera_linea.startswith('56|'))
+
+    def test_construir_detalle_marca_indexe_segun_es_exenta(self):
+        dp = SimpleNamespace(
+            productoTalla=None, descripcion='Arriendo Febrero', stock=1,
+            precio_unitario=415000, precio=415000,
+            descuento_pct=0, descuento_monto=0, monto_item=415000,
+        )
+        # NC/ND exenta → IndExe=1 por línea.
+        detalle_exenta = construir_detalle_txt_desde_dte_productos(
+            [dp], tipo_numerico=61, es_exenta=True)
+        self.assertEqual(detalle_exenta[0]['indicador_exencion'], 1)
+
+        # NC/ND afecta → sin IndExe.
+        detalle_afecta = construir_detalle_txt_desde_dte_productos(
+            [dp], tipo_numerico=61, es_exenta=False)
+        self.assertEqual(detalle_afecta[0]['indicador_exencion'], '')
+
+        # Backward-compat: Factura Exenta (34) sigue marcando IndExe sin el flag.
+        detalle_34 = construir_detalle_txt_desde_dte_productos([dp], tipo_numerico=34)
+        self.assertEqual(detalle_34[0]['indicador_exencion'], 1)
+
+
+class TestConstruirDatosTxtDesdeDteExencion(TestCase):
+    """Camino real BD→TXT (`construir_datos_txt_desde_dte`): detección de exención
+    de NC/ND a partir de los montos persistidos. Cubre el fix donde una NC/ND que
+    referencia un documento exento debe emitirse sin IVA aunque su tipo (61/56) no
+    lo indique."""
+
+    def setUp(self):
+        from app.tests.factories import crear_empresa, crear_sucursal
+        from app.models import Dte, Dte_Productos
+        self.Dte = Dte
+        self.Dte_Productos = Dte_Productos
+        self.emisor = crear_empresa(nombre='Emisor', rut='76.000.000-0')
+        self.receptor = crear_empresa(nombre='Receptor', rut='77.888.999-K')
+        self.sucursal = crear_sucursal(empresa=self.emisor, alias='CASA MATRIZ',
+                                       comuna='Antofagasta', ciudad='Antofagasta')
+
+    def _crear_nc(self, tipo_documento, monto_neto, monto_con_iva, ref_tipo):
+        """Crea una NC/ND con un ítem de concepto y referencia a un doc original."""
+        dte = self.Dte.objects.create(
+            emisor=self.emisor,
+            receptor=self.receptor,
+            numero_documento=5019,
+            tipo_documento=tipo_documento,
+            monto_neto=monto_neto,
+            monto_con_iva=monto_con_iva,
+            estado_pago='PENDIENTE',
+            estado_dte='EMITIDO',
+            responsable='tester',
+            fecha_emision=date(2026, 2, 28),
+            fecha_vencimiento=date(2026, 2, 28),
+            diasCredito=0,
+            bultos=0,
+            unidades_productos=0,
+            tipo_transaccion='VENTA',
+            referencias=json.dumps([{
+                'tipo_documento': ref_tipo, 'folio': '366',
+                'fecha': '2026-02-28', 'razon': '1',
+            }]),
+            sucursal=self.sucursal,
+            es_nota_credito=(tipo_documento == 'NOTA DE CREDITO'),
+        )
+        self.Dte_Productos.objects.create(
+            dte=dte, productoTalla=None, descripcion='[PAR] Arriendo Febrero',
+            costo=0, sobreprecio=0, precio=monto_con_iva,
+            precio_unitario=monto_con_iva, monto_item=monto_con_iva,
+            stock=1, activo=True,
+        )
+        return dte
+
+    def test_nc_sobre_exenta_se_construye_sin_iva(self):
+        # Emitida exenta → monto_con_iva == monto_neto. Debe ir todo a EXENTO.
+        dte = self._crear_nc('NOTA DE CREDITO', 415000, 415000, ref_tipo=34)
+        datos = construir_datos_txt_desde_dte(dte)
+
+        self.assertEqual(datos['totales']['monto_neto'], 0)
+        self.assertEqual(datos['totales']['monto_exento'], 415000)
+        self.assertEqual(datos['totales']['tasa_iva'], 0)
+        self.assertEqual(datos['totales']['iva'], 0)
+        self.assertEqual(datos['totales']['monto_total'], 415000)
+        self.assertEqual(datos['detalle'][0]['indicador_exencion'], 1)
+
+        # Y el TXT resultante deja la tasa vacía y el exento poblado.
+        txt = generar_txt_dte_acepta(datos)
+        campos_totales = txt.split('\n')[4].split('|')
+        self.assertEqual(campos_totales[1], '415000')  # exento
+        self.assertEqual(campos_totales[2], '')          # tasa vacía
+
+    def test_nc_sobre_afecta_se_construye_con_iva(self):
+        # Emitida afecta → monto_con_iva = neto * 1.19. Debe llevar IVA.
+        dte = self._crear_nc('NOTA DE CREDITO', 100000, 119000, ref_tipo=33)
+        datos = construir_datos_txt_desde_dte(dte)
+
+        self.assertEqual(datos['totales']['monto_neto'], 100000)
+        self.assertEqual(datos['totales']['monto_exento'], 0)
+        self.assertEqual(datos['totales']['tasa_iva'], 19)
+        self.assertEqual(datos['totales']['iva'], 19000)
+        self.assertEqual(datos['detalle'][0]['indicador_exencion'], '')
+
+    def test_nota_debito_mapea_a_56_y_hereda_exencion(self):
+        # ND exenta: tipo_numerico 56 y exención heredada del doc referenciado.
+        dte = self._crear_nc('NOTA DE DEBITO', 415000, 415000, ref_tipo=41)
+        datos = construir_datos_txt_desde_dte(dte)
+
+        self.assertEqual(datos['documento']['tipo_documento'], 56)
+        self.assertEqual(datos['totales']['monto_exento'], 415000)
+        self.assertEqual(datos['totales']['iva'], 0)
+        self.assertEqual(datos['detalle'][0]['indicador_exencion'], 1)
+
+        # El dispatcher rutea 56 al formato NC y escribe 56 en el IdDoc.
+        txt = generar_txt_dte_acepta(datos)
+        self.assertTrue(txt.split('\n')[0].startswith('56|'))

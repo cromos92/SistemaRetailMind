@@ -3011,19 +3011,19 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
             tbody.append(`
                 <tr class="table-danger-subtle" style="background-color: rgba(255, 77, 77, 0.06);">
                     <td>
-                        <strong>${dte.tipo_documento_display || dte.tipo_documento || 'DTE'} #${dte.numero_documento}</strong>
+                        <strong>${_escapeHtmlDte(dte.tipo_documento_display || dte.tipo_documento || 'DTE')} #${_escapeHtmlDte(dte.numero_documento)}</strong>
                         <br><small class="text-muted">${fecha}</small>
                     </td>
                     <td>
-                        <strong>${dte.sucursal_origen || '-'}</strong>
-                        <br><small class="text-muted">${dte.emisor || '-'}</small>
+                        <strong>${_escapeHtmlDte(dte.sucursal_origen || '-')}</strong>
+                        <br><small class="text-muted">${_escapeHtmlDte(dte.emisor || '-')}</small>
                     </td>
                     <td colspan="5">
                         <div class="fw-semibold text-danger">
-                            <i class="bi bi-exclamation-triangle me-1"></i>${dte.motivo_rechazo || 'Sin motivo'}
+                            <i class="bi bi-exclamation-triangle me-1"></i>${_escapeHtmlDte(dte.motivo_rechazo || 'Sin motivo')}
                         </div>
                         <small class="text-muted">
-                            Destino: <strong>${dte.sucursal_destino || '-'}</strong> · ${dte.unidades || 0} uds · $${montoFmt} con IVA · Sin recepción iniciada
+                            Destino: <strong>${_escapeHtmlDte(dte.sucursal_destino || '-')}</strong> · ${dte.unidades || 0} uds · $${montoFmt} con IVA · Sin recepción iniciada
                         </small>
                     </td>
                     <td><span class="badge bg-danger">RECHAZADO</span></td>
@@ -3126,16 +3126,16 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
         tbody.append(`
             <tr>
                 <td>
-                    <strong>${prod.tipo_documento || 'DTE'} #${prod.dte_numero}</strong>
+                    <strong>${_escapeHtmlDte(prod.tipo_documento || 'DTE')} #${_escapeHtmlDte(prod.dte_numero)}</strong>
                     <br><small class="text-muted">${fecha}</small>
                 </td>
                 <td>
-                    <strong>${prod.sucursal_origen || '-'}</strong>
-                    <br><small class="text-muted">${prod.emisor || '-'}</small>
+                    <strong>${_escapeHtmlDte(prod.sucursal_origen || '-')}</strong>
+                    <br><small class="text-muted">${_escapeHtmlDte(prod.emisor || '-')}</small>
                 </td>
                 <td>
-                    <div class="fw-semibold">${prod.producto_nombre || '-'}</div>
-                    <small class="text-muted">SKU ${prod.sku || '-'} · Talla ${prod.talla || '-'}</small>
+                    <div class="fw-semibold">${_escapeHtmlDte(prod.producto_nombre || '-')}</div>
+                    <small class="text-muted">SKU ${_escapeHtmlDte(prod.sku || '-')} · Talla ${_escapeHtmlDte(prod.talla || '-')}</small>
                 </td>
                 <td class="text-center">${prod.cantidad_esperada || 0}</td>
                 <td class="text-center">${prod.cantidad_recibida || 0}</td>
@@ -5286,17 +5286,17 @@ function verDTERecepcionado(dteId) {
                 
                 tbody.append(`
                     <tr class="${rowClass}">
-                        <td><small class="font-monospace">${prod.sku}</small></td>
-                        <td><small>${prod.descripcion}</small></td>
-                        <td><small>${prod.articulo || '-'}</small></td>
-                        <td><small>${prod.color || '-'}</small></td>
-                        <td><small>${prod.marca || '-'}</small></td>
-                        <td class="text-center"><span class="badge bg-secondary">${prod.talla}</span></td>
+                        <td><small class="font-monospace">${_escapeHtmlDte(prod.sku)}</small></td>
+                        <td><small>${_escapeHtmlDte(prod.descripcion)}</small></td>
+                        <td><small>${_escapeHtmlDte(prod.articulo || '-')}</small></td>
+                        <td><small>${_escapeHtmlDte(prod.color || '-')}</small></td>
+                        <td><small>${_escapeHtmlDte(prod.marca || '-')}</small></td>
+                        <td class="text-center"><span class="badge bg-secondary">${_escapeHtmlDte(prod.talla)}</span></td>
                         <td class="text-center"><strong>${prod.cantidad_esperada}</strong></td>
                         <td class="text-center"><strong class="text-success">${prod.cantidad_recepcionada}</strong></td>
                         <td class="text-center"><strong class="text-secondary">${prod.cantidad_faltante}</strong></td>
                         <td>${estadoBadge}</td>
-                        <td><small class="text-muted">${prod.observaciones || '-'}</small></td>
+                        <td><small class="text-muted">${_escapeHtmlDte(prod.observaciones || '-')}</small></td>
                     </tr>
                 `);
             });
@@ -5421,9 +5421,9 @@ function renderizarProductosCorreccion() {
         const estadoBadge = getEstadoBadge(prod.estado);
         tbody.append(`
             <tr>
-                <td><small class="font-monospace">${prod.sku}</small></td>
-                <td><small>${prod.descripcion}</small></td>
-                <td class="text-center"><span class="badge bg-secondary">${prod.talla}</span></td>
+                <td><small class="font-monospace">${_escapeHtmlDte(prod.sku)}</small></td>
+                <td><small>${_escapeHtmlDte(prod.descripcion)}</small></td>
+                <td class="text-center"><span class="badge bg-secondary">${_escapeHtmlDte(prod.talla)}</span></td>
                 <td class="text-center"><strong>${prod.cantidad_esperada}</strong></td>
                 <td class="text-center"><strong class="text-success">${prod.cantidad_recepcionada}</strong></td>
                 <td class="text-center"><strong class="text-danger">${prod.cantidad_faltante}</strong></td>
@@ -5748,11 +5748,11 @@ function renderTablaEmitidos() {
                     <i class="bi bi-diagram-3"></i>
                 </button>`;
         }
-        const origenHtml = d.sucursal_origen ? `<br><small class="text-muted">desde ${d.sucursal_origen}</small>` : '';
+        const origenHtml = d.sucursal_origen ? `<br><small class="text-muted">desde ${_escapeHtmlDte(d.sucursal_origen)}</small>` : '';
         tbody.append(`
             <tr class="${esRechazado ? 'table-danger' : ''}">
-                <td><strong>${d.tipo_documento}</strong><br><span class="text-muted">#${d.numero_documento}</span>${origenHtml}</td>
-                <td>${d.sucursal_destino || d.receptor || '-'}</td>
+                <td><strong>${_escapeHtmlDte(d.tipo_documento)}</strong><br><span class="text-muted">#${_escapeHtmlDte(d.numero_documento)}</span>${origenHtml}</td>
+                <td>${_escapeHtmlDte(d.sucursal_destino || d.receptor || '-')}</td>
                 <td>${d.fecha_emision || '-'}</td>
                 <td>${d.unidades_productos} uds</td>
                 <td>${_ajusteFormatearPesos(d.monto_con_iva)}</td>

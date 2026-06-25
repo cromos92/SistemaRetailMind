@@ -1703,11 +1703,14 @@ def obtener_dtes_rechazados_api(request):
             'items': items,
             'total': len(items)
         })
-        
-    except Exception as e:
+
+    except Exception:
+        # Loguear el detalle (antes se devolvía str(e) crudo al cliente, lo que
+        # filtraba estructura interna y no dejaba rastro en logs).
+        logger.exception("Error en obtener_dtes_rechazados_api")
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': 'No se pudieron cargar los DTEs rechazados.'
         }, status=500)
 
 
@@ -2239,19 +2242,22 @@ def emitidos_recepcionados_api(request):
                 else (dte.receptor.nombre if dte.receptor else '-')
             )
 
-            # Contar NCs ya emitidas sobre este DTE (para UI informativa)
-            ajustes_count = Dte.objects.filter(
-                documento_afectado=dte,
-                estado_dte__in=['EMITIDO', 'ACEPTADO'],
-            ).count()
+            # NCs/ajustes ya emitidos sobre este DTE. Una sola query (antes se
+            # ejecutaban DOS idénticas: una para .count() y otra para iterar) y
+            # con select_related de los campos que _diagnostico_nc lee de cada NC
+            # (documento_afectado + su sucursal, y la sucursal de la NC), lo que
+            # evita 2 queries extra por NC dentro del diagnóstico.
+            ncs_hijas = list(
+                Dte.objects.filter(
+                    documento_afectado=dte,
+                    estado_dte__in=['EMITIDO', 'ACEPTADO'],
+                ).select_related('documento_afectado__sucursal', 'sucursal')
+            )
+            ajustes_count = len(ncs_hijas)
 
             # Detectar si alguna NC hija quedó sin los movimientos de
             # reversa (bug histórico). Se reutiliza el mismo diagnóstico
             # que usa la pantalla "NCs por reparar".
-            ncs_hijas = Dte.objects.filter(
-                documento_afectado=dte,
-                estado_dte__in=['EMITIDO', 'ACEPTADO'],
-            )
             ncs_stock_pendiente = 0
             nc_ids_pendientes = []
             try:
@@ -10239,10 +10245,11 @@ def cargarDteCompra(request):
                 notas_credito_numeros = [nc['voucher'] for nc in notas_credito_objs if nc.get('voucher')]
 
                 # Compensaciones con factura asociadas (otra factura usada como pago/neteo).
-                # 'Compensación con Factura' = constante METODO_COMPENSACION (views_modulo_compras.py).
+                # Incluye mismo-proveedor (METODO_COMPENSACION) y factura emitida a este
+                # proveedor (METODO_COMPENSACION_EMITIDA) — ver views_modulo_compras.py.
                 compensaciones_objs = Dte_Detalle_Pago.objects.filter(
                     dte=d,
-                    metodo_pago='Compensación con Factura'
+                    metodo_pago__in=['Compensación con Factura', 'Compensación con Factura Emitida']
                 ).values('id', 'monto', 'voucher')
 
                 compensaciones_total = sum(c['monto'] for c in compensaciones_objs) if compensaciones_objs else 0
@@ -11550,9 +11557,9 @@ def pagosDTE(request, dte_id):
             dte_id=dte_id
         ).exclude(
             # Excluir instrumentos no-efectivo: se muestran aparte (NC y compensaciones
-            # con factura). 'Compensación con Factura' = constante METODO_COMPENSACION
-            # en views_modulo_compras.py.
-            metodo_pago__in=['Nota de Crédito', 'Compensación con Factura']
+            # con factura, mismo-proveedor y emitidas). Ver constantes en
+            # views_modulo_compras.py (METODO_COMPENSACION / METODO_COMPENSACION_EMITIDA).
+            metodo_pago__in=['Nota de Crédito', 'Compensación con Factura', 'Compensación con Factura Emitida']
         ).order_by('id')
 
         pagos = []
@@ -12512,11 +12519,11 @@ def obtener_asociaciones_dte(request, dte_id):
                 'fecha': p['fecha_pago'].strftime('%Y-%m-%d') if p.get('fecha_pago') else '',
             })
 
-        # Compensaciones con factura (otra factura usada como pago)
+        # Compensaciones con factura (otra factura usada como pago: mismo proveedor o emitida)
         compensaciones = []
         pagos_comp = Dte_Detalle_Pago.objects.filter(
-            dte=dte, metodo_pago='Compensación con Factura'
-        ).values('id', 'voucher', 'monto', 'notas', 'fecha_pago')
+            dte=dte, metodo_pago__in=['Compensación con Factura', 'Compensación con Factura Emitida']
+        ).values('id', 'voucher', 'monto', 'notas', 'fecha_pago', 'metodo_pago')
         for p in pagos_comp:
             compensaciones.append({
                 'pago_id': p['id'],
@@ -12524,6 +12531,7 @@ def obtener_asociaciones_dte(request, dte_id):
                 'monto': float(p['monto'] or 0),
                 'motivo': p.get('notas') or '',
                 'fecha': p['fecha_pago'].strftime('%Y-%m-%d') if p.get('fecha_pago') else '',
+                'es_emitida': p.get('metodo_pago') == 'Compensación con Factura Emitida',
             })
 
         return JsonResponse({
@@ -24682,7 +24690,7 @@ def emitir_dte_concepto(request):
                 'error': 'Faltan datos obligatorios (tipo documento, receptor, fecha)'
             }, status=400)
 
-        tipos_validos = ['FACTURA ELECTRONICA', 'FACTURA EXENTA', 'BOLETA ELECTRONICA', 'NOTA DE CREDITO', 'GUIA']
+        tipos_validos = ['FACTURA ELECTRONICA', 'FACTURA EXENTA', 'BOLETA ELECTRONICA', 'NOTA DE CREDITO', 'NOTA DE DEBITO', 'GUIA']
         if tipo_documento not in tipos_validos:
             return JsonResponse({
                 'success': False,
@@ -24695,10 +24703,10 @@ def emitir_dte_concepto(request):
                 'error': 'Debe incluir al menos un concepto'
             }, status=400)
 
-        if tipo_documento == 'NOTA DE CREDITO' and not referencia:
+        if tipo_documento in ('NOTA DE CREDITO', 'NOTA DE DEBITO') and not referencia:
             return JsonResponse({
                 'success': False,
-                'error': 'Nota de Crédito requiere referencia a documento original'
+                'error': 'Nota de Crédito/Débito requiere referencia a documento original'
             }, status=400)
 
         sucursal_id = request.session.get('idSucursalActual')
@@ -24721,7 +24729,14 @@ def emitir_dte_concepto(request):
                 precio = int(float(item.get('precio_unitario', 0)))
                 subtotal_neto += cantidad * precio
 
-            es_exenta = tipo_documento == 'FACTURA EXENTA'
+            # NC/ND heredan la exención del documento que referencian: si el
+            # referenciado es exento (Factura Exenta 34 / Boleta Exenta 41) la
+            # nota se emite sin IVA; si es afecto (33/39) lleva IVA 19%.
+            es_nc_nd = tipo_documento in ('NOTA DE CREDITO', 'NOTA DE DEBITO')
+            if es_nc_nd and referencia:
+                es_exenta = int(referencia.get('tipo_documento') or 33) in (34, 41)
+            else:
+                es_exenta = tipo_documento == 'FACTURA EXENTA'
             subtotal_decimal = Decimal(str(subtotal_neto))
 
             if es_exenta:
@@ -24744,7 +24759,7 @@ def emitir_dte_concepto(request):
 
             es_nc = tipo_documento == 'NOTA DE CREDITO'
 
-            if es_nc and referencia:
+            if es_nc_nd and referencia:
                 referencias_json = json.dumps([{
                     'tipo_documento': int(referencia.get('tipo_documento', 33)),
                     'folio': str(referencia.get('folio', '')),
@@ -24757,7 +24772,7 @@ def emitir_dte_concepto(request):
                     referencias_json += f". {observaciones}"
 
             doc_afectado = None
-            if es_nc and referencia:
+            if es_nc_nd and referencia:
                 folio_ref = str(referencia.get('folio', ''))
                 if folio_ref:
                     doc_afectado = Dte.objects.filter(

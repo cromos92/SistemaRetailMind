@@ -66,6 +66,18 @@ def normalizar_rut(rut):
     return str(rut).replace('.', '').replace('-', '').replace(' ', '').upper()
 
 
+def es_rut_empresa(rut):
+    """Personas jurídicas chilenas tienen número de RUT >= 50.000.000. No fidelizan."""
+    try:
+        digitos = ''.join(c for c in str(rut or '') if c.isdigit())
+        if len(digitos) < 2:
+            return False
+        numero = int(digitos[:-1])
+        return numero >= 50_000_000
+    except (ValueError, IndexError):
+        return False
+
+
 def resolver_cliente_por_rut(rut):
     """
     Devuelve el Cliente del CRM cuyo RUT coincide (comparación robusta sin
@@ -337,6 +349,15 @@ def acumular_puntos_por_venta(ticket, usuario=None):
         return None
 
     rut_ticket = getattr(ticket, 'cliente_rut', '') or ''
+    # Solo acumular para RUTs reales: deben pasar la validación módulo 11 y
+    # no ser el RUT genérico ficticio que se usa para ventas sin cliente.
+    _RUT_FICTICIOS = {'66666666-6'}
+    from app.models.base import validar_rut_chileno as _validar_rut
+    if (not rut_ticket
+            or not _validar_rut(rut_ticket)
+            or rut_ticket in _RUT_FICTICIOS
+            or es_rut_empresa(rut_ticket)):
+        return None
     cliente = resolver_cliente_por_rut(rut_ticket)
     if not cliente and rut_ticket:
         # RUT presente pero sin registro CRM → auto-registrar desde historial.

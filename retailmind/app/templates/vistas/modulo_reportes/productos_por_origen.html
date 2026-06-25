@@ -5,172 +5,543 @@
 {% csrf_token %}
 
 <style>
-    .ppo-wrap { background:#F5F5F7; min-height:100vh; padding-bottom:40px; }
-    .ppo-header {
-        background:linear-gradient(135deg, #405189 0%, #0ab39c 100%);
-        color:#fff; padding:24px 0; margin-bottom:22px;
-    }
-    .ppo-header h4 { margin:0; font-weight:700; }
-    .ppo-header p { margin:4px 0 0; opacity:.85; font-size:.85rem; }
-    .ppo-card { background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(26,26,46,.08); padding:18px; }
-    .ppo-kpi { background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(26,26,46,.08);
-        padding:16px 18px; border-left:4px solid var(--acc, #0066FF); height:100%; }
-    .ppo-kpi .lbl { font-size:.72rem; font-weight:600; color:#8A8A9A; text-transform:uppercase; letter-spacing:.3px; }
-    .ppo-kpi .val { font-size:1.7rem; font-weight:800; color:#1A1A2E; line-height:1.1; margin-top:4px; }
-    .ppo-kpi .sub { font-size:.72rem; color:#8A8A9A; }
-    .ppo-bar { height:8px; border-radius:6px; background:#eef0f4; overflow:hidden; }
-    .ppo-bar > span { display:block; height:100%; background:linear-gradient(90deg,#0066FF,#00D4AA); }
-    .ppo-table { width:100%; font-size:.85rem; }
-    .ppo-table th { font-size:.7rem; text-transform:uppercase; color:#8A8A9A; font-weight:700;
-        border-bottom:2px solid #eef0f4; padding:8px 10px; }
-    .ppo-table td { padding:9px 10px; border-bottom:1px solid #f2f3f6; }
-    .ppo-chip { display:inline-block; padding:2px 9px; border-radius:20px; font-size:.7rem; font-weight:700; }
-    .ppo-muted { color:#8A8A9A; font-size:.8rem; }
-    .ppo-mes-bar { display:flex; align-items:flex-end; gap:6px; height:120px; padding-top:10px; }
-    .ppo-mes-bar .col { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
-    .ppo-mes-bar .col .b { width:60%; min-height:2px; border-radius:4px 4px 0 0; background:linear-gradient(180deg,#0066FF,#00D4AA); }
-    .ppo-mes-bar .col .m { font-size:.62rem; color:#8A8A9A; }
+/* ===== MÓDULO: ORIGEN DE CATÁLOGO ===== */
+.origen-wrap { background: #F5F5F7; min-height: 100vh; padding-bottom: 48px; }
+
+.origen-header {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: #fff; padding: 26px 0 22px; margin-bottom: 24px;
+    border-bottom: 3px solid rgba(0,212,170,.4);
+}
+.origen-header h4 { margin: 0; font-weight: 700; font-size: 1.25rem; letter-spacing: -.3px; }
+.origen-header p  { margin: 5px 0 0; opacity: .85; font-size: .85rem; }
+.origen-header .badge-anio {
+    background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35);
+    color: #fff; padding: 4px 12px; border-radius: 20px; font-size: .78rem; font-weight: 600;
+}
+
+/* Filtros */
+.origen-filters { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(26,26,46,.07); padding: 16px 20px; margin-bottom: 20px; }
+
+/* KPI Cards */
+.kpi-origen {
+    background: #fff; border-radius: 14px; box-shadow: 0 1px 4px rgba(26,26,46,.07);
+    padding: 18px 20px; height: 100%;
+    border-left: 4px solid var(--kc, #0066FF);
+    transition: box-shadow .2s, transform .15s;
+}
+.kpi-origen:hover { box-shadow: 0 4px 16px rgba(26,26,46,.13); transform: translateY(-2px); }
+.kpi-origen .ki-icon {
+    width: 46px; height: 46px; border-radius: 10px; display: flex;
+    align-items: center; justify-content: center;
+    background: var(--kc-bg, #E6F0FF); margin-bottom: 12px;
+}
+.kpi-origen .ki-icon i { font-size: 1.3rem; color: var(--kc, #0066FF); }
+.kpi-origen .ki-label { font-size: .68rem; font-weight: 700; color: #8A8A9A; text-transform: uppercase; letter-spacing: .4px; }
+.kpi-origen .ki-val   { font-size: 1.65rem; font-weight: 800; color: #1A1A2E; line-height: 1.1; margin: 3px 0 2px; }
+.kpi-origen .ki-sub   { font-size: .72rem; color: #8A8A9A; }
+
+/* Grupo operativo cards */
+.grupo-card {
+    background: #fff; border-radius: 14px; box-shadow: 0 1px 4px rgba(26,26,46,.07);
+    padding: 16px 20px; height: 100%;
+    border-top: 4px solid var(--gc, #0066FF);
+}
+.grupo-card .gc-title { font-size: .72rem; font-weight: 700; color: var(--gc, #0066FF); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+.grupo-card .gc-pct  { font-size: 2rem; font-weight: 800; color: #1A1A2E; line-height: 1; }
+.grupo-card .gc-desc { font-size: .75rem; color: #8A8A9A; margin-top: 4px; }
+.grupo-card .gc-bar  { height: 6px; border-radius: 4px; background: #eef0f4; margin-top: 10px; overflow: hidden; }
+.grupo-card .gc-bar > span { display: block; height: 100%; border-radius: 4px; background: var(--gc, #0066FF); }
+.grupo-card .gc-skus { font-size: .8rem; font-weight: 600; color: #1A1A2E; margin-top: 6px; }
+
+/* Tabla origen */
+.origen-card { background: #fff; border-radius: 14px; box-shadow: 0 1px 4px rgba(26,26,46,.07); }
+.origen-card .oc-head {
+    padding: 16px 20px 12px; border-bottom: 1px solid #eef0f4;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.origen-card .oc-head h6 { margin: 0; font-weight: 700; font-size: .95rem; }
+.origen-card .oc-body { padding: 0 0 8px; }
+
+.ot { width: 100%; font-size: .82rem; }
+.ot th { font-size: .67rem; text-transform: uppercase; color: #8A8A9A; font-weight: 700;
+    border-bottom: 2px solid #eef0f4; padding: 10px 14px; white-space: nowrap; }
+.ot td { padding: 10px 14px; border-bottom: 1px solid #f4f5f8; vertical-align: middle; }
+.ot tbody tr:last-child td { border-bottom: none; }
+.ot tbody tr:hover td { background: #f8f9fc; }
+
+.chip-origen { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: .72rem; font-weight: 700; white-space: nowrap; }
+.chip-origen i { font-size: .82rem; }
+
+.pct-bar-wrap { height: 6px; border-radius: 4px; background: #eef0f4; min-width: 60px; overflow: hidden; }
+.pct-bar-fill { height: 100%; border-radius: 4px; }
+
+.alerta-icon { color: #FFB020; font-size: .9rem; }
+
+/* Alertas operativas */
+.origen-alert-box {
+    border-radius: 12px; padding: 14px 18px; margin-bottom: 8px;
+    display: flex; align-items: flex-start; gap: 12px;
+    font-size: .83rem;
+}
+.origen-alert-box.warn { background: #FFF8EC; border-left: 4px solid #FFB020; }
+.origen-alert-box.info { background: #E6F6FF; border-left: 4px solid #0099E5; }
+.origen-alert-box.ok   { background: #E8FBF5; border-left: 4px solid #00D4AA; }
+.origen-alert-box i    { font-size: 1.1rem; margin-top: 1px; flex-shrink: 0; }
+.origen-alert-box strong { display: block; font-size: .85rem; margin-bottom: 2px; }
+
+/* Chart card */
+.chart-card { background: #fff; border-radius: 14px; box-shadow: 0 1px 4px rgba(26,26,46,.07); height: 100%; }
+.chart-card .cc-head { padding: 16px 20px 12px; border-bottom: 1px solid #eef0f4; }
+.chart-card .cc-head h6 { margin: 0; font-weight: 700; font-size: .95rem; }
+.chart-card .cc-body { padding: 12px 10px 8px; }
+
+/* Empty / loading states */
+.origen-empty { text-align: center; padding: 40px; color: #8A8A9A; font-size: .87rem; }
+.origen-loading { display: flex; align-items: center; justify-content: center; gap: 8px; color: #8A8A9A; font-size: .85rem; padding: 20px; }
+.spin { animation: spin .8s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 768px) {
+    .kpi-origen .ki-val { font-size: 1.3rem; }
+    .grupo-card .gc-pct { font-size: 1.5rem; }
+}
 </style>
 
 <div class="page-content">
-  <div class="ppo-wrap">
-    <div class="ppo-header">
+  <div class="origen-wrap">
+
+    <!-- ===== HEADER ===== -->
+    <div class="origen-header">
       <div class="container-fluid">
-        <h4><i class="ri-seedling-line me-2"></i>Productos creados por origen</h4>
-        <p>Cada SKU se clasifica por el concepto de su <strong>primer ingreso</strong>: compra, alta manual, traspaso o ajuste.</p>
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+          <div>
+            <h4><i class="ri-seedling-line me-2"></i>Origen de Catálogo</h4>
+            <p>Cada SKU clasificado por el concepto de su <strong>primer ingreso</strong> · compra formal, traspaso, alta manual o ajuste</p>
+          </div>
+          <span class="badge-anio" id="badgeAnio">—</span>
+        </div>
       </div>
     </div>
 
     <div class="container-fluid">
-      <!-- Filtros -->
-      <div class="ppo-card mb-3">
+
+      <!-- ===== FILTROS ===== -->
+      <div class="origen-filters mb-4">
         <div class="row g-2 align-items-end">
           <div class="col-auto">
-            <label class="ppo-muted d-block mb-1">Año</label>
-            <select id="ppoAnio" class="form-select form-select-sm" style="min-width:120px;"></select>
+            <label class="form-label mb-1" style="font-size:.72rem;font-weight:700;color:#8A8A9A;text-transform:uppercase;letter-spacing:.4px;">Año</label>
+            <select id="ppoAnio" class="form-select form-select-sm" style="min-width:110px;"></select>
           </div>
           <div class="col-auto">
-            <label class="ppo-muted d-block mb-1">Sucursal</label>
-            <select id="ppoSucursal" class="form-select form-select-sm" style="min-width:180px;">
-              <option value="">Todas</option>
+            <label class="form-label mb-1" style="font-size:.72rem;font-weight:700;color:#8A8A9A;text-transform:uppercase;letter-spacing:.4px;">Sucursal</label>
+            <select id="ppoSucursal" class="form-select form-select-sm" style="min-width:190px;">
+              <option value="">Todas las sucursales</option>
             </select>
           </div>
           <div class="col-auto">
-            <button id="ppoRefrescar" class="btn btn-sm btn-primary"><i class="ri-refresh-line me-1"></i>Actualizar</button>
+            <button id="ppoRefrescar" class="btn btn-sm btn-primary px-3">
+              <i class="ri-refresh-line me-1"></i>Actualizar
+            </button>
           </div>
-          <div class="col text-end ppo-muted" id="ppoEstado">—</div>
+          <div class="col text-end" id="ppoEstado" style="font-size:.8rem;color:#8A8A9A;">—</div>
         </div>
       </div>
 
-      <!-- KPIs -->
+      <!-- ===== KPIs ===== -->
       <div class="row g-3 mb-3">
-        <div class="col-md-4"><div class="ppo-kpi" style="--acc:#0066FF;">
-          <div class="lbl">SKU creados</div><div class="val" id="kpiSkus">0</div><div class="sub">en el año</div>
-        </div></div>
-        <div class="col-md-4"><div class="ppo-kpi" style="--acc:#00D4AA;">
-          <div class="lbl">Unidades de alta</div><div class="val" id="kpiUds">0</div><div class="sub">del primer ingreso</div>
-        </div></div>
-        <div class="col-md-4"><div class="ppo-kpi" style="--acc:#FFB020;">
-          <div class="lbl">Costo de alta</div><div class="val" id="kpiCosto">$0</div><div class="sub">costo × unidades</div>
-        </div></div>
+        <div class="col-sm-6 col-xl-2">
+          <div class="kpi-origen" style="--kc:#0066FF;--kc-bg:#E6F0FF;">
+            <div class="ki-icon"><i class="ri-box-3-line"></i></div>
+            <div class="ki-label">SKU creados</div>
+            <div class="ki-val" id="kpiSkus">—</div>
+            <div class="ki-sub">variantes únicas en el año</div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-xl-2">
+          <div class="kpi-origen" style="--kc:#00D4AA;--kc-bg:#E0FAF4;">
+            <div class="ki-icon"><i class="ri-stack-line"></i></div>
+            <div class="ki-label">Unidades de alta</div>
+            <div class="ki-val" id="kpiUds">—</div>
+            <div class="ki-sub">del primer ingreso por SKU</div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-xl-2">
+          <div class="kpi-origen" style="--kc:#FFB020;--kc-bg:#FFF4E0;">
+            <div class="ki-icon"><i class="ri-money-dollar-circle-line"></i></div>
+            <div class="ki-label">Inversión en altas</div>
+            <div class="ki-val" id="kpiCosto">—</div>
+            <div class="ki-sub">costo × unidades del alta</div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-xl-2">
+          <div class="kpi-origen" style="--kc:#6f42c1;--kc-bg:#F2EDFC;">
+            <div class="ki-icon"><i class="ri-price-tag-3-line"></i></div>
+            <div class="ki-label">Costo prom / SKU</div>
+            <div class="ki-val" id="kpiCostoSku">—</div>
+            <div class="ki-sub">inversión media por variante</div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-xl-2">
+          <div class="kpi-origen" style="--kc:#0ab39c;--kc-bg:#E3F7F5;">
+            <div class="ki-icon"><i class="ri-shopping-bag-line"></i></div>
+            <div class="ki-label">% compra directa</div>
+            <div class="ki-val" id="kpiPctCompra">—</div>
+            <div class="ki-sub">SKU con DTE de compra</div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-xl-2">
+          <div class="kpi-origen" id="kpiIrregCard" style="--kc:#FF4D4D;--kc-bg:#FFEAEA;">
+            <div class="ki-icon"><i class="ri-alert-line"></i></div>
+            <div class="ki-label">Altas irregulares</div>
+            <div class="ki-val" id="kpiIrreg">—</div>
+            <div class="ki-sub">ajustes, manuales, devoluciones</div>
+          </div>
+        </div>
       </div>
 
-      <div class="row g-3">
-        <!-- Por origen -->
-        <div class="col-lg-7">
-          <div class="ppo-card">
-            <h6 class="mb-3" style="font-weight:700;">Altas por origen</h6>
-            <table class="ppo-table">
-              <thead><tr><th>Origen</th><th class="text-end">SKU</th><th style="width:32%;">Participación</th><th class="text-end">Unidades</th></tr></thead>
-              <tbody id="ppoOrigenBody">
-                <tr><td colspan="4" class="ppo-muted text-center py-4">Cargando…</td></tr>
-              </tbody>
-            </table>
+      <!-- ===== GRUPOS OPERATIVOS ===== -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-4">
+          <div class="grupo-card" style="--gc:#00D4AA;">
+            <div class="gc-title"><i class="ri-file-text-line me-1"></i>Compra formal</div>
+            <div class="gc-pct" id="gcPctFormal">—</div>
+            <div class="gc-desc">Recepciones con DTE de proveedor</div>
+            <div class="gc-bar"><span id="gcBarFormal" style="width:0%;"></span></div>
+            <div class="gc-skus" id="gcSkusFormal">— SKU</div>
           </div>
         </div>
-        <!-- Por mes -->
-        <div class="col-lg-5">
-          <div class="ppo-card">
-            <h6 class="mb-3" style="font-weight:700;">Altas por mes (SKU)</h6>
-            <div class="ppo-mes-bar" id="ppoMesBar"></div>
+        <div class="col-md-4">
+          <div class="grupo-card" style="--gc:#0066FF;">
+            <div class="gc-title"><i class="ri-swap-line me-1"></i>Movimiento operativo</div>
+            <div class="gc-pct" id="gcPctOp">—</div>
+            <div class="gc-desc">Traspasos, reposiciones e ingresos iniciales</div>
+            <div class="gc-bar"><span id="gcBarOp" style="width:0%;"></span></div>
+            <div class="gc-skus" id="gcSkusOp">— SKU</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="grupo-card" id="gcIrregCard" style="--gc:#FFB020;">
+            <div class="gc-title"><i class="ri-error-warning-line me-1"></i>Manual / Irregular</div>
+            <div class="gc-pct" id="gcPctIrreg">—</div>
+            <div class="gc-desc">Sin DTE: ajustes, altas manuales, devoluciones</div>
+            <div class="gc-bar"><span id="gcBarIrreg" style="width:0%;"></span></div>
+            <div class="gc-skus" id="gcSkusIrreg">— SKU</div>
           </div>
         </div>
       </div>
-    </div>
-  </div>
-</div>
+
+      <!-- ===== ALERTAS OPERATIVAS ===== -->
+      <div id="alertasSection" class="mb-4" style="display:none;"></div>
+
+      <!-- ===== CONTENIDO PRINCIPAL ===== -->
+      <div class="row g-3">
+
+        <!-- Tabla detallada -->
+        <div class="col-xl-7">
+          <div class="origen-card h-100">
+            <div class="oc-head">
+              <h6><i class="ri-list-check me-2" style="color:#0066FF;"></i>Detalle por origen</h6>
+              <span style="font-size:.75rem;color:#8A8A9A;" id="tablaTotal">—</span>
+            </div>
+            <div class="oc-body">
+              <div style="overflow-x:auto;">
+                <table class="ot">
+                  <thead>
+                    <tr>
+                      <th>Origen</th>
+                      <th class="text-end">SKU</th>
+                      <th style="min-width:90px;">% SKU</th>
+                      <th class="text-end">Uds.</th>
+                      <th class="text-end">Costo total</th>
+                      <th class="text-end">Costo/SKU</th>
+                    </tr>
+                  </thead>
+                  <tbody id="origenBody">
+                    <tr><td colspan="6"><div class="origen-loading"><i class="ri-loader-4-line spin"></i> Cargando…</div></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gráfico mensual -->
+        <div class="col-xl-5">
+          <div class="chart-card">
+            <div class="cc-head">
+              <div class="d-flex align-items-center justify-content-between">
+                <h6><i class="ri-bar-chart-2-line me-2" style="color:#0066FF;"></i>Altas mensuales</h6>
+                <div style="display:flex;gap:12px;font-size:.72rem;color:#8A8A9A;">
+                  <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#0066FF;margin-right:4px;"></span>SKU</span>
+                  <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#00D4AA;margin-right:4px;"></span>Uds.</span>
+                </div>
+              </div>
+            </div>
+            <div class="cc-body">
+              <div id="chartMensual" style="min-height:280px;"></div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /row principal -->
+
+    </div><!-- /container-fluid -->
+  </div><!-- /origen-wrap -->
+</div><!-- /page-content -->
 
 <script>
 (function () {
-    const fmt = n => (n || 0).toLocaleString('es-CL');
-    const fmtMoney = n => '$' + Math.round(n || 0).toLocaleString('es-CL');
+    'use strict';
+
+    /* ── Helpers ── */
+    const fmt  = n => (n || 0).toLocaleString('es-CL');
+    const fmtM = n => '$' + Math.round(n || 0).toLocaleString('es-CL');
     const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-    const colorOrigen = {
-        'RECEPCION_COMPRA':'#0066FF', 'INGRESO_INICIAL':'#6f42c1', 'INGRESO_MANUAL':'#FFB020',
-        'TRASPASO_ENTRADA':'#00D4AA', 'AJUSTE_POSITIVO':'#FF4D4D', 'REPOSICION_STOCK':'#0ab39c',
-        'DEVOLUCION_CLIENTE':'#8A8A9A'
+
+    const CONCEPTOS_FORMAL    = new Set(['RECEPCION_COMPRA']);
+    const CONCEPTOS_OPERATIVO = new Set(['TRASPASO_ENTRADA','TRASPASO_SUCURSAL','REPOSICION_STOCK','INGRESO_INICIAL']);
+    const CONCEPTOS_IRREG     = new Set(['INGRESO_MANUAL','AJUSTE_POSITIVO','AJUSTE_INVENTARIO','DEVOLUCION_CLIENTE']);
+
+    const COLOR_ORIGEN = {
+        RECEPCION_COMPRA:   { bg:'#E0FAF4', color:'#00A87A', icon:'ri-file-list-3-line' },
+        INGRESO_INICIAL:    { bg:'#F2EDFC', color:'#6f42c1', icon:'ri-archive-line' },
+        INGRESO_MANUAL:     { bg:'#FFF4E0', color:'#D08000', icon:'ri-pencil-line' },
+        TRASPASO_SUCURSAL:  { bg:'#E6F0FF', color:'#0055D4', icon:'ri-swap-box-line' },
+        TRASPASO_ENTRADA:   { bg:'#E6F0FF', color:'#0055D4', icon:'ri-swap-line' },
+        REPOSICION_STOCK:   { bg:'#E3F7F5', color:'#0ab39c', icon:'ri-refresh-line' },
+        AJUSTE_POSITIVO:    { bg:'#FFEAEA', color:'#CC0000', icon:'ri-alert-line' },
+        AJUSTE_INVENTARIO:  { bg:'#FFEAEA', color:'#CC0000', icon:'ri-alert-line' },
+        DEVOLUCION_CLIENTE: { bg:'#F5F5F7', color:'#8A8A9A', icon:'ri-reply-line' },
     };
 
-    const $anio = document.getElementById('ppoAnio');
-    const $suc = document.getElementById('ppoSucursal');
-    const $estado = document.getElementById('ppoEstado');
+    /* ── Estado ── */
+    let chartInst = null;
 
+    /* ── Refs ── */
+    const $anio    = document.getElementById('ppoAnio');
+    const $suc     = document.getElementById('ppoSucursal');
+    const $estado  = document.getElementById('ppoEstado');
+    const $alertas = document.getElementById('alertasSection');
+
+    /* ── Carga ── */
     function cargar() {
         const params = new URLSearchParams();
-        if ($anio.value) params.set('anio', $anio.value);
-        if ($suc.value) params.set('sucursal', $suc.value);
+        if ($anio.value)   params.set('anio', $anio.value);
+        if ($suc.value)    params.set('sucursal', $suc.value);
         $estado.textContent = 'Cargando…';
+        document.getElementById('origenBody').innerHTML =
+            '<tr><td colspan="6"><div class="origen-loading"><i class="ri-loader-4-line spin"></i> Cargando…</div></td></tr>';
         fetch('/app/api/reportes/productos-origen/?' + params.toString())
             .then(r => r.json())
             .then(render)
-            .catch(() => { $estado.textContent = 'Error al cargar'; });
+            .catch(() => { $estado.textContent = 'Error al cargar datos'; });
     }
 
+    /* ── Render principal ── */
     function render(data) {
-        if (!data || !data.success) { $estado.textContent = 'Sin datos'; return; }
+        if (!data || !data.success) {
+            $estado.textContent = 'Sin datos disponibles';
+            return;
+        }
 
-        // Año selector (una sola vez, según años disponibles)
+        /* Año badge y selector */
+        document.getElementById('badgeAnio').textContent = data.anio;
         if (!$anio.dataset.poblado && Array.isArray(data.anios_disponibles)) {
             $anio.innerHTML = data.anios_disponibles.map(a =>
                 `<option value="${a}" ${a === data.anio ? 'selected' : ''}>${a}</option>`).join('');
             $anio.dataset.poblado = '1';
         }
 
-        document.getElementById('kpiSkus').textContent = fmt(data.resumen.total_skus);
-        document.getElementById('kpiUds').textContent = fmt(data.resumen.total_unidades);
-        document.getElementById('kpiCosto').textContent = fmtMoney(data.resumen.total_costo);
+        const r = data.resumen;
 
-        // Tabla por origen
-        const body = document.getElementById('ppoOrigenBody');
-        if (!data.por_origen.length) {
-            body.innerHTML = '<tr><td colspan="4" class="ppo-muted text-center py-4">No hay altas en este período.</td></tr>';
+        /* ── KPIs ── */
+        document.getElementById('kpiSkus').textContent    = fmt(r.total_skus);
+        document.getElementById('kpiUds').textContent     = fmt(r.total_unidades);
+        document.getElementById('kpiCosto').textContent   = fmtM(r.total_costo);
+        document.getElementById('kpiCostoSku').textContent = fmtM(r.costo_por_sku);
+
+        /* KPI % compra directa */
+        const compraItem = (data.por_origen || []).find(o => o.concepto === 'RECEPCION_COMPRA');
+        const pctCompra  = compraItem ? compraItem.pct : 0;
+        document.getElementById('kpiPctCompra').textContent = pctCompra + '%';
+
+        /* KPI altas irregulares */
+        let irregSkus = 0, irregPct = 0;
+        (data.por_origen || []).forEach(o => { if (o.alerta) { irregSkus += o.skus; irregPct += o.pct; } });
+        irregPct = r.total_skus ? Math.round(irregSkus / r.total_skus * 100) : 0;
+        document.getElementById('kpiIrreg').textContent = irregPct + '%';
+        const kpiIrregCard = document.getElementById('kpiIrregCard');
+        if (irregPct <= 5) {
+            kpiIrregCard.style.setProperty('--kc', '#00D4AA');
+            kpiIrregCard.style.setProperty('--kc-bg', '#E0FAF4');
+            kpiIrregCard.querySelector('i').className = 'ri-checkbox-circle-line';
+        } else if (irregPct > 15) {
+            kpiIrregCard.style.setProperty('--kc', '#FF4D4D');
+            kpiIrregCard.style.setProperty('--kc-bg', '#FFEAEA');
+            kpiIrregCard.querySelector('i').className = 'ri-alert-line';
         } else {
-            body.innerHTML = data.por_origen.map(o => {
-                const c = colorOrigen[o.concepto] || '#8A8A9A';
-                return `<tr>
-                    <td><span class="ppo-chip" style="background:${c}22;color:${c};">${o.origen}</span></td>
-                    <td class="text-end fw-bold">${fmt(o.skus)}</td>
-                    <td><div class="ppo-bar"><span style="width:${o.pct}%;"></span></div>
-                        <span class="ppo-muted">${o.pct}%</span></td>
-                    <td class="text-end">${fmt(o.unidades)}</td>
-                </tr>`;
-            }).join('');
+            kpiIrregCard.style.setProperty('--kc', '#FFB020');
+            kpiIrregCard.style.setProperty('--kc-bg', '#FFF4E0');
+            kpiIrregCard.querySelector('i').className = 'ri-error-warning-line';
         }
 
-        // Barras por mes
-        const maxMes = Math.max(1, ...data.por_mes.map(m => m.skus));
-        document.getElementById('ppoMesBar').innerHTML = data.por_mes.map(m => {
-            const h = Math.round((m.skus / maxMes) * 100);
-            return `<div class="col" title="${MESES[m.mes-1]}: ${m.skus} SKU">
-                        <div class="b" style="height:${h}%;"></div>
-                        <div class="m">${MESES[m.mes-1]}</div>
-                    </div>`;
-        }).join('');
+        /* ── Grupos operativos ── */
+        let gFormal = 0, gOp = 0, gIrreg = 0;
+        (data.por_origen || []).forEach(o => {
+            if (CONCEPTOS_FORMAL.has(o.concepto))    gFormal += o.skus;
+            else if (CONCEPTOS_OPERATIVO.has(o.concepto)) gOp += o.skus;
+            else if (CONCEPTOS_IRREG.has(o.concepto))     gIrreg += o.skus;
+        });
+        const total = r.total_skus || 1;
+        const pFormal = Math.round(gFormal / total * 100);
+        const pOp     = Math.round(gOp     / total * 100);
+        const pIrreg  = Math.round(gIrreg  / total * 100);
 
-        $estado.textContent = `${fmt(data.resumen.total_skus)} SKU creados en ${data.anio}`;
+        document.getElementById('gcPctFormal').textContent = pFormal + '%';
+        document.getElementById('gcBarFormal').style.width = pFormal + '%';
+        document.getElementById('gcSkusFormal').textContent = fmt(gFormal) + ' SKU';
+        document.getElementById('gcPctOp').textContent = pOp + '%';
+        document.getElementById('gcBarOp').style.width  = pOp + '%';
+        document.getElementById('gcSkusOp').textContent = fmt(gOp) + ' SKU';
+        document.getElementById('gcPctIrreg').textContent = pIrreg + '%';
+        document.getElementById('gcBarIrreg').style.width  = pIrreg + '%';
+        document.getElementById('gcSkusIrreg').textContent = fmt(gIrreg) + ' SKU';
+
+        /* Color semafórico grupo irregular */
+        const gcIrregCard = document.getElementById('gcIrregCard');
+        gcIrregCard.style.setProperty('--gc', pIrreg > 15 ? '#FF4D4D' : pIrreg > 5 ? '#FFB020' : '#00D4AA');
+
+        /* ── Alertas operativas ── */
+        renderAlertas(data, irregPct, pctCompra, r);
+
+        /* ── Tabla ── */
+        renderTabla(data.por_origen || [], r.total_skus);
+
+        /* ── Gráfico mensual ── */
+        renderChart(data.por_mes || []);
+
+        /* Estado */
+        const mesNombre = r.mes_pico ? MESES[r.mes_pico - 1] : null;
+        $estado.textContent = fmt(r.total_skus) + ' SKU nuevos en ' + data.anio +
+            (mesNombre && r.mes_pico_skus ? ' · pico en ' + mesNombre + ' (' + fmt(r.mes_pico_skus) + ')' : '');
     }
 
-    // Sucursales (best-effort; si falla, queda "Todas")
+    /* ── Tabla detallada ── */
+    function renderTabla(origenes, totalSkus) {
+        const body = document.getElementById('origenBody');
+        document.getElementById('tablaTotal').textContent = origenes.length + ' origen' + (origenes.length !== 1 ? 'es' : '');
+
+        if (!origenes.length) {
+            body.innerHTML = '<tr><td colspan="6"><div class="origen-empty"><i class="ri-inbox-line" style="font-size:2rem;display:block;margin-bottom:8px;"></i>No hay altas en este período.</div></td></tr>';
+            return;
+        }
+
+        body.innerHTML = origenes.map(o => {
+            const cfg = COLOR_ORIGEN[o.concepto] || { bg:'#F5F5F7', color:'#8A8A9A', icon:'ri-question-line' };
+            const alertaHtml = o.alerta
+                ? `<i class="ri-error-warning-line alerta-icon ms-1" title="Origen sin DTE — requiere revisión"></i>`
+                : '';
+            return `<tr>
+                <td>
+                    <span class="chip-origen" style="background:${cfg.bg};color:${cfg.color};">
+                        <i class="${cfg.icon}"></i>${o.origen}
+                    </span>${alertaHtml}
+                </td>
+                <td class="text-end fw-bold">${fmt(o.skus)}</td>
+                <td>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="pct-bar-wrap flex-grow-1">
+                            <div class="pct-bar-fill" style="width:${o.pct}%;background:${cfg.color};opacity:.75;"></div>
+                        </div>
+                        <span style="font-size:.75rem;color:#8A8A9A;min-width:32px;text-align:right;">${o.pct}%</span>
+                    </div>
+                </td>
+                <td class="text-end">${fmt(o.unidades)}</td>
+                <td class="text-end fw-semibold">${fmtM(o.costo)}</td>
+                <td class="text-end" style="color:#8A8A9A;">${fmtM(o.costo_por_sku)}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    /* ── Alertas ── */
+    function renderAlertas(data, irregPct, pctCompra, r) {
+        const items = [];
+        const mesNombre = r.mes_pico ? MESES[r.mes_pico - 1] : null;
+
+        if (irregPct > 15) {
+            items.push({ tipo:'warn', icon:'ri-alert-fill', titulo:'Alta proporción de ingresos sin DTE',
+                msg:`El ${irregPct}% de los SKU nuevos entraron por ajuste o alta manual — sin respaldo documental. Revisar procesos de recepción.` });
+        } else if (irregPct > 5) {
+            items.push({ tipo:'info', icon:'ri-information-fill', titulo:'Ingresos irregulares detectados',
+                msg:`El ${irregPct}% de altas son ajustes o manuales. Dentro de rango tolerable, pero conviene monitorear.` });
+        } else if (r.total_skus > 0) {
+            items.push({ tipo:'ok', icon:'ri-checkbox-circle-fill', titulo:'Trazabilidad formal predominante',
+                msg:`El ${pctCompra}% de los SKU ingresaron con DTE de compra. Solo el ${irregPct}% sin respaldo documental.` });
+        }
+
+        if (mesNombre && r.mes_pico_skus > 0) {
+            const pctMes = r.total_skus ? Math.round(r.mes_pico_skus / r.total_skus * 100) : 0;
+            items.push({ tipo:'info', icon:'ri-calendar-event-fill', titulo:`Pico de incorporación: ${mesNombre}`,
+                msg:`En ${mesNombre} se incorporaron ${fmt(r.mes_pico_skus)} SKU nuevos (${pctMes}% del total anual).` });
+        }
+
+        if (!items.length) { $alertas.style.display = 'none'; return; }
+        $alertas.style.display = 'block';
+        $alertas.innerHTML = items.map(a =>
+            `<div class="origen-alert-box ${a.tipo}">
+                <i class="${a.icon}" style="color:${a.tipo==='warn'?'#D08000':a.tipo==='ok'?'#00A87A':'#0099E5'};"></i>
+                <div><strong>${a.titulo}</strong>${a.msg}</div>
+            </div>`
+        ).join('');
+    }
+
+    /* ── Gráfico ApexCharts ── */
+    function renderChart(porMes) {
+        const skuArr = porMes.map(m => m.skus);
+        const udsArr = porMes.map(m => m.unidades);
+
+        const options = {
+            chart: {
+                type: 'bar', height: 280,
+                toolbar: { show: false },
+                animations: { enabled: true, speed: 400 },
+            },
+            series: [
+                { name: 'SKU nuevos', data: skuArr },
+                { name: 'Unidades',   data: udsArr },
+            ],
+            colors: ['#0066FF', '#00D4AA'],
+            plotOptions: {
+                bar: { columnWidth: '60%', borderRadius: 3, dataLabels: { position: 'top' } }
+            },
+            dataLabels: { enabled: false },
+            xaxis: {
+                categories: MESES,
+                labels: { style: { fontSize: '11px', colors: '#8A8A9A' } },
+                axisBorder: { show: false }, axisTicks: { show: false },
+            },
+            yaxis: [
+                { labels: { style: { colors: '#8A8A9A', fontSize: '11px' }, formatter: v => fmt(v) } },
+                { opposite: true, labels: { style: { colors: '#8A8A9A', fontSize: '11px' }, formatter: v => fmt(v) } },
+            ],
+            grid: { strokeDashArray: 4, borderColor: '#f2f3f6', padding: { left: 4, right: 4 } },
+            tooltip: {
+                shared: true, intersect: false,
+                y: { formatter: (v, { seriesIndex }) => seriesIndex === 0 ? fmt(v) + ' SKU' : fmt(v) + ' uds.' }
+            },
+            legend: { show: false },
+        };
+
+        if (chartInst) { chartInst.destroy(); chartInst = null; }
+        const el = document.getElementById('chartMensual');
+        if (el && typeof ApexCharts !== 'undefined') {
+            chartInst = new ApexCharts(el, options);
+            chartInst.render();
+        }
+    }
+
+    /* ── Sucursales ── */
     fetch('/app/api/reportes/sucursales/')
         .then(r => r.json())
         .then(d => {
@@ -184,9 +555,11 @@
         })
         .catch(() => {});
 
+    /* ── Eventos ── */
     document.getElementById('ppoRefrescar').addEventListener('click', cargar);
     $anio.addEventListener('change', cargar);
     $suc.addEventListener('change', cargar);
+
     cargar();
 })();
 </script>

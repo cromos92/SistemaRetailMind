@@ -510,6 +510,11 @@ urlpatterns = [
      path('desasociar_factura_compensacion/<int:pago_id>/', views_modulo_compras.desasociar_factura_compensacion, name='desasociar_factura_compensacion'),
      path('obtener_info_compensacion/<int:dte_id>/', views_modulo_compras.obtener_info_compensacion, name='obtener_info_compensacion'),
 
+     # Compensación con factura EMITIDA a este proveedor (cuando no se puede cargar una NC)
+     path('obtener_documentos_emitidos_compensar_disponibles/', views_modulo_compras.obtener_documentos_emitidos_compensar_disponibles, name='obtener_documentos_emitidos_compensar_disponibles'),
+     path('asociar_documento_emitido_compensacion/', views_modulo_compras.asociar_documento_emitido_compensacion, name='asociar_documento_emitido_compensacion'),
+     path('desasociar_documento_emitido_compensacion/<int:pago_id>/', views_modulo_compras.desasociar_documento_emitido_compensacion, name='desasociar_documento_emitido_compensacion'),
+
      path('procesar_pago_masivo/', views.procesar_pago_masivo, name='procesar_pago_masivo'),
      path('guardar_recepcion/', views.guardar_recepcion, name='guardar_recepcion'),
      path('actualizar_sucursal_recepciones/', views.actualizar_sucursal_recepciones, name='actualizar_sucursal_recepciones'),
@@ -1103,6 +1108,9 @@ urlpatterns = [
     path('configuracion/integraciones-ecommerce/<int:pk>/sincronizar/',
          views_modulo_configuracion.sincronizar_integracion_ecommerce,
          name='sincronizar_integracion_ecommerce'),
+    path('configuracion/integraciones-ecommerce/<int:pk>/verificar/',
+         views_modulo_configuracion.verificar_integracion_ecommerce,
+         name='verificar_integracion_ecommerce'),
 
     # ========== MÓDULO DE GENERACIÓN DE ARCHIVOS TXT ACEPTA ==========
     path('configuracion/interfaz-prueba-acepta/', views_modulo_documentos.interfaz_prueba_acepta, name='interfaz_prueba_acepta'),
@@ -1198,6 +1206,10 @@ urlpatterns = [
     path('reportes/movimientos-sucursal/', views_modulo_reportes.ver_reporte_movimientos_sucursal, name='ver_reporte_movimientos_sucursal'),
     path('api/reporte-movimientos-sucursal/', views_modulo_reportes.obtener_reporte_movimientos_sucursal, name='obtener_reporte_movimientos_sucursal'),
     path('api/exportar-movimientos-sucursal-excel/', views_modulo_reportes.exportar_movimientos_sucursal_excel, name='exportar_movimientos_sucursal_excel'),
+
+    # Reporte de despachos a tiendas (traspasos de salida)
+    path('reportes/despachos-tiendas/', views_modulo_reportes.ver_reporte_despachos_tiendas, name='ver_reporte_despachos_tiendas'),
+    path('api/reporte-despachos-tiendas/', views_modulo_reportes.obtener_reporte_despachos_tiendas, name='obtener_reporte_despachos_tiendas'),
     
     # Reporte de resumen de existencias
     path('reportes/resumen-existencias/', views_resumen_existencias.ver_resumen_existencias, name='ver_resumen_existencias'),

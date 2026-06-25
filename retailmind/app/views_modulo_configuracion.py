@@ -21,6 +21,7 @@ from django.views.decorators.http import require_http_methods
 from app.decorators import solo_administrador_o_jefe
 from app.models import CredencialesEcommerce, Empresa
 from app.services.realsport_imagenes_service import probar_conexion
+from app.utils_permisos import obtener_empresas_usuario
 
 logger = logging.getLogger('app')
 
@@ -28,15 +29,20 @@ logger = logging.getLogger('app')
 @login_required
 @solo_administrador_o_jefe
 def integraciones_ecommerce(request):
-    """Listado + alta/edición de credenciales de ecommerce externos."""
+    """Listado + alta/edición de credenciales de ecommerce externos.
+
+    Scoped a las empresas asignadas al usuario (admins ven todas).
+    """
+    empresas = obtener_empresas_usuario(request.user)
+    empresa_ids = list(empresas.values_list('id', flat=True))
+
     credenciales = (
         CredencialesEcommerce.objects
+        .filter(empresa_id__in=empresa_ids)
         .select_related('empresa')
         .annotate(total_fotos=Count('fotos'))
         .order_by('-prioridad', 'nombre')
     )
-
-    empresas = Empresa.objects.filter(activo=True).order_by('nombre')
 
     context = {
         'credenciales': credenciales,
@@ -167,4 +173,52 @@ def sincronizar_integracion_ecommerce(request, pk):
         'stderr': stderr,
         'ultima_sync_at': cred.ultima_sync_at.isoformat() if cred.ultima_sync_at else None,
         'ultima_sync_resultado': cred.ultima_sync_resultado,
+    })
+
+
+@login_required
+@solo_administrador_o_jefe
+@require_http_methods(['POST'])
+def verificar_integracion_ecommerce(request, pk):
+    """Verifica que las portadas de la integración "realmente se pasaron".
+
+    Cobertura del catálogo (por sucursal) + liveness HTTP de una MUESTRA de URLs
+    (rápido, para no exceder el tiempo del request). El barrido completo es el
+    management command ``verificar_fotos_ecommerce``. Devuelve JSON para la UI.
+    """
+    from app.services.verificacion_fotos_service import (
+        VerificacionFotosError, persistir_resultado, verificar_credencial,
+    )
+
+    cred = get_object_or_404(CredencialesEcommerce, pk=pk)
+
+    # Scope: la credencial debe ser de una empresa asignada al usuario.
+    empresa_ids = set(obtener_empresas_usuario(request.user).values_list('id', flat=True))
+    if cred.empresa_id not in empresa_ids:
+        return JsonResponse({'ok': False, 'error': 'Sin acceso a esta empresa.'}, status=403)
+
+    solo_cobertura = request.POST.get('solo_cobertura') == '1'
+    try:
+        muestra = int(request.POST.get('muestra') or 300)
+    except (TypeError, ValueError):
+        muestra = 300
+
+    try:
+        resultado = verificar_credencial(
+            cred, muestra=muestra, solo_cobertura=solo_cobertura,
+        )
+        persistir_resultado(cred, resultado)
+        ok = True
+    except VerificacionFotosError as exc:
+        return JsonResponse({'ok': False, 'error': str(exc)[:300]}, status=200)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('Error verificando fotos de %s', cred.codigo)
+        return JsonResponse({'ok': False, 'error': str(exc)[:300]}, status=200)
+
+    cred.refresh_from_db()
+    return JsonResponse({
+        'ok': ok,
+        'resultado': resultado,
+        'ultima_verif_at': cred.ultima_verif_at.isoformat() if cred.ultima_verif_at else None,
+        'ultima_verif_resultado': cred.ultima_verif_resultado,
     })

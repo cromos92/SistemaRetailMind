@@ -377,6 +377,16 @@ class Dte_Detalle_Pago(models.Model):
         null=True, blank=True,
         help_text="Fecha en que se realizó el pago. Aplica a todos los métodos. Permite fechas pasadas (retroactivos) y futuras (cheques a fecha)."
     )
+    # FK al DTE emitido (factura de venta a este proveedor) usado como instrumento de
+    # compensación. Apunta a Dte, NO a Dte_Detalle_Pago. Null para compensaciones
+    # mismo-proveedor o registros manuales (DTE emitido fuera del sistema).
+    documento_compensacion = models.ForeignKey(
+        Dte, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='compensaciones_emitidas',
+        help_text="DTE emitido (factura de venta a este proveedor) usado como instrumento de "
+                  "compensación de la factura de compra. Null si es compensación mismo-proveedor "
+                  "o registro manual."
+    )
 
     def __str__(self):
         return f"Dte_Detalle_Pago {self.metodo_pago} - {self.monto}"

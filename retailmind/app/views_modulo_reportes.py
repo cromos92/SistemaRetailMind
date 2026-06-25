@@ -4595,6 +4595,8 @@ def api_productos_por_origen(request):
             total_unidades += uds
             total_costo += costo
 
+    _CONCEPTOS_IRREGULARES = {'AJUSTE_POSITIVO', 'AJUSTE_INVENTARIO', 'DEVOLUCION_CLIENTE', 'INGRESO_MANUAL'}
+
     por_origen_data = sorted((
         {
             'concepto': concepto,
@@ -4603,6 +4605,9 @@ def api_productos_por_origen(request):
             'unidades': v['unidades'],
             'costo': round(v['costo'], 0),
             'pct': round(v['skus'] / total_skus * 100, 1) if total_skus else 0,
+            'pct_costo': round(v['costo'] / total_costo * 100, 1) if total_costo else 0,
+            'costo_por_sku': round(v['costo'] / v['skus']) if v['skus'] else 0,
+            'alerta': concepto in _CONCEPTOS_IRREGULARES,
         }
         for concepto, v in por_origen.items()
     ), key=lambda x: x['skus'], reverse=True)
@@ -4612,6 +4617,8 @@ def api_productos_por_origen(request):
          'unidades': por_mes.get(mm, {}).get('unidades', 0)}
         for mm in range(1, 13)
     ]
+
+    mes_pico = max(por_mes_data, key=lambda m: m['skus']) if por_mes_data else {'mes': 0, 'skus': 0}
 
     anios = sorted({f.year for f in primeras.values() if f}, reverse=True)
     anio_actual = timezone.localdate().year
@@ -4625,6 +4632,9 @@ def api_productos_por_origen(request):
             'total_skus': total_skus,
             'total_unidades': total_unidades,
             'total_costo': round(total_costo, 0),
+            'costo_por_sku': round(total_costo / total_skus) if total_skus else 0,
+            'mes_pico': mes_pico['mes'],
+            'mes_pico_skus': mes_pico['skus'],
         },
         'por_origen': por_origen_data,
         'por_mes': por_mes_data,
@@ -9462,3 +9472,294 @@ def obtener_atributo_opciones(request):
     except Exception as e:
         logger.exception("Error al obtener opciones de atributo para reportes")
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ========== REPORTE DE DESPACHOS A TIENDAS (TRASPASO_SALIDA) ==========
+
+@login_required
+def ver_reporte_despachos_tiendas(request):
+    """
+    Vista principal del reporte de despachos a tiendas (traspasos de salida).
+
+    Muestra lo que las sucursales del usuario despacharon hacia las tiendas en
+    un rango de fechas (por defecto, la semana actual), con cantidades por
+    artículo, agrupado por tienda destino y filtrable por proveedor.
+    """
+    empresas_usuario = EmpresaUser.objects.filter(
+        user=request.user,
+        status=True,
+    ).values_list('empresa_id', flat=True)
+    sucursales = Sucursal.objects.filter(empresa_id__in=empresas_usuario).order_by('alias')
+
+    hoy = timezone.localdate()
+    lunes = hoy - timedelta(days=hoy.weekday())
+
+    context = {
+        'sucursales': sucursales,
+        'fecha_desde_default': lunes.strftime('%Y-%m-%d'),
+        'fecha_hasta_default': hoy.strftime('%Y-%m-%d'),
+    }
+    return render(request, 'vistas/modulo_reportes/reporte_despachos_tiendas.html', context)
+
+
+@require_GET
+@login_required
+def obtener_reporte_despachos_tiendas(request):
+    """
+    API del reporte de despachos a tiendas.
+
+    Devuelve, para el rango de fechas indicado (por defecto la semana actual),
+    los despachos (Movimientos_Producto con concepto TRASPASO_SALIDA, estado
+    COMPLETADO) agrupados por artículo y tienda destino, con cantidades.
+
+    El proveedor se deriva de la última recepción de compra (DTE COMPRA) de cada
+    artículo: es una aproximación ("último proveedor del artículo"), no un dato
+    propio del traspaso.
+    """
+    try:
+        # ===== PARÁMETROS =====
+        fecha_desde_str = request.GET.get('fecha_desde', '').strip()
+        fecha_hasta_str = request.GET.get('fecha_hasta', '').strip()
+        sucursal_destino_id = request.GET.get('sucursal_destino_id') or None
+        proveedor_id = request.GET.get('proveedor_id') or None
+
+        hoy = timezone.localdate()
+        try:
+            fecha_desde = (datetime.strptime(fecha_desde_str, '%Y-%m-%d').date()
+                           if fecha_desde_str else hoy - timedelta(days=hoy.weekday()))
+        except ValueError:
+            fecha_desde = hoy - timedelta(days=hoy.weekday())
+        try:
+            fecha_hasta = (datetime.strptime(fecha_hasta_str, '%Y-%m-%d').date()
+                           if fecha_hasta_str else hoy)
+        except ValueError:
+            fecha_hasta = hoy
+
+        if proveedor_id:
+            try:
+                proveedor_id = int(proveedor_id)
+            except (TypeError, ValueError):
+                proveedor_id = None
+
+        # ===== SUCURSALES DEL USUARIO (despachadoras = origen) =====
+        empresas_usuario = EmpresaUser.objects.filter(
+            user=request.user,
+            status=True,
+        ).values_list('empresa_id', flat=True)
+        sucursales_ids = list(
+            Sucursal.objects.filter(empresa_id__in=empresas_usuario).values_list('id', flat=True)
+        )
+
+        # ===== MOVIMIENTOS DE DESPACHO (TRASPASO_SALIDA) =====
+        movimientos = Movimientos_Producto.objects.filter(
+            concepto='TRASPASO_SALIDA',
+            estado='COMPLETADO',
+            fecha__gte=fecha_desde,
+            fecha__lte=fecha_hasta,
+            sucursal_origen_id__in=sucursales_ids,
+        )
+        if sucursal_destino_id:
+            movimientos = movimientos.filter(sucursal_destino_id=sucursal_destino_id)
+
+        # Se agrupa por CÓDIGO de artículo (no por producto_id): en este catálogo
+        # el mismo `articulo` existe como varias filas Producto (una por sucursal),
+        # y el usuario razona en códigos de artículo.
+        # `cantidad` de TRASPASO_SALIDA es negativa (egreso). En un traspaso interno:
+        #   costo       = costo origen (lo que costó al origen)
+        #   sobreprecio = recargo de traspaso
+        #   precio      = costo destino = costo + sobreprecio (lo que se carga al destino)
+        # NO es precio de venta al público. Valorizamos los tres por separado.
+        agregado = list(movimientos.values(
+            'ProductoTalla__producto__articulo',
+            'ProductoTalla__producto__descripcion',
+            'sucursal_destino__alias',
+        ).annotate(
+            uds=Sum('cantidad'),
+            valor_costo=Sum(F('cantidad') * F('costo')),
+            valor_sobreprecio=Sum(F('cantidad') * F('sobreprecio')),
+            valor_destino=Sum(F('cantidad') * F('precio')),
+            lineas=Count('id'),
+        ))
+
+        # ===== CONTRAPARTE RECIBIDA EN DESTINO (TRASPASO_ENTRADA) =====
+        # Se atribuye a cada proveedor vía el artículo (igual que el despacho).
+        entradas = Movimientos_Producto.objects.filter(
+            concepto='TRASPASO_ENTRADA',
+            estado='COMPLETADO',
+            fecha__gte=fecha_desde,
+            fecha__lte=fecha_hasta,
+            sucursal_origen_id__in=sucursales_ids,
+        )
+        if sucursal_destino_id:
+            entradas = entradas.filter(sucursal_destino_id=sucursal_destino_id)
+        entradas_por_articulo = list(entradas.values(
+            'ProductoTalla__producto__articulo',
+        ).annotate(uds=Sum('cantidad')))
+
+        # ===== DERIVAR PROVEEDOR POR ARTÍCULO (última recepción de compra) =====
+        articulos = {
+            row['ProductoTalla__producto__articulo']
+            for row in agregado if row['ProductoTalla__producto__articulo']
+        } | {
+            row['ProductoTalla__producto__articulo']
+            for row in entradas_por_articulo if row['ProductoTalla__producto__articulo']
+        }
+        proveedor_por_articulo = {}
+        if articulos:
+            recepciones = Productos_Recepcionados.objects.filter(
+                producto_talla__producto__articulo__in=articulos,
+                dte__tipo_transaccion='COMPRA',
+                dte__emisor__isnull=False,
+            ).select_related(
+                'dte', 'dte__emisor', 'producto_talla__producto'
+            ).order_by('dte__fecha_emision')
+            # Orden ascendente: la última recepción (más reciente) sobrescribe.
+            for rec in recepciones:
+                art = rec.producto_talla.producto.articulo
+                proveedor_por_articulo[art] = {
+                    'id': rec.dte.emisor_id,
+                    'nombre': rec.dte.emisor.nombre,
+                }
+
+        SIN_PROV = 'Sin recepción'
+
+        def _coincide_filtro(prov):
+            return not proveedor_id or (prov and prov['id'] == proveedor_id)
+
+        # ===== PIVOTE ARTÍCULO × TIENDA (+ valorización) + ACUMULADO POR PROVEEDOR =====
+        productos = {}
+        prov_acc = {}
+
+        for row in agregado:
+            art = row['ProductoTalla__producto__articulo']
+            uds = abs(row['uds'] or 0)
+            if uds == 0:
+                continue
+
+            prov = proveedor_por_articulo.get(art)
+            if not _coincide_filtro(prov):  # filtro por proveedor (derivado del artículo)
+                continue
+
+            v_costo = abs(row['valor_costo'] or 0)
+            v_sobre = abs(row['valor_sobreprecio'] or 0)
+            v_destino = abs(row['valor_destino'] or 0)
+            suc_alias = row['sucursal_destino__alias'] or 'Sin tienda'
+            prov_nombre = prov['nombre'] if prov else SIN_PROV
+
+            # --- pivote por artículo ---
+            if art not in productos:
+                productos[art] = {
+                    'articulo': art,
+                    'descripcion': row['ProductoTalla__producto__descripcion'] or '',
+                    'proveedor': prov_nombre,
+                    'tiendas': {},
+                    'total': 0,
+                    'valor_costo': 0,
+                    'valor_sobreprecio': 0,
+                    'valor_destino': 0,
+                }
+            productos[art]['tiendas'][suc_alias] = (
+                productos[art]['tiendas'].get(suc_alias, 0) + uds
+            )
+            productos[art]['total'] += uds
+            productos[art]['valor_costo'] += v_costo
+            productos[art]['valor_sobreprecio'] += v_sobre
+            productos[art]['valor_destino'] += v_destino
+
+            # --- acumulado por proveedor ---
+            acc = prov_acc.setdefault(prov_nombre, {
+                'proveedor': prov_nombre, 'despachado': 0, 'recibido': 0,
+                'valor_costo': 0, 'valor_sobreprecio': 0, 'valor_destino': 0,
+                '_articulos': set(), '_tiendas': set(),
+            })
+            acc['despachado'] += uds
+            acc['valor_costo'] += v_costo
+            acc['valor_sobreprecio'] += v_sobre
+            acc['valor_destino'] += v_destino
+            acc['_articulos'].add(art)
+            acc['_tiendas'].add(suc_alias)
+
+        datos = sorted(productos.values(), key=lambda p: p['total'], reverse=True)
+
+        # Tiendas presentes (columnas del pivote), tras filtros
+        tiendas_presentes = set()
+        for p in datos:
+            tiendas_presentes.update(p['tiendas'].keys())
+        tiendas_list = sorted(tiendas_presentes)
+
+        # Atribuir lo RECIBIDO a cada proveedor (vía artículo)
+        for row in entradas_por_articulo:
+            art = row['ProductoTalla__producto__articulo']
+            recibido = abs(row['uds'] or 0)
+            if recibido == 0:
+                continue
+            prov = proveedor_por_articulo.get(art)
+            if not _coincide_filtro(prov):
+                continue
+            prov_nombre = prov['nombre'] if prov else SIN_PROV
+            acc = prov_acc.setdefault(prov_nombre, {
+                'proveedor': prov_nombre, 'despachado': 0, 'recibido': 0,
+                'valor_costo': 0, 'valor_sobreprecio': 0, 'valor_destino': 0,
+                '_articulos': set(), '_tiendas': set(),
+            })
+            acc['recibido'] += recibido
+
+        # ===== TOTALES =====
+        total_despachado = sum(p['total'] for p in datos)
+        total_valor_costo = sum(p['valor_costo'] for p in datos)
+        total_valor_sobreprecio = sum(p['valor_sobreprecio'] for p in datos)
+        total_valor_destino = sum(p['valor_destino'] for p in datos)
+        total_recibido = sum(a['recibido'] for a in prov_acc.values())
+
+        # ===== POR PROVEEDOR (indicadores finales) =====
+        por_proveedor = []
+        for acc in prov_acc.values():
+            desp = acc['despachado']
+            rec = acc['recibido']
+            por_proveedor.append({
+                'proveedor': acc['proveedor'],
+                'despachado': desp,
+                'recibido': rec,
+                'pendiente': max(desp - rec, 0),
+                'tasa_recepcion': round(rec / desp * 100, 1) if desp > 0 else 0,
+                'pct_unidades': round(desp / total_despachado * 100, 1) if total_despachado > 0 else 0,
+                'valor_costo': acc['valor_costo'],
+                'valor_sobreprecio': acc['valor_sobreprecio'],
+                'valor_destino': acc['valor_destino'],
+                'articulos': len(acc['_articulos']),
+                'tiendas': len(acc['_tiendas']),
+            })
+        por_proveedor.sort(key=lambda x: x['despachado'], reverse=True)
+
+        # ===== RESUMEN GLOBAL =====
+        resumen = {
+            'total_articulos': len(datos),
+            'total_proveedores': len([p for p in por_proveedor if p['despachado'] > 0]),
+            'total_despachado': total_despachado,
+            'total_recibido': total_recibido,
+            'total_pendiente': max(total_despachado - total_recibido, 0),
+            'tasa_recepcion': round(total_recibido / total_despachado * 100, 1) if total_despachado > 0 else 0,
+            'total_tiendas': len(tiendas_list),
+            'valor_costo': total_valor_costo,
+            'valor_sobreprecio': total_valor_sobreprecio,
+            'valor_destino': total_valor_destino,
+        }
+
+        return JsonResponse({
+            'success': True,
+            'datos': datos,
+            'por_proveedor': por_proveedor,
+            'tiendas': tiendas_list,
+            'resumen': resumen,
+            'parametros': {
+                'fecha_desde': fecha_desde.strftime('%Y-%m-%d'),
+                'fecha_hasta': fecha_hasta.strftime('%Y-%m-%d'),
+            },
+        })
+
+    except Exception as e:
+        logger.exception("Error en reporte de despachos a tiendas")
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al generar reporte: {str(e)}',
+        }, status=500)
