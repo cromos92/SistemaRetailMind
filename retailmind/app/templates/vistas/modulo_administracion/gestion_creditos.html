@@ -695,6 +695,9 @@
                 <button class="btn btn-lg nexo-btn-secondary" id="btn-nuevo-trabajador" title="Crear nuevo beneficiario">
                     <i class="ri-user-add-line me-1"></i> Nuevo Beneficiario
                 </button>
+                <button class="btn btn-lg nexo-btn-secondary" id="btn-editar-trabajador" title="Editar un beneficiario existente">
+                    <i class="ri-user-settings-line me-1"></i> Editar Beneficiario
+                </button>
                 <button class="btn btn-lg nexo-btn-primary" id="btn-nuevo-credito">
                     <i class="ri-add-line me-1"></i> Nuevo Crédito
                 </button>
@@ -1272,6 +1275,84 @@
     </div>
 </div>
 
+<!-- Modal Editar Beneficiario - NEXO Style -->
+<div class="modal fade" id="modal-editar-trabajador" tabindex="-1" aria-labelledby="modal-editar-trabajador-label" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content nexo-modal">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--nexo-primary), var(--nexo-info)); border: none;">
+                <h5 class="modal-title" id="modal-editar-trabajador-label" style="color: white;">
+                    <i class="ri-user-settings-line me-1"></i> Editar Beneficiario
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="form-editar-trabajador">
+                <input type="hidden" id="editar-trabajador-id">
+                <div class="modal-body">
+                    <div class="alert" style="background-color: rgba(0, 108, 255, 0.1); border-left: 4px solid var(--nexo-info); border-radius: var(--nexo-radius-md);">
+                        <i class="ri-information-line" style="color: var(--nexo-info);"></i>
+                        Selecciona un beneficiario y corrige sus datos. Los cambios afectan su ficha en todo el sistema.
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="nexo-form-label">Beneficiario a editar <span style="color: var(--nexo-error);">*</span></label>
+                            <select class="form-select nexo-input" id="editar-trabajador-selector" required>
+                                <option value="">Seleccionar beneficiario...</option>
+                            </select>
+                        </div>
+
+                        <!-- Datos Básicos -->
+                        <div class="col-12 mt-3">
+                            <h6 style="color: var(--nexo-primary); font-weight: 600; border-bottom: 1px solid var(--nexo-gray-300); padding-bottom: 8px;">
+                                <i class="ri-user-line me-1"></i> Datos Básicos
+                            </h6>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="nexo-form-label">Nombre Completo <span style="color: var(--nexo-error);">*</span></label>
+                            <input type="text" class="form-control nexo-input" id="editar-trabajador-nombre" placeholder="Ej: Juan Pérez González">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="nexo-form-label">RUT</label>
+                            <input type="text" class="form-control nexo-input" id="editar-trabajador-rut" placeholder="12.345.678-9">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="nexo-form-label">Correo Electrónico</label>
+                            <input type="email" class="form-control nexo-input" id="editar-trabajador-correo" placeholder="correo@ejemplo.com">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="nexo-form-label">Fecha de Nacimiento</label>
+                            <input type="text" class="form-control nexo-input" id="editar-trabajador-fecha-nacimiento" placeholder="dd-mm-yyyy">
+                        </div>
+
+                        <!-- Empresa -->
+                        <div class="col-12 mt-3">
+                            <h6 style="color: var(--nexo-primary); font-weight: 600; border-bottom: 1px solid var(--nexo-gray-300); padding-bottom: 8px;">
+                                <i class="ri-building-line me-1"></i> Empresa
+                            </h6>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="nexo-form-label">Empresa a la que pertenece</label>
+                            <select class="form-select nexo-input" id="editar-trabajador-empresa">
+                                <option value="">-- Sin cambios --</option>
+                            </select>
+                            <small style="color: var(--nexo-text-muted);">
+                                <i class="ri-information-line me-1"></i>
+                                Esta es la empresa que aparece como "Empresa Beneficiario" en el reporte.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn nexo-btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn nexo-btn-primary" id="btn-guardar-editar-trabajador">
+                        <i class="ri-save-line me-1"></i> Guardar Cambios
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Crear Trabajador - NEXO Style -->
 <div class="modal fade" id="modal-nuevo-trabajador" tabindex="-1" aria-labelledby="modal-trabajador-label" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-lg">
@@ -1459,6 +1540,20 @@ $(document).ready(function() {
         crearNuevoTrabajador();
     });
 
+    // Editar beneficiario existente
+    $('#btn-editar-trabajador').click(function() {
+        openEditarTrabajadorModal();
+    });
+
+    $('#editar-trabajador-selector').on('change', function() {
+        prefillEditarTrabajador($(this).val());
+    });
+
+    $('#form-editar-trabajador').on('submit', function(e) {
+        e.preventDefault();
+        actualizarTrabajador();
+    });
+
     // Event listeners para cálculo automático de vencimiento
     $('#mes-primer-pago, #año-primer-pago, #numero-cuotas').on('change', function() {
         calculateVencimiento();
@@ -1598,23 +1693,30 @@ $(document).ready(function() {
         return `${year}-${month}-${day}`;
     }
     
+    // Cache de beneficiarios para pre-llenar el modal de edición
+    window.trabajadoresData = [];
+
     function loadTrabajadores() {
         $.get('/app/api/creditos/trabajadores/')
             .done(function(response) {
                 if (response.success) {
                     const trabajadores = response.trabajadores;
+                    window.trabajadoresData = trabajadores;
                     let options = '<option value="">Seleccionar beneficiario...</option>';
                     let filterOptions = '<option value="">Todos</option>';
+                    let editarOptions = '<option value="">Seleccionar beneficiario...</option>';
 
                     trabajadores.forEach(function(trabajador) {
                         const ident = trabajador.rut ? ' (' + trabajador.rut + ')' : '';
                         options += `<option value="${trabajador.id}">${trabajador.nombre}${ident}</option>`;
                         filterOptions += `<option value="${trabajador.id}">${trabajador.nombre}</option>`;
+                        editarOptions += `<option value="${trabajador.id}">${trabajador.nombre}${ident}</option>`;
                     });
 
                     $('#trabajador-id').html(options);
                     $('#filtro-trabajador').html(filterOptions);
-                    
+                    $('#editar-trabajador-selector').html(editarOptions);
+
                     // Inicializar Select2 con búsqueda para el trabajador
                     if ($('#trabajador-id').data('select2')) {
                         $('#trabajador-id').select2('destroy');
@@ -1624,6 +1726,17 @@ $(document).ready(function() {
                         allowClear: true,
                         width: '100%',
                         dropdownParent: $('#modal-credito')
+                    });
+
+                    // Select2 con búsqueda para el selector de edición
+                    if ($('#editar-trabajador-selector').data('select2')) {
+                        $('#editar-trabajador-selector').select2('destroy');
+                    }
+                    $('#editar-trabajador-selector').select2({
+                        placeholder: 'Seleccionar beneficiario...',
+                        allowClear: true,
+                        width: '100%',
+                        dropdownParent: $('#modal-editar-trabajador')
                     });
                 }
             })
@@ -1908,6 +2021,133 @@ $(document).ready(function() {
             },
             error: function(xhr) {
                 const error = xhr.responseJSON?.error || 'Error al crear beneficiario';
+                showError(error);
+            }
+        });
+    }
+
+    // ============ EDITAR BENEFICIARIO ============
+    function openEditarTrabajadorModal() {
+        $('#form-editar-trabajador')[0].reset();
+        $('#editar-trabajador-id').val('');
+        $('#editar-trabajador-empresa').html('<option value="">-- Sin cambios --</option>');
+        // Limpiar el selector (compatible con Select2)
+        $('#editar-trabajador-selector').val(null).trigger('change.select2');
+
+        flatpickr('#editar-trabajador-fecha-nacimiento', {
+            dateFormat: 'd-m-Y',
+            locale: 'es',
+            allowInput: true
+        });
+
+        $('#modal-editar-trabajador').modal('show');
+    }
+
+    function prefillEditarTrabajador(trabajadorId) {
+        if (!trabajadorId) {
+            $('#editar-trabajador-id').val('');
+            $('#editar-trabajador-nombre').val('');
+            $('#editar-trabajador-rut').val('');
+            $('#editar-trabajador-correo').val('');
+            $('#editar-trabajador-fecha-nacimiento').val('');
+            cargarEmpresasParaEditar(null);
+            return;
+        }
+
+        const t = (window.trabajadoresData || []).find(x => String(x.id) === String(trabajadorId));
+        if (!t) return;
+
+        $('#editar-trabajador-id').val(t.id);
+        $('#editar-trabajador-nombre').val(t.nombre || '');
+        $('#editar-trabajador-rut').val(t.rut || '');
+        $('#editar-trabajador-correo').val(t.correo || '');
+        $('#editar-trabajador-fecha-nacimiento').val(t.fecha_nacimiento || '');
+        cargarEmpresasParaEditar(t.empresa_id || null);
+    }
+
+    function cargarEmpresasParaEditar(empresaSeleccionadaId) {
+        $.get('/app/api/empresas/')
+            .done(function(response) {
+                if (response.success && response.empresas) {
+                    let options = '<option value="">-- Sin cambios --</option>';
+                    response.empresas.forEach(function(emp) {
+                        const sel = (String(emp.id) === String(empresaSeleccionadaId)) ? ' selected' : '';
+                        options += `<option value="${emp.id}"${sel}>${emp.nombre}</option>`;
+                    });
+                    $('#editar-trabajador-empresa').html(options);
+                }
+            })
+            .fail(function() {
+                console.warn('No se pudieron cargar las empresas');
+            });
+    }
+
+    function actualizarTrabajador() {
+        const trabajadorId = $('#editar-trabajador-id').val();
+        const nombre = $('#editar-trabajador-nombre').val().trim();
+        const rut = $('#editar-trabajador-rut').val().trim();
+        const correo = $('#editar-trabajador-correo').val().trim();
+        const fechaNacimiento = $('#editar-trabajador-fecha-nacimiento').val();
+        const empresaId = $('#editar-trabajador-empresa').val();
+
+        if (!trabajadorId) {
+            showError('Selecciona un beneficiario para editar');
+            return;
+        }
+        if (!nombre) {
+            showError('El nombre es requerido');
+            return;
+        }
+        if (rut && !/^[\d]{1,2}\.?[\d]{3}\.?[\d]{3}-?[\dkK]$/.test(rut.replace(/\./g, ''))) {
+            showError('El formato del RUT no es válido');
+            return;
+        }
+        if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+            showError('El formato del correo no es válido');
+            return;
+        }
+
+        Swal.fire({
+            title: 'Guardando cambios...',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+
+        $.ajax({
+            url: '/app/api/creditos/trabajadores/actualizar/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                trabajador_id: parseInt(trabajadorId),
+                nombre: nombre,
+                rut: rut,
+                correo: correo,
+                fecha_nacimiento: fechaNacimiento,
+                empresa_id: empresaId ? parseInt(empresaId) : null
+            }),
+            success: function(response) {
+                if (response.success) {
+                    $('#modal-editar-trabajador').modal('hide');
+                    let empresaMsg = response.trabajador.empresa
+                        ? `<br><small style="color: var(--nexo-info);"><i class="ri-building-line me-1"></i>Empresa: ${response.trabajador.empresa}</small>`
+                        : '';
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Beneficiario Actualizado!',
+                        html: `
+                            <strong>${response.trabajador.nombre}</strong><br>
+                            <small style="color: var(--nexo-text-muted);">RUT: ${response.trabajador.rut || 'N/A'}</small>
+                            ${empresaMsg}
+                        `,
+                        confirmButtonColor: 'var(--nexo-primary)'
+                    });
+                    loadTrabajadores();
+                } else {
+                    showError(response.error);
+                }
+            },
+            error: function(xhr) {
+                const error = xhr.responseJSON?.error || 'Error al actualizar beneficiario';
                 showError(error);
             }
         });
@@ -2699,46 +2939,33 @@ $(document).ready(function() {
         });
     }
     
+    // Formatea una referencia de pago como número de boleta "BE-<número>".
+    // Extrae solo los dígitos; si no hay número, devuelve cadena vacía.
+    function formatBoleta(raw) {
+        if (!raw) return '';
+        const str = String(raw).trim();
+        if (!str) return '';
+        const digits = str.replace(/\D/g, '');
+        if (!digits) return '';
+        return `BE-${digits}`;
+    }
+
     function generateExcelFile(creditos) {
         if (creditos.length === 0) {
             Swal.fire('Sin datos', 'No hay créditos para exportar', 'info');
             return;
         }
 
-        // Headers con nombres amigables - Incluyendo información de pagos
+        // Reporte resumido (8 columnas)
         const headers = [
             'N° Crédito',
             'Beneficiario',
             'RUT Beneficiario',
             'Empresa Beneficiario',
-            'Empresa Crédito',
-            'Sucursal Otorgamiento',
-            'Dirección Sucursal',
-            'Tipo Crédito',
-            'Estado',
-            'Monto Solicitado',
-            'Monto Aprobado',
-            'Monto Pagado',
-            'Saldo Pendiente',
-            '% Pagado',
-            'N° Cuotas',
-            'Valor Cuota',
-            'Tasa Interés',
-            'Fecha Solicitud',
+            'Monto Usado',
             'Mes Solicitud',
-            'Fecha Vencimiento',
-            'Mes Vencimiento',
-            'Días para Vencer',
-            'Vencido',
-            'Usuario Creación',
-            'Usuario Autorización',
-            // === NUEVAS COLUMNAS DE PAGO ===
             'Sucursal Uso Ticket',
-            'Número Boleta',
-            'Fecha Pago',
-            'Monto Último Pago',
-            'Método Pago',
-            'Registrado Por'
+            'Número Boleta'
         ];
 
         // Crear contenido CSV con BOM para UTF-8
@@ -2746,42 +2973,35 @@ $(document).ready(function() {
         csvRows.push(headers.join(';'));
 
         creditos.forEach(c => {
-            // Datos del último pago (si existe)
-            const pago = c.ultimo_pago || {};
-            
+            const usos = c.usos || [];
+
+            // Sucursal Uso: "alias - dirección" de cada uso, sin duplicados
+            const sucursalesSet = new Set();
+            usos.forEach(u => {
+                if (u.sucursal_cobro) {
+                    const dir = u.sucursal_direccion ? ` - ${u.sucursal_direccion}` : '';
+                    sucursalesSet.add(`${u.sucursal_cobro}${dir}`);
+                }
+            });
+            const sucursalUso = Array.from(sucursalesSet).join(' | ');
+
+            // Número Boleta: "BE-<número>" de cada uso, sin duplicados
+            const boletasSet = new Set();
+            usos.forEach(u => {
+                const b = formatBoleta(u.numero_boleta);
+                if (b) boletasSet.add(b);
+            });
+            const numeroBoleta = Array.from(boletasSet).join(', ');
+
             const row = [
                 c.numero_credito || '',
                 c.trabajador?.nombre || '',
                 c.trabajador?.rut || '',
                 c.trabajador?.empresa || '',
-                c.empresa?.nombre || '',
-                c.sucursal || '',
-                c.sucursal_direccion || '',
-                c.tipo_credito_display || '',
-                c.estado_display || '',
-                c.monto_solicitado || 0,
-                c.monto_aprobado || 0,
                 c.monto_pagado || 0,
-                c.saldo_pendiente || 0,
-                (c.porcentaje_pagado || 0).toFixed(1),
-                c.numero_cuotas || 1,
-                c.valor_cuota || 0,
-                (c.tasa_interes || 0) + '%',
-                c.fecha_solicitud || '',
                 formatMonthLabel(c.fecha_solicitud),
-                c.fecha_vencimiento || '',
-                formatMonthLabel(c.fecha_vencimiento),
-                c.dias_para_vencimiento || 0,
-                c.esta_vencido ? 'SÍ' : 'NO',
-                c.solicitado_por || '',
-                c.autorizado_por || '',
-                // === DATOS DEL PAGO ===
-                pago.sucursal_cobro || '',
-                pago.numero_boleta || '',
-                pago.fecha_pago || '',
-                pago.monto_pago || '',
-                pago.metodo_pago || '',
-                pago.registrado_por || ''
+                sucursalUso,
+                numeroBoleta
             ];
             // Escapar comillas y wrap en comillas si hay punto y coma
             csvRows.push(row.map(field => {

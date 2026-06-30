@@ -160,6 +160,7 @@ from .views_modulo_creditos import (
     # Utilidades
     obtener_trabajadores_credito,
     crear_trabajador_credito,
+    actualizar_trabajador_credito,
     validar_codigo_trabajador,
     obtener_sucursales_empresa,
     obtener_empresas_disponibles,
@@ -886,6 +887,7 @@ urlpatterns = [
     path('api/creditos/firma/', registrar_firma_credito, name='registrar_firma_credito'),
     path('api/creditos/trabajadores/', obtener_trabajadores_credito, name='obtener_trabajadores_credito'),
     path('api/creditos/trabajadores/crear/', crear_trabajador_credito, name='crear_trabajador_credito'),
+    path('api/creditos/trabajadores/actualizar/', actualizar_trabajador_credito, name='actualizar_trabajador_credito'),
     path('api/creditos/trabajadores/validar-codigo/', validar_codigo_trabajador, name='validar_codigo_trabajador'),
     path('api/creditos/sucursales/', obtener_sucursales_empresa, name='obtener_sucursales_empresa'),
     path('api/empresas/', obtener_empresas_disponibles, name='obtener_empresas_disponibles'),

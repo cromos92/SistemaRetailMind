@@ -361,31 +361,34 @@ def cargar_creditos_trabajadores(request):
         # Serializar datos
         creditos_data = []
         for credito in creditos_page:
-            # Obtener información del último pago si existe
-            ultimo_pago = credito.pagos.select_related('sucursal_cobro', 'registrado_por').order_by('-fecha_pago').first()
-            
-            # Datos del pago
-            pago_info = None
-            if ultimo_pago:
-                # Intentar extraer número de boleta de observaciones o referencia
+            # Obtener TODOS los usos/pagos del crédito.
+            # Un crédito puede usarse en varias compras (varias boletas / varias
+            # sucursales), por eso se devuelven todos los usos ordenados
+            # cronológicamente; el reporte luego los agrega.
+            usos = []
+            for pago in credito.pagos.select_related('sucursal_cobro', 'registrado_por').order_by('fecha_pago', 'created_at'):
+                # Intentar extraer número de boleta de la referencia o de las observaciones
                 numero_boleta = ''
-                if ultimo_pago.referencia_pago:
-                    numero_boleta = ultimo_pago.referencia_pago
-                elif ultimo_pago.observaciones:
+                if pago.referencia_pago:
+                    numero_boleta = pago.referencia_pago.strip()
+                elif pago.observaciones:
                     # Buscar patrón de ticket en observaciones
-                    import re
-                    match = re.search(r'Ticket\s*#?(\d+)', ultimo_pago.observaciones)
+                    match = re.search(r'Ticket\s*#?(\d+)', pago.observaciones)
                     if match:
                         numero_boleta = match.group(1)
-                
-                pago_info = {
-                    'sucursal_cobro': ultimo_pago.sucursal_cobro.alias if ultimo_pago.sucursal_cobro else '',
+
+                usos.append({
+                    'sucursal_cobro': pago.sucursal_cobro.alias if pago.sucursal_cobro else '',
+                    'sucursal_direccion': (pago.sucursal_cobro.direccion or '') if pago.sucursal_cobro else '',
                     'numero_boleta': numero_boleta,
-                    'fecha_pago': ultimo_pago.fecha_pago.strftime('%d/%m/%Y'),
-                    'monto_pago': float(ultimo_pago.monto_pago),
-                    'metodo_pago': ultimo_pago.get_metodo_pago_display(),
-                    'registrado_por': ultimo_pago.registrado_por.username if ultimo_pago.registrado_por else ''
-                }
+                    'fecha_pago': pago.fecha_pago.strftime('%d/%m/%Y'),
+                    'monto_pago': float(pago.monto_pago),
+                    'metodo_pago': pago.get_metodo_pago_display(),
+                    'registrado_por': pago.registrado_por.username if pago.registrado_por else ''
+                })
+
+            # Compatibilidad: último uso/pago registrado
+            pago_info = usos[-1] if usos else None
             
             creditos_data.append({
                 'id': credito.id,
@@ -418,7 +421,8 @@ def cargar_creditos_trabajadores(request):
                 'valor_cuota': float(credito.valor_cuota) if credito.valor_cuota else None,
                 'tasa_interes': float(credito.tasa_interes),
                 'requiere_aval': credito.requiere_aval,
-                'ultimo_pago': pago_info
+                'ultimo_pago': pago_info,
+                'usos': usos,
             })
         
         return JsonResponse({
@@ -1023,6 +1027,8 @@ def obtener_trabajadores_credito(request):
                 'empresa': cli.empresa.nombre if cli.empresa else '',
                 'empresa_id': cli.empresa.id if cli.empresa else None,
                 'tipo_cliente': cli.tipo_cliente,
+                'correo': cli.email or '',
+                'fecha_nacimiento': cli.fecha_nacimiento.strftime('%d-%m-%Y') if cli.fecha_nacimiento else '',
             })
         
         return JsonResponse({
@@ -1124,6 +1130,109 @@ def crear_trabajador_credito(request):
         return JsonResponse({
             'success': False,
             'error': f'Error al crear beneficiario: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@require_POST
+def actualizar_trabajador_credito(request):
+    """Editar los datos de un beneficiario (Cliente) ya existente.
+
+    Permite corregir nombre, RUT, correo, fecha de nacimiento y la empresa a la
+    que pertenece el beneficiario. La empresa solo se modifica si se envía un
+    `empresa_id` válido; si llega vacío se conserva la empresa actual.
+    """
+    try:
+        data = json.loads(request.body)
+
+        trabajador_id = data.get('trabajador_id')
+        if not trabajador_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'ID de beneficiario requerido'
+            }, status=400)
+
+        cliente = Cliente.objects.filter(id=trabajador_id).first()
+        if not cliente:
+            return JsonResponse({
+                'success': False,
+                'error': 'Beneficiario no encontrado'
+            }, status=404)
+
+        nombre = data.get('nombre', '').strip()
+        rut = data.get('rut', '').strip()
+        correo = data.get('correo', '').strip()
+        fecha_nacimiento = data.get('fecha_nacimiento')
+        empresa_id = data.get('empresa_id')
+
+        if not nombre:
+            return JsonResponse({
+                'success': False,
+                'error': 'El nombre es requerido'
+            }, status=400)
+
+        # Validar RUT único (excluyendo al propio beneficiario)
+        if rut:
+            existente = Cliente.objects.filter(rut__iexact=rut).exclude(id=cliente.id).first()
+            if existente:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Ya existe otro cliente con RUT "{rut}": {existente.nombre_completo}'
+                }, status=400)
+
+        # Parsear fecha de nacimiento (acepta DD-MM-YYYY)
+        fecha_nacimiento_parsed = None
+        if fecha_nacimiento:
+            try:
+                if '-' in fecha_nacimiento and len(fecha_nacimiento.split('-')[0]) == 2:
+                    partes = fecha_nacimiento.split('-')
+                    fecha_nacimiento_parsed = f"{partes[2]}-{partes[1]}-{partes[0]}"
+                else:
+                    fecha_nacimiento_parsed = fecha_nacimiento
+            except Exception:
+                pass
+
+        # Empresa: solo se reemplaza si llega un id válido
+        if empresa_id:
+            empresa_nueva = Empresa.objects.filter(id=empresa_id).first()
+            if empresa_nueva:
+                cliente.empresa = empresa_nueva
+
+        # Separar nombre completo en primer nombre + apellido (mismo criterio que al crear)
+        partes_nombre = nombre.split(None, 1)
+        primer_nombre = partes_nombre[0]
+        apellido = partes_nombre[1] if len(partes_nombre) > 1 else ''
+
+        cliente.nombre = primer_nombre
+        cliente.apellido = apellido
+        cliente.rut = rut or None
+        cliente.email = correo or None
+        if fecha_nacimiento_parsed:
+            cliente.fecha_nacimiento = fecha_nacimiento_parsed
+        cliente.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Beneficiario actualizado exitosamente',
+            'trabajador': {
+                'id': cliente.id,
+                'nombre': cliente.nombre_completo,
+                'rut': cliente.rut or '',
+                'correo': cliente.email or '',
+                'empresa': cliente.empresa.nombre if cliente.empresa else None,
+                'empresa_id': cliente.empresa.id if cliente.empresa else None,
+            }
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Datos JSON inválidos'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al actualizar beneficiario: {str(e)}'
         }, status=500)
 
 
