@@ -205,7 +205,20 @@
                             <span class="text-muted">por página</span>
                         </div>
                     </div>
-                    <ul class="pagination pagination-rounded mb-0" id="paginacion" style="font-size:12px;"></ul>
+                    <div class="d-flex align-items-center gap-2">
+                        <div id="paginacionNavInfo" class="d-flex align-items-center gap-1" style="font-size:11px; display:none;">
+                            <span class="text-muted">
+                                Página <strong id="paginaActualLabel">1</strong> de <strong id="totalPaginasLabel">1</strong>
+                            </span>
+                            <span class="text-muted ms-1">· Ir a</span>
+                            <input type="number" id="inputIrPagina" min="1" value="1"
+                                   class="form-control form-control-sm text-center"
+                                   style="width:60px; font-size:11px; padding:2px 4px;"
+                                   onkeydown="if(event.key==='Enter'){irAPaginaInput(); return false;}"
+                                   onchange="irAPaginaInput()">
+                        </div>
+                        <ul class="pagination pagination-rounded mb-0" id="paginacion" style="font-size:12px;"></ul>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1515,44 +1528,91 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function actualizarPaginacion() {
-        const totalPaginas = Math.ceil(totalDocumentos / documentosPorPagina);
+        const totalPaginas = Math.max(1, Math.ceil(totalDocumentos / documentosPorPagina));
         const paginacion = document.getElementById('paginacion');
-        
+
+        // Clamp defensivo: si la página actual quedó fuera de rango (p. ej. tras
+        // cambiar el tamaño de página o aplicar un filtro), la ajustamos.
+        if (paginaActual > totalPaginas) paginaActual = totalPaginas;
+        if (paginaActual < 1) paginaActual = 1;
+
+        const enPrimera = paginaActual === 1;
+        const enUltima = paginaActual === totalPaginas;
+
         let html = '';
-        
-        // Botón anterior
+
+        // Botón "Primera" («)
         html += `
-            <li class="page-item ${paginaActual === 1 ? 'disabled' : ''}">
-                <a class="page-link" href="#" onclick="cambiarPagina(${paginaActual - 1})">Anterior</a>
+            <li class="page-item ${enPrimera ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="cambiarPagina(1); return false;" title="Primera página" aria-label="Primera">
+                    <i class="ri-skip-back-mini-line"></i>
+                </a>
             </li>
         `;
-        
-        // Números de página
+
+        // Botón "Anterior"
+        html += `
+            <li class="page-item ${enPrimera ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="cambiarPagina(${paginaActual - 1}); return false;" title="Anterior" aria-label="Anterior">
+                    <i class="ri-arrow-left-s-line"></i>
+                </a>
+            </li>
+        `;
+
+        // Números de página (ventana deslizante alrededor de la actual)
         for (let i = 1; i <= totalPaginas; i++) {
             if (i === 1 || i === totalPaginas || (i >= paginaActual - 2 && i <= paginaActual + 2)) {
                 html += `
                     <li class="page-item ${i === paginaActual ? 'active' : ''}">
-                        <a class="page-link" href="#" onclick="cambiarPagina(${i})">${i}</a>
+                        <a class="page-link" href="#" onclick="cambiarPagina(${i}); return false;">${i}</a>
                     </li>
                 `;
             } else if (i === paginaActual - 3 || i === paginaActual + 3) {
-                html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                html += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
             }
         }
-        
-        // Botón siguiente
+
+        // Botón "Siguiente"
         html += `
-            <li class="page-item ${paginaActual === totalPaginas ? 'disabled' : ''}">
-                <a class="page-link" href="#" onclick="cambiarPagina(${paginaActual + 1})">Siguiente</a>
+            <li class="page-item ${enUltima ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="cambiarPagina(${paginaActual + 1}); return false;" title="Siguiente" aria-label="Siguiente">
+                    <i class="ri-arrow-right-s-line"></i>
+                </a>
             </li>
         `;
-        
+
+        // Botón "Última" (»)
+        html += `
+            <li class="page-item ${enUltima ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="cambiarPagina(${totalPaginas}); return false;" title="Última página" aria-label="Última">
+                    <i class="ri-skip-forward-mini-line"></i>
+                </a>
+            </li>
+        `;
+
         paginacion.innerHTML = html;
-        
-        // Actualizar info
-        const inicio = (paginaActual - 1) * documentosPorPagina + 1;
+
+        // "Página X de Y" + input para saltar (solo útil cuando hay varias páginas)
+        const navInfo = document.getElementById('paginacionNavInfo');
+        if (navInfo) {
+            if (totalPaginas > 1) {
+                navInfo.style.display = '';
+                document.getElementById('paginaActualLabel').textContent = paginaActual;
+                document.getElementById('totalPaginasLabel').textContent = totalPaginas;
+                const inputIr = document.getElementById('inputIrPagina');
+                if (inputIr) {
+                    inputIr.max = totalPaginas;
+                    inputIr.value = paginaActual;
+                }
+            } else {
+                navInfo.style.display = 'none';
+            }
+        }
+
+        // Actualizar info "Mostrando X–Y de Z"
+        const inicio = totalDocumentos === 0 ? 0 : (paginaActual - 1) * documentosPorPagina + 1;
         const fin = Math.min(paginaActual * documentosPorPagina, totalDocumentos);
-        
+
         document.getElementById('infoInicio').textContent = inicio;
         document.getElementById('infoFin').textContent = fin;
         document.getElementById('infoTotal').textContent = totalDocumentos;
@@ -2624,7 +2684,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     window.cambiarPagina = function(pagina) {
-        if (pagina >= 1 && pagina <= Math.ceil(totalDocumentos / documentosPorPagina)) {
+        const totalPaginas = Math.max(1, Math.ceil(totalDocumentos / documentosPorPagina));
+        if (pagina >= 1 && pagina <= totalPaginas && pagina !== paginaActual) {
             paginaActual = pagina;
             cargarDocumentos();
         }
@@ -2635,6 +2696,21 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!Number.isNaN(n) && n > 0) {
             documentosPorPagina = n;
             paginaActual = 1; // Volver a la primera página al cambiar el tamaño
+            cargarDocumentos();
+        }
+    };
+
+    window.irAPaginaInput = function() {
+        const input = document.getElementById('inputIrPagina');
+        if (!input) return;
+        const totalPaginas = Math.max(1, Math.ceil(totalDocumentos / documentosPorPagina));
+        let n = parseInt(input.value, 10);
+        if (Number.isNaN(n)) { input.value = paginaActual; return; }
+        // Acotar al rango válido en vez de rechazar
+        n = Math.min(Math.max(n, 1), totalPaginas);
+        input.value = n;
+        if (n !== paginaActual) {
+            paginaActual = n;
             cargarDocumentos();
         }
     };
