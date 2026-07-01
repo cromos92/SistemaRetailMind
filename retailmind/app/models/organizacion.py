@@ -237,14 +237,29 @@ class Vendedor(models.Model):
 class Correlativo(models.Model):
     sucursal = models.ForeignKey(Sucursal, on_delete=models.CASCADE)
     tipo_dte = models.CharField(max_length=50)
+    # NOTA: 'inicio' es el número ACTUAL/siguiente a emitir; se muta hacia arriba
+    # en obtener_siguiente_numero(). El número desde el que arrancó el correlativo
+    # se guarda por separado en 'rango_inicial' (agregado para poder mostrar
+    # inicial vs actual vs final por separado). Es nullable: cuando es None se
+    # asume el comportamiento legacy (rango que empezó en 1).
     inicio = models.IntegerField()
     termino = models.IntegerField()
+    rango_inicial = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text='Número desde el que arrancó el correlativo. Fijo, no se muta al emitir.'
+    )
     fecha_actualizacion = models.DateField(null=True)
     alias = models.CharField(max_length=100)
     responsable = models.CharField(max_length=50)
 
     def __str__(self):
         return f"{self.sucursal.alias} - {self.tipo_dte} ({self.inicio}-{self.termino})"
+
+    @property
+    def base_inicial(self):
+        """Rango inicial real; fallback a 1 para correlativos legacy sin el dato."""
+        return self.rango_inicial if self.rango_inicial is not None else 1
 
     @property
     def numero_actual(self):
@@ -256,11 +271,11 @@ class Correlativo(models.Model):
 
     @property
     def consumidos(self):
-        return max(0, self.inicio - 1)
+        return max(0, self.inicio - self.base_inicial)
 
     @property
     def total_rango(self):
-        return self.termino
+        return max(0, self.termino - self.base_inicial + 1)
 
     @property
     def porcentaje_consumo(self):

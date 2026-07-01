@@ -621,6 +621,9 @@
                             <button class="btn btn-nexo-secondary ms-2" onclick="abrirModalCorrelativosFaltantes()">
                                 <i class="ri-play-list-add-line me-2"></i>Crear faltantes
                             </button>
+                            <button class="btn btn-nexo-outline ms-2" onclick="exportarCorrelativosPDF()">
+                                <i class="ri-file-pdf-2-line me-2"></i>Exportar PDF
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -729,8 +732,11 @@
                                     <thead>
                                         <tr>
                                             <th>Sucursal</th>
+                                            <th>Dirección</th>
                                             <th>Tipo Documento</th>
-                                            <th>Rango</th>
+                                            <th class="text-end">Inicial</th>
+                                            <th class="text-end">Actual</th>
+                                            <th class="text-end">Final</th>
                                             <th>Consumo</th>
                                             <th>Responsable</th>
                                             <th>Actualizado</th>
@@ -747,11 +753,24 @@
                                                     <span class="fw-semibold">{{ correlativo.sucursal.alias }}</span>
                                                 </div>
                                             </td>
+                                            <td style="color: var(--nexo-gray-500); font-size: 0.75rem;">
+                                                {% if correlativo.sucursal.direccion %}
+                                                    <i class="ri-map-pin-line me-1"></i>{{ correlativo.sucursal.direccion }}
+                                                {% else %}
+                                                    —
+                                                {% endif %}
+                                            </td>
                                             <td>
                                                 <span class="badge-nexo badge-nexo-info">{{ correlativo.tipo_dte }}</span>
                                             </td>
-                                            <td class="text-nowrap" style="font-variant-numeric: tabular-nums; color: var(--nexo-gray-500);">
-                                                1 – {{ correlativo.termino|default:"N/A" }}
+                                            <td class="text-end text-nowrap" style="font-variant-numeric: tabular-nums; color: var(--nexo-gray-500);">
+                                                {{ correlativo.base_inicial }}
+                                            </td>
+                                            <td class="text-end text-nowrap" style="font-variant-numeric: tabular-nums;">
+                                                <strong class="text-nexo-primary">{{ correlativo.inicio }}</strong>
+                                            </td>
+                                            <td class="text-end text-nowrap" style="font-variant-numeric: tabular-nums; color: var(--nexo-gray-500);">
+                                                {{ correlativo.termino|default:"N/A" }}
                                             </td>
                                             <td class="consumo-cell">
                                                 <div class="consumo-numeros">
@@ -765,9 +784,8 @@
                                                          style="width: {{ correlativo.porcentaje_consumo }}%"></div>
                                                 </div>
                                                 <div class="consumo-meta">
-                                                    <span>Actual: <strong class="text-nexo-primary">{{ correlativo.inicio }}</strong></span>
                                                     <span class="{% if correlativo.disponibles <= 100 %}text-nexo-error{% elif correlativo.disponibles <= 500 %}text-nexo-warning{% else %}text-nexo-success{% endif %}">
-                                                        {{ correlativo.disponibles }} disp.
+                                                        {{ correlativo.disponibles }} disponibles
                                                     </span>
                                                 </div>
                                             </td>
@@ -821,7 +839,7 @@
                                         </tr>
                                         {% empty %}
                                         <tr>
-                                            <td colspan="8" class="text-center py-5">
+                                            <td colspan="11" class="text-center py-5">
                                                 <div class="empty-state">
                                                     <i class="ri-inbox-line d-block mb-3"></i>
                                                     <p>No hay correlativos registrados</p>
@@ -879,16 +897,24 @@
                             </select>
                         </div>
                         
-                        <div class="col-md-6">
-                            <label class="form-label-nexo" for="inicio">Número Inicial *</label>
-                            <input type="number" class="form-control form-control-nexo" id="inicio" name="inicio" min="1" required>
+                        <div class="col-md-4">
+                            <label class="form-label-nexo" for="rango_inicial">Rango Inicial *</label>
+                            <input type="number" class="form-control form-control-nexo" id="rango_inicial" name="rango_inicial" min="1" required>
+                            <small class="text-muted">Número desde el que arrancó (fijo)</small>
                         </div>
-                        
-                        <div class="col-md-6">
+
+                        <div class="col-md-4">
+                            <label class="form-label-nexo" for="inicio">Número Actual *</label>
+                            <input type="number" class="form-control form-control-nexo" id="inicio" name="inicio" min="1" required>
+                            <small class="text-muted">Próximo folio a emitir</small>
+                        </div>
+
+                        <div class="col-md-4">
                             <label class="form-label-nexo" for="termino">Número Final *</label>
                             <input type="number" class="form-control form-control-nexo" id="termino" name="termino" min="1" required>
+                            <small class="text-muted">Tope del rango</small>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <label class="form-label-nexo" for="alias">Alias</label>
                             <input type="text" class="form-control form-control-nexo" id="alias" name="alias" maxlength="100" placeholder="Opcional">
@@ -904,7 +930,9 @@
                         <div class="col-12">
                             <div class="alert alert-nexo alert-nexo-info">
                                 <i class="ri-information-line me-2"></i>
-                                <strong>Información:</strong> El correlativo se iniciará desde el número especificado y se consumirá automáticamente con cada documento emitido.
+                                <strong>Información:</strong> El <strong>rango inicial</strong> es el número desde el que arrancó el correlativo (fijo).
+                                El <strong>número actual</strong> es el próximo folio a emitir y avanza automáticamente con cada documento.
+                                El <strong>número final</strong> es el tope del rango autorizado.
                             </div>
                         </div>
                     </div>
@@ -1095,10 +1123,10 @@
                     url: 'https://cdn.datatables.net/plug-ins/1.13.4/i18n/es-ES.json'
                 },
                 pageLength: 25,
-                order: [[0, 'asc'], [1, 'asc']],
+                order: [[0, 'asc'], [2, 'asc']],
                 columnDefs: [
-                    { orderable: false, targets: [7] }, // Columna de acciones no ordenable
-                    { className: 'text-center', targets: [7] }
+                    { orderable: false, targets: [10] }, // Columna de acciones no ordenable
+                    { className: 'text-center', targets: [10] }
                 ],
                 responsive: true,
                 autoWidth: false,
@@ -1287,7 +1315,8 @@
         // Validaciones
         const inicio = parseInt(formData.get('inicio'));
         const termino = parseInt(formData.get('termino'));
-        
+        const rangoInicial = parseInt(formData.get('rango_inicial'));
+
         if (!formData.get('sucursal')) {
             Swal.fire({
                 icon: 'warning',
@@ -1312,12 +1341,33 @@
             Swal.fire({
                 icon: 'error',
                 title: 'Error de validación',
-                text: 'El número inicial debe ser menor que el número final',
+                text: 'El número actual debe ser menor que el número final',
                 confirmButtonColor: '#0066FF'
             });
             return;
         }
-        
+
+        if (!isNaN(rangoInicial)) {
+            if (rangoInicial > inicio) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error de validación',
+                    text: 'El rango inicial no puede ser mayor que el número actual',
+                    confirmButtonColor: '#0066FF'
+                });
+                return;
+            }
+            if (rangoInicial > termino) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error de validación',
+                    text: 'El rango inicial no puede ser mayor que el número final',
+                    confirmButtonColor: '#0066FF'
+                });
+                return;
+            }
+        }
+
         // Mostrar loading
         Swal.fire({
             title: 'Guardando...',
@@ -1401,11 +1451,12 @@
                 }
                 selectTipo.value = tipoActual;
 
+                document.getElementById('rango_inicial').value = (correlativo.rango_inicial != null ? correlativo.rango_inicial : '');
                 document.getElementById('inicio').value = correlativo.inicio || '';
                 document.getElementById('termino').value = correlativo.termino || '';
                 document.getElementById('alias').value = correlativo.alias || '';
                 document.getElementById('responsable').value = correlativo.responsable || '';
-                
+
                 // Cambiar título
                 document.getElementById('tituloModal').textContent = 'Editar Correlativo';
                 
@@ -1776,6 +1827,21 @@
                 }
             });
         });
+    }
+
+    // Exportar a PDF respetando los filtros actuales de la URL
+    function exportarCorrelativosPDF() {
+        const params = new URLSearchParams();
+        const sucursal = document.getElementById('filtroSucursal').value;
+        const tipoDocumento = document.getElementById('filtroTipoDocumento').value;
+        const estado = document.getElementById('filtroEstado').value;
+
+        if (sucursal) params.set('sucursal', sucursal);
+        if (tipoDocumento) params.set('tipo_documento', tipoDocumento);
+        if (estado) params.set('estado', estado);
+
+        const qs = params.toString();
+        window.open('/app/correlativos/exportar-pdf/' + (qs ? '?' + qs : ''), '_blank');
     }
 
     // Función para obtener el token CSRF

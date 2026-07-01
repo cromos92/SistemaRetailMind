@@ -870,6 +870,7 @@ urlpatterns = [
     path('correlativos/eliminar/<int:correlativo_id>/', views.eliminar_correlativo, name='eliminar_correlativo'),
     path('correlativos/faltantes/', views.obtener_correlativos_faltantes, name='obtener_correlativos_faltantes'),
     path('correlativos/crear-faltantes/', views.crear_correlativos_faltantes, name='crear_correlativos_faltantes'),
+    path('correlativos/exportar-pdf/', views.exportar_correlativos_pdf, name='exportar_correlativos_pdf'),
     
     # === Gestión de Créditos ===
     path('documentos/gestion-creditos/', views_modulo_documentos.gestion_creditos_documentos, name='gestion_creditos_documentos'),

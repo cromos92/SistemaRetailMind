@@ -30195,6 +30195,31 @@ def _obtener_correlativos_faltantes(sucursal):
     return faltantes
 
 
+def _filtrar_correlativos(queryset, sucursal_filtro, tipo_documento_filtro, estado_filtro):
+    """Aplica los filtros de sucursal/tipo/estado a un queryset de Correlativo.
+
+    Se comparte entre la vista de gestión y la exportación a PDF para que el
+    PDF respete exactamente los mismos filtros que la tabla en pantalla.
+    """
+    if sucursal_filtro:
+        queryset = queryset.filter(sucursal_id=sucursal_filtro)
+
+    if tipo_documento_filtro:
+        queryset = queryset.filter(tipo_dte=tipo_documento_filtro)
+
+    if estado_filtro == 'activo':
+        queryset = queryset.filter(inicio__lt=F('termino'))
+    elif estado_filtro == 'agotado':
+        queryset = queryset.filter(inicio__gte=F('termino'))
+    elif estado_filtro == 'proximo_agotarse':
+        # Correlativos con menos de 100 números disponibles
+        queryset = queryset.annotate(
+            disponibles_calc=F('termino') - F('inicio') + 1
+        ).filter(disponibles_calc__lte=100, disponibles_calc__gt=0)
+
+    return queryset
+
+
 @login_required
 def gestion_correlativos(request):
     """
@@ -30279,22 +30304,9 @@ def gestion_correlativos(request):
                     correlativo.delete()
         
         # Aplicar filtros
-        if sucursal_filtro:
-            correlativos = correlativos.filter(sucursal_id=sucursal_filtro)
-        
-        if tipo_documento_filtro:
-            correlativos = correlativos.filter(tipo_dte=tipo_documento_filtro)
-        
-        # Filtro por estado
-        if estado_filtro == 'activo':
-            correlativos = correlativos.filter(inicio__lt=F('termino'))
-        elif estado_filtro == 'agotado':
-            correlativos = correlativos.filter(inicio__gte=F('termino'))
-        elif estado_filtro == 'proximo_agotarse':
-            # Correlativos con menos de 100 números disponibles
-            correlativos = correlativos.annotate(
-                disponibles=F('termino') - F('inicio') + 1
-            ).filter(disponibles__lte=100, disponibles__gt=0)
+        correlativos = _filtrar_correlativos(
+            correlativos, sucursal_filtro, tipo_documento_filtro, estado_filtro
+        )
         
         # Calcular estadísticas globales
         total_correlativos = Correlativo.objects.count()
@@ -30408,6 +30420,7 @@ def crear_correlativos_faltantes(request):
                 tipo_dte=correlativo_data['tipo_dte'],
                 inicio=correlativo_data['inicio'],
                 termino=correlativo_data['termino'],
+                rango_inicial=correlativo_data['inicio'],
                 alias=correlativo_data['alias'],
                 responsable=correlativo_data['responsable'],
                 fecha_actualizacion=fecha_actual
@@ -30434,13 +30447,32 @@ def guardar_correlativo(request):
         termino = int(request.POST.get('termino'))
         alias = request.POST.get('alias', '')
         responsable = request.POST.get('responsable')
-        
+
+        # rango_inicial (número desde el que arrancó el correlativo). Opcional:
+        # si no se envía, al crear se toma el 'inicio' actual como base.
+        rango_inicial_raw = request.POST.get('rango_inicial')
+        rango_inicial = None
+        if rango_inicial_raw not in (None, ''):
+            rango_inicial = int(rango_inicial_raw)
+
         # Validaciones
         if inicio >= termino:
             return JsonResponse({
                 'success': False,
                 'message': 'El número inicial debe ser menor que el número final'
             })
+
+        if rango_inicial is not None:
+            if rango_inicial > inicio:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'El rango inicial no puede ser mayor que el número actual'
+                })
+            if rango_inicial > termino:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'El rango inicial no puede ser mayor que el número final'
+                })
         
         sucursal = get_object_or_404(Sucursal, id=sucursal_id)
         
@@ -30486,17 +30518,22 @@ def guardar_correlativo(request):
                 correlativo.tipo_dte = tipo_documento
                 correlativo.inicio = inicio
                 correlativo.termino = termino
+                if rango_inicial is not None:
+                    correlativo.rango_inicial = rango_inicial
                 correlativo.alias = alias
                 correlativo.responsable = responsable
                 correlativo.fecha_actualizacion = timezone.localdate()
                 correlativo.save()
                 mensaje = 'Correlativo actualizado exitosamente'
             else:
+                # Al crear, si no se especifica rango_inicial se toma el 'inicio'
+                # como base, de modo que 'consumidos' arranque en 0.
                 correlativo = Correlativo.objects.create(
                     sucursal=sucursal,
                     tipo_dte=tipo_documento,
                     inicio=inicio,
                     termino=termino,
+                    rango_inicial=rango_inicial if rango_inicial is not None else inicio,
                     alias=alias,
                     responsable=responsable,
                     fecha_actualizacion=timezone.localdate()
@@ -30547,6 +30584,7 @@ def obtener_correlativo(request, correlativo_id):
                 'tipo_dte': correlativo.tipo_dte,
                 'inicio': correlativo.inicio,
                 'termino': correlativo.termino,
+                'rango_inicial': correlativo.rango_inicial if correlativo.rango_inicial is not None else correlativo.base_inicial,
                 'alias': correlativo.alias,
                 'responsable': correlativo.responsable,
                 'fecha_actualizacion': correlativo.fecha_actualizacion.strftime('%d/%m/%Y') if correlativo.fecha_actualizacion else None
@@ -30578,13 +30616,17 @@ def renovar_correlativo(request):
             })
         
         correlativo = get_object_or_404(Correlativo, id=correlativo_id)
-        
-        # Actualizar correlativo
+
+        # Actualizar correlativo. La renovación arranca un rango nuevo, por lo que
+        # 'rango_inicial' se reajusta a 'nuevo_inicio' para que el consumo vuelva a
+        # contar desde 0 sobre el nuevo rango (si no, quedaría apuntando al rango
+        # anterior y 'consumidos' saldría inflado).
         correlativo.inicio = nuevo_inicio
         correlativo.termino = nuevo_termino
+        correlativo.rango_inicial = nuevo_inicio
         correlativo.fecha_actualizacion = timezone.localdate()
         correlativo.save()
-        
+
         return JsonResponse({
             'success': True,
             'message': f'Correlativo renovado. Nuevo rango: {nuevo_inicio} - {nuevo_termino}'
@@ -30706,6 +30748,151 @@ def eliminar_correlativo(request, correlativo_id):
             'success': False,
             'message': f'Error al eliminar correlativo: {str(e)}'
         }, status=500)
+
+
+@login_required
+@require_GET
+def exportar_correlativos_pdf(request):
+    """
+    Exporta a PDF la lista de correlativos respetando los filtros aplicados
+    (sucursal, tipo de documento, estado) que vienen en el querystring, con
+    las columnas: Sucursal, Dirección, Tipo, Inicial, Actual, Final,
+    Consumidos, Disponibles, % y Estado.
+    """
+    try:
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib import colors
+        from reportlab.lib.units import cm
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+        from io import BytesIO
+
+        # Mismos filtros que la vista de gestión
+        sucursal_filtro = request.GET.get('sucursal')
+        tipo_documento_filtro = request.GET.get('tipo_documento')
+        estado_filtro = request.GET.get('estado')
+
+        correlativos = _filtrar_correlativos(
+            Correlativo.objects.select_related('sucursal').all(),
+            sucursal_filtro, tipo_documento_filtro, estado_filtro
+        ).order_by('sucursal__alias', 'tipo_dte')
+
+        correlativos = list(correlativos)
+        if not correlativos:
+            return JsonResponse({'success': False, 'error': 'No hay correlativos para exportar'})
+
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            leftMargin=1.2 * cm,
+            rightMargin=1.2 * cm,
+            topMargin=1.8 * cm,
+            bottomMargin=1.8 * cm,
+        )
+
+        styles = getSampleStyleSheet()
+        azul = colors.HexColor('#0066FF')
+        azul_oscuro = colors.HexColor('#1A1A2E')
+        gris_claro = colors.HexColor('#F5F5F7')
+        rojo_claro = colors.HexColor('#FFE0E0')
+        naranjo_claro = colors.HexColor('#FFF3D6')
+
+        title_style = ParagraphStyle('Title', parent=styles['Title'], fontSize=16, textColor=azul_oscuro, spaceAfter=4)
+        sub_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=9, textColor=colors.grey, spaceAfter=12)
+        cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=7, leading=8)
+
+        # Descripción del filtro aplicado para el subtítulo
+        partes_filtro = []
+        if sucursal_filtro:
+            suc = next((c.sucursal.alias for c in correlativos), None)
+            partes_filtro.append(f"Sucursal: {suc}" if suc else "Sucursal filtrada")
+        if tipo_documento_filtro:
+            partes_filtro.append(f"Tipo: {tipo_documento_filtro}")
+        if estado_filtro:
+            partes_filtro.append(f"Estado: {estado_filtro}")
+        filtro_txt = ' | '.join(partes_filtro) if partes_filtro else 'Todos los correlativos'
+
+        elements = []
+        elements.append(Paragraph("Gestión de Correlativos", title_style))
+        elements.append(Paragraph(
+            f"Generado: {timezone.localdate().strftime('%d/%m/%Y')}  |  "
+            f"Registros: {len(correlativos)}  |  {filtro_txt}",
+            sub_style
+        ))
+
+        col_labels = ['Sucursal', 'Dirección', 'Tipo Doc.', 'Inicial', 'Actual',
+                      'Final', 'Consum.', 'Disp.', '%', 'Estado']
+        col_widths_pdf = [3*cm, 4.5*cm, 3.2*cm, 2*cm, 2*cm,
+                          2*cm, 2*cm, 2*cm, 1.6*cm, 2.2*cm]
+
+        estado_label = {'agotado': 'Agotado', 'critico': 'Crítico', 'activo': 'Activo'}
+
+        table_data = [col_labels]
+        for c in correlativos:
+            direccion = c.sucursal.direccion or '—'
+            table_data.append([
+                Paragraph(c.sucursal.alias, cell_style),
+                Paragraph(direccion, cell_style),
+                Paragraph(c.tipo_dte, cell_style),
+                f"{c.base_inicial:,}",
+                f"{c.inicio:,}",
+                f"{c.termino:,}",
+                f"{c.consumidos:,}",
+                f"{c.disponibles:,}",
+                f"{c.porcentaje_consumo:.1f}%",
+                estado_label.get(c.estado, c.estado),
+            ])
+
+        table = Table(table_data, colWidths=col_widths_pdf, repeatRows=1)
+
+        style_cmds = [
+            ('BACKGROUND', (0, 0), (-1, 0), azul),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 7),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#DEE2E6')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, gris_claro]),
+            ('ALIGN', (3, 1), (8, -1), 'RIGHT'),   # columnas numéricas
+            ('ALIGN', (9, 1), (9, -1), 'CENTER'),  # estado
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ]
+        # Resaltar filas según estado
+        for row_idx, c in enumerate(correlativos, start=1):
+            if c.estado == 'agotado':
+                style_cmds.append(('BACKGROUND', (0, row_idx), (-1, row_idx), rojo_claro))
+            elif c.estado == 'critico':
+                style_cmds.append(('BACKGROUND', (0, row_idx), (-1, row_idx), naranjo_claro))
+
+        table.setStyle(TableStyle(style_cmds))
+        elements.append(table)
+
+        def footer(canvas, doc):
+            canvas.saveState()
+            canvas.setFont('Helvetica', 7)
+            canvas.setFillColor(colors.grey)
+            canvas.drawString(1.2 * cm, 1 * cm, f"RetailMind — Correlativos — {timezone.localdate().strftime('%d/%m/%Y')}")
+            canvas.drawRightString(landscape(A4)[0] - 1.2 * cm, 1 * cm, f"Página {doc.page}")
+            canvas.restoreState()
+
+        doc.build(elements, onFirstPage=footer, onLaterPages=footer)
+        buffer.seek(0)
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = (
+            f'attachment; filename="correlativos_{timezone.localdate().strftime("%Y%m%d")}.pdf"'
+        )
+        response.write(buffer.read())
+        return response
+
+    except Exception as e:
+        logger.exception("Error al exportar correlativos a PDF")
+        return JsonResponse({'success': False, 'error': f'Error al exportar PDF: {str(e)}'})
 
 
 # ========== MÓDULO DE REPORTE DE EXISTENCIAS ==========
