@@ -187,10 +187,23 @@
                 </div>
                 
                 <!-- Paginación -->
-                <div class="d-flex align-items-center justify-content-between px-3 py-2 border-top">
-                    <div class="dataTables_info" style="font-size:11px;">
-                        Mostrando <span id="infoInicio">0</span>–<span id="infoFin">0</span> 
-                        de <span id="infoTotal">0</span> DTEs
+                <div class="d-flex align-items-center justify-content-between px-3 py-2 border-top flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="dataTables_info" style="font-size:11px;">
+                            Mostrando <span id="infoInicio">0</span>–<span id="infoFin">0</span>
+                            de <span id="infoTotal">0</span> DTEs
+                        </div>
+                        <div class="d-flex align-items-center gap-1" style="font-size:11px;">
+                            <label for="selectPorPagina" class="mb-0 text-muted">Mostrar</label>
+                            <select id="selectPorPagina" class="form-select form-select-sm" style="width:auto; font-size:11px; padding:2px 24px 2px 8px;" onchange="cambiarPorPagina(this.value)">
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                                <option value="100" selected>100</option>
+                                <option value="200">200</option>
+                                <option value="500">500</option>
+                            </select>
+                            <span class="text-muted">por página</span>
+                        </div>
                     </div>
                     <ul class="pagination pagination-rounded mb-0" id="paginacion" style="font-size:12px;"></ul>
                 </div>
@@ -1119,7 +1132,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Variables globales
     let documentosData = [];
     let paginaActual = 1;
-    let documentosPorPagina = 20;
+    let documentosPorPagina = 100;
     let totalDocumentos = 0;
     let documentoSeleccionado = null;
     let documentoActualModal = null; // Documento que se muestra actualmente en el modal
@@ -1196,8 +1209,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Variables de ordenamiento
-    let ordenCampo = 'fecha';      // Campo por defecto
-    let ordenDireccion = 'desc';   // Dirección por defecto (más recientes primero)
+    let ordenCampo = 'numero_documento';  // Campo por defecto: número de documento
+    let ordenDireccion = 'desc';          // Dirección por defecto (folios más altos primero)
 
     // URLs de API
     const apiUrls = {
@@ -2613,6 +2626,15 @@ document.addEventListener('DOMContentLoaded', function() {
     window.cambiarPagina = function(pagina) {
         if (pagina >= 1 && pagina <= Math.ceil(totalDocumentos / documentosPorPagina)) {
             paginaActual = pagina;
+            cargarDocumentos();
+        }
+    };
+
+    window.cambiarPorPagina = function(valor) {
+        const n = parseInt(valor, 10);
+        if (!Number.isNaN(n) && n > 0) {
+            documentosPorPagina = n;
+            paginaActual = 1; // Volver a la primera página al cambiar el tamaño
             cargarDocumentos();
         }
     };
