@@ -124,6 +124,15 @@
     letter-spacing: 0.5px;
 }
 
+.nexo-control-group label i.ri-information-line {
+    text-transform: none;
+    letter-spacing: normal;
+    cursor: help;
+    color: var(--nexo-primary);
+    font-size: 1.05em;
+    vertical-align: -1px;
+}
+
 .nexo-control-group select,
 .nexo-control-group input {
     padding: 10px 14px;
@@ -969,7 +978,10 @@
         </div>
         
         <div class="nexo-control-group">
-            <label for="filtro-fecha">Fecha de Corte:</label>
+            <label for="filtro-fecha">
+                Fecha de Corte:
+                <i class="ri-information-line" title="El stock se calcula al cierre del día seleccionado: incluye los movimientos (ingresos, egresos, traspasos) registrados ese mismo día. Solo se revierten los movimientos posteriores a esa fecha."></i>
+            </label>
             <input type="date" id="filtro-fecha" max="">
         </div>
 
@@ -1007,7 +1019,7 @@
 
     <div id="alerta-historico" class="nexo-alert nexo-alert-warning" style="display: none;">
         <span class="nexo-alert-icon">⏰</span>
-        <span id="alerta-historico-texto">Mostrando inventario histórico al <strong id="fecha-historico"></strong></span>
+        <span id="alerta-historico-texto">Mostrando inventario histórico al cierre del <strong id="fecha-historico"></strong> (incluye los movimientos de ese día)</span>
     </div>
 
     <div id="alerta-exclusiones" class="nexo-alert nexo-alert-warning" style="display: none;">
@@ -1323,7 +1335,7 @@ function actualizarUIHistorico(data) {
     if (data.es_historico && data.fecha_corte) {
         badge.style.display = 'inline-flex';
         badge.classList.add('historico');
-        document.getElementById('modo-badge-text').textContent = `Al ${formatearFecha(data.fecha_corte)}`;
+        document.getElementById('modo-badge-text').textContent = `Cierre ${formatearFecha(data.fecha_corte)}`;
         
         alerta.style.display = 'flex';
         fechaEl.textContent = formatearFecha(data.fecha_corte);
@@ -1640,7 +1652,7 @@ async function abrirModalDetalle(sucursalId) {
             const mostrados = Math.min(items.length, data.top_n || 30);
             let txt = `Mostrando ${mostrados} de ${formatearNumero(data.total_productos)} producto(s), ordenados por unidades.`;
             if (data.es_historico && data.fecha_corte) {
-                txt += ` Stock histórico al ${formatearFecha(data.fecha_corte)}.`;
+                txt += ` Stock histórico al cierre del ${formatearFecha(data.fecha_corte)}.`;
             }
             footerEl.textContent = txt;
         }

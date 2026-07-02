@@ -137,6 +137,7 @@ def api_generar_devolucion_garantia(request):
     folio = (body.get('folio_dte') or '').strip()
     productos = body.get('productos') or []
     motivo = (body.get('motivo') or '').strip() or 'Garantía aprobada'
+    requerimiento_id = body.get('requerimiento_id')
 
     if not folio:
         return JsonResponse({'success': False, 'error': 'folio_dte es requerido'}, status=400)
@@ -146,6 +147,14 @@ def api_generar_devolucion_garantia(request):
     sucursal = _sucursal_actual(request)
     if not sucursal:
         return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'}, status=400)
+
+    requerimiento = None
+    if requerimiento_id:
+        from .models import Requerimiento
+        # Mismo criterio de aislamiento por sucursal que el resto del módulo
+        # (ver fix de IDOR en detalle_devolucion_garantia): un requerimiento
+        # de otra sucursal simplemente no se vincula, sin filtrar por error.
+        requerimiento = Requerimiento.objects.filter(id=requerimiento_id, sucursal=sucursal).first()
 
     try:
         dte_original = service.buscar_dte_para_devolucion(folio, sucursal=sucursal)
@@ -169,6 +178,7 @@ def api_generar_devolucion_garantia(request):
             motivo=motivo,
             usuario=request.user,
             detalles=productos,
+            requerimiento=requerimiento,
         )
     except service.DevolucionGarantiaError as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
@@ -191,6 +201,7 @@ def api_generar_devolucion_garantia(request):
                 'rut': receptor.rut,
                 'nombre': receptor.nombre,
             },
+            'requerimiento_vinculado': requerimiento.numero_requerimiento if requerimiento else None,
         },
     })
 

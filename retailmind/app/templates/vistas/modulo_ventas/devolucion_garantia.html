@@ -388,6 +388,7 @@
 
     let dgDteActual = null;
     let dgProductosSeleccion = {};
+    let dgRequerimientoId = null;
 
     function getCookie(name) {
         let cookieValue = null;
@@ -422,6 +423,7 @@
     function resetModalDevolucionGarantia() {
         dgDteActual = null;
         dgProductosSeleccion = {};
+        dgRequerimientoId = null;
         $('#dg-folio').val('');
         $('#dg-doc-info').addClass('d-none').empty();
         $('#dg-seccion-productos, #dg-seccion-cliente, #dg-seccion-motivo').addClass('d-none');
@@ -589,6 +591,7 @@
                     comuna: $('#dg-cliente-comuna').val().trim(),
                     ciudad: $('#dg-cliente-ciudad').val().trim(),
                     motivo: $('#dg-motivo').val().trim(),
+                    requerimiento_id: dgRequerimientoId || null,
                 }),
                 success: function (resp) {
                     if (resp.success) {
@@ -598,7 +601,10 @@
                             title: 'Devolución registrada',
                             html: `<p><strong>${resp.data.numero_operacion}</strong></p>` +
                                   `<p>NC #${resp.data.nc_numero} — $${Number(resp.data.monto_total).toLocaleString('es-CL')}</p>` +
-                                  `<p>Cliente: ${resp.data.receptor.nombre} (${resp.data.receptor.rut})</p>`,
+                                  `<p>Cliente: ${resp.data.receptor.nombre} (${resp.data.receptor.rut})</p>` +
+                                  (resp.data.requerimiento_vinculado
+                                      ? `<p class="small text-muted">Vinculada al requerimiento ${resp.data.requerimiento_vinculado}</p>`
+                                      : ''),
                         });
                         cargarDevoluciones();
                     } else {
@@ -662,6 +668,7 @@
         const folio = params.get('folio');
         if (!folio) { return; }
 
+        dgRequerimientoId = params.get('requerimiento_id') || null;
         $('#dg-folio').val(folio);
         $('#dg-cliente-rut').val(params.get('rut') || '');
         $('#dg-cliente-nombre').val(params.get('nombre') || '');

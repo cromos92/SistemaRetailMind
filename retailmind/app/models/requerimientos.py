@@ -315,6 +315,14 @@ class Requerimiento(models.Model):
         null=True,
         help_text="Fecha de resolucion del requerimiento"
     )
+    devolucion_garantia = models.ForeignKey(
+        'app.DevolucionGarantia',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='requerimiento_origen',
+        help_text="Devolucion de dinero generada a partir de este requerimiento (si se uso el puente de UI)"
+    )
 
     # === NOTAS INTERNAS ===
     notas_internas = models.TextField(

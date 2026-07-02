@@ -403,6 +403,7 @@ function mostrarAccionesDisponibles(r) {
     // dinero directamente sin retipear folio/RUT/nombre del cliente.
     if (['APROBADO','RECHAZADO'].includes(r.estado_codigo) && ['administrador','jefe_local'].includes(r.rol_usuario)) {
         const qs = new URLSearchParams({
+            requerimiento_id: r.id || '',
             folio: r.numero_boleta || '',
             rut: r.cliente_rut || '',
             nombre: r.cliente_nombre || '',

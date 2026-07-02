@@ -187,11 +187,15 @@ def resolver_o_crear_receptor(*, cliente_id=None, rut='', nombre='', giro='',
 
 @transaction.atomic
 def generar_devolucion_garantia(*, dte_original, sucursal, receptor, motivo,
-                                 usuario, detalles):
+                                 usuario, detalles, requerimiento=None):
     """
     Registra la devolución de garantía y genera la Nota de Crédito.
 
     `detalles`: lista de dicts {dte_producto_id, cantidad, precio_unitario}.
+    `requerimiento`: instancia opcional de `Requerimiento` (app.models.requerimientos)
+        cuando la devolución se generó desde el puente de UI en el detalle de un
+        requerimiento ya aprobado/rechazado por el proveedor. Si viene, se vincula
+        vía `Requerimiento.devolucion_garantia` y se registra en su historial.
 
     Devuelve (devolucion, nc, contenido_txt_o_None).
     """
@@ -346,6 +350,22 @@ def generar_devolucion_garantia(*, dte_original, sucursal, receptor, motivo,
     devolucion.nota_credito = nc
     devolucion.estado = 'NC_GENERADA'
     devolucion.save(update_fields=['nota_credito', 'estado', 'updated_at'])
+
+    if requerimiento is not None:
+        from app.models import HistorialRequerimiento
+        requerimiento.devolucion_garantia = devolucion
+        requerimiento.save(update_fields=['devolucion_garantia'])
+        HistorialRequerimiento.objects.create(
+            requerimiento=requerimiento,
+            accion='DEVOLUCION_GARANTIA_GENERADA',
+            estado_anterior=requerimiento.estado,
+            estado_nuevo=requerimiento.estado,
+            comentario=(
+                f"Devolución de dinero {devolucion.numero_operacion} generada "
+                f"(NC #{nc.numero_documento}, ${monto_con_iva:,.0f})."
+            ),
+            usuario=usuario,
+        )
 
     contenido_txt = None
     try:

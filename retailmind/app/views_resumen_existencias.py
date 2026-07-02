@@ -832,8 +832,8 @@ def exportar_resumen_existencias_excel(request):
             titulo += " POR SUCURSAL"
         
         if es_historico and fecha_corte:
-            titulo += f" - Al {fecha_corte}"
-        
+            titulo += f" - Cierre del {fecha_corte}"
+
         ws.merge_cells('A1:F1')
         cell = ws['A1']
         cell.value = titulo
@@ -1274,7 +1274,7 @@ def exportar_resumen_existencias_pdf(request):
 
         sub_partes = []
         if es_historico and fecha_corte:
-            sub_partes.append(f"Fecha de corte: <b>{fecha_corte}</b>")
+            sub_partes.append(f"Stock al cierre del <b>{fecha_corte}</b>")
         else:
             sub_partes.append(f"Inventario actual al {timezone.localdate().strftime('%d/%m/%Y')}")
 
