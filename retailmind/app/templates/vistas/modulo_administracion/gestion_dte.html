@@ -1233,9 +1233,14 @@
                 <!-- Contenido inyectado dinámicamente por anularDocumento() -->
             </div>
             <div class="modal-footer bg-light border-0 py-2 px-3">
-                <div id="modalGenerarNC_errorMsg" class="me-auto text-danger small" style="display:none;">
-                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                    <span id="modalGenerarNC_errorText"></span>
+                <div class="me-auto">
+                    <div id="modalGenerarNC_errorMsg" class="text-danger small" style="display:none;">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                        <span id="modalGenerarNC_errorText"></span>
+                    </div>
+                    <div id="modalGenerarNC_footerTotal" class="small fw-bold" style="display:none;">
+                        Total NC: <span id="modalGenerarNC_footerTotalValue" style="color:var(--nexo-primary);">$0</span>
+                    </div>
                 </div>
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
                     <i class="bi bi-x-lg me-1"></i>Cancelar
@@ -2954,24 +2959,25 @@
         return cookieValue;
     }
 
-    function buscarClienteAnulacion() {
+    function buscarClienteAnulacion(esAuto = false) {
         const rutInput = document.getElementById('anulClienteRut');
         const nombreInput = document.getElementById('anulClienteNombre');
         const estadoBadge = document.getElementById('anulClienteEstado');
         const noEncontradoDiv = document.getElementById('anulClienteNoEncontrado');
         const extraDiv = document.getElementById('anulClienteExtra');
         const clienteIdInput = document.getElementById('anulClienteId');
+        const sufijoAuto = esAuto ? ' · autocompletado desde la venta' : '';
 
         const rut = (rutInput.value || '').trim();
         if (!rut || rut.length < 7) {
-            estadoBadge.className = 'badge bg-danger d-inline-block w-100 py-2';
+            estadoBadge.className = 'badge-nexo badge-nexo-error d-inline-block w-100 py-2';
             estadoBadge.style.fontSize = '0.72rem';
             estadoBadge.textContent = 'Ingrese un RUT válido';
             estadoBadge.classList.remove('d-none');
             return;
         }
 
-        estadoBadge.className = 'badge bg-secondary d-inline-block w-100 py-2';
+        estadoBadge.className = 'badge-nexo badge-nexo-secondary d-inline-block w-100 py-2';
         estadoBadge.style.fontSize = '0.72rem';
         estadoBadge.textContent = 'Buscando...';
         estadoBadge.classList.remove('d-none');
@@ -2992,12 +2998,12 @@
                     clienteIdInput.value = (data.cliente_origen === 'EMPRESA')
                         ? (data.cliente_id || '')
                         : '';
-                    estadoBadge.className = 'badge bg-success d-inline-block w-100 py-2';
+                    estadoBadge.className = 'badge-nexo badge-nexo-success d-inline-block w-100 py-2';
                     estadoBadge.style.fontSize = '0.72rem';
                     let etiquetaOrigenAnul = '';
                     if (data.cliente_origen === 'CRM') etiquetaOrigenAnul = ' (CRM)';
                     else if (data.cliente_origen === 'TICKET') etiquetaOrigenAnul = ' (Ticket)';
-                    estadoBadge.innerHTML = '<i class="bi bi-check-circle me-1"></i>Cliente encontrado' + etiquetaOrigenAnul;
+                    estadoBadge.innerHTML = '<i class="bi bi-check-circle me-1"></i>Cliente encontrado' + etiquetaOrigenAnul + sufijoAuto;
                     noEncontradoDiv.classList.add('d-none');
                     extraDiv.classList.add('d-none');
                     if (data.cliente.email) {
@@ -3009,9 +3015,9 @@
                     nombreInput.readOnly = false;
                     nombreInput.style.background = '#fff';
                     clienteIdInput.value = '';
-                    estadoBadge.className = 'badge bg-warning text-dark d-inline-block w-100 py-2';
+                    estadoBadge.className = 'badge-nexo badge-nexo-warning d-inline-block w-100 py-2';
                     estadoBadge.style.fontSize = '0.72rem';
-                    estadoBadge.textContent = 'No encontrado';
+                    estadoBadge.textContent = esAuto ? 'No encontrado (venta con cliente no registrado en Empresa/CRM)' : 'No encontrado';
                     noEncontradoDiv.classList.remove('d-none');
                     if (data.rut_formateado) {
                         rutInput.value = data.rut_formateado;
@@ -3019,7 +3025,7 @@
                 }
             })
             .catch(() => {
-                estadoBadge.className = 'badge bg-danger d-inline-block w-100 py-2';
+                estadoBadge.className = 'badge-nexo badge-nexo-error d-inline-block w-100 py-2';
                 estadoBadge.style.fontSize = '0.72rem';
                 estadoBadge.textContent = 'Error de conexión';
             });
@@ -3453,13 +3459,40 @@
         const dteRut = dteDelListado ? (dteDelListado.receptor_rut || '') : '';
         const dteFecha = dteDelListado ? (dteDelListado.fecha_emision || '-') : null;
 
+        // POS-origen: la modalidad DEVOLUCION (que afecta caja) sólo aplica a
+        // boletas/facturas emitidas desde el POS (tipo_transaccion = VENTA_PUBLICO).
+        // Para traspasos internos (TRASPASO) o compras a proveedores externos
+        // (COMPRA), o ventas mayoristas (VENTA), no se devuelve dinero a caja.
+        const tipoTransaccion = (dteDelListado && dteDelListado.tipo_transaccion) || '';
+        const esOriginadoEnPOS = tipoTransaccion === 'VENTA_PUBLICO';
+
+        // Ventas de ecommerce también quedan tipo_transaccion='VENTA_PUBLICO'
+        // (son boletas a consumidor final), pero nunca pasaron por una caja
+        // física: no tiene sentido ofrecer "resta del efectivo teórico".
+        const esEcommerce = !!(dteDelListado && dteDelListado.es_ecommerce);
+        const canalEcommerce = (dteDelListado && dteDelListado.canal_ecommerce) || '';
+        const permiteDevolucionCaja = esOriginadoEnPOS && !esEcommerce;
+
+        // Encabezado compacto de sección (ícono circular + título), reutiliza
+        // .nexo-section-header/.nexo-section-icon de nexo-design-system.css
+        // a escala reducida para caber en el modal.
+        const seccionTitulo = (icono, textoHtml) => `
+            <div class="nexo-section-header" style="margin-bottom:0.5rem; gap:0.5rem;">
+                <div class="nexo-section-icon" style="width:26px; height:26px; font-size:0.8rem; border-radius:var(--nexo-radius-md);">
+                    <i class="bi bi-${icono}"></i>
+                </div>
+                <p class="nexo-section-title mb-0" style="font-size:0.9rem;">${textoHtml}</p>
+            </div>`;
+
         // Card prominente con el DTE que se va a acreditar
         const prefillDteCard = `
-            <div class="card border-primary mb-3" style="background: linear-gradient(135deg, #e3edff 0%, #f5f9ff 100%);">
-                <div class="card-body py-2 px-3">
+            <div class="card-nexo mb-3" style="border-left: 4px solid var(--nexo-primary);">
+                <div class="card-nexo-body py-2 px-3">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <div class="small text-muted mb-1"><i class="bi bi-file-earmark-text me-1"></i>DTE a acreditar</div>
+                            <div class="small text-muted mb-1"><i class="bi bi-file-earmark-text me-1"></i>DTE a acreditar
+                                ${esEcommerce ? `<span class="badge-nexo badge-nexo-info ms-1"><i class="bi bi-globe me-1"></i>${escapeHtml(canalEcommerce || 'Internet')}</span>` : ''}
+                            </div>
                             <div class="fw-bold" style="font-size: 0.95rem;">${nombreDoc} <span class="text-primary">#${escapeHtml(numeroDoc)}</span></div>
                             ${dteCliente ? `<div class="small mt-1"><i class="bi bi-person me-1"></i>${escapeHtml(dteCliente)}${dteRut ? ` · <code>${escapeHtml(dteRut)}</code>` : ''}</div>` : ''}
                             ${dteFecha ? `<div class="small text-muted"><i class="bi bi-calendar me-1"></i>${escapeHtml(dteFecha)}</div>` : ''}
@@ -3478,7 +3511,7 @@
         `;
 
         const infoNCPrevias = tieneNCPrevias
-            ? `<div class="alert alert-info py-2 px-3 mb-3 small">
+            ? `<div class="alert-nexo alert-nexo-info py-2 px-3 mb-3 small">
                    <i class="bi bi-info-circle me-1"></i>
                    Ya existen NC por <strong>${fmtCLP(ncAcumulado)}</strong> de ${fmtCLP(montoOriginal)}.
                    Disponible: <strong>${fmtCLP(montoRestante)}</strong>
@@ -3494,7 +3527,7 @@
                 .map(x => `#${x.numero_documento || x.nc_id} (${fmtCLP(x.monto)})`)
                 .join(', ');
             bannerNCsGenericas = `
-                <div class="alert alert-warning py-2 px-3 mb-3 small">
+                <div class="alert-nexo alert-nexo-warning py-2 px-3 mb-3 small">
                     <i class="bi bi-exclamation-triangle me-1"></i>
                     Existen ${ncsGenericasMonto.length} NC(s) sin detalle de productos por <strong>${fmtCLP(totalGen)}</strong>: ${lista}.
                     Esas NCs no descuentan de líneas específicas; tenlas en cuenta al elegir cantidades.
@@ -3508,11 +3541,11 @@
             let estadoHtml = '';
             if (disabled) {
                 const numeros = (l.ncs_previas || []).map(n => `#${escapeHtml(n.numero_documento)}`).join(', ');
-                estadoHtml = `<span class="badge bg-danger" title="NC previas: ${numeros}"><i class="bi bi-shield-x me-1"></i>Ya regularizada</span>`;
+                estadoHtml = `<span class="badge-nexo badge-nexo-error" title="NC previas: ${numeros}"><i class="bi bi-shield-x me-1"></i>Ya regularizada</span>`;
             } else if (parcial) {
-                estadoHtml = `<span class="badge bg-warning text-dark"><i class="bi bi-pie-chart me-1"></i>${l.cantidad_ya_acreditada} de ${l.cantidad_original} ya NC</span>`;
+                estadoHtml = `<span class="badge-nexo badge-nexo-warning"><i class="bi bi-pie-chart me-1"></i>${l.cantidad_ya_acreditada} de ${l.cantidad_original} ya NC</span>`;
             } else {
-                estadoHtml = `<span class="badge bg-success"><i class="bi bi-check2 me-1"></i>Disponible</span>`;
+                estadoHtml = `<span class="badge-nexo badge-nexo-success"><i class="bi bi-check2 me-1"></i>Disponible</span>`;
             }
             const rowOpacity = disabled ? 'opacity:0.55;' : '';
             const rowTd = disabled ? 'text-decoration:line-through;' : '';
@@ -3561,12 +3594,10 @@
         }).join('');
 
         const tablaProductosHtml = `
-            <p class="mb-2 fw-bold" style="font-size:0.9rem;">
-                <i class="bi bi-box-seam me-1"></i>Productos a acreditar:
-                <span class="badge bg-light text-dark border ms-1" title="${precioEsBruto ? 'El precio mostrado YA incluye IVA (precio de la boleta); el subtotal NC suma cantidad × precio, sin volver a sumar IVA.' : 'El precio mostrado es NETO (factura); el subtotal NC suma cantidad × precio + IVA 19%.'}" style="cursor:help; font-weight:400;">
+            ${seccionTitulo('box-seam', `Productos a acreditar:
+                <span class="badge-nexo badge-nexo-secondary ms-1" title="${precioEsBruto ? 'El precio mostrado YA incluye IVA (precio de la boleta); el subtotal NC suma cantidad × precio, sin volver a sumar IVA.' : 'El precio mostrado es NETO (factura); el subtotal NC suma cantidad × precio + IVA 19%.'}" style="cursor:help; font-weight:400;">
                     <i class="bi bi-info-circle"></i> ¿qué precio usa?
-                </span>
-            </p>
+                </span>`)}
             <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
                 <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" id="anulBtnSelTodo" style="font-size:0.75rem;">
                     <i class="bi bi-check2-all me-1"></i>Seleccionar todo
@@ -3574,10 +3605,10 @@
                 <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" id="anulBtnQuitarTodo" style="font-size:0.75rem;">
                     <i class="bi bi-x-square me-1"></i>Quitar todo
                 </button>
-                <span class="badge bg-primary ms-auto" id="anulContadorLineas" aria-live="polite">0 líneas</span>
+                <span class="badge-nexo ms-auto" id="anulContadorLineas" aria-live="polite" style="background:var(--nexo-primary); color:#fff;">0 líneas</span>
             </div>
             <div style="max-height:280px; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px;">
-                <table class="table table-sm table-hover mb-0" style="font-size:0.8rem;">
+                <table class="table table-sm table-hover mb-0" style="font-size:0.875rem;">
                     <thead class="table-light" style="position:sticky; top:0;">
                         <tr>
                             <th class="text-center" style="width:32px;"></th>
@@ -3604,19 +3635,12 @@
                 </span>
                 <span>
                     <strong>Total NC (con IVA):</strong>
-                    <span id="anulTotalNC" class="badge bg-primary" style="font-size:0.85rem;">$0</span>
+                    <span id="anulTotalNC" class="badge-nexo" style="font-size:0.85rem; background:var(--nexo-primary); color:#fff;">$0</span>
                 </span>
             </div>
             <input type="hidden" id="anulMontoNC" value="0">
             <hr class="my-3">
             `;
-
-        // POS-origen: la modalidad DEVOLUCION (que afecta caja) sólo aplica a
-        // boletas/facturas emitidas desde el POS (tipo_transaccion = VENTA_PUBLICO).
-        // Para traspasos internos (TRASPASO) o compras a proveedores externos
-        // (COMPRA), o ventas mayoristas (VENTA), no se devuelve dinero a caja.
-        const tipoTransaccion = (dteDelListado && dteDelListado.tipo_transaccion) || '';
-        const esOriginadoEnPOS = tipoTransaccion === 'VENTA_PUBLICO';
 
         // Fechas para el selector "fecha que afecta la cuadratura" (solo
         // modalidad Devolución). Por defecto hoy; rango permitido entre la
@@ -3633,14 +3657,22 @@
             return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
         })();
 
-        const cardDevolucionHtml = esOriginadoEnPOS
-            ? `<label class="p-2 border rounded modalidad-card" data-modalidad="DEVOLUCION" style="cursor:pointer;">
+        const motivoNoDisponibleHtml = esEcommerce
+            ? `Esta venta se originó por internet${canalEcommerce ? ` (canal: <code>${escapeHtml(canalEcommerce)}</code>)` : ''} y nunca pasó por una caja física.
+               La devolución a caja sólo aplica a boletas emitidas desde el punto de venta.
+               Usa <strong>Informativa</strong> u <strong>Oculta</strong>.`
+            : `Este documento no fue emitido desde el POS (tipo: <code>${tipoTransaccion || 'no identificado'}</code>).
+               La devolución a caja sólo aplica a boletas emitidas desde el punto de venta.
+               Usa <strong>Informativa</strong> u <strong>Oculta</strong>.`;
+
+        const cardDevolucionHtml = permiteDevolucionCaja
+            ? `<label class="p-3 border rounded-nexo-md modalidad-card" data-modalidad="DEVOLUCION" style="cursor:pointer; border-width:1.5px;">
                 <input type="radio" name="modalidadNC" value="DEVOLUCION" checked class="me-2">
                 <strong><i class="bi bi-cash-coin me-1"></i>A. Devolución que afecta cuadratura</strong>
                 <div class="mt-1 d-flex gap-1 flex-wrap" style="font-size:0.68rem;">
-                    <span class="badge bg-warning text-dark">Resta del método de pago</span>
-                    <span class="badge bg-info text-dark">Aparece en cuadratura</span>
-                    <span class="badge bg-info text-dark">Aparece en Gestión DTE</span>
+                    <span class="badge-nexo badge-nexo-warning">Resta del método de pago</span>
+                    <span class="badge-nexo badge-nexo-info">Aparece en cuadratura</span>
+                    <span class="badge-nexo badge-nexo-info">Aparece en Gestión DTE</span>
                 </div>
                 <div id="subDevolucion" class="mt-2 ms-4" style="font-size:0.85rem;">
                     <label class="me-3"><input type="radio" name="metodoDevolucion" value="EFECTIVO_CAJA" checked class="me-1"><i class="bi bi-cash me-1"></i>Efectivo</label>
@@ -3652,35 +3684,33 @@
                     </div>
                 </div>
             </label>`
-            : `<div class="p-2 border rounded mb-1" style="background:#f8f9fa;opacity:0.7;">
+            : `<div class="p-3 border rounded-nexo-md mb-1" style="background:var(--nexo-gray-100);opacity:0.75;">
                 <div class="d-flex align-items-start gap-2">
                     <i class="bi bi-lock-fill text-muted mt-1"></i>
                     <div style="font-size:0.78rem;">
                         <strong class="text-muted"><i class="bi bi-cash-coin me-1"></i>Devolución que afecta cuadratura — no disponible</strong>
                         <div class="text-muted mt-1" style="font-size:0.72rem;">
-                            Este documento no fue emitido desde el POS (tipo: <code>${tipoTransaccion || 'no identificado'}</code>).
-                            La devolución a caja sólo aplica a boletas emitidas desde el punto de venta.
-                            Usa <strong>Informativa</strong> u <strong>Oculta</strong>.
+                            ${motivoNoDisponibleHtml}
                         </div>
                     </div>
                 </div>
             </div>`;
 
-        // Si no es POS, INFORMATIVA queda como default checked
-        const informativaChecked = esOriginadoEnPOS ? '' : 'checked';
+        // Si no aplica devolución a caja (no-POS o ecommerce), INFORMATIVA queda como default checked
+        const informativaChecked = permiteDevolucionCaja ? '' : 'checked';
 
         // Selector de tipo de NC: devolución de productos (razón 1, por
         // cantidad) vs corrección de monto cobrado (razón 3, monto libre por
         // línea, sin revertir stock).
         const tipoNCSelectorHtml = `
-            <p class="mb-2 fw-bold" style="font-size:0.9rem;"><i class="bi bi-sliders me-1"></i>¿Qué tipo de NC?</p>
+            ${seccionTitulo('sliders', '¿Qué tipo de NC?')}
             <div class="d-flex flex-column gap-2 mb-3" id="tipoNCContainer">
-                <label class="p-2 border rounded tiponc-card" data-tiponc="PRODUCTOS" style="cursor:pointer;">
+                <label class="p-3 border rounded-nexo-md tiponc-card" data-tiponc="PRODUCTOS" style="cursor:pointer; border-width:1.5px;">
                     <input type="radio" name="tipoNC" value="PRODUCTOS" checked class="me-2">
                     <strong><i class="bi bi-box-arrow-in-left me-1"></i>Devolución / anulación de productos</strong>
                     <small class="text-muted ms-4 d-block" style="font-size:0.74rem;">Acredita unidades completas al precio original y revierte stock. Referencia SII: <strong>razón 1 (anula)</strong>.</small>
                 </label>
-                <label class="p-2 border rounded tiponc-card" data-tiponc="CORRIGE_MONTO" style="cursor:pointer;">
+                <label class="p-3 border rounded-nexo-md tiponc-card" data-tiponc="CORRIGE_MONTO" style="cursor:pointer; border-width:1.5px;">
                     <input type="radio" name="tipoNC" value="CORRIGE_MONTO" class="me-2">
                     <strong><i class="bi bi-pencil-square me-1"></i>Corrección de monto cobrado</strong>
                     <small class="text-muted ms-4 d-block" style="font-size:0.74rem;">Acredita un <strong>monto libre por línea</strong> (error de cobro). NO devuelve producto ni revierte stock. Referencia SII: <strong>razón 3 (corrige montos)</strong>.</small>
@@ -3690,9 +3720,11 @@
         // Modal Bootstrap nativo (reemplaza el Swal.fire principal)
         const modalEl = document.getElementById('modalGenerarNC');
         document.getElementById('modalGenerarNC_title').textContent = `Generar NC — ${nombreDoc} #${numeroDoc}`;
-        document.getElementById('modalGenerarNC_subtitle').textContent = esOriginadoEnPOS
+        document.getElementById('modalGenerarNC_subtitle').textContent = permiteDevolucionCaja
             ? `DTE de POS — todas las modalidades disponibles`
-            : `DTE no-POS (${tipoTransaccion || 'sin tipo'}) — sólo Informativa/Oculta`;
+            : esEcommerce
+                ? `Venta por internet${canalEcommerce ? ` (${canalEcommerce})` : ''} — sólo Informativa/Oculta`
+                : `DTE no-POS (${tipoTransaccion || 'sin tipo'}) — sólo Informativa/Oculta`;
 
         const errorMsgEl = document.getElementById('modalGenerarNC_errorMsg');
         const errorTextEl = document.getElementById('modalGenerarNC_errorText');
@@ -3705,51 +3737,49 @@
                     ${bannerNCsGenericas}
                     ${tipoNCSelectorHtml}
                     ${tablaProductosHtml}
-                    <p class="mb-2 fw-bold" style="font-size:0.9rem;"><i class="bi bi-shield-exclamation me-1"></i>Modalidad de la Nota de Crédito:</p>
+                    ${seccionTitulo('shield-exclamation', 'Modalidad de la Nota de Crédito:')}
                     <div class="d-flex flex-column gap-2 mb-2" id="modalidadNCContainer">
                         ${cardDevolucionHtml}
-                        <label class="p-2 border rounded modalidad-card" data-modalidad="INFORMATIVA" style="cursor:pointer;">
+                        <label class="p-3 border rounded-nexo-md modalidad-card" data-modalidad="INFORMATIVA" style="cursor:pointer; border-width:1.5px;">
                             <input type="radio" name="modalidadNC" value="INFORMATIVA" ${informativaChecked} class="me-2">
                             <strong><i class="bi bi-info-circle me-1"></i>B. NC informativa (sin afectar montos)</strong>
                             <div class="mt-1 d-flex gap-1 flex-wrap" style="font-size:0.68rem;">
-                                <span class="badge bg-secondary">No resta nada</span>
-                                <span class="badge bg-info text-dark">Aparece en cuadratura (solo conteo)</span>
-                                <span class="badge bg-info text-dark">Aparece en Gestión DTE</span>
+                                <span class="badge-nexo badge-nexo-secondary">No resta nada</span>
+                                <span class="badge-nexo badge-nexo-info">Aparece en cuadratura (solo conteo)</span>
+                                <span class="badge-nexo badge-nexo-info">Aparece en Gestión DTE</span>
                             </div>
                             <small class="text-muted ms-4 d-block mt-1" style="font-size:0.75rem;">Se emite y queda como documento del día, pero no descuenta del efectivo ni del venta total.</small>
                         </label>
                         {% if puede_ocultar_nc %}
-                        <label class="p-2 border rounded modalidad-card" data-modalidad="OCULTA" style="cursor:pointer;">
+                        <label class="p-3 border rounded-nexo-md modalidad-card" data-modalidad="OCULTA" style="cursor:pointer; border-width:1.5px;">
                             <input type="radio" name="modalidadNC" value="OCULTA" class="me-2">
                             <strong><i class="bi bi-eye-slash me-1"></i>C. NC oculta (no figura en cuadratura ni listado)</strong>
                             <div class="mt-1 d-flex gap-1 flex-wrap" style="font-size:0.68rem;">
-                                <span class="badge bg-secondary">No resta nada</span>
-                                <span class="badge bg-dark">Oculta de cuadratura</span>
-                                <span class="badge bg-dark">Oculta de Gestión DTE</span>
+                                <span class="badge-nexo badge-nexo-secondary">No resta nada</span>
+                                <span class="badge-nexo" style="background:var(--nexo-secondary); color:#fff;">Oculta de cuadratura</span>
+                                <span class="badge-nexo" style="background:var(--nexo-secondary); color:#fff;">Oculta de Gestión DTE</span>
                             </div>
                             <small class="text-muted ms-4 d-block mt-1" style="font-size:0.75rem;">El TXT Acepta se descarga, pero la NC se marca como descartada y no aparece en listados ni cuadratura.</small>
                         </label>
                         {% endif %}
                     </div>
 
-                    <div id="anulEfectoPanel" class="alert alert-info py-2 px-3 mb-3" style="font-size:0.78rem;">
+                    <div id="anulEfectoPanel" class="alert-nexo alert-nexo-info py-2 px-3 mb-3" style="font-size:0.78rem;">
                         <div class="fw-bold mb-1"><i class="bi bi-broadcast me-1"></i>Efecto de esta NC:</div>
                         <div class="d-flex flex-wrap gap-1">
-                            <span id="efectoCuadratura" class="badge bg-light text-dark border"></span>
-                            <span id="efectoGestionDte" class="badge bg-light text-dark border"></span>
-                            <span id="efectoEfectivo" class="badge bg-light text-dark border"></span>
-                            <span id="efectoTransferencia" class="badge bg-light text-dark border"></span>
+                            <span id="efectoCuadratura" class="badge-nexo badge-nexo-secondary"></span>
+                            <span id="efectoGestionDte" class="badge-nexo badge-nexo-secondary"></span>
+                            <span id="efectoEfectivo" class="badge-nexo badge-nexo-secondary"></span>
+                            <span id="efectoTransferencia" class="badge-nexo badge-nexo-secondary"></span>
                         </div>
                     </div>
 
                     <hr class="my-2">
-                    <p class="mb-2 fw-bold" style="font-size:0.9rem;">
-                        <i class="bi bi-person me-1"></i>Datos del cliente
+                    ${seccionTitulo('person', `Datos del cliente
                         <span class="text-danger" id="anulClienteRequiredMark">*</span>
                         <small id="anulClienteHint" class="text-danger ms-1" style="font-weight:500;">
                             (obligatorio para emitir NC con TXT al SII)
-                        </small>
-                    </p>
+                        </small>`)}
                     <div class="row g-2 mb-1">
                         <div class="col-8">
                             <div class="input-group input-group-sm">
@@ -3779,7 +3809,7 @@
                         </div>
                     </div>
                     <div id="anulClienteNoEncontrado" class="d-none mt-1">
-                        <div class="alert alert-warning py-1 px-2 mb-0 small d-flex align-items-center justify-content-between">
+                        <div class="alert-nexo alert-nexo-warning py-1 px-2 mb-0 small d-flex align-items-center justify-content-between">
                             <span><i class="bi bi-exclamation-triangle me-1"></i>Cliente no encontrado</span>
                             <button type="button" class="btn btn-sm btn-warning py-0 px-2" onclick="crearClienteDesdeAnulacion()" style="font-size:0.75rem;">
                                 <i class="bi bi-person-plus me-1"></i>Crear Cliente
@@ -3789,7 +3819,7 @@
                     <input type="hidden" id="anulClienteId" value="">
 
                     <hr class="my-2">
-                    <p class="mb-2 fw-bold" style="font-size:0.9rem;"><i class="bi bi-chat-left-text me-1"></i>Motivo de la anulación <span class="text-danger">*</span>:</p>
+                    ${seccionTitulo('chat-left-text', 'Motivo de la anulación <span class="text-danger">*</span>:')}
                     <select id="anulMotivoSelect" class="form-select form-select-sm mb-2" onchange="actualizarMotivoAnulacion()">
                         <option value="">-- Seleccione motivo --</option>
                         <optgroup label="Devolución del cliente">
@@ -3833,6 +3863,14 @@
                     rutEl.addEventListener('keydown', (e) => {
                         if (e.key === 'Enter') { e.preventDefault(); buscarClienteAnulacion(); }
                     });
+                }
+
+                // Si el DTE original tiene un cliente identificado (no genérico),
+                // precargar el RUT y reutilizar la búsqueda existente en vez de
+                // obligar a retipear un dato que el sistema ya conoce.
+                if (rutEl && dteRut && dteRut !== '66666666-6') {
+                    rutEl.value = dteRut;
+                    buscarClienteAnulacion(true);
                 }
                 const montoEl = document.getElementById('anulMontoNC');
                 const infoEl = document.getElementById('anulInfoTotal');
@@ -3888,6 +3926,15 @@
                     if (montoEl) montoEl.value = conIva;
                     const contEl = document.getElementById('anulContadorLineas');
                     if (contEl) contEl.textContent = incluidas + (incluidas === 1 ? ' línea' : ' líneas');
+                    // Refleja el total también en el footer del modal (fijo,
+                    // fuera del cuerpo con scroll) para no perderlo de vista
+                    // al bajar hacia Modalidad/Cliente/Motivo.
+                    const footerTotal = document.getElementById('modalGenerarNC_footerTotal');
+                    const footerTotalValue = document.getElementById('modalGenerarNC_footerTotalValue');
+                    if (footerTotal && footerTotalValue) {
+                        footerTotalValue.textContent = fmtCLP(conIva);
+                        footerTotal.style.display = incluidas > 0 ? '' : 'none';
+                    }
                     return conIva;
                 };
 
@@ -4012,15 +4059,15 @@
                 const setBadge = (id, ok, label) => {
                     const el = document.getElementById(id);
                     if (!el) return;
-                    el.className = 'badge border ' + (ok === true
-                        ? 'bg-success'
-                        : ok === false ? 'bg-secondary' : 'bg-light text-dark');
+                    el.className = 'badge-nexo ' + (ok === true
+                        ? 'badge-nexo-success'
+                        : ok === false ? 'badge-nexo-secondary' : 'badge-nexo-secondary');
                     el.innerHTML = (ok === true ? '<i class="bi bi-check-circle me-1"></i>' :
                                     ok === false ? '<i class="bi bi-x-circle me-1"></i>' :
                                     '<i class="bi bi-dash-circle me-1"></i>') + label;
                 };
                 const subDev = document.getElementById('subDevolucion');
-                const defaultSel = esOriginadoEnPOS ? 'DEVOLUCION' : 'INFORMATIVA';
+                const defaultSel = permiteDevolucionCaja ? 'DEVOLUCION' : 'INFORMATIVA';
                 const actualizarEfecto = () => {
                     const sel = (document.querySelector('input[name="modalidadNC"]:checked') || {}).value || defaultSel;
                     const metodo = (document.querySelector('input[name="metodoDevolucion"]:checked') || {}).value || 'EFECTIVO_CAJA';
@@ -4129,13 +4176,15 @@
                 }
                 const motivoFinal = selectVal === 'OTRO' ? txtVal : (txtVal ? `${selectVal}. ${txtVal}` : selectVal);
                 const modalidadSel = (document.querySelector('input[name="modalidadNC"]:checked') || {}).value
-                    || (esOriginadoEnPOS ? 'DEVOLUCION' : 'INFORMATIVA');
+                    || (permiteDevolucionCaja ? 'DEVOLUCION' : 'INFORMATIVA');
                 const metodoSel = (document.querySelector('input[name="metodoDevolucion"]:checked') || {}).value || 'EFECTIVO_CAJA';
                 const fechaDevolucionCajaSel = (document.getElementById('anulFechaDevolucionCaja') || {}).value || '';
 
-                // Defensa extra contra elección de DEVOLUCION en DTE no-POS
-                if (modalidadSel === 'DEVOLUCION' && !esOriginadoEnPOS) {
-                    mostrarError('La modalidad Devolución sólo aplica a documentos emitidos desde el POS. Usa Informativa u Oculta.');
+                // Defensa extra contra elección de DEVOLUCION en DTE no-POS o ecommerce
+                if (modalidadSel === 'DEVOLUCION' && !permiteDevolucionCaja) {
+                    mostrarError(esEcommerce
+                        ? 'La modalidad Devolución no aplica a ventas por internet (no hay caja física asociada). Usa Informativa u Oculta.'
+                        : 'La modalidad Devolución sólo aplica a documentos emitidos desde el POS. Usa Informativa u Oculta.');
                     return null;
                 }
 
@@ -4208,23 +4257,23 @@
             if (modalidadNC === 'DEVOLUCION') {
                 const esEf = metodoDevolucion === 'EFECTIVO_CAJA';
                 return `
-                    <span class="badge bg-success me-1"><i class="bi bi-check-circle me-1"></i>Aparece en cuadratura</span>
-                    <span class="badge bg-success me-1"><i class="bi bi-check-circle me-1"></i>Aparece en Gestión DTE</span>
-                    <span class="badge ${esEf ? 'bg-warning text-dark' : 'bg-secondary'} me-1"><i class="bi bi-${esEf ? 'cash-coin' : 'x-circle'} me-1"></i>${esEf ? 'Resta efectivo teórico' : 'No afecta efectivo'}</span>
-                    <span class="badge ${!esEf ? 'bg-warning text-dark' : 'bg-secondary'}"><i class="bi bi-${!esEf ? 'bank' : 'x-circle'} me-1"></i>${!esEf ? 'Resta transferencia teórica' : 'No afecta transferencia'}</span>`;
+                    <span class="badge-nexo badge-nexo-success me-1"><i class="bi bi-check-circle me-1"></i>Aparece en cuadratura</span>
+                    <span class="badge-nexo badge-nexo-success me-1"><i class="bi bi-check-circle me-1"></i>Aparece en Gestión DTE</span>
+                    <span class="badge-nexo ${esEf ? 'badge-nexo-warning' : 'badge-nexo-secondary'} me-1"><i class="bi bi-${esEf ? 'cash-coin' : 'x-circle'} me-1"></i>${esEf ? 'Resta efectivo teórico' : 'No afecta efectivo'}</span>
+                    <span class="badge-nexo ${!esEf ? 'badge-nexo-warning' : 'badge-nexo-secondary'}"><i class="bi bi-${!esEf ? 'bank' : 'x-circle'} me-1"></i>${!esEf ? 'Resta transferencia teórica' : 'No afecta transferencia'}</span>`;
             }
             if (modalidadNC === 'INFORMATIVA') {
                 return `
-                    <span class="badge bg-success me-1"><i class="bi bi-check-circle me-1"></i>Aparece en cuadratura (solo conteo)</span>
-                    <span class="badge bg-success me-1"><i class="bi bi-check-circle me-1"></i>Aparece en Gestión DTE</span>
-                    <span class="badge bg-secondary me-1"><i class="bi bi-x-circle me-1"></i>No afecta efectivo</span>
-                    <span class="badge bg-secondary"><i class="bi bi-x-circle me-1"></i>No afecta transferencia</span>`;
+                    <span class="badge-nexo badge-nexo-success me-1"><i class="bi bi-check-circle me-1"></i>Aparece en cuadratura (solo conteo)</span>
+                    <span class="badge-nexo badge-nexo-success me-1"><i class="bi bi-check-circle me-1"></i>Aparece en Gestión DTE</span>
+                    <span class="badge-nexo badge-nexo-secondary me-1"><i class="bi bi-x-circle me-1"></i>No afecta efectivo</span>
+                    <span class="badge-nexo badge-nexo-secondary"><i class="bi bi-x-circle me-1"></i>No afecta transferencia</span>`;
             }
             return `
-                <span class="badge bg-dark me-1"><i class="bi bi-eye-slash me-1"></i>Oculta de cuadratura</span>
-                <span class="badge bg-dark me-1"><i class="bi bi-eye-slash me-1"></i>Oculta de Gestión DTE</span>
-                <span class="badge bg-secondary me-1"><i class="bi bi-x-circle me-1"></i>No afecta efectivo</span>
-                <span class="badge bg-secondary"><i class="bi bi-x-circle me-1"></i>No afecta transferencia</span>`;
+                <span class="badge-nexo me-1" style="background:var(--nexo-secondary); color:#fff;"><i class="bi bi-eye-slash me-1"></i>Oculta de cuadratura</span>
+                <span class="badge-nexo me-1" style="background:var(--nexo-secondary); color:#fff;"><i class="bi bi-eye-slash me-1"></i>Oculta de Gestión DTE</span>
+                <span class="badge-nexo badge-nexo-secondary me-1"><i class="bi bi-x-circle me-1"></i>No afecta efectivo</span>
+                <span class="badge-nexo badge-nexo-secondary"><i class="bi bi-x-circle me-1"></i>No afecta transferencia</span>`;
         })();
         const tituloModalidad = modalidadNC === 'DEVOLUCION'
             ? `Devolución (${metodoDevolucion === 'EFECTIVO_CAJA' ? 'Efectivo' : 'Transferencia'})`
@@ -4251,9 +4300,9 @@
                     <div class="mb-2"><strong>${formData.esCorreccionMonto ? 'Correcciones' : 'Productos'}:</strong>
                         <ul class="mb-0 mt-1" style="padding-left:1.2rem;">${lineasResumen || '<li class="text-muted">(ninguno)</li>'}</ul>
                     </div>
-                    <div class="mb-2"><strong>${formData.esCorreccionMonto ? 'Monto a corregir' : 'Monto NC'}:</strong> ${fmtCLP(formData.montoNC)} ${formData.esCorreccionMonto ? '<span class="badge bg-warning text-dark ms-1">Corrige montos (razón 3)</span>' : (formData.montoNC >= montoRestante ? '<span class="badge bg-danger ms-1">Total — anulará el documento</span>' : '<span class="badge bg-info text-dark ms-1">Parcial</span>')}</div>
+                    <div class="mb-2"><strong>${formData.esCorreccionMonto ? 'Monto a corregir' : 'Monto NC'}:</strong> ${fmtCLP(formData.montoNC)} ${formData.esCorreccionMonto ? '<span class="badge-nexo badge-nexo-warning ms-1">Corrige montos (razón 3)</span>' : (formData.montoNC >= montoRestante ? '<span class="badge-nexo badge-nexo-error ms-1">Total — anulará el documento</span>' : '<span class="badge-nexo badge-nexo-info ms-1">Parcial</span>')}</div>
                     <div class="mb-2"><strong>Modalidad:</strong> ${tituloModalidad}</div>
-                    ${modalidadNC === 'DEVOLUCION' && formData.fechaDevolucionCaja ? `<div class="mb-2"><strong>Afecta cuadratura del:</strong> ${formData.fechaDevolucionCaja.split('-').reverse().join('/')}${formData.fechaDevolucionCaja === hoyISO ? ' <span class="badge bg-secondary ms-1">hoy</span>' : ' <span class="badge bg-warning text-dark ms-1">día anterior</span>'}</div>` : ''}
+                    ${modalidadNC === 'DEVOLUCION' && formData.fechaDevolucionCaja ? `<div class="mb-2"><strong>Afecta cuadratura del:</strong> ${formData.fechaDevolucionCaja.split('-').reverse().join('/')}${formData.fechaDevolucionCaja === hoyISO ? ' <span class="badge-nexo badge-nexo-secondary ms-1">hoy</span>' : ' <span class="badge-nexo badge-nexo-warning ms-1">día anterior</span>'}</div>` : ''}
                     <div class="mb-2"><strong>Motivo:</strong> ${escapeHtml(formData.motivo)}</div>
                     ${formData.clienteNombre ? `<div class="mb-2"><strong>Cliente:</strong> ${escapeHtml(formData.clienteNombre)}${formData.clienteRut ? ` (${escapeHtml(formData.clienteRut)})` : ''}</div>` : ''}
                     <hr class="my-2">

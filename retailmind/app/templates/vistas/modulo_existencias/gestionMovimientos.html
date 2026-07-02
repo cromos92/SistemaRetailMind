@@ -526,42 +526,73 @@
 
 /* Responsable + Referencia */
 #tablaMovimientos .col-resp {
-    width: 120px;
+    width: 180px;
 }
 .resp-nombre {
     display: block;
     font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--nexo-gray-900);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 116px;
+    max-width: 176px;
 }
+/* Referencia como valor claro (no placeholder tenue) */
 .resp-referencia {
-    display: block;
-    font-size: 0.68rem;
-    color: var(--nexo-gray-500);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 3px;
+    max-width: 176px;
+}
+.resp-referencia .ref-vacia {
+    color: var(--nexo-gray-300);
+    font-size: 0.72rem;
+}
+
+/* Badge de referencia legible */
+.ref-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.3;
     white-space: nowrap;
+    max-width: 176px;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 116px;
-    margin-top: 1px;
 }
+.ref-badge i { font-size: 0.72rem; }
+.ref-badge .ref-num { font-weight: 700; }
 
-.referencia-devolucion {
-    color: var(--nexo-accent);
-    font-weight: 500;
+.ref-badge.referencia-dte {
+    background: rgba(255, 176, 32, 0.15);
+    color: #a86e00;
+    border: 1px solid rgba(255, 176, 32, 0.35);
 }
-
-.referencia-ticket {
-    color: var(--nexo-info);
+.ref-badge.referencia-devolucion {
+    background: rgba(0, 212, 170, 0.15);
+    color: #00795f;
+    border: 1px solid rgba(0, 212, 170, 0.35);
 }
-
-.referencia-dte {
-    color: var(--nexo-warning);
+.ref-badge.referencia-ticket {
+    background: rgba(0, 102, 255, 0.12);
+    color: var(--nexo-primary-dark);
+    border: 1px solid rgba(0, 102, 255, 0.3);
 }
-
-.referencia-traspaso {
-    color: var(--nexo-primary);
+.ref-badge.referencia-traspaso {
+    background: rgba(0, 102, 255, 0.12);
+    color: var(--nexo-primary-dark);
+    border: 1px solid rgba(0, 102, 255, 0.3);
+}
+.ref-badge.referencia-externa {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+    border: 1px solid var(--nexo-gray-300);
 }
 
 /* ========== RESPONSIVE ========== */
@@ -710,6 +741,11 @@
                                 <div class="col-lg-2 col-md-4 col-6">
                                     <label class="form-label">SKU / Código de barra</label>
                                     <input type="text" class="form-control" id="filtroSkuCodigo" placeholder="Escanear o buscar...">
+                                </div>
+                                <div class="col-lg-2 col-md-4 col-6 d-flex align-items-end">
+                                    <button class="btn btn-outline-secondary w-100" id="btnLimpiarFiltros" type="button">
+                                        <i class="bi bi-eraser"></i> Limpiar filtros
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1023,7 +1059,7 @@ function cargarMovimientos(page = 1) {
     // Mostrar loading
     $('#tbodyMovimientos').html(`
         <tr>
-            <td colspan="14">
+            <td colspan="9">
                 <div class="nexo-empty-state">
                     <i class="bi bi-hourglass-split" style="animation: spin 1s linear infinite;"></i>
                     <p>Cargando movimientos...</p>
@@ -1056,7 +1092,7 @@ function cargarMovimientos(page = 1) {
             if (response.items.length === 0) {
                 tbody.html(`
                     <tr>
-                        <td colspan="14">
+                        <td colspan="9">
                             <div class="nexo-empty-state">
                                 <i class="bi bi-inbox"></i>
                                 <p>No hay movimientos para los filtros seleccionados</p>
@@ -1076,33 +1112,33 @@ function cargarMovimientos(page = 1) {
                     
                     // Obtener clase para badge de tipo
                     const tipoBadgeClass = getTipoBadgeClass(mov.tipo_movimiento);
-                    
-                    // Obtener clase para referencia
-                    const referenciaClass = getReferenciaClass(mov.concepto, mov.referencia_externa);
-                    
-                    const refTitle = `${mov.responsable} | ${mov.referencia_externa || '-'}`;
+
+                    // Referencia (incluye N° DTE) renderizada como badge legible, no como texto tenue
+                    const referenciaHtml = construirReferencia(mov);
+
+                    const refTitle = `${mov.responsable || '-'} | ${mov.referencia_externa || 'Sin referencia'}`;
                     const fila = `
                         <tr>
                             <td class="col-fecha">
                                 ${fechaFormateada}
                                 <span class="fecha-hora">${mov.hora}</span>
                             </td>
-                            <td class="col-articulo" title="${mov.articulo}${mov.descripcion ? ' — ' + mov.descripcion : ''}">
-                                <strong>${mov.articulo}</strong>
-                                <span class="sub-text">${mov.descripcion || ''}</span>
+                            <td class="col-articulo" title="${escapeHtml(mov.articulo)}${mov.descripcion ? ' — ' + escapeHtml(mov.descripcion) : ''}">
+                                <strong>${escapeHtml(mov.articulo)}</strong>
+                                <span class="sub-text">${escapeHtml(mov.descripcion || '')}</span>
                             </td>
-                            <td class="col-caract" title="${mov.marca || '-'} · ${mov.color || '-'} · ${mov.genero || '-'}">
-                                <span class="caract-item">${mov.marca || '-'}</span>
-                                <span class="caract-item">${mov.color || '-'} · ${mov.genero || '-'}</span>
+                            <td class="col-caract" title="${escapeHtml(mov.marca || '-')} · ${escapeHtml(mov.color || '-')} · ${escapeHtml(mov.genero || '-')}">
+                                <span class="caract-item">${escapeHtml(mov.marca || '-')}</span>
+                                <span class="caract-item">${escapeHtml(mov.color || '-')} · ${escapeHtml(mov.genero || '-')}</span>
                             </td>
-                            <td class="col-talla">${mov.talla}</td>
-                            <td class="col-sku" title="${mov.sku}"><code>${mov.sku}</code></td>
+                            <td class="col-talla">${escapeHtml(mov.talla)}</td>
+                            <td class="col-sku" title="${escapeHtml(mov.sku)}"><code>${escapeHtml(mov.sku)}</code></td>
                             <td class="col-cant ${cantidadClass}">${cantidadSign}${mov.cantidad}</td>
                             <td class="col-tipo"><span class="nexo-badge ${tipoBadgeClass}">${mov.tipo_movimiento}</span></td>
-                            <td class="col-concepto" title="${mov.concepto || ''}">${formatearConcepto(mov.concepto, mov.sucursal_destino)}</td>
-                            <td class="col-resp" title="${refTitle}">
-                                <span class="resp-nombre">${mov.responsable}</span>
-                                <span class="resp-referencia ${referenciaClass}">${mov.referencia_externa || '-'}</span>
+                            <td class="col-concepto" title="${escapeHtml(mov.concepto || '')}">${formatearConcepto(mov.concepto, mov.sucursal_destino)}</td>
+                            <td class="col-resp" title="${escapeHtml(refTitle)}">
+                                <span class="resp-nombre">${escapeHtml(mov.responsable || '—')}</span>
+                                <span class="resp-referencia">${referenciaHtml}</span>
                             </td>
                         </tr>`;
                     tbody.append(fila);
@@ -1128,13 +1164,50 @@ function getTipoBadgeClass(tipo) {
     return clases[tipo] || 'nexo-badge-ajuste';
 }
 
-function getReferenciaClass(concepto, referencia) {
-    if (!referencia || referencia === '-') return '';
-    if (concepto && concepto.includes('DEVOLUCION')) return 'referencia-devolucion';
-    if (referencia.includes('Ticket')) return 'referencia-ticket';
-    if (referencia.includes('DTE') || referencia.includes('#')) return 'referencia-dte';
-    if (referencia.includes('Destino')) return 'referencia-traspaso';
-    return '';
+// Escapa texto para evitar romper el HTML (y XSS) al interpolar en las plantillas
+function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// Metadata de badge por tipo de referencia (color/ícono definidos en el CSS)
+const REFERENCIA_META = {
+    dte:        { clase: 'referencia-dte',        icono: 'bi-receipt' },
+    devolucion: { clase: 'referencia-devolucion', icono: 'bi-arrow-return-left' },
+    ticket:     { clase: 'referencia-ticket',     icono: 'bi-ticket-perforated' },
+    traspaso:   { clase: 'referencia-traspaso',   icono: 'bi-arrow-left-right' },
+    externa:    { clase: 'referencia-externa',    icono: 'bi-link-45deg' }
+};
+
+// Construye la referencia (incl. N° DTE) como badge claro y legible
+function construirReferencia(mov) {
+    // Caso DTE: usar los datos estructurados para mostrar "Tipo #Número" legible
+    if (mov.dte && mov.dte.numero) {
+        const meta = REFERENCIA_META.dte;
+        const label = mov.dte.tipo_label || 'DTE';
+        const titulo = `${label} N° ${mov.dte.numero}`;
+        return `<span class="ref-badge ${meta.clase}" title="${escapeHtml(titulo)}">`
+             + `<i class="bi ${meta.icono}"></i>`
+             + `<span>${escapeHtml(label)}</span>`
+             + `<span class="ref-num">#${escapeHtml(mov.dte.numero)}</span>`
+             + `</span>`;
+    }
+
+    // Resto de referencias (devolución, ticket, traspaso, externa)
+    const referencia = mov.referencia_externa;
+    if (!referencia || referencia === '-') {
+        return '<span class="ref-vacia">—</span>';
+    }
+    const meta = REFERENCIA_META[mov.tipo_referencia] || REFERENCIA_META.externa;
+    return `<span class="ref-badge ${meta.clase}" title="${escapeHtml(referencia)}">`
+         + `<i class="bi ${meta.icono}"></i>`
+         + `<span>${escapeHtml(referencia)}</span>`
+         + `</span>`;
 }
 
 function formatearConcepto(concepto, sucursalDestino) {
@@ -1554,7 +1627,17 @@ $(document).ready(function() {
             cargarMovimientos();
         }, 500);
     });
-    
+
+    // Limpiar todos los filtros y volver al rango por defecto (últimos 30 días)
+    $('#btnLimpiarFiltros').on('click', function() {
+        $('#filtroTipo').val('');
+        $('#filtroArticulo').val('');
+        $('#filtroSkuCodigo').val('');
+        establecerFechasDefecto();
+        currentPageMovimientos = 1;
+        cargarMovimientos();
+    });
+
     // Eventos de paginación para movimientos
     $('#btnPrevPageMovimientos').on('click', function(e) {
         e.preventDefault();

@@ -2477,8 +2477,12 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
 
     # Si ticket.total está sincronizado con las líneas, lo respetamos. Si no,
     # usamos el cálculo autoritativo basado en las líneas (y logeamos el desfase
-    # para diagnosticar flujos mal cerrados).
-    ticket_total_guardado = int(ticket.total or 0)
+    # para diagnosticar flujos mal cerrados). Esta comparación es en base a las
+    # líneas de producto (bruto - descuento de línea), sin el vale de
+    # fidelización, que se resta aparte más abajo — comparar contra
+    # ticket.total (que sí ya tiene el vale restado, ver registrar_pagos_ticket)
+    # generaría una falsa alarma de desfase en cada venta pagada con vale.
+    ticket_total_guardado = int(ticket.total or 0) + int(ticket.descuento_fidelizacion or 0)
     if ticket_total_guardado != total_real_lineas and total_real_lineas > 0:
         logger.warning(
             "Desfase ticket.total vs suma de lineas. ticket_id=%s, total_guardado=%s, "
@@ -2488,14 +2492,22 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
             total_real_lineas,
         )
         # Reconciliar también en DB para que el resto del flujo (resumen, cuadratura) use el valor correcto.
-        ticket.total = total_real_lineas
+        ticket.total = total_real_lineas - int(ticket.descuento_fidelizacion or 0)
         ticket.descuento = descuento_real_lineas
         if hasattr(ticket, 'subTotal'):
             ticket.subTotal = suma_items_brutos
         ticket.save(update_fields=['total', 'descuento', 'subTotal'] if hasattr(ticket, 'subTotal') else ['total', 'descuento'])
 
-    total_con_iva = Decimal(total_real_lineas)
-    descuento = Decimal(descuento_real_lineas)
+    # El DTE debe reflejar lo efectivamente cobrado: si parte del ticket se
+    # pagó con vale de fidelización (ticket.descuento_fidelizacion), ese monto
+    # nunca llegó como pago en efectivo/tarjeta (Dte_Detalle_Pago), así que se
+    # resta acá igual que el descuento por línea — si no, el DTE queda emitido
+    # por un monto mayor a la suma real de Dte_Detalle_Pago.
+    descuento_vale = int(ticket.descuento_fidelizacion or 0)
+    total_dte = total_real_lineas - descuento_vale
+
+    total_con_iva = Decimal(total_dte)
+    descuento = Decimal(descuento_real_lineas + descuento_vale)
 
     # Descomponer el total para obtener neto e IVA
     # Total = Neto + IVA, donde IVA = Neto * 0.19
@@ -4095,7 +4107,15 @@ def registrar_pagos_ticket(request, correlativo):
                 dte_generado.tipo_documento,
                 dte_generado.numero_documento,
             )
-            
+
+            # Si un intento anterior había quedado marcado como fallido
+            # (ver except más abajo / reintentar_generar_dte_ticket), limpiar
+            # la bandera ahora que el DTE se generó con éxito.
+            if ticket.dte_generacion_fallida:
+                ticket.dte_generacion_fallida = False
+                ticket.dte_error_detalle = None
+                ticket.save(update_fields=['dte_generacion_fallida', 'dte_error_detalle'])
+
             # Verificar stock DESPUÉS de generar DTE
             for tp in ticket.ticket_productos.all():
                 if tp.ProductoTalla is None:
@@ -4140,14 +4160,28 @@ def registrar_pagos_ticket(request, correlativo):
                     )
                 
         except Exception as e:
-            # No fallar el pago si hay error en DTE, solo registrar
+            # No fallar el pago si hay error en DTE (la venta ya está cobrada
+            # y el stock ya se descontó) — pero dejar rastro persistente para
+            # que no quede un ticket PAGADO sin documento tributario en
+            # silencio. El reintento manual es responsabilidad de
+            # `reintentar_generar_dte_ticket`.
             logger.exception("Error al generar DTE desde ticket=%s", ticket.correlativo)
+            ticket.dte_generacion_fallida = True
+            ticket.dte_error_detalle = f"{type(e).__name__}: {e}"[:2000]
+            ticket.save(update_fields=['dte_generacion_fallida', 'dte_error_detalle'])
 
     response_data = {
-        'success': True, 
+        'success': True,
         'ticket': construir_ticket_data(ticket)
     }
-    
+
+    if ticket.dte_generacion_fallida:
+        response_data['dte_generacion_fallo'] = True
+        response_data['dte_error_mensaje'] = (
+            'La venta se cobró correctamente pero no se pudo generar el '
+            'documento tributario. Reintente desde Consulta de Documentos.'
+        )
+
     if dte_generado:
         response_data['dte_generado'] = {
             'id': dte_generado.id,
@@ -4186,6 +4220,116 @@ def registrar_pagos_ticket(request, correlativo):
 
     logger.debug("Fin registrar_pagos_ticket ticket=%s", correlativo)
     return JsonResponse(response_data)
+
+
+@login_required
+@require_http_methods(["POST"])
+def reintentar_generar_dte_ticket(request, ticket_id):
+    """Reintenta generar el DTE de un ticket que quedó PAGADO sin documento
+    (ver `dte_generacion_fallida` en el modelo Ticket).
+
+    No reusa `generar_dte_desde_ticket_api` (views_modulo_documentos.py) porque
+    esa función solo genera el TXT descargable, consume un folio nuevo cada vez
+    que se llama y no crea el registro `Dte` en BD — reutilizarla aquí
+    duplicaría folios sin documento real. Este endpoint llama directamente a
+    la función autoritativa `generar_dte_desde_ticket` de este mismo archivo,
+    que recalcula el monto desde las líneas del ticket.
+    """
+    sucursal_id = (
+        request.session.get('idSucursalActual')
+        or request.session.get('sucursalActual')
+        or request.session.get('idSucursalActualPOS')
+    )
+    if not sucursal_id:
+        return JsonResponse({'success': False, 'error': 'No hay sucursal activa en la sesión'}, status=400)
+
+    ticket = (
+        Ticket.objects
+        .select_related('sucursal')
+        .filter(id=ticket_id, sucursal_id=sucursal_id)
+        .first()
+    )
+    if not ticket:
+        return JsonResponse({'success': False, 'error': 'Ticket no encontrado'}, status=404)
+
+    if ticket.estado != 'PAGADO':
+        return JsonResponse({
+            'success': False,
+            'error': f'El ticket #{ticket.correlativo} no está en estado PAGADO (estado actual: {ticket.estado}).',
+        }, status=400)
+
+    if ticket.folio_dte:
+        return JsonResponse({
+            'success': False,
+            'error': f'El ticket #{ticket.correlativo} ya tiene un DTE generado (folio {ticket.folio_dte}).',
+        }, status=400)
+
+    tipo_documento = ticket.tipo_dte
+    if tipo_documento not in ('BOLETA_ELECTRONICA', 'BOLETA_PAPEL', 'FACTURA_ELECTRONICA'):
+        return JsonResponse({
+            'success': False,
+            'error': f'Tipo de documento del ticket ("{tipo_documento}") no es facturable electrónicamente.',
+        }, status=400)
+
+    try:
+        dte_generado = generar_dte_desde_ticket(ticket, tipo_documento, request.user)
+        ticket.dte_generacion_fallida = False
+        ticket.dte_error_detalle = None
+        ticket.save(update_fields=['dte_generacion_fallida', 'dte_error_detalle'])
+        logger.info(
+            "DTE generado en reintento manual ticket=%s tipo=%s numero=%s",
+            ticket.correlativo,
+            dte_generado.tipo_documento,
+            dte_generado.numero_documento,
+        )
+        return JsonResponse({
+            'success': True,
+            'dte_generado': {
+                'id': dte_generado.id,
+                'numero': dte_generado.numero_documento,
+                'tipo': dte_generado.tipo_documento,
+            },
+        })
+    except Exception as e:
+        logger.exception("Error en reintento manual de DTE ticket=%s", ticket.correlativo)
+        ticket.dte_generacion_fallida = True
+        ticket.dte_error_detalle = f"{type(e).__name__}: {e}"[:2000]
+        ticket.save(update_fields=['dte_generacion_fallida', 'dte_error_detalle'])
+        return JsonResponse({'success': False, 'error': f'Error al generar DTE: {e}'}, status=500)
+
+
+@login_required
+@require_GET
+def listar_tickets_dte_fallido(request):
+    """Lista los tickets PAGADOS de la sucursal actual cuyo DTE no se pudo
+    generar (`dte_generacion_fallida=True`), para el botón de reintento en
+    Consulta de Documentos."""
+    sucursal_id = get_sucursal_id(request)
+    if not sucursal_id:
+        return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'})
+
+    tickets = (
+        Ticket.objects
+        .filter(sucursal_id=sucursal_id, dte_generacion_fallida=True)
+        .order_by('-fecha', '-hora')
+        .only('id', 'correlativo', 'fecha', 'hora', 'total', 'cliente_nombre', 'dte_error_detalle')
+    )
+
+    return JsonResponse({
+        'success': True,
+        'tickets': [
+            {
+                'id': t.id,
+                'correlativo': t.correlativo,
+                'fecha': t.fecha.strftime('%Y-%m-%d') if t.fecha else '',
+                'hora': t.hora.strftime('%H:%M') if t.hora else '',
+                'total': t.total,
+                'cliente_nombre': t.cliente_nombre or '',
+                'error_detalle': t.dte_error_detalle or '',
+            }
+            for t in tickets
+        ],
+    })
 
 
 @login_required
@@ -4263,6 +4407,15 @@ def gestion_ventas_documentos(request):
     # input de fecha en el modal de DTE manual (regla timezone-chile).
     fecha_hoy_str = timezone.localdate().strftime('%Y-%m-%d')
 
+    # Tickets cobrados cuyo DTE no se pudo generar (ver `dte_generacion_fallida`
+    # en el modelo Ticket) — requieren reintento manual desde este módulo.
+    tickets_dte_fallido_count = 0
+    if sucursal_actual_id:
+        tickets_dte_fallido_count = Ticket.objects.filter(
+            sucursal_id=sucursal_actual_id,
+            dte_generacion_fallida=True,
+        ).count()
+
     context = {
         'sucursal_actual': sucursal_actual,
         'metodo_pago_choices': METODO_PAGO_TICKET_CHOICES,
@@ -4308,6 +4461,7 @@ def gestion_ventas_documentos(request):
         'puede_crear_dte_manual': es_admin,
         'vendedores_sucursal': vendedores_sucursal,
         'fecha_hoy_str': fecha_hoy_str,
+        'tickets_dte_fallido_count': tickets_dte_fallido_count,
     }
     return render(request, 'vistas/modulo_ventas/gestionVentasDocumentos.html', context)
 
@@ -5332,7 +5486,18 @@ def detalle_documento_venta(request, documento_id):
                 'totales': {
                     'neto': documento.monto_neto,
                     'iva': documento.monto_con_iva - documento.monto_neto,
-                    'total': documento.monto_con_iva,
+                    # Mismo criterio que `listar_documentos_ventas` (ver su
+                    # comentario junto a `_total_pagos`): en DTEs históricos
+                    # emitidos antes del fix de `descuento_fidelizacion` en
+                    # `generar_dte_desde_ticket`, `monto_con_iva` puede quedar
+                    # mayor que lo realmente cobrado si parte se pagó con vale
+                    # de fidelización (el vale no genera un `Dte_Detalle_Pago`).
+                    # Usamos la suma de pagos reales cuando existe; si no hay
+                    # pagos registrados, caemos a `monto_con_iva`.
+                    'total': (
+                        sum(p.get('monto') or 0 for p in pagos_raw)
+                        or documento.monto_con_iva
+                    ),
                 },
                 'referencias': documento.referencias or '',
             }
@@ -5445,6 +5610,9 @@ def eliminar_documento_venta(request):
            devolvemos cada `ProductoTalla.stock`.
          - Si no hay ticket, recorremos `Dte_Productos` (sólo los que
            tengan `productoTalla` no nulo).
+         - Si el DTE es una NOTA DE CREDITO, NO se toca stock: la NC ya
+           devolvió el stock vendido a bodega al emitirse, y volver a
+           sumarlo aquí lo duplicaría.
        Por cada línea se crea un `Movimientos_Producto` con
        ``concepto='DEVOLUCION_CLIENTE'`` y ``tipo_movimiento='INGRESO'`` con
        ``referencia_externa='ELIMINACION_DTE_<numero>'`` para mantener
@@ -5528,7 +5696,16 @@ def eliminar_documento_venta(request):
             stock_devuelto = []  # [{sku, cantidad}, ...]
             movimientos_creados = 0
 
-            if ticket_vinculado:
+            if dte.tipo_documento == 'NOTA DE CREDITO':
+                # Una NC ya devolvió el stock vendido a bodega al emitirse
+                # (para eso existe el flujo de devolución). Si aquí
+                # también sumáramos stock por sus propias `Dte_Productos`
+                # duplicaríamos el ingreso a inventario, así que el soft
+                # delete de una NC NO toca stock ni busca ticket vinculado
+                # (una NC no tiene ticket propio: `ticket_vinculado` es
+                # siempre None para este tipo).
+                pass
+            elif ticket_vinculado:
                 # Caso 1: el stock fue descontado al pagar el ticket; lo
                 # devolvemos por las líneas del ticket (mismas SKUs / cant.).
                 productos_ticket = (
@@ -7428,6 +7605,13 @@ def obtener_detalle_cuadratura_metodos_pago(request):
     flags_campo = permisos_dte.get('campo', {})
     flags_tipo = permisos_dte.get('tipo', {})
 
+    # Eliminar un ítem (boleta/factura/NC) desde este modal, y editar la
+    # fecha de cuadratura de una NC, no tienen permiso granular por tipo
+    # (`CODIGO_PERMISO_TIPO_DTE` no incluye 'NOTA DE CREDITO'), así que se
+    # restringen al mismo gate de rol que usa `eliminar_documento_venta`.
+    rol_usuario = getattr(request.user, 'rol', '') or ''
+    es_admin = rol_usuario == 'administrador'
+
     # ---------------------------------------------------------------
     # 1) Pagos desde TICKETS PAGADOS del día (con o sin DTE asociado).
     # ---------------------------------------------------------------
@@ -7503,6 +7687,7 @@ def obtener_detalle_cuadratura_metodos_pago(request):
                 'editar_numero': False,
                 'editar_pago': False,
                 'editar_fecha_ticket': bool(flags_campo.get('fecha')),
+                'eliminar': False,
             }
         tipo_up = (dte_obj.tipo_documento or '').upper().strip()
         tipo_ok = flags_tipo.get(tipo_up, False)
@@ -7513,6 +7698,7 @@ def obtener_detalle_cuadratura_metodos_pago(request):
             ),
             'editar_pago': bool(flags_campo.get('pago') and tipo_ok),
             'editar_fecha_ticket': False,
+            'eliminar': es_admin,
         }
 
     for ticket in tickets_qs:
@@ -7638,6 +7824,98 @@ def obtener_detalle_cuadratura_metodos_pago(request):
                 'permisos': permisos_item,
             })
 
+    # ---------------------------------------------------------------
+    # 3) NC de devolución que afectan la caja de este día. Se imputan por
+    #    `Dte_Detalle_Pago.fecha_pago` (no por `fecha_emision`), mismo
+    #    criterio que usa `_calcular_cuadratura_data`. Solo NC con
+    #    tipo_transaccion='DEVOLUCION' (mueven dinero); las 'ANULACION'
+    #    son informativas y no se listan aquí.
+    # ---------------------------------------------------------------
+    ncs_devolucion_qs = (
+        Dte.objects
+        .filter(
+            sucursal_id=sucursal.id,
+            tipo_documento='NOTA DE CREDITO',
+            tipo_transaccion='DEVOLUCION',
+            estado_dte__in=['EMITIDO', 'ACEPTADO'],
+            descartado=False,
+        )
+        .filter(
+            Q(dte_asociado__fecha_pago=fecha_obj)
+            | Q(dte_asociado__fecha_pago__isnull=True, fecha_emision=fecha_obj)
+        )
+        .distinct()
+        .prefetch_related('dte_asociado', 'receptor')
+        .only(
+            'id', 'numero_documento', 'tipo_documento', 'fecha_emision',
+            'hora', 'estado_dte', 'monto_con_iva', 'sucursal_id',
+            'receptor_id',
+        )
+    )
+
+    for nc in ncs_devolucion_qs:
+        pagos_nc = list(nc.dte_asociado.all())
+        fecha_efecto = next(
+            (p.fecha_pago for p in pagos_nc if p.fecha_pago), None
+        ) or nc.fecha_emision
+        if fecha_efecto != fecha_obj:
+            continue
+        hora_str = nc.hora.strftime('%H:%M') if nc.hora else ''
+        receptor = getattr(nc, 'receptor', None)
+        cliente_nombre = (
+            (receptor.razon_social if receptor else '') or 'Cliente General'
+        )
+        cliente_rut = (receptor.rut if receptor else '') or ''
+        for pago in pagos_nc:
+            metodo = (pago.metodo_pago or '').upper()
+            cat = _categoria_metodo_pago(metodo)
+            fecha_pago_str = (
+                pago.fecha_pago.strftime('%Y-%m-%d')
+                if pago.fecha_pago else nc.fecha_emision.strftime('%Y-%m-%d')
+            )
+            items.append({
+                'origen': 'NC',
+                'pago_id': pago.id,
+                'ticket_id': None,
+                'ticket_correlativo': None,
+                'ticket_fecha': None,
+                'tipo_dte_ticket': 'NOTA DE CREDITO',
+                'dte_id': nc.id,
+                'correlativo': nc.numero_documento,
+                'hora': hora_str,
+                'cliente': cliente_nombre,
+                'cliente_rut': cliente_rut,
+                'metodo_pago': metodo,
+                'metodo_pago_display': obtener_nombre_metodo_pago(metodo),
+                'tipo_tarjeta': (pago.tipo_tarjeta or '').strip(),
+                'voucher': (pago.voucher or '').strip(),
+                # Negativo: la NC resta del método de pago (coherente con
+                # el descuento que aplica `_calcular_cuadratura_data` al
+                # efectivo/transferencia teórico del día).
+                'monto': -int(pago.monto or 0),
+                'categoria': cat,
+                'es_nota_credito': True,
+                'dte': {
+                    'id': nc.id,
+                    'folio': nc.numero_documento,
+                    'tipo': nc.tipo_documento,
+                    'fecha_emision': nc.fecha_emision.strftime('%Y-%m-%d'),
+                    'fecha_pago': fecha_pago_str,
+                    'estado': nc.estado_dte,
+                },
+                'drift_fecha': False,
+                'permisos': {
+                    'editar_fecha': False,
+                    'editar_numero': False,
+                    'editar_pago': False,
+                    'editar_fecha_ticket': False,
+                    # Edita `fecha_pago` (fecha de cuadratura), no
+                    # `fecha_emision` — botón distinto en el frontend.
+                    'editar_fecha_pago_nc': es_admin,
+                    'eliminar': es_admin,
+                },
+            })
+
     # Filtro por categoría (opcional)
     if categoria and categoria != 'todo':
         items = [it for it in items if it['categoria'] == categoria]
@@ -7672,7 +7950,97 @@ def obtener_detalle_cuadratura_metodos_pago(request):
             'cualquier_edicion': bool(permisos_dte.get('cualquiera')),
             'campo': flags_campo,
             'tipo': flags_tipo,
+            'puede_eliminar': es_admin,
         },
+    })
+
+
+@login_required
+@require_POST
+def editar_fecha_pago_nc(request):
+    """
+    Edita la fecha de cuadratura (`Dte_Detalle_Pago.fecha_pago`) de una NC
+    de devolución, usada por `_calcular_cuadratura_data` para imputar el
+    efecto de la NC a un día de caja distinto de `fecha_emision`.
+
+    A diferencia de `editar_dte_boleta_papel` (que edita `fecha_emision`
+    y requiere el permiso granular `dte_editar_fecha` + `dte_editar_tipo_*`),
+    aquí no existe permiso granular por tipo para NOTA DE CREDITO
+    (`CODIGO_PERMISO_TIPO_DTE` no la incluye), así que se restringe al
+    mismo gate de rol que usa `eliminar_documento_venta`: solo
+    administrador.
+
+    Body JSON: { "dte_id": 123, "fecha_pago": "YYYY-MM-DD" }
+    """
+    rol_usuario = getattr(request.user, 'rol', '') or ''
+    if rol_usuario != 'administrador':
+        return JsonResponse({
+            'success': False,
+            'error': 'Solo los administradores pueden editar la fecha de cuadratura de una NC',
+        }, status=403)
+
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'})
+
+    dte_id = data.get('dte_id')
+    fecha_pago_str = (data.get('fecha_pago') or '').strip()
+    if not dte_id or not fecha_pago_str:
+        return JsonResponse({
+            'success': False,
+            'error': 'dte_id y fecha_pago son requeridos',
+        })
+
+    from datetime import datetime as _dt2
+    try:
+        nueva_fecha = _dt2.strptime(fecha_pago_str, '%Y-%m-%d').date()
+    except ValueError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Formato de fecha inválido (YYYY-MM-DD)',
+        })
+
+    sucursal_id = get_sucursal_id(request)
+    if not sucursal_id:
+        return JsonResponse({
+            'success': False,
+            'error': 'No hay sucursal seleccionada',
+        })
+
+    with transaction.atomic():
+        nc = (
+            Dte.objects
+            .select_for_update()
+            .filter(
+                pk=dte_id,
+                sucursal_id=sucursal_id,
+                tipo_documento='NOTA DE CREDITO',
+            )
+            .first()
+        )
+        if not nc:
+            return JsonResponse({
+                'success': False,
+                'error': 'Nota de crédito no encontrada',
+            })
+        if nc.tipo_transaccion != 'DEVOLUCION':
+            return JsonResponse({
+                'success': False,
+                'error': 'Solo aplica a NC de devolución',
+            })
+
+        pagos_actualizados = Dte_Detalle_Pago.objects.filter(
+            dte=nc
+        ).update(fecha_pago=nueva_fecha)
+
+    return JsonResponse({
+        'success': True,
+        'message': (
+            f'Fecha de cuadratura de NC #{nc.numero_documento} '
+            f'actualizada a {fecha_pago_str}'
+        ),
+        'pagos_actualizados': pagos_actualizados,
     })
 
 

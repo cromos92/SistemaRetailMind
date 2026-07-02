@@ -3,52 +3,186 @@
 {% include '../../layout/header.html' %}
 {% include '../../layout/menu.html' %}
 
+<style>
+/* ===== Tarjeta de Movimiento — Vida completa del producto ===== */
+.tm-header {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    border-radius: 12px;
+    color: #fff;
+    padding: 1.25rem 1.5rem;
+    box-shadow: 0 4px 12px rgba(64, 81, 137, 0.25);
+}
+.tm-header h4 { color: #fff; margin: 0; font-weight: 700; }
+.tm-header .tm-sub { color: rgba(255,255,255,.85); font-size: .875rem; }
+
+/* Buscador */
+.tm-search-card { border: none; box-shadow: var(--nexo-shadow-sm, 0 1px 2px rgba(26,26,46,.05)); border-radius: 12px; }
+
+/* KPI cards */
+.tm-kpi {
+    border: none; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 2px 8px rgba(26,26,46,.06);
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+.tm-kpi:hover { transform: translateY(-3px); box-shadow: 0 8px 18px rgba(26,26,46,.12); }
+.tm-kpi .tm-kpi-icon {
+    width: 46px; height: 46px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; font-size: 1.4rem;
+}
+.tm-kpi .tm-kpi-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: #8A8A9A; font-weight: 600; }
+.tm-kpi .tm-kpi-value { font-size: 1.55rem; font-weight: 700; line-height: 1.1; color: #1A1A2E; }
+
+/* Distribución por bodega */
+.tm-bodega-card {
+    border: 1px solid #eef0f4; border-radius: 12px; padding: 1rem 1.1rem; height: 100%;
+    transition: box-shadow .2s ease, transform .2s ease; background: #fff;
+}
+.tm-bodega-card:hover { box-shadow: 0 6px 16px rgba(26,26,46,.08); transform: translateY(-2px); }
+.tm-bodega-card.is-cd { border-color: #cfe9e2; background: linear-gradient(180deg,#f4fdfa 0%,#ffffff 60%); }
+.tm-bodega-card.is-actual { border-color: #405189; box-shadow: 0 0 0 2px rgba(64,81,137,.12); }
+.tm-bodega-name { font-weight: 700; color: #1A1A2E; }
+.tm-bodega-stock { font-size: 1.7rem; font-weight: 800; color: #405189; line-height: 1; }
+.tm-talla-chip {
+    display: inline-flex; align-items: center; gap: .25rem;
+    background: #f1f3f8; color: #4A4A5A; border-radius: 999px;
+    padding: .12rem .55rem; font-size: .74rem; font-weight: 600; margin: .12rem;
+}
+.tm-talla-chip .tm-talla-n { color: #405189; font-weight: 700; }
+.tm-talla-chip.is-zero { opacity: .45; }
+
+/* Timeline */
+.tm-timeline { position: relative; padding-left: 2rem; margin-top: .5rem; }
+.tm-timeline::before {
+    content: ''; position: absolute; left: 11px; top: 4px; bottom: 4px;
+    width: 2px; background: linear-gradient(180deg,#e3e6ee,#eef0f4);
+}
+.tm-tl-item { position: relative; padding: 0 0 1.1rem 0; }
+.tm-tl-dot {
+    position: absolute; left: -1.62rem; top: 2px; width: 24px; height: 24px;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: .8rem; box-shadow: 0 0 0 4px #fff, 0 2px 5px rgba(0,0,0,.12);
+}
+.tm-tl-body { background: #fff; border: 1px solid #eef0f4; border-radius: 10px; padding: .55rem .8rem; }
+.tm-tl-title { font-weight: 700; color: #1A1A2E; font-size: .9rem; }
+.tm-tl-meta { font-size: .78rem; color: #8A8A9A; }
+.tm-tl-detail { font-size: .82rem; color: #4A4A5A; }
+
+/* Filtros del kardex */
+.tm-filter-bar {
+    display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
+}
+.tm-filter-bar select, .tm-filter-bar input { min-width: 130px; }
+
+/* Tabla kardex */
+#tablaMovimientos td, #tablaMovimientos th { vertical-align: middle; }
+.tm-badge-entrada { background: #e8f7f2; color: #0a9; }
+.tm-badge-salida { background: #fdecec; color: #e14b4b; }
+.tm-badge-traspaso { background: #fff4d6; color: #b8860b; }
+.tm-badge-ajuste { background: #e9f0ff; color: #405189; }
+
+/* Estados vacíos */
+.tm-empty { text-align: center; color: #8A8A9A; padding: 3rem 1rem; }
+.tm-empty i { font-size: 3rem; opacity: .4; display: block; margin-bottom: .5rem; }
+
+/* Tabs */
+.tm-tabs .nav-link { font-weight: 600; color: #6c757d; }
+.tm-tabs .nav-link.active { color: #405189; }
+</style>
+
 <div class="page-content">
     <div class="container-fluid">
 
-        <div class="row">
+        <!-- Encabezado -->
+        <div class="row mb-3">
             <div class="col-12">
-                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                    <h4 class="mb-sm-0"><i class="ri-file-list-3-line text-primary me-2"></i>Tarjeta de Movimiento por Producto</h4>
-                    <div class="page-title-right">
-                        <ol class="breadcrumb m-0">
-                            <li class="breadcrumb-item"><a href="/app/home/">Inicio</a></li>
-                            <li class="breadcrumb-item">Existencias</li>
-                            <li class="breadcrumb-item active">Tarjeta de Movimiento</li>
-                        </ol>
+                <div class="tm-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <div>
+                        <h4><i class="ri-route-line me-2"></i>Tarjeta de Movimiento del Producto</h4>
+                        <div class="tm-sub">Vida completa del producto en todas las bodegas — nacimiento, traspasos, ventas y stock actual</div>
+                    </div>
+                    <ol class="breadcrumb m-0 bg-transparent p-0" style="--bs-breadcrumb-divider-color:rgba(255,255,255,.6);">
+                        <li class="breadcrumb-item"><a href="/app/home/" class="text-white-50">Inicio</a></li>
+                        <li class="breadcrumb-item text-white-50">Existencias</li>
+                        <li class="breadcrumb-item active text-white">Tarjeta de Movimiento</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- Buscador -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card tm-search-card">
+                    <div class="card-body">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-lg-4 col-md-6 position-relative">
+                                <label class="form-label fw-semibold mb-1">SKU o código de artículo</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white"><i class="ri-search-line text-muted"></i></span>
+                                    <input type="text" id="inputSku" class="form-control" placeholder="Escanee o escriba SKU / código..." autocomplete="off" autofocus>
+                                </div>
+                                <div id="listaAyudaProductos" class="list-group position-absolute shadow mt-1" style="z-index:1050; display:none; max-height:320px; overflow-y:auto; width:100%;"></div>
+                            </div>
+                            <div class="col-lg-2 col-md-3 col-6">
+                                <label class="form-label fw-semibold mb-1">Desde</label>
+                                <input type="date" id="inputFechaDesde" class="form-control">
+                            </div>
+                            <div class="col-lg-2 col-md-3 col-6">
+                                <label class="form-label fw-semibold mb-1">Hasta</label>
+                                <input type="date" id="inputFechaHasta" class="form-control">
+                            </div>
+                            <div class="col-lg-2 col-md-6">
+                                <button class="btn btn-primary w-100" onclick="buscarMovimientos()">
+                                    <i class="ri-search-line me-1"></i> Ver vida del producto
+                                </button>
+                            </div>
+                            <div class="col-lg-2 col-md-6 text-lg-end">
+                                <button class="btn btn-outline-success w-100 w-lg-auto" onclick="exportarExcel()" id="btnExportar" style="display:none;">
+                                    <i class="ri-file-excel-2-line me-1"></i> Exportar
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-            <!-- Buscador -->
+        <!-- Loader -->
+        <div id="tmLoader" class="text-center py-5" style="display:none;">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="text-muted mt-2 mb-0">Reconstruyendo la vida del producto...</p>
+        </div>
+
+        <!-- Estado inicial -->
+        <div id="tmInicial" class="card tm-search-card">
+            <div class="card-body tm-empty">
+                <i class="ri-barcode-line"></i>
+                <h5 class="text-muted">Busque un producto para ver su historia completa</h5>
+                <p class="mb-0">Ingrese un SKU o código de artículo. Verá su recorrido por todas las bodegas: dónde nació, cada traspaso, cada venta y cuánto queda hoy en cada sucursal.</p>
+            </div>
+        </div>
+
+        <!-- ===== RESULTADOS ===== -->
+        <div id="tmResultados" style="display:none;">
+
+            <!-- Info del producto -->
             <div class="row mb-3">
                 <div class="col-12">
-                    <div class="card">
+                    <div class="card border-0" style="box-shadow:var(--nexo-shadow-sm,0 1px 2px rgba(26,26,46,.05)); border-radius:12px;">
                         <div class="card-body">
-                            <div class="row g-3 align-items-end">
-                                <div class="col-md-3 position-relative">
-                                    <label class="form-label fw-semibold">SKU o Artículo</label>
-                                    <input type="text" id="inputSku" class="form-control" placeholder="Ingrese SKU o artículo..." autofocus>
-                                    <div id="listaAyudaProductos" class="list-group position-absolute shadow-sm mt-1" style="z-index:1050; display:none; max-height:260px; overflow-y:auto; min-width:360px;"></div>
+                            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                                <div>
+                                    <h5 class="mb-1 fw-bold" id="pDescripcion">-</h5>
+                                    <div class="text-muted">
+                                        Código <span class="fw-semibold text-dark" id="pArticulo">-</span>
+                                        <span class="mx-2">·</span> <span id="pMarca">-</span>
+                                        <span class="mx-2">·</span> <span id="pColor">-</span>
+                                        <span class="mx-2">·</span> <span id="pCategoria">-</span>
+                                    </div>
                                 </div>
-                                <div class="col-md-2">
-                                    <label class="form-label fw-semibold">Fecha Desde</label>
-                                    <input type="date" id="inputFechaDesde" class="form-control">
-                                </div>
-                                <div class="col-md-2">
-                                    <label class="form-label fw-semibold">Fecha Hasta</label>
-                                    <input type="date" id="inputFechaHasta" class="form-control">
-                                </div>
-                                <div class="col-md-2">
-                                    <button class="btn btn-primary w-100" onclick="buscarMovimientos()">
-                                        <i class="ri-search-line me-1"></i> Buscar
-                                    </button>
-                                </div>
-                                <div class="col-md-3 text-end">
-                                    <button class="btn btn-outline-success" onclick="exportarExcel()" id="btnExportar" style="display:none;">
-                                        <i class="ri-file-excel-2-line me-1"></i> Exportar Excel
-                                    </button>
+                                <div class="text-end">
+                                    <div class="text-muted small">Precio venta</div>
+                                    <div class="fs-4 fw-bold text-success" id="pPrecio">-</div>
                                 </div>
                             </div>
                         </div>
@@ -56,136 +190,111 @@
                 </div>
             </div>
 
-            <!-- Info del Producto -->
-            <div class="row mb-3" id="productoInfo" style="display:none;">
+            <!-- KPIs -->
+            <div class="row g-3 mb-3" id="tmKpis">
+                <div class="col-xl-3 col-md-6">
+                    <div class="card tm-kpi h-100"><div class="card-body d-flex align-items-center gap-3">
+                        <div class="tm-kpi-icon" style="background:#e9f0ff;color:#405189;"><i class="ri-stack-line"></i></div>
+                        <div><div class="tm-kpi-label">Stock actual total</div><div class="tm-kpi-value" id="kpiStock">0</div>
+                        <div class="small text-muted" id="kpiBodegas">en 0 bodegas</div></div>
+                    </div></div>
+                </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="card tm-kpi h-100"><div class="card-body d-flex align-items-center gap-3">
+                        <div class="tm-kpi-icon" style="background:#e8f7f2;color:#0a9;"><i class="ri-login-circle-line"></i></div>
+                        <div><div class="tm-kpi-label">Total entradas</div><div class="tm-kpi-value text-success" id="kpiEntradas">0</div></div>
+                    </div></div>
+                </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="card tm-kpi h-100"><div class="card-body d-flex align-items-center gap-3">
+                        <div class="tm-kpi-icon" style="background:#fdecec;color:#e14b4b;"><i class="ri-logout-circle-line"></i></div>
+                        <div><div class="tm-kpi-label">Total salidas</div><div class="tm-kpi-value text-danger" id="kpiSalidas">0</div>
+                        <div class="small text-muted" id="kpiVendido">0 vendidos</div></div>
+                    </div></div>
+                </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="card tm-kpi h-100"><div class="card-body d-flex align-items-center gap-3">
+                        <div class="tm-kpi-icon" style="background:#fff4d6;color:#b8860b;"><i class="ri-truck-line"></i></div>
+                        <div><div class="tm-kpi-label">Traspasos entre bodegas</div><div class="tm-kpi-value" id="kpiTraspasos">0</div>
+                        <div class="small text-muted" id="kpiRango">-</div></div>
+                    </div></div>
+                </div>
+            </div>
+
+            <!-- Distribución por bodega -->
+            <div class="row mb-3">
                 <div class="col-12">
-                    <div class="card border-primary">
+                    <div class="card border-0" style="box-shadow:var(--nexo-shadow-sm,0 1px 2px rgba(26,26,46,.05)); border-radius:12px;">
+                        <div class="card-header bg-white border-0 pb-0">
+                            <h5 class="card-title mb-0"><i class="ri-store-3-line me-2 text-primary"></i>Distribución de stock por bodega <span class="text-muted small">(hoy)</span></h5>
+                        </div>
                         <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-3">
-                                    <h6 class="text-muted mb-1">Artículo</h6>
-                                    <p class="fw-bold mb-0" id="pArticulo">-</p>
-                                </div>
-                                <div class="col-md-3">
-                                    <h6 class="text-muted mb-1">SKU / Talla</h6>
-                                    <p class="fw-bold mb-0"><span id="pSku">-</span> / <span id="pTalla">-</span></p>
-                                </div>
-                                <div class="col-md-2">
-                                    <h6 class="text-muted mb-1">Marca</h6>
-                                    <p class="fw-bold mb-0" id="pMarca">-</p>
-                                </div>
-                                <div class="col-md-2">
-                                    <h6 class="text-muted mb-1">Stock Actual</h6>
-                                    <p class="fw-bold mb-0 fs-5 text-primary" id="pStock">-</p>
-                                </div>
-                                <div class="col-md-2">
-                                    <h6 class="text-muted mb-1">Precio Venta</h6>
-                                    <p class="fw-bold mb-0 fs-5 text-success" id="pPrecio">-</p>
-                                </div>
-                            </div>
+                            <div class="row g-3" id="distribucionBodegas"></div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Resumen KPIs -->
-            <div class="row mb-3" id="resumenKpi" style="display:none;">
-                <div class="col-md-3">
-                    <div class="card card-animate">
-                        <div class="card-body">
-                            <div class="d-flex align-items-center">
-                                <div class="flex-grow-1">
-                                    <p class="text-uppercase fw-medium text-muted mb-0">Total Movimientos</p>
-                                    <h4 class="fs-22 fw-semibold mb-0" id="kpiTotal">0</h4>
-                                </div>
-                                <div class="avatar-sm flex-shrink-0">
-                                    <span class="avatar-title bg-info-subtle rounded fs-3"><i class="ri-arrow-left-right-line text-info"></i></span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card card-animate">
-                        <div class="card-body">
-                            <div class="d-flex align-items-center">
-                                <div class="flex-grow-1">
-                                    <p class="text-uppercase fw-medium text-muted mb-0">Total Ingresos</p>
-                                    <h4 class="fs-22 fw-semibold mb-0 text-success" id="kpiIngresos">0</h4>
-                                </div>
-                                <div class="avatar-sm flex-shrink-0">
-                                    <span class="avatar-title bg-success-subtle rounded fs-3"><i class="ri-add-circle-line text-success"></i></span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card card-animate">
-                        <div class="card-body">
-                            <div class="d-flex align-items-center">
-                                <div class="flex-grow-1">
-                                    <p class="text-uppercase fw-medium text-muted mb-0">Total Egresos</p>
-                                    <h4 class="fs-22 fw-semibold mb-0 text-danger" id="kpiEgresos">0</h4>
-                                </div>
-                                <div class="avatar-sm flex-shrink-0">
-                                    <span class="avatar-title bg-danger-subtle rounded fs-3"><i class="ri-indeterminate-circle-line text-danger"></i></span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card card-animate">
-                        <div class="card-body">
-                            <div class="d-flex align-items-center">
-                                <div class="flex-grow-1">
-                                    <p class="text-uppercase fw-medium text-muted mb-0">Saldo Final</p>
-                                    <h4 class="fs-22 fw-semibold mb-0 text-primary" id="kpiSaldo">0</h4>
-                                </div>
-                                <div class="avatar-sm flex-shrink-0">
-                                    <span class="avatar-title bg-primary-subtle rounded fs-3"><i class="ri-stack-line text-primary"></i></span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Tabla de Movimientos -->
-            <div class="row" id="tablaContainer" style="display:none;">
+            <!-- Tabs: Timeline / Kardex -->
+            <div class="row">
                 <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0"><i class="ri-list-check me-2"></i>Detalle de Movimientos</h5>
+                    <div class="card border-0" style="box-shadow:var(--nexo-shadow-sm,0 1px 2px rgba(26,26,46,.05)); border-radius:12px;">
+                        <div class="card-header bg-white border-0">
+                            <ul class="nav nav-tabs card-header-tabs tm-tabs" role="tablist">
+                                <li class="nav-item"><button class="nav-link active" data-tab="timeline"><i class="ri-time-line me-1"></i>Línea de vida</button></li>
+                                <li class="nav-item"><button class="nav-link" data-tab="kardex"><i class="ri-table-line me-1"></i>Kardex detallado</button></li>
+                            </ul>
                         </div>
                         <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-hover table-striped align-middle" id="tablaMovimientos">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>Fecha</th>
-                                            <th>Hora</th>
-                                            <th>SKU / Talla</th>
-                                            <th>Tipo</th>
-                                            <th>Concepto</th>
-                                            <th class="text-end">Cantidad</th>
-                                            <th class="text-end">Saldo</th>
-                                            <th class="text-end">Costo</th>
-                                            <th class="text-end">Precio</th>
-                                            <th>Origen</th>
-                                            <th>Destino</th>
-                                            <th>Responsable</th>
-                                            <th>Referencia</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tbodyMovimientos"></tbody>
-                                </table>
+
+                            <!-- Panel Timeline -->
+                            <div id="panelTimeline">
+                                <div id="timelineAviso"></div>
+                                <div class="tm-timeline" id="timelineContainer"></div>
                             </div>
+
+                            <!-- Panel Kardex -->
+                            <div id="panelKardex" style="display:none;">
+                                <div class="tm-filter-bar mb-3">
+                                    <select id="filtroBodega" class="form-select form-select-sm"><option value="">Todas las bodegas</option></select>
+                                    <select id="filtroTalla" class="form-select form-select-sm"><option value="">Todas las tallas</option></select>
+                                    <select id="filtroTipo" class="form-select form-select-sm">
+                                        <option value="">Todos los tipos</option>
+                                        <option value="INGRESO">Ingresos</option>
+                                        <option value="EGRESO">Egresos</option>
+                                        <option value="TRASPASO">Traspasos</option>
+                                        <option value="AJUSTE">Ajustes</option>
+                                        <option value="DEVOLUCION">Devoluciones</option>
+                                        <option value="PERDIDA">Pérdidas</option>
+                                    </select>
+                                    <span class="text-muted small ms-auto" id="kardexContador"></span>
+                                </div>
+                                <div class="alert alert-light border small mb-3 py-2">
+                                    <i class="ri-information-line me-1 text-primary"></i>
+                                    El <strong>saldo</strong> es acumulado por cada combinación de <strong>bodega + talla</strong> (cada SKU lleva su propia cuenta). Filtre por bodega y talla para leer una serie limpia.
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0" id="tablaMovimientos">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Fecha</th><th>Hora</th><th>Bodega</th><th>Talla</th>
+                                                <th>Tipo</th><th>Concepto</th>
+                                                <th class="text-end">Cant.</th><th class="text-end">Saldo</th>
+                                                <th class="text-end">Costo</th><th class="text-end">Precio</th>
+                                                <th>Origen → Destino</th><th>Responsable</th><th>Referencia</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyMovimientos"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
                 </div>
             </div>
+
+        </div><!-- /tmResultados -->
 
     </div>
 </div>
@@ -194,149 +303,264 @@
 
 <script>
 const CSRF_TOKEN = '{{ csrf_token }}';
+const SUCURSAL_ACTUAL_ID = {{ sucursal_id|default:"null" }};
 let movimientosData = [];
 let ayudaTimer = null;
 let ayudaAbortController = null;
 
+function fmtMoneda(v) { return '$' + Number(v || 0).toLocaleString('es-CL'); }
+function fmtNum(v) { return Number(v || 0).toLocaleString('es-CL'); }
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[char]));
+}
+
+/* ================= Búsqueda principal ================= */
 function buscarMovimientos() {
     const sku = document.getElementById('inputSku').value.trim();
-    if (!sku) { alert('Ingrese un SKU o artículo'); return; }
+    if (!sku) { document.getElementById('inputSku').focus(); return; }
     const desde = document.getElementById('inputFechaDesde').value;
     const hasta = document.getElementById('inputFechaHasta').value;
+
     let url = `/app/api/tarjeta-movimiento/?sku=${encodeURIComponent(sku)}`;
     if (desde) url += `&fecha_desde=${desde}`;
     if (hasta) url += `&fecha_hasta=${hasta}`;
 
+    document.getElementById('tmInicial').style.display = 'none';
+    document.getElementById('tmResultados').style.display = 'none';
+    document.getElementById('tmLoader').style.display = '';
+
     fetch(url).then(r => r.json()).then(data => {
-        if (!data.success) { alert(data.error); return; }
+        document.getElementById('tmLoader').style.display = 'none';
+        if (!data.success) {
+            document.getElementById('tmInicial').style.display = '';
+            document.getElementById('tmInicial').querySelector('.tm-empty').innerHTML =
+                `<i class="ri-error-warning-line text-danger"></i><h5 class="text-danger">${escapeHtml(data.error || 'Error')}</h5>`;
+            return;
+        }
         movimientosData = data.movimientos;
-        renderProducto(data.producto);
-        renderResumen(data.resumen);
-        renderTabla(data.movimientos);
-        document.getElementById('productoInfo').style.display = '';
-        document.getElementById('resumenKpi').style.display = '';
-        document.getElementById('tablaContainer').style.display = '';
+        renderProducto(data.producto, data.resumen);
+        renderKpis(data.producto, data.resumen);
+        renderDistribucion(data.distribucion, data.sucursal_actual_id);
+        renderTimeline(data.timeline, data.timeline_omitidos);
+        poblarFiltros(data.filtros);
+        renderTabla(movimientosData);
+        document.getElementById('tmResultados').style.display = '';
         document.getElementById('btnExportar').style.display = '';
-    }).catch(e => alert('Error: ' + e.message));
+    }).catch(e => {
+        document.getElementById('tmLoader').style.display = 'none';
+        document.getElementById('tmInicial').style.display = '';
+        alert('Error de red: ' + e.message);
+    });
 }
 
-function escapeHtml(value) {
-    return String(value ?? '').replace(/[&<>"']/g, char => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
-    }[char]));
-}
-
-function ocultarListaAyuda() {
-    document.getElementById('listaAyudaProductos').style.display = 'none';
-}
+/* ================= Autocomplete ================= */
+function ocultarListaAyuda() { document.getElementById('listaAyudaProductos').style.display = 'none'; }
 
 function renderListaAyuda(productos) {
     const lista = document.getElementById('listaAyudaProductos');
     if (!productos.length) {
         lista.innerHTML = '<div class="list-group-item text-muted small">Sin coincidencias</div>';
-        lista.style.display = '';
-        return;
+        lista.style.display = ''; return;
     }
-
     lista.innerHTML = productos.map(p => `
         <button type="button" class="list-group-item list-group-item-action" data-sku="${escapeHtml(p.sku)}">
             <div class="d-flex justify-content-between gap-2">
                 <div>
                     <strong>${escapeHtml(p.articulo)}</strong>
                     <small class="text-muted d-block">${escapeHtml(p.descripcion)}</small>
-                    <small class="text-muted">SKU: ${escapeHtml(p.sku)} · Talla: ${escapeHtml(p.talla)} · ${escapeHtml(p.marca)}</small>
+                    <small class="text-muted">${escapeHtml(p.marca)} · ${escapeHtml(p.num_bodegas)} bodega(s)</small>
                 </div>
                 <span class="badge bg-primary-subtle text-primary align-self-start">Stock ${escapeHtml(p.stock)}</span>
             </div>
-        </button>
-    `).join('');
+        </button>`).join('');
     lista.style.display = '';
 }
 
 function buscarAyudaProductos() {
     const q = document.getElementById('inputSku').value.trim();
     clearTimeout(ayudaTimer);
-
-    if (q.length < 2) {
-        ocultarListaAyuda();
-        return;
-    }
-
+    if (q.length < 2) { ocultarListaAyuda(); return; }
     ayudaTimer = setTimeout(() => {
         if (ayudaAbortController) ayudaAbortController.abort();
         ayudaAbortController = new AbortController();
-
-        fetch(`/app/api/tarjeta-movimiento/buscar/?q=${encodeURIComponent(q)}`, {
-            signal: ayudaAbortController.signal
-        })
+        fetch(`/app/api/tarjeta-movimiento/buscar/?q=${encodeURIComponent(q)}`, { signal: ayudaAbortController.signal })
             .then(r => r.json())
             .then(data => renderListaAyuda(data.productos || []))
-            .catch(e => {
-                if (e.name !== 'AbortError') ocultarListaAyuda();
-            });
+            .catch(e => { if (e.name !== 'AbortError') ocultarListaAyuda(); });
     }, 250);
 }
 
-function renderProducto(p) {
+/* ================= Render: producto / KPIs ================= */
+function renderProducto(p, r) {
+    document.getElementById('pDescripcion').textContent = p.descripcion || p.articulo;
     document.getElementById('pArticulo').textContent = p.articulo;
-    document.getElementById('pSku').textContent = p.sku;
-    document.getElementById('pTalla').textContent = p.talla;
     document.getElementById('pMarca').textContent = p.marca;
-    document.getElementById('pStock').textContent = p.stock_actual;
-    document.getElementById('pPrecio').textContent = '$' + Number(p.precio_venta).toLocaleString('es-CL');
+    document.getElementById('pColor').textContent = p.color;
+    document.getElementById('pCategoria').textContent = p.categoria;
+    document.getElementById('pPrecio').textContent = fmtMoneda(p.precio_venta);
 }
 
-function renderResumen(r) {
-    document.getElementById('kpiTotal').textContent = r.total_movimientos;
-    document.getElementById('kpiIngresos').textContent = '+' + r.total_ingresos;
-    document.getElementById('kpiEgresos').textContent = '-' + r.total_egresos;
-    document.getElementById('kpiSaldo').textContent = r.saldo_final;
+function renderKpis(p, r) {
+    document.getElementById('kpiStock').textContent = fmtNum(r.stock_actual);
+    document.getElementById('kpiBodegas').textContent = `en ${p.num_bodegas} bodega(s) · ${p.num_skus} SKU(s)`;
+    document.getElementById('kpiEntradas').textContent = '+' + fmtNum(r.total_entradas);
+    document.getElementById('kpiSalidas').textContent = '−' + fmtNum(r.total_salidas);
+    document.getElementById('kpiVendido').textContent = fmtNum(r.total_vendido) + ' vendidos';
+    document.getElementById('kpiTraspasos').textContent = fmtNum(r.traspasos);
+    document.getElementById('kpiRango').textContent =
+        (r.primer_movimiento && r.primer_movimiento !== '-') ? `${r.primer_movimiento} → ${r.ultimo_movimiento}` : 'Sin movimientos';
+}
+
+/* ================= Render: distribución por bodega ================= */
+function renderDistribucion(dist, sucursalActualId) {
+    const cont = document.getElementById('distribucionBodegas');
+    if (!dist || !dist.length) {
+        cont.innerHTML = '<div class="col-12 tm-empty py-3"><i class="ri-inbox-line"></i>Sin bodegas con este producto</div>';
+        return;
+    }
+    cont.innerHTML = dist.map(b => {
+        const esActual = sucursalActualId != null && String(b.bodega_id) === String(sucursalActualId);
+        const chips = b.tallas.map(t =>
+            `<span class="tm-talla-chip ${t.stock <= 0 ? 'is-zero' : ''}">${escapeHtml(t.talla)} <span class="tm-talla-n">${t.stock}</span></span>`
+        ).join('');
+        return `
+        <div class="col-xl-3 col-md-4 col-sm-6">
+            <div class="tm-bodega-card ${b.es_cd ? 'is-cd' : ''} ${esActual ? 'is-actual' : ''}">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <div class="tm-bodega-name">
+                        <i class="ri-store-3-line me-1 text-muted"></i>${escapeHtml(b.bodega)}
+                        ${esActual ? '<span class="badge bg-primary-subtle text-primary ms-1">Aquí</span>' : ''}
+                    </div>
+                    ${b.es_cd ? '<span class="badge bg-success-subtle text-success">CD</span>' : ''}
+                </div>
+                <div class="tm-bodega-stock">${fmtNum(b.stock_total)}</div>
+                <div class="text-muted small mb-2">unidades</div>
+                <div>${chips}</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+/* ================= Render: timeline ================= */
+function renderTimeline(timeline, omitidos) {
+    const cont = document.getElementById('timelineContainer');
+    const avisoBox = document.getElementById('timelineAviso');
+    avisoBox.innerHTML = (omitidos && omitidos > 0)
+        ? `<div class="alert alert-light border small mb-3 py-2"><i class="ri-history-line me-1 text-primary"></i>
+           Mostrando los <strong>${timeline.length}</strong> hitos más recientes. Se omitieron <strong>${fmtNum(omitidos)}</strong> anteriores — use el <strong>Kardex detallado</strong> o filtre por fechas para ver el resto.</div>`
+        : '';
+    if (!timeline || !timeline.length) {
+        cont.innerHTML = '<div class="tm-empty"><i class="ri-time-line"></i>Sin hitos para el rango seleccionado</div>';
+        return;
+    }
+    cont.innerHTML = timeline.map(t => `
+        <div class="tm-tl-item">
+            <div class="tm-tl-dot" style="background:${t.color};"><i class="${t.icono}"></i></div>
+            <div class="tm-tl-body">
+                <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                    <div class="tm-tl-title">${escapeHtml(t.titulo)}</div>
+                    <div class="tm-tl-meta">${escapeHtml(t.fecha)} ${escapeHtml(t.hora)}</div>
+                </div>
+                <div class="tm-tl-detail">${escapeHtml(t.detalle)}</div>
+                ${t.responsable && t.responsable !== 'Sistema' ? `<div class="tm-tl-meta"><i class="ri-user-line me-1"></i>${escapeHtml(t.responsable)}</div>` : ''}
+            </div>
+        </div>`).join('');
+}
+
+/* ================= Filtros del kardex ================= */
+function poblarFiltros(filtros) {
+    const selBodega = document.getElementById('filtroBodega');
+    const selTalla = document.getElementById('filtroTalla');
+    selBodega.innerHTML = '<option value="">Todas las bodegas</option>' +
+        (filtros.bodegas || []).map(b => `<option value="${b.id}">${escapeHtml(b.alias)}</option>`).join('');
+    selTalla.innerHTML = '<option value="">Todas las tallas</option>' +
+        (filtros.tallas || []).map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+}
+
+function coincideTipo(m, fTipo) {
+    if (!fTipo) return true;
+    // "TRASPASO" agrupa por concepto (los traspasos llegan como INGRESO/EGRESO).
+    if (fTipo === 'TRASPASO') return m.es_traspaso;
+    // Para el resto, un traspaso NO debe colarse en "Ingresos"/"Egresos".
+    return m.tipo_movimiento === fTipo && !m.es_traspaso;
+}
+
+function aplicarFiltrosKardex() {
+    const fb = document.getElementById('filtroBodega').value;
+    const ft = document.getElementById('filtroTalla').value;
+    const fTipo = document.getElementById('filtroTipo').value;
+    let filtrados = movimientosData.filter(m =>
+        (!fb || String(m.bodega_id) === fb) &&
+        (!ft || m.talla === ft) &&
+        coincideTipo(m, fTipo)
+    );
+    renderTabla(filtrados);
+}
+
+/* ================= Render: tabla kardex ================= */
+function tipoBadge(m) {
+    if (m.es_traspaso) return 'tm-badge-traspaso';
+    if (m.es_entrada) return 'tm-badge-entrada';
+    return 'tm-badge-salida';
+}
+function tipoLabel(m) {
+    // Los traspasos llegan como INGRESO/EGRESO; mostrarlos como TRASPASO.
+    if (m.es_traspaso) return 'TRASPASO';
+    return m.tipo_movimiento;
 }
 
 function renderTabla(movimientos) {
     const tbody = document.getElementById('tbodyMovimientos');
-    tbody.innerHTML = '';
-    movimientos.forEach(m => {
-        const tipoClass = m.tipo_movimiento === 'INGRESO' ? 'text-success' : m.tipo_movimiento === 'EGRESO' ? 'text-danger' : 'text-info';
+    document.getElementById('kardexContador').textContent = `${movimientos.length} movimiento(s)`;
+    if (!movimientos.length) {
+        tbody.innerHTML = '<tr><td colspan="13" class="tm-empty"><i class="ri-inbox-line"></i>Sin movimientos con estos filtros</td></tr>';
+        return;
+    }
+    tbody.innerHTML = movimientos.map(m => {
         const cantClass = m.cantidad > 0 ? 'text-success fw-bold' : m.cantidad < 0 ? 'text-danger fw-bold' : '';
-        const ref = m.dte_folio ? `DTE #${m.dte_folio}` : m.ticket_correlativo ? `Ticket #${m.ticket_correlativo}` : m.referencia || '-';
-        tbody.innerHTML += `<tr>
-            <td>${m.fecha}</td>
-            <td>${m.hora}</td>
-            <td><code>${m.sku}</code><br><small class="text-muted">${m.talla}</small></td>
-            <td><span class="badge bg-${m.tipo_movimiento === 'INGRESO' ? 'success' : m.tipo_movimiento === 'EGRESO' ? 'danger' : 'info'}-subtle ${tipoClass}">${m.tipo_movimiento}</span></td>
-            <td>${m.concepto_display}</td>
+        const ref = m.dte_folio ? `DTE #${m.dte_folio}` : m.ticket_correlativo ? `Ticket #${m.ticket_correlativo}` : (m.referencia || '-');
+        const ruta = (m.sucursal_origen !== '-' || m.sucursal_destino !== '-')
+            ? `${escapeHtml(m.sucursal_origen)} → ${escapeHtml(m.sucursal_destino)}` : '-';
+        return `<tr>
+            <td class="text-nowrap">${escapeHtml(m.fecha)}</td>
+            <td>${escapeHtml(m.hora)}</td>
+            <td>${escapeHtml(m.bodega)}</td>
+            <td><span class="badge bg-light text-dark border">${escapeHtml(m.talla)}</span></td>
+            <td><span class="badge ${tipoBadge(m)}">${escapeHtml(tipoLabel(m))}</span></td>
+            <td class="small">${escapeHtml(m.concepto_display)}</td>
             <td class="text-end ${cantClass}">${m.cantidad > 0 ? '+' : ''}${m.cantidad}</td>
             <td class="text-end fw-bold">${m.saldo}</td>
-            <td class="text-end">$${Number(m.costo).toLocaleString('es-CL')}</td>
-            <td class="text-end">$${Number(m.precio).toLocaleString('es-CL')}</td>
-            <td>${m.sucursal_origen}</td>
-            <td>${m.sucursal_destino}</td>
-            <td>${m.responsable}</td>
-            <td>${ref}</td>
+            <td class="text-end">${fmtMoneda(m.costo)}</td>
+            <td class="text-end">${fmtMoneda(m.precio)}</td>
+            <td class="small text-nowrap">${ruta}</td>
+            <td class="small">${escapeHtml(m.responsable)}</td>
+            <td class="small">${escapeHtml(ref)}</td>
         </tr>`;
-    });
+    }).join('');
 }
 
+/* ================= Exportar CSV ================= */
 function exportarExcel() {
     if (!movimientosData.length) return;
-    let csv = 'Fecha,Hora,Tipo,Concepto,Cantidad,Saldo,Costo,Precio,Origen,Destino,Responsable,Referencia\n';
+    let csv = 'Fecha,Hora,Bodega,Talla,SKU,Tipo,Concepto,Cantidad,Saldo,Costo,Precio,Origen,Destino,Responsable,Referencia\n';
     movimientosData.forEach(m => {
-        const ref = m.dte_folio ? `DTE #${m.dte_folio}` : m.ticket_correlativo ? `Ticket #${m.ticket_correlativo}` : m.referencia || '';
-        csv += `${m.fecha},${m.hora},${m.tipo_movimiento},${m.concepto_display},${m.cantidad},${m.saldo},${m.costo},${m.precio},${m.sucursal_origen},${m.sucursal_destino},${m.responsable},"${ref}"\n`;
+        const ref = m.dte_folio ? `DTE #${m.dte_folio}` : m.ticket_correlativo ? `Ticket #${m.ticket_correlativo}` : (m.referencia || '');
+        csv += [m.fecha, m.hora, m.bodega, m.talla, m.sku, m.tipo_movimiento, m.concepto_display,
+                m.cantidad, m.saldo, m.costo, m.precio, m.sucursal_origen, m.sucursal_destino,
+                m.responsable, `"${ref}"`].join(',') + '\n';
     });
-    const blob = new Blob(['\uFEFF' + csv], {type: 'text/csv;charset=utf-8;'});
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `tarjeta_movimiento_${document.getElementById('inputSku').value}.csv`;
+    a.download = `tarjeta_movimiento_${document.getElementById('pArticulo').textContent || 'producto'}.csv`;
     a.click();
 }
 
-document.getElementById('inputSku').addEventListener('keydown', e => { if (e.key === 'Enter') buscarMovimientos(); });
+/* ================= Eventos ================= */
+document.getElementById('inputSku').addEventListener('keydown', e => { if (e.key === 'Enter') { ocultarListaAyuda(); buscarMovimientos(); } });
 document.getElementById('inputSku').addEventListener('input', buscarAyudaProductos);
 document.getElementById('listaAyudaProductos').addEventListener('click', e => {
     const opcion = e.target.closest('[data-sku]');
@@ -346,8 +570,20 @@ document.getElementById('listaAyudaProductos').addEventListener('click', e => {
     buscarMovimientos();
 });
 document.addEventListener('click', e => {
-    if (!e.target.closest('#inputSku') && !e.target.closest('#listaAyudaProductos')) {
-        ocultarListaAyuda();
-    }
+    if (!e.target.closest('#inputSku') && !e.target.closest('#listaAyudaProductos')) ocultarListaAyuda();
+});
+document.getElementById('filtroBodega').addEventListener('change', aplicarFiltrosKardex);
+document.getElementById('filtroTalla').addEventListener('change', aplicarFiltrosKardex);
+document.getElementById('filtroTipo').addEventListener('change', aplicarFiltrosKardex);
+
+/* Tabs */
+document.querySelectorAll('.tm-tabs .nav-link').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tm-tabs .nav-link').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        document.getElementById('panelTimeline').style.display = tab === 'timeline' ? '' : 'none';
+        document.getElementById('panelKardex').style.display = tab === 'kardex' ? '' : 'none';
+    });
 });
 </script>

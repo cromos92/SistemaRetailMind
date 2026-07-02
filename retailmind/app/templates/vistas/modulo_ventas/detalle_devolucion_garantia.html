@@ -1,0 +1,85 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+<!-- ========== App Menu ========== -->
+{% include 'layout/menu.html' %} {% include 'layout/footer.html' %}
+{% csrf_token %}
+
+<style>
+    :root {
+        --nexo-primary: #0066FF;
+        --nexo-secondary: #1A1A2E;
+        --nexo-accent: #00D4AA;
+        --nexo-gray-100: #F5F5F7;
+        --nexo-radius-lg: 12px;
+        --nexo-radius-md: 8px;
+        --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    }
+    .page-content { background: linear-gradient(135deg, var(--nexo-gray-100) 0%, #ECEEF2 100%); min-height: 100vh; }
+    .page-header-nexo {
+        background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
+        border-radius: var(--nexo-radius-lg);
+        padding: 0.75rem 1.25rem;
+        margin-bottom: 0.75rem;
+        color: #fff;
+        box-shadow: var(--nexo-shadow-md);
+    }
+    .detalle-card {
+        background: #fff;
+        border-radius: var(--nexo-radius-md);
+        box-shadow: var(--nexo-shadow-md);
+        padding: 1rem 1.25rem;
+        margin-bottom: 0.75rem;
+    }
+    .detalle-card h6 { color: var(--nexo-secondary); font-weight: 700; margin-bottom: 0.75rem; }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+
+        <div class="page-header-nexo mb-2">
+            <h1 style="font-size:1.2rem; margin:0;"><i class="ri-refund-2-line"></i> Devolución {{ devolucion.numero_operacion }}</h1>
+        </div>
+
+        <div class="detalle-card">
+            <h6><i class="ri-file-text-line me-1"></i> Documento original</h6>
+            <p class="mb-1"><strong>Folio:</strong> #{{ devolucion.dte_original.numero_documento }} ({{ devolucion.dte_original.get_tipo_documento_display }})</p>
+            <p class="mb-0"><strong>Fecha emisión:</strong> {{ devolucion.dte_original.fecha_emision|date:"d/m/Y" }}</p>
+        </div>
+
+        <div class="detalle-card">
+            <h6><i class="ri-user-line me-1"></i> Cliente / Receptor</h6>
+            <p class="mb-1"><strong>{{ devolucion.receptor.nombre }}</strong> — {{ devolucion.receptor.rut }}</p>
+            <p class="mb-1">{{ devolucion.receptor.direccion }} {{ devolucion.receptor.comuna }} {{ devolucion.receptor.ciudad }}</p>
+            <p class="mb-0">{{ devolucion.receptor.giro }}</p>
+        </div>
+
+        <div class="detalle-card">
+            <h6><i class="ri-shopping-bag-3-line me-1"></i> Productos devueltos</h6>
+            <table class="table table-sm">
+                <thead><tr><th>Producto</th><th>Cantidad</th><th>Precio unit.</th><th>Subtotal</th></tr></thead>
+                <tbody>
+                    {% for detalle in devolucion.detalles.all %}
+                    <tr>
+                        <td>{{ detalle.dte_producto.descripcion }}</td>
+                        <td>{{ detalle.cantidad }}</td>
+                        <td>${{ detalle.precio_unitario|floatformat:0 }}</td>
+                        <td>${{ detalle.subtotal|floatformat:0 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="detalle-card">
+            <h6><i class="ri-price-tag-3-line me-1"></i> Motivo y estado</h6>
+            <p class="mb-1"><strong>Motivo:</strong> {{ devolucion.motivo }}</p>
+            <p class="mb-1"><strong>Estado:</strong> {{ devolucion.get_estado_display }}</p>
+            <p class="mb-1"><strong>Autorizado por:</strong> {{ devolucion.autorizado_por.username }}</p>
+            {% if devolucion.nota_credito %}
+            <p class="mb-0"><strong>Nota de Crédito:</strong> #{{ devolucion.nota_credito.numero_documento }} — ${{ devolucion.nota_credito.monto_con_iva|floatformat:0 }}</p>
+            {% endif %}
+        </div>
+
+    </div>
+</div>

@@ -21,6 +21,8 @@ from .views_modulo_ventas import (
     # Funciones Ticket POS
     obtener_ticket_por_correlativo,
     registrar_pagos_ticket,
+    reintentar_generar_dte_ticket,
+    listar_tickets_dte_fallido,
     ticket_pago_pos,
     buscar_ticket_pos,
     anular_ticket_pendiente,
@@ -39,6 +41,7 @@ from .views_modulo_ventas import (
     cuadratura_caja,
     generar_cuadratura_caja,
     obtener_detalle_cuadratura_metodos_pago,
+    editar_fecha_pago_nc,
     sincronizar_fecha_ticket_dte,
     editar_fecha_ticket_sin_dte,
     guardar_cuadratura_completa,
@@ -250,6 +253,8 @@ from .views_modulo_existencias_nuevo import (
     api_productos_disponibles_despacho,
     api_pendientes_despacho_sucursal,
     api_crear_despacho_masivo,
+    api_marcas_disponibles_despacho,
+    api_historial_despachos,
     # Trazabilidad Completa
     trazabilidad_producto,
     api_trazabilidad_producto,
@@ -313,6 +318,15 @@ from .views_modulo_giftcards import (
     api_recargar_giftcard,
     api_anular_giftcard,
     api_reporte_giftcards,
+)
+from .views_modulo_devolucion_garantia import (
+    # Vistas HTML
+    modulo_devolucion_garantia,
+    detalle_devolucion_garantia,
+    # APIs
+    api_buscar_dte_devolucion_garantia,
+    api_generar_devolucion_garantia,
+    api_listar_devoluciones_garantia,
 )
 from .views_modulo_fidelizacion import (
     # Vistas HTML
@@ -759,6 +773,8 @@ urlpatterns = [
     path('api/tickets/<int:correlativo>/', obtener_ticket_por_correlativo, name='obtener_ticket_por_correlativo'),
     path('api/tickets/buscar/', buscar_ticket_pos, name='buscar_ticket_pos'),
     path('api/tickets/<str:correlativo>/pagos/', registrar_pagos_ticket, name='registrar_pagos_ticket'),
+    path('api/tickets/<int:ticket_id>/reintentar-dte/', reintentar_generar_dte_ticket, name='reintentar_generar_dte_ticket'),
+    path('api/tickets/dte-fallido/', listar_tickets_dte_fallido, name='listar_tickets_dte_fallido'),
     path('api/tickets/anular/', anular_ticket_pendiente, name='anular_ticket_pendiente'),
     path('api/tickets/crear-pendiente/', crear_ticket_pendiente_pos, name='crear_ticket_pendiente_pos'),
     path('ticket-pago-pos/', ticket_pago_pos, name='ticket_pago_pos'),
@@ -794,6 +810,7 @@ urlpatterns = [
     path('ventas/revision-arqueos/', revision_arqueos, name='revision_arqueos'),
     path('api/cuadratura/generar/', generar_cuadratura_caja, name='generar_cuadratura_caja'),
     path('api/cuadratura/detalle-metodos-pago/', obtener_detalle_cuadratura_metodos_pago, name='obtener_detalle_cuadratura_metodos_pago'),
+    path('api/cuadratura/editar-fecha-pago-nc/', editar_fecha_pago_nc, name='editar_fecha_pago_nc'),
     path('api/cuadratura/sincronizar-fecha-ticket-dte/', sincronizar_fecha_ticket_dte, name='sincronizar_fecha_ticket_dte'),
     path('api/cuadratura/editar-fecha-ticket/', editar_fecha_ticket_sin_dte, name='editar_fecha_ticket_sin_dte'),
     path('api/cuadratura/guardar/', guardar_cuadratura_completa, name='guardar_cuadratura_completa'),
@@ -1135,6 +1152,8 @@ urlpatterns = [
     path('api/despacho/productos/', api_productos_disponibles_despacho, name='api_productos_disponibles_despacho'),
     path('api/despacho/pendientes/', api_pendientes_despacho_sucursal, name='api_pendientes_despacho_sucursal'),
     path('api/despacho/crear-masivo/', api_crear_despacho_masivo, name='api_crear_despacho_masivo'),
+    path('api/despacho/marcas/', api_marcas_disponibles_despacho, name='api_marcas_disponibles_despacho'),
+    path('api/despacho/historial/', api_historial_despachos, name='api_historial_despachos'),
 
     # ========== TRAZABILIDAD COMPLETA DE PRODUCTO ==========
     path('trazabilidad-producto/', trazabilidad_producto, name='trazabilidad_producto'),
@@ -1222,6 +1241,7 @@ urlpatterns = [
     path('api/verificar-disponibilidad-historico/', views_resumen_existencias.verificar_disponibilidad_historico, name='verificar_disponibilidad_historico'),
     path('api/listar-articulos-para-excluir/', views_resumen_existencias.listar_articulos_para_excluir, name='listar_articulos_para_excluir'),
     path('api/listar-sucursales-resumen/', views_resumen_existencias.listar_sucursales_resumen, name='listar_sucursales_resumen'),
+    path('api/detalle-stock-sucursal/', views_resumen_existencias.detalle_stock_sucursal, name='detalle_stock_sucursal'),
 
     # ========== MÓDULO DE REQUERIMIENTOS DE GARANTÍAS ==========
     # Vistas principales
@@ -1263,6 +1283,15 @@ urlpatterns = [
     path('api/giftcards/recargar/', api_recargar_giftcard, name='api_recargar_giftcard'),
     path('api/giftcards/anular/', api_anular_giftcard, name='api_anular_giftcard'),
     path('api/giftcards/reporte/', api_reporte_giftcards, name='api_reporte_giftcards'),
+
+    # ========== MÓDULO DEVOLUCIÓN DE DINERO POR GARANTÍA ==========
+    # Vistas HTML
+    path('devolucion-garantia/', modulo_devolucion_garantia, name='modulo_devolucion_garantia'),
+    path('devolucion-garantia/<int:devolucion_id>/', detalle_devolucion_garantia, name='detalle_devolucion_garantia'),
+    # APIs
+    path('api/devolucion-garantia/buscar-dte/', api_buscar_dte_devolucion_garantia, name='api_buscar_dte_devolucion_garantia'),
+    path('api/devolucion-garantia/generar/', api_generar_devolucion_garantia, name='api_generar_devolucion_garantia'),
+    path('api/devolucion-garantia/listar/', api_listar_devoluciones_garantia, name='api_listar_devoluciones_garantia'),
 
     # ========== MÓDULO FIDELIZACIÓN (PUNTOS) ==========
     # Vistas HTML

@@ -14,6 +14,7 @@
 {% puede_ver_opcion_tag 'dashboard_requerimientos' as permiso_dashboard_requerimientos %}
 {% puede_ver_opcion_tag 'dashboard_ventas' as permiso_dashboard_ventas %}
 {% puede_ver_opcion_tag 'despacho_sucursales' as permiso_despacho_sucursales %}
+{% puede_ver_opcion_tag 'devolucion_garantia' as permiso_devolucion_garantia %}
 {% puede_ver_opcion_tag 'ecommerce_pedidos_todos' as permiso_ecommerce_pedidos_todos %}
 {% puede_ver_opcion_tag 'edicion_rapida_precios' as permiso_edicion_rapida_precios %}
 {% puede_ver_opcion_tag 'emision_dte' as permiso_emision_dte %}
@@ -2100,6 +2101,13 @@
                                         </a>
                                     </li>
                                     {% endif %}
+                                    {% if permiso_devolucion_garantia %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'modulo_devolucion_garantia' %}" class="nav-link" data-key="t-devolucion-garantia">
+                                            <i class="ri-refund-2-line"></i> Devolución por Garantía
+                                        </a>
+                                    </li>
+                                    {% endif %}
                                     {% if permiso_pos_dashboard %}
                                     <li class="nav-item">
                                         <a href="{% url 'pos_dashboard' %}" class="nav-link" data-key="t-generar-venta">
@@ -2482,6 +2490,13 @@
                                     <li class="nav-item">
                                         <a href="{% url 'configurar_programa_vista' %}" class="nav-link">
                                             <i class="ri-settings-3-line"></i> Configuración Programa
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if permiso_fidelizacion_reporte %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'reporte_fidelizacion_vista' %}" class="nav-link">
+                                            <i class="ri-bar-chart-box-line"></i> Reporte Fidelización
                                         </a>
                                     </li>
                                     {% endif %}

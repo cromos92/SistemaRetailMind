@@ -1,4 +1,5 @@
 {% load static %}
+{% load permisos_tags %}
 
 {% include '../../layout/header.html' %}
 {% include '../../layout/menu.html' %}
@@ -66,9 +67,11 @@
                     <button class="btn btn-light" onclick="abrirModalConsultar()">
                         <i class="ri-search-line"></i> Consultar saldo
                     </button>
+                    {% if user|puede_crear_en:'giftcards_emitir' %}
                     <button class="btn btn-success" id="btn-emitir-gc" onclick="abrirModalEmitir()">
                         <i class="ri-add-circle-line"></i> Emitir Gift Card
                     </button>
+                    {% endif %}
                 </div>
             </div>
 
@@ -291,7 +294,8 @@ const URLS_GC = {
     emitir: "{% url 'api_emitir_giftcard' %}",
     buscarCliente: "{% url 'api_buscar_cliente_requerimiento' %}",
 };
-const PUEDE_EMITIR = true;
+const PUEDE_EMITIR = {% if user|puede_crear_en:'giftcards_emitir' %}true{% else %}false{% endif %};
+const PUEDE_ANULAR_GC = {% if user|puede_editar_en:'giftcards_emitir' %}true{% else %}false{% endif %};
 let TIPO_GC = 'DIGITAL';
 let CLIENTE_ID = null;
 let modalEmitir = null, modalConsultar = null;
@@ -512,8 +516,8 @@ function consultarSaldoGc() {
         if (PUEDE_EMITIR) {
             document.getElementById('gc-acciones-extra').classList.remove('d-none');
             document.getElementById('btn-recargar-gc').classList.remove('d-none');
-            if (d.estado === 'ACTIVA') document.getElementById('btn-anular-gc').classList.remove('d-none');
         }
+        if (PUEDE_ANULAR_GC && d.estado === 'ACTIVA') document.getElementById('btn-anular-gc').classList.remove('d-none');
     });
 }
 

@@ -88,11 +88,12 @@ class Command(BaseCommand):
         opciones = [
             ('ticket_venta', 'Ticket de Venta', 'ticket_venta', 'mdi-receipt', 1),
             ('cambios_devoluciones', 'Cambios y Devoluciones', 'gestion_cambios_devoluciones', 'ri-exchange-line', 2),
-            ('pos_dashboard', 'Generar Venta (POS)', 'pos_dashboard', 'ri-dashboard-3-line', 3),
-            ('gestion_documentos_ventas', 'Consulta Documentos', 'gestion_ventas_documentos', 'ri-file-search-line', 4),
-            ('cuadratura_caja', 'Cuadratura y Arqueo', 'cuadratura_caja', 'ri-calculator-line', 5),
-            ('pos_transbank', 'POS Transbank', 'gestion_transbank_pos_sdk', 'ri-bank-card-line', 6),
-            ('revision_arqueos', 'Revisi?n Arqueos y Dep?sitos', 'revision_arqueos', 'ri-shield-check-line', 7),
+            ('devolucion_garantia', 'Devolucion por Garantia', 'modulo_devolucion_garantia', 'ri-refund-2-line', 3),
+            ('pos_dashboard', 'Generar Venta (POS)', 'pos_dashboard', 'ri-dashboard-3-line', 4),
+            ('gestion_documentos_ventas', 'Consulta Documentos', 'gestion_ventas_documentos', 'ri-file-search-line', 5),
+            ('cuadratura_caja', 'Cuadratura y Arqueo', 'cuadratura_caja', 'ri-calculator-line', 6),
+            ('pos_transbank', 'POS Transbank', 'gestion_transbank_pos_sdk', 'ri-bank-card-line', 7),
+            ('revision_arqueos', 'Revisi?n Arqueos y Dep?sitos', 'revision_arqueos', 'ri-shield-check-line', 8),
         ]
         
         for codigo, nombre, url_name, icono, orden in opciones:
@@ -506,7 +507,7 @@ class Command(BaseCommand):
             'dashboard_compras_estrategico', 'dashboard_documentos', 'dashboard_despachos',
             'dashboard_requerimientos',
             # Ventas
-            'ticket_venta', 'cambios_devoluciones', 'pos_dashboard', 'gestion_documentos_ventas',
+            'ticket_venta', 'cambios_devoluciones', 'devolucion_garantia', 'pos_dashboard', 'gestion_documentos_ventas',
             'cuadratura_caja', 'pos_transbank', 'revision_arqueos',
             # Documentos
             'emision_dte', 'gestion_dte', 'recepcion_dte',

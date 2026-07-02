@@ -163,6 +163,28 @@
                     </div>
                 </div>
 
+                <div class="section-box mb-3">
+                    <div class="section-title"><i class="ri-line-chart-line"></i> Tendencia mensual (últimos 12 meses)</div>
+                    <div style="position:relative; height:260px;">
+                        <canvas id="chart-tendencia-mensual"></canvas>
+                    </div>
+                </div>
+
+                <div class="section-box mb-3">
+                    <div class="section-title d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <span><i class="ri-trophy-line"></i> Top clientes del mes</span>
+                        <input type="month" id="rp-mes-ranking" class="form-control form-control-sm" style="max-width:170px;">
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead class="table-light">
+                                <tr><th>#</th><th>Cliente</th><th>RUT</th><th class="text-end">Puntos ganados</th><th class="text-end">Valor</th></tr>
+                            </thead>
+                            <tbody id="tb-ranking-mes"></tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <div class="row">
                     <div class="col-lg-6">
                         <div class="section-box">
@@ -207,11 +229,25 @@
                         </table>
                     </div>
                 </div>
+
+                <div class="section-box">
+                    <div class="section-title"><i class="ri-alarm-warning-line"></i> Señales de RUT sospechoso</div>
+                    <p class="text-muted small mb-2">Además de la concentración cajera-cliente de la tabla de arriba, estas señales buscan otros patrones de abuso: acumulación en varias sucursales el mismo día, ventas pagadas con RUT genérico/inválido y canjes inmediatos tras acumular.</p>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead class="table-light">
+                                <tr><th>Riesgo</th><th>Tipo</th><th>Cliente / Vendedor</th><th>RUT</th><th>Detalle</th></tr>
+                            </thead>
+                            <tbody id="tb-rut-sospechoso"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 const URL_REPORTE = "{% url 'api_reporte_fidelizacion' %}";
 function fmt(n) { return '$' + Math.round(n||0).toLocaleString('es-CL'); }
@@ -225,7 +261,32 @@ function setDefaultDates() {
     desde.setDate(hoy.getDate() - 29);
     document.getElementById('rp-desde').value = desde.toISOString().slice(0, 10);
     document.getElementById('rp-hasta').value = hoy.toISOString().slice(0, 10);
+    document.getElementById('rp-mes-ranking').value = hoy.toISOString().slice(0, 7);
 }
+let chartTendencia = null;
+function actualizarChartTendencia(tendencia) {
+    const canvas = document.getElementById('chart-tendencia-mensual');
+    if (!canvas || typeof Chart === 'undefined') return;
+    const labels = tendencia.map(t => t.mes);
+    if (chartTendencia) { chartTendencia.destroy(); }
+    chartTendencia = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                { label: 'Ganados', data: tendencia.map(t => t.puntos_ganados), borderColor: '#0ab39c', backgroundColor: 'rgba(10,179,156,.1)', fill: true, tension: .3 },
+                { label: 'Canjeados', data: tendencia.map(t => t.puntos_canjeados), borderColor: '#fb8c00', backgroundColor: 'rgba(251,140,0,.1)', fill: true, tension: .3 },
+                { label: 'Expirados', data: tendencia.map(t => t.puntos_expirados), borderColor: '#f06548', backgroundColor: 'rgba(240,101,72,.1)', fill: true, tension: .3 },
+            ],
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+    });
+}
+const TIPO_SENAL_LABEL = {
+    MULTI_SUCURSAL: 'Multi-sucursal',
+    RUT_GENERICO: 'RUT genérico',
+    CANJE_INMEDIATO: 'Canje inmediato',
+};
 function emptyRow(cols, text) {
     return `<tr><td colspan="${cols}" class="empty-row">${text}</td></tr>`;
 }
@@ -234,6 +295,7 @@ function cargarReporte() {
         desde: document.getElementById('rp-desde').value,
         hasta: document.getElementById('rp-hasta').value,
         vencen_en: document.getElementById('rp-vencen').value,
+        mes: document.getElementById('rp-mes-ranking').value,
     });
     fetch(`${URL_REPORTE}?${params.toString()}`).then(r => r.json()).then(d => {
         if (!d.success) { Swal.fire('Error', d.error || 'No se pudo cargar el reporte', 'error'); return; }
@@ -290,9 +352,35 @@ function cargarReporte() {
                 <td class="text-end">${fmt(i.venta_total)}</td>
                 <td class="small">${htmlEscape(i.primer_mov)} a ${htmlEscape(i.ultimo_mov)}</td>
             </tr>`).join('') : emptyRow(8, 'Sin concentraciones sospechosas.');
+
+        actualizarChartTendencia(d.tendencia_mensual || []);
+
+        const ranking = d.ranking_mes || [];
+        document.getElementById('tb-ranking-mes').innerHTML = ranking.length ? ranking.map((i, idx) => `
+            <tr>
+                <td>${idx + 1}</td>
+                <td><a href="/app/fidelizacion/cliente/${i.cliente_id}/">${htmlEscape(i.cliente)}</a></td>
+                <td>${htmlEscape(i.rut || '—')}</td>
+                <td class="text-end fw-bold text-success">${pts(i.puntos_ganados)}</td>
+                <td class="text-end">${fmt(i.valor_pesos)}</td>
+            </tr>`).join('') : emptyRow(5, 'Sin acumulación de puntos en el mes seleccionado.');
+
+        const senalesRut = d.senales_rut_sospechoso || [];
+        document.getElementById('tb-rut-sospechoso').innerHTML = senalesRut.length ? senalesRut.map(i => `
+            <tr>
+                <td><span class="badge-risk ${String(i.severidad).toLowerCase()}">${htmlEscape(i.severidad)}</span></td>
+                <td><span class="badge bg-secondary-subtle text-secondary-emphasis">${htmlEscape(TIPO_SENAL_LABEL[i.tipo] || i.tipo)}</span></td>
+                <td>${i.cliente_id ? `<a href="/app/fidelizacion/cliente/${i.cliente_id}/">${htmlEscape(i.cliente)}</a>` : htmlEscape(i.cliente)}</td>
+                <td>${htmlEscape(i.rut || '—')}</td>
+                <td class="small">${htmlEscape(i.detalle)}</td>
+            </tr>`).join('') : emptyRow(5, 'Sin señales de RUT sospechoso en el período.');
     }).catch(() => Swal.fire('Error', 'No se pudo cargar el reporte.', 'error'));
 }
-document.addEventListener('DOMContentLoaded', () => { setDefaultDates(); cargarReporte(); });
+document.addEventListener('DOMContentLoaded', () => {
+    setDefaultDates();
+    cargarReporte();
+    document.getElementById('rp-mes-ranking').addEventListener('change', cargarReporte);
+});
 </script>
 
 {% include '../../layout/footer.html' %}

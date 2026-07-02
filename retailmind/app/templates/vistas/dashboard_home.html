@@ -458,6 +458,17 @@
 
     </div>
 
+    <!-- ===== Venta General (ultimos 30 dias) ===== -->
+    <div class="home-panel" style="margin-bottom:1.25rem;">
+        <div class="home-panel-header operaciones">
+            <span class="home-panel-title"><i class="ri-line-chart-line"></i> Venta General &middot; Ultimos 30 Dias</span>
+            <span class="home-panel-badge">${{ ventas.mes|floatformat:0|intcomma }} este mes</span>
+        </div>
+        <div class="home-panel-body">
+            <div id="chartVentaGeneral" style="min-height:280px;"></div>
+        </div>
+    </div>
+
     <!-- ===== Top Productos + Quiebres que Rotan ===== -->
     <div class="home-panels-row" style="grid-template-columns:1fr 1fr;">
 
@@ -607,7 +618,37 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!isNaN(num)) { el.textContent = '$' + num.toLocaleString('es-CL'); }
         }
     });
+
+    renderChartVentaGeneral({{ ventas.ventas_ultimos_30_dias|default:"[]"|safe }});
 });
+
+function renderChartVentaGeneral(datos) {
+    var el = document.getElementById('chartVentaGeneral');
+    if (!el) return;
+    if (typeof ApexCharts === 'undefined') {
+        el.innerHTML = '<div class="text-muted text-center py-4">Graficos no disponibles</div>';
+        return;
+    }
+    var fmt = function(v) { return Math.round(v).toLocaleString('es-CL'); };
+
+    var opts = {
+        series: [{ name: 'Ventas', data: datos.map(function(d) { return d.monto; }) }],
+        chart: { type: 'area', height: 280, toolbar: { show: false } },
+        stroke: { curve: 'smooth', width: 2 },
+        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: .35, opacityTo: .05, stops: [0, 90, 100] } },
+        dataLabels: { enabled: false },
+        xaxis: { categories: datos.map(function(d) { return d.fecha; }), labels: { rotate: -45, style: { fontSize: '10px' } } },
+        yaxis: { labels: { formatter: function(v) { return '$' + fmt(v); } } },
+        tooltip: {
+            y: { formatter: function(v) { return '$' + fmt(v); } },
+            x: { formatter: function(v, opts) { return datos[opts.dataPointIndex].fecha + ' (' + datos[opts.dataPointIndex].documentos + ' docs)'; } }
+        },
+        colors: ['#0066FF'],
+        grid: { strokeDashArray: 4 }
+    };
+
+    new ApexCharts(el, opts).render();
+}
 </script>
 
 {% include 'layout/footer.html' %}

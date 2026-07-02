@@ -14,13 +14,14 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
 from django.core.paginator import Paginator
 from django.db.models import Q, Sum, Count, Min, Max
+from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
 from .decorators import requiere_permiso
 from .models import (
     Cliente, CuentaPuntos, MovimientoPuntos, ProgramaFidelizacion,
-    Empresa, EmpresaUser,
+    Empresa, EmpresaUser, Ticket, validar_rut_chileno,
 )
 from .services import fidelizacion_service
 from .utils_permisos import usuario_puede_ver_todas_sucursales
@@ -91,12 +92,17 @@ def ficha_cliente_puntos_vista(request, cliente_id):
     cliente = get_object_or_404(Cliente, id=cliente_id)
     cuenta = getattr(cliente, 'cuenta_puntos', None)
     movimientos = []
+    tendencia_mensual = []
     if cuenta:
         movimientos = cuenta.movimientos.all().order_by('-fecha')[:200]
+        programa = ProgramaFidelizacion.get_activo()
+        valor_pto = programa.valor_punto_en_pesos if programa else 0
+        tendencia_mensual = _construir_tendencia_mensual(cuenta=cuenta, valor_pto=valor_pto)
     context = {
         'cliente': cliente,
         'cuenta': cuenta,
         'movimientos': movimientos,
+        'tendencia_mensual': tendencia_mensual,
         'saldo_info': fidelizacion_service.consultar_saldo(cliente=cliente),
     }
     return render(request, 'vistas/modulo_fidelizacion/ficha_cliente.html', context)
@@ -179,7 +185,16 @@ def api_detalle_cuenta(request, cliente_id):
             'observaciones': m.observaciones or '',
         } for m in cuenta.movimientos.all().order_by('-fecha')[:200]]
 
-    return JsonResponse({'success': True, 'saldo': info, 'movimientos': movimientos})
+    tendencia_mensual = []
+    if cuenta:
+        programa = ProgramaFidelizacion.get_activo()
+        valor_pto = programa.valor_punto_en_pesos if programa else 0
+        tendencia_mensual = _construir_tendencia_mensual(cuenta=cuenta, valor_pto=valor_pto)
+
+    return JsonResponse({
+        'success': True, 'saldo': info, 'movimientos': movimientos,
+        'tendencia_mensual': tendencia_mensual,
+    })
 
 
 @require_GET
@@ -225,8 +240,217 @@ def _cliente_nombre(cliente):
     return cliente.nombre_completo
 
 
+def _sumar_meses(fecha, delta_meses):
+    """Suma (o resta) meses a una fecha, devolviendo siempre el día 1 de mes."""
+    mes_total = fecha.month - 1 + delta_meses
+    anio = fecha.year + mes_total // 12
+    mes = mes_total % 12 + 1
+    return fecha.replace(year=anio, month=mes, day=1)
+
+
+def _construir_tendencia_mensual(meses=12, usuario=None, cuenta=None, valor_pto=0):
+    """
+    Puntos ganados/canjeados/expirados por mes, de los últimos `meses` meses
+    (ventana fija, independiente del filtro desde/hasta del reporte). Si se
+    pasa `cuenta`, se limita al historial de ese cliente.
+    """
+    hoy = timezone.localdate()
+    inicio_mes = _sumar_meses(hoy.replace(day=1), -(meses - 1))
+    tz = timezone.get_current_timezone()
+    inicio_dt = timezone.make_aware(datetime.combine(inicio_mes, time.min), tz)
+
+    qs = MovimientoPuntos.objects.filter(fecha__gte=inicio_dt)
+    if cuenta is not None:
+        qs = qs.filter(cuenta=cuenta)
+    elif usuario is not None:
+        qs = _movimientos_visibles_para_usuario(qs, usuario)
+
+    filas = (
+        qs.annotate(mes=TruncMonth('fecha'))
+          .values('mes')
+          .annotate(
+              ganados=Sum('puntos', filter=Q(tipo__in=['ACUMULACION', 'BIENVENIDA', 'CUMPLEANOS'], puntos__gt=0)),
+              canjeados=Sum('puntos', filter=Q(tipo='CANJE', puntos__lt=0)),
+              expirados=Sum('puntos', filter=Q(tipo='EXPIRACION', puntos__lt=0)),
+          )
+    )
+    por_mes = {f['mes'].strftime('%Y-%m'): f for f in filas if f['mes']}
+
+    resultado = []
+    cursor = inicio_mes
+    for _ in range(meses):
+        clave = cursor.strftime('%Y-%m')
+        fila = por_mes.get(clave, {})
+        ganados = fila.get('ganados') or 0
+        canjeados = abs(fila.get('canjeados') or 0)
+        expirados = abs(fila.get('expirados') or 0)
+        resultado.append({
+            'mes': clave,
+            'puntos_ganados': ganados,
+            'valor_ganado': ganados * valor_pto,
+            'puntos_canjeados': canjeados,
+            'valor_canjeado': canjeados * valor_pto,
+            'puntos_expirados': expirados,
+            'valor_expirado': expirados * valor_pto,
+        })
+        cursor = _sumar_meses(cursor, 1)
+    return resultado
+
+
+def _construir_ranking_mes(mes_str=None, usuario=None, valor_pto=0, top=10):
+    """Top clientes por puntos ganados en un mes puntual (default: mes actual)."""
+    hoy = timezone.localdate()
+    anio, mes = hoy.year, hoy.month
+    if mes_str:
+        try:
+            partes = mes_str.split('-')
+            anio, mes = int(partes[0]), int(partes[1])
+        except (ValueError, IndexError, TypeError):
+            anio, mes = hoy.year, hoy.month
+
+    qs = MovimientoPuntos.objects.filter(
+        tipo__in=['ACUMULACION', 'BIENVENIDA', 'CUMPLEANOS'],
+        puntos__gt=0,
+        fecha__year=anio,
+        fecha__month=mes,
+    )
+    if usuario is not None:
+        qs = _movimientos_visibles_para_usuario(qs, usuario)
+
+    filas = (
+        qs.values('cuenta_id', 'cuenta__cliente_id', 'cuenta__cliente__nombre',
+                   'cuenta__cliente__apellido', 'cuenta__cliente__rut')
+          .annotate(puntos_ganados=Sum('puntos'))
+          .order_by('-puntos_ganados')[:top]
+    )
+    return [{
+        'cliente_id': f['cuenta__cliente_id'],
+        'cliente': (
+            f"{f.get('cuenta__cliente__nombre') or ''} {f.get('cuenta__cliente__apellido') or ''}".strip()
+            or 'Cliente'
+        ),
+        'rut': f.get('cuenta__cliente__rut') or '',
+        'puntos_ganados': f['puntos_ganados'] or 0,
+        'valor_pesos': (f['puntos_ganados'] or 0) * valor_pto,
+    } for f in filas]
+
+
+def detectar_senales_rut_sospechoso(fecha_inicio_dt, fecha_fin_dt, usuario=None):
+    """
+    Señales de posible abuso/fraude sobre RUTs en el programa de puntos,
+    calculadas en vivo sobre el período del reporte (mismo criterio que
+    `alertas_concentracion`, que se sigue calculando aparte y se muestra
+    junto a estas señales en el reporte).
+
+    - MULTI_SUCURSAL: misma cuenta acumulando en 2+ sucursales el mismo día.
+    - RUT_GENERICO: ventas pagadas con el RUT ficticio o un RUT inválido,
+      agrupadas por vendedor (no genera puntos, así que se mide sobre Ticket).
+    - CANJE_INMEDIATO: canje realizado dentro de 48h de la acumulación previa.
+    """
+    senales = []
+
+    mov_qs = MovimientoPuntos.objects.select_related('cuenta__cliente', 'sucursal').filter(
+        fecha__gte=fecha_inicio_dt, fecha__lte=fecha_fin_dt,
+    )
+    if usuario is not None:
+        mov_qs = _movimientos_visibles_para_usuario(mov_qs, usuario)
+
+    # 1) Multi-sucursal el mismo día
+    por_cuenta_dia = {}
+    for mov in mov_qs.filter(tipo='ACUMULACION', puntos__gt=0, sucursal__isnull=False):
+        clave = (mov.cuenta_id, timezone.localtime(mov.fecha).date())
+        entrada = por_cuenta_dia.setdefault(clave, {'sucursales': set(), 'cliente': mov.cuenta.cliente})
+        entrada['sucursales'].add(mov.sucursal_id)
+
+    por_cuenta_ocurrencias = {}
+    for (cuenta_id, dia), entrada in por_cuenta_dia.items():
+        if len(entrada['sucursales']) >= 2:
+            por_cuenta_ocurrencias.setdefault(cuenta_id, []).append(
+                (dia, len(entrada['sucursales']), entrada['cliente'])
+            )
+
+    for cuenta_id, ocurrencias in por_cuenta_ocurrencias.items():
+        cliente = ocurrencias[0][2]
+        max_sucursales = max(o[1] for o in ocurrencias)
+        severidad = 'ALTA' if max_sucursales >= 3 or len(ocurrencias) >= 2 else 'MEDIA'
+        senales.append({
+            'tipo': 'MULTI_SUCURSAL',
+            'severidad': severidad,
+            'cliente_id': cliente.id,
+            'cliente': _cliente_nombre(cliente),
+            'rut': cliente.rut or '',
+            'detalle': f"{len(ocurrencias)} día(s) con acumulación en hasta {max_sucursales} sucursales distintas",
+        })
+
+    # 3) RUT genérico/inválido reutilizado (a nivel de venta, no de puntos:
+    # el RUT ficticio nunca acumula puntos, así que no aparece en MovimientoPuntos)
+    tickets_qs = Ticket.objects.select_related('vendedor').filter(
+        created_at__gte=fecha_inicio_dt, created_at__lte=fecha_fin_dt,
+        estado='PAGADO',
+    ).exclude(cliente_rut__isnull=True).exclude(cliente_rut='')
+    if usuario is not None and not usuario_puede_ver_todas_sucursales(usuario):
+        empresas = _empresa_ids_usuario(usuario)
+        tickets_qs = tickets_qs.filter(
+            Q(vendedor__empresa__isnull=True) | Q(vendedor__empresa_id__in=empresas)
+        )
+
+    conteo_por_vendedor = {}
+    for t in tickets_qs.only('id', 'cliente_rut', 'vendedor_id', 'vendedor__nombre'):
+        rut_norm = (t.cliente_rut or '').strip().upper()
+        es_generico = rut_norm in fidelizacion_service._RUT_FICTICIOS or not validar_rut_chileno(rut_norm)
+        if not es_generico:
+            continue
+        entrada = conteo_por_vendedor.setdefault(t.vendedor_id, {
+            'count': 0,
+            'vendedor': t.vendedor.nombre if t.vendedor else 'Sin vendedor',
+        })
+        entrada['count'] += 1
+
+    for info in conteo_por_vendedor.values():
+        if info['count'] < 15:
+            continue
+        severidad = 'ALTA' if info['count'] >= 30 else 'MEDIA'
+        senales.append({
+            'tipo': 'RUT_GENERICO',
+            'severidad': severidad,
+            'cliente_id': None,
+            'cliente': info['vendedor'],
+            'rut': '',
+            'detalle': f"{info['count']} venta(s) pagadas con RUT genérico/inválido en el período",
+        })
+
+    # 4) Canje inmediato tras acumular (mismo RUT/cuenta)
+    por_cuenta_eventos = {}
+    for mov in mov_qs.filter(tipo__in=['ACUMULACION', 'CANJE']).order_by('cuenta_id', 'fecha'):
+        por_cuenta_eventos.setdefault(mov.cuenta_id, []).append(mov)
+
+    for eventos in por_cuenta_eventos.values():
+        ultimo_acum = None
+        ocurrencias = 0
+        cliente = None
+        for mov in eventos:
+            if mov.tipo == 'ACUMULACION':
+                ultimo_acum = mov.fecha
+            elif mov.tipo == 'CANJE' and ultimo_acum is not None:
+                if (mov.fecha - ultimo_acum).total_seconds() < 48 * 3600:
+                    ocurrencias += 1
+                    cliente = mov.cuenta.cliente
+        if ocurrencias >= 1 and cliente is not None:
+            severidad = 'ALTA' if ocurrencias >= 2 else 'MEDIA'
+            senales.append({
+                'tipo': 'CANJE_INMEDIATO',
+                'severidad': severidad,
+                'cliente_id': cliente.id,
+                'cliente': _cliente_nombre(cliente),
+                'rut': cliente.rut or '',
+                'detalle': f"{ocurrencias} canje(s) realizados dentro de 48h de acumular",
+            })
+
+    return senales
+
+
 def construir_reporte_fidelizacion(*, fecha_inicio_dt, fecha_fin_dt,
-                                   dias_vencimiento=30, usuario=None):
+                                   dias_vencimiento=30, usuario=None, mes=None):
     """
     Calcula el reporte de fidelización. Separado para testear la lógica sin
     depender de la vista ni del JavaScript.
@@ -381,6 +605,10 @@ def construir_reporte_fidelizacion(*, fecha_inicio_dt, fecha_fin_dt,
     cumpleanos_qs = periodo_qs.filter(tipo='CUMPLEANOS', puntos__gt=0)
     puntos_cumpleanos = cumpleanos_qs.aggregate(s=Sum('puntos'))['s'] or 0
 
+    tendencia_mensual = _construir_tendencia_mensual(usuario=usuario, valor_pto=valor_pto)
+    ranking_mes = _construir_ranking_mes(mes, usuario=usuario, valor_pto=valor_pto)
+    senales_rut_sospechoso = detectar_senales_rut_sospechoso(fecha_inicio_dt, fecha_fin_dt, usuario=usuario)
+
     return {
         'programa': {
             'nombre': programa.nombre if programa else '',
@@ -420,6 +648,9 @@ def construir_reporte_fidelizacion(*, fecha_inicio_dt, fecha_fin_dt,
         } for item in puntos_por_vencer[:20]],
         'canjes_recientes': canjes_recientes,
         'alertas_concentracion': alertas_concentracion,
+        'tendencia_mensual': tendencia_mensual,
+        'ranking_mes': ranking_mes,
+        'senales_rut_sospechoso': senales_rut_sospechoso,
     }
 
 
@@ -580,6 +811,7 @@ def api_reporte_fidelizacion(request):
         fecha_fin_dt=fin_dt,
         dias_vencimiento=dias_vencimiento,
         usuario=request.user,
+        mes=request.GET.get('mes'),
     )
     # Compatibilidad con el listado actual: conserva los KPIs en la raíz.
     return JsonResponse({'success': True, **reporte['resumen'], **reporte})

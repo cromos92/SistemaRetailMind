@@ -1,0 +1,651 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+<!-- ========== App Menu ========== -->
+{% include 'layout/menu.html' %} {% include 'layout/footer.html' %}
+{% csrf_token %}
+
+<!-- Extra CSS -->
+<link href="{% static 'libs/sweetalert2/sweetalert2.min.css' %}" rel="stylesheet" type="text/css" />
+<style>
+    /* ========== NEXO DESIGN SYSTEM - VARIABLES ========== */
+    :root {
+        --nexo-primary: #0066FF;
+        --nexo-primary-dark: #0052CC;
+        --nexo-primary-light: #E6F0FF;
+        --nexo-secondary: #1A1A2E;
+        --nexo-accent: #00D4AA;
+        --nexo-success: #00D4AA;
+        --nexo-warning: #FFB020;
+        --nexo-error: #FF4D4D;
+        --nexo-info: #0066FF;
+        --nexo-gray-900: #1A1A2E;
+        --nexo-gray-700: #4A4A5A;
+        --nexo-gray-500: #8A8A9A;
+        --nexo-gray-300: #D1D1D9;
+        --nexo-gray-100: #F5F5F7;
+        --nexo-white: #FFFFFF;
+        --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+        --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+        --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+        --nexo-radius-sm: 4px;
+        --nexo-radius-md: 8px;
+        --nexo-radius-lg: 12px;
+        --nexo-radius-xl: 16px;
+        --nexo-radius-full: 9999px;
+        --nexo-transition-fast: 150ms ease;
+        --nexo-transition-normal: 250ms ease;
+    }
+
+    .page-content {
+        background: linear-gradient(135deg, var(--nexo-gray-100) 0%, #ECEEF2 100%);
+        min-height: 100vh;
+    }
+
+    .page-content > .container-fluid {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    /* ========== PAGE HEADER ========== */
+    .page-header-nexo {
+        background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
+        border-radius: var(--nexo-radius-lg);
+        padding: 0.75rem 1.25rem;
+        margin-bottom: 0.75rem;
+        color: var(--nexo-white);
+        box-shadow: var(--nexo-shadow-md);
+    }
+
+    .page-header-nexo h1 {
+        font-weight: 700;
+        font-size: 1.3rem;
+        margin-bottom: 0.15rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .page-header-nexo h1 i {
+        color: var(--nexo-accent);
+        font-size: 1.5rem;
+    }
+
+    .page-header-nexo .sucursal-info {
+        color: var(--nexo-gray-300);
+        font-size: 0.82rem;
+    }
+
+    .page-header-nexo .sucursal-info strong {
+        color: var(--nexo-accent);
+    }
+
+    /* ========== CARD STATS NEXO ========== */
+    .card-stats-nexo {
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-md);
+        box-shadow: var(--nexo-shadow-sm);
+        transition: all var(--nexo-transition-normal);
+        border: 1px solid var(--nexo-gray-300);
+        overflow: hidden;
+    }
+
+    .card-stats-nexo:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--nexo-shadow-md);
+        border-color: var(--nexo-primary);
+    }
+
+    .card-stats-nexo .card-body {
+        padding: 0.5rem 0.75rem;
+    }
+
+    .card-stats-nexo .stat-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: var(--nexo-radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        color: var(--nexo-white);
+        flex-shrink: 0;
+    }
+
+    .card-stats-nexo .stat-icon.bg-nexo-primary { background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%); }
+    .card-stats-nexo .stat-icon.bg-nexo-warning { background: linear-gradient(135deg, var(--nexo-warning) 0%, #E59B00 100%); }
+    .card-stats-nexo .stat-icon.bg-nexo-success { background: linear-gradient(135deg, var(--nexo-success) 0%, #00B08A 100%); }
+
+    .card-stats-nexo .stat-label {
+        color: var(--nexo-gray-500);
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        margin-bottom: 0;
+        line-height: 1.1;
+    }
+
+    .card-stats-nexo .stat-value {
+        color: var(--nexo-secondary);
+        font-size: 1.4rem;
+        font-weight: 800;
+        line-height: 1.1;
+    }
+
+    /* ========== STATUS BADGES ========== */
+    .status-badge {
+        padding: 6px 14px;
+        border-radius: var(--nexo-radius-full);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+    }
+    .status-registrada { background: rgba(255, 176, 32, 0.15); color: #CC8C00; border: 1px solid rgba(255, 176, 32, 0.3); }
+    .status-nc_generada { background: rgba(0, 212, 170, 0.15); color: #00A080; border: 1px solid rgba(0, 212, 170, 0.3); }
+    .status-anulada { background: rgba(255, 77, 77, 0.15); color: var(--nexo-error); border: 1px solid rgba(255, 77, 77, 0.3); }
+
+    /* ========== TABLA ========== */
+    .table-nexo {
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-md);
+        box-shadow: var(--nexo-shadow-sm);
+        overflow: hidden;
+    }
+
+    /* ========== BÚSQUEDA DE CLIENTE (paleta dark, mismo patrón que modalGenerarNC) ========== */
+    .cliente-box {
+        background: #161b27;
+        border: 1px solid #2a3045;
+        border-radius: var(--nexo-radius-md);
+        padding: 0.75rem;
+    }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+
+    <!-- Header NEXO -->
+    <div class="page-header-nexo mb-2">
+        <div class="row align-items-center">
+            <div class="col">
+                <h1><i class="ri-refund-2-line"></i> Devolución por Garantía</h1>
+                <p class="sucursal-info mb-0">
+                    <i class="ri-store-2-line me-1"></i> <strong>{{ sucursal_actual.alias }}</strong>
+                </p>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-nexo-success" data-bs-toggle="modal" data-bs-target="#modalNuevaDevolucion" style="font-size:0.88rem; padding:0.45rem 1rem;">
+                    <i class="ri-add-line me-1"></i> Nueva Devolución
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estadísticas -->
+    <div class="row mb-2 g-2" id="estadisticas-cards">
+        <div class="col-6 col-md-4">
+            <div class="card-stats-nexo">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="stat-icon bg-nexo-primary"><i class="ri-file-list-3-line"></i></div>
+                        <div>
+                            <p class="stat-label">Total</p>
+                            <h3 class="stat-value mb-0" id="stat-total">0</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4">
+            <div class="card-stats-nexo">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="stat-icon bg-nexo-success"><i class="ri-check-double-line"></i></div>
+                        <div>
+                            <p class="stat-label">NC Generadas</p>
+                            <h3 class="stat-value mb-0" id="stat-nc-generadas">0</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4">
+            <div class="card-stats-nexo">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="stat-icon bg-nexo-warning"><i class="ri-money-dollar-circle-line"></i></div>
+                        <div>
+                            <p class="stat-label">Monto Total</p>
+                            <h3 class="stat-value mb-0" id="stat-monto-total">$0</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controles de búsqueda -->
+    <div class="table-nexo p-2 mb-2">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-6">
+                <input type="text" id="filtro-busqueda" class="form-control form-control-sm" placeholder="Buscar por N° operación, RUT, nombre o N° NC...">
+            </div>
+            <div class="col-md-3">
+                <select id="filtro-estado" class="form-select form-select-sm">
+                    <option value="">Todos los estados</option>
+                    {% for valor, etiqueta in estado_choices %}
+                    <option value="{{ valor }}">{{ etiqueta }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 text-end">
+                <button class="btn btn-sm btn-outline-primary" onclick="cargarDevoluciones()">
+                    <i class="ri-search-line me-1"></i> Buscar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="table-nexo">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="tabla-devoluciones">
+                <thead class="table-light">
+                    <tr>
+                        <th>N° Operación</th>
+                        <th>Boleta/Factura</th>
+                        <th>Cliente</th>
+                        <th>Monto</th>
+                        <th>NC</th>
+                        <th>Estado</th>
+                        <th>Autorizado por</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody-devoluciones">
+                    <tr><td colspan="8" class="text-center text-muted py-4">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    </div>
+</div>
+
+<!-- ========== MODAL NUEVA DEVOLUCIÓN ========== -->
+<div class="modal fade" id="modalNuevaDevolucion" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0" style="background:#1a1f2e;">
+            <div class="modal-header py-2 px-3" style="background:#1a1f2e; border-bottom:2px solid #0d6efd;">
+                <div class="text-white fw-bold" style="font-size:0.95rem;">
+                    <i class="ri-refund-2-line me-1"></i> Nueva Devolución por Garantía
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-3 py-3" style="background:#0f1117;">
+
+                <!-- Paso 1: buscar boleta/factura -->
+                <div class="mb-3">
+                    <label class="form-label text-white fw-semibold" style="font-size:0.85rem;">
+                        <i class="ri-file-search-line me-1" style="color:#0d6efd;"></i> Boleta / Factura con el producto fallado
+                    </label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" id="dg-folio" class="form-control" placeholder="N° de folio">
+                        <button type="button" class="btn btn-primary" onclick="buscarDteDevolucionGarantia()">
+                            <i class="ri-search-line"></i> Buscar
+                        </button>
+                    </div>
+                    <div id="dg-doc-info" class="text-secondary mt-1 d-none" style="font-size:0.75rem;"></div>
+                </div>
+
+                <!-- Paso 2: productos -->
+                <div id="dg-seccion-productos" class="mb-3 d-none">
+                    <label class="form-label text-white fw-semibold" style="font-size:0.85rem;">
+                        <i class="ri-shopping-bag-3-line me-1" style="color:#0d6efd;"></i> Producto(s) a devolver
+                    </label>
+                    <div id="dg-lista-productos" class="cliente-box"></div>
+                </div>
+
+                <!-- Paso 3: cliente / receptor real -->
+                <div id="dg-seccion-cliente" class="mb-3 d-none">
+                    <div class="cliente-box">
+                        <div class="text-white fw-semibold mb-2" style="font-size:0.85rem;">
+                            <i class="ri-user-line me-1" style="color:#0d6efd;"></i> Cliente / Receptor real de la Nota de Crédito
+                        </div>
+                        <div id="dg-alerta-generico" class="alert alert-warning py-1 px-2 mb-2 small d-none">
+                            <i class="ri-alert-line me-1"></i> Esta boleta no tiene un cliente identificado (Consumidor Final). Registre los datos reales para la NC.
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-8">
+                                <div class="input-group input-group-sm">
+                                    <input type="text" id="dg-cliente-rut" class="form-control" placeholder="RUT (ej: 12345678-9)">
+                                    <button type="button" class="btn btn-outline-primary" onclick="buscarClienteDevolucionGarantia()" title="Buscar cliente">
+                                        <i class="ri-search-line"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <span id="dg-cliente-estado" class="badge d-none w-100 py-1" style="font-size:0.65rem;"></span>
+                            </div>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <input type="text" id="dg-cliente-nombre" class="form-control form-control-sm" placeholder="Nombre / Razón social">
+                            </div>
+                            <div class="col-md-6">
+                                <input type="text" id="dg-cliente-email" class="form-control form-control-sm" placeholder="Correo">
+                            </div>
+                            <div class="col-md-6">
+                                <input type="text" id="dg-cliente-telefono" class="form-control form-control-sm" placeholder="Teléfono">
+                            </div>
+                            <div class="col-md-6">
+                                <input type="text" id="dg-cliente-giro" class="form-control form-control-sm" placeholder="Giro">
+                            </div>
+                            <div class="col-md-8">
+                                <input type="text" id="dg-cliente-direccion" class="form-control form-control-sm" placeholder="Dirección">
+                            </div>
+                            <div class="col-md-4">
+                                <input type="text" id="dg-cliente-comuna" class="form-control form-control-sm" placeholder="Comuna">
+                            </div>
+                            <div class="col-md-6">
+                                <input type="text" id="dg-cliente-ciudad" class="form-control form-control-sm" placeholder="Ciudad">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Paso 4: motivo -->
+                <div id="dg-seccion-motivo" class="mb-0 d-none">
+                    <label class="form-label text-white fw-semibold" style="font-size:0.85rem;">
+                        <i class="ri-file-text-line me-1" style="color:#0d6efd;"></i> Motivo
+                    </label>
+                    <textarea id="dg-motivo" class="form-control form-control-sm" rows="2">Garantía aprobada, autorizada por jefe de local</textarea>
+                </div>
+
+            </div>
+            <div class="modal-footer py-2 px-3" style="background:#161b27; border-top:1px solid #2a3045;">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="ri-close-line"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-sm btn-primary" id="dg-btn-confirmar" onclick="confirmarDevolucionGarantia()" disabled>
+                    <i class="ri-file-text-line me-1"></i> Generar Nota de Crédito
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Extra JS -->
+<script src="{% static 'libs/sweetalert2/sweetalert2.min.js' %}"></script>
+<script>
+    const URLS_DG = {
+        buscarDte: '{% url "api_buscar_dte_devolucion_garantia" %}',
+        buscarCliente: '{% url "buscar_cliente_rut" %}',
+        generar: '{% url "api_generar_devolucion_garantia" %}',
+        listar: '{% url "api_listar_devoluciones_garantia" %}',
+    };
+
+    let dgDteActual = null;
+    let dgProductosSeleccion = {};
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function validarRutChileno(rut) {
+        const rutLimpio = (rut || '').replace(/[^0-9kK]/g, '');
+        if (rutLimpio.length < 2) return false;
+        const cuerpo = rutLimpio.slice(0, -1);
+        const dv = rutLimpio.slice(-1).toLowerCase();
+        let suma = 0, multiplicador = 2;
+        for (let i = cuerpo.length - 1; i >= 0; i--) {
+            suma += parseInt(cuerpo[i]) * multiplicador;
+            multiplicador = multiplicador === 7 ? 2 : multiplicador + 1;
+        }
+        const resto = suma % 11;
+        const dvCalculado = resto === 0 ? '0' : resto === 1 ? 'k' : (11 - resto).toString();
+        return dv === dvCalculado;
+    }
+
+    function resetModalDevolucionGarantia() {
+        dgDteActual = null;
+        dgProductosSeleccion = {};
+        $('#dg-folio').val('');
+        $('#dg-doc-info').addClass('d-none').empty();
+        $('#dg-seccion-productos, #dg-seccion-cliente, #dg-seccion-motivo').addClass('d-none');
+        $('#dg-lista-productos').empty();
+        $('#dg-cliente-rut, #dg-cliente-nombre, #dg-cliente-email, #dg-cliente-telefono, #dg-cliente-giro, #dg-cliente-direccion, #dg-cliente-comuna, #dg-cliente-ciudad').val('');
+        $('#dg-cliente-estado').addClass('d-none');
+        $('#dg-alerta-generico').addClass('d-none');
+        $('#dg-motivo').val('Garantía aprobada, autorizada por jefe de local');
+        $('#dg-btn-confirmar').prop('disabled', true);
+    }
+    $('#modalNuevaDevolucion').on('hidden.bs.modal', resetModalDevolucionGarantia);
+
+    function buscarDteDevolucionGarantia() {
+        const folio = $('#dg-folio').val().trim();
+        if (!folio) { return; }
+
+        $.get(URLS_DG.buscarDte, { folio: folio }, function (resp) {
+            if (!resp.success) { return; }
+            dgDteActual = resp.dte;
+            dgProductosSeleccion = {};
+
+            $('#dg-doc-info').removeClass('d-none').html(
+                `<i class="ri-checkbox-circle-line text-success me-1"></i>` +
+                `${resp.dte.tipo_documento} #${resp.dte.folio} — ${resp.dte.fecha_emision} — $${Number(resp.dte.total).toLocaleString('es-CL')}`
+            );
+
+            const $lista = $('#dg-lista-productos').empty();
+            resp.productos.forEach(function (p) {
+                const rowId = `dg-prod-${p.dte_producto_id}`;
+                $lista.append(`
+                    <div class="row g-2 align-items-center mb-2" id="${rowId}">
+                        <div class="col-1">
+                            <input type="checkbox" class="form-check-input" onchange="dgToggleProducto(${p.dte_producto_id}, this.checked, ${p.precio_unitario})">
+                        </div>
+                        <div class="col-5 text-white" style="font-size:0.82rem;">${p.articulo} ${p.talla ? '(' + p.talla + ')' : ''}</div>
+                        <div class="col-3">
+                            <input type="number" min="1" max="${p.cantidad_disponible}" value="1" class="form-control form-control-sm"
+                                   id="dg-cant-${p.dte_producto_id}" disabled
+                                   onchange="dgActualizarCantidad(${p.dte_producto_id}, this.value)">
+                        </div>
+                        <div class="col-3 text-secondary" style="font-size:0.75rem;">Disp: ${p.cantidad_disponible}</div>
+                    </div>
+                `);
+            });
+
+            $('#dg-seccion-productos, #dg-seccion-cliente, #dg-seccion-motivo').removeClass('d-none');
+
+            if (resp.receptor_es_generico) {
+                $('#dg-alerta-generico').removeClass('d-none');
+            } else if (resp.receptor_actual) {
+                $('#dg-cliente-rut').val(resp.receptor_actual.rut);
+                $('#dg-cliente-nombre').val(resp.receptor_actual.nombre);
+            }
+
+            dgValidarFormulario();
+        }).fail(function (xhr) {
+            const msg = xhr.responseJSON?.error || 'Error al buscar el documento';
+            Swal.fire({ icon: 'error', title: 'No encontrado', text: msg });
+        });
+    }
+
+    function dgToggleProducto(dteProductoId, checked, precioUnitario) {
+        $(`#dg-cant-${dteProductoId}`).prop('disabled', !checked);
+        if (checked) {
+            dgProductosSeleccion[dteProductoId] = {
+                dte_producto_id: dteProductoId,
+                cantidad: parseInt($(`#dg-cant-${dteProductoId}`).val() || '1', 10),
+                precio_unitario: precioUnitario,
+            };
+        } else {
+            delete dgProductosSeleccion[dteProductoId];
+        }
+        dgValidarFormulario();
+    }
+
+    function dgActualizarCantidad(dteProductoId, valor) {
+        if (dgProductosSeleccion[dteProductoId]) {
+            dgProductosSeleccion[dteProductoId].cantidad = parseInt(valor || '1', 10);
+        }
+    }
+
+    function buscarClienteDevolucionGarantia() {
+        const rut = $('#dg-cliente-rut').val().trim();
+        const $estado = $('#dg-cliente-estado');
+
+        if (!rut || !validarRutChileno(rut)) {
+            $estado.removeClass('d-none').attr('class', 'badge bg-danger d-inline-block w-100 py-1').text('RUT inválido');
+            return;
+        }
+
+        $estado.removeClass('d-none').attr('class', 'badge bg-secondary d-inline-block w-100 py-1').text('Buscando...');
+
+        $.get(URLS_DG.buscarCliente, { rut: rut }, function (data) {
+            if (data.success && data.cliente) {
+                const c = data.cliente;
+                $('#dg-cliente-nombre').val(c.nombre || '');
+                $('#dg-cliente-email').val(c.email || '');
+                $('#dg-cliente-telefono').val(c.telefono || '');
+                $('#dg-cliente-giro').val(c.giro || '');
+                $('#dg-cliente-direccion').val(c.direccion || '');
+                $('#dg-cliente-comuna').val(c.comuna || '');
+                $('#dg-cliente-ciudad').val(c.ciudad || '');
+                window._dgClienteId = (data.cliente_origen === 'EMPRESA') ? (data.cliente_id || null) : null;
+                $estado.attr('class', 'badge bg-success d-inline-block w-100 py-1').text('Encontrado');
+            } else {
+                window._dgClienteId = null;
+                $estado.attr('class', 'badge bg-warning text-dark d-inline-block w-100 py-1').text('No encontrado — complete los datos');
+            }
+            dgValidarFormulario();
+        }).fail(function () {
+            $estado.attr('class', 'badge bg-danger d-inline-block w-100 py-1').text('Error de conexión');
+        });
+    }
+
+    function dgValidarFormulario() {
+        const tieneProductos = Object.keys(dgProductosSeleccion).length > 0;
+        const rut = $('#dg-cliente-rut').val().trim();
+        const nombre = $('#dg-cliente-nombre').val().trim();
+        const valido = dgDteActual && tieneProductos && rut && nombre && validarRutChileno(rut);
+        $('#dg-btn-confirmar').prop('disabled', !valido);
+    }
+
+    $(document).on('input', '#dg-cliente-rut, #dg-cliente-nombre', dgValidarFormulario);
+
+    function confirmarDevolucionGarantia() {
+        if (!dgDteActual) { return; }
+        const productos = Object.values(dgProductosSeleccion);
+        if (!productos.length) { return; }
+
+        Swal.fire({
+            title: 'Confirmar Devolución por Garantía',
+            html: `Se generará una <strong>Nota de Crédito</strong> a nombre de ` +
+                  `<strong>${$('#dg-cliente-nombre').val()}</strong> (${$('#dg-cliente-rut').val()}).`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#0d6efd',
+            confirmButtonText: '<i class="ri-file-text-line me-1"></i> Generar NC',
+            cancelButtonText: 'Cancelar',
+        }).then(function (result) {
+            if (!result.isConfirmed) { return; }
+
+            $('#dg-btn-confirmar').prop('disabled', true);
+
+            $.ajax({
+                url: URLS_DG.generar,
+                method: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                data: JSON.stringify({
+                    folio_dte: dgDteActual.folio,
+                    productos: productos,
+                    cliente_id: window._dgClienteId || null,
+                    rut: $('#dg-cliente-rut').val().trim(),
+                    nombre: $('#dg-cliente-nombre').val().trim(),
+                    email: $('#dg-cliente-email').val().trim(),
+                    telefono: $('#dg-cliente-telefono').val().trim(),
+                    giro: $('#dg-cliente-giro').val().trim(),
+                    direccion: $('#dg-cliente-direccion').val().trim(),
+                    comuna: $('#dg-cliente-comuna').val().trim(),
+                    ciudad: $('#dg-cliente-ciudad').val().trim(),
+                    motivo: $('#dg-motivo').val().trim(),
+                }),
+                success: function (resp) {
+                    if (resp.success) {
+                        bootstrap.Modal.getInstance(document.getElementById('modalNuevaDevolucion'))?.hide();
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Devolución registrada',
+                            html: `<p><strong>${resp.data.numero_operacion}</strong></p>` +
+                                  `<p>NC #${resp.data.nc_numero} — $${Number(resp.data.monto_total).toLocaleString('es-CL')}</p>` +
+                                  `<p>Cliente: ${resp.data.receptor.nombre} (${resp.data.receptor.rut})</p>`,
+                        });
+                        cargarDevoluciones();
+                    } else {
+                        $('#dg-btn-confirmar').prop('disabled', false);
+                        Swal.fire({ icon: 'error', title: 'Error', text: resp.error });
+                    }
+                },
+                error: function (xhr) {
+                    $('#dg-btn-confirmar').prop('disabled', false);
+                    Swal.fire({ icon: 'error', title: 'Error', text: xhr.responseJSON?.error || 'Error de conexión' });
+                },
+            });
+        });
+    }
+
+    function cargarDevoluciones() {
+        const params = {
+            q: $('#filtro-busqueda').val().trim(),
+            estado: $('#filtro-estado').val(),
+        };
+        $.get(URLS_DG.listar, params, function (resp) {
+            if (!resp.success) { return; }
+            const $tbody = $('#tbody-devoluciones').empty();
+
+            if (!resp.data.length) {
+                $tbody.append('<tr><td colspan="8" class="text-center text-muted py-4">Sin devoluciones registradas</td></tr>');
+            }
+
+            let montoTotal = 0, ncGeneradas = 0;
+            resp.data.forEach(function (d) {
+                montoTotal += d.monto_total;
+                if (d.estado === 'NC_GENERADA') { ncGeneradas++; }
+                $tbody.append(`
+                    <tr>
+                        <td>${d.numero_operacion}</td>
+                        <td>#${d.dte_folio}</td>
+                        <td>${d.receptor_nombre}<br><small class="text-muted">${d.receptor_rut}</small></td>
+                        <td>$${Number(d.monto_total).toLocaleString('es-CL')}</td>
+                        <td>${d.nc_numero ? '#' + d.nc_numero : '-'}</td>
+                        <td><span class="status-badge status-${d.estado.toLowerCase()}">${d.estado_display}</span></td>
+                        <td>${d.autorizado_por}</td>
+                        <td>${d.fecha}</td>
+                    </tr>
+                `);
+            });
+
+            $('#stat-total').text(resp.total);
+            $('#stat-nc-generadas').text(ncGeneradas);
+            $('#stat-monto-total').text('$' + Number(montoTotal).toLocaleString('es-CL'));
+        });
+    }
+
+    $(document).ready(function () {
+        cargarDevoluciones();
+    });
+</script>

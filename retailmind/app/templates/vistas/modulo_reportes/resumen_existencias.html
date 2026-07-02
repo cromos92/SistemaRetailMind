@@ -826,6 +826,113 @@
     .nexo-busqueda-controls input { flex: 1; width: 100%; }
 }
 
+/* ========== FILA CLICKEABLE (detalle sucursal) ========== */
+.nexo-tabla tbody tr.fila-clickeable { cursor: pointer; }
+.nexo-tabla tbody tr.fila-clickeable:hover { background: var(--nexo-primary-light); }
+.nexo-tabla .ver-detalle-hint {
+    font-size: 0.72em;
+    color: var(--nexo-gray-500);
+    font-weight: 500;
+    margin-left: 8px;
+    white-space: nowrap;
+}
+.nexo-tabla tbody tr.fila-clickeable:hover .ver-detalle-hint { color: var(--nexo-primary); }
+
+/* ========== MODAL DETALLE TOP-N ========== */
+.nexo-modal-detalle-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 320px;
+}
+
+.nexo-detalle-resumen {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+}
+
+.nexo-detalle-chip {
+    background: var(--nexo-gray-100);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 14px;
+    text-align: center;
+}
+.nexo-detalle-chip .label {
+    font-size: 0.68em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--nexo-gray-500);
+    font-weight: 600;
+}
+.nexo-detalle-chip .value {
+    font-size: 1.15em;
+    font-weight: 700;
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    margin-top: 2px;
+    color: var(--nexo-gray-900);
+}
+.nexo-detalle-chip.pares .value { color: var(--nexo-primary); }
+.nexo-detalle-chip.costo .value { color: var(--nexo-success); }
+.nexo-detalle-chip.venta .value { color: var(--nexo-error); }
+
+.nexo-detalle-lista {
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    overflow: hidden;
+}
+
+.nexo-detalle-tabla {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85em;
+}
+.nexo-detalle-tabla thead {
+    background: var(--nexo-secondary);
+    color: var(--nexo-white);
+}
+.nexo-detalle-tabla th {
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+}
+.nexo-detalle-tabla th.num, .nexo-detalle-tabla td.num { text-align: right; }
+.nexo-detalle-tabla td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--nexo-gray-300);
+}
+.nexo-detalle-tabla tbody tr:nth-child(even) { background: var(--nexo-gray-100); }
+.nexo-detalle-tabla tbody tr:hover { background: var(--nexo-primary-light); }
+.nexo-detalle-tabla .rank {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+    font-weight: 700;
+    font-size: 0.85em;
+    margin-right: 8px;
+}
+.nexo-detalle-tabla .art { font-weight: 600; color: var(--nexo-gray-900); }
+.nexo-detalle-tabla .desc { color: var(--nexo-gray-500); font-size: 0.9em; }
+.nexo-detalle-tabla .num {
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+}
+
 /* ========== IMPRESIÓN ========== */
 @media print {
     .nexo-controls, .nexo-btn { display: none !important; }
@@ -907,6 +1014,7 @@
         <span class="nexo-alert-icon">🚫</span>
         <span>
             <strong id="alerta-exclusiones-num">0</strong> artículo(s) excluidos del análisis
+            <span id="alerta-exclusiones-detalle"></span>
             (filtro temporal de esta sesión).
             <a href="javascript:void(0)" onclick="abrirModalExclusiones()" style="color: inherit; text-decoration: underline;">Gestionar</a>
             ·
@@ -979,10 +1087,36 @@
     </div>
 </div>
 
+<!-- ========== MODAL DETALLE TOP-N POR SUCURSAL ========== -->
+<div id="modal-detalle" class="nexo-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-detalle-title">
+    <div class="nexo-modal">
+        <div class="nexo-modal-header">
+            <h3 id="modal-detalle-title">📦 <span id="modal-detalle-titulo-texto">Detalle de existencias</span></h3>
+            <button type="button" class="nexo-modal-close" onclick="cerrarModalDetalle()" aria-label="Cerrar">×</button>
+        </div>
+        <div class="nexo-modal-detalle-body">
+            <div id="modal-detalle-resumen" class="nexo-detalle-resumen"></div>
+            <div id="modal-detalle-lista" class="nexo-detalle-lista">
+                <div class="nexo-modal-loading">Cargando detalle…</div>
+            </div>
+        </div>
+        <div class="nexo-modal-footer">
+            <span class="footer-info" id="modal-detalle-footer-info"></span>
+            <div style="display: flex; gap: 8px;">
+                <button type="button" class="nexo-btn nexo-btn-outline" onclick="cerrarModalDetalle()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 // ==================== ESTADO GLOBAL ====================
 let agruparPor = 'sucursal';
 let esHistorico = false;
+// Totales de lo excluido devueltos por el backend (pares/valores reales del stock excluido)
+let totalesExcluidos = null;
+// Nombre de sucursal por id (para el título del modal de detalle sin inyectar en atributos HTML)
+let sucursalNombreCache = {};
 
 // ===== Estado de exclusiones (filtro temporal por sesión) =====
 const STORAGE_KEY_EXCLUSIONES = 'resumen_existencias_exclusiones_v1';
@@ -1020,15 +1154,24 @@ document.addEventListener('DOMContentLoaded', function() {
         selectSuc.addEventListener('change', () => buscarArticulosModal());
     }
 
-    // Cerrar modal al hacer clic fuera o con Escape
+    // Cerrar modales al hacer clic fuera o con Escape
     const overlay = document.getElementById('modal-exclusiones');
     if (overlay) {
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) cerrarModalExclusiones();
         });
     }
+    const overlayDetalle = document.getElementById('modal-detalle');
+    if (overlayDetalle) {
+        overlayDetalle.addEventListener('click', (e) => {
+            if (e.target === overlayDetalle) cerrarModalDetalle();
+        });
+    }
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && overlay && overlay.classList.contains('is-open')) {
+        if (e.key !== 'Escape') return;
+        if (overlayDetalle && overlayDetalle.classList.contains('is-open')) {
+            cerrarModalDetalle();
+        } else if (overlay && overlay.classList.contains('is-open')) {
             cerrarModalExclusiones();
         }
     });
@@ -1143,10 +1286,12 @@ async function cargarResumen() {
 
         if (data.success) {
             esHistorico = data.es_historico;
+            totalesExcluidos = data.totales_excluidos || null;
             actualizarUIHistorico(data);
             renderizarTotales(data.total_general);
             renderizarResumen(data.datos, data.agrupar_por);
             renderizarResumenEmpresas(data.resumen_empresas || []);
+            actualizarUIExclusiones();
         } else {
             contenido.innerHTML = `
                 <div class="nexo-empty-state">
@@ -1247,7 +1392,7 @@ function renderizarResumen(datos, tipoAgrupacion) {
     const iconoEntidad = esCategoria ? '📁' : '🏪';
     const columna1 = esCategoria ? 'Categoría' : 'Sucursal';
     const columna2 = esCategoria ? 'Sucursales' : 'Dirección';
-    
+
     let html = `
         <table class="nexo-tabla">
             <thead>
@@ -1262,16 +1407,24 @@ function renderizarResumen(datos, tipoAgrupacion) {
             </thead>
             <tbody>
     `;
-    
+
     datos.forEach(item => {
         const entidad = esCategoria ? item.categoria : item.sucursal;
         const detalle = esCategoria ? `${item.num_sucursales} sucursales` : item.direccion;
-        
+        // Solo la agrupación por sucursal permite ver el detalle (Top 30)
+        const clickeable = !esCategoria && item.sucursal_id != null;
+        // Guardamos el nombre en cache para no inyectarlo en el atributo onclick (evita romper comillas/XSS)
+        if (clickeable) sucursalNombreCache[item.sucursal_id] = entidad || '';
+        const trAttrs = clickeable
+            ? ` class="fila-clickeable" onclick="abrirModalDetalle(${item.sucursal_id})" title="Ver Top 30 de esta sucursal"`
+            : '';
+        const hint = clickeable ? '<span class="ver-detalle-hint">👁 Ver detalle</span>' : '';
+
         html += `
-            <tr>
+            <tr${trAttrs}>
                 <td class="td-entidad">
                     <span class="icon">${iconoEntidad}</span>
-                    ${entidad}
+                    ${entidad}${hint}
                 </td>
                 <td>${detalle}</td>
                 <td class="td-numero">${formatearNumero(item.total_pares)}</td>
@@ -1392,6 +1545,116 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
+// ==================== MODAL DETALLE TOP-N POR SUCURSAL ====================
+async function abrirModalDetalle(sucursalId) {
+    const overlay = document.getElementById('modal-detalle');
+    if (!overlay) return;
+
+    const nombreSucursal = sucursalNombreCache[sucursalId] || 'Sucursal';
+    const tituloEl = document.getElementById('modal-detalle-titulo-texto');
+    const resumenEl = document.getElementById('modal-detalle-resumen');
+    const listaEl = document.getElementById('modal-detalle-lista');
+    const footerEl = document.getElementById('modal-detalle-footer-info');
+
+    if (tituloEl) tituloEl.textContent = `Top 30 · ${nombreSucursal}`;
+    if (resumenEl) resumenEl.innerHTML = '';
+    if (footerEl) footerEl.textContent = '';
+    if (listaEl) listaEl.innerHTML = '<div class="nexo-modal-loading">Cargando detalle…</div>';
+    overlay.classList.add('is-open');
+
+    // Reutiliza los mismos filtros activos del reporte (marca, fecha, exclusiones)
+    const params = new URLSearchParams();
+    params.append('sucursal_id', sucursalId);
+    params.append('limite', 30);
+    const marcaId = document.getElementById('filtro-marca').value;
+    const fechaCorte = document.getElementById('filtro-fecha').value;
+    if (marcaId) params.append('marca_id', marcaId);
+    if (fechaCorte) params.append('fecha_corte', fechaCorte);
+    if (excluidosSet.size > 0) params.append('excluir_articulos', [...excluidosSet].join(','));
+
+    try {
+        const response = await fetch('/app/api/detalle-stock-sucursal/?' + params.toString());
+        const data = await response.json();
+
+        if (!data.success) {
+            if (listaEl) listaEl.innerHTML = `<div class="nexo-modal-empty">${escapeHtml(data.error || 'Error al cargar el detalle')}</div>`;
+            return;
+        }
+
+        // Chips de resumen de la sucursal
+        if (resumenEl) {
+            resumenEl.innerHTML = `
+                <div class="nexo-detalle-chip pares">
+                    <div class="label">Unidades (total sucursal)</div>
+                    <div class="value">${formatearNumero(data.total_pares)}</div>
+                </div>
+                <div class="nexo-detalle-chip costo">
+                    <div class="label">Valor Costo</div>
+                    <div class="value">$${formatearNumero(data.total_costo)}</div>
+                </div>
+                <div class="nexo-detalle-chip venta">
+                    <div class="label">Valor P. Venta</div>
+                    <div class="value">$${formatearNumero(data.total_precio_venta)}</div>
+                </div>
+                <div class="nexo-detalle-chip">
+                    <div class="label">Productos c/ stock</div>
+                    <div class="value">${formatearNumero(data.total_productos)}</div>
+                </div>
+            `;
+        }
+
+        // Tabla Top N
+        const items = data.items || [];
+        if (items.length === 0) {
+            if (listaEl) listaEl.innerHTML = '<div class="nexo-modal-empty">No hay productos con stock para los filtros actuales.</div>';
+        } else if (listaEl) {
+            let filas = items.map((it, idx) => `
+                <tr>
+                    <td>
+                        <span class="rank">${idx + 1}</span>
+                        <span class="art">${escapeHtml(it.articulo || '')}</span>
+                        <div class="desc">${escapeHtml(it.descripcion || '')}</div>
+                    </td>
+                    <td class="num">${formatearNumero(it.pares)}</td>
+                    <td class="num">$${formatearNumero(it.costo)}</td>
+                    <td class="num">$${formatearNumero(it.precio_venta)}</td>
+                </tr>
+            `).join('');
+
+            listaEl.innerHTML = `
+                <table class="nexo-detalle-tabla">
+                    <thead>
+                        <tr>
+                            <th>Artículo</th>
+                            <th class="num">Unidades</th>
+                            <th class="num">Costo</th>
+                            <th class="num">P. Venta</th>
+                        </tr>
+                    </thead>
+                    <tbody>${filas}</tbody>
+                </table>
+            `;
+        }
+
+        if (footerEl) {
+            const mostrados = Math.min(items.length, data.top_n || 30);
+            let txt = `Mostrando ${mostrados} de ${formatearNumero(data.total_productos)} producto(s), ordenados por unidades.`;
+            if (data.es_historico && data.fecha_corte) {
+                txt += ` Stock histórico al ${formatearFecha(data.fecha_corte)}.`;
+            }
+            footerEl.textContent = txt;
+        }
+    } catch (e) {
+        console.error('Error al cargar detalle de sucursal:', e);
+        if (listaEl) listaEl.innerHTML = '<div class="nexo-modal-empty">Error de conexión al cargar el detalle.</div>';
+    }
+}
+
+function cerrarModalDetalle() {
+    const overlay = document.getElementById('modal-detalle');
+    if (overlay) overlay.classList.remove('is-open');
+}
+
 // ==================== EXCLUSIONES (LOCALSTORAGE) ====================
 function cargarExclusionesDesdeStorage() {
     try {
@@ -1444,11 +1707,24 @@ function actualizarUIExclusiones() {
     }
     const alerta = document.getElementById('alerta-exclusiones');
     const numEl = document.getElementById('alerta-exclusiones-num');
+    const detalleEl = document.getElementById('alerta-exclusiones-detalle');
     if (alerta && numEl) {
         if (n > 0) {
             numEl.textContent = n;
+            // Mostrar unidades/valor realmente excluidos (según el último resumen cargado)
+            if (detalleEl) {
+                if (totalesExcluidos && totalesExcluidos.pares > 0) {
+                    detalleEl.innerHTML =
+                        ` — <strong>${formatearNumero(totalesExcluidos.pares)}</strong> unidad(es)` +
+                        ` por <strong>$${formatearNumero(totalesExcluidos.precio_venta)}</strong> a precio venta` +
+                        ` (<strong>$${formatearNumero(totalesExcluidos.costo)}</strong> costo)`;
+                } else {
+                    detalleEl.innerHTML = '';
+                }
+            }
             alerta.style.display = 'flex';
         } else {
+            if (detalleEl) detalleEl.innerHTML = '';
             alerta.style.display = 'none';
         }
     }

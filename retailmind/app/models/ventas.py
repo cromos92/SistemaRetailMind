@@ -235,6 +235,16 @@ class Ticket(models.Model):
     dte_fecha_generacion = models.DateTimeField(blank=True, null=True, verbose_name='Fecha Generación DTE')
     dte_xml_path = models.CharField(max_length=500, blank=True, null=True, verbose_name='Ruta XML')
     dte_pdf_url = models.CharField(max_length=500, blank=True, null=True, verbose_name='URL PDF')
+    dte_generacion_fallida = models.BooleanField(
+        default=False,
+        verbose_name='Generación DTE Fallida',
+        help_text='True si el ticket quedó PAGADO pero generar_dte_desde_ticket falló; requiere reintento manual'
+    )
+    dte_error_detalle = models.TextField(
+        blank=True, null=True,
+        verbose_name='Detalle Error DTE',
+        help_text='Traza del último error al intentar generar el DTE'
+    )
     
     # === CAMPOS PARA SINCRONIZACIÓN DESKTOP (POS FÍSICO) ===
     local_id = models.UUIDField(
@@ -1128,6 +1138,113 @@ class HistorialCambioDevolucion(models.Model):
         ordering = ['-timestamp']
         verbose_name = 'Historial de Cambio/Devolución'
         verbose_name_plural = 'Historiales de Cambios/Devoluciones'
-    
+
     def __str__(self):
         return f"{self.accion} - {self.cambio_devolucion.numero_operacion} - {self.timestamp.strftime('%d/%m/%Y %H:%M')}"
+
+
+# ========== MÓDULO DEVOLUCIÓN DE DINERO POR GARANTÍA ==========
+# Dominio propio, separado de CambioDevolucion (cambio de producto por otro)
+# y de Requerimiento (reclamo a proveedor externo). Flujo de un solo actor:
+# jefe_local/administrador busca el DTE, elige el producto, registra el
+# cliente real como receptor, y genera la NC en el mismo paso.
+
+ESTADO_DEVOLUCION_GARANTIA_CHOICES = [
+    ('REGISTRADA', 'Registrada'),
+    ('NC_GENERADA', 'NC Generada'),
+    ('ANULADA', 'Anulada'),
+]
+
+
+class DevolucionGarantia(models.Model):
+    """
+    Devolución de DINERO al cliente por garantía/falla de producto — no cambio
+    de producto por otro (para eso existe CambioDevolucion). Flujo de un solo
+    actor: jefe_local/administrador busca el DTE, elige el producto, registra
+    el cliente real como receptor, y genera la NC en el mismo paso.
+    """
+    # === RELACIONES AL DOCUMENTO ORIGEN ===
+    dte_original = models.ForeignKey(
+        'app.Dte', on_delete=models.PROTECT,
+        related_name='devoluciones_garantia',
+        help_text="Boleta/factura original con el producto fallado",
+    )
+    sucursal = models.ForeignKey(
+        Sucursal, on_delete=models.CASCADE,
+        related_name='devoluciones_garantia',
+    )
+
+    # === RECEPTOR REAL (asociado a la boleta para esta operación) ===
+    receptor = models.ForeignKey(
+        'app.Empresa', on_delete=models.PROTECT,
+        related_name='devoluciones_garantia_receptor',
+        help_text="Empresa (cliente real) resuelta/creada por RUT, usada como receptor de la NC",
+    )
+
+    # === MOTIVO Y AUTORIZACIÓN ===
+    motivo = models.TextField(
+        default='Garantía aprobada',
+        help_text="Motivo de la devolución de dinero",
+    )
+    autorizado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='devoluciones_garantia_autorizadas',
+        help_text="Jefe de local o administrador que ejecutó/autorizó la devolución",
+    )
+
+    # === ESTADO Y NC ===
+    estado = models.CharField(
+        max_length=20, choices=ESTADO_DEVOLUCION_GARANTIA_CHOICES,
+        default='REGISTRADA',
+    )
+    nota_credito = models.ForeignKey(
+        'app.Dte', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='devolucion_garantia_origen',
+        help_text="Nota de Crédito (DTE 61) generada por esta devolución",
+    )
+
+    # === MONTOS (calculados desde los DevolucionGarantiaDetalle) ===
+    monto_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    # === METADATA ===
+    numero_operacion = models.CharField(
+        max_length=50, unique=True,
+        help_text="DG-<sucursal>-<YYYYMM>-<correlativo>",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Devolución por Garantía'
+        verbose_name_plural = 'Devoluciones por Garantía'
+        indexes = [
+            models.Index(fields=['numero_operacion']),
+            models.Index(fields=['sucursal', '-created_at']),
+            models.Index(fields=['estado']),
+        ]
+
+    def __str__(self):
+        return f"{self.numero_operacion} - {self.get_estado_display()}"
+
+
+class DevolucionGarantiaDetalle(models.Model):
+    """Línea(s) de producto específica(s) del DTE que se devuelven."""
+    devolucion = models.ForeignKey(
+        DevolucionGarantia, on_delete=models.CASCADE,
+        related_name='detalles',
+    )
+    dte_producto = models.ForeignKey(
+        'app.Dte_Productos', on_delete=models.PROTECT,
+        related_name='devoluciones_garantia_detalle',
+    )
+    cantidad = models.IntegerField()
+    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2)
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        verbose_name = 'Detalle de Devolución por Garantía'
+        verbose_name_plural = 'Detalles de Devolución por Garantía'
+
+    def __str__(self):
+        return f"Detalle {self.devolucion.numero_operacion} - {self.dte_producto} x{self.cantidad}"

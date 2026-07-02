@@ -1,4 +1,5 @@
 {% load static %}
+{% load permisos_tags %}
 
 {% include '../../layout/header.html' %}
 {% include '../../layout/menu.html' %}
@@ -65,6 +66,7 @@
                             <div class="col-6 mb-2"><small class="text-muted">Cuenta desde</small><div>{% if cuenta %}{{ cuenta.fecha_alta|date:"Y-m-d" }}{% else %}Sin cuenta{% endif %}</div></div>
                         </div>
                         <div class="d-flex flex-wrap gap-2 mt-2">
+                            {% if user|puede_editar_en:'fidelizacion_cuentas' %}
                             <button class="btn btn-outline-primary btn-sm" onclick="abrirAjuste()" id="btn-ajuste">
                                 <i class="ri-edit-line"></i> Ajuste manual
                             </button>
@@ -73,8 +75,33 @@
                                 <i class="ri-cake-line"></i> Bono cumpleaños
                             </button>
                             {% endif %}
+                            {% endif %}
                         </div>
                     </div>
+                </div>
+
+                <h6 class="fw-bold mb-3"><i class="ri-calendar-2-line"></i> Puntos por mes (últimos 12 meses)</h6>
+                <div class="table-responsive mb-4">
+                    <table class="table table-sm table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Mes</th><th class="text-end">Ganados</th>
+                                <th class="text-end">Canjeados</th><th class="text-end">Expirados</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for m in tendencia_mensual %}
+                            <tr>
+                                <td>{{ m.mes }}</td>
+                                <td class="text-end fw-bold text-success">{{ m.puntos_ganados }}</td>
+                                <td class="text-end fw-bold text-danger">{{ m.puntos_canjeados }}</td>
+                                <td class="text-end text-muted">{{ m.puntos_expirados }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">Sin cuenta de puntos</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
 
                 <h6 class="fw-bold mb-3"><i class="ri-history-line"></i> Historial de movimientos</h6>

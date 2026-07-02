@@ -259,7 +259,7 @@ def dashboard_home(request):
         # Retornar contexto mínimo en caso de error
         return render(request, 'vistas/dashboard_home.html', {
             'error': str(e),
-            'ventas': {'hoy': 0, 'semana': 0, 'mes': 0, 'unidades_hoy': 0, 'ticket_promedio': 0},
+            'ventas': {'hoy': 0, 'semana': 0, 'mes': 0, 'unidades_hoy': 0, 'ticket_promedio': 0, 'ventas_ultimos_30_dias': []},
             'stock': {'total_skus': 0, 'stock_critico': 0, 'sin_stock': 0, 'valor_inventario': 0,
                       'quiebres_rotantes': 0, 'quiebres_lista': [], 'total_unidades': 0, 'rotacion_mes': 0},
             'compras': {'pendientes_recepcion': 0, 'dtes_pendientes': 0, 'monto_pendiente': 0, 'compras_mes': 0, 'lista_pendientes': []},
@@ -333,7 +333,24 @@ def calcular_kpis_ventas(sucursal_id, hoy, inicio_semana, inicio_mes, mes_pasado
     ).order_by('hora_num')
     ventas_hora_map = {item['hora_num']: int(item['monto'] or 0) for item in ventas_hora_qs}
     ventas_por_hora = [{'hora': i, 'monto': ventas_hora_map.get(i, 0)} for i in range(24)]
-    
+
+    # Venta general de los ultimos 30 dias (todas las ventas, agrupadas por fecha)
+    fecha_30d = hoy - timedelta(days=29)
+    ventas_dia_qs = tickets_base.filter(fecha__gte=fecha_30d, fecha__lte=hoy).values('fecha').annotate(
+        monto=Sum('total'),
+        documentos=Count('id')
+    ).order_by('fecha')
+    ventas_dia_map = {item['fecha']: item for item in ventas_dia_qs}
+    ventas_ultimos_30_dias = []
+    for i in range(30):
+        dia = fecha_30d + timedelta(days=i)
+        item = ventas_dia_map.get(dia)
+        ventas_ultimos_30_dias.append({
+            'fecha': dia.strftime('%d/%m'),
+            'monto': int(item['monto']) if item else 0,
+            'documentos': item['documentos'] if item else 0,
+        })
+
     return {
         'hoy': int(ventas_hoy),
         'semana': int(ventas_semana),
@@ -346,6 +363,7 @@ def calcular_kpis_ventas(sucursal_id, hoy, inicio_semana, inicio_mes, mes_pasado
         'ticket_promedio': int(ticket_promedio),
         'ticket_promedio_mes': int(ticket_promedio_mes),
         'ventas_por_hora': ventas_por_hora,
+        'ventas_ultimos_30_dias': ventas_ultimos_30_dias,
         'tendencia': 'up' if variacion_mes > 0 else ('down' if variacion_mes < 0 else 'stable'),
     }
 

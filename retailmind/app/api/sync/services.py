@@ -263,24 +263,33 @@ class TicketSyncService:
     
     def _descontar_stock(self, producto_talla, cantidad, ticket):
         """
-        Descuenta stock y crea movimiento de inventario.
+        Descuenta stock, consume lotes FIFO (mejor esfuerzo) y crea movimiento de inventario.
         """
+        # Consumir lotes FIFO disponibles (mejor esfuerzo) antes de tocar el stock
+        # plano, que sigue siendo la fuente de verdad. No bloquea la sincronización
+        # de la venta si no hay lotes suficientes.
+        from app.views_edicion_productos import _consumir_lotes_fifo_ajuste
+        try:
+            _consumir_lotes_fifo_ajuste(producto_talla, cantidad)
+        except Exception:
+            logger.exception("No se pudieron bajar lotes FIFO en sync, sku=%s", producto_talla.sku)
+
         # Descontar del campo stock directo
         producto_talla.stock = F('stock') - cantidad
         producto_talla.save(update_fields=['stock'])
         producto_talla.refresh_from_db()
-        
+
         # Crear movimiento de inventario (si el modelo existe)
         try:
             Movimientos_Producto.objects.create(
-                producto_talla=producto_talla,
+                ProductoTalla=producto_talla,
                 sucursal_origen=self.sucursal,
                 tipo_movimiento='EGRESO',
                 concepto='VENTA_PUBLICO',
                 cantidad=-cantidad,  # Negativo porque es salida
                 estado='COMPLETADO',
                 responsable=self.usuario.username if self.usuario else 'SYNC',
-                notas=f'Venta sincronizada - Ticket {ticket.correlativo}',
+                observaciones=f'Venta sincronizada - Ticket {ticket.correlativo}',
                 dte=None,
             )
         except Exception as e:

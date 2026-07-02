@@ -26,6 +26,7 @@ URL_PERMISO_MAP = {
     # Ventas
     '/app/ticket-venta/': 'ticket_venta',
     '/app/cambios-devoluciones/': 'cambios_devoluciones',
+    '/app/devolucion-garantia/': 'devolucion_garantia',
     '/app/pos-dashboard/': 'pos_dashboard',
     '/app/gestion-ventas-documentos/': 'gestion_documentos_ventas',
     '/app/ventas/cuadratura-caja/': 'cuadratura_caja',

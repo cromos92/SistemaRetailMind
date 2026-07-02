@@ -105,6 +105,22 @@
             </div>
         </div>
 
+        {% if tickets_dte_fallido_count > 0 %}
+        <!-- Alerta: tickets pagados sin DTE generado (ver dte_generacion_fallida) -->
+        <div class="alert alert-danger d-flex align-items-center justify-content-between py-2 px-3 mb-2" style="font-size:12px;" id="alertaTicketsDteFallido">
+            <div class="d-flex align-items-center gap-2">
+                <i class="ri-error-warning-fill" style="font-size:18px;"></i>
+                <div>
+                    <strong>{{ tickets_dte_fallido_count }}</strong> ticket{{ tickets_dte_fallido_count|pluralize }} cobrado{{ tickets_dte_fallido_count|pluralize }}
+                    sin documento tributario generado. La venta ya está cobrada; falta reintentar la emisión del DTE.
+                </div>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="mostrarTicketsDteFallido()">
+                <i class="ri-refresh-line"></i> Ver y reintentar
+            </button>
+        </div>
+        {% endif %}
+
         <!-- Estadísticas Rápidas (barra compacta) -->
         <div class="card border-0 shadow-sm mb-2">
             <div class="card-body py-2 px-3">
@@ -1235,6 +1251,8 @@ document.addEventListener('DOMContentLoaded', function() {
         crearDteManual: '{% url "crear_dte_manual" %}',
         exportarExcel: '/api/ventas/exportar-documentos/',
         detalleDocumento: (id) => `{% url "detalle_documento_venta" documento_id=0 %}`.replace('/0/', `/${id}/`),
+        listarTicketsDteFallido: '{% url "listar_tickets_dte_fallido" %}',
+        reintentarDte: (ticketId) => `{% url "reintentar_generar_dte_ticket" ticket_id=0 %}`.replace('/0/', `/${ticketId}/`),
     };
 
     // Leer parámetros de URL (ej: ?buscar=14 desde link "Ver DTE" en ecommerce)
@@ -2546,6 +2564,85 @@ document.addEventListener('DOMContentLoaded', function() {
             mostrarError(err.message || 'No se pudo crear el DTE manual');
         })
         .finally(() => {
+            if (btn) btn.disabled = false;
+        });
+    };
+
+    // Tickets pagados sin DTE generado (ver dte_generacion_fallida) — lista
+    // y permite reintentar la emisión desde la propia Consulta de Documentos.
+    window.mostrarTicketsDteFallido = function() {
+        Swal.fire({ title: 'Cargando…', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+        fetch(apiUrls.listarTicketsDteFallido)
+            .then((r) => r.json())
+            .then((data) => {
+                if (!data.success) {
+                    Swal.fire('Error', data.error || 'No se pudo obtener el listado', 'error');
+                    return;
+                }
+                if (!data.tickets.length) {
+                    Swal.fire('Sin pendientes', 'No hay tickets con DTE pendiente de reintento.', 'info');
+                    return;
+                }
+                const filas = data.tickets.map(t => `
+                    <tr>
+                        <td>#${t.correlativo}</td>
+                        <td>${t.fecha} ${t.hora}</td>
+                        <td>${t.cliente_nombre || '—'}</td>
+                        <td class="text-end">${formatearMoneda(t.total)}</td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-danger" onclick="reintentarDteTicket(${t.id}, this)">
+                                <i class="ri-refresh-line"></i> Reintentar
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+                Swal.fire({
+                    title: 'Tickets sin DTE',
+                    width: 650,
+                    html: `
+                        <div class="table-responsive text-start">
+                            <table class="table table-sm align-middle">
+                                <thead><tr><th>Ticket</th><th>Fecha</th><th>Cliente</th><th class="text-end">Total</th><th></th></tr></thead>
+                                <tbody id="tbodyTicketsDteFallido">${filas}</tbody>
+                            </table>
+                        </div>
+                    `,
+                    showConfirmButton: false,
+                    showCloseButton: true,
+                });
+            })
+            .catch((err) => {
+                console.error('Error al listar tickets con DTE fallido:', err);
+                Swal.fire('Error', 'No se pudo obtener el listado', 'error');
+            });
+    };
+
+    window.reintentarDteTicket = function(ticketId, btn) {
+        if (btn) btn.disabled = true;
+        fetch(apiUrls.reintentarDte(ticketId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: '{}',
+        })
+        .then(async (r) => {
+            const data = await r.json();
+            if (!r.ok || !data.success) throw new Error(data.error || 'Error al generar DTE');
+            return data;
+        })
+        .then((data) => {
+            const fila = btn ? btn.closest('tr') : null;
+            if (fila) fila.remove();
+            mostrarExito(`DTE generado: ${data.dte_generado.tipo} #${data.dte_generado.numero}`);
+            cargarDocumentos();
+        })
+        .catch((err) => {
+            console.error('Error al reintentar DTE:', err);
+            mostrarError(err.message || 'No se pudo generar el DTE');
             if (btn) btn.disabled = false;
         });
     };

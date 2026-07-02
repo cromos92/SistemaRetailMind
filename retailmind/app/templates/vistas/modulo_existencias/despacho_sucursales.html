@@ -3,6 +3,60 @@
 {% include '../../layout/header.html' %}
 {% include '../../layout/menu.html' %}
 
+<style>
+    .module-header {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        color: white;
+        padding: 16px 24px;
+        border-radius: 16px 16px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .module-header-left { display: flex; align-items: center; gap: 14px; }
+    .module-header-icon {
+        width: 48px; height: 48px;
+        background: rgba(255,255,255,0.2);
+        border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 24px;
+    }
+    .module-header-info h5 { margin: 0; font-size: 18px; font-weight: 600; color: white; }
+    .module-header-status { display: flex; align-items: center; gap: 6px; font-size: 13px; opacity: 0.9; margin-top: 4px; }
+    .status-dot { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .module-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .kpi-card { border-radius: 12px; border: none; transition: all 0.3s ease; overflow: hidden; cursor: pointer; }
+    .kpi-card:hover { transform: translateY(-4px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
+    .kpi-card .card-body { padding: 12px 16px; }
+
+    .pagination-controls {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 12px;
+        padding: 10px 16px;
+        margin-top: 12px;
+        border: 1px solid rgba(64, 81, 137, 0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .despacho-card { border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(64, 81, 137, 0.08); border: none; }
+
+    @media (max-width: 768px) {
+        .module-header { padding: 12px 16px; border-radius: 12px 12px 0 0; }
+        .module-header-icon { width: 40px; height: 40px; font-size: 20px; }
+        .pagination-controls { flex-direction: column; align-items: stretch; }
+        .nav-tabs-custom { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .nav-tabs-custom .nav-link { white-space: nowrap; font-size: 0.8rem; padding: 0.5rem 0.75rem; }
+    }
+</style>
+
 <div class="page-content">
     <div class="container-fluid">
 
@@ -22,108 +76,249 @@
         </div>
 
         <div class="row">
-                <!-- Panel Izquierdo: Búsqueda y productos -->
-                <div class="col-lg-7">
-                    <!-- Pendientes de Despacho -->
-                    <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h5 class="card-title mb-0"><i class="ri-time-line me-2 text-warning"></i>Pendientes de Despacho</h5>
-                            <button class="btn btn-sm btn-outline-primary" onclick="cargarPendientes()"><i class="ri-refresh-line"></i> Actualizar</button>
-                        </div>
-                        <div class="card-body" id="pendientesContainer">
-                            <div class="text-center text-muted py-3">Cargando pendientes...</div>
-                        </div>
-                    </div>
-
-                    <!-- Búsqueda de Productos -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0"><i class="ri-search-line me-2"></i>Buscar Productos para Despachar</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="input-group mb-3">
-                                <input type="text" id="inputBuscar" class="form-control" placeholder="Buscar por SKU, artículo o descripción...">
-                                <button class="btn btn-primary" onclick="buscarProductos()"><i class="ri-search-line"></i></button>
+            <div class="col-12">
+                <div class="despacho-card card mb-3">
+                    <div class="module-header">
+                        <div class="module-header-left">
+                            <div class="module-header-icon"><i class="ri-truck-line"></i></div>
+                            <div class="module-header-info">
+                                <h5>Despacho a Sucursales</h5>
+                                <div class="module-header-status">
+                                    <span class="status-dot"></span>
+                                    Sistema Activo
+                                </div>
                             </div>
-                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                                <table class="table table-hover table-sm align-middle">
-                                    <thead class="table-light sticky-top">
-                                        <tr>
-                                            <th>SKU</th>
-                                            <th>Artículo</th>
-                                            <th>Talla</th>
-                                            <th class="text-end">Stock</th>
-                                            <th class="text-center">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tbodyProductos">
-                                        <tr><td colspan="5" class="text-center text-muted">Busque productos para despachar</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                        </div>
+                        <div class="module-header-actions">
+                            <a href="/app/dashboard-despachos/" class="btn btn-light btn-sm">
+                                <i class="ri-bar-chart-line me-1"></i>Ver Dashboard Completo
+                            </a>
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <!-- Panel Derecho: Carrito de Despacho -->
-                <div class="col-lg-5">
-                    <div class="card border-primary">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="card-title mb-0 text-white"><i class="ri-shopping-cart-2-line me-2"></i>Carrito de Despacho</h5>
-                        </div>
-                        <div class="card-body">
-                            <!-- Selector Sucursal Destino -->
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Sucursal Destino</label>
-                                <select id="selectSucursal" class="form-select">
-                                    <option value="">-- Seleccionar Sucursal --</option>
+        <!-- KPIs -->
+        <div class="row g-2 mb-3">
+            <div class="col-6 col-md-3">
+                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 4px solid #ffbe0b;" onclick="document.getElementById('panelPendientes').scrollIntoView({behavior:'smooth'})">
+                    <div class="card-body text-center py-2">
+                        <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiPendientes">0</h4>
+                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Unid. Pendientes</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid #299cdb;" onclick="DespachoSucursales.filtrarHistorialPorEstado('', document.getElementById('tab-total'))">
+                    <div class="card-body text-center py-2">
+                        <h4 class="mb-0 fw-bold" style="color: #405189;" id="tab-count-total">0</h4>
+                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Despachos Totales</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-left: 4px solid #fb8c00;" onclick="DespachoSucursales.filtrarHistorialPorEstado('EN_TRANSITO', document.getElementById('tab-en_transito'))">
+                    <div class="card-body text-center py-2">
+                        <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiEnTransito">0</h4>
+                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">En Tránsito</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 4px solid #0ab39c;" onclick="DespachoSucursales.filtrarHistorialPorEstado('RECIBIDO', document.getElementById('tab-recibido'))">
+                    <div class="card-body text-center py-2">
+                        <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiRecibidos">0</h4>
+                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Recibidos</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Panel Izquierdo: Búsqueda y productos -->
+            <div class="col-lg-7">
+                <!-- Pendientes de Despacho -->
+                <div class="card" id="panelPendientes">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0"><i class="ri-time-line me-2 text-warning"></i>Pendientes de Despacho</h5>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="DespachoSucursales.cargarPendientes()"><i class="ri-refresh-line"></i> Actualizar</button>
+                    </div>
+                    <div class="card-body" id="pendientesContainer">
+                        <div class="text-center text-muted py-3">Cargando pendientes...</div>
+                    </div>
+                </div>
+
+                <!-- Búsqueda de Productos -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="ri-search-line me-2"></i>Buscar Productos para Despachar</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-6">
+                                <input type="text" id="inputBuscar" class="form-control" placeholder="Buscar por SKU, artículo o descripción...">
+                            </div>
+                            <div class="col-md-4">
+                                <select id="selectMarcaFiltro" class="form-select">
+                                    <option value="">Todas las marcas</option>
                                 </select>
                             </div>
-
-                            <!-- Items del carrito -->
-                            <div id="carritoItems" style="max-height: 350px; overflow-y: auto;">
-                                <div class="text-center text-muted py-3">Agregue productos al carrito</div>
-                            </div>
-
-                            <hr>
-
-                            <!-- Resumen -->
-                            <div class="d-flex justify-content-between mb-2">
-                                <span class="fw-bold">Total items:</span>
-                                <span class="fw-bold" id="totalItems">0</span>
-                            </div>
-                            <div class="d-flex justify-content-between mb-3">
-                                <span class="fw-bold">Total unidades:</span>
-                                <span class="fw-bold text-primary" id="totalUnidades">0</span>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Observaciones</label>
-                                <textarea id="inputObservaciones" class="form-control" rows="2" placeholder="Observaciones del despacho..."></textarea>
-                            </div>
-
-                            <div class="d-flex gap-2">
-                                <button class="btn btn-success flex-grow-1" onclick="agregarAlDespachoMasivo()">
-                                    <i class="ri-add-line me-1"></i> Agregar a Despacho Masivo
-                                </button>
+                            <div class="col-md-2 d-flex gap-1">
+                                <button type="button" class="btn btn-primary flex-grow-1" onclick="DespachoSucursales.buscarProductos(1)" title="Buscar"><i class="ri-search-line"></i></button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="DespachoSucursales.traerTodoElStock()" title="Traer todo el stock disponible"><i class="ri-stack-line"></i></button>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Despachos acumulados -->
-                    <div class="card border-warning" id="despachosMasivos" style="display:none;">
-                        <div class="card-header bg-warning bg-opacity-10">
-                            <h5 class="card-title mb-0"><i class="ri-stack-line me-2 text-warning"></i>Despachos a Enviar</h5>
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-hover table-sm align-middle">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th style="width:36px;"><input type="checkbox" class="form-check-input" id="chkSeleccionarTodos" onchange="DespachoSucursales.toggleSeleccionarTodos(this.checked)"></th>
+                                        <th>SKU</th>
+                                        <th>Artículo</th>
+                                        <th>Talla</th>
+                                        <th class="text-end">Stock</th>
+                                        <th class="text-center">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyProductos">
+                                    <tr><td colspan="6" class="text-center text-muted">Busque productos para despachar</td></tr>
+                                </tbody>
+                            </table>
                         </div>
-                        <div class="card-body" id="despachosMasivosBody"></div>
-                        <div class="card-footer">
-                            <button class="btn btn-primary w-100 btn-lg" onclick="enviarTodosDespachos()">
-                                <i class="ri-send-plane-line me-2"></i> Enviar Todos los Despachos
+                        <div class="pagination-controls" id="paginacionProductos" style="display:none;">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnPaginaAnterior" onclick="DespachoSucursales.paginaAnterior()"><i class="ri-arrow-left-s-line"></i> Anterior</button>
+                            <span id="paginacionProductosInfo" class="small text-muted"></span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnPaginaSiguiente" onclick="DespachoSucursales.paginaSiguiente()">Siguiente <i class="ri-arrow-right-s-line"></i></button>
+                        </div>
+                        <div class="d-grid mt-2">
+                            <button type="button" class="btn btn-success" id="btnAgregarSeleccionados" disabled onclick="DespachoSucursales.agregarSeleccionadosAlCarrito()">
+                                Agregar seleccionados
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <!-- Panel Derecho: Carrito de Despacho -->
+            <div class="col-lg-5">
+                <div class="card border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0 text-white"><i class="ri-shopping-cart-2-line me-2"></i>Carrito de Despacho</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Sucursal Destino</label>
+                            <select id="selectSucursal" class="form-select">
+                                <option value="">-- Seleccionar Sucursal --</option>
+                            </select>
+                        </div>
+
+                        <div id="carritoItems" style="max-height: 350px; overflow-y: auto;">
+                            <div class="text-center text-muted py-3">Agregue productos al carrito</div>
+                        </div>
+
+                        <hr>
+
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="fw-bold">Total items:</span>
+                            <span class="fw-bold" id="totalItems">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <span class="fw-bold">Total unidades:</span>
+                            <span class="fw-bold text-primary" id="totalUnidades">0</span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Observaciones</label>
+                            <textarea id="inputObservaciones" class="form-control" rows="2" placeholder="Observaciones del despacho..."></textarea>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-success flex-grow-1" onclick="DespachoSucursales.agregarAlDespachoMasivo()">
+                                <i class="ri-add-line me-1"></i> Agregar a Despacho Masivo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Despachos acumulados -->
+                <div class="card border-warning" id="despachosMasivos" style="display:none;">
+                    <div class="card-header bg-warning bg-opacity-10">
+                        <h5 class="card-title mb-0"><i class="ri-stack-line me-2 text-warning"></i>Despachos a Enviar</h5>
+                    </div>
+                    <div class="card-body" id="despachosMasivosBody"></div>
+                    <div class="card-footer">
+                        <button type="button" class="btn btn-primary w-100 btn-lg" onclick="DespachoSucursales.enviarTodosDespachos()">
+                            <i class="ri-send-plane-line me-2"></i> Enviar Todos los Despachos
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Historial de Despachos Recientes -->
+        <div class="card mt-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0"><i class="ri-history-line me-2 text-primary"></i>Historial de Despachos Recientes</h5>
+                <a href="/app/dashboard-despachos/" class="btn btn-sm btn-soft-primary">
+                    <i class="ri-bar-chart-line me-1"></i>Ver Dashboard Completo
+                </a>
+            </div>
+            <div class="card-body">
+                <ul class="nav nav-tabs nav-tabs-custom nav-primary mb-3" id="tabsHistorial">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="tab-total" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorialPorEstado('', this)">
+                            Todos <span class="badge bg-secondary ms-1" id="tab-count-total">0</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="tab-pendiente" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorialPorEstado('PENDIENTE', this)">
+                            Pendiente <span class="badge bg-warning ms-1" id="tab-count-pendiente">0</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="tab-en_transito" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorialPorEstado('EN_TRANSITO', this)">
+                            En Tránsito <span class="badge bg-primary ms-1" id="tab-count-en_transito">0</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="tab-recibido" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorialPorEstado('RECIBIDO', this)">
+                            Recibido <span class="badge bg-success ms-1" id="tab-count-recibido">0</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="tab-rechazado" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorialPorEstado('RECHAZADO', this)">
+                            Rechazado/Anulado <span class="badge bg-danger ms-1" id="tab-count-rechazado">0</span>
+                        </a>
+                    </li>
+                </ul>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>N° Traspaso</th>
+                                <th>Destino</th>
+                                <th>Fecha</th>
+                                <th class="text-end">Items</th>
+                                <th class="text-end">Unidades</th>
+                                <th>Estado</th>
+                                <th>Solicitante</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyHistorial">
+                            <tr><td colspan="7" class="text-center text-muted">Cargando historial...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination-controls" id="paginacionHistorial" style="display:none;">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnHistorialAnterior" onclick="DespachoSucursales.historialPaginaAnterior()"><i class="ri-arrow-left-s-line"></i> Anterior</button>
+                    <span id="paginacionHistorialInfo" class="small text-muted"></span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnHistorialSiguiente" onclick="DespachoSucursales.historialPaginaSiguiente()">Siguiente <i class="ri-arrow-right-s-line"></i></button>
+                </div>
+            </div>
+        </div>
 
     </div>
 </div>
@@ -131,200 +326,17 @@
 {% include '../../layout/footer.html' %}
 
 <script>
-const CSRF_TOKEN = '{{ csrf_token }}';
-let carrito = [];
-let despachosMasivos = [];
-let sucursalesDisponibles = [];
-
-document.addEventListener('DOMContentLoaded', () => {
-    cargarSucursales();
-    cargarPendientes();
-});
-
-async function cargarSucursales() {
-    const resp = await fetch('/app/api/despacho/sucursales/');
-    const data = await resp.json();
-    if (data.success) {
-        sucursalesDisponibles = data.sucursales;
-        const select = document.getElementById('selectSucursal');
-        data.sucursales.forEach(s => {
-            select.innerHTML += `<option value="${s.id}">${s.alias} - ${s.direccion || ''}</option>`;
-        });
-    }
-}
-
-async function cargarPendientes() {
-    const container = document.getElementById('pendientesContainer');
-    const resp = await fetch('/app/api/despacho/pendientes/');
-    const data = await resp.json();
-    if (!data.success || !data.pendientes_por_sucursal.length) {
-        container.innerHTML = '<div class="text-center text-muted py-2">No hay pendientes de despacho</div>';
-        return;
-    }
-    let html = '';
-    data.pendientes_por_sucursal.forEach(suc => {
-        html += `<div class="mb-3">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <h6 class="mb-0"><i class="ri-store-2-line me-1 text-primary"></i>${suc.alias}</h6>
-                <span class="badge bg-warning">${suc.total_unidades} unidades</span>
-            </div>
-            <div class="table-responsive"><table class="table table-sm table-bordered mb-0">
-                <thead class="table-light"><tr><th>SKU</th><th>Artículo</th><th>Talla</th><th class="text-end">Restante</th><th></th></tr></thead>
-                <tbody>`;
-        suc.items.forEach(item => {
-            html += `<tr>
-                <td><code>${item.sku}</code></td><td>${item.articulo}</td><td>${item.talla}</td>
-                <td class="text-end fw-bold">${item.cantidad_restante}</td>
-                <td class="text-center"><button class="btn btn-sm btn-outline-primary" onclick="agregarPendienteAlCarrito('${item.sku}', ${item.cantidad_restante}, ${suc.sucursal_id})"><i class="ri-add-line"></i></button></td>
-            </tr>`;
-        });
-        html += '</tbody></table></div></div>';
-    });
-    container.innerHTML = html;
-}
-
-async function buscarProductos() {
-    const q = document.getElementById('inputBuscar').value.trim();
-    if (!q) return;
-    const resp = await fetch(`/app/api/despacho/productos/?q=${encodeURIComponent(q)}`);
-    const data = await resp.json();
-    const tbody = document.getElementById('tbodyProductos');
-    if (!data.success || !data.productos.length) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Sin resultados</td></tr>';
-        return;
-    }
-    tbody.innerHTML = '';
-    data.productos.forEach(p => {
-        tbody.innerHTML += `<tr>
-            <td><code>${p.sku}</code></td>
-            <td>${p.articulo}<br><small class="text-muted">${p.marca}</small></td>
-            <td>${p.talla}</td>
-            <td class="text-end fw-bold">${p.stock}</td>
-            <td class="text-center">
-                <button class="btn btn-sm btn-primary" onclick="agregarAlCarrito(${p.producto_talla_id}, '${p.sku}', '${p.articulo.replace(/'/g, "\\'")}', '${p.talla}', ${p.stock})">
-                    <i class="ri-add-line"></i>
-                </button>
-            </td>
-        </tr>`;
-    });
-}
-
-function agregarAlCarrito(ptId, sku, articulo, talla, stockMax) {
-    const existe = carrito.find(c => c.producto_talla_id === ptId);
-    if (existe) { alert('Ya está en el carrito'); return; }
-    carrito.push({ producto_talla_id: ptId, sku, articulo, talla, stock_max: stockMax, cantidad: 1 });
-    renderCarrito();
-}
-
-function agregarPendienteAlCarrito(sku, cantidad, sucursalId) {
-    document.getElementById('selectSucursal').value = sucursalId;
-    const inputBuscar = document.getElementById('inputBuscar');
-    inputBuscar.value = sku;
-    buscarProductos();
-}
-
-function renderCarrito() {
-    const container = document.getElementById('carritoItems');
-    if (!carrito.length) {
-        container.innerHTML = '<div class="text-center text-muted py-3">Agregue productos al carrito</div>';
-        document.getElementById('totalItems').textContent = '0';
-        document.getElementById('totalUnidades').textContent = '0';
-        return;
-    }
-    let html = '';
-    carrito.forEach((item, idx) => {
-        html += `<div class="d-flex align-items-center gap-2 mb-2 p-2 border rounded">
-            <div class="flex-grow-1">
-                <strong>${item.articulo}</strong><br>
-                <small class="text-muted">SKU: ${item.sku} | Talla: ${item.talla}</small>
-            </div>
-            <input type="number" class="form-control form-control-sm" style="width:70px;" min="1" max="${item.stock_max}" value="${item.cantidad}"
-                onchange="actualizarCantidad(${idx}, this.value)">
-            <button class="btn btn-sm btn-outline-danger" onclick="quitarDelCarrito(${idx})"><i class="ri-delete-bin-line"></i></button>
-        </div>`;
-    });
-    container.innerHTML = html;
-    document.getElementById('totalItems').textContent = carrito.length;
-    document.getElementById('totalUnidades').textContent = carrito.reduce((a, b) => a + b.cantidad, 0);
-}
-
-function actualizarCantidad(idx, val) {
-    const cant = Math.min(Math.max(1, parseInt(val) || 1), carrito[idx].stock_max);
-    carrito[idx].cantidad = cant;
-    renderCarrito();
-}
-
-function quitarDelCarrito(idx) {
-    carrito.splice(idx, 1);
-    renderCarrito();
-}
-
-function agregarAlDespachoMasivo() {
-    const sucId = document.getElementById('selectSucursal').value;
-    if (!sucId) { alert('Seleccione una sucursal destino'); return; }
-    if (!carrito.length) { alert('Agregue productos al carrito'); return; }
-    const suc = sucursalesDisponibles.find(s => s.id == sucId);
-    despachosMasivos.push({
-        sucursal_destino_id: parseInt(sucId),
-        sucursal_alias: suc ? suc.alias : 'Sucursal ' + sucId,
-        items: [...carrito],
-    });
-    carrito = [];
-    renderCarrito();
-    renderDespachosMasivos();
-}
-
-function renderDespachosMasivos() {
-    const container = document.getElementById('despachosMasivosBody');
-    const card = document.getElementById('despachosMasivos');
-    if (!despachosMasivos.length) { card.style.display = 'none'; return; }
-    card.style.display = '';
-    let html = '';
-    despachosMasivos.forEach((d, idx) => {
-        const totalUn = d.items.reduce((a, b) => a + b.cantidad, 0);
-        html += `<div class="mb-2 p-2 border rounded bg-light">
-            <div class="d-flex justify-content-between align-items-center">
-                <strong><i class="ri-store-2-line me-1"></i>${d.sucursal_alias}</strong>
-                <div>
-                    <span class="badge bg-primary me-1">${d.items.length} items / ${totalUn} uds</span>
-                    <button class="btn btn-sm btn-outline-danger" onclick="quitarDespacho(${idx})"><i class="ri-close-line"></i></button>
-                </div>
-            </div>
-        </div>`;
-    });
-    container.innerHTML = html;
-}
-
-function quitarDespacho(idx) {
-    despachosMasivos.splice(idx, 1);
-    renderDespachosMasivos();
-}
-
-async function enviarTodosDespachos() {
-    if (!despachosMasivos.length) { alert('No hay despachos para enviar'); return; }
-    if (!confirm(`¿Enviar ${despachosMasivos.length} despachos?`)) return;
-    const payload = {
-        despachos: despachosMasivos.map(d => ({
-            sucursal_destino_id: d.sucursal_destino_id,
-            items: d.items.map(i => ({ producto_talla_id: i.producto_talla_id, cantidad: i.cantidad })),
-        })),
-        observaciones: document.getElementById('inputObservaciones').value,
+    window.DESPACHO_CONFIG = {
+        csrfToken: '{{ csrf_token }}',
+        sucursalId: {{ sucursal_id|default:"null" }},
+        urls: {
+            sucursales: '{% url "api_obtener_sucursales_despacho" %}',
+            productos: '{% url "api_productos_disponibles_despacho" %}',
+            pendientes: '{% url "api_pendientes_despacho_sucursal" %}',
+            marcas: '{% url "api_marcas_disponibles_despacho" %}',
+            historial: '{% url "api_historial_despachos" %}',
+            crearMasivo: '{% url "api_crear_despacho_masivo" %}',
+        },
     };
-    const resp = await fetch('/app/api/despacho/crear-masivo/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
-        body: JSON.stringify(payload),
-    });
-    const data = await resp.json();
-    if (data.success) {
-        alert(data.mensaje);
-        despachosMasivos = [];
-        renderDespachosMasivos();
-        cargarPendientes();
-    } else {
-        alert('Error: ' + data.error);
-    }
-}
-
-document.getElementById('inputBuscar').addEventListener('keydown', e => { if (e.key === 'Enter') buscarProductos(); });
 </script>
+<script src="{% static 'js/despacho_sucursales.js' %}?v=20260702"></script>

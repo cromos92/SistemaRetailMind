@@ -16,3 +16,7 @@ mysql-connector-python==9.5.0
 statsmodels>=0.14
 # numpy y scipy entran como dependencia transitiva de statsmodels, no hace
 # falta fijarlas aquí.
+# xlrd: leer archivos .xls antiguos (formato OLE2) como el export de estados
+# del SII, para cruzarlos con la BD (command generar_txt_acepta_batch --cruzar-sii).
+# Solo diagnóstico local; pandas ya está en el entorno.
+xlrd==2.0.2

@@ -1,4 +1,5 @@
 {% load static %}
+{% load permisos_tags %}
 
 {% include '../../layout/header.html' %}
 {% include '../../layout/menu.html' %}
@@ -50,9 +51,11 @@
                     <a class="btn btn-light" href="{% url 'reporte_fidelizacion_vista' %}">
                         <i class="ri-line-chart-line"></i> Reporte
                     </a>
+                    {% if user|puede_crear_en:'fidelizacion_cuentas' %}
                     <button class="btn btn-success" onclick="abrirModalRegistro()">
                         <i class="ri-user-add-line"></i> Registrar cliente
                     </button>
+                    {% endif %}
                 </div>
             </div>
 

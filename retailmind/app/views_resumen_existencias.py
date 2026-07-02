@@ -364,6 +364,107 @@ def _parse_excluir_articulos(request):
     return ids
 
 
+def _calcular_totales_excluidos(empresas_usuario, excluir_ids, fecha_corte=None, es_historico=False):
+    """
+    Calcula cuántas unidades (y su valor) representan los artículos excluidos,
+    para que el usuario vea de forma explícita qué está dejando fuera del análisis.
+
+    Respeta la fecha de corte histórica: si es histórico, reconstruye el stock a esa
+    fecha con la misma lógica de reversión de movimientos que el resto del reporte.
+
+    Devuelve un dict {pares, costo, precio_interno, precio_venta, articulos}.
+    """
+    vacio = {'pares': 0, 'costo': 0, 'precio_interno': 0, 'precio_venta': 0, 'articulos': 0}
+    if not excluir_ids:
+        return vacio
+
+    talla_qs = Producto_Talla.objects.filter(
+        producto__sucursal__empresa_id__in=empresas_usuario,
+        producto_id__in=excluir_ids,
+    )
+
+    if es_historico and fecha_corte:
+        # Reconstrucción histórica (misma fórmula que _aggregar_por_sucursal_historico)
+        tallas_data = list(
+            talla_qs.values(
+                'id', 'stock', 'producto_id',
+                'producto__sucursal_id',
+                'producto__costo', 'producto__sobreprecio', 'producto__precioventa',
+            )
+        )
+        if not tallas_data:
+            return vacio
+
+        talla_ids = [t['id'] for t in tallas_data]
+
+        ingresos = (
+            Movimientos_Producto.objects
+            .filter(ProductoTalla_id__in=talla_ids, fecha__gt=fecha_corte, estado='COMPLETADO')
+            .filter(Q(tipo_movimiento='INGRESO') | Q(concepto='TRASPASO_ENTRADA'))
+            .values('ProductoTalla_id', 'sucursal_destino_id')
+            .annotate(total=Sum('cantidad'))
+        )
+        ingresos_map = {(r['ProductoTalla_id'], r['sucursal_destino_id']): int(r['total'] or 0) for r in ingresos}
+
+        egresos = (
+            Movimientos_Producto.objects
+            .filter(ProductoTalla_id__in=talla_ids, fecha__gt=fecha_corte, estado='COMPLETADO')
+            .filter(Q(tipo_movimiento='EGRESO') | Q(concepto='TRASPASO_SALIDA'))
+            .values('ProductoTalla_id', 'sucursal_origen_id')
+            .annotate(total=Sum('cantidad'))
+        )
+        egresos_map = {(r['ProductoTalla_id'], r['sucursal_origen_id']): int(r['total'] or 0) for r in egresos}
+
+        pares = costo = p_interno = p_venta = 0
+        productos_con_stock = set()
+        for t in tallas_data:
+            sid = t['producto__sucursal_id']
+            ingresos_post = ingresos_map.get((t['id'], sid), 0)
+            egresos_post = egresos_map.get((t['id'], sid), 0)
+            stock_hist = (t['stock'] or 0) - ingresos_post + abs(egresos_post)
+            if stock_hist <= 0:
+                continue
+            c = t['producto__costo'] or 0
+            s = t['producto__sobreprecio'] or 0
+            v = t['producto__precioventa'] or 0
+            pares += stock_hist
+            costo += c * stock_hist
+            p_interno += (c + s) * stock_hist
+            p_venta += v * stock_hist
+            productos_con_stock.add(t['producto_id'])
+
+        return {
+            'pares': int(pares),
+            'costo': int(costo),
+            'precio_interno': int(p_interno),
+            'precio_venta': int(p_venta),
+            'articulos': len(productos_con_stock),
+        }
+
+    # Actual — una sola query agregada
+    zero_int = Value(0, output_field=IntegerField())
+    agg = (
+        talla_qs.filter(stock__gt=0)
+        .aggregate(
+            total_pares=Coalesce(Sum('stock'), zero_int),
+            total_costo=Coalesce(Sum(F('producto__costo') * F('stock')), zero_int),
+            total_p_interno=Coalesce(Sum((F('producto__costo') + F('producto__sobreprecio')) * F('stock')), zero_int),
+            total_p_venta=Coalesce(Sum(F('producto__precioventa') * F('stock')), zero_int),
+        )
+    )
+    articulos = (
+        talla_qs.filter(stock__gt=0)
+        .values('producto_id').distinct().count()
+    )
+    return {
+        'pares': int(agg['total_pares'] or 0),
+        'costo': int(agg['total_costo'] or 0),
+        'precio_interno': int(agg['total_p_interno'] or 0),
+        'precio_venta': int(agg['total_p_venta'] or 0),
+        'articulos': articulos,
+    }
+
+
 @require_GET
 @login_required
 def obtener_resumen_existencias(request):
@@ -484,13 +585,19 @@ def obtener_resumen_existencias(request):
                 'total_precio_venta': float(emp['total_precio_venta']),
             })
 
+        # Totales de lo excluido (para que el usuario vea qué deja fuera)
+        totales_excluidos = _calcular_totales_excluidos(
+            empresas_usuario, excluir_ids, fecha_corte=fecha_corte, es_historico=es_historico,
+        )
+
         fecha_info = f"al {fecha_corte.strftime('%d/%m/%Y')}" if es_historico else "actual"
         logger.info(
-            "Resumen existencias generado: sucursales=%s, fecha=%s, total_pares=%s, excluidos=%s",
+            "Resumen existencias generado: sucursales=%s, fecha=%s, total_pares=%s, excluidos=%s (pares_excluidos=%s)",
             len(resumen_sucursales),
             fecha_info,
             total_general['pares'],
             len(excluir_ids),
+            totales_excluidos['pares'],
         )
 
         return JsonResponse({
@@ -502,6 +609,7 @@ def obtener_resumen_existencias(request):
             'fecha_corte': fecha_corte_str if es_historico else None,
             'agrupar_por': 'sucursal',
             'excluir_articulos_count': len(excluir_ids),
+            'totales_excluidos': totales_excluidos,
         })
         
     except Exception as e:
@@ -637,6 +745,10 @@ def _resumen_por_categoria(request, marca_id, fecha_corte, es_historico, empresa
                 'total_precio_venta': float(emp['p_venta']),
             })
 
+        totales_excluidos = _calcular_totales_excluidos(
+            empresas_usuario, excluir_ids, fecha_corte=fecha_corte, es_historico=es_historico,
+        )
+
         return JsonResponse({
             'success': True,
             'datos': resumen_categorias,
@@ -646,6 +758,7 @@ def _resumen_por_categoria(request, marca_id, fecha_corte, es_historico, empresa
             'fecha_corte': fecha_corte.strftime('%Y-%m-%d') if es_historico and fecha_corte else None,
             'agrupar_por': 'categoria',
             'excluir_articulos_count': len(excluir_ids),
+            'totales_excluidos': totales_excluidos,
         })
 
     except Exception as e:
@@ -686,6 +799,7 @@ def exportar_resumen_existencias_excel(request):
         es_historico = datos.get('es_historico', False)
         resumen_empresas = datos.get('resumen_empresas', []) or []
         excluir_count = datos.get('excluir_articulos_count', 0)
+        totales_excluidos = datos.get('totales_excluidos', {}) or {}
 
         if not datos_resumen:
             return JsonResponse({
@@ -865,13 +979,23 @@ def exportar_resumen_existencias_excel(request):
 
                 fila += 1
 
-        # Nota de exclusiones (si aplica)
+        # Nota de exclusiones (si aplica) — incluye unidades y valores realmente excluidos
         if excluir_count:
             fila += 1
             ws.merge_cells(start_row=fila, start_column=1, end_row=fila, end_column=6)
+            pares_exc = int(totales_excluidos.get('pares', 0) or 0)
+            venta_exc = int(totales_excluidos.get('precio_venta', 0) or 0)
+            costo_exc = int(totales_excluidos.get('costo', 0) or 0)
+            detalle_exc = ''
+            if pares_exc > 0:
+                detalle_exc = (
+                    f" — {pares_exc:,} unidad(es) por ${venta_exc:,} a precio venta "
+                    f"(${costo_exc:,} costo)"
+                ).replace(',', '.')
             nota = ws.cell(
                 row=fila, column=1,
-                value=f"Nota: {excluir_count} artículo(s) excluidos del análisis (filtro temporal de la sesión)."
+                value=(f"Nota: {excluir_count} artículo(s) excluidos del análisis "
+                       f"(filtro temporal de la sesión){detalle_exc}.")
             )
             nota.font = Font(italic=True, color="8a6914")
             nota.alignment = Alignment(horizontal='left', vertical='center')
@@ -883,7 +1007,14 @@ def exportar_resumen_existencias_excel(request):
         ws.column_dimensions['D'].width = 18
         ws.column_dimensions['E'].width = 22
         ws.column_dimensions['F'].width = 20
-        
+
+        # ===== Hoja: Top 30 por Sucursal (solo agrupación por sucursal) =====
+        if agrupar_por == 'sucursal':
+            _agregar_hoja_top_por_sucursal_excel(
+                wb, request, datos_resumen, es_historico, fecha_corte,
+                header_fill, header_font, total_fill, total_font, border,
+            )
+
         # Nombre del archivo
         filename = "resumen_existencias"
         if agrupar_por == 'categoria':
@@ -907,6 +1038,114 @@ def exportar_resumen_existencias_excel(request):
             'success': False,
             'error': f'Error al exportar: {str(e)}'
         })
+
+
+def _obtener_filtros_top_export(request):
+    """Extrae empresas del usuario + filtros (marca, exclusiones, fecha) para los Top-N de export."""
+    marca_id = request.GET.get('marca_id')
+    excluir_ids = _parse_excluir_articulos(request)
+
+    fecha_corte = None
+    es_historico = False
+    fecha_corte_str = request.GET.get('fecha_corte')
+    if fecha_corte_str:
+        try:
+            fecha_corte = datetime.strptime(fecha_corte_str, '%Y-%m-%d').date()
+            es_historico = fecha_corte < timezone.localdate()
+        except ValueError:
+            pass
+
+    empresas_usuario = list(EmpresaUser.objects.filter(
+        user=request.user, status=True,
+    ).values_list('empresa_id', flat=True))
+
+    return empresas_usuario, marca_id, excluir_ids, fecha_corte, es_historico
+
+
+def _agregar_hoja_top_por_sucursal_excel(wb, request, datos_resumen, es_historico_reporte,
+                                          fecha_corte_reporte, header_fill, header_font,
+                                          total_fill, total_font, border):
+    """Añade al workbook una hoja con el Top 30 de productos (por unidades) de cada sucursal."""
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    empresas_usuario, marca_id, excluir_ids, fecha_corte, es_historico = _obtener_filtros_top_export(request)
+
+    ws = wb.create_sheet(title="Top 30 por Sucursal")
+    seccion_fill = PatternFill(start_color="1A1A2E", end_color="1A1A2E", fill_type="solid")
+    seccion_font = Font(bold=True, color="FFFFFF", size=12)
+    right = Alignment(horizontal='right')
+
+    fila = 1
+    hubo_datos = False
+
+    for suc in datos_resumen:
+        sucursal_id = suc.get('sucursal_id')
+        if not sucursal_id:
+            continue
+
+        detalle = _calcular_detalle_top_por_sucursal(
+            empresas_usuario, sucursal_id, limite=30,
+            marca_id=marca_id, excluir_ids=excluir_ids,
+            fecha_corte=fecha_corte, es_historico=es_historico,
+        )
+        items = detalle['items']
+        if not items:
+            continue
+        hubo_datos = True
+
+        # Título de sección (nombre sucursal)
+        ws.merge_cells(start_row=fila, start_column=1, end_row=fila, end_column=5)
+        titulo = f"🏪 {suc.get('sucursal', 'Sucursal')}  ·  {detalle['total_productos']} productos con stock"
+        c = ws.cell(row=fila, column=1, value=titulo)
+        c.fill = seccion_fill
+        c.font = seccion_font
+        c.alignment = Alignment(horizontal='left', vertical='center')
+        ws.row_dimensions[fila].height = 22
+        fila += 1
+
+        # Encabezados
+        headers = ['#', 'Artículo', 'Unidades', 'Costo', 'Precio Venta']
+        for idx, h in enumerate(headers, start=1):
+            hc = ws.cell(row=fila, column=idx, value=h)
+            hc.fill = header_fill
+            hc.font = header_font
+            hc.alignment = Alignment(horizontal='center', vertical='center')
+            hc.border = border
+        fila += 1
+
+        # Filas del top
+        for pos, it in enumerate(items, start=1):
+            ws.cell(row=fila, column=1, value=pos).border = border
+            art = f"{it['articulo']}"
+            if it.get('descripcion'):
+                art += f" — {it['descripcion']}"
+            ws.cell(row=fila, column=2, value=art).border = border
+
+            u = ws.cell(row=fila, column=3, value=it['pares'])
+            u.alignment = right
+            u.border = border
+
+            co = ws.cell(row=fila, column=4, value=it['costo'])
+            co.number_format = '#,##0'
+            co.alignment = right
+            co.border = border
+
+            v = ws.cell(row=fila, column=5, value=it['precio_venta'])
+            v.number_format = '#,##0'
+            v.alignment = right
+            v.border = border
+            fila += 1
+
+        fila += 1  # espacio entre sucursales
+
+    if not hubo_datos:
+        ws.cell(row=1, column=1, value="No hay productos con stock para los filtros actuales.")
+
+    ws.column_dimensions['A'].width = 6
+    ws.column_dimensions['B'].width = 55
+    ws.column_dimensions['C'].width = 14
+    ws.column_dimensions['D'].width = 16
+    ws.column_dimensions['E'].width = 16
 
 
 @require_GET
@@ -946,6 +1185,7 @@ def exportar_resumen_existencias_pdf(request):
         resumen_empresas = datos.get('resumen_empresas', []) or []
         es_historico = datos.get('es_historico', False)
         excluir_count = datos.get('excluir_articulos_count', 0)
+        totales_excluidos = datos.get('totales_excluidos', {}) or {}
 
         if not datos_resumen:
             return JsonResponse({'success': False, 'error': 'No hay datos para exportar'})
@@ -1242,11 +1482,107 @@ def exportar_resumen_existencias_pdf(request):
         # ===== NOTAS =====
         if excluir_count:
             elements.append(Spacer(1, 0.4 * cm))
+            pares_exc = int(totales_excluidos.get('pares', 0) or 0)
+            detalle_exc = ''
+            if pares_exc > 0:
+                detalle_exc = (
+                    f" Representan <b>{fmt_int(pares_exc)}</b> unidad(es) por "
+                    f"<b>{fmt_money(totales_excluidos.get('precio_venta', 0))}</b> a precio venta "
+                    f"(<b>{fmt_money(totales_excluidos.get('costo', 0))}</b> a costo)."
+                )
             elements.append(Paragraph(
                 f"Nota: {excluir_count} artículo(s) excluidos del análisis "
-                f"(filtro temporal del navegador del usuario; no afecta otros reportes).",
+                f"(filtro temporal del navegador del usuario; no afecta otros reportes)."
+                + detalle_exc,
                 st_note,
             ))
+
+        # ===== TOP 30 POR SUCURSAL (solo agrupación por sucursal) =====
+        if agrupar_por == 'sucursal':
+            empresas_usuario, marca_id_f, excluir_ids_f, fecha_corte_f, es_hist_f = \
+                _obtener_filtros_top_export(request)
+
+            secciones_top = []
+            for suc in datos_resumen:
+                sucursal_id = suc.get('sucursal_id')
+                if not sucursal_id:
+                    continue
+                detalle = _calcular_detalle_top_por_sucursal(
+                    empresas_usuario, sucursal_id, limite=30,
+                    marca_id=marca_id_f, excluir_ids=excluir_ids_f,
+                    fecha_corte=fecha_corte_f, es_historico=es_hist_f,
+                )
+                items = detalle['items']
+                if not items:
+                    continue
+
+                bloque = []
+                bloque.append(Paragraph(
+                    f"Top 30 · {suc.get('sucursal', 'Sucursal')} "
+                    f"<font size=7 color='#8A8A9A'>({detalle['total_productos']} productos con stock)</font>",
+                    st_section,
+                ))
+
+                top_headers = ['#', 'Artículo', 'Unidades', 'Costo', 'P. Venta']
+                top_widths = [
+                    content_w * 0.06,
+                    content_w * 0.50,
+                    content_w * 0.14,
+                    content_w * 0.15,
+                    content_w * 0.15,
+                ]
+                top_data = [top_headers]
+                for pos, it in enumerate(items, start=1):
+                    art = str(it.get('articulo', '') or '')
+                    if it.get('descripcion'):
+                        art += f" — {it['descripcion']}"
+                    if len(art) > 70:
+                        art = art[:67] + '…'
+                    top_data.append([
+                        str(pos),
+                        art,
+                        fmt_int(it.get('pares', 0)),
+                        fmt_money(it.get('costo', 0)),
+                        fmt_money(it.get('precio_venta', 0)),
+                    ])
+
+                tbl_top = Table(top_data, colWidths=top_widths, repeatRows=1)
+                tbl_top.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), nexo_secondary),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 7),
+                    ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('GRID', (0, 0), (-1, -1), 0.4, nexo_gray_300),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, nexo_gray_100]),
+                    ('ALIGN', (0, 1), (0, -1), 'CENTER'),
+                    ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),
+                    ('TOPPADDING', (0, 0), (-1, -1), 3),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ]))
+                bloque.append(tbl_top)
+                bloque.append(Spacer(1, 0.4 * cm))
+                secciones_top.append(KeepTogether(bloque))
+
+            if secciones_top:
+                elements.append(PageBreak())
+                titulo_top = 'DETALLE TOP 30 POR SUCURSAL'
+                if es_hist_f and fecha_corte_f:
+                    titulo_top += f" — Al {fecha_corte_f.strftime('%d/%m/%Y')}"
+                header_top = Table([[Paragraph(titulo_top, st_title)]], colWidths=[content_w])
+                header_top.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, -1), nexo_secondary),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 16),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 16),
+                    ('TOPPADDING', (0, 0), (-1, -1), 12),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ]))
+                elements.append(header_top)
+                elements.append(Spacer(1, 0.4 * cm))
+                elements.extend(secciones_top)
 
         # ===== FOOTER =====
         usuario_nombre = (
@@ -1331,6 +1667,198 @@ def listar_sucursales_resumen(request):
         return JsonResponse({'success': True, 'items': items})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e), 'items': []})
+
+
+def _calcular_detalle_top_por_sucursal(empresas_usuario, sucursal_id, limite=30,
+                                       marca_id=None, excluir_ids=None,
+                                       fecha_corte=None, es_historico=False):
+    """
+    Núcleo de cálculo del Top-N de productos con stock en UNA sucursal, ordenado por
+    unidades (pares) descendente. Agrega a nivel de PRODUCTO (suma de todas sus tallas).
+
+    Reutilizado por el endpoint del modal y por los exports (Excel/PDF).
+
+    Devuelve un dict con:
+      items (top-N), total_productos, total_pares, total_costo, total_precio_venta.
+    """
+    excluir_ids = excluir_ids or []
+    limite = max(1, min(int(limite or 30), 200))
+
+    talla_qs = Producto_Talla.objects.filter(
+        producto__sucursal_id=sucursal_id,
+        producto__sucursal__empresa_id__in=empresas_usuario,
+        producto__excluir_de_analitica=False,
+    )
+    if marca_id:
+        talla_qs = talla_qs.filter(producto__atributo1_id=marca_id)
+    if excluir_ids:
+        talla_qs = talla_qs.exclude(producto_id__in=excluir_ids)
+
+    productos = {}  # producto_id -> bucket
+
+    if es_historico and fecha_corte:
+        tallas_data = list(
+            talla_qs.values(
+                'id', 'stock', 'producto_id',
+                'producto__articulo', 'producto__descripcion',
+                'producto__costo', 'producto__sobreprecio', 'producto__precioventa',
+            )
+        )
+        talla_ids = [t['id'] for t in tallas_data]
+
+        ingresos = (
+            Movimientos_Producto.objects
+            .filter(ProductoTalla_id__in=talla_ids, fecha__gt=fecha_corte, estado='COMPLETADO')
+            .filter(Q(tipo_movimiento='INGRESO') | Q(concepto='TRASPASO_ENTRADA'))
+            .filter(sucursal_destino_id=sucursal_id)
+            .values('ProductoTalla_id')
+            .annotate(total=Sum('cantidad'))
+        )
+        ingresos_map = {r['ProductoTalla_id']: int(r['total'] or 0) for r in ingresos}
+
+        egresos = (
+            Movimientos_Producto.objects
+            .filter(ProductoTalla_id__in=talla_ids, fecha__gt=fecha_corte, estado='COMPLETADO')
+            .filter(Q(tipo_movimiento='EGRESO') | Q(concepto='TRASPASO_SALIDA'))
+            .filter(sucursal_origen_id=sucursal_id)
+            .values('ProductoTalla_id')
+            .annotate(total=Sum('cantidad'))
+        )
+        egresos_map = {r['ProductoTalla_id']: int(r['total'] or 0) for r in egresos}
+
+        for t in tallas_data:
+            stock_hist = (t['stock'] or 0) - ingresos_map.get(t['id'], 0) + abs(egresos_map.get(t['id'], 0))
+            if stock_hist <= 0:
+                continue
+            _acumular_producto_detalle(productos, t, stock_hist)
+    else:
+        tallas_data = talla_qs.filter(stock__gt=0).values(
+            'stock', 'producto_id',
+            'producto__articulo', 'producto__descripcion',
+            'producto__costo', 'producto__sobreprecio', 'producto__precioventa',
+        )
+        for t in tallas_data:
+            _acumular_producto_detalle(productos, t, t['stock'] or 0)
+
+    items_ordenados = sorted(productos.values(), key=lambda p: p['pares'], reverse=True)
+    top = items_ordenados[:limite]
+
+    return {
+        'items': [{
+            'producto_id': p['producto_id'],
+            'articulo': p['articulo'],
+            'descripcion': p['descripcion'],
+            'pares': p['pares'],
+            'costo': p['costo'],
+            'precio_venta': p['p_venta'],
+        } for p in top],
+        'top_n': limite,
+        'total_productos': len(items_ordenados),
+        'total_pares': sum(p['pares'] for p in items_ordenados),
+        'total_costo': sum(p['costo'] for p in items_ordenados),
+        'total_precio_venta': sum(p['p_venta'] for p in items_ordenados),
+    }
+
+
+@require_GET
+@login_required
+def detalle_stock_sucursal(request):
+    """
+    Devuelve el detalle de productos con stock de UNA sucursal, ordenado por
+    unidades (pares) descendente, para el modal "Ver lo que queda" del reporte.
+
+    Respeta:
+      - las empresas del usuario (multi-tenant / seguridad),
+      - el filtro de marca (marca_id),
+      - las exclusiones activas (excluir_articulos),
+      - la fecha de corte histórica (fecha_corte) reconstruyendo el stock a esa fecha.
+
+    Parámetros GET:
+      - sucursal_id (obligatorio)
+      - marca_id, fecha_corte, excluir_articulos (opcionales, mismos que el reporte)
+      - limite (opcional, default 30, máx 200)
+    """
+    try:
+        sucursal_id = request.GET.get('sucursal_id')
+        if not sucursal_id or not str(sucursal_id).isdigit():
+            return JsonResponse({'success': False, 'error': 'sucursal_id inválido'})
+        sucursal_id = int(sucursal_id)
+
+        marca_id = request.GET.get('marca_id')
+        excluir_ids = _parse_excluir_articulos(request)
+
+        try:
+            limite = int(request.GET.get('limite', 30))
+        except (TypeError, ValueError):
+            limite = 30
+
+        # Fecha de corte histórica
+        fecha_corte = None
+        es_historico = False
+        fecha_corte_str = request.GET.get('fecha_corte')
+        if fecha_corte_str:
+            try:
+                fecha_corte = datetime.strptime(fecha_corte_str, '%Y-%m-%d').date()
+                es_historico = fecha_corte < timezone.localdate()
+            except ValueError:
+                pass
+
+        # Multi-tenant + validar que la sucursal pertenece al usuario
+        empresas_usuario = list(EmpresaUser.objects.filter(
+            user=request.user, status=True,
+        ).values_list('empresa_id', flat=True))
+
+        sucursal = (
+            Sucursal.objects
+            .filter(id=sucursal_id, empresa_id__in=empresas_usuario)
+            .select_related('empresa')
+            .first()
+        )
+        if not sucursal:
+            return JsonResponse({'success': False, 'error': 'Sucursal no encontrada o sin permisos'})
+
+        detalle = _calcular_detalle_top_por_sucursal(
+            empresas_usuario, sucursal_id, limite=limite,
+            marca_id=marca_id, excluir_ids=excluir_ids,
+            fecha_corte=fecha_corte, es_historico=es_historico,
+        )
+
+        return JsonResponse({
+            'success': True,
+            'sucursal_id': sucursal.id,
+            'sucursal': sucursal.alias,
+            'empresa': sucursal.empresa.nombre if sucursal.empresa else '-',
+            'items': detalle['items'],
+            'top_n': detalle['top_n'],
+            'total_productos': detalle['total_productos'],
+            'total_pares': detalle['total_pares'],
+            'total_costo': detalle['total_costo'],
+            'total_precio_venta': detalle['total_precio_venta'],
+            'es_historico': es_historico,
+            'fecha_corte': fecha_corte_str if es_historico else None,
+        })
+    except Exception as e:
+        logger.exception("Error en detalle_stock_sucursal")
+        return JsonResponse({'success': False, 'error': str(e), 'items': []})
+
+
+def _acumular_producto_detalle(productos, talla_row, stock):
+    """Acumula una talla dentro del bucket de su producto para el detalle por sucursal."""
+    pid = talla_row['producto_id']
+    b = productos.get(pid)
+    if b is None:
+        b = {
+            'producto_id': pid,
+            'articulo': talla_row['producto__articulo'] or '',
+            'descripcion': talla_row['producto__descripcion'] or '',
+            'pares': 0, 'costo': 0, 'p_venta': 0,
+        }
+        productos[pid] = b
+    costo = talla_row['producto__costo'] or 0
+    venta = talla_row['producto__precioventa'] or 0
+    b['pares'] += stock
+    b['costo'] += costo * stock
+    b['p_venta'] += venta * stock
 
 
 @require_GET

@@ -1485,6 +1485,8 @@
             <div class="modal-footer py-2">
                 <small class="text-muted me-auto" id="leyendaPermisosDetalle" style="font-size:.7rem;">
                     <i class="ri-information-line me-1"></i>Las fechas editables dependen de sus permisos por tipo de DTE. Tickets sin DTE no permiten edición de fecha.
+                    Las NC de devolución se muestran en rojo (restan del método de pago); su fecha editable es la de cuadratura, no la de emisión.
+                    Eliminar un documento está restringido a administrador.
                 </small>
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal"><i class="ri-close-line me-1"></i>Cerrar</button>
             </div>
@@ -3477,7 +3479,10 @@ function generarContenidoTermica(d) {
     </body></html>`;
 }
 
-function fmCLP(v) { return '$' + parseInt(v||0).toLocaleString('es-CL'); }
+function fmCLP(v) {
+    const n = parseInt(v || 0);
+    return (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('es-CL');
+}
 function formatearMoneda(v) { return fmCLP(v); }
 
 
@@ -3492,6 +3497,11 @@ const PERMISOS_RESUMEN = {
     puede_editar_numero: {% if puede_editar_numero_dte %}true{% else %}false{% endif %},
     puede_editar_pago: {% if puede_editar_pago_dte %}true{% else %}false{% endif %},
     puede_editar_algun_dte: {% if puede_editar_algun_dte %}true{% else %}false{% endif %},
+    // Eliminar un ítem (boleta/factura/NC) desde este modal está
+    // restringido a administrador, igual que en Gestión de Documentos
+    // (`eliminar_documento_venta`) — no hay permiso granular por tipo
+    // para NOTA DE CREDITO.
+    puede_eliminar: {% if es_administrador %}true{% else %}false{% endif %},
 };
 
 // Cache del último batch de items cargados. Se usa para filtrar en
@@ -3694,7 +3704,19 @@ function _filaDetalleHTML(it, idx) {
     }
 
     let dteCell = '<span class="text-muted">—</span>';
-    if (it.dte) {
+    if (it.es_nota_credito && it.dte) {
+        // La NC afecta la caja por `fecha_pago` (fecha de cuadratura), no
+        // por `fecha_emision`. Se muestran ambas cuando difieren.
+        dteCell = `
+            <div class="dte-tag">
+                <span class="tipo">NC</span> #${it.dte.folio}
+                <div class="text-muted" style="font-size:.68rem;">
+                    Emisión: ${it.dte.fecha_emision}
+                    ${it.dte.fecha_pago && it.dte.fecha_pago !== it.dte.fecha_emision ? `<br>Cuadratura: <span class="fecha-pago-nc fw-bold" data-dte-id="${it.dte.id}">${it.dte.fecha_pago}</span>` : `<br>Cuadratura: <span class="fecha-pago-nc" data-dte-id="${it.dte.id}">${it.dte.fecha_pago || it.dte.fecha_emision}</span>`}
+                </div>
+            </div>
+        `;
+    } else if (it.dte) {
         const driftBadge = it.drift_fecha
             ? `<span class="badge bg-danger ms-1" style="font-size:.6rem;" title="La fecha del Ticket (${it.ticket_fecha}) NO coincide con la fecha de emisión del DTE (${it.dte.fecha_emision}). Usa Sincronizar para mover el ticket al día correcto.">⚠ Drift</span>`
             : '';
@@ -3717,7 +3739,15 @@ function _filaDetalleHTML(it, idx) {
 
     // Construcción de acciones
     const acciones = [];
-    if (it.dte && it.permisos && it.permisos.editar_fecha) {
+    if (it.es_nota_credito && it.dte && it.permisos && it.permisos.editar_fecha_pago_nc) {
+        acciones.push(`
+            <button type="button" class="btn btn-outline-primary btn-editar-fecha"
+                    onclick="iniciarEdicionFechaPagoNc(${it.dte.id}, '${it.dte.fecha_pago || it.dte.fecha_emision}', this)"
+                    title="Editar la fecha de cuadratura de esta NC (día de caja al que afecta, no la fecha de emisión)">
+                <i class="ri-calendar-edit-line"></i> Editar fecha
+            </button>
+        `);
+    } else if (it.dte && it.permisos && it.permisos.editar_fecha) {
         acciones.push(`
             <button type="button" class="btn btn-outline-primary btn-editar-fecha"
                     onclick="iniciarEdicionFechaDte(${it.dte.id}, '${it.dte.fecha_emision}', this)"
@@ -3744,11 +3774,22 @@ function _filaDetalleHTML(it, idx) {
             </button>
         `);
     }
+    if (it.dte && it.permisos && it.permisos.eliminar) {
+        acciones.push(`
+            <button type="button" class="btn btn-outline-danger btn-editar-fecha"
+                    onclick="eliminarItemCuadratura(${it.dte.id}, '${it.dte.tipo}', ${it.dte.folio}, this)"
+                    title="Eliminar este documento (solo administrador)">
+                <i class="ri-delete-bin-line"></i> Eliminar
+            </button>
+        `);
+    }
     let accionesCell;
     if (acciones.length) {
-        accionesCell = `<div class="d-flex gap-1 justify-content-center">${acciones.join('')}</div>`;
+        accionesCell = `<div class="d-flex gap-1 flex-wrap justify-content-center">${acciones.join('')}</div>`;
     } else if (!it.dte) {
         accionesCell = '<span class="text-muted" style="font-size:.68rem;" title="Sin DTE asociado: no hay fecha de emisión que editar">Sin DTE</span>';
+    } else if (it.es_nota_credito) {
+        accionesCell = '<span class="text-muted" style="font-size:.68rem;" title="Editar fecha de cuadratura y eliminar NC están restringidos a administrador">Sin permiso</span>';
     } else if (!PERMISOS_RESUMEN.puede_editar_algun_dte) {
         accionesCell = '<span class="text-muted" style="font-size:.68rem;" title="Sin permiso de edición de DTEs">Sin permiso</span>';
     } else {
@@ -3756,7 +3797,8 @@ function _filaDetalleHTML(it, idx) {
     }
 
     const tarjetaVoucher = [it.tipo_tarjeta, it.voucher].filter(Boolean).join(' · ') || '—';
-    const filaClase = it.drift_fecha ? 'table-warning' : (!it.dte && it.tipo_dte_ticket && it.tipo_dte_ticket !== 'TICKET' ? 'table-light' : '');
+    const filaClase = it.es_nota_credito ? 'table-danger' : (it.drift_fecha ? 'table-warning' : (!it.dte && it.tipo_dte_ticket && it.tipo_dte_ticket !== 'TICKET' ? 'table-light' : ''));
+    const montoClase = it.monto < 0 ? 'text-danger' : '';
 
     return `
         <tr class="${filaClase}" data-idx="${idx}" data-dte-id="${it.dte ? it.dte.id : ''}" data-ticket-id="${it.ticket_id || ''}">
@@ -3767,7 +3809,7 @@ function _filaDetalleHTML(it, idx) {
             <td><span class="badge badge-categoria ${_badgeClaseCategoria(it.categoria)}">${it.metodo_pago_display}</span></td>
             <td class="text-muted" style="font-size:.72rem;">${tarjetaVoucher}</td>
             <td>${dteCell}</td>
-            <td class="text-end fw-bold font-monospace">${fmCLP(it.monto)}</td>
+            <td class="text-end fw-bold font-monospace ${montoClase}">${fmCLP(it.monto)}</td>
             <td class="text-center">${accionesCell}</td>
         </tr>
     `;
@@ -3967,6 +4009,150 @@ async function confirmarEdicionFechaTicket(ticketId, fechaAnterior, btnEl) {
         const msg = err.responseJSON && err.responseJSON.error
             ? err.responseJSON.error
             : 'No se pudo mover el ticket';
+        mostrarError(msg);
+    }
+}
+
+/**
+ * Muestra un input date inline para editar la fecha de CUADRATURA de una
+ * NC de devolución (`Dte_Detalle_Pago.fecha_pago`), no su fecha de
+ * emisión. Solo administrador (sin permiso granular por tipo para NC).
+ */
+function iniciarEdicionFechaPagoNc(dteId, fechaActual, btnEl) {
+    const $btn = $(btnEl);
+    const $tr = $btn.closest('tr');
+    $tr.addClass('fila-editando');
+
+    const $td = $btn.closest('td');
+    $td.html(`
+        <div class="d-flex gap-1 align-items-center justify-content-center">
+            <input type="date" class="form-control form-control-sm" value="${fechaActual}" style="max-width:120px;font-size:.72rem;padding:.1rem .3rem;" id="inputFechaPagoNc${dteId}">
+            <button type="button" class="btn btn-success btn-sm py-0 px-1" title="Guardar" onclick="confirmarEdicionFechaPagoNc(${dteId}, '${fechaActual}', this)"><i class="ri-check-line"></i></button>
+            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" title="Cancelar" onclick="cancelarEdicionFechaPagoNc(${dteId}, '${fechaActual}', this)"><i class="ri-close-line"></i></button>
+        </div>
+    `);
+}
+
+function cancelarEdicionFechaPagoNc(dteId, fechaActual, btnEl) {
+    const $tr = $(btnEl).closest('tr');
+    $tr.removeClass('fila-editando');
+    const $td = $(btnEl).closest('td');
+    $td.html(`
+        <button type="button" class="btn btn-outline-primary btn-editar-fecha"
+                onclick="iniciarEdicionFechaPagoNc(${dteId}, '${fechaActual}', this)"
+                title="Editar la fecha de cuadratura de esta NC">
+            <i class="ri-calendar-edit-line"></i> Editar fecha
+        </button>
+    `);
+}
+
+async function confirmarEdicionFechaPagoNc(dteId, fechaAnterior, btnEl) {
+    const $tr = $(btnEl).closest('tr');
+    const nueva = $(`#inputFechaPagoNc${dteId}`).val();
+    if (!nueva) { mostrarError('Ingrese una fecha válida'); return; }
+    if (nueva === fechaAnterior) {
+        cancelarEdicionFechaPagoNc(dteId, fechaAnterior, btnEl);
+        return;
+    }
+
+    const confirm = await Swal.fire({
+        icon: 'warning',
+        title: '¿Cambiar fecha de cuadratura de la NC?',
+        html: `Esta NC dejará de afectar la caja del <strong>${fechaAnterior}</strong> y pasará a afectar la del <strong>${nueva}</strong>.<br>
+               <small class="text-muted">No cambia la fecha de emisión del documento, solo el día de caja al que se imputa.</small><br><br>
+               <small>Si existen arqueos cerrados en las fechas afectadas, sus teóricos pueden requerir recálculo.</small>`,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, actualizar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0066FF',
+    });
+    if (!confirm.isConfirmed) return;
+
+    try {
+        const r = await $.ajax({
+            url: '/app/api/cuadratura/editar-fecha-pago-nc/',
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+            data: JSON.stringify({ dte_id: dteId, fecha_pago: nueva }),
+        });
+        if (!r.success) { mostrarError(r.error || 'Error al actualizar'); return; }
+
+        mostrarExito(r.message || `Fecha de cuadratura actualizada a ${nueva}`);
+
+        $tr.removeClass('fila-editando');
+        recargarDetalleMetodosPago();
+        if (typeof generarCuadratura === 'function') generarCuadratura();
+        if (typeof cargarArqueos === 'function') {
+            try { cargarArqueos(); } catch(e) {}
+        }
+    } catch (err) {
+        const msg = err.responseJSON && err.responseJSON.error
+            ? err.responseJSON.error
+            : 'No se pudo actualizar la fecha de cuadratura';
+        mostrarError(msg);
+    }
+}
+
+/**
+ * Elimina (soft delete) un documento desde el modal de detalle de la
+ * cuadratura. Reusa el mismo endpoint que Gestión de Documentos
+ * (`eliminar_documento_venta`), restringido a administrador. Para una
+ * NC, el backend NO devuelve/toca stock (ya lo movió al emitirse) — solo
+ * la marca como descartada y la saca de la cuadratura.
+ */
+async function eliminarItemCuadratura(dteId, tipoDte, folio, btnEl) {
+    if (!PERMISOS_RESUMEN.puede_eliminar) {
+        mostrarError('Solo administradores pueden eliminar documentos');
+        return;
+    }
+    const esNC = (tipoDte || '').toUpperCase().trim() === 'NOTA DE CREDITO';
+    const tipoTxt = _abreviarTipoDte(tipoDte) || tipoDte || 'DTE';
+
+    const confirm = await Swal.fire({
+        icon: 'warning',
+        title: `Eliminar ${tipoTxt} #${folio}`,
+        html: `
+            <div class="text-start" style="font-size:13px;">
+                <p class="mb-2">Esta acción:</p>
+                <ul class="mb-2 ps-3">
+                    <li>Marca el documento como <strong>descartado</strong>.</li>
+                    <li>Lo saca de este listado y de la <strong>cuadratura de caja</strong>.</li>
+                    ${esNC
+                        ? '<li>No modifica stock: una NC ya devolvió el inventario al emitirse.</li>'
+                        : '<li><strong>Devuelve el stock</strong> vendido a bodega con su movimiento.</li><li>Si tiene ticket vinculado, lo marca como <strong>ANULADO</strong>.</li>'}
+                </ul>
+                <p class="text-danger mb-2"><i class="ri-alert-line"></i> El documento queda en BD para auditoría, pero no aparecerá en consultas.</p>
+            </div>
+            <input id="eliminarItemCuadraturaMotivo" class="swal2-input" placeholder="Motivo (opcional, máx 200)" maxlength="200">
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        confirmButtonColor: '#FF4D4D',
+        cancelButtonText: 'Cancelar',
+        focusCancel: true,
+        preConfirm: () => (document.getElementById('eliminarItemCuadraturaMotivo')?.value || '').trim(),
+    });
+    if (!confirm.isConfirmed) return;
+
+    try {
+        const r = await $.ajax({
+            url: '/app/api/ventas/eliminar-documento/',
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+            data: JSON.stringify({ documento_id: dteId, motivo: confirm.value || '' }),
+        });
+        if (!r.success) { mostrarError(r.error || 'No se pudo eliminar el documento'); return; }
+
+        mostrarExito(r.message || 'Documento eliminado');
+        recargarDetalleMetodosPago();
+        if (typeof generarCuadratura === 'function') generarCuadratura();
+        if (typeof cargarArqueos === 'function') {
+            try { cargarArqueos(); } catch(e) {}
+        }
+    } catch (err) {
+        const msg = err.responseJSON && err.responseJSON.error
+            ? err.responseJSON.error
+            : 'No se pudo eliminar el documento';
         mostrarError(msg);
     }
 }

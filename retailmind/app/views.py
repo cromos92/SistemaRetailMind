@@ -20022,21 +20022,37 @@ def obtener_movimientos_producto(request):
         
         # ✅ MEJORA: Construir referencia priorizando referencia_externa para devoluciones
         # Las devoluciones ya guardan el numero_operacion en referencia_externa
+        # `tipo_referencia` permite al frontend darle un estilo claro (badge) según el origen
+        tipo_referencia = ''
         if m.referencia_externa:
             # Si existe referencia_externa, usarla (devoluciones, cambios, etc.)
             referencia = m.referencia_externa
             # Agregar contexto adicional si aplica
             if m.concepto in ('DEVOLUCION_CLIENTE', 'DEVOLUCION_PROVEEDOR') and m.ticket:
                 referencia = f"{m.referencia_externa} (Ticket #{m.ticket.correlativo})"
+            tipo_referencia = 'devolucion' if (m.concepto or '').find('DEVOLUCION') != -1 else 'externa'
         elif m.tipo_movimiento == 'TRASPASO' and m.sucursal_destino:
             referencia = f"Destino: {m.sucursal_destino.alias}"
+            tipo_referencia = 'traspaso'
         elif m.dte:
-            referencia = f"{m.dte.tipo_documento} #{m.dte.numero_documento}"
+            referencia = f"{m.dte.get_tipo_documento_display()} #{m.dte.numero_documento}"
+            tipo_referencia = 'dte'
         elif m.ticket:
             referencia = f"Ticket #{m.ticket.correlativo}"
+            tipo_referencia = 'ticket'
         else:
             referencia = ''
-        
+
+        # ✅ DTE estructurado para render claro en el frontend (evita parsear strings en JS)
+        if m.dte:
+            dte_info = {
+                'numero': m.dte.numero_documento,
+                'tipo': m.dte.tipo_documento,                     # código crudo (ej. 'FACTURA ELECTRONICA')
+                'tipo_label': m.dte.get_tipo_documento_display(),  # legible (ej. 'Factura Electrónica')
+            }
+        else:
+            dte_info = None
+
         # Extraer atributos del producto (ya cargados por select_related)
         marca = limpiar_prefijo(prod.atributo1.valor if prod.atributo1 else '')
         color = limpiar_prefijo(prod.atributo2.valor if prod.atributo2 else '')
@@ -20061,8 +20077,9 @@ def obtener_movimientos_producto(request):
             'tipo_movimiento': m.tipo_movimiento,
             'concepto': m.concepto,
             'responsable': m.responsable,
-            'dte': m.dte.numero_documento if m.dte else None,
+            'dte': dte_info,
             'referencia_externa': referencia,
+            'tipo_referencia': tipo_referencia,
             'sucursal_destino': m.sucursal_destino.alias if m.sucursal_destino else '',
         })
     
@@ -29979,11 +29996,22 @@ def cargar_dte_ventas(request):
         
         # Ordenar por fecha de emisión descendente
         query = query.order_by('-fecha_emision', '-id')
-        
+
         # Paginación
         paginator = Paginator(query, page_size)
         page_obj = paginator.get_page(page)
-        
+
+        # Canal ecommerce por DTE de la página (una sola query, evita N+1).
+        # Se usa en el modal "Generar NC" para no ofrecer la modalidad
+        # "Devolución que afecta cuadratura" en ventas que nunca pasaron
+        # por una caja física.
+        from .models import PedidoEcommerce
+        canal_ecommerce_por_dte = dict(
+            PedidoEcommerce.objects
+            .filter(dte_id__in=[dte.id for dte in page_obj])
+            .values_list('dte_id', 'canal_origen')
+        )
+
         # Preparar datos para respuesta
         items = []
         for dte in page_obj:
@@ -30074,6 +30102,8 @@ def cargar_dte_ventas(request):
                 'numero_documento': dte.numero_documento,
                 'tipo_documento': dte.tipo_documento,
                 'tipo_transaccion': dte.tipo_transaccion,
+                'es_ecommerce': dte.id in canal_ecommerce_por_dte,
+                'canal_ecommerce': canal_ecommerce_por_dte.get(dte.id),
                 'es_traspaso': es_traspaso_dte,
                 'sucursal_destino': sucursal_destino_info,
                 'fecha_emision': dte.fecha_emision.strftime('%d/%m/%Y'),
