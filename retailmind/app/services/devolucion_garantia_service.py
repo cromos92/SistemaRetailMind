@@ -122,6 +122,16 @@ def resolver_o_crear_receptor(*, cliente_id=None, rut='', nombre='', giro='',
         ).order_by('-id').first()
 
     if empresa is not None:
+        # El propósito central de este módulo es que la NC quede con un
+        # cliente real, no con el receptor genérico de consumidor final —
+        # aunque exista una Empresa así en la BD (heredada de boletas
+        # antiguas), no se acepta como receptor de una devolución nueva.
+        rut_empresa_limpio = (empresa.rut or '').replace('.', '')
+        if rut_empresa_limpio in ('66666666-6', '666666666'):
+            raise DevolucionGarantiaError(
+                'El RUT ingresado corresponde a "Consumidor Final" (genérico). '
+                'Ingrese el RUT real del cliente que recibe la devolución.'
+            )
         # Actualizar solo si llegan valores nuevos (no pisar datos buenos con vacío).
         if nombre:
             empresa.nombre = nombre
@@ -195,7 +205,11 @@ def generar_devolucion_garantia(*, dte_original, sucursal, receptor, motivo,
     monto_total = Decimal('0')
     for item in detalles:
         try:
-            dte_producto = Dte_Productos.objects.select_related('productoTalla__producto').get(
+            # select_for_update: bloquea la línea del DTE mientras se valida
+            # la cantidad disponible, para que dos devoluciones concurrentes
+            # del mismo producto no puedan pasar ambas la validación antes
+            # de que cualquiera confirme su DevolucionGarantiaDetalle.
+            dte_producto = Dte_Productos.objects.select_related('productoTalla__producto').select_for_update().get(
                 id=item['dte_producto_id'], dte=dte_original,
             )
         except Dte_Productos.DoesNotExist:
@@ -223,9 +237,13 @@ def generar_devolucion_garantia(*, dte_original, sucursal, receptor, motivo,
         })
 
     # === Número de operación ===
+    # select_for_update() sobre el rango del prefijo: dos devoluciones
+    # concurrentes de la misma sucursal/mes deben serializarse aquí, si no
+    # ambas pueden calcular el mismo correlativo y la segunda falla contra
+    # el unique=True de numero_operacion.
     fecha = timezone.now()
     prefijo = f"DG-{sucursal.id}-{fecha.strftime('%Y%m')}"
-    ultimo = DevolucionGarantia.objects.filter(
+    ultimo = DevolucionGarantia.objects.select_for_update().filter(
         numero_operacion__startswith=prefijo
     ).order_by('-numero_operacion').first()
     correlativo_local = 1
@@ -257,9 +275,19 @@ def generar_devolucion_garantia(*, dte_original, sucursal, receptor, motivo,
         )
 
     # === Generar la Nota de Crédito (DTE 61) ===
-    monto_con_iva = int(monto_total)
-    monto_neto = int(round(monto_con_iva / Decimal('1.19')))
-    iva = monto_con_iva - monto_neto
+    # Dte_Productos.precio cambia de significado según el documento (ver
+    # Dte.calcular_totales en app/models/dte.py): en boleta es IVA-incluido,
+    # en factura es neto. monto_total viene de sumar ese precio tal cual, así
+    # que hay que aplicar la misma distinción al derivar neto/IVA para la NC.
+    es_boleta_original = 'BOLETA' in dte_original.tipo_documento
+    if es_boleta_original:
+        monto_con_iva = int(monto_total)
+        monto_neto = int(round(monto_con_iva / Decimal('1.19')))
+        iva = monto_con_iva - monto_neto
+    else:
+        monto_neto = int(monto_total)
+        iva = int(round(monto_neto * Decimal('0.19')))
+        monto_con_iva = monto_neto + iva
 
     numero_nc = obtener_siguiente_correlativo(sucursal, 'NOTA DE CREDITO')
 

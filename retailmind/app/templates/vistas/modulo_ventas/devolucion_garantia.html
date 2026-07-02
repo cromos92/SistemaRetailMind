@@ -2,7 +2,7 @@
 
 {% include 'layout/header.html' %}
 <!-- ========== App Menu ========== -->
-{% include 'layout/menu.html' %} {% include 'layout/footer.html' %}
+{% include 'layout/menu.html' %}
 {% csrf_token %}
 
 <!-- Extra CSS -->
@@ -439,7 +439,10 @@
         if (!folio) { return; }
 
         $.get(URLS_DG.buscarDte, { folio: folio }, function (resp) {
-            if (!resp.success) { return; }
+            if (!resp.success) {
+                Swal.fire({ icon: 'error', title: 'No encontrado', text: resp.error || 'Error al buscar el documento' });
+                return;
+            }
             dgDteActual = resp.dte;
             dgProductosSeleccion = {};
 
@@ -471,7 +474,10 @@
 
             if (resp.receptor_es_generico) {
                 $('#dg-alerta-generico').removeClass('d-none');
-            } else if (resp.receptor_actual) {
+            } else if (resp.receptor_actual && !$('#dg-cliente-rut').val().trim()) {
+                // No pisar el RUT/nombre si ya vienen precargados (ej. desde
+                // el puente con Requerimientos) — solo autocompletar cuando
+                // el campo está vacío.
                 $('#dg-cliente-rut').val(resp.receptor_actual.rut);
                 $('#dg-cliente-nombre').val(resp.receptor_actual.nombre);
             }
@@ -614,7 +620,10 @@
             estado: $('#filtro-estado').val(),
         };
         $.get(URLS_DG.listar, params, function (resp) {
-            if (!resp.success) { return; }
+            if (!resp.success) {
+                $('#tbody-devoluciones').html(`<tr><td colspan="8" class="text-center text-danger py-4">${resp.error || 'Error al cargar el listado'}</td></tr>`);
+                return;
+            }
             const $tbody = $('#tbody-devoluciones').empty();
 
             if (!resp.data.length) {
@@ -645,7 +654,31 @@
         });
     }
 
+    // Puente desde el detalle de un Requerimiento (garantía ya resuelta con
+    // el proveedor): precarga folio/cliente/motivo que llegan por querystring
+    // y abre el modal directo, para no retipear los datos.
+    function precargarDesdeRequerimiento() {
+        const params = new URLSearchParams(window.location.search);
+        const folio = params.get('folio');
+        if (!folio) { return; }
+
+        $('#dg-folio').val(folio);
+        $('#dg-cliente-rut').val(params.get('rut') || '');
+        $('#dg-cliente-nombre').val(params.get('nombre') || '');
+        $('#dg-cliente-telefono').val(params.get('telefono') || '');
+        $('#dg-cliente-email').val(params.get('email') || '');
+        if (params.get('motivo')) {
+            $('#dg-motivo').val(params.get('motivo'));
+        }
+
+        new bootstrap.Modal(document.getElementById('modalNuevaDevolucion')).show();
+        buscarDteDevolucionGarantia();
+    }
+
     $(document).ready(function () {
         cargarDevoluciones();
+        precargarDesdeRequerimiento();
     });
 </script>
+
+{% include 'layout/footer.html' %}

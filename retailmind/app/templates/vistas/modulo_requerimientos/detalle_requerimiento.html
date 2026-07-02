@@ -398,6 +398,21 @@ function mostrarAccionesDisponibles(r) {
     if (['APROBADO','EN_PROCESO'].includes(r.estado_codigo) && p.puede_completar)
         h += `<button class="btn btn-success btn-sm w-100" onclick="completarRequerimiento()"><i class="ri-check-double-line me-1"></i>Completar</button>`;
 
+    // Puente a Devolución por Garantía: cuando el proveedor ya respondió
+    // (aprobó o rechazó), el jefe de local puede decidir devolver el
+    // dinero directamente sin retipear folio/RUT/nombre del cliente.
+    if (['APROBADO','RECHAZADO'].includes(r.estado_codigo) && ['administrador','jefe_local'].includes(r.rol_usuario)) {
+        const qs = new URLSearchParams({
+            folio: r.numero_boleta || '',
+            rut: r.cliente_rut || '',
+            nombre: r.cliente_nombre || '',
+            telefono: r.cliente_telefono || '',
+            email: r.cliente_email || '',
+            motivo: `Garantía: ${r.motivo || ''}`,
+        });
+        h += `<a href="/app/devolucion-garantia/?${qs.toString()}" class="btn btn-warning btn-sm w-100" target="_blank"><i class="ri-refund-2-line me-1"></i>Generar devolución de dinero</a>`;
+    }
+
     if (['administrador','jefe_local'].includes(r.rol_usuario))
         h += `<button class="btn btn-soft-primary btn-sm w-100" onclick="cambiarEstado()"><i class="ri-refresh-line me-1"></i>Cambiar Estado</button>`;
 

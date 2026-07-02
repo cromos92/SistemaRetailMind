@@ -18,11 +18,17 @@ from django.views.decorators.http import require_POST, require_GET
 from django.core.paginator import Paginator
 from django.db.models import Q
 
-from .decorators import solo_administrador_o_jefe
+from .decorators import requiere_rol
 from .models import Sucursal, DevolucionGarantia
 from .services import devolucion_garantia_service as service
 
 logger = logging.getLogger('app')
+
+# 'administracion' es un rol distinto de 'administrador' en este sistema
+# (ver PermisoRol.ROLES_CHOICES) y ya tiene puede_aprobar=True por diseño
+# en inicializar_permisos.py — mismo criterio que generar_nc_devolucion
+# (views_modulo_ventas.py), el módulo hermano de Cambios y Devoluciones.
+solo_administrador_o_jefe = requiere_rol('administrador', 'administracion', 'jefe_local')
 
 
 def _sucursal_actual(request):
@@ -49,11 +55,15 @@ def modulo_devolucion_garantia(request):
 @solo_administrador_o_jefe
 def detalle_devolucion_garantia(request, devolucion_id):
     """Detalle de una devolución por garantía con su NC asociada."""
+    sucursal = _sucursal_actual(request)
+    if not sucursal:
+        return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'}, status=400)
+
     devolucion = get_object_or_404(
         DevolucionGarantia.objects.select_related(
             'dte_original', 'receptor', 'nota_credito', 'sucursal', 'autorizado_por',
         ).prefetch_related('detalles__dte_producto__productoTalla__producto'),
-        id=devolucion_id,
+        id=devolucion_id, sucursal=sucursal,
     )
     context = {'devolucion': devolucion}
     return render(request, 'vistas/modulo_ventas/detalle_devolucion_garantia.html', context)
