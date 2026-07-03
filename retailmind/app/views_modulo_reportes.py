@@ -6472,11 +6472,13 @@ def obtener_reporte_movimientos_sucursal(request):
         # ========== QUERY 4: VENTAS REALES POR PRODUCTO Y SUCURSAL ==========
         # Calcula vendido desde movimientos de venta (no por resta)
         # Las cantidades de egreso son negativas, usamos abs()
+        # Incluye VENTA_DIRECTA (fallback POS) y VENTA (fallback de cambios,
+        # histórico) — se escribían fuera del catálogo y quedaban invisibles.
         ventas_query = Movimientos_Producto.objects.filter(
             ProductoTalla__producto_id__in=productos_ids,
             sucursal_origen_id__in=sucursales_ids,
             estado='COMPLETADO',
-            concepto__in=['VENTA_PUBLICO', 'VENTA_MAYORISTA'],
+            concepto__in=['VENTA_PUBLICO', 'VENTA_MAYORISTA', 'VENTA_DIRECTA', 'VENTA'],
             **filtro_fecha
         ).values(
             'ProductoTalla__producto_id', 'sucursal_origen_id'
@@ -6702,7 +6704,7 @@ def exportar_movimientos_sucursal_excel(request):
                 ProductoTalla__producto_id__in=productos_ids,
                 sucursal_origen_id__in=sucursales_ids,
                 estado='COMPLETADO',
-                concepto__in=['VENTA_PUBLICO', 'VENTA_MAYORISTA'],
+                concepto__in=['VENTA_PUBLICO', 'VENTA_MAYORISTA', 'VENTA_DIRECTA', 'VENTA'],
                 **filtro_fecha
             ).values(
                 'ProductoTalla__producto_id', 'sucursal_origen_id'

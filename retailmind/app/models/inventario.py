@@ -206,14 +206,14 @@ class Movimientos_Producto(models.Model):
         return f"Movimiento {self.tipo_movimiento} - {self.concepto} - {self.cantidad}"
     
     def save(self, *args, **kwargs):
-        # Auto-determinar tipo de movimiento basado en el concepto
-        if not self.tipo_movimiento:
-            if self.concepto.startswith(('INGRESO_', 'RECEPCION_', 'DEVOLUCION_CLIENTE', 'TRASPASO_ENTRADA', 'AJUSTE_POSITIVO', 'DONACION_RECIBIDA')):
-                self.tipo_movimiento = 'INGRESO'
-            elif self.concepto.startswith(('VENTA_', 'TRASPASO_SALIDA', 'AJUSTE_NEGATIVO', 'PERDIDA_', 'DONACION_ENTREGADA', 'DEVOLUCION_PROVEEDOR')):
-                self.tipo_movimiento = 'EGRESO'
-            elif self.concepto.startswith('TRASPASO_'):
-                self.tipo_movimiento = 'TRASPASO'
+        # El tipo se deriva SIEMPRE del signo de la cantidad (convención del
+        # kardex: ingresos > 0, egresos < 0). El clasificador anterior por
+        # prefijo de concepto nunca se ejecutaba (default='INGRESO' hacía que
+        # `if not self.tipo_movimiento` jamás fuera verdadero) y dejó egresos
+        # etiquetados como INGRESO. Con cantidad 0 (registros documentales,
+        # p.ej. DEVOLUCION_NO_APTA) se respeta el tipo que pase el llamador.
+        if self.cantidad:
+            self.tipo_movimiento = 'INGRESO' if self.cantidad > 0 else 'EGRESO'
         
         # Auto-asignar fecha y hora si no están presentes
         if not self.fecha:

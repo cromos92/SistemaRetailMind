@@ -15405,7 +15405,7 @@ def aprobar_cambio_generar_ticket(request):
                         Movimientos_Producto.objects.create(
                             ProductoTalla=producto_talla_devuelto,
                             tipo_movimiento='INGRESO',
-                            concepto='DEVOLUCION',
+                            concepto='DEVOLUCION_CLIENTE',
                             cantidad=item.cantidad_original,
                             responsable=request.user.username,
                             sucursal_destino=sucursal,
@@ -15464,7 +15464,7 @@ def aprobar_cambio_generar_ticket(request):
                             Movimientos_Producto.objects.create(
                                 ProductoTalla=item.producto_nuevo,
                                 tipo_movimiento='EGRESO',
-                                concepto='VENTA',
+                                concepto='VENTA_PUBLICO',
                                 cantidad=-item.cantidad_nueva,
                                 responsable=request.user.username,
                                 sucursal_origen=sucursal,

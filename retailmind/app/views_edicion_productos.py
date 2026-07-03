@@ -773,10 +773,9 @@ def ajustar_stock(request, variacion_id):
                 sobreprecio=int(sobreprecio_unitario),
                 precio=int(precio_venta_unitario),
                 concepto='AJUSTE_POSITIVO',
-                responsable=request.user,
+                responsable=request.user.username,
                 observaciones=motivo,
                 estado='COMPLETADO',
-                fecha_hora=timezone.now()
             )
             
             # Actualizar stock en Producto_Talla
@@ -815,21 +814,21 @@ def ajustar_stock(request, variacion_id):
             lotes_consumidos = consumir_stock_fifo(
                 producto_talla=variacion,
                 cantidad_requerida=cantidad,
-                responsable=request.user,
+                responsable=request.user.username,
                 observaciones=motivo,
                 referencia_externa=f'AJUSTE_MANUAL_{timezone.now().strftime("%Y%m%d%H%M%S")}'
             )
-            
+
             # El consumir_stock_fifo ya crea el movimiento, pero vamos a obtenerlo
             # para retornar su ID
             ultimo_movimiento = Movimientos_Producto.objects.filter(
                 ProductoTalla=variacion,
-                responsable=request.user
-            ).order_by('-fecha_hora').first()
-            
-            # Actualizar stock en Producto_Talla
-            variacion.stock -= cantidad
-            variacion.save()
+                responsable=request.user.username
+            ).order_by('-id').first()
+
+            # consumir_stock_fifo (via registrar_movimiento_producto) ya
+            # descontó el stock plano; solo refrescar para responder el valor.
+            variacion.refresh_from_db(fields=['stock'])
             
             return JsonResponse({
                 'success': True,

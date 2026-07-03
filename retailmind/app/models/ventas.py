@@ -131,6 +131,22 @@ CONCEPTO_MOVIMIENTO_CHOICES = [
     # reportes distingan "reparación retroactiva" de los ingresos
     # naturales (compras, devoluciones en flujo normal, etc.).
     ('REPARACION_STOCK_HISTORICO', 'Reparación Stock Histórico (NC sin movimientos)'),
+
+    # === CONCEPTOS EN USO REGULARIZADOS ===
+    # AJUSTE_INVENTARIO: ajustes legítimos del sistema legacy (~44k filas
+    # migradas). Distinto de AJUSTE_INVENTARIO_ENTRADA/SALIDA, que son del
+    # flujo de inventario físico nuevo.
+    ('AJUSTE_INVENTARIO', 'Ajuste de Inventario (legacy)'),
+    # VENTA_DIRECTA: egreso del fallback del POS cuando el consumo FIFO
+    # falla. Es una venta real y debe contarse como tal en reportes.
+    ('VENTA_DIRECTA', 'Venta Directa (fallback POS)'),
+    # ANULACION_TICKET: reingreso por anulación de ticket POS. Distinto de
+    # ANULACION, que es la reversa de un DTE.
+    ('ANULACION_TICKET', 'Anulación de Ticket POS'),
+    ('REVERSION_CAMBIO', 'Reversión de Cambio de Producto'),
+    # DEVOLUCION_NO_APTA: registro documental con cantidad 0 (el producto
+    # devuelto no reingresa a inventario).
+    ('DEVOLUCION_NO_APTA', 'Devolución No Apta (sin ingreso a stock)'),
 ]
 
 ESTADO_MOVIMIENTO_CHOICES = [

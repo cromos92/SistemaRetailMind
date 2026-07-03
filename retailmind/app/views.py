@@ -26095,6 +26095,17 @@ def emitir_dte(request):
                     
                     # ✅ Actualizar stock legacy para mantener sincronización
                     Producto_Talla.objects.filter(id=talla.id).update(stock=F('stock') - cantidad)
+                    # Consumir lotes FIFO junto con el stock plano; si la capa
+                    # de lotes está incompleta no se bloquea la emisión (el
+                    # faltante queda para reconciliar_stock_lotes).
+                    try:
+                        from app.services.inventario_service import consumir_lotes_fifo
+                        consumir_lotes_fifo(talla, cantidad)
+                    except Exception as e_lotes:
+                        logger.warning(
+                            "emitir_dte externo: lotes FIFO no consumidos sku=%s cantidad=%s: %s",
+                            talla.sku, cantidad, e_lotes,
+                        )
                     logger.info(
                         "Movimiento de egreso venta creado: sku=%s cantidad=%s sucursal=%s",
                         talla.sku,
@@ -26126,6 +26137,16 @@ def emitir_dte(request):
                     
                     # ✅ Actualizar stock legacy para mantener sincronización con movimientos
                     Producto_Talla.objects.filter(id=talla.id).update(stock=F('stock') - cantidad)
+                    # Consumir lotes FIFO junto con el stock plano (misma
+                    # política best-effort que el despacho externo).
+                    try:
+                        from app.services.inventario_service import consumir_lotes_fifo
+                        consumir_lotes_fifo(talla, cantidad)
+                    except Exception as e_lotes:
+                        logger.warning(
+                            "emitir_dte interno: lotes FIFO no consumidos sku=%s cantidad=%s: %s",
+                            talla.sku, cantidad, e_lotes,
+                        )
                     logger.info(
                         "Movimiento de egreso traspaso creado: sku=%s cantidad=%s origen=%s destino=%s",
                         talla.sku,

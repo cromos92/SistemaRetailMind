@@ -14,7 +14,9 @@ Uso:
   python _fix_conceptos.py --apply      # EJECUTA los UPDATES
 """
 import os, sys
-os.chdir(r'c:\Users\cromo\Documents\DjangoProyects\SistemaRetailMind\retailmind')
+# Derivar la ruta desde __file__ (mismo casing que la invocación) para evitar
+# "app module has multiple filesystem locations" por C:\ vs c:\ en Windows.
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.getcwd())
 os.environ['DJANGO_SETTINGS_MODULE'] = 'retailmind.settings'
 import django; django.setup()

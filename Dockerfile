@@ -42,5 +42,12 @@ RUN python manage.py collectstatic --noinput --ignore="*.map" || echo "Static fi
 # Expose port
 EXPOSE 8000
 
-# Start command
-CMD ["gunicorn", "retailmind.wsgi", "--bind", "0.0.0.0:8000", "--log-file", "-"]
+# Start command — workers/threads/timeout ajustables por env sin rebuild.
+# El default anterior era 1 worker síncrono: un reporte pesado congelaba el
+# POS de todas las sucursales. 2 workers × 2 threads es conservador en RAM;
+# subir GUNICORN_WORKERS según el plan de la instancia.
+CMD gunicorn retailmind.wsgi --bind 0.0.0.0:8000 \
+    --workers ${GUNICORN_WORKERS:-2} \
+    --threads ${GUNICORN_THREADS:-2} \
+    --timeout ${GUNICORN_TIMEOUT:-60} \
+    --log-file -

@@ -724,8 +724,8 @@ def crear_lote_producto(producto_talla, cantidad, costo_unitario, sobreprecio_un
             sobreprecio_unitario=sobreprecio_unitario,
             precio_venta_unitario=precio_venta_unitario,
             fecha_vencimiento=fecha_vencimiento,
-            dte_origen=dte,
-            movimiento_origen=movimiento,
+            dte=dte,
+            movimiento=movimiento,
             observaciones=observaciones or ''
         )
         
@@ -744,8 +744,8 @@ def consumir_stock_fifo(producto_talla, cantidad_requerida, responsable, ticket=
             producto_talla=producto_talla,
             cantidad_disponible__gt=0,
             activo=True
-        ).order_by('fecha_creacion')
-        
+        ).order_by('fecha_ingreso', 'id')
+
         cantidad_pendiente = cantidad_requerida
         lotes_consumidos = []
         
@@ -881,7 +881,7 @@ def obtener_lotes_producto(request, producto_talla_id):
         # Construir queryset
         queryset = LoteProducto.objects.filter(
             producto_talla=producto_talla
-        ).select_related('dte_origen', 'movimiento_origen')
+        ).select_related('dte', 'movimiento')
         
         # Aplicar filtros
         if estado == 'activos':
@@ -891,8 +891,8 @@ def obtener_lotes_producto(request, producto_talla_id):
         elif estado == 'inactivos':
             queryset = queryset.filter(activo=False)
         
-        # Ordenar por fecha de creación (FIFO)
-        queryset = queryset.order_by('fecha_creacion')
+        # Ordenar por fecha de ingreso (FIFO)
+        queryset = queryset.order_by('fecha_ingreso', 'id')
         
         lotes_data = []
         for lote in queryset:
@@ -903,9 +903,9 @@ def obtener_lotes_producto(request, producto_talla_id):
                 'cantidad_disponible': lote.cantidad_disponible,
                 'costo_unitario': float(lote.costo_unitario),
                 'precio_venta_unitario': float(lote.precio_venta_unitario),
-                'fecha_creacion': lote.fecha_creacion.strftime('%d/%m/%Y %H:%M'),
+                'fecha_creacion': lote.fecha_ingreso.strftime('%d/%m/%Y %H:%M') if lote.fecha_ingreso else None,
                 'fecha_vencimiento': lote.fecha_vencimiento.strftime('%d/%m/%Y') if lote.fecha_vencimiento else None,
-                'dte_origen': lote.dte_origen.numero_dte if lote.dte_origen else None,
+                'dte_origen': lote.dte.numero_documento if lote.dte else None,
                 'valor_inventario': float(lote.cantidad_disponible * lote.costo_unitario),
                 'activo': lote.activo,
                 'observaciones': lote.observaciones or ''
