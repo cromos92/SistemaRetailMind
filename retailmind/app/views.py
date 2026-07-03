@@ -6646,13 +6646,18 @@ import csv
 
 # ========== FUNCIONES AUXILIARES PARA MOVIMIENTOS ==========
 
-def registrar_movimiento_producto(producto_talla, concepto, cantidad, responsable, 
-                                dte=None, ticket=None, sucursal_origen=None, 
-                                sucursal_destino=None, observaciones=None, 
-                                referencia_externa=None, crear_lote_fifo=True):
+def registrar_movimiento_producto(producto_talla, concepto, cantidad, responsable,
+                                dte=None, ticket=None, sucursal_origen=None,
+                                sucursal_destino=None, observaciones=None,
+                                referencia_externa=None, crear_lote_fifo=True,
+                                consumir_lotes=True):
     """
     Función centralizada para registrar movimientos de productos
-    Ahora incluye soporte para FIFO automático
+    Ahora incluye soporte para FIFO automático.
+
+    consumir_lotes=False es para llamadores que ya gestionaron los lotes por
+    su cuenta (aplicar_salida_stock_producto, ajustar_lote, consumir_stock_fifo
+    de views_modulo_productos) — si no, un egreso consumiría lotes dos veces.
     """
     from .models import Movimientos_Producto
     
@@ -6700,7 +6705,21 @@ def registrar_movimiento_producto(producto_talla, concepto, cantidad, responsabl
     # Actualizar stock del producto
     producto_talla.stock += cantidad
     producto_talla.save()
-    
+
+    # Consumir lotes FIFO en egresos (best-effort): sin esto, traspasos vía
+    # modelo Traspaso y ajustes negativos bajaban el stock plano dejando los
+    # lotes inflados (drift crónico detectado en la auditoría jul-2026).
+    if consumir_lotes and cantidad < 0:
+        try:
+            from app.services.inventario_service import consumir_lotes_fifo
+            consumir_lotes_fifo(producto_talla, -cantidad, usar_lock=False)
+        except Exception as e_lotes:
+            import logging
+            logging.getLogger('app').warning(
+                'registrar_movimiento_producto: lotes FIFO no consumidos sku=%s cantidad=%s: %s',
+                producto_talla.sku, cantidad, e_lotes,
+            )
+
     # Crear lote FIFO para ingresos (solo si es positivo y se solicita)
     # Lista de conceptos que generan lotes FIFO automáticamente
     if crear_lote_fifo and cantidad > 0 and concepto in [
@@ -21693,7 +21712,8 @@ def ajustar_lote(request, lote_id):
             responsable=responsable,
             observaciones=f'Ajuste lote {lote.id}: {cantidad_anterior} → {nueva_cantidad} - {observaciones}',
             referencia_externa=f'Lote-{lote.id}',
-            crear_lote_fifo=False
+            crear_lote_fifo=False,
+            consumir_lotes=False  # el lote ya fue ajustado a mano arriba
         )
         
         return JsonResponse({

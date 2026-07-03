@@ -792,7 +792,8 @@ def consumir_stock_fifo(producto_talla, cantidad_requerida, responsable, ticket=
             responsable=responsable,
             ticket=ticket,
             observaciones=observaciones,
-            referencia_externa=ref_final
+            referencia_externa=ref_final,
+            consumir_lotes=False  # los lotes ya se consumieron arriba
         )
         
         return lotes_consumidos

@@ -1544,6 +1544,16 @@ def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMM
                 )
                 producto_talla.stock = max(0, producto_talla.stock - cantidad)
                 producto_talla.save(update_fields=['stock'])
+                # Consumir los lotes que existan aunque el FIFO completo haya
+                # fallado (evita dejar la capa de lotes inflada).
+                try:
+                    from app.services.inventario_service import consumir_lotes_fifo
+                    consumir_lotes_fifo(producto_talla, cantidad, usar_lock=False)
+                except Exception as e_lotes:
+                    logger.warning(
+                        'Ecommerce fallback: lotes FIFO no consumidos sku=%s cantidad=%s: %s',
+                        sku, cantidad, e_lotes,
+                    )
         else:
             logger.warning(
                 'SKU %s del pedido %s no encontrado en sucursal %s — sin rebaje de stock',

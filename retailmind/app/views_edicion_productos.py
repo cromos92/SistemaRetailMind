@@ -647,7 +647,8 @@ def aplicar_salida_stock_producto(request):
             sucursal_destino=variacion.producto.sucursal if variacion.producto else None,
             observaciones=observaciones,
             referencia_externa=referencia_final,
-            crear_lote_fifo=False
+            crear_lote_fifo=False,
+            consumir_lotes=False  # los lotes ya se consumieron arriba (FIFO ajuste)
         )
         movimiento.tipo_movimiento = 'EGRESO'
         movimiento.save(update_fields=['tipo_movimiento', 'updated_at'])

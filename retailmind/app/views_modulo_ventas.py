@@ -14778,7 +14778,7 @@ def ejecutar_cambio_devolucion(request):
             for detalle in cambio.detalles.filter(producto_original__isnull=False, cantidad_original__gt=0):
                 # 1. DEVOLVER stock del producto original (INGRESO)
                 if detalle.apto_para_venta:
-                    Movimientos_Producto.objects.create(
+                    mov_devolucion = Movimientos_Producto.objects.create(
                         ProductoTalla=detalle.producto_original.ProductoTalla,
                         cantidad=detalle.cantidad_original,
                         costo=detalle.producto_original.ProductoTalla.producto.costo,
@@ -14790,10 +14790,22 @@ def ejecutar_cambio_devolucion(request):
                         referencia_externa=cambio.numero_operacion,
                         ticket=cambio.ticket_original
                     )
-                    
+
                     # Actualizar stock del producto devuelto
                     detalle.producto_original.ProductoTalla.stock += detalle.cantidad_original
                     detalle.producto_original.ProductoTalla.save()
+
+                    # El reingreso recrea su lote FIFO: sin esto la capa de
+                    # lotes queda corta respecto del stock plano.
+                    from app.services.inventario_service import crear_lote
+                    crear_lote(
+                        detalle.producto_original.ProductoTalla,
+                        detalle.cantidad_original,
+                        costo_unitario=detalle.producto_original.ProductoTalla.producto.costo or 0,
+                        precio_venta_unitario=int(detalle.precio_original_unitario),
+                        movimiento=mov_devolucion,
+                        observaciones=f'Reingreso por cambio {cambio.numero_operacion}',
+                    )
                 else:
                     # Producto no apto: registrar sin devolver stock
                     Movimientos_Producto.objects.create(
@@ -15400,9 +15412,9 @@ def aprobar_cambio_generar_ticket(request):
                     if item.apto_para_venta:
                         producto_talla_devuelto.stock += item.cantidad_original
                         producto_talla_devuelto.save()
-                        
+
                         # Registrar movimiento de entrada
-                        Movimientos_Producto.objects.create(
+                        mov_devolucion = Movimientos_Producto.objects.create(
                             ProductoTalla=producto_talla_devuelto,
                             tipo_movimiento='INGRESO',
                             concepto='DEVOLUCION_CLIENTE',
@@ -15413,6 +15425,18 @@ def aprobar_cambio_generar_ticket(request):
                             costo=0,
                             estado='COMPLETADO',
                             observaciones=f'Devolución - Cambio #{cambio.numero_operacion}. Condición: {item.get_condicion_producto_display()}. APTO PARA VENTA.'
+                        )
+
+                        # El reingreso recrea su lote FIFO: sin esto la capa
+                        # de lotes queda corta respecto del stock plano.
+                        from app.services.inventario_service import crear_lote
+                        crear_lote(
+                            producto_talla_devuelto,
+                            item.cantidad_original,
+                            costo_unitario=producto_talla_devuelto.producto.costo or 0,
+                            precio_venta_unitario=int(item.precio_original_unitario),
+                            movimiento=mov_devolucion,
+                            observaciones=f'Reingreso por cambio #{cambio.numero_operacion}',
                         )
                         logger.debug(
                             "Ingreso por devolucion apta: cambio=%s, sku=%s, cantidad=%s",
@@ -15461,6 +15485,16 @@ def aprobar_cambio_generar_ticket(request):
                             )
                             item.producto_nuevo.stock -= item.cantidad_nueva
                             item.producto_nuevo.save()
+                            # Consumir lo que quede de lotes aunque el FIFO
+                            # canónico haya fallado (no deja lotes inflados).
+                            try:
+                                from app.services.inventario_service import consumir_lotes_fifo
+                                consumir_lotes_fifo(item.producto_nuevo, item.cantidad_nueva, usar_lock=True)
+                            except Exception as e_lotes2:
+                                logger.warning(
+                                    'Fallback cambio: lotes FIFO no consumidos sku=%s: %s',
+                                    item.producto_nuevo.sku, e_lotes2,
+                                )
                             Movimientos_Producto.objects.create(
                                 ProductoTalla=item.producto_nuevo,
                                 tipo_movimiento='EGRESO',

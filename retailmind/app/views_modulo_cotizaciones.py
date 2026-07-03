@@ -1114,9 +1114,18 @@ def asignar_sku_pendiente(request):
                 'sku_asignado_post_factura', 'fecha_asignacion_sku', 'usuario_asignacion_sku'
             ])
 
-            # 3. Decrementar stock
+            # 3. Decrementar stock (y consumir lotes FIFO para no dejar la
+            # capa de lotes inflada — best-effort, no bloquea el despacho)
             producto_talla.stock -= cantidad
             producto_talla.save(update_fields=['stock'])
+            try:
+                from app.services.inventario_service import consumir_lotes_fifo
+                consumir_lotes_fifo(producto_talla, cantidad, usar_lock=True)
+            except Exception as e_lotes:
+                logger.warning(
+                    'Despacho cotización: lotes FIFO no consumidos sku=%s cantidad=%s: %s',
+                    producto_talla.sku, cantidad, e_lotes,
+                )
 
             # 4. Crear movimiento de inventario
             sucursal_obj = cotizacion.sucursal
