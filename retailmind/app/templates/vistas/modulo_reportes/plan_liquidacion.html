@@ -1,0 +1,225 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<div class="page-content">
+<div class="container-fluid">
+
+<style>
+    :root {
+        --nexo-primary:#0066FF; --nexo-primary-dark:#0052CC; --nexo-primary-light:#E6F0FF;
+        --nexo-secondary:#1A1A2E; --nexo-accent:#00D4AA; --nexo-warning:#FFB020; --nexo-error:#f06548;
+        --nexo-gray-700:#4A4A5A; --nexo-gray-500:#8A8A9A; --nexo-gray-300:#D1D1D9; --nexo-gray-100:#F5F5F7;
+        --nexo-shadow-md:0 4px 6px rgba(26,26,46,.08); --nexo-radius:12px;
+    }
+    .pl-wrap { background:var(--nexo-gray-100); min-height:calc(100vh - 70px); padding-bottom:40px; }
+    .pl-header { background:var(--nexo-secondary); color:#fff; padding:26px 34px; position:relative; overflow:hidden; border-radius:0 0 18px 18px; }
+    .pl-header::before { content:''; position:absolute; top:0; right:0; width:420px; height:100%; background:linear-gradient(135deg,var(--nexo-error) 0%,transparent 70%); opacity:.2; }
+    .pl-header h1 { font-size:1.7rem; font-weight:800; margin:0; position:relative; z-index:1; }
+    .pl-header p { color:var(--nexo-gray-300); margin:4px 0 0; font-size:.85rem; position:relative; z-index:1; }
+    .pl-body { padding:22px 34px; }
+    .pl-kpis { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:18px; }
+    .pl-kpi { background:#fff; border:1px solid var(--nexo-gray-300); border-radius:var(--nexo-radius); padding:14px 16px; box-shadow:var(--nexo-shadow-md); }
+    .pl-kpi .lbl { font-size:.66rem; font-weight:700; color:var(--nexo-gray-500); text-transform:uppercase; letter-spacing:.4px; }
+    .pl-kpi .val { font-size:1.35rem; font-weight:800; color:var(--nexo-secondary); line-height:1.15; margin-top:4px; }
+    .pl-kpi .val.red { color:var(--nexo-error); } .pl-kpi .val.green { color:var(--nexo-accent); }
+    .pl-kpi .sub { font-size:.72rem; color:var(--nexo-gray-500); margin-top:2px; }
+    .pl-alert { background:linear-gradient(135deg,#FFECEC,#fff); border:1px solid #ffd4d4; border-left:5px solid var(--nexo-error); border-radius:var(--nexo-radius); padding:16px 20px; margin-bottom:18px; }
+    .pl-alert .big { font-size:1.15rem; font-weight:800; color:var(--nexo-secondary); }
+    .pl-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+    .pl-card { background:#fff; border:1px solid var(--nexo-gray-300); border-radius:var(--nexo-radius); padding:16px 18px; box-shadow:var(--nexo-shadow-md); }
+    .pl-card h3 { font-size:.98rem; font-weight:800; color:var(--nexo-secondary); margin:0 0 10px; display:flex; align-items:center; gap:8px; }
+    .pl-card h3 i { color:var(--nexo-primary); }
+    .pl-filters { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center; }
+    .pl-fbtn { border:1.5px solid var(--nexo-gray-300); background:#fff; padding:6px 14px; border-radius:999px; font-size:.82rem; font-weight:700; cursor:pointer; color:var(--nexo-gray-700); }
+    .pl-fbtn.active { background:var(--nexo-primary); color:#fff; border-color:var(--nexo-primary); }
+    .pl-table { width:100%; border-collapse:collapse; font-size:.83rem; }
+    .pl-table th { background:var(--nexo-secondary); color:#fff; text-align:right; padding:8px 10px; font-weight:700; cursor:pointer; white-space:nowrap; position:sticky; top:0; }
+    .pl-table th:first-child, .pl-table td:first-child { text-align:left; }
+    .pl-table th.txt { text-align:left; }
+    .pl-table td { padding:6px 10px; border-bottom:1px solid var(--nexo-gray-100); text-align:right; }
+    .pl-table tbody tr:hover { background:var(--nexo-primary-light); }
+    .pl-tag { display:inline-block; padding:2px 9px; border-radius:999px; font-size:.72rem; font-weight:700; }
+    .pl-tag.Liquidar { background:#FFECEC; color:var(--nexo-error); }
+    .pl-tag.Depurar { background:#FFF6E6; color:#b8860b; }
+    .pl-tag.Reponer { background:#E6FBF5; color:#08917a; }
+    .pl-tag.Monitorear { background:var(--nexo-gray-100); color:var(--nexo-gray-500); }
+    .badge-gm { font-weight:800; } .gm-bad{color:var(--nexo-error);} .gm-ok{color:var(--nexo-warning);} .gm-good{color:var(--nexo-accent);}
+    .pl-tablewrap { background:#fff; border:1px solid var(--nexo-gray-300); border-radius:var(--nexo-radius); box-shadow:var(--nexo-shadow-md); padding:16px 18px; }
+    .pl-loading { text-align:center; padding:70px; color:var(--nexo-gray-500); }
+    @media (max-width:900px){ .pl-kpis{grid-template-columns:repeat(2,1fr);} .pl-grid{grid-template-columns:1fr;} }
+    @media print { #app-menu,.navbar-header,.pl-filters,footer{display:none!important;} }
+</style>
+
+<div class="pl-wrap">
+    <div class="pl-header">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <div>
+                <h1><i class="ri-scissors-cut-line"></i> Plan de Liquidación</h1>
+                <p>Ranking de marcas por capital inmovilizado · dónde liberar caja y dónde reponer · datos en vivo del kardex</p>
+            </div>
+            <button class="pl-fbtn" onclick="window.print()"><i class="ri-printer-line"></i> Imprimir / PDF</button>
+        </div>
+    </div>
+    <div class="pl-body">
+        <div id="pl-loading" class="pl-loading"><div class="spinner-border text-primary"></div><p style="margin-top:12px;">Calculando capital inmovilizado en todas las marcas…</p></div>
+        <div id="pl-results" style="display:none;"></div>
+    </div>
+</div>
+
+</div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+const PL_API = "{% url 'obtener_plan_liquidacion' %}";
+const fmt = n => (n == null ? '—' : Math.round(n).toLocaleString('es-CL'));
+const money = n => (n == null ? '—' : '$' + Math.round(n).toLocaleString('es-CL'));
+const moneyM = n => (n == null ? '—' : '$' + (n/1e6).toLocaleString('es-CL',{maximumFractionDigits:1}) + 'M');
+let PL_DATA = [], plCharts = [], plSort = { key: 'dead_costo', dir: -1 }, plFilter = 'Todas';
+
+document.addEventListener('DOMContentLoaded', () => {
+    fetch(PL_API, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.json())
+        .then(res => {
+            document.getElementById('pl-loading').style.display = 'none';
+            if (!res.success) { document.getElementById('pl-results').innerHTML = '<div class="pl-alert">Error: ' + (res.error || '') + '</div>'; document.getElementById('pl-results').style.display = 'block'; return; }
+            PL_DATA = res.data.marcas;
+            renderPlan(res.data);
+            document.getElementById('pl-results').style.display = 'block';
+        })
+        .catch(e => { document.getElementById('pl-loading').innerHTML = 'Error de red: ' + e; });
+});
+
+function gmClass(g) { return g == null ? '' : (g >= 3 ? 'gm-good' : (g >= 1 ? 'gm-ok' : 'gm-bad')); }
+
+function renderPlan(d) {
+    const t = d.totales;
+    let html = `
+    <div class="pl-kpis">
+        <div class="pl-kpi"><div class="lbl">Capital en inventario</div><div class="val">${moneyM(t.valor_costo)}</div><div class="sub">a costo · ${fmt(t.stock_u)} pares</div></div>
+        <div class="pl-kpi"><div class="lbl">Capital inmovilizado 180d</div><div class="val red">${moneyM(t.dead_costo)}</div><div class="sub">${t.dead_pct_valor}% del inventario</div></div>
+        <div class="pl-kpi"><div class="lbl">Pares muertos</div><div class="val red">${fmt(t.dead_u)}</div><div class="sub">sin venta 180 días</div></div>
+        <div class="pl-kpi"><div class="lbl">Marcas analizadas</div><div class="val">${fmt(t.marcas)}</div><div class="sub">con stock en tiendas</div></div>
+        <div class="pl-kpi"><div class="lbl">Marcas a liquidar</div><div class="val red">${fmt(t.n_liquidar)}</div><div class="sub">GMROI &lt;1 + sobre-stock</div></div>
+        <div class="pl-kpi"><div class="lbl">Marcas a reponer</div><div class="val green">${fmt(t.n_reponer)}</div><div class="sub">GMROI ≥3 + cobertura sana</div></div>
+    </div>
+
+    <div class="pl-alert">
+        <div class="big"><i class="ri-alarm-warning-line"></i> ${moneyM(t.dead_costo)} inmovilizados (${t.dead_pct_valor}% del inventario) en ${fmt(t.dead_u)} pares sin rotación</div>
+        <div style="margin-top:6px; color:var(--nexo-gray-700);">Priorizá la liquidación por las marcas de arriba de la tabla (mayor capital atrapado). Reponé solo las marcas verdes de la matriz.</div>
+    </div>
+
+    <div class="pl-grid">
+        <div class="pl-card"><h3><i class="ri-bar-chart-horizontal-line"></i> Top 15 marcas por capital inmovilizado</h3><div id="pl-chart-top"></div></div>
+        <div class="pl-card"><h3><i class="ri-bubble-chart-line"></i> Matriz estratégica — GMROI vs cobertura <span style="font-weight:500; color:var(--nexo-gray-500); font-size:.78rem;">(burbuja = capital)</span></h3><div id="pl-chart-matrix"></div></div>
+    </div>
+
+    <div class="pl-tablewrap">
+        <div class="pl-filters">
+            <span style="font-weight:700; color:var(--nexo-gray-700); font-size:.85rem;">Filtrar:</span>
+            ${['Todas', 'Liquidar', 'Depurar', 'Reponer', 'Monitorear'].map(f => `<button class="pl-fbtn ${f === 'Todas' ? 'active' : ''}" data-f="${f}" onclick="setFilter('${f}')">${f}</button>`).join('')}
+            <span style="margin-left:auto; color:var(--nexo-gray-500); font-size:.78rem;">Click en encabezados para ordenar</span>
+        </div>
+        <div style="overflow-x:auto; max-height:600px; overflow-y:auto;">
+            <table class="pl-table" id="pl-table">
+                <thead><tr>
+                    <th class="txt" onclick="sortBy('marca')">Marca</th>
+                    <th onclick="sortBy('stock')">Stock</th>
+                    <th onclick="sortBy('valor_costo')">Valor $ costo</th>
+                    <th onclick="sortBy('gmroi')">GMROI</th>
+                    <th onclick="sortBy('rotacion')">Rotación</th>
+                    <th onclick="sortBy('cobertura')">Cob. (m)</th>
+                    <th onclick="sortBy('dead_costo')">Inmovil. $</th>
+                    <th onclick="sortBy('pct_dead')">% dead</th>
+                    <th class="txt" onclick="sortBy('accion')">Acción</th>
+                </tr></thead>
+                <tbody id="pl-tbody"></tbody>
+            </table>
+        </div>
+    </div>`;
+    document.getElementById('pl-results').innerHTML = html;
+    renderTable();
+    drawCharts(d);
+}
+
+function renderTable() {
+    let rows = plFilter === 'Todas' ? PL_DATA : PL_DATA.filter(r => r.accion === plFilter);
+    rows = rows.slice().sort((a, b) => {
+        let x = a[plSort.key], y = b[plSort.key];
+        if (x == null) x = -Infinity; if (y == null) y = -Infinity;
+        if (typeof x === 'string') return plSort.dir * x.localeCompare(y);
+        return plSort.dir * (x - y);
+    });
+    document.getElementById('pl-tbody').innerHTML = rows.map(r => `
+        <tr>
+            <td><b>${r.marca}</b></td>
+            <td>${fmt(r.stock)}</td>
+            <td>${money(r.valor_costo)}</td>
+            <td class="badge-gm ${gmClass(r.gmroi)}">${r.gmroi != null ? r.gmroi : '—'}</td>
+            <td>${r.rotacion != null ? r.rotacion + 'x' : '—'}</td>
+            <td>${r.cobertura != null ? r.cobertura : '—'}</td>
+            <td style="font-weight:700;">${money(r.dead_costo)}</td>
+            <td>${r.pct_dead}%</td>
+            <td style="text-align:left;"><span class="pl-tag ${r.accion}">${r.accion}</span></td>
+        </tr>`).join('');
+}
+
+function setFilter(f) {
+    plFilter = f;
+    document.querySelectorAll('.pl-fbtn[data-f]').forEach(b => b.classList.toggle('active', b.dataset.f === f));
+    renderTable();
+}
+function sortBy(key) {
+    plSort.dir = (plSort.key === key) ? -plSort.dir : -1;
+    plSort.key = key;
+    renderTable();
+}
+
+function drawCharts(d) {
+    plCharts.forEach(c => { try { c.destroy(); } catch (e) {} });
+    plCharts = [];
+    const top = PL_DATA.slice(0, 15);
+    // 1. barra horizontal top capital atrapado
+    let c1 = new ApexCharts(document.querySelector('#pl-chart-top'), {
+        chart: { type: 'bar', height: 380, toolbar: { show: false }, fontFamily: 'inherit' },
+        series: [{ name: 'Capital inmovilizado', data: top.map(x => x.dead_costo) }],
+        colors: ['#f06548'], plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '70%' } },
+        dataLabels: { enabled: true, formatter: v => moneyM(v), style: { fontSize: '10px', colors: ['#fff'] } },
+        xaxis: { categories: top.map(x => x.marca), labels: { formatter: v => moneyM(v) } },
+        yaxis: { labels: { style: { fontSize: '11px' } } }, grid: { borderColor: '#eef0f5' },
+        tooltip: { y: { formatter: v => money(v) } },
+    });
+    c1.render(); plCharts.push(c1);
+
+    // 2. matriz estratégica (bubble) por acción
+    const cap = (v, m) => v == null ? null : Math.min(v, m);
+    const grupos = { Liquidar: '#f06548', Depurar: '#FFB020', Reponer: '#00D4AA', Monitorear: '#8A8A9A' };
+    const series = Object.keys(grupos).map(g => ({
+        name: g,
+        data: PL_DATA.filter(r => r.accion === g && r.cobertura != null && r.gmroi != null)
+            .map(r => ({ x: cap(r.cobertura, 36), y: cap(r.gmroi, 6), z: Math.max(4, r.dead_costo / 3e6), marca: r.marca })),
+    }));
+    let c2 = new ApexCharts(document.querySelector('#pl-chart-matrix'), {
+        chart: { type: 'bubble', height: 380, toolbar: { show: false }, fontFamily: 'inherit' },
+        series: series, colors: Object.values(grupos),
+        dataLabels: { enabled: false }, fill: { opacity: 0.7 },
+        xaxis: { title: { text: 'Cobertura (meses) →' }, tickAmount: 6, min: 0, max: 36 },
+        yaxis: { title: { text: 'GMROI →' }, min: 0, max: 6 },
+        grid: { borderColor: '#eef0f5' }, legend: { position: 'top' },
+        annotations: {
+            yaxis: [{ y: 1, borderColor: '#f06548', strokeDashArray: 4, label: { text: 'GMROI 1', style: { background: '#f06548', color: '#fff' } } },
+                    { y: 3, borderColor: '#00D4AA', strokeDashArray: 4, label: { text: 'GMROI 3', style: { background: '#00D4AA', color: '#fff' } } }],
+            xaxis: [{ x: 12, borderColor: '#FFB020', strokeDashArray: 4, label: { text: '12 m', style: { background: '#FFB020', color: '#fff' } } }],
+        },
+        tooltip: { custom: ({ seriesIndex, dataPointIndex, w }) => {
+            const p = w.config.series[seriesIndex].data[dataPointIndex];
+            return `<div style="padding:8px;"><b>${p.marca}</b><br>GMROI: ${p.y} · Cobertura: ${p.x}m<br>Capital: ${moneyM(p.z * 3e6)}</div>`;
+        } },
+    });
+    c2.render(); plCharts.push(c2);
+}
+</script>

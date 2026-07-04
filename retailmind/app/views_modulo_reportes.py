@@ -42,1067 +42,6 @@ from .utils_permisos import (
 logger = logging.getLogger('app')
 
 
-# ========== REPORTES DE COMPRAS ==========
-
-@require_GET
-@login_required
-def reporte_despachos_por_proveedor(request):
-    """Reporte de despachos por proveedor"""
-    try:
-        # Parámetros de filtro
-        fecha_inicio = request.GET.get('fecha_inicio')
-        fecha_fin = request.GET.get('fecha_fin')
-        proveedor_id = request.GET.get('proveedor_id')
-        
-        # Fechas por defecto (último mes)
-        if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.localdate()
-            fecha_inicio = fecha_fin - timedelta(days=30)
-        else:
-            fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
-            fecha_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
-        
-        # Construir queryset
-        queryset = Dte.objects.filter(
-            tipo_transaccion='COMPRA',
-            fecha_emision__range=[fecha_inicio, fecha_fin]
-        ).select_related('emisor')
-        
-        if proveedor_id:
-            queryset = queryset.filter(emisor_id=proveedor_id)
-        
-        # Agrupar por proveedor
-        despachos_por_proveedor = queryset.values(
-            'emisor__nombre',
-            'emisor__rut'
-        ).annotate(
-            total_documentos=Count('id'),
-            monto_total=Sum('total'),
-            monto_promedio=Avg('total')
-        ).order_by('-monto_total')
-        
-        # Detalles por documento, enriched with reception data
-        detalles_documentos = []
-        for dte in queryset.order_by('-fecha_emision'):
-            recepciones = Productos_Recepcionados.objects.filter(dte=dte)
-            total_recibido = recepciones.aggregate(t=Sum('stockArribado'))['t'] or 0
-            total_esperado = Dte_Productos.objects.filter(dte=dte).aggregate(t=Sum('cantidad'))['t'] or 0
-            reposicion_count = recepciones.filter(es_reposicion=True).count()
-            nuevo_count = recepciones.filter(es_reposicion=False).count()
-
-            sucursales = list(
-                recepciones.filter(sucursal_destino__isnull=False)
-                .values_list('sucursal_destino__alias', flat=True)
-                .distinct()
-            )
-
-            detalles_documentos.append({
-                'numero_dte': dte.numero_dte,
-                'tipo_documento': dte.tipo_documento,
-                'fecha_emision': dte.fecha_emision.strftime('%d/%m/%Y'),
-                'proveedor': dte.emisor.nombre,
-                'subtotal': float(dte.subtotal),
-                'iva': float(dte.iva),
-                'total': float(dte.total),
-                'estado': dte.estado_dte,
-                'unidades_esperadas': total_esperado,
-                'unidades_recibidas': total_recibido,
-                'porcentaje_recepcion': round(total_recibido / total_esperado * 100, 1) if total_esperado > 0 else 0,
-                'items_reposicion': reposicion_count,
-                'items_nuevo': nuevo_count,
-                'sucursales_destino': sucursales,
-            })
-        
-        total_docs = sum(item['total_documentos'] for item in despachos_por_proveedor)
-        total_monto = sum(item['monto_total'] for item in despachos_por_proveedor)
-        resumen = {
-            'total_proveedores': len(despachos_por_proveedor),
-            'total_documentos': total_docs,
-            'monto_total_periodo': total_monto,
-            'monto_promedio_documento': total_monto / max(total_docs, 1),
-        }
-        
-        return JsonResponse({
-            'success': True,
-            'despachos_por_proveedor': [
-                {
-                    'proveedor': item['emisor__nombre'],
-                    'rut': item['emisor__rut'],
-                    'total_documentos': item['total_documentos'],
-                    'monto_total': float(item['monto_total']),
-                    'monto_promedio': float(item['monto_promedio'])
-                }
-                for item in despachos_por_proveedor
-            ],
-            'detalles_documentos': detalles_documentos,
-            'resumen': resumen,
-            'parametros': {
-                'fecha_inicio': fecha_inicio.strftime('%d/%m/%Y'),
-                'fecha_fin': fecha_fin.strftime('%d/%m/%Y')
-            }
-        })
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'Error al generar reporte: {str(e)}'
-        })
-
-
-@require_GET
-@login_required
-def obtener_proveedores_para_reporte(request):
-    """Obtener lista de proveedores para filtros de reportes"""
-    try:
-        proveedores = Empresa.objects.filter(
-            esProveedor=True,
-            activo=True,
-        ).order_by('nombre')
-        
-        proveedores_data = []
-        for proveedor in proveedores:
-            # Contar DTEs del proveedor
-            total_dtes = Dte.objects.filter(
-                emisor=proveedor,
-                tipo_transaccion='COMPRA'
-            ).count()
-            
-            if total_dtes > 0:  # Solo incluir proveedores con DTEs
-                proveedores_data.append({
-                    'id': proveedor.id,
-                    'nombre': proveedor.nombre,
-                    'rut': proveedor.rut,
-                    'total_documentos': total_dtes
-                })
-        
-        return JsonResponse({
-            'success': True,
-            'proveedores': proveedores_data
-        })
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'Error al obtener proveedores: {str(e)}'
-        })
-
-
-@login_required
-def verReporteDespachosProveedor(request):
-    """Vista principal del reporte de despachos por proveedor"""
-    return render(request, 'vistas/modulo reportes/reporteDespachosProveedor.html')
-
-
-# ========== REPORTES DE MOVIMIENTOS ==========
-
-@require_GET
-@login_required
-def reporte_movimientos_kardex(request):
-    """Reporte de movimientos tipo kardex"""
-    try:
-        # Parámetros de filtro
-        fecha_inicio = request.GET.get('fecha_inicio')
-        fecha_fin = request.GET.get('fecha_fin')
-        producto_id = request.GET.get('producto_id')
-        sucursal_id = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
-        concepto = request.GET.get('concepto')
-        
-        # Construir queryset
-        queryset = Movimientos_Producto.objects.select_related(
-            'producto_talla__producto', 'responsable', 'sucursal_origen', 'sucursal_destino'
-        )
-        
-        # Aplicar filtros
-        if fecha_inicio:
-            queryset = queryset.filter(fecha_creacion__date__gte=fecha_inicio)
-        
-        if fecha_fin:
-            queryset = queryset.filter(fecha_creacion__date__lte=fecha_fin)
-        
-        if producto_id:
-            queryset = queryset.filter(producto_talla__producto_id=producto_id)
-        
-        if sucursal_id:
-            queryset = queryset.filter(
-                Q(sucursal_origen_id=sucursal_id) | Q(sucursal_destino_id=sucursal_id)
-            )
-        
-        if concepto:
-            queryset = queryset.filter(concepto=concepto)
-        
-        # Ordenar por fecha
-        queryset = queryset.order_by('fecha_creacion')
-        
-        # Generar kardex
-        kardex_data = []
-        saldo_acumulado = {}  # Por producto_talla_id
-        
-        for mov in queryset:
-            producto_talla_id = mov.producto_talla.id
-            
-            # Inicializar saldo si no existe
-            if producto_talla_id not in saldo_acumulado:
-                saldo_acumulado[producto_talla_id] = 0
-            
-            # Determinar si es entrada o salida
-            if mov.concepto in ['COMPRA', 'TRASPASO_ENTRADA', 'AJUSTE_ENTRADA']:
-                entrada = abs(mov.cantidad)
-                salida = 0
-                saldo_acumulado[producto_talla_id] += entrada
-            else:
-                entrada = 0
-                salida = abs(mov.cantidad)
-                saldo_acumulado[producto_talla_id] -= salida
-            
-            kardex_data.append({
-                'fecha': mov.fecha_creacion.strftime('%d/%m/%Y %H:%M'),
-                'concepto': mov.concepto,
-                'tipo_movimiento': mov.tipo_movimiento,
-                'producto': mov.producto_talla.producto.nombre,
-                'sku': mov.producto_talla.sku,
-                'entrada': entrada,
-                'salida': salida,
-                'saldo': saldo_acumulado[producto_talla_id],
-                'responsable': mov.responsable.username if mov.responsable else '',
-                'observaciones': mov.observaciones or '',
-                'referencia': mov.referencia_externa or ''
-            })
-        
-        # Resumen por concepto
-        resumen_conceptos = queryset.values('concepto').annotate(
-            total_movimientos=Count('id'),
-            cantidad_total=Sum('cantidad')
-        ).order_by('-total_movimientos')
-        
-        return JsonResponse({
-            'success': True,
-            'kardex': kardex_data,
-            'resumen_conceptos': [
-                {
-                    'concepto': item['concepto'],
-                    'total_movimientos': item['total_movimientos'],
-                    'cantidad_total': item['cantidad_total']
-                }
-                for item in resumen_conceptos
-            ],
-            'total_movimientos': len(kardex_data)
-        })
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'Error al generar kardex: {str(e)}'
-        })
-
-
-@require_GET
-@login_required
-def reporte_kardex_agrupado(request):
-    """Reporte kardex agrupado por producto"""
-    try:
-        # Parámetros de filtro
-        fecha_inicio = request.GET.get('fecha_inicio')
-        fecha_fin = request.GET.get('fecha_fin')
-        categoria_id = request.GET.get('categoria_id')
-        marca_id = request.GET.get('marca_id')
-        sucursal_id = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
-        
-        # Construir queryset base
-        queryset = Movimientos_Producto.objects.select_related(
-            'producto_talla__producto', 'producto_talla__producto__categoria', 'producto_talla__producto__marca'
-        )
-        
-        # Aplicar filtros
-        if fecha_inicio:
-            queryset = queryset.filter(fecha_creacion__date__gte=fecha_inicio)
-        
-        if fecha_fin:
-            queryset = queryset.filter(fecha_creacion__date__lte=fecha_fin)
-        
-        if categoria_id:
-            queryset = queryset.filter(producto_talla__producto__categoria_id=categoria_id)
-        
-        if marca_id:
-            queryset = queryset.filter(producto_talla__producto__marca_id=marca_id)
-        
-        if sucursal_id:
-            queryset = queryset.filter(
-                Q(sucursal_origen_id=sucursal_id) | Q(sucursal_destino_id=sucursal_id)
-            )
-        
-        # Agrupar por producto
-        kardex_agrupado = queryset.values(
-            'producto_talla__producto__nombre',
-            'producto_talla__sku',
-            'producto_talla__producto__categoria__nombre',
-            'producto_talla__producto__marca__nombre'
-        ).annotate(
-            total_entradas=Sum(
-                'cantidad',
-                filter=Q(concepto__in=['COMPRA', 'TRASPASO_ENTRADA', 'AJUSTE_ENTRADA'])
-            ),
-            total_salidas=Sum(
-                'cantidad',
-                filter=Q(concepto__in=['VENTA', 'TRASPASO_SALIDA', 'AJUSTE_SALIDA'])
-            ),
-            total_movimientos=Count('id'),
-            ultimo_movimiento=Max('fecha_creacion')
-        ).order_by('producto_talla__producto__nombre')
-        
-        # Procesar datos
-        kardex_data = []
-        for item in kardex_agrupado:
-            entradas = item['total_entradas'] or 0
-            salidas = abs(item['total_salidas']) if item['total_salidas'] else 0
-            saldo_neto = entradas - salidas
-            
-            kardex_data.append({
-                'producto': item['producto_talla__producto__nombre'],
-                'sku': item['producto_talla__sku'],
-                'categoria': item['producto_talla__producto__categoria__nombre'] or '',
-                'marca': item['producto_talla__producto__marca__nombre'] or '',
-                'total_entradas': entradas,
-                'total_salidas': salidas,
-                'saldo_neto': saldo_neto,
-                'total_movimientos': item['total_movimientos'],
-                'ultimo_movimiento': item['ultimo_movimiento'].strftime('%d/%m/%Y %H:%M') if item['ultimo_movimiento'] else ''
-            })
-        
-        # Resumen general
-        resumen = {
-            'total_productos': len(kardex_data),
-            'total_entradas': sum(item['total_entradas'] for item in kardex_data),
-            'total_salidas': sum(item['total_salidas'] for item in kardex_data),
-            'productos_con_saldo_positivo': len([item for item in kardex_data if item['saldo_neto'] > 0]),
-            'productos_con_saldo_negativo': len([item for item in kardex_data if item['saldo_neto'] < 0])
-        }
-        
-        return JsonResponse({
-            'success': True,
-            'kardex_agrupado': kardex_data,
-            'resumen': resumen
-        })
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'Error al generar kardex agrupado: {str(e)}'
-        })
-
-
-# ========== REPORTES DE VENTAS ==========
-
-@require_GET
-@login_required
-def reporte_ventas_por_periodo(request):
-    """Reporte de ventas por período"""
-    try:
-        # Parámetros de filtro
-        fecha_inicio = request.GET.get('fecha_inicio')
-        fecha_fin = request.GET.get('fecha_fin')
-        sucursal_id = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
-        vendedor_id = request.GET.get('vendedor_id')
-        agrupacion = request.GET.get('agrupacion', 'dia')  # dia, semana, mes
-        
-        # Fechas por defecto (último mes)
-        if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.localdate()
-            fecha_inicio = fecha_fin - timedelta(days=30)
-        else:
-            fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
-            fecha_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
-        
-        # Construir queryset
-        queryset = Ticket.objects.filter(
-            fecha_creacion__date__range=[fecha_inicio, fecha_fin],
-            estado='PAGADO'
-        ).select_related('vendedor', 'sucursal')
-        
-        if sucursal_id:
-            queryset = queryset.filter(sucursal_id=sucursal_id)
-        
-        if vendedor_id:
-            queryset = queryset.filter(vendedor_id=vendedor_id)
-        
-        # Agrupar según el tipo de agrupación
-        if agrupacion == 'dia':
-            ventas_agrupadas = queryset.annotate(
-                periodo=TruncDate('fecha_creacion')
-            ).values('periodo').annotate(
-                total_tickets=Count('id'),
-                monto_total=Sum('total'),
-                monto_promedio=Avg('total')
-            ).order_by('periodo')
-            
-        elif agrupacion == 'semana':
-            ventas_agrupadas = queryset.annotate(
-                periodo=TruncWeek('fecha_creacion')
-            ).values('periodo').annotate(
-                total_tickets=Count('id'),
-                monto_total=Sum('total'),
-                monto_promedio=Avg('total')
-            ).order_by('periodo')
-            
-        elif agrupacion == 'mes':
-            ventas_agrupadas = queryset.annotate(
-                periodo=TruncMonth('fecha_creacion')
-            ).values('periodo').annotate(
-                total_tickets=Count('id'),
-                monto_total=Sum('total'),
-                monto_promedio=Avg('total')
-            ).order_by('periodo')
-        
-        # Procesar datos
-        ventas_data = []
-        for item in ventas_agrupadas:
-            ventas_data.append({
-                'periodo': item['periodo'].strftime('%d/%m/%Y') if agrupacion == 'dia' else item['periodo'].strftime('%m/%Y'),
-                'total_tickets': item['total_tickets'],
-                'monto_total': float(item['monto_total']),
-                'monto_promedio': float(item['monto_promedio'])
-            })
-        
-        # Resumen general
-        resumen = {
-            'total_tickets': queryset.count(),
-            'monto_total_periodo': float(queryset.aggregate(total=Sum('total'))['total'] or 0),
-            'ticket_promedio': float(queryset.aggregate(promedio=Avg('total'))['promedio'] or 0),
-            'mejor_dia': max(ventas_data, key=lambda x: x['monto_total']) if ventas_data else None
-        }
-        
-        return JsonResponse({
-            'success': True,
-            'ventas_por_periodo': ventas_data,
-            'resumen': resumen,
-            'parametros': {
-                'fecha_inicio': fecha_inicio.strftime('%d/%m/%Y'),
-                'fecha_fin': fecha_fin.strftime('%d/%m/%Y'),
-                'agrupacion': agrupacion
-            }
-        })
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'Error al generar reporte de ventas: {str(e)}'
-        })
-
-
-@require_GET
-@login_required
-def reporte_productos_mas_vendidos(request):
-    """Reporte de productos más vendidos"""
-    try:
-        fecha_inicio  = request.GET.get('fecha_inicio')
-        fecha_fin     = request.GET.get('fecha_fin')
-        sucursal_id   = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
-        categoria_id  = request.GET.get('categoria_id')
-        limite        = int(request.GET.get('limite', 20))
-
-        if not fecha_inicio or not fecha_fin:
-            fecha_fin    = timezone.localdate()
-            fecha_inicio = fecha_fin - timedelta(days=30)
-        else:
-            fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
-            fecha_fin    = datetime.strptime(fecha_fin,    '%Y-%m-%d').date()
-
-        # Ticket_Productos: FK es idTicket (no ticket), cantidad es stock, precio es precio
-        queryset = Ticket_Productos.objects.filter(
-            idTicket__fecha__range=[fecha_inicio, fecha_fin],
-            idTicket__estado='PAGADO'
-        ).select_related(
-            'ProductoTalla__producto',
-            'ProductoTalla__producto__categoria',
-            'ProductoTalla__producto__atributo1',
-        )
-
-        if sucursal_id:
-            queryset = queryset.filter(idTicket__sucursal_id=sucursal_id)
-
-        if categoria_id:
-            queryset = queryset.filter(ProductoTalla__producto__categoria_id=categoria_id)
-
-        productos_vendidos = queryset.values(
-            'ProductoTalla__producto__articulo',
-            'ProductoTalla__sku',
-            'ProductoTalla__producto__categoria__nombre',
-            'ProductoTalla__producto__atributo1__valor',
-        ).annotate(
-            cantidad_vendida=Sum('stock'),
-            ingresos_totales=Sum(F('stock') * F('precio')),
-            tickets_count=Count('idTicket', distinct=True),
-            precio_promedio=Avg('precio'),
-        ).order_by('-cantidad_vendida')[:limite]
-
-        productos_data = []
-        for item in productos_vendidos:
-            productos_data.append({
-                'producto':        item['ProductoTalla__producto__articulo'],
-                'sku':             item['ProductoTalla__sku'],
-                'categoria':       item['ProductoTalla__producto__categoria__nombre'] or '',
-                'marca':           item['ProductoTalla__producto__atributo1__valor'] or '',
-                'cantidad_vendida': item['cantidad_vendida'],
-                'ingresos_totales': float(item['ingresos_totales'] or 0),
-                'tickets_count':   item['tickets_count'],
-                'precio_promedio': float(item['precio_promedio'] or 0),
-            })
-
-        top_categorias = queryset.values(
-            'ProductoTalla__producto__categoria__nombre'
-        ).annotate(
-            cantidad_vendida=Sum('stock'),
-            ingresos_totales=Sum(F('stock') * F('precio')),
-        ).order_by('-cantidad_vendida')[:5]
-
-        return JsonResponse({
-            'success': True,
-            'productos_mas_vendidos': productos_data,
-            'top_categorias': [
-                {
-                    'categoria':      item['ProductoTalla__producto__categoria__nombre'] or 'Sin categoría',
-                    'cantidad_vendida': item['cantidad_vendida'],
-                    'ingresos_totales': float(item['ingresos_totales'] or 0),
-                }
-                for item in top_categorias
-            ],
-            'parametros': {
-                'fecha_inicio': fecha_inicio.strftime('%d/%m/%Y'),
-                'fecha_fin':    fecha_fin.strftime('%d/%m/%Y'),
-                'limite':       limite,
-            }
-        })
-
-    except Exception as e:
-        logger.exception("Error al generar reporte de productos")
-        return JsonResponse({'success': False, 'error': f'Error al generar reporte de productos: {str(e)}'})
-
-
-@require_GET
-@login_required
-def reporte_vendedores_performance(request):
-    """Reporte de performance de vendedores"""
-    try:
-        # Parámetros de filtro
-        fecha_inicio = request.GET.get('fecha_inicio')
-        fecha_fin = request.GET.get('fecha_fin')
-        sucursal_id = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
-        
-        # Fechas por defecto (último mes)
-        if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.localdate()
-            fecha_inicio = fecha_fin - timedelta(days=30)
-        else:
-            fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
-            fecha_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
-        
-        # Construir queryset
-        queryset = Ticket.objects.filter(
-            fecha_creacion__date__range=[fecha_inicio, fecha_fin],
-            estado='PAGADO'
-        ).select_related('vendedor')
-        
-        if sucursal_id:
-            queryset = queryset.filter(sucursal_id=sucursal_id)
-        
-        # Agrupar por vendedor
-        performance_vendedores = queryset.values(
-            'vendedor__nombre',
-            'vendedor__codigo'
-        ).annotate(
-            total_tickets=Count('id'),
-            monto_total_ventas=Sum('total'),
-            ticket_promedio=Avg('total'),
-            comision_total=Sum(F('total') * F('vendedor__comision_porcentaje') / 100)
-        ).order_by('-monto_total_ventas')
-        
-        # Procesar datos
-        vendedores_data = []
-        for item in performance_vendedores:
-            # Calcular días trabajados (días con al menos una venta)
-            dias_trabajados = queryset.filter(
-                vendedor__nombre=item['vendedor__nombre']
-            ).dates('fecha_creacion', 'day').count()
-            
-            promedio_diario = item['monto_total_ventas'] / max(dias_trabajados, 1)
-            
-            vendedores_data.append({
-                'vendedor': item['vendedor__nombre'],
-                'codigo': item['vendedor__codigo'],
-                'total_tickets': item['total_tickets'],
-                'monto_total_ventas': float(item['monto_total_ventas']),
-                'ticket_promedio': float(item['ticket_promedio']),
-                'comision_total': float(item['comision_total'] or 0),
-                'dias_trabajados': dias_trabajados,
-                'promedio_diario': float(promedio_diario)
-            })
-        
-        # Ranking y métricas
-        if vendedores_data:
-            mejor_vendedor = max(vendedores_data, key=lambda x: x['monto_total_ventas'])
-            mayor_ticket_promedio = max(vendedores_data, key=lambda x: x['ticket_promedio'])
-        else:
-            mejor_vendedor = None
-            mayor_ticket_promedio = None
-        
-        return JsonResponse({
-            'success': True,
-            'performance_vendedores': vendedores_data,
-            'ranking': {
-                'mejor_vendedor': mejor_vendedor,
-                'mayor_ticket_promedio': mayor_ticket_promedio
-            },
-            'parametros': {
-                'fecha_inicio': fecha_inicio.strftime('%d/%m/%Y'),
-                'fecha_fin': fecha_fin.strftime('%d/%m/%Y')
-            }
-        })
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'Error al generar reporte de vendedores: {str(e)}'
-        })
-
-
-# ========== REPORTES DE INVENTARIO ==========
-
-@require_GET
-@login_required
-def reporte_valoracion_inventario(request):
-    """Reporte de valoración de inventario por sucursal activa"""
-    try:
-        sucursal_id = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
-        categoria_id = request.GET.get('categoria_id')
-        marca_id = request.GET.get('marca_id')
-
-        # Base: productos de la sucursal activa (un Producto = una sucursal)
-        queryset = Producto.objects.select_related(
-            'categoria', 'atributo1', 'atributo2', 'sucursal'
-        ).prefetch_related('producto_talla')
-
-        if sucursal_id:
-            queryset = queryset.filter(sucursal_id=sucursal_id)
-
-        if categoria_id:
-            queryset = queryset.filter(categoria_id=categoria_id)
-
-        if marca_id:
-            queryset = queryset.filter(atributo1_id=marca_id)
-
-        inventario_data = []
-        valor_total_inventario = 0
-        stock_total_general = 0
-
-        resumen_categorias = {}
-
-        for producto in queryset:
-            for talla in producto.producto_talla.all():
-                stock_actual = talla.stock or 0
-                if stock_actual <= 0:
-                    continue
-
-                costo_unitario = producto.costo or 0
-                precio_venta   = producto.precioventa or 0
-                valor_linea    = stock_actual * costo_unitario
-
-                valor_total_inventario += valor_linea
-                stock_total_general    += stock_actual
-
-                margen_unitario = precio_venta - costo_unitario
-                margen_pct = round((margen_unitario / precio_venta) * 100, 1) if precio_venta > 0 else 0
-
-                inventario_data.append({
-                    'sku':             talla.sku,
-                    'articulo':        producto.articulo,
-                    'descripcion':     producto.descripcion or '-',
-                    'categoria':       producto.categoria.nombre if producto.categoria else '-',
-                    'marca':           producto.atributo1.valor if producto.atributo1 else '-',
-                    'color':           producto.atributo2.valor if producto.atributo2 else '-',
-                    'talla':           talla.talla or '-',
-                    'sucursal':        producto.sucursal.alias if producto.sucursal else '-',
-                    'stock_actual':    stock_actual,
-                    'costo_unitario':  float(costo_unitario),
-                    'precio_venta':    float(precio_venta),
-                    'valor_inventario': float(valor_linea),
-                    'margen_unitario': float(margen_unitario),
-                    'margen_porcentaje': margen_pct,
-                })
-
-                cat = producto.categoria.nombre if producto.categoria else 'Sin categoría'
-                if cat not in resumen_categorias:
-                    resumen_categorias[cat] = {'productos_count': 0, 'stock_total': 0, 'valor_total': 0}
-                resumen_categorias[cat]['productos_count'] += 1
-                resumen_categorias[cat]['stock_total']     += stock_actual
-                resumen_categorias[cat]['valor_total']     += valor_linea
-
-        inventario_data.sort(key=lambda x: x['valor_inventario'], reverse=True)
-
-        return JsonResponse({
-            'success': True,
-            'inventario': inventario_data,
-            'resumen': {
-                'total_productos':       len(inventario_data),
-                'valor_total_inventario': float(valor_total_inventario),
-                'stock_total':           stock_total_general,
-                'costo_promedio_general': float(valor_total_inventario / stock_total_general) if stock_total_general > 0 else 0,
-            },
-            'resumen_categorias': [
-                {
-                    'categoria':       cat,
-                    'productos_count': data['productos_count'],
-                    'stock_total':     data['stock_total'],
-                    'valor_total':     float(data['valor_total']),
-                    'porcentaje_valor': round((data['valor_total'] / valor_total_inventario) * 100, 1) if valor_total_inventario > 0 else 0,
-                }
-                for cat, data in resumen_categorias.items()
-            ],
-            'parametros': {
-                'fecha_reporte': timezone.now().strftime('%d/%m/%Y %H:%M'),
-                'sucursal_id':   sucursal_id,
-            }
-        })
-
-    except Exception as e:
-        logger.exception("Error al generar reporte de valoracion de inventario")
-        return JsonResponse({'success': False, 'error': f'Error al generar reporte de valoración: {str(e)}'})
-
-
-@require_GET
-@login_required
-def reporte_rotacion_inventario(request):
-    """Reporte de rotación de inventario por sucursal"""
-    try:
-        periodo_dias = int(request.GET.get('periodo_dias', 90))
-        sucursal_id  = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
-        categoria_id = request.GET.get('categoria_id')
-
-        fecha_inicio = timezone.localdate() - timedelta(days=periodo_dias)
-
-        # Base: productos de la sucursal activa
-        queryset = Producto.objects.select_related(
-            'categoria', 'atributo1', 'sucursal'
-        ).prefetch_related('producto_talla')
-
-        if sucursal_id:
-            queryset = queryset.filter(sucursal_id=sucursal_id)
-
-        if categoria_id:
-            queryset = queryset.filter(categoria_id=categoria_id)
-
-        # Pre-cargar ventas del período para todos los productos de una vez
-        producto_ids = list(queryset.values_list('id', flat=True))
-
-        # Ventas desde Dte_Productos (más completo que Ticket_Productos para este rango)
-        from django.db.models import Sum as DSum
-        ventas_map = {}
-        if producto_ids:
-            ventas_qs = Dte_Productos.objects.filter(
-                productoTalla__producto_id__in=producto_ids,
-                dte__fecha_emision__gte=fecha_inicio,
-                dte__tipo_documento__in=[
-                    'BOLETA ELECTRONICA', 'BOLETA PAPEL',
-                    'FACTURA ELECTRONICA', 'FACTURA EXENTA'
-                ],
-                activo=True,
-            )
-            if sucursal_id:
-                ventas_qs = ventas_qs.filter(dte__sucursal_id=sucursal_id)
-
-            ventas_agg = ventas_qs.values(
-                'productoTalla__producto_id'
-            ).annotate(total_vendido=DSum('stock'))
-
-            ventas_map = {
-                v['productoTalla__producto_id']: v['total_vendido'] or 0
-                for v in ventas_agg
-            }
-
-        def clasificar_rotacion(rot):
-            if rot >= 2.0: return 'ALTA'
-            if rot >= 0.5: return 'MEDIA'
-            return 'BAJA'
-
-        rotacion_data = []
-
-        for producto in queryset:
-            stock_actual = sum(t.stock or 0 for t in producto.producto_talla.all())
-            if stock_actual <= 0:
-                continue
-
-            cantidad_vendida = ventas_map.get(producto.id, 0)
-            if cantidad_vendida <= 0:
-                continue
-
-            rotacion      = round(cantidad_vendida / stock_actual, 2)
-            dias_inventario = round(periodo_dias / rotacion, 1) if rotacion > 0 else None
-
-            rotacion_data.append({
-                'articulo':        producto.articulo,
-                'descripcion':     producto.descripcion or '-',
-                'categoria':       producto.categoria.nombre if producto.categoria else '-',
-                'marca':           producto.atributo1.valor if producto.atributo1 else '-',
-                'sucursal':        producto.sucursal.alias if producto.sucursal else '-',
-                'stock_actual':    stock_actual,
-                'cantidad_vendida': cantidad_vendida,
-                'rotacion':        rotacion,
-                'dias_inventario': dias_inventario if dias_inventario is not None else 'Sin rotación',
-                'clasificacion':   clasificar_rotacion(rotacion),
-            })
-
-        rotacion_data.sort(key=lambda x: x['rotacion'], reverse=True)
-
-        rotaciones_validas = [r for r in rotacion_data if isinstance(r['dias_inventario'], float)]
-
-        resumen = {
-            'productos_analizados':    len(rotacion_data),
-            'productos_con_rotacion':  len(rotaciones_validas),
-            'rotacion_promedio':       round(sum(r['rotacion'] for r in rotacion_data) / len(rotacion_data), 2) if rotacion_data else 0,
-            'dias_inventario_promedio': round(sum(r['dias_inventario'] for r in rotaciones_validas) / len(rotaciones_validas), 1) if rotaciones_validas else 0,
-            'productos_alta_rotacion': len([r for r in rotacion_data if r['clasificacion'] == 'ALTA']),
-            'productos_baja_rotacion': len([r for r in rotacion_data if r['clasificacion'] == 'BAJA']),
-        }
-
-        return JsonResponse({
-            'success': True,
-            'rotacion_inventario': rotacion_data,
-            'resumen': resumen,
-            'parametros': {
-                'periodo_dias':  periodo_dias,
-                'fecha_inicio':  fecha_inicio.strftime('%d/%m/%Y'),
-                'fecha_fin':     timezone.now().strftime('%d/%m/%Y'),
-                'sucursal_id':   sucursal_id,
-            }
-        })
-
-    except Exception as e:
-        logger.exception("Error al generar reporte de rotacion")
-        return JsonResponse({'success': False, 'error': f'Error al generar reporte de rotación: {str(e)}'})
-
-
-# ========== EXPORTACIÓN DE REPORTES ==========
-
-@require_GET
-@login_required
-def exportar_reporte_excel(request):
-    """Exportar cualquier reporte a Excel"""
-    try:
-        import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment
-        
-        tipo_reporte = request.GET.get('tipo_reporte')
-        
-        if not tipo_reporte:
-            return JsonResponse({
-                'success': False,
-                'error': 'Tipo de reporte requerido'
-            })
-        
-        # Crear workbook
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        
-        # Configurar según tipo de reporte
-        if tipo_reporte == 'ventas_periodo':
-            ws.title = "Ventas por Período"
-            # Obtener datos del reporte
-            reporte_response = reporte_ventas_por_periodo(request)
-            data = json.loads(reporte_response.content)
-            
-            # Encabezados
-            headers = ['Período', 'Total Tickets', 'Monto Total', 'Monto Promedio']
-            ws.append(headers)
-            
-            # Datos
-            for item in data['ventas_por_periodo']:
-                ws.append([
-                    item['periodo'],
-                    item['total_tickets'],
-                    item['monto_total'],
-                    item['monto_promedio']
-                ])
-        
-        elif tipo_reporte == 'productos_vendidos':
-            ws.title = "Productos Más Vendidos"
-            # Obtener datos del reporte
-            reporte_response = reporte_productos_mas_vendidos(request)
-            data = json.loads(reporte_response.content)
-            
-            # Encabezados
-            headers = ['Producto', 'SKU', 'Categoría', 'Cantidad Vendida', 'Ingresos Totales']
-            ws.append(headers)
-            
-            # Datos
-            for item in data['productos_mas_vendidos']:
-                ws.append([
-                    item['producto'],
-                    item['sku'],
-                    item['categoria'],
-                    item['cantidad_vendida'],
-                    item['ingresos_totales']
-                ])
-        
-        elif tipo_reporte == 'valoracion_inventario':
-            ws.title = "Valoración de Inventario"
-            # Obtener datos del reporte
-            reporte_response = reporte_valoracion_inventario(request)
-            data = json.loads(reporte_response.content)
-            
-            # Encabezados
-            headers = ['SKU', 'Producto', 'Categoría', 'Stock', 'Costo Unitario', 'Valor Inventario']
-            ws.append(headers)
-            
-            # Datos
-            for item in data['inventario']:
-                ws.append([
-                    item['sku'],
-                    item['producto'],
-                    item['categoria'],
-                    item['stock_actual'],
-                    item['costo_unitario'],
-                    item['valor_inventario']
-                ])
-        
-        else:
-            return JsonResponse({
-                'success': False,
-                'error': 'Tipo de reporte no soportado'
-            })
-        
-        # Aplicar estilos a encabezados
-        header_font = Font(bold=True, color="FFFFFF")
-        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-        
-        for cell in ws[1]:
-            cell.font = header_font
-            cell.fill = header_fill
-        
-        # Ajustar ancho de columnas
-        for column in ws.columns:
-            max_length = 0
-            column_letter = column[0].column_letter
-            for cell in column:
-                try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
-            adjusted_width = min(max_length + 2, 50)
-            ws.column_dimensions[column_letter].width = adjusted_width
-        
-        # Preparar respuesta
-        response = HttpResponse(
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        response['Content-Disposition'] = f'attachment; filename="reporte_{tipo_reporte}.xlsx"'
-        
-        wb.save(response)
-        return response
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'Error al exportar reporte: {str(e)}'
-        })
-
-
-# ========== DASHBOARD GENERAL DE REPORTES ==========
-
-@login_required
-def dashboard_reportes(request):
-    """Vista principal del dashboard de reportes"""
-    return render(request, 'vistas/modulo_dashboards/dashboard_reportes.html')
-
-
-@require_GET
-@login_required
-def obtener_resumen_reportes(request):
-    """Obtener resumen general para el dashboard de reportes"""
-    try:
-        # Período de análisis (último mes)
-        fecha_fin = timezone.localdate()
-        fecha_inicio = fecha_fin - timedelta(days=30)
-        
-        # Métricas de ventas
-        tickets_periodo = Ticket.objects.filter(
-            fecha_creacion__date__range=[fecha_inicio, fecha_fin],
-            estado='PAGADO'
-        )
-        
-        total_ventas = tickets_periodo.aggregate(total=Sum('total'))['total'] or 0
-        total_tickets = tickets_periodo.count()
-        ticket_promedio = total_ventas / total_tickets if total_tickets > 0 else 0
-        
-        # Métricas de inventario
-        total_productos = Producto_Talla.objects.filter(activo=True).count()
-        productos_con_stock = 0
-        valor_total_inventario = 0
-        
-        for pt in Producto_Talla.objects.filter(activo=True):
-            stock = pt.stock_total()
-            if stock > 0:
-                productos_con_stock += 1
-                from .views import obtener_valor_inventario_fifo
-                valor_total_inventario += obtener_valor_inventario_fifo(pt)
-        
-        # Métricas de compras
-        compras_periodo = Compras.objects.filter(
-            fecha_compra__range=[fecha_inicio, fecha_fin]
-        )
-        
-        total_compras = compras_periodo.aggregate(total=Sum('total'))['total'] or 0
-        cantidad_compras = compras_periodo.count()
-        
-        # Top 5 productos más vendidos
-        top_productos = Ticket_Productos.objects.filter(
-            ticket__created_at__date__range=[fecha_inicio, fecha_fin],
-            ticket__estado='PAGADO'
-        ).values(
-            'productoTalla__producto__nombre',
-            'productoTalla__sku'
-        ).annotate(
-            cantidad_vendida=Sum('cantidad')
-        ).order_by('-cantidad_vendida')[:5]
-        
-        resumen = {
-            'ventas': {
-                'total_ventas': float(total_ventas),
-                'total_tickets': total_tickets,
-                'ticket_promedio': float(ticket_promedio)
-            },
-            'inventario': {
-                'total_productos': total_productos,
-                'productos_con_stock': productos_con_stock,
-                'valor_total_inventario': float(valor_total_inventario)
-            },
-            'compras': {
-                'total_compras': float(total_compras),
-                'cantidad_compras': cantidad_compras
-            },
-            'top_productos': [
-                {
-                    'producto': item['productoTalla__producto__nombre'],
-                    'sku': item['productoTalla__sku'],
-                    'cantidad_vendida': item['cantidad_vendida']
-                }
-                for item in top_productos
-            ],
-            'periodo': {
-                'fecha_inicio': fecha_inicio.strftime('%d/%m/%Y'),
-                'fecha_fin': fecha_fin.strftime('%d/%m/%Y')
-            }
-        }
-        
-        return JsonResponse({
-            'success': True,
-            'resumen': resumen
-        })
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'Error al obtener resumen: {str(e)}'
-        })
-
 
 # ========== REPORTE DE VENTAS POR SUCURSAL ==========
 
@@ -1222,6 +161,13 @@ def obtener_ventas_por_vendedor_reporte(request):
             )
         }
 
+        # Unidades por vendedor (para UPT = unidades por documento).
+        unidades_por_vend = {
+            r['dte__vendedor__id']: int(r['u'] or 0)
+            for r in Dte_Productos.objects.filter(dte__in=queryset_ventas)
+            .values('dte__vendedor__id').annotate(u=Sum('stock'))
+        }
+
         # Consolidar.
         # Usamos `None` como key para los DTEs sin vendedor asignado para
         # que el total de la tabla calce con el KPI "Total Ventas" del
@@ -1244,6 +190,7 @@ def obtener_ventas_por_vendedor_reporte(request):
                 'cantidad_devoluciones': nc['cantidad'],
                 'nc_anulacion_total': nc_anul['total'],
                 'cantidad_nc_anulacion': nc_anul['cantidad'],
+                'unidades': unidades_por_vend.get(vid, 0),
                 'sin_vendedor': es_sin_vendedor,
             }
 
@@ -1296,6 +243,14 @@ def obtener_ventas_por_vendedor_reporte(request):
                 'nc_anulacion_total': int(data.get('nc_anulacion_total', 0)),
                 'cantidad_nc_anulacion': int(data.get('cantidad_nc_anulacion', 0)),
                 'documentos': data['documentos'],
+                # Calidad de venta: % de descuento sobre precio lista y
+                # unidades por documento (venta cruzada).
+                'unidades': int(data.get('unidades', 0)),
+                'upt': round(data.get('unidades', 0) / data['documentos'], 2)
+                       if data['documentos'] else 0,
+                'pct_descuento': round(
+                    100 * data['descuentos'] / (data['ventas_brutas'] + data['descuentos']), 1
+                ) if (data['ventas_brutas'] + data['descuentos']) > 0 else 0,
                 'participacion': round(participacion, 1),
                 # Marca para que el frontend pinte la fila distinto y NO
                 # ofrezca el botón "ver documentos" (no hay vendedor_id).
@@ -2795,7 +1750,7 @@ def obtener_documentos_vendedor_reporte(request):
             fecha_fin = datetime.strptime(fecha_fin_param, '%Y-%m-%d')
         else:
             if not mes:
-                mes = timezone.now().strftime('%Y-%m')
+                mes = timezone.localdate().strftime('%Y-%m')
             fecha_inicio = datetime.strptime(mes, '%Y-%m').replace(day=1)
             if fecha_inicio.month == 12:
                 fecha_fin = fecha_inicio.replace(year=fecha_inicio.year + 1, month=1, day=1) - timedelta(days=1)
@@ -3116,11 +2071,34 @@ def obtener_documentos_emitidos(request):
         
         # Ordernar por fecha descendente
         queryset = queryset.order_by('-fecha_emision', '-numero_documento')
-        
+
+        # Una sola materialización para la lista y el resumen, con los pagos
+        # prefetched (antes: 2 recorridos del queryset + 2-4 queries por DTE).
+        queryset = queryset.select_related('receptor', 'sucursal').prefetch_related('dte_asociado')
+        dtes_todos = list(queryset)
+
+        # Fallback masivo de tickets para los DTEs sin detalle de pago
+        # (reemplaza la búsqueda de Ticket/TicketDetallePago fila a fila).
+        claves_sin_pago = {
+            (str(d.numero_documento), d.sucursal_id)
+            for d in dtes_todos if not d.dte_asociado.all()
+        }
+        tickets_map = {}
+        pagos_ticket_map = {}
+        if claves_sin_pago:
+            correlativos = {c for c, _ in claves_sin_pago}
+            for t in Ticket.objects.filter(correlativo__in=correlativos):
+                tickets_map.setdefault((str(t.correlativo), t.sucursal_id), t)
+            ids_tickets = [t.id for t in tickets_map.values()]
+            if ids_tickets:
+                for pt in TicketDetallePago.objects.filter(
+                        ticket_id__in=ids_tickets).order_by('id'):
+                    pagos_ticket_map.setdefault(pt.ticket_id, []).append(pt)
+
         # Preparar datos de documentos
         documentos_data = []
-        total_real = queryset.count()
-        for dte in queryset[:100]:  # Limitar a 100 registros
+        total_real = len(dtes_todos)
+        for dte in dtes_todos[:100]:  # Limitar a 100 registros
             # Obtener información del cliente
             cliente_info = 'N.N'
             if dte.receptor:
@@ -3134,20 +2112,14 @@ def obtener_documentos_emitidos(request):
             tipo_tarjeta = ''
             pagos_detalle = {}
             
-            # Buscar en detalles de pago del DTE usando la relación inversa
-            detalles_pago = dte.dte_asociado.all()
-            
-            # DEBUG: Contar detalles de pago
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.info(f"DTE {dte.id} - Detalles pago: {detalles_pago.count()}")
-            
-            if detalles_pago.exists():
+            # Buscar en detalles de pago del DTE (prefetched, sin query extra)
+            detalles_pago = list(dte.dte_asociado.all())
+
+            if detalles_pago:
                 # Si hay múltiples pagos, concatenar
                 metodos = []
                 vouchers = []
                 for detalle in detalles_pago:
-                    logger.info(f"  Método: {detalle.metodo_pago}, Monto: {detalle.monto}")
                     metodos.append(detalle.metodo_pago)
                     if detalle.voucher:
                         vouchers.append(str(detalle.voucher))
@@ -3158,25 +2130,21 @@ def obtener_documentos_emitidos(request):
                 metodo_pago_display = ', '.join(metodos) if metodos else 'No especificado'
                 voucher = ', '.join(vouchers) if vouchers else ''
             else:
-                # Si no hay detalles de pago, buscar en ticket relacionado
-                logger.info(f"  No hay detalles de pago para DTE {dte.id}, buscando en tickets...")
-                
-                # Buscar ticket por correlativo y sucursal
-                ticket_relacionado = Ticket.objects.filter(
-                    correlativo=dte.numero_documento,
-                    sucursal=dte.sucursal
-                ).first()
-                
+                # Sin detalles de pago: fallback al ticket relacionado desde el
+                # mapa precalculado (sin query por fila)
+                ticket_relacionado = tickets_map.get(
+                    (str(dte.numero_documento), dte.sucursal_id)
+                )
+
                 if ticket_relacionado:
-                    logger.info(f"  Ticket encontrado: {ticket_relacionado.id}, método: {ticket_relacionado.metodo_pago}")
                     metodo_pago_display = dict(METODO_PAGO_TICKET_CHOICES).get(
                         ticket_relacionado.metodo_pago, 
                         ticket_relacionado.metodo_pago
                     )
                     
-                    # Buscar voucher en detalles de pago del ticket
-                    pagos_ticket = TicketDetallePago.objects.filter(ticket=ticket_relacionado)
-                    if pagos_ticket.exists():
+                    # Buscar voucher en detalles de pago del ticket (mapa)
+                    pagos_ticket = pagos_ticket_map.get(ticket_relacionado.id, [])
+                    if pagos_ticket:
                         vouchers = []
                         for pago_ticket in pagos_ticket:
                             if pago_ticket.voucher:
@@ -3190,7 +2158,6 @@ def obtener_documentos_emitidos(request):
                             pagos_detalle[metodo_ticket] = pagos_detalle.get(metodo_ticket, 0) + int(pago_ticket.monto or 0)
                         voucher = ', '.join(vouchers) if vouchers else ''
                 else:
-                    logger.info(f"  No se encontró ticket relacionado")
                     metodo_pago_display = 'Efectivo'  # Default si no hay info
                     pagos_detalle['Efectivo'] = int(dte.monto_con_iva or 0)
             
@@ -3286,7 +2253,8 @@ def obtener_documentos_emitidos(request):
         diag_sin_pagos = 0            # DTEs sin registros en dte_asociado
 
         # Calcular totales por método de pago desde Dte_Detalle_Pago
-        for dte in queryset:
+        # (misma lista materializada; sin segunda evaluación del queryset)
+        for dte in dtes_todos:
             total = int(dte.monto_con_iva or 0)
             descuento_db = int(dte.descuento) if dte.descuento else 0
             tipo_doc_upper = dte.tipo_documento.upper() if dte.tipo_documento else ''
@@ -3318,11 +2286,11 @@ def obtener_documentos_emitidos(request):
 
             diag_cant_dtes += 1
 
-            # Obtener métodos de pago del DTE usando la relación inversa
-            detalles_pago = dte.dte_asociado.all()
+            # Obtener métodos de pago del DTE (prefetched)
+            detalles_pago = list(dte.dte_asociado.all())
             pagado_sum = 0
 
-            if detalles_pago.exists():
+            if detalles_pago:
                 for detalle in detalles_pago:
                     monto = int(detalle.monto or 0)
                     pagado_sum += monto
@@ -3347,21 +2315,19 @@ def obtener_documentos_emitidos(request):
             resumen['ventas_brutas'] += total
 
             # Si no se procesó método de pago (no había registros en dte_asociado),
-            # buscar en el ticket relacionado como fallback.
-            if not detalles_pago.exists():
-                ticket_relacionado = Ticket.objects.filter(
-                    correlativo=dte.numero_documento,
-                    sucursal=dte.sucursal
-                ).first()
+            # buscar en el ticket relacionado como fallback (mapa precalculado).
+            if not detalles_pago:
+                ticket_relacionado = tickets_map.get(
+                    (str(dte.numero_documento), dte.sucursal_id)
+                )
 
                 if ticket_relacionado:
                     metodo_ticket = ticket_relacionado.metodo_pago
 
                     if metodo_ticket == 'TBK_POS_INTEGRADO':
-                        # Verificar tipo de tarjeta en detalles
-                        pago_ticket = TicketDetallePago.objects.filter(
-                            ticket=ticket_relacionado
-                        ).first()
+                        # Verificar tipo de tarjeta en detalles (mapa)
+                        pagos_tr = pagos_ticket_map.get(ticket_relacionado.id, [])
+                        pago_ticket = pagos_tr[0] if pagos_tr else None
                         if pago_ticket and pago_ticket.tipo_tarjeta and \
                                 'DEBITO' in pago_ticket.tipo_tarjeta.upper():
                             resumen['tbk_debito'] += total
@@ -3834,13 +2800,42 @@ def obtener_reporte_existencias_marca(request):
         # Ordenar por marca, luego artículo
         datos_reporte.sort(key=lambda f: (f.get('marca') or '', f.get('articulo') or ''))
         
+        # ========== SALUD DEL UNIVERSO FILTRADO (cobertura / stock viejo) ==========
+        salud = None
+        if productos_ids:
+            from datetime import timedelta as _td
+            from app.constants_kardex import CONCEPTOS_VENTA as _CV
+            from app.models import LoteProducto as _Lote
+            _hoy = timezone.localdate()
+            _stock_univ = sum(tallas_por_producto.values())
+            _vend30 = abs(
+                Movimientos_Producto.objects.filter(
+                    concepto__in=_CV, estado='COMPLETADO',
+                    fecha__gte=_hoy - _td(days=30),
+                    ProductoTalla__producto_id__in=productos_ids,
+                ).aggregate(s=Sum('cantidad'))['s'] or 0
+            )
+            _viejo = _Lote.objects.filter(
+                activo=True, cantidad_disponible__gt=0,
+                producto_talla__producto_id__in=productos_ids,
+                fecha_ingreso__date__lte=_hoy - _td(days=181),
+            ).aggregate(s=Sum('cantidad_disponible'))['s'] or 0
+            _vel = _vend30 / 30 if _vend30 else 0
+            salud = {
+                'cobertura_dias': int(_stock_univ / _vel) if _vel else None,
+                'pct_stock_viejo': round(100 * _viejo / _stock_univ, 1) if _stock_univ else 0,
+                'vendidas_30': _vend30,
+                'stock_total': _stock_univ,
+            }
+
         # ========== RESPUESTA ==========
         sucursales_data = [{'id': s.id, 'alias': s.alias} for s in sucursales_list]
-        
+
         return JsonResponse({
             'success': True,
             'datos': datos_reporte,
             'sucursales': sucursales_data,
+            'salud': salud,
             'filtros_aplicados': {
                 'marca_id': marca_id,
                 'departamento_id': departamento_id,
@@ -4166,11 +3161,18 @@ def obtener_reporte_existencias_sucursal(request):
         )
 
         from django.db.models import Sum as _Sum
-        conceptos_ingreso = [
-            'INGRESO_INICIAL', 'INGRESO_MANUAL', 'RECEPCION_COMPRA',
-            'REPOSICION_STOCK', 'TRASPASO_ENTRADA', 'CAMBIO_PRODUCTO_ENTRADA',
-            'AJUSTE_POSITIVO', 'AJUSTE_INVENTARIO_ENTRADA',
-        ]
+        # Misma definición de "recibido" que movimientos-sucursal (sets
+        # canónicos) para que ambos reportes cuenten igual.
+        from app.constants_kardex import (
+            CONCEPTOS_ABASTECIMIENTO, CONCEPTOS_TRASPASO_ENTRADA,
+        )
+        conceptos_ingreso = list(
+            CONCEPTOS_ABASTECIMIENTO + CONCEPTOS_TRASPASO_ENTRADA + (
+                'CAMBIO_PRODUCTO_ENTRADA', 'AJUSTE_POSITIVO',
+                'AJUSTE_INVENTARIO_ENTRADA', 'SOBRANTE_INGRESO',
+                'DONACION_RECIBIDA',
+            )
+        )
         stocks_iniciales_qs = (
             Movimientos_Producto.objects.filter(
                 ProductoTalla_id__in=talla_ids,
@@ -4188,6 +3190,7 @@ def obtener_reporte_existencias_sucursal(request):
         datos_reporte = []
         total_stock = 0
         valor_inventario = 0
+        valor_venta_potencial = 0
         skus_con_stock = 0
         productos_sin_stock = 0
 
@@ -4206,6 +3209,7 @@ def obtener_reporte_existencias_sucursal(request):
                     skus_con_stock += 1
                     total_stock += stock
                     valor_inventario += costo_unitario * stock
+                    valor_venta_potencial += (producto.precioventa or 0) * stock
 
                 stock_inicial = stocks_iniciales_map.get(talla.id, 0) or 0
 
@@ -4233,6 +3237,32 @@ def obtener_reporte_existencias_sucursal(request):
             'sin_stock': productos_sin_stock,
             'sucursal': sucursal.alias or sucursal.nombre or f'Sucursal {sucursal.id}',
         }
+
+        # KPIs de salud de inventario de la sucursal: cobertura en días,
+        # % de stock envejecido (lotes >180d) y valor venta potencial.
+        from datetime import timedelta as _td
+        from app.constants_kardex import CONCEPTOS_VENTA as _CV
+        from app.models import LoteProducto as _Lote
+        _hoy = timezone.localdate()
+        vendidas_30 = abs(
+            Movimientos_Producto.objects.filter(
+                concepto__in=_CV, estado='COMPLETADO',
+                fecha__gte=_hoy - _td(days=30),
+                sucursal_origen_id=sucursal_id,
+            ).aggregate(s=_Sum('cantidad'))['s'] or 0
+        )
+        stock_viejo = _Lote.objects.filter(
+            activo=True, cantidad_disponible__gt=0,
+            producto_talla__producto__sucursal_id=sucursal_id,
+            fecha_ingreso__date__lte=_hoy - _td(days=181),
+        ).aggregate(s=_Sum('cantidad_disponible'))['s'] or 0
+        _velocidad = vendidas_30 / 30 if vendidas_30 else 0
+        resumen.update({
+            'valor_venta_potencial': valor_venta_potencial,
+            'cobertura_dias': int(total_stock / _velocidad) if _velocidad else None,
+            'pct_stock_viejo': round(100 * stock_viejo / total_stock, 1) if total_stock else 0,
+            'vendidas_30': vendidas_30,
+        })
 
         return JsonResponse({'success': True, 'datos': datos_reporte, 'resumen': resumen})
 
@@ -6297,6 +5327,72 @@ def _resumen_vacio():
 # ========== REPORTE DE MOVIMIENTOS POR SUCURSAL (INICIAL VS RESTANTE) ==========
 
 @login_required
+def _mapas_movimientos_sucursal(productos_ids, sucursales_ids, filtro_fecha):
+    """Mapas {producto_id: {sucursal_id: unidades}} para el reporte de
+    movimientos por sucursal, separando compras/abastecimiento, traspasos
+    recibidos, traspasos enviados y ventas. Los sets de conceptos viven en
+    app.constants_kardex para que todos los reportes cuenten lo mismo.
+    Nota: los traspasos legacy de una sola pierna (TRASPASO_SUCURSAL/BODEGA/
+    VITRINA) se clasifican por signo."""
+    from app.constants_kardex import (
+        CONCEPTOS_ABASTECIMIENTO,
+        CONCEPTOS_TRASPASO_ENTRADA,
+        CONCEPTOS_TRASPASO_LEGACY,
+        CONCEPTOS_TRASPASO_SALIDA,
+        CONCEPTOS_VENTA,
+    )
+
+    conceptos_compras = CONCEPTOS_ABASTECIMIENTO + (
+        'CAMBIO_PRODUCTO_ENTRADA', 'AJUSTE_POSITIVO',
+        'AJUSTE_INVENTARIO_ENTRADA', 'SOBRANTE_INGRESO', 'DONACION_RECIBIDA',
+    )
+
+    base = Movimientos_Producto.objects.filter(
+        ProductoTalla__producto_id__in=productos_ids,
+        estado='COMPLETADO',
+        **filtro_fecha,
+    )
+
+    def _mapa(queryset, campo_sucursal):
+        mapa = {}
+        for item in queryset:
+            prod = item['ProductoTalla__producto_id']
+            mapa.setdefault(prod, {})[item[campo_sucursal]] = abs(item['total'] or 0)
+        return mapa
+
+    compras = _mapa(
+        base.filter(sucursal_destino_id__in=sucursales_ids,
+                    concepto__in=conceptos_compras)
+        .values('ProductoTalla__producto_id', 'sucursal_destino_id')
+        .annotate(total=Sum('cantidad')),
+        'sucursal_destino_id',
+    )
+    traspasos_in = _mapa(
+        base.filter(sucursal_destino_id__in=sucursales_ids)
+        .filter(Q(concepto__in=CONCEPTOS_TRASPASO_ENTRADA)
+                | Q(concepto__in=CONCEPTOS_TRASPASO_LEGACY, cantidad__gt=0))
+        .values('ProductoTalla__producto_id', 'sucursal_destino_id')
+        .annotate(total=Sum('cantidad')),
+        'sucursal_destino_id',
+    )
+    traspasos_out = _mapa(
+        base.filter(sucursal_origen_id__in=sucursales_ids, cantidad__lt=0)
+        .filter(Q(concepto__in=CONCEPTOS_TRASPASO_SALIDA)
+                | Q(concepto__in=CONCEPTOS_TRASPASO_LEGACY))
+        .values('ProductoTalla__producto_id', 'sucursal_origen_id')
+        .annotate(total=Sum('cantidad')),
+        'sucursal_origen_id',
+    )
+    ventas = _mapa(
+        base.filter(sucursal_origen_id__in=sucursales_ids,
+                    concepto__in=CONCEPTOS_VENTA)
+        .values('ProductoTalla__producto_id', 'sucursal_origen_id')
+        .annotate(total=Sum('cantidad')),
+        'sucursal_origen_id',
+    )
+    return compras, traspasos_in, traspasos_out, ventas
+
+
 def ver_reporte_movimientos_sucursal(request):
     """Vista principal del reporte de movimientos por sucursal (inicial vs restante)"""
     sucursal_actual_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
@@ -6419,35 +5515,14 @@ def obtener_reporte_movimientos_sucursal(request):
             except ValueError:
                 pass
 
-        # ========== QUERY 2: INGRESOS AGREGADOS POR PRODUCTO Y SUCURSAL ==========
-        # Excluye DEVOLUCION_CLIENTE para no inflar el "recibido"
-        conceptos_ingreso_real = [
-            'INGRESO_INICIAL', 'INGRESO_MANUAL', 'RECEPCION_COMPRA',
-            'REPOSICION_STOCK', 'TRASPASO_ENTRADA', 'CAMBIO_PRODUCTO_ENTRADA',
-            'AJUSTE_POSITIVO', 'AJUSTE_INVENTARIO_ENTRADA',
-        ]
-        ingresos_query = Movimientos_Producto.objects.filter(
-            ProductoTalla__producto_id__in=productos_ids,
-            sucursal_destino_id__in=sucursales_ids,
-            estado='COMPLETADO',
-            concepto__in=conceptos_ingreso_real,
-            **filtro_fecha
-        ).values(
-            'ProductoTalla__producto_id', 'sucursal_destino_id'
-        ).annotate(
-            total_ingresos=Sum('cantidad')
+        # ========== QUERIES 2/4: MAPAS AGREGADOS POR TIPO DE FLUJO ==========
+        # Compras/abastecimiento y traspasos recibidos van SEPARADOS (antes se
+        # mezclaban en "recibido"), se agregan los traspasos enviados, y las
+        # ventas usan el set canónico de constants_kardex (incluye
+        # VENTA_DIRECTA, invisible hasta la auditoría jul-2026).
+        compras_map, traspasos_in_map, traspasos_out_map, ventas_map = (
+            _mapas_movimientos_sucursal(productos_ids, sucursales_ids, filtro_fecha)
         )
-
-        # Crear mapa de ingresos: {producto_id: {sucursal_id: cantidad}}
-        ingresos_map = {}
-        for item in ingresos_query:
-            prod_id = item['ProductoTalla__producto_id']
-            suc_id = item['sucursal_destino_id']
-            cantidad = item['total_ingresos'] or 0
-
-            if prod_id not in ingresos_map:
-                ingresos_map[prod_id] = {}
-            ingresos_map[prod_id][suc_id] = cantidad
 
         # ========== QUERY 3: STOCK ACTUAL AGREGADO POR PRODUCTO Y SUCURSAL ==========
         stock_query = Producto_Talla.objects.filter(
@@ -6469,34 +5544,8 @@ def obtener_reporte_movimientos_sucursal(request):
                 stock_map[prod_id] = {}
             stock_map[prod_id][suc_id] = stock
 
-        # ========== QUERY 4: VENTAS REALES POR PRODUCTO Y SUCURSAL ==========
-        # Calcula vendido desde movimientos de venta (no por resta)
-        # Las cantidades de egreso son negativas, usamos abs()
-        # Incluye VENTA_DIRECTA (fallback POS) y VENTA (fallback de cambios,
-        # histórico) — se escribían fuera del catálogo y quedaban invisibles.
-        ventas_query = Movimientos_Producto.objects.filter(
-            ProductoTalla__producto_id__in=productos_ids,
-            sucursal_origen_id__in=sucursales_ids,
-            estado='COMPLETADO',
-            concepto__in=['VENTA_PUBLICO', 'VENTA_MAYORISTA', 'VENTA_DIRECTA', 'VENTA'],
-            **filtro_fecha
-        ).values(
-            'ProductoTalla__producto_id', 'sucursal_origen_id'
-        ).annotate(
-            total_ventas=Sum('cantidad')
-        )
-
-        # Crear mapa de ventas: {producto_id: {sucursal_id: cantidad}}
-        ventas_map = {}
-        for item in ventas_query:
-            prod_id = item['ProductoTalla__producto_id']
-            suc_id = item['sucursal_origen_id']
-            # cantidad es negativa para egresos, tomamos abs
-            cantidad = abs(item['total_ventas'] or 0)
-
-            if prod_id not in ventas_map:
-                ventas_map[prod_id] = {}
-            ventas_map[prod_id][suc_id] = cantidad
+        # (Las ventas vienen del mismo helper que compras/traspasos — ver
+        # _mapas_movimientos_sucursal.)
 
         # ========== PROCESAR RESULTADOS (sin queries adicionales) ==========
         datos_reporte = []
@@ -6505,38 +5554,52 @@ def obtener_reporte_movimientos_sucursal(request):
             prod_id = producto.id
 
             # Obtener datos de este producto desde los mapas
-            ingresos_producto = ingresos_map.get(prod_id, {})
+            compras_producto = compras_map.get(prod_id, {})
+            tin_producto = traspasos_in_map.get(prod_id, {})
+            tout_producto = traspasos_out_map.get(prod_id, {})
             stock_producto = stock_map.get(prod_id, {})
             ventas_producto = ventas_map.get(prod_id, {})
 
             # Construir datos por sucursal
             stock_por_sucursal = {}
-            total_inicial = 0
+            total_compras = total_tin = total_tout = 0
             total_restante = 0
             total_vendido = 0
 
-            # Revisar todas las sucursales donde hay ingresos, stock o ventas
-            sucursales_con_datos = set(ingresos_producto.keys()) | set(stock_producto.keys()) | set(ventas_producto.keys())
+            sucursales_con_datos = (
+                set(compras_producto) | set(tin_producto) | set(tout_producto)
+                | set(stock_producto) | set(ventas_producto)
+            )
 
             for suc_id in sucursales_con_datos:
                 if suc_id not in sucursales_map:
                     continue
 
-                inicial = ingresos_producto.get(suc_id, 0)
+                compras = compras_producto.get(suc_id, 0)
+                traspasos_in = tin_producto.get(suc_id, 0)
+                traspasos_out = tout_producto.get(suc_id, 0)
                 restante = stock_producto.get(suc_id, 0)
                 vendido = ventas_producto.get(suc_id, 0)
+                inicial = compras + traspasos_in  # compat con la UI actual
 
-                if inicial > 0 or restante > 0 or vendido > 0:
+                if inicial > 0 or restante > 0 or vendido > 0 or traspasos_out > 0:
                     suc_alias = sucursales_map[suc_id]
                     stock_por_sucursal[suc_alias] = {
                         'sucursal_id': suc_id,
                         'inicial': inicial,
+                        'compras': compras,
+                        'traspasos_in': traspasos_in,
+                        'traspasos_out': traspasos_out,
                         'restante': restante,
                         'vendido': vendido,
                     }
-                    total_inicial += inicial
+                    total_compras += compras
+                    total_tin += traspasos_in
+                    total_tout += traspasos_out
                     total_restante += restante
                     total_vendido += vendido
+
+            total_inicial = total_compras + total_tin
 
             # Solo incluir productos con datos
             if stock_por_sucursal or total_inicial > 0 or total_restante > 0:
@@ -6549,6 +5612,9 @@ def obtener_reporte_movimientos_sucursal(request):
                     'precio_venta': float(producto.precioventa) if producto.precioventa else 0,
                     'sucursales': stock_por_sucursal,
                     'total_inicial': total_inicial,
+                    'total_compras': total_compras,
+                    'total_traspasos_in': total_tin,
+                    'total_traspasos_out': total_tout,
                     'total_restante': total_restante,
                     'total_vendido': total_vendido,
                 })
@@ -6652,32 +5718,11 @@ def exportar_movimientos_sucursal_excel(request):
         productos_list = list(queryset)
         productos_ids = [p.id for p in productos_list]
         
-        # QUERY 2: Ingresos agregados (excluye devoluciones de cliente)
-        conceptos_ingreso_real = [
-            'INGRESO_INICIAL', 'INGRESO_MANUAL', 'RECEPCION_COMPRA',
-            'REPOSICION_STOCK', 'TRASPASO_ENTRADA', 'CAMBIO_PRODUCTO_ENTRADA',
-            'AJUSTE_POSITIVO', 'AJUSTE_INVENTARIO_ENTRADA',
-        ]
-        ingresos_map = {}
-        if productos_ids:
-            ingresos_query = Movimientos_Producto.objects.filter(
-                ProductoTalla__producto_id__in=productos_ids,
-                sucursal_destino_id__in=sucursales_ids,
-                estado='COMPLETADO',
-                concepto__in=conceptos_ingreso_real,
-                **filtro_fecha
-            ).values(
-                'ProductoTalla__producto_id', 'sucursal_destino_id'
-            ).annotate(
-                total_ingresos=Sum('cantidad')
-            )
-
-            for item in ingresos_query:
-                prod_id = item['ProductoTalla__producto_id']
-                suc_id = item['sucursal_destino_id']
-                if prod_id not in ingresos_map:
-                    ingresos_map[prod_id] = {}
-                ingresos_map[prod_id][suc_id] = item['total_ingresos'] or 0
+        # QUERY 2/4: mapas por tipo de flujo (mismo helper que la vista API)
+        compras_map, traspasos_in_map, traspasos_out_map, ventas_map = (
+            _mapas_movimientos_sucursal(productos_ids, sucursales_ids, filtro_fecha)
+            if productos_ids else ({}, {}, {}, {})
+        )
 
         # QUERY 3: Stock actual agregado
         stock_map = {}
@@ -6697,32 +5742,12 @@ def exportar_movimientos_sucursal_excel(request):
                     stock_map[prod_id] = {}
                 stock_map[prod_id][suc_id] = item['total_stock'] or 0
 
-        # QUERY 4: Ventas reales agregadas
-        ventas_map = {}
-        if productos_ids:
-            ventas_query = Movimientos_Producto.objects.filter(
-                ProductoTalla__producto_id__in=productos_ids,
-                sucursal_origen_id__in=sucursales_ids,
-                estado='COMPLETADO',
-                concepto__in=['VENTA_PUBLICO', 'VENTA_MAYORISTA', 'VENTA_DIRECTA', 'VENTA'],
-                **filtro_fecha
-            ).values(
-                'ProductoTalla__producto_id', 'sucursal_origen_id'
-            ).annotate(
-                total_ventas=Sum('cantidad')
-            )
-
-            for item in ventas_query:
-                prod_id = item['ProductoTalla__producto_id']
-                suc_id = item['sucursal_origen_id']
-                if prod_id not in ventas_map:
-                    ventas_map[prod_id] = {}
-                ventas_map[prod_id][suc_id] = abs(item['total_ventas'] or 0)
+        # (Ventas incluidas en el helper de mapas.)
 
         # Crear workbook
         wb = openpyxl.Workbook()
         ws = wb.active
-        ws.title = "Inicial vs Restante"
+        ws.title = "Movimientos Sucursal"
         
         # Estilos
         header_fill = PatternFill(start_color="1A1A2E", end_color="1A1A2E", fill_type="solid")
@@ -6739,7 +5764,7 @@ def exportar_movimientos_sucursal_excel(request):
         
         # Título
         ws.merge_cells('A1:F1')
-        ws['A1'] = "REPORTE: STOCK INICIAL VS RESTANTE POR SUCURSAL"
+        ws['A1'] = "MOVIMIENTOS POR SUCURSAL — Compras · Traspasos IN/OUT · Stock actual · Vendido"
         ws['A1'].font = Font(bold=True, color="FFFFFF", size=14)
         ws['A1'].fill = header_fill
         
@@ -6753,9 +5778,9 @@ def exportar_movimientos_sucursal_excel(request):
 
         sucursales_nombres = [s.alias for s in sucursales_list]
         for suc in sucursales_nombres:
-            headers.extend([f'{suc} Recib.', f'{suc} Rest.'])
+            headers.extend([f'{suc} Comp.', f'{suc} T.IN', f'{suc} T.OUT', f'{suc} Rest.'])
 
-        headers.extend(['TOTAL Recib.', 'TOTAL Rest.', 'VENDIDO'])
+        headers.extend(['TOTAL Comp.', 'TOTAL T.IN', 'TOTAL T.OUT', 'TOTAL Rest.', 'VENDIDO'])
         
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=row, column=col, value=header)
@@ -6768,16 +5793,21 @@ def exportar_movimientos_sucursal_excel(request):
         row = 5
         for producto in productos_list:
             prod_id = producto.id
-            ingresos_prod = ingresos_map.get(prod_id, {})
+            compras_prod = compras_map.get(prod_id, {})
+            tin_prod = traspasos_in_map.get(prod_id, {})
+            tout_prod = traspasos_out_map.get(prod_id, {})
             stock_prod = stock_map.get(prod_id, {})
             ventas_prod = ventas_map.get(prod_id, {})
 
             # Calcular totales
-            total_inicial = sum(ingresos_prod.values())
+            total_compras = sum(compras_prod.values())
+            total_tin = sum(tin_prod.values())
+            total_tout = sum(tout_prod.values())
             total_restante = sum(stock_prod.values())
             total_vendido = sum(ventas_prod.values())
 
-            if total_inicial > 0 or total_restante > 0 or total_vendido > 0:
+            if (total_compras > 0 or total_tin > 0 or total_tout > 0
+                    or total_restante > 0 or total_vendido > 0):
                 col = 1
 
                 ws.cell(row=row, column=col, value=producto.articulo).border = border
@@ -6806,41 +5836,34 @@ def exportar_movimientos_sucursal_excel(request):
 
                 # Datos por sucursal (desde los mapas, sin queries)
                 for suc in sucursales_list:
-                    suc_inicial = ingresos_prod.get(suc.id, 0)
-                    suc_restante = stock_prod.get(suc.id, 0)
-
-                    cell_inicial = ws.cell(row=row, column=col, value=suc_inicial)
-                    cell_inicial.border = border
-                    cell_inicial.fill = inicial_fill
-                    cell_inicial.alignment = Alignment(horizontal='center')
-                    col += 1
-
-                    cell_restante = ws.cell(row=row, column=col, value=suc_restante)
-                    cell_restante.border = border
-                    cell_restante.fill = restante_fill
-                    cell_restante.alignment = Alignment(horizontal='center')
-                    col += 1
+                    valores_suc = (
+                        (compras_prod.get(suc.id, 0), inicial_fill),
+                        (tin_prod.get(suc.id, 0), inicial_fill),
+                        (tout_prod.get(suc.id, 0), restante_fill),
+                        (stock_prod.get(suc.id, 0), restante_fill),
+                    )
+                    for valor, relleno in valores_suc:
+                        celda = ws.cell(row=row, column=col, value=valor)
+                        celda.border = border
+                        celda.fill = relleno
+                        celda.alignment = Alignment(horizontal='center')
+                        col += 1
 
                 # Totales
-                cell = ws.cell(row=row, column=col, value=total_inicial)
-                cell.border = border
-                cell.fill = total_fill
-                cell.font = Font(bold=True)
-                cell.alignment = Alignment(horizontal='center')
-                col += 1
-
-                cell = ws.cell(row=row, column=col, value=total_restante)
-                cell.border = border
-                cell.fill = total_fill
-                cell.font = Font(bold=True)
-                cell.alignment = Alignment(horizontal='center')
-                col += 1
-
-                cell = ws.cell(row=row, column=col, value=total_vendido)
-                cell.border = border
-                cell.fill = total_fill
-                cell.font = Font(bold=True, color="CC0000")
-                cell.alignment = Alignment(horizontal='center')
+                for valor, color_fuente in (
+                    (total_compras, None),
+                    (total_tin, None),
+                    (total_tout, None),
+                    (total_restante, None),
+                    (total_vendido, 'CC0000'),
+                ):
+                    celda = ws.cell(row=row, column=col, value=valor)
+                    celda.border = border
+                    celda.fill = total_fill
+                    celda.font = (Font(bold=True, color=color_fuente)
+                                  if color_fuente else Font(bold=True))
+                    celda.alignment = Alignment(horizontal='center')
+                    col += 1
 
                 row += 1
         
@@ -7282,6 +6305,9 @@ def api_reporte_rendimiento_proveedor(request):
             pares_recepcionados = recep_qs.aggregate(total=Sum('stockArribado'))['total'] or 0
 
             # Vendidos: IDs directos + match por articulo cross-sucursal
+            # TODO(negocio): el match por nombre de artículo puede sobrecontar
+            # cuando hay artículos homónimos de otros proveedores; se mantiene
+            # porque las recepciones antiguas no siempre vinculan producto_talla.
             pt_directos = set(recep_qs.filter(producto_talla__isnull=False).values_list('producto_talla_id', flat=True))
             articulos = set(Compras_Producto.objects.filter(compras_id__in=c_ids).values_list('nombre', flat=True))
             pt_articulo = set()
@@ -7292,12 +6318,14 @@ def api_reporte_rendimiento_proveedor(request):
             pares_vendidos = 0
             venta_total = 0.0
             if pts:
-                tf = {'ProductoTalla_id__in': pts, 'idTicket__estado__in': ['PAGADO', 'PENDIENTE'],
+                # Solo tickets PAGADOS (un PENDIENTE aún no es venta) y por
+                # created_at (fecha real de venta; Ticket.fecha es auto_now).
+                tf = {'ProductoTalla_id__in': pts, 'idTicket__estado': 'PAGADO',
                       'idTicket__modulo_origen__in': ['VENTA_PUBLICO', 'POS', 'ECOMMERCE']}
                 if fecha_inicio and fecha_fin:
-                    tf['idTicket__fecha__range'] = [fecha_inicio, fecha_fin]
+                    tf['idTicket__created_at__date__range'] = [fecha_inicio, fecha_fin]
                 else:
-                    tf['idTicket__fecha__year'] = anio
+                    tf['idTicket__created_at__year'] = anio
                 if sucursal_id:
                     tf['idTicket__sucursal_id'] = sucursal_id
                 vd = Ticket_Productos.objects.filter(**tf).aggregate(p=Sum('stock'), v=Sum('subtotal'))
@@ -7528,10 +6556,14 @@ def _construir_reporte_ventas_internet(request, paginar=True):
         'ticket_productos__ProductoTalla__producto',
         'pedidos_ecommerce__dte',
         'pedidos_ecommerce__facturado_por',
-    ).distinct().order_by('-fecha', '-hora', '-created_at', '-id')
+    ).distinct().order_by('-created_at', '-id')
 
     if not todo_historico:
-        queryset = queryset.filter(fecha__gte=fecha_inicio, fecha__lte=fecha_fin)
+        # created_at es la fecha real de la venta; Ticket.fecha es auto_now
+        # (se reescribe en cada save) y filtraba por última modificación.
+        queryset = queryset.filter(
+            created_at__date__gte=fecha_inicio, created_at__date__lte=fecha_fin
+        )
 
     empresa_id = request.GET.get('empresa_id', '').strip()
     sucursal_id = request.GET.get('sucursal_id', '').strip()
@@ -8190,7 +7222,7 @@ def obtener_ventas_global_por_empresa(request):
             fecha_fin = datetime.strptime(fecha_fin_param, '%Y-%m-%d')
         else:
             if not mes:
-                mes = timezone.now().strftime('%Y-%m')
+                mes = timezone.localdate().strftime('%Y-%m')
             fecha_inicio = datetime.strptime(mes, '%Y-%m').replace(day=1)
             if fecha_inicio.month == 12:
                 fecha_fin = fecha_inicio.replace(year=fecha_inicio.year + 1, month=1, day=1) - timedelta(days=1)
@@ -8209,10 +7241,13 @@ def obtener_ventas_global_por_empresa(request):
 
             data = {}  # {sucursal_id: {ventas, descuentos, documentos, devoluciones}}
 
-            # Tickets
+            # Tickets — SOLO los que no generaron DTE: un ticket con boleta ya
+            # está representado en la suma de DTEs de abajo (misma regla
+            # anti-doble-conteo del reporte comparativo).
             for r in Ticket.objects.filter(
                 created_at__date__gte=fi_date, created_at__date__lte=ff_date,
                 estado='PAGADO',
+                dte_generado=False,
                 modulo_origen__in=['VENTA_PUBLICO', 'POS', 'ECOMMERCE'],
             ).values('sucursal_id', 'sucursal__alias', 'sucursal__empresa_id', 'sucursal__empresa__nombre').annotate(
                 total=Sum('total'), dcto=Sum('descuento'), docs=Count('id'),
@@ -9214,27 +8249,50 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
         if pid and sid:
             sucursales_por_producto.setdefault(pid, set()).add(sid)
 
+    # ---------- Stock actual por producto (sell-through / cobertura) ----------
+    stock_por_producto = {}
+    if productos_acum:
+        stock_por_producto = {
+            r['producto_id']: int(r['s'] or 0)
+            for r in Producto_Talla.objects.filter(
+                producto_id__in=productos_acum.keys(), stock__gt=0,
+            ).values('producto_id').annotate(s=Sum('stock'))
+        }
+    dias_periodo = max((ff - fi).days + 1, 1)
+
     # ---------- Calcular margen por producto + totales ----------
     productos = []
     tot_unid = 0
     tot_monto = 0
     tot_costo = 0
+    tot_stock = 0
     for pid, p in productos_acum.items():
         margen = p['monto'] - p['costo']
         margen_pct = (margen / p['monto'] * 100) if p['monto'] > 0 else 0
         sucs = len(sucursales_por_producto.get(pid, set()))
+        stock_actual = stock_por_producto.get(pid, 0)
+        disponible = p['unidades'] + stock_actual
+        velocidad_dia = p['unidades'] / dias_periodo if p['unidades'] else 0
         productos.append({
             **p,
             'margen': margen,
             'margen_pct': round(margen_pct, 1),
             'sucursales_count': sucs,
+            'stock_actual': stock_actual,
+            'sell_through': round(100 * p['unidades'] / disponible, 1) if disponible else 0,
+            'cobertura_dias': int(stock_actual / velocidad_dia) if velocidad_dia else None,
         })
         tot_unid += p['unidades']
         tot_monto += p['monto']
         tot_costo += p['costo']
+        tot_stock += stock_actual
 
     tot_margen = tot_monto - tot_costo
     tot_margen_pct = (tot_margen / tot_monto * 100) if tot_monto > 0 else 0
+    tot_disponible = tot_unid + tot_stock
+    tot_sell_through = round(100 * tot_unid / tot_disponible, 1) if tot_disponible else 0
+    tot_cobertura = (int(tot_stock / (tot_unid / dias_periodo))
+                     if tot_unid else None)
 
     # Orden según parámetro
     orden = filtros.get('orden', 'unidades_desc')
@@ -9342,6 +8400,11 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
         'top_marca': top_marca,
         'top_categoria': top_categoria,
         'top_producto': top_producto,
+        # Salud de inventario del universo vendido en el período:
+        'stock_actual_total': tot_stock,
+        'sell_through_periodo': tot_sell_through,
+        'cobertura_dias': tot_cobertura,
+        'dias_periodo': dias_periodo,
     }
 
     return {

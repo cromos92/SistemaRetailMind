@@ -509,6 +509,27 @@
         <div class="nexo-kpi-value" id="kpi-sin-stock">0</div>
       </div>
     </div>
+    <div class="nexo-kpi-card kpi-primary" id="kpi-card-5" style="display:none">
+      <div class="nexo-kpi-icon icon-primary"><i class="ri-time-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label" title="Stock actual ÷ velocidad de venta de los últimos 30 días">Cobertura (días)</div>
+        <div class="nexo-kpi-value" id="kpi-cobertura">—</div>
+      </div>
+    </div>
+    <div class="nexo-kpi-card kpi-error" id="kpi-card-6" style="display:none">
+      <div class="nexo-kpi-icon icon-error"><i class="ri-archive-2-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label" title="Unidades en lotes con más de 180 días de antigüedad">Stock &gt;180 días</div>
+        <div class="nexo-kpi-value" id="kpi-viejo">—</div>
+      </div>
+    </div>
+    <div class="nexo-kpi-card kpi-success" id="kpi-card-7" style="display:none">
+      <div class="nexo-kpi-icon icon-success"><i class="ri-price-tag-3-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label">Valor Venta Potencial</div>
+        <div class="nexo-kpi-value" id="kpi-valor-venta">$0</div>
+      </div>
+    </div>
   </div>
 
   <!-- ── Controles ────────────────────────────────────── -->
@@ -715,6 +736,13 @@ async function cargarReporte() {
     document.getElementById('kpi-unidades').textContent  = num(r.stock_total);
     document.getElementById('kpi-valor').textContent     = '$' + numCL(r.valor_inventario);
     document.getElementById('kpi-sin-stock').textContent = num(r.sin_stock);
+    document.getElementById('kpi-cobertura').textContent = r.cobertura_dias ? num(r.cobertura_dias) : '—';
+    document.getElementById('kpi-viejo').textContent     = (r.pct_stock_viejo != null ? r.pct_stock_viejo : 0) + '%';
+    document.getElementById('kpi-valor-venta').textContent = '$' + numCL(r.valor_venta_potencial || 0);
+    ['kpi-card-5','kpi-card-6','kpi-card-7'].forEach(id => {
+        const c = document.getElementById(id);
+        if (c) c.style.display = '';
+    });
     mostrarKpis(true);
     document.getElementById('badge-sucursal').textContent = r.sucursal;
 

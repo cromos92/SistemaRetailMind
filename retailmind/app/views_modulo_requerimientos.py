@@ -981,8 +981,13 @@ def buscar_producto_sku(request):
             }, status=400)
         
         try:
-            producto_talla = Producto_Talla.objects.select_related('producto').get(sku=sku)
-            
+            from .utils_producto_match import producto_talla_por_sku
+            producto_talla = producto_talla_por_sku(
+                sku, sucursal_id=request.session.get('idSucursalActual'),
+                select_related=['producto'])
+            if not producto_talla:
+                return JsonResponse({'success': False, 'error': 'Producto no encontrado'}, status=404)
+
             return JsonResponse({
                 'success': True,
                 'producto': {

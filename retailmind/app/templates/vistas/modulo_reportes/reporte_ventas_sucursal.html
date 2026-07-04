@@ -254,8 +254,10 @@
                                                                 <th>Codigo</th>
                                                                 <th class="text-end">Total Ventas</th>
                                                                 <th class="text-end">Dcto</th>
+                                                                <th class="text-center" title="Descuento sobre precio de lista (fuga de margen)">% Dcto</th>
                                                                 <th class="text-center">Docs</th>
                                                                 <th class="text-end">Ticket Prom.</th>
+                                                                <th class="text-center" title="Unidades por documento (venta cruzada)">UPT</th>
                                                                 <th class="text-center">%</th>
                                                                 <th class="text-center">Detalle</th>
                                                             </tr>
@@ -267,9 +269,13 @@
                                                             <tr>
                                                                 <td colspan="3" class="text-end">TOTALES:</td>
                                                                 <td class="text-end" id="totalVentasVendedores">$0</td>
+                                                                <td></td>
+                                                                <td></td>
                                                                 <td class="text-center" id="totalDocsVendedores">0</td>
                                                                 <td class="text-end" id="promedioVendedores">$0</td>
+                                                                <td></td>
                                                                 <td class="text-center">100%</td>
+                                                                <td></td>
                                                             </tr>
                                                         </tfoot>
                                                     </table>
@@ -922,7 +928,7 @@ document.addEventListener('DOMContentLoaded', function() {
         tbody.innerHTML = '';
 
         if (!datos || datos.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No hay datos para mostrar</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">No hay datos para mostrar</td></tr>';
             document.getElementById('totalVentasVendedores').textContent = '$0';
             document.getElementById('totalDocsVendedores').textContent = '0';
             document.getElementById('promedioVendedores').textContent = '$0';
@@ -959,8 +965,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td>${vendedor.codigo || '-'}</td>
                     <td class="text-end fw-semibold">$${formatearNumero(vendedor.ventas)}</td>
                     <td class="text-end ${dcto > 0 ? 'text-danger' : ''}">${dcto > 0 ? '-$' + formatearNumero(dcto) : '-'}</td>
+                    <td class="text-center"><span class="badge ${(vendedor.pct_descuento || 0) > 8 ? 'bg-danger' : (vendedor.pct_descuento || 0) > 4 ? 'bg-warning text-dark' : 'bg-light text-muted'}">${(vendedor.pct_descuento || 0).toFixed(1)}%</span></td>
                     <td class="text-center">${vendedor.documentos}</td>
                     <td class="text-end">$${formatearNumero(ticketPromedio)}</td>
+                    <td class="text-center">${(vendedor.upt || 0).toFixed(2)}</td>
                     <td class="text-center">
                         <span class="badge ${sinVendedor ? 'bg-warning text-dark' : 'bg-primary'}">${vendedor.participacion.toFixed(1)}%</span>
                     </td>

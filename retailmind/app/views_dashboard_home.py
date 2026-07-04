@@ -146,6 +146,48 @@ def bienvenida(request):
     return render(request, 'vistas/bienvenida.html', context)
 
 
+def calcular_kpis_salud_inventario(sucursal_id, hoy):
+    """KPIs ejecutivos de salud de inventario: cobertura en días, % de stock
+    envejecido (>180 días vía lotes FIFO) y sell-through 30d. Con sucursal
+    activa mide esa sucursal; sin ella, toda la cadena."""
+    from app.constants_kardex import CONCEPTOS_VENTA
+    from app.models import LoteProducto, Movimientos_Producto
+
+    d30 = hoy - timedelta(days=30)
+    ventas_qs = Movimientos_Producto.objects.filter(
+        concepto__in=CONCEPTOS_VENTA, estado='COMPLETADO', fecha__gte=d30,
+        ProductoTalla__producto__excluir_de_analitica=False,
+    )
+    stock_qs = Producto_Talla.objects.filter(
+        stock__gt=0, producto__excluir_de_analitica=False,
+    )
+    lotes_qs = LoteProducto.objects.filter(
+        activo=True, cantidad_disponible__gt=0,
+        producto_talla__producto__excluir_de_analitica=False,
+    )
+    if sucursal_id:
+        ventas_qs = ventas_qs.filter(sucursal_origen_id=sucursal_id)
+        stock_qs = stock_qs.filter(producto__sucursal_id=sucursal_id)
+        lotes_qs = lotes_qs.filter(producto_talla__producto__sucursal_id=sucursal_id)
+
+    vendidas_30 = abs(ventas_qs.aggregate(s=Sum('cantidad'))['s'] or 0)
+    stock_total = stock_qs.aggregate(s=Sum('stock'))['s'] or 0
+    stock_viejo = lotes_qs.filter(
+        fecha_ingreso__date__lte=hoy - timedelta(days=181)
+    ).aggregate(s=Sum('cantidad_disponible'))['s'] or 0
+
+    velocidad = vendidas_30 / 30 if vendidas_30 else 0
+    return {
+        'cobertura_dias': int(stock_total / velocidad) if velocidad else None,
+        'pct_stock_viejo': round(100 * stock_viejo / stock_total, 1) if stock_total else 0,
+        'sell_through_30': round(100 * vendidas_30 / (vendidas_30 + stock_total), 1)
+                           if (vendidas_30 + stock_total) else 0,
+        'vendidas_30': vendidas_30,
+        'stock_total': stock_total,
+        'stock_viejo_unidades': stock_viejo,
+    }
+
+
 @login_required
 def dashboard_home(request):
     """
@@ -228,6 +270,13 @@ def dashboard_home(request):
         except Exception:
             top_productos = []
 
+        # ========== 9b. SALUD DE INVENTARIO (ejecutivo) ==========
+        try:
+            salud_inventario = calcular_kpis_salud_inventario(sucursal_id, hoy)
+        except Exception:
+            logger.exception("Error calculando salud de inventario")
+            salud_inventario = None
+
         # ========== 10. ALERTAS CRÍTICAS ==========
         alertas = generar_alertas_criticas(
             stock_data, compras_data, requerimientos_data, operaciones_data,
@@ -247,6 +296,7 @@ def dashboard_home(request):
             'precios': precios_data,
             'dte_problemas': dte_problemas,
             'top_productos': top_productos,
+            'salud_inventario': salud_inventario,
 
             'alertas': alertas,
         }
@@ -287,8 +337,9 @@ def calcular_kpis_ventas(sucursal_id, hoy, inicio_semana, inicio_mes, mes_pasado
     if sucursal_id:
         tickets_base = tickets_base.filter(sucursal_id=sucursal_id)
     
-    # Ventas HOY
-    ventas_hoy_query = tickets_base.filter(fecha=hoy)
+    # Ventas HOY — created_at es la fecha real de venta; Ticket.fecha es
+    # auto_now (se reescribe en cada save y desplaza ventas entre días).
+    ventas_hoy_query = tickets_base.filter(created_at__date=hoy)
     ventas_hoy = ventas_hoy_query.aggregate(total=Sum('total'))['total'] or 0
     tickets_hoy = ventas_hoy_query.count()
     
@@ -299,19 +350,21 @@ def calcular_kpis_ventas(sucursal_id, hoy, inicio_semana, inicio_mes, mes_pasado
     
     # Ventas SEMANA
     ventas_semana = tickets_base.filter(
-        fecha__gte=inicio_semana,
-        fecha__lte=hoy
+        created_at__date__gte=inicio_semana,
+        created_at__date__lte=hoy
     ).aggregate(total=Sum('total'))['total'] or 0
-    
+
     # Ventas MES
-    ventas_mes_query = tickets_base.filter(fecha__gte=inicio_mes, fecha__lte=hoy)
+    ventas_mes_query = tickets_base.filter(
+        created_at__date__gte=inicio_mes, created_at__date__lte=hoy
+    )
     ventas_mes = ventas_mes_query.aggregate(total=Sum('total'))['total'] or 0
     tickets_mes = ventas_mes_query.count()
-    
+
     # Ventas MES PASADO (para comparar)
     ventas_mes_pasado = tickets_base.filter(
-        fecha__gte=mes_pasado_inicio,
-        fecha__lte=mes_pasado_fin
+        created_at__date__gte=mes_pasado_inicio,
+        created_at__date__lte=mes_pasado_fin
     ).aggregate(total=Sum('total'))['total'] or 0
     
     # Calcular variación porcentual
@@ -324,23 +377,25 @@ def calcular_kpis_ventas(sucursal_id, hoy, inicio_semana, inicio_mes, mes_pasado
     ticket_promedio = round(ventas_hoy / tickets_hoy, 0) if tickets_hoy > 0 else 0
     ticket_promedio_mes = round(ventas_mes / tickets_mes, 0) if tickets_mes > 0 else 0
     
-    # Ventas por hora (hoy - una sola query agrupada por hora)
-    from django.db.models.functions import ExtractHour
-    ventas_hora_qs = tickets_base.filter(fecha=hoy, hora__isnull=False).annotate(
-        hora_num=ExtractHour('hora')
+    # Ventas por hora (hoy - una sola query agrupada por hora, desde created_at)
+    from django.db.models.functions import ExtractHour, TruncDate
+    ventas_hora_qs = tickets_base.filter(created_at__date=hoy).annotate(
+        hora_num=ExtractHour('created_at')
     ).values('hora_num').annotate(
         monto=Sum('total')
     ).order_by('hora_num')
     ventas_hora_map = {item['hora_num']: int(item['monto'] or 0) for item in ventas_hora_qs}
     ventas_por_hora = [{'hora': i, 'monto': ventas_hora_map.get(i, 0)} for i in range(24)]
 
-    # Venta general de los ultimos 30 dias (todas las ventas, agrupadas por fecha)
+    # Venta general de los ultimos 30 dias (todas las ventas, agrupadas por dia real)
     fecha_30d = hoy - timedelta(days=29)
-    ventas_dia_qs = tickets_base.filter(fecha__gte=fecha_30d, fecha__lte=hoy).values('fecha').annotate(
+    ventas_dia_qs = tickets_base.filter(
+        created_at__date__gte=fecha_30d, created_at__date__lte=hoy
+    ).annotate(dia=TruncDate('created_at')).values('dia').annotate(
         monto=Sum('total'),
         documentos=Count('id')
-    ).order_by('fecha')
-    ventas_dia_map = {item['fecha']: item for item in ventas_dia_qs}
+    ).order_by('dia')
+    ventas_dia_map = {item['dia']: item for item in ventas_dia_qs}
     ventas_ultimos_30_dias = []
     for i in range(30):
         dia = fecha_30d + timedelta(days=i)
@@ -426,7 +481,7 @@ def calcular_kpis_stock(sucursal_id, empresa_id):
     # Ventas del mes / Inventario promedio
     inicio_mes = timezone.localdate().replace(day=1)
     ventas_mes_query = Ticket_Productos.objects.filter(
-        idTicket__fecha__gte=inicio_mes,
+        idTicket__created_at__date__gte=inicio_mes,
         idTicket__estado='PAGADO'
     )
     if sucursal_id:
@@ -440,7 +495,7 @@ def calcular_kpis_stock(sucursal_id, empresa_id):
     # Esto es lo accionable de verdad, a diferencia de "22.307 sin stock" (catálogo muerto).
     fecha_30 = timezone.localdate() - timedelta(days=30)
     vendidos_30d = Ticket_Productos.objects.filter(
-        idTicket__fecha__gte=fecha_30,
+        idTicket__created_at__date__gte=fecha_30,
         idTicket__estado='PAGADO',
     )
     if sucursal_id:
@@ -866,8 +921,8 @@ def generar_alertas_criticas(stock_data, compras_data, requerimientos_data, oper
 def obtener_top_productos(sucursal_id, inicio_mes, hoy):
     """Obtiene los productos más vendidos del mes"""
     ventas_productos = Ticket_Productos.objects.filter(
-        idTicket__fecha__gte=inicio_mes,
-        idTicket__fecha__lte=hoy,
+        idTicket__created_at__date__gte=inicio_mes,
+        idTicket__created_at__date__lte=hoy,
         idTicket__estado='PAGADO'
     )
     
@@ -903,7 +958,7 @@ def obtener_productos_sin_movimiento(sucursal_id, dias=30):
     
     # SKUs que SÍ tuvieron ventas en el período
     skus_con_ventas = Ticket_Productos.objects.filter(
-        idTicket__fecha__gte=fecha_limite,
+        idTicket__created_at__date__gte=fecha_limite,
         idTicket__estado='PAGADO'
     )
     if sucursal_id:

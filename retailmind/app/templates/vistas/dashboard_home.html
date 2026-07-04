@@ -220,6 +220,49 @@
         </div>
     </div>
 
+    <!-- ===== Salud de Inventario (ejecutivo) ===== -->
+    {% if salud_inventario %}
+    <div class="home-kpi-grid" style="grid-template-columns:repeat(3,1fr);">
+
+        <div class="home-kpi kpi-stock">
+            <div class="home-kpi-top">
+                <div class="home-kpi-icon stock"><i class="ri-time-line"></i></div>
+                {% if salud_inventario.cobertura_dias and salud_inventario.cobertura_dias > 240 %}<span class="badge bg-danger" style="font-size:.65rem">sobre-stock</span>{% elif salud_inventario.cobertura_dias and salud_inventario.cobertura_dias > 120 %}<span class="badge bg-warning text-dark" style="font-size:.65rem">alto</span>{% else %}<span class="badge bg-success" style="font-size:.65rem">sano</span>{% endif %}
+            </div>
+            <div class="home-kpi-val">{% if salud_inventario.cobertura_dias %}{{ salud_inventario.cobertura_dias|intcomma }} d&iacute;as{% else %}—{% endif %}</div>
+            <div class="home-kpi-label">Cobertura de Stock</div>
+            <div class="home-kpi-footer">
+                <div class="home-kpi-stat"><div class="home-kpi-sv">{{ salud_inventario.stock_total|intcomma }}</div><div class="home-kpi-sl">Unidades</div></div>
+                <div class="home-kpi-stat"><div class="home-kpi-sv">{{ salud_inventario.vendidas_30|intcomma }}</div><div class="home-kpi-sl">Vend. 30d</div></div>
+            </div>
+        </div>
+
+        <div class="home-kpi kpi-compras">
+            <div class="home-kpi-top">
+                <div class="home-kpi-icon compras"><i class="ri-archive-2-line"></i></div>
+                {% if salud_inventario.pct_stock_viejo > 30 %}<span class="badge bg-danger" style="font-size:.65rem">liquidar</span>{% elif salud_inventario.pct_stock_viejo > 15 %}<span class="badge bg-warning text-dark" style="font-size:.65rem">vigilar</span>{% else %}<span class="badge bg-success" style="font-size:.65rem">sano</span>{% endif %}
+            </div>
+            <div class="home-kpi-val">{{ salud_inventario.pct_stock_viejo }}%</div>
+            <div class="home-kpi-label">Stock &gt;180 d&iacute;as</div>
+            <div class="home-kpi-footer">
+                <div class="home-kpi-stat"><div class="home-kpi-sv">{{ salud_inventario.stock_viejo_unidades|intcomma }}</div><div class="home-kpi-sl">Unidades viejas</div></div>
+            </div>
+        </div>
+
+        <div class="home-kpi kpi-ventas">
+            <div class="home-kpi-top">
+                <div class="home-kpi-icon ventas"><i class="ri-exchange-funds-line"></i></div>
+                {% if salud_inventario.sell_through_30 < 5 %}<span class="badge bg-danger" style="font-size:.65rem">lento</span>{% elif salud_inventario.sell_through_30 < 10 %}<span class="badge bg-warning text-dark" style="font-size:.65rem">medio</span>{% else %}<span class="badge bg-success" style="font-size:.65rem">bueno</span>{% endif %}
+            </div>
+            <div class="home-kpi-val">{{ salud_inventario.sell_through_30 }}%</div>
+            <div class="home-kpi-label">Sell-Through 30 d&iacute;as</div>
+            <div class="home-kpi-footer">
+                <div class="home-kpi-stat"><div class="home-kpi-sv">{{ salud_inventario.vendidas_30|intcomma }} / {{ salud_inventario.stock_total|intcomma }}</div><div class="home-kpi-sl">Vendidas / Disponibles</div></div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- ===== Alertas ===== -->
     {% if alertas %}
     <div class="home-alerts">

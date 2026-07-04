@@ -1096,6 +1096,24 @@
             <div class="nexo-kpi-value" id="kpi-critico">-</div>
             <div class="nexo-kpi-meta">SKUs con &lt;5 unidades</div>
         </div>
+
+        <div class="nexo-kpi-card kpi-primary">
+            <div class="nexo-kpi-icon icon-primary">
+                <i class="ri-time-line"></i>
+            </div>
+            <div class="nexo-kpi-label">Cobertura (días)</div>
+            <div class="nexo-kpi-value" id="kpi-cobertura">-</div>
+            <div class="nexo-kpi-meta">Stock ÷ velocidad 30d del universo filtrado</div>
+        </div>
+
+        <div class="nexo-kpi-card kpi-error">
+            <div class="nexo-kpi-icon icon-error">
+                <i class="ri-archive-2-line"></i>
+            </div>
+            <div class="nexo-kpi-label">Stock &gt;180 días</div>
+            <div class="nexo-kpi-value" id="kpi-viejo">-</div>
+            <div class="nexo-kpi-meta">% del stock en lotes antiguos (dead stock)</div>
+        </div>
     </div>
 
     <!-- ========== CONTROLES ========== -->
@@ -1560,8 +1578,14 @@ async function cargarReporte(forzarSinFiltro = false) {
         if (data.success) {
             datosCompletos = data.datos;
             sucursalesDisponibles = data.sucursales || [];
-            
+
             actualizarKPIs(data.datos);
+            // KPIs de salud (server-side, sobre el universo filtrado)
+            const salud = data.salud || {};
+            document.getElementById('kpi-cobertura').textContent =
+                salud.cobertura_dias != null ? salud.cobertura_dias.toLocaleString('es-CL') : '—';
+            document.getElementById('kpi-viejo').textContent =
+                (salud.pct_stock_viejo != null ? salud.pct_stock_viejo : 0) + '%';
             renderizarReporte(data.datos);
             
             // Habilitar exportación

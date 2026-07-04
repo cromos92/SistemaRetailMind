@@ -18214,9 +18214,13 @@ def verificar_producto_existente(request):
         except:
             pass
 
+    # Normalizar el código: el aviso "producto ya existe" debe dispararse aunque
+    # el usuario tipee el articulo con otras mayúsculas/espacios que el existente.
+    articulo = (articulo or '').strip()
+
     # Convertir a enteros si son números, o buscar por valor si son texto
-    filtros = {'articulo': articulo}
-    
+    filtros = {'articulo__iexact': articulo}
+
     # ✅ FILTRAR POR SUCURSAL ACTIVA
     if sucursal_id:
         filtros['sucursal_id'] = sucursal_id
@@ -18308,8 +18312,8 @@ def verificar_producto_existente(request):
                 except:
                     pass
         
-        # Buscar productos con el mismo artículo en la sucursal
-        filtros_candidatos = {'articulo': articulo}
+        # Buscar productos con el mismo artículo en la sucursal (case/space-insensitive)
+        filtros_candidatos = {'articulo__iexact': articulo}
         if sucursal_id:
             filtros_candidatos['sucursal_id'] = sucursal_id
         # ✅ INCLUIR CATEGORÍA EN LA BÚSQUEDA FLEXIBLE
@@ -18409,6 +18413,36 @@ def verificar_producto_existente(request):
                 'sku_ejemplo': primera_talla.sku if primera_talla else '-'
             })
     
+    # ========== VARIANTES DEL MISMO CÓDIGO (para el aviso claro de la UI) ==========
+    # Todos los productos que comparten el código normalizado en la sucursal
+    # activa (mismo articulo, distinto color/género/categoría). Permite avisar
+    # "el código X ya existe en estas variantes" y que el usuario elija.
+    variantes_codigo = []
+    try:
+        if articulo and sucursal_id:
+            from .utils_producto_match import variantes_mismo_codigo
+            for v in variantes_mismo_codigo(articulo, sucursal_id):
+                tallas_v = list(Producto_Talla.objects.filter(producto=v)
+                                .values('talla', 'sku', 'stock').order_by('talla'))
+                variantes_codigo.append({
+                    'id': v.id,
+                    'articulo': v.articulo,
+                    'descripcion': v.descripcion,
+                    'marca': v.atributo1.valor if v.atributo1 else '-',
+                    'marca_id': v.atributo1_id,
+                    'color': v.atributo2.valor if v.atributo2 else '-',
+                    'color_id': v.atributo2_id,
+                    'genero': v.atributo3.valor if v.atributo3 else '-',
+                    'genero_id': v.atributo3_id,
+                    'categoria': v.categoria.nombre if v.categoria else '-',
+                    'categoria_id': v.categoria_id,
+                    'precioventa': int(v.precioventa or 0),
+                    'stock_total': sum((t['stock'] or 0) for t in tallas_v),
+                    'tallas': tallas_v,
+                })
+    except Exception as e:
+        logger.warning("Error calculando variantes_codigo: %s", e)
+
     if producto:
         # Obtener las tallas existentes con sus SKUs
         tallas_existentes = Producto_Talla.objects.filter(producto=producto).values('talla', 'sku', 'stock')
@@ -18543,6 +18577,7 @@ def verificar_producto_existente(request):
             'edel_producto': _build_edel_producto_ref(articulo, producto),
             'hay_duplicados': hay_duplicados,
             'total_duplicados': total_duplicados,
+            'variantes_codigo': variantes_codigo,
         })
     else:
         # ========== BUSCAR PRECIOS EN OTRAS SUCURSALES (para producto nuevo) ==========
@@ -18625,6 +18660,7 @@ def verificar_producto_existente(request):
             'productos_similares_nombre': productos_similares_nombre,
             'productos_otras_sucursales': productos_otras_sucursales,
             'edel_producto': _build_edel_producto_ref(articulo, None),
+            'variantes_codigo': variantes_codigo,
         })
 
 
@@ -18829,15 +18865,15 @@ def crear_producto_desde_recepcion(request):
     atributo3_normalizado = buscar_atributo_normalizado(atributo3)
 
     # ========== 2. BUSCAR SI PRODUCTO YA EXISTE EN ESTA SUCURSAL ==========
-    # Primero intentar búsqueda exacta
-    producto_existente = Producto.objects.filter(
-        articulo=articulo,
-        atributo1_id=atributo1_normalizado,
-        atributo2_id=atributo2_normalizado,
-        atributo3_id=atributo3_normalizado,
-        categoria_id=categoria,
-        sucursal=sucursal
-    ).first()
+    # Match por IDENTIDAD con articulo NORMALIZADO (sin distinguir mayúsculas,
+    # espacios ni acentos) + marca + color + género + categoría + sucursal.
+    # Antes comparaba el articulo como texto exacto y un tipeo distinto creaba
+    # un producto duplicado con SKUs nuevos (bug reportado en recepción).
+    from .utils_producto_match import buscar_producto_por_identidad
+    producto_existente = buscar_producto_por_identidad(
+        articulo, atributo1_normalizado, atributo2_normalizado,
+        atributo3_normalizado, categoria, sucursal.id,
+    )
     
     # Si no encuentra, buscar con atributos case-insensitive por valor
     if not producto_existente:
@@ -18860,16 +18896,25 @@ def crear_producto_desde_recepcion(request):
         valor_attr2 = get_valor_atributo(atributo2)
         valor_attr3 = get_valor_atributo(atributo3)
         
-        # Buscar productos con el mismo artículo en la sucursal Y MISMA CATEGORÍA
-        filtros_flex = {'articulo': articulo, 'sucursal': sucursal}
+        # Buscar productos con el mismo CÓDIGO NORMALIZADO en la sucursal Y categoría
+        # (el fallback flexible ahora también normaliza el articulo, no solo los atributos).
+        from .utils_producto_match import normalizar_articulo
+        objetivo_art = normalizar_articulo(articulo)
+        token_art = objetivo_art.split(' ')[0] if objetivo_art else ''
+        filtros_flex = {'sucursal': sucursal}
+        if token_art:
+            filtros_flex['articulo__icontains'] = token_art
         if categoria:
             filtros_flex['categoria_id'] = categoria
-            
+
         productos_candidatos = Producto.objects.filter(
             **filtros_flex
         ).select_related('atributo1', 'atributo2', 'atributo3')
-        
+
         for prod in productos_candidatos:
+            # Debe coincidir el código normalizado (mayúsculas/espacios/acentos)
+            if normalizar_articulo(prod.articulo) != objetivo_art:
+                continue
             # Comparar atributos case-insensitive
             match_attr1 = (not valor_attr1 and not prod.atributo1) or \
                          (valor_attr1 and prod.atributo1 and prod.atributo1.valor.upper() == valor_attr1.upper())
@@ -20479,6 +20524,9 @@ def crear_producto_manual(request):
     try:
         # Obtener datos del formulario
         es_manual = request.POST.get('es_manual') == 'true'
+        # Solo se actualizan precios de un producto existente si el usuario lo
+        # marcó explícitamente en el modal (antes se hacía silenciosamente).
+        actualizar_precios = request.POST.get('actualizar_precios') == 'true'
         proveedor_id = request.POST.get('proveedor')
         dte_id = request.POST.get('dte_manual')
         articulo = request.POST.get('articulo')
@@ -20554,14 +20602,15 @@ def crear_producto_manual(request):
         atributo3_obj = get_object_or_404(AtributoOpcion, id=atributo3)
         
         # ========== VERIFICAR SI PRODUCTO EXISTE EN ESTA SUCURSAL ==========
-        producto_existente = Producto.objects.filter(
-            articulo=articulo,
-            atributo1=atributo1_obj,
-            atributo2=atributo2_obj,
-            atributo3=atributo3_obj,
-            categoria=categoria,
-            sucursal=sucursal  # ✅ Filtrar por sucursal activa
-        ).first()
+        # Identidad: articulo NORMALIZADO (sin distinguir mayúsculas, espacios
+        # ni acentos) + marca + color + género + categoría + sucursal. Antes se
+        # comparaba el articulo como texto exacto y un tipeo distinto ("ZAP-001"
+        # vs "zap-001 ") creaba un producto duplicado con SKUs nuevos.
+        from .utils_producto_match import buscar_producto_por_identidad
+        producto_existente = buscar_producto_por_identidad(
+            articulo, atributo1_obj.id, atributo2_obj.id, atributo3_obj.id,
+            categoria.id, sucursal.id,
+        )
         
         producto_actualizado = False
         precios_cambiaron = False
@@ -20574,8 +20623,9 @@ def crear_producto_manual(request):
             precio_anterior = float(producto.precioventa)
             costo_anterior = float(producto.costo)
             
-            # Verificar si los precios cambiaron
-            if float(producto.costo) != float(costo) or float(producto.sobreprecio) != float(sobreprecio) or float(producto.precioventa) != float(precioventa):
+            # Verificar si los precios cambiaron (solo si el usuario autorizó
+            # la actualización en el modal; si no, se conservan los del producto).
+            if actualizar_precios and (float(producto.costo) != float(costo) or float(producto.sobreprecio) != float(sobreprecio) or float(producto.precioventa) != float(precioventa)):
                 precios_cambiaron = True
                 
                 # Actualizar precios del producto
@@ -20759,7 +20809,10 @@ def crear_producto_manual(request):
 
                 compra_producto_creado = Compras_Producto.objects.create(
                     compras=compra_creada,
-                    nombre=articulo,
+                    # Usar el código canónico del producto (no el texto tipeado):
+                    # si se reutilizó un producto existente, mantiene consistente
+                    # el join por nombre con Producto.articulo (proveedor, lead-time).
+                    nombre=producto.articulo,
                     descripcion=descripcion,
                     atributo1=marca_nombre,
                     atributo2=color_nombre,
@@ -23986,12 +24039,13 @@ def dashboard_productos_mejorado_api(request):
         dias_cobertura = min(int(stock_total / velocidad_venta) if velocidad_venta > 0 else 999, 999)
         
         # ========== MOVIMIENTOS (UNA CONSULTA AGREGADA) ==========
+        from app.constants_kardex import CONCEPTOS_ABASTECIMIENTO, CONCEPTOS_VENTA
         movimientos_agg = Movimientos_Producto.objects.filter(
             fecha__gte=fecha_inicio.date(),
             estado='COMPLETADO'
         ).aggregate(
-            compras=Coalesce(Sum('cantidad', filter=Q(concepto__in=['RECEPCION_COMPRA', 'INGRESO_INICIAL', 'INGRESO_MANUAL'])), 0),
-            ventas=Coalesce(Sum('cantidad', filter=Q(concepto__in=['VENTA_PUBLICO', 'VENTA_MAYORISTA'])), 0),
+            compras=Coalesce(Sum('cantidad', filter=Q(concepto__in=CONCEPTOS_ABASTECIMIENTO)), 0),
+            ventas=Coalesce(Sum('cantidad', filter=Q(concepto__in=CONCEPTOS_VENTA)), 0),
             traspasos_out=Coalesce(Sum('cantidad', filter=Q(concepto='TRASPASO_SALIDA')), 0),
             traspasos_in=Coalesce(Sum('cantidad', filter=Q(concepto='TRASPASO_ENTRADA')), 0),
             ajustes=Count('id', filter=Q(concepto__in=['AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO']))
@@ -27342,18 +27396,19 @@ def buscar_producto_por_sku(request):
         })
     
     try:
-        # Buscar el producto por SKU en la sucursal actual
-        producto_talla = Producto_Talla.objects.select_related(
-            'producto',
-            'producto__sucursal',
-            'producto__atributo1__atributo',
-            'producto__atributo2__atributo',
-            'producto__atributo3__atributo',
-            'producto__atributo4__atributo'
-        ).get(
-            sku=sku,
-            producto__sucursal_id=sucursal_id
-        )
+        # Buscar el producto por SKU en la sucursal actual (tolerante a SKUs
+        # duplicados: estrictamente la talla de esta sucursal).
+        from .utils_producto_match import producto_talla_por_sku
+        producto_talla = producto_talla_por_sku(
+            sku, sucursal_id=sucursal_id, solo_sucursal=True,
+            select_related=['producto', 'producto__sucursal',
+                            'producto__atributo1__atributo', 'producto__atributo2__atributo',
+                            'producto__atributo3__atributo', 'producto__atributo4__atributo'])
+        if not producto_talla:
+            return JsonResponse({
+                'success': False,
+                'message': f'No se encontró producto con SKU {sku} en esta sucursal'
+            })
 
         producto = producto_talla.producto
 

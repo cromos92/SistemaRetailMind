@@ -1,0 +1,341 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<div class="page-content">
+<div class="container-fluid">
+
+<style>
+    :root {
+        --nexo-primary: #0066FF; --nexo-primary-dark: #0052CC; --nexo-primary-light: #E6F0FF;
+        --nexo-secondary: #1A1A2E; --nexo-accent: #00D4AA; --nexo-warning: #FFB020;
+        --nexo-error: #FF4D4D; --nexo-gray-700: #4A4A5A; --nexo-gray-500: #8A8A9A;
+        --nexo-gray-300: #D1D1D9; --nexo-gray-100: #F5F5F7; --nexo-white: #fff;
+        --nexo-shadow-md: 0 4px 6px rgba(26,26,46,.08); --nexo-radius: 12px;
+    }
+    .ic-wrap { background: var(--nexo-gray-100); min-height: calc(100vh - 70px); padding-bottom: 40px; }
+    .ic-header {
+        background: var(--nexo-secondary); color: #fff; padding: 26px 34px; position: relative; overflow: hidden;
+        border-radius: 0 0 18px 18px;
+    }
+    .ic-header::before { content:''; position:absolute; top:0; right:0; width:420px; height:100%;
+        background: linear-gradient(135deg, var(--nexo-accent) 0%, transparent 70%); opacity:.18; }
+    .ic-header h1 { font-size: 1.7rem; font-weight: 800; margin: 0; letter-spacing:-.5px; position:relative; z-index:1;}
+    .ic-header p { color: var(--nexo-gray-300); margin: 4px 0 0; font-size:.85rem; position:relative; z-index:1;}
+    .ic-badge { display:inline-flex; gap:6px; align-items:center; background: rgba(0,212,170,.16);
+        border:1px solid rgba(0,212,170,.35); color: var(--nexo-accent); padding:6px 14px; border-radius:999px;
+        font-size:.75rem; font-weight:700; }
+
+    .ic-controls { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; padding:18px 34px;
+        background:#fff; border-bottom:1px solid var(--nexo-gray-300); }
+    .ic-field { display:flex; flex-direction:column; gap:4px; }
+    .ic-field label { font-size:.72rem; font-weight:700; color:var(--nexo-gray-700); text-transform:uppercase; letter-spacing:.4px;}
+    .ic-field select { min-width:220px; padding:9px 12px; border:1.5px solid var(--nexo-gray-300);
+        border-radius:8px; font-size:.9rem; background:#fff; }
+    .ic-btn { background: var(--nexo-primary); color:#fff; border:none; padding:10px 22px; border-radius:8px;
+        font-weight:700; font-size:.9rem; cursor:pointer; transition:.15s; }
+    .ic-btn:hover { background: var(--nexo-primary-dark); }
+    .ic-btn.ghost { background:#fff; color:var(--nexo-primary); border:1.5px solid var(--nexo-primary); }
+
+    .ic-body { padding: 22px 34px; }
+    .ic-empty { text-align:center; padding:70px 20px; color:var(--nexo-gray-500); }
+    .ic-empty i { font-size:3.4rem; color: var(--nexo-gray-300); }
+
+    .ic-kpis { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:18px; }
+    .ic-kpi { background:#fff; border:1px solid var(--nexo-gray-300); border-radius:var(--nexo-radius);
+        padding:14px 16px; box-shadow:var(--nexo-shadow-md); }
+    .ic-kpi .lbl { font-size:.68rem; font-weight:700; color:var(--nexo-gray-500); text-transform:uppercase; letter-spacing:.4px;}
+    .ic-kpi .val { font-size:1.5rem; font-weight:800; color:var(--nexo-secondary); line-height:1.15; margin-top:4px;}
+    .ic-kpi .sub { font-size:.72rem; color:var(--nexo-gray-500); margin-top:2px; }
+    .ic-kpi .sub.up { color: var(--nexo-accent);} .ic-kpi .sub.down { color: var(--nexo-error);}
+    .ic-kpi .val.up { color: var(--nexo-accent);} .ic-kpi .val.down { color: var(--nexo-error);}
+
+    .ic-verdict { background:linear-gradient(135deg, var(--nexo-primary-light), #fff); border:1px solid var(--nexo-primary-light);
+        border-left:5px solid var(--nexo-primary); border-radius:var(--nexo-radius); padding:16px 20px; margin-bottom:18px; }
+    .ic-verdict .big { font-size:1.05rem; font-weight:800; color:var(--nexo-secondary); }
+    .ic-verdict.warn { border-left-color: var(--nexo-warning); background:linear-gradient(135deg,#FFF6E6,#fff);}
+    .ic-verdict.danger { border-left-color: var(--nexo-error); background:linear-gradient(135deg,#FFECEC,#fff);}
+
+    .ic-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .ic-card { background:#fff; border:1px solid var(--nexo-gray-300); border-radius:var(--nexo-radius);
+        padding:16px 18px; box-shadow:var(--nexo-shadow-md); margin-bottom:16px; }
+    .ic-card h3 { font-size:.98rem; font-weight:800; color:var(--nexo-secondary); margin:0 0 10px;
+        display:flex; align-items:center; gap:8px; }
+    .ic-card h3 i { color: var(--nexo-primary); }
+    .ic-card.full { grid-column:1 / -1; }
+
+    .ic-table { width:100%; border-collapse:collapse; font-size:.84rem; }
+    .ic-table th { background:var(--nexo-gray-100); text-align:left; padding:7px 10px; font-weight:700; color:var(--nexo-gray-700);}
+    .ic-table td { padding:6px 10px; border-bottom:1px solid var(--nexo-gray-100); }
+    .ic-table td.num, .ic-table th.num { text-align:right; }
+    .chip { display:inline-block; padding:3px 10px; border-radius:999px; font-size:.75rem; font-weight:700; margin:2px; }
+    .chip.red { background:#FFECEC; color:var(--nexo-error); }
+    .buy-hero { display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
+    .buy-hero .num { font-size:3rem; font-weight:900; color:var(--nexo-primary); line-height:1; }
+    .buy-hero .num small { font-size:1rem; color:var(--nexo-gray-500); font-weight:700; }
+    @media (max-width: 900px){ .ic-kpis{grid-template-columns:repeat(2,1fr);} .ic-grid{grid-template-columns:1fr;} }
+    @media print { .ic-controls, #app-menu, .app-menu, .navbar-header, footer { display:none !important; } }
+</style>
+
+<div class="ic-wrap">
+    <div class="ic-header">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <div>
+                <h1><i class="ri-brain-line"></i> Inteligencia de Compra</h1>
+                <p>Análisis histórico + pronóstico de demanda por marca · decide cuánto, qué curva y para qué tiendas comprar</p>
+            </div>
+            <span class="ic-badge"><i class="ri-shield-check-line"></i> Solo lectura · kardex</span>
+        </div>
+    </div>
+
+    <div class="ic-controls">
+        <div class="ic-field">
+            <label>Marca</label>
+            <select id="ic-marca">
+                <option value="">— Selecciona marca —</option>
+                {% for m in marcas %}<option value="{{ m.id }}">{{ m.valor }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="ic-field">
+            <label>Alcance</label>
+            <select id="ic-sucursal">
+                <option value="todas">Todas las tiendas</option>
+                {% for t in tiendas %}<option value="{{ t.id }}">{{ t.alias }}</option>{% endfor %}
+            </select>
+        </div>
+        <button class="ic-btn" id="ic-analizar"><i class="ri-search-eye-line"></i> Analizar</button>
+        <button class="ic-btn ghost" id="ic-print" style="display:none;"><i class="ri-printer-line"></i> Imprimir / PDF</button>
+    </div>
+
+    <div class="ic-body">
+        <div id="ic-empty" class="ic-empty">
+            <i class="ri-line-chart-line"></i>
+            <p style="margin-top:12px; font-size:1rem;">Selecciona una marca y presiona <b>Analizar</b> para ver el diagnóstico y el pronóstico de compra.</p>
+        </div>
+        <div id="ic-loading" class="ic-empty" style="display:none;">
+            <div class="spinner-border text-primary"></div>
+            <p style="margin-top:12px;">Calculando sobre el kardex…</p>
+        </div>
+        <div id="ic-results" style="display:none;"></div>
+    </div>
+</div>
+
+</div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+const IC_API = "{% url 'obtener_inteligencia_compra' %}";
+const fmt = n => (n == null ? '—' : Math.round(n).toLocaleString('es-CL'));
+const money = n => (n == null ? '—' : '$' + Math.round(n).toLocaleString('es-CL'));
+let icCharts = [];
+
+document.getElementById('ic-analizar').addEventListener('click', cargarInteligencia);
+document.getElementById('ic-print').addEventListener('click', () => window.print());
+document.getElementById('ic-marca').addEventListener('keydown', e => { if (e.key === 'Enter') cargarInteligencia(); });
+
+function cargarInteligencia() {
+    const marca = document.getElementById('ic-marca').value;
+    const suc = document.getElementById('ic-sucursal').value;
+    if (!marca) { alert('Selecciona una marca primero.'); return; }
+    document.getElementById('ic-empty').style.display = 'none';
+    document.getElementById('ic-results').style.display = 'none';
+    document.getElementById('ic-loading').style.display = 'block';
+    icCharts.forEach(c => { try { c.destroy(); } catch (e) {} });
+    icCharts = [];
+
+    fetch(`${IC_API}?marca_id=${marca}&sucursal_id=${suc}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.json())
+        .then(res => {
+            document.getElementById('ic-loading').style.display = 'none';
+            if (!res.success) { alert(res.error || 'Error al analizar.'); document.getElementById('ic-empty').style.display = 'block'; return; }
+            render(res.data);
+            document.getElementById('ic-results').style.display = 'block';
+            document.getElementById('ic-print').style.display = 'inline-flex';
+        })
+        .catch(err => {
+            document.getElementById('ic-loading').style.display = 'none';
+            document.getElementById('ic-empty').style.display = 'block';
+            alert('Error de red: ' + err);
+        });
+}
+
+function render(d) {
+    const k = d.kpis, r = d.recomendacion, fn = d.finanzas, sal = d.salud, liq = d.liquidacion;
+    const yoyCls = (k.vel_yoy != null && k.vel_yoy < 0) ? 'down' : 'up';
+    const gmCls = fn.gmroi == null ? '' : (fn.gmroi >= 3 ? 'up' : (fn.gmroi >= 1 ? '' : 'down'));
+    const cob = k.cobertura_meses;
+    let vClass = 'ic-verdict';
+    if (cob != null && cob > 12) vClass += ' warn';
+    if (cob != null && cob < 3) vClass += ' danger';
+
+    let abcHtml = '';
+    if (sal.abc) {
+        const a = sal.abc;
+        abcHtml = `<div style="margin-top:10px;">
+            <div style="font-size:.78rem; font-weight:700; color:var(--nexo-gray-700);">Clasificación ABC <span style="font-weight:500; color:var(--nexo-gray-500);">(motor · ${a.fecha || a.anio})</span></div>
+            <div style="display:flex; height:22px; border-radius:6px; overflow:hidden; margin-top:5px; font-size:.72rem; color:#fff; font-weight:700;">
+                <div style="flex:${a.A || 0}; background:#0066FF; display:flex; align-items:center; justify-content:center; min-width:24px;" title="A (top 80% ingreso): ${a.A}">A ${a.A}</div>
+                <div style="flex:${a.B || 0}; background:#00D4AA; display:flex; align-items:center; justify-content:center; min-width:24px;" title="B: ${a.B}">B ${a.B}</div>
+                <div style="flex:${a.C || 0}; background:#8A8A9A; display:flex; align-items:center; justify-content:center; min-width:24px;" title="C: ${a.C}">C ${a.C}</div>
+            </div></div>`;
+    }
+
+    let html = `
+    <div class="ic-kpis">
+        <div class="ic-kpi"><div class="lbl">Venta público histórica</div><div class="val">${fmt(k.venta_publica_hist)}</div><div class="sub">pares (tiendas)</div></div>
+        <div class="ic-kpi"><div class="lbl">Distribución bodegas</div><div class="val">${fmt(k.distribucion_bodega)}</div><div class="sub">pares (mayorista/CD)</div></div>
+        <div class="ic-kpi"><div class="lbl">Stock en tiendas</div><div class="val">${fmt(k.stock_tiendas)}</div><div class="sub">pares en piso</div></div>
+        <div class="ic-kpi"><div class="lbl">Velocidad 90 días</div><div class="val">${fmt(k.vel_dia)}<small style="font-size:.8rem;">/día</small></div><div class="sub ${yoyCls}">${k.vel_yoy != null ? (k.vel_yoy > 0 ? '+' : '') + k.vel_yoy + '% YoY' : ''}</div></div>
+        <div class="ic-kpi"><div class="lbl">Pronóstico 12 meses</div><div class="val">${fmt(k.pronostico_12m)}</div><div class="sub">pares proyectados</div></div>
+        <div class="ic-kpi"><div class="lbl">Cobertura</div><div class="val">${cob != null ? cob : '—'}<small style="font-size:.8rem;"> m</small></div><div class="sub">stock ÷ venta</div></div>
+    </div>
+
+    <div class="ic-kpis">
+        <div class="ic-kpi"><div class="lbl">Valor inventario (costo)</div><div class="val" style="font-size:1.2rem;">${money(fn.inv_costo)}</div><div class="sub">${money(fn.inv_precio)} a precio</div></div>
+        <div class="ic-kpi"><div class="lbl">Margen bruto</div><div class="val">${fn.margen_pct != null ? fn.margen_pct + '%' : '—'}</div><div class="sub">${fn.margen_src || ''}</div></div>
+        <div class="ic-kpi"><div class="lbl">Rotación</div><div class="val">${fn.rotacion != null ? fn.rotacion + 'x' : '—'}</div><div class="sub">vueltas/año</div></div>
+        <div class="ic-kpi"><div class="lbl">Semanas de stock</div><div class="val">${fn.wos != null ? fn.wos : '—'}</div><div class="sub">WOS</div></div>
+        <div class="ic-kpi"><div class="lbl">GMROI</div><div class="val ${gmCls}">${fn.gmroi != null ? fn.gmroi : '—'}</div><div class="sub ${gmCls}">${fn.gmroi == null ? '' : (fn.gmroi >= 3 ? 'excelente' : (fn.gmroi >= 1 ? 'aceptable' : 'destruye capital'))}</div></div>
+        <div class="ic-kpi"><div class="lbl">Dead stock 180d</div><div class="val ${sal.pct_dead180 >= 50 ? 'down' : ''}">${sal.pct_dead180 != null ? sal.pct_dead180 + '%' : '—'}</div><div class="sub">${fmt(sal.dead180_n)} SKUs</div></div>
+    </div>
+
+    <div class="${vClass}">
+        <div class="big"><i class="ri-lightbulb-flash-line"></i> ${d.marca} · ${d.scope} — Comprar ≈ ${fmt(r.comprar)} pares</div>
+        <div style="margin-top:6px; color:var(--nexo-gray-700);">${r.veredicto}</div>
+    </div>
+
+    <div class="ic-grid">
+        <div class="ic-card"><h3><i class="ri-bar-chart-2-line"></i> Venta a público por año</h3><div id="ic-chart-anual"></div></div>
+        <div class="ic-card"><h3><i class="ri-donut-chart-line"></i> Venta por tienda</h3><div id="ic-chart-tienda"></div></div>
+        <div class="ic-card full"><h3><i class="ri-line-chart-line"></i> Serie mensual + pronóstico 12 meses</h3><div id="ic-chart-forecast"></div></div>
+        <div class="ic-card full"><h3><i class="ri-ruler-line"></i> Curva de tallas — venta % vs stock % <span style="font-weight:500; color:var(--nexo-gray-500); font-size:.8rem;">(gap positivo = falta stock)</span></h3><div id="ic-chart-curva"></div></div>
+        <div class="ic-card"><h3><i class="ri-heart-pulse-line"></i> Salud &amp; antigüedad de inventario</h3>
+            <table class="ic-table">
+                <tr><td>Dead stock 90 días</td><td class="num">${fmt(sal.dead90_n)} SKUs</td></tr>
+                <tr><td>Dead stock 180 días</td><td class="num">${fmt(sal.dead180_n)} / ${fmt(sal.skus_total)} (${sal.pct_dead180 != null ? sal.pct_dead180 : '—'}%)</td></tr>
+                <tr><td>Capital inmovilizado 180d</td><td class="num">${fmt(sal.dead180_u)} pares · ${money(sal.dead180_costo)}</td></tr>
+                <tr><td>Lead time proveedor</td><td class="num">${sal.lead_time.dias} días ${sal.lead_time.proveedor ? '· ' + sal.lead_time.proveedor : '<span style="color:var(--nexo-gray-500);">(default)</span>'}</td></tr>
+            </table>
+            ${abcHtml}
+        </div>
+        <div class="ic-card"><h3><i class="ri-recycle-line"></i> Sell-through anual <span style="font-weight:500; color:var(--nexo-gray-500); font-size:.78rem;">(tendencia; &gt;100% = subvaluado por traspaso)</span></h3><div id="ic-chart-str"></div></div>
+        <div class="ic-card full"><h3><i class="ri-store-2-line"></i> Stock por sucursal</h3><div id="ic-stock-suc"></div></div>
+    </div>
+
+    <div class="ic-card full" style="border-top:4px solid var(--nexo-accent);">
+        <h3><i class="ri-shopping-cart-2-line"></i> Recomendación de compra</h3>
+        <div class="buy-hero" style="margin-bottom:16px;">
+            <div><div class="num">${fmt(r.comprar)} <small>pares</small></div><div style="color:var(--nexo-gray-500); font-size:.82rem;">TTM ${fmt(r.ttm)} · tendencia ${r.yoy > 0 ? '+' : ''}${r.yoy}% YoY</div></div>
+        </div>
+        <div class="ic-grid">
+            <div>
+                <h3 style="font-size:.9rem;"><i class="ri-ruler-2-line"></i> Curva de compra sugerida</h3>
+                <table class="ic-table"><thead><tr><th>Talla</th><th class="num">% pedido</th><th class="num">Pares</th></tr></thead><tbody>
+                ${r.curva_compra.map(c => `<tr><td>${c.talla}</td><td class="num">${c.pct}%</td><td class="num">${fmt(c.pares)}</td></tr>`).join('')}
+                </tbody></table>
+                ${r.evitar_tallas.length ? `<div style="margin-top:10px;"><b style="font-size:.8rem; color:var(--nexo-gray-700);">Evitar (sobre-stock):</b><br>${r.evitar_tallas.map(t => `<span class="chip red">${t}</span>`).join('')}</div>` : ''}
+            </div>
+            <div>
+                <h3 style="font-size:.9rem;"><i class="ri-store-3-line"></i> Asignación por tienda</h3>
+                <table class="ic-table"><thead><tr><th>Tienda</th><th class="num">% pedido</th><th class="num">Pares</th></tr></thead><tbody>
+                ${r.asignacion.map(a => `<tr><td>${a.alias}</td><td class="num">${a.pct}%</td><td class="num">${fmt(a.pares)}</td></tr>`).join('')}
+                </tbody></table>
+            </div>
+        </div>
+        <div style="margin-top:10px; font-size:.8rem; color:var(--nexo-gray-500);"><i class="ri-time-line"></i> Lead time estimado: <b>${r.lead_dias} días</b> — un pedido puesto hoy llega en ~${Math.round(r.lead_dias/7)} semanas. Curva ponderada por demanda reciente.</div>
+    </div>
+
+    <div class="ic-card full" style="border-top:4px solid var(--nexo-warning);">
+        <h3><i class="ri-scissors-cut-line"></i> Liquidación / liberación de capital</h3>
+        <div class="buy-hero" style="margin-bottom:10px;">
+            <div><div class="num" style="color:var(--nexo-warning);">${fmt(liq.unidades)} <small>pares</small></div>
+                <div style="color:var(--nexo-gray-500); font-size:.82rem;">${money(liq.valor_costo)} a costo · ${fmt(liq.skus)} SKUs sin venta 180 días</div></div>
+        </div>
+        <div style="color:var(--nexo-gray-700); font-size:.9rem;">${liq.texto}</div>
+        ${liq.tallas_sobre.length ? `<div style="margin-top:8px;"><b style="font-size:.8rem; color:var(--nexo-gray-700);">Tallas sobre-stockeadas a descontinuar:</b> ${liq.tallas_sobre.map(t => `<span class="chip red">${t}</span>`).join('')}</div>` : ''}
+    </div>`;
+
+    document.getElementById('ic-results').innerHTML = html;
+
+    // stock por sucursal (tabla)
+    document.getElementById('ic-stock-suc').innerHTML =
+        `<table class="ic-table"><thead><tr><th>Sucursal</th><th>Tipo</th><th class="num">Stock</th><th class="num">SKUs</th></tr></thead><tbody>
+        ${d.stock_suc.map(s => `<tr><td>${s.alias}</td><td>${s.tipo}</td><td class="num">${fmt(s.stock)}</td><td class="num">${fmt(s.skus)}</td></tr>`).join('')}
+        </tbody></table>`;
+
+    dibujarCharts(d);
+}
+
+function dibujarCharts(d) {
+    const AZUL = '#0066FF', TEAL = '#00D4AA', GRIS = '#8A8A9A', NARANJA = '#FFB020', ROJO = '#FF4D4D';
+    const baseOpts = { chart: { fontFamily: 'inherit', toolbar: { show: false }, animations: { enabled: true } },
+        dataLabels: { enabled: false }, grid: { borderColor: '#eef0f5' }, legend: { position: 'top', fontSize: '12px' } };
+
+    // 1. venta anual
+    let c1 = new ApexCharts(document.querySelector('#ic-chart-anual'), Object.assign({}, baseOpts, {
+        chart: { type: 'bar', height: 240, toolbar: { show: false } },
+        series: [{ name: 'Pares', data: d.ventas_anual.map(x => x.unidades) }],
+        colors: [AZUL], plotOptions: { bar: { borderRadius: 5, columnWidth: '55%' } },
+        xaxis: { categories: d.ventas_anual.map(x => x.anio) },
+        tooltip: { y: { formatter: (v, o) => fmt(v) + ' pares · ' + money(d.ventas_anual[o.dataPointIndex].monto) } },
+    }));
+    c1.render(); icCharts.push(c1);
+
+    // 2. venta por tienda (donut)
+    let c2 = new ApexCharts(document.querySelector('#ic-chart-tienda'), {
+        chart: { type: 'donut', height: 240 },
+        series: d.ventas_por_tienda.map(x => x.unidades),
+        labels: d.ventas_por_tienda.map(x => x.alias),
+        colors: [AZUL, TEAL, NARANJA, '#7C4DFF', '#00B8D9', GRIS, ROJO],
+        legend: { position: 'right', fontSize: '12px' }, dataLabels: { enabled: true, formatter: v => v.toFixed(0) + '%' },
+        tooltip: { y: { formatter: v => fmt(v) + ' pares' } },
+    });
+    c2.render(); icCharts.push(c2);
+
+    // 3. serie mensual + pronóstico
+    const histLabels = d.serie_chart.map(x => x.label);
+    const fcLabels = d.forecast.forecast.map(x => x.label);
+    const allLabels = histLabels.concat(fcLabels);
+    const histData = d.serie_chart.map(x => x.u).concat(d.forecast.forecast.map(() => null));
+    // conectar: último real como punto inicial del pronóstico
+    const lastReal = d.serie_chart.length ? d.serie_chart[d.serie_chart.length - 1].u : null;
+    const fcSeries = d.serie_chart.map((_, i) => (i === d.serie_chart.length - 1 ? lastReal : null))
+        .concat(d.forecast.forecast.map(x => x.base));
+    let c3 = new ApexCharts(document.querySelector('#ic-chart-forecast'), Object.assign({}, baseOpts, {
+        chart: { type: 'line', height: 300, toolbar: { show: false } },
+        series: [{ name: 'Venta real', data: histData }, { name: 'Pronóstico', data: fcSeries }],
+        colors: [AZUL, TEAL], stroke: { width: [3, 3], dashArray: [0, 6], curve: 'smooth' },
+        markers: { size: 0 }, xaxis: { categories: allLabels, tickAmount: 12, labels: { rotate: -45, style: { fontSize: '10px' } } },
+        tooltip: { y: { formatter: v => v == null ? '—' : fmt(v) + ' pares' } },
+    }));
+    c3.render(); icCharts.push(c3);
+
+    // 4. curva de tallas
+    let c4 = new ApexCharts(document.querySelector('#ic-chart-curva'), Object.assign({}, baseOpts, {
+        chart: { type: 'bar', height: 320, toolbar: { show: false } },
+        series: [{ name: 'Venta %', data: d.curva.map(x => x.venta_pct) },
+                 { name: 'Stock %', data: d.curva.map(x => x.stock_pct) }],
+        colors: [AZUL, GRIS], plotOptions: { bar: { borderRadius: 3, columnWidth: '75%' } },
+        xaxis: { categories: d.curva.map(x => x.talla), labels: { style: { fontSize: '10px' } } },
+        yaxis: { labels: { formatter: v => v.toFixed(0) + '%' } },
+        tooltip: { shared: true, y: { formatter: v => v.toFixed(1) + '%' } },
+    }));
+    c4.render(); icCharts.push(c4);
+
+    // 5. sell-through
+    let c5 = new ApexCharts(document.querySelector('#ic-chart-str'), Object.assign({}, baseOpts, {
+        chart: { type: 'line', height: 240, toolbar: { show: false } },
+        series: [{ name: 'Sell-through %', data: d.sellthrough.map(x => x.str) }],
+        colors: [TEAL], stroke: { width: 3, curve: 'smooth' }, markers: { size: 4 },
+        xaxis: { categories: d.sellthrough.map(x => x.anio) },
+        yaxis: { labels: { formatter: v => v == null ? '' : v.toFixed(0) + '%' } },
+        annotations: { yaxis: [{ y: 100, borderColor: NARANJA, label: { text: '100%', style: { color: '#fff', background: NARANJA } } }] },
+        tooltip: { y: { formatter: v => v == null ? '—' : v + '%' } },
+    }));
+    c5.render(); icCharts.push(c5);
+}
+</script>

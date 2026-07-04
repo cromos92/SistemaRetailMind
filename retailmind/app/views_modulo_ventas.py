@@ -624,16 +624,15 @@ def buscar_producto_por_sku(request):
         })
     
     try:
-        # Buscar producto por SKU
-        producto_talla = Producto_Talla.objects.select_related(
-            'producto',
-            'producto__categoria',
-            'producto__atributo1',
-            'producto__atributo2',
-            'producto__atributo3',
-            'producto__atributo4'
-        ).get(sku=sku)
-        
+        # Buscar producto por SKU (tolerante a SKUs duplicados en BD legacy)
+        from .utils_producto_match import producto_talla_por_sku
+        producto_talla = producto_talla_por_sku(
+            sku, sucursal_id=sucursal_id,
+            select_related=['producto', 'producto__categoria', 'producto__atributo1',
+                            'producto__atributo2', 'producto__atributo3', 'producto__atributo4'])
+        if not producto_talla:
+            return JsonResponse({'success': False, 'error': 'Producto no encontrado'})
+
         # Verificar stock en la sucursal
         stock_actual = producto_talla.stock_sucursal(sucursal_id)
         
@@ -17102,7 +17101,10 @@ def obtener_indicadores_globales_ventas(request):
                 }, status=400)
         
         def build_queryset(f_inicio, f_fin):
-            qs = Ticket.objects.filter(fecha__gte=f_inicio, fecha__lte=f_fin)
+            # created_at = fecha real de venta (Ticket.fecha es auto_now)
+            qs = Ticket.objects.filter(
+                created_at__date__gte=f_inicio, created_at__date__lte=f_fin
+            )
             if estado:
                 qs = qs.filter(estado=estado)
             else:

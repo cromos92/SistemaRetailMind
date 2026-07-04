@@ -859,13 +859,24 @@ def api_trazabilidad_producto(request):
     if not sku:
         return JsonResponse({'success': False, 'error': 'Debe ingresar un SKU.'}, status=400)
 
-    try:
-        producto_talla = Producto_Talla.objects.select_related(
-            'producto', 'producto__atributo1', 'producto__atributo2',
-            'producto__categoria', 'producto__sucursal',
-        ).get(sku=sku)
-    except Producto_Talla.DoesNotExist:
+    # OJO: `sku` NO es único en la BD (dato legacy: hay SKUs repetidos). Antes
+    # se usaba .get(sku=) y reventaba con MultipleObjectsReturned → la
+    # trazabilidad no se mostraba. Se resuelve tolerando duplicados: se prefiere
+    # la talla de la sucursal activa y se avisa que el SKU está duplicado.
+    _qs_pt = Producto_Talla.objects.select_related(
+        'producto', 'producto__atributo1', 'producto__atributo2',
+        'producto__categoria', 'producto__sucursal',
+    ).filter(sku=sku)
+    _n_sku = _qs_pt.count()
+    if _n_sku == 0:
         return JsonResponse({'success': False, 'error': f'SKU {sku} no encontrado.'}, status=404)
+    producto_talla = None
+    if _n_sku > 1:
+        _suc_id = request.session.get('idSucursalActual')
+        if _suc_id:
+            producto_talla = _qs_pt.filter(producto__sucursal_id=_suc_id).first()
+    if producto_talla is None:
+        producto_talla = _qs_pt.first()
 
     producto = producto_talla.producto
 
@@ -884,6 +895,8 @@ def api_trazabilidad_producto(request):
         'categoria': producto.categoria.nombre if producto.categoria else '-',
         'sucursal': producto.sucursal.alias if producto.sucursal else '-',
         'fecha_creacion': producto.fecha_creacion.strftime('%d/%m/%Y %H:%M') if producto.fecha_creacion else '-',
+        'sku_duplicado': _n_sku > 1,
+        'sku_ocurrencias': _n_sku,
     }
 
     # --- Movimientos ---

@@ -426,6 +426,11 @@
         color: #cc8c00 !important;
     }
 
+    .th-despacho {
+        background: rgba(0, 102, 255, 0.10) !important;
+        color: #0052CC !important;
+    }
+
     .th-total {
         background: var(--nexo-secondary) !important;
         color: var(--nexo-white) !important;
@@ -452,6 +457,11 @@
     .stock-restante {
         background: rgba(255, 176, 32, 0.1);
         color: #996B00;
+    }
+
+    .stock-despacho {
+        background: rgba(0, 102, 255, 0.08);
+        color: #0052CC;
     }
 
     .stock-vendido {
@@ -712,6 +722,11 @@
             <div class="nexo-kpi-icon icon-success"><i class="ri-inbox-archive-line"></i></div>
             <div class="nexo-kpi-label">Total Recibido</div>
             <div class="nexo-kpi-value" id="kpi-inicial">-</div>
+        </div>
+        <div class="nexo-kpi-card kpi-primary">
+            <div class="nexo-kpi-icon icon-primary"><i class="ri-truck-line"></i></div>
+            <div class="nexo-kpi-label">Despachado (Traspasos)</div>
+            <div class="nexo-kpi-value" id="kpi-despachado">-</div>
         </div>
         <div class="nexo-kpi-card kpi-warning">
             <div class="nexo-kpi-icon icon-warning"><i class="ri-archive-line"></i></div>
@@ -996,17 +1011,20 @@ async function cargarReporte() {
 // ========== ACTUALIZAR KPIs ==========
 function actualizarKPIs(datos) {
     let totalInicial = 0;
+    let totalDespachado = 0;
     let totalRestante = 0;
     let totalVendido = 0;
-    
+
     datos.forEach(item => {
         totalInicial += item.total_inicial || 0;
+        totalDespachado += item.total_traspasos_out || 0;
         totalRestante += item.total_restante || 0;
         totalVendido += item.total_vendido || 0;
     });
-    
+
     document.getElementById('kpi-articulos').textContent = formatearNumero(datos.length);
     document.getElementById('kpi-inicial').textContent = formatearNumero(totalInicial);
+    document.getElementById('kpi-despachado').textContent = formatearNumero(totalDespachado);
     document.getElementById('kpi-restante').textContent = formatearNumero(totalRestante);
     document.getElementById('kpi-vendido').textContent = formatearNumero(totalVendido);
 }
@@ -1064,19 +1082,20 @@ function renderizarTabla() {
                             <th style="text-align: right;" rowspan="2">P. Venta</th>
     `;
     
-    // Headers sucursales
+    // Headers sucursales (Recib. = compras + traspasos recibidos; Desp. =
+    // traspasos enviados desde la sucursal; Rest. = stock actual)
     sucursalesList.forEach(suc => {
-        html += `<th class="th-sucursal" colspan="2">${suc}</th>`;
+        html += `<th class="th-sucursal" colspan="3">${suc}</th>`;
     });
-    
-    html += `<th class="th-total" colspan="2">TOTAL</th></tr><tr>`;
-    
+
+    html += `<th class="th-total" colspan="3">TOTAL</th></tr><tr>`;
+
     // Sub-headers
     sucursalesList.forEach(() => {
-        html += `<th class="th-sub th-inicial">Recib.</th><th class="th-sub th-restante">Rest.</th>`;
+        html += `<th class="th-sub th-inicial">Recib.</th><th class="th-sub th-despacho">Desp.</th><th class="th-sub th-restante">Rest.</th>`;
     });
-    
-    html += `<th class="th-sub th-total">Recib.</th><th class="th-sub th-total">Rest.</th></tr></thead><tbody>`;
+
+    html += `<th class="th-sub th-total">Recib.</th><th class="th-sub th-total">Desp.</th><th class="th-sub th-total">Rest.</th></tr></thead><tbody>`;
     
     // Filas
     datosPagina.forEach(producto => {
@@ -1091,18 +1110,22 @@ function renderizarTabla() {
         
         sucursalesList.forEach(suc => {
             const sucData = producto.sucursales[suc];
-            if (sucData && (sucData.inicial > 0 || sucData.restante > 0)) {
+            if (sucData && (sucData.inicial > 0 || sucData.restante > 0 || (sucData.traspasos_out || 0) > 0)) {
+                const tipRecib = `Compras: ${sucData.compras || 0} · Traspasos recibidos: ${sucData.traspasos_in || 0}`;
                 html += `
-                    <td><span class="stock-badge stock-inicial">${sucData.inicial}</span></td>
+                    <td><span class="stock-badge stock-inicial" title="${tipRecib}">${sucData.inicial}</span></td>
+                    <td><span class="stock-badge stock-despacho" title="Traspasos enviados desde ${suc}">${sucData.traspasos_out || 0}</span></td>
                     <td><span class="stock-badge stock-restante">${sucData.restante}</span></td>
                 `;
             } else {
-                html += `<td><span class="stock-badge stock-empty">-</span></td><td><span class="stock-badge stock-empty">-</span></td>`;
+                html += `<td><span class="stock-badge stock-empty">-</span></td><td><span class="stock-badge stock-empty">-</span></td><td><span class="stock-badge stock-empty">-</span></td>`;
             }
         });
-        
+
+        const tipRecibTotal = `Compras: ${producto.total_compras || 0} · Traspasos recibidos: ${producto.total_traspasos_in || 0}`;
         html += `
-            <td><span class="stock-badge stock-inicial">${producto.total_inicial || 0}</span></td>
+            <td><span class="stock-badge stock-inicial" title="${tipRecibTotal}">${producto.total_inicial || 0}</span></td>
+            <td><span class="stock-badge stock-despacho">${producto.total_traspasos_out || 0}</span></td>
             <td><span class="stock-badge stock-restante">${producto.total_restante || 0}</span></td>
         </tr>`;
     });

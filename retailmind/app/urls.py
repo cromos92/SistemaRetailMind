@@ -6,9 +6,11 @@ from . import views_modulo_configuracion
 from . import views_modulo_reportes
 from . import views_gestion_sucursales
 from . import views_resumen_existencias
+from . import views_inteligencia_compra
 from . import views_dashboard_home
 from . import views_gestion_inventarios
 from . import views_etiquetas_zebra
+from . import views_fusion_duplicados
 from . import views_ecommerce
 from . import views_cron
 from .views_modulo_ventas import (
@@ -1213,6 +1215,13 @@ urlpatterns = [
     path('api/reporte-recepciones-detallado/', views_modulo_reportes.api_reporte_recepciones_detallado, name='api_reporte_recepciones_detallado'),
     path('api/reporte-despachos-detallado/', views_modulo_reportes.api_reporte_despachos_detallado, name='api_reporte_despachos_detallado'),
 
+    # Inteligencia de Compra (análisis + pronóstico por marca)
+    path('reportes/inteligencia-compra/', views_inteligencia_compra.ver_inteligencia_compra, name='ver_inteligencia_compra'),
+    path('api/inteligencia-compra/', views_inteligencia_compra.obtener_inteligencia_compra, name='obtener_inteligencia_compra'),
+    # Plan de Liquidación (ranking consolidado de marcas)
+    path('reportes/plan-liquidacion/', views_inteligencia_compra.ver_plan_liquidacion, name='ver_plan_liquidacion'),
+    path('api/plan-liquidacion/', views_inteligencia_compra.obtener_plan_liquidacion, name='obtener_plan_liquidacion'),
+
     # Reporte de existencias por marca
     path('reportes/existencias-marca/', views_modulo_reportes.ver_reporte_existencias_marca, name='ver_reporte_existencias_marca'),
     path('api/reporte-existencias-marca/', views_modulo_reportes.obtener_reporte_existencias_marca, name='obtener_reporte_existencias_marca'),
@@ -1350,6 +1359,11 @@ urlpatterns = [
     path('permisos/eliminar-permisos-usuario/', eliminar_permisos_usuario, name='eliminar_permisos_usuario'),
     path('permisos/copiar-permisos-usuario/', copiar_permisos_usuario, name='copiar_permisos_usuario'),
 
+
+    # ========== FUSIÓN Y RE-ETIQUETADO DE DUPLICADOS (EXISTENCIAS) ==========
+    path('existencias/fusion-duplicados/', views_fusion_duplicados.ver_fusion_duplicados, name='ver_fusion_duplicados'),
+    path('api/fusion-duplicados/buscar/', views_fusion_duplicados.api_buscar_producto_fusion, name='api_buscar_producto_fusion'),
+    path('api/fusion-duplicados/ejecutar/', views_fusion_duplicados.api_ejecutar_fusion, name='api_ejecutar_fusion'),
 
     # ========== MÓDULO DE GESTIÓN DE INVENTARIOS (TOMA FÍSICA) ==========
     # Vistas principales

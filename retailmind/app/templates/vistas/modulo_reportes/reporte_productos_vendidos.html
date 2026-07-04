@@ -157,6 +157,7 @@
                     <div class="card-body py-3">
                         <div class="kpi-label"><i class="ri-shopping-bag-line text-primary"></i> Unidades</div>
                         <div class="kpi-main" id="kpiUnidades">0</div>
+                        <div class="kpi-sub" title="Vendido ÷ (vendido + stock actual) del universo filtrado · Cobertura = stock ÷ velocidad del período">Sell-through: <span id="kpiSellThrough">0%</span> · Cob: <span id="kpiCobertura">—</span></div>
                     </div>
                 </div>
             </div>
@@ -274,6 +275,9 @@
                                                 <th class="text-center">Docs</th>
                                                 <th class="text-center">Sucs.</th>
                                                 <th class="text-center">% Partic.</th>
+                                                <th class="text-end" title="Stock actual del producto en toda la cadena">Stock</th>
+                                                <th class="text-center" title="Vendido ÷ (vendido + stock actual)">Sell-Thr.</th>
+                                                <th class="text-center" title="Días para agotar el stock a la velocidad del período">Cob. (d)</th>
                                             </tr>
                                         </thead>
                                         <tbody></tbody>
@@ -658,6 +662,9 @@
         document.getElementById('kpiTopProducto').textContent = k.top_producto || '-';
         document.getElementById('kpiTopMarca').textContent = k.top_marca || '-';
         document.getElementById('kpiTopCategoria').textContent = k.top_categoria || '-';
+        document.getElementById('kpiSellThrough').textContent = fmtPct(k.sell_through_periodo || 0);
+        document.getElementById('kpiCobertura').textContent =
+            k.cobertura_dias != null ? fmtNum(k.cobertura_dias) + ' días' : '—';
     }
 
     function renderProductos(rows, total) {
@@ -665,7 +672,7 @@
         document.getElementById('countProductosTotal').textContent = total || 0;
         const tb = document.querySelector('#tablaProductos tbody');
         if (!rows || !rows.length) {
-            tb.innerHTML = '<tr><td colspan="14" class="text-center text-muted py-4">Sin productos para los filtros seleccionados</td></tr>';
+            tb.innerHTML = '<tr><td colspan="17" class="text-center text-muted py-4">Sin productos para los filtros seleccionados</td></tr>';
             return;
         }
         tb.innerHTML = rows.map((r, i) => `
@@ -684,6 +691,9 @@
                 <td class="text-center">${fmtNum(r.docs)}</td>
                 <td class="text-center">${r.sucursales_count}</td>
                 <td class="text-center"><span class="badge bg-primary">${fmtPct(r.participacion)}</span></td>
+                <td class="text-end">${fmtNum(r.stock_actual || 0)}</td>
+                <td class="text-center"><span class="badge ${(r.sell_through || 0) >= 50 ? 'bg-success' : (r.sell_through || 0) >= 20 ? 'bg-warning text-dark' : 'bg-danger'}">${fmtPct(r.sell_through || 0)}</span></td>
+                <td class="text-center ${r.cobertura_dias > 240 ? 'text-danger fw-bold' : ''}">${r.cobertura_dias != null ? fmtNum(r.cobertura_dias) : '—'}</td>
             </tr>
         `).join('');
     }

@@ -1,0 +1,369 @@
+{% load static %}
+{% load humanize %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+
+<style>
+    .fd-header {
+        background: linear-gradient(90deg, #405189 0%, #0ab39c 100%);
+        border-radius: 12px; padding: 22px 26px; color: #fff; margin-bottom: 18px;
+    }
+    .fd-header h4 { margin: 0 0 4px; font-weight: 700; }
+    .fd-header p { margin: 0; opacity: .85; font-size: .9rem; }
+    .fd-card { background: #fff; border: 1px solid #e3e6ee; border-radius: 10px; padding: 18px; height: 100%; }
+    .fd-card h6 { font-weight: 700; margin-bottom: 10px; }
+    .fd-card.mantener { border-top: 4px solid #0ab39c; }
+    .fd-card.eliminar { border-top: 4px solid #f06548; }
+    .fd-resultados { position: relative; }
+    .fd-lista {
+        position: absolute; z-index: 30; left: 0; right: 0; top: 100%;
+        background: #fff; border: 1px solid #d8dce6; border-radius: 8px;
+        max-height: 280px; overflow-y: auto; box-shadow: 0 8px 20px rgba(26,26,46,.12);
+        display: none;
+    }
+    .fd-item { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f0f2f7; font-size: .85rem; }
+    .fd-item:hover { background: #edf3ff; }
+    .fd-item small { color: #8a90a3; display: block; }
+    .fd-sel { background: #f8f9fc; border: 1px dashed #c8cdda; border-radius: 8px; padding: 10px 12px; font-size: .85rem; min-height: 70px; }
+    .fd-sel .badge { font-size: .7rem; }
+    .fd-tabla th { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; }
+    .fd-tabla td { vertical-align: middle; font-size: .85rem; }
+    .fd-flecha { color: #0ab39c; font-weight: 700; }
+    .fd-sinpar { background: #fff6f5; }
+    .fd-acciones { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+    .fd-warning {
+        background: #fff8e6; border-left: 3px solid #f7b84b; border-radius: 0 8px 8px 0;
+        padding: 10px 14px; font-size: .82rem; margin-top: 12px;
+    }
+
+    /* ===== Etiquetas ===== */
+    .fd-etiquetas-grid { display: flex; flex-wrap: wrap; gap: 4mm; margin-top: 12px; }
+    .fd-etiqueta {
+        width: 50mm; height: 25mm; border: 1px dashed #c8cdda; border-radius: 2px;
+        padding: 1.5mm 2mm; display: flex; flex-direction: column; justify-content: space-between;
+        background: #fff; overflow: hidden;
+    }
+    .fd-etiqueta .et-nombre { font-size: 7pt; font-weight: 700; line-height: 1.1; max-height: 8mm; overflow: hidden; }
+    .fd-etiqueta .et-linea { display: flex; justify-content: space-between; font-size: 7pt; }
+    .fd-etiqueta svg { width: 100%; height: 9mm; }
+
+    @media print {
+        body * { visibility: hidden !important; }
+        #zona-etiquetas, #zona-etiquetas * { visibility: visible !important; }
+        #zona-etiquetas { position: absolute; left: 0; top: 0; width: 100%; }
+        .fd-etiqueta { border: none; page-break-inside: avoid; }
+        .fd-etiquetas-grid { gap: 0; }
+    }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+
+        <div class="fd-header">
+            <h4><i class="ri-shuffle-line"></i> Fusión y Re-etiquetado de Duplicados</h4>
+            <p>Transfiere el stock de un producto duplicado hacia la ficha que se conserva (talla a talla, con kardex y lotes), y genera las etiquetas del SKU final para re-etiquetar las unidades físicas. Sucursal activa: <strong>{{ sucursal_actual.alias|default:'—' }}</strong></p>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-lg-6">
+                <div class="fd-card mantener">
+                    <h6><i class="ri-shield-check-line text-success"></i> Producto que SE MANTIENE (A)</h6>
+                    <div class="fd-resultados">
+                        <input type="text" id="buscar-a" class="form-control" placeholder="Buscar por artículo, descripción o SKU exacto..." autocomplete="off">
+                        <div class="fd-lista" id="lista-a"></div>
+                    </div>
+                    <div class="fd-sel mt-2" id="sel-a"><span class="text-muted">Sin selección — sus etiquetas serán las que imprimas.</span></div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="fd-card eliminar">
+                    <h6><i class="ri-delete-bin-6-line text-danger"></i> Producto que SE VACÍA (B)</h6>
+                    <div class="fd-resultados">
+                        <input type="text" id="buscar-b" class="form-control" placeholder="Buscar por artículo, descripción o SKU exacto..." autocomplete="off">
+                        <div class="fd-lista" id="lista-b"></div>
+                    </div>
+                    <div class="fd-sel mt-2" id="sel-b"><span class="text-muted">Sin selección — su stock pasará a A y quedará en cero.</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== Preview talla a talla ===== -->
+        <div class="fd-card mt-3" id="card-preview" style="display:none">
+            <h6><i class="ri-table-line"></i> Vista previa de la transferencia</h6>
+            <div id="warn-precio" style="display:none" class="fd-warning" role="alert">
+                <i class="ri-price-tag-2-line"></i> <strong>Precios distintos:</strong>
+                <span id="warn-precio-detalle"></span> — al re-etiquetar, esas unidades pasarán a venderse al precio de A.
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover fd-tabla mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Talla</th>
+                            <th class="text-end">Stock B (sale)</th>
+                            <th class="text-center"></th>
+                            <th class="text-end">Stock A actual</th>
+                            <th class="text-end">Stock A final</th>
+                            <th class="text-center">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-preview"></tbody>
+                </table>
+            </div>
+            <div class="fd-warning">
+                <i class="ri-alert-line"></i> Esta operación <strong>mueve stock de verdad</strong> (kardex + lotes con referencia de fusión) y no tiene botón de deshacer — la reversa sería otra fusión en sentido contrario. Las tallas de B sin par en A <strong>no se tocan</strong> y quedan listadas para resolverlas manualmente.
+            </div>
+            <div class="fd-acciones">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="chk-excluir" checked>
+                    <label class="form-check-label" for="chk-excluir" style="font-size:.85rem">
+                        Excluir el producto B de la analítica (deja de aparecer en reportes)
+                    </label>
+                </div>
+                <button class="btn btn-success ms-auto" id="btn-ejecutar">
+                    <i class="ri-git-merge-line"></i> Ejecutar fusión y generar etiquetas
+                </button>
+            </div>
+        </div>
+
+        <!-- ===== Resultado + Etiquetas ===== -->
+        <div class="fd-card mt-3" id="card-etiquetas" style="display:none">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <h6 class="mb-0"><i class="ri-price-tag-3-line"></i> Etiquetas para re-etiquetar (SKU de A)</h6>
+                <div>
+                    <span class="badge bg-success" id="badge-referencia"></span>
+                    <button class="btn btn-primary btn-sm ms-2" onclick="window.print()">
+                        <i class="ri-printer-line"></i> Imprimir etiquetas
+                    </button>
+                </div>
+            </div>
+            <div class="text-muted" style="font-size:.8rem" id="resumen-fusion"></div>
+            <div class="d-flex align-items-end gap-2 flex-wrap mt-2" id="controles-etiquetas"></div>
+            <div id="zona-etiquetas"><div class="fd-etiquetas-grid" id="grid-etiquetas"></div></div>
+        </div>
+
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script src="{% static 'js/JsBarcode.all.min.js' %}"></script>
+<script>
+(function () {
+    'use strict';
+
+    let seleccion = { a: null, b: null };
+    let timers = { a: null, b: null };
+
+    function getCookie(name) {
+        const v = document.cookie.split('; ').find(r => r.startsWith(name + '='));
+        return v ? decodeURIComponent(v.split('=')[1]) : '';
+    }
+    const fmt = n => (n || 0).toLocaleString('es-CL');
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+        c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+    // ---------- Búsqueda ----------
+    function configurarBuscador(lado) {
+        const input = document.getElementById('buscar-' + lado);
+        const lista = document.getElementById('lista-' + lado);
+        input.addEventListener('input', () => {
+            clearTimeout(timers[lado]);
+            const q = input.value.trim();
+            if (q.length < 2) { lista.style.display = 'none'; return; }
+            timers[lado] = setTimeout(async () => {
+                const resp = await fetch('/app/api/fusion-duplicados/buscar/?q=' + encodeURIComponent(q));
+                const data = await resp.json();
+                if (!data.success) { lista.style.display = 'none'; return; }
+                lista.innerHTML = (data.resultados.length ? data.resultados.map(p => `
+                    <div class="fd-item" data-prod='${esc(JSON.stringify(p))}'>
+                        <strong>${esc(p.articulo)}</strong> — ${esc(p.marca)} / ${esc(p.color)}
+                        <small>${esc(p.descripcion)} · ${p.tallas.length} tallas · stock total ${fmt(p.stock_total)}</small>
+                    </div>`).join('')
+                    : '<div class="fd-item text-muted">Sin resultados en esta sucursal</div>');
+                lista.style.display = 'block';
+                lista.querySelectorAll('.fd-item[data-prod]').forEach(el => {
+                    el.addEventListener('click', () => {
+                        seleccionar(lado, JSON.parse(el.dataset.prod));
+                        lista.style.display = 'none';
+                        input.value = '';
+                    });
+                });
+            }, 300);
+        });
+        // Pistola/escáner: Enter selecciona si hay exactamente un resultado.
+        input.addEventListener('keydown', e => {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            const items = lista.querySelectorAll('.fd-item[data-prod]');
+            if (items.length === 1) items[0].click();
+        });
+        document.addEventListener('click', e => {
+            if (!lista.contains(e.target) && e.target !== input) lista.style.display = 'none';
+        });
+    }
+
+    function seleccionar(lado, prod) {
+        const otro = lado === 'a' ? 'b' : 'a';
+        if (seleccion[otro] && seleccion[otro].id === prod.id) {
+            alert('No puedes seleccionar el mismo producto en ambos lados.');
+            return;
+        }
+        seleccion[lado] = prod;
+        document.getElementById('sel-' + lado).innerHTML = `
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <strong>${esc(prod.articulo)}</strong>
+                    <span class="badge ${lado === 'a' ? 'bg-success' : 'bg-danger'}">${lado === 'a' ? 'MANTENER' : 'VACIAR'}</span><br>
+                    <small class="text-muted">${esc(prod.marca)} / ${esc(prod.color)} · $${fmt(prod.precio_venta)} · stock ${fmt(prod.stock_total)}</small><br>
+                    <small class="text-muted">Tallas: ${prod.tallas.map(t => `${esc(t.talla)}(${t.stock})`).join(' · ')}</small>
+                </div>
+            </div>`;
+        renderPreview();
+    }
+
+    // ---------- Preview ----------
+    function renderPreview() {
+        const card = document.getElementById('card-preview');
+        if (!seleccion.a || !seleccion.b) { card.style.display = 'none'; return; }
+        const mapaA = {};
+        seleccion.a.tallas.forEach(t => { mapaA[String(t.talla).trim().toUpperCase()] = t; });
+        const filas = [];
+        seleccion.b.tallas.filter(t => t.stock > 0).forEach(tb => {
+            const ta = mapaA[String(tb.talla).trim().toUpperCase()];
+            if (ta) {
+                filas.push(`<tr>
+                    <td><strong>${esc(tb.talla)}</strong></td>
+                    <td class="text-end text-danger">−${fmt(tb.stock)}</td>
+                    <td class="text-center fd-flecha">→</td>
+                    <td class="text-end">${fmt(ta.stock)}</td>
+                    <td class="text-end fw-bold text-success">${fmt(ta.stock + tb.stock)}</td>
+                    <td class="text-center"><span class="badge bg-success">OK</span></td>
+                </tr>`);
+            } else {
+                filas.push(`<tr class="fd-sinpar">
+                    <td><strong>${esc(tb.talla)}</strong></td>
+                    <td class="text-end">${fmt(tb.stock)}</td>
+                    <td class="text-center">✕</td>
+                    <td class="text-end" colspan="2"><em>A no tiene esta talla — no se transfiere</em></td>
+                    <td class="text-center"><span class="badge bg-warning text-dark">SIN PAR</span></td>
+                </tr>`);
+            }
+        });
+        document.getElementById('tbody-preview').innerHTML =
+            filas.length ? filas.join('') :
+            '<tr><td colspan="6" class="text-center text-muted">B no tiene stock que transferir</td></tr>';
+
+        // Advertir si el re-etiquetado implica cambio de precio al cliente.
+        const warn = document.getElementById('warn-precio');
+        if (seleccion.a.precio_venta !== seleccion.b.precio_venta) {
+            document.getElementById('warn-precio-detalle').textContent =
+                `B se vende a $${fmt(seleccion.b.precio_venta)} y A a $${fmt(seleccion.a.precio_venta)}`;
+            warn.style.display = '';
+        } else {
+            warn.style.display = 'none';
+        }
+
+        card.style.display = '';
+        document.getElementById('card-etiquetas').style.display = 'none';
+    }
+
+    // ---------- Ejecutar ----------
+    document.getElementById('btn-ejecutar').addEventListener('click', async () => {
+        if (!seleccion.a || !seleccion.b) return;
+        const msg = `Vas a transferir el stock de:\n\n  B) ${seleccion.b.articulo}\n  → A) ${seleccion.a.articulo}\n\nB quedará en CERO en las tallas con par. ¿Confirmas?`;
+        if (!confirm(msg)) return;
+
+        const btn = document.getElementById('btn-ejecutar');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Ejecutando...';
+        try {
+            const resp = await fetch('/app/api/fusion-duplicados/ejecutar/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify({
+                    mantener_id: seleccion.a.id,
+                    eliminar_id: seleccion.b.id,
+                    excluir_eliminado: document.getElementById('chk-excluir').checked,
+                }),
+            });
+            const data = await resp.json();
+            if (!data.success) { alert('Error: ' + (data.error || 'desconocido')); return; }
+            renderEtiquetas(data);
+        } catch (e) {
+            alert('Error de red al ejecutar la fusión: ' + e);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="ri-git-merge-line"></i> Ejecutar fusión y generar etiquetas';
+        }
+    });
+
+    // ---------- Etiquetas ----------
+    let ultimaFusion = null;
+
+    function generarEtiquetas() {
+        if (!ultimaFusion) return;
+        const grid = document.getElementById('grid-etiquetas');
+        const cantidades = {};
+        document.querySelectorAll('#controles-etiquetas input[data-talla]').forEach(inp => {
+            cantidades[inp.dataset.talla] = Math.max(0, parseInt(inp.value || '0', 10));
+        });
+        const total = Object.values(cantidades).reduce((a, b) => a + b, 0);
+        if (total > 500 && !confirm(`Vas a generar ${total} etiquetas. ¿Continuar?`)) return;
+
+        grid.innerHTML = '';
+        ultimaFusion.transferidas.forEach(t => {
+            const n = cantidades[t.talla] != null ? cantidades[t.talla] : t.cantidad;
+            for (let i = 0; i < n; i++) {
+                const div = document.createElement('div');
+                div.className = 'fd-etiqueta';
+                div.innerHTML = `
+                    <div class="et-nombre">${esc(ultimaFusion.articulo_destino)} · ${esc(ultimaFusion.marca_destino)}</div>
+                    <svg class="et-barcode" data-sku="${esc(t.sku_destino)}"></svg>
+                    <div class="et-linea"><span>Talla ${esc(t.talla)}</span><strong>$${fmt(t.precio)}</strong></div>`;
+                grid.appendChild(div);
+            }
+        });
+        grid.querySelectorAll('svg.et-barcode').forEach(svg => {
+            JsBarcode(svg, svg.dataset.sku, {
+                format: 'CODE128', displayValue: true, fontSize: 10,
+                height: 26, margin: 0,
+            });
+        });
+    }
+
+    function renderEtiquetas(data) {
+        ultimaFusion = data;
+        // Controles: cantidad de etiquetas editable por talla (por si ya
+        // re-etiquetaron parte de las unidades a mano).
+        document.getElementById('controles-etiquetas').innerHTML =
+            data.transferidas.map(t => `
+                <label style="font-size:.75rem" class="text-muted">
+                    Talla ${esc(t.talla)}
+                    <input type="number" class="form-control form-control-sm" style="width:80px"
+                           data-talla="${esc(t.talla)}" min="0" value="${t.cantidad}">
+                </label>`).join('') +
+            `<button class="btn btn-outline-primary btn-sm" id="btn-regenerar">
+                <i class="ri-refresh-line"></i> Regenerar etiquetas
+            </button>`;
+        document.getElementById('btn-regenerar').addEventListener('click', generarEtiquetas);
+        generarEtiquetas();
+        document.getElementById('badge-referencia').textContent = data.referencia;
+        const sinPar = (data.sin_par || []).length
+            ? ` · SIN PAR (no transferidas): ${data.sin_par.map(s => `${s.talla}(${s.stock})`).join(', ')}`
+            : '';
+        document.getElementById('resumen-fusion').textContent =
+            `${data.transferidas.length} talla(s), ${totalEtiquetas} etiqueta(s) generadas` +
+            (data.excluido_de_analitica ? ' · B excluido de analítica' : '') + sinPar;
+        document.getElementById('card-etiquetas').style.display = '';
+        document.getElementById('card-preview').style.display = 'none';
+        seleccion = { a: null, b: null };
+        document.getElementById('sel-a').innerHTML = '<span class="text-muted">Sin selección.</span>';
+        document.getElementById('sel-b').innerHTML = '<span class="text-muted">Sin selección.</span>';
+        document.getElementById('card-etiquetas').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    configurarBuscador('a');
+    configurarBuscador('b');
+    document.getElementById('buscar-a').focus();
+})();
+</script>

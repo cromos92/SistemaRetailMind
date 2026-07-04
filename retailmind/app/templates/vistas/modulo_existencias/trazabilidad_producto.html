@@ -207,6 +207,24 @@ function renderProductoInfo(p) {
     document.getElementById('pPrecio').textContent = '$' + Number(p.precio_venta).toLocaleString('es-CL');
     document.getElementById('pSucursal').textContent = p.sucursal;
     document.getElementById('pFechaCreacion').textContent = p.fecha_creacion;
+
+    // Aviso: SKU duplicado en la BD (dato legacy). Se muestra la trazabilidad de
+    // la talla de la sucursal activa; puede haber otras con el mismo SKU.
+    const cont = document.getElementById('contenidoTrazabilidad');
+    let aviso = document.getElementById('avisoSkuDuplicado');
+    if (p.sku_duplicado) {
+        if (!aviso) {
+            aviso = document.createElement('div');
+            aviso.id = 'avisoSkuDuplicado';
+            aviso.className = 'alert alert-warning d-flex align-items-center gap-2';
+            cont.prepend(aviso);
+        }
+        aviso.innerHTML = `<i class="ri-error-warning-line fs-5"></i>
+            <div><strong>SKU duplicado:</strong> este código existe en <b>${p.sku_ocurrencias}</b> productos/tallas.
+            Se muestra la trazabilidad del de la sucursal activa (<b>${p.sucursal}</b>). Conviene depurar el SKU duplicado.</div>`;
+    } else if (aviso) {
+        aviso.remove();
+    }
 }
 
 function renderTimeline(items) {
