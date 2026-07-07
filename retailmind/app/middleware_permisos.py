@@ -60,6 +60,10 @@ URL_PERMISO_MAP = {
     '/app/revisar-cambios-precios/': 'revisar_cambios_precios',
     '/app/verMovimientosProducto/': 'movimientos_producto',
     '/app/gestion-inventarios/': 'gestion_inventarios',
+    # Fusión de duplicados: comparte el permiso fino de Gestión de Inventarios
+    # (opera stock/kardex). Cubre la página y sus 2 endpoints AJAX.
+    '/app/existencias/fusion-duplicados/': 'gestion_inventarios',
+    '/app/api/fusion-duplicados/': 'gestion_inventarios',
     '/app/etiquetas-zebra/': 'gestion_etiquetas_zebra',
     '/app/buscar-productos-sucursal/': 'buscar_productos_sucursal',
     '/app/tarjeta-movimiento/': 'tarjeta_movimiento_producto',
@@ -134,6 +138,7 @@ URLS_SIEMPRE_PERMITIDAS = [
     '/logout/',
     '/login/',
     '/favicon.ico',
+    '/puntos/',  # landing pública de la app de fidelización (QR en tickets)
 ]
 
 

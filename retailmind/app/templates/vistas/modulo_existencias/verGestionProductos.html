@@ -88,8 +88,8 @@
     .crear-seccion {
         background: #f8f9fa;
         border-radius: 10px;
-        padding: 10px 12px;
-        margin-bottom: 10px;
+        padding: 9px 12px;
+        margin-bottom: 8px;
         border: 1px solid #e9ecef;
     }
     .crear-seccion-titulo {
@@ -97,7 +97,7 @@
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: .3px;
-        margin-bottom: 6px;
+        margin-bottom: 5px;
         display: flex;
         align-items: center;
         gap: 5px;
@@ -240,6 +240,7 @@
     }
 
     /* Labels compactos */
+    #modalCrearProductoDesdeRecepcion .form-label,
     #modalCrearProductoDesdeRecepcion .form-label,
     #modalCrearProductoManual .form-label {
         font-size: .78rem;
@@ -2560,6 +2561,10 @@
                                     <div class="mb-0">
                                         <label class="form-label">Descripción</label>
                                         <input type="text" name="descripcion" class="form-control" placeholder="Ej: Zapatilla Running Hombre Talla CL">
+                                        <label class="d-flex align-items-center gap-1 mt-1 mb-0 text-muted" style="font-size:.74rem;cursor:pointer;">
+                                            <input type="checkbox" name="aplicar_todas_bodegas" value="true">
+                                            <i class="bi bi-building-gear"></i> Aplicar esta descripción a todas las bodegas de este código
+                                        </label>
                                     </div>
                                 </div>
 
@@ -2755,6 +2760,11 @@
                     </div>
 
                     <div class="modal-footer">
+                        <div class="me-auto d-flex align-items-center gap-2" style="font-size:.85rem;">
+                            <span class="badge bg-primary-subtle text-primary border" style="font-size:.76rem;"><i class="bi bi-rulers me-1"></i><span id="footerTallasRecepcion">0</span> tallas</span>
+                            <span class="text-muted">·</span>
+                            <span class="fw-bold text-dark">Total: <span id="footerUnidadesRecepcion">0</span> uds</span>
+                        </div>
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                             <i class="bi bi-x-lg me-1"></i>Cancelar
                         </button>
@@ -2781,7 +2791,6 @@
                             <h5 class="modal-title text-white mb-0" id="crearProductoManualLabel">Crear Producto Manual</h5>
                             <small class="text-white-50" style="font-size:.72rem;">Ingrese todos los datos del nuevo producto</small>
                         </div>
-                        <span id="estadoCreacionManual" class="badge ms-3" style="display:none;font-size:.78rem;"></span>
                     </div>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
@@ -2854,6 +2863,10 @@
                                     <div class="mb-0">
                                         <label class="form-label">Descripción</label>
                                         <input type="text" name="descripcion" class="form-control" placeholder="Ej: Zapatilla Running Hombre Talla CL">
+                                        <label class="d-flex align-items-center gap-1 mt-1 mb-0 text-muted" style="font-size:.74rem;cursor:pointer;">
+                                            <input type="checkbox" name="aplicar_todas_bodegas" value="true">
+                                            <i class="bi bi-building-gear"></i> Aplicar esta descripción a todas las bodegas de este código
+                                        </label>
                                     </div>
                                 </div>
 
@@ -3127,6 +3140,11 @@
                     </div>
                     
                     <div class="modal-footer">
+                        <div class="me-auto d-flex align-items-center gap-2" style="font-size:.85rem;">
+                            <span class="badge bg-primary-subtle text-primary border" style="font-size:.76rem;"><i class="bi bi-rulers me-1"></i><span id="footerTallasManual">0</span> tallas</span>
+                            <span class="text-muted">·</span>
+                            <span class="fw-bold text-dark">Total: <span id="footerUnidadesManual">0</span> uds</span>
+                        </div>
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                             <i class="bi bi-x-lg me-1"></i>Cancelar
                         </button>
@@ -6722,25 +6740,9 @@ function verificarProductoExistente(articulo, marca, color, genero, categoria, s
             InfoChipsRecepcion.remove('variantes');
         }
 
-        // Chip de OTRAS variantes del mismo código (otros colores/géneros)
-        if (typeof InfoChipsRecepcion !== 'undefined') {
-            const matchId = response.producto_encontrado ? response.producto_encontrado.id : null;
-            const otras = (response.variantes_codigo || []).filter(v => v.id !== matchId);
-            if (otras.length > 0) {
-                const det = otras.map(v => `<div style="font-size:.72rem;margin-bottom:2px;">
-                    <span class="badge bg-info text-dark">${v.color}</span>
-                    <span class="badge bg-secondary">${v.genero}</span>
-                    <span class="text-muted">· ${v.tallas.length} tallas · stock ${v.stock_total}</span></div>`).join('');
-                InfoChipsRecepcion.set('variantes', {
-                    label: `Código en ${otras.length} variante(s)`,
-                    resumen: '',
-                    tipoColor: 'estado_existente',
-                    detalleHtml: `<div class="fw-semibold mb-1" style="font-size:.78rem;">Otras variantes de este mismo código:</div>${det}
-                        <div class="text-muted mt-1" style="font-size:.7rem;">Si tu recepción es una de estas, seleccioná su color/género para no crear un duplicado.</div>`,
-                });
-            }
-        }
-        
+        // Tarjeta ÚNICA de bodegas del código (la MISMA que en el modal manual)
+        renderTarjetaCodigoRecepcion(response);
+
         // ✅ SIEMPRE verificar precios en otras sucursales
         if (response.productos_otras_sucursales && response.productos_otras_sucursales.length > 0) {
             mostrarAlertaPreciosOtrasSucursalesRecepcion(response.productos_otras_sucursales);
@@ -8886,7 +8888,7 @@ $('#formCrearProductoDesdeRecepcion').off('submit').on('submit', function(e) {
     // ========== VERIFICAR SI HAY PRODUCTO EXISTENTE DETECTADO ==========
     const hayProductoExistente = $('#panelProductoEncontrado').length > 0 && $('#panelProductoEncontrado').is(':visible');
 
-    function enviarFormularioRecepcion() {
+    function enviarFormularioRecepcion(actualizarPrecios) {
         // ========== MOSTRAR LOADING ==========
         const textoOriginal = $btnSubmit.html();
         $btnSubmit.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Creando...');
@@ -8899,6 +8901,10 @@ $('#formCrearProductoDesdeRecepcion').off('submit').on('submit', function(e) {
         if ($('#selectGuiaTalla').val() === 'SIN_GUIA') {
             formData = formData.map(f => f.name === 'guia_talla' ? { name: 'guia_talla', value: '' } : f);
         }
+        // Gate de precios (paridad con el modal manual): el backend solo pisa
+        // precios/costos del producto existente si mandamos actualizar_precios=true.
+        formData = formData.filter(f => f.name !== 'actualizar_precios');
+        formData.push({ name: 'actualizar_precios', value: actualizarPrecios ? 'true' : 'false' });
         $.ajax({
             url: '/app/crear_producto_desde_recepcion/',
             type: 'POST',
@@ -8942,11 +8948,17 @@ $('#formCrearProductoDesdeRecepcion').off('submit').on('submit', function(e) {
                 <p>Se detectó que <strong>ya existe un producto</strong> con las mismas características en esta sucursal.</p>
                 <p>Al continuar, el sistema:</p>
                 <ul>
-                    <li>Actualizará los <strong>precios y costos</strong> si hay diferencias</li>
                     <li>Agregará las <strong>tallas nuevas</strong> al producto existente</li>
                     <li>Sumará <strong>stock</strong> en tallas que ya existen</li>
                 </ul>
-                <p class="mb-0 text-muted"><small>Si deseas crear un producto totalmente nuevo, cancela y modifica el artículo o atributos.</small></p>
+                <div style="margin-top:.5rem;padding:.5rem .6rem;background:#f6f9ff;border:1px solid #d6e4ff;border-radius:8px;">
+                    <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;margin:0;">
+                        <input type="checkbox" id="swalActualizarPreciosRecepcion" checked>
+                        <span>Actualizar también <strong>precios y costos</strong> con los de esta recepción</span>
+                    </label>
+                    <small class="text-muted">Desmárcalo para solo agregar tallas/stock sin cambiar los precios ya guardados.</small>
+                </div>
+                <p class="mb-0 mt-2 text-muted"><small>Si deseas crear un producto totalmente nuevo, cancela y modifica el artículo o atributos.</small></p>
             </div>`,
             showCancelButton: true,
             confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Sí, actualizar existente',
@@ -8956,11 +8968,13 @@ $('#formCrearProductoDesdeRecepcion').off('submit').on('submit', function(e) {
             reverseButtons: true
         }).then((result) => {
             if (result.isConfirmed) {
-                enviarFormularioRecepcion();
+                const chk = document.getElementById('swalActualizarPreciosRecepcion');
+                enviarFormularioRecepcion(chk ? chk.checked : true);
             }
         });
     } else {
-        enviarFormularioRecepcion();
+        // Producto nuevo: no hay precios previos que preservar, se usan los del formulario.
+        enviarFormularioRecepcion(true);
     }
 });
 
@@ -9579,16 +9593,70 @@ function _fmtTallaRango(t) {
     return (t % 1 === 0) ? String(t) : t.toFixed(1);
 }
 
-// Banda de estado en vivo del modal manual (nuevo / existente / variante)
-function setEstadoCreacionManual(tipo) {
-    const $p = $('#estadoCreacionManual');
-    const map = {
-        nuevo:     { txt: '🆕 Producto nuevo',           cls: 'bg-success' },
-        existente: { txt: '✏️ Se agrega al existente',    cls: 'bg-warning text-dark' },
-        variante:  { txt: '⚠️ Nueva variante del código', cls: 'bg-info text-dark' },
-    };
-    if (!tipo || !map[tipo]) { $p.hide(); return; }
-    $p.attr('class', 'badge ms-3 ' + map[tipo].cls).text(map[tipo].txt).show();
+// Tarjeta ÚNICA del código: estado + tabla de bodegas/variantes (reemplaza los
+// múltiples paneles apilados). Muestra en qué bodegas existe el código y
+// diferencia las variantes (colores/géneros distintos) con su diferencia.
+function renderTarjetaCodigo(response, modalSel, formSel, cardId) {
+    $('#' + cardId).remove();
+    const articulo = ($(modalSel + ' input[name="articulo"]').val() || '').trim();
+    if (!articulo) return;
+    const bodegas = response.bodegas_codigo || [];
+    const existe = !!(response.existe && response.producto_encontrado);
+    const hayVariante = bodegas.some(b => b.mismo_combo === false);
+
+    let estado, borde;
+    if (existe)          { estado = '<span class="badge bg-warning text-dark">✏️ Ya existe · se agrega</span>'; borde = '#e65100'; }
+    else if (hayVariante){ estado = '<span class="badge bg-info text-dark">⚠️ El código existe en otra variante</span>'; borde = '#0dcaf0'; }
+    else if (bodegas.length){ estado = '<span class="badge bg-secondary">Código ya usado en otra bodega</span>'; borde = '#6c757d'; }
+    else                 { estado = '<span class="badge bg-success">🆕 Código nuevo</span>'; borde = '#198754'; }
+
+    let filas;
+    if (bodegas.length) {
+        const ord = bodegas.slice().sort((a, b) => (a.mismo_combo === b.mismo_combo ? 0 : (a.mismo_combo ? -1 : 1)));
+        filas = ord.map(b => {
+            const tipo = b.mismo_combo === false
+                ? '<span class="badge bg-info text-dark" title="Otro color/género con el mismo código">variante</span>'
+                : (b.mismo_combo ? '<span class="badge bg-success">mismo</span>' : '<span class="badge bg-light text-dark border">—</span>');
+            const aqui = b.es_sucursal_actual ? ' <i class="bi bi-geo-alt-fill text-primary" title="Sucursal actual"></i>' : '';
+            return `<tr>
+                <td class="fw-semibold">${b.sucursal}${aqui}</td>
+                <td><span class="badge bg-dark">${b.marca}</span> <span class="badge bg-info text-dark">${b.color}</span> <span class="badge bg-secondary">${b.genero}</span></td>
+                <td class="text-end">${b.n_tallas}</td>
+                <td class="text-end">${(b.stock_total || 0).toLocaleString('es-CL')}</td>
+                <td class="text-end">$${(b.precioventa || 0).toLocaleString('es-CL')}</td>
+                <td>${tipo}</td>
+            </tr>`;
+        }).join('');
+    } else {
+        filas = '<tr><td colspan="6" class="text-muted">Este código no existe en ninguna de tus bodegas todavía.</td></tr>';
+    }
+
+    const html = `
+    <div id="${cardId}" class="card border-0 shadow-sm mb-2" style="border-left:4px solid ${borde} !important;">
+        <div class="card-body py-2 px-3">
+            <div class="d-flex align-items-center justify-content-between mb-1 flex-wrap gap-1">
+                <div class="fw-bold" style="font-size:.82rem;"><i class="bi bi-diagram-3 me-1"></i>Código <span class="text-primary">${articulo}</span> en tus bodegas</div>
+                ${estado}
+            </div>
+            <div class="table-responsive" style="max-height:180px;overflow:auto;">
+                <table class="table table-sm table-hover mb-0" style="font-size:.75rem;">
+                    <thead class="table-light"><tr><th>Bodega</th><th>Variante (marca/color/género)</th><th class="text-end">Tallas</th><th class="text-end">Stock</th><th class="text-end">Precio</th><th></th></tr></thead>
+                    <tbody>${filas}</tbody>
+                </table>
+            </div>
+        </div>
+    </div>`;
+    const $ancla = $(modalSel + ' input[name="articulo"]').closest('.crear-seccion');
+    if ($ancla.length) $ancla.after(html);
+    else $(formSel + ' .modal-body').prepend(html);
+}
+
+// Wrappers por modal: la MISMA tarjeta en manual y en recepción
+function renderTarjetaCodigoManual(response) {
+    renderTarjetaCodigo(response, '#modalCrearProductoManual', '#formCrearProductoManual', 'tarjetaCodigoManual');
+}
+function renderTarjetaCodigoRecepcion(response) {
+    renderTarjetaCodigo(response, '#modalCrearProductoDesdeRecepcion', '#formCrearProductoDesdeRecepcion', 'tarjetaCodigoRecepcion');
 }
 
 function generarRangoTallasManual() {
@@ -9671,6 +9739,19 @@ $(document).on('focus', '#tablaTallasManual .stock-input', function() {
 });
 
 // ✅ RESUMEN DE TALLAS Y STOCK - Actualización dinámica
+// Total en el footer del modal de RECEPCIÓN (paridad con el manual).
+function actualizarFooterRecepcion() {
+    const $filas = $('#tablaTallasCrearProducto tbody tr');
+    let total = 0;
+    $filas.each(function () {
+        const $n = $(this).find('input[type="number"]').first();
+        total += parseInt($n.val()) || 0;
+    });
+    $('#footerUnidadesRecepcion').text(total);
+    $('#footerTallasRecepcion').text($filas.length);
+}
+$(document).on('input change', '#tablaTallasCrearProducto input', actualizarFooterRecepcion);
+
 function actualizarResumenTallasManual() {
     const $filas = $('#tablaTallasManual tbody tr');
     const $listaResumen = $('#listaTallasResumen');
@@ -9679,6 +9760,8 @@ function actualizarResumenTallasManual() {
     if ($filas.length === 0) {
         $listaResumen.html('<span class="text-muted small"><i class="bi bi-box-seam me-1"></i>Sin tallas agregadas</span>');
         $totalResumen.text('0');
+        $('#footerUnidadesManual').text('0');
+        $('#footerTallasManual').text('0');
         return;
     }
     
@@ -9712,6 +9795,8 @@ function actualizarResumenTallasManual() {
     
     $listaResumen.html(tallasHtml);
     $totalResumen.text(totalUnidades);
+    $('#footerUnidadesManual').text(totalUnidades);
+    $('#footerTallasManual').text($filas.length);
 
     // Sincronizar badge del tab Tallas y Stock
     const nTallasActual = $filas.length;
@@ -10079,13 +10164,9 @@ function verificarProductoExistenteManual() {
         if (categoria) params.categoria = categoria;
         
         $.get('/app/verificar_producto_existente/', params, function(response) {
-            // ✅ SIEMPRE verificar precios en otras sucursales
-            if (response.productos_otras_sucursales && response.productos_otras_sucursales.length > 0) {
-                mostrarAlertaPreciosOtrasSucursales(response.productos_otras_sucursales);
-            } else {
-                $('#alertaPreciosOtrasSucursales').remove();
-            }
-            
+            // Precios/otras sucursales ahora se ven en la tarjeta de bodegas del código
+            $('#alertaPreciosOtrasSucursales').remove();
+
             if (response.existe && response.producto_encontrado) {
                 console.log('✅ Producto existente encontrado en modal manual');
                 console.log('📦 Producto:', response.producto_encontrado);
@@ -10101,11 +10182,10 @@ function verificarProductoExistenteManual() {
                 // ✅ LIMPIAR indicador de producto nuevo si existe
                 $('#indicadorVerificacionManual').remove();
                 
-                // Mostrar panel informativo del producto existente
+                // Panel del producto existente (tallas + switch de precios)
                 mostrarPanelProductoExistenteManual(prod, tallas);
-                // Mostrar OTRAS variantes del mismo código (otros colores/géneros)
-                mostrarVariantesCodigoManual(response.variantes_codigo, prod.id);
-                setEstadoCreacionManual('existente');
+                // Tarjeta ÚNICA: bodegas y variantes del código
+                renderTarjetaCodigoManual(response);
                 
                 // ✅ AUTOMÁTICAMENTE reemplazar la tabla de tallas con las tallas existentes
                 // Esto garantiza que los SKUs sean los correctos de la BD
@@ -10168,10 +10248,8 @@ function verificarProductoExistenteManual() {
                 window.productoExistenteManual = null;
                 window.tallasExistentesManual = null;
 
-                // Aviso: el código existe en otras variantes (aunque este combo sea nuevo)
-                mostrarVariantesCodigoManual(response.variantes_codigo, null);
-                setEstadoCreacionManual(
-                    (response.variantes_codigo && response.variantes_codigo.length) ? 'variante' : 'nuevo');
+                // Tarjeta ÚNICA: bodegas y variantes del código
+                renderTarjetaCodigoManual(response);
 
                 // Convertir filas "talla-existente" (que tienen hidden SKU + badge verde)
                 // a filas normales con input vacío para que generarTodosLosSkusManual las llene
@@ -10191,22 +10269,13 @@ function verificarProductoExistenteManual() {
                 });
 
                 generarTodosLosSkusManual();
-                mostrarIndicadorProductoNuevoManual();
-                
-                // Mostrar productos similares si los hay
-                if ((response.productos_similares_sku && response.productos_similares_sku.length > 0) ||
-                    (response.productos_similares_nombre && response.productos_similares_nombre.length > 0)) {
-                    mostrarAdvertenciaProductosSimilaresManual(
-                        response.productos_similares_sku, 
-                        response.productos_similares_nombre
-                    );
-                }
+                // (el estado "nuevo" y los similares ahora viven en la tarjeta de bodegas)
             }
         });
     } else {
         console.log('📝 Campos incompletos en modal manual, limpiando SKUs');
         limpiarSkusManual();
-        setEstadoCreacionManual(null);
+        $('#tarjetaCodigoManual').remove();
     }
 }
 

@@ -815,3 +815,29 @@ def api_reporte_fidelizacion(request):
     )
     # Compatibilidad con el listado actual: conserva los KPIs en la raíz.
     return JsonResponse({'success': True, **reporte['resumen'], **reporte})
+
+
+# ========== LANDING PÚBLICA DE DESCARGA DE LA APP ==========
+
+def descargar_app_puntos(request):
+    """
+    Landing PÚBLICA (sin login) a la que apunta el QR impreso en los tickets
+    del POS. La escanea el cliente final con su teléfono.
+
+    Los botones de descarga se configuran por entorno (según decisión
+    stores vs APK directo):
+      - APP_PUNTOS_URL_ANDROID  (Play Store)
+      - APP_PUNTOS_URL_IOS      (App Store)
+      - APP_PUNTOS_URL_APK      (APK directo)
+    Sin ninguna configurada, muestra "muy pronto" e igual educa sobre
+    acumular con el RUT en caja.
+    """
+    import os
+    contexto = {
+        'url_android': os.environ.get('APP_PUNTOS_URL_ANDROID', ''),
+        'url_ios': os.environ.get('APP_PUNTOS_URL_IOS', ''),
+        'url_apk': os.environ.get('APP_PUNTOS_URL_APK', ''),
+    }
+    return render(
+        request, 'vistas/modulo_fidelizacion/descargar_app.html', contexto,
+    )

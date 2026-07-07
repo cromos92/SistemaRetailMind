@@ -234,6 +234,12 @@ from .fidelizacion import (  # noqa: F401
     ESTADO_RESERVA_CHOICES,
     CanjeVale,
     ESTADO_VALE_CHOICES,
+    DispositivoCliente,
+    PLATAFORMA_DISPOSITIVO_CHOICES,
+    Referido,
+    ESTADO_REFERIDO_CHOICES,
+    DesafioPromo,
+    TIPO_DESAFIO_CHOICES,
 )
 
 from .cliente_app import (  # noqa: F401

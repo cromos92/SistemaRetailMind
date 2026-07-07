@@ -3662,6 +3662,13 @@ $(document).ready(function() {
         fetch(`{% url "api_consultar_saldo_puntos" %}?rut=${encodeURIComponent(rut)}`)
             .then(r => r.json())
             .then(d => {
+                // Se guarda para el bloque "Mis Puntos" del ticket impreso,
+                // ESTAMPADO con el RUT consultado: al imprimir se valida contra
+                // el RUT del ticket (una respuesta tardía de otro cliente no
+                // puede imprimir el saldo equivocado).
+                window._fidSaldoCliente = (d && d.success && d.cliente)
+                    ? Object.assign({}, d, { _rut: tkNormRut(rut) })
+                    : null;
                 const badge = document.getElementById('posClientePuntos');
                 if (!badge) return;
                 if (d && d.success && d.cliente) {
@@ -3688,7 +3695,10 @@ $(document).ready(function() {
                     badge.classList.add('d-none');
                 }
             })
-            .catch(() => document.getElementById('posClientePuntos')?.classList.add('d-none'));
+            .catch(() => {
+                window._fidSaldoCliente = null;
+                document.getElementById('posClientePuntos')?.classList.add('d-none');
+            });
     }
 
     // Tras autocompletar, salta al primer campo vacío (no roba foco si está completo).
@@ -3762,6 +3772,7 @@ $(document).ready(function() {
         });
         tkUltimoRutBuscado = '';
         tkSetCamposBloqueados(true);
+        window._fidSaldoCliente = null;
         document.getElementById('posClientePuntos')?.classList.add('d-none');
         const hint = document.getElementById('tkClienteHint');
         if (hint) hint.textContent = 'Completa un RUT válido para habilitar los datos. Se guardan al cobrar.';
@@ -3792,6 +3803,7 @@ $(document).ready(function() {
                 const _tkAvisoEmp = document.getElementById('tkEmpresaAviso');
                 if (_tkAvisoEmp) _tkAvisoEmp.style.display = _tkEsEmpresa ? '' : 'none';
                 if (_tkEsEmpresa) {
+                    window._fidSaldoCliente = null;
                     document.getElementById('posClientePuntos')?.classList.add('d-none');
                     const hint = document.getElementById('tkClienteHint');
                     if (hint) hint.textContent = 'RUT de empresa — no acumula puntos de fidelización.';
@@ -3814,6 +3826,9 @@ $(document).ready(function() {
                         showConfirmButton: false, timer: 2000 });
                     tkFocoPrimerFaltante();
                 } else {
+                    // Cliente nuevo: limpiar el saldo del cliente ANTERIOR o el
+                    // ticket imprimiría "Ya tienes $X" de otra persona.
+                    window._fidSaldoCliente = null;
                     document.getElementById('posClientePuntos')?.classList.add('d-none');
                     const hint = document.getElementById('tkClienteHint');
                     if (hint && !_tkEsEmpresa) hint.textContent = 'Cliente nuevo: escribe el Nombre para crear su ficha.';
@@ -4000,6 +4015,16 @@ $(document).ready(function() {
             return;
         }
 
+        // Saldo para el bloque "Mis Puntos" impreso: SOLO si el RUT estampado
+        // en la consulta coincide con el RUT que lleva este ticket (evita
+        // imprimir el saldo de otra persona por respuestas tardías o por
+        // borrar los campos a mano).
+        const _rutTicket = tkNormRut(document.getElementById('tkClienteRut')?.value || '');
+        const _fidCrudo = window._fidSaldoCliente || null;
+        const _fidParaTicket =
+            (_fidCrudo && _fidCrudo._rut && _rutTicket && _fidCrudo._rut === _rutTicket)
+                ? _fidCrudo : null;
+
         const ticketData = {
             vendedor_id: vendedorSeleccionado.id,
             productos: productosTicket.map(p => ({
@@ -4023,6 +4048,8 @@ $(document).ready(function() {
         .then(response => response.json())
         .then(response => {
             if (response.success) {
+                // (_fidParaTicket viene validado por RUT desde el closure de
+                // la función — ver arriba, antes del fetch.)
                 Swal.fire({
                     icon: 'success',
                     title: '¡Ticket creado!',
@@ -4032,6 +4059,7 @@ $(document).ready(function() {
                     resetearVistaTicket();
 
                     if (response.ticket_data) {
+                        response.ticket_data.fidelizacion = _fidParaTicket;
                         imprimirTicketTermico(response.ticket_data);
                     } else if (response.ticket_html) {
                         const ventanaImpresion = window.open('', '_blank', 'width=300,height=600');
@@ -4532,6 +4560,14 @@ body {
 
 <!-- FOOTER -->
 <div class="footer">
+    ${(() => {
+        const fid = ticketData.fidelizacion || null;
+        const linea = (fid && (fid.valor_pesos || 0) > 0)
+            ? '¡Ya tienes $' + (fid.valor_pesos || 0).toLocaleString('es-CL') + ' en puntos!'
+            : 'Acumula dinero en cada compra con tu RUT.';
+        return '<div class="f-aviso" style="font-weight:700">MIS PUNTOS — ' + linea +
+               ' Descarga la app: ' + (window.location.host || '') + '/puntos/app/</div>';
+    })()}
     <span class="f-gracias">¡Gracias por su compra!</span>
     ${sucursal.politica_cambios ? `<div class="f-aviso">${sucursal.politica_cambios}</div>` : '<div class="f-aviso">Cambios con boleta hasta 15 días</div>'}
     <div class="f-aviso">Sin devolución de dinero en efectivo</div>
@@ -4714,6 +4750,22 @@ function col2(izq, der, nDer) {
     return padL(izq, COLS - nd) + padR(der, nd) + _LF;
 }
 
+/* ── QR nativo ESC/POS (GS ( k — Epson TM-T20II y compatibles) ──── */
+const QR_APP_URL = window.location.origin + '/puntos/app/';
+
+function qrNativo(data) {
+    const store = '\x31\x50\x30' + data;                    // fn=80: almacenar
+    const pL = String.fromCharCode(store.length & 0xFF);
+    const pH = String.fromCharCode((store.length >> 8) & 0xFF);
+    return [
+        _GS + '(k\x04\x00\x31\x41\x32\x00',   // modelo QR 2
+        _GS + '(k\x03\x00\x31\x43\x06',       // tamaño de módulo 6
+        _GS + '(k\x03\x00\x31\x45\x31',       // corrección de error M
+        _GS + '(k' + pL + pH + store,          // datos
+        _GS + '(k\x03\x00\x31\x51\x30',       // imprimir
+    ];
+}
+
 /* ── Generar array de comandos ESC/POS ──────────────────────────── */
 function generarEscPos(ticketData) {
     // El backend retorna ticket_id (no correlativo) y la empresa
@@ -4839,6 +4891,26 @@ function generarEscPos(ticketData) {
     c.push(_GS + 'k\x49' + String.fromCharCode(barcodeData.length) + barcodeData);
     c.push(_LF);
 
+    c.push(sep('-'));
+
+    // ── Bloque Mis Puntos (fidelización + QR de descarga) ──
+    const fid = ticketData.fidelizacion || null;
+    c.push(ESCPOS.ALIGN_CENTER);
+    c.push(ESCPOS.BOLD_ON);
+    c.push('MIS PUNTOS' + _LF);
+    c.push(ESCPOS.BOLD_OFF);
+    if (fid && (fid.valor_pesos || 0) > 0) {
+        c.push('Ya tienes ' + fmtCLP(fid.valor_pesos) + ' en puntos!' + _LF);
+        c.push('Esta compra suma mas al pagar.' + _LF);
+    } else if (fid) {
+        c.push('Esta compra ya suma puntos.' + _LF);
+    } else {
+        c.push('Acumula dinero en cada compra:' + _LF);
+        c.push('pide sumar puntos con tu RUT.' + _LF);
+    }
+    c.push('Revisa y canjea en la app:' + _LF);
+    qrNativo(QR_APP_URL).forEach(function(cmd) { c.push(cmd); });
+    c.push(_LF);
     c.push(sep('-'));
 
     // ── Pie de página ──

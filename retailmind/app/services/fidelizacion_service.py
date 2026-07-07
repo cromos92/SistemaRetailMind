@@ -433,6 +433,13 @@ def acumular_puntos_por_venta(ticket, usuario=None):
     except Exception:
         logger.warning("No se pudo actualizar nivel cliente=%s (¿falta migración?)", cliente.id)
 
+    # Bono "invita y gana": si esta es la primera compra de un referido,
+    # paga los bonos a ambos (idempotente; nunca lanza).
+    _pagar_referido_si_corresponde(cliente, programa, usuario=usuario)
+
+    # Desafíos/promos: paga bonos de desafíos recién completados (idem).
+    _pagar_desafios_si_corresponde(cliente, programa, usuario=usuario)
+
     logger.info("Puntos acumulados cliente=%s ticket=%s puntos=%s saldo=%s nivel=%s",
                 cliente.id, ticket.correlativo, puntos, cuenta.saldo_puntos, cuenta.nivel)
     return _resultado(puntos, cuenta.saldo_puntos, cuenta.nivel)
@@ -1201,14 +1208,30 @@ def consultar_saldo(cliente=None, rut=None):
 
     limite = timezone.localdate() + timezone.timedelta(days=30)
     por_vencer = 0
+    # TIPOS_LOTE: incluye también CUMPLEANOS/REFERIDO/DESAFIO — todos los
+    # créditos expiran y deben aparecer en "por vencer".
+    from app.models import TIPOS_LOTE as _TIPOS_LOTE
     lotes = MovimientoPuntos.objects.filter(
-        cuenta=cuenta, tipo__in=('ACUMULACION', 'BIENVENIDA'),
+        cuenta=cuenta, tipo__in=_TIPOS_LOTE,
         fecha_expiracion__lte=limite, fecha_expiracion__gte=timezone.localdate(),
     )
     for lote in lotes:
         por_vencer += max(0, lote.puntos - lote.puntos_consumidos_del_lote)
 
     valor = cuenta.saldo_puntos * (programa.valor_punto_en_pesos if programa else 0)
+    # Bloque de membresía para la app: umbrales y tasas del programa activo,
+    # para pintar la barra de progreso de nivel sin hardcodear valores.
+    membresia = None
+    if programa:
+        membresia = {
+            'umbral_oro': int(programa.umbral_oro),
+            'umbral_platino': int(programa.umbral_platino),
+            'tasas': {
+                'PLATA': float(programa.tasa_plata),
+                'ORO': float(programa.tasa_oro),
+                'PLATINO': float(programa.tasa_platino),
+            },
+        }
     return {
         'cliente': cliente.nombre_completo,
         'saldo_puntos': cuenta.saldo_puntos,
@@ -1216,6 +1239,7 @@ def consultar_saldo(cliente=None, rut=None):
         'puntos_por_vencer': por_vencer,
         'nivel': cuenta.nivel,
         'gasto_12_meses': cuenta.gasto_12_meses,
+        'membresia': membresia,
     }
 
 
@@ -1289,3 +1313,291 @@ def registrar_cliente_manual(*, nombre, apellido='', rut, email='', celular='',
             creado = True
         cuenta, _ = get_or_create_cuenta(cliente, usuario=usuario)
     return cliente, cuenta, creado
+
+
+# ========== REFERIDOS ("invita y gana") ==========
+
+# Alfabeto sin caracteres ambiguos (0/O, 1/I) para dictar el código en voz.
+_ALFABETO_REFERIDO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
+
+def obtener_codigo_referido(cliente, *, usuario=None):
+    """
+    Devuelve el código "invita y gana" del cliente (se genera al 1er uso).
+    Corre en transacción con la cuenta bloqueada: así la eventual bienvenida
+    de una cuenta nueva es atómica y dos requests concurrentes del mismo
+    cliente reciben EL MISMO código (sin last-write-wins).
+    """
+    import secrets
+
+    with transaction.atomic():
+        cuenta, _ = get_or_create_cuenta(cliente, usuario=usuario)
+        cuenta = CuentaPuntos.objects.select_for_update().get(pk=cuenta.pk)
+        if cuenta.codigo_referido:
+            return cuenta.codigo_referido
+        for _intento in range(20):
+            codigo = 'MP' + ''.join(
+                secrets.choice(_ALFABETO_REFERIDO) for _ in range(6)
+            )
+            if CuentaPuntos.objects.filter(codigo_referido=codigo).exists():
+                continue
+            cuenta.codigo_referido = codigo
+            cuenta.save(update_fields=['codigo_referido', 'updated_at'])
+            return codigo
+    raise FidelizacionError('No se pudo generar tu código. Intenta de nuevo.')
+
+
+def resumen_referidos(cliente, *, usuario=None):
+    """Resumen para la app: mi código, invitados, ganado, y si puedo ingresar uno."""
+    from app.models import Referido
+
+    programa = ProgramaFidelizacion.get_activo()
+    codigo = obtener_codigo_referido(cliente, usuario=usuario)
+    refs = Referido.objects.filter(padrino=cliente)
+    pagados = refs.filter(estado='PAGADO')
+    ya_referido = Referido.objects.filter(ahijado=cliente).exists()
+    ya_compro = MovimientoPuntos.objects.filter(
+        cuenta__cliente=cliente, tipo='ACUMULACION',
+    ).exists()
+    return {
+        'codigo': codigo,
+        'total_invitados': refs.exclude(estado='ANULADO').count(),
+        'invitados_pagados': pagados.count(),
+        'puntos_ganados': pagados.aggregate(t=Sum('puntos_padrino'))['t'] or 0,
+        'puede_ingresar_codigo': (not ya_referido) and (not ya_compro),
+        'bono_padrino': int(programa.bono_referido_padrino) if programa else 0,
+        'bono_ahijado': int(programa.bono_referido_ahijado) if programa else 0,
+        'activo': bool(programa and programa.bono_referido_padrino > 0),
+    }
+
+
+def aplicar_codigo_referido(cliente, codigo, *, usuario=None):
+    """
+    El cliente (ahijado) ingresa el código de quien lo invitó. NO paga bonos
+    todavía: el vínculo queda REGISTRADO y los bonos se pagan automáticamente
+    con su PRIMERA compra (ver `_pagar_referido_si_corresponde`).
+    """
+    from app.models import Referido
+
+    programa = ProgramaFidelizacion.get_activo()
+    if not programa or programa.bono_referido_padrino <= 0:
+        raise FidelizacionError('El programa de referidos no está activo.')
+    codigo = (codigo or '').strip().upper()
+    if not codigo:
+        raise FidelizacionError('Ingresa un código.')
+
+    cuenta_padrino = (
+        CuentaPuntos.objects.select_related('cliente')
+        .filter(codigo_referido=codigo)
+        .first()
+    )
+    if not cuenta_padrino:
+        raise FidelizacionError('Ese código no existe. Revísalo e intenta de nuevo.')
+    padrino = cuenta_padrino.cliente
+    if padrino.id == cliente.id:
+        raise FidelizacionError('No puedes usar tu propio código.')
+    if Referido.objects.filter(ahijado=cliente).exists():
+        raise FidelizacionError('Ya ingresaste un código de invitación.')
+    if MovimientoPuntos.objects.filter(
+        cuenta__cliente=cliente, tipo='ACUMULACION',
+    ).exists():
+        raise FidelizacionError(
+            'Los códigos de invitación son solo para clientes '
+            'que aún no hacen su primera compra.'
+        )
+    # Anti-farmeo: clientes con compras HISTÓRICAS (previas al programa de
+    # puntos, sin movimientos en el ledger) tampoco cuentan como "nuevos".
+    from app.models import Ticket as _Ticket
+    if _Ticket.objects.filter(cliente=cliente).exists():
+        raise FidelizacionError(
+            'Los códigos de invitación son solo para clientes nuevos.'
+        )
+
+    try:
+        Referido.objects.create(ahijado=cliente, padrino=padrino)
+    except IntegrityError:
+        # Carrera: dos requests simultáneos del mismo cliente (OneToOne).
+        raise FidelizacionError('Ya ingresaste un código de invitación.')
+    logger.info("Referido registrado padrino=%s ahijado=%s", padrino.id, cliente.id)
+    return {
+        'padrino': padrino.nombre_completo,
+        'bono_ahijado': int(programa.bono_referido_ahijado),
+        'mensaje': (
+            f'¡Listo! Con tu primera compra recibirás '
+            f'{int(programa.bono_referido_ahijado)} puntos de regalo.'
+        ),
+    }
+
+
+def _pagar_referido_si_corresponde(cliente, programa, *, usuario=None):
+    """
+    Si `cliente` es un ahijado con Referido REGISTRADO, paga ambos bonos
+    (idempotente por referido, tipo REFERIDO en el ledger). Se invoca tras una
+    acumulación exitosa y NUNCA lanza: si falla, queda REGISTRADO y se paga
+    con la siguiente compra.
+    """
+    from app.models import Referido
+
+    try:
+        ref = (
+            Referido.objects.select_related('padrino')
+            .filter(ahijado=cliente, estado='REGISTRADO')
+            .first()
+        )
+        if not ref or not programa:
+            return
+        bono_p = int(programa.bono_referido_padrino or 0)
+        bono_a = int(programa.bono_referido_ahijado or 0)
+        with transaction.atomic():
+            ref_lock = Referido.objects.select_for_update().get(pk=ref.pk)
+            if ref_lock.estado != 'REGISTRADO':
+                return
+            cuenta_a, _ = get_or_create_cuenta(
+                cliente, programa=programa, usuario=usuario,
+            )
+            cuenta_p, _ = get_or_create_cuenta(
+                ref_lock.padrino, programa=programa, usuario=usuario,
+            )
+            # Bloquear AMBAS cuentas en orden de pk: evita deadlock AB-BA si
+            # dos referidos mutuos pagan simultáneamente en dos cajas.
+            bloqueadas = {
+                c.pk: c
+                for c in CuentaPuntos.objects.select_for_update().filter(
+                    pk__in=[cuenta_a.pk, cuenta_p.pk],
+                ).order_by('pk')
+            }
+            cuenta_a = bloqueadas[cuenta_a.pk]
+            cuenta_p = bloqueadas[cuenta_p.pk]
+            if bono_a > 0:
+                _otorgar(
+                    cuenta_a, 'REFERIDO', bono_a,
+                    programa=programa, usuario=usuario,
+                    idempotency_key=f'ref-ahijado:{ref_lock.pk}',
+                    observaciones=(
+                        f'Bono de invitación (te invitó '
+                        f'{ref_lock.padrino.nombre_completo})'
+                    ),
+                    rut_cliente=getattr(cliente, 'rut', None),
+                    canal='AUTO',
+                )
+            if bono_p > 0:
+                _otorgar(
+                    cuenta_p, 'REFERIDO', bono_p,
+                    programa=programa, usuario=usuario,
+                    idempotency_key=f'ref-padrino:{ref_lock.pk}',
+                    observaciones=f'Bono por invitar a {cliente.nombre_completo}',
+                    rut_cliente=getattr(ref_lock.padrino, 'rut', None),
+                    canal='AUTO',
+                )
+            ref_lock.estado = 'PAGADO'
+            ref_lock.puntos_padrino = bono_p
+            ref_lock.puntos_ahijado = bono_a
+            ref_lock.pagado_at = timezone.now()
+            ref_lock.save(update_fields=[
+                'estado', 'puntos_padrino', 'puntos_ahijado', 'pagado_at',
+            ])
+        logger.info(
+            "Bonos de referido pagados ref=%s padrino=%s ahijado=%s",
+            ref_lock.pk, ref_lock.padrino_id, cliente.id,
+        )
+    except Exception:
+        logger.exception("No se pudo pagar bono de referido cliente=%s", cliente.id)
+
+
+# ========== DESAFÍOS / PROMOCIONES ==========
+
+def _progreso_desafio(desafio, cliente):
+    """Progreso del cliente en un desafío (nº de compras o $ acumulado)."""
+    # Tickets con REVERSA (venta anulada/devuelta) no cuentan para la meta.
+    tickets_reversados = MovimientoPuntos.objects.filter(
+        cuenta__cliente=cliente, tipo='REVERSA', ticket__isnull=False,
+    ).values('ticket_id')
+    movs = MovimientoPuntos.objects.filter(
+        cuenta__cliente=cliente,
+        tipo='ACUMULACION',
+        fecha__date__gte=desafio.fecha_inicio,
+        fecha__date__lte=desafio.fecha_fin,
+    ).exclude(ticket_id__in=tickets_reversados)
+    if desafio.tipo == 'COMPRAS_N':
+        return movs.count()
+    # MONTO_ACUMULADO: suma de los tickets asociados a esas acumulaciones.
+    return int(movs.aggregate(t=Sum('ticket__total'))['t'] or 0)
+
+
+def _desafios_vigentes():
+    from app.models import DesafioPromo
+
+    hoy = timezone.localdate()
+    return DesafioPromo.objects.filter(
+        activo=True, fecha_inicio__lte=hoy, fecha_fin__gte=hoy,
+    )
+
+
+def desafios_cliente(cliente):
+    """
+    Desafíos vigentes aplicables al cliente, con su progreso y estado,
+    para la app (GET desafios/).
+    """
+    cuenta = getattr(cliente, 'cuenta_puntos', None)
+    nivel = cuenta.nivel if cuenta else 'PLATA'
+    resultados = []
+    for d in _desafios_vigentes():
+        if d.nivel_objetivo and d.nivel_objetivo != nivel:
+            continue
+        valor = _progreso_desafio(d, cliente)
+        pagado = MovimientoPuntos.objects.filter(
+            idempotency_key=f'desafio:{d.id}:{cliente.id}',
+        ).exists()
+        resultados.append({
+            'id': d.id,
+            'nombre': d.nombre,
+            'descripcion': d.descripcion,
+            'tipo': d.tipo,
+            'meta': d.meta_valor,
+            'valor_actual': min(valor, d.meta_valor),
+            'bono_puntos': d.bono_puntos,
+            'fecha_fin': d.fecha_fin.isoformat(),
+            'completado': valor >= d.meta_valor,
+            'pagado': pagado,
+        })
+    return resultados
+
+
+def _pagar_desafios_si_corresponde(cliente, programa, *, usuario=None):
+    """
+    Tras una acumulación: paga los bonos de desafíos que el cliente acaba de
+    completar (idempotente por `desafio:{id}:{cliente_id}`). Nunca lanza.
+    """
+    try:
+        cuenta_ref = getattr(cliente, 'cuenta_puntos', None)
+        nivel = cuenta_ref.nivel if cuenta_ref else 'PLATA'
+        for d in _desafios_vigentes().filter(bono_puntos__gt=0):
+            if d.nivel_objetivo and d.nivel_objetivo != nivel:
+                continue
+            idem = f'desafio:{d.id}:{cliente.id}'
+            if MovimientoPuntos.objects.filter(idempotency_key=idem).exists():
+                continue
+            if _progreso_desafio(d, cliente) < d.meta_valor:
+                continue
+            with transaction.atomic():
+                cuenta, _ = get_or_create_cuenta(
+                    cliente, programa=programa, usuario=usuario,
+                )
+                cuenta = CuentaPuntos.objects.select_for_update().get(pk=cuenta.pk)
+                try:
+                    _otorgar(
+                        cuenta, 'DESAFIO', d.bono_puntos,
+                        programa=programa, usuario=usuario,
+                        idempotency_key=idem,
+                        observaciones=f'Desafío completado: {d.nombre}',
+                        rut_cliente=getattr(cliente, 'rut', None),
+                        canal='AUTO',
+                    )
+                except IntegrityError:
+                    continue  # carrera: otro proceso ya lo pagó
+            logger.info(
+                "Bono de desafío pagado desafio=%s cliente=%s puntos=%s",
+                d.id, cliente.id, d.bono_puntos,
+            )
+    except Exception:
+        logger.exception("No se pudo evaluar desafíos cliente=%s", cliente.id)

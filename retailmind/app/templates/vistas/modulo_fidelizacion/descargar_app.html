@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+{# Landing PÚBLICA del QR de los tickets — standalone a propósito: sin       #}
+{# layout/header ni login, carga instantánea en el teléfono del cliente.    #}
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mis Puntos — Realsport · Calzados Paola</title>
+<style>
+  :root{
+    --cream:#FDF9F5; --ink:#1C1C19; --ink-soft:#554335; --muted:#897363;
+    --cta:#8F4E00; --cta-top:#9A5500; --orange:#FF8917; --amber:#FFB04A;
+    --coral:#FF585D; --border:#ECE4DD;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+    background:var(--cream); color:var(--ink);
+    min-height:100vh; display:flex; flex-direction:column; align-items:center;
+  }
+  .hero{
+    width:100%;
+    background:linear-gradient(135deg,var(--amber),var(--orange) 55%,var(--cta));
+    color:#fff; text-align:center; padding:44px 24px 56px;
+    border-radius:0 0 32px 32px;
+  }
+  .hero .pill{
+    display:inline-block; background:rgba(255,255,255,.2);
+    border-radius:999px; padding:6px 16px; font-size:12px; font-weight:800;
+    letter-spacing:.14em; margin-bottom:18px;
+  }
+  .hero h1{font-size:34px; font-weight:800; letter-spacing:-.5px}
+  .hero p{margin-top:10px; font-size:16px; opacity:.94; max-width:34ch; margin-left:auto; margin-right:auto}
+  .card{
+    background:#fff; border:1px solid var(--border); border-radius:22px;
+    padding:22px; margin:-30px 20px 0; max-width:420px; width:calc(100% - 40px);
+    box-shadow:0 14px 34px rgba(143,78,0,.16);
+  }
+  .btn{
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    width:100%; padding:16px; border-radius:16px; border:0;
+    background:linear-gradient(180deg,var(--cta-top),var(--cta));
+    color:#fff; font-size:16px; font-weight:800; text-decoration:none;
+    margin-bottom:12px;
+  }
+  .btn.sec{
+    background:#fff; color:var(--cta); border:1.5px solid var(--cta);
+  }
+  .pronto{
+    text-align:center; padding:10px 6px 4px; color:var(--ink-soft);
+    font-size:15px; line-height:1.55;
+  }
+  .pronto b{color:var(--cta)}
+  ul.pasos{list-style:none; margin-top:8px}
+  ul.pasos li{
+    display:flex; gap:12px; align-items:flex-start; padding:10px 2px;
+    color:var(--ink-soft); font-size:14.5px; line-height:1.5;
+  }
+  ul.pasos .n{
+    flex:0 0 26px; height:26px; border-radius:50%; background:#FFF4E8;
+    color:var(--cta); font-weight:800; font-size:13px;
+    display:flex; align-items:center; justify-content:center; margin-top:1px;
+  }
+  .marcas{
+    margin:26px 0 30px; color:var(--muted); font-size:13px; text-align:center;
+  }
+  .marcas b{color:var(--orange)} .marcas i{color:var(--coral); font-style:normal}
+</style>
+</head>
+<body>
+  <div class="hero">
+    <span class="pill">PROGRAMA DE PUNTOS</span>
+    <h1>Mis Puntos</h1>
+    <p>Cada compra en Realsport y Calzados Paola te devuelve dinero en puntos. 1 punto = $1.</p>
+  </div>
+
+  <div class="card">
+    {% if url_android or url_ios or url_apk %}
+      {% if url_android %}<a class="btn" href="{{ url_android }}">▶ Descargar para Android</a>{% endif %}
+      {% if url_ios %}<a class="btn {% if url_android %}sec{% endif %}" href="{{ url_ios }}"> Descargar para iPhone</a>{% endif %}
+      {% if url_apk %}<a class="btn {% if url_android or url_ios %}sec{% endif %}" href="{{ url_apk }}">⬇ Descargar APK directo</a>{% endif %}
+    {% else %}
+      <div class="pronto">
+        La app está <b>muy pronto disponible</b>.<br>
+        Mientras tanto, tus puntos <b>ya se acumulan solos</b>:
+      </div>
+    {% endif %}
+    <ul class="pasos">
+      <li><span class="n">1</span><span>Al pagar en caja, da tu <b>RUT</b>: acumulas puntos aunque no tengas la app.</span></li>
+      <li><span class="n">2</span><span>En la app entras solo con tu RUT y un código que llega a tu correo.</span></li>
+      <li><span class="n">3</span><span>Canjea tus puntos como descuento en tienda o paga con ellos en la web.</span></li>
+    </ul>
+  </div>
+
+  <div class="marcas"><b>Realsport</b> &nbsp;·&nbsp; <i>calzados paola!</i></div>
+</body>
+</html>

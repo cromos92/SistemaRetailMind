@@ -21,6 +21,8 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve
 
+from app.views_modulo_fidelizacion import descargar_app_puntos
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('app/', include('app.urls')),
@@ -31,6 +33,10 @@ urlpatterns = [
     path('login-pin/', views.login_pin_request_view, name='login_pin_request'),
     path('login-2fa/', views.login_2fa_view, name='login_2fa'),
     path('logout/', views.logout_view, name='logout'),
+
+    # Landing pública "Mis Puntos" — URL CORTA EN RAÍZ porque es la que va
+    # impresa en el QR de cada ticket (app.urls vive bajo el prefijo /app/).
+    path('puntos/app/', descargar_app_puntos, name='descargar_app_puntos_raiz'),
     path('api/check-session/', views.check_session_status, name='check_session_status'),
     path('api/check-login-method/', views.check_login_method_view, name='check_login_method'),
     

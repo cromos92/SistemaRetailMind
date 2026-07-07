@@ -8534,9 +8534,9 @@ def crear_compra(request):
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
-        logger.error(f"Error al crear compra: {str(e)}")
+        logger.exception("Error al crear compra")
 
-        return JsonResponse({'success': False, 'error': f'Error interno: {str(e)}'}, status=500)
+        return JsonResponse({'success': False, 'error': 'No se pudo crear la compra. Reintentá; si el problema persiste, contactá a soporte.'}, status=500)
 
 
 @login_required
@@ -8993,6 +8993,17 @@ def obtener_compras_por_anio(request):
             filter=Q(compras_producto__compras_producto_talla__productos_recepcionados__producto_talla__isnull=True)
         )
     )
+
+    # Filtro por ESTADO de avance (sobre las anotaciones ya calculadas)
+    estado_filtro = request.GET.get('estado_filtro', '').strip()
+    if estado_filtro == 'pendiente':          # nada recepcionado
+        compras_query = compras_query.filter(Q(total_recepcionado__isnull=True) | Q(total_recepcionado=0))
+    elif estado_filtro == 'parcial':          # recepción incompleta
+        compras_query = compras_query.filter(total_recepcionado__gt=0, total_recepcionado__lt=F('unidades_totales'))
+    elif estado_filtro == 'por_crear':        # hay recepciones sin materializar en producto
+        compras_query = compras_query.filter(pendientes_crear__gt=0)
+    elif estado_filtro == 'completado':       # todo recepcionado y sin pendientes de crear
+        compras_query = compras_query.filter(total_recepcionado__gte=F('unidades_totales'), pendientes_crear=0)
 
     # Contar total de registros para paginación
     total_count = compras_query.count()
@@ -12704,7 +12715,8 @@ def guardar_recepcion(request):
         return JsonResponse({'success': True})
 
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        logger.exception("Error al guardar recepción")
+        return JsonResponse({'success': False, 'error': 'No se pudo guardar la recepción. Reintentá; si el problema persiste, contactá a soporte.'}, status=500)
 
 
 @require_POST
@@ -13925,6 +13937,15 @@ def agregar_producto_manual_a_compra(request):
             precio_sug_int = int(float(precio_sugerido or 0))
         except (TypeError, ValueError):
             return JsonResponse({'success': False, 'error': 'Costo o precio inválidos'}, status=400)
+
+        # Normalizar textos (trim + colapsar espacios internos) para que el
+        # auto-vinculado posterior (match iexact contra AtributoOpcion) no falle
+        # por espacios de más. El código de artículo se guarda tal cual (nombre).
+        def _limpiar(s):
+            return ' '.join((s or '').split())
+        nombre = _limpiar(nombre)
+        atributo1, atributo2 = _limpiar(atributo1), _limpiar(atributo2)
+        atributo3, atributo4 = _limpiar(atributo3), _limpiar(atributo4)
 
         compra_producto = Compras_Producto.objects.create(
             compras=compra,
@@ -18090,7 +18111,7 @@ def buscar_articulo_autocomplete(request):
         Producto.objects
         .filter(filtros)
         .select_related('atributo1', 'atributo2', 'atributo3', 'categoria', 'guia_talla')
-        .prefetch_related('producto_tallas')
+        .prefetch_related('producto_talla')
         .order_by('articulo')[:15]
     )
 
@@ -18101,7 +18122,7 @@ def buscar_articulo_autocomplete(request):
         color = p.atributo2.valor if p.atributo2 else '-'
         genero = p.atributo3.valor if p.atributo3 else '-'
         categoria = p.categoria.nombre if p.categoria else '-'
-        tallas_qs = p.producto_tallas.all()
+        tallas_qs = p.producto_talla.all()
         tallas_list = [t.talla for t in tallas_qs]
         stock_total = sum(t.stock for t in tallas_qs)
         tallas_detail = [{'talla': t.talla, 'sku': t.sku, 'stock': t.stock} for t in tallas_qs]
@@ -18162,11 +18183,11 @@ def buscar_productos_por_articulo(request):
     
     productos = Producto.objects.filter(**filtros).select_related(
         'atributo1', 'atributo2', 'atributo3', 'categoria'
-    ).prefetch_related('producto_tallas')[:20]
+    ).prefetch_related('producto_talla')[:20]
     
     resultado = []
     for p in productos:
-        tallas = list(p.producto_tallas.values('talla', 'sku', 'stock'))
+        tallas = list(p.producto_talla.values('talla', 'sku', 'stock'))
         stock_total = sum(t.get('stock', 0) for t in tallas)
         
         resultado.append({
@@ -18413,35 +18434,49 @@ def verificar_producto_existente(request):
                 'sku_ejemplo': primera_talla.sku if primera_talla else '-'
             })
     
-    # ========== VARIANTES DEL MISMO CÓDIGO (para el aviso claro de la UI) ==========
-    # Todos los productos que comparten el código normalizado en la sucursal
-    # activa (mismo articulo, distinto color/género/categoría). Permite avisar
-    # "el código X ya existe en estas variantes" y que el usuario elija.
-    variantes_codigo = []
+
+    # ========== BODEGAS DEL CÓDIGO (todas las sucursales del usuario) ==========
+    # Muestra en qué bodegas existe el código y sus variantes (colores/géneros
+    # distintos) diferenciadas, para elegir bien y no duplicar.
+    bodegas_codigo = []
     try:
-        if articulo and sucursal_id:
-            from .utils_producto_match import variantes_mismo_codigo
-            for v in variantes_mismo_codigo(articulo, sucursal_id):
-                tallas_v = list(Producto_Talla.objects.filter(producto=v)
-                                .values('talla', 'sku', 'stock').order_by('talla'))
-                variantes_codigo.append({
-                    'id': v.id,
-                    'articulo': v.articulo,
-                    'descripcion': v.descripcion,
-                    'marca': v.atributo1.valor if v.atributo1 else '-',
-                    'marca_id': v.atributo1_id,
-                    'color': v.atributo2.valor if v.atributo2 else '-',
-                    'color_id': v.atributo2_id,
-                    'genero': v.atributo3.valor if v.atributo3 else '-',
-                    'genero_id': v.atributo3_id,
-                    'categoria': v.categoria.nombre if v.categoria else '-',
-                    'categoria_id': v.categoria_id,
-                    'precioventa': int(v.precioventa or 0),
-                    'stock_total': sum((t['stock'] or 0) for t in tallas_v),
-                    'tallas': tallas_v,
+        if articulo:
+            _emp = EmpresaUser.objects.filter(user=request.user, status=True).values_list('empresa_id', flat=True)
+            _suc_ids = list(Sucursal.objects.filter(empresa_id__in=_emp).values_list('id', flat=True))
+            from .utils_producto_match import productos_por_codigo_sucursales
+
+            def _cid(v):
+                try:
+                    return int(v)
+                except (ValueError, TypeError):
+                    return None
+            _combo_actual = (_cid(marca), _cid(color), _cid(genero), _cid(categoria))
+            _combo_completo = all(c is not None for c in _combo_actual)
+            _prods = productos_por_codigo_sucursales(articulo, _suc_ids)
+            # Stock y nº de tallas de TODOS los productos en UNA sola query (evita N+1)
+            _aggs = {r['producto_id']: r for r in
+                     Producto_Talla.objects.filter(producto_id__in=[p.id for p in _prods])
+                     .values('producto_id').annotate(s=Sum('stock'), n=Count('id'))}
+            for p in _prods:
+                _combo_p = (p.atributo1_id, p.atributo2_id, p.atributo3_id, p.categoria_id)
+                _a = _aggs.get(p.id, {})
+                bodegas_codigo.append({
+                    'producto_id': p.id,
+                    'sucursal': p.sucursal.alias if p.sucursal else '-',
+                    'sucursal_id': p.sucursal_id,
+                    'es_sucursal_actual': str(p.sucursal_id) == str(sucursal_id),
+                    'marca': p.atributo1.valor if p.atributo1 else '-',
+                    'color': p.atributo2.valor if p.atributo2 else '-',
+                    'genero': p.atributo3.valor if p.atributo3 else '-',
+                    'categoria': p.categoria.nombre if p.categoria else '-',
+                    'descripcion': p.descripcion or '',
+                    'precioventa': int(p.precioventa or 0),
+                    'stock_total': (_a.get('s') or 0),
+                    'n_tallas': (_a.get('n') or 0),
+                    'mismo_combo': (_combo_p == _combo_actual) if _combo_completo else None,
                 })
     except Exception as e:
-        logger.warning("Error calculando variantes_codigo: %s", e)
+        logger.warning("Error calculando bodegas_codigo: %s", e)
 
     if producto:
         # Obtener las tallas existentes con sus SKUs
@@ -18577,7 +18612,7 @@ def verificar_producto_existente(request):
             'edel_producto': _build_edel_producto_ref(articulo, producto),
             'hay_duplicados': hay_duplicados,
             'total_duplicados': total_duplicados,
-            'variantes_codigo': variantes_codigo,
+            'bodegas_codigo': bodegas_codigo,
         })
     else:
         # ========== BUSCAR PRECIOS EN OTRAS SUCURSALES (para producto nuevo) ==========
@@ -18660,7 +18695,7 @@ def verificar_producto_existente(request):
             'productos_similares_nombre': productos_similares_nombre,
             'productos_otras_sucursales': productos_otras_sucursales,
             'edel_producto': _build_edel_producto_ref(articulo, None),
-            'variantes_codigo': variantes_codigo,
+            'bodegas_codigo': bodegas_codigo,
         })
 
 
@@ -18959,8 +18994,20 @@ def crear_producto_desde_recepcion(request):
         costo_db = int(producto.costo or 0)
         sobreprecio_db = int(producto.sobreprecio or 0)
         precioventa_db = int(producto.precioventa or 0)
-        
-        if costo_db != costo or sobreprecio_db != sobreprecio or precioventa_db != precioventa:
+
+        # Gate de precios (paridad con el flujo manual): solo se pisan los
+        # precios/costos guardados si el usuario lo pidió explícitamente
+        # (checkbox del modal). Antes la recepción SIEMPRE sobrescribía precio
+        # de venta y costo del producto existente, cambiando precios de vitrina
+        # sin control. El flag lo envía el frontend; ausente = no tocar precios.
+        actualizar_precios_flag = str(data.get('actualizar_precios', '')).strip().lower() in (
+            '1', 'true', 'on', 'yes',
+        )
+        precios_difieren = (
+            costo_db != costo or sobreprecio_db != sobreprecio or precioventa_db != precioventa
+        )
+
+        if precios_difieren and actualizar_precios_flag:
             precios_cambiaron = True
             logger.debug("Precios cambiaron; actualizando producto_id=%s", producto.id)
             
@@ -19011,6 +19058,15 @@ def crear_producto_desde_recepcion(request):
                 precio_anterior,
                 precioventa,
             )
+        elif precios_difieren:
+            # Difieren pero el usuario NO marcó "actualizar precios": se
+            # conservan los de la BD (solo se agregan tallas/stock).
+            logger.info(
+                "Recepcion: precios difieren pero actualizar_precios=false; se conservan los de la BD. "
+                "producto_id=%s articulo=%s bd=(c=%s,sp=%s,pv=%s) form=(c=%s,sp=%s,pv=%s)",
+                producto.id, articulo,
+                costo_db, sobreprecio_db, precioventa_db, costo, sobreprecio, precioventa,
+            )
         else:
             logger.debug("Producto existente sin cambios de precio: producto_id=%s articulo=%s", producto.id, articulo)
     else:
@@ -19032,6 +19088,22 @@ def crear_producto_desde_recepcion(request):
             guia_talla_id=guia_talla,
         )
         logger.info("Producto nuevo creado desde recepcion: producto_id=%s articulo=%s", producto.id, articulo)
+
+    # ===== Propagar descripción a la MISMA variante en todas las bodegas (opt-in) =====
+    if data.get('aplicar_todas_bodegas') == 'true' and descripcion:
+        try:
+            _emp = EmpresaUser.objects.filter(user=request.user, status=True).values_list('empresa_id', flat=True)
+            _suc = list(Sucursal.objects.filter(empresa_id__in=_emp).values_list('id', flat=True))
+            from .utils_producto_match import productos_por_identidad_sucursales
+            _ids = [p.id for p in productos_por_identidad_sucursales(
+                articulo, producto.atributo1_id, producto.atributo2_id,
+                producto.atributo3_id, producto.categoria_id, _suc)]
+            if producto.id not in _ids:
+                _ids.append(producto.id)
+            Producto.objects.filter(id__in=_ids).update(descripcion=descripcion)
+            logger.info("Descripción propagada a %s bodegas (recepción) para código %s", len(_ids), articulo)
+        except Exception as e:
+            logger.warning("Error propagando descripción multi-bodega (recepción): %s", e)
 
     # =====================================================================
     # 2b. PRE-PROCESO: Redistribuir Compras_Producto_Talla consolidada
@@ -20527,6 +20599,8 @@ def crear_producto_manual(request):
         # Solo se actualizan precios de un producto existente si el usuario lo
         # marcó explícitamente en el modal (antes se hacía silenciosamente).
         actualizar_precios = request.POST.get('actualizar_precios') == 'true'
+        # Propagar la descripción a todas las bodegas del mismo código.
+        aplicar_todas_bodegas = request.POST.get('aplicar_todas_bodegas') == 'true'
         proveedor_id = request.POST.get('proveedor')
         dte_id = request.POST.get('dte_manual')
         articulo = request.POST.get('articulo')
@@ -20694,7 +20768,26 @@ def crear_producto_manual(request):
                 sucursal=sucursal
             )
             logger.info("Producto nuevo creado manualmente: producto_id=%s articulo=%s", producto.id, articulo)
-        
+
+        # ========== PROPAGAR DESCRIPCIÓN A TODAS LAS BODEGAS DEL CÓDIGO ==========
+        bodegas_actualizadas = 0
+        if aplicar_todas_bodegas and descripcion:
+            try:
+                emp_ids = EmpresaUser.objects.filter(user=request.user, status=True).values_list('empresa_id', flat=True)
+                suc_ids = list(Sucursal.objects.filter(empresa_id__in=emp_ids).values_list('id', flat=True))
+                # Solo la MISMA variante (identidad) en otras bodegas, para no
+                # pisar la descripción de otras variantes (colores) del código.
+                from .utils_producto_match import productos_por_identidad_sucursales
+                ids_bodegas = [p.id for p in productos_por_identidad_sucursales(
+                    articulo, producto.atributo1_id, producto.atributo2_id,
+                    producto.atributo3_id, producto.categoria_id, suc_ids)]
+                if producto.id not in ids_bodegas:
+                    ids_bodegas.append(producto.id)
+                bodegas_actualizadas = Producto.objects.filter(id__in=ids_bodegas).update(descripcion=descripcion)
+                logger.info("Descripción propagada a %s bodegas para código %s", bodegas_actualizadas, articulo)
+            except Exception as e:
+                logger.warning("Error propagando descripción multi-bodega: %s", e)
+
         # ========== CREAR O REUTILIZAR VARIANTES (TALLAS) ==========
         tallas_creadas = {}
         tallas_nuevas = 0

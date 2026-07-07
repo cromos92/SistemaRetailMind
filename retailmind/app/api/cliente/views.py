@@ -240,6 +240,164 @@ class MovimientosPuntosView(APIView):
         return resp
 
 
+class ComprasView(APIView):
+    """
+    GET /api/v1/cliente/compras/?page=1&page_size=20
+
+    Historial de compras del cliente: las ventas que acumularon puntos
+    (movimientos ACUMULACION con ticket), con sucursal, monto, descuento
+    aplicado con vale y puntos ganados.
+    """
+    authentication_classes = [ClienteJWTAuthentication]
+    permission_classes = [IsClienteApp]
+
+    def get(self, request):
+        cuenta = getattr(request.user.cliente, 'cuenta_puntos', None)
+        if not cuenta:
+            return Response({'success': True, 'count': 0, 'results': []})
+
+        qs = (
+            MovimientoPuntos.objects
+            .filter(cuenta=cuenta, tipo='ACUMULACION')
+            .select_related('ticket', 'sucursal')
+            .order_by('-fecha')
+        )
+        paginator = PageNumberPagination()
+        paginator.page_size = 20
+        paginator.page_size_query_param = 'page_size'
+        paginator.max_page_size = 100
+        page = paginator.paginate_queryset(qs, request, view=self)
+
+        resultados = []
+        for m in page:
+            t = m.ticket
+            resultados.append({
+                'id': m.id,
+                'fecha': m.fecha.isoformat() if m.fecha else None,
+                'sucursal': m.sucursal.alias if m.sucursal else None,
+                'numero_ticket': t.id if t else None,
+                'monto': int(t.total or 0) if t else None,
+                'descuento_puntos': int(t.descuento_fidelizacion or 0) if t else 0,
+                'puntos_ganados': m.puntos,
+            })
+        resp = paginator.get_paginated_response(resultados)
+        resp.data = {'success': True, **resp.data}
+        return resp
+
+
+class RegistrarDispositivoView(APIView):
+    """
+    POST /api/v1/cliente/dispositivos/
+    Body: { "token": "<fcm-token>", "plataforma": "android" | "ios" }
+
+    Registra (o re-asigna) el token FCM del dispositivo para push. Idempotente
+    por token: si otro cliente inicia sesión en el mismo teléfono, el token
+    pasa a su cuenta.
+    """
+    authentication_classes = [ClienteJWTAuthentication]
+    permission_classes = [IsClienteApp]
+
+    def post(self, request):
+        from app.models import DispositivoCliente
+
+        datos = request.data if isinstance(request.data, dict) else {}
+        token = (datos.get('token') or '').strip()
+        plataforma = (datos.get('plataforma') or '').strip().lower()
+        if not token or len(token) > 512:
+            return Response(
+                {'success': False, 'error': 'Token inválido.'}, status=400,
+            )
+        if plataforma not in ('android', 'ios'):
+            return Response(
+                {'success': False, 'error': 'Plataforma inválida.'}, status=400,
+            )
+
+        DispositivoCliente.objects.update_or_create(
+            token=token,
+            defaults={
+                'cliente': request.user.cliente,
+                'plataforma': plataforma,
+                'activo': True,
+            },
+        )
+        return Response({'success': True})
+
+
+class EliminarDispositivoView(APIView):
+    """
+    POST /api/v1/cliente/dispositivos/eliminar/
+    Body: { "token": "<fcm-token>" }
+
+    Desactiva el token (logout del dispositivo): deja de recibir push.
+    """
+    authentication_classes = [ClienteJWTAuthentication]
+    permission_classes = [IsClienteApp]
+
+    def post(self, request):
+        from app.models import DispositivoCliente
+
+        datos = request.data if isinstance(request.data, dict) else {}
+        token = (datos.get('token') or '').strip()
+        if token:
+            DispositivoCliente.objects.filter(
+                token=token, cliente=request.user.cliente,
+            ).update(activo=False)
+        return Response({'success': True})
+
+
+class ReferidosView(APIView):
+    """
+    GET /api/v1/cliente/referidos/
+
+    Resumen "invita y gana": mi código, invitados, puntos ganados, montos de
+    los bonos y si aún puedo ingresar un código de invitación.
+    """
+    authentication_classes = [ClienteJWTAuthentication]
+    permission_classes = [IsClienteApp]
+
+    def get(self, request):
+        info = fidelizacion_service.resumen_referidos(request.user.cliente)
+        return Response({'success': True, **info})
+
+
+class AplicarReferidoView(APIView):
+    """
+    POST /api/v1/cliente/referidos/aplicar/
+    Body: { "codigo": "MPABC123" }
+
+    Registra el código de quien me invitó. Los bonos se pagan con mi primera
+    compra (no al ingresar el código).
+    """
+    authentication_classes = [ClienteJWTAuthentication]
+    permission_classes = [IsClienteApp]
+
+    def post(self, request):
+        datos = request.data if isinstance(request.data, dict) else {}
+        codigo = (datos.get('codigo') or '').strip()
+        try:
+            info = fidelizacion_service.aplicar_codigo_referido(
+                request.user.cliente, codigo,
+            )
+        except fidelizacion_service.FidelizacionError as e:
+            return Response({'success': False, 'error': str(e)}, status=400)
+        return Response({'success': True, **info})
+
+
+class DesafiosView(APIView):
+    """
+    GET /api/v1/cliente/desafios/
+
+    Desafíos/promociones vigentes para el cliente, con su progreso
+    (p. ej. "haz 2 compras este mes y gana 2.000 pts").
+    """
+    authentication_classes = [ClienteJWTAuthentication]
+    permission_classes = [IsClienteApp]
+
+    def get(self, request):
+        resultados = fidelizacion_service.desafios_cliente(request.user.cliente)
+        return Response({'success': True, 'results': resultados})
+
+
 class CotizarCanjeView(_ClienteConsultaView):
     """
     POST /api/v1/cliente/puntos/cotizar/

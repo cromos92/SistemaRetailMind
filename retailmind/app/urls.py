@@ -332,6 +332,7 @@ from .views_modulo_devolucion_garantia import (
 )
 from .views_modulo_fidelizacion import (
     # Vistas HTML
+    descargar_app_puntos,
     modulo_fidelizacion,
     configurar_programa_vista,
     reporte_fidelizacion_vista,
@@ -1303,6 +1304,8 @@ urlpatterns = [
     path('api/devolucion-garantia/listar/', api_listar_devoluciones_garantia, name='api_listar_devoluciones_garantia'),
 
     # ========== MÓDULO FIDELIZACIÓN (PUNTOS) ==========
+    # Landing PÚBLICA (QR impreso en tickets del POS) — sin login
+    path('puntos/app/', descargar_app_puntos, name='descargar_app_puntos'),
     # Vistas HTML
     path('fidelizacion/', modulo_fidelizacion, name='modulo_fidelizacion'),
     path('fidelizacion/configuracion/', configurar_programa_vista, name='configurar_programa_vista'),
@@ -1456,6 +1459,7 @@ urlpatterns = [
     path('api/ecommerce/pedidos/', views_ecommerce.api_recibir_pedido_ecommerce, name='api_ecommerce_recibir_pedido'),
     path('api/ecommerce/pedidos/pagado/', views_ecommerce.api_pedido_pagado, name='api_ecommerce_pedido_pagado'),
     path('api/cron/tareas/', views_cron.ejecutar_tareas_periodicas, name='api_cron_tareas'),
+    path('api/cron/verificar-drift/', views_cron.verificar_drift_http, name='api_cron_verificar_drift'),
     path('api/ecommerce/pedidos/consultar/', views_ecommerce.api_asignar_ticket_rm, name='api_ecommerce_consultar_pedido'),
     path('api/ecommerce/pedidos/cancelar/', views_ecommerce.api_cancelar_pedido_ecommerce, name='api_ecommerce_cancelar_pedido'),
     path('api/ecommerce/facturar-masivo/', views_ecommerce.facturar_ecommerce_masivo, name='facturar_ecommerce_masivo'),

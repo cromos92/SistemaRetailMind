@@ -137,6 +137,18 @@ document.getElementById('ic-analizar').addEventListener('click', cargarInteligen
 document.getElementById('ic-print').addEventListener('click', () => window.print());
 document.getElementById('ic-marca').addEventListener('keydown', e => { if (e.key === 'Enter') cargarInteligencia(); });
 
+// Selector de marca con buscador (Select2 viene del footer → inicializar al load).
+window.addEventListener('load', () => {
+    if (window.jQuery && jQuery.fn.select2) {
+        jQuery('#ic-marca').select2({
+            placeholder: '— Selecciona marca —',
+            allowClear: true,
+            width: '100%',
+            language: { noResults: function () { return 'Sin resultados'; } },
+        });
+    }
+});
+
 function cargarInteligencia() {
     const marca = document.getElementById('ic-marca').value;
     const suc = document.getElementById('ic-sucursal').value;
@@ -322,7 +334,7 @@ function dibujarCharts(d) {
         colors: [AZUL, GRIS], plotOptions: { bar: { borderRadius: 3, columnWidth: '75%' } },
         xaxis: { categories: d.curva.map(x => x.talla), labels: { style: { fontSize: '10px' } } },
         yaxis: { labels: { formatter: v => v.toFixed(0) + '%' } },
-        tooltip: { shared: true, y: { formatter: v => v.toFixed(1) + '%' } },
+        tooltip: { shared: true, intersect: false, y: { formatter: v => v.toFixed(1) + '%' } },
     }));
     c4.render(); icCharts.push(c4);
 

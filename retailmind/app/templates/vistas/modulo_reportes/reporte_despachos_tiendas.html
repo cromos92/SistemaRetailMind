@@ -716,15 +716,16 @@ async function cargarProveedoresSelect2() {
     try {
         const response = await fetch('/app/obtener_proveedores_para_reporte/');
         const data = await response.json();
-        if (data.success) {
-            const select = document.getElementById('filtro-proveedor');
-            (data.proveedores || []).forEach(prov => {
-                const option = document.createElement('option');
-                option.value = prov.id;
-                option.textContent = prov.nombre;
-                select.appendChild(option);
-            });
-        }
+        // El endpoint devuelve un array plano; se acepta también {proveedores:[...]}
+        // por compatibilidad. (Antes se exigía data.success y el select quedaba vacío.)
+        const provs = Array.isArray(data) ? data : (data.proveedores || []);
+        const select = document.getElementById('filtro-proveedor');
+        provs.forEach(prov => {
+            const option = document.createElement('option');
+            option.value = prov.id;
+            option.textContent = prov.nombre;
+            select.appendChild(option);
+        });
         $('.select2-proveedor').select2({
             placeholder: 'Buscar proveedor...',
             allowClear: true,

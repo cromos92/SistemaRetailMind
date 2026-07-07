@@ -47,6 +47,8 @@ TIPO_MOV_PUNTOS_CHOICES = [
     ('REVERSA', 'Reversa (devolución/anulación de venta)'),
     ('BIENVENIDA', 'Bono de bienvenida'),
     ('CUMPLEANOS', 'Bono de cumpleaños'),
+    ('REFERIDO', 'Bono por referido'),
+    ('DESAFIO', 'Bono por desafío/promoción'),
 ]
 
 NIVEL_CHOICES = [
@@ -56,7 +58,7 @@ NIVEL_CHOICES = [
 ]
 
 # Tipos que CREAN un lote consumible (suman puntos con fecha de expiración)
-TIPOS_LOTE = ('ACUMULACION', 'BIENVENIDA', 'CUMPLEANOS')
+TIPOS_LOTE = ('ACUMULACION', 'BIENVENIDA', 'CUMPLEANOS', 'REFERIDO', 'DESAFIO')
 
 CANAL_MOV_CHOICES = [
     ('POS',    'Caja POS'),
@@ -120,6 +122,15 @@ class ProgramaFidelizacion(models.Model):
     puntos_cumpleanos = models.IntegerField(
         default=3000,
         help_text="Puntos de regalo en el mes de cumpleaños (0 = sin bono)",
+    )
+    bono_referido_padrino = models.IntegerField(
+        default=2000,
+        help_text="Puntos para quien invita, al concretarse la 1ª compra "
+                  "del invitado (0 = referidos desactivados)",
+    )
+    bono_referido_ahijado = models.IntegerField(
+        default=2000,
+        help_text="Puntos para el invitado, al concretarse su 1ª compra",
     )
 
     # === NIVELES (Plata / Oro / Platino) ===
@@ -264,6 +275,13 @@ class CuentaPuntos(models.Model):
     gasto_12_meses = models.IntegerField(
         default=0,
         help_text="Cache de gasto acumulado en los últimos 12 meses (pesos)",
+    )
+    codigo_referido = models.CharField(
+        max_length=12,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text="Código para invitar amigos (se genera al primer uso)",
     )
     nivel_actualizado = models.DateTimeField(
         null=True, blank=True,
@@ -514,6 +532,159 @@ ESTADO_VALE_CHOICES = [
     ('EXPIRADO', 'Expirado'),
     ('ANULADO', 'Anulado'),
 ]
+
+
+PLATAFORMA_DISPOSITIVO_CHOICES = [
+    ('android', 'Android'),
+    ('ios', 'iOS'),
+]
+
+
+class DispositivoCliente(models.Model):
+    """
+    Dispositivo móvil registrado por la app "Mis Puntos" para notificaciones
+    push (token FCM). Un cliente puede tener varios dispositivos; un token es
+    único y se re-asigna si otro cliente inicia sesión en el mismo teléfono.
+    """
+
+    cliente = models.ForeignKey(
+        'Cliente',
+        on_delete=models.CASCADE,
+        related_name='dispositivos',
+    )
+    token = models.CharField(
+        max_length=512,
+        unique=True,
+        help_text="Token FCM del dispositivo",
+    )
+    plataforma = models.CharField(
+        max_length=10,
+        choices=PLATAFORMA_DISPOSITIVO_CHOICES,
+    )
+    activo = models.BooleanField(default=True, db_index=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_seen = models.DateTimeField(
+        auto_now=True,
+        help_text="Última vez que la app refrescó/confirmó el token",
+    )
+
+    class Meta:
+        ordering = ['-last_seen']
+        verbose_name = 'Dispositivo de Cliente (push)'
+        verbose_name_plural = 'Dispositivos de Clientes (push)'
+        indexes = [
+            models.Index(fields=['cliente', 'activo']),
+        ]
+
+    def __str__(self):
+        return f"{self.cliente_id} · {self.plataforma} · {self.token[:16]}…"
+
+
+ESTADO_REFERIDO_CHOICES = [
+    ('REGISTRADO', 'Registrado (espera 1ª compra)'),
+    ('PAGADO', 'Bonos pagados'),
+    ('ANULADO', 'Anulado'),
+]
+
+
+class Referido(models.Model):
+    """
+    Vínculo padrino → ahijado del programa "invita y gana". El ahijado ingresa
+    el código del padrino en la app; los bonos (a ambos) se pagan recién cuando
+    el ahijado concreta su PRIMERA compra con acumulación (anti-fraude básico:
+    crear cuentas no paga nada).
+    """
+
+    ahijado = models.OneToOneField(
+        Cliente,
+        on_delete=models.CASCADE,
+        related_name='referido_recibido',
+        help_text="El invitado: solo puede ser referido una vez",
+    )
+    padrino = models.ForeignKey(
+        Cliente,
+        on_delete=models.CASCADE,
+        related_name='referidos_hechos',
+    )
+    estado = models.CharField(
+        max_length=12,
+        choices=ESTADO_REFERIDO_CHOICES,
+        default='REGISTRADO',
+        db_index=True,
+    )
+    # Montos pagados (se congelan al pagar, por si el programa cambia después)
+    puntos_padrino = models.IntegerField(default=0)
+    puntos_ahijado = models.IntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    pagado_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Referido'
+        verbose_name_plural = 'Referidos'
+        indexes = [
+            models.Index(fields=['padrino', 'estado']),
+        ]
+
+    def __str__(self):
+        return f"{self.padrino_id} → {self.ahijado_id} ({self.estado})"
+
+
+TIPO_DESAFIO_CHOICES = [
+    ('COMPRAS_N', 'Cantidad de compras en el período'),
+    ('MONTO_ACUMULADO', 'Monto comprado en el período ($)'),
+]
+
+
+class DesafioPromo(models.Model):
+    """
+    Desafío/promoción de fidelización: "haz N compras (o compra $X) entre
+    fecha_inicio y fecha_fin y gana un bono de puntos". El progreso se calcula
+    on-the-fly desde el ledger (ACUMULACION del período) — sin estado por
+    cliente — y el bono se paga automáticamente al completarse (idempotente
+    por `desafio:{id}:{cliente_id}`).
+    """
+
+    nombre = models.CharField(max_length=80)
+    descripcion = models.TextField(
+        blank=True,
+        help_text="Texto que ve el cliente en la app",
+    )
+    tipo = models.CharField(max_length=20, choices=TIPO_DESAFIO_CHOICES)
+    meta_valor = models.IntegerField(
+        help_text="COMPRAS_N: nº de compras · MONTO_ACUMULADO: pesos",
+    )
+    bono_puntos = models.IntegerField(help_text="Puntos de premio al completar")
+
+    fecha_inicio = models.DateField(db_index=True)
+    fecha_fin = models.DateField(db_index=True, help_text="Inclusive")
+
+    nivel_objetivo = models.CharField(
+        max_length=10,
+        choices=NIVEL_CHOICES,
+        blank=True,
+        default='',
+        help_text="Vacío = para todos los niveles",
+    )
+    activo = models.BooleanField(default=True, db_index=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-fecha_inicio']
+        verbose_name = 'Desafío / Promoción'
+        verbose_name_plural = 'Desafíos / Promociones'
+
+    def __str__(self):
+        return f"{self.nombre} ({self.fecha_inicio} → {self.fecha_fin})"
+
+    @property
+    def vigente(self):
+        hoy = timezone.localdate()
+        return self.activo and self.fecha_inicio <= hoy <= self.fecha_fin
 
 
 class CanjeVale(models.Model):

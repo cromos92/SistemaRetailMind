@@ -52,6 +52,9 @@ class Command(BaseCommand):
                             help='DESTRUCTIVO: reasigna SKUs únicos a los duplicados.')
         parser.add_argument('--force', action='store_true',
                             help='Con --aplicar, no pedir confirmación interactiva.')
+        parser.add_argument('--solo-placeholder', action='store_true',
+                            help='Actuar SOLO sobre los SKUs "placeholder" (>=10 ocurrencias '
+                                 'o redondos): el ~80%% del daño con el menor riesgo.')
 
     # -------------------------------------------------------------- handle
     def handle(self, *args, **opts):
@@ -89,7 +92,8 @@ class Command(BaseCommand):
             self._exportar_excel(top, opts['excel'])
 
         if opts['aplicar']:
-            self._aplicar(dups_qs, total_skus, total_filas, opts['force'])
+            self._aplicar(dups_qs, total_skus, total_filas, opts['force'],
+                          solo_placeholder=opts['solo_placeholder'])
 
     # -------------------------------------------------------------- excel
     def _exportar_excel(self, top, ruta):
@@ -129,9 +133,11 @@ class Command(BaseCommand):
             f'\nExcel generado: {ruta}  ({ws.max_row - 1} filas de los {len(top)} peores SKUs)'))
 
     # -------------------------------------------------------------- aplicar
-    def _aplicar(self, dups_qs, total_skus, total_filas, force):
+    def _aplicar(self, dups_qs, total_skus, total_filas, force, solo_placeholder=False):
+        alcance = ('SOLO los SKUs placeholder (>=10 ocurr. o redondos)'
+                   if solo_placeholder else f'{total_filas - total_skus:,} tallas')
         self.stdout.write(self.style.WARNING(
-            f'\n⚠️  --aplicar reasignará SKUs únicos a {total_filas - total_skus:,} tallas '
+            f'\n⚠️  --aplicar reasignará SKUs únicos — alcance: {alcance} '
             f'(mantiene 1 por SKU). Esto CAMBIA el código de barra/etiqueta de esas tallas.'))
         if not force:
             resp = input('Escribe "SI" para continuar: ').strip()
@@ -146,6 +152,8 @@ class Command(BaseCommand):
         reasignados = 0
         for d in dups_qs.iterator():
             sku = d['sku']
+            if solo_placeholder and not _es_placeholder(sku, d['n']):
+                continue
             pts = list(Producto_Talla.objects
                        .filter(sku=sku)
                        .annotate(n_mov=Count('movimientos_productos_talla')))

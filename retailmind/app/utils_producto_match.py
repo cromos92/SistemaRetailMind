@@ -79,6 +79,44 @@ def producto_talla_por_sku(sku, sucursal_id=None, select_related=None,
     return qs.first()
 
 
+def productos_por_codigo_sucursales(articulo, sucursal_ids):
+    """Todos los Producto con el mismo código normalizado en las sucursales dadas.
+
+    Sirve para mostrar en qué bodegas existe el código y sus variantes (colores/
+    géneros distintos) diferenciadas, y para propagar la descripción multi-bodega.
+    """
+    from .models import Producto
+    objetivo = normalizar_articulo(articulo)
+    if not objetivo or not sucursal_ids:
+        return []
+    token = objetivo.split(' ')[0]
+    qs = (Producto.objects.filter(sucursal_id__in=sucursal_ids, articulo__icontains=token)
+          .select_related('sucursal', 'atributo1', 'atributo2', 'atributo3', 'categoria'))
+    return [p for p in qs if normalizar_articulo(p.articulo) == objetivo]
+
+
+def productos_por_identidad_sucursales(articulo, atributo1_id, atributo2_id,
+                                       atributo3_id, categoria_id, sucursal_ids):
+    """El MISMO producto (identidad completa) en todas las sucursales dadas.
+
+    A diferencia de `productos_por_codigo_sucursales` (que trae TODAS las
+    variantes del código), este filtra además por marca+color+género+categoría,
+    o sea la MISMA variante en distintas bodegas. Se usa para propagar la
+    descripción sin pisar la de otras variantes (colores/géneros) del código.
+    """
+    from .models import Producto
+    objetivo = normalizar_articulo(articulo)
+    if not objetivo or not sucursal_ids:
+        return []
+    token = objetivo.split(' ')[0]
+    qs = Producto.objects.filter(
+        sucursal_id__in=sucursal_ids, articulo__icontains=token,
+        atributo1_id=atributo1_id, atributo2_id=atributo2_id,
+        atributo3_id=atributo3_id, categoria_id=categoria_id,
+    )
+    return [p for p in qs if normalizar_articulo(p.articulo) == objetivo]
+
+
 def variantes_mismo_codigo(articulo, sucursal_id, excluir_id=None):
     """Productos (variantes) con el mismo código normalizado en la sucursal.
 

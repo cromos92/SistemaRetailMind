@@ -441,3 +441,34 @@ class LogClienteAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+
+# ========== FIDELIZACIÓN: APP "MIS PUNTOS" ==========
+from .models import DesafioPromo, Referido, DispositivoCliente
+
+
+@admin.register(DesafioPromo)
+class DesafioPromoAdmin(admin.ModelAdmin):
+    """Crear/editar desafíos ("haz N compras y gana X pts") sin tocar código."""
+    list_display = ['nombre', 'tipo', 'meta_valor', 'bono_puntos',
+                    'fecha_inicio', 'fecha_fin', 'nivel_objetivo', 'activo']
+    list_filter = ['activo', 'tipo', 'nivel_objetivo']
+    search_fields = ['nombre']
+
+
+@admin.register(Referido)
+class ReferidoAdmin(admin.ModelAdmin):
+    list_display = ['padrino', 'ahijado', 'estado', 'puntos_padrino',
+                    'puntos_ahijado', 'created_at', 'pagado_at']
+    list_filter = ['estado']
+    search_fields = ['padrino__nombre', 'padrino__rut',
+                     'ahijado__nombre', 'ahijado__rut']
+    readonly_fields = ['created_at', 'pagado_at']
+
+
+@admin.register(DispositivoCliente)
+class DispositivoClienteAdmin(admin.ModelAdmin):
+    list_display = ['cliente', 'plataforma', 'activo', 'last_seen', 'created_at']
+    list_filter = ['plataforma', 'activo']
+    search_fields = ['cliente__nombre', 'cliente__rut']
+    readonly_fields = ['token', 'created_at', 'last_seen']

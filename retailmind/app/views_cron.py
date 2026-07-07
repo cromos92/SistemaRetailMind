@@ -63,3 +63,39 @@ def ejecutar_tareas_periodicas(request):
         'vales_expirados': vales,
         'lotes_puntos_expirados': lotes,
     })
+
+
+@csrf_exempt
+@require_POST
+def verificar_drift_http(request):
+    """
+    POST /app/api/cron/verificar-drift/
+    Header: X-Cron-Key: <CRON_TRIGGER_KEY>
+
+    Ejecuta la guarda diaria de integridad de inventario (drift stock↔lotes,
+    conceptos fuera de catálogo, tipo/signo incoherente). Responde 200 si todo
+    está dentro de umbrales y 500 si hay alerta — así el scheduler externo
+    marca el fallo y notifica. Pensado para App Platform (sin cron nativo).
+    """
+    if not _autorizado(request):
+        raise Http404()
+
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    salida = StringIO()
+    alerta = False
+    try:
+        call_command('verificar_drift_inventario', stdout=salida)
+    except SystemExit:
+        alerta = True
+
+    detalle = salida.getvalue()
+    logger.info('Cron drift inventario: alerta=%s', alerta)
+    if alerta:
+        logger.warning('Cron drift inventario EXCEDE UMBRALES:\n%s', detalle)
+    return JsonResponse(
+        {'ok': not alerta, 'alerta': alerta, 'detalle': detalle},
+        status=500 if alerta else 200,
+    )

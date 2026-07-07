@@ -1587,7 +1587,17 @@
                                 <small class="text-muted d-none d-md-inline">
                                     <i class="bi bi-lightbulb me-1"></i>Tip: busca productos por nombre, marca, color o talla
                                 </small>
-                                <div class="input-group input-group-sm ms-auto" style="max-width: 260px; min-width: 160px;" title="Filtra compras con mercadería recepcionada en la sucursal elegida">
+                                <div class="input-group input-group-sm ms-auto" style="max-width: 215px; min-width: 150px;" title="Filtra por estado de avance de la compra">
+                                    <span class="input-group-text bg-white" style="font-size: .75rem;"><i class="bi bi-funnel-fill text-primary"></i></span>
+                                    <select class="form-select" id="filtroEstadoCompras" style="font-size: .8rem;">
+                                        <option value="">Todos los estados</option>
+                                        <option value="pendiente">Sin recepcionar</option>
+                                        <option value="parcial">Recepción parcial</option>
+                                        <option value="por_crear">Con productos por crear</option>
+                                        <option value="completado">Completadas</option>
+                                    </select>
+                                </div>
+                                <div class="input-group input-group-sm" style="max-width: 260px; min-width: 160px;" title="Filtra compras con mercadería recepcionada en la sucursal elegida">
                                     <span class="input-group-text bg-white" style="font-size: .75rem;"><i class="bi bi-geo-alt-fill text-info"></i></span>
                                     <select class="form-select" id="filtroSucursalCompras" style="font-size: .8rem;">
                                         <option value="">Todas las sucursales</option>
@@ -3427,9 +3437,12 @@
                         <div class="row g-2 g-md-3">
                             <div class="col-12 col-md-6">
                                 <label class="form-label fw-semibold text-muted small">
-                                    <i class="bi bi-tag me-1 text-info"></i>Nombre del Producto *
+                                    <i class="bi bi-tag me-1 text-info"></i>Nombre / Código del Producto *
                                 </label>
-                                <input type="text" class="form-control" name="nombre" required placeholder="Ej: Zapatilla Running Pro">
+                                <div class="position-relative">
+                                    <input type="text" class="form-control" name="nombre" id="inputNombreCompraManual" required placeholder="Escribí el código para autocompletar del catálogo" autocomplete="off">
+                                    <div id="acNombreCompraManual" class="list-group position-absolute w-100 shadow" style="z-index:1085;max-height:260px;overflow-y:auto;display:none;"></div>
+                                </div>
                             </div>
                             <div class="col-12 col-md-6">
                                 <label class="form-label fw-semibold text-muted small">
@@ -3825,6 +3838,73 @@ const GestionCompras = (function() {
         $('#filtroSucursalCompras').on('change', function() {
             const anio = $('#anioSeleccionado').val() || anioActual;
             cargarComprasPorAnio(anio, 1, currentSearchCompras || '');
+        });
+
+        // Al cambiar el filtro de ESTADO recargar desde la primera página
+        $('#filtroEstadoCompras').on('change', function() {
+            const anio = $('#anioSeleccionado').val() || anioActual;
+            cargarComprasPorAnio(anio, 1, currentSearchCompras || '');
+        });
+
+        // ===== Autocomplete del catálogo en el alta manual de producto de compra =====
+        let _acCompraTimer = null;
+        $(document).on('input', '#inputNombreCompraManual', function () {
+            const q = $(this).val().trim();
+            const $box = $('#acNombreCompraManual');
+            clearTimeout(_acCompraTimer);
+            if (q.length < 2) { $box.hide().empty(); return; }
+            _acCompraTimer = setTimeout(() => {
+                $.get('/app/buscar_articulo_autocomplete/', { q: q }, function (res) {
+                    const items = (res.resultados || []);
+                    if (!items.length) { $box.hide().empty(); return; }
+                    $box.html(items.map((p, i) => `
+                        <button type="button" class="list-group-item list-group-item-action py-2 ac-compra-item" data-idx="${i}">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-semibold" style="font-size:.85rem;">${p.articulo}</span>
+                                <small class="text-muted">${(p.tallas_detail || []).length} tallas</small>
+                            </div>
+                            <div style="font-size:.72rem;" class="text-muted">
+                                <span class="badge bg-dark">${p.marca}</span>
+                                <span class="badge bg-info text-dark">${p.color}</span>
+                                <span class="badge bg-secondary">${p.genero}</span>
+                                ${p.descripcion ? '· ' + p.descripcion : ''}
+                            </div>
+                        </button>`).join('')).show().data('items', items);
+                });
+            }, 250);
+        });
+
+        function setSelect2TagCompra($sel, text) {
+            if (!text || text === '-') return;
+            if (!$sel.find(`option[value="${text}"]`).length) {
+                $sel.append(new Option(text, text, true, true));
+            }
+            $sel.val(text).trigger('change');
+        }
+
+        // Al hacer click en una sugerencia, rellenar los campos del formulario
+        $(document).on('click', '.ac-compra-item', function () {
+            const items = $('#acNombreCompraManual').data('items') || [];
+            const p = items[$(this).data('idx')];
+            if (!p) return;
+            const $form = $('#formProductoManual');
+            $('#inputNombreCompraManual').val(p.articulo);
+            $form.find('input[name="descripcion"]').val(p.descripcion || '');
+            setSelect2TagCompra($('#selectMarcaManual'), p.marca);
+            setSelect2TagCompra($('#selectColorManual'), p.color);
+            setSelect2TagCompra($('#selectGeneroManual'), p.genero);
+            $('#acNombreCompraManual').hide().empty();
+            if (typeof Swal !== 'undefined') {
+                Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2200 })
+                    .fire({ icon: 'success', title: 'Datos del catálogo cargados' });
+            }
+        });
+
+        // Cerrar el dropdown al hacer click afuera
+        $(document).on('click', function (e) {
+            if (!$(e.target).closest('#inputNombreCompraManual, #acNombreCompraManual').length) {
+                $('#acNombreCompraManual').hide();
+            }
         });
 
         // Cargar DTEs disponibles y atributos al abrir el modal de producto manual
@@ -7603,6 +7683,7 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
         $('#tbodyCompras').html('<tr><td colspan="7" class="text-center"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando compras del año ' + anio + '...</td></tr>');
 
         const sucursalFiltroId = $('#filtroSucursalCompras').val() || '';
+        const estadoFiltro = $('#filtroEstadoCompras').val() || '';
 
         $.ajax({
             url: '{% url "obtener_compras" %}',
@@ -7612,7 +7693,8 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                 page: page,
                 page_size: 20,
                 search: search,
-                sucursal_id: sucursalFiltroId
+                sucursal_id: sucursalFiltroId,
+                estado_filtro: estadoFiltro
             },
             success: function (response) {
                 const endTime = performance.now();
@@ -8632,7 +8714,9 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                                 timerProgressBar: true,
                             }).fire({
                                 icon: 'success',
-                                title: `${totalUnidades} unidades recepcionadas`,
+                                title: `${totalUnidades} u recepcionadas`,
+                                html: '<small style="font-size:.75rem;">⚠️ El stock ingresa al inventario al <b>Crear Productos</b> (paso 4)</small>',
+                                timer: 4500,
                             });
                         }
 

@@ -58,7 +58,15 @@ def verGestionCompras(request):
 
 
 def crear_compra(request):
-    """Crear nueva compra"""
+    """[DEPRECADO — NO USAR] Duplicado roto de views.crear_compra.
+
+    Usa campos numero_factura/total que NO existen en el modelo Compras y
+    dejaría la compra inconsistente. El flujo real es views.crear_compra
+    (ruta 'crear_compra/'). Se conserva solo para no romper el import del módulo.
+    """
+    raise NotImplementedError(
+        "views_modulo_compras.crear_compra está deprecado/roto. "
+        "Usar views.crear_compra (ruta 'crear_compra/').")
     if request.method == 'POST':
         try:
             # Obtener datos del formulario
@@ -212,7 +220,15 @@ def recepcionar_compra(request):
     - Crea el movimiento de ingreso
     - Actualiza el stock en Producto_Talla
     - Crea automáticamente el lote FIFO (cuando crear_lote_fifo=True y concepto es de ingreso)
+
+    [DEPRECADO — NO USAR] Este duplicado usa Producto_Recepcionados con campos
+    inexistentes (cantidad_recepcionada, costo_unitario, usuario_recepcion) y
+    setea estado='RECEPCIONADA' que NO existe en Compras.ESTADO_CHOICES. El
+    flujo real es views.recepcionar_compra (lista) + views.guardar_recepcion.
     """
+    raise NotImplementedError(
+        "views_modulo_compras.recepcionar_compra está deprecado/roto. "
+        "Usar views.recepcionar_compra + views.guardar_recepcion.")
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
@@ -446,10 +462,11 @@ def obtener_dte_compras(request):
             }
         })
         
-    except Exception as e:
+    except Exception:
+        logger.exception("Error al obtener DTEs de compra")
         return JsonResponse({
             'success': False,
-            'error': f'Error al obtener DTEs: {str(e)}'
+            'error': 'No se pudieron cargar los DTEs. Reintentá; si el problema persiste, contactá a soporte.'
         })
 
 
@@ -1546,10 +1563,16 @@ def obtener_resumen_pendientes_anio(request):
 
             saldo_pendiente = float(monto_dte - notas_credito)
             monto_total_pendiente += saldo_pendiente
-            
-            # Clasificar por vencimiento
+
+            # Clasificar por vencimiento. OJO: fecha_vencimiento es nullable;
+            # un solo DTE sin vencimiento hacía crashear TODO el panel de KPIs
+            # con TypeError. Sin vencimiento → se cuenta como "al día" (no urgente).
+            if dte.fecha_vencimiento is None:
+                al_dia += 1
+                monto_al_dia += saldo_pendiente
+                continue
             dias_hasta_vencimiento = (dte.fecha_vencimiento - hoy).days
-            
+
             if dias_hasta_vencimiento < 0:
                 # Ya venció
                 vencidos += 1
@@ -1583,10 +1606,11 @@ def obtener_resumen_pendientes_anio(request):
             'monto_al_dia': monto_al_dia
         })
         
-    except Exception as e:
+    except Exception:
+        logger.exception("Error al obtener resumen de pendientes del año")
         return JsonResponse({
             'success': False,
-            'error': f'Error al obtener resumen: {str(e)}'
+            'error': 'No se pudo cargar el resumen de vencimientos. Reintentá; si persiste, contactá a soporte.'
         })
 
 

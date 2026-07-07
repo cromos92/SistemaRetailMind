@@ -87,6 +87,41 @@
 /* Tabs */
 .tm-tabs .nav-link { font-weight: 600; color: #6c757d; }
 .tm-tabs .nav-link.active { color: #405189; }
+
+/* ===== Upgrade visual: kardex agrupado + línea de vida ===== */
+/* Separador de mes en la línea de vida */
+.tm-tl-sep { position: relative; text-align: left; margin: .35rem 0 .9rem -2rem; padding-left: 2rem; }
+.tm-tl-sep span {
+    display: inline-block; background: #405189; color: #fff;
+    font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    border-radius: 999px; padding: .18rem .7rem; box-shadow: 0 2px 6px rgba(64,81,137,.25);
+}
+.tm-tl-body { transition: box-shadow .15s ease; }
+.tm-tl-item:hover .tm-tl-body { box-shadow: 0 6px 14px rgba(26,26,46,.10); }
+.tm-tl-fecha-chip {
+    background: #f1f3f8; color: #4A4A5A; border-radius: 6px;
+    padding: .08rem .45rem; font-size: .72rem; font-weight: 600; white-space: nowrap;
+}
+
+/* Kardex: fila separadora de serie (bodega · talla) */
+.tm-serie-row td {
+    background: linear-gradient(90deg, #eef1f8 0%, #f7f9fc 100%) !important;
+    font-weight: 700; color: #405189; font-size: .8rem;
+    border-top: 2px solid #d8dce8 !important; padding: .45rem .75rem !important;
+}
+/* Saldo como chip; negativo en rojo */
+.tm-saldo {
+    display: inline-block; min-width: 44px; text-align: center;
+    background: #eef1f8; color: #1A1A2E; font-weight: 700;
+    border-radius: 6px; padding: .1rem .45rem;
+}
+.tm-saldo.neg { background: #fdecec; color: #e14b4b; }
+/* Encabezado pegajoso dentro del scroll del kardex */
+#panelKardex .table-responsive { max-height: 65vh; }
+#tablaMovimientos thead th {
+    position: sticky; top: 0; z-index: 5; background: #f3f6f9;
+    font-size: .7rem; text-transform: uppercase; letter-spacing: .04em;
+}
 </style>
 
 <div class="page-content">
@@ -267,6 +302,10 @@
                                         <option value="DEVOLUCION">Devoluciones</option>
                                         <option value="PERDIDA">Pérdidas</option>
                                     </select>
+                                    <div class="form-check form-switch mb-0 ms-1">
+                                        <input class="form-check-input" type="checkbox" id="chkAgrupar" checked>
+                                        <label class="form-check-label small" for="chkAgrupar">Agrupar por bodega · talla</label>
+                                    </div>
                                     <span class="text-muted small ms-auto" id="kardexContador"></span>
                                 </div>
                                 <div class="alert alert-light border small mb-3 py-2">
@@ -279,7 +318,8 @@
                                             <tr>
                                                 <th>Fecha</th><th>Hora</th><th>Bodega</th><th>Talla</th>
                                                 <th>Tipo</th><th>Concepto</th>
-                                                <th class="text-end">Cant.</th><th class="text-end">Saldo</th>
+                                                <th class="text-end">Entrada</th><th class="text-end">Salida</th>
+                                                <th class="text-end">Saldo</th>
                                                 <th class="text-end">Costo</th><th class="text-end">Precio</th>
                                                 <th>Origen → Destino</th><th>Responsable</th><th>Referencia</th>
                                             </tr>
@@ -456,18 +496,32 @@ function renderTimeline(timeline, omitidos) {
         cont.innerHTML = '<div class="tm-empty"><i class="ri-time-line"></i>Sin hitos para el rango seleccionado</div>';
         return;
     }
-    cont.innerHTML = timeline.map(t => `
+    // Línea de vida con separadores de mes y tarjetas coloreadas por tipo de hito.
+    const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                   'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    let html = '';
+    let mesActual = null;
+    timeline.forEach(t => {
+        const partes = (t.fecha || '').split('/');   // dd/mm/yyyy
+        const claveMes = partes.length === 3 ? `${MESES[parseInt(partes[1], 10) - 1]} ${partes[2]}` : '';
+        if (claveMes && claveMes !== mesActual) {
+            mesActual = claveMes;
+            html += `<div class="tm-tl-sep"><span>${claveMes}</span></div>`;
+        }
+        html += `
         <div class="tm-tl-item">
-            <div class="tm-tl-dot" style="background:${t.color};"><i class="${t.icono}"></i></div>
-            <div class="tm-tl-body">
+            <div class="tm-tl-dot" style="background:${t.color}; box-shadow: 0 0 0 4px #fff, 0 0 0 7px ${t.color}22, 0 2px 5px rgba(0,0,0,.12);"><i class="${t.icono}"></i></div>
+            <div class="tm-tl-body" style="border-left: 3px solid ${t.color};">
                 <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
                     <div class="tm-tl-title">${escapeHtml(t.titulo)}</div>
-                    <div class="tm-tl-meta">${escapeHtml(t.fecha)} ${escapeHtml(t.hora)}</div>
+                    <span class="tm-tl-fecha-chip"><i class="ri-calendar-line me-1"></i>${escapeHtml(t.fecha)}${t.hora ? ' · ' + escapeHtml(t.hora) : ''}</span>
                 </div>
                 <div class="tm-tl-detail">${escapeHtml(t.detalle)}</div>
                 ${t.responsable && t.responsable !== 'Sistema' ? `<div class="tm-tl-meta"><i class="ri-user-line me-1"></i>${escapeHtml(t.responsable)}</div>` : ''}
             </div>
-        </div>`).join('');
+        </div>`;
+    });
+    cont.innerHTML = html;
 }
 
 /* ================= Filtros del kardex ================= */
@@ -514,32 +568,59 @@ function tipoLabel(m) {
 
 function renderTabla(movimientos) {
     const tbody = document.getElementById('tbodyMovimientos');
+    const agrupar = document.getElementById('chkAgrupar').checked;
     document.getElementById('kardexContador').textContent = `${movimientos.length} movimiento(s)`;
     if (!movimientos.length) {
-        tbody.innerHTML = '<tr><td colspan="13" class="tm-empty"><i class="ri-inbox-line"></i>Sin movimientos con estos filtros</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="14" class="tm-empty"><i class="ri-inbox-line"></i>Sin movimientos con estos filtros</td></tr>';
         return;
     }
-    tbody.innerHTML = movimientos.map(m => {
-        const cantClass = m.cantidad > 0 ? 'text-success fw-bold' : m.cantidad < 0 ? 'text-danger fw-bold' : '';
+
+    // Agrupado (default): una "cuenta" por bodega·talla, con subencabezado —
+    // así el saldo se lee como un kardex contable serie por serie.
+    let lista = movimientos;
+    if (agrupar) {
+        lista = [...movimientos].sort((a, b) =>
+            (a.bodega + '|' + a.talla).localeCompare(b.bodega + '|' + b.talla) ||
+            (a.fecha_iso || '').localeCompare(b.fecha_iso || '') ||
+            (a.hora || '').localeCompare(b.hora || '') ||
+            (a.id - b.id));
+    }
+
+    let html = '';
+    let serieActual = null;
+    lista.forEach(m => {
+        const serie = m.bodega + '·' + m.talla;
+        if (agrupar && serie !== serieActual) {
+            serieActual = serie;
+            html += `<tr class="tm-serie-row"><td colspan="14">
+                <i class="ri-store-3-line me-1"></i>${escapeHtml(m.bodega)}
+                <span class="mx-1">·</span> Talla <span>${escapeHtml(m.talla)}</span>
+                <span class="ms-2 fw-normal text-muted">SKU ${escapeHtml(m.sku)}</span>
+            </td></tr>`;
+        }
+        const entrada = m.cantidad > 0 ? `<span class="text-success fw-bold">+${m.cantidad}</span>` : '';
+        const salida = m.cantidad < 0 ? `<span class="text-danger fw-bold">−${Math.abs(m.cantidad)}</span>` : '';
         const ref = m.dte_folio ? `DTE #${m.dte_folio}` : m.ticket_correlativo ? `Ticket #${m.ticket_correlativo}` : (m.referencia || '-');
         const ruta = (m.sucursal_origen !== '-' || m.sucursal_destino !== '-')
             ? `${escapeHtml(m.sucursal_origen)} → ${escapeHtml(m.sucursal_destino)}` : '-';
-        return `<tr>
+        html += `<tr title="${escapeHtml(m.observaciones || '')}">
             <td class="text-nowrap">${escapeHtml(m.fecha)}</td>
             <td>${escapeHtml(m.hora)}</td>
             <td>${escapeHtml(m.bodega)}</td>
             <td><span class="badge bg-light text-dark border">${escapeHtml(m.talla)}</span></td>
             <td><span class="badge ${tipoBadge(m)}">${escapeHtml(tipoLabel(m))}</span></td>
             <td class="small">${escapeHtml(m.concepto_display)}</td>
-            <td class="text-end ${cantClass}">${m.cantidad > 0 ? '+' : ''}${m.cantidad}</td>
-            <td class="text-end fw-bold">${m.saldo}</td>
+            <td class="text-end">${entrada}</td>
+            <td class="text-end">${salida}</td>
+            <td class="text-end"><span class="tm-saldo ${m.saldo < 0 ? 'neg' : ''}">${m.saldo}</span></td>
             <td class="text-end">${fmtMoneda(m.costo)}</td>
             <td class="text-end">${fmtMoneda(m.precio)}</td>
             <td class="small text-nowrap">${ruta}</td>
             <td class="small">${escapeHtml(m.responsable)}</td>
             <td class="small">${escapeHtml(ref)}</td>
         </tr>`;
-    }).join('');
+    });
+    tbody.innerHTML = html;
 }
 
 /* ================= Exportar CSV ================= */
@@ -575,6 +656,7 @@ document.addEventListener('click', e => {
 document.getElementById('filtroBodega').addEventListener('change', aplicarFiltrosKardex);
 document.getElementById('filtroTalla').addEventListener('change', aplicarFiltrosKardex);
 document.getElementById('filtroTipo').addEventListener('change', aplicarFiltrosKardex);
+document.getElementById('chkAgrupar').addEventListener('change', aplicarFiltrosKardex);
 
 /* Tabs */
 document.querySelectorAll('.tm-tabs .nav-link').forEach(btn => {
