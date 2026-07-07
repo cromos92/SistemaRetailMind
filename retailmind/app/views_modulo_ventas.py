@@ -7043,11 +7043,19 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
     # del día (si no la NC "desaparece" del día en que se solicitó).
     # La clasificación posterior (si descuenta o no efectivo) sigue dependiendo
     # de si la NC tiene un Dte_Detalle_Pago en EFECTIVO, no del tipo_transaccion.
+    # Solo ventas al público (POS / módulo ventas) participan de la caja.
+    # `tipo_transaccion='VENTA'` se reserva para DTEs emitidos FUERA del POS
+    # —por concepto (sin mercadería), despacho externo, compensación de compra
+    # y documentos— que NO son ventas de mesón y no deben aparecer ni sumar al
+    # VENTA TOTAL del Resumen de Caja. Las conversiones ticket→factura también
+    # quedan como 'VENTA', pero su dinero ya está contabilizado en el ticket
+    # (`total_tickets`), así que excluirlas además evita doble conteo.
+    # DEVOLUCION/ANULACION se mantienen porque son las NC del día.
     dtes_del_dia = Dte.objects.filter(
         sucursal=sucursal,
         fecha_emision=fecha_obj,
         estado_dte__in=['EMITIDO', 'ACEPTADO'],
-        tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO', 'DEVOLUCION', 'ANULACION'],
+        tipo_transaccion__in=['VENTA_PUBLICO', 'DEVOLUCION', 'ANULACION'],
         # Los DTEs marcados como descartados desde la gestión de
         # documentos no participan de la cuadratura (stock ya devuelto,
         # documento sacado del listado).
