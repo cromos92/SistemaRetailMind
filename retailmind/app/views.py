@@ -20586,6 +20586,8 @@ def obtener_dtes_por_proveedor(request, proveedor_id):
         logger.exception("Error en obtener_dtes_por_proveedor")
         return JsonResponse({'error': str(e)}, status=500)
 
+@require_POST
+@login_required
 def crear_producto_manual(request):
     """
     Crea un producto manualmente con DTE y proveedor seleccionados.
@@ -20662,7 +20664,31 @@ def crear_producto_manual(request):
         
         if not tallas:
             return JsonResponse({'success': False, 'error': 'Debe agregar al menos una talla'})
-        
+
+        # Guard anti "creado sin stock": si el total de unidades enviado es 0
+        # (p.ej. la auto-detección de producto existente reconstruyó la tabla de
+        # tallas y dejó el Stock en 0, pisando lo tipeado), no se debe crear nada
+        # ni devolver un "creado" engañoso. El movimiento de ingreso ya está
+        # gateado por `if stock > 0`, así que con total 0 no entraría stock:
+        # abortamos temprano con un mensaje claro para el usuario.
+        # Parseo por-item: un valor sucio ('' , ' ', '1.5') no debe anular el
+        # total de las demás tallas válidas. La lista limpia se reutiliza en el
+        # loop de variantes (mismo criterio que el guard: sucio/faltante = 0,
+        # negativos clampeados a 0 — antes un stocks[] corto INVENTABA 1 unidad
+        # y un valor sucio reventaba con ValueError a mitad de la creación).
+        stocks_limpios = []
+        for _s in stocks:
+            try:
+                stocks_limpios.append(max(int(str(_s).strip() or 0), 0))
+            except (TypeError, ValueError):
+                stocks_limpios.append(0)
+        total_unidades_stock = sum(stocks_limpios)
+        if total_unidades_stock <= 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'No ingresaste unidades de stock (todas las tallas quedaron en 0). Escribe la cantidad en la columna Stock antes de crear.'
+            })
+
         # Obtener objetos relacionados
         proveedor = get_object_or_404(Empresa, id=proveedor_id)
         dte = get_object_or_404(Dte, id=dte_id)
@@ -20798,7 +20824,9 @@ def crear_producto_manual(request):
                 continue
                 
             talla_limpia = talla.strip()
-            stock = int(stocks[i]) if i < len(stocks) else 1
+            # stocks_limpios viene del guard (parseo tolerante, negativos a 0).
+            # Faltante = 0 (antes inventaba 1 unidad si stocks[] venía corto).
+            stock = stocks_limpios[i] if i < len(stocks_limpios) else 0
             sku = skus[i] if i < len(skus) else ''
             guia_talla_manual_id = guias_talla_manual[i] if i < len(guias_talla_manual) else None
             
@@ -20921,6 +20949,13 @@ def crear_producto_manual(request):
                 for talla_nombre, talla_info in tallas_creadas.items():
                     producto_talla = talla_info['producto_talla']
                     stock_talla = talla_info['stock']
+
+                    # Sin unidades no hay nada que registrar en la compra/DTE:
+                    # antes se creaban Compras_Producto_Talla y Dte_Productos
+                    # con stock=0 y monto_item=0 (líneas basura en la compra y
+                    # el detalle del DTE) por cada talla del form sin cantidad.
+                    if stock_talla <= 0:
+                        continue
 
                     cpt = Compras_Producto_Talla.objects.create(
                         compra_producto=compra_producto_creado,
@@ -21119,6 +21154,27 @@ def crear_producto_manual(request):
         except Exception:
             logger.exception("Error en sincronizacion manual de precios")
         
+        # Detalle verificable por talla: registrar_movimiento_producto mutó y
+        # guardó las MISMAS instancias referenciadas en tallas_creadas, así que
+        # el stock final ya está en memoria (sin queries extra). Permite al
+        # frontend confirmar "talla 00: +3 → stock 5" en vez de un genérico.
+        tallas_detalle = [
+            {
+                'talla': _nombre,
+                'sku': _info['sku'],
+                'stock_ingresado': _info['stock'],
+                'stock_final': _info['producto_talla'].stock,
+                'es_nueva': _info['es_nueva'],
+            }
+            for _nombre, _info in tallas_creadas.items()
+        ]
+        # Contar como "actualizadas" solo las tallas existentes que RECIBIERON
+        # unidades (antes se contaban también las enviadas con stock 0).
+        tallas_existentes_con_stock = sum(
+            1 for _info in tallas_creadas.values()
+            if not _info['es_nueva'] and _info['stock'] > 0
+        )
+
         # Construir mensaje descriptivo
         if producto_actualizado:
             mensaje = f'Producto actualizado correctamente'
@@ -21126,16 +21182,16 @@ def crear_producto_manual(request):
                 mensaje += f' (precio: ${int(precio_anterior):,} → ${int(precioventa):,})'
         else:
             mensaje = 'Producto creado correctamente'
-        
+
         if tallas_nuevas > 0:
             mensaje += f'. {tallas_nuevas} talla(s) nueva(s) agregada(s)'
-        if tallas_existentes_count > 0:
-            mensaje += f'. {tallas_existentes_count} talla(s) existente(s) actualizada(s)'
+        if tallas_existentes_con_stock > 0:
+            mensaje += f'. {tallas_existentes_con_stock} talla(s) existente(s) actualizada(s)'
         if productos_sincronizados > 0:
             mensaje += f'. Precios sincronizados y alertas enviadas a {len(sucursales_afectadas)} sucursal(es)'
         if compra_creada:
             mensaje += f'. Registrado en compra #{compra_creada.correlativo}'
-        
+
         return JsonResponse({
             'success': True,
             'producto_id': producto.id,
@@ -21144,6 +21200,7 @@ def crear_producto_manual(request):
             'precios_cambiaron': precios_cambiaron,
             'tallas_nuevas': tallas_nuevas,
             'tallas_existentes': tallas_existentes_count,
+            'tallas_detalle': tallas_detalle,
             'productos_sincronizados': productos_sincronizados,
             'sucursales_afectadas': sucursales_afectadas,
             'compra_id': compra_creada.id if compra_creada else None,

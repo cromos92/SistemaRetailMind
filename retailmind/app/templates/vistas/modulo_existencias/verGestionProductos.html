@@ -8761,6 +8761,13 @@ function aplicarModoSinGuiaManual(activar) {
                 stockTotal += parseInt($(this).val() || 0, 10);
             });
         }
+        // ✅ Sincronizar propiedad→atributo antes del snapshot: .html() serializa
+        // ATRIBUTOS, no la propiedad .value, así que sin esto el snapshot
+        // guardaba los inputs con su value="0" original y al restaurar se
+        // perdía todo el stock tipeado.
+        $tbody.find('input').each(function() {
+            this.setAttribute('value', this.value);
+        });
         $tbody.data('originalHtml', $tbody.html());
         // El backend manual lee talla[] / stock[] / sku[]; mantenemos ese
         // naming para no romper el parseo.
@@ -8789,10 +8796,25 @@ function aplicarModoSinGuiaManual(activar) {
         }
     } else {
         $nota.addClass('d-none');
+        // ✅ Capturar lo tipeado en el modo sin guía (fila '00') antes de
+        // restaurar, para re-aplicarlo si la fila restaurada coincide.
+        const prevSinGuia = capturarStocksTipeados();
         const original = $tbody.data('originalHtml');
         if (original) {
             $tbody.html(original);
             $tbody.removeData('originalHtml');
+            // Re-aplicar stocks tipeados sobre las filas restauradas (el
+            // snapshot ya trae los valores pre-modo gracias al sync de
+            // atributos; esto rescata además lo editado DURANTE el modo).
+            $tbody.find('tr').each(function() {
+                const $stock = $(this).find('input[name="stock[]"]');
+                const skuFila = $(this).find('input[name="sku[]"]').val();
+                const tallaFila = $(this).find('input[name="talla[]"]').val();
+                const rescatado = stockPrevioDe(prevSinGuia, skuFila, tallaFila);
+                if (rescatado > 0 && !(parseInt($stock.val()) > 0)) {
+                    $stock.val(rescatado);
+                }
+            });
         }
         $btnAgregar.prop('disabled', false).attr('title', '');
         $('#formCrearProductoManual input[name="sin_guia"]').remove();
@@ -9143,6 +9165,8 @@ function abrirModalCrearProductoManual() {
     window.productoExistenteManual = null;
     window.tallasExistentesManual = null;
     window.articuloAnteriorManual = '';
+    window.stockPrevioManualPendiente = null;
+    window._confirmPendienteManual = false;
     
     // Limpiar todos los paneles/indicadores
     $('#indicadorVerificacionManual').remove();
@@ -9552,6 +9576,46 @@ $('#modalCrearProductoManual').on('hidden.bs.modal', function() {
 $(document).on('click', '#btnAgregarTallaManual', function() {
     agregarFilaTallaManual();
 });
+
+// ==================================================================
+// ✅ Helpers ANTI-PÉRDIDA DE STOCK TIPEADO.
+// Varios flujos reconstruyen #tablaTallasManual (verificación de producto
+// existente, copiar datos, autocomplete, modo sin guía, etc.) y antes lo
+// hacían con inputs stock value="0", borrando las cantidades que el usuario
+// ya había escrito (el submit terminaba mandando stock[]=0). Todo re-render
+// de la tabla DEBE capturar primero con capturarStocksTipeados() y generar
+// los inputs con stockPrevioDe(prev, sku, talla).
+// ==================================================================
+function capturarStocksTipeados() {
+    const prev = {};
+    $('#tablaTallasManual tbody tr').each(function() {
+        const sku = String($(this).find('input[name="sku[]"]').val() || '').trim();
+        const talla = String($(this).find('input[name="talla[]"]').val() || '').trim();
+        const val = parseInt($(this).find('input[name="stock[]"]').val()) || 0;
+        if (val > 0) {
+            if (sku) prev['sku:' + sku] = val;
+            if (talla) {
+                prev['talla:' + talla] = val;
+                // Clave normalizada ('38' ≡ '38.0') para matchear la talla
+                // aunque la BD la devuelva con otro formato.
+                const norm = normalizarTallaParaComparacion(talla);
+                if (norm && norm !== talla) prev['talla:' + norm] = val;
+            }
+        }
+    });
+    return prev;
+}
+
+function stockPrevioDe(prev, sku, talla) {
+    if (!prev) return 0;
+    const skuStr = String(sku == null ? '' : sku).trim();
+    const tallaStr = String(talla == null ? '' : talla).trim();
+    const norm = normalizarTallaParaComparacion(tallaStr);
+    return prev['sku:' + skuStr]
+        || prev['talla:' + tallaStr]
+        || (norm ? prev['talla:' + norm] : 0)
+        || 0;
+}
 
 function agregarFilaTallaManual() {
     // Calcular el siguiente tabindex basado en las filas existentes
@@ -10142,6 +10206,13 @@ $(document).on('click', '#tablaTallasManual .btn-usar-talla-disponible', functio
 
 // Evento para verificar producto existente en modal manual
 function verificarProductoExistenteManual() {
+    // ✅ No reconstruir la tabla mientras el usuario decide en el Swal de
+    // confirmación: un rebuild en esa ventana pisaba el stock tipeado y el
+    // submit terminaba mandando stock[]=0.
+    if (window._confirmPendienteManual) {
+        console.log('⏸️ Verificación pausada: confirmación de creación en curso');
+        return;
+    }
     const articulo = $('#modalCrearProductoManual input[name="articulo"]').val().trim();
     const marca = $('#modalCrearProductoManual select[name="atributo1"]').val();
     const color = $('#modalCrearProductoManual select[name="atributo2"]').val();
@@ -10191,6 +10262,20 @@ function verificarProductoExistenteManual() {
                 // Esto garantiza que los SKUs sean los correctos de la BD
                 if (tallas.length > 0) {
                     console.log('🔄 Reemplazando tabla de tallas automáticamente...');
+
+                    // ✅ Preservar el stock que el usuario ya haya tipeado (indexado por
+                    // SKU y por talla) para que este re-render de la verificación NO lo
+                    // borre a 0. Sin esto, si la verificación se re-dispara después de
+                    // escribir la cantidad, el submit termina mandando stock[]=0.
+                    // Se fusiona con el capture pendiente que deja el handler de
+                    // 'articulo' (que vacía la tabla ANTES de llegar acá).
+                    const stockPrevioManual = Object.assign(
+                        {},
+                        window.stockPrevioManualPendiente || {},
+                        capturarStocksTipeados()
+                    );
+                    window.stockPrevioManualPendiente = null;
+
                     $('#tablaTallasManual tbody').empty();
                     
                     // ✅ ORDENAR tallas de menor a mayor
@@ -10203,6 +10288,9 @@ function verificarProductoExistenteManual() {
                     tallasOrdenadas.forEach((t, idx) => {
                         console.log(`   ✅ Talla ${t.talla}: SKU=${t.sku}`);
                         const tabIdx = 100 + idx; // TAB solo en stock
+                        // Recuperar el stock que el usuario ya haya tipeado para esta
+                        // talla/SKU (ver captura arriba); si no hay, arranca en 0.
+                        const stockPre = stockPrevioDe(stockPrevioManual, t.sku, t.talla);
                         const fila = `
                             <tr class="talla-existente">
                                 <td>
@@ -10211,7 +10299,7 @@ function verificarProductoExistenteManual() {
                                 </td>
                                 <td>
                                     <input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold" 
-                                           value="0" min="0" tabindex="${tabIdx}" 
+                                           value="${stockPre}" min="0" tabindex="${tabIdx}"
                                            style="max-width: 80px;" placeholder="0">
                                 </td>
                                 <td>
@@ -10401,9 +10489,11 @@ $(document).on('click', '#btnCopiarDatosProducto', function() {
     
     // Copiar tallas existentes a la tabla CON LOS SKUs REALES
     if (tallas && tallas.length > 0) {
+        // ✅ Preservar stock tipeado antes de vaciar (patrón anti-pérdida)
+        const prevCopiar = capturarStocksTipeados();
         // Limpiar tabla de tallas
         $('#tablaTallasManual tbody').empty();
-        
+
         // Agregar cada talla con su SKU REAL de la base de datos
         // Ordenar tallas de menor a mayor
         const tallasOrdenadas = [...tallas].sort((a, b) => {
@@ -10411,14 +10501,14 @@ $(document).on('click', '#btnCopiarDatosProducto', function() {
             const tallaB = parseFloat(String(b.talla).replace(',', '.')) || 0;
             return tallaA - tallaB;
         });
-        
+
         tallasOrdenadas.forEach((t, i) => {
             console.log(`   Talla ${t.talla}: SKU=${t.sku}`);
             const tabIdx = 100 + i;
             const fila = `
                 <tr class="talla-existente">
                     <td><input type="text" name="talla[]" class="form-control form-control-sm bg-light" value="${t.talla}" readonly tabindex="-1"></td>
-                    <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold" value="0" min="0" tabindex="${tabIdx}" style="max-width: 80px;"></td>
+                    <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold" value="${stockPrevioDe(prevCopiar, t.sku, t.talla)}" min="0" tabindex="${tabIdx}" style="max-width: 80px;"></td>
                     <td>
                         <span class="badge bg-success px-2 py-1" title="SKU: ${t.sku}">${t.sku}</span>
                         <input type="hidden" name="sku[]" class="sku-manual" value="${t.sku}">
@@ -10571,6 +10661,8 @@ $(document).on('click', '#btnCopiarDatosProducto', function() {
 
             // Copiar tallas si hay detalle
             if (p.tallas_detail && p.tallas_detail.length > 0) {
+                // ✅ Preservar stock tipeado antes de vaciar (patrón anti-pérdida)
+                const prevAc = capturarStocksTipeados();
                 $('#tablaTallasManual tbody').empty();
                 const tallasOrdenadas = [...p.tallas_detail].sort((a, b) => {
                     const ta = parseFloat(String(a.talla).replace(',', '.')) || 0;
@@ -10581,7 +10673,7 @@ $(document).on('click', '#btnCopiarDatosProducto', function() {
                     const fila = `
                         <tr class="talla-existente">
                             <td><input type="text" name="talla[]" class="form-control form-control-sm bg-light" value="${t.talla}" readonly tabindex="-1"></td>
-                            <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold" value="0" min="0" tabindex="${100+i}" style="max-width: 80px;"></td>
+                            <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold" value="${stockPrevioDe(prevAc, t.sku, t.talla)}" min="0" tabindex="${100+i}" style="max-width: 80px;"></td>
                             <td>
                                 <span class="badge bg-success px-2 py-1" title="SKU: ${t.sku}">${t.sku}</span>
                                 <input type="hidden" name="sku[]" class="sku-manual" value="${t.sku}">
@@ -10761,6 +10853,8 @@ function copiarProductoCoincidencia(producto) {
     
     // Copiar tallas — nuevo producto, SKUs se generarán frescos
     if (producto.tallas && producto.tallas.length > 0) {
+        // ✅ Preservar stock tipeado antes de vaciar (patrón anti-pérdida)
+        const prevCoin = capturarStocksTipeados();
         $('#tablaTallasManual tbody').empty();
         window.tallasExistentesManual = null;
 
@@ -10775,7 +10869,7 @@ function copiarProductoCoincidencia(producto) {
             const fila = `
                 <tr>
                     <td><input type="text" name="talla[]" class="form-control form-control-sm bg-light" value="${t.talla}" readonly tabindex="-1"></td>
-                    <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold" value="0" min="0" tabindex="${tabIdx}" style="max-width: 80px;"></td>
+                    <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold" value="${stockPrevioDe(prevCoin, t.sku, t.talla)}" min="0" tabindex="${tabIdx}" style="max-width: 80px;"></td>
                     <td>
                         <input type="text" name="sku[]" class="form-control form-control-sm sku-manual bg-light" readonly placeholder="Se generará..." tabindex="-1">
                     </td>
@@ -11253,7 +11347,14 @@ $('#modalCrearProductoManual input[name="articulo"]').on('change input', functio
         $('#indicadorVerificacionManual').remove();
         $('#advertenciaProductosSimilaresManual').remove();
         $('#advertenciaPrecioDiferenteManual').remove();
-        
+
+        // ✅ Capturar el stock tipeado ANTES de vaciar: la verificación (que
+        // corre 500ms después) lo fusiona vía window.stockPrevioManualPendiente
+        // para no repoblar las tallas con 0 (típico al corregir un typo del
+        // código con cantidades ya escritas).
+        window.stockPrevioManualPendiente = Object.assign(
+            window.stockPrevioManualPendiente || {}, capturarStocksTipeados());
+
         // Limpiar tabla de tallas (se volverá a llenar si existe el producto)
         $('#tablaTallasManual tbody').empty();
     }
@@ -11762,11 +11863,19 @@ function confirmarCreacionManual(modal, $btnSubmit) {
                 <div>${chips}</div>
             </div>`;
     }
+    // ✅ Mientras el usuario decide en el Swal, bloquear la verificación de
+    // producto existente (timer debounce o change en vuelo): su rebuild de la
+    // tabla era la carrera que dejaba stock[]=0 detrás del diálogo.
+    window._confirmPendienteManual = true;
+    if (typeof timeoutVerificacionManual !== 'undefined') {
+        clearTimeout(timeoutVerificacionManual);
+    }
     Swal.fire({
         title: '¿Confirmar creación?', html: html, icon: icon,
         showCancelButton: true, confirmButtonText: confirmText,
         cancelButtonText: 'Revisar', confirmButtonColor: '#0d6efd', width: 520,
     }).then(r => {
+        window._confirmPendienteManual = false;
         if (r.isConfirmed) {
             window._confirmadoCreacionManual = true;
             enviarFormularioCrearProductoManual(modal, $btnSubmit);
@@ -11855,7 +11964,25 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
     console.log('📦 Stocks a enviar:', stocksEnviados);
     console.log('📦 SKUs a enviar:', skusEnviados);
     console.log('📦 FormData serializado:', formData);
-    
+
+    // ✅ GUARD FINAL: re-chequear el total AL MOMENTO de serializar. La
+    // validación del submit y este envío están separados por el Swal de
+    // confirmación (espera de usuario no acotada); si algún rebuild dejó la
+    // tabla en 0 durante esa ventana, abortamos ANTES de enviar en vez de
+    // registrar un "creado" sin unidades. Espejo del guard del backend.
+    const totalStockEnvio = stocksEnviados.reduce((s, v) => s + (parseInt(v) || 0), 0);
+    if (tallasEnviadas.length === 0 || totalStockEnvio <= 0) {
+        $btnSubmit.prop('disabled', false).html(textoOriginal);
+        const $tabTallas = document.querySelector('[data-bs-target="#tabTallasStock"]');
+        if ($tabTallas) bootstrap.Tab.getOrCreateInstance($tabTallas).show();
+        Swal.fire({
+            icon: 'error',
+            title: 'Stock en 0',
+            html: 'Las cantidades de stock se reiniciaron mientras confirmabas.<br>Vuelve a ingresarlas en la columna <b>Stock</b> y presiona Crear de nuevo.'
+        });
+        return;
+    }
+
     $.ajax({
         url: '/app/crear_producto_manual/',
         type: 'POST',
@@ -11865,7 +11992,28 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
             if (res.success) {
                 // Mostrar mensaje detallado según resultado
                 let titulo = res.producto_actualizado ? 'Producto actualizado' : 'Producto creado';
-                showSuccessAlert(titulo, res.mensaje || 'El producto fue procesado correctamente.');
+                // ✅ Confirmación VERIFICABLE: detalle por talla con el stock
+                // final que quedó en la BD (viene del backend), en vez de un
+                // "creado" genérico que no permitía detectar ingresos en 0.
+                const detalleTallas = Array.isArray(res.tallas_detalle)
+                    ? res.tallas_detalle.filter(t => (t.stock_ingresado || 0) > 0) : [];
+                if (detalleTallas.length) {
+                    const filasDet = detalleTallas.map(t =>
+                        `<tr><td style="padding:2px 10px;">${t.talla}</td>` +
+                        `<td style="padding:2px 10px;">${t.sku}</td>` +
+                        `<td style="padding:2px 10px;color:#0ab39c;font-weight:600;">+${t.stock_ingresado}</td>` +
+                        `<td style="padding:2px 10px;font-weight:700;">${t.stock_final}</td></tr>`).join('');
+                    Swal.fire({
+                        icon: 'success', title: titulo, width: 500,
+                        html: `<p style="font-size:.88rem;margin-bottom:8px;">${res.mensaje || ''}</p>` +
+                              `<table style="margin:0 auto;font-size:.85rem;border-collapse:collapse;">` +
+                              `<thead><tr style="border-bottom:1px solid #dee2e6;"><th style="padding:2px 10px;">Talla</th><th style="padding:2px 10px;">SKU</th><th style="padding:2px 10px;">Ingresado</th><th style="padding:2px 10px;">Stock final</th></tr></thead>` +
+                              `<tbody>${filasDet}</tbody></table>`,
+                        confirmButtonText: 'OK'
+                    });
+                } else {
+                    showSuccessAlert(titulo, res.mensaje || 'El producto fue procesado correctamente.');
+                }
                 // Mostrar resultado de sincronización multi-sucursal
                 const nSync = res.sucursales_sincronizadas || res.productos_otras_sucursales?.length || 0;
                 if (nSync > 0) {
@@ -12411,8 +12559,10 @@ $('#btnConfirmarActualizacion').on('click', function() {
         // Copiar tallas si existen - DIRECTAMENTE sin usar agregarFilaTallaManual
         // para evitar que se disparen eventos que generen SKUs nuevos
         if (producto.tallas && producto.tallas.length > 0) {
+            // ✅ Preservar stock tipeado antes de vaciar (patrón anti-pérdida)
+            const prevCopiaBusq = capturarStocksTipeados();
             $('#tablaTallasManual tbody').empty();
-            
+
             // Es un NUEVO producto — no preservar SKUs existentes; se generarán nuevos
             window.productoExistenteManual = producto;
             window.tallasExistentesManual = null;
@@ -12429,7 +12579,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
                 const fila = `
                     <tr>
                         <td><input type="text" name="talla[]" class="form-control form-control-sm bg-light" value="${talla.talla}" readonly tabindex="-1"></td>
-                        <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold" value="0" min="0" tabindex="${tabIdx}" style="max-width: 80px;"></td>
+                        <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold" value="${stockPrevioDe(prevCopiaBusq, talla.sku, talla.talla)}" min="0" tabindex="${tabIdx}" style="max-width: 80px;"></td>
                         <td>
                             <input type="text" name="sku[]" class="form-control form-control-sm sku-manual bg-light" readonly placeholder="Se generará..." tabindex="-1">
                         </td>
@@ -12880,27 +13030,32 @@ $('#btnConfirmarActualizacion').on('click', function() {
     
     // Función para copiar tallas al modal manual
     function copiarTallasAlModalManual(tallas) {
+        // ✅ Preservar stock tipeado antes de vaciar (patrón anti-pérdida)
+        const prevSel = capturarStocksTipeados();
         // Limpiar tallas existentes
         $('#tablaTallasManual tbody').empty();
-        
+
         // Guardar en variables globales para evitar regeneración de SKUs
         window.tallasExistentesManual = tallas;
-        
+
         // Ordenar tallas de menor a mayor
         const tallasOrdenadas = [...tallas].sort((a, b) => {
             const tallaA = parseFloat(String(a.talla).replace(',', '.')) || 0;
             const tallaB = parseFloat(String(b.talla).replace(',', '.')) || 0;
             return tallaA - tallaB;
         });
-        
-        // Agregar las tallas seleccionadas - DIRECTAMENTE con valores
+
+        // Agregar las tallas seleccionadas - DIRECTAMENTE con valores.
+        // Prioridad del stock: lo ya tipeado > talla.stock del llamador
+        // (default 1 al copiar seleccionadas, que antes se ignoraba) > 0.
         tallasOrdenadas.forEach((talla, idx) => {
             console.log(`📋 Copiando talla seleccionada: ${talla.talla} con SKU: ${talla.sku}`);
             const tabIdx = 100 + idx;
+            const stockCopia = stockPrevioDe(prevSel, talla.sku, talla.talla) || parseInt(talla.stock) || 0;
             const fila = `
                 <tr class="talla-existente">
                     <td><input type="text" name="talla[]" class="form-control form-control-sm bg-light" value="${talla.talla}" readonly tabindex="-1"></td>
-                    <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold" value="0" min="0" tabindex="${tabIdx}" style="max-width: 80px;"></td>
+                    <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold" value="${stockCopia}" min="0" tabindex="${tabIdx}" style="max-width: 80px;"></td>
                     <td>
                         <span class="badge bg-success px-2 py-1" title="SKU: ${talla.sku}">${talla.sku}</span>
                         <input type="hidden" name="sku[]" class="sku-manual" value="${talla.sku}">
