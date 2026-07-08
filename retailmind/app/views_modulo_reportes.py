@@ -30,6 +30,7 @@ from .models import (
     TicketDetallePago, METODO_PAGO_TICKET_CHOICES, TIPO_DOCUMENTO_CHOICES,
     Categoria, AtributoOpcion, Productos_Atributos,
     PermisoRol, PedidoEcommerce, CANAL_ECOMMERCE_CHOICES,
+    CambioDevolucionDetalle,
 )
 from .utils_permisos import (
     obtener_sucursales_usuario,
@@ -5326,7 +5327,10 @@ def _resumen_vacio():
 
 # ========== REPORTE DE MOVIMIENTOS POR SUCURSAL (INICIAL VS RESTANTE) ==========
 
-@login_required
+# NOTA: helper interno, NO es una vista. No lleva @login_required: se invoca como
+# _mapas_movimientos_sucursal(productos_ids, ...) y el wrapper de login_required
+# tomaría productos_ids (una lista) como `request` -> 'list' object has no
+# attribute 'user'. El control de acceso ya está en las vistas que lo llaman.
 def _mapas_movimientos_sucursal(productos_ids, sucursales_ids, filtro_fecha):
     """Mapas {producto_id: {sucursal_id: unidades}} para el reporte de
     movimientos por sucursal, separando compras/abastecimiento, traspasos
@@ -5360,20 +5364,53 @@ def _mapas_movimientos_sucursal(productos_ids, sucursales_ids, filtro_fecha):
             mapa.setdefault(prod, {})[item[campo_sucursal]] = abs(item['total'] or 0)
         return mapa
 
-    compras = _mapa(
-        base.filter(sucursal_destino_id__in=sucursales_ids,
-                    concepto__in=conceptos_compras)
-        .values('ProductoTalla__producto_id', 'sucursal_destino_id')
-        .annotate(total=Sum('cantidad')),
-        'sucursal_destino_id',
+    def _mapa_entrada(qs_base):
+        """Suma entradas por (producto, sucursal RECEPTORA).
+
+        La sucursal receptora es ``sucursal_destino`` cuando está seteada
+        (recepciones/traspasos nuevos), y ``sucursal_origen`` cuando el
+        movimiento migró de Laravel: esa migración guardó la sucursal SIEMPRE
+        en ``sucursal_origen`` y dejó ``sucursal_destino`` en NULL, incluso
+        para ingresos iniciales y recepciones de compra
+        (migrate_from_laravel.py). Contar el "inicial" solo por
+        ``sucursal_destino`` dejaba en 0 el recibido de todo el histórico
+        migrado (la queja "el inicial tira mal el valor"). Los dos conjuntos
+        (destino seteado / destino NULL) son disjuntos, así que no hay doble
+        conteo."""
+        mapa = {}
+        por_destino = (
+            qs_base.filter(sucursal_destino_id__in=sucursales_ids)
+            .values('ProductoTalla__producto_id', 'sucursal_destino_id')
+            .annotate(total=Sum('cantidad'))
+        )
+        for item in por_destino:
+            prod = item['ProductoTalla__producto_id']
+            suc = item['sucursal_destino_id']
+            d = mapa.setdefault(prod, {})
+            d[suc] = d.get(suc, 0) + abs(item['total'] or 0)
+        por_origen = (
+            qs_base.filter(sucursal_destino_id__isnull=True,
+                           sucursal_origen_id__in=sucursales_ids)
+            .values('ProductoTalla__producto_id', 'sucursal_origen_id')
+            .annotate(total=Sum('cantidad'))
+        )
+        for item in por_origen:
+            prod = item['ProductoTalla__producto_id']
+            suc = item['sucursal_origen_id']
+            d = mapa.setdefault(prod, {})
+            d[suc] = d.get(suc, 0) + abs(item['total'] or 0)
+        return mapa
+
+    # Entradas (abastecimiento y traspasos recibidos): solo movimientos que
+    # SUMAN stock (cantidad > 0), contados por la sucursal receptora.
+    compras = _mapa_entrada(
+        base.filter(concepto__in=conceptos_compras, cantidad__gt=0)
     )
-    traspasos_in = _mapa(
-        base.filter(sucursal_destino_id__in=sucursales_ids)
-        .filter(Q(concepto__in=CONCEPTOS_TRASPASO_ENTRADA)
-                | Q(concepto__in=CONCEPTOS_TRASPASO_LEGACY, cantidad__gt=0))
-        .values('ProductoTalla__producto_id', 'sucursal_destino_id')
-        .annotate(total=Sum('cantidad')),
-        'sucursal_destino_id',
+    traspasos_in = _mapa_entrada(
+        base.filter(cantidad__gt=0).filter(
+            Q(concepto__in=CONCEPTOS_TRASPASO_ENTRADA)
+            | Q(concepto__in=CONCEPTOS_TRASPASO_LEGACY)
+        )
     )
     traspasos_out = _mapa(
         base.filter(sucursal_origen_id__in=sucursales_ids, cantidad__lt=0)
@@ -8098,8 +8135,11 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
       - DTEs: todos los de venta no-anulados/no-NC (incluyen boletas de tickets).
 
     Métricas calculadas por producto:
-      - unidades, monto, costo, margen, margen_pct
+      - unidades (NETAS de devoluciones de cliente), unidades_brutas,
+        unidades_devueltas, monto, monto_devuelto, costo, margen, margen_pct
       - docs (cantidad de ventas), sucursales_count
+    Las devoluciones se restan desde CambioDevolucionDetalle (no desde la Nota
+    de Crédito): las ventas por ticket no generan NC.
 
     Devuelve dict con:
       {
@@ -8162,6 +8202,7 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
             'genero': data_row.get('prod_genero') or '-',
             'genero_id': data_row.get('prod_genero_id'),
             'unidades': 0, 'monto': 0, 'costo': 0, 'docs': 0,
+            'unidades_devueltas': 0, 'monto_devuelto': 0,
         })
 
     # --- Tickets ---
@@ -8249,6 +8290,50 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
         if pid and sid:
             sucursales_por_producto.setdefault(pid, set()).add(sid)
 
+    # ---------- DEVOLUCIONES DE CLIENTE (netear unidades) ----------
+    # Las unidades vendidas deben ser NETAS de lo devuelto. La fuente es
+    # CambioDevolucionDetalle (no la Nota de Crédito): las ventas por ticket
+    # no generan NC, y el kardex pierde las devoluciones "no aptas" (cant=0).
+    # Aquí capturamos toda devolución/cambio de mercadería una sola vez, sin
+    # solape (el reporte no cuenta las NC como venta).
+    qs_dev = CambioDevolucionDetalle.objects.filter(
+        producto_original__isnull=False,
+        cantidad_original__gt=0,
+        cambio_devolucion__fecha_ejecucion__date__gte=fi,
+        cambio_devolucion__fecha_ejecucion__date__lte=ff,
+    )
+    qs_dev = filtrar_queryset_por_sucursal(
+        qs_dev, user, request, campo_sucursal='cambio_devolucion__sucursal_id'
+    )
+    qs_dev = _aplicar_filtros_producto(
+        qs_dev, 'producto_original__ProductoTalla__producto', filtros
+    )
+    agg_dev = qs_dev.values('producto_original__ProductoTalla__producto_id').annotate(
+        dev_u=Sum('cantidad_original'),
+        dev_m=Sum(ExpressionWrapper(
+            F('precio_original_unitario') * F('cantidad_original'),
+            output_field=DecimalField(),
+        )),
+    )
+    dev_omitidas = 0
+    for r in agg_dev:
+        pid = r['producto_original__ProductoTalla__producto_id']
+        p = productos_acum.get(pid)
+        if not p:
+            # Devolución de un SKU sin ventas en el período: no restamos para
+            # no generar filas negativas fantasma.
+            dev_omitidas += int(r['dev_u'] or 0)
+            continue
+        p['unidades_devueltas'] += int(r['dev_u'] or 0)
+        p['monto_devuelto'] += int(r['dev_m'] or 0)
+        p['unidades'] -= int(r['dev_u'] or 0)   # unidades = NETAS de devoluciones
+        p['monto'] -= int(r['dev_m'] or 0)
+    if dev_omitidas:
+        logger.info(
+            'productos_vendidos: %s unidades devueltas omitidas del neteo '
+            '(SKUs sin ventas en el período %s..%s)', dev_omitidas, fi, ff
+        )
+
     # ---------- Stock actual por producto (sell-through / cobertura) ----------
     stock_por_producto = {}
     if productos_acum:
@@ -8266,6 +8351,7 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
     tot_monto = 0
     tot_costo = 0
     tot_stock = 0
+    tot_dev = 0
     for pid, p in productos_acum.items():
         margen = p['monto'] - p['costo']
         margen_pct = (margen / p['monto'] * 100) if p['monto'] > 0 else 0
@@ -8275,6 +8361,7 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
         velocidad_dia = p['unidades'] / dias_periodo if p['unidades'] else 0
         productos.append({
             **p,
+            'unidades_brutas': p['unidades'] + p['unidades_devueltas'],
             'margen': margen,
             'margen_pct': round(margen_pct, 1),
             'sucursales_count': sucs,
@@ -8286,6 +8373,7 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
         tot_monto += p['monto']
         tot_costo += p['costo']
         tot_stock += stock_actual
+        tot_dev += p['unidades_devueltas']
 
     tot_margen = tot_monto - tot_costo
     tot_margen_pct = (tot_margen / tot_monto * 100) if tot_monto > 0 else 0
@@ -8379,6 +8467,22 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
         h['unidades'] += int(r['unid'] or 0)
         h['monto'] += monto
 
+    # Restar devoluciones del heatmap (solo celdas ya existentes: evita crear
+    # celdas negativas para categorías/sucursales sin ventas en el período).
+    for r in qs_dev.values(
+        'cambio_devolucion__sucursal_id',
+        cat_nombre=F('producto_original__ProductoTalla__producto__categoria__nombre'),
+    ).annotate(unid=Sum('cantidad_original'),
+               monto=Sum(ExpressionWrapper(
+                   F('precio_original_unitario') * F('cantidad_original'),
+                   output_field=DecimalField()))):
+        sid = r['cambio_devolucion__sucursal_id']
+        cat = r['cat_nombre'] or 'Sin clasificar'
+        h = heat.get((sid, cat))
+        if h:
+            h['unidades'] -= int(r['unid'] or 0)
+            h['monto'] -= int(r['monto'] or 0)
+
     heatmap = sorted(
         heat.values(),
         key=lambda x: (x['sucursal'], -x['unidades']),
@@ -8391,6 +8495,7 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
 
     kpis = {
         'total_unidades': tot_unid,
+        'total_devoluciones_unid': tot_dev,
         'total_monto': tot_monto,
         'total_costo': tot_costo,
         'total_margen': tot_margen,

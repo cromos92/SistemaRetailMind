@@ -157,7 +157,7 @@
                     <div class="card-body py-3">
                         <div class="kpi-label"><i class="ri-shopping-bag-line text-primary"></i> Unidades</div>
                         <div class="kpi-main" id="kpiUnidades">0</div>
-                        <div class="kpi-sub" title="Vendido ÷ (vendido + stock actual) del universo filtrado · Cobertura = stock ÷ velocidad del período">Sell-through: <span id="kpiSellThrough">0%</span> · Cob: <span id="kpiCobertura">—</span></div>
+                        <div class="kpi-sub" title="Vendido ÷ (vendido + stock actual) del universo filtrado · Cobertura = stock ÷ velocidad del período">Sell-through: <span id="kpiSellThrough">0%</span> · Cob: <span id="kpiCobertura">—</span> · Devol: <span id="kpiDevoluciones" title="Unidades devueltas por clientes (ya restadas del total)">0</span></div>
                     </div>
                 </div>
             </div>
@@ -268,7 +268,8 @@
                                                 <th>Categoría</th>
                                                 <th>Sexo</th>
                                                 <th>Género</th>
-                                                <th class="text-end">Unidades</th>
+                                                <th class="text-end" title="Unidades vendidas netas de devoluciones">Unidades</th>
+                                                <th class="text-center" title="Unidades devueltas por clientes en el período (ya restadas de Unidades)">Devol.</th>
                                                 <th class="text-end">Monto</th>
                                                 <th class="text-end">Margen $</th>
                                                 <th class="text-center">Margen %</th>
@@ -654,6 +655,7 @@
 
     function renderKPIs(k) {
         document.getElementById('kpiUnidades').textContent = fmtNum(k.total_unidades);
+        document.getElementById('kpiDevoluciones').textContent = fmtNum(k.total_devoluciones_unid || 0);
         document.getElementById('kpiMonto').textContent = fmtMoney(k.total_monto);
         document.getElementById('kpiMargen').textContent = fmtMoney(k.total_margen);
         document.getElementById('kpiMargenPct').textContent = fmtPct(k.total_margen_pct);
@@ -672,7 +674,7 @@
         document.getElementById('countProductosTotal').textContent = total || 0;
         const tb = document.querySelector('#tablaProductos tbody');
         if (!rows || !rows.length) {
-            tb.innerHTML = '<tr><td colspan="17" class="text-center text-muted py-4">Sin productos para los filtros seleccionados</td></tr>';
+            tb.innerHTML = '<tr><td colspan="18" class="text-center text-muted py-4">Sin productos para los filtros seleccionados</td></tr>';
             return;
         }
         tb.innerHTML = rows.map((r, i) => `
@@ -684,7 +686,8 @@
                 <td>${escapeHtml(r.categoria)}</td>
                 <td>${escapeHtml(r.sexo)}</td>
                 <td>${escapeHtml(r.genero)}</td>
-                <td class="text-end fw-semibold">${fmtNum(r.unidades)}</td>
+                <td class="text-end fw-semibold" title="${(r.unidades_devueltas || 0) > 0 ? 'Bruto: ' + fmtNum(r.unidades_brutas) + ' − ' + fmtNum(r.unidades_devueltas) + ' devueltas' : ''}">${fmtNum(r.unidades)}</td>
+                <td class="text-center ${(r.unidades_devueltas || 0) > 0 ? 'text-danger' : 'text-muted'}">${(r.unidades_devueltas || 0) > 0 ? '−' + fmtNum(r.unidades_devueltas) : '—'}</td>
                 <td class="text-end">${fmtMoney(r.monto)}</td>
                 <td class="text-end ${r.margen >= 0 ? 'text-success' : 'text-danger'}">${fmtMoney(r.margen)}</td>
                 <td class="text-center">${badgePct(r.margen_pct)}</td>
