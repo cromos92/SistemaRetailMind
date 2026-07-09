@@ -535,6 +535,92 @@ class PermisoUsuario(models.Model):
         ).exists()
 
 
+class PermisoTemporalCambio(models.Model):
+    """Autorización temporal y acotada para acciones destructivas de cambios."""
+
+    ACCION_CANCELAR = 'CANCELAR'
+    ACCION_REVERTIR = 'REVERTIR'
+    ACCIONES = [
+        (ACCION_CANCELAR, 'Cancelar solicitud de cambio'),
+        (ACCION_REVERTIR, 'Revertir cambio ejecutado'),
+    ]
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='permisos_temporales_cambios',
+    )
+    empresa = models.ForeignKey(
+        'app.Empresa',
+        on_delete=models.CASCADE,
+        related_name='permisos_temporales_cambios',
+    )
+    sucursal = models.ForeignKey(
+        'app.Sucursal',
+        on_delete=models.CASCADE,
+        related_name='permisos_temporales_cambios',
+    )
+    accion = models.CharField(max_length=20, choices=ACCIONES)
+    otorgado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='permisos_temporales_cambios_otorgados',
+    )
+    codigo_autorizacion = models.ForeignKey(
+        'app.CodigoAutorizacionDinamico',
+        on_delete=models.PROTECT,
+        related_name='permisos_temporales_cambios',
+    )
+    motivo = models.TextField()
+    vigente_desde = models.DateTimeField(default=timezone.now)
+    vigente_hasta = models.DateTimeField(db_index=True)
+    revocado_en = models.DateTimeField(null=True, blank=True)
+    revocado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='permisos_temporales_cambios_revocados',
+    )
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Permiso temporal de cambios'
+        verbose_name_plural = 'Permisos temporales de cambios'
+        ordering = ['-creado_en']
+        indexes = [
+            models.Index(
+                fields=['usuario', 'empresa', 'sucursal', 'accion', 'vigente_hasta'],
+                name='app_ptc_vigencia_idx',
+            ),
+            models.Index(
+                fields=['otorgado_por', 'creado_en'],
+                name='app_ptc_otorgado_idx',
+            ),
+        ]
+
+    @property
+    def esta_vigente(self):
+        ahora = timezone.now()
+        return (
+            self.revocado_en is None
+            and self.vigente_desde <= ahora < self.vigente_hasta
+        )
+
+    @classmethod
+    def vigente_para(cls, usuario, empresa_id, sucursal_id, accion, ahora=None):
+        ahora = ahora or timezone.now()
+        return cls.objects.filter(
+            usuario=usuario,
+            empresa_id=empresa_id,
+            sucursal_id=sucursal_id,
+            accion=accion,
+            vigente_desde__lte=ahora,
+            vigente_hasta__gt=ahora,
+            revocado_en__isnull=True,
+        ).select_related('otorgado_por').order_by('-vigente_hasta').first()
+
+
 # ========== SISTEMA DE CÓDIGOS DE AUTORIZACIÓN DINÁMICOS ==========
 
 class CodigoAutorizacionDinamico(models.Model):

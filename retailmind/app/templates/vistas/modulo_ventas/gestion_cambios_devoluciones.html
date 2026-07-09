@@ -1449,6 +1449,14 @@
         font-weight: 600;
         margin-top: 4px;
     }
+    #contexto-documento-paso2 {
+        min-height: 38px;
+        font-size: 0.82rem;
+        position: sticky;
+        top: -0.6rem;
+        z-index: 12;
+        box-shadow: var(--nexo-shadow-sm);
+    }
     #modal-nav-bar .mnb-nav {
         min-height: 58px;
         padding: 10px 16px;
@@ -1935,23 +1943,26 @@
         #modalNuevoCambio .modal-header { padding: 0.3rem 0.75rem; }
         #modalNuevoCambio .modal-title { font-size: 0.88rem; }
         #modalNuevoCambio .wizard-stepper { padding: 0.2rem 0.4rem; margin-bottom: 0.3rem; }
-        #modalNuevoCambio .wizard-step { font-size: 0.65rem; }
-        #modalNuevoCambio .wizard-step .wizard-circle { width: 22px; height: 22px; font-size: 0.68rem; }
-        #modalNuevoCambio .wizard-step .wizard-label { font-size: 0.6rem; }
-        #modalNuevoCambio .card-nexo .card-header { padding: 0.25rem 0.55rem; font-size: 0.75rem; }
+        #modalNuevoCambio .wizard-step { font-size: 0.75rem; }
+        #modalNuevoCambio .wizard-step .wizard-circle { width: 24px; height: 24px; font-size: 0.75rem; }
+        #modalNuevoCambio .wizard-step .wizard-label { font-size: 0.72rem; }
+        #modalNuevoCambio .card-nexo .card-header { padding: 0.3rem 0.55rem; font-size: 0.82rem; }
         #modalNuevoCambio .card-nexo .card-body { padding: 0.35rem 0.55rem; }
-        #modalNuevoCambio .alert { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        #modalNuevoCambio .alert { padding: 0.3rem 0.5rem; font-size: 0.8rem; }
         .motivo-inline-bar { padding: 0.3rem 0.5rem; margin-bottom: 0.35rem; }
-        .motivo-inline-bar .motivo-label { font-size: 0.72rem; }
-        .motivo-inline-bar select { font-size: 0.82rem; height: 32px; }
+        .motivo-inline-bar .motivo-label { font-size: 0.78rem; }
+        .motivo-inline-bar select { font-size: 0.88rem; height: 36px; }
         #modalNuevoCambio .productos-section { padding: 0.5rem; margin-bottom: 0.5rem; }
         #modalNuevoCambio .table-sm td,
-        #modalNuevoCambio .table-sm th { padding: 0.2rem 0.35rem; font-size: 0.78rem; }
+        #modalNuevoCambio .table-sm th { padding: 0.25rem 0.35rem; font-size: 0.82rem; }
         #modalNuevoCambio .ticket-info { padding: 0.35rem 0.55rem; margin-bottom: 0.4rem; }
         #modalNuevoCambio .ticket-info .info-chip { padding: 0.2rem 0.4rem; }
-        #modalNuevoCambio .ticket-info .info-chip .chip-label { font-size: 0.58rem; }
-        #modalNuevoCambio .ticket-info .info-chip .chip-value { font-size: 0.88rem; }
+        #modalNuevoCambio .ticket-info .info-chip .chip-label { font-size: 0.7rem; }
+        #modalNuevoCambio .ticket-info .info-chip .chip-value { font-size: 0.92rem; }
         #modalNuevoCambio .ticket-info .info-chip.chip-total .chip-value { font-size: 1.05rem; }
+        #floating-action-bar { margin: 0 -0.65rem; width: calc(100% + 1.3rem); padding: 8px 12px; }
+        #floating-action-bar .fab-btn-primary,
+        #floating-action-bar .fab-btn-secondary { min-height: 42px; }
 
         /* ── Modal Nav Bar ── */
         #modal-nav-bar .mnb-nav { padding: 5px 8px; }
@@ -2572,6 +2583,12 @@
 
                 <!-- Paso 2: Seleccionar Productos -->
                 <div id="paso-seleccionar-productos" style="display: none;">
+                    <div class="d-flex align-items-center flex-wrap gap-2 px-2 py-1 mb-2 bg-white border rounded" id="contexto-documento-paso2">
+                        <span class="badge bg-primary"><i class="ri-file-text-line me-1"></i><span id="ctx-documento-numero">-</span></span>
+                        <small><strong id="ctx-documento-cliente">-</strong></small>
+                        <small class="text-muted"><i class="ri-calendar-line me-1"></i><span id="ctx-documento-fecha">-</span></small>
+                        <small class="ms-auto"><i class="ri-time-line me-1"></i><span id="ctx-documento-plazo">-</span></small>
+                    </div>
                     <div class="row g-3">
                         <div class="col-12">
                             <div class="alert alert-primary border-primary mb-2 py-2 px-3">
@@ -3255,20 +3272,21 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- Supervisor -->
+                        <!-- Administrador autorizador -->
                         <div class="col-md-6">
                             <div class="d-flex flex-column gap-1">
+                                <label for="input-codigo-autorizacion-aprobacion" class="form-label small fw-semibold mb-0">
+                                    Código de autorización de la barra superior
+                                </label>
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text py-0 px-2 bg-danger bg-opacity-10 text-danger border-danger border-opacity-25" style="font-size:.75rem;"><i class="ri-shield-keyhole-line"></i></span>
-                                    <input type="text" class="form-control form-control-sm fw-bold text-center" id="input-codigo-autorizacion-aprobacion" placeholder="Código autorización" autocomplete="off" maxlength="6" style="letter-spacing:2px; font-size:.8rem;" required
-                                        onkeypress="if(event.key==='Enter'){event.preventDefault();validarCodigoAutorizacionAprobacion();}">
-                                    <button class="btn btn-danger btn-sm px-2" onclick="validarCodigoAutorizacionAprobacion()" style="font-size:.75rem;">
-                                        <i class="ri-checkbox-line"></i> Validar
-                                    </button>
+                                    <input type="password" class="form-control form-control-sm fw-bold text-center" id="input-codigo-autorizacion-aprobacion" placeholder="6 dígitos" autocomplete="one-time-code" inputmode="numeric" maxlength="6" style="letter-spacing:2px; font-size:.9rem;" required
+                                        oninput="actualizarCodigoAutorizacionAprobacion(this)"
+                                        onkeypress="if(event.key==='Enter'){event.preventDefault();confirmarAprobacionYGenerarTicket();}">
                                 </div>
                                 <div id="info-autorizacion-validada" style="display:none;" class="d-flex align-items-center gap-1 px-2 py-1 rounded bg-success bg-opacity-10 border border-success border-opacity-25">
                                     <i class="ri-shield-check-line text-success" style="font-size:.8rem;"></i>
-                                    <small class="text-success"><strong>Válido hasta:</strong> <span id="autorizacion-valido-hasta">--:--</span></small>
+                                    <small class="text-success">Código completo; se validará al ejecutar</small>
                                 </div>
                                 <div id="info-autorizacion-error" style="display:none;" class="d-flex align-items-center gap-1 px-2 py-1 rounded bg-danger bg-opacity-10 border border-danger border-opacity-25">
                                     <i class="ri-close-circle-line text-danger" style="font-size:.8rem;"></i>
@@ -3300,7 +3318,7 @@
                     <i class="ri-close-line"></i> Cancelar
                 </button>
                 <button type="button" class="btn btn-success" id="btn-confirmar-aprobacion" onclick="confirmarAprobacionYGenerarTicket()" disabled>
-                    <i class="ri-check-line"></i> Aprobar y Ejecutar
+                    <i class="ri-shield-check-line"></i> Autorizar y Ejecutar
                 </button>
             </div>
         </div>
@@ -4310,6 +4328,7 @@ function actualizarTablaCambios(cambios) {
 
 function generarBotonesAccion(cambio) {
     let botones = [];
+    const acciones = cambio.acciones_permitidas || {};
 
     if (cambio.estado === 'SOLICITADO') {
         botones.push(`
@@ -4317,11 +4336,13 @@ function generarBotonesAccion(cambio) {
                 <i class="ri-check-double-line me-1"></i>Aprobar y Ejecutar
             </button>
         `);
-        botones.push(`
-            <button class="btn btn-outline-danger btn-sm px-2" onclick='cancelarCambio(${cambio.id})' title='Cancelar solicitud'>
-                <i class="ri-close-line"></i>
-            </button>
-        `);
+        if (acciones.puede_solicitar_cancelar) {
+            botones.push(`
+                <button class="btn btn-outline-danger btn-sm px-2" onclick='cancelarCambio(${cambio.id})' title='${acciones.requiere_autorizacion_cancelar ? 'Requiere código de administrador' : 'Cancelar solicitud'}'>
+                    <i class="ri-close-line"></i>
+                </button>
+            `);
+        }
     }
     
     if (cambio.estado === 'APROBADO') {
@@ -4335,11 +4356,13 @@ function generarBotonesAccion(cambio) {
                 <i class="ri-play-circle-line me-1"></i>Ejecutar
             </button>
         `);
-        botones.push(`
-            <button class="btn btn-outline-danger btn-sm px-2" onclick='cancelarCambio(${cambio.id})' title='Cancelar cambio aprobado'>
-                <i class="ri-close-line"></i>
-            </button>
-        `);
+        if (acciones.puede_solicitar_cancelar) {
+            botones.push(`
+                <button class="btn btn-outline-danger btn-sm px-2" onclick='cancelarCambio(${cambio.id})' title='${acciones.requiere_autorizacion_cancelar ? 'Requiere código de administrador' : 'Cancelar cambio aprobado'}'>
+                    <i class="ri-close-line"></i>
+                </button>
+            `);
+        }
     }
 
     if (cambio.estado === 'EJECUTADO_COBRO_PENDIENTE') {
@@ -4356,18 +4379,20 @@ function generarBotonesAccion(cambio) {
             `);
         }
         // Solo administrador: condonar la diferencia (perdonar el cobro) sin anular el cambio
-        if (window.USER_ROL === 'administrador') {
+        if (acciones.condonar) {
             botones.push(`
                 <button class="btn btn-outline-secondary btn-sm px-2" onclick='condonarDiferencia(${cambio.id}, ${cambio.diferencia_monto}, "${cambio.numero_operacion}")' title='Condonar: perder el cobro de la diferencia con justificación, sin anular el cambio'>
                     <i class="ri-hand-coin-line me-1"></i>Condonar
                 </button>
             `);
         }
-        botones.push(`
-            <button class="btn btn-outline-danger btn-sm px-2" onclick='revertirCambio(${cambio.id})' title='Revertir: deshace stock y cancela ticket pendiente'>
-                <i class="ri-arrow-go-back-line me-1"></i>Revertir
-            </button>
-        `);
+        if (acciones.puede_solicitar_revertir) {
+            botones.push(`
+                <button class="btn btn-outline-danger btn-sm px-2" onclick='revertirCambio(${cambio.id})' title='${acciones.requiere_autorizacion_revertir ? 'Requiere código de administrador' : 'Revertir: deshace stock y cancela ticket pendiente'}'>
+                    <i class="ri-arrow-go-back-line me-1"></i>Revertir
+                </button>
+            `);
+        }
     }
 
     if (cambio.estado === 'EJECUTADO_DEVOL_PENDIENTE') {
@@ -4383,11 +4408,13 @@ function generarBotonesAccion(cambio) {
                 </a>
             `);
         }
-        botones.push(`
-            <button class="btn btn-outline-danger btn-sm px-2" onclick='revertirCambio(${cambio.id})' title='Revertir: deshace stock y cancela ticket pendiente'>
-                <i class="ri-arrow-go-back-line me-1"></i>Revertir
-            </button>
-        `);
+        if (acciones.puede_solicitar_revertir) {
+            botones.push(`
+                <button class="btn btn-outline-danger btn-sm px-2" onclick='revertirCambio(${cambio.id})' title='${acciones.requiere_autorizacion_revertir ? 'Requiere código de administrador' : 'Revertir: deshace stock y cancela ticket pendiente'}'>
+                    <i class="ri-arrow-go-back-line me-1"></i>Revertir
+                </button>
+            `);
+        }
     }
     
     if (cambio.estado === 'COMPLETADO') {
@@ -4786,7 +4813,7 @@ function buscarDocumentoParaCambio(event) {
                     console.log('✅ DEBUG - Mostrando botón SIGUIENTE');
                     $('#btn-siguiente').prop('disabled', false).removeClass('btn-outline-secondary').addClass('btn-primary');
                     $('#footer-hint').hide();
-                    $('#btn-continuar-inline').show().addClass('show-animated');
+                    $('#btn-continuar-inline').removeClass('show-animated').hide();
                     actualizarFloatingBar();
                     setTimeout(() => {
                         $('#btn-siguiente').addClass('show-animated');
@@ -4821,8 +4848,8 @@ function buscarDocumentoParaCambio(event) {
                                 </div>
                                 <div class="alert alert-warning py-2 mb-0">
                                     <i class="ri-shield-keyhole-line me-1"></i>
-                                    <strong>Se requerirá el Código de Autorización de un Administrador</strong>
-                                    (el de la barra superior) o su PIN de 6 dígitos para autorizar este cambio fuera de plazo al enviarlo.
+                                    <strong>Se requerirá el código dinámico de un Administrador</strong>
+                                    visible en la barra superior para autorizar este cambio fuera de plazo al enviarlo.
                                 </div>
                             `,
                             confirmButtonText: 'Continuar con autorización',
@@ -4830,11 +4857,15 @@ function buscarDocumentoParaCambio(event) {
                             showCancelButton: true,
                             cancelButtonText: 'Cancelar'
                         }).then((result) => {
-                            if (!result.isConfirmed) {
+                            if (result.isConfirmed) {
+                                siguientePaso();
+                            } else {
                                 ticketActual = null;
                                 resetearFormularioNuevoCambio();
                             }
                         });
+                    } else {
+                        setTimeout(() => siguientePaso(), 150);
                     }
                     
                     if (response.documento.fue_redirigido) {
@@ -5186,6 +5217,11 @@ function siguientePaso(event) {
         
         // Ir al paso 2
         pasoActual = 2;
+        $('#paso-buscar-ticket').hide();
+        $('#ctx-documento-numero').text('#' + (ticketActual.correlativo || ticketActual.numero_documento || '-'));
+        $('#ctx-documento-cliente').text(ticketActual.cliente_nombre || ticketActual.cliente || 'Cliente General');
+        $('#ctx-documento-fecha').text(ticketActual.fecha || '-');
+        $('#ctx-documento-plazo').text(ticketActual.dentro_del_plazo ? 'Dentro del plazo' : 'Fuera de plazo');
         $('#paso-seleccionar-productos').show();
         $('#btn-continuar-inline').removeClass('show-animated').hide();
         cargarProductosOriginales();
@@ -5275,6 +5311,7 @@ function pasoAnterior(event) {
         
         // Volver al paso 1
         pasoActual = 1;
+        $('#paso-buscar-ticket').show();
         $('#paso-seleccionar-productos').hide();
         $('#btn-siguiente').show().prop('disabled', !ticketActual)
             .removeClass('show-animated')
@@ -5300,7 +5337,7 @@ function pasoAnterior(event) {
         
         pasoActual = 2;
         $('#paso-resumen').hide();
-        $('#paso-buscar-ticket').show();
+        $('#paso-buscar-ticket').hide();
         $('#paso-seleccionar-productos').show();
         $('#btn-siguiente').show().prop('disabled', false)
             .html('Ver Resumen <i class="ri-arrow-right-circle-fill ms-1"></i>');
@@ -6662,8 +6699,8 @@ function solicitarAutorizacionSupervisor(datos, responseOriginal) {
     const diasFuera = responseOriginal.dias_fuera_de_plazo || responseOriginal.dias_transcurridos || '';
     // Si ya veníamos con un PIN, es un reintento por código inválido: mostrar el error
     // y limpiar el PIN previo para no reenviar uno inválido.
-    const esReintento = !!datos.supervisor_pin;
-    datos.supervisor_pin = '';
+    const esReintento = !!datos.codigo_autorizacion;
+    datos.codigo_autorizacion = '';
     const errorHtml = (esReintento && responseOriginal.error)
         ? `<div class="alert alert-danger py-2 mb-3"><i class="ri-error-warning-line me-1"></i>${responseOriginal.error}</div>`
         : '';
@@ -6682,15 +6719,15 @@ function solicitarAutorizacionSupervisor(datos, responseOriginal) {
                     </div>
                 </div>
                 <div class="mb-2 text-center">
-                    <label class="form-label fw-bold small d-block mb-2">Ingrese el Código de Autorización (el de la barra superior) o el PIN de 6 dígitos de un Administrador:</label>
+                    <label class="form-label fw-bold small d-block mb-2">Ingrese el código dinámico de 6 dígitos que un Administrador ve en la barra superior:</label>
                     <input type="password" id="swal-supervisor-pin" class="form-control text-center fw-bold"
                            inputmode="numeric" pattern="\\d{6}" maxlength="6" autocomplete="one-time-code"
                            placeholder="● ● ● ● ● ●"
                            style="letter-spacing: 0.6rem; font-size: 1.5rem; max-width: 220px; margin: 0 auto;">
                 </div>
                 <div class="small text-muted mt-3">
-                    <i class="ri-shield-quarter-line"></i> Cualquier Administrador puede leer su <strong>Código de Autorización</strong> en la barra superior (ícono escudo) y dictarlo.
-                    <br><i class="ri-information-line"></i> También sirve el PIN de 6 dígitos configurado en el perfil del Administrador.
+                    <i class="ri-shield-quarter-line"></i> Puede autorizar cualquier Administrador activo de la misma empresa, incluso desde otra sucursal.
+                    <br><i class="ri-information-line"></i> El código es de un solo uso y no corresponde al PIN de Mi perfil.
                     <br><i class="ri-shield-check-line"></i> La autorización queda registrada para auditoría.
                 </div>
             </div>
@@ -6716,14 +6753,14 @@ function solicitarAutorizacionSupervisor(datos, responseOriginal) {
         preConfirm: () => {
             const pin = (document.getElementById('swal-supervisor-pin').value || '').trim();
             if (!/^\d{6}$/.test(pin)) {
-                Swal.showValidationMessage('El PIN debe tener exactamente 6 dígitos numéricos');
+                Swal.showValidationMessage('El código debe tener exactamente 6 dígitos numéricos');
                 return false;
             }
             return { pin };
         }
     }).then((result) => {
         if (result.isConfirmed && result.value) {
-            datos.supervisor_pin = result.value.pin;
+            datos.codigo_autorizacion = result.value.pin;
             enviarSolicitudCambio(datos);
         }
     });
@@ -7042,6 +7079,14 @@ function mostrarDetalleCambio(data) {
     // ===== BOTONES DE ACCIÓN =====
     const accionesEl = $('#acciones-cambio');
     accionesEl.empty();
+    const acciones = cambio.acciones_permitidas || {};
+    if (acciones.permiso_temporal_hasta) {
+        accionesEl.append(`
+            <span class="badge bg-warning text-dark me-2">
+                <i class="ri-timer-line"></i> Autorizado hasta ${acciones.permiso_temporal_hasta}
+            </span>
+        `);
+    }
     
     if (cambio.estado === 'SOLICITADO') {
         const tipoOp = cambio.tipo_operacion || '';
@@ -7049,9 +7094,9 @@ function mostrarDetalleCambio(data) {
             <button class="btn btn-sm btn-success me-2" onclick='aprobarCambioConDatos(${cambio.id}, "${tipoOp}", ${montoDevuelto}, ${montoNuevo})'>
                 <i class="ri-check-double-line"></i> Aprobar y Ejecutar
             </button>
-            <button class="btn btn-sm btn-danger" onclick='cancelarCambio(${cambio.id})'>
-                <i class="ri-delete-bin-line"></i> Eliminar
-            </button>
+            ${acciones.puede_solicitar_cancelar ? `<button class="btn btn-sm btn-danger" onclick='cancelarCambio(${cambio.id})'>
+                <i class="ri-close-line"></i> Cancelar
+            </button>` : ''}
         `);
     }
     
@@ -7061,9 +7106,9 @@ function mostrarDetalleCambio(data) {
             <button class="btn btn-sm btn-primary me-2" onclick='aprobarCambioConDatos(${cambio.id}, "${tipoOp}", ${montoDevuelto}, ${montoNuevo})'>
                 <i class="ri-play-circle-line"></i> Ejecutar
             </button>
-            <button class="btn btn-sm btn-danger" onclick='cancelarCambio(${cambio.id})'>
+            ${acciones.puede_solicitar_cancelar ? `<button class="btn btn-sm btn-danger" onclick='cancelarCambio(${cambio.id})'>
                 <i class="ri-delete-bin-line"></i> Cancelar
-            </button>
+            </button>` : ''}
         `);
     }
 
@@ -7075,9 +7120,9 @@ function mostrarDetalleCambio(data) {
                     <strong>Cobro pendiente</strong> - Ticket: #${cambio.ticket_nuevo?.correlativo || '-'}
                 </small>
                 ${cambio.ticket_nuevo ? `<a href="/app/ventas/?ticket=${cambio.ticket_nuevo.correlativo}" class="btn btn-sm btn-warning ms-auto"><i class="ri-money-dollar-circle-line me-1"></i>Cobrar</a>` : ''}
-                <button class="btn btn-sm btn-outline-danger" onclick='revertirCambio(${cambio.id})'>
+                ${acciones.puede_solicitar_revertir ? `<button class="btn btn-sm btn-outline-danger" onclick='revertirCambio(${cambio.id})'>
                     <i class="ri-arrow-go-back-line"></i> Revertir
-                </button>
+                </button>` : ''}
             </div>
         `);
     }
@@ -7090,9 +7135,9 @@ function mostrarDetalleCambio(data) {
                     <strong>Devolución pendiente</strong> - Ticket: #${cambio.ticket_nuevo?.correlativo || '-'}
                 </small>
                 ${cambio.ticket_nuevo ? `<a href="/app/ventas/?ticket=${cambio.ticket_nuevo.correlativo}" class="btn btn-sm btn-info ms-auto"><i class="ri-refund-line me-1"></i>Devolver</a>` : ''}
-                <button class="btn btn-sm btn-outline-danger" onclick='revertirCambio(${cambio.id})'>
+                ${acciones.puede_solicitar_revertir ? `<button class="btn btn-sm btn-outline-danger" onclick='revertirCambio(${cambio.id})'>
                     <i class="ri-arrow-go-back-line"></i> Revertir
-                </button>
+                </button>` : ''}
             </div>
         `);
     }
@@ -7514,83 +7559,21 @@ function validarCodigoVendedorAprobacion() {
     });
 }
 
+function actualizarCodigoAutorizacionAprobacion(input) {
+    input.value = input.value.replace(/\D/g, '').slice(0, 6);
+    autorizacionValidada = /^\d{6}$/.test(input.value);
+    $('#info-autorizacion-validada').toggle(autorizacionValidada);
+    $('#info-autorizacion-error').hide();
+    verificarValidacionesCompletas();
+}
+
 function validarCodigoAutorizacionAprobacion() {
-    const codigo = $('#input-codigo-autorizacion-aprobacion').val().trim();
-    
-    if (!codigo) {
-        mostrarError('Ingrese el código de autorización');
-        return;
+    const input = document.getElementById('input-codigo-autorizacion-aprobacion');
+    actualizarCodigoAutorizacionAprobacion(input);
+    if (!autorizacionValidada) {
+        mostrarError('Ingrese los 6 dígitos del código de la barra superior');
+        input.focus();
     }
-    
-    if (codigo.length !== 6 || !/^\d{6}$/.test(codigo)) {
-        mostrarError('El código debe ser de 6 dígitos numéricos');
-        return;
-    }
-    
-    // Mostrar loading
-    Swal.fire({
-        title: 'Validando código de autorización...',
-        html: '<i class="ri-shield-keyhole-line fs-1 text-warning"></i><br>Verificando con el sistema...',
-        allowOutsideClick: false,
-        didOpen: () => {
-            Swal.showLoading();
-        }
-    });
-    
-    $.ajax({
-        url: '/app/ventas/api/codigo-autorizacion/validar/',
-        method: 'POST',
-        data: JSON.stringify({
-            codigo: codigo,
-            tipo_operacion: 'APROBACION_CAMBIO',
-            cambio_id: cambioActual?.id || null
-        }),
-        contentType: 'application/json',
-        headers: {
-            'X-CSRFToken': getCookie('csrftoken')
-        },
-        success: function(response) {
-            Swal.close();
-            
-            if (response.success) {
-                // Código de autorización válido
-                $('#autorizacion-valido-hasta').text(response.codigo.valido_hasta);
-                $('#info-autorizacion-validada').show();
-                $('#info-autorizacion-error').hide();
-                autorizacionValidada = true;
-                
-                // Verificar si ambos están validados
-                verificarValidacionesCompletas();
-                
-                Swal.fire({
-                    icon: 'success',
-                    title: '✓ Autorización Aprobada',
-                    html: `<p class="mb-0">${response.mensaje}</p><p class="small text-muted mt-2">Código válido hasta: ${response.codigo.valido_hasta}</p>`,
-                    timer: 2000,
-                    showConfirmButton: false
-                });
-            } else {
-                // Código inválido
-                $('#autorizacion-error-mensaje').text(response.error || 'Código de autorización inválido');
-                $('#info-autorizacion-error').show();
-                $('#info-autorizacion-validada').hide();
-                autorizacionValidada = false;
-                $('#btn-confirmar-aprobacion').prop('disabled', true);
-                
-                mostrarError(response.error || 'Código de autorización inválido');
-            }
-        },
-        error: function(xhr) {
-            Swal.close();
-            const errorMsg = xhr.responseJSON?.error || 'Error al validar código de autorización';
-            $('#autorizacion-error-mensaje').text(errorMsg);
-            $('#info-autorizacion-error').show();
-            $('#info-autorizacion-validada').hide();
-            autorizacionValidada = false;
-            $('#btn-confirmar-aprobacion').prop('disabled', true);
-            mostrarError(errorMsg);
-        }
-    });
 }
 
 function verificarValidacionesCompletas() {
@@ -7598,55 +7581,100 @@ function verificarValidacionesCompletas() {
     if (vendedorValidado && autorizacionValidada) {
         $('#btn-confirmar-aprobacion').prop('disabled', false);
         
-        // Opcional: mostrar mensaje de éxito
-        Swal.fire({
-            icon: 'success',
-            title: '✓ Validaciones Completas',
-            text: 'Todas las validaciones han sido completadas. Puede proceder con la aprobación.',
-            timer: 2000,
-            showConfirmButton: false,
-            toast: true,
-            position: 'top-end'
-        });
     } else {
         $('#btn-confirmar-aprobacion').prop('disabled', true);
     }
 }
 
 function cancelarCambio(cambioId) {
-    Swal.fire({
-        title: '¿Eliminar este cambio?',
-        html: `
-            <p>Esta acción <strong>eliminará</strong> la solicitud de cambio/devolución.</p>
-            <hr>
-            <div class="alert alert-danger">
-                <i class="ri-alert-line"></i> <strong>¡Atención!</strong> El cambio se eliminará del sistema y podrás crear uno nuevo si es necesario.
+    const cambio = cambiosData.find(c => Number(c.id) === Number(cambioId))
+        || (cambioActual && Number(cambioActual.id) === Number(cambioId) ? cambioActual : {});
+    const acciones = cambio.acciones_permitidas || {};
+    const requiereCodigo = !!acciones.requiere_autorizacion_cancelar;
+    const autorizacionHtml = requiereCodigo ? `
+        <div class="alert alert-warning text-start py-2 small">
+            <i class="ri-shield-keyhole-line me-1"></i>
+            Tu perfil necesita autorización temporal de un Administrador.
+        </div>
+        <div class="row g-2 text-start">
+            <div class="col-7">
+                <label class="form-label small fw-semibold">Código de la barra superior</label>
+                <input type="password" id="codigo-admin-cancelar" class="form-control text-center fw-bold"
+                       inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 dígitos">
             </div>
-            <p class="small text-muted">Esta acción no se puede deshacer.</p>
+            <div class="col-5">
+                <label class="form-label small fw-semibold">Vigencia</label>
+                <select id="minutos-cancelar" class="form-select">
+                    <option value="15">15 minutos</option>
+                    <option value="30" selected>30 minutos</option>
+                    <option value="60">1 hora</option>
+                    <option value="480">8 horas</option>
+                </select>
+            </div>
+        </div>` : '';
+
+    Swal.fire({
+        title: 'Cancelar solicitud de cambio',
+        html: `
+            <div class="alert alert-info text-start py-2 small">
+                La solicitud quedará en estado <strong>Cancelado</strong>. No se eliminará su historial.
+            </div>
+            <div class="text-start mb-3">
+                <label class="form-label small fw-semibold">Motivo de cancelación</label>
+                <textarea id="motivo-cancelacion" class="form-control" rows="2" placeholder="Indica por qué se cancela la solicitud"></textarea>
+            </div>
+            ${autorizacionHtml}
         `,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#dc3545',
         cancelButtonColor: '#6c757d',
-        confirmButtonText: '<i class="ri-delete-bin-line"></i> Sí, eliminar',
-        cancelButtonText: 'No, mantener'
+        confirmButtonText: '<i class="ri-close-circle-line"></i> Cancelar solicitud',
+        cancelButtonText: 'Volver',
+        focusCancel: true,
+        didOpen: () => {
+            const codigo = document.getElementById('codigo-admin-cancelar');
+            if (codigo) codigo.addEventListener('input', () => {
+                codigo.value = codigo.value.replace(/\D/g, '').slice(0, 6);
+            });
+        },
+        preConfirm: () => {
+            const motivo = (document.getElementById('motivo-cancelacion')?.value || '').trim();
+            const codigo = (document.getElementById('codigo-admin-cancelar')?.value || '').trim();
+            if (motivo.length < 5) {
+                Swal.showValidationMessage('Escribe un motivo de al menos 5 caracteres');
+                return false;
+            }
+            if (requiereCodigo && !/^\d{6}$/.test(codigo)) {
+                Swal.showValidationMessage('Ingresa los 6 dígitos del código de Administrador');
+                return false;
+            }
+            return {
+                motivo,
+                codigo_autorizacion: codigo,
+                minutos_autorizacion: Number(document.getElementById('minutos-cancelar')?.value || 30),
+            };
+        }
     }).then((result) => {
-        if (result.isConfirmed) {
+        if (result.isConfirmed && result.value) {
             mostrarLoading('Cancelando cambio...');
             
             $.ajax({
                 url: '/app/ventas/api/cancelar-cambio-devolucion/',
                 method: 'POST',
-                data: JSON.stringify({ cambio_id: cambioId }),
+                data: JSON.stringify({ cambio_id: cambioId, ...result.value }),
                 contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
                 success: function(response) {
                     ocultarLoading();
                     
                     if (response.success) {
                         Swal.fire({
                             icon: 'success',
-                            title: '¡Cambio Eliminado!',
-                            text: response.message || 'El cambio ha sido eliminado correctamente',
+                            title: 'Solicitud cancelada',
+                            text: response.permiso_temporal_hasta
+                                ? `${response.message}. Autorización temporal vigente hasta ${response.permiso_temporal_hasta}.`
+                                : response.message,
                             timer: 2000,
                             showConfirmButton: false
                         });
@@ -7663,10 +7691,11 @@ function cancelarCambio(cambioId) {
                 },
                 error: function(xhr) {
                     ocultarLoading();
+                    const mensaje = xhr.responseJSON?.error || 'No se pudo conectar con el servidor';
                     Swal.fire({
                         icon: 'error',
-                        title: 'Error de conexión',
-                        text: xhr.responseJSON?.error || 'No se pudo conectar con el servidor',
+                        title: 'No fue posible cancelar',
+                        text: mensaje,
                         confirmButtonText: 'Entendido'
                     });
                 }
@@ -7678,51 +7707,25 @@ function cancelarCambio(cambioId) {
 function confirmarAprobacionYGenerarTicket() {
     const observaciones = $('#textarea-observaciones-aprobacion').val();
     const vendedorId = $('#vendedor-id-validado').val();
+    const codigoAutorizacion = $('#input-codigo-autorizacion-aprobacion').val().trim();
     
     if (!vendedorId) {
         mostrarError('Debe validar un vendedor antes de aprobar');
         return;
     }
-
-    const diferencia = (cambioActual.monto_nuevo || 0) - (cambioActual.monto_original || 0);
-
-    let resumenDiferencia = '';
-    if (diferencia > 0) {
-        resumenDiferencia = `<div class="alert alert-warning text-start small py-2">
-            <i class="ri-money-dollar-circle-line me-1"></i>
-            <strong>Diferencia de $${formatearNumero(diferencia)}</strong> — se cobrará en el POS Dashboard
-        </div>`;
-    } else if (diferencia < 0) {
-        resumenDiferencia = `<div class="alert alert-info text-start small py-2">
-            <i class="ri-refund-2-line me-1"></i>
-            <strong>Devolver $${formatearNumero(Math.abs(diferencia))}</strong> al cliente
-        </div>`;
+    if (!/^\d{6}$/.test(codigoAutorizacion)) {
+        mostrarError('Ingrese los 6 dígitos del código de autorización de la barra superior');
+        $('#input-codigo-autorizacion-aprobacion').focus();
+        return;
     }
-    
-    Swal.fire({
-        title: 'Aprobar y Ejecutar Cambio',
-        html: `
-            <p>Se ejecutarán las siguientes acciones:</p>
-            <hr>
-            <div class="alert alert-success text-start small py-2">
-                <strong>1.</strong> Aprobar solicitud + Generar Ticket + Actualizar Inventario
-            </div>
-            ${resumenDiferencia}
-        `,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#28a745',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: '<i class="ri-check-line"></i> Confirmar',
-        cancelButtonText: 'Cancelar'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            mostrarLoading('Aprobando y generando ticket...');
+
+    mostrarLoading('Autorizando y ejecutando cambio...');
             
             const datos = {
                 cambio_id: cambioActual.id,
                 vendedor_id: vendedorId,
                 observaciones: observaciones,
+                codigo_autorizacion: codigoAutorizacion,
                 generar_ticket: true
             };
             
@@ -7789,16 +7792,21 @@ function confirmarAprobacionYGenerarTicket() {
                 },
                 error: function(xhr) {
                     ocultarLoading();
+                    const mensaje = xhr.responseJSON?.error || 'No se pudo conectar con el servidor';
+                    autorizacionValidada = false;
+                    $('#input-codigo-autorizacion-aprobacion').val('').focus();
+                    $('#info-autorizacion-validada').hide();
+                    $('#autorizacion-error-mensaje').text(mensaje);
+                    $('#info-autorizacion-error').show();
+                    verificarValidacionesCompletas();
                     Swal.fire({
                         icon: 'error',
-                        title: 'Error de conexión',
-                        text: xhr.responseJSON?.error || 'No se pudo conectar con el servidor',
+                        title: 'No fue posible autorizar',
+                        text: mensaje,
                         confirmButtonText: 'Entendido'
                     });
                 }
             });
-        }
-    });
 }
 
 function confirmarAprobacion() {
@@ -7884,6 +7892,32 @@ function ejecutarCambio(cambioId) {
 }
 
 function revertirCambio(cambioId) {
+    const cambio = cambiosData.find(c => Number(c.id) === Number(cambioId))
+        || (cambioActual && Number(cambioActual.id) === Number(cambioId) ? cambioActual : {});
+    const acciones = cambio.acciones_permitidas || {};
+    const requiereCodigo = !!acciones.requiere_autorizacion_revertir;
+    const autorizacionHtml = requiereCodigo ? `
+        <div class="alert alert-warning text-start py-2 small">
+            <i class="ri-shield-keyhole-line me-1"></i>
+            Tu perfil necesita autorización temporal de un Administrador.
+        </div>
+        <div class="row g-2 text-start">
+            <div class="col-7">
+                <label class="form-label small fw-semibold">Código de la barra superior</label>
+                <input type="password" id="codigo-admin-reversion" class="form-control text-center fw-bold"
+                       inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 dígitos">
+            </div>
+            <div class="col-5">
+                <label class="form-label small fw-semibold">Vigencia</label>
+                <select id="minutos-reversion" class="form-select">
+                    <option value="15">15 minutos</option>
+                    <option value="30" selected>30 minutos</option>
+                    <option value="60">1 hora</option>
+                    <option value="480">8 horas</option>
+                </select>
+            </div>
+        </div>` : '';
+
     Swal.fire({
         title: 'Revertir Cambio/Devolución',
         html: `
@@ -7898,9 +7932,10 @@ function revertirCambio(cambioId) {
                 </ul>
             </div>
             <div class="mb-3 text-start">
-                <label class="form-label small fw-semibold">Motivo de la reversión (opcional)</label>
+                <label class="form-label small fw-semibold">Motivo de la reversión (obligatorio)</label>
                 <textarea id="motivo-reversion" class="form-control" rows="2" placeholder="Ej: Cliente no quiso pagar la diferencia"></textarea>
             </div>
+            ${autorizacionHtml}
         `,
         icon: 'warning',
         showCancelButton: true,
@@ -7908,16 +7943,39 @@ function revertirCambio(cambioId) {
         cancelButtonColor: '#6c757d',
         confirmButtonText: '<i class="ri-arrow-go-back-line"></i> Sí, revertir',
         cancelButtonText: 'Cancelar',
-        focusCancel: true
+        focusCancel: true,
+        didOpen: () => {
+            const codigo = document.getElementById('codigo-admin-reversion');
+            if (codigo) codigo.addEventListener('input', () => {
+                codigo.value = codigo.value.replace(/\D/g, '').slice(0, 6);
+            });
+        },
+        preConfirm: () => {
+            const motivo = (document.getElementById('motivo-reversion')?.value || '').trim();
+            const codigo = (document.getElementById('codigo-admin-reversion')?.value || '').trim();
+            if (motivo.length < 5) {
+                Swal.showValidationMessage('Escribe un motivo de al menos 5 caracteres');
+                return false;
+            }
+            if (requiereCodigo && !/^\d{6}$/.test(codigo)) {
+                Swal.showValidationMessage('Ingresa los 6 dígitos del código de Administrador');
+                return false;
+            }
+            return {
+                motivo,
+                codigo_autorizacion: codigo,
+                minutos_autorizacion: Number(document.getElementById('minutos-reversion')?.value || 30),
+            };
+        }
     }).then((result) => {
-        if (result.isConfirmed) {
+        if (result.isConfirmed && result.value) {
             mostrarLoading('Revirtiendo cambio...');
             $.ajax({
                 url: '/app/ventas/api/revertir-cambio-devolucion/',
                 method: 'POST',
                 data: JSON.stringify({
                     cambio_id: cambioId,
-                    motivo: document.getElementById('motivo-reversion')?.value || ''
+                    ...result.value
                 }),
                 contentType: 'application/json',
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
@@ -7935,9 +7993,9 @@ function revertirCambio(cambioId) {
                         mostrarError(response.error);
                     }
                 },
-                error: function() {
+                error: function(xhr) {
                     ocultarLoading();
-                    mostrarError('Error de conexión al revertir');
+                    mostrarError(xhr.responseJSON?.error || 'Error de conexión al revertir');
                 }
             });
         }

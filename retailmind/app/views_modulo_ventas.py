@@ -68,12 +68,268 @@ from .models import (
     CambioDevolucion, CambioDevolucionDetalle, PagoCambioDevolucion, HistorialCambioDevolucion,
     TIPO_OPERACION_CAMBIO_CHOICES, ESTADO_CAMBIO_CHOICES, MOTIVO_CAMBIO_CHOICES, CONDICION_PRODUCTO_CHOICES,
     METODO_DEVOLUCION_NC_CHOICES,
+    CodigoAutorizacionDinamico, RegistroAutorizacion, PermisoTemporalCambio,
+    PermisoRol,
 )
 
 
 # ========== GESTIÓN DE VENDEDORES ==========
 
 logger = logging.getLogger('app')
+
+
+ACCIONES_TEMPORALES_CAMBIO = {
+    PermisoTemporalCambio.ACCION_CANCELAR,
+    PermisoTemporalCambio.ACCION_REVERTIR,
+}
+MINUTOS_PERMISO_TEMPORAL_VALIDOS = {15, 30, 60, 480}
+
+
+def _usuario_es_administrador_activo(usuario):
+    return bool(
+        usuario
+        and usuario.is_authenticated
+        and usuario.is_active
+        and getattr(usuario, 'es_activo', True)
+        and getattr(usuario, 'rol', '') == 'administrador'
+    )
+
+
+def _usuario_tiene_permiso_base_cambios(usuario, sucursal_id):
+    if _usuario_es_administrador_activo(usuario):
+        return True
+    if (
+        usuario
+        and usuario.is_authenticated
+        and usuario.is_active
+        and getattr(usuario, 'es_activo', True)
+        and getattr(usuario, 'rol', '') == 'jefe_local'
+    ):
+        return True
+    return PermisoRol.tiene_permiso(
+        usuario,
+        'cambios_devoluciones',
+        'puede_eliminar',
+        sucursal_id=sucursal_id,
+    )
+
+
+def _permiso_temporal_vigente(usuario, cambio, accion):
+    return PermisoTemporalCambio.vigente_para(
+        usuario=usuario,
+        empresa_id=cambio.sucursal.empresa_id,
+        sucursal_id=cambio.sucursal_id,
+        accion=accion,
+    )
+
+
+def _acciones_cambio_para_usuario(usuario, cambio):
+    """Fuente de verdad para visibilidad y habilitación de acciones destructivas."""
+    es_admin = _usuario_es_administrador_activo(usuario)
+    tiene_base = _usuario_tiene_permiso_base_cambios(usuario, cambio.sucursal_id)
+    permiso_cancelar = None if es_admin else _permiso_temporal_vigente(
+        usuario, cambio, PermisoTemporalCambio.ACCION_CANCELAR
+    )
+    permiso_revertir = None if es_admin else _permiso_temporal_vigente(
+        usuario, cambio, PermisoTemporalCambio.ACCION_REVERTIR
+    )
+
+    estado_cancelable = cambio.estado in ('SOLICITADO', 'APROBADO') and not cambio.ticket_nuevo_id
+    ticket_pendiente = bool(cambio.ticket_nuevo_id and cambio.ticket_nuevo.estado == 'PENDIENTE')
+    estado_revertible = cambio.estado in (
+        'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE'
+    )
+    integridad_reversion = not cambio.diferencia_condonada and not cambio.nc_generada
+
+    cancelar_autorizado = estado_cancelable and tiene_base and (es_admin or bool(permiso_cancelar))
+    revertir_autorizado = (
+        estado_revertible and ticket_pendiente and integridad_reversion
+        and tiene_base and (es_admin or bool(permiso_revertir))
+    )
+
+    vigencias = [
+        permiso.vigente_hasta for permiso in (permiso_cancelar, permiso_revertir) if permiso
+    ]
+    return {
+        'cancelar': cancelar_autorizado,
+        'revertir': revertir_autorizado,
+        'condonar': es_admin and cambio.estado == 'EJECUTADO_COBRO_PENDIENTE',
+        'puede_solicitar_cancelar': estado_cancelable and tiene_base,
+        'puede_solicitar_revertir': (
+            estado_revertible and ticket_pendiente and integridad_reversion and tiene_base
+        ),
+        'requiere_autorizacion_cancelar': (
+            estado_cancelable and tiene_base and not cancelar_autorizado
+        ),
+        'requiere_autorizacion_revertir': (
+            estado_revertible and ticket_pendiente and integridad_reversion
+            and tiene_base and not revertir_autorizado
+        ),
+        'permiso_temporal_hasta': (
+            timezone.localtime(max(vigencias)).strftime('%d/%m/%Y %H:%M') if vigencias else None
+        ),
+    }
+
+
+def _registrar_intento_permiso_temporal(
+    request, cambio, accion, exitoso, descripcion, autorizador=None,
+    codigo_obj=None, sucursal_autorizador=None, minutos=None,
+):
+    return RegistroAutorizacion.objects.create(
+        codigo_usado=codigo_obj if exitoso else None,
+        usuario_solicitante=request.user,
+        usuario_autorizador=autorizador if exitoso else None,
+        tipo_operacion='OTRO',
+        descripcion=descripcion,
+        ip_origen=request.META.get('REMOTE_ADDR'),
+        exitoso=exitoso,
+        cambio_devolucion=cambio,
+        sucursal_solicitante=cambio.sucursal,
+        sucursal_autorizador=sucursal_autorizador if exitoso else None,
+        es_cross_branch=bool(
+            exitoso and sucursal_autorizador
+            and sucursal_autorizador.id != cambio.sucursal_id
+        ),
+        requiere_revision=bool(
+            exitoso and sucursal_autorizador
+            and sucursal_autorizador.id != cambio.sucursal_id
+        ),
+        datos_adicionales={
+            'accion': accion,
+            'minutos': minutos,
+            'cambio_id': cambio.id,
+        },
+    )
+
+
+def _otorgar_permiso_temporal_desde_codigo(request, cambio, accion, codigo, motivo, minutos):
+    if accion not in ACCIONES_TEMPORALES_CAMBIO:
+        return None, JsonResponse({
+            'success': False, 'code': 'INVALID_ACTION', 'error': 'Acción temporal no permitida'
+        }, status=400)
+
+    if not _usuario_tiene_permiso_base_cambios(request.user, cambio.sucursal_id):
+        return None, JsonResponse({
+            'success': False,
+            'code': 'PERMISSION_DENIED',
+            'error': 'Su perfil no tiene permiso para solicitar esta acción',
+        }, status=403)
+
+    try:
+        minutos = int(minutos or 30)
+    except (TypeError, ValueError):
+        minutos = 30
+    if minutos not in MINUTOS_PERMISO_TEMPORAL_VALIDOS:
+        return None, JsonResponse({
+            'success': False,
+            'code': 'INVALID_DURATION',
+            'error': 'Duración de autorización no permitida',
+        }, status=400)
+
+    hace_15_min = timezone.now() - timezone.timedelta(minutes=15)
+    intentos_fallidos = RegistroAutorizacion.objects.filter(
+        usuario_solicitante=request.user,
+        tipo_operacion='OTRO',
+        exitoso=False,
+        fecha_hora__gte=hace_15_min,
+        descripcion__icontains='permiso temporal de cambio',
+    ).count()
+    if intentos_fallidos >= 5:
+        return None, JsonResponse({
+            'success': False,
+            'code': 'AUTH_LOCKED',
+            'error': 'Demasiados intentos fallidos. Intente nuevamente en 15 minutos.',
+        }, status=429)
+
+    es_valido, mensaje, codigo_obj = CodigoAutorizacionDinamico.validar_codigo(codigo)
+    if not es_valido or not codigo_obj:
+        _registrar_intento_permiso_temporal(
+            request, cambio, accion, False,
+            f'Intento fallido de permiso temporal de cambio: {mensaje}',
+            minutos=minutos,
+        )
+        return None, JsonResponse({
+            'success': False,
+            'code': 'INVALID_AUTH_CODE',
+            'error': mensaje,
+        }, status=403)
+
+    codigo_obj = CodigoAutorizacionDinamico.objects.select_for_update().select_related(
+        'generado_por'
+    ).get(id=codigo_obj.id)
+    if not codigo_obj.es_valido():
+        _registrar_intento_permiso_temporal(
+            request, cambio, accion, False,
+            'Intento fallido de permiso temporal de cambio: código vencido o utilizado',
+            minutos=minutos,
+        )
+        return None, JsonResponse({
+            'success': False,
+            'code': 'INVALID_AUTH_CODE',
+            'error': 'Código de autorización vencido o ya utilizado',
+        }, status=403)
+
+    administrador = codigo_obj.generado_por
+    if not _usuario_es_administrador_activo(administrador):
+        _registrar_intento_permiso_temporal(
+            request, cambio, accion, False,
+            'Intento fallido de permiso temporal de cambio: autorizador no es administrador activo',
+            minutos=minutos,
+        )
+        return None, JsonResponse({
+            'success': False,
+            'code': 'INVALID_AUTHORIZER',
+            'error': 'El código no pertenece a un administrador activo',
+        }, status=403)
+
+    asignacion_admin = EmpresaUser.objects.filter(
+        user=administrador,
+        empresa_id=cambio.sucursal.empresa_id,
+        status=True,
+    ).select_related('sucursal').order_by('-active').first()
+    if not asignacion_admin:
+        _registrar_intento_permiso_temporal(
+            request, cambio, accion, False,
+            'Intento fallido de permiso temporal de cambio: administrador de otra empresa',
+            minutos=minutos,
+        )
+        return None, JsonResponse({
+            'success': False,
+            'code': 'CROSS_COMPANY_AUTH',
+            'error': 'El administrador debe pertenecer a la misma empresa',
+        }, status=403)
+
+    ahora = timezone.now()
+    vigente_hasta = ahora + timezone.timedelta(minutes=minutos)
+    codigo_obj.usado = True
+    codigo_obj.save(update_fields=['usado'])
+    registro = _registrar_intento_permiso_temporal(
+        request,
+        cambio,
+        accion,
+        True,
+        f'Permiso temporal de cambio otorgado por {administrador.get_full_name() or administrador.username}',
+        autorizador=administrador,
+        codigo_obj=codigo_obj,
+        sucursal_autorizador=asignacion_admin.sucursal,
+        minutos=minutos,
+    )
+    permiso = PermisoTemporalCambio.objects.create(
+        usuario=request.user,
+        empresa_id=cambio.sucursal.empresa_id,
+        sucursal=cambio.sucursal,
+        accion=accion,
+        otorgado_por=administrador,
+        codigo_autorizacion=codigo_obj,
+        motivo=motivo,
+        vigente_desde=ahora,
+        vigente_hasta=vigente_hasta,
+    )
+    logger.info(
+        'Permiso temporal cambio otorgado usuario=%s accion=%s cambio=%s autorizador=%s registro=%s hasta=%s',
+        request.user.username, accion, cambio.id, administrador.username, registro.id, vigente_hasta.isoformat(),
+    )
+    return permiso, None
 
 @login_required
 def gestion_vendedores(request):
@@ -13503,6 +13759,7 @@ def listar_cambios_devoluciones(request):
 
         cambios_data = []
         for cambio in cambios_page:
+            acciones_permitidas = _acciones_cambio_para_usuario(request.user, cambio)
             detalles = list(cambio.detalles.all())
             total_productos_devueltos = sum(1 for d in detalles if d.producto_original_id)
             total_productos_nuevos = sum(1 for d in detalles if d.producto_nuevo_id)
@@ -13594,6 +13851,7 @@ def listar_cambios_devoluciones(request):
                 'metodo_devolucion': cambio.metodo_devolucion,
                 'metodo_devolucion_display': cambio.get_metodo_devolucion_display() if cambio.metodo_devolucion != 'SIN_NC' else '',
                 'nota_credito_numero': cambio.nota_credito.numero_documento if cambio.nota_credito_id else None,
+                'acciones_permitidas': acciones_permitidas,
             })
 
         return JsonResponse({
@@ -13816,25 +14074,23 @@ def crear_cambio_devolucion(request):
         fecha_limite = fecha_base_plazo + timedelta(days=30)
         fuera_de_plazo = timezone.localdate() > fecha_limite
         
-        # Permitir cambios fuera de plazo SOLO con PIN de Administrador
-        supervisor_pin = str(data.get('supervisor_pin', '') or '').strip()
-        # Retrocompat: aceptar usuario+contraseña de clientes/integraciones antiguas
-        supervisor_username = data.get('supervisor_username', '').strip()
-        supervisor_password = data.get('supervisor_password', '')
-        if not supervisor_password and data.get('codigo_autorizacion_supervisor'):
-            supervisor_password = data.get('codigo_autorizacion_supervisor')
-
+        # Los cambios fuera de plazo usan exclusivamente el código dinámico de la navbar.
+        codigo_autorizacion = str(
+            data.get('codigo_autorizacion') or data.get('supervisor_pin') or ''
+        ).strip()
         supervisor_autorizo = False
         supervisor = None
         dias_fuera = 0
-        codigo_dinamico_obj = None  # Código de Autorización dinámico (navbar) usado, si aplica
+        codigo_dinamico_obj = None
+        sucursal_supervisor = None
 
         if fuera_de_plazo:
             dias_fuera = (timezone.localdate() - fecha_limite).days
 
-            if not supervisor_pin and not supervisor_password:
+            if not codigo_autorizacion:
                 return JsonResponse({
                     'success': False,
+                    'code': 'AUTH_CODE_REQUIRED',
                     'error': f'El plazo para cambios venció el {fecha_limite.strftime("%d/%m/%Y")}',
                     'requiere_autorizacion': True,
                     'fecha_limite': fecha_limite.strftime('%d/%m/%Y'),
@@ -13843,43 +14099,30 @@ def crear_cambio_devolucion(request):
                     'dias_fuera_de_plazo': dias_fuera,
                 })
 
-            # 1) Vía preferida: PIN fijo de Administrador (configurado en su perfil)
-            if supervisor_pin:
-                from users.models import Usuario as UsuarioModel
-                supervisor = UsuarioModel.buscar_admin_por_pin(supervisor_pin)
-
-            # 1b) Código de Autorización dinámico del navbar (cualquier admin lo dicta).
-            #     Mismo formato de 6 dígitos, así que reutilizamos el campo supervisor_pin.
-            if not supervisor and supervisor_pin:
-                from .models import CodigoAutorizacionDinamico
-                es_valido_cod, _msg_cod, codigo_dinamico_obj = \
-                    CodigoAutorizacionDinamico.validar_codigo(supervisor_pin)
-                if es_valido_cod and codigo_dinamico_obj:
-                    supervisor = codigo_dinamico_obj.generado_por
-                else:
-                    codigo_dinamico_obj = None
-
-            # 2) Retrocompat: usuario + contraseña
-            if not supervisor and supervisor_password and supervisor_username:
-                from django.contrib.auth import authenticate
-                supervisor = authenticate(
-                    username=supervisor_username, password=supervisor_password
-                )
-                if supervisor:
-                    rol = getattr(supervisor, 'rol', '')
-                    tiene_rol = rol in ['administrador', 'administracion', 'jefe_local']
-                    tiene_grupo = supervisor.groups.filter(
-                        name__in=['Supervisor', 'Administrador', 'Encargado', 'Gerente']
-                    ).exists()
-                    if not tiene_rol and not tiene_grupo:
-                        supervisor = None
-
-            if not supervisor:
+            es_valido_cod, mensaje_codigo, codigo_dinamico_obj = \
+                CodigoAutorizacionDinamico.validar_codigo(codigo_autorizacion)
+            supervisor = codigo_dinamico_obj.generado_por if codigo_dinamico_obj else None
+            if not es_valido_cod or not _usuario_es_administrador_activo(supervisor):
                 return JsonResponse({
                     'success': False,
-                    'error': 'Código inválido o vencido. Ingrese el Código de Autorización vigente de la barra superior, o el PIN de 6 dígitos de un administrador.',
+                    'code': 'INVALID_AUTH_CODE',
+                    'error': mensaje_codigo if not es_valido_cod else 'El código no pertenece a un administrador activo',
                     'requiere_autorizacion': True,
-                })
+                }, status=403)
+
+            asignacion_supervisor = EmpresaUser.objects.filter(
+                user=supervisor,
+                empresa_id=sucursal.empresa_id,
+                status=True,
+            ).select_related('sucursal').order_by('-active').first()
+            if not asignacion_supervisor:
+                return JsonResponse({
+                    'success': False,
+                    'code': 'CROSS_COMPANY_AUTH',
+                    'error': 'El administrador debe pertenecer a la misma empresa',
+                    'requiere_autorizacion': True,
+                }, status=403)
+            sucursal_supervisor = asignacion_supervisor.sucursal
 
             supervisor_autorizo = True
         
@@ -13929,6 +14172,18 @@ def crear_cambio_devolucion(request):
                 })
 
         with transaction.atomic():
+            if codigo_dinamico_obj:
+                codigo_dinamico_obj = CodigoAutorizacionDinamico.objects.select_for_update().get(
+                    id=codigo_dinamico_obj.id
+                )
+                if not codigo_dinamico_obj.es_valido():
+                    return JsonResponse({
+                        'success': False,
+                        'code': 'AUTH_CODE_ALREADY_USED',
+                        'error': 'El código fue utilizado o venció antes de completar la solicitud',
+                        'requiere_autorizacion': True,
+                    }, status=409)
+
             # Cambios por concepto: monto viene directamente del frontend
             es_concepto = tipo_operacion in ('CAMBIO_CONCEPTO', 'DEVOLUCION_CONCEPTO')
             if es_concepto:
@@ -13958,8 +14213,6 @@ def crear_cambio_devolucion(request):
             # Determinar tipo especial y cross-branch
             tipo_especial = 'NORMAL'
             es_cross_branch = False
-            sucursal_supervisor = None
-
             if fuera_de_plazo:
                 tipo_especial = 'FUERA_PLAZO'
 
@@ -13967,26 +14220,15 @@ def crear_cambio_devolucion(request):
                 tipo_especial = 'CONCEPTO'
 
             if supervisor:
-                # Obtener sucursal del supervisor
-                try:
-                    from .models import PerfilUsuario
-                    perfil_sup = getattr(supervisor, 'perfil', None)
-                    if perfil_sup:
-                        sucursal_supervisor = perfil_sup.sucursal
-                    if not sucursal_supervisor:
-                        sucursal_supervisor = getattr(supervisor, 'sucursal', None)
-                except Exception:
-                    pass
-                # bool() explícito: si sucursal_supervisor es None, "None and ..." da None,
-                # lo que rompe los BooleanField NOT NULL (es_cross_branch en RegistroAutorizacion
-                # y es_autorizacion_cross_branch en CambioDevolucion).
-                es_cross_branch = bool(sucursal_supervisor and sucursal_supervisor.id != sucursal.id)
+                es_cross_branch = bool(
+                    sucursal_supervisor and sucursal_supervisor.id != sucursal.id
+                )
 
             # Crear registro de autorización con trazabilidad completa
             registro_auth = None
             if supervisor_autorizo:
                 from .models import RegistroAutorizacion
-                metodo_auth = 'código de autorización del navbar' if codigo_dinamico_obj else 'PIN de administrador'
+                metodo_auth = 'código de autorización del navbar'
                 registro_auth = RegistroAutorizacion.objects.create(
                     codigo_usado=codigo_dinamico_obj,
                     usuario_solicitante=request.user,
@@ -14220,6 +14462,12 @@ def obtener_detalle_cambio(request, cambio_id):
         
         # Verificar acceso
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        if not sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'code': 'BRANCH_REQUIRED',
+                'error': 'No hay una sucursal seleccionada'
+            }, status=400)
         if cambio.sucursal_id != int(sucursal_id):
             return JsonResponse({
                 'success': False,
@@ -14227,6 +14475,7 @@ def obtener_detalle_cambio(request, cambio_id):
             })
         
         # Datos del cambio
+        acciones_permitidas = _acciones_cambio_para_usuario(request.user, cambio)
         cambio_data = {
             'id': cambio.id,
             'numero_operacion': cambio.numero_operacion,
@@ -14281,6 +14530,7 @@ def obtener_detalle_cambio(request, cambio_id):
             'revisado_por_gerencia': cambio.revisado_por_gerencia.get_full_name() if cambio.revisado_por_gerencia else None,
             'fecha_revision_gerencia': cambio.fecha_revision_gerencia.strftime('%d/%m/%Y %H:%M') if cambio.fecha_revision_gerencia else None,
             'notas_revision_gerencia': cambio.notas_revision_gerencia or '',
+            'acciones_permitidas': acciones_permitidas,
 
             # Tickets
             'ticket_original': {
@@ -14423,95 +14673,204 @@ def obtener_detalle_cambio(request, cambio_id):
 
 @login_required
 @require_POST
-@csrf_exempt
 def cancelar_cambio_devolucion(request):
-    """Cancelar una solicitud de cambio/devolución"""
+    """Cancelar una solicitud antes de que genere tickets o movimientos."""
     try:
         data = json.loads(request.body)
         cambio_id = data.get('cambio_id')
+        motivo = str(data.get('motivo') or '').strip()
+        codigo_autorizacion = str(data.get('codigo_autorizacion') or '').strip()
+        minutos_autorizacion = data.get('minutos_autorizacion', 30)
         
         if not cambio_id:
+            return JsonResponse({'success': False, 'error': 'ID de cambio requerido'}, status=400)
+        if len(motivo) < 5:
             return JsonResponse({
                 'success': False,
-                'error': 'ID de cambio requerido'
-            })
-        
-        cambio = get_object_or_404(CambioDevolucion, id=cambio_id)
-        
-        # Verificar que sea de la sucursal actual
+                'code': 'REASON_REQUIRED',
+                'error': 'Debe indicar un motivo de al menos 5 caracteres',
+            }, status=400)
+
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        if cambio.sucursal_id != int(sucursal_id):
-            return JsonResponse({
-                'success': False,
-                'error': 'No tiene permisos para cancelar este cambio'
-            })
-        
-        # Se puede cancelar si está en SOLICITADO o APROBADO
-        if cambio.estado not in ['SOLICITADO', 'APROBADO']:
-            return JsonResponse({
-                'success': False,
-                'error': f'No se puede cancelar un cambio en estado {cambio.get_estado_display()}'
-            })
-        
-        # Cancelar el cambio
-        cambio.estado = 'CANCELADO'
-        cambio.observaciones_aprobacion = f'Cancelado por {request.user.username} el {timezone.now().strftime("%d/%m/%Y %H:%M")}'
-        cambio.save()
+        if not sucursal_id:
+            return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'}, status=400)
+
+        with transaction.atomic():
+            cambio = get_object_or_404(
+                CambioDevolucion.objects.select_for_update().select_related(
+                    'sucursal__empresa', 'ticket_nuevo'
+                ),
+                id=cambio_id,
+            )
+            if cambio.sucursal_id != int(sucursal_id):
+                return JsonResponse({
+                    'success': False,
+                    'code': 'BRANCH_DENIED',
+                    'error': 'No tiene acceso a este cambio',
+                }, status=403)
+            if cambio.estado not in ('SOLICITADO', 'APROBADO') or cambio.ticket_nuevo_id:
+                return JsonResponse({
+                    'success': False,
+                    'code': 'INVALID_STATE',
+                    'error': 'Solo se pueden cancelar solicitudes no ejecutadas',
+                }, status=409)
+
+            acciones = _acciones_cambio_para_usuario(request.user, cambio)
+            permiso_temporal = None
+            if not acciones['cancelar']:
+                if not acciones['puede_solicitar_cancelar']:
+                    return JsonResponse({
+                        'success': False,
+                        'code': 'PERMISSION_DENIED',
+                        'error': 'Su perfil no tiene permiso para cancelar cambios',
+                    }, status=403)
+                if not codigo_autorizacion:
+                    return JsonResponse({
+                        'success': False,
+                        'code': 'TEMP_AUTH_REQUIRED',
+                        'requiere_autorizacion_temporal': True,
+                        'error': 'Ingrese el código de autorización de un administrador',
+                    }, status=403)
+                permiso_temporal, error_response = _otorgar_permiso_temporal_desde_codigo(
+                    request,
+                    cambio,
+                    PermisoTemporalCambio.ACCION_CANCELAR,
+                    codigo_autorizacion,
+                    motivo,
+                    minutos_autorizacion,
+                )
+                if error_response:
+                    return error_response
+
+            estado_anterior = cambio.estado
+            cambio.estado = 'CANCELADO'
+            cambio.observaciones_aprobacion = (
+                f'Cancelado por {request.user.username} el '
+                f'{timezone.localtime().strftime("%d/%m/%Y %H:%M")}. Motivo: {motivo}'
+            )
+            cambio.save(update_fields=['estado', 'observaciones_aprobacion'])
+            HistorialCambioDevolucion.objects.create(
+                cambio_devolucion=cambio,
+                accion='CANCELADO',
+                estado_anterior=estado_anterior,
+                estado_nuevo='CANCELADO',
+                usuario=request.user,
+                descripcion=f'Solicitud cancelada. Motivo: {motivo}',
+                datos_adicionales={
+                    'motivo': motivo,
+                    'permiso_temporal_id': permiso_temporal.id if permiso_temporal else None,
+                    'fecha_cancelacion': timezone.now().isoformat(),
+                },
+            )
         
         return JsonResponse({
             'success': True,
-            'message': f'Cambio {cambio.numero_operacion} cancelado correctamente'
+            'message': f'Cambio {cambio.numero_operacion} cancelado correctamente',
+            'nuevo_estado': 'CANCELADO',
+            'permiso_temporal_hasta': (
+                timezone.localtime(permiso_temporal.vigente_hasta).strftime('%H:%M')
+                if permiso_temporal else None
+            ),
         })
-        
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'}, status=400)
     except Exception as e:
+        logger.exception('Error al cancelar cambio/devolución')
         return JsonResponse({
             'success': False,
             'error': f'Error al cancelar cambio: {str(e)}'
-        })
+        }, status=500)
 
 
 @login_required
 @require_POST
-@csrf_exempt
 def revertir_cambio_devolucion(request):
-    """Revertir un cambio completado cuyo ticket aún no fue pagado.
+    """Revertir un cambio ejecutado cuyo ticket financiero aún está pendiente.
     Deshace todos los movimientos de stock y cancela el ticket pendiente."""
     try:
         data = json.loads(request.body)
         cambio_id = data.get('cambio_id')
-        motivo = data.get('motivo', '')
+        motivo = str(data.get('motivo') or '').strip()
+        codigo_autorizacion = str(data.get('codigo_autorizacion') or '').strip()
+        minutos_autorizacion = data.get('minutos_autorizacion', 30)
 
         if not cambio_id:
-            return JsonResponse({'success': False, 'error': 'ID de cambio requerido'})
-
-        cambio = get_object_or_404(CambioDevolucion, id=cambio_id)
-
-        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        if cambio.sucursal_id != int(sucursal_id):
-            return JsonResponse({'success': False, 'error': 'No tiene acceso a este cambio'})
-
-        # Un cambio con la diferencia condonada ya cerró su cobro sin tocar stock; revertirlo
-        # re-movería inventario y anularía un ticket pagado, dejando todo inconsistente.
-        if cambio.diferencia_condonada:
+            return JsonResponse({'success': False, 'error': 'ID de cambio requerido'}, status=400)
+        if len(motivo) < 5:
             return JsonResponse({
                 'success': False,
-                'error': 'Este cambio tuvo su diferencia condonada (perdonada) y no se puede revertir. '
-                         'La condonación no movió stock; revertir lo dejaría inconsistente.'
-            })
+                'code': 'REASON_REQUIRED',
+                'error': 'Debe indicar un motivo de al menos 5 caracteres',
+            }, status=400)
 
-        estados_revertibles = ['COMPLETADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE', 'EJECUTADO']
-        if cambio.estado not in estados_revertibles:
-            return JsonResponse({'success': False, 'error': f'Solo se pueden revertir cambios ejecutados o completados, estado actual: {cambio.get_estado_display()}'})
-
-        if not cambio.ticket_nuevo or cambio.ticket_nuevo.estado not in ('PENDIENTE', 'PAGADO'):
-            if cambio.ticket_nuevo and cambio.ticket_nuevo.estado == 'PAGADO' and cambio.estado == 'COMPLETADO':
-                return JsonResponse({'success': False, 'error': 'Este cambio ya fue pagado y completado, no se puede revertir'})
-            if not cambio.ticket_nuevo:
-                return JsonResponse({'success': False, 'error': 'Este cambio no tiene ticket asociado para revertir'})
-
-        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        if not sucursal_id:
+            return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'}, status=400)
 
         with transaction.atomic():
+            cambio = get_object_or_404(
+                CambioDevolucion.objects.select_for_update().select_related(
+                    'sucursal__empresa', 'ticket_nuevo', 'ticket_diferencia'
+                ),
+                id=cambio_id,
+            )
+            if cambio.sucursal_id != int(sucursal_id):
+                return JsonResponse({
+                    'success': False,
+                    'code': 'BRANCH_DENIED',
+                    'error': 'No tiene acceso a este cambio',
+                }, status=403)
+
+            estados_revertibles = (
+                'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE'
+            )
+            if cambio.estado not in estados_revertibles:
+                return JsonResponse({
+                    'success': False,
+                    'code': 'INVALID_STATE',
+                    'error': 'Solo se pueden revertir cambios ejecutados con cobro o devolución pendiente',
+                }, status=409)
+            if cambio.diferencia_condonada or cambio.nc_generada:
+                return JsonResponse({
+                    'success': False,
+                    'code': 'FINANCIAL_OPERATION_CLOSED',
+                    'error': 'Este cambio ya tiene una operación financiera cerrada y no se puede revertir',
+                }, status=409)
+            if not cambio.ticket_nuevo_id or cambio.ticket_nuevo.estado != 'PENDIENTE':
+                return JsonResponse({
+                    'success': False,
+                    'code': 'TICKET_NOT_PENDING',
+                    'error': 'El ticket ya fue pagado, anulado o completado; utilice el flujo formal de anulación',
+                }, status=409)
+
+            acciones = _acciones_cambio_para_usuario(request.user, cambio)
+            permiso_temporal = None
+            if not acciones['revertir']:
+                if not acciones['puede_solicitar_revertir']:
+                    return JsonResponse({
+                        'success': False,
+                        'code': 'PERMISSION_DENIED',
+                        'error': 'Su perfil no tiene permiso para revertir cambios',
+                    }, status=403)
+                if not codigo_autorizacion:
+                    return JsonResponse({
+                        'success': False,
+                        'code': 'TEMP_AUTH_REQUIRED',
+                        'requiere_autorizacion_temporal': True,
+                        'error': 'Ingrese el código de autorización de un administrador',
+                    }, status=403)
+                permiso_temporal, error_response = _otorgar_permiso_temporal_desde_codigo(
+                    request,
+                    cambio,
+                    PermisoTemporalCambio.ACCION_REVERTIR,
+                    codigo_autorizacion,
+                    motivo,
+                    minutos_autorizacion,
+                )
+                if error_response:
+                    return error_response
+
+            sucursal = cambio.sucursal
             # 1) Revertir EGRESOS: devolver stock de productos nuevos que fueron entregados
             for item in cambio.detalles.all():
                 if item.producto_nuevo and item.cantidad_nueva:
@@ -14580,6 +14939,7 @@ def revertir_cambio_devolucion(request):
                 datos_adicionales={
                     'motivo': motivo,
                     'ticket_anulado': ticket.correlativo,
+                    'permiso_temporal_id': permiso_temporal.id if permiso_temporal else None,
                     'fecha_reversion': timezone.now().isoformat()
                 }
             )
@@ -14587,24 +14947,37 @@ def revertir_cambio_devolucion(request):
         return JsonResponse({
             'success': True,
             'message': f'Cambio {cambio.numero_operacion} revertido exitosamente. Stock restaurado.',
-            'nuevo_estado': 'REVERTIDO'
+            'nuevo_estado': 'REVERTIDO',
+            'permiso_temporal_hasta': (
+                timezone.localtime(permiso_temporal.vigente_hasta).strftime('%H:%M')
+                if permiso_temporal else None
+            ),
         })
 
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'})
     except Exception as e:
         logger.exception("Error al revertir cambio/devolucion")
-        return JsonResponse({'success': False, 'error': f'Error al revertir cambio: {str(e)}'})
+        return JsonResponse({'success': False, 'error': f'Error al revertir cambio: {str(e)}'}, status=500)
 
 
 @login_required
 @require_POST
-@csrf_exempt
 def aprobar_cambio_devolucion(request):
     """Aprobar o rechazar una solicitud de cambio/devolución.
     NOTA: Esta función es el camino alternativo (solo aprueba, no genera ticket ni mueve stock).
     La UI principal usa aprobar_cambio_generar_ticket() que hace todo en un solo paso.
     Se mantiene para compatibilidad con posibles integraciones externas."""
+    return JsonResponse({
+        'success': False,
+        'code': 'LEGACY_FLOW_DISABLED',
+        'error': (
+            'El flujo separado de aprobaci\u00f3n fue deshabilitado. '
+            'Use la autorizaci\u00f3n y ejecuci\u00f3n unificada con c\u00f3digo de Administrador.'
+        ),
+    }, status=410)
+
+    # Codigo legado conservado temporalmente como referencia de migracion.
     try:
         data = json.loads(request.body)
         cambio_id = data.get('cambio_id')
@@ -14697,11 +15070,20 @@ def aprobar_cambio_devolucion(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def ejecutar_cambio_devolucion(request):
     """Ejecutar un cambio/devolución aprobado: generar tickets y movimientos de inventario.
     NOTA: Camino alternativo desde estado APROBADO. La UI principal usa
     aprobar_cambio_generar_ticket() que combina aprobación + ejecución en un paso."""
+    return JsonResponse({
+        'success': False,
+        'code': 'LEGACY_FLOW_DISABLED',
+        'error': (
+            'La ejecuci\u00f3n separada fue deshabilitada. '
+            'Use la autorizaci\u00f3n y ejecuci\u00f3n unificada con c\u00f3digo de Administrador.'
+        ),
+    }, status=410)
+
+    # Codigo legado conservado temporalmente como referencia de migracion.
     try:
         data = json.loads(request.body)
         cambio_id = data.get('cambio_id')
@@ -15046,7 +15428,6 @@ def registrar_pago_diferencia(request):
 
 
 @require_POST
-@csrf_exempt
 @requiere_rol('administrador')
 def condonar_diferencia_cobro(request):
     """
@@ -15146,31 +15527,60 @@ def condonar_diferencia_cobro(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def aprobar_cambio_generar_ticket(request):
-    """Aprobar cambio/devolución y generar ticket de venta automáticamente"""
+    """Autorizar, aprobar y ejecutar el cambio en una sola transacción."""
     try:
         data = json.loads(request.body)
         cambio_id = data.get('cambio_id')
         vendedor_id = data.get('vendedor_id')
         observaciones = data.get('observaciones', '')
+        codigo_autorizacion = str(data.get('codigo_autorizacion') or '').strip()
         
-        if not all([cambio_id, vendedor_id]):
+        if not all([cambio_id, vendedor_id, codigo_autorizacion]):
             return JsonResponse({
                 'success': False,
-                'error': 'ID de cambio y vendedor requeridos'
-            })
+                'code': 'AUTH_CODE_REQUIRED',
+                'error': 'ID de cambio, vendedor y código de autorización requeridos'
+            }, status=400)
         
         # Obtener cambio
         cambio = get_object_or_404(CambioDevolucion, id=cambio_id)
         
         # Verificar acceso
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        if not sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'code': 'BRANCH_REQUIRED',
+                'error': 'No hay una sucursal seleccionada'
+            }, status=400)
         if cambio.sucursal_id != int(sucursal_id):
             return JsonResponse({
                 'success': False,
                 'error': 'No tiene acceso a este cambio'
-            })
+            }, status=403)
+
+        es_valido_codigo, mensaje_codigo, codigo_obj = \
+            CodigoAutorizacionDinamico.validar_codigo(codigo_autorizacion)
+        administrador_autorizador = codigo_obj.generado_por if codigo_obj else None
+        if not es_valido_codigo or not _usuario_es_administrador_activo(administrador_autorizador):
+            return JsonResponse({
+                'success': False,
+                'code': 'INVALID_AUTH_CODE',
+                'error': mensaje_codigo if not es_valido_codigo else 'El código no pertenece a un administrador activo',
+            }, status=403)
+
+        asignacion_autorizador = EmpresaUser.objects.filter(
+            user=administrador_autorizador,
+            empresa_id=cambio.sucursal.empresa_id,
+            status=True,
+        ).select_related('sucursal').order_by('-active').first()
+        if not asignacion_autorizador:
+            return JsonResponse({
+                'success': False,
+                'code': 'CROSS_COMPANY_AUTH',
+                'error': 'El administrador debe pertenecer a la misma empresa',
+            }, status=403)
         
         # Verificar estado
         if cambio.estado not in ('SOLICITADO', 'APROBADO'):
@@ -15219,6 +15629,53 @@ def aprobar_cambio_generar_ticket(request):
         logger.info("Iniciando transaccion atomica para aprobar cambio %s", cambio.id)
         
         with transaction.atomic():
+            cambio = CambioDevolucion.objects.select_for_update().select_related(
+                'sucursal__empresa', 'ticket_original', 'ticket_nuevo'
+            ).get(id=cambio_id)
+            if cambio.estado not in ('SOLICITADO', 'APROBADO'):
+                return JsonResponse({
+                    'success': False,
+                    'code': 'OPERATION_CHANGED',
+                    'error': 'El cambio fue modificado por otro usuario. Actualice la pantalla.',
+                }, status=409)
+
+            codigo_obj = CodigoAutorizacionDinamico.objects.select_for_update().get(id=codigo_obj.id)
+            if not codigo_obj.es_valido():
+                return JsonResponse({
+                    'success': False,
+                    'code': 'AUTH_CODE_ALREADY_USED',
+                    'error': 'El código fue utilizado o venció antes de ejecutar el cambio',
+                }, status=409)
+            codigo_obj.usado = True
+            codigo_obj.save(update_fields=['usado'])
+            registro_autorizacion = RegistroAutorizacion.objects.create(
+                codigo_usado=codigo_obj,
+                usuario_solicitante=request.user,
+                usuario_autorizador=administrador_autorizador,
+                tipo_operacion='APROBACION_CAMBIO',
+                descripcion=(
+                    f'Aprobación y ejecución autorizada por '
+                    f'{administrador_autorizador.get_full_name() or administrador_autorizador.username}'
+                ),
+                ip_origen=request.META.get('REMOTE_ADDR'),
+                exitoso=True,
+                cambio_devolucion=cambio,
+                sucursal_solicitante=cambio.sucursal,
+                sucursal_autorizador=asignacion_autorizador.sucursal,
+                es_cross_branch=bool(
+                    asignacion_autorizador.sucursal_id
+                    and asignacion_autorizador.sucursal_id != cambio.sucursal_id
+                ),
+                requiere_revision=bool(
+                    asignacion_autorizador.sucursal_id
+                    and asignacion_autorizador.sucursal_id != cambio.sucursal_id
+                ),
+                datos_adicionales={
+                    'cambio_id': cambio.id,
+                    'vendedor_id': vendedor_id,
+                },
+            )
+
             # Aprobar el cambio (solo si no está ya aprobado)
             if cambio.estado == 'SOLICITADO':
                 logger.debug("Aprobando cambio %s", cambio.id)
@@ -15226,6 +15683,15 @@ def aprobar_cambio_generar_ticket(request):
                 logger.info("Cambio %s aprobado: estado=%s", cambio.id, cambio.estado)
             else:
                 logger.debug("Cambio %s ya estaba en estado %s; continuando ejecucion", cambio.id, cambio.estado)
+
+            cambio.autorizado_por_usuario = administrador_autorizador
+            cambio.sucursal_autorizador = asignacion_autorizador.sucursal
+            cambio.registro_autorizacion = registro_autorizacion
+            cambio.requiere_autorizacion = True
+            cambio.save(update_fields=[
+                'autorizado_por_usuario', 'sucursal_autorizador',
+                'registro_autorizacion', 'requiere_autorizacion',
+            ])
             
             # GENERAR TICKET DE VENTA
             # Obtener correlativo usando la función centralizada

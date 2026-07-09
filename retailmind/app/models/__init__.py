@@ -149,6 +149,7 @@ from .permisos import (  # noqa: F401
     PermisoUsuario,
     CodigoAutorizacionDinamico,
     RegistroAutorizacion,
+    PermisoTemporalCambio,
 )
 
 from .requerimientos import (  # noqa: F401
