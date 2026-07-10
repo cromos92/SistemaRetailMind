@@ -55,6 +55,10 @@ from .services.transbank_sdk_service import (
     run_transbank_operation, test_pos_connection, 
     execute_pos_sale, get_available_ports, cancel_pos_sale
 )
+from .services.inventario_service import (
+    ingresar as ingresar_inventario,
+    egresar as egresar_inventario,
+)
 
 from .models import (
     Ticket, Ticket_Productos, TicketDetallePago, TicketReferencia, Vendedor, Producto, Producto_Talla,
@@ -83,6 +87,94 @@ ACCIONES_TEMPORALES_CAMBIO = {
     PermisoTemporalCambio.ACCION_REVERTIR,
 }
 MINUTOS_PERMISO_TEMPORAL_VALIDOS = {15, 30, 60, 480}
+
+
+class ConflictoInventarioCambio(Exception):
+    """Conflicto de stock/sucursal que debe abortar toda la transaccion."""
+
+    def __init__(self, mensaje, codigo='STOCK_CHANGED'):
+        super().__init__(mensaje)
+        self.codigo = codigo
+
+
+def _vendedores_elegibles_para_sucursal(sucursal):
+    """Vendedores activos que pueden operar en la empresa/sucursal indicada.
+
+    Compatibilidad legacy:
+    - empresa actual + sucursal exacta;
+    - empresa actual sin asignaciones M2M (vendedor company-wide);
+    - empresa nula + sucursal exacta.
+    """
+    return Vendedor.objects.filter(activo=True).filter(
+        Q(empresa_id=sucursal.empresa_id, sucursales=sucursal)
+        | Q(empresa_id=sucursal.empresa_id, sucursales__isnull=True)
+        | Q(empresa__isnull=True, sucursales=sucursal)
+    ).distinct()
+
+
+def _bloquear_y_validar_inventario_cambio(detalles, sucursal_id, reversion=False):
+    """Bloquea productos en orden estable y valida el stock final agregado."""
+    entradas = {}
+    salidas = {}
+
+    def sumar(destino, producto_id, cantidad):
+        if producto_id and cantidad and cantidad > 0:
+            destino[producto_id] = destino.get(producto_id, 0) + cantidad
+
+    for detalle in detalles:
+        producto_original_id = (
+            detalle.producto_original.ProductoTalla_id
+            if detalle.producto_original_id else None
+        )
+        if detalle.apto_para_venta:
+            sumar(entradas, producto_original_id, detalle.cantidad_original)
+        sumar(salidas, detalle.producto_nuevo_id, detalle.cantidad_nueva)
+
+    ids_producto = sorted(set(entradas) | set(salidas))
+    bloqueados = list(
+        Producto_Talla.objects.select_for_update()
+        .select_related('producto')
+        .filter(id__in=ids_producto)
+        .order_by('id')
+    )
+    productos = {producto.id: producto for producto in bloqueados}
+
+    if len(productos) != len(ids_producto):
+        raise ConflictoInventarioCambio(
+            'Uno de los productos del cambio ya no existe',
+            codigo='PRODUCT_NOT_FOUND',
+        )
+
+    for producto_id in ids_producto:
+        producto = productos[producto_id]
+        if producto.producto.sucursal_id != int(sucursal_id):
+            raise ConflictoInventarioCambio(
+                f'El SKU {producto.sku} no pertenece a la sucursal del cambio',
+                codigo='INVALID_PRODUCT_BRANCH',
+            )
+
+        if reversion:
+            stock_final = (
+                producto.stock
+                + salidas.get(producto_id, 0)
+                - entradas.get(producto_id, 0)
+            )
+        else:
+            stock_final = (
+                producto.stock
+                + entradas.get(producto_id, 0)
+                - salidas.get(producto_id, 0)
+            )
+
+        if stock_final < 0:
+            operacion = 'revertir' if reversion else 'ejecutar'
+            raise ConflictoInventarioCambio(
+                f'Stock insuficiente para {operacion} el cambio: SKU {producto.sku}. '
+                f'Disponible {producto.stock}, resultado proyectado {stock_final}.',
+                codigo='STOCK_REVERSAL_CONFLICT' if reversion else 'STOCK_CHANGED',
+            )
+
+    return productos
 
 
 def _usuario_es_administrador_activo(usuario):
@@ -13887,7 +13979,6 @@ def listar_cambios_devoluciones(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def crear_cambio_devolucion(request):
     """Crear nueva solicitud de cambio o devolución"""
     try:
@@ -14810,7 +14901,7 @@ def revertir_cambio_devolucion(request):
         with transaction.atomic():
             cambio = get_object_or_404(
                 CambioDevolucion.objects.select_for_update().select_related(
-                    'sucursal__empresa', 'ticket_nuevo', 'ticket_diferencia'
+                    'sucursal__empresa'
                 ),
                 id=cambio_id,
             )
@@ -14836,12 +14927,54 @@ def revertir_cambio_devolucion(request):
                     'code': 'FINANCIAL_OPERATION_CLOSED',
                     'error': 'Este cambio ya tiene una operación financiera cerrada y no se puede revertir',
                 }, status=409)
-            if not cambio.ticket_nuevo_id or cambio.ticket_nuevo.estado != 'PENDIENTE':
+            ticket_ids = sorted(filter(None, [
+                cambio.ticket_nuevo_id,
+                cambio.ticket_diferencia_id,
+            ]))
+            tickets_bloqueados = {
+                ticket.id: ticket
+                for ticket in Ticket.objects.select_for_update()
+                .filter(id__in=ticket_ids)
+                .order_by('id')
+            }
+            ticket_nuevo = tickets_bloqueados.get(cambio.ticket_nuevo_id)
+            ticket_diferencia = tickets_bloqueados.get(cambio.ticket_diferencia_id)
+            if not ticket_nuevo or ticket_nuevo.estado != 'PENDIENTE':
                 return JsonResponse({
                     'success': False,
                     'code': 'TICKET_NOT_PENDING',
-                    'error': 'El ticket ya fue pagado, anulado o completado; utilice el flujo formal de anulación',
+                    'error': 'El ticket ya fue pagado, anulado o completado; use el flujo formal de anulacion',
                 }, status=409)
+
+            pagos_ticket = list(
+                TicketDetallePago.objects.select_for_update()
+                .filter(ticket_id__in=ticket_ids)
+                .values_list('id', flat=True)
+            )
+            pagos_cambio = list(
+                PagoCambioDevolucion.objects.select_for_update()
+                .filter(cambio_devolucion=cambio)
+                .values_list('id', flat=True)
+            )
+            if pagos_ticket or pagos_cambio:
+                return JsonResponse({
+                    'success': False,
+                    'code': 'FINANCIAL_OPERATION_STARTED',
+                    'error': 'El cambio ya registra pagos y no se puede revertir desde este flujo',
+                }, status=409)
+
+            # Poblar las relaciones con los objetos que ya quedaron bloqueados.
+            cambio.ticket_nuevo = ticket_nuevo
+            cambio.ticket_diferencia = ticket_diferencia
+
+            detalles_bloqueados = list(
+                cambio.detalles.select_for_update().order_by('id')
+            )
+            productos_bloqueados = _bloquear_y_validar_inventario_cambio(
+                detalles_bloqueados,
+                cambio.sucursal_id,
+                reversion=True,
+            )
 
             acciones = _acciones_cambio_para_usuario(request.user, cambio)
             permiso_temporal = None
@@ -14871,45 +15004,51 @@ def revertir_cambio_devolucion(request):
                     return error_response
 
             sucursal = cambio.sucursal
-            # 1) Revertir EGRESOS: devolver stock de productos nuevos que fueron entregados
-            for item in cambio.detalles.all():
-                if item.producto_nuevo and item.cantidad_nueva:
-                    producto_talla_nuevo = item.producto_nuevo
-                    producto_talla_nuevo.stock += item.cantidad_nueva
-                    producto_talla_nuevo.save()
+            # 1) Los productos nuevos entregados regresan a stock y FIFO.
+            for item in detalles_bloqueados:
+                if not item.producto_nuevo_id or item.cantidad_nueva <= 0:
+                    continue
+                producto_talla = productos_bloqueados[item.producto_nuevo_id]
+                ingresar_inventario(
+                    producto_talla=producto_talla,
+                    cantidad=item.cantidad_nueva,
+                    concepto='REVERSION_CAMBIO',
+                    responsable=request.user.username,
+                    sucursal_destino=cambio.sucursal,
+                    ticket=ticket_nuevo,
+                    costo_unitario=producto_talla.producto.costo or 0,
+                    precio_unitario=int(item.precio_nuevo),
+                    observaciones=(
+                        f'Reversion - Cambio #{cambio.numero_operacion}. '
+                        'Producto entregado devuelto al stock.'
+                    ),
+                    referencia_externa=cambio.numero_operacion,
+                )
 
-                    Movimientos_Producto.objects.create(
-                        ProductoTalla=producto_talla_nuevo,
-                        tipo_movimiento='INGRESO',
-                        concepto='REVERSION_CAMBIO',
-                        cantidad=item.cantidad_nueva,
-                        responsable=request.user.username,
-                        sucursal_destino=sucursal,
-                        precio=int(item.precio_nuevo),
-                        costo=0,
-                        estado='COMPLETADO',
-                        observaciones=f'REVERSION - Cambio #{cambio.numero_operacion}. Producto nuevo devuelto al stock.'
-                    )
-
-            # 2) Revertir INGRESOS: descontar stock de productos devueltos que se habían re-ingresado
-            for item in cambio.detalles.filter(producto_original__isnull=False, cantidad_original__gt=0):
-                if item.apto_para_venta:
-                    producto_talla_devuelto = item.producto_original.ProductoTalla
-                    producto_talla_devuelto.stock -= item.cantidad_original
-                    producto_talla_devuelto.save()
-
-                    Movimientos_Producto.objects.create(
-                        ProductoTalla=producto_talla_devuelto,
-                        tipo_movimiento='EGRESO',
-                        concepto='REVERSION_CAMBIO',
-                        cantidad=item.cantidad_original,
-                        responsable=request.user.username,
-                        sucursal_origen=sucursal,
-                        precio=int(item.precio_original_unitario),
-                        costo=0,
-                        estado='COMPLETADO',
-                        observaciones=f'REVERSION - Cambio #{cambio.numero_operacion}. Se revierte ingreso de devolución.'
-                    )
+            # 2) Los productos originales aptos salen nuevamente. El servicio
+            # rechaza la reversion si esas unidades ya no estan disponibles.
+            for item in detalles_bloqueados:
+                if (
+                    not item.producto_original_id
+                    or item.cantidad_original <= 0
+                    or not item.apto_para_venta
+                ):
+                    continue
+                producto_id = item.producto_original.ProductoTalla_id
+                egresar_inventario(
+                    producto_talla=productos_bloqueados[producto_id],
+                    cantidad=item.cantidad_original,
+                    concepto='REVERSION_CAMBIO',
+                    responsable=request.user.username,
+                    sucursal_origen=cambio.sucursal,
+                    ticket=cambio.ticket_original,
+                    precio_unitario=int(item.precio_original_unitario),
+                    observaciones=(
+                        f'Reversion - Cambio #{cambio.numero_operacion}. '
+                        'Se revierte el ingreso de devolucion.'
+                    ),
+                    referencia_externa=cambio.numero_operacion,
+                )
 
             # 3) Cancelar ticket pendiente
             ticket = cambio.ticket_nuevo
@@ -14956,6 +15095,12 @@ def revertir_cambio_devolucion(request):
 
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'})
+    except ConflictoInventarioCambio as e:
+        return JsonResponse({
+            'success': False,
+            'code': e.codigo,
+            'error': str(e),
+        }, status=409)
     except Exception as e:
         logger.exception("Error al revertir cambio/devolucion")
         return JsonResponse({'success': False, 'error': f'Error al revertir cambio: {str(e)}'}, status=500)
@@ -14964,467 +15109,43 @@ def revertir_cambio_devolucion(request):
 @login_required
 @require_POST
 def aprobar_cambio_devolucion(request):
-    """Aprobar o rechazar una solicitud de cambio/devolución.
-    NOTA: Esta función es el camino alternativo (solo aprueba, no genera ticket ni mueve stock).
-    La UI principal usa aprobar_cambio_generar_ticket() que hace todo en un solo paso.
-    Se mantiene para compatibilidad con posibles integraciones externas."""
+    """Ruta legacy deshabilitada: la aprobacion se ejecuta en el flujo unificado."""
     return JsonResponse({
         'success': False,
         'code': 'LEGACY_FLOW_DISABLED',
         'error': (
-            'El flujo separado de aprobaci\u00f3n fue deshabilitado. '
-            'Use la autorizaci\u00f3n y ejecuci\u00f3n unificada con c\u00f3digo de Administrador.'
+            'El flujo separado de aprobacion fue deshabilitado. '
+            'Use la autorizacion y ejecucion unificada con codigo de Administrador.'
         ),
     }, status=410)
-
-    # Codigo legado conservado temporalmente como referencia de migracion.
-    try:
-        data = json.loads(request.body)
-        cambio_id = data.get('cambio_id')
-        accion = data.get('accion')  # 'aprobar' o 'rechazar'
-        observaciones = data.get('observaciones', '')
-        
-        if not all([cambio_id, accion]):
-            return JsonResponse({
-                'success': False,
-                'error': 'ID de cambio y acción requeridos'
-            })
-        
-        cambio = get_object_or_404(CambioDevolucion, id=cambio_id)
-        
-        # Verificar acceso
-        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        if cambio.sucursal_id != int(sucursal_id):
-            return JsonResponse({
-                'success': False,
-                'error': 'No tiene acceso a este cambio'
-            })
-        
-        # Verificar estado
-        if cambio.estado != 'SOLICITADO':
-            return JsonResponse({
-                'success': False,
-                'error': 'Solo se pueden aprobar cambios en estado solicitado'
-            })
-        
-        # Verificar plazo (permitir si fue autorizado fuera de plazo)
-        fue_autorizado_fuera_plazo = '[AUTORIZADO FUERA DE PLAZO' in (cambio.observaciones_vendedor or '')
-        if not cambio.dentro_del_plazo and not fue_autorizado_fuera_plazo:
-            return JsonResponse({
-                'success': False,
-                'error': 'El plazo para este cambio ya venció'
-            })
-        
-        with transaction.atomic():
-            if accion == 'aprobar':
-                cambio.aprobar_cambio(request.user, observaciones)
-                mensaje = 'Cambio aprobado exitosamente'
-                accion_historial = 'APROBADO'
-            elif accion == 'rechazar':
-                if not observaciones:
-                    return JsonResponse({
-                        'success': False,
-                        'error': 'Debe proporcionar un motivo para el rechazo'
-                    })
-                cambio.rechazar_cambio(request.user, observaciones)
-                mensaje = 'Cambio rechazado'
-                accion_historial = 'RECHAZADO'
-            else:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Acción no válida'
-                })
-            
-            # Crear historial
-            HistorialCambioDevolucion.objects.create(
-                cambio_devolucion=cambio,
-                accion=accion_historial,
-                estado_anterior='SOLICITADO',
-                estado_nuevo=cambio.estado,
-                usuario=request.user,
-                descripcion=f'Cambio {accion_historial.lower()} por {request.user.username}',
-                datos_adicionales={
-                    'observaciones': observaciones,
-                    'fecha_decision': timezone.now().isoformat()
-                }
-            )
-        
-        return JsonResponse({
-            'success': True,
-            'message': mensaje,
-            'nuevo_estado': cambio.estado,
-            'nuevo_estado_display': cambio.get_estado_display()
-        })
-        
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'success': False,
-            'error': 'Datos JSON inválidos'
-        })
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'Error al procesar solicitud: {str(e)}'
-        })
 
 
 @login_required
 @require_POST
 def ejecutar_cambio_devolucion(request):
-    """Ejecutar un cambio/devolución aprobado: generar tickets y movimientos de inventario.
-    NOTA: Camino alternativo desde estado APROBADO. La UI principal usa
-    aprobar_cambio_generar_ticket() que combina aprobación + ejecución en un paso."""
+    """Ruta legacy deshabilitada: la ejecucion requiere el flujo unificado."""
     return JsonResponse({
         'success': False,
         'code': 'LEGACY_FLOW_DISABLED',
         'error': (
-            'La ejecuci\u00f3n separada fue deshabilitada. '
-            'Use la autorizaci\u00f3n y ejecuci\u00f3n unificada con c\u00f3digo de Administrador.'
+            'La ejecucion separada fue deshabilitada. '
+            'Use la autorizacion y ejecucion unificada con codigo de Administrador.'
         ),
     }, status=410)
-
-    # Codigo legado conservado temporalmente como referencia de migracion.
-    try:
-        data = json.loads(request.body)
-        cambio_id = data.get('cambio_id')
-        
-        if not cambio_id:
-            return JsonResponse({
-                'success': False,
-                'error': 'ID de cambio requerido'
-            })
-        
-        cambio = get_object_or_404(CambioDevolucion, id=cambio_id)
-        
-        # Verificar acceso
-        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        if cambio.sucursal_id != int(sucursal_id):
-            return JsonResponse({
-                'success': False,
-                'error': 'No tiene acceso a este cambio'
-            })
-        
-        # Verificar que se puede ejecutar
-        if not cambio.puede_ejecutar:
-            return JsonResponse({
-                'success': False,
-                'error': 'Este cambio no puede ser ejecutado en su estado actual'
-            })
-        
-        # VALIDAR STOCK ANTES DE EJECUTAR (usa stock_sucursal cuando está disponible)
-        for detalle in cambio.detalles.filter(producto_nuevo__isnull=False):
-            try:
-                stock_disponible = detalle.producto_nuevo.stock_sucursal(sucursal_id)
-            except Exception:
-                stock_disponible = detalle.producto_nuevo.stock
-            if stock_disponible < detalle.cantidad_nueva:
-                return JsonResponse({
-                    'success': False,
-                    'error': f'No hay stock disponible para {detalle.producto_nuevo.sku} - {detalle.producto_nuevo.producto.articulo} Talla {detalle.producto_nuevo.talla}. Disponible: {stock_disponible}, Requerido: {detalle.cantidad_nueva}'
-                })
-        
-        with transaction.atomic():
-            # Procesar según el tipo de operación
-            if cambio.tipo_operacion in ['CAMBIO_SIMPLE', 'CAMBIO_CON_DIFERENCIA']:
-                # Es un cambio - crear nuevo ticket si hay productos nuevos
-                productos_nuevos = cambio.detalles.filter(producto_nuevo__isnull=False)
-                
-                if productos_nuevos.exists():
-                    # Crear nuevo ticket
-                    correlativo_nuevo = obtener_siguiente_correlativo(cambio.sucursal, 'TICKET_CAMBIO')
-                    
-                    ticket_nuevo = Ticket.objects.create(
-                        correlativo=correlativo_nuevo,
-                        vendedor=cambio.ticket_original.vendedor,
-                        sucursal=cambio.sucursal,
-                        subTotal=int(cambio.monto_nuevo),
-                        descuento=0,
-                        total=int(cambio.monto_nuevo),
-                        estado='PAGADO',
-                        responsable=request.user.username,
-                        cliente_nombre=cambio.ticket_original.cliente_nombre,
-                        cliente_rut=cambio.ticket_original.cliente_rut,
-                        cliente_email=cambio.ticket_original.cliente_email,
-                        cliente_telefono=cambio.ticket_original.cliente_telefono,
-                        observaciones=f'Cambio de ticket #{cambio.ticket_original.correlativo} - {cambio.numero_operacion}'
-                    )
-                    
-                    # Agregar productos nuevos al ticket
-                    for detalle in productos_nuevos:
-                        Ticket_Productos.objects.create(
-                            idTicket=ticket_nuevo,
-                            ProductoTalla=detalle.producto_nuevo,
-                            stock=detalle.cantidad_nueva,
-                            precio=int(detalle.precio_nuevo),
-                            descuento_unitario=0,
-                            subtotal=int(detalle.precio_nuevo * detalle.cantidad_nueva)
-                        )
-                    
-                    cambio.ticket_nuevo = ticket_nuevo
-            
-            # Procesar movimientos de inventario
-            # Filtrar solo detalles con producto_original (excluye productos adicionales)
-            for detalle in cambio.detalles.filter(producto_original__isnull=False, cantidad_original__gt=0):
-                # 1. DEVOLVER stock del producto original (INGRESO)
-                if detalle.apto_para_venta:
-                    mov_devolucion = Movimientos_Producto.objects.create(
-                        ProductoTalla=detalle.producto_original.ProductoTalla,
-                        cantidad=detalle.cantidad_original,
-                        costo=detalle.producto_original.ProductoTalla.producto.costo,
-                        precio=int(detalle.precio_original_unitario),
-                        concepto='DEVOLUCION_CLIENTE',
-                        tipo_movimiento='INGRESO',
-                        responsable=request.user.username,
-                        observaciones=f'Devolución por cambio {cambio.numero_operacion} - Ticket #{cambio.ticket_original.correlativo}',
-                        referencia_externa=cambio.numero_operacion,
-                        ticket=cambio.ticket_original
-                    )
-
-                    # Actualizar stock del producto devuelto
-                    detalle.producto_original.ProductoTalla.stock += detalle.cantidad_original
-                    detalle.producto_original.ProductoTalla.save()
-
-                    # El reingreso recrea su lote FIFO: sin esto la capa de
-                    # lotes queda corta respecto del stock plano.
-                    from app.services.inventario_service import crear_lote
-                    crear_lote(
-                        detalle.producto_original.ProductoTalla,
-                        detalle.cantidad_original,
-                        costo_unitario=detalle.producto_original.ProductoTalla.producto.costo or 0,
-                        precio_venta_unitario=int(detalle.precio_original_unitario),
-                        movimiento=mov_devolucion,
-                        observaciones=f'Reingreso por cambio {cambio.numero_operacion}',
-                    )
-                else:
-                    # Producto no apto: registrar sin devolver stock
-                    Movimientos_Producto.objects.create(
-                        ProductoTalla=detalle.producto_original.ProductoTalla,
-                        cantidad=0,
-                        costo=detalle.producto_original.ProductoTalla.producto.costo,
-                        precio=int(detalle.precio_original_unitario),
-                        concepto='DEVOLUCION_CLIENTE',
-                        tipo_movimiento='AJUSTE',
-                        responsable=request.user.username,
-                        observaciones=f'Devolución NO APTA - {cambio.numero_operacion}',
-                        referencia_externa=cambio.numero_operacion,
-                        ticket=cambio.ticket_original
-                    )
-                
-                # 2. DESCONTAR stock del producto nuevo (EGRESO con FIFO)
-                if detalle.producto_nuevo:
-                    # Verificar stock
-                    if detalle.producto_nuevo.stock < detalle.cantidad_nueva:
-                        raise ValidationError(f'Stock insuficiente para {detalle.producto_nuevo.producto.articulo}')
-                    
-                    # Consumir stock FIFO
-                    consumir_stock_fifo(
-                        producto_talla=detalle.producto_nuevo,
-                        cantidad_requerida=detalle.cantidad_nueva,
-                        responsable=request.user.username,
-                        ticket=cambio.ticket_nuevo,
-                        observaciones=f'Cambio {cambio.numero_operacion}',
-                        referencia_externa=cambio.numero_operacion
-                    )
-            
-            # Si hay diferencia positiva, crear ticket de diferencia
-            ticket_diferencia = None
-            if cambio.diferencia_monto > 0:
-                correlativo_diferencia = obtener_siguiente_correlativo(cambio.sucursal, 'TICKET_CAMBIO')
-                
-                ticket_diferencia = Ticket.objects.create(
-                    correlativo=correlativo_diferencia,
-                    vendedor=cambio.ticket_original.vendedor,
-                    sucursal=cambio.sucursal,
-                    subTotal=int(cambio.diferencia_monto),
-                    descuento=0,
-                    total=int(cambio.diferencia_monto),
-                    estado='PENDIENTE',
-                    responsable=request.user.username,
-                    cliente_nombre=cambio.ticket_original.cliente_nombre,
-                    cliente_rut=cambio.ticket_original.cliente_rut,
-                    cliente_email=cambio.ticket_original.cliente_email,
-                    cliente_telefono=cambio.ticket_original.cliente_telefono,
-                    observaciones=f'💰 DIFERENCIA DE PRECIO - Cambio {cambio.numero_operacion}\nTicket Original: #{cambio.ticket_original.correlativo}'
-                )
-                
-                cambio.ticket_diferencia = ticket_diferencia
-                cambio.estado = 'EJECUTADO_COBRO_PENDIENTE'
-            elif cambio.diferencia_monto < 0:
-                cambio.estado = 'EJECUTADO_DEVOL_PENDIENTE'
-            else:
-                cambio.estado = 'COMPLETADO'
-            
-            # Marcar fecha de ejecución
-            cambio.fecha_ejecucion = timezone.now()
-            cambio.save()
-            
-            # Crear historial
-            HistorialCambioDevolucion.objects.create(
-                cambio_devolucion=cambio,
-                accion='EJECUTADO',
-                estado_anterior='APROBADO',
-                estado_nuevo=cambio.estado,
-                usuario=request.user,
-                descripcion=f'Cambio ejecutado - Movimientos de inventario realizados',
-                datos_adicionales={
-                    'ticket_nuevo': cambio.ticket_nuevo.correlativo if cambio.ticket_nuevo else None,
-                    'ticket_diferencia': ticket_diferencia.correlativo if ticket_diferencia else None,
-                    'diferencia_monto': float(cambio.diferencia_monto),
-                    'fecha_ejecucion': timezone.now().isoformat()
-                }
-            )
-        
-        # Preparar respuesta
-        response_data = {
-            'success': True,
-            'message': 'Cambio ejecutado exitosamente',
-            'cambio_id': cambio.id,
-            'numero_operacion': cambio.numero_operacion,
-            'ticket_nuevo': cambio.ticket_nuevo.correlativo if cambio.ticket_nuevo else None,
-            'ticket_diferencia': ticket_diferencia.correlativo if ticket_diferencia else None,
-            'diferencia_monto': float(cambio.diferencia_monto),
-            'estado_final': cambio.get_estado_display(),
-            'requiere_cobro': cambio.diferencia_monto > 0,
-            'cobro_pendiente': cambio.estado == 'EJECUTADO_COBRO_PENDIENTE'
-        }
-        
-        # Datos del ticket nuevo para impresión
-        if cambio.ticket_nuevo:
-            response_data['ticket_data'] = construir_ticket_data(cambio.ticket_nuevo)
-        
-        return JsonResponse(response_data)
-        
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'success': False,
-            'error': 'Datos JSON inválidos'
-        })
-    except ValidationError as e:
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        })
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'Error al ejecutar cambio: {str(e)}'
-        })
 
 
 @login_required
 @require_POST
-@csrf_exempt
 def registrar_pago_diferencia(request):
-    """Registrar el pago de la diferencia de precio de un cambio ejecutado"""
-    try:
-        data = json.loads(request.body)
-        cambio_id = data.get('cambio_id')
-        metodo_pago = data.get('metodo_pago')
-        monto = data.get('monto')
-        referencia_pago = data.get('referencia_pago', '')
-        numero_autorizacion = data.get('numero_autorizacion', '')
-        observaciones = data.get('observaciones', '')
-        
-        if not all([cambio_id, metodo_pago, monto]):
-            return JsonResponse({
-                'success': False,
-                'error': 'Faltan datos requeridos'
-            })
-        
-        cambio = get_object_or_404(CambioDevolucion, id=cambio_id)
-        
-        # Verificar acceso
-        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        if cambio.sucursal_id != int(sucursal_id):
-            return JsonResponse({
-                'success': False,
-                'error': 'No tiene acceso a este cambio'
-            })
-        
-        # Verificar que tenga cobro pendiente
-        if not cambio.cobro_pendiente:
-            return JsonResponse({
-                'success': False,
-                'error': 'Este cambio no tiene un cobro de diferencia pendiente'
-            })
-        
-        # Verificar monto
-        if float(monto) != float(cambio.diferencia_monto):
-            return JsonResponse({
-                'success': False,
-                'error': f'El monto debe ser ${cambio.diferencia_monto:,}'
-            })
-        
-        with transaction.atomic():
-            # Crear registro de pago
-            PagoCambioDevolucion.objects.create(
-                cambio_devolucion=cambio,
-                tipo_pago='PAGO_DIFERENCIA',
-                metodo_pago=metodo_pago,
-                monto=monto,
-                referencia_pago=referencia_pago,
-                numero_autorizacion=numero_autorizacion,
-                procesado_por=request.user,
-                observaciones=observaciones
-            )
-            
-            # Actualizar ticket de diferencia a PAGADO
-            if cambio.ticket_diferencia:
-                cambio.ticket_diferencia.estado = 'PAGADO'
-                cambio.ticket_diferencia.fecha_pago = timezone.now()
-                cambio.ticket_diferencia.save()
-                
-                # Crear pago en el ticket
-                TicketDetallePago.objects.create(
-                    ticket=cambio.ticket_diferencia,
-                    metodo_pago=metodo_pago,
-                    monto=int(monto),
-                    voucher=referencia_pago,
-                    notas=observaciones
-                )
-            
-            # Cambiar estado del cambio a COMPLETADO
-            cambio.estado = 'COMPLETADO'
-            cambio.fecha_pago_diferencia = timezone.now()
-            cambio.fecha_completado = timezone.now()
-            cambio.save()
-            
-            # Crear historial
-            HistorialCambioDevolucion.objects.create(
-                cambio_devolucion=cambio,
-                accion='COBRO_DIFERENCIA',
-                estado_anterior='EJECUTADO_COBRO_PENDIENTE',
-                estado_nuevo='COMPLETADO',
-                usuario=request.user,
-                descripcion=f'Diferencia de ${monto:,} cobrada por {request.user.username}',
-                datos_adicionales={
-                    'metodo_pago': metodo_pago,
-                    'monto': float(monto),
-                    'referencia_pago': referencia_pago,
-                    'numero_autorizacion': numero_autorizacion,
-                    'fecha_pago': timezone.now().isoformat()
-                }
-            )
-        
-        return JsonResponse({
-            'success': True,
-            'message': f'Pago de ${monto:,} registrado exitosamente',
-            'cambio_id': cambio.id,
-            'ticket_diferencia': cambio.ticket_diferencia.correlativo if cambio.ticket_diferencia else None,
-            'estado_final': cambio.get_estado_display(),
-            'estado_final_codigo': cambio.estado
-        })
-        
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'success': False,
-            'error': 'Datos JSON inválidos'
-        })
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'Error al registrar pago: {str(e)}'
-        })
+    """Ruta legacy deshabilitada: el POS es el cierre financiero canonico."""
+    return JsonResponse({
+        'success': False,
+        'code': 'LEGACY_FLOW_DISABLED',
+        'error': (
+            'El cierre manual de diferencias fue deshabilitado. '
+            'El cobro o devolucion debe procesarse desde el POS.'
+        ),
+    }, status=410)
 
 
 @require_POST
@@ -15590,47 +15311,21 @@ def aprobar_cambio_generar_ticket(request):
             })
         
         # Validar vendedor (vendedor_id es el ID del modelo Vendedor, no User)
-        try:
-            vendedor_obj = Vendedor.objects.get(id=vendedor_id)
-        except Vendedor.DoesNotExist:
+        vendedor_obj = _vendedores_elegibles_para_sucursal(cambio.sucursal).filter(
+            id=vendedor_id
+        ).first()
+        if not vendedor_obj:
             return JsonResponse({
                 'success': False,
-                'error': 'Vendedor no encontrado'
-            })
-        
-        # Validar stock de productos nuevos
-        # IMPORTANTE: Considerar que los productos devueltos se suman al stock primero
-        stock_ajustes = {}  # Dict para rastrear ajustes de stock por producto_talla_id
-        
-        # 1. Primero, calcular el stock que se va a recuperar de las devoluciones
-        # Filtrar solo detalles con producto_original (excluye productos adicionales)
-        for item in cambio.detalles.filter(producto_original__isnull=False, cantidad_original__gt=0):
-            producto_talla_devuelto = item.producto_original.ProductoTalla
-            if producto_talla_devuelto.id not in stock_ajustes:
-                stock_ajustes[producto_talla_devuelto.id] = 0
-            stock_ajustes[producto_talla_devuelto.id] += item.cantidad_original
-        
-        # 2. Ahora validar stock de productos nuevos considerando las devoluciones
-        for item in cambio.detalles.all():
-            if item.producto_nuevo and item.cantidad_nueva:
-                producto_talla = item.producto_nuevo
-                stock_actual = producto_talla.stock_sucursal(sucursal_id)
-                
-                # Sumar el stock que se va a recuperar si este producto también se está devolviendo
-                stock_recuperado = stock_ajustes.get(producto_talla.id, 0)
-                stock_disponible = stock_actual + stock_recuperado
-                
-                if stock_disponible < item.cantidad_nueva:
-                    return JsonResponse({
-                        'success': False,
-                        'error': f'Stock insuficiente para {producto_talla.producto.articulo} - Talla {producto_talla.talla}. Disponible: {stock_disponible}'
-                    })
+                'code': 'SELLER_NOT_AVAILABLE',
+                'error': 'El vendedor no esta activo o no pertenece a esta sucursal/empresa',
+            }, status=403)
         
         logger.info("Iniciando transaccion atomica para aprobar cambio %s", cambio.id)
         
         with transaction.atomic():
             cambio = CambioDevolucion.objects.select_for_update().select_related(
-                'sucursal__empresa', 'ticket_original', 'ticket_nuevo'
+                'sucursal__empresa', 'ticket_original'
             ).get(id=cambio_id)
             if cambio.estado not in ('SOLICITADO', 'APROBADO'):
                 return JsonResponse({
@@ -15638,6 +15333,25 @@ def aprobar_cambio_generar_ticket(request):
                     'code': 'OPERATION_CHANGED',
                     'error': 'El cambio fue modificado por otro usuario. Actualice la pantalla.',
                 }, status=409)
+
+            vendedor_obj = _vendedores_elegibles_para_sucursal(cambio.sucursal).filter(
+                id=vendedor_id
+            ).first()
+            if not vendedor_obj:
+                return JsonResponse({
+                    'success': False,
+                    'code': 'SELLER_NOT_AVAILABLE',
+                    'error': 'El vendedor no esta activo o no pertenece a esta sucursal/empresa',
+                }, status=403)
+
+            detalles_bloqueados = list(
+                cambio.detalles.select_for_update().order_by('id')
+            )
+            productos_bloqueados = _bloquear_y_validar_inventario_cambio(
+                detalles_bloqueados,
+                cambio.sucursal_id,
+                reversion=False,
+            )
 
             codigo_obj = CodigoAutorizacionDinamico.objects.select_for_update().get(id=codigo_obj.id)
             if not codigo_obj.es_valido():
@@ -15876,117 +15590,69 @@ def aprobar_cambio_generar_ticket(request):
             logger.debug("Ejecutando movimientos de inventario para cambio %s", cambio.id)
             
             try:
-                # 1. ENTRADA: Productos devueltos vuelven al inventario (SOLO SI ESTÁN APTOS)
-                # Filtrar solo detalles con producto_original (excluye productos adicionales)
-                for item in cambio.detalles.filter(producto_original__isnull=False, cantidad_original__gt=0):
-                    producto_talla_devuelto = item.producto_original.ProductoTalla
-                    
-                    # ✅ Solo sumar stock si el producto está apto para venta
+                # Primero ingresan las devoluciones aptas. Las no aptas quedan
+                # solo en kardex y nunca se consideran stock disponible.
+                for item in detalles_bloqueados:
+                    if not item.producto_original_id or item.cantidad_original <= 0:
+                        continue
+                    producto_id = item.producto_original.ProductoTalla_id
+                    producto_talla = productos_bloqueados[producto_id]
                     if item.apto_para_venta:
-                        producto_talla_devuelto.stock += item.cantidad_original
-                        producto_talla_devuelto.save()
-
-                        # Registrar movimiento de entrada
-                        mov_devolucion = Movimientos_Producto.objects.create(
-                            ProductoTalla=producto_talla_devuelto,
-                            tipo_movimiento='INGRESO',
-                            concepto='DEVOLUCION_CLIENTE',
+                        ingresar_inventario(
+                            producto_talla=producto_talla,
                             cantidad=item.cantidad_original,
+                            concepto='CAMBIO_PRODUCTO_ENTRADA',
                             responsable=request.user.username,
                             sucursal_destino=sucursal,
-                            precio=int(item.precio_original_unitario),
-                            costo=0,
-                            estado='COMPLETADO',
-                            observaciones=f'Devolución - Cambio #{cambio.numero_operacion}. Condición: {item.get_condicion_producto_display()}. APTO PARA VENTA.'
-                        )
-
-                        # El reingreso recrea su lote FIFO: sin esto la capa
-                        # de lotes queda corta respecto del stock plano.
-                        from app.services.inventario_service import crear_lote
-                        crear_lote(
-                            producto_talla_devuelto,
-                            item.cantidad_original,
-                            costo_unitario=producto_talla_devuelto.producto.costo or 0,
-                            precio_venta_unitario=int(item.precio_original_unitario),
-                            movimiento=mov_devolucion,
-                            observaciones=f'Reingreso por cambio #{cambio.numero_operacion}',
-                        )
-                        logger.debug(
-                            "Ingreso por devolucion apta: cambio=%s, sku=%s, cantidad=%s",
-                            cambio.id,
-                            producto_talla_devuelto.sku,
-                            item.cantidad_original,
+                            ticket=cambio.ticket_original,
+                            costo_unitario=producto_talla.producto.costo or 0,
+                            precio_unitario=int(item.precio_original_unitario),
+                            observaciones=(
+                                f'Devolucion apta - Cambio #{cambio.numero_operacion}. '
+                                f'Condicion: {item.get_condicion_producto_display()}.'
+                            ),
+                            referencia_externa=cambio.numero_operacion,
                         )
                     else:
-                        # Producto NO APTO - Solo registrar sin sumar stock
                         Movimientos_Producto.objects.create(
-                            ProductoTalla=producto_talla_devuelto,
+                            ProductoTalla=producto_talla,
                             tipo_movimiento='AJUSTE',
                             concepto='DEVOLUCION_NO_APTA',
-                            cantidad=0,  # No suma stock
+                            cantidad=0,
                             responsable=request.user.username,
                             sucursal_destino=sucursal,
+                            ticket=cambio.ticket_original,
                             precio=int(item.precio_original_unitario),
                             costo=0,
                             estado='COMPLETADO',
-                            observaciones=f'Devolución NO APTA - Cambio #{cambio.numero_operacion}. Condición: {item.get_condicion_producto_display()}. NO SE SUMA AL INVENTARIO.'
+                            referencia_externa=cambio.numero_operacion,
+                            observaciones=(
+                                f'Devolucion NO APTA - Cambio #{cambio.numero_operacion}. '
+                                'No se suma al inventario.'
+                            ),
                         )
-                        logger.debug(
-                            "Devolucion no apta sin ingreso de stock: cambio=%s, sku=%s",
-                            cambio.id,
-                            producto_talla_devuelto.sku,
-                        )
-                
-                # 2. SALIDA: Productos nuevos entregados al cliente (FIFO)
-                for item in cambio.detalles.all():
-                    if item.producto_nuevo and item.cantidad_nueva:
-                        try:
-                            consumir_stock_fifo(
-                                producto_talla=item.producto_nuevo,
-                                cantidad_requerida=item.cantidad_nueva,
-                                responsable=request.user.username,
-                                ticket=ticket,
-                                observaciones=f'Entrega - Cambio #{cambio.numero_operacion}',
-                                referencia_externa=cambio.numero_operacion
-                            )
-                        except Exception as e_fifo:
-                            logger.warning(
-                                "FIFO fallo para cambio %s sku=%s; usando decremento directo: %s",
-                                cambio.id,
-                                item.producto_nuevo.sku,
-                                e_fifo,
-                            )
-                            item.producto_nuevo.stock -= item.cantidad_nueva
-                            item.producto_nuevo.save()
-                            # Consumir lo que quede de lotes aunque el FIFO
-                            # canónico haya fallado (no deja lotes inflados).
-                            try:
-                                from app.services.inventario_service import consumir_lotes_fifo
-                                consumir_lotes_fifo(item.producto_nuevo, item.cantidad_nueva, usar_lock=True)
-                            except Exception as e_lotes2:
-                                logger.warning(
-                                    'Fallback cambio: lotes FIFO no consumidos sku=%s: %s',
-                                    item.producto_nuevo.sku, e_lotes2,
-                                )
-                            Movimientos_Producto.objects.create(
-                                ProductoTalla=item.producto_nuevo,
-                                tipo_movimiento='EGRESO',
-                                concepto='VENTA_PUBLICO',
-                                cantidad=-item.cantidad_nueva,
-                                responsable=request.user.username,
-                                sucursal_origen=sucursal,
-                                ticket=ticket,
-                                precio=int(item.precio_nuevo),
-                                costo=0,
-                                estado='COMPLETADO',
-                                observaciones=f'Entrega - Cambio #{cambio.numero_operacion}. Fallback sin FIFO.'
-                            )
-                
+
+                # Luego salen los productos entregados. egresar_inventario
+                # mantiene stock plano, FIFO y kardex en la misma transaccion.
+                for item in detalles_bloqueados:
+                    if not item.producto_nuevo_id or item.cantidad_nueva <= 0:
+                        continue
+                    egresar_inventario(
+                        producto_talla=productos_bloqueados[item.producto_nuevo_id],
+                        cantidad=item.cantidad_nueva,
+                        concepto='CAMBIO_PRODUCTO_SALIDA',
+                        responsable=request.user.username,
+                        sucursal_origen=sucursal,
+                        ticket=ticket,
+                        precio_unitario=int(item.precio_nuevo),
+                        observaciones=f'Entrega - Cambio #{cambio.numero_operacion}',
+                        referencia_externa=cambio.numero_operacion,
+                    )
+
                 logger.info("Movimientos de inventario ejecutados para cambio %s", cambio.id)
-            except Exception as e:
+            except Exception:
                 logger.exception("Error en movimientos de inventario para cambio %s", cambio.id)
                 raise
-            
             # Vincular ticket nuevo al cambio
             logger.debug("Vinculando ticket %s al cambio %s", ticket.id, cambio.id)
             cambio.ticket_nuevo = ticket
@@ -16077,6 +15743,12 @@ def aprobar_cambio_generar_ticket(request):
             'success': False,
             'error': 'Datos JSON inválidos'
         })
+    except ConflictoInventarioCambio as e:
+        return JsonResponse({
+            'success': False,
+            'code': e.codigo,
+            'error': str(e),
+        }, status=409)
     except Exception as e:
         logger.exception("Error al aprobar cambio y generar ticket")
         return JsonResponse({
@@ -16087,50 +15759,77 @@ def aprobar_cambio_generar_ticket(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def validar_codigo_vendedor(request):
-    """Validar código de vendedor para cambios/devoluciones"""
+    """Valida un vendedor dentro del alcance del cambio solicitado."""
     try:
         data = json.loads(request.body)
-        codigo = data.get('codigo', '').strip()
-        
-        if not codigo:
+        codigo = str(data.get('codigo') or '').strip()
+        cambio_id = data.get('cambio_id')
+
+        if not codigo or not cambio_id:
             return JsonResponse({
                 'success': False,
-                'error': 'Código requerido'
-            })
-        
-        # Buscar vendedor por código en el modelo Vendedor
-        vendedor_obj = Vendedor.objects.filter(codigo_vendedor=codigo).first()
-        
-        if not vendedor_obj:
+                'code': 'SELLER_CONTEXT_REQUIRED',
+                'error': 'Codigo de vendedor e identificador del cambio requeridos',
+            }, status=400)
+
+        cambio = CambioDevolucion.objects.select_related('sucursal__empresa').filter(
+            id=cambio_id
+        ).first()
+        if not cambio:
             return JsonResponse({
                 'success': False,
-                'error': 'Código de vendedor no encontrado'
-            })
-        
-        # El vendedor existe, retornar sus datos
+                'code': 'CHANGE_NOT_FOUND',
+                'error': 'Cambio no encontrado',
+            }, status=404)
+
+        sucursal_id = get_sucursal_id(request)
+        if not sucursal_id or cambio.sucursal_id != int(sucursal_id):
+            return JsonResponse({
+                'success': False,
+                'code': 'BRANCH_DENIED',
+                'error': 'No tiene acceso a este cambio',
+            }, status=403)
+
+        candidatos = list(
+            _vendedores_elegibles_para_sucursal(cambio.sucursal)
+            .filter(codigo_vendedor=codigo)
+            .order_by('id')[:2]
+        )
+        if not candidatos:
+            return JsonResponse({
+                'success': False,
+                'code': 'SELLER_NOT_AVAILABLE',
+                'error': 'El vendedor no esta activo o no pertenece a esta sucursal/empresa',
+            }, status=404)
+        if len(candidatos) > 1:
+            return JsonResponse({
+                'success': False,
+                'code': 'SELLER_CODE_AMBIGUOUS',
+                'error': 'El codigo corresponde a mas de un vendedor. Corrija la configuracion.',
+            }, status=409)
+
+        vendedor_obj = candidatos[0]
         return JsonResponse({
             'success': True,
             'vendedor': {
                 'id': vendedor_obj.id,
                 'nombre_completo': vendedor_obj.nombre or f'Vendedor {vendedor_obj.codigo_vendedor}',
-                'codigo': vendedor_obj.codigo_vendedor
-            }
+                'codigo': vendedor_obj.codigo_vendedor,
+            },
         })
-        
+
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
-            'error': 'Datos JSON inválidos'
-        })
-    except Exception as e:
+            'error': 'Datos JSON invalidos',
+        }, status=400)
+    except Exception:
         logger.exception("Error al validar vendedor para cambio/devolucion")
         return JsonResponse({
             'success': False,
-            'error': f'Error: {str(e)}'
-        })
-
+            'error': 'No fue posible validar el vendedor',
+        }, status=500)
 
 # ========== CÓDIGOS DE AUTORIZACIÓN DINÁMICOS ==========
 
@@ -16191,7 +15890,6 @@ def obtener_codigo_autorizacion_actual(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def validar_codigo_autorizacion(request):
     """
     Valida un código de autorización dinámico ingresado por el usuario.
@@ -16289,225 +15987,16 @@ def validar_codigo_autorizacion(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def completar_cambio_devolucion(request):
-    """Completar un cambio/devolución aprobado.
-    NOTA: Camino alternativo. La UI principal usa aprobar_cambio_generar_ticket()."""
-    try:
-        data = json.loads(request.body)
-        cambio_id = data.get('cambio_id')
-        
-        if not cambio_id:
-            return JsonResponse({
-                'success': False,
-                'error': 'ID de cambio requerido'
-            })
-        
-        cambio = get_object_or_404(CambioDevolucion, id=cambio_id)
-        
-        # Verificar acceso
-        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        if cambio.sucursal_id != int(sucursal_id):
-            return JsonResponse({
-                'success': False,
-                'error': 'No tiene acceso a este cambio'
-            })
-        
-        # Verificar que se puede completar
-        if not cambio.puede_completar:
-            return JsonResponse({
-                'success': False,
-                'error': 'Este cambio no puede ser completado en su estado actual'
-            })
-        
-        with transaction.atomic():
-            # Procesar según el tipo de operación
-            if cambio.tipo_operacion in ['CAMBIO_SIMPLE', 'CAMBIO_CON_DIFERENCIA']:
-                # Es un cambio - crear nuevo ticket si hay productos nuevos
-                productos_nuevos = cambio.detalles.filter(producto_nuevo__isnull=False)
-                
-                if productos_nuevos.exists():
-                    # Crear nuevo ticket
-                    correlativo_nuevo = obtener_siguiente_correlativo(cambio.sucursal, 'TICKET_CAMBIO')
-                    
-                    ticket_nuevo = Ticket.objects.create(
-                        correlativo=correlativo_nuevo,
-                        vendedor=cambio.ticket_original.vendedor,
-                        sucursal=cambio.sucursal,
-                        subTotal=int(cambio.monto_nuevo),
-                        descuento=0,
-                        total=int(cambio.monto_nuevo),
-                        estado='PAGADO' if cambio.diferencia_monto <= 0 else 'PENDIENTE',
-                        responsable=request.user.username,
-                        cliente_nombre=cambio.ticket_original.cliente_nombre,
-                        cliente_rut=cambio.ticket_original.cliente_rut,
-                        cliente_email=cambio.ticket_original.cliente_email,
-                        cliente_telefono=cambio.ticket_original.cliente_telefono,
-                        observaciones=f'Cambio de ticket #{cambio.ticket_original.correlativo} - {cambio.numero_operacion}'
-                    )
-                    
-                    # Agregar productos nuevos al ticket
-                    for detalle in productos_nuevos:
-                        Ticket_Productos.objects.create(
-                            idTicket=ticket_nuevo,
-                            ProductoTalla=detalle.producto_nuevo,
-                            stock=detalle.cantidad_nueva,
-                            precio=int(detalle.precio_nuevo),
-                            descuento_unitario=0,
-                            subtotal=int(detalle.precio_nuevo * detalle.cantidad_nueva)
-                        )
-                    
-                    cambio.ticket_nuevo = ticket_nuevo
-            
-            # Procesar movimientos de inventario
-            # Filtrar solo detalles con producto_original (excluye productos adicionales)
-            for detalle in cambio.detalles.filter(producto_original__isnull=False, cantidad_original__gt=0):
-                # 1. DEVOLVER stock del producto original (INGRESO)
-                if detalle.apto_para_venta:
-                    mov_devolucion = Movimientos_Producto.objects.create(
-                        ProductoTalla=detalle.producto_original.ProductoTalla,
-                        cantidad=detalle.cantidad_original,  # Positivo para ingreso
-                        costo=detalle.producto_original.ProductoTalla.producto.costo,
-                        precio=int(detalle.precio_original_unitario),
-                        concepto='DEVOLUCION_CLIENTE',
-                        tipo_movimiento='INGRESO',
-                        responsable=request.user.username,
-                        observaciones=f'Devolución por cambio {cambio.numero_operacion} - Ticket original #{cambio.ticket_original.correlativo}',
-                        referencia_externa=cambio.numero_operacion,
-                        ticket=cambio.ticket_original
-                    )
-                    
-                    # Actualizar stock del producto devuelto
-                    detalle.producto_original.ProductoTalla.stock += detalle.cantidad_original
-                    detalle.producto_original.ProductoTalla.save()
-                    
-                    logger.debug(
-                        "Stock devuelto por cambio %s: sku=%s, cantidad=%s",
-                        cambio.numero_operacion,
-                        detalle.producto_original.ProductoTalla.sku,
-                        detalle.cantidad_original,
-                    )
-                else:
-                    # Producto no apto: registrar solo para auditoría sin devolver stock
-                    Movimientos_Producto.objects.create(
-                        ProductoTalla=detalle.producto_original.ProductoTalla,
-                        cantidad=0,  # No devuelve stock
-                        costo=detalle.producto_original.ProductoTalla.producto.costo,
-                        precio=int(detalle.precio_original_unitario),
-                        concepto='DEVOLUCION_CLIENTE',
-                        tipo_movimiento='AJUSTE',
-                        responsable=request.user.username,
-                        observaciones=f'Devolución NO APTA por cambio {cambio.numero_operacion} - Producto en mal estado',
-                        referencia_externa=cambio.numero_operacion,
-                        ticket=cambio.ticket_original
-                    )
-                    logger.debug(
-                        "Producto no apto no devuelve stock en cambio %s: sku=%s",
-                        cambio.numero_operacion,
-                        detalle.producto_original.ProductoTalla.sku,
-                    )
-                
-                # 2. DESCONTAR stock del producto nuevo (EGRESO con FIFO)
-                if detalle.producto_nuevo:
-                    # Verificar stock disponible
-                    if detalle.producto_nuevo.stock < detalle.cantidad_nueva:
-                        raise ValidationError(f'Stock insuficiente para {detalle.producto_nuevo.producto.articulo} - Talla {detalle.producto_nuevo.talla}. Disponible: {detalle.producto_nuevo.stock}, Requerido: {detalle.cantidad_nueva}')
-                    
-                    # Consumir stock FIFO (crea movimiento de EGRESO automáticamente)
-                    try:
-                        consumir_stock_fifo(
-                            producto_talla=detalle.producto_nuevo,
-                            cantidad_requerida=detalle.cantidad_nueva,
-                            responsable=request.user.username,
-                            ticket=cambio.ticket_nuevo,
-                            observaciones=f'Cambio {cambio.numero_operacion} - Nuevo producto para ticket #{cambio.ticket_nuevo.correlativo if cambio.ticket_nuevo else "N/A"}',
-                            referencia_externa=cambio.numero_operacion
-                        )
-                        logger.debug(
-                            "Stock FIFO consumido por cambio %s: sku=%s, cantidad=%s",
-                            cambio.numero_operacion,
-                            detalle.producto_nuevo.sku,
-                            detalle.cantidad_nueva,
-                        )
-                    except Exception as e:
-                        raise ValidationError(f'Error al consumir stock FIFO: {str(e)}')
-            
-            # Procesar pagos si hay diferencia
-            if cambio.diferencia_monto != 0:
-                pagos_data = data.get('pagos', [])
-                
-                for pago_data in pagos_data:
-                    PagoCambioDevolucion.objects.create(
-                        cambio_devolucion=cambio,
-                        tipo_pago=pago_data.get('tipo_pago'),
-                        metodo_pago=pago_data.get('metodo_pago'),
-                        monto=abs(pago_data.get('monto', 0)),
-                        referencia_pago=pago_data.get('referencia_pago', ''),
-                        numero_autorizacion=pago_data.get('numero_autorizacion', ''),
-                        procesado_por=request.user,
-                        observaciones=pago_data.get('observaciones', '')
-                    )
-            
-            # Completar el cambio
-            cambio.completar_cambio()
-            
-            # Crear historial
-            HistorialCambioDevolucion.objects.create(
-                cambio_devolucion=cambio,
-                accion='COMPLETADO',
-                estado_anterior='APROBADO',
-                estado_nuevo='COMPLETADO',
-                usuario=request.user,
-                descripcion=f'Cambio completado exitosamente',
-                datos_adicionales={
-                    'ticket_nuevo': cambio.ticket_nuevo.correlativo if cambio.ticket_nuevo else None,
-                    'diferencia_procesada': float(cambio.diferencia_monto),
-                    'fecha_completado': timezone.now().isoformat()
-                }
-            )
-        
-        # Preparar datos del ticket para impresión si se creó uno nuevo
-        ticket_data = None
-        if cambio.ticket_nuevo:
-            ticket_data = construir_ticket_data(cambio.ticket_nuevo)
-            ticket_data['es_ticket_cambio'] = True
-            ticket_data['numero_operacion']            = cambio.numero_operacion
-            ticket_data['ticket_original_correlativo'] = (
-                cambio.ticket_original.correlativo if cambio.ticket_original else None
-            )
-            ticket_data['tipo_operacion']         = cambio.tipo_operacion
-            ticket_data['tipo_operacion_display']  = cambio.get_tipo_operacion_display()
-            ticket_data['monto_original']  = int(cambio.monto_original)
-            ticket_data['monto_nuevo']     = int(cambio.monto_nuevo)
-            ticket_data['diferencia_monto'] = int(cambio.diferencia_monto)
-        
-        return JsonResponse({
-            'success': True,
-            'message': 'Cambio completado exitosamente',
-            'cambio_id': cambio.id,
-            'numero_operacion': cambio.numero_operacion,
-            'ticket_nuevo': cambio.ticket_nuevo.correlativo if cambio.ticket_nuevo else None,
-            'estado_final': cambio.get_estado_display(),
-            'ticket_data': ticket_data,  # Datos para imprimir el nuevo ticket
-            'puede_imprimir': cambio.ticket_nuevo is not None,
-            'diferencia_monto': float(cambio.diferencia_monto)
-        })
-        
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'success': False,
-            'error': 'Datos JSON inválidos'
-        })
-    except ValidationError as e:
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        })
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'Error al completar cambio: {str(e)}'
-        })
+    """Ruta legacy deshabilitada: completar requiere el flujo unificado."""
+    return JsonResponse({
+        'success': False,
+        'code': 'LEGACY_FLOW_DISABLED',
+        'error': (
+            'El flujo separado de completado fue deshabilitado. '
+            'Use la autorizacion y ejecucion unificada con codigo de Administrador.'
+        ),
+    }, status=410)
 
 
 @login_required

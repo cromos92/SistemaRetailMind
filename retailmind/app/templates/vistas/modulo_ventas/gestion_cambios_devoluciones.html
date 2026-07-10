@@ -6618,6 +6618,7 @@ function enviarSolicitudCambio(datos) {
         method: 'POST',
         data: JSON.stringify(datos),
         contentType: 'application/json',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
         success: function(response) {
             ocultarLoading();
 
@@ -7433,56 +7434,6 @@ function aprobarCambio(cambioId) {
     aprobarCambioConDatos(cambioId, 'CAMBIO', 0, 0);
 }
 
-function soloAprobarCambio(cambioId) {
-    Swal.fire({
-        title: '¿Aprobar esta solicitud?',
-        html: `<p class="mb-2">Se aprobará la solicitud <strong>sin ejecutar</strong> movimientos de inventario ni generar tickets.</p>
-               <p class="text-muted small">Luego deberá ejecutar el cambio en un paso separado.</p>
-               <div class="mt-3">
-                   <label class="form-label small">Observaciones (opcional)</label>
-                   <textarea id="swal-obs-aprobar" class="form-control form-control-sm" rows="2"></textarea>
-               </div>`,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: '<i class="ri-check-line"></i> Aprobar',
-        cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#198754',
-        preConfirm: () => {
-            return { observaciones: document.getElementById('swal-obs-aprobar').value };
-        }
-    }).then((result) => {
-        if (result.isConfirmed) {
-            $.ajax({
-                url: '/app/ventas/api/aprobar-cambio-devolucion/',
-                method: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({
-                    cambio_id: cambioId,
-                    accion: 'aprobar',
-                    observaciones: result.value.observaciones
-                }),
-                headers: { 'X-CSRFToken': csrfToken },
-                success: function(response) {
-                    if (response.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Aprobado',
-                            text: 'El cambio fue aprobado. Ahora puede ejecutarlo cuando esté listo.',
-                            timer: 2500
-                        });
-                        cargarCambiosDevoluciones();
-                    } else {
-                        Swal.fire('Error', response.error, 'error');
-                    }
-                },
-                error: function(xhr) {
-                    Swal.fire('Error', 'No se pudo aprobar el cambio', 'error');
-                }
-            });
-        }
-    });
-}
-
 // Variables para controlar las validaciones
 let vendedorValidado = false;
 let autorizacionValidada = false;
@@ -7515,7 +7466,10 @@ function validarCodigoVendedorAprobacion() {
     $.ajax({
         url: '/app/ventas/api/validar-codigo-vendedor/',
         method: 'POST',
-        data: JSON.stringify({ codigo: codigo }),
+        data: JSON.stringify({
+            codigo: codigo,
+            cambio_id: cambioActual?.id
+        }),
         contentType: 'application/json',
         headers: {
             'X-CSRFToken': getCookie('csrftoken')
@@ -7550,7 +7504,7 @@ function validarCodigoVendedorAprobacion() {
         },
         error: function(xhr) {
             Swal.close();
-            mostrarError('Error al validar vendedor');
+            mostrarError(xhr.responseJSON?.error || 'Error al validar vendedor');
             $('#vendedor-id-validado').val('');
             $('#info-vendedor-validado').hide();
             vendedorValidado = false;
@@ -7812,83 +7766,6 @@ function confirmarAprobacionYGenerarTicket() {
 function confirmarAprobacion() {
     // Función legacy - redirige a la nueva
     confirmarAprobacionYGenerarTicket();
-}
-
-function ejecutarCambio(cambioId) {
-    Swal.fire({
-        title: '¿Ejecutar este cambio?',
-        html: `
-            <p>Se realizarán las siguientes acciones:</p>
-            <hr>
-            <ul class="text-start">
-                <li>✅ Devolución de productos al inventario</li>
-                <li>✅ Entrega de productos nuevos (con FIFO)</li>
-                <li>✅ Generación de ticket nuevo</li>
-                <li>💰 Generación de ticket de diferencia (si aplica)</li>
-            </ul>
-            <hr>
-            <p class="small text-muted">Esta acción no se puede deshacer.</p>
-        `,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#0d6efd',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: '<i class="ri-play-circle-line"></i> Sí, ejecutar',
-        cancelButtonText: 'Cancelar'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            mostrarLoading('Ejecutando cambio...');
-            
-            $.ajax({
-                url: '/app/ventas/api/ejecutar-cambio-devolucion/',
-                method: 'POST',
-                data: JSON.stringify({ cambio_id: cambioId }),
-                contentType: 'application/json',
-                success: function(response) {
-                    ocultarLoading();
-                    
-                    if (response.success) {
-                        let mensajeHtml = `
-                            <p><strong>Operación:</strong> ${response.numero_operacion}</p>
-                            <hr>
-                        `;
-                        
-                        if (response.ticket_nuevo) {
-                            mensajeHtml += `<p>✅ <strong>Ticket Nuevo:</strong> #${response.ticket_nuevo}</p>`;
-                        }
-                        
-                        if (response.ticket_diferencia) {
-                            mensajeHtml += `
-                                <p class="text-warning">
-                                    💰 <strong>Ticket de Diferencia:</strong> #${response.ticket_diferencia}
-                                    <br><small>Monto: $${formatearNumero(response.diferencia_monto)}</small>
-                                    <br><span class="badge bg-warning text-dark mt-1">PENDIENTE DE COBRO</span>
-                                </p>
-                            `;
-                        }
-                        
-                        mensajeHtml += `<hr><p><strong>Estado:</strong> ${response.estado_final}</p>`;
-                        
-                        Swal.fire({
-                            icon: 'success',
-                            title: '✅ Cambio Ejecutado',
-                            html: mensajeHtml,
-                            confirmButtonText: 'Entendido'
-                        });
-                        
-                        cargarCambiosDevoluciones();
-                    } else {
-                        mostrarError(response.error);
-                    }
-                },
-                error: function(xhr) {
-                    ocultarLoading();
-                    const error = xhr.responseJSON?.error || 'Error al ejecutar cambio';
-                    mostrarError(error);
-                }
-            });
-        }
-    });
 }
 
 function revertirCambio(cambioId) {
@@ -8248,143 +8125,6 @@ function verDetalleNC(cambioId) {
         });
     }).fail(function() {
         mostrarError('Error al cargar detalle de NC');
-    });
-}
-
-function cobrarDiferencia(cambioId, montoDiferencia) {
-    Swal.fire({
-        title: '💰 Cobrar Diferencia de Precio',
-        html: `
-            <div class="text-start">
-                <div class="alert alert-warning">
-                    <strong>Monto a cobrar:</strong> $${formatearNumero(montoDiferencia)}
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Método de Pago *</label>
-                    <select class="form-select" id="swal-metodo-pago">
-                        <option value="EFECTIVO">Efectivo</option>
-                        <option value="DEBITO">Tarjeta Débito</option>
-                        <option value="CREDITO">Tarjeta Crédito</option>
-                        <option value="TRANSFERENCIA">Transferencia</option>
-                    </select>
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">Referencia/Voucher</label>
-                    <input type="text" class="form-control" id="swal-referencia" placeholder="Ej: Voucher 1234">
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">Nº Autorización</label>
-                    <input type="text" class="form-control" id="swal-autorizacion" placeholder="Ej: AUTH-5678">
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">Observaciones</label>
-                    <textarea class="form-control" id="swal-observaciones" rows="2"></textarea>
-                </div>
-            </div>
-        `,
-        showCancelButton: true,
-        confirmButtonColor: '#28a745',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: '<i class="ri-money-dollar-circle-line"></i> Registrar Pago',
-        cancelButtonText: 'Cancelar',
-        width: '600px',
-        preConfirm: () => {
-            const metodoPago = $('#swal-metodo-pago').val();
-            if (!metodoPago) {
-                Swal.showValidationMessage('Debe seleccionar un método de pago');
-                return false;
-            }
-            return {
-                metodo_pago: metodoPago,
-                referencia_pago: $('#swal-referencia').val(),
-                numero_autorizacion: $('#swal-autorizacion').val(),
-                observaciones: $('#swal-observaciones').val()
-            };
-        }
-    }).then((result) => {
-        if (result.isConfirmed) {
-            const datosPago = result.value;
-            
-            mostrarLoading('Registrando pago...');
-            
-            $.ajax({
-                url: '/app/ventas/api/registrar-pago-diferencia/',
-                method: 'POST',
-                data: JSON.stringify({
-                    cambio_id: cambioId,
-                    monto: montoDiferencia,
-                    ...datosPago
-                }),
-                contentType: 'application/json',
-                success: function(response) {
-                    ocultarLoading();
-                    
-                    if (response.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '✅ Pago Registrado',
-                            html: `
-                                <p>El pago de <strong>$${formatearNumero(montoDiferencia)}</strong> se registró correctamente</p>
-                                <p>El cambio está ahora <strong>${response.estado_final}</strong></p>
-                            `,
-                            timer: 3000,
-                            showConfirmButton: true
-                        });
-                        
-                        cargarCambiosDevoluciones();
-                    } else {
-                        mostrarError(response.error);
-                    }
-                },
-                error: function(xhr) {
-                    ocultarLoading();
-                    const error = xhr.responseJSON?.error || 'Error al registrar pago';
-                    mostrarError(error);
-                }
-            });
-        }
-    });
-}
-
-function marcarCompletado(cambioId) {
-    Swal.fire({
-        title: '¿Marcar como completado?',
-        text: 'El cambio se marcará como finalizado',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, completar',
-        cancelButtonText: 'Cancelar'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            // Simplemente cambiar el estado a COMPLETADO
-            $.ajax({
-                url: '/app/ventas/api/completar-cambio-devolucion/',
-                method: 'POST',
-                data: JSON.stringify({ cambio_id: cambioId }),
-                contentType: 'application/json',
-                success: function(response) {
-                    if (response.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '✅ Cambio Completado',
-                            timer: 2000,
-                            showConfirmButton: false
-                        });
-                        cargarCambiosDevoluciones();
-                    } else {
-                        mostrarError(response.error);
-                    }
-                },
-                error: function(xhr) {
-                    const error = xhr.responseJSON?.error || 'Error al completar';
-                    mostrarError(error);
-                }
-            });
-        }
     });
 }
 

@@ -6,17 +6,22 @@ from django.utils import timezone
 
 from app.models import (
     CambioDevolucion,
+    CambioDevolucionDetalle,
     CodigoAutorizacionDinamico,
+    LoteProducto,
     ModuloSistema,
     OpcionMenu,
     PermisoRol,
     PermisoTemporalCambio,
     RegistroAutorizacion,
     Ticket,
+    Ticket_Productos,
 )
 from .factories import (
     crear_empresa,
     crear_empresa_user,
+    crear_lote_fifo,
+    crear_producto_con_talla,
     crear_sucursal,
     crear_usuario,
     crear_vendedor,
@@ -102,6 +107,18 @@ class PermisosCambiosTest(TestCase):
         return self.client.post(
             reverse('cancelar_cambio_devolucion'),
             data=json.dumps(payload),
+            content_type='application/json',
+        )
+
+    def _post_aprobar(self, codigo, vendedor=None):
+        return self.client.post(
+            reverse('aprobar_cambio_generar_ticket'),
+            data=json.dumps({
+                'cambio_id': self.cambio.id,
+                'vendedor_id': (vendedor or self.vendedor).id,
+                'codigo_autorizacion': codigo,
+                'observaciones': 'Prueba de autorizacion',
+            }),
             content_type='application/json',
         )
 
@@ -233,6 +250,288 @@ class PermisosCambiosTest(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()['code'], 'AUTH_CODE_REQUIRED')
 
+    @override_settings(CSRF_FAILURE_VIEW='django.views.csrf.csrf_failure')
+    def test_crear_cambio_rechaza_post_sin_csrf(self):
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.cookies.update(self.client.cookies)
+
+        response = csrf_client.post(
+            reverse('crear_cambio_devolucion'),
+            data=json.dumps({}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_aprobacion_rechaza_vendedor_de_otra_empresa_sin_consumir_codigo(self):
+        otra_empresa = crear_empresa(nombre='Empresa Vendedor Ajeno', rut='76.111.111-1')
+        otra_sucursal = crear_sucursal(empresa=otra_empresa, alias='SUC-VEND-AJENA')
+        vendedor_ajeno = crear_vendedor(
+            nombre='Vendedor Ajeno',
+            empresa=otra_empresa,
+            codigo_vendedor='VAJENO',
+            rut='11.111.111-1',
+        )
+        vendedor_ajeno.sucursales.add(otra_sucursal)
+        codigo = self._codigo_admin(codigo='333444')
+
+        response = self._post_aprobar(codigo.codigo, vendedor=vendedor_ajeno)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()['code'], 'SELLER_NOT_AVAILABLE')
+        codigo.refresh_from_db()
+        self.cambio.refresh_from_db()
+        self.assertFalse(codigo.usado)
+        self.assertEqual(self.cambio.estado, 'SOLICITADO')
+        self.assertIsNone(self.cambio.ticket_nuevo_id)
+
+    def test_validar_codigo_vendedor_usa_contexto_del_cambio(self):
+        response_valido = self.client.post(
+            reverse('validar_codigo_vendedor'),
+            data=json.dumps({
+                'codigo': self.vendedor.codigo_vendedor,
+                'cambio_id': self.cambio.id,
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(response_valido.status_code, 200)
+        self.assertEqual(response_valido.json()['vendedor']['id'], self.vendedor.id)
+
+        otra_empresa = crear_empresa(nombre='Empresa Codigo Ajeno', rut='76.222.222-2')
+        otra_sucursal = crear_sucursal(empresa=otra_empresa, alias='SUC-COD-AJENA')
+        vendedor_ajeno = crear_vendedor(
+            nombre='Codigo Ajeno',
+            empresa=otra_empresa,
+            codigo_vendedor='COD-AJENO',
+            rut='22.222.222-2',
+        )
+        vendedor_ajeno.sucursales.add(otra_sucursal)
+        response_ajeno = self.client.post(
+            reverse('validar_codigo_vendedor'),
+            data=json.dumps({
+                'codigo': vendedor_ajeno.codigo_vendedor,
+                'cambio_id': self.cambio.id,
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(response_ajeno.status_code, 404)
+        self.assertEqual(response_ajeno.json()['code'], 'SELLER_NOT_AVAILABLE')
+
+    def test_stock_repetido_se_valida_por_cantidad_total(self):
+        _, producto_nuevo = crear_producto_con_talla(
+            self.sucursal,
+            articulo='Ultima Unidad',
+            sku=880001,
+            stock=1,
+            precioventa=25000,
+        )
+        crear_lote_fifo(producto_nuevo, cantidad=1)
+        for _ in range(2):
+            CambioDevolucionDetalle.objects.create(
+                cambio_devolucion=self.cambio,
+                producto_original=None,
+                cantidad_original=0,
+                producto_nuevo=producto_nuevo,
+                cantidad_nueva=1,
+                precio_nuevo=25000,
+                condicion_producto='PERFECTO',
+                apto_para_venta=True,
+                precio_original_unitario=0,
+            )
+        codigo = self._codigo_admin(codigo='555666')
+
+        response = self._post_aprobar(codigo.codigo)
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()['code'], 'STOCK_CHANGED')
+        producto_nuevo.refresh_from_db()
+        codigo.refresh_from_db()
+        self.cambio.refresh_from_db()
+        self.assertEqual(producto_nuevo.stock, 1)
+        self.assertFalse(codigo.usado)
+        self.assertEqual(self.cambio.estado, 'SOLICITADO')
+        self.assertIsNone(self.cambio.ticket_nuevo_id)
+
+    def test_reversion_bloqueada_si_producto_devuelto_ya_no_tiene_stock(self):
+        _, producto_original = crear_producto_con_talla(
+            self.sucursal,
+            articulo='Producto Ya Vendido',
+            sku=880002,
+            stock=0,
+            precioventa=20000,
+        )
+        linea_original = Ticket_Productos.objects.create(
+            idTicket=self.ticket_original,
+            ProductoTalla=producto_original,
+            stock=1,
+            precio=20000,
+            precio_original=20000,
+            subtotal=20000,
+        )
+        CambioDevolucionDetalle.objects.create(
+            cambio_devolucion=self.cambio,
+            producto_original=linea_original,
+            cantidad_original=1,
+            producto_nuevo=None,
+            cantidad_nueva=0,
+            precio_nuevo=0,
+            condicion_producto='PERFECTO',
+            apto_para_venta=True,
+            precio_original_unitario=20000,
+        )
+        ticket_pendiente = Ticket.objects.create(
+            correlativo=903,
+            vendedor=self.vendedor,
+            sucursal=self.sucursal,
+            subTotal=20000,
+            total=20000,
+            estado='PENDIENTE',
+            responsable='test',
+            modulo_origen='CAMBIO_DEVOLUCION',
+        )
+        self.cambio.estado = 'EJECUTADO_DEVOL_PENDIENTE'
+        self.cambio.ticket_nuevo = ticket_pendiente
+        self.cambio.save(update_fields=['estado', 'ticket_nuevo'])
+        self.client.force_login(self.admin)
+        session = self.client.session
+        session['idSucursalActual'] = self.sucursal.id
+        session.save()
+
+        response = self.client.post(
+            reverse('revertir_cambio_devolucion'),
+            data=json.dumps({
+                'cambio_id': self.cambio.id,
+                'motivo': 'Producto devuelto ya fue vendido',
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()['code'], 'STOCK_REVERSAL_CONFLICT')
+        producto_original.refresh_from_db()
+        ticket_pendiente.refresh_from_db()
+        self.cambio.refresh_from_db()
+        self.assertEqual(producto_original.stock, 0)
+        self.assertEqual(ticket_pendiente.estado, 'PENDIENTE')
+        self.assertEqual(self.cambio.estado, 'EJECUTADO_DEVOL_PENDIENTE')
+
+    def test_ejecucion_y_reversion_mantienen_stock_fifo_y_kardex(self):
+        _, producto_original = crear_producto_con_talla(
+            self.sucursal,
+            articulo='Producto Devuelto',
+            sku=880010,
+            stock=0,
+            costo=10000,
+            precioventa=20000,
+        )
+        _, producto_nuevo = crear_producto_con_talla(
+            self.sucursal,
+            articulo='Producto Entregado',
+            sku=880011,
+            stock=2,
+            costo=12000,
+            precioventa=25000,
+        )
+        crear_lote_fifo(
+            producto_nuevo,
+            cantidad=2,
+            costo_unitario=12000,
+            precio_venta_unitario=25000,
+        )
+        linea_original = Ticket_Productos.objects.create(
+            idTicket=self.ticket_original,
+            ProductoTalla=producto_original,
+            stock=1,
+            precio=20000,
+            precio_original=20000,
+            subtotal=20000,
+        )
+        CambioDevolucionDetalle.objects.create(
+            cambio_devolucion=self.cambio,
+            producto_original=linea_original,
+            cantidad_original=1,
+            producto_nuevo=producto_nuevo,
+            cantidad_nueva=1,
+            precio_nuevo=25000,
+            condicion_producto='PERFECTO',
+            apto_para_venta=True,
+            precio_original_unitario=20000,
+        )
+        self.cambio.tipo_operacion = 'CAMBIO_CON_DIFERENCIA'
+        self.cambio.monto_original = 20000
+        self.cambio.monto_nuevo = 25000
+        self.cambio.diferencia_monto = 5000
+        self.cambio.save(update_fields=[
+            'tipo_operacion', 'monto_original', 'monto_nuevo', 'diferencia_monto'
+        ])
+        codigo = self._codigo_admin(codigo='777888')
+
+        response_aprobar = self._post_aprobar(codigo.codigo)
+        self.assertEqual(response_aprobar.status_code, 200, response_aprobar.content)
+
+        producto_original.refresh_from_db()
+        producto_nuevo.refresh_from_db()
+        self.cambio.refresh_from_db()
+        self.assertEqual(producto_original.stock, 1)
+        self.assertEqual(producto_nuevo.stock, 1)
+        self.assertEqual(
+            sum(LoteProducto.objects.filter(
+                producto_talla=producto_original,
+                activo=True,
+                agotado=False,
+            ).values_list('cantidad_disponible', flat=True)),
+            1,
+        )
+        self.assertEqual(
+            sum(LoteProducto.objects.filter(
+                producto_talla=producto_nuevo,
+                activo=True,
+                agotado=False,
+            ).values_list('cantidad_disponible', flat=True)),
+            1,
+        )
+        self.assertEqual(self.cambio.estado, 'EJECUTADO_COBRO_PENDIENTE')
+        self.assertEqual(self.cambio.ticket_nuevo.estado, 'PENDIENTE')
+
+        self.client.force_login(self.admin)
+        session = self.client.session
+        session['idSucursalActual'] = self.sucursal.id
+        session.save()
+        response_revertir = self.client.post(
+            reverse('revertir_cambio_devolucion'),
+            data=json.dumps({
+                'cambio_id': self.cambio.id,
+                'motivo': 'Prueba de rollback integral',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(response_revertir.status_code, 200, response_revertir.content)
+
+        producto_original.refresh_from_db()
+        producto_nuevo.refresh_from_db()
+        self.cambio.refresh_from_db()
+        self.cambio.ticket_nuevo.refresh_from_db()
+        self.assertEqual(producto_original.stock, 0)
+        self.assertEqual(producto_nuevo.stock, 2)
+        self.assertEqual(
+            sum(LoteProducto.objects.filter(
+                producto_talla=producto_original,
+                activo=True,
+                agotado=False,
+            ).values_list('cantidad_disponible', flat=True)),
+            0,
+        )
+        self.assertEqual(
+            sum(LoteProducto.objects.filter(
+                producto_talla=producto_nuevo,
+                activo=True,
+                agotado=False,
+            ).values_list('cantidad_disponible', flat=True)),
+            2,
+        )
+        self.assertEqual(self.cambio.estado, 'REVERTIDO')
+        self.assertEqual(self.cambio.ticket_nuevo.estado, 'ANULADO')
+
     def test_flujos_legacy_no_permiten_saltar_autorizacion(self):
         for url_name, payload in (
             ('aprobar_cambio_devolucion', {
@@ -240,6 +539,14 @@ class PermisosCambiosTest(TestCase):
                 'accion': 'aprobar',
             }),
             ('ejecutar_cambio_devolucion', {
+                'cambio_id': self.cambio.id,
+            }),
+            ('registrar_pago_diferencia', {
+                'cambio_id': self.cambio.id,
+                'metodo_pago': 'EFECTIVO',
+                'monto': 0,
+            }),
+            ('completar_cambio_devolucion', {
                 'cambio_id': self.cambio.id,
             }),
         ):
