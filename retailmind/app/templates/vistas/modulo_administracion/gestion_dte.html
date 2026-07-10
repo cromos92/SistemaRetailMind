@@ -2959,6 +2959,33 @@
         return cookieValue;
     }
 
+    // Valida un RUT chileno COMPLETO (cuerpo + dígito verificador) con módulo
+    // 11 — mismo algoritmo que validar_rut_chileno() del backend. Devuelve
+    // { valido, formateado, motivo }. `formateado` es "cuerpo-DV" (sin puntos,
+    // con guión), el formato que espera formatear_rut y el TXT Acepta.
+    function _ncValidarRutCompleto(rutRaw) {
+        const limpio = String(rutRaw || '').replace(/[.\-\s]/g, '').toUpperCase();
+        if (limpio.length < 8) {
+            return { valido: false, formateado: '', motivo: 'El RUT debe incluir el dígito verificador (ej: 12345678-9).' };
+        }
+        const cuerpo = limpio.slice(0, -1);
+        const dv = limpio.slice(-1);
+        if (!/^\d{7,8}$/.test(cuerpo) || !/^[0-9K]$/.test(dv)) {
+            return { valido: false, formateado: '', motivo: 'Formato de RUT inválido. Use 7 u 8 dígitos + dígito verificador (ej: 12345678-9).' };
+        }
+        let suma = 0, mult = 2;
+        for (let i = cuerpo.length - 1; i >= 0; i--) {
+            suma += parseInt(cuerpo[i], 10) * mult;
+            mult = mult < 7 ? mult + 1 : 2;
+        }
+        const resto = suma % 11;
+        const dvEsperado = resto === 0 ? '0' : (11 - resto === 10 ? 'K' : String(11 - resto));
+        if (dv !== dvEsperado) {
+            return { valido: false, formateado: '', motivo: `Dígito verificador incorrecto (debería ser ${dvEsperado}).` };
+        }
+        return { valido: true, formateado: `${cuerpo}-${dv}`, motivo: '' };
+    }
+
     function buscarClienteAnulacion(esAuto = false) {
         const rutInput = document.getElementById('anulClienteRut');
         const nombreInput = document.getElementById('anulClienteNombre');
@@ -2968,14 +2995,18 @@
         const clienteIdInput = document.getElementById('anulClienteId');
         const sufijoAuto = esAuto ? ' · autocompletado desde la venta' : '';
 
-        const rut = (rutInput.value || '').trim();
-        if (!rut || rut.length < 7) {
+        const rutRaw = (rutInput.value || '').trim();
+        const rutChk = _ncValidarRutCompleto(rutRaw);
+        if (!rutChk.valido) {
             estadoBadge.className = 'badge-nexo badge-nexo-error d-inline-block w-100 py-2';
             estadoBadge.style.fontSize = '0.72rem';
-            estadoBadge.textContent = 'Ingrese un RUT válido';
+            estadoBadge.textContent = rutChk.motivo;
             estadoBadge.classList.remove('d-none');
             return;
         }
+        // Normaliza el input al formato completo "cuerpo-DV" antes de buscar.
+        const rut = rutChk.formateado;
+        rutInput.value = rut;
 
         estadoBadge.className = 'badge-nexo badge-nexo-secondary d-inline-block w-100 py-2';
         estadoBadge.style.fontSize = '0.72rem';
@@ -4188,7 +4219,7 @@
                     return null;
                 }
 
-                const clienteRut = document.getElementById('anulClienteRut').value.trim();
+                let clienteRut = document.getElementById('anulClienteRut').value.trim();
                 const clienteNombre = document.getElementById('anulClienteNombre').value.trim();
                 const clienteId = document.getElementById('anulClienteId').value || null;
 
@@ -4197,6 +4228,17 @@
                         mostrarError('Debe ingresar el RUT del cliente y buscarlo (o crearlo si no existe). Para NC sin cliente identificado seleccione "NC oculta".');
                         return null;
                     }
+                    // El RUT debe estar COMPLETO (cuerpo + dígito verificador). Así
+                    // el TXT Acepta lleva el RUT correcto y no un DV inventado por
+                    // formatear_rut cuando falta el verificador.
+                    const rutChk = _ncValidarRutCompleto(clienteRut);
+                    if (!rutChk.valido) {
+                        mostrarError('RUT del cliente inválido: ' + rutChk.motivo);
+                        return null;
+                    }
+                    clienteRut = rutChk.formateado; // normaliza a "cuerpo-DV"
+                    const rutInputEl = document.getElementById('anulClienteRut');
+                    if (rutInputEl) rutInputEl.value = clienteRut;
                     if (!clienteId && !clienteNombre) {
                         mostrarError('El RUT ingresado no se ha buscado en la base. Presione el botón de buscar; si no existe, créelo con "Crear Cliente".');
                         return null;

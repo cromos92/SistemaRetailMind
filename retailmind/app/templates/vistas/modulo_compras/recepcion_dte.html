@@ -1254,6 +1254,42 @@
                         </div>
                     </div>
                     <div class="card-body">
+                        <!-- Navegación de primera clase entre las vistas del módulo.
+                             Los botones usan class="vista-unificada-btn" + data-vista,
+                             que el handler existente enruta a cambiarVistaUnificada(). -->
+                        <ul class="nav nav-pills recepcion-nav flex-wrap gap-2 mb-4 p-2 bg-light rounded-3" role="tablist">
+                            {% if puede_recepcionar_dte %}
+                            <li class="nav-item">
+                                <button type="button" class="nav-link vista-unificada-btn" data-vista="recibidos">
+                                    <i class="bi bi-box-arrow-in-down me-1"></i>Por recibir
+                                </button>
+                            </li>
+                            {% endif %}
+                            {% if puede_regularizar_dte %}
+                            <li class="nav-item">
+                                <button type="button" class="nav-link vista-unificada-btn" data-vista="regularizar">
+                                    <i class="bi bi-tools me-1"></i>Por resolver
+                                </button>
+                            </li>
+                            {% endif %}
+                            <li class="nav-item">
+                                <button type="button" class="nav-link vista-unificada-btn" data-vista="recepcionados">
+                                    <i class="bi bi-check2-all me-1"></i>Recepcionados
+                                </button>
+                            </li>
+                            {% if puede_ajustar_emitidos %}
+                            <li class="nav-item">
+                                <button type="button" class="nav-link vista-unificada-btn" data-vista="emitidos">
+                                    <i class="bi bi-box-arrow-up-right me-1"></i>Emitidos
+                                </button>
+                            </li>
+                            {% endif %}
+                            <li class="nav-item">
+                                <button type="button" class="nav-link vista-unificada-btn" data-vista="mis_regularizaciones">
+                                    <i class="bi bi-inbox me-1"></i>Mis solicitudes
+                                </button>
+                            </li>
+                        </ul>
                         <div class="filter-section mb-4">
                             <div class="row g-3">
                                 <div class="col-12">
@@ -2622,6 +2658,7 @@ $(document).ready(function() {
     } else if (!PUEDE_RECEPCIONAR_DTE && !PUEDE_AJUSTAR_EMITIDOS) {
         cambiarVistaUnificada(PUEDE_REGULARIZAR_DTE ? 'regularizar' : 'recepcionados');
     } else {
+        $('.vista-unificada-btn[data-vista="recibidos"]').addClass('active');
         cargarRecepciones();
     }
     cargarHistorial();
@@ -3220,6 +3257,13 @@ function cancelarRegularizacionProducto(recepcionId) {
                     html: `<p>${_escapeHtmlDte(response.message || '')}</p><div class="alert alert-info">Ahora podés actualizar el stock por regularizar con <strong>Mercadería Encontrada</strong> o <strong>Ajustar</strong>.</div>${errHtml}`,
                     confirmButtonText: 'Entendido'
                 });
+                // La línea vuelve a Pendiente/Faltante: saltar al tab "Pendientes"
+                // para que quede visible con su botón "Regularizar". Si nos
+                // quedáramos en "Regularizado", la fila reabierta desaparecería.
+                $('.regularizar-tabs [data-tab]').removeClass('active');
+                $('.regularizar-tabs [data-tab="pendiente"]').addClass('active');
+                $('#regularizarTabFiltro').val('pendiente');
+                if (typeof paginaActualRegularizar !== 'undefined') paginaActualRegularizar = 1;
                 if (window.cargarProductosProblemas) window.cargarProductosProblemas();
             } else {
                 Swal.fire('No se pudo cancelar', response.error || 'Error', 'warning');

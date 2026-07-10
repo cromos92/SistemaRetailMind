@@ -96,6 +96,41 @@ def _permiso_recepcion_dte(user, tipo_permiso, sucursal_id=None):
     )
 
 
+# --- Cierre canónico de DTE de traspaso (fuente única de verdad) ---
+# Estados de LÍNEA (Productos_Recepcionados) que se consideran "abiertos": la
+# línea todavía requiere acción. Incluye estados legacy que aún pueden existir
+# en datos viejos (SOBRANTE_PENDIENTE, EN_REGULARIZACION de línea).
+OPEN_LINE_STATES = {
+    'RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE',
+    'RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE',
+    'EN_SOLICITUD_REGULARIZACION', 'EN_REGULARIZACION',
+}
+# Estados de CABECERA fijados por acción explícita: el cierre por líneas NO los toca.
+HEADER_TERMINAL = {'EMITIDO', 'ACEPTADO', 'RECHAZADO', 'ANULADO', 'CANCELADO'}
+
+
+def _recalcular_estado_dte(dte, guardar=True):
+    """Única fuente de verdad del cierre de un DTE de traspaso.
+
+    Deriva RECEPCIONADO_PARCIAL / RECEPCIONADO_COMPLETO desde las líneas
+    (Productos_Recepcionados): si queda alguna línea abierta → PARCIAL; si todas
+    están OK/REGULARIZADO → COMPLETO. NO toca estados fijados por acción explícita
+    (EMITIDO/ACEPTADO/RECHAZADO/ANULADO/CANCELADO). Devuelve el estado resultante.
+    """
+    if not dte or dte.estado_dte in HEADER_TERMINAL:
+        return dte.estado_dte if dte else None
+    lineas = Productos_Recepcionados.objects.filter(dte=dte)
+    if not lineas.exists():
+        return dte.estado_dte
+    hay_abiertas = lineas.filter(estado__in=OPEN_LINE_STATES).exists()
+    nuevo = 'RECEPCIONADO_PARCIAL' if hay_abiertas else 'RECEPCIONADO_COMPLETO'
+    if nuevo != dte.estado_dte:
+        dte.estado_dte = nuevo
+        if guardar:
+            dte.save(update_fields=['estado_dte'])
+    return nuevo
+
+
 @login_required
 @requiere_permiso('recepcion_dte', 'puede_ver')
 def recepcion_dte(request):
@@ -934,6 +969,8 @@ def confirmar_recepcion_api(request):
                     msg_parts.append(f'{productos_auto_regularizados} devueltos al origen')
                 mensaje = f'Recepción procesada. {", ".join(msg_parts)} requieren atención.'
             
+            # Cierre canónico derivado de las líneas ya persistidas (fuente única).
+            _recalcular_estado_dte(dte, guardar=False)
             dte.fecha_recepcion = hoy.date()
             dte.hora = hoy.time()
             registro = f"\nRecepción: {usuario} {hoy.strftime('%Y-%m-%d %H:%M')} - OK:{productos_ok} Problemas:{productos_problemas}"
@@ -1140,15 +1177,7 @@ def decidir_sobrante_api(request):
 
             # Verificar si todos los productos del DTE están resueltos
             if dte:
-                pendientes = Productos_Recepcionados.objects.filter(
-                    dte=dte,
-                    estado__in=['RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE', 'EN_REGULARIZACION',
-                                'RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE',
-                                'EN_SOLICITUD_REGULARIZACION']
-                ).count()
-                if pendientes == 0:
-                    dte.estado_dte = 'RECEPCIONADO_COMPLETO'
-                    dte.save(update_fields=['estado_dte'])
+                _recalcular_estado_dte(dte)
 
         return JsonResponse({
             'success': True,
@@ -1582,14 +1611,9 @@ def corregir_recepcion_emisor_api(request):
         if not productos_corregidos:
             return JsonResponse({'success': False, 'error': 'No hay productos para corregir (las cantidades ya coinciden).'}, status=400)
 
-        todas_ok = not Productos_Recepcionados.objects.filter(
-            dte=dte
-        ).exclude(
-            estado='RECEPCIONADO_OK'
-        ).exists()
-
-        if todas_ok:
-            dte.estado_dte = 'RECEPCIONADO_COMPLETO'
+        # Cierre canónico (cuenta REGULARIZADO como cerrado, no solo OK). Esto
+        # libera el DTE que quedaba atascado en PARCIAL con líneas ya resueltas.
+        _recalcular_estado_dte(dte, guardar=False)
         registro = f"\nCorrección emisor: {usuario.username} {hoy.strftime('%Y-%m-%d %H:%M')} - {len(productos_corregidos)} producto(s) corregido(s)."
         if observaciones_generales:
             registro += f" {observaciones_generales}"
@@ -2984,28 +3008,18 @@ def ajustar_dte_emisor_api(request):
 
 # ========== VISTAS PARA REGULARIZACIÓN DE RECEPCIONES ==========
 
-from django.views.decorators.clickjacking import xframe_options_sameorigin
-
-
 @login_required
-@xframe_options_sameorigin
 def regularizar_recepciones(request):
-    """Compatibilidad: la regularización vive dentro de Recepción DTE.
+    """Compat: la regularización vive dentro de Recepción DTE.
 
-    @xframe_options_sameorigin permite que esta vista se cargue dentro de
-    un iframe del mismo dominio (lo usa recepcion_dte.html con ?embed=1
-    para mostrar el modal de regularización in-place sin navegar a otra
-    página). Sigue bloqueando iframes de orígenes externos.
+    Redirige siempre a /app/recepcion-dte/?vista=regularizar. El template legacy
+    regularizar_recepciones.html fue eliminado; ya no existe el modo ?legacy=1.
     """
-    if request.GET.get('legacy') != '1':
-        query = request.GET.urlencode()
-        destino = '/app/recepcion-dte/?vista=regularizar'
-        if query:
-            destino += '&' + query
-        return redirect(destino)
-
-    # Fallback temporal para flujos antiguos mientras se migra toda la UI.
-    return render(request, 'vistas/modulo_compras/regularizar_recepciones.html')
+    query = request.GET.urlencode()
+    destino = '/app/recepcion-dte/?vista=regularizar'
+    if query:
+        destino += '&' + query
+    return redirect(destino)
 
 
 
@@ -4322,10 +4336,21 @@ def decidir_solicitud_api(request):
                 solicitud.decision_emisor = motivo_rechazo
                 solicitud.save()
                 
-                # Actualizar producto recepcionado a EN_REGULARIZACION
-                solicitud.producto_recepcionado.estado = 'EN_REGULARIZACION'
-                solicitud.producto_recepcionado.observaciones = (solicitud.producto_recepcionado.observaciones or '') + f"\n[{hoy.strftime('%Y-%m-%d %H:%M')}] Solicitud #{solicitud.numero_solicitud} RECHAZADA por {usuario}. Motivo: {motivo_rechazo}"
-                solicitud.producto_recepcionado.save()
+                # Solicitud rechazada: la línea vuelve a su PROBLEMA BASE (editable),
+                # no a un limbo EN_REGULARIZACION. Así el receptor puede reintentar
+                # (Mercadería Encontrada / nueva solicitud) desde la bandeja de problemas.
+                _rec = solicitud.producto_recepcionado
+                _falt = _rec.cantidad_faltante or 0
+                _dan = _rec.cantidad_danada or 0
+                _recib = _rec.stockArribado or 0
+                if _falt > 0 and _recib == 0:
+                    _rec.estado = 'FALTANTE'
+                elif _dan > 0 and _falt == 0:
+                    _rec.estado = 'RECEPCIONADO_DANADO'
+                else:
+                    _rec.estado = 'RECEPCIONADO_PARCIAL'
+                _rec.observaciones = (_rec.observaciones or '') + f"\n[{hoy.strftime('%Y-%m-%d %H:%M')}] Solicitud #{solicitud.numero_solicitud} RECHAZADA por {usuario}. Motivo: {motivo_rechazo}"
+                _rec.save()
                 
                 mensaje = f'Solicitud #{solicitud.numero_solicitud} rechazada'
             
@@ -4712,9 +4737,16 @@ def regularizar_producto_api(request):
                         )
                     }, status=400)
 
-                sucursal_destino_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-                sucursal_destino = Sucursal.objects.get(id=sucursal_destino_id)
-                
+                # Destino REAL del traspaso (no la sucursal de sesión, que podría
+                # no coincidir si el usuario ve varias sucursales). Fallback a sesión.
+                mov_salida = recepcion.dte.dte_movimientos.filter(
+                    concepto='TRASPASO_SALIDA'
+                ).first() if recepcion.dte else None
+                sucursal_destino = mov_salida.sucursal_destino if (mov_salida and mov_salida.sucursal_destino) else None
+                if not sucursal_destino:
+                    sucursal_destino_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+                    sucursal_destino = Sucursal.objects.get(id=sucursal_destino_id)
+
                 # El stock encontrado entra a la bodega DESTINO (no al origen).
                 # recepcion.producto_talla es la talla del ORIGEN; buscamos/creamos
                 # la del destino por SKU (mismo patrón que anular_regularizacion_dte).
@@ -4778,12 +4810,7 @@ def regularizar_producto_api(request):
                 recepcion.save()
                 
                 if recepcion.dte:
-                    pendientes_dte = Productos_Recepcionados.objects.filter(
-                        dte=recepcion.dte
-                    ).exclude(estado__in=['REGULARIZADO', 'RECEPCIONADO_OK']).count()
-                    if pendientes_dte == 0:
-                        recepcion.dte.estado_dte = 'RECEPCIONADO_COMPLETO'
-                        recepcion.dte.save()
+                    _recalcular_estado_dte(recepcion.dte)
                 
                 from .models import NotificacionDTE
                 NotificacionDTE.objects.create(
@@ -4915,12 +4942,7 @@ def regularizar_producto_api(request):
                 recepcion.save()
                 
                 if recepcion.dte:
-                    pendientes_dte = Productos_Recepcionados.objects.filter(
-                        dte=recepcion.dte
-                    ).exclude(estado__in=['REGULARIZADO', 'RECEPCIONADO_OK']).count()
-                    if pendientes_dte == 0:
-                        recepcion.dte.estado_dte = 'RECEPCIONADO_COMPLETO'
-                        recepcion.dte.save()
+                    _recalcular_estado_dte(recepcion.dte)
                 
                 result = {
                     'success': True,
@@ -5279,12 +5301,7 @@ def regularizar_producto_api(request):
                     # Cerrar el DTE original si todos sus productos están
                     # regularizados o recepcionados OK.
                     if recepcion.dte:
-                        pendientes_dte = Productos_Recepcionados.objects.filter(
-                            dte=recepcion.dte
-                        ).exclude(estado__in=['REGULARIZADO', 'RECEPCIONADO_OK']).count()
-                        if pendientes_dte == 0 and recepcion.dte.estado_dte not in ('RECEPCIONADO_COMPLETO', 'ANULADO', 'CANCELADO'):
-                            recepcion.dte.estado_dte = 'RECEPCIONADO_COMPLETO'
-                            recepcion.dte.save(update_fields=['estado_dte'])
+                        _recalcular_estado_dte(recepcion.dte)
 
                     return JsonResponse({
                         'success': True,
@@ -5517,12 +5534,7 @@ def regularizar_producto_api(request):
                     # Cerrar el DTE original si todos sus productos están
                     # regularizados o recepcionados OK.
                     if recepcion.dte:
-                        pendientes_dte = Productos_Recepcionados.objects.filter(
-                            dte=recepcion.dte
-                        ).exclude(estado__in=['REGULARIZADO', 'RECEPCIONADO_OK']).count()
-                        if pendientes_dte == 0 and recepcion.dte.estado_dte not in ('RECEPCIONADO_COMPLETO', 'ANULADO', 'CANCELADO'):
-                            recepcion.dte.estado_dte = 'RECEPCIONADO_COMPLETO'
-                            recepcion.dte.save(update_fields=['estado_dte'])
+                        _recalcular_estado_dte(recepcion.dte)
 
                     return JsonResponse({
                         'success': True,
@@ -5565,23 +5577,65 @@ def regularizar_producto_api(request):
                         'error': 'Para traspasos entre empresas debes usar "Solicitar NC" o "Solicitar Cambio de Producto"'
                     }, status=400)
                 
-                # SOLO TRASPASOS INTERNOS a partir de aquí
+                # SOLO TRASPASOS INTERNOS a partir de aquí.
+                # El stock ajustado entra a la bodega DESTINO (no al origen), igual
+                # que Mercadería Encontrada. Se deriva el destino real del traspaso.
                 if diferencia > 0:
-                    # Llegaron más productos (traspaso interno)
-                    recepcion.producto_talla.stock += diferencia
-                    recepcion.producto_talla.save()
-                    
-                    # Crear movimiento de ingreso
+                    mov_salida = recepcion.dte.dte_movimientos.filter(
+                        concepto='TRASPASO_SALIDA'
+                    ).first() if recepcion.dte else None
+                    sucursal_destino_aj = mov_salida.sucursal_destino if mov_salida else None
+
+                    talla_destino_aj = None
+                    if recepcion.producto_talla and sucursal_destino_aj:
+                        talla_destino_aj = Producto_Talla.objects.filter(
+                            sku=recepcion.producto_talla.sku,
+                            producto__sucursal=sucursal_destino_aj,
+                        ).select_related('producto').first()
+                        if not talla_destino_aj:
+                            prod_ori = recepcion.producto_talla.producto
+                            producto_destino_aj, _ = Producto.objects.get_or_create(
+                                articulo=prod_ori.articulo,
+                                sucursal=sucursal_destino_aj,
+                                atributo1=prod_ori.atributo1,
+                                atributo2=prod_ori.atributo2,
+                                atributo3=prod_ori.atributo3,
+                                atributo4=prod_ori.atributo4,
+                                defaults={
+                                    'descripcion': prod_ori.descripcion,
+                                    'categoria': prod_ori.categoria,
+                                    'costo': prod_ori.costo,
+                                    'sobreprecio': prod_ori.sobreprecio,
+                                    'precioventa': prod_ori.precioventa,
+                                    'precioSugerido': prod_ori.precioSugerido,
+                                    'tipo_talla': prod_ori.tipo_talla,
+                                    'guia_talla': prod_ori.guia_talla,
+                                },
+                            )
+                            talla_destino_aj = Producto_Talla.objects.create(
+                                producto=producto_destino_aj,
+                                talla=recepcion.producto_talla.talla,
+                                sku=recepcion.producto_talla.sku,
+                                stock=0,
+                            )
+                    talla_ing = talla_destino_aj or recepcion.producto_talla
+                    if talla_ing:
+                        Producto_Talla.objects.filter(id=talla_ing.id).update(
+                            stock=F('stock') + diferencia
+                        )
+                    # Crear movimiento de ingreso al destino
                     Movimientos_Producto.objects.create(
                         dte=recepcion.dte,
-                        ProductoTalla=recepcion.producto_talla,
+                        ProductoTalla=talla_ing,
+                        sucursal_origen=recepcion.dte.sucursal if recepcion.dte else None,
+                        sucursal_destino=sucursal_destino_aj,
                         cantidad=diferencia,
-                        costo=recepcion.producto_talla.producto.costo if recepcion.producto_talla and recepcion.producto_talla.producto else 0,
+                        costo=talla_ing.producto.costo if talla_ing and talla_ing.producto else 0,
                         concepto='REGULARIZACION_TRASPASO',
                         tipo_movimiento='INGRESO',
                         estado='COMPLETADO',
                         responsable=usuario,
-                        observaciones=f"Regularización DTE #{recepcion.dte.numero_documento if recepcion.dte else 'N/A'} - Ajuste +{diferencia} - {observaciones}"
+                        observaciones=f"Regularización DTE #{recepcion.dte.numero_documento if recepcion.dte else 'N/A'} - Ajuste +{diferencia} a {sucursal_destino_aj.alias if sucursal_destino_aj else 'destino'} - {observaciones}"
                     )
                 
                 # Actualizar recepción (solo para internos)
@@ -5725,13 +5779,7 @@ def regularizar_producto_api(request):
             # Verificar si el DTE completo está regularizado
             dte_completado = False
             if recepcion.dte:
-                recepciones_dte = Productos_Recepcionados.objects.filter(dte=recepcion.dte)
-                todas_ok = all(r.estado in ['RECEPCIONADO_OK', 'REGULARIZADO'] for r in recepciones_dte)
-                
-                if todas_ok and hasattr(recepcion.dte, 'estado_dte'):
-                    recepcion.dte.estado_dte = 'RECEPCIONADO_COMPLETO'
-                    recepcion.dte.save()
-                    dte_completado = True
+                dte_completado = _recalcular_estado_dte(recepcion.dte) == 'RECEPCIONADO_COMPLETO'
         
         return JsonResponse({
             'success': True,
@@ -6212,6 +6260,11 @@ def anular_regularizacion_dte(request):
                     'cantidad': cantidad_problema
                 })
             
+            # Cierre canónico: tras marcar líneas OK, recalcular el DTE (antes no
+            # se recalculaba y podía quedar atascado en PARCIAL sin líneas problema).
+            for _dte in Dte.objects.filter(id__in={r.dte_id for r in recepciones if r.dte_id}):
+                _recalcular_estado_dte(_dte)
+
             logger.info(
                 "Regularizacion DTE anulada: dte_numero=%s productos=%s unidades=%s",
                 dte_numero,
@@ -6282,11 +6335,13 @@ def cancelar_regularizacion_producto(request):
 
     from .models import Productos_Recepcionados, Movimientos_Producto, Producto_Talla
 
-    # Solo se cancela una regularización YA aplicada. Una línea que ya está
-    # pendiente (FALTANTE/PARCIAL/DAÑADO) no tiene regularización que cancelar:
-    # se actualiza directo con Mercadería Encontrada / Ajustar. Esto evita el
-    # "cancelar infinito" (no-op que respondía éxito una y otra vez).
+    # Se cancela una regularización con movimientos REGULARIZACION_TRASPASO
+    # revertibles, o una línea en estado de regularización. Una línea ya pendiente
+    # SIN movimiento revertible no tiene nada que cancelar (evita el "cancelar
+    # infinito" no-op).
     ESTADOS_CANCELABLES = {'REGULARIZADO', 'EN_REGULARIZACION'}
+
+    from django.db.models import Sum
 
     usuario = request.user.username
     hoy = timezone.now()
@@ -6303,7 +6358,7 @@ def cancelar_regularizacion_producto(request):
             recepciones = list(
                 Productos_Recepcionados.objects
                 .select_for_update(of=('self',))
-                .select_related('dte', 'dte__sucursal', 'producto_talla', 'producto_talla__producto')
+                .select_related('dte', 'dte__sucursal', 'producto_talla', 'producto_talla__producto', 'dte_producto')
                 .filter(id__in=recepcion_ids)
             )
             if not recepciones:
@@ -6321,13 +6376,6 @@ def cancelar_regularizacion_producto(request):
 
                 if recepcion.estado == 'EN_SOLICITUD_REGULARIZACION':
                     errores.append(f'{etiqueta}: tiene una solicitud de regularización en curso; resuélvela o recházala primero.')
-                    continue
-
-                if recepcion.estado not in ESTADOS_CANCELABLES:
-                    errores.append(
-                        f'{etiqueta}: no tiene una regularización que cancelar '
-                        f'(estado {recepcion.estado}); actualízala con Mercadería Encontrada / Ajustar.'
-                    )
                     continue
 
                 # Bloqueo: NC vigente sobre este DTE (revertir stock sin anular la
@@ -6348,58 +6396,97 @@ def cancelar_regularizacion_producto(request):
                     errores.append(f'{etiqueta}: se regularizó con cambio de producto; revísalo manualmente.')
                     continue
 
-                # Movimientos de regularización a revertir: SOLO REGULARIZACION_TRASPASO
-                # sobre la talla de esta línea. Nunca TRASPASO_ENTRADA (stock OK).
+                sku = recepcion.producto_talla.sku if recepcion.producto_talla else None
+
+                # Movimientos de regularización a revertir: REGULARIZACION_TRASPASO del
+                # SKU en CUALQUIER talla. Cubre la auto-devolución al ORIGEN de guías Y
+                # lo que Mercadería Encontrada/Ajustar sumaron al DESTINO. Nunca toca
+                # TRASPASO_ENTRADA (stock recibido OK).
                 movs_reg = list(Movimientos_Producto.objects.filter(
-                    dte=dte,
-                    ProductoTalla=recepcion.producto_talla,
-                    concepto='REGULARIZACION_TRASPASO',
-                    estado='COMPLETADO',
-                )) if recepcion.producto_talla else []
+                    dte=dte, ProductoTalla__sku=sku,
+                    concepto='REGULARIZACION_TRASPASO', estado='COMPLETADO',
+                ).select_related('ProductoTalla', 'ProductoTalla__producto')) if sku else []
 
-                total_reg = sum(m.cantidad or 0 for m in movs_reg)
-
-                if total_reg > 0:
-                    talla_lock = Producto_Talla.objects.select_for_update().select_related('producto').get(
-                        id=recepcion.producto_talla_id
+                # Gate: si no hay nada revertible y la línea no está en estado de
+                # regularización, no hay regularización que cancelar.
+                if not movs_reg and recepcion.estado not in ESTADOS_CANCELABLES:
+                    errores.append(
+                        f'{etiqueta}: no tiene una regularización que cancelar '
+                        f'(estado {recepcion.estado}); actualízala con Mercadería Encontrada / Ajustar.'
                     )
-                    if talla_lock.stock < total_reg:
-                        errores.append(
-                            f'{etiqueta}: no se puede revertir {total_reg} u. porque el stock actual '
-                            f'({talla_lock.stock}) quedaría negativo (ya se movió/vendió).'
+                    continue
+
+                # Cantidad a revertir agrupada por talla (una talla origen y/o destino).
+                revertir_por_talla = {}
+                for m in movs_reg:
+                    if m.ProductoTalla_id and (m.cantidad or 0) > 0:
+                        revertir_por_talla[m.ProductoTalla_id] = (
+                            revertir_por_talla.get(m.ProductoTalla_id, 0) + m.cantidad
                         )
-                        continue
-                    Producto_Talla.objects.filter(id=talla_lock.id).update(stock=F('stock') - total_reg)
+
+                # Validar (con lock) que ninguna talla quede en negativo.
+                tallas_lock = {}
+                bloqueo = None
+                for talla_id, cant in revertir_por_talla.items():
+                    tl = Producto_Talla.objects.select_for_update().select_related('producto').get(id=talla_id)
+                    tallas_lock[talla_id] = tl
+                    if tl.stock < cant:
+                        bloqueo = (
+                            f'{etiqueta}: no se puede revertir {cant} u. de {tl.sku} porque el stock '
+                            f'({tl.stock}) quedaría negativo (ya se movió/vendió).'
+                        )
+                        break
+                if bloqueo:
+                    errores.append(bloqueo)
+                    continue
+
+                # Aplicar la reversa por talla (EGRESO ANULACION_REGULARIZACION).
+                total_reg = 0
+                for talla_id, cant in revertir_por_talla.items():
+                    tl = tallas_lock[talla_id]
+                    Producto_Talla.objects.filter(id=talla_id).update(stock=F('stock') - cant)
                     Movimientos_Producto.objects.create(
-                        dte=dte,
-                        ProductoTalla=talla_lock,
-                        sucursal_origen=talla_lock.producto.sucursal if talla_lock.producto else None,
-                        sucursal_destino=None,
-                        cantidad=-total_reg,
-                        costo=talla_lock.producto.costo if talla_lock.producto else 0,
-                        sobreprecio=talla_lock.producto.sobreprecio if talla_lock.producto else 0,
-                        precio=talla_lock.producto.precioventa if talla_lock.producto else 0,
-                        concepto='ANULACION_REGULARIZACION',
-                        tipo_movimiento='EGRESO',
-                        estado='COMPLETADO',
-                        responsable=usuario,
-                        fecha=hoy.date(),
-                        hora=hoy.time(),
+                        dte=dte, ProductoTalla=tl,
+                        sucursal_origen=tl.producto.sucursal if tl.producto else None,
+                        sucursal_destino=None, cantidad=-cant,
+                        costo=tl.producto.costo if tl.producto else 0,
+                        sobreprecio=tl.producto.sobreprecio if tl.producto else 0,
+                        precio=tl.producto.precioventa if tl.producto else 0,
+                        concepto='ANULACION_REGULARIZACION', tipo_movimiento='EGRESO',
+                        estado='COMPLETADO', responsable=usuario, fecha=hoy.date(), hora=hoy.time(),
                         observaciones=(
                             f'Cancelación de regularización DTE #{dte.numero_documento}: '
-                            f'revierte {total_reg} u. por regularizar de {etiqueta}. {motivo}'
+                            f'revierte {cant} u. de {tl.sku}. {motivo}'
                         ),
                     )
-                    # Idempotencia: los movimientos revertidos ya no se re-procesan.
+                    total_reg += cant
+                # Idempotencia: los movimientos revertidos ya no se re-procesan.
+                if movs_reg:
                     Movimientos_Producto.objects.filter(
                         id__in=[m.id for m in movs_reg]
                     ).update(estado='ANULADO')
 
-                # Reset del estado de la línea a "problema editable".
-                faltante = recepcion.cantidad_faltante or 0
+                # Recomputar cantidades desde la verdad: lo recibido OK son los
+                # TRASPASO_ENTRADA (independiente de la regularización revertida). Así
+                # el candado "≤ faltante" de Mercadería Encontrada siempre tiene margen.
+                esperada = recepcion.cantidad_esperada or (
+                    recepcion.dte_producto.stock if recepcion.dte_producto else 0
+                )
+                recibido_ok = 0
+                if sku:
+                    recibido_ok = Movimientos_Producto.objects.filter(
+                        dte=dte, ProductoTalla__sku=sku,
+                        concepto='TRASPASO_ENTRADA', estado='COMPLETADO',
+                    ).aggregate(t=Sum('cantidad'))['t'] or 0
                 danada = recepcion.cantidad_danada or 0
-                recibida = recepcion.stockArribado or 0
-                if faltante > 0 and recibida == 0:
+                faltante = max(0, esperada - recibido_ok - danada)
+
+                recepcion.stockArribado = recibido_ok
+                recepcion.cantidad_faltante = faltante
+
+                if faltante == 0 and danada == 0:
+                    nuevo_estado = 'RECEPCIONADO_OK'
+                elif faltante > 0 and recibido_ok == 0:
                     nuevo_estado = 'FALTANTE'
                 elif danada > 0 and faltante == 0:
                     nuevo_estado = 'RECEPCIONADO_DANADO'
@@ -6412,7 +6499,7 @@ def cancelar_regularizacion_producto(request):
                 recepcion.observaciones = (recepcion.observaciones or '') + (
                     f"\n[{hoy.strftime('%Y-%m-%d %H:%M')}] Regularización CANCELADA por {usuario}"
                     + (f" (revertidas {total_reg} u. por regularizar)" if total_reg > 0 else "")
-                    + f". Línea reabierta para actualizar. {motivo}"
+                    + f". Línea reabierta ({nuevo_estado}) para actualizar. {motivo}"
                 )
                 recepcion.save()
 
@@ -6424,12 +6511,13 @@ def cancelar_regularizacion_producto(request):
                     'nuevo_estado': nuevo_estado,
                 })
 
-            # Reabrir DTEs cerrados para que reaparezcan en Regularizar. NO tocamos
-            # EMITIDO/CANCELADO/ANULADO/RECHAZADO ni forzamos re-recepción total.
+            # Cierre canónico por DTE afectado: reabre a PARCIAL si quedan líneas
+            # abiertas, deja COMPLETO si todas quedaron OK/REGULARIZADO. No toca
+            # EMITIDO/CANCELADO/ANULADO/RECHAZADO.
             for dte_id in dtes_a_reabrir:
-                Dte.objects.filter(
-                    id=dte_id, estado_dte='RECEPCIONADO_COMPLETO',
-                ).update(estado_dte='RECEPCIONADO_PARCIAL')
+                dte_obj = Dte.objects.filter(id=dte_id).first()
+                if dte_obj:
+                    _recalcular_estado_dte(dte_obj)
 
         if not canceladas:
             return JsonResponse({
@@ -28634,6 +28722,21 @@ def anular_factura_dte(request):
     #   3. Heredar de `dte.receptor` (boletas pueden no tener receptor).
     # ------------------------------------------------------------------
     receptor_nc = dte.receptor
+
+    # Para NC con TXT al SII (modalidad != OCULTA), el RUT del receptor debe
+    # venir COMPLETO y con dígito verificador correcto. Sin esta guarda,
+    # formatear_rut tomaba el último carácter como DV aunque faltara (ej.
+    # "13948938" -> "1394893-8") y ese RUT corrupto terminaba en el TXT Acepta.
+    if modalidad_nc != 'OCULTA' and cliente_rut:
+        rut_valido, rut_msg = validar_rut_chileno(cliente_rut)
+        if not rut_valido:
+            return JsonResponse({
+                'error': (
+                    f'El RUT del cliente no es válido ({rut_msg}). Ingrese el '
+                    'RUT completo con su dígito verificador (ej: 12345678-9) '
+                    'antes de generar la NC.'
+                )
+            }, status=400)
 
     if cliente_id_in:
         try:

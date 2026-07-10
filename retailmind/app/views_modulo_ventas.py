@@ -14787,8 +14787,11 @@ def cancelar_cambio_devolucion(request):
             return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'}, status=400)
 
         with transaction.atomic():
+            # of=('self',): bloquea solo la fila de CambioDevolucion. Sin esto,
+            # select_related('ticket_nuevo') (FK nullable → LEFT OUTER JOIN) provoca
+            # "FOR UPDATE cannot be applied to the nullable side of an outer join" en PostgreSQL.
             cambio = get_object_or_404(
-                CambioDevolucion.objects.select_for_update().select_related(
+                CambioDevolucion.objects.select_for_update(of=('self',)).select_related(
                     'sucursal__empresa', 'ticket_nuevo'
                 ),
                 id=cambio_id,
