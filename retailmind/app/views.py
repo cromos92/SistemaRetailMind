@@ -1580,26 +1580,59 @@ def corregir_recepcion_emisor_api(request):
             recepcion.save()
 
             if recepcion.producto_talla:
-                Producto_Talla.objects.filter(id=recepcion.producto_talla.id).update(
+                # El stock corregido entra a la bodega DESTINO (no al origen).
+                # recepcion.producto_talla es la talla del ORIGEN; buscamos/creamos
+                # la del destino por SKU (mismo patrón que anular_regularizacion_dte).
+                talla_destino_c = Producto_Talla.objects.filter(
+                    sku=recepcion.producto_talla.sku,
+                    producto__sucursal=sucursal_destino,
+                ).select_related('producto').first()
+                if not talla_destino_c:
+                    prod_ori = recepcion.producto_talla.producto
+                    producto_destino_c, _ = Producto.objects.get_or_create(
+                        articulo=prod_ori.articulo,
+                        sucursal=sucursal_destino,
+                        atributo1=prod_ori.atributo1,
+                        atributo2=prod_ori.atributo2,
+                        atributo3=prod_ori.atributo3,
+                        atributo4=prod_ori.atributo4,
+                        defaults={
+                            'descripcion': prod_ori.descripcion,
+                            'categoria': prod_ori.categoria,
+                            'costo': prod_ori.costo,
+                            'sobreprecio': prod_ori.sobreprecio,
+                            'precioventa': prod_ori.precioventa,
+                            'precioSugerido': prod_ori.precioSugerido,
+                            'tipo_talla': prod_ori.tipo_talla,
+                            'guia_talla': prod_ori.guia_talla,
+                        },
+                    )
+                    talla_destino_c = Producto_Talla.objects.create(
+                        producto=producto_destino_c,
+                        talla=recepcion.producto_talla.talla,
+                        sku=recepcion.producto_talla.sku,
+                        stock=0,
+                    )
+                Producto_Talla.objects.filter(id=talla_destino_c.id).update(
                     stock=F('stock') + delta
                 )
 
                 Movimientos_Producto.objects.create(
                     dte=dte,
-                    ProductoTalla=recepcion.producto_talla,
+                    ProductoTalla=talla_destino_c,
                     sucursal_origen=dte.sucursal,
                     sucursal_destino=sucursal_destino,
                     cantidad=delta,
-                    costo=recepcion.producto_talla.producto.costo if recepcion.producto_talla.producto else 0,
-                    sobreprecio=recepcion.producto_talla.producto.sobreprecio if recepcion.producto_talla.producto else 0,
-                    precio=recepcion.producto_talla.producto.precioventa if recepcion.producto_talla.producto else 0,
+                    costo=talla_destino_c.producto.costo if talla_destino_c.producto else 0,
+                    sobreprecio=talla_destino_c.producto.sobreprecio if talla_destino_c.producto else 0,
+                    precio=talla_destino_c.producto.precioventa if talla_destino_c.producto else 0,
                     concepto='TRASPASO_ENTRADA',
                     tipo_movimiento='INGRESO',
                     estado='COMPLETADO',
                     responsable=usuario,
                     fecha=hoy.date(),
                     hora=hoy.time(),
-                    observaciones=f'Corrección emisor DTE #{dte.numero_documento} +{delta} {recepcion.producto_talla.sku}'
+                    observaciones=f'Corrección emisor DTE #{dte.numero_documento} +{delta} {talla_destino_c.sku} a {sucursal_destino.alias}'
                 )
 
             productos_corregidos.append({
