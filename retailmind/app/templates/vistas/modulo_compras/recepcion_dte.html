@@ -3161,17 +3161,38 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
                </button>`
             : '';
 
-        // Acciones según estado: regularizado → solo ver detalle; pendiente → regularizar + ver
-        const acciones = (yaRegularizado
-            ? `<button type="button" class="btn btn-outline-success btn-sm" onclick="abrirModalRegularizar(${prod.id})" title="Ver detalle de la regularización">
+        // Acciones ROLE-AWARE (botones por rol + ayuda):
+        //  - Ya regularizado → solo "Ver detalle".
+        //  - Soy origen (emisor) → "Corregir" (afirmar despacho) + "Emitir NC".
+        //  - Soy destino (receptor) → "Actualizar faltante" (Mercadería Encontrada).
+        let acciones;
+        if (yaRegularizado) {
+            acciones = `<button type="button" class="btn btn-outline-success btn-sm" onclick="abrirModalRegularizar(${prod.id})" title="Ver detalle de la regularización">
                     <i class="bi bi-eye me-1"></i>Ver detalle
-               </button>`
-            : `<button type="button" class="btn btn-warning btn-sm" onclick="abrirModalRegularizar(${prod.id})" title="Abrir flujo de regularización">
-                    <i class="bi bi-tools me-1"></i>Regularizar
+               </button>`;
+        } else if (prod.soy_emisor) {
+            acciones = `<button type="button" class="btn btn-warning btn-sm" onclick="abrirCorreccionDTE(${prod.dte_id})" title="Afirmar que despachaste completo: sube la cantidad faltante al stock del destino">
+                    <i class="bi bi-pencil-square me-1"></i>Corregir
+               </button>
+               <button type="button" class="btn btn-outline-danger btn-sm ms-1" onclick="abrirModalRegularizar(${prod.id})" title="Emitir Nota de Crédito por lo que no se entregó">
+                    <i class="bi bi-receipt me-1"></i>Emitir NC
+               </button>`;
+        } else {
+            acciones = `<button type="button" class="btn btn-warning btn-sm" onclick="abrirModalRegularizar(${prod.id})" title="Registrá lo que sí llegó del faltante (Mercadería Encontrada)">
+                    <i class="bi bi-box-arrow-in-down me-1"></i>Actualizar faltante
                </button>
                ${prod.dte_id ? `<button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionado(${prod.dte_id})" title="Ver DTE">
                     <i class="bi bi-eye"></i>
-               </button>` : ''}`) + btnCancelar;
+               </button>` : ''}`;
+        }
+        acciones = acciones + btnCancelar;
+
+        // Ayuda por rol (solo en líneas con problema pendiente).
+        const rolHint = yaRegularizado ? '' : (prod.soy_emisor
+            ? '<div class="small text-muted mt-1"><i class="bi bi-info-circle me-1"></i>Sos el <strong>origen</strong>: corregí si despachaste completo, o emití NC por lo no entregado.</div>'
+            : (prod.soy_receptor
+                ? '<div class="small text-muted mt-1"><i class="bi bi-info-circle me-1"></i>Sos el <strong>destino</strong>: registrá lo que sí llegó del faltante.</div>'
+                : ''));
 
         // Bandeja única role-aware: badge que indica desde qué lado actúa el usuario
         // (el modal de regularización ya adapta sus opciones según soy_emisor/soy_receptor).
@@ -3200,7 +3221,7 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
                 <td class="text-center"><span class="${(prod.cantidad_faltante || 0) > 0 ? 'text-danger fw-bold' : ''}">${prod.cantidad_faltante || 0}</span></td>
                 <td class="text-center"><span class="${(prod.cantidad_sobrante || 0) > 0 ? 'text-info fw-bold' : ''}">${prod.cantidad_sobrante || 0}</span></td>
                 <td>${estadoBadge}${ncInfo}</td>
-                <td class="text-end">${acciones}</td>
+                <td class="text-end">${acciones}${rolHint}</td>
             </tr>
         `);
         });

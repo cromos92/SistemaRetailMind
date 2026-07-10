@@ -425,6 +425,15 @@ def api_dashboard_despachos(request):
     suc_id, emp_id = _get_sucursal_empresa(request)
     inicio, fin = _parse_date_range(request)
 
+    # Vista global: si el usuario puede ver todas las sucursales y lo pide (?todas=1),
+    # no filtramos por sucursal (solo por empresa). Habilita el panorama origen→destino.
+    from .models import PermisoUsuario
+    ver_todas = request.GET.get('todas') == '1' and (
+        request.user.is_superuser or PermisoUsuario.usuario_ve_todas_sucursales(request.user)
+    )
+    if ver_todas:
+        suc_id = None
+
     # Base: DTEs de traspaso no descartados
     traspasos_qs = Dte.objects.filter(
         descartado=False,
@@ -638,6 +647,90 @@ def api_dashboard_despachos(request):
         d['fecha_emision'] = str(fecha) if fecha else ''
         d['estado_label'] = ESTADO_LABELS.get(d['estado_dte'], d['estado_dte'])
 
+    # --- Flujo origen→destino (matriz de traspasos) ---
+    flujo_qs = Movimientos_Producto.objects.filter(
+        concepto='TRASPASO_SALIDA',
+        dte__tipo_transaccion='TRASPASO',
+        dte__descartado=False,
+        dte__fecha_emision__range=[inicio, fin],
+        sucursal_origen__isnull=False,
+        sucursal_destino__isnull=False,
+    )
+    if emp_id:
+        flujo_qs = flujo_qs.filter(Q(dte__emisor_id=emp_id) | Q(dte__receptor_id=emp_id))
+    if suc_id:
+        flujo_qs = flujo_qs.filter(Q(sucursal_origen_id=suc_id) | Q(sucursal_destino_id=suc_id))
+    flujo_origen_destino = [
+        {
+            'origen': r['sucursal_origen__alias'] or '-',
+            'destino': r['sucursal_destino__alias'] or '-',
+            'dtes': r['dtes'],
+            'emitidos': r['emitidos'],
+            'parciales': r['parciales'],
+            'completos': r['completos'],
+            'por_resolver': (r['emitidos'] or 0) + (r['parciales'] or 0),
+        }
+        for r in (
+            flujo_qs.values('sucursal_origen__alias', 'sucursal_destino__alias')
+            .annotate(
+                dtes=Count('dte', distinct=True),
+                emitidos=Count('dte', distinct=True, filter=Q(dte__estado_dte='EMITIDO')),
+                parciales=Count('dte', distinct=True, filter=Q(dte__estado_dte='RECEPCIONADO_PARCIAL')),
+                completos=Count('dte', distinct=True, filter=Q(dte__estado_dte='RECEPCIONADO_COMPLETO')),
+            )
+            .order_by('-dtes')[:40]
+        )
+    ]
+
+    # --- Atribución de error: una NC emitida sobre un traspaso = el ORIGEN aceptó
+    # el faltante (no despachó lo facturado) → error de la bodega de inicio. ---
+    nc_qs = Dte.objects.filter(
+        es_nota_credito=True,
+        estado_dte__in=['EMITIDO', 'ACEPTADO'],
+        documento_afectado__tipo_transaccion='TRASPASO',
+        documento_afectado__descartado=False,
+        documento_afectado__fecha_emision__range=[inicio, fin],
+    )
+    if emp_id:
+        nc_qs = nc_qs.filter(
+            Q(documento_afectado__emisor_id=emp_id) | Q(documento_afectado__receptor_id=emp_id)
+        )
+    if suc_id:
+        nc_qs = nc_qs.filter(documento_afectado__sucursal_id=suc_id)
+    nc_por_origen = dict(
+        nc_qs.values_list('documento_afectado__sucursal__alias')
+        .annotate(c=Count('documento_afectado', distinct=True))
+        .values_list('documento_afectado__sucursal__alias', 'c')
+    )
+    total_por_origen = dict(
+        traspasos_qs.filter(sucursal__isnull=False)
+        .values_list('sucursal__alias')
+        .annotate(t=Count('id'))
+        .values_list('sucursal__alias', 't')
+    )
+    errores_origen = []
+    for alias, errores in nc_por_origen.items():
+        if not alias:
+            continue
+        total = total_por_origen.get(alias, 0) or 0
+        errores_origen.append({
+            'origen': alias,
+            'errores': errores,
+            'total': total,
+            'tasa': round(errores / total * 100, 1) if total else 0.0,
+        })
+    errores_origen.sort(key=lambda x: (-x['errores'], -x['tasa']))
+    errores_origen = errores_origen[:15]
+
+    # --- KPIs headline: por recibir / por regularizar (DTEs incompletos, sin fecha) ---
+    _inc = {row['estado_dte']: row['cantidad'] for row in dtes_pendientes_raw}
+    por_recibir = _inc.get('EMITIDO', 0)
+    por_regularizar = (
+        _inc.get('RECEPCIONADO_PARCIAL', 0)
+        + _inc.get('EN_REGULARIZACION', 0)
+        + _inc.get('RECHAZADO', 0)
+    )
+
     return JsonResponse({
         'kpis': {
             'total_traspasos': total_traspasos,
@@ -649,7 +742,12 @@ def api_dashboard_despachos(request):
             'total_danados': total_danados,
             'total_sobrantes': total_sobrantes,
             'total_regularizados': total_regularizados,
+            'por_recibir': por_recibir,
+            'por_regularizar': por_regularizar,
         },
+        'flujo_origen_destino': flujo_origen_destino,
+        'errores_origen': errores_origen,
+        'ver_todas': ver_todas,
         'pipeline': pipeline,
         'por_sucursal': por_sucursal,
         'tendencia': tendencia,

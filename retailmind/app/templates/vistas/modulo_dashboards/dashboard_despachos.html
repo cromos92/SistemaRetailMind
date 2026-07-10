@@ -123,9 +123,40 @@
     <div class="doc-filters">
         <input type="date" id="fechaInicio">
         <input type="date" id="fechaFin">
+        <label style="display:flex;align-items:center;gap:6px;color:#fff;font-size:.8rem;cursor:pointer;white-space:nowrap;" title="Ver el panorama de todas las sucursales (requiere permiso multi-sucursal)">
+            <input type="checkbox" id="chkTodasSucursales" onchange="cargarDatos()"> Todas las sucursales
+        </label>
         <button class="doc-btn-refresh" onclick="cargarDatos()">
             <i class="ri-refresh-line me-1"></i>Actualizar
         </button>
+    </div>
+</div>
+
+<!-- Acciones pendientes (headline: por recibir / por regularizar) -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <a href="/app/recepcion-dte/" class="text-decoration-none">
+            <div class="doc-kpi-card" style="border-left:5px solid var(--doc-primary);">
+                <div class="doc-kpi-top">
+                    <div class="doc-kpi-icon-box" style="background:var(--doc-primary-light);color:var(--doc-primary);"><i class="ri-inbox-archive-line"></i></div>
+                    <i class="ri-arrow-right-line" style="color:var(--doc-primary);font-size:1.2rem;"></i>
+                </div>
+                <div class="doc-kpi-value" id="kpiPorRecibir" style="color:var(--doc-primary);">-</div>
+                <div class="doc-kpi-label">DTEs por recibir (sin recepcionar)</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-6">
+        <a href="/app/recepcion-dte/?vista=regularizar&tab=pendiente" class="text-decoration-none">
+            <div class="doc-kpi-card" style="border-left:5px solid var(--doc-warning);">
+                <div class="doc-kpi-top">
+                    <div class="doc-kpi-icon-box" style="background:var(--doc-warning-light);color:var(--doc-warning);"><i class="ri-tools-line"></i></div>
+                    <i class="ri-arrow-right-line" style="color:var(--doc-warning);font-size:1.2rem;"></i>
+                </div>
+                <div class="doc-kpi-value" id="kpiPorRegularizar" style="color:var(--doc-warning);">-</div>
+                <div class="doc-kpi-label">DTEs por regularizar (con problemas / rechazados)</div>
+            </div>
+        </a>
     </div>
 </div>
 
@@ -211,6 +242,51 @@
             <div class="doc-card-body">
                 <div class="doc-section-title"><i class="ri-line-chart-line"></i>Tendencia Mensual de Problemas</div>
                 <canvas id="chartTendencia" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Flujo origen→destino + Errores por bodega de origen -->
+<div class="row">
+    <div class="col-lg-7">
+        <div class="doc-card">
+            <div class="doc-card-body">
+                <div class="doc-section-title"><i class="ri-arrow-left-right-line"></i>Flujo Origen → Destino</div>
+                <div class="table-responsive">
+                    <table class="tbl-despachos">
+                        <thead>
+                            <tr>
+                                <th>Origen</th>
+                                <th>Destino</th>
+                                <th class="text-center">DTEs</th>
+                                <th class="text-center">Completos</th>
+                                <th class="text-center">Por resolver</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tblFlujo"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="doc-card">
+            <div class="doc-card-body">
+                <div class="doc-section-title"><i class="ri-error-warning-line" style="color:var(--doc-danger);"></i>Errores por Bodega de Origen</div>
+                <p style="font-size:.75rem;color:var(--doc-gray-500);margin-top:-8px;">Traspasos donde el origen emitió NC = aceptó el faltante (se equivocó la bodega de inicio).</p>
+                <div class="table-responsive">
+                    <table class="tbl-despachos">
+                        <thead>
+                            <tr>
+                                <th>Bodega origen</th>
+                                <th class="text-center">Errores</th>
+                                <th class="text-center">Tasa</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tblErroresOrigen"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -329,6 +405,7 @@ function cargarDatos() {
     const inicio = document.getElementById('fechaInicio').value;
     const fin = document.getElementById('fechaFin').value;
     const params = new URLSearchParams({ fecha_inicio: inicio, fecha_fin: fin });
+    if (document.getElementById('chkTodasSucursales').checked) params.set('todas', '1');
 
     fetch(`/app/api/dashboard-despachos/datos/?${params}`)
         .then(r => r.json())
@@ -338,6 +415,8 @@ function cargarDatos() {
             renderSucursales(data.por_sucursal);
             renderTendencia(data.tendencia);
             renderRegPendientes(data.regularizaciones_pendientes);
+            renderFlujo(data.flujo_origen_destino || []);
+            renderErroresOrigen(data.errores_origen || []);
             renderIncompletos(data.dtes_incompletos || []);
             window._incompletosDetalle = data.dtes_incompletos_detalle || [];
             renderIncompletosDetalle(window._incompletosDetalle);
@@ -353,6 +432,45 @@ function renderKPIs(k) {
     document.getElementById('kpiDiasPromedio').textContent = k.avg_dias_recepcion;
     document.getElementById('kpiPendientes').textContent = k.total_pendientes;
     document.getElementById('kpiSobrantes').textContent = k.total_sobrantes;
+    document.getElementById('kpiPorRecibir').textContent = (k.por_recibir ?? '-');
+    document.getElementById('kpiPorRegularizar').textContent = (k.por_regularizar ?? '-');
+}
+
+function renderFlujo(data) {
+    const tbody = document.getElementById('tblFlujo');
+    if (!data.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">Sin traspasos en el periodo</td></tr>';
+        return;
+    }
+    tbody.innerHTML = data.map(f => {
+        const pr = f.por_resolver || 0;
+        const prCell = pr > 0
+            ? `<span class="badge bg-warning text-dark">${pr}</span>`
+            : '<span class="text-muted">0</span>';
+        return `<tr>
+            <td><strong>${f.origen}</strong></td>
+            <td><i class="ri-arrow-right-line text-muted me-1"></i>${f.destino}</td>
+            <td class="text-center">${f.dtes}</td>
+            <td class="text-center"><span style="color:var(--doc-success);font-weight:600;">${f.completos}</span></td>
+            <td class="text-center">${prCell}</td>
+        </tr>`;
+    }).join('');
+}
+
+function renderErroresOrigen(data) {
+    const tbody = document.getElementById('tblErroresOrigen');
+    if (!data.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4">Sin errores atribuibles al origen (ninguna NC emitida)</td></tr>';
+        return;
+    }
+    tbody.innerHTML = data.map(e => {
+        const tasaColor = e.tasa >= 20 ? 'var(--doc-danger)' : e.tasa >= 8 ? 'var(--doc-warning)' : 'var(--doc-gray-700)';
+        return `<tr>
+            <td><strong>${e.origen}</strong> <small class="text-muted">de ${e.total}</small></td>
+            <td class="text-center"><span class="badge bg-danger">${e.errores}</span></td>
+            <td class="text-center" style="color:${tasaColor};font-weight:700;">${e.tasa}%</td>
+        </tr>`;
+    }).join('');
 }
 
 function renderPipeline(p) {
