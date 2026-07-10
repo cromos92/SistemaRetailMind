@@ -2708,6 +2708,24 @@
                             <span class="badge bg-success" id="badge-productos-nuevos">0 agregados</span>
                         </div>
                         
+                        <!-- Escáner dedicado de producto a ENTREGAR (independiente del de devolución) -->
+                        <div class="input-group input-group-sm shadow-sm mb-1">
+                            <span class="input-group-text bg-success text-white border-0 px-3">
+                                <i class="ri-barcode-line"></i>
+                            </span>
+                            <input type="text" class="form-control border-success"
+                                   id="input-escanear-entrega"
+                                   placeholder="Escanee el código de barras del producto a ENTREGAR..."
+                                   autocomplete="off"
+                                   style="font-size:0.88rem;">
+                            <button class="btn btn-success px-3" type="button" id="btn-escanear-entrega" onclick="escanearProductoEntrega()">
+                                <i class="ri-scan-line me-1"></i>Escanear
+                            </button>
+                        </div>
+                        <div class="text-muted mb-2" style="font-size:0.72rem;">
+                            <i class="ri-information-line"></i> Escanee para agregar directo, o use la búsqueda manual por nombre/marca.
+                        </div>
+
                         <!-- Buscador de Productos -->
                         <div class="buscador-productos-wrapper mb-2">
                             <div class="input-group input-group-sm shadow-sm">
@@ -3758,6 +3776,23 @@ function seleccionarTipoDocumento(tipo) {
 // Variable global para productos escaneados
 let productosEscaneados = {};  // { sku: { cantidad: N, productoData: {...} } }
 
+// Beep de feedback para escaneos (ok=true → agudo/éxito, ok=false → grave/error)
+function _beepCambio(ok) {
+    if (!window.AudioContext && !window.webkitAudioContext) return;
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.type = 'sine';
+        oscillator.frequency.value = ok ? 800 : 200;
+        gainNode.gain.setValueAtTime(ok ? 0.1 : 0.3, audioCtx.currentTime);
+        oscillator.start(audioCtx.currentTime);
+        oscillator.stop(audioCtx.currentTime + (ok ? 0.1 : 0.2));
+    } catch (e) { /* audio no disponible */ }
+}
+
 function escanearProducto() {
     const inputSku = $('#input-escanear-sku');
     const sku = inputSku.val().trim().toUpperCase();
@@ -3798,19 +3833,8 @@ function escanearProducto() {
         });
         
         // Sonido de error (si está disponible)
-        if (window.AudioContext) {
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            oscillator.frequency.value = 200;
-            oscillator.type = 'sine';
-            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-            oscillator.start(audioCtx.currentTime);
-            oscillator.stop(audioCtx.currentTime + 0.2);
-        }
-        
+        _beepCambio(false);
+
         inputSku.val('').focus();
         return;
     }
@@ -3840,19 +3864,8 @@ function escanearProducto() {
     }
     
     // Sonido de éxito (beep corto)
-    if (window.AudioContext) {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioCtx.createOscillator();
-        const gainNode = audioCtx.createGain();
-        oscillator.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
-        oscillator.frequency.value = 800;
-        oscillator.type = 'sine';
-        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        oscillator.start(audioCtx.currentTime);
-        oscillator.stop(audioCtx.currentTime + 0.1);
-    }
-    
+    _beepCambio(true);
+
     const indexProducto = ticketActual.productos.indexOf(productoEncontrado);
     if (indexProducto !== -1) {
         const checkbox = $(`#check-producto-${indexProducto}`);
@@ -4659,8 +4672,9 @@ function resetearFormularioNuevoCambio() {
     $('#tbody-productos-nuevos').empty();
     
     // ✅ LIMPIAR SECCIÓN DE PRODUCTOS NUEVOS COMPLETAMENTE
-    // Limpiar buscador de productos
+    // Limpiar buscador y escáner de productos a entregar
     $('#input-buscar-producto').val('');
+    $('#input-escanear-entrega').val('');
     
     // Limpiar y ocultar panel de resultados de búsqueda
     $('#tbody-resultados-busqueda').empty();
@@ -5818,8 +5832,90 @@ function actualizarResumenFooter(montoOriginal, montoNuevo, diferencia) {
 let _productosBusqueda = [];
 
 // Activar búsqueda con Enter
-$('#input-buscar-producto').on('keydown', function(e) {
-    if (e.key === 'Enter') buscarProductosParaCambio();
+// Escáner dedicado para productos a ENTREGAR.
+// Independiente del escáner de devolución: agrega directo por SKU exacto
+// (o incrementa la cantidad si ya está agregado) sin robar el foco del otro input.
+function escanearProductoEntrega() {
+    const $input = $('#input-escanear-entrega');
+    const sku = $input.val().trim();
+
+    if (!sku) {
+        mostrarError('Escanee o ingrese un SKU para entregar');
+        return;
+    }
+
+    const skuNorm = sku.toUpperCase();
+
+    // Si ya está en la lista de productos a entregar → incrementar cantidad
+    const idxExistente = productosNuevos.findIndex(p =>
+        String(p.sku).toUpperCase() === skuNorm
+    );
+    if (idxExistente !== -1) {
+        const prod = productosNuevos[idxExistente];
+        if (prod.cantidad >= prod.stock_disponible) {
+            _beepCambio(false);
+            mostrarError(`Stock máximo alcanzado para ${prod.sku} (${prod.stock_disponible})`);
+        } else {
+            prod.cantidad++;
+            actualizarTablaProductosNuevos();
+            actualizarVistaPreviaTotales();
+            _beepCambio(true);
+            mostrarToast('success', `${prod.sku} ×${prod.cantidad}`);
+        }
+        $input.val('').focus();
+        return;
+    }
+
+    // Buscar por SKU en bodega y agregar la coincidencia EXACTA
+    const $btn = $('#btn-escanear-entrega');
+    $btn.prop('disabled', true);
+
+    $.get('/app/ventas/api/buscar-productos-cambio/', { termino: sku })
+        .done(function(response) {
+            if (!response.success) {
+                _beepCambio(false);
+                mostrarError(response.error || 'Error al buscar el producto');
+                return;
+            }
+
+            const productos = response.productos || [];
+            const exacto = productos.find(p =>
+                String(p.sku).toUpperCase() === skuNorm
+            );
+
+            if (exacto) {
+                agregarProductoNuevo(exacto);
+                _beepCambio(true);
+            } else if (productos.length === 0) {
+                _beepCambio(false);
+                Swal.fire({
+                    icon: 'error',
+                    title: '⚠️ Sin stock o SKU inexistente',
+                    html: `<p class="text-danger fw-bold">No hay stock disponible para el SKU <code>${skuNorm}</code> en esta sucursal.</p>`,
+                    confirmButtonText: 'Entendido',
+                    confirmButtonColor: '#dc3545'
+                });
+            } else {
+                // No hubo match exacto pero sí parciales → mostrar el panel para elegir
+                _beepCambio(false);
+                mostrarResultadosBusquedaProductos(productos);
+            }
+        })
+        .fail(function() {
+            _beepCambio(false);
+            mostrarError('Error de conexión al buscar el producto');
+        })
+        .always(function() {
+            $btn.prop('disabled', false);
+            $input.val('').focus();
+        });
+}
+
+$('#input-escanear-entrega').on('keypress', function(e) {
+    if (e.which === 13) {
+        e.preventDefault();
+        escanearProductoEntrega();
+    }
 });
 
 function buscarProductosParaCambio() {

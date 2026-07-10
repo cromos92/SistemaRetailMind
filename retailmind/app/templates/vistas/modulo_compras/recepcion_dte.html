@@ -3111,8 +3111,19 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
             ? `<br><small class="text-success"><i class="bi bi-receipt-cutoff me-1"></i>NC #${prod.nc_numero}${prod.nc_id ? ` <a href="/app/dte/${prod.nc_id}/txt-acepta/" class="ms-1" title="Descargar TXT Acepta"><i class="bi bi-download"></i></a>` : ''}</small>`
             : (prod.tipo_regularizacion ? `<br><small class="text-muted">${prod.tipo_regularizacion}</small>` : '');
 
+        // Cancelar regularización: reabre la línea para actualizar el stock por
+        // regularizar (no toca el OK). No aplica a líneas OK ni a solicitudes en curso.
+        const estadoUpper = String(prod.estado || '').toUpperCase();
+        const puedeCancelar = PUEDE_REGULARIZAR_DTE
+            && !['RECEPCIONADO_OK', 'EN_SOLICITUD_REGULARIZACION'].includes(estadoUpper);
+        const btnCancelar = puedeCancelar
+            ? `<button type="button" class="btn btn-outline-danger btn-sm ms-1" onclick="cancelarRegularizacionProducto(${prod.id})" title="Cancelar la regularización y reabrir para actualizar el stock por regularizar">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Cancelar
+               </button>`
+            : '';
+
         // Acciones según estado: regularizado → solo ver detalle; pendiente → regularizar + ver
-        const acciones = yaRegularizado
+        const acciones = (yaRegularizado
             ? `<button type="button" class="btn btn-outline-success btn-sm" onclick="abrirModalRegularizar(${prod.id})" title="Ver detalle de la regularización">
                     <i class="bi bi-eye me-1"></i>Ver detalle
                </button>`
@@ -3121,7 +3132,7 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
                </button>
                ${prod.dte_id ? `<button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionado(${prod.dte_id})" title="Ver DTE">
                     <i class="bi bi-eye"></i>
-               </button>` : ''}`;
+               </button>` : ''}`) + btnCancelar;
 
         tbody.append(`
             <tr>
@@ -3145,6 +3156,74 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
                 <td class="text-end">${acciones}</td>
             </tr>
         `);
+        });
+    });
+}
+
+function cancelarRegularizacionProducto(recepcionId) {
+    const prod = (window.productosProblemas || []).find(p => p.id === recepcionId);
+    const nombre = prod
+        ? `${prod.producto_nombre || prod.sku || ''} (${prod.talla || '-'})`
+        : `línea #${recepcionId}`;
+
+    Swal.fire({
+        title: '↩️ Cancelar regularización',
+        html: `
+            <div class="text-start">
+                <p>Se cancelará la regularización de <strong>${_escapeHtmlDte(nombre)}</strong> y la línea volverá a quedar <strong>por regularizar</strong> para que actualices el stock que declaraste con problemas.</p>
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Solo se revierte el <strong>stock por regularizar</strong> (auto-devolución al origen / mercadería encontrada / ajuste). El stock ya recibido OK <strong>no se toca</strong>.
+                </div>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Se bloquea si hay una NC vigente, una solicitud en curso o si el stock ya se vendió/movió.
+                </div>
+                <label class="form-label fw-bold">Motivo <span class="text-danger">*</span></label>
+                <textarea id="motivoCancelarReg" class="form-control" rows="2" placeholder="Ej: se marcó faltante por error, la mercadería sí llegó"></textarea>
+            </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-arrow-counterclockwise me-1"></i>Sí, cancelar regularización',
+        cancelButtonText: 'Volver',
+        confirmButtonColor: '#dc3545',
+        width: '600px',
+        focusConfirm: false,
+        preConfirm: () => {
+            const motivo = (document.getElementById('motivoCancelarReg').value || '').trim();
+            if (!motivo) { Swal.showValidationMessage('Debes ingresar el motivo'); return false; }
+            return motivo;
+        }
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        const motivo = result.value;
+
+        Swal.fire({ title: 'Procesando...', html: 'Cancelando regularización...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+        $.ajax({
+            url: '/app/dte/cancelar_regularizacion/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({ recepcion_ids: [recepcionId], motivo })
+        }).done(response => {
+            if (response.success) {
+                const errHtml = (response.errores && response.errores.length)
+                    ? `<div class="alert alert-warning mt-2 text-start"><strong>No se pudieron cancelar:</strong><ul class="mb-0">${response.errores.map(e => `<li>${_escapeHtmlDte(e)}</li>`).join('')}</ul></div>`
+                    : '';
+                Swal.fire({
+                    icon: 'success',
+                    title: '✅ Regularización cancelada',
+                    html: `<p>${_escapeHtmlDte(response.message || '')}</p><div class="alert alert-info">Ahora podés actualizar el stock por regularizar con <strong>Mercadería Encontrada</strong> o <strong>Ajustar</strong>.</div>${errHtml}`,
+                    confirmButtonText: 'Entendido'
+                });
+                if (window.cargarProductosProblemas) window.cargarProductosProblemas();
+            } else {
+                Swal.fire('No se pudo cancelar', response.error || 'Error', 'warning');
+            }
+        }).fail(xhr => {
+            Swal.fire('Error', xhr.responseJSON?.error || 'Error de conexión', 'error');
         });
     });
 }

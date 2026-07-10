@@ -732,6 +732,7 @@ urlpatterns = [
     path('dte/<int:nc_id>/txt-acepta/', views.descargar_txt_nc_api, name='descargar_txt_nc_api'),
     path('dte/regularizar_dte_masivo/', views.regularizar_dte_masivo, name='regularizar_dte_masivo'),
     path('dte/anular_regularizacion_dte/', views.anular_regularizacion_dte, name='anular_regularizacion_dte'),
+    path('dte/cancelar_regularizacion/', views.cancelar_regularizacion_producto, name='cancelar_regularizacion_producto'),
     path('dte/obtener_dtes_con_problemas/', views.obtener_dtes_con_problemas, name='obtener_dtes_con_problemas'),
     path('dte/obtener_detalle_dte_recepcionado/', views.obtener_detalle_dte_recepcionado, name='obtener_detalle_dte_recepcionado'),
     path('dte/<int:dte_id>/audit/', views.dte_audit_api, name='dte_audit_api'),

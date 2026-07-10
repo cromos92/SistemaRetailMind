@@ -6188,6 +6188,227 @@ def anular_regularizacion_dte(request):
 
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
+@require_http_methods(["POST"])
+def cancelar_regularizacion_producto(request):
+    """
+    Cancela la regularización de una o más líneas con problema para que el
+    usuario pueda volver a declarar la cantidad real de la porción "por
+    regularizar", SIN tocar el stock que ya entró OK.
+
+    A diferencia de anular_regularizacion_dte (que fuerza RECEPCIONADO_OK y suma
+    todo el faltante al destino), aquí NO se decide por el usuario: solo se
+    revierte el stock por regularizar y la línea vuelve a quedar editable.
+
+    Qué revierte:
+      - SOLO los movimientos de regularización (concepto REGULARIZACION_TRASPASO)
+        sobre la talla de la línea: la auto-devolución al origen de las guías y
+        cualquier "Mercadería Encontrada"/"Ajuste" aplicado por error.
+      - NUNCA toca el TRASPASO_ENTRADA (stock recibido OK) ni las líneas OK.
+
+    Bloquea la línea (sin modificar nada) si:
+      - Tiene una solicitud de regularización en curso.
+      - El DTE tiene una NC vigente (hay que anularla primero).
+      - Se regularizó con cambio de producto (flujo irreversible aquí).
+      - Revertir dejaría el stock de la talla en negativo (ya se vendió/movió).
+
+    Deja la línea de vuelta como problema editable (FALTANTE / PARCIAL / DAÑADO)
+    y reabre el DTE a RECEPCIONADO_PARCIAL para que reaparezca en Regularizar.
+    Acepta procesamiento por lote (varias líneas): las que se bloquean se
+    reportan en `errores` y no abortan a las demás.
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    # Acepta lista de ids o un id único
+    recepcion_ids = data.get('recepcion_ids') or data.get('productos_ids') or []
+    if not recepcion_ids and data.get('producto_id'):
+        recepcion_ids = [data.get('producto_id')]
+    motivo = (data.get('motivo') or '').strip()
+
+    if not recepcion_ids:
+        return JsonResponse({'success': False, 'error': 'No se indicaron líneas a cancelar.'}, status=400)
+    if not motivo:
+        return JsonResponse({'success': False, 'error': 'Debes ingresar el motivo de la cancelación.'}, status=400)
+
+    from .models import Productos_Recepcionados, Movimientos_Producto, Producto_Talla
+
+    ESTADOS_CANCELABLES = {
+        'FALTANTE', 'RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO',
+        'EN_REGULARIZACION', 'REGULARIZADO',
+    }
+
+    usuario = request.user.username
+    hoy = timezone.now()
+    canceladas = []
+    errores = []
+
+    try:
+        with transaction.atomic():
+            # Defensa: aborta la transacción si alguna query se cuelga por lock,
+            # antes de que el worker sea matado.
+            with connection.cursor() as cur:
+                cur.execute("SET LOCAL statement_timeout = '25s'")
+
+            recepciones = list(
+                Productos_Recepcionados.objects
+                .select_for_update(of=('self',))
+                .select_related('dte', 'dte__sucursal', 'producto_talla', 'producto_talla__producto')
+                .filter(id__in=recepcion_ids)
+            )
+            if not recepciones:
+                return JsonResponse({'success': False, 'error': 'No se encontraron las líneas indicadas.'}, status=404)
+
+            dtes_a_reabrir = set()
+
+            for recepcion in recepciones:
+                etiqueta = recepcion.producto_talla.sku if recepcion.producto_talla else f'recepción #{recepcion.id}'
+                dte = recepcion.dte
+
+                if not dte:
+                    errores.append(f'{etiqueta}: sin DTE asociado.')
+                    continue
+
+                if recepcion.estado == 'EN_SOLICITUD_REGULARIZACION':
+                    errores.append(f'{etiqueta}: tiene una solicitud de regularización en curso; resuélvela o recházala primero.')
+                    continue
+
+                if recepcion.estado not in ESTADOS_CANCELABLES:
+                    errores.append(f'{etiqueta}: estado "{recepcion.estado}" no admite cancelación.')
+                    continue
+
+                # Bloqueo: NC vigente sobre este DTE (revertir stock sin anular la
+                # NC dejaría descuadre contable).
+                nc_vigente = Dte.objects.filter(
+                    documento_afectado=dte,
+                    es_nota_credito=True,
+                    estado_dte__in=['EMITIDO', 'ACEPTADO'],
+                ).first()
+                if nc_vigente:
+                    errores.append(f'{etiqueta}: el DTE tiene la NC #{nc_vigente.numero_documento} vigente; anúlala antes de cancelar la regularización.')
+                    continue
+
+                # Bloqueo: regularización por cambio de producto (irreversible aquí).
+                if Movimientos_Producto.objects.filter(
+                    dte=dte, concepto='REGULARIZACION_CAMBIO_PRODUCTO', estado='COMPLETADO',
+                ).exists():
+                    errores.append(f'{etiqueta}: se regularizó con cambio de producto; revísalo manualmente.')
+                    continue
+
+                # Movimientos de regularización a revertir: SOLO REGULARIZACION_TRASPASO
+                # sobre la talla de esta línea. Nunca TRASPASO_ENTRADA (stock OK).
+                movs_reg = list(Movimientos_Producto.objects.filter(
+                    dte=dte,
+                    ProductoTalla=recepcion.producto_talla,
+                    concepto='REGULARIZACION_TRASPASO',
+                    estado='COMPLETADO',
+                )) if recepcion.producto_talla else []
+
+                total_reg = sum(m.cantidad or 0 for m in movs_reg)
+
+                if total_reg > 0:
+                    talla_lock = Producto_Talla.objects.select_for_update().select_related('producto').get(
+                        id=recepcion.producto_talla_id
+                    )
+                    if talla_lock.stock < total_reg:
+                        errores.append(
+                            f'{etiqueta}: no se puede revertir {total_reg} u. porque el stock actual '
+                            f'({talla_lock.stock}) quedaría negativo (ya se movió/vendió).'
+                        )
+                        continue
+                    Producto_Talla.objects.filter(id=talla_lock.id).update(stock=F('stock') - total_reg)
+                    Movimientos_Producto.objects.create(
+                        dte=dte,
+                        ProductoTalla=talla_lock,
+                        sucursal_origen=talla_lock.producto.sucursal if talla_lock.producto else None,
+                        sucursal_destino=None,
+                        cantidad=-total_reg,
+                        costo=talla_lock.producto.costo if talla_lock.producto else 0,
+                        sobreprecio=talla_lock.producto.sobreprecio if talla_lock.producto else 0,
+                        precio=talla_lock.producto.precioventa if talla_lock.producto else 0,
+                        concepto='ANULACION_REGULARIZACION',
+                        tipo_movimiento='EGRESO',
+                        estado='COMPLETADO',
+                        responsable=usuario,
+                        fecha=hoy.date(),
+                        hora=hoy.time(),
+                        observaciones=(
+                            f'Cancelación de regularización DTE #{dte.numero_documento}: '
+                            f'revierte {total_reg} u. por regularizar de {etiqueta}. {motivo}'
+                        ),
+                    )
+                    # Idempotencia: los movimientos revertidos ya no se re-procesan.
+                    Movimientos_Producto.objects.filter(
+                        id__in=[m.id for m in movs_reg]
+                    ).update(estado='ANULADO')
+
+                # Reset del estado de la línea a "problema editable".
+                faltante = recepcion.cantidad_faltante or 0
+                danada = recepcion.cantidad_danada or 0
+                recibida = recepcion.stockArribado or 0
+                if faltante > 0 and recibida == 0:
+                    nuevo_estado = 'FALTANTE'
+                elif danada > 0 and faltante == 0:
+                    nuevo_estado = 'RECEPCIONADO_DANADO'
+                else:
+                    nuevo_estado = 'RECEPCIONADO_PARCIAL'
+
+                recepcion.estado = nuevo_estado
+                recepcion.fecha_regularizacion = None
+                recepcion.regularizado_por = None
+                recepcion.observaciones = (recepcion.observaciones or '') + (
+                    f"\n[{hoy.strftime('%Y-%m-%d %H:%M')}] Regularización CANCELADA por {usuario}"
+                    + (f" (revertidas {total_reg} u. por regularizar)" if total_reg > 0 else "")
+                    + f". Línea reabierta para actualizar. {motivo}"
+                )
+                recepcion.save()
+
+                dtes_a_reabrir.add(dte.id)
+                canceladas.append({
+                    'recepcion_id': recepcion.id,
+                    'sku': etiqueta,
+                    'stock_revertido': total_reg,
+                    'nuevo_estado': nuevo_estado,
+                })
+
+            # Reabrir DTEs cerrados para que reaparezcan en Regularizar. NO tocamos
+            # EMITIDO/CANCELADO/ANULADO/RECHAZADO ni forzamos re-recepción total.
+            for dte_id in dtes_a_reabrir:
+                Dte.objects.filter(
+                    id=dte_id, estado_dte='RECEPCIONADO_COMPLETO',
+                ).update(estado_dte='RECEPCIONADO_PARCIAL')
+
+        if not canceladas:
+            return JsonResponse({
+                'success': False,
+                'error': 'No se canceló ninguna línea. ' + ' '.join(errores),
+                'errores': errores,
+            }, status=400)
+
+        logger.info(
+            "Regularizacion cancelada: usuario=%s lineas=%s errores=%s",
+            usuario, len(canceladas), len(errores),
+        )
+
+        mensaje = f'{len(canceladas)} línea(s) reabierta(s) para actualizar.'
+        if errores:
+            mensaje += f' {len(errores)} no se pudieron cancelar.'
+
+        return JsonResponse({
+            'success': True,
+            'message': mensaje,
+            'canceladas': canceladas,
+            'errores': errores,
+        })
+
+    except Exception as e:
+        logger.exception("Error en cancelar_regularizacion_producto")
+        return JsonResponse({'success': False, 'error': f'Error al cancelar: {str(e)}'}, status=500)
+
+
+@login_required
 @requiere_permiso('recepcion_dte', 'puede_ver')
 @require_GET
 def obtener_dtes_con_problemas(request):
