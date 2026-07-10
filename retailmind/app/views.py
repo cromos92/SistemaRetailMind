@@ -28645,12 +28645,54 @@ def anular_factura_dte(request):
     elif cliente_rut:
         from .views_modulo_ventas import formatear_rut as _fmt_rut
         rut_norm = _fmt_rut(cliente_rut)
-        receptor_nc = (
+        empresa_por_rut = (
             Empresa.objects
             .filter(Q(rut__iexact=rut_norm) | Q(rut__iexact=cliente_rut))
             .order_by('-id')
             .first()
-        ) or receptor_nc
+        )
+        if empresa_por_rut is not None:
+            receptor_nc = empresa_por_rut
+        elif modalidad_nc != 'OCULTA' and cliente_nombre:
+            # No existe una Empresa con ese RUT, pero el modal la resolvió
+            # desde CRM/Ticket (nombre presente, sin cliente_id) y su propio
+            # comentario promete que "el backend resolverá por RUT, creando
+            # Empresa si hace falta". Sin esta creación on-the-fly, la NC de
+            # una boleta a consumidor final (sin dte.receptor) fallaba con
+            # "Debe seleccionar (o crear) un cliente con RUT". Mismo patrón
+            # tolerante que asignar_receptor_dte.
+            try:
+                receptor_nc = Empresa.objects.create(
+                    nombre=cliente_nombre,
+                    rut=rut_norm,
+                    nombre_fantasia=cliente_nombre,
+                    razon_social=cliente_nombre,
+                    giro=(body.get('giro') or '').strip(),
+                    direccion=(body.get('direccion') or '').strip(),
+                    comuna=(body.get('comuna') or '').strip(),
+                    ciudad=(body.get('ciudad') or '').strip(),
+                    esProveedor=False,
+                    correoVendedor=(body.get('cliente_email') or body.get('email') or '').strip(),
+                    correoAdministrador='',
+                    correoIntercambio='',
+                    contacto1=(body.get('telefono') or '').strip(),
+                    contacto2='',
+                )
+                logger.info(
+                    "[NC] %s creó Empresa receptora on-the-fly para NC de DTE "
+                    "#%s: %s (%s)",
+                    request.user.username, dte.id, receptor_nc.nombre, receptor_nc.rut,
+                )
+            except Exception as e:
+                logger.exception(
+                    'anular_factura: error creando Empresa receptora on-the-fly '
+                    '(rut=%s)', cliente_rut,
+                )
+                return JsonResponse({
+                    'error': f'No se pudo crear el cliente receptor de la NC: {e}'
+                }, status=500)
+        # Si no llega cliente_nombre y no hay Empresa, receptor_nc queda como
+        # dte.receptor (posiblemente None) y el guard de abajo decide.
 
     if modalidad_nc != 'OCULTA' and receptor_nc is None:
         return JsonResponse({

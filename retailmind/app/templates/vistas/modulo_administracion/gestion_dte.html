@@ -2086,7 +2086,7 @@
             {% if es_admin %}
             ${['FACTURA ELECTRONICA','FACTURA_ELECTRONICA','BOLETA ELECTRONICA','BOLETA_ELECTRONICA'].includes(dte.tipo_documento) && dte.estado_dte !== 'ANULADO' && (dte.monto_con_iva - (dte.total_nc_acumulado || 0)) > 0 ? `
             <button class="nexo-action-btn danger" title="Generar NC" onclick='anularDocumento(${dte.id || 0}, ${JSON.stringify(String(dte.numero_documento || ""))}, ${JSON.stringify(String(dte.tipo_documento || ""))}, ${dte.monto_con_iva || 0}, ${dte.total_nc_acumulado || 0})'>
-                <i class="bi bi-x-circle"></i>
+                <i class="bi bi-file-earmark-minus"></i>
             </button>` : ''}
             ${['NOTA DE CREDITO','NOTA_CREDITO'].includes(dte.tipo_documento) ? `
             <button class="nexo-action-btn warning" title="Editar folio / cliente NC" onclick='editarFolioNC(${dte.id || 0}, ${JSON.stringify(String(dte.numero_documento || ""))}, ${JSON.stringify(dte.tipo_documento || "")}, ${dte.receptor_id ? "true" : "false"}, ${JSON.stringify(dte.receptor_nombre || "")}, ${JSON.stringify(dte.receptor_rut || "")})'>
@@ -4344,6 +4344,7 @@
                     cliente_id: formData.clienteId,
                     cliente_nombre: formData.clienteNombre,
                     cliente_rut: formData.clienteRut,
+                    cliente_email: (document.getElementById('anulClienteEmail') || {}).value || '',
                     motivo: formData.motivo
                 })
             });
