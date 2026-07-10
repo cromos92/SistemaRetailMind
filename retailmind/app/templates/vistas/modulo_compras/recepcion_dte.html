@@ -3111,11 +3111,13 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
             ? `<br><small class="text-success"><i class="bi bi-receipt-cutoff me-1"></i>NC #${prod.nc_numero}${prod.nc_id ? ` <a href="/app/dte/${prod.nc_id}/txt-acepta/" class="ms-1" title="Descargar TXT Acepta"><i class="bi bi-download"></i></a>` : ''}</small>`
             : (prod.tipo_regularizacion ? `<br><small class="text-muted">${prod.tipo_regularizacion}</small>` : '');
 
-        // Cancelar regularización: reabre la línea para actualizar el stock por
-        // regularizar (no toca el OK). No aplica a líneas OK ni a solicitudes en curso.
+        // Cancelar regularización: SOLO aplica a una regularización ya aplicada
+        // (REGULARIZADO). Tras cancelar, la línea queda pendiente (FALTANTE/PARCIAL)
+        // y se actualiza con Regularizar → Mercadería Encontrada/Ajustar, NO
+        // volviendo a cancelar (por eso el botón desaparece: no hay nada más que
+        // deshacer).
         const estadoUpper = String(prod.estado || '').toUpperCase();
-        const puedeCancelar = PUEDE_REGULARIZAR_DTE
-            && !['RECEPCIONADO_OK', 'EN_SOLICITUD_REGULARIZACION'].includes(estadoUpper);
+        const puedeCancelar = PUEDE_REGULARIZAR_DTE && estadoUpper === 'REGULARIZADO';
         const btnCancelar = puedeCancelar
             ? `<button type="button" class="btn btn-outline-danger btn-sm ms-1" onclick="cancelarRegularizacionProducto(${prod.id})" title="Cancelar la regularización y reabrir para actualizar el stock por regularizar">
                     <i class="bi bi-arrow-counterclockwise me-1"></i>Cancelar

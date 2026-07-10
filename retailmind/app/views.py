@@ -4699,17 +4699,64 @@ def regularizar_producto_api(request):
                         'success': False,
                         'error': 'La cantidad encontrada debe ser mayor a 0'
                     }, status=400)
-                
+
+                # Candado anti doble-ingreso: solo se puede ingresar lo que FALTA.
+                # El stock ya recibido (OK) no se vuelve a ingresar/actualizar.
+                faltante_actual = recepcion.cantidad_faltante or 0
+                if cantidad_encontrada > faltante_actual:
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            f'Solo puedes ingresar hasta {faltante_actual} u. (lo que falta). '
+                            f'El stock ya recibido no se vuelve a ingresar.'
+                        )
+                    }, status=400)
+
                 sucursal_destino_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
                 sucursal_destino = Sucursal.objects.get(id=sucursal_destino_id)
                 
+                # El stock encontrado entra a la bodega DESTINO (no al origen).
+                # recepcion.producto_talla es la talla del ORIGEN; buscamos/creamos
+                # la del destino por SKU (mismo patrón que anular_regularizacion_dte).
+                talla_destino = None
                 if recepcion.producto_talla:
-                    recepcion.producto_talla.stock += cantidad_encontrada
-                    recepcion.producto_talla.save()
-                
+                    talla_destino = Producto_Talla.objects.filter(
+                        sku=recepcion.producto_talla.sku,
+                        producto__sucursal=sucursal_destino,
+                    ).select_related('producto').first()
+                    if not talla_destino:
+                        prod_ori = recepcion.producto_talla.producto
+                        producto_destino, _ = Producto.objects.get_or_create(
+                            articulo=prod_ori.articulo,
+                            sucursal=sucursal_destino,
+                            atributo1=prod_ori.atributo1,
+                            atributo2=prod_ori.atributo2,
+                            atributo3=prod_ori.atributo3,
+                            atributo4=prod_ori.atributo4,
+                            defaults={
+                                'descripcion': prod_ori.descripcion,
+                                'categoria': prod_ori.categoria,
+                                'costo': prod_ori.costo,
+                                'sobreprecio': prod_ori.sobreprecio,
+                                'precioventa': prod_ori.precioventa,
+                                'precioSugerido': prod_ori.precioSugerido,
+                                'tipo_talla': prod_ori.tipo_talla,
+                                'guia_talla': prod_ori.guia_talla,
+                            },
+                        )
+                        talla_destino = Producto_Talla.objects.create(
+                            producto=producto_destino,
+                            talla=recepcion.producto_talla.talla,
+                            sku=recepcion.producto_talla.sku,
+                            stock=0,
+                        )
+                    Producto_Talla.objects.filter(id=talla_destino.id).update(
+                        stock=F('stock') + cantidad_encontrada
+                    )
+
                 Movimientos_Producto.objects.create(
                     dte=recepcion.dte,
-                    ProductoTalla=recepcion.producto_talla,
+                    ProductoTalla=talla_destino or recepcion.producto_talla,
                     sucursal_origen=recepcion.dte.sucursal if recepcion.dte else None,
                     sucursal_destino=sucursal_destino,
                     cantidad=cantidad_encontrada,
@@ -6235,10 +6282,11 @@ def cancelar_regularizacion_producto(request):
 
     from .models import Productos_Recepcionados, Movimientos_Producto, Producto_Talla
 
-    ESTADOS_CANCELABLES = {
-        'FALTANTE', 'RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO',
-        'EN_REGULARIZACION', 'REGULARIZADO',
-    }
+    # Solo se cancela una regularización YA aplicada. Una línea que ya está
+    # pendiente (FALTANTE/PARCIAL/DAÑADO) no tiene regularización que cancelar:
+    # se actualiza directo con Mercadería Encontrada / Ajustar. Esto evita el
+    # "cancelar infinito" (no-op que respondía éxito una y otra vez).
+    ESTADOS_CANCELABLES = {'REGULARIZADO', 'EN_REGULARIZACION'}
 
     usuario = request.user.username
     hoy = timezone.now()
@@ -6276,7 +6324,10 @@ def cancelar_regularizacion_producto(request):
                     continue
 
                 if recepcion.estado not in ESTADOS_CANCELABLES:
-                    errores.append(f'{etiqueta}: estado "{recepcion.estado}" no admite cancelación.')
+                    errores.append(
+                        f'{etiqueta}: no tiene una regularización que cancelar '
+                        f'(estado {recepcion.estado}); actualízala con Mercadería Encontrada / Ajustar.'
+                    )
                     continue
 
                 # Bloqueo: NC vigente sobre este DTE (revertir stock sin anular la
