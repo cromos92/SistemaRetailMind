@@ -3173,6 +3173,14 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
                     <i class="bi bi-eye"></i>
                </button>` : ''}`) + btnCancelar;
 
+        // Bandeja única role-aware: badge que indica desde qué lado actúa el usuario
+        // (el modal de regularización ya adapta sus opciones según soy_emisor/soy_receptor).
+        const rolBadge = prod.soy_emisor
+            ? '<span class="badge bg-primary ms-1" title="Tu sucursal EMITIÓ este traspaso (sos el origen)"><i class="bi bi-box-arrow-up-right me-1"></i>Soy origen</span>'
+            : (prod.soy_receptor
+                ? '<span class="badge bg-success ms-1" title="Tu sucursal RECIBE este traspaso (sos el destino)"><i class="bi bi-box-arrow-in-down me-1"></i>Soy destino</span>'
+                : '');
+
         tbody.append(`
             <tr>
                 <td>
@@ -3180,7 +3188,7 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
                     <br><small class="text-muted">${fecha}</small>
                 </td>
                 <td>
-                    <strong>${_escapeHtmlDte(prod.sucursal_origen || '-')}</strong>
+                    <strong>${_escapeHtmlDte(prod.sucursal_origen || '-')}</strong>${rolBadge}
                     <br><small class="text-muted">${_escapeHtmlDte(prod.emisor || '-')}</small>
                 </td>
                 <td>
