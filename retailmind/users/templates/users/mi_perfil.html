@@ -722,8 +722,7 @@
                             <i class="ri-arrow-right-s-line ms-auto" style="font-size: 1.5rem; color: var(--nexo-gray-300);"></i>
                         </div>
 
-                        {% if usuario.rol == 'administrador' or usuario.rol == 'administracion' or usuario.rol == 'jefe_local' %}
-                        <!-- PIN de Autorización (solo admins / jefes de local) -->
+                        <!-- PIN de Autorización (disponible para todos los usuarios) -->
                         <div class="security-option" onclick="abrirModalPin()">
                             <div class="security-option-icon" style="background: rgba(255, 176, 32, 0.15); color: var(--nexo-warning);">
                                 <i class="ri-key-2-line"></i>
@@ -734,13 +733,12 @@
                                     {% if usuario.pin_autorizacion %}
                                         Configurado · actualiza tu PIN de 6 dígitos
                                     {% else %}
-                                        Configura tu PIN de 6 dígitos para autorizar cambios fuera de plazo
+                                        Configura tu PIN de 6 dígitos para autorizar cambios/devoluciones
                                     {% endif %}
                                 </p>
                             </div>
                             <i class="ri-arrow-right-s-line ms-auto" style="font-size: 1.5rem; color: var(--nexo-gray-300);"></i>
                         </div>
-                        {% endif %}
 
                         <hr class="my-3">
 
@@ -813,8 +811,7 @@
     </div>
 </div>
 
-{% if usuario.rol == 'administrador' or usuario.rol == 'administracion' or usuario.rol == 'jefe_local' %}
-<!-- Modal PIN de Autorización -->
+<!-- Modal PIN de Autorización (disponible para todos los usuarios) -->
 <div class="modal fade" id="modalPinAutorizacion" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content" style="border-radius: var(--nexo-radius-lg); overflow: hidden;">
@@ -868,7 +865,6 @@
         </div>
     </div>
 </div>
-{% endif %}
 
 <!-- Modal Cambiar Contraseña -->
 <div class="modal fade" id="modalCambiarPassword" tabindex="-1">
@@ -1059,8 +1055,7 @@ $('#formCambiarPassword').on('submit', function(e) {
     });
 });
 
-{% if usuario.rol == 'administrador' or usuario.rol == 'administracion' or usuario.rol == 'jefe_local' %}
-// ========== PIN DE AUTORIZACIÓN ==========
+// ========== PIN DE AUTORIZACIÓN (disponible para todos los usuarios) ==========
 function abrirModalPin() {
     $('#formPinAutorizacion')[0].reset();
     $('#modalPinAutorizacion').modal('show');
@@ -1165,7 +1160,6 @@ function eliminarPinAutorizacion() {
         }
     });
 }
-{% endif %}
 
 // ========== CAMBIAR CONTRASEÑA POR EMAIL ==========
 function solicitarCambioEmail() {

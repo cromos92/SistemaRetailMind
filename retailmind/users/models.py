@@ -217,18 +217,22 @@ class Usuario(AbstractUser):
         
         return password_temporal
     
-    # ===== PIN de Autorización (solo admins) =====
+    # ===== PIN de Autorización =====
+    # ROLES_CON_PIN se conserva para la búsqueda de ADMINISTRADORES por PIN
+    # (autorizaciones exclusivas de admin). El PIN, sin embargo, puede
+    # configurarlo cualquier usuario activo: se usa para aprobar operaciones
+    # normales (p. ej. cambios/devoluciones dentro de plazo).
     ROLES_CON_PIN = ('administrador', 'administracion', 'jefe_local')
 
     def puede_tener_pin_autorizacion(self):
-        """Solo administradores/jefes pueden configurar un PIN de autorización."""
-        return self.rol in self.ROLES_CON_PIN
+        """Cualquier usuario activo puede configurar un PIN de autorización."""
+        return bool(self.is_active and getattr(self, 'es_activo', True))
 
     def set_pin_autorizacion(self, pin):
-        """Hashea y guarda el PIN. Valida que sean 6 dígitos numéricos y que el rol lo permita."""
+        """Hashea y guarda el PIN. Valida que sean 6 dígitos numéricos y que el usuario esté activo."""
         from django.contrib.auth.hashers import make_password
         if not self.puede_tener_pin_autorizacion():
-            raise ValueError('Solo administradores o jefes de local pueden tener PIN de autorización')
+            raise ValueError('Solo usuarios activos pueden configurar un PIN de autorización')
         if not pin or not re.match(r'^\d{6}$', str(pin)):
             raise ValueError('El PIN debe tener exactamente 6 dígitos numéricos')
         self.pin_autorizacion = make_password(str(pin))
@@ -265,6 +269,26 @@ class Usuario(AbstractUser):
         for admin in candidatos:
             if admin.verificar_pin_autorizacion(pin):
                 return admin
+        return None
+
+    @classmethod
+    def buscar_usuario_por_pin(cls, pin):
+        """
+        Busca CUALQUIER usuario activo (sin importar el rol) cuyo PIN coincida.
+        Se usa para autorizar operaciones normales (no exclusivas de admin),
+        como cambios/devoluciones dentro de plazo.
+        Retorna el primer Usuario que matchea o None. PIN de 6 dígitos.
+        El llamador debe validar además la pertenencia a la empresa/sucursal.
+        """
+        if not pin or not re.match(r'^\d{6}$', str(pin)):
+            return None
+        candidatos = cls.objects.filter(
+            is_active=True,
+            es_activo=True,
+        ).exclude(pin_autorizacion__isnull=True).exclude(pin_autorizacion='')
+        for usuario in candidatos:
+            if usuario.verificar_pin_autorizacion(pin):
+                return usuario
         return None
 
     def get_iniciales(self):

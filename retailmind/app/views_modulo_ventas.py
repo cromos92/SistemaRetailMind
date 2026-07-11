@@ -112,6 +112,20 @@ def _vendedores_elegibles_para_sucursal(sucursal):
     ).distinct()
 
 
+def _vendedores_para_autorizacion_cambio(sucursal):
+    """Vendedores que pueden autorizar/figurar en un cambio de esta empresa.
+
+    A diferencia de _vendedores_elegibles_para_sucursal, NO restringe por
+    sucursal: cualquier vendedor activo de la misma empresa (de cualquier
+    tienda), o company-wide, sirve para autorizar el cambio. La sucursal del
+    cambio sigue determinando el inventario; solo se relaja quién puede firmar.
+    """
+    return Vendedor.objects.filter(activo=True).filter(
+        Q(empresa_id=sucursal.empresa_id)
+        | Q(empresa__isnull=True)
+    ).distinct()
+
+
 def _bloquear_y_validar_inventario_cambio(detalles, sucursal_id, reversion=False):
     """Bloquea productos en orden estable y valida el stock final agregado."""
     entradas = {}
@@ -15258,18 +15272,23 @@ def aprobar_cambio_generar_ticket(request):
         cambio_id = data.get('cambio_id')
         vendedor_id = data.get('vendedor_id')
         observaciones = data.get('observaciones', '')
-        codigo_autorizacion = str(data.get('codigo_autorizacion') or '').strip()
-        
-        if not all([cambio_id, vendedor_id, codigo_autorizacion]):
+        # Credencial de 6 dígitos. Según el plazo del cambio será interpretada como:
+        #   - Código dinámico de ADMINISTRADOR (cambio fuera de plazo), o
+        #   - PIN de autorización de CUALQUIER usuario activo (cambio normal, dentro de plazo).
+        credencial = str(
+            data.get('codigo_autorizacion') or data.get('pin_autorizacion') or ''
+        ).strip()
+
+        if not all([cambio_id, vendedor_id, credencial]):
             return JsonResponse({
                 'success': False,
                 'code': 'AUTH_CODE_REQUIRED',
-                'error': 'ID de cambio, vendedor y código de autorización requeridos'
+                'error': 'ID de cambio, vendedor y PIN/código de autorización requeridos'
             }, status=400)
-        
+
         # Obtener cambio
         cambio = get_object_or_404(CambioDevolucion, id=cambio_id)
-        
+
         # Verificar acceso
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         if not sucursal_id:
@@ -15284,18 +15303,36 @@ def aprobar_cambio_generar_ticket(request):
                 'error': 'No tiene acceso a este cambio'
             }, status=403)
 
-        es_valido_codigo, mensaje_codigo, codigo_obj = \
-            CodigoAutorizacionDinamico.validar_codigo(codigo_autorizacion)
-        administrador_autorizador = codigo_obj.generado_por if codigo_obj else None
-        if not es_valido_codigo or not _usuario_es_administrador_activo(administrador_autorizador):
-            return JsonResponse({
-                'success': False,
-                'code': 'INVALID_AUTH_CODE',
-                'error': mensaje_codigo if not es_valido_codigo else 'El código no pertenece a un administrador activo',
-            }, status=403)
+        # ¿Requiere autorización especial de administrador?
+        # Solo cuando el cambio está FUERA DE PLAZO. Dentro de plazo es un cambio
+        # normal y basta el PIN de cualquier usuario activo de la empresa.
+        requiere_admin = not cambio.dentro_del_plazo
+
+        codigo_obj = None
+        usuario_autorizador = None
+        if requiere_admin:
+            # Fuera de plazo → código dinámico de un administrador
+            es_valido_codigo, mensaje_codigo, codigo_obj = \
+                CodigoAutorizacionDinamico.validar_codigo(credencial)
+            usuario_autorizador = codigo_obj.generado_por if codigo_obj else None
+            if not es_valido_codigo or not _usuario_es_administrador_activo(usuario_autorizador):
+                return JsonResponse({
+                    'success': False,
+                    'code': 'INVALID_AUTH_CODE',
+                    'error': mensaje_codigo if not es_valido_codigo else 'El código no pertenece a un administrador activo',
+                }, status=403)
+        else:
+            # Cambio normal (dentro de plazo) → PIN de cualquier usuario activo
+            usuario_autorizador = User.buscar_usuario_por_pin(credencial)
+            if not usuario_autorizador:
+                return JsonResponse({
+                    'success': False,
+                    'code': 'INVALID_PIN',
+                    'error': 'PIN de autorización inválido. Debe ser el PIN de 6 dígitos de un usuario activo.',
+                }, status=403)
 
         asignacion_autorizador = EmpresaUser.objects.filter(
-            user=administrador_autorizador,
+            user=usuario_autorizador,
             empresa_id=cambio.sucursal.empresa_id,
             status=True,
         ).select_related('sucursal').order_by('-active').first()
@@ -15303,25 +15340,30 @@ def aprobar_cambio_generar_ticket(request):
             return JsonResponse({
                 'success': False,
                 'code': 'CROSS_COMPANY_AUTH',
-                'error': 'El administrador debe pertenecer a la misma empresa',
+                'error': (
+                    'El administrador debe pertenecer a la misma empresa'
+                    if requiere_admin else
+                    'El usuario que autoriza debe pertenecer a la misma empresa'
+                ),
             }, status=403)
-        
+
         # Verificar estado
         if cambio.estado not in ('SOLICITADO', 'APROBADO'):
             return JsonResponse({
                 'success': False,
                 'error': 'Solo se pueden aprobar/ejecutar cambios en estado Solicitado o Aprobado'
             })
-        
-        # Validar vendedor (vendedor_id es el ID del modelo Vendedor, no User)
-        vendedor_obj = _vendedores_elegibles_para_sucursal(cambio.sucursal).filter(
+
+        # Validar vendedor (vendedor_id es el ID del modelo Vendedor, no User).
+        # Se acepta cualquier vendedor activo de la empresa (de cualquier tienda).
+        vendedor_obj = _vendedores_para_autorizacion_cambio(cambio.sucursal).filter(
             id=vendedor_id
         ).first()
         if not vendedor_obj:
             return JsonResponse({
                 'success': False,
                 'code': 'SELLER_NOT_AVAILABLE',
-                'error': 'El vendedor no esta activo o no pertenece a esta sucursal/empresa',
+                'error': 'El vendedor no esta activo o no pertenece a la empresa',
             }, status=403)
         
         logger.info("Iniciando transaccion atomica para aprobar cambio %s", cambio.id)
@@ -15337,14 +15379,14 @@ def aprobar_cambio_generar_ticket(request):
                     'error': 'El cambio fue modificado por otro usuario. Actualice la pantalla.',
                 }, status=409)
 
-            vendedor_obj = _vendedores_elegibles_para_sucursal(cambio.sucursal).filter(
+            vendedor_obj = _vendedores_para_autorizacion_cambio(cambio.sucursal).filter(
                 id=vendedor_id
             ).first()
             if not vendedor_obj:
                 return JsonResponse({
                     'success': False,
                     'code': 'SELLER_NOT_AVAILABLE',
-                    'error': 'El vendedor no esta activo o no pertenece a esta sucursal/empresa',
+                    'error': 'El vendedor no esta activo o no pertenece a la empresa',
                 }, status=403)
 
             detalles_bloqueados = list(
@@ -15356,23 +15398,30 @@ def aprobar_cambio_generar_ticket(request):
                 reversion=False,
             )
 
-            codigo_obj = CodigoAutorizacionDinamico.objects.select_for_update().get(id=codigo_obj.id)
-            if not codigo_obj.es_valido():
-                return JsonResponse({
-                    'success': False,
-                    'code': 'AUTH_CODE_ALREADY_USED',
-                    'error': 'El código fue utilizado o venció antes de ejecutar el cambio',
-                }, status=409)
-            codigo_obj.usado = True
-            codigo_obj.save(update_fields=['usado'])
+            # Solo los cambios fuera de plazo consumen un código dinámico de admin.
+            if codigo_obj is not None:
+                codigo_obj = CodigoAutorizacionDinamico.objects.select_for_update().get(id=codigo_obj.id)
+                if not codigo_obj.es_valido():
+                    return JsonResponse({
+                        'success': False,
+                        'code': 'AUTH_CODE_ALREADY_USED',
+                        'error': 'El código fue utilizado o venció antes de ejecutar el cambio',
+                    }, status=409)
+                codigo_obj.usado = True
+                codigo_obj.save(update_fields=['usado'])
+
+            _autorizador_nombre = (
+                usuario_autorizador.get_full_name() or usuario_autorizador.username
+            )
             registro_autorizacion = RegistroAutorizacion.objects.create(
                 codigo_usado=codigo_obj,
                 usuario_solicitante=request.user,
-                usuario_autorizador=administrador_autorizador,
+                usuario_autorizador=usuario_autorizador,
                 tipo_operacion='APROBACION_CAMBIO',
                 descripcion=(
-                    f'Aprobación y ejecución autorizada por '
-                    f'{administrador_autorizador.get_full_name() or administrador_autorizador.username}'
+                    (f'Aprobación y ejecución (fuera de plazo) autorizada por {_autorizador_nombre}'
+                     if requiere_admin else
+                     f'Aprobación y ejecución (cambio normal) autorizada por PIN de {_autorizador_nombre}')
                 ),
                 ip_origen=request.META.get('REMOTE_ADDR'),
                 exitoso=True,
@@ -15401,10 +15450,10 @@ def aprobar_cambio_generar_ticket(request):
             else:
                 logger.debug("Cambio %s ya estaba en estado %s; continuando ejecucion", cambio.id, cambio.estado)
 
-            cambio.autorizado_por_usuario = administrador_autorizador
+            cambio.autorizado_por_usuario = usuario_autorizador
             cambio.sucursal_autorizador = asignacion_autorizador.sucursal
             cambio.registro_autorizacion = registro_autorizacion
-            cambio.requiere_autorizacion = True
+            cambio.requiere_autorizacion = requiere_admin
             cambio.save(update_fields=[
                 'autorizado_por_usuario', 'sucursal_autorizador',
                 'registro_autorizacion', 'requiere_autorizacion',
@@ -15795,7 +15844,7 @@ def validar_codigo_vendedor(request):
             }, status=403)
 
         candidatos = list(
-            _vendedores_elegibles_para_sucursal(cambio.sucursal)
+            _vendedores_para_autorizacion_cambio(cambio.sucursal)
             .filter(codigo_vendedor=codigo)
             .order_by('id')[:2]
         )
@@ -15803,7 +15852,7 @@ def validar_codigo_vendedor(request):
             return JsonResponse({
                 'success': False,
                 'code': 'SELLER_NOT_AVAILABLE',
-                'error': 'El vendedor no esta activo o no pertenece a esta sucursal/empresa',
+                'error': 'El vendedor no esta activo o no pertenece a la empresa',
             }, status=404)
         if len(candidatos) > 1:
             return JsonResponse({

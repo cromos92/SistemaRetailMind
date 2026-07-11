@@ -3293,9 +3293,12 @@
                         <!-- Administrador autorizador -->
                         <div class="col-md-6">
                             <div class="d-flex flex-column gap-1">
-                                <label for="input-codigo-autorizacion-aprobacion" class="form-label small fw-semibold mb-0">
-                                    Código de autorización de la barra superior
+                                <label for="input-codigo-autorizacion-aprobacion" class="form-label small fw-semibold mb-0" id="label-autorizacion-aprobacion">
+                                    PIN de autorización (cualquier usuario)
                                 </label>
+                                <div id="hint-autorizacion-aprobacion" class="text-muted" style="font-size:.68rem; line-height:1.2;">
+                                    Cambio dentro de plazo: ingrese el PIN de 6 dígitos de cualquier usuario activo.
+                                </div>
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text py-0 px-2 bg-danger bg-opacity-10 text-danger border-danger border-opacity-25" style="font-size:.75rem;"><i class="ri-shield-keyhole-line"></i></span>
                                     <input type="password" class="form-control form-control-sm fw-bold text-center" id="input-codigo-autorizacion-aprobacion" placeholder="6 dígitos" autocomplete="one-time-code" inputmode="numeric" maxlength="6" style="letter-spacing:2px; font-size:.9rem;" required
@@ -7298,9 +7301,38 @@ function mostrarDetalleCambio(data) {
     $('#modalDetalleCambio').modal('show');
 }
 
+// Ajusta la etiqueta/ayuda del campo de autorización según el tipo de cambio:
+//  - fuera de plazo  → código dinámico de ADMINISTRADOR
+//  - dentro de plazo → PIN de cualquier usuario activo
+function aplicarModoAutorizacionAprobacion(fueraDePlazo) {
+    const $label = $('#label-autorizacion-aprobacion');
+    const $hint = $('#hint-autorizacion-aprobacion');
+    const $input = $('#input-codigo-autorizacion-aprobacion');
+    if (fueraDePlazo) {
+        $label.html('<i class="ri-shield-keyhole-line text-danger me-1"></i>Código de administrador (barra superior)');
+        $hint.html('Cambio <strong>fuera de plazo</strong>: requiere el código dinámico de un administrador.')
+             .removeClass('text-muted').addClass('text-danger');
+        $input.attr('placeholder', 'Código admin');
+    } else {
+        $label.html('<i class="ri-key-2-line text-success me-1"></i>PIN de autorización (cualquier usuario)');
+        $hint.html('Cambio dentro de plazo: ingrese el PIN de 6 dígitos de cualquier usuario activo.')
+             .removeClass('text-danger').addClass('text-muted');
+        $input.attr('placeholder', 'PIN 6 dígitos');
+    }
+}
+
 function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
     cambioActual = { id: cambioId, tipo_operacion: tipo, monto_original: montoDevuelto, monto_nuevo: montoNuevo };
-    
+
+    // Determinar si el cambio está fuera de plazo (requiere admin) o es normal (PIN de cualquier usuario)
+    const _cambioLista = (typeof cambiosData !== 'undefined' && Array.isArray(cambiosData))
+        ? cambiosData.find(c => Number(c.id) === Number(cambioId)) : null;
+    const fueraDePlazo = _cambioLista
+        ? (_cambioLista.es_fuera_de_plazo === true || _cambioLista.dentro_del_plazo === false)
+        : false;
+    cambioActual.fuera_de_plazo = fueraDePlazo;
+    aplicarModoAutorizacionAprobacion(fueraDePlazo);
+
     $('#aprobar-num-operacion').text(cambioId);
     $('#aprobar-tipo').text(tipo === 'CAMBIO' ? 'Cambio' : 'Devolución');
     $('#aprobar-total-devuelto').text('$' + formatearNumero(montoDevuelto));
@@ -7764,7 +7796,10 @@ function confirmarAprobacionYGenerarTicket() {
         return;
     }
     if (!/^\d{6}$/.test(codigoAutorizacion)) {
-        mostrarError('Ingrese los 6 dígitos del código de autorización de la barra superior');
+        const _msg = (cambioActual && cambioActual.fuera_de_plazo)
+            ? 'Ingrese los 6 dígitos del código de administrador (barra superior)'
+            : 'Ingrese el PIN de 6 dígitos de un usuario activo';
+        mostrarError(_msg);
         $('#input-codigo-autorizacion-aprobacion').focus();
         return;
     }
