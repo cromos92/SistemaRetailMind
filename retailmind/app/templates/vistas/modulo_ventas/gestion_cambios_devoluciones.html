@@ -3297,7 +3297,7 @@
                                     PIN de autorización (cualquier usuario)
                                 </label>
                                 <div id="hint-autorizacion-aprobacion" class="text-muted" style="font-size:.68rem; line-height:1.2;">
-                                    Cambio dentro de plazo: ingrese el PIN de 6 dígitos de cualquier usuario activo.
+                                    Cambio dentro de plazo: ingrese el PIN de 6 dígitos de cualquier usuario activo, o el código de la barra superior.
                                 </div>
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text py-0 px-2 bg-danger bg-opacity-10 text-danger border-danger border-opacity-25" style="font-size:.75rem;"><i class="ri-shield-keyhole-line"></i></span>
@@ -7315,9 +7315,9 @@ function aplicarModoAutorizacionAprobacion(fueraDePlazo) {
         $input.attr('placeholder', 'Código admin');
     } else {
         $label.html('<i class="ri-key-2-line text-success me-1"></i>PIN de autorización (cualquier usuario)');
-        $hint.html('Cambio dentro de plazo: ingrese el PIN de 6 dígitos de cualquier usuario activo.')
+        $hint.html('Cambio dentro de plazo: ingrese el <strong>PIN de 6 dígitos</strong> de cualquier usuario activo, o el <strong>código de la barra superior</strong>.')
              .removeClass('text-danger').addClass('text-muted');
-        $input.attr('placeholder', 'PIN 6 dígitos');
+        $input.attr('placeholder', 'PIN o código');
     }
 }
 

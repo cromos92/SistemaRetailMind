@@ -15322,14 +15322,27 @@ def aprobar_cambio_generar_ticket(request):
                     'error': mensaje_codigo if not es_valido_codigo else 'El código no pertenece a un administrador activo',
                 }, status=403)
         else:
-            # Cambio normal (dentro de plazo) → PIN de cualquier usuario activo
+            # Cambio normal (dentro de plazo): acepta CUALQUIERA de las dos credenciales:
+            #   1) PIN estático de 6 dígitos de cualquier usuario activo, o
+            #   2) código dinámico de la barra superior (admin/jefe) — retrocompatible.
             usuario_autorizador = User.buscar_usuario_por_pin(credencial)
             if not usuario_autorizador:
-                return JsonResponse({
-                    'success': False,
-                    'code': 'INVALID_PIN',
-                    'error': 'PIN de autorización inválido. Debe ser el PIN de 6 dígitos de un usuario activo.',
-                }, status=403)
+                # Fallback: intentar como código dinámico de la barra superior.
+                es_valido_codigo, _mensaje_codigo, codigo_obj = \
+                    CodigoAutorizacionDinamico.validar_codigo(credencial)
+                candidato = codigo_obj.generado_por if (es_valido_codigo and codigo_obj) else None
+                if candidato and candidato.is_active and getattr(candidato, 'es_activo', True):
+                    usuario_autorizador = candidato
+                else:
+                    codigo_obj = None
+                    return JsonResponse({
+                        'success': False,
+                        'code': 'INVALID_AUTH',
+                        'error': (
+                            'Credencial inválida. Ingrese el PIN de 6 dígitos de un usuario activo, '
+                            'o el código de autorización de la barra superior.'
+                        ),
+                    }, status=403)
 
         asignacion_autorizador = EmpresaUser.objects.filter(
             user=usuario_autorizador,
