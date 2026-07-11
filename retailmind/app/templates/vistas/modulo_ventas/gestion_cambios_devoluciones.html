@@ -3294,10 +3294,10 @@
                         <div class="col-md-6">
                             <div class="d-flex flex-column gap-1">
                                 <label for="input-codigo-autorizacion-aprobacion" class="form-label small fw-semibold mb-0" id="label-autorizacion-aprobacion">
-                                    PIN de autorización (cualquier usuario)
+                                    Código de autorización de la barra superior
                                 </label>
                                 <div id="hint-autorizacion-aprobacion" class="text-muted" style="font-size:.68rem; line-height:1.2;">
-                                    Cambio dentro de plazo: ingrese el PIN de 6 dígitos de cualquier usuario activo, o el código de la barra superior.
+                                    Cambio dentro de plazo: código de un administrador o jefe de local.
                                 </div>
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text py-0 px-2 bg-danger bg-opacity-10 text-danger border-danger border-opacity-25" style="font-size:.75rem;"><i class="ri-shield-keyhole-line"></i></span>
@@ -7309,15 +7309,15 @@ function aplicarModoAutorizacionAprobacion(fueraDePlazo) {
     const $hint = $('#hint-autorizacion-aprobacion');
     const $input = $('#input-codigo-autorizacion-aprobacion');
     if (fueraDePlazo) {
-        $label.html('<i class="ri-shield-keyhole-line text-danger me-1"></i>Código de administrador (barra superior)');
-        $hint.html('Cambio <strong>fuera de plazo</strong>: requiere el código dinámico de un administrador.')
+        $label.html('<i class="ri-shield-keyhole-line text-danger me-1"></i>Código de ADMINISTRADOR (barra superior)');
+        $hint.html('Cambio <strong>fuera de plazo</strong>: requiere el código dinámico de un <strong>administrador</strong>.')
              .removeClass('text-muted').addClass('text-danger');
         $input.attr('placeholder', 'Código admin');
     } else {
-        $label.html('<i class="ri-key-2-line text-success me-1"></i>PIN de autorización (cualquier usuario)');
-        $hint.html('Cambio dentro de plazo: ingrese el <strong>PIN de 6 dígitos</strong> de cualquier usuario activo, o el <strong>código de la barra superior</strong>.')
+        $label.html('<i class="ri-shield-keyhole-line text-primary me-1"></i>Código de autorización (barra superior)');
+        $hint.html('Cambio dentro de plazo: código de la barra de un <strong>administrador o jefe de local</strong>.')
              .removeClass('text-danger').addClass('text-muted');
-        $input.attr('placeholder', 'PIN o código');
+        $input.attr('placeholder', '6 dígitos');
     }
 }
 
@@ -7797,8 +7797,8 @@ function confirmarAprobacionYGenerarTicket() {
     }
     if (!/^\d{6}$/.test(codigoAutorizacion)) {
         const _msg = (cambioActual && cambioActual.fuera_de_plazo)
-            ? 'Ingrese los 6 dígitos del código de administrador (barra superior)'
-            : 'Ingrese el PIN de 6 dígitos de un usuario activo';
+            ? 'Ingrese los 6 dígitos del código de un ADMINISTRADOR (barra superior)'
+            : 'Ingrese los 6 dígitos del código de autorización de la barra superior';
         mostrarError(_msg);
         $('#input-codigo-autorizacion-aprobacion').focus();
         return;

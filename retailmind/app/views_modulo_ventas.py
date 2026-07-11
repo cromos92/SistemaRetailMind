@@ -360,7 +360,10 @@ def _otorgar_permiso_temporal_desde_codigo(request, cambio, accion, codigo, moti
             'error': mensaje,
         }, status=403)
 
-    codigo_obj = CodigoAutorizacionDinamico.objects.select_for_update().select_related(
+    # of=('self',): bloquea solo la fila del código. Sin esto,
+    # select_related('generado_por') (FK nullable → LEFT OUTER JOIN) provoca
+    # "FOR UPDATE cannot be applied to the nullable side of an outer join" en PostgreSQL.
+    codigo_obj = CodigoAutorizacionDinamico.objects.select_for_update(of=('self',)).select_related(
         'generado_por'
     ).get(id=codigo_obj.id)
     if not codigo_obj.es_valido():
@@ -15272,18 +15275,15 @@ def aprobar_cambio_generar_ticket(request):
         cambio_id = data.get('cambio_id')
         vendedor_id = data.get('vendedor_id')
         observaciones = data.get('observaciones', '')
-        # Credencial de 6 dígitos. Según el plazo del cambio será interpretada como:
-        #   - Código dinámico de ADMINISTRADOR (cambio fuera de plazo), o
-        #   - PIN de autorización de CUALQUIER usuario activo (cambio normal, dentro de plazo).
-        credencial = str(
-            data.get('codigo_autorizacion') or data.get('pin_autorizacion') or ''
-        ).strip()
+        # Código dinámico de autorización de la barra superior (6 dígitos).
+        # Fuera de plazo debe ser de un ADMINISTRADOR; dentro de plazo basta admin o jefe de local.
+        credencial = str(data.get('codigo_autorizacion') or '').strip()
 
         if not all([cambio_id, vendedor_id, credencial]):
             return JsonResponse({
                 'success': False,
                 'code': 'AUTH_CODE_REQUIRED',
-                'error': 'ID de cambio, vendedor y PIN/código de autorización requeridos'
+                'error': 'ID de cambio, vendedor y código de autorización requeridos'
             }, status=400)
 
         # Obtener cambio
@@ -15308,41 +15308,34 @@ def aprobar_cambio_generar_ticket(request):
         # normal y basta el PIN de cualquier usuario activo de la empresa.
         requiere_admin = not cambio.dentro_del_plazo
 
-        codigo_obj = None
-        usuario_autorizador = None
-        if requiere_admin:
-            # Fuera de plazo → código dinámico de un administrador
-            es_valido_codigo, mensaje_codigo, codigo_obj = \
-                CodigoAutorizacionDinamico.validar_codigo(credencial)
-            usuario_autorizador = codigo_obj.generado_por if codigo_obj else None
-            if not es_valido_codigo or not _usuario_es_administrador_activo(usuario_autorizador):
-                return JsonResponse({
-                    'success': False,
-                    'code': 'INVALID_AUTH_CODE',
-                    'error': mensaje_codigo if not es_valido_codigo else 'El código no pertenece a un administrador activo',
-                }, status=403)
-        else:
-            # Cambio normal (dentro de plazo): acepta CUALQUIERA de las dos credenciales:
-            #   1) PIN estático de 6 dígitos de cualquier usuario activo, o
-            #   2) código dinámico de la barra superior (admin/jefe) — retrocompatible.
-            usuario_autorizador = User.buscar_usuario_por_pin(credencial)
-            if not usuario_autorizador:
-                # Fallback: intentar como código dinámico de la barra superior.
-                es_valido_codigo, _mensaje_codigo, codigo_obj = \
-                    CodigoAutorizacionDinamico.validar_codigo(credencial)
-                candidato = codigo_obj.generado_por if (es_valido_codigo and codigo_obj) else None
-                if candidato and candidato.is_active and getattr(candidato, 'es_activo', True):
-                    usuario_autorizador = candidato
-                else:
-                    codigo_obj = None
-                    return JsonResponse({
-                        'success': False,
-                        'code': 'INVALID_AUTH',
-                        'error': (
-                            'Credencial inválida. Ingrese el PIN de 6 dígitos de un usuario activo, '
-                            'o el código de autorización de la barra superior.'
-                        ),
-                    }, status=403)
+        # Toda autorización se hace con el código dinámico de la barra superior.
+        es_valido_codigo, mensaje_codigo, codigo_obj = \
+            CodigoAutorizacionDinamico.validar_codigo(credencial)
+        usuario_autorizador = codigo_obj.generado_por if (es_valido_codigo and codigo_obj) else None
+
+        if not es_valido_codigo or not usuario_autorizador:
+            return JsonResponse({
+                'success': False,
+                'code': 'INVALID_AUTH_CODE',
+                'error': mensaje_codigo or 'Código de autorización inválido',
+            }, status=403)
+
+        if not (usuario_autorizador.is_active and getattr(usuario_autorizador, 'es_activo', True)):
+            codigo_obj = None
+            return JsonResponse({
+                'success': False,
+                'code': 'INVALID_AUTH_CODE',
+                'error': 'El código no pertenece a un usuario activo',
+            }, status=403)
+
+        # Casos especiales (fuera de plazo) → SOLO el código de un ADMINISTRADOR.
+        # Cambios normales (dentro de plazo) → código de admin o de jefe de local.
+        if requiere_admin and not _usuario_es_administrador_activo(usuario_autorizador):
+            return JsonResponse({
+                'success': False,
+                'code': 'ADMIN_REQUIRED',
+                'error': 'Los cambios fuera de plazo requieren el código de autorización de un ADMINISTRADOR.',
+            }, status=403)
 
         asignacion_autorizador = EmpresaUser.objects.filter(
             user=usuario_autorizador,
@@ -15434,7 +15427,7 @@ def aprobar_cambio_generar_ticket(request):
                 descripcion=(
                     (f'Aprobación y ejecución (fuera de plazo) autorizada por {_autorizador_nombre}'
                      if requiere_admin else
-                     f'Aprobación y ejecución (cambio normal) autorizada por PIN de {_autorizador_nombre}')
+                     f'Aprobación y ejecución (cambio normal) autorizada por {_autorizador_nombre}')
                 ),
                 ip_origen=request.META.get('REMOTE_ADDR'),
                 exitoso=True,
