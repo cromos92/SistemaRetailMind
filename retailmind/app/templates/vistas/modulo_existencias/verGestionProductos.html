@@ -2826,6 +2826,16 @@
                             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                         </div>
 
+                        <!-- Contexto persistente: factura/proveedor en uso para carga por lote -->
+                        <div id="bannerContextoManual" class="alert alert-success d-none mb-3 py-2 d-flex align-items-center flex-wrap gap-2" role="alert" style="border-radius:10px;">
+                            <i class="bi bi-receipt-cutoff fs-5"></i>
+                            <span style="font-size:.85rem;">Ingresando productos de <b id="ctxManualDte"></b> · <span id="ctxManualProveedor"></span></span>
+                            <span class="badge bg-success" id="ctxManualContador">0 creados</span>
+                            <button type="button" class="btn btn-outline-success btn-sm ms-auto py-0" id="btnCambiarFacturaManual" style="font-size:.75rem;">
+                                <i class="bi bi-arrow-repeat me-1"></i>Cambiar factura
+                            </button>
+                        </div>
+
                         <div class="row g-3">
                             <!-- Columna izquierda -->
                             <div class="col-md-5">
@@ -3147,6 +3157,10 @@
                         </div>
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                             <i class="bi bi-x-lg me-1"></i>Cancelar
+                        </button>
+                        <button type="button" class="btn btn-success" id="btnCrearYSeguirManual"
+                            title="Crea el producto y deja el modal listo para el siguiente de la misma factura (mantiene proveedor, DTE, marca, categoría y guía) — Ctrl+Enter">
+                            <i class="bi bi-arrow-repeat me-1"></i> Crear y seguir
                         </button>
                         <button type="submit" class="btn btn-primary px-4" id="btnSubmitProductoManual">
                             <i class="bi bi-check-lg me-1"></i> Crear Producto
@@ -9167,16 +9181,23 @@ function abrirModalCrearProductoManual() {
     window.articuloAnteriorManual = '';
     window.stockPrevioManualPendiente = null;
     window._confirmPendienteManual = false;
-    
+    window._modoSeguirCreando = false;
+    window._confirmadoCreacionManual = false;
+
     // Limpiar todos los paneles/indicadores
     $('#indicadorVerificacionManual').remove();
     $('#panelProductoExistenteManual').remove();
     $('#advertenciaProductosSimilaresManual').remove();
     $('#advertenciaPrecioDiferenteManual').remove();
     $('#alertaPreciosOtrasSucursales').remove();
+    $('#tarjetaCodigoManual').remove();
 
-    // Cargar proveedores
-    cargarProveedoresManual();
+    // Cargar proveedores, restaurando proveedor/DTE de la última creación de
+    // esta pestaña (contexto en sessionStorage) para no re-seleccionarlos en
+    // cada producto de la misma factura.
+    const ctxManual = obtenerContextoManual();
+    cargarProveedoresManual(ctxManual ? ctxManual.proveedor : null, ctxManual ? ctxManual.dte : null);
+    actualizarBannerContextoManual();
 
     // Cargar atributos
     cargarOpcionesAtributo(ID_ATRIBUTO_MARCA, 'atributo1');
@@ -9243,7 +9264,108 @@ $(document).on('change', '#selectDteManual', function() {
     setTimeout(() => actualizarStepperManual(detectarPasoManual()), 200);
 });
 
-function cargarProveedoresManual() {
+// ==================================================================
+// ✅ CONTEXTO PERSISTENTE PROVEEDOR/DTE (carga por lote desde una factura).
+// Al crear un producto se guarda el proveedor/DTE usado en sessionStorage;
+// al reabrir el modal (o con "Crear y seguir") se restauran solos, en vez
+// de obligar a re-seleccionarlos producto por producto.
+// ==================================================================
+const CTX_MANUAL_KEY = 'ctxCrearProductoManual';
+
+function obtenerContextoManual() {
+    try {
+        const raw = sessionStorage.getItem(CTX_MANUAL_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+}
+
+function guardarContextoManual(ctx) {
+    try { sessionStorage.setItem(CTX_MANUAL_KEY, JSON.stringify(ctx)); } catch (e) {}
+}
+
+function limpiarContextoManual() {
+    try { sessionStorage.removeItem(CTX_MANUAL_KEY); } catch (e) {}
+}
+
+function actualizarBannerContextoManual() {
+    const ctx = obtenerContextoManual();
+    const $banner = $('#bannerContextoManual');
+    if (!ctx || !ctx.dte) { $banner.addClass('d-none'); return; }
+    $('#ctxManualDte').text(ctx.dteTexto || ('DTE #' + ctx.dte));
+    $('#ctxManualProveedor').text(ctx.proveedorTexto || '');
+    const n = ctx.creados || 0;
+    $('#ctxManualContador').text(n + (n === 1 ? ' creado' : ' creados'));
+    $banner.removeClass('d-none');
+}
+
+// Guarda proveedor/DTE de la creación recién confirmada y lleva el contador
+// de productos creados con esa misma factura.
+function guardarContextoTrasCrear() {
+    const provId = $('#selectProveedorManual').val();
+    const dteId = $('#hiddenDteManual').val() || $('#selectDteManual').val();
+    if (!provId || !dteId) return;
+    const previo = obtenerContextoManual();
+    const creados = (previo && String(previo.dte) === String(dteId)) ? (previo.creados || 0) + 1 : 1;
+    guardarContextoManual({
+        proveedor: provId,
+        proveedorTexto: $('#selectProveedorManual option:selected').text(),
+        dte: dteId,
+        dteTexto: $('#selectDteManual option:selected').text() || ('DTE #' + dteId),
+        creados: creados
+    });
+    actualizarBannerContextoManual();
+}
+
+// Botón "Cambiar factura": descarta el contexto y deja proveedor/DTE en cero
+$(document).on('click', '#btnCambiarFacturaManual', function() {
+    limpiarContextoManual();
+    const $prov = $('#selectProveedorManual');
+    $prov.val('').trigger('change.select2');
+    $('#selectDteManual').empty().append('<option value="">-- Primero seleccione proveedor --</option>');
+    $('#hiddenDteManual').val('');
+    reinicializarSelect2Dte(false);
+    actualizarBannerContextoManual();
+    actualizarStepperManual(1);
+    setTimeout(function() { try { $prov.select2('open'); } catch (e) {} }, 100);
+});
+
+// Si el usuario elige a mano otro proveedor/DTE distinto al del contexto,
+// ocultar el banner (el contexto se re-guarda recién al crear).
+$(document).on('change', '#selectProveedorManual, #selectDteManual', function() {
+    const ctx = obtenerContextoManual();
+    if (!ctx) return;
+    const provAct = $('#selectProveedorManual').val();
+    const dteAct = $('#selectDteManual').val();
+    if ((provAct && String(provAct) !== String(ctx.proveedor)) ||
+        (dteAct && String(dteAct) !== String(ctx.dte))) {
+        $('#bannerContextoManual').addClass('d-none');
+    } else {
+        actualizarBannerContextoManual();
+    }
+});
+
+// Botón "Crear y seguir": mismo submit, pero al confirmar deja el modal
+// abierto y listo para el siguiente producto de la misma factura.
+$(document).on('click', '#btnCrearYSeguirManual', function() {
+    window._modoSeguirCreando = true;
+    $('#formCrearProductoManual').trigger('submit');
+});
+
+// El submit normal siempre cierra: si antes hubo un intento fallido con
+// "Crear y seguir", este click limpia el flag.
+$(document).on('click', '#btnSubmitProductoManual', function() {
+    window._modoSeguirCreando = false;
+});
+
+// Atajo de teclado: Ctrl+Enter = Crear y seguir
+$(document).on('keydown', '#modalCrearProductoManual', function(e) {
+    if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        $('#btnCrearYSeguirManual').trigger('click');
+    }
+});
+
+function cargarProveedoresManual(preProveedorId, preDteId) {
     const select = $('#selectProveedorManual');
     select.empty().append('<option value="">Cargando proveedores...</option>');
     $.get('/app/proveedores/', function(data) {
@@ -9255,9 +9377,24 @@ function cargarProveedoresManual() {
         } else {
             select.append('<option value="" disabled>No hay proveedores disponibles</option>');
         }
-        
+
+        // ✅ Restaurar proveedor del contexto ANTES de inicializar Select2
+        // (así el init ya renderiza el texto seleccionado). Se usa .val()
+        // directo (sin trigger 'change') para no disparar la carga de DTEs
+        // sin preselección: la llamamos nosotros con el DTE a restaurar.
+        if (preProveedorId && select.find(`option[value="${preProveedorId}"]`).length > 0) {
+            select.val(String(preProveedorId));
+        }
+
         // ✅ Reinicializar Select2 después de cargar opciones
         reinicializarSelect2Proveedor();
+
+        if (preProveedorId && select.val()) {
+            const textoProv = select.find('option:selected').text();
+            const $rendered = select.next('.select2-container').find('.select2-selection__rendered');
+            if (textoProv) { $rendered.text(textoProv).attr('title', textoProv); }
+            cargarDtesPorProveedor(select.val(), preDteId);
+        }
     }).fail(function(xhr, status, error) {
         console.error('❌ Error cargando proveedores:', error);
         console.error('Status:', status);
@@ -9351,28 +9488,28 @@ function reinicializarSelect2Proveedor() {
         });
 }
 
-function cargarDtesPorProveedor(proveedorId) {
+function cargarDtesPorProveedor(proveedorId, preDteId) {
     console.log('🔄 Cargando DTEs para proveedor:', proveedorId);
     const select = $('#selectDteManual');
     const hiddenInput = $('#hiddenDteManual');
-    
+
     if (!proveedorId) {
         select.empty().append('<option value="">-- Seleccionar DTE --</option>');
         hiddenInput.val(''); // Limpiar hidden cuando no hay proveedor
         reinicializarSelect2Dte(false); // No preservar valor
         return;
     }
-    
+
     // Mostrar loading mientras carga
     select.empty().append('<option value="">Cargando DTEs...</option>');
     reinicializarSelect2Dte(false); // No preservar valor durante loading
-    
+
     $.get(`/app/dtes_por_proveedor/${proveedorId}/`, function(data) {
         console.log('✅ DTEs cargados:', data);
         select.empty().append('<option value="">-- Seleccionar DTE --</option>');
-        
+
         let valorASeleccionar = '';
-        
+
         if (data && data.length > 0) {
             data.forEach(dte => {
                 const fecha = dte.fecha || dte.fecha_emision || 'Sin fecha';
@@ -9380,9 +9517,17 @@ function cargarDtesPorProveedor(proveedorId) {
                 select.append(`<option value="${dte.id}">${numero} - ${fecha}</option>`);
             });
             console.log(`✅ ${data.length} DTEs agregados al select`);
-            
+
+            // ✅ Restaurar el DTE del contexto (última creación) si sigue disponible
+            if (preDteId && select.find(`option[value="${preDteId}"]`).length > 0) {
+                valorASeleccionar = String(preDteId);
+                console.log('✅ DTE restaurado desde contexto:', valorASeleccionar);
+            } else if (preDteId) {
+                // El DTE guardado ya no está disponible: el contexto quedó obsoleto
+                $('#bannerContextoManual').addClass('d-none');
+            }
             // ✅ Si solo hay un DTE, seleccionarlo automáticamente
-            if (data.length === 1) {
+            if (!valorASeleccionar && data.length === 1) {
                 valorASeleccionar = data[0].id;
                 console.log('✅ DTE único, se seleccionará automáticamente:', valorASeleccionar);
             }
@@ -9409,6 +9554,7 @@ function cargarDtesPorProveedor(proveedorId) {
                     $rendered.attr('style', 'color: #212529 !important; line-height: 36px !important; padding-left: 12px !important;');
                 }
                 console.log('✅ DTE seleccionado y sincronizado:', valorASeleccionar, '-', textoSeleccionado);
+                actualizarStepperManual(detectarPasoManual());
             }, 50);
         }
     }).fail(function(xhr, status, error) {
@@ -11989,7 +12135,14 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
         data: formData,
         headers: { 'X-CSRFToken': getCookie('csrftoken') },
         success: function(res) {
+            // Capturar el modo ANTES de cualquier async (Swal): decide si el
+            // modal se cierra o queda listo para el siguiente producto.
+            const seguirCreando = window._modoSeguirCreando === true;
+            window._modoSeguirCreando = false;
             if (res.success) {
+                // ✅ Guardar proveedor/DTE usados para restaurarlos en la
+                // próxima creación (contexto de carga por lote)
+                guardarContextoTrasCrear();
                 // Mostrar mensaje detallado según resultado
                 let titulo = res.producto_actualizado ? 'Producto actualizado' : 'Producto creado';
                 // ✅ Confirmación VERIFICABLE: detalle por talla con el stock
@@ -12023,7 +12176,13 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
                     $('#alertaSincManualTexto').text(txtSync);
                     $('#alertaSincManual').removeClass('d-none').addClass('show');
                 }
-                cerrarModal('modalCrearProductoManual');
+                if (seguirCreando) {
+                    // "Crear y seguir": el modal queda abierto con proveedor/
+                    // DTE/marca/guía intactos, listo para el siguiente producto
+                    prepararSiguienteProductoManual();
+                } else {
+                    cerrarModal('modalCrearProductoManual');
+                }
                 // Refrescar la tabla de productos
                 const anioActual = new Date().getFullYear();
                 cargarProductosParaCrear(anioActual);
@@ -12037,6 +12196,7 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
             }
         },
         error: function(xhr) {
+            window._modoSeguirCreando = false;
             showErrorAlert('Error', xhr.responseJSON?.error || 'Error inesperado al crear el producto.');
         },
         complete: function() {
@@ -12044,6 +12204,64 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
             $btnSubmit.prop('disabled', false).html(textoOriginal);
         }
     });
+}
+
+// ✅ "CREAR Y SEGUIR": deja el modal listo para el siguiente producto de la
+// MISMA factura. Conserva proveedor, DTE, marca, género, categoría, tipo de
+// talla y guía; limpia solo lo específico del producto (artículo, descripción,
+// color, tallas/stock y precios).
+function prepararSiguienteProductoManual() {
+    const $modal = $('#modalCrearProductoManual');
+    const $form = $('#formCrearProductoManual');
+
+    // Campos específicos del producto
+    $form.find('input[name="articulo"]').val('');
+    $form.find('input[name="descripcion"]').val('');
+    $form.find('input[name="costo"], input[name="sobreprecio"], input[name="precioventa"], input[name="precio_sugerido"]').val('');
+    $modal.find('select[name="atributo2"]').val('').trigger('change.select2');
+    $('#hiddenActualizarPreciosManual').val('false');
+    $form.find('input[name="aplicar_todas_bodegas"]').prop('checked', false);
+
+    // Estado de verificación de producto existente (mismo reset que al abrir)
+    window.productoExistenteManual = null;
+    window.tallasExistentesManual = null;
+    window.articuloAnteriorManual = '';
+    window.stockPrevioManualPendiente = null;
+    window._confirmPendienteManual = false;
+    window._confirmadoCreacionManual = false;
+    $('#indicadorVerificacionManual').remove();
+    $('#panelProductoExistenteManual').remove();
+    $('#advertenciaProductosSimilaresManual').remove();
+    $('#advertenciaPrecioDiferenteManual').remove();
+    $('#alertaPreciosOtrasSucursales').remove();
+    $('#tarjetaCodigoManual').remove();
+    $('.articulo-autocomplete-dropdown').hide();
+    $('.articulo-search-feedback').hide();
+
+    // Tallas: regenerar en 0 según la guía que quedó seleccionada
+    const guia = $('#selectGuiaTallaManual').val();
+    $('#tablaTallasManual tbody').empty().removeData('originalHtml');
+    if (guia === 'SIN_GUIA') {
+        aplicarModoSinGuiaManual(true);           // fila única 00 en 0
+    } else if (guia) {
+        $('#selectGuiaTallaManual').trigger('change'); // repuebla tallas de la guía con stock 0
+    } else {
+        agregarFilaTallaManual();
+    }
+    actualizarResumenTallasManual();
+    actualizarIndicadoresMargen($modal);
+
+    actualizarStepperManual(2);
+    actualizarBannerContextoManual();
+
+    // Enfocar Artículo cuando se cierre el Swal de confirmación de creación
+    setTimeout(function reenfocarArticulo() {
+        if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+            setTimeout(reenfocarArticulo, 300);
+            return;
+        }
+        $form.find('input[name="articulo"]').trigger('focus');
+    }, 300);
 }
 
 // ========== FUNCIONES PARA MANEJO DE PRODUCTO EXISTENTE ==========
