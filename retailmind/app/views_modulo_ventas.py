@@ -113,17 +113,16 @@ def _vendedores_elegibles_para_sucursal(sucursal):
 
 
 def _vendedores_para_autorizacion_cambio(sucursal):
-    """Vendedores que pueden autorizar/figurar en un cambio de esta empresa.
+    """Vendedores que pueden autorizar/figurar en un cambio.
 
     A diferencia de _vendedores_elegibles_para_sucursal, NO restringe por
-    sucursal: cualquier vendedor activo de la misma empresa (de cualquier
-    tienda), o company-wide, sirve para autorizar el cambio. La sucursal del
-    cambio sigue determinando el inventario; solo se relaja quién puede firmar.
+    sucursal NI por empresa: cualquier vendedor activo del sistema (de
+    cualquier tienda o empresa) sirve para autorizar/figurar en el cambio. La
+    sucursal del cambio sigue determinando el inventario; solo se relaja quién
+    puede firmar. El parámetro `sucursal` se conserva por compatibilidad con
+    los llamadores.
     """
-    return Vendedor.objects.filter(activo=True).filter(
-        Q(empresa_id=sucursal.empresa_id)
-        | Q(empresa__isnull=True)
-    ).distinct()
+    return Vendedor.objects.filter(activo=True)
 
 
 def _bloquear_y_validar_inventario_cambio(detalles, sucursal_id, reversion=False):
@@ -15369,7 +15368,7 @@ def aprobar_cambio_generar_ticket(request):
             return JsonResponse({
                 'success': False,
                 'code': 'SELLER_NOT_AVAILABLE',
-                'error': 'El vendedor no esta activo o no pertenece a la empresa',
+                'error': 'El vendedor no esta activo',
             }, status=403)
         
         logger.info("Iniciando transaccion atomica para aprobar cambio %s", cambio.id)
@@ -15392,7 +15391,7 @@ def aprobar_cambio_generar_ticket(request):
                 return JsonResponse({
                     'success': False,
                     'code': 'SELLER_NOT_AVAILABLE',
-                    'error': 'El vendedor no esta activo o no pertenece a la empresa',
+                    'error': 'El vendedor no esta activo',
                 }, status=403)
 
             detalles_bloqueados = list(
@@ -15858,7 +15857,7 @@ def validar_codigo_vendedor(request):
             return JsonResponse({
                 'success': False,
                 'code': 'SELLER_NOT_AVAILABLE',
-                'error': 'El vendedor no esta activo o no pertenece a la empresa',
+                'error': 'El vendedor no esta activo',
             }, status=404)
         if len(candidatos) > 1:
             return JsonResponse({
