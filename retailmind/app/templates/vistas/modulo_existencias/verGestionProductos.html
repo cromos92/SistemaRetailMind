@@ -226,6 +226,56 @@
     .precio-markup-badge.bajo { background: #f8d7da !important; border-color: #f5c6cb !important; }
     .btn-markup-rapido.active { background: #405189 !important; color: #fff !important; border-color: #405189 !important; }
 
+    /* ===== Panel ÚNICO "Estado del código" (modal Crear Manual) ===== */
+    .estado-codigo-card {
+        border-radius: 10px;
+        border: 1px solid #dee2e6;
+        border-left-width: 5px;
+        background: #fff;
+        box-shadow: 0 1px 4px rgba(0,0,0,.06);
+        overflow: hidden;
+    }
+    .estado-codigo-card .ec-header {
+        display: flex; align-items: center; gap: 8px;
+        padding: 8px 12px; font-size: .85rem; font-weight: 600;
+    }
+    .estado-codigo-card .ec-header .ec-icono {
+        width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center; font-size: 1rem;
+    }
+    .estado-codigo-card .ec-body { padding: 0 12px 10px 12px; font-size: .8rem; }
+    .estado-codigo-card .ec-body .table { font-size: .76rem; margin-bottom: 6px; }
+    .estado-codigo-card .ec-body .table th, .estado-codigo-card .ec-body .table td { padding: 3px 8px; }
+    .estado-codigo-card .ec-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .estado-codigo-card .ec-nota { font-size: .74rem; color: #6c757d; }
+    /* estados */
+    .estado-codigo-card.ec-vacio       { border-left-color: #adb5bd; }
+    .estado-codigo-card.ec-vacio       .ec-header { background: #f8f9fa; color: #6c757d; }
+    .estado-codigo-card.ec-vacio       .ec-icono { background: #e9ecef; color: #6c757d; }
+    .estado-codigo-card.ec-verificando { border-left-color: #0d6efd; }
+    .estado-codigo-card.ec-verificando .ec-header { background: #f0f6ff; color: #0d6efd; }
+    .estado-codigo-card.ec-verificando .ec-icono { background: #cfe2ff; color: #0d6efd; }
+    .estado-codigo-card.ec-existe      { border-left-color: #e65100; }
+    .estado-codigo-card.ec-existe      .ec-header { background: #fff8f0; color: #b34700; }
+    .estado-codigo-card.ec-existe      .ec-icono { background: #ffe0b2; color: #e65100; }
+    .estado-codigo-card.ec-variante    { border-left-color: #0dcaf0; }
+    .estado-codigo-card.ec-variante    .ec-header { background: #f0fbff; color: #087990; }
+    .estado-codigo-card.ec-variante    .ec-icono { background: #cff4fc; color: #087990; }
+    .estado-codigo-card.ec-otras       { border-left-color: #6c757d; }
+    .estado-codigo-card.ec-otras       .ec-header { background: #f8f9fa; color: #495057; }
+    .estado-codigo-card.ec-otras       .ec-icono { background: #e9ecef; color: #495057; }
+    .estado-codigo-card.ec-nuevo       { border-left-color: #198754; }
+    .estado-codigo-card.ec-nuevo       .ec-header { background: #f2fbf6; color: #146c43; }
+    .estado-codigo-card.ec-nuevo       .ec-icono { background: #d1e7dd; color: #146c43; }
+    .estado-codigo-card .ec-seccion {
+        border-top: 1px dashed #dee2e6; margin-top: 6px; padding-top: 6px;
+    }
+    .estado-codigo-card .ec-toggle {
+        font-size: .74rem; color: #0d6efd; cursor: pointer; text-decoration: none; user-select: none;
+    }
+    .chipSimilarManual { cursor: pointer; }
+    .chipSimilarManual:hover { background: #fff3cd !important; }
+
     /* Tabs panel derecho Crear Manual */
     #tabsCrearManual .nav-link {
         font-size: .78rem; padding: 6px 10px; color: #495057;
@@ -3024,31 +3074,35 @@
                                 </div>
                             </div>
 
-                            <!-- Columna derecha: TABS -->
+                            <!-- Columna derecha: ESTADO DEL CÓDIGO + TABS -->
                             <div class="col-md-7">
+                                <!-- Panel ÚNICO de estado del código: aquí se muestra TODO lo
+                                     relativo a existencia (existe/variante/otras bodegas/similares/nuevo) -->
+                                <div id="estadoCodigoManual" class="mb-2"></div>
+
                                 <!-- Tabs header -->
                                 <ul class="nav nav-tabs" id="tabsCrearManual" role="tablist">
                                     <li class="nav-item" role="presentation">
-                                        <button class="nav-link active" id="tab-buscar-btn"
-                                                data-bs-toggle="tab" data-bs-target="#tabBuscarProducto"
-                                                type="button" role="tab">
-                                            <i class="bi bi-search me-1"></i>Buscar Producto
-                                        </button>
-                                    </li>
-                                    <li class="nav-item" role="presentation">
-                                        <button class="nav-link" id="tab-tallas-btn"
+                                        <button class="nav-link active" id="tab-tallas-btn"
                                                 data-bs-toggle="tab" data-bs-target="#tabTallasStock"
                                                 type="button" role="tab">
                                             <i class="bi bi-grid-3x3-gap me-1"></i>Tallas y Stock
                                             <span class="badge bg-secondary ms-1" id="badgeCantTallas" style="font-size:.6rem;">0</span>
                                         </button>
                                     </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="tab-buscar-btn"
+                                                data-bs-toggle="tab" data-bs-target="#tabBuscarProducto"
+                                                type="button" role="tab">
+                                            <i class="bi bi-search me-1"></i>Buscar Producto
+                                        </button>
+                                    </li>
                                 </ul>
 
                                 <div class="tab-content" id="tabContentCrearManual">
 
-                                    <!-- TAB 1: Buscar Producto -->
-                                    <div class="tab-pane fade show active p-2" id="tabBuscarProducto" role="tabpanel">
+                                    <!-- TAB Buscar Producto -->
+                                    <div class="tab-pane fade p-2" id="tabBuscarProducto" role="tabpanel">
                                         <div class="mb-2">
                                             <div class="input-group input-group-sm">
                                                 <input type="text" class="form-control" id="buscadorProductoExistente"
@@ -3098,8 +3152,8 @@
                                         </div>
                                     </div>
 
-                                    <!-- TAB 2: Tallas y Stock -->
-                                    <div class="tab-pane fade p-2" id="tabTallasStock" role="tabpanel">
+                                    <!-- TAB Tallas y Stock (default) -->
+                                    <div class="tab-pane fade show active p-2" id="tabTallasStock" role="tabpanel">
                                         <table class="table table-bordered mb-0" id="tablaTallasManual">
                                             <thead>
                                                 <tr>
@@ -9184,13 +9238,8 @@ function abrirModalCrearProductoManual() {
     window._modoSeguirCreando = false;
     window._confirmadoCreacionManual = false;
 
-    // Limpiar todos los paneles/indicadores
-    $('#indicadorVerificacionManual').remove();
-    $('#panelProductoExistenteManual').remove();
-    $('#advertenciaProductosSimilaresManual').remove();
-    $('#advertenciaPrecioDiferenteManual').remove();
-    $('#alertaPreciosOtrasSucursales').remove();
-    $('#tarjetaCodigoManual').remove();
+    // Resetear el panel único de estado del código
+    renderEstadoCodigoManual('vacio');
 
     // Cargar proveedores, restaurando proveedor/DTE de la última creación de
     // esta pestaña (contexto en sessionStorage) para no re-seleccionarlos en
@@ -9697,12 +9746,8 @@ $('#modalCrearProductoManual').on('hidden.bs.modal', function() {
     // Limpiar variables globales de producto existente
     window.productoExistenteManual = null;
     window.tallasExistentesManual = null;
-    $('#panelProductoExistenteManual').remove();
-    $('#advertenciaPrecioDiferenteManual').remove();
-    $('#indicadorVerificacionManual').remove();
-    $('#advertenciaProductosSimilaresManual').remove();
-    $('#alertaPreciosOtrasSucursales').remove();
-    
+    renderEstadoCodigoManual('vacio');
+
     $selects.each(function() {
         if ($(this).hasClass('select2-hidden-accessible')) {
             try {
@@ -9861,10 +9906,8 @@ function renderTarjetaCodigo(response, modalSel, formSel, cardId) {
     else $(formSel + ' .modal-body').prepend(html);
 }
 
-// Wrappers por modal: la MISMA tarjeta en manual y en recepción
-function renderTarjetaCodigoManual(response) {
-    renderTarjetaCodigo(response, '#modalCrearProductoManual', '#formCrearProductoManual', 'tarjetaCodigoManual');
-}
+// Wrapper por modal (recepción). El modal MANUAL ya no usa esta tarjeta:
+// su información vive en el panel único renderEstadoCodigoManual.
 function renderTarjetaCodigoRecepcion(response) {
     renderTarjetaCodigo(response, '#modalCrearProductoDesdeRecepcion', '#formCrearProductoDesdeRecepcion', 'tarjetaCodigoRecepcion');
 }
@@ -10351,6 +10394,213 @@ $(document).on('click', '#tablaTallasManual .btn-usar-talla-disponible', functio
 });
 
 // Evento para verificar producto existente en modal manual
+// ==================================================================
+// ✅ PANEL ÚNICO "ESTADO DEL CÓDIGO" (#estadoCodigoManual, columna derecha).
+// Centraliza TODA la señalización de existencia que antes vivía en 5 paneles
+// apilados (panelProductoExistenteManual, tarjetaCodigoManual,
+// advertenciaPrecioDiferenteManual, indicadorVerificacionManual,
+// panelVariantesCodigoManual). Estados posibles:
+//   vacio       → sin código tipeado
+//   verificando → consulta en vuelo
+//   existe      → mismo producto en ESTA bodega (stock se SUMA, SKUs reutilizados)
+//   variante    → el código existe en ESTA bodega con otro color/género
+//   otras       → el código solo existe en OTRAS bodegas
+//   nuevo       → código inédito en todas las bodegas
+// ==================================================================
+function renderEstadoCodigoManual(estado, response) {
+    const $cont = $('#estadoCodigoManual');
+    if (!$cont.length) return;
+    const articulo = ($('#modalCrearProductoManual input[name="articulo"]').val() || '').trim();
+    response = response || {};
+
+    const CFG = {
+        vacio:       { icono: 'bi-upc-scan',        titulo: 'Verificación del código', badge: '' },
+        verificando: { icono: 'bi-hourglass-split', titulo: `Verificando <b>${articulo}</b>…`, badge: '<div class="spinner-border spinner-border-sm text-primary"></div>' },
+        existe:      { icono: 'bi-box-seam',        titulo: `<b>${articulo}</b> YA EXISTE en esta bodega`, badge: '<span class="badge bg-warning text-dark">se SUMA stock</span>' },
+        variante:    { icono: 'bi-palette',         titulo: `<b>${articulo}</b> existe aquí en OTRA variante`, badge: '<span class="badge bg-info text-dark">variante nueva</span>' },
+        otras:       { icono: 'bi-buildings',       titulo: `<b>${articulo}</b> existe en otras bodegas`, badge: '<span class="badge bg-secondary">no está aquí</span>' },
+        nuevo:       { icono: 'bi-plus-circle',     titulo: `<b>${articulo}</b> es un código NUEVO`, badge: '<span class="badge bg-success">se crea producto</span>' },
+    };
+    const cfg = CFG[estado] || CFG.vacio;
+
+    let body = '';
+    if (estado === 'vacio') {
+        body = '<div class="ec-nota py-1"><i class="bi bi-info-circle me-1"></i>Escribe el código del artículo: aquí verás al instante si ya existe, en qué bodegas y con qué variantes.</div>';
+    } else if (estado === 'existe') {
+        body = _ecSeccionExistente(response);
+    } else if (estado === 'variante') {
+        body = _ecSeccionVariantesLocales(response);
+    } else if (estado === 'nuevo') {
+        body = '<div class="ec-nota py-1"><i class="bi bi-check-circle text-success me-1"></i>No hay ningún producto con este código en tus bodegas. Se generarán SKUs nuevos.</div>';
+    }
+    if (estado === 'existe' || estado === 'variante' || estado === 'otras' || estado === 'nuevo') {
+        body += _ecSeccionBodegas(response, estado);
+        body += _ecSeccionSimilares(response, articulo, estado);
+    }
+
+    $cont.html(`
+        <div class="estado-codigo-card ec-${estado}">
+            <div class="ec-header">
+                <div class="ec-icono"><i class="bi ${cfg.icono}"></i></div>
+                <div class="flex-grow-1">${cfg.titulo}</div>
+                ${cfg.badge}
+            </div>
+            ${body ? `<div class="ec-body">${body}</div>` : ''}
+        </div>`);
+    actualizarComparePrecioManual();
+}
+
+// Sección estado "existe": identidad + tallas/SKUs/stock + precios + duplicados
+function _ecSeccionExistente(r) {
+    const p = r.producto_encontrado || {};
+    const tallas = [...(r.tallas_existentes || [])].sort((a, b) =>
+        (parseFloat(String(a.talla).replace(',', '.')) || 0) - (parseFloat(String(b.talla).replace(',', '.')) || 0));
+    const stockTotal = tallas.reduce((s, t) => s + (t.stock || 0), 0);
+    const filas = tallas.map(t =>
+        `<tr><td class="fw-semibold">${t.talla}</td>
+             <td><span class="badge bg-success">${t.sku}</span></td>
+             <td class="text-end">${(t.stock || 0).toLocaleString('es-CL')}</td></tr>`).join('');
+
+    const dup = r.hay_duplicados
+        ? `<div class="alert alert-danger py-1 px-2 mb-2" style="font-size:.74rem;">
+             <i class="bi bi-exclamation-octagon-fill me-1"></i>Ojo: hay <b>${r.total_duplicados}</b> fichas duplicadas de este producto en esta bodega. El stock se sumará a la primera — considera fusionarlas en Fusión de Duplicados.
+           </div>` : '';
+
+    // Otras variantes del mismo código en ESTA bodega (distintas al match)
+    const otrasLocales = (r.bodegas_codigo || []).filter(b => b.es_sucursal_actual && b.producto_id !== r.producto_id);
+    const variantes = otrasLocales.length ? `
+        <div class="ec-seccion">
+            <div class="ec-nota mb-1"><i class="bi bi-palette me-1"></i>Este código tiene además <b>${otrasLocales.length}</b> variante(s) en esta bodega:</div>
+            <div class="ec-chips">${otrasLocales.map(_ecChipVariante).join('')}</div>
+        </div>` : '';
+
+    return `
+        ${dup}
+        <div class="ec-chips mb-2">
+            <span class="badge bg-dark">${p.marca || '-'}</span>
+            <span class="badge bg-info text-dark">${p.color || '-'}</span>
+            <span class="badge bg-secondary">${p.genero || '-'}</span>
+            <span class="badge bg-light text-dark border">${p.categoria || '-'}</span>
+        </div>
+        <div class="alert alert-success py-1 px-2 mb-2" style="font-size:.76rem;">
+            <i class="bi bi-check-circle-fill me-1"></i>Las tallas ya se cargaron abajo en <b>Tallas y Stock</b> con sus SKUs reales — escribe solo las <b>cantidades a sumar</b>. No se crea un producto nuevo.
+        </div>
+        <div class="table-responsive" style="max-height:150px;overflow-y:auto;">
+            <table class="table table-sm table-bordered mb-1">
+                <thead class="table-light"><tr><th>Talla</th><th>SKU existente</th><th class="text-end">Stock actual</th></tr></thead>
+                <tbody>${filas}</tbody>
+                <tfoot><tr class="table-light"><td colspan="2" class="text-end fw-semibold">Total actual</td><td class="text-end fw-bold">${stockTotal.toLocaleString('es-CL')}</td></tr></tfoot>
+            </table>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap mt-1">
+            <span style="font-size:.78rem;">Precio actual: <b>$${(p.precioventa || 0).toLocaleString('es-CL')}</b> · Costo: $${(p.costo || 0).toLocaleString('es-CL')}</span>
+            <span id="comparePrecioManual"></span>
+        </div>
+        <div class="form-check form-switch mt-1 mb-0">
+            <input class="form-check-input" type="checkbox" id="chkActualizarPreciosManual">
+            <label class="form-check-label" for="chkActualizarPreciosManual" style="font-size:.78rem;">Actualizar los precios del producto con los del formulario</label>
+        </div>
+        <input type="hidden" name="actualizar_precios" id="hiddenActualizarPreciosManual" value="false">
+        ${variantes}`;
+}
+
+// Chip de una variante/bodega con botón "Usar" (reutiliza .btnCopiarTodoSucursal)
+function _ecChipVariante(b) {
+    return `<div class="border rounded px-2 py-1 bg-white d-inline-flex align-items-center gap-1" style="font-size:.74rem;">
+        <span class="badge bg-dark">${b.marca}</span>
+        <span class="badge bg-info text-dark">${b.color}</span>
+        <span class="badge bg-secondary">${b.genero}</span>
+        <span class="text-muted">${b.n_tallas} tallas · ${(b.stock_total || 0).toLocaleString('es-CL')} uds · $${(b.precioventa || 0).toLocaleString('es-CL')}</span>
+        <button type="button" class="btn btn-sm btn-outline-primary py-0 px-1 btnCopiarTodoSucursal" data-producto-id="${b.producto_id}" style="font-size:.7rem;" title="Cargar los datos de esta variante al formulario">
+            <i class="bi bi-box-arrow-in-down"></i> Usar
+        </button>
+    </div>`;
+}
+
+// Sección estado "variante": el código existe en ESTA bodega con otro combo
+function _ecSeccionVariantesLocales(r) {
+    const locales = (r.bodegas_codigo || []).filter(b => b.es_sucursal_actual);
+    return `
+        <div class="ec-nota mb-1">El código ya se usa en esta bodega con otro color/género. Si continúas con los atributos actuales se creará una <b>variante NUEVA</b> (con SKUs nuevos).</div>
+        <div class="ec-nota mb-1"><i class="bi bi-hand-index me-1"></i>¿Era una de estas? Pulsa <b>Usar</b> para cargar sus datos y sumar stock:</div>
+        <div class="ec-chips">${locales.map(_ecChipVariante).join('')}</div>`;
+}
+
+// Sección plegable: el código en TODAS las bodegas (stock, precios, copiar)
+function _ecSeccionBodegas(r, estado) {
+    const bodegas = r.bodegas_codigo || [];
+    if (!bodegas.length) return '';
+    const abierta = (estado === 'otras');
+    const filas = bodegas.slice()
+        .sort((a, b) => ((b.es_sucursal_actual ? 1 : 0) - (a.es_sucursal_actual ? 1 : 0)) || ((b.stock_total || 0) - (a.stock_total || 0)))
+        .map(b => `
+        <tr class="${b.es_sucursal_actual ? 'table-primary' : ''}">
+            <td class="fw-semibold">${b.sucursal}${b.es_sucursal_actual ? ' <i class="bi bi-geo-alt-fill text-primary" title="Bodega actual"></i>' : ''}</td>
+            <td><span class="badge bg-dark">${b.marca}</span> <span class="badge bg-info text-dark">${b.color}</span> <span class="badge bg-secondary">${b.genero}</span></td>
+            <td class="text-end">${b.n_tallas}</td>
+            <td class="text-end">${(b.stock_total || 0).toLocaleString('es-CL')}</td>
+            <td class="text-end">$${(b.precioventa || 0).toLocaleString('es-CL')}</td>
+            <td class="text-center">${(b.producto_id && !b.es_sucursal_actual) ? `<button type="button" class="btn btn-sm btn-outline-success py-0 px-1 btnCopiarTodoSucursal" data-producto-id="${b.producto_id}" style="font-size:.7rem;" title="Copiar atributos, precios y tallas de esta bodega"><i class="bi bi-copy"></i> Copiar</button>` : ''}</td>
+        </tr>`).join('');
+    return `
+        <div class="ec-seccion">
+            <a class="ec-toggle" data-bs-toggle="collapse" href="#collapseBodegasManual" role="button">
+                <i class="bi bi-buildings me-1"></i>Ver el código en <b>${bodegas.length}</b> bodega(s) — stock y precios <i class="bi bi-chevron-down"></i>
+            </a>
+            <div class="collapse ${abierta ? 'show' : ''} mt-1" id="collapseBodegasManual">
+                <div class="table-responsive" style="max-height:160px;overflow-y:auto;">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light"><tr><th>Bodega</th><th>Variante</th><th class="text-end">Tallas</th><th class="text-end">Stock</th><th class="text-end">Precio</th><th></th></tr></thead>
+                        <tbody>${filas}</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>`;
+}
+
+// Sección: códigos parecidos ya registrados (guardia anti-typo/duplicado)
+function _ecSeccionSimilares(r, articulo, estado) {
+    if (estado === 'existe') return '';
+    const vistos = new Set();
+    const similares = [...(r.productos_similares_nombre || []), ...(r.productos_similares_sku || [])]
+        .filter(s => {
+            const a = (s.articulo || '').trim().toUpperCase();
+            if (!a || a === articulo.toUpperCase() || vistos.has(a)) return false;
+            vistos.add(a);
+            return true;
+        }).slice(0, 6);
+    if (!similares.length) return '';
+    const chips = similares.map(s => `
+        <span class="badge bg-warning-subtle text-dark border chipSimilarManual" data-articulo="${s.articulo}"
+              title="${s.marca} / ${s.color} / ${s.genero} — clic para usar este código">${s.articulo}</span>`).join(' ');
+    return `
+        <div class="ec-seccion">
+            <div class="ec-nota mb-1"><i class="bi bi-spellcheck me-1"></i>Códigos <b>parecidos</b> ya registrados (¿typo?): clic para usar uno.</div>
+            <div class="ec-chips">${chips}</div>
+        </div>`;
+}
+
+// Comparación viva precio formulario vs precio del producto existente
+function actualizarComparePrecioManual() {
+    const $el = $('#comparePrecioManual');
+    if (!$el.length) return;
+    const actual = parseInt(window.productoExistenteManual && window.productoExistenteManual.precioventa) || 0;
+    const nuevo = parseInt($('#modalCrearProductoManual input[name="precioventa"]').val()) || 0;
+    if (!actual || !nuevo || actual === nuevo) { $el.empty(); return; }
+    const dif = nuevo - actual;
+    const pct = ((dif / actual) * 100).toFixed(1);
+    $el.html(`<span class="badge ${dif > 0 ? 'bg-success' : 'bg-danger'}" style="font-size:.7rem;">Formulario: $${nuevo.toLocaleString('es-CL')} (${dif > 0 ? '+' : ''}${pct}%)</span>
+        <span class="text-muted ms-1" style="font-size:.7rem;">se aplica solo si activas el switch</span>`);
+}
+
+// Chip de código similar → corrige el código y re-verifica.
+// Se usa 'change' (no 'input') para NO abrir el dropdown del autocomplete.
+$(document).on('click', '.chipSimilarManual', function() {
+    const art = $(this).data('articulo');
+    if (!art) return;
+    $('#modalCrearProductoManual input[name="articulo"]').val(art).trigger('change');
+});
+
 function verificarProductoExistenteManual() {
     // ✅ No reconstruir la tabla mientras el usuario decide en el Swal de
     // confirmación: un rebuild en esa ventana pisaba el stock tipeado y el
@@ -10367,11 +10617,6 @@ function verificarProductoExistenteManual() {
 
     console.log('🔍 Verificando producto existente en modal manual:', { articulo, marca, color, genero, categoria });
 
-    // Remover advertencia anterior
-    $('#advertenciaProductosSimilaresManual').remove();
-    $('#panelProductoExistenteManual').remove();
-    $('#panelVariantesCodigoManual').remove();
-
     // ✅ MEJORA: Verificar solo con artículo si está completo (más intuitivo)
     if (articulo) {
         const params = { articulo: articulo };
@@ -10379,11 +10624,11 @@ function verificarProductoExistenteManual() {
         if (color) params.color = color;
         if (genero) params.genero = genero;
         if (categoria) params.categoria = categoria;
-        
-        $.get('/app/verificar_producto_existente/', params, function(response) {
-            // Precios/otras sucursales ahora se ven en la tarjeta de bodegas del código
-            $('#alertaPreciosOtrasSucursales').remove();
 
+        // Feedback inmediato en el panel único mientras responde el backend
+        renderEstadoCodigoManual('verificando');
+
+        $.get('/app/verificar_producto_existente/', params, function(response) {
             if (response.existe && response.producto_encontrado) {
                 console.log('✅ Producto existente encontrado en modal manual');
                 console.log('📦 Producto:', response.producto_encontrado);
@@ -10396,13 +10641,8 @@ function verificarProductoExistenteManual() {
                 window.productoExistenteManual = prod;
                 window.tallasExistentesManual = tallas;
                 
-                // ✅ LIMPIAR indicador de producto nuevo si existe
-                $('#indicadorVerificacionManual').remove();
-                
-                // Panel del producto existente (tallas + switch de precios)
-                mostrarPanelProductoExistenteManual(prod, tallas);
-                // Tarjeta ÚNICA: bodegas y variantes del código
-                renderTarjetaCodigoManual(response);
+                // Panel único de estado: existe → naranja (tallas, precios, duplicados, variantes)
+                renderEstadoCodigoManual('existe', response);
                 
                 // ✅ AUTOMÁTICAMENTE reemplazar la tabla de tallas con las tallas existentes
                 // Esto garantiza que los SKUs sean los correctos de la BD
@@ -10472,18 +10712,17 @@ function verificarProductoExistenteManual() {
                     console.log(`✅ ${tallasOrdenadas.length} tallas copiadas (ordenadas de menor a mayor)`);
                 }
                 
-                // Comparar precios y mostrar advertencia si son diferentes
-                const precioActualForm = parseInt($('#modalCrearProductoManual input[name="precioventa"]').val()) || 0;
-                if (precioActualForm > 0 && prod.precioventa > 0 && precioActualForm !== prod.precioventa) {
-                    mostrarAdvertenciaPrecioDiferenteManual(prod.precioventa, precioActualForm);
-                }
+                // (la comparación de precios vive dentro del panel único y se
+                // actualiza en vivo al tipear precioventa)
             } else {
                 // Limpiar variables globales de producto existente
                 window.productoExistenteManual = null;
                 window.tallasExistentesManual = null;
 
-                // Tarjeta ÚNICA: bodegas y variantes del código
-                renderTarjetaCodigoManual(response);
+                // Panel único de estado: variante local / otras bodegas / código nuevo
+                const bodegasResp = response.bodegas_codigo || [];
+                const hayLocal = bodegasResp.some(b => b.es_sucursal_actual);
+                renderEstadoCodigoManual(hayLocal ? 'variante' : (bodegasResp.length ? 'otras' : 'nuevo'), response);
 
                 // Convertir filas "talla-existente" (que tienen hidden SKU + badge verde)
                 // a filas normales con input vacío para que generarTodosLosSkusManual las llene
@@ -10503,102 +10742,25 @@ function verificarProductoExistenteManual() {
                 });
 
                 generarTodosLosSkusManual();
-                // (el estado "nuevo" y los similares ahora viven en la tarjeta de bodegas)
             }
+        }).fail(function() {
+            // Que el panel no quede pegado en "Verificando…" si falla la consulta
+            renderEstadoCodigoManual('vacio');
         });
     } else {
         console.log('📝 Campos incompletos en modal manual, limpiando SKUs');
         limpiarSkusManual();
-        $('#tarjetaCodigoManual').remove();
+        renderEstadoCodigoManual('vacio');
     }
 }
 
-// Panel CLARO de "producto ya existe": identidad + tallas/SKUs + toggle de precios
-function mostrarPanelProductoExistenteManual(producto, tallasExistentes) {
-    $('#panelProductoExistenteManual').remove();
-    $('#indicadorVerificacionManual').remove();
-
-    window.productoExistenteManual = producto;
-    window.tallasExistentesManual = tallasExistentes;
-
-    const stockTotal = tallasExistentes.reduce((sum, t) => sum + (t.stock || 0), 0);
-    const tallasOrden = [...tallasExistentes].sort((a, b) =>
-        (parseFloat(String(a.talla).replace(',', '.')) || 0) - (parseFloat(String(b.talla).replace(',', '.')) || 0));
-    const filas = tallasOrden.map(t => `
-        <tr>
-            <td class="fw-semibold">${t.talla}</td>
-            <td><span class="badge bg-success">${t.sku}</span></td>
-            <td class="text-end">${(t.stock || 0).toLocaleString('es-CL')}</td>
-        </tr>`).join('');
-    const precioExist = (producto.precioventa || 0).toLocaleString('es-CL');
-
-    const html = `
-        <div id="panelProductoExistenteManual" class="alert alert-warning border-2 shadow-sm mb-3" data-precio="${producto.precioventa || 0}" style="border-left:5px solid #e65100;">
-            <div class="d-flex align-items-start gap-2">
-                <i class="bi bi-exclamation-triangle-fill text-warning" style="font-size:1.4rem;"></i>
-                <div class="flex-grow-1">
-                    <h6 class="mb-1 fw-bold text-dark"><i class="bi bi-box-seam"></i> Este producto YA EXISTE en esta sucursal</h6>
-                    <div class="mb-2">
-                        <span class="badge bg-dark">${producto.marca || '-'}</span>
-                        <span class="badge bg-info text-dark">${producto.color || '-'}</span>
-                        <span class="badge bg-secondary">${producto.genero || '-'}</span>
-                        <span class="badge bg-light text-dark border">${producto.categoria || '-'}</span>
-                        <span class="ms-1 text-muted" style="font-size:.8rem;">· Código <b>${producto.articulo || ''}</b></span>
-                    </div>
-                    <div class="alert alert-success py-1 px-2 mb-2" style="font-size:.8rem;">
-                        <i class="bi bi-check-circle-fill"></i> Las tallas que agregues se <b>sumarán a este producto</b> (no se crea uno nuevo). Los SKUs existentes se reutilizan.
-                    </div>
-                    <div class="table-responsive" style="max-height:180px;overflow-y:auto;">
-                    <table class="table table-sm table-bordered bg-white mb-2" style="font-size:.8rem;">
-                        <thead class="table-light"><tr><th>Talla</th><th>SKU existente</th><th class="text-end">Stock actual</th></tr></thead>
-                        <tbody>${filas}</tbody>
-                        <tfoot><tr class="table-light"><td colspan="2" class="text-end fw-semibold">Total</td><td class="text-end fw-bold">${stockTotal.toLocaleString('es-CL')}</td></tr></tfoot>
-                    </table>
-                    </div>
-                    <div class="d-flex align-items-center gap-3 flex-wrap">
-                        <span class="text-muted" style="font-size:.82rem;">Precio actual del producto: <b>$${precioExist}</b></span>
-                        <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" id="chkActualizarPreciosManual">
-                            <label class="form-check-label" for="chkActualizarPreciosManual" style="font-size:.82rem;">Actualizar los precios de este producto con los del formulario</label>
-                        </div>
-                    </div>
-                    <input type="hidden" name="actualizar_precios" id="hiddenActualizarPreciosManual" value="false">
-                </div>
-            </div>
-        </div>`;
-    $('#formCrearProductoManual .modal-body').prepend(html);
-}
+// (mostrarPanelProductoExistenteManual y mostrarVariantesCodigoManual fueron
+// reemplazados por el panel único renderEstadoCodigoManual en la columna derecha)
 
 // Toggle de actualización de precios (por defecto NO se tocan los precios)
 $(document).on('change', '#chkActualizarPreciosManual', function () {
     $('#hiddenActualizarPreciosManual').val(this.checked ? 'true' : 'false');
 });
-
-// Banner de OTRAS variantes del mismo código (colores/géneros distintos)
-function mostrarVariantesCodigoManual(variantes, matchId) {
-    $('#panelVariantesCodigoManual').remove();
-    if (!variantes || variantes.length === 0) return;
-    const otras = variantes.filter(v => v.id !== matchId);
-    if (otras.length === 0) return;
-    const chips = otras.map(v => `
-        <div class="border rounded px-2 py-1 bg-white d-inline-flex align-items-center gap-1" style="font-size:.75rem;">
-            <span class="badge bg-info text-dark">${v.color}</span>
-            <span class="badge bg-secondary">${v.genero}</span>
-            <span class="text-muted">· ${v.tallas.length} tallas · stock ${v.stock_total}</span>
-        </div>`).join('');
-    const titulo = matchId
-        ? `<i class="bi bi-collection"></i> Este código también existe en ${otras.length} variante(s) más:`
-        : `<i class="bi bi-exclamation-circle"></i> El código ya existe en ${otras.length} variante(s). Vas a crear una <b>NUEVA variante</b> (otro color/género). Si querías una existente, seleccioná su color/género arriba.`;
-    const cls = matchId ? 'alert-secondary' : 'alert-info';
-    const html = `
-        <div id="panelVariantesCodigoManual" class="alert ${cls} py-2 px-3 mb-3" style="font-size:.82rem;">
-            <div class="fw-semibold mb-1">${titulo}</div>
-            <div class="d-flex flex-wrap gap-2">${chips}</div>
-        </div>`;
-    const $panel = $('#panelProductoExistenteManual');
-    if ($panel.length) $panel.after(html);
-    else $('#formCrearProductoManual .modal-body').prepend(html);
-}
 
 // ✅ NUEVA: Copiar datos del producto existente al formulario
 $(document).on('click', '#btnCopiarDatosProducto', function() {
@@ -11032,8 +11194,8 @@ function copiarProductoCoincidencia(producto) {
         setTimeout(() => generarTodosLosSkusManual(), 200);
     }
     
-    // Actualizar panel e indicadores de margen
-    mostrarPanelProductoExistenteManual(producto, producto.tallas || []);
+    // Actualizar indicadores de margen (el panel de estado se re-renderiza solo:
+    // los .trigger('change') de los atributos disparan la verificación)
     setTimeout(() => actualizarIndicadoresMargen($('#modalCrearProductoManual')), 100);
     
     Swal.fire({
@@ -11045,146 +11207,9 @@ function copiarProductoCoincidencia(producto) {
     });
 }
 
-// ✅ NUEVA: Mostrar advertencia de precio diferente
-function mostrarAdvertenciaPrecioDiferenteManual(precioActual, precioNuevo) {
-    $('#advertenciaPrecioDiferenteManual').remove();
-    
-    const diferencia = precioNuevo - precioActual;
-    const porcentaje = ((diferencia / precioActual) * 100).toFixed(1);
-    const esAumento = diferencia > 0;
-    
-    const html = `
-        <div id="advertenciaPrecioDiferenteManual" class="alert alert-warning mb-3">
-            <div class="d-flex align-items-center">
-                <i class="bi bi-exclamation-triangle-fill fs-5 me-2"></i>
-                <div>
-                    <strong>El precio es diferente al registrado</strong><br>
-                    <small>
-                        Precio actual: <strong>$${precioActual.toLocaleString('es-CL')}</strong> → 
-                        Precio nuevo: <strong class="${esAumento ? 'text-success' : 'text-danger'}">$${precioNuevo.toLocaleString('es-CL')}</strong>
-                        <span class="badge ${esAumento ? 'bg-success' : 'bg-danger'}">${esAumento ? '+' : ''}${porcentaje}%</span>
-                    </small>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    $('#panelProductoExistenteManual').after(html);
-}
-
-// ✅ NUEVA: Mostrar alerta de precios diferentes en OTRAS SUCURSALES
-function mostrarAlertaPreciosOtrasSucursales(productosOtrasSucursales) {
-    $('#alertaPreciosOtrasSucursales').remove();
-    
-    if (!productosOtrasSucursales || productosOtrasSucursales.length === 0) {
-        return;
-    }
-    
-    console.log('📊 Productos en otras sucursales:', productosOtrasSucursales);
-    
-    // Obtener el precio actual del formulario
-    const precioFormulario = parseInt($('#modalCrearProductoManual input[name="precioventa"]').val()) || 0;
-    
-    // Verificar si hay diferencias de precio
-    const sucursalesConDiferencia = productosOtrasSucursales.filter(p => {
-        if (precioFormulario > 0) {
-            return p.precioventa !== precioFormulario;
-        }
-        return p.precio_diferente;
-    });
-    
-    // Solo mostrar alerta si hay diferencias o si hay productos en otras sucursales
-    const hayDiferencias = sucursalesConDiferencia.length > 0;
-    const colorAlerta = hayDiferencias ? 'danger' : 'info';
-    const iconoAlerta = hayDiferencias ? 'exclamation-triangle-fill' : 'info-circle-fill';
-    
-    let filasSucursales = '';
-    productosOtrasSucursales.forEach(p => {
-        const esDiferente = precioFormulario > 0 && p.precioventa !== precioFormulario;
-        const diferencia = precioFormulario > 0 ? p.precioventa - precioFormulario : 0;
-        const porcentaje = precioFormulario > 0 ? ((diferencia / precioFormulario) * 100).toFixed(1) : 0;
-        const marcaColor = [p.marca, p.color].filter(v => v && v !== '-').join(' / ');
-        const tienePid = p.producto_id ? true : false;
-
-        filasSucursales += `
-            <tr class="${esDiferente ? 'table-warning' : ''}">
-                <td>
-                    <strong>${p.sucursal_nombre}</strong>
-                    ${p.es_sucursal_actual ? '<span class="badge bg-primary ms-1" style="font-size:.58rem;">actual</span>' : ''}
-                    ${marcaColor ? `<br><small class="text-muted" style="font-size:.72rem;">${marcaColor}</small>` : ''}
-                </td>
-                <td class="text-end fw-semibold">$${p.precioventa.toLocaleString('es-CL')}</td>
-                <td class="text-end text-muted">$${p.costo.toLocaleString('es-CL')}</td>
-                <td class="text-center">
-                    ${esDiferente ?
-                        `<span class="badge ${diferencia > 0 ? 'bg-danger' : 'bg-success'}">${diferencia > 0 ? '+' : ''}${porcentaje}%</span>` :
-                        '<span class="badge bg-secondary">Igual</span>'
-                    }
-                </td>
-                <td class="text-center">
-                    ${tienePid ? `
-                    <button type="button" class="btn btn-sm btn-success btnCopiarTodoSucursal"
-                            data-producto-id="${p.producto_id}"
-                            data-precio="${p.precioventa}" data-costo="${p.costo}" data-sobreprecio="${p.sobreprecio}"
-                            title="Copiar todos los datos de ${p.sucursal_nombre}">
-                        <i class="bi bi-copy me-1"></i>Copiar
-                    </button>` : `
-                    <button type="button" class="btn btn-sm btn-outline-primary btnCopiarPrecioSucursal"
-                            data-precio="${p.precioventa}" data-costo="${p.costo}" data-sobreprecio="${p.sobreprecio}"
-                            title="Usar solo los precios de ${p.sucursal_nombre}">
-                        <i class="bi bi-currency-dollar"></i>
-                    </button>`}
-                </td>
-            </tr>
-        `;
-    });
-
-    const html = `
-        <div id="alertaPreciosOtrasSucursales" class="alert alert-${colorAlerta} mb-3 py-2">
-            <div class="d-flex align-items-start">
-                <i class="bi bi-${iconoAlerta} fs-5 me-2 mt-1"></i>
-                <div class="flex-grow-1">
-                    <strong>
-                        ${hayDiferencias ?
-                            '⚠️ Este producto tiene precios diferentes en otras sucursales' :
-                            'ℹ️ Este artículo ya existe en otras sucursales — puedes copiar sus datos'
-                        }
-                    </strong>
-                    <div class="table-responsive mt-2" style="max-height: 200px; overflow-y: auto;">
-                        <table class="table table-sm table-bordered mb-0" style="font-size: 0.82rem;">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Sucursal / Atributos</th>
-                                    <th class="text-end">Precio</th>
-                                    <th class="text-end">Costo</th>
-                                    <th class="text-center">Precio</th>
-                                    <th class="text-center">Acción</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${filasSucursales}
-                            </tbody>
-                        </table>
-                    </div>
-                    ${hayDiferencias ? `
-                        <div class="mt-2 small text-muted">
-                            <i class="bi bi-lightbulb me-1"></i>
-                            <strong>Recomendación:</strong> Mantener precios uniformes entre sucursales para evitar inconsistencias.
-                        </div>
-                    ` : ''}
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Insertar después del panel de producto existente o al inicio del modal body
-    const $panelExistente = $('#panelProductoExistenteManual');
-    if ($panelExistente.length > 0) {
-        $panelExistente.after(html);
-    } else {
-        $('#formCrearProductoManual .modal-body').prepend(html);
-    }
-}
+// (mostrarAdvertenciaPrecioDiferenteManual y mostrarAlertaPreciosOtrasSucursales
+// fueron absorbidas por el panel único: la comparación de precio vive en
+// #comparePrecioManual y los precios por bodega en la sección plegable de bodegas)
 
 // Evento: copiar precios solamente desde otra sucursal
 $(document).on('click', '.btnCopiarPrecioSucursal', function() {
@@ -11233,89 +11258,9 @@ $(document).on('click', '.btnCopiarTodoSucursal', function() {
     });
 });
 
-// 📋 MOSTRAR ADVERTENCIA DE PRODUCTOS SIMILARES EN MODAL MANUAL
-function mostrarAdvertenciaProductosSimilaresManual(similaresSkuRaw, similaresNombreRaw) {
-    $('#advertenciaProductosSimilaresManual').remove();
-    
-    const similaresSku = similaresSkuRaw || [];
-    const similaresNombre = similaresNombreRaw || [];
-    
-    if (similaresSku.length === 0 && similaresNombre.length === 0) {
-        return;
-    }
-    
-    let html = `
-        <div id="advertenciaProductosSimilaresManual" class="alert alert-warning alert-dismissible fade show mb-3" role="alert">
-            <h6 class="alert-heading mb-2"><i class="bi bi-exclamation-triangle-fill me-2"></i>¡Atención! Se encontraron productos similares</h6>
-            <p class="mb-2 small">Verifica que no estés creando un duplicado. Haz clic en <i class="bi bi-copy"></i> para copiar los datos:</p>
-    `;
-    
-    if (similaresSku.length > 0) {
-        html += `<div class="mb-2"><strong><i class="bi bi-upc me-1"></i>Por SKU similar:</strong></div>
-                 <div class="table-responsive" style="max-height: 150px; overflow-y: auto;">
-                 <table class="table table-sm table-bordered mb-2">
-                     <thead class="table-light">
-                         <tr><th>Artículo</th><th>Marca</th><th>Color</th><th>Género</th><th>Categoría</th><th>Precio</th><th>Tallas</th><th width="90">Acción</th></tr>
-                     </thead>
-                     <tbody>`;
-        similaresSku.forEach(p => {
-            const precio = p.precioventa ? '$' + parseInt(p.precioventa).toLocaleString('es-CL') : '-';
-            const dataJson = JSON.stringify(p).replace(/"/g, '&quot;');
-            html += `<tr>
-                <td><strong>${p.articulo}</strong></td>
-                <td>${p.marca}</td>
-                <td>${p.color}</td>
-                <td>${p.genero}</td>
-                <td>${p.categoria}</td>
-                <td class="text-success fw-bold">${precio}</td>
-                <td><small>${p.tallas || '-'}</small></td>
-                <td class="text-center">
-                    <button type="button" class="btn btn-primary btn-copiar-producto-similar px-3 py-1" 
-                            data-producto='${dataJson}' data-modal="manual" title="Usar este producto">
-                        <i class="bi bi-copy me-1"></i>Usar
-                    </button>
-                </td>
-            </tr>`;
-        });
-        html += `</tbody></table></div>`;
-    }
-    
-    if (similaresNombre.length > 0) {
-        html += `<div class="mb-2"><strong><i class="bi bi-tag me-1"></i>Por nombre similar:</strong></div>
-                 <div class="table-responsive" style="max-height: 150px; overflow-y: auto;">
-                 <table class="table table-sm table-bordered mb-0">
-                     <thead class="table-light">
-                         <tr><th>Artículo</th><th>Marca</th><th>Color</th><th>Género</th><th>Categoría</th><th>Precio</th><th>Tallas</th><th width="90">Acción</th></tr>
-                     </thead>
-                     <tbody>`;
-        similaresNombre.forEach(p => {
-            const precio = p.precioventa ? '$' + parseInt(p.precioventa).toLocaleString('es-CL') : '-';
-            const dataJson = JSON.stringify(p).replace(/"/g, '&quot;');
-            html += `<tr>
-                <td><strong>${p.articulo}</strong></td>
-                <td>${p.marca}</td>
-                <td>${p.color}</td>
-                <td>${p.genero}</td>
-                <td>${p.categoria}</td>
-                <td class="text-success fw-bold">${precio}</td>
-                <td><small>${p.tallas || '-'}</small></td>
-                <td class="text-center">
-                    <button type="button" class="btn btn-primary btn-copiar-producto-similar px-3 py-1" 
-                            data-producto='${dataJson}' data-modal="manual" title="Usar este producto">
-                        <i class="bi bi-copy me-1"></i>Usar
-                    </button>
-                </td>
-            </tr>`;
-        });
-        html += `</tbody></table></div>`;
-    }
-    
-    html += `<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>`;
-    
-    // Insertar al inicio del modal-body
-    $('#modalCrearProductoManual .modal-body').prepend(html);
-}
+// (mostrarAdvertenciaProductosSimilaresManual fue absorbida por el panel único:
+// los códigos parecidos se muestran como chips clickeables en la sección
+// "¿typo?" de renderEstadoCodigoManual)
 
 // Función para mostrar SKUs existentes en modal manual
 function mostrarSkusExistentesManual(tallasExistentes) {
@@ -11448,26 +11393,8 @@ function limpiarSkusManual() {
     $('#advertenciaPrecioDiferenteManual').remove();
 }
 
-// Función para mostrar indicador de producto existente en modal manual
-function mostrarIndicadorProductoExistenteManual() {
-    // Ya no es necesario mostrar este indicador si tenemos el panel completo
-    $('#indicadorVerificacionManual').remove();
-}
-
-// Función para mostrar indicador de producto nuevo en modal manual
-function mostrarIndicadorProductoNuevoManual() {
-    let indicador = $('#indicadorVerificacionManual');
-    const contenido = '<div class="d-flex align-items-center gap-2" style="font-size:.78rem;">' +
-        '<div style="width:24px;height:24px;background:#fff3e0;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' +
-        '<i class="bi bi-plus-circle text-warning"></i></div>' +
-        '<span><strong>Producto nuevo</strong> — Se generarán nuevos SKUs</span></div>';
-    if (indicador.length === 0) {
-        indicador = $(`<div id="indicadorVerificacionManual" class="mb-2" style="border-radius:8px;background:linear-gradient(135deg,#fff8e1,#fff3e0);border:1px solid #ffe082;padding:8px 12px;">${contenido}</div>`);
-        $('#formCrearProductoManual .modal-body').prepend(indicador);
-    } else {
-        indicador.html(contenido).css({'background':'linear-gradient(135deg,#fff8e1,#fff3e0)','border-color':'#ffe082'});
-    }
-}
+// (mostrarIndicadorProductoExistenteManual / mostrarIndicadorProductoNuevoManual
+// eliminados: el estado "nuevo"/"existe" lo comunica el panel único)
 
 // Debounce para modal manual
 let timeoutVerificacionManual = null;
@@ -11488,11 +11415,8 @@ $('#modalCrearProductoManual input[name="articulo"]').on('change input', functio
         window.tallasExistentesManual = null;
         window.articuloAnteriorManual = articuloNuevo;
         
-        // Limpiar paneles
-        $('#panelProductoExistenteManual').remove();
-        $('#indicadorVerificacionManual').remove();
-        $('#advertenciaProductosSimilaresManual').remove();
-        $('#advertenciaPrecioDiferenteManual').remove();
+        // Feedback inmediato en el panel único (la verificación corre en 500ms)
+        renderEstadoCodigoManual(articuloNuevo ? 'verificando' : 'vacio');
 
         // ✅ Capturar el stock tipeado ANTES de vaciar: la verificación (que
         // corre 500ms después) lo fusiona vía window.stockPrevioManualPendiente
@@ -11634,18 +11558,9 @@ $(document).on('input', '#modalCrearProductoManual input[name="costo"]', functio
 
 // Detectar cambio de precio y comparar con producto existente (NO tocar sobreprecio)
 $(document).on('input', '#modalCrearProductoManual input[name="precioventa"]', function() {
-    const pvNuevo = parseFloat($(this).val()) || 0;
     actualizarIndicadoresMargen($('#modalCrearProductoManual'));
-    // Comparar con producto existente
-    const panel = $('#panelProductoExistenteManual');
-    if (panel.length > 0) {
-        const precioExistente = parseInt(panel.find('.badge.bg-success').text().replace(/\D/g, '')) || 0;
-        const precioNuevo = parseInt($(this).val()) || 0;
-        $('#advertenciaPrecioDiferenteManual').remove();
-        if (precioExistente > 0 && precioNuevo > 0 && precioExistente !== precioNuevo) {
-            mostrarAdvertenciaPrecioDiferenteManual(precioExistente, precioNuevo);
-        }
-    }
+    // Comparación viva contra el producto existente, dentro del panel único
+    actualizarComparePrecioManual();
 });
 
 // Evento para generar SKUs automáticos en modal manual (con debounce)
@@ -12229,12 +12144,7 @@ function prepararSiguienteProductoManual() {
     window.stockPrevioManualPendiente = null;
     window._confirmPendienteManual = false;
     window._confirmadoCreacionManual = false;
-    $('#indicadorVerificacionManual').remove();
-    $('#panelProductoExistenteManual').remove();
-    $('#advertenciaProductosSimilaresManual').remove();
-    $('#advertenciaPrecioDiferenteManual').remove();
-    $('#alertaPreciosOtrasSucursales').remove();
-    $('#tarjetaCodigoManual').remove();
+    renderEstadoCodigoManual('vacio');
     $('.articulo-autocomplete-dropdown').hide();
     $('.articulo-search-feedback').hide();
 
@@ -12828,9 +12738,9 @@ $('#btnConfirmarActualizacion').on('click', function() {
         $('#resultadosBusqueda').hide();
         $('#loadingBusquedaProducto').hide();
 
-        // Reset al tab "Buscar Producto"
+        // Reset al tab "Tallas y Stock" (default: es el área de trabajo principal)
         bootstrap.Tab.getOrCreateInstance(
-            document.querySelector('[data-bs-target="#tabBuscarProducto"]')
+            document.querySelector('[data-bs-target="#tabTallasStock"]')
         ).show();
         $('#badgeCantTallas').text('0').removeClass('bg-success').addClass('bg-secondary');
 
