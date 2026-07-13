@@ -579,89 +579,424 @@
     font-weight: 700;
 }
 
-/* Panel lateral de historial reciente */
-.historial-sidebar {
-    position: fixed;
-    top: 0;
-    right: -420px;
-    width: 420px;
-    height: 100vh;
-    background: var(--nexo-white);
-    box-shadow: -5px 0 25px rgba(26, 26, 46, 0.15);
-    z-index: 9998;
-    transition: right 0.3s ease;
-    display: flex;
-    flex-direction: column;
-}
-
-.historial-sidebar.active {
-    right: 0;
-}
-
-.historial-sidebar-overlay {
+/* ========== MODAL AUDITORÍA DE PRECIOS ========== */
+.modal-auditoria-overlay {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(26, 26, 46, 0.5);
-    z-index: 9997;
+    background: rgba(26, 26, 46, 0.7);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9995; /* Bajo el modal de historial por producto (9999) para poder abrirlo encima */
     opacity: 0;
     visibility: hidden;
     transition: all 0.3s ease;
 }
 
-.historial-sidebar-overlay.active {
+.modal-auditoria-overlay.active {
     opacity: 1;
     visibility: visible;
 }
 
-.historial-sidebar-header {
+.modal-auditoria {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-lg);
+    max-width: 1100px;
+    width: 96%;
+    max-height: 92vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(-20px);
+    transition: transform 0.3s ease;
+}
+
+.modal-auditoria-overlay.active .modal-auditoria {
+    transform: translateY(0);
+}
+
+.modal-auditoria-header {
     background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
     color: var(--nexo-white);
-    padding: 20px;
+    padding: 18px 24px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-shrink: 0;
 }
 
-.historial-sidebar-header h3 {
+.modal-auditoria-header h3 {
     margin: 0;
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 600;
     display: flex;
     align-items: center;
     gap: 10px;
 }
 
-.historial-sidebar-header h3 i {
+.modal-auditoria-header h3 i {
     color: var(--nexo-accent);
 }
 
-.historial-sidebar-header .btn-close-sidebar {
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
-    color: var(--nexo-white);
-    width: 32px;
-    height: 32px;
-    border-radius: var(--nexo-radius-sm);
-    cursor: pointer;
-    font-size: 16px;
+.auditoria-tabs {
     display: flex;
+    background: var(--nexo-gray-100);
+    border-bottom: 1px solid var(--nexo-gray-300);
+    padding: 0 24px;
+    flex-shrink: 0;
+}
+
+.auditoria-tab-btn {
+    padding: 12px 20px;
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--nexo-gray-500);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: var(--nexo-transition-fast);
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
+    gap: 8px;
+}
+
+.auditoria-tab-btn:hover {
+    color: var(--nexo-primary);
+}
+
+.auditoria-tab-btn.active {
+    color: var(--nexo-primary);
+    border-bottom-color: var(--nexo-primary);
+    background: var(--nexo-white);
+}
+
+.modal-auditoria-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.auditoria-filtros {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-end;
+    background: var(--nexo-gray-100);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+.auditoria-filtros .filtro-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.auditoria-filtros label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+    text-transform: uppercase;
+}
+
+.auditoria-filtros select,
+.auditoria-filtros input {
+    padding: 8px 10px;
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-sm);
+    font-size: 13px;
+    background: var(--nexo-white);
+    color: var(--nexo-secondary);
+}
+
+.auditoria-filtros select:focus,
+.auditoria-filtros input:focus {
+    outline: none;
+    border-color: var(--nexo-primary);
+}
+
+.btn-auditoria-aplicar {
+    padding: 9px 18px;
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-sm);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     transition: var(--nexo-transition-fast);
 }
 
-.historial-sidebar-header .btn-close-sidebar:hover {
-    background: rgba(255, 255, 255, 0.2);
+.btn-auditoria-aplicar:hover {
+    background: var(--nexo-primary-dark);
 }
 
-.historial-sidebar-content {
+.kpi-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.kpi-card-aud {
+    background: var(--nexo-gray-100);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 14px;
+    text-align: center;
+}
+
+.kpi-card-aud .valor {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+}
+
+.kpi-card-aud .etiqueta {
+    font-size: 11px;
+    color: var(--nexo-gray-500);
+    text-transform: uppercase;
+    margin-top: 4px;
+}
+
+.kpi-card-aud.alerta {
+    border-color: rgba(255, 77, 77, 0.4);
+    background: rgba(255, 77, 77, 0.06);
+}
+
+.kpi-card-aud.alerta .valor {
+    color: var(--nexo-error);
+}
+
+.tabla-auditoria {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.tabla-auditoria th {
+    background: var(--nexo-secondary);
+    color: var(--nexo-white);
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.tabla-auditoria td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--nexo-gray-300);
+    vertical-align: middle;
+}
+
+.tabla-auditoria tbody tr:hover {
+    background: var(--nexo-primary-light);
+}
+
+.tabla-auditoria-wrapper {
+    overflow-x: auto;
+    border-radius: var(--nexo-radius-md);
+    border: 1px solid var(--nexo-gray-300);
+}
+
+.alerta-seccion {
+    margin-top: 20px;
+}
+
+.alerta-seccion h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--nexo-secondary);
+    margin: 0 0 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.alerta-card {
+    background: rgba(255, 176, 32, 0.08);
+    border: 1px solid rgba(255, 176, 32, 0.35);
+    border-left: 4px solid var(--nexo-warning);
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+    cursor: pointer;
+    transition: var(--nexo-transition-fast);
+}
+
+.alerta-card:hover {
+    box-shadow: var(--nexo-shadow-sm);
+}
+
+.alerta-card.critica {
+    background: rgba(255, 77, 77, 0.06);
+    border-color: rgba(255, 77, 77, 0.35);
+    border-left-color: var(--nexo-error);
+}
+
+.paginacion-auditoria {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--nexo-gray-500);
+}
+
+.paginacion-auditoria button {
+    padding: 6px 14px;
+    border: 1px solid var(--nexo-gray-300);
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-sm);
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--nexo-gray-700);
+    transition: var(--nexo-transition-fast);
+}
+
+.paginacion-auditoria button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.paginacion-auditoria button:not(:disabled):hover {
+    border-color: var(--nexo-primary);
+    color: var(--nexo-primary);
+}
+
+/* ========== FILTROS AVANZADOS DE BÚSQUEDA ========== */
+.btn-toggle-filtros {
+    margin-top: 10px;
+    padding: 8px 14px;
+    background: var(--nexo-gray-100);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-toggle-filtros:hover {
+    border-color: var(--nexo-primary);
+    color: var(--nexo-primary);
+}
+
+.btn-toggle-filtros .badge-filtros {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+    border-radius: 10px;
+    padding: 1px 7px;
+    font-size: 10px;
+    font-weight: 700;
+    display: none;
+}
+
+.btn-toggle-filtros .badge-filtros.visible {
+    display: inline-block;
+}
+
+.filtros-avanzados {
+    display: none;
+    margin-top: 12px;
+    background: var(--nexo-gray-100);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 14px;
+}
+
+.filtros-avanzados.active {
+    display: block;
+}
+
+.filtros-avanzados .filtros-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.filtros-avanzados .filtro-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.filtros-avanzados label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+    text-transform: uppercase;
+}
+
+.filtros-avanzados select,
+.filtros-avanzados input {
+    padding: 8px 10px;
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-sm);
+    font-size: 13px;
+    background: var(--nexo-white);
+    width: 100%;
+}
+
+.filtros-avanzados select:focus,
+.filtros-avanzados input:focus {
+    outline: none;
+    border-color: var(--nexo-primary);
+}
+
+.filtros-avanzados .filtros-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.filtros-avanzados .filtros-actions button {
     flex: 1;
-    overflow-y: auto;
-    padding: 16px;
+    padding: 9px;
+    border-radius: var(--nexo-radius-sm);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-aplicar-filtros {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.btn-aplicar-filtros:hover {
+    background: var(--nexo-primary-dark);
+}
+
+.btn-limpiar-filtros {
+    background: var(--nexo-white);
+    color: var(--nexo-gray-700);
+    border: 1px solid var(--nexo-gray-300) !important;
 }
 
 .historial-reciente-item {
@@ -759,117 +1094,6 @@
     color: var(--nexo-primary);
 }
 
-.historial-sidebar-empty {
-    text-align: center;
-    padding: 40px 20px;
-    color: var(--nexo-gray-500);
-}
-
-.historial-sidebar-empty i {
-    font-size: 48px;
-    color: var(--nexo-gray-300);
-    margin-bottom: 12px;
-    display: block;
-}
-
-.historial-sidebar-loading {
-    text-align: center;
-    padding: 40px 20px;
-}
-
-/* Buscador del historial */
-.historial-sidebar-search {
-    padding: 12px 16px;
-    background: var(--nexo-gray-100);
-    border-bottom: 1px solid var(--nexo-gray-200);
-    flex-shrink: 0;
-}
-
-.historial-search-wrapper {
-    position: relative;
-    display: flex;
-    align-items: center;
-}
-
-.historial-search-wrapper i {
-    position: absolute;
-    left: 12px;
-    color: var(--nexo-gray-400);
-    font-size: 16px;
-    pointer-events: none;
-}
-
-.historial-search-input {
-    width: 100%;
-    padding: 10px 36px 10px 38px;
-    border: 2px solid var(--nexo-gray-200);
-    border-radius: 8px;
-    font-size: 13px;
-    background: var(--nexo-white);
-    transition: all 0.2s ease;
-}
-
-.historial-search-input:focus {
-    outline: none;
-    border-color: var(--nexo-accent);
-    box-shadow: 0 0 0 3px rgba(106, 90, 205, 0.1);
-}
-
-.historial-search-input::placeholder {
-    color: var(--nexo-gray-400);
-}
-
-.historial-search-clear {
-    position: absolute;
-    right: 8px;
-    background: var(--nexo-gray-200);
-    border: none;
-    color: var(--nexo-gray-500);
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    cursor: pointer;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    transition: all 0.2s ease;
-}
-
-.historial-search-clear:hover {
-    background: var(--nexo-gray-300);
-    color: var(--nexo-gray-700);
-}
-
-.historial-search-clear.visible {
-    display: flex;
-}
-
-.historial-search-results-info {
-    font-size: 11px;
-    color: var(--nexo-gray-500);
-    margin-top: 8px;
-    display: none;
-}
-
-.historial-search-results-info.visible {
-    display: block;
-}
-
-.historial-search-results-info span {
-    font-weight: 600;
-    color: var(--nexo-primary);
-}
-
-/* Resaltado del texto buscado */
-.historial-reciente-item .highlight {
-    background: linear-gradient(120deg, rgba(106, 90, 205, 0.3) 0%, rgba(106, 90, 205, 0.2) 100%);
-    color: var(--nexo-primary);
-    padding: 1px 3px;
-    border-radius: 3px;
-    font-weight: 600;
-}
-
 /* Estado "sin resultados" en búsqueda */
 .historial-no-results {
     text-align: center;
@@ -898,37 +1122,6 @@
 .historial-no-results .search-term {
     color: var(--nexo-primary);
     font-weight: 600;
-}
-
-/* Botón para buscar en servidor */
-.btn-buscar-servidor {
-    margin-top: 16px;
-    padding: 10px 20px;
-    background: linear-gradient(135deg, var(--nexo-accent) 0%, #5a4fcf 100%);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(106, 90, 205, 0.3);
-}
-
-.btn-buscar-servidor:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(106, 90, 205, 0.4);
-}
-
-.btn-buscar-servidor:active {
-    transform: translateY(0);
-}
-
-.btn-buscar-servidor i {
-    font-size: 15px;
 }
 
 @media (max-width: 600px) {
@@ -1782,10 +1975,10 @@
                         </span>
                     </p>
                 </div>
-                <button class="btn-historial-header" onclick="toggleHistorialReciente()">
-                    <i class="ri-history-line"></i> 
-                    Últimas Ediciones
-                    <span class="badge-count" id="historialCount">0</span>
+                <button class="btn-historial-header" onclick="abrirAuditoriaPrecios()">
+                    <i class="ri-history-line"></i>
+                    Últimas Ediciones / Auditoría
+                    <span class="badge-count" id="historialCount" title="Ediciones de hoy">0</span>
                 </button>
             </div>
         </div>
@@ -1807,8 +2000,69 @@
                                onkeydown="if(event.key==='Enter'){event.preventDefault(); buscarProductosRapido(); return false;}">
                         <div class="input-loading"></div>
                     </div>
-                    <button onclick="buscarProductosRapido()" 
+                    <button onclick="buscarProductosRapido()"
                             style="display: none;" id="btnSearchHidden"></button>
+
+                    <button type="button" class="btn-toggle-filtros" onclick="toggleFiltrosBusqueda()">
+                        <i class="ri-filter-3-line"></i> Filtros avanzados
+                        <span class="badge-filtros" id="badgeFiltrosActivos">0</span>
+                    </button>
+
+                    <div class="filtros-avanzados" id="filtrosAvanzados">
+                        <div class="filtros-grid">
+                            <div class="filtro-group">
+                                <label for="filtroSucursal">Sucursal</label>
+                                <select id="filtroSucursal">
+                                    <option value="">Sucursal actual</option>
+                                </select>
+                            </div>
+                            <div class="filtro-group">
+                                <label for="filtroCategoria">Categoría</label>
+                                <select id="filtroCategoria">
+                                    <option value="">Todas</option>
+                                </select>
+                            </div>
+                            <div class="filtro-group">
+                                <label for="filtroMarca">Marca</label>
+                                <select id="filtroMarca">
+                                    <option value="">Todas</option>
+                                </select>
+                            </div>
+                            <div class="filtro-group">
+                                <label for="filtroAntiguedad">Antigüedad inventario</label>
+                                <select id="filtroAntiguedad">
+                                    <option value="">Cualquiera</option>
+                                    <option value="nuevo">Nuevo (&lt; 6 meses)</option>
+                                    <option value="medio">Medio (6-12 meses)</option>
+                                    <option value="antiguo">Antiguo (&gt; 1 año)</option>
+                                </select>
+                            </div>
+                            <div class="filtro-group">
+                                <label for="filtroPrecioMin">Precio mínimo</label>
+                                <input type="number" id="filtroPrecioMin" placeholder="Ej: 10000" step="1000" min="0">
+                            </div>
+                            <div class="filtro-group">
+                                <label for="filtroPrecioMax">Precio máximo</label>
+                                <input type="number" id="filtroPrecioMax" placeholder="Ej: 80000" step="1000" min="0">
+                            </div>
+                            <div class="filtro-group">
+                                <label for="filtroMargenMin">Margen mínimo %</label>
+                                <input type="number" id="filtroMargenMin" placeholder="Ej: 20" step="1">
+                            </div>
+                            <div class="filtro-group">
+                                <label for="filtroAnio">Año de ingreso</label>
+                                <input type="number" id="filtroAnio" placeholder="Ej: 2024" min="2000" max="2100">
+                            </div>
+                        </div>
+                        <div class="filtros-actions">
+                            <button type="button" class="btn-aplicar-filtros" onclick="buscarProductosRapido()">
+                                <i class="ri-search-line"></i> Buscar con filtros
+                            </button>
+                            <button type="button" class="btn-limpiar-filtros" onclick="limpiarFiltrosBusqueda()">
+                                <i class="ri-eraser-line"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="searchResults">
@@ -1871,43 +2125,134 @@
     </div>
 </div>
 
-<!-- Panel Lateral Historial Reciente -->
-<div class="historial-sidebar-overlay" id="historialSidebarOverlay" onclick="cerrarHistorialReciente()"></div>
-<div class="historial-sidebar" id="historialSidebar">
-    <div class="historial-sidebar-header">
-        <h3>
-            <i class="ri-history-line"></i> 
-            Últimas Ediciones
-        </h3>
-        <button class="btn-close-sidebar" onclick="cerrarHistorialReciente()">
-            <i class="ri-close-line"></i>
-        </button>
-    </div>
-    
-    <!-- Buscador del historial -->
-    <div class="historial-sidebar-search">
-        <div class="historial-search-wrapper">
-            <i class="ri-search-line"></i>
-            <input type="text" 
-                   id="historialSearchInput" 
-                   class="historial-search-input" 
-                   placeholder="Buscar artículo... (Enter para buscar)"
-                   oninput="filtrarHistorialLocal(this.value)"
-                   onkeydown="manejarTeclaBusquedaHistorial(event)">
-            <button class="historial-search-clear" id="historialSearchClear" onclick="limpiarBusquedaHistorial()">
+<!-- Modal Auditoría de Precios (Registro de cambios + KPIs por usuario) -->
+<div class="modal-auditoria-overlay" id="modalAuditoriaOverlay" onclick="cerrarAuditoriaPrecios(event)">
+    <div class="modal-auditoria" onclick="event.stopPropagation()">
+        <div class="modal-auditoria-header">
+            <h3>
+                <i class="ri-shield-check-line"></i>
+                Auditoría de Precios
+            </h3>
+            <button class="btn-close-modal" onclick="cerrarAuditoriaPrecios()">
                 <i class="ri-close-line"></i>
             </button>
         </div>
-        <div class="historial-search-results-info" id="historialSearchInfo">
-            <span id="historialResultsCount">0</span> resultado(s) encontrado(s)
-            <span id="historialSearchTip" style="display: none;"> - Presiona Enter para buscar en todo el historial</span>
+
+        <div class="auditoria-tabs">
+            <button type="button" class="auditoria-tab-btn active" id="tabBtnRegistro" onclick="cambiarTabAuditoria('registro')">
+                <i class="ri-file-list-3-line"></i> Registro de Cambios
+            </button>
+            <button type="button" class="auditoria-tab-btn" id="tabBtnKpis" onclick="cambiarTabAuditoria('kpis')">
+                <i class="ri-bar-chart-2-line"></i> KPIs por Usuario
+            </button>
         </div>
-    </div>
-    
-    <div class="historial-sidebar-content" id="historialSidebarContent">
-        <div class="historial-sidebar-loading">
-            <div class="spinner-historial"></div>
-            <p>Cargando historial...</p>
+
+        <div class="modal-auditoria-body">
+            <!-- TAB: Registro de cambios -->
+            <div id="tabRegistro">
+                <div class="auditoria-filtros">
+                    <div class="filtro-group">
+                        <label for="audUsuario">Usuario</label>
+                        <select id="audUsuario">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                    <div class="filtro-group">
+                        <label for="audDesde">Desde</label>
+                        <input type="date" id="audDesde">
+                    </div>
+                    <div class="filtro-group">
+                        <label for="audHasta">Hasta</label>
+                        <input type="date" id="audHasta">
+                    </div>
+                    <div class="filtro-group">
+                        <label for="audTipo">Tipo de cambio</label>
+                        <select id="audTipo">
+                            <option value="">Todos</option>
+                            <option value="MANUAL">Manual</option>
+                            <option value="MASIVO">Masivo</option>
+                            <option value="SINCRONIZACION">Sincronización</option>
+                            <option value="RECOMENDACION">Por recomendación</option>
+                            <option value="APROBACION">Por aprobación</option>
+                            <option value="ACTUALIZACION_RECEPCION">Act. por recepción</option>
+                            <option value="ACTUALIZACION_MANUAL">Act. manual</option>
+                            <option value="REGULARIZACION">Regularización</option>
+                        </select>
+                    </div>
+                    <div class="filtro-group">
+                        <label for="audAlcance">Alcance</label>
+                        <select id="audAlcance">
+                            <option value="todas">Todas las sucursales</option>
+                            <option value="actual">Sucursal actual</option>
+                        </select>
+                    </div>
+                    <div class="filtro-group" style="flex: 1; min-width: 160px;">
+                        <label for="audSearch">Artículo / usuario</label>
+                        <input type="text" id="audSearch" placeholder="Buscar..."
+                               onkeydown="if(event.key==='Enter'){event.preventDefault(); cargarRegistroAuditoria(1);}">
+                    </div>
+                    <button type="button" class="btn-auditoria-aplicar" onclick="cargarRegistroAuditoria(1)">
+                        <i class="ri-search-line"></i> Filtrar
+                    </button>
+                </div>
+
+                <div id="registroAuditoriaContent">
+                    <div class="historial-loading">
+                        <div class="spinner-historial"></div>
+                        <p>Cargando registro...</p>
+                    </div>
+                </div>
+
+                <div class="paginacion-auditoria" id="registroPaginacion" style="display: none;">
+                    <button type="button" id="regBtnPrev" onclick="cargarRegistroAuditoria(paginaRegistroActual - 1)">
+                        <i class="ri-arrow-left-s-line"></i> Anterior
+                    </button>
+                    <span id="regPageInfo"></span>
+                    <button type="button" id="regBtnNext" onclick="cargarRegistroAuditoria(paginaRegistroActual + 1)">
+                        Siguiente <i class="ri-arrow-right-s-line"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- TAB: KPIs por usuario -->
+            <div id="tabKpis" style="display: none;">
+                <div class="auditoria-filtros">
+                    <div class="filtro-group">
+                        <label for="kpiPeriodo">Período</label>
+                        <select id="kpiPeriodo" onchange="cambioPeriodoKpis()">
+                            <option value="7">Últimos 7 días</option>
+                            <option value="30" selected>Últimos 30 días</option>
+                            <option value="90">Últimos 90 días</option>
+                            <option value="custom">Personalizado</option>
+                        </select>
+                    </div>
+                    <div class="filtro-group" id="kpiDesdeGroup" style="display: none;">
+                        <label for="kpiDesde">Desde</label>
+                        <input type="date" id="kpiDesde">
+                    </div>
+                    <div class="filtro-group" id="kpiHastaGroup" style="display: none;">
+                        <label for="kpiHasta">Hasta</label>
+                        <input type="date" id="kpiHasta">
+                    </div>
+                    <div class="filtro-group">
+                        <label for="kpiAlcance">Alcance</label>
+                        <select id="kpiAlcance">
+                            <option value="todas">Todas las sucursales</option>
+                            <option value="actual">Sucursal actual</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn-auditoria-aplicar" onclick="cargarKpisAuditoria()">
+                        <i class="ri-refresh-line"></i> Actualizar
+                    </button>
+                </div>
+
+                <div id="kpisAuditoriaContent">
+                    <div class="historial-loading">
+                        <div class="spinner-historial"></div>
+                        <p>Calculando KPIs...</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -1947,140 +2292,166 @@
 let listaEdicion = [];
 let productosDisponibles = [];
 let buscando = false; // Flag para evitar búsquedas múltiples
-let historialRecienteData = []; // Variable para almacenar historial y permitir filtrado
+let paginaRegistroActual = 1; // Página actual del registro de auditoría
+let kpisCargados = false; // Si ya se cargaron los KPIs del modal de auditoría
 
 // Inicializar
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('quickSearch').focus();
-    // Cargar contador de historial reciente
+    // Cargar contador de historial reciente (ediciones de hoy)
     cargarContadorHistorial();
+    // Cargar opciones de los filtros avanzados (sucursales, categorías, marcas)
+    cargarOpcionesFiltros();
 });
 
-// ========== HISTORIAL RECIENTE ==========
+// ========== AUDITORÍA DE PRECIOS (Registro + KPIs por usuario) ==========
 
-// Cargar contador de historial
+// Fecha local en formato YYYY-MM-DD (para parámetros de la API)
+function fechaISO(fecha) {
+    const y = fecha.getFullYear();
+    const m = String(fecha.getMonth() + 1).padStart(2, '0');
+    const d = String(fecha.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+// Contador del header: ediciones de HOY en toda la red
 async function cargarContadorHistorial() {
     try {
-        const response = await fetch('/app/gestion-precios/historial-reciente/');
+        const hoy = fechaISO(new Date());
+        const response = await fetch(`/app/gestion-precios/historial-reciente/?page=1&per_page=1&alcance=todas&fecha_desde=${hoy}`);
         const data = await response.json();
-        
-        if (data.success) {
-            document.getElementById('historialCount').textContent = data.total || 0;
+
+        if (data.success && data.pagination) {
+            document.getElementById('historialCount').textContent = data.pagination.total_items || 0;
         }
     } catch (error) {
         console.error('Error cargando contador historial:', error);
     }
 }
 
-// Toggle panel de historial reciente
-function toggleHistorialReciente() {
-    const sidebar = document.getElementById('historialSidebar');
-    const overlay = document.getElementById('historialSidebarOverlay');
-    
-    if (sidebar.classList.contains('active')) {
-        cerrarHistorialReciente();
-    } else {
-        sidebar.classList.add('active');
-        overlay.classList.add('active');
-        cargarHistorialReciente();
+// Abrir modal de auditoría
+function abrirAuditoriaPrecios() {
+    document.getElementById('modalAuditoriaOverlay').classList.add('active');
+    cargarRegistroAuditoria(1);
+    // Los KPIs también pueblan el dropdown de usuarios del registro
+    if (!kpisCargados) {
+        cargarKpisAuditoria();
     }
 }
 
-// Cerrar panel de historial
-function cerrarHistorialReciente() {
-    const sidebar = document.getElementById('historialSidebar');
-    const overlay = document.getElementById('historialSidebarOverlay');
-    
-    sidebar.classList.remove('active');
-    overlay.classList.remove('active');
+// Cerrar modal de auditoría (el contenido interno hace stopPropagation)
+function cerrarAuditoriaPrecios(event) {
+    document.getElementById('modalAuditoriaOverlay').classList.remove('active');
 }
 
-// Cargar historial reciente
-async function cargarHistorialReciente() {
-    const container = document.getElementById('historialSidebarContent');
-    const searchInput = document.getElementById('historialSearchInput');
-    const searchClear = document.getElementById('historialSearchClear');
-    const searchInfo = document.getElementById('historialSearchInfo');
-    
-    // Limpiar búsqueda al recargar
-    if (searchInput) {
-        searchInput.value = '';
-        searchClear.classList.remove('visible');
-        searchInfo.classList.remove('visible');
-    }
-    
+// Cambiar entre pestañas Registro / KPIs
+function cambiarTabAuditoria(tab) {
+    const esRegistro = tab === 'registro';
+    document.getElementById('tabRegistro').style.display = esRegistro ? 'block' : 'none';
+    document.getElementById('tabKpis').style.display = esRegistro ? 'none' : 'block';
+    document.getElementById('tabBtnRegistro').classList.toggle('active', esRegistro);
+    document.getElementById('tabBtnKpis').classList.toggle('active', !esRegistro);
+}
+
+// ===== TAB REGISTRO =====
+
+async function cargarRegistroAuditoria(page = 1) {
+    const container = document.getElementById('registroAuditoriaContent');
+    const paginacion = document.getElementById('registroPaginacion');
+    paginaRegistroActual = Math.max(1, page);
+
+    const params = new URLSearchParams({
+        page: paginaRegistroActual,
+        per_page: 25,
+        alcance: document.getElementById('audAlcance').value || 'todas',
+    });
+    const usuario = document.getElementById('audUsuario').value;
+    const desde = document.getElementById('audDesde').value;
+    const hasta = document.getElementById('audHasta').value;
+    const tipo = document.getElementById('audTipo').value;
+    const search = document.getElementById('audSearch').value.trim();
+    if (usuario) params.append('usuario', usuario);
+    if (desde) params.append('fecha_desde', desde);
+    if (hasta) params.append('fecha_hasta', hasta);
+    if (tipo) params.append('tipo_cambio', tipo);
+    if (search) params.append('search', search);
+
     container.innerHTML = `
-        <div class="historial-sidebar-loading">
+        <div class="historial-loading">
             <div class="spinner-historial"></div>
-            <p>Cargando historial...</p>
+            <p>Cargando registro...</p>
         </div>
     `;
-    
+    paginacion.style.display = 'none';
+
     try {
-        const response = await fetch('/app/gestion-precios/historial-reciente/');
+        const response = await fetch(`/app/gestion-precios/historial-reciente/?${params.toString()}`);
         const data = await response.json();
-        
-        if (data.success && data.historial && data.historial.length > 0) {
-            // Guardar historial en variable global para filtrado
-            historialRecienteData = data.historial;
-            renderizarHistorialReciente(data.historial, container);
+
+        if (data.success) {
+            renderizarRegistroAuditoria(data);
         } else {
-            historialRecienteData = [];
             container.innerHTML = `
-                <div class="historial-sidebar-empty">
-                    <i class="ri-file-list-3-line"></i>
-                    <h4>Sin ediciones recientes</h4>
-                    <p>No hay cambios de precios registrados</p>
+                <div class="historial-no-results">
+                    <i class="ri-error-warning-line" style="color: var(--nexo-error);"></i>
+                    <h4>Error al cargar el registro</h4>
+                    <p>${data.error || 'Intenta nuevamente'}</p>
                 </div>
             `;
         }
     } catch (error) {
-        console.error('Error cargando historial reciente:', error);
-        historialRecienteData = [];
+        console.error('Error cargando registro de auditoría:', error);
         container.innerHTML = `
-            <div class="historial-sidebar-empty">
+            <div class="historial-no-results">
                 <i class="ri-wifi-off-line" style="color: var(--nexo-error);"></i>
                 <h4>Error de conexión</h4>
-                <p>No se pudo cargar el historial</p>
+                <p>No se pudo cargar el registro</p>
             </div>
         `;
     }
 }
 
-// Renderizar historial reciente (con soporte para resaltado de búsqueda)
-function renderizarHistorialReciente(historial, container, searchTerm = '') {
-    let html = '';
-    
-    historial.forEach(item => {
+function renderizarRegistroAuditoria(data) {
+    const container = document.getElementById('registroAuditoriaContent');
+    const paginacion = document.getElementById('registroPaginacion');
+
+    if (!data.historial || data.historial.length === 0) {
+        container.innerHTML = `
+            <div class="historial-no-results">
+                <i class="ri-file-list-3-line"></i>
+                <h4>Sin cambios registrados</h4>
+                <p>No hay modificaciones de precio con estos filtros</p>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px;">';
+
+    data.historial.forEach(item => {
         const variacion = item.diferencia || (item.precio_nuevo - item.precio_anterior);
-        const porcentaje = item.porcentaje_cambio || 
-            (item.precio_anterior > 0 ? ((variacion / item.precio_anterior) * 100) : 0);
-        
         const variacionClass = variacion >= 0 ? 'positivo' : 'negativo';
         const variacionIcon = variacion >= 0 ? '↑' : '↓';
-        
-        // Resaltar término de búsqueda en el nombre del producto
-        let nombreMostrar = item.producto_nombre;
-        if (searchTerm) {
-            nombreMostrar = resaltarTexto(item.producto_nombre, searchTerm);
-        }
-        
+        const fechaAlta = item.producto_fecha_creacion
+            ? `<span title="Fecha de alta del producto en su sucursal"><i class="ri-add-circle-line"></i> Alta: ${item.producto_fecha_creacion}</span>`
+            : '';
+
         html += `
-            <div class="historial-reciente-item" onclick="verHistorial(${item.producto_id}, '${item.producto_nombre.replace(/'/g, "\\'")}', '${item.producto_talla || ''}', 0, ${item.precio_nuevo})">
+            <div class="historial-reciente-item" onclick="verHistorial(${item.producto_id}, '${(item.producto_nombre || '').replace(/'/g, "\\'")}', '${item.producto_talla || ''}', 0, ${item.precio_nuevo})">
                 <div class="item-header">
-                    <h4 class="producto-nombre">${nombreMostrar}</h4>
-                    <span class="fecha-badge">${item.hace_cuanto || item.fecha_cambio}</span>
+                    <h4 class="producto-nombre">${item.producto_nombre}</h4>
+                    <span class="fecha-badge" title="${item.fecha_cambio}">${item.fecha_cambio}</span>
                 </div>
-                
+
                 <div class="precios-row">
                     <span class="precio-anterior">${formatearMoneda(item.precio_anterior)}</span>
                     <span style="color: var(--nexo-gray-400);">→</span>
                     <span class="precio-nuevo">${formatearMoneda(item.precio_nuevo)}</span>
                     <span class="variacion-badge ${variacionClass}">
-                        ${variacionIcon} ${variacion >= 0 ? '+' : ''}${porcentaje.toFixed(1)}%
+                        ${variacionIcon} ${variacion >= 0 ? '+' : ''}${item.porcentaje_cambio.toFixed(1)}%
                     </span>
                 </div>
-                
+
                 <div class="item-footer">
                     <span class="usuario-info">
                         <i class="ri-user-line"></i> ${item.usuario}
@@ -2089,195 +2460,325 @@ function renderizarHistorialReciente(historial, container, searchTerm = '') {
                         <i class="ri-store-2-line"></i> ${item.sucursal || 'N/A'}
                     </span>
                 </div>
+                <div class="item-footer" style="border-top: none; padding-top: 4px;">
+                    <span><i class="ri-price-tag-3-line"></i> ${item.tipo_cambio}</span>
+                    ${fechaAlta}
+                </div>
             </div>
         `;
     });
-    
-    const mensajeFinal = searchTerm 
-        ? `${historial.length} resultado(s) para "${searchTerm}"`
-        : `Mostrando las últimas ${historial.length} ediciones`;
-    
-    html += `
-        <div style="text-align: center; padding: 16px; font-size: 12px; color: var(--nexo-gray-500);">
-            <i class="ri-information-line"></i> ${mensajeFinal}
-        </div>
-    `;
-    
+
+    html += '</div>';
     container.innerHTML = html;
-}
 
-// ========== FUNCIONES DE BÚSQUEDA EN HISTORIAL ==========
-
-// Resaltar texto de búsqueda
-function resaltarTexto(texto, termino) {
-    if (!termino) return texto;
-    
-    // Escapar caracteres especiales de regex
-    const terminoEscapado = termino.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(${terminoEscapado})`, 'gi');
-    
-    return texto.replace(regex, '<span class="highlight">$1</span>');
-}
-
-// Manejar teclas en el buscador de historial
-function manejarTeclaBusquedaHistorial(event) {
-    if (event.key === 'Escape') {
-        limpiarBusquedaHistorial();
-    } else if (event.key === 'Enter') {
-        event.preventDefault();
-        const termino = event.target.value.trim();
-        if (termino.length >= 2) {
-            buscarHistorialEnServidor(termino);
-        }
+    if (data.pagination) {
+        paginacion.style.display = 'flex';
+        paginaRegistroActual = data.pagination.current_page;
+        document.getElementById('regPageInfo').textContent =
+            `Página ${data.pagination.current_page} de ${data.pagination.total_pages} · ${data.pagination.total_items} cambios`;
+        document.getElementById('regBtnPrev').disabled = !data.pagination.has_previous;
+        document.getElementById('regBtnNext').disabled = !data.pagination.has_next;
     }
 }
 
-// Filtrar historial LOCAL (mientras escribe)
-function filtrarHistorialLocal(termino) {
-    const container = document.getElementById('historialSidebarContent');
-    const searchClear = document.getElementById('historialSearchClear');
-    const searchInfo = document.getElementById('historialSearchInfo');
-    const resultsCount = document.getElementById('historialResultsCount');
-    const searchTip = document.getElementById('historialSearchTip');
-    
-    termino = termino.trim().toLowerCase();
-    
-    // Mostrar/ocultar botón de limpiar
-    if (termino.length > 0) {
-        searchClear.classList.add('visible');
-    } else {
-        searchClear.classList.remove('visible');
-        searchInfo.classList.remove('visible');
-        searchTip.style.display = 'none';
-        // Mostrar todo el historial
-        if (historialRecienteData.length > 0) {
-            renderizarHistorialReciente(historialRecienteData, container);
-        }
-        return;
-    }
-    
-    // Filtrar por nombre de producto, usuario o sucursal (filtrado LOCAL)
-    const resultados = historialRecienteData.filter(item => {
-        const nombreMatch = item.producto_nombre.toLowerCase().includes(termino);
-        const usuarioMatch = item.usuario && item.usuario.toLowerCase().includes(termino);
-        const sucursalMatch = item.sucursal && item.sucursal.toLowerCase().includes(termino);
-        return nombreMatch || usuarioMatch || sucursalMatch;
-    });
-    
-    // Actualizar contador
-    resultsCount.textContent = resultados.length;
-    searchInfo.classList.add('visible');
-    
-    // Mostrar tip de buscar en servidor si hay pocos resultados locales
-    if (termino.length >= 2) {
-        searchTip.style.display = 'inline';
-    } else {
-        searchTip.style.display = 'none';
-    }
-    
-    // Mostrar resultados o mensaje de "sin resultados"
-    if (resultados.length > 0) {
-        renderizarHistorialReciente(resultados, container, termino);
-    } else {
-        container.innerHTML = `
-            <div class="historial-no-results">
-                <i class="ri-search-line"></i>
-                <h4>Sin resultados en ediciones recientes</h4>
-                <p>No se encontró "<span class="search-term">${termino}</span>" en las últimas ediciones</p>
-                <button class="btn-buscar-servidor" onclick="buscarHistorialEnServidor('${termino.replace(/'/g, "\\'")}')">
-                    <i class="ri-search-2-line"></i> Buscar en todo el historial
-                </button>
-            </div>
-        `;
-    }
+// ===== TAB KPIs =====
+
+function cambioPeriodoKpis() {
+    const custom = document.getElementById('kpiPeriodo').value === 'custom';
+    document.getElementById('kpiDesdeGroup').style.display = custom ? 'flex' : 'none';
+    document.getElementById('kpiHastaGroup').style.display = custom ? 'flex' : 'none';
 }
 
-// Buscar historial en el SERVIDOR (búsqueda completa)
-async function buscarHistorialEnServidor(termino) {
-    const container = document.getElementById('historialSidebarContent');
-    const searchClear = document.getElementById('historialSearchClear');
-    const searchInfo = document.getElementById('historialSearchInfo');
-    const resultsCount = document.getElementById('historialResultsCount');
-    const searchTip = document.getElementById('historialSearchTip');
-    
-    if (!termino || termino.length < 2) {
-        return;
-    }
-    
-    // Mostrar loading
+async function cargarKpisAuditoria() {
+    const container = document.getElementById('kpisAuditoriaContent');
+    kpisCargados = true;
+
     container.innerHTML = `
-        <div class="historial-sidebar-loading">
+        <div class="historial-loading">
             <div class="spinner-historial"></div>
-            <p>Buscando "<strong>${termino}</strong>" en todo el historial...</p>
+            <p>Calculando KPIs...</p>
         </div>
     `;
-    
+
+    const params = new URLSearchParams({
+        alcance: document.getElementById('kpiAlcance').value || 'todas',
+    });
+    const periodo = document.getElementById('kpiPeriodo').value;
+    if (periodo === 'custom') {
+        const desde = document.getElementById('kpiDesde').value;
+        const hasta = document.getElementById('kpiHasta').value;
+        if (desde) params.append('fecha_desde', desde);
+        if (hasta) params.append('fecha_hasta', hasta);
+    } else {
+        const desde = new Date();
+        desde.setDate(desde.getDate() - parseInt(periodo, 10));
+        params.append('fecha_desde', fechaISO(desde));
+    }
+
     try {
-        const response = await fetch(`/app/gestion-precios/historial-reciente/?search=${encodeURIComponent(termino)}`);
+        const response = await fetch(`/app/gestion-precios/kpis-cambios/?${params.toString()}`);
         const data = await response.json();
-        
-        if (data.success && data.historial && data.historial.length > 0) {
-            // Actualizar contador
-            resultsCount.textContent = data.historial.length;
-            searchInfo.classList.add('visible');
-            searchTip.style.display = 'none';
-            searchClear.classList.add('visible');
-            
-            // Renderizar resultados con resaltado
-            renderizarHistorialReciente(data.historial, container, termino);
-            
-            // Agregar indicador de búsqueda en servidor
-            const infoDiv = container.querySelector('div[style*="text-align: center"]');
-            if (infoDiv) {
-                infoDiv.innerHTML = `<i class="ri-database-2-line"></i> ${data.historial.length} resultado(s) en todo el historial para "${termino}"`;
-            }
+
+        if (data.success) {
+            poblarUsuariosAuditoria(data.por_usuario);
+            renderizarKpisAuditoria(data);
         } else {
-            resultsCount.textContent = '0';
-            searchInfo.classList.add('visible');
-            searchTip.style.display = 'none';
-            
             container.innerHTML = `
                 <div class="historial-no-results">
-                    <i class="ri-file-search-line"></i>
-                    <h4>Sin resultados</h4>
-                    <p>No se encontraron cambios de precio para "<span class="search-term">${termino}</span>"</p>
-                    <p style="font-size: 11px; margin-top: 8px; color: var(--nexo-gray-400);">
-                        Verifica el nombre del artículo o prueba con otro término
-                    </p>
+                    <i class="ri-error-warning-line" style="color: var(--nexo-error);"></i>
+                    <h4>Error al calcular KPIs</h4>
+                    <p>${data.error || 'Intenta nuevamente'}</p>
                 </div>
             `;
         }
     } catch (error) {
-        console.error('Error buscando en historial:', error);
+        console.error('Error cargando KPIs de auditoría:', error);
         container.innerHTML = `
             <div class="historial-no-results">
                 <i class="ri-wifi-off-line" style="color: var(--nexo-error);"></i>
                 <h4>Error de conexión</h4>
-                <p>No se pudo buscar en el historial</p>
-                <button class="btn-buscar-servidor" onclick="buscarHistorialEnServidor('${termino.replace(/'/g, "\\'")}')">
-                    <i class="ri-refresh-line"></i> Reintentar
-                </button>
+                <p>No se pudieron calcular los KPIs</p>
             </div>
         `;
     }
 }
 
-// Limpiar búsqueda del historial
-function limpiarBusquedaHistorial() {
-    const searchInput = document.getElementById('historialSearchInput');
-    const searchClear = document.getElementById('historialSearchClear');
-    const searchInfo = document.getElementById('historialSearchInfo');
-    const searchTip = document.getElementById('historialSearchTip');
-    const container = document.getElementById('historialSidebarContent');
-    
-    searchInput.value = '';
-    searchClear.classList.remove('visible');
-    searchInfo.classList.remove('visible');
-    searchTip.style.display = 'none';
-    searchInput.focus();
-    
-    // Recargar historial desde servidor (las últimas ediciones)
-    cargarHistorialReciente();
+// Poblar el dropdown de usuarios del tab Registro (unión con opciones existentes)
+function poblarUsuariosAuditoria(porUsuario) {
+    const select = document.getElementById('audUsuario');
+    const existentes = new Set(Array.from(select.options).map(o => o.value));
+
+    (porUsuario || []).forEach(u => {
+        if (u.usuario_id && !existentes.has(String(u.usuario_id))) {
+            const opt = document.createElement('option');
+            opt.value = u.usuario_id;
+            opt.textContent = u.usuario;
+            select.appendChild(opt);
+            existentes.add(String(u.usuario_id));
+        }
+    });
+}
+
+function renderizarKpisAuditoria(data) {
+    const g = data.globales;
+    const umbral = data.alertas.umbral_rebaja_fuerte;
+
+    let html = `
+        <div class="kpi-cards-grid">
+            <div class="kpi-card-aud"><div class="valor">${g.total}</div><div class="etiqueta">Cambios</div></div>
+            <div class="kpi-card-aud"><div class="valor">${g.usuarios}</div><div class="etiqueta">Usuarios</div></div>
+            <div class="kpi-card-aud"><div class="valor">${g.productos}</div><div class="etiqueta">Productos</div></div>
+            <div class="kpi-card-aud"><div class="valor" style="color: var(--nexo-accent);">${g.alzas}</div><div class="etiqueta">Alzas</div></div>
+            <div class="kpi-card-aud"><div class="valor" style="color: var(--nexo-error);">${g.rebajas}</div><div class="etiqueta">Rebajas</div></div>
+            <div class="kpi-card-aud ${g.rebajas_fuertes > 0 ? 'alerta' : ''}"><div class="valor">${g.rebajas_fuertes}</div><div class="etiqueta">Rebajas ≥ ${umbral}%</div></div>
+            <div class="kpi-card-aud ${g.bajo_costo > 0 ? 'alerta' : ''}"><div class="valor">${g.bajo_costo}</div><div class="etiqueta">Bajo costo</div></div>
+            <div class="kpi-card-aud ${g.fuera_horario > 0 ? 'alerta' : ''}"><div class="valor">${g.fuera_horario}</div><div class="etiqueta">Fuera de horario</div></div>
+        </div>
+    `;
+
+    if (data.por_usuario && data.por_usuario.length > 0) {
+        html += `
+            <div class="tabla-auditoria-wrapper">
+                <table class="tabla-auditoria">
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Cambios</th>
+                            <th>Alzas</th>
+                            <th>Rebajas</th>
+                            <th>% Prom.</th>
+                            <th>Rebaja Máx.</th>
+                            <th>Productos</th>
+                            <th>Bajo Costo</th>
+                            <th>Fuera Horario</th>
+                            <th>Última Edición</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        data.por_usuario.forEach(u => {
+            html += `
+                <tr>
+                    <td style="font-weight: 600;"><i class="ri-user-line" style="color: var(--nexo-primary);"></i> ${u.usuario}</td>
+                    <td>${u.total}</td>
+                    <td style="color: var(--nexo-accent);">${u.alzas}</td>
+                    <td style="color: var(--nexo-error);">${u.rebajas}</td>
+                    <td>${u.pct_promedio >= 0 ? '+' : ''}${u.pct_promedio}%</td>
+                    <td>${u.rebaja_max}%</td>
+                    <td>${u.productos}</td>
+                    <td>${u.bajo_costo > 0 ? `<span style="color: var(--nexo-error); font-weight: 700;">${u.bajo_costo}</span>` : '0'}</td>
+                    <td>${u.fuera_horario > 0 ? `<span style="color: var(--nexo-warning); font-weight: 700;">${u.fuera_horario}</span>` : '0'}</td>
+                    <td style="white-space: nowrap;">${u.ultima_fecha || '-'}</td>
+                </tr>
+            `;
+        });
+        html += '</tbody></table></div>';
+    } else {
+        html += `
+            <div class="historial-no-results">
+                <i class="ri-inbox-line"></i>
+                <h4>Sin cambios en el período</h4>
+                <p>No hay modificaciones de precio registradas</p>
+            </div>
+        `;
+    }
+
+    html += renderizarAlertasAuditoria(data.alertas);
+    document.getElementById('kpisAuditoriaContent').innerHTML = html;
+}
+
+// Sección "llama la atención": rebajas fuertes, bajo costo, ping-pong, fuera de horario
+function renderizarAlertasAuditoria(alertas) {
+    const tieneAlertas = alertas.rebajas_fuertes.length || alertas.bajo_costo.length
+        || alertas.ping_pong.length || alertas.fuera_horario.length;
+
+    if (!tieneAlertas) {
+        return `
+            <div class="alerta-seccion">
+                <h4><i class="ri-checkbox-circle-line" style="color: var(--nexo-accent);"></i> Nada llama la atención en este período</h4>
+            </div>
+        `;
+    }
+
+    const cardCambio = (c, critica) => `
+        <div class="alerta-card ${critica ? 'critica' : ''}" onclick="verHistorial(${c.producto_id}, '${(c.producto || '').replace(/'/g, "\\'")}', '', ${c.costo || 0}, ${c.precio_nuevo})">
+            <span style="font-weight: 600;">${c.producto} <small style="color: var(--nexo-gray-500);">(${c.sucursal})</small></span>
+            <span>
+                ${formatearMoneda(c.precio_anterior)} → <strong>${formatearMoneda(c.precio_nuevo)}</strong>
+                <span class="variacion-badge ${c.porcentaje_cambio >= 0 ? 'positivo' : 'negativo'}">${c.porcentaje_cambio >= 0 ? '+' : ''}${c.porcentaje_cambio.toFixed(1)}%</span>
+            </span>
+            <span><i class="ri-user-line"></i> ${c.usuario} · ${c.fecha}</span>
+        </div>
+    `;
+
+    let html = '';
+
+    if (alertas.bajo_costo.length) {
+        html += `
+            <div class="alerta-seccion">
+                <h4><i class="ri-error-warning-line" style="color: var(--nexo-error);"></i> Precio bajo el costo actual (${alertas.bajo_costo.length})</h4>
+        `;
+        alertas.bajo_costo.forEach(c => { html += cardCambio(c, true); });
+        html += '</div>';
+    }
+
+    if (alertas.rebajas_fuertes.length) {
+        html += `
+            <div class="alerta-seccion">
+                <h4><i class="ri-arrow-down-double-line" style="color: var(--nexo-error);"></i> Rebajas fuertes ≥ ${alertas.umbral_rebaja_fuerte}% (${alertas.rebajas_fuertes.length})</h4>
+        `;
+        alertas.rebajas_fuertes.forEach(c => { html += cardCambio(c, true); });
+        html += '</div>';
+    }
+
+    if (alertas.ping_pong.length) {
+        html += `
+            <div class="alerta-seccion">
+                <h4><i class="ri-arrow-left-right-line" style="color: var(--nexo-warning);"></i> Productos con 3+ cambios en el período (${alertas.ping_pong.length})</h4>
+        `;
+        alertas.ping_pong.forEach(p => {
+            html += `
+                <div class="alerta-card" onclick="verHistorial(${p.producto_id}, '${(p.producto || '').replace(/'/g, "\\'")}', '', 0, 0)">
+                    <span style="font-weight: 600;">${p.producto} <small style="color: var(--nexo-gray-500);">(${p.sucursal})</small></span>
+                    <span>${p.cambios} cambios · ${p.usuarios_distintos} usuario(s)</span>
+                    <span>Rango: ${p.pct_min}% a ${p.pct_max >= 0 ? '+' : ''}${p.pct_max}%</span>
+                </div>
+            `;
+        });
+        html += '</div>';
+    }
+
+    if (alertas.fuera_horario.length) {
+        html += `
+            <div class="alerta-seccion">
+                <h4><i class="ri-moon-line" style="color: var(--nexo-warning);"></i> Fuera de horario — antes de 08:00 o después de 21:00 (${alertas.fuera_horario.length})</h4>
+        `;
+        alertas.fuera_horario.forEach(c => { html += cardCambio(c, false); });
+        html += '</div>';
+    }
+
+    return html;
+}
+
+// ========== FILTROS AVANZADOS DE BÚSQUEDA ==========
+
+function toggleFiltrosBusqueda() {
+    document.getElementById('filtrosAvanzados').classList.toggle('active');
+}
+
+// Poblar selects de sucursal, categoría y marca (endpoints ya existentes)
+async function cargarOpcionesFiltros() {
+    try {
+        const [sucRes, catRes, marRes] = await Promise.all([
+            fetch('/app/api/sucursales/listar/'),
+            fetch('/app/api/categorias/listar/'),
+            fetch('/app/api/atributos/listar/?tipo=marca'),
+        ]);
+        const [sucData, catData, marData] = await Promise.all([
+            sucRes.json(), catRes.json(), marRes.json()
+        ]);
+
+        if (sucData.success) {
+            const select = document.getElementById('filtroSucursal');
+            const sucursalActual = '{{ sucursal_actual }}';
+            sucData.sucursales.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = String(s.id) === sucursalActual ? `${s.alias} (actual)` : s.alias;
+                select.appendChild(opt);
+            });
+        }
+
+        if (catData.success) {
+            const select = document.getElementById('filtroCategoria');
+            catData.categorias.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.nombre;
+                select.appendChild(opt);
+            });
+        }
+
+        if (marData.success) {
+            const select = document.getElementById('filtroMarca');
+            marData.opciones.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.valor;
+                select.appendChild(opt);
+            });
+        }
+    } catch (error) {
+        console.error('Error cargando opciones de filtros:', error);
+    }
+}
+
+function obtenerFiltrosActivos() {
+    return {
+        sucursal: document.getElementById('filtroSucursal').value,
+        categoria: document.getElementById('filtroCategoria').value,
+        marca: document.getElementById('filtroMarca').value,
+        antiguedad: document.getElementById('filtroAntiguedad').value,
+        precio_min: document.getElementById('filtroPrecioMin').value,
+        precio_max: document.getElementById('filtroPrecioMax').value,
+        margen_min: document.getElementById('filtroMargenMin').value,
+        anio: document.getElementById('filtroAnio').value,
+    };
+}
+
+function actualizarBadgeFiltros(filtros) {
+    const cantidad = Object.values(filtros).filter(v => v !== '' && v !== null).length;
+    const badge = document.getElementById('badgeFiltrosActivos');
+    badge.textContent = cantidad;
+    badge.classList.toggle('visible', cantidad > 0);
+}
+
+function limpiarFiltrosBusqueda() {
+    ['filtroSucursal', 'filtroCategoria', 'filtroMarca', 'filtroAntiguedad',
+     'filtroPrecioMin', 'filtroPrecioMax', 'filtroMargenMin', 'filtroAnio'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    actualizarBadgeFiltros({});
 }
 
 // Buscar productos
@@ -2292,13 +2793,18 @@ async function buscarProductosRapido() {
     const termino = searchInput.value.trim();
     const container = document.getElementById('searchResults');
     const inputWrapper = document.getElementById('searchInputWrapper');
-    
-    if (termino.length < 2) {
+
+    const filtros = obtenerFiltrosActivos();
+    actualizarBadgeFiltros(filtros);
+    // Con un filtro acotador activo se permite buscar sin texto
+    const hayFiltroAcotador = filtros.categoria || filtros.marca || filtros.antiguedad || filtros.anio;
+
+    if (termino.length < 2 && !hayFiltroAcotador) {
         container.innerHTML = `
             <div class="empty-list">
                 <i class="ri-search-line"></i>
                 <h4>Busca productos</h4>
-                <p>Escribe al menos 2 caracteres y presiona Enter</p>
+                <p>Escribe al menos 2 caracteres y presiona Enter, o usa los filtros avanzados</p>
             </div>
         `;
         return;
@@ -2318,16 +2824,23 @@ async function buscarProductosRapido() {
     `;
     
     try {
-        // 🔍 Obtener sucursal desde el contexto de Django
-        const sucursalId = '{{ sucursal_actual }}';
-        
-        // 🔍 Construir URL con parámetro sucursal explícito
+        // 🔍 Sucursal: la del filtro avanzado, o la de la sesión por defecto
+        const sucursalId = filtros.sucursal || '{{ sucursal_actual }}';
+
+        // 🔍 Construir URL con parámetro sucursal explícito + filtros avanzados
         let url = `/app/gestion-precios/buscar/?search=${encodeURIComponent(termino)}&per_page=20`;
         if (sucursalId && sucursalId !== 'None') {
             url += `&sucursal=${sucursalId}`;
         }
-        
-        console.log('🔍 Buscando productos:', { termino, sucursalId, url });
+        if (filtros.categoria) url += `&categoria=${filtros.categoria}`;
+        if (filtros.marca) url += `&marca=${filtros.marca}`;
+        if (filtros.antiguedad) url += `&antiguedad=${filtros.antiguedad}`;
+        if (filtros.precio_min) url += `&precio_min=${filtros.precio_min}`;
+        if (filtros.precio_max) url += `&precio_max=${filtros.precio_max}`;
+        if (filtros.margen_min) url += `&margen_min=${filtros.margen_min}`;
+        if (filtros.anio) url += `&anio=${filtros.anio}`;
+
+        console.log('🔍 Buscando productos:', { termino, sucursalId, filtros, url });
         
         const response = await fetch(url);
         const data = await response.json();
@@ -3359,9 +3872,14 @@ document.addEventListener('keydown', function(e) {
     if (e.ctrlKey && e.key === 'Enter') {
         aplicarTodosCambios();
     }
-    // ESC para cerrar modal
+    // ESC para cerrar modales (primero el de historial por producto, luego auditoría)
     if (e.key === 'Escape') {
-        cerrarModalHistorial();
+        const modalHistorial = document.getElementById('modalHistorialOverlay');
+        if (modalHistorial && modalHistorial.classList.contains('active')) {
+            cerrarModalHistorial();
+        } else {
+            cerrarAuditoriaPrecios();
+        }
     }
 });
 

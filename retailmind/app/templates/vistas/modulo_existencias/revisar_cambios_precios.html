@@ -1183,8 +1183,14 @@
                     </select>
                 </div>
                 <div class="col-lg-2 col-md-3">
+                    <label class="form-label">Marca</label>
+                    <select id="filterMarca" class="form-select" onchange="paginaActual = 1; cargarCambios()">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-3">
                     <label class="form-label">Buscar</label>
-                    <input type="text" id="filterBusqueda" class="form-control" placeholder="Artículo..." onkeyup="debounceCargar()">
+                    <input type="text" id="filterBusqueda" class="form-control" placeholder="Artículo, marca, SKU..." onkeyup="debounceCargar()">
                 </div>
                 <div class="col-lg-2 col-md-3">
                     <label class="form-label">Desde</label>
@@ -1207,6 +1213,9 @@
                 </div>
                 <div class="col-md-6 text-end">
                     <div class="d-flex gap-2 justify-content-end">
+                        <button class="btn btn-outline-success" onclick="exportarExcel()" title="Descargar Excel con los filtros actuales para trabajo manual">
+                            <i class="ri-file-excel-2-line"></i> Exportar Excel
+                        </button>
                         <button class="btn-refresh" onclick="cargarCambios()">
                             <i class="ri-refresh-line"></i> Actualizar
                         </button>
@@ -1240,6 +1249,7 @@
                             </th>
                             <th class="col-producto">Producto</th>
                             <th>Sucursal</th>
+                            <th class="text-center" title="Stock del producto en la sucursal de la fila">Stock</th>
                             <th>Tipo</th>
                             <th class="text-end">Anterior</th>
                             <th class="text-end">Nuevo</th>
@@ -1290,6 +1300,7 @@ let cambiosActuales = [];
 // Inicializar
 document.addEventListener('DOMContentLoaded', async function() {
     cargarSucursales();
+    cargarMarcas();
     cargarIndicadores();
     await cargarCambios();
 
@@ -1459,6 +1470,26 @@ async function cargarSucursales() {
     }
 }
 
+// Cargar marcas para filtro
+async function cargarMarcas() {
+    try {
+        const response = await fetch('/app/api/atributos/listar/?tipo=marca');
+        const data = await response.json();
+
+        if (data.success) {
+            const select = document.getElementById('filterMarca');
+            data.opciones.forEach(op => {
+                const option = document.createElement('option');
+                option.value = op.id;
+                option.textContent = op.valor;
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error cargando marcas:', error);
+    }
+}
+
 // Cargar cambios pendientes
 // Variable para debounce de búsqueda
 let debounceTimer = null;
@@ -1474,6 +1505,7 @@ function debounceCargar() {
 function limpiarFiltros() {
     document.getElementById('filterTipoCambio').value = 'SINCRONIZACION';
     document.getElementById('filterSucursal').value = '';
+    document.getElementById('filterMarca').value = '';
     document.getElementById('filterBusqueda').value = '';
     document.getElementById('filterFechaDesde').value = '';
     document.getElementById('filterFechaHasta').value = '';
@@ -1508,28 +1540,41 @@ function filtroMes() {
     cargarCambios();
 }
 
-async function cargarCambios() {
-    mostrarCargando(true);
-    
+// Construye los filtros actuales (compartido entre cargarCambios y exportarExcel)
+function obtenerFiltrosActuales() {
     const tipoSeleccionado = document.getElementById('filterTipoCambio').value;
     const esDescartados = tipoSeleccionado === 'DESCARTADOS';
     const esTodos = tipoSeleccionado === 'TODOS';
     const esPendienteAprobacion = tipoSeleccionado === 'PENDIENTE_APROBACION';
-    
-    const filtros = {
+
+    return {
         // Si es "esperan aprobación" filtramos por estado PENDIENTE; si es TODOS no filtramos por estado; si no, solo APLICADO
         estado: esPendienteAprobacion ? 'PENDIENTE' : (esTodos || esDescartados ? '' : 'APLICADO'),
         tipo_cambio: (esDescartados || esTodos || esPendienteAprobacion) ? '' : tipoSeleccionado,
         sucursal_id: document.getElementById('filterSucursal').value,
+        marca: document.getElementById('filterMarca').value,
         busqueda: document.getElementById('filterBusqueda').value,
         fecha_desde: document.getElementById('filterFechaDesde').value,
         fecha_hasta: document.getElementById('filterFechaHasta').value,
         mostrar_descartados: (esDescartados || esTodos) ? 'true' : 'false',
-        solo_descartados: esDescartados ? 'true' : 'false',
+        solo_descartados: esDescartados ? 'true' : 'false'
+    };
+}
+
+// Descargar Excel con los filtros actuales (sin paginación)
+function exportarExcel() {
+    const queryString = new URLSearchParams(obtenerFiltrosActuales()).toString();
+    window.location.href = `/app/gestion-precios/exportar-excel/?${queryString}`;
+}
+
+async function cargarCambios() {
+    mostrarCargando(true);
+
+    const filtros = Object.assign(obtenerFiltrosActuales(), {
         page: paginaActual,
         per_page: 15
-    };
-    
+    });
+
     try {
         const queryString = new URLSearchParams(filtros).toString();
         const response = await fetch(`/app/gestion-precios/listar-cambios/?${queryString}`);
@@ -1649,9 +1694,13 @@ function renderizarCambios(cambios) {
             </td>
             <td class="col-producto">
                 <div class="producto-nombre">${cambio.producto}</div>
-                <div class="producto-tallas">${cambio.tallas_preview || cambio.tallas_count + ' tallas'}</div>
+                <div class="producto-tallas">${cambio.marca ? '<strong>' + cambio.marca + '</strong> · ' : ''}${cambio.tallas_preview || cambio.tallas_count + ' tallas'}</div>
             </td>
             <td><strong>${cambio.sucursal}</strong></td>
+            <td class="text-center" title="${cambio.stock_detalle || ''}">
+                <div style="font-weight: 600;">${cambio.stock_producto != null ? cambio.stock_producto : '—'}</div>
+                ${cambio.talla ? `<small class="text-muted">T.${cambio.talla}: ${cambio.stock_talla}</small>` : ''}
+            </td>
             <td>${tipoBadge}</td>
             <td class="text-end precio-cell precio-anterior">${formatearMoneda(cambio.precio_anterior)}</td>
             <td class="text-end precio-cell precio-nuevo">${formatearMoneda(cambio.precio_nuevo)}</td>

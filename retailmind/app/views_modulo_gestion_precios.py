@@ -4,7 +4,7 @@ Sistema avanzado de gestión de precios con recomendaciones inteligentes
 """
 
 from django.shortcuts import render
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_GET, require_POST
 from django.db.models import Sum, F, Q, Avg, Count, ExpressionWrapper, DecimalField, Min, Max
@@ -1574,77 +1574,305 @@ def obtener_historial_precio(request, producto_id):
 @require_GET
 @login_required
 def obtener_historial_ediciones_recientes(request):
-    """Obtener historial general de las últimas ediciones de precios
-    
+    """Obtener historial general de ediciones de precios con filtros de auditoría
+
     Parámetros GET opcionales:
-    - search: Término de búsqueda para filtrar por nombre de artículo
-    - limit: Cantidad máxima de resultados (default: 20, máximo: 100)
+    - search: Término de búsqueda (artículo, descripción o usuario)
+    - usuario: ID del usuario que realizó el cambio
+    - tipo_cambio: código del tipo (MANUAL, MASIVO, SINCRONIZACION, ...)
+    - fecha_desde / fecha_hasta: rango de fechas YYYY-MM-DD
+    - alcance: 'actual' (sucursal de la sesión, default) o 'todas'
+    - page / per_page: modo paginado (usado por el modal de auditoría)
+    - limit: modo sin paginación (default: 20, máximo: 100)
     """
     try:
         # Obtener sucursal activa del usuario (clave correcta)
         sucursal_id = request.session.get('idSucursalActual')
-        
+
         # Parámetros de búsqueda
         search_term = request.GET.get('search', '').strip()
-        limit = min(int(request.GET.get('limit', 20)), 100)  # Máximo 100 resultados
-        
-        logger.debug("Historial precios solicitado: sucursal_id=%s search=%s limit=%s", sucursal_id, search_term, limit)
-        
+        usuario_id = request.GET.get('usuario', '').strip()
+        tipo_cambio = request.GET.get('tipo_cambio', '').strip()
+        fecha_desde = request.GET.get('fecha_desde', '').strip()
+        fecha_hasta = request.GET.get('fecha_hasta', '').strip()
+        alcance = request.GET.get('alcance', 'actual')
+        paginado = 'page' in request.GET
+
+        logger.debug(
+            "Historial precios solicitado: sucursal_id=%s search=%s usuario=%s tipo=%s desde=%s hasta=%s alcance=%s",
+            sucursal_id, search_term, usuario_id, tipo_cambio, fecha_desde, fecha_hasta, alcance,
+        )
+
         # Obtener cambios de precio
         query = HistorialCambioPrecio.objects.select_related(
-            'producto', 'producto__sucursal', 'usuario'
+            'producto', 'producto__sucursal', 'producto__atributo1', 'usuario'
         ).order_by('-fecha_cambio')
-        
-        # Si hay sucursal activa, filtrar por ella
-        # Incluye ediciones directas Y sincronizaciones hacia esta sucursal
-        if sucursal_id:
-            from django.db.models import Q
-            query = query.filter(
-                Q(producto__sucursal_id=sucursal_id) |  # Ediciones de esta sucursal
-                Q(tipo_cambio='SINCRONIZACION', producto__sucursal_id=sucursal_id)  # Sincronizaciones recibidas
-            )
-        
+
+        # Alcance: por defecto solo la sucursal activa; 'todas' muestra toda la red
+        if alcance != 'todas' and sucursal_id:
+            query = query.filter(producto__sucursal_id=sucursal_id)
+
         # Filtrar por término de búsqueda si existe
         if search_term:
-            query = query.filter(producto__articulo__icontains=search_term)
-            # Si hay búsqueda, aumentar el límite para mostrar más resultados relevantes
-            limit = min(50, limit * 2)
-        
-        historial = query[:limit]
-        
+            query = query.filter(
+                Q(producto__articulo__icontains=search_term) |
+                Q(producto__descripcion__icontains=search_term) |
+                Q(usuario__username__icontains=search_term)
+            )
+
+        if usuario_id:
+            query = query.filter(usuario_id=usuario_id)
+
+        if tipo_cambio:
+            query = query.filter(tipo_cambio=tipo_cambio)
+
+        if fecha_desde:
+            query = query.filter(
+                fecha_cambio__date__gte=datetime.strptime(fecha_desde, '%Y-%m-%d').date()
+            )
+
+        if fecha_hasta:
+            query = query.filter(
+                fecha_cambio__date__lte=datetime.strptime(fecha_hasta, '%Y-%m-%d').date()
+            )
+
+        pagination = None
+        if paginado:
+            page = int(request.GET.get('page', 1))
+            per_page = min(int(request.GET.get('per_page', 25)), 100)
+            paginator = Paginator(query, per_page)
+            page_obj = paginator.get_page(page)
+            historial = list(page_obj)
+            pagination = {
+                'current_page': page_obj.number,
+                'total_pages': paginator.num_pages,
+                'total_items': paginator.count,
+                'has_next': page_obj.has_next(),
+                'has_previous': page_obj.has_previous(),
+            }
+        else:
+            limit = min(int(request.GET.get('limit', 20)), 100)  # Máximo 100 resultados
+            if search_term:
+                # Si hay búsqueda, aumentar el límite para mostrar más resultados relevantes
+                limit = min(50, limit * 2)
+            historial = list(query[:limit])
+
         logger.debug("Historial precios registros encontrados: total=%s", len(historial))
-        
+
         historial_data = []
         for cambio in historial:
+            fecha_local = timezone.localtime(cambio.fecha_cambio)
+            fecha_alta = cambio.producto.fecha_creacion
             historial_data.append({
                 'id': cambio.id,
                 'producto_id': cambio.producto.id,
                 'producto_nombre': cambio.producto.articulo,
                 'producto_talla': cambio.producto.atributo1.valor if cambio.producto.atributo1 else '',
+                'marca': cambio.producto.atributo1.valor if cambio.producto.atributo1 else '',
+                'producto_fecha_creacion': fecha_alta.strftime('%d/%m/%Y') if fecha_alta else None,
                 'sucursal': cambio.producto.sucursal.alias if cambio.producto.sucursal else 'N/A',
                 'precio_anterior': cambio.precio_anterior,
                 'precio_nuevo': cambio.precio_nuevo,
                 'diferencia': cambio.diferencia,
                 'porcentaje_cambio': float(cambio.porcentaje_cambio),
                 'tipo_cambio': cambio.get_tipo_cambio_display(),
+                'tipo_cambio_codigo': cambio.tipo_cambio,
                 'motivo': cambio.motivo or '',
                 'usuario': cambio.usuario.username if cambio.usuario else 'Sistema',
-                'fecha_cambio': cambio.fecha_cambio.strftime('%d/%m/%Y %H:%M'),
+                'usuario_id': cambio.usuario_id,
+                'fecha_cambio': fecha_local.strftime('%d/%m/%Y %H:%M'),
                 'hace_cuanto': cambio.hace_cuanto,
             })
-        
+
         return JsonResponse({
             'success': True,
             'historial': historial_data,
             'total': len(historial_data),
+            'pagination': pagination,
             'search_term': search_term if search_term else None
         })
-        
+
     except Exception as e:
         logger.exception("Error al obtener historial de precios")
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener historial: {str(e)}'
+        })
+
+
+def _serializar_cambio_alerta(cambio):
+    """Serializa un HistorialCambioPrecio para las listas de alertas del panel de KPIs"""
+    return {
+        'producto_id': cambio.producto_id,
+        'producto': cambio.producto.articulo,
+        'sucursal': cambio.producto.sucursal.alias if cambio.producto.sucursal else 'N/A',
+        'usuario': cambio.usuario.username if cambio.usuario else 'Sistema',
+        'fecha': timezone.localtime(cambio.fecha_cambio).strftime('%d/%m/%Y %H:%M'),
+        'precio_anterior': cambio.precio_anterior,
+        'precio_nuevo': cambio.precio_nuevo,
+        'porcentaje_cambio': float(cambio.porcentaje_cambio),
+        'costo': cambio.producto.costo or 0,
+        'tipo_cambio': cambio.tipo_cambio,
+    }
+
+
+@require_GET
+@login_required
+def obtener_kpis_cambios_precios(request):
+    """KPIs de modificaciones de precios por usuario + alertas de auditoría
+
+    Parámetros GET opcionales:
+    - fecha_desde / fecha_hasta: rango YYYY-MM-DD (default: últimos 30 días)
+    - alcance: 'todas' (default) o 'actual' (sucursal de la sesión)
+    - incluir_sincronizacion: 'true' para contar también los ecos automáticos
+      de sincronización multi-sucursal (default: false, solo acciones directas)
+    """
+    try:
+        sucursal_id = request.session.get('idSucursalActual')
+        alcance = request.GET.get('alcance', 'todas')
+        incluir_sync = request.GET.get('incluir_sincronizacion', 'false') == 'true'
+        fecha_desde = request.GET.get('fecha_desde', '').strip()
+        fecha_hasta = request.GET.get('fecha_hasta', '').strip()
+
+        hoy = timezone.localdate()
+        desde = datetime.strptime(fecha_desde, '%Y-%m-%d').date() if fecha_desde else hoy - timedelta(days=30)
+        hasta = datetime.strptime(fecha_hasta, '%Y-%m-%d').date() if fecha_hasta else hoy
+
+        qs = HistorialCambioPrecio.objects.filter(
+            fecha_cambio__date__gte=desde,
+            fecha_cambio__date__lte=hasta,
+        )
+
+        if alcance == 'actual' and sucursal_id:
+            qs = qs.filter(producto__sucursal_id=sucursal_id)
+
+        if not incluir_sync:
+            # Las sincronizaciones son ecos automáticos de un cambio manual:
+            # contarlas inflaría los KPIs por usuario
+            qs = qs.exclude(tipo_cambio='SINCRONIZACION')
+
+        # Precio nuevo por debajo del costo ACTUAL del producto (aproximación:
+        # el historial no guarda el costo al momento del cambio)
+        bajo_costo_q = Q(precio_nuevo__lt=F('producto__costo'), producto__costo__gt=0)
+        # El lookup __hour respeta TIME_ZONE (America/Santiago) con USE_TZ=True
+        fuera_horario_q = Q(fecha_cambio__hour__lt=8) | Q(fecha_cambio__hour__gte=21)
+        UMBRAL_REBAJA_FUERTE = 30  # % de rebaja que se considera "llama la atención"
+
+        # === KPIs GLOBALES ===
+        globales = qs.aggregate(
+            total=Count('id'),
+            alzas=Count('id', filter=Q(diferencia__gt=0)),
+            rebajas=Count('id', filter=Q(diferencia__lt=0)),
+            pct_promedio=Avg('porcentaje_cambio'),
+            rebaja_max=Min('porcentaje_cambio'),
+            productos=Count('producto', distinct=True),
+            usuarios=Count('usuario', distinct=True),
+            bajo_costo=Count('id', filter=bajo_costo_q),
+            fuera_horario=Count('id', filter=fuera_horario_q),
+            rebajas_fuertes=Count('id', filter=Q(porcentaje_cambio__lte=-UMBRAL_REBAJA_FUERTE)),
+        )
+
+        # === KPIs POR USUARIO ===
+        por_usuario_raw = qs.values('usuario__id', 'usuario__username').annotate(
+            total=Count('id'),
+            alzas=Count('id', filter=Q(diferencia__gt=0)),
+            rebajas=Count('id', filter=Q(diferencia__lt=0)),
+            pct_promedio=Avg('porcentaje_cambio'),
+            rebaja_max=Min('porcentaje_cambio'),
+            alza_max=Max('porcentaje_cambio'),
+            productos=Count('producto', distinct=True),
+            bajo_costo=Count('id', filter=bajo_costo_q),
+            fuera_horario=Count('id', filter=fuera_horario_q),
+            rebajas_fuertes=Count('id', filter=Q(porcentaje_cambio__lte=-UMBRAL_REBAJA_FUERTE)),
+            ultima_fecha=Max('fecha_cambio'),
+        ).order_by('-total')
+
+        por_usuario = []
+        for u in por_usuario_raw:
+            por_usuario.append({
+                'usuario_id': u['usuario__id'],
+                'usuario': u['usuario__username'] or 'Sistema',
+                'total': u['total'],
+                'alzas': u['alzas'],
+                'rebajas': u['rebajas'],
+                'pct_promedio': round(float(u['pct_promedio'] or 0), 1),
+                'rebaja_max': round(float(u['rebaja_max'] or 0), 1),
+                'alza_max': round(float(u['alza_max'] or 0), 1),
+                'productos': u['productos'],
+                'bajo_costo': u['bajo_costo'],
+                'fuera_horario': u['fuera_horario'],
+                'rebajas_fuertes': u['rebajas_fuertes'],
+                'ultima_fecha': timezone.localtime(u['ultima_fecha']).strftime('%d/%m/%Y %H:%M') if u['ultima_fecha'] else None,
+            })
+
+        # === ALERTAS: cosas que llaman la atención ===
+        base_alertas = qs.select_related('producto', 'producto__sucursal', 'usuario')
+
+        alertas_rebajas_fuertes = [
+            _serializar_cambio_alerta(c)
+            for c in base_alertas.filter(porcentaje_cambio__lte=-UMBRAL_REBAJA_FUERTE).order_by('porcentaje_cambio')[:15]
+        ]
+
+        alertas_bajo_costo = [
+            _serializar_cambio_alerta(c)
+            for c in base_alertas.filter(bajo_costo_q).order_by('-fecha_cambio')[:15]
+        ]
+
+        alertas_fuera_horario = [
+            _serializar_cambio_alerta(c)
+            for c in base_alertas.filter(fuera_horario_q).order_by('-fecha_cambio')[:15]
+        ]
+
+        # Ping-pong: mismo producto cambiado 3+ veces dentro del período
+        alertas_ping_pong = list(
+            qs.values('producto_id', 'producto__articulo', 'producto__sucursal__alias').annotate(
+                cambios=Count('id'),
+                usuarios_distintos=Count('usuario', distinct=True),
+                pct_min=Min('porcentaje_cambio'),
+                pct_max=Max('porcentaje_cambio'),
+            ).filter(cambios__gte=3).order_by('-cambios')[:10]
+        )
+        for p in alertas_ping_pong:
+            p['producto'] = p.pop('producto__articulo')
+            p['sucursal'] = p.pop('producto__sucursal__alias') or 'N/A'
+            p['pct_min'] = round(float(p['pct_min'] or 0), 1)
+            p['pct_max'] = round(float(p['pct_max'] or 0), 1)
+
+        return JsonResponse({
+            'success': True,
+            'periodo': {
+                'desde': desde.strftime('%Y-%m-%d'),
+                'hasta': hasta.strftime('%Y-%m-%d'),
+                'alcance': alcance,
+                'incluye_sincronizacion': incluir_sync,
+            },
+            'globales': {
+                'total': globales['total'],
+                'alzas': globales['alzas'],
+                'rebajas': globales['rebajas'],
+                'pct_promedio': round(float(globales['pct_promedio'] or 0), 1),
+                'rebaja_max': round(float(globales['rebaja_max'] or 0), 1),
+                'productos': globales['productos'],
+                'usuarios': globales['usuarios'],
+                'bajo_costo': globales['bajo_costo'],
+                'fuera_horario': globales['fuera_horario'],
+                'rebajas_fuertes': globales['rebajas_fuertes'],
+            },
+            'por_usuario': por_usuario,
+            'alertas': {
+                'umbral_rebaja_fuerte': UMBRAL_REBAJA_FUERTE,
+                'rebajas_fuertes': alertas_rebajas_fuertes,
+                'bajo_costo': alertas_bajo_costo,
+                'fuera_horario': alertas_fuera_horario,
+                'ping_pong': alertas_ping_pong,
+            },
+        })
+
+    except Exception as e:
+        logger.exception("Error al obtener KPIs de cambios de precios")
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al obtener KPIs: {str(e)}'
         })
 
 
@@ -1902,6 +2130,90 @@ def obtener_indicadores_precios_pendientes(request):
         })
 
 
+def _filtrar_cambios_precios(request):
+    """
+    Construye el queryset de CambioPrecioPendiente según los filtros GET.
+    Compartido por listar_cambios_pendientes y exportar_cambios_precios_excel.
+    Retorna (queryset ordenado, sucursal_id).
+    """
+    sucursal_id = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
+    estado = request.GET.get('estado')
+    prioridad = request.GET.get('prioridad')
+    tipo_cambio = request.GET.get('tipo_cambio')
+    marca_id = request.GET.get('marca')
+    busqueda = request.GET.get('busqueda', '').strip()
+    fecha_desde = request.GET.get('fecha_desde', '').strip()
+    fecha_hasta = request.GET.get('fecha_hasta', '').strip()
+    mostrar_descartados = request.GET.get('mostrar_descartados', 'false') == 'true'
+    solo_descartados = request.GET.get('solo_descartados', 'false') == 'true'
+
+    queryset = CambioPrecioPendiente.objects.select_related(
+        'producto_talla__producto__atributo1',
+        'sucursal',
+        'creado_por',
+        'revisado_por',
+        'aprobado_por'
+    ).prefetch_related('producto_talla__producto__producto_talla')
+
+    # Filtrar por descartados según parámetros
+    if solo_descartados:
+        # Mostrar SOLO los descartados
+        queryset = queryset.filter(descartado=True)
+    elif not mostrar_descartados:
+        # Por defecto NO mostrar descartados
+        queryset = queryset.filter(descartado=False)
+
+    # Filtros
+    if sucursal_id:
+        queryset = queryset.filter(sucursal_id=sucursal_id)
+
+    if estado:
+        queryset = queryset.filter(estado=estado)
+
+    if prioridad:
+        queryset = queryset.filter(prioridad=prioridad)
+
+    if tipo_cambio:
+        queryset = queryset.filter(tipo_cambio=tipo_cambio)
+
+    if marca_id:
+        queryset = queryset.filter(producto_talla__producto__atributo1_id=marca_id)
+
+    if busqueda:
+        queryset = queryset.filter(
+            Q(producto_talla__producto__articulo__icontains=busqueda) |
+            Q(producto_talla__producto__descripcion__icontains=busqueda) |
+            Q(producto_talla__producto__atributo1__valor__icontains=busqueda) |
+            Q(producto_talla__sku__icontains=busqueda) |
+            Q(motivo__icontains=busqueda)
+        )
+
+    # Filtro de fechas
+    if fecha_desde:
+        fecha_inicio = datetime.strptime(fecha_desde, '%Y-%m-%d')
+        queryset = queryset.filter(fecha_creacion__date__gte=fecha_inicio.date())
+
+    if fecha_hasta:
+        fecha_fin = datetime.strptime(fecha_hasta, '%Y-%m-%d')
+        queryset = queryset.filter(fecha_creacion__date__lte=fecha_fin.date())
+
+    return queryset.order_by('-fecha_creacion'), sucursal_id
+
+
+def _stock_info_producto(producto):
+    """
+    Stock del producto en su sucursal (cada Producto pertenece a una sucursal,
+    por lo que la suma de sus tallas ES el stock de esa sucursal).
+    Retorna (stock_total, detalle "talla: stock, ...").
+    """
+    tallas = list(producto.producto_talla.all())
+    stock_total = sum(max(0, t.stock or 0) for t in tallas)
+    detalle = ', '.join(f"{t.talla}: {max(0, t.stock or 0)}" for t in tallas[:10])
+    if len(tallas) > 10:
+        detalle += f" (+{len(tallas) - 10} más)"
+    return stock_total, detalle
+
+
 @require_GET
 @login_required
 def listar_cambios_pendientes(request):
@@ -1909,65 +2221,11 @@ def listar_cambios_pendientes(request):
     Listar todos los cambios de precio pendientes con filtros
     """
     try:
-        sucursal_id = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
-        estado = request.GET.get('estado')
-        prioridad = request.GET.get('prioridad')
-        tipo_cambio = request.GET.get('tipo_cambio')
-        busqueda = request.GET.get('busqueda', '').strip()
-        fecha_desde = request.GET.get('fecha_desde', '').strip()
-        fecha_hasta = request.GET.get('fecha_hasta', '').strip()
-        mostrar_descartados = request.GET.get('mostrar_descartados', 'false') == 'true'
-        solo_descartados = request.GET.get('solo_descartados', 'false') == 'true'
         page = int(request.GET.get('page', 1))
         per_page = int(request.GET.get('per_page', 20))
-        
-        queryset = CambioPrecioPendiente.objects.select_related(
-            'producto_talla__producto',
-            'sucursal',
-            'creado_por',
-            'revisado_por',
-            'aprobado_por'
-        )
-        
-        # Filtrar por descartados según parámetros
-        if solo_descartados:
-            # Mostrar SOLO los descartados
-            queryset = queryset.filter(descartado=True)
-        elif not mostrar_descartados:
-            # Por defecto NO mostrar descartados
-            queryset = queryset.filter(descartado=False)
-        
-        # Filtros
-        if sucursal_id:
-            queryset = queryset.filter(sucursal_id=sucursal_id)
-        
-        if estado:
-            queryset = queryset.filter(estado=estado)
-        
-        if prioridad:
-            queryset = queryset.filter(prioridad=prioridad)
-        
-        if tipo_cambio:
-            queryset = queryset.filter(tipo_cambio=tipo_cambio)
-        
-        if busqueda:
-            queryset = queryset.filter(
-                Q(producto_talla__producto__articulo__icontains=busqueda) |
-                Q(producto_talla__sku__icontains=busqueda) |
-                Q(motivo__icontains=busqueda)
-            )
-        
-        # Filtro de fechas
-        if fecha_desde:
-            from datetime import datetime
-            fecha_inicio = datetime.strptime(fecha_desde, '%Y-%m-%d')
-            queryset = queryset.filter(fecha_creacion__date__gte=fecha_inicio.date())
-        
-        if fecha_hasta:
-            from datetime import datetime
-            fecha_fin = datetime.strptime(fecha_hasta, '%Y-%m-%d')
-            queryset = queryset.filter(fecha_creacion__date__lte=fecha_fin.date())
-        
+
+        queryset, sucursal_id = _filtrar_cambios_precios(request)
+
         # Obtener resumen de contadores
         base_queryset = CambioPrecioPendiente.objects.all()
         if sucursal_id:
@@ -1983,9 +2241,7 @@ def listar_cambios_pendientes(request):
             'aplicados': activos.filter(estado='APLICADO').count(),
             'descartados': base_queryset.filter(descartado=True).count(),  # Total descartados
         }
-        
-        queryset = queryset.order_by('-fecha_creacion')
-        
+
         # Paginación
         paginator = Paginator(queryset, per_page)
         page_obj = paginator.get_page(page)
@@ -1993,13 +2249,20 @@ def listar_cambios_pendientes(request):
         cambios_data = []
         for cambio in page_obj:
             producto = cambio.producto_talla.producto
-            tallas_count = producto.producto_talla.count()
-            tallas_list = [t.talla for t in producto.producto_talla.all()[:5]]
-            
+            tallas = list(producto.producto_talla.all())
+            tallas_count = len(tallas)
+            tallas_list = [t.talla for t in tallas[:5]]
+            stock_producto, stock_detalle = _stock_info_producto(producto)
+
             cambios_data.append({
                 'id': cambio.id,
                 'sku': cambio.producto_talla.sku,
                 'producto': producto.articulo,
+                'marca': producto.atributo1.valor if producto.atributo1 else '',
+                'talla': cambio.producto_talla.talla,
+                'stock_talla': max(0, cambio.producto_talla.stock or 0),
+                'stock_producto': stock_producto,
+                'stock_detalle': stock_detalle,
                 'tallas_count': tallas_count,
                 'tallas_preview': ', '.join(str(t) for t in tallas_list) + (f' (+{tallas_count-5} más)' if tallas_count > 5 else ''),
                 'sucursal': cambio.sucursal.alias,
@@ -2045,6 +2308,94 @@ def listar_cambios_pendientes(request):
         return JsonResponse({
             'success': False,
             'error': f'Error al listar cambios: {str(e)}'
+        })
+
+
+@require_GET
+@login_required
+def exportar_cambios_precios_excel(request):
+    """
+    Exportar a Excel los cambios de precio según los filtros actuales
+    (mismos filtros que listar_cambios_pendientes, sin paginación).
+    Incluye columnas vacías 'Ejecutado' y 'Observaciones' para trabajo manual;
+    la columna ID permite ubicar el registro y descartarlo luego en la vista.
+    """
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.utils import get_column_letter
+
+        queryset, sucursal_id = _filtrar_cambios_precios(request)
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Cambios de precio"
+
+        headers = [
+            'ID', 'SKU', 'Artículo', 'Descripción', 'Marca', 'Talla',
+            'Stock talla', 'Stock producto (sucursal)', 'Sucursal',
+            'Precio anterior', 'Precio nuevo', 'Diferencia', 'Variación %',
+            'Tipo', 'Estado', 'Prioridad', 'Motivo',
+            'Creado por', 'Fecha creación', 'Días pendiente',
+            'Ejecutado (SÍ/NO)', 'Observaciones',
+        ]
+        ws.append(headers)
+
+        header_fill = PatternFill(start_color='405189', end_color='405189', fill_type='solid')
+        header_font = Font(color='FFFFFF', bold=True)
+        for col_num in range(1, len(headers) + 1):
+            celda = ws.cell(row=1, column=col_num)
+            celda.fill = header_fill
+            celda.font = header_font
+            celda.alignment = Alignment(horizontal='center', vertical='center')
+
+        for cambio in queryset:
+            producto = cambio.producto_talla.producto
+            stock_producto, _ = _stock_info_producto(producto)
+            ws.append([
+                cambio.id,
+                cambio.producto_talla.sku,
+                producto.articulo,
+                producto.descripcion,
+                producto.atributo1.valor if producto.atributo1 else '',
+                cambio.producto_talla.talla,
+                max(0, cambio.producto_talla.stock or 0),
+                stock_producto,
+                cambio.sucursal.alias,
+                float(cambio.precio_anterior),
+                float(cambio.precio_nuevo),
+                float(cambio.diferencia),
+                float(cambio.porcentaje_cambio),
+                cambio.get_tipo_cambio_display(),
+                cambio.get_estado_display() + (' (descartado)' if cambio.descartado else ''),
+                cambio.prioridad,
+                cambio.motivo or '',
+                cambio.creado_por.username if cambio.creado_por else 'Sistema',
+                cambio.fecha_creacion.strftime('%d/%m/%Y %H:%M'),
+                cambio.dias_pendiente,
+                '',
+                '',
+            ])
+
+        anchos = [8, 14, 26, 32, 16, 8, 10, 12, 12, 14, 14, 12, 11, 18, 20, 11, 30, 14, 16, 12, 14, 30]
+        for idx, ancho in enumerate(anchos, start=1):
+            ws.column_dimensions[get_column_letter(idx)].width = ancho
+        ws.freeze_panes = 'A2'
+        ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{ws.max_row}"
+
+        fecha_archivo = timezone.localtime(timezone.now()).strftime('%Y%m%d_%H%M')
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="cambios_precios_{fecha_archivo}.xlsx"'
+        wb.save(response)
+        return response
+
+    except Exception as e:
+        logger.exception("Error en exportar_cambios_precios_excel")
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al exportar: {str(e)}'
         })
 
 

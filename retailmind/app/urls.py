@@ -198,11 +198,13 @@ from .views_modulo_gestion_precios import (
     listar_sucursales,
     obtener_historial_precio,
     obtener_historial_ediciones_recientes,
+    obtener_kpis_cambios_precios,
     buscar_productos_similares_sucursales,
     # Sistema de aprobación
     proponer_cambio_precio,
     obtener_indicadores_precios_pendientes,
     listar_cambios_pendientes,
+    exportar_cambios_precios_excel,
     eliminar_cambios_aplicados,
     revisar_cambio_precio,
     aprobar_cambio_precio,
@@ -1084,12 +1086,14 @@ urlpatterns = [
     path('api/sucursales/listar/', listar_sucursales, name='listar_sucursales'),
     path('gestion-precios/historial/<int:producto_id>/', obtener_historial_precio, name='obtener_historial_precio'),
     path('gestion-precios/historial-reciente/', obtener_historial_ediciones_recientes, name='obtener_historial_ediciones_recientes'),
+    path('gestion-precios/kpis-cambios/', obtener_kpis_cambios_precios, name='obtener_kpis_cambios_precios'),
     path('gestion-precios/sucursales-similares/<int:producto_id>/', buscar_productos_similares_sucursales, name='buscar_productos_similares_sucursales'),
     
     # ========== SISTEMA DE APROBACIÓN DE CAMBIOS DE PRECIOS ==========
     path('gestion-precios/proponer-cambio/', proponer_cambio_precio, name='proponer_cambio_precio'),
     path('gestion-precios/indicadores-pendientes/', obtener_indicadores_precios_pendientes, name='indicadores_precios_pendientes'),
     path('gestion-precios/listar-cambios/', listar_cambios_pendientes, name='listar_cambios_pendientes'),
+    path('gestion-precios/exportar-excel/', exportar_cambios_precios_excel, name='exportar_cambios_precios_excel'),
     path('gestion-precios/eliminar-cambios-aplicados/', eliminar_cambios_aplicados, name='eliminar_cambios_aplicados'),
     path('gestion-precios/revisar-cambio/', revisar_cambio_precio, name='revisar_cambio_precio'),
     path('gestion-precios/aprobar-cambio/', aprobar_cambio_precio, name='aprobar_cambio_precio'),
