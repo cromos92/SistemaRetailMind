@@ -263,10 +263,7 @@ class PermisosCambiosTest(TestCase):
 
         self.assertEqual(response.status_code, 403)
 
-    def test_aprobacion_acepta_vendedor_de_otra_empresa(self):
-        # El vendedor que figura en el cambio ya NO se restringe por empresa ni
-        # por sucursal: cualquier vendedor activo del sistema puede autorizarlo.
-        # Basta con que la puerta del vendedor no lo rechace con SELLER_NOT_AVAILABLE.
+    def test_aprobacion_rechaza_vendedor_de_otra_empresa_sin_consumir_codigo(self):
         otra_empresa = crear_empresa(nombre='Empresa Vendedor Ajeno', rut='76.111.111-1')
         otra_sucursal = crear_sucursal(empresa=otra_empresa, alias='SUC-VEND-AJENA')
         vendedor_ajeno = crear_vendedor(
@@ -280,7 +277,13 @@ class PermisosCambiosTest(TestCase):
 
         response = self._post_aprobar(codigo.codigo, vendedor=vendedor_ajeno)
 
-        self.assertNotEqual(response.json().get('code'), 'SELLER_NOT_AVAILABLE')
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()['code'], 'SELLER_NOT_AVAILABLE')
+        codigo.refresh_from_db()
+        self.cambio.refresh_from_db()
+        self.assertFalse(codigo.usado)
+        self.assertEqual(self.cambio.estado, 'SOLICITADO')
+        self.assertIsNone(self.cambio.ticket_nuevo_id)
 
     def test_validar_codigo_vendedor_usa_contexto_del_cambio(self):
         response_valido = self.client.post(
@@ -294,8 +297,6 @@ class PermisosCambiosTest(TestCase):
         self.assertEqual(response_valido.status_code, 200)
         self.assertEqual(response_valido.json()['vendedor']['id'], self.vendedor.id)
 
-        # Un vendedor de otra empresa (con código único) ahora también valida:
-        # la autorización de cambios ya no se restringe por empresa ni sucursal.
         otra_empresa = crear_empresa(nombre='Empresa Codigo Ajeno', rut='76.222.222-2')
         otra_sucursal = crear_sucursal(empresa=otra_empresa, alias='SUC-COD-AJENA')
         vendedor_ajeno = crear_vendedor(
@@ -313,8 +314,8 @@ class PermisosCambiosTest(TestCase):
             }),
             content_type='application/json',
         )
-        self.assertEqual(response_ajeno.status_code, 200)
-        self.assertEqual(response_ajeno.json()['vendedor']['id'], vendedor_ajeno.id)
+        self.assertEqual(response_ajeno.status_code, 404)
+        self.assertEqual(response_ajeno.json()['code'], 'SELLER_NOT_AVAILABLE')
 
     def test_stock_repetido_se_valida_por_cantidad_total(self):
         _, producto_nuevo = crear_producto_con_talla(
