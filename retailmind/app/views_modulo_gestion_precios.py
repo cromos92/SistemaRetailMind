@@ -213,6 +213,7 @@ def buscar_productos(request):
         stock_min = request.GET.get('stock_min')
         antiguedad = request.GET.get('antiguedad')
         anio = request.GET.get('anio')
+        incluir_sin_stock = request.GET.get('incluir_sin_stock') == '1'
         
         logger.debug(
             "Busqueda productos precios: search=%s, sucursal_get=%s, sucursal_session=%s, "
@@ -321,7 +322,9 @@ def buscar_productos(request):
             
             # ✅ CAMBIO: No excluir productos sin lotes si tienen stock
             # Si no hay lotes pero hay stock, usar el costo del producto
-            if cantidad_total == 0 and stock_total == 0:
+            # Con incluir_sin_stock=1 (filtro avanzado) se muestran igual, para
+            # poder editar el precio de fichas en 0 (se sincroniza a toda la red)
+            if cantidad_total == 0 and stock_total == 0 and not incluir_sin_stock:
                 # Solo excluir si NO tiene stock ni lotes
                 logger.debug("Producto excluido de precios sin stock ni lotes: producto_id=%s articulo=%s", producto.id, producto.articulo)
                 productos_excluidos['sin_stock_ni_lotes'] += 1

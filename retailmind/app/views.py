@@ -2891,7 +2891,11 @@ def ajustar_dte_emisor_api(request):
                 try:
                     from .views_modulo_documentos import generar_txt_dte_acepta, limpiar_texto
                     import os
+                    from decimal import ROUND_HALF_UP
                     from django.conf import settings as dj_settings
+
+                    def _monto_entero(valor):
+                        return int(Decimal(str(valor or 0)).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
 
                     mapa_tipo_sii_original = {
                         'FACTURA ELECTRONICA': '33',
@@ -2900,6 +2904,21 @@ def ajustar_dte_emisor_api(request):
                         'BOLETA_ELECTRONICA': '39',
                     }
                     tipo_sii_ref = mapa_tipo_sii_original.get(tipo_doc_original, '33')
+
+                    # Código de referencia SII: 1 = anula el documento completo,
+                    # 3 = corrige montos (NC parcial). Solo corresponde 1 cuando
+                    # este ajuste deja el DTE sin unidades (pre-recepción) o
+                    # acredita el 100% de lo despachado (post-recepción, donde
+                    # el DTE original conserva sus unidades intactas).
+                    if es_post_recepcion:
+                        unidades_dte_original = int(dte.unidades_productos or 0)
+                        anula_doc_completo = (
+                            unidades_dte_original > 0
+                            and diferencial_unidades >= unidades_dte_original
+                        )
+                    else:
+                        anula_doc_completo = int(nuevas_unidades or 0) == 0
+                    razon_referencia_sii = '1' if anula_doc_completo else '3'
 
                     sucursal_destino_nc = None
                     mov_destino = dte.dte_movimientos.filter(

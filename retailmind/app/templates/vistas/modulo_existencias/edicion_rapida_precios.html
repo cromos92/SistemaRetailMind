@@ -2053,6 +2053,13 @@
                                 <label for="filtroAnio">Año de ingreso</label>
                                 <input type="number" id="filtroAnio" placeholder="Ej: 2024" min="2000" max="2100">
                             </div>
+                            <div class="filtro-group">
+                                <label for="filtroSinStock">Productos sin stock</label>
+                                <select id="filtroSinStock">
+                                    <option value="">Ocultar (solo con stock)</option>
+                                    <option value="1">Incluir sin stock</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="filtros-actions">
                             <button type="button" class="btn-aplicar-filtros" onclick="buscarProductosRapido()">
@@ -2763,6 +2770,7 @@ function obtenerFiltrosActivos() {
         precio_max: document.getElementById('filtroPrecioMax').value,
         margen_min: document.getElementById('filtroMargenMin').value,
         anio: document.getElementById('filtroAnio').value,
+        incluir_sin_stock: document.getElementById('filtroSinStock').value,
     };
 }
 
@@ -2775,7 +2783,7 @@ function actualizarBadgeFiltros(filtros) {
 
 function limpiarFiltrosBusqueda() {
     ['filtroSucursal', 'filtroCategoria', 'filtroMarca', 'filtroAntiguedad',
-     'filtroPrecioMin', 'filtroPrecioMax', 'filtroMargenMin', 'filtroAnio'].forEach(id => {
+     'filtroPrecioMin', 'filtroPrecioMax', 'filtroMargenMin', 'filtroAnio', 'filtroSinStock'].forEach(id => {
         document.getElementById(id).value = '';
     });
     actualizarBadgeFiltros({});
@@ -2839,6 +2847,7 @@ async function buscarProductosRapido() {
         if (filtros.precio_max) url += `&precio_max=${filtros.precio_max}`;
         if (filtros.margen_min) url += `&margen_min=${filtros.margen_min}`;
         if (filtros.anio) url += `&anio=${filtros.anio}`;
+        if (filtros.incluir_sin_stock) url += `&incluir_sin_stock=1`;
 
         console.log('🔍 Buscando productos:', { termino, sucursalId, filtros, url });
         

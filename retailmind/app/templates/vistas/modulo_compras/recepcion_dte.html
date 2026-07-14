@@ -1606,7 +1606,7 @@
                     <h5 class="modal-title mb-1" id="modalAjustarDteEmisorLabel">
                         <i class="bi bi-pencil-square me-2"></i>Ajustar DTE emitido — <span id="ajusteNumero">-</span>
                     </h5>
-                    <small class="opacity-75" id="ajusteSubtitulo">Reduce cantidades o quita productos antes de que el receptor recepcione</small>
+                    <small class="opacity-75" id="ajusteSubtitulo">Indica cuántas unidades DEVUELVES por línea; la NC/ajuste se emite por esa cantidad</small>
                 </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
@@ -1648,7 +1648,7 @@
                                 <th>Producto</th>
                                 <th style="width: 70px;">Talla</th>
                                 <th style="width: 90px;" class="text-center">Original</th>
-                                <th style="width: 110px;" class="text-center">Nueva cant.</th>
+                                <th style="width: 110px;" class="text-center text-danger">Devolver (NC)</th>
                                 <th style="width: 105px;" class="text-end text-danger">Monto NC</th>
                                 <th style="width: 70px;" class="text-center">Acción</th>
                             </tr>
@@ -1661,7 +1661,8 @@
 
                 <div class="small text-muted mt-2">
                     <i class="bi bi-info-circle me-1"></i>
-                    Al poner cantidad 0 se quita el producto. Para aumentar, emitir otro DTE.
+                    Escribe en <strong>Devolver (NC)</strong> cuántas unidades retiras de cada línea — la NC/ajuste se emite exactamente por ese número.
+                    Si devuelves todas las unidades, la línea se quita del DTE. Para aumentar cantidades, emite otro DTE.
                 </div>
                 <!-- Footer financiero sticky -->
                 <div class="border-top pt-2 mt-2" id="ajusteFooterFinanciero">
@@ -6378,12 +6379,12 @@ function abrirModalAjusteEmisor(dteId, opciones) {
                         <td class="text-center"><strong>${cantidad}</strong></td>
                         <td class="text-center">
                             <input type="number" class="form-control form-control-sm text-center input-ajuste-cantidad"
-                                   min="${cantidad - maxDevolver}" max="${cantidad}" value="${cantidad}" style="width: 95px; display:inline-block;">
-                            <div class="small text-muted">NC: <span class="ajuste-cantidad-nc">0</span></div>
+                                   min="0" max="${maxDevolver}" value="0" style="width: 95px; display:inline-block;">
+                            <div class="small text-muted">Queda: <span class="ajuste-cantidad-queda">${cantidad}</span></div>
                         </td>
                         <td class="text-end ajuste-monto-nc-celda text-danger fw-bold small">$0</td>
                         <td class="text-center">
-                            <button class="btn btn-sm btn-outline-danger btn-poner-cero" title="Devolver el máximo permitido">
+                            <button class="btn btn-sm btn-outline-danger btn-poner-cero" title="Devolver todo (máximo permitido: ${maxDevolver})">
                                 <i class="bi bi-x-circle"></i>
                             </button>
                         </td>
@@ -6416,14 +6417,16 @@ function actualizarDiferencialAjuste() {
         const maxDevolver = ($tr.data('max-devolver') !== undefined && $tr.data('max-devolver') !== '')
             ? parseInt($tr.data('max-devolver'), 10)
             : cantOriginal;
-        const minNueva = cantOriginal - maxDevolver;
+        // El input es la cantidad A DEVOLVER (la NC se emite por este número).
         const $input = $tr.find('.input-ajuste-cantidad');
-        let nuevaCant = parseInt($input.val(), 10);
-        if (isNaN(nuevaCant) || nuevaCant < minNueva) nuevaCant = minNueva;
-        if (nuevaCant > cantOriginal) nuevaCant = cantOriginal;
-        if (String(nuevaCant) !== String($input.val())) $input.val(nuevaCant);
-        const dif = cantOriginal - nuevaCant;
-        $tr.find('.ajuste-cantidad-nc').text(dif);
+        const raw = String($input.val());
+        let devolver = parseInt(raw, 10);
+        if (isNaN(devolver) || devolver < 0) devolver = 0;
+        if (devolver > maxDevolver) devolver = maxDevolver;
+        if (raw !== '' && String(devolver) !== raw) $input.val(devolver);
+        const dif = devolver;
+        const nuevaCant = cantOriginal - dif;
+        $tr.find('.ajuste-cantidad-queda').text(nuevaCant);
         const montoNcFila = dif > 0 ? dif * precio : 0;
         $tr.find('.ajuste-monto-nc-celda').text(dif > 0 ? _ajusteFormatearPesos(montoNcFila) : '$0');
         $tr.toggleClass('table-danger', dif > 0);
@@ -6482,15 +6485,19 @@ function confirmarAjusteEmisor() {
         const $tr = $(this);
         const dpId = parseInt($tr.data('dp-id'), 10);
         const cantOriginal = parseInt($tr.data('cantidad-original'), 10) || 0;
-        let nuevaCant = parseInt($tr.find('.input-ajuste-cantidad').val(), 10);
-        if (isNaN(nuevaCant) || nuevaCant < 0) nuevaCant = 0;
-        if (nuevaCant > cantOriginal) nuevaCant = cantOriginal;
-        if (nuevaCant !== cantOriginal) {
+        const maxDevolver = ($tr.data('max-devolver') !== undefined && $tr.data('max-devolver') !== '')
+            ? parseInt($tr.data('max-devolver'), 10)
+            : cantOriginal;
+        // El input es la cantidad A DEVOLVER; el endpoint espera la que QUEDA.
+        let devolver = parseInt($tr.find('.input-ajuste-cantidad').val(), 10);
+        if (isNaN(devolver) || devolver < 0) devolver = 0;
+        if (devolver > maxDevolver) devolver = maxDevolver;
+        if (devolver > 0) {
             ajustes.push({
                 dte_producto_id: dpId,
-                nueva_cantidad: nuevaCant,
+                nueva_cantidad: cantOriginal - devolver,
                 cantidad_original: cantOriginal,
-                cantidad_nc: cantOriginal - nuevaCant,
+                cantidad_nc: devolver,
                 sku: $tr.data('sku') || '-',
                 nombre: $tr.data('nombre') || '-',
                 talla: $tr.data('talla') || '-',
@@ -6499,11 +6506,12 @@ function confirmarAjusteEmisor() {
     });
 
     if (!ajustes.length) {
-        Swal.fire('Sin cambios', 'No modificaste ninguna cantidad. Baja alguna cantidad o quita un producto.', 'info');
+        Swal.fire('Sin unidades a devolver', 'Escribe en la columna "Devolver (NC)" cuántas unidades retiras de alguna línea.', 'info');
         return;
     }
 
     const esPost = !!(window.ajusteDteActual && window.ajusteDteActual.es_post_recepcion);
+    const totalDevolver = ajustes.reduce((s, a) => s + a.cantidad_nc, 0);
     const tituloConfirm = esPost ? '¿Emitir NC post-recepción?' : '¿Confirmar ajuste del DTE?';
     const resumenAjusteHtml = `
         <div class="table-responsive mt-2">
@@ -6533,10 +6541,10 @@ function confirmarAjusteEmisor() {
             </table>
         </div>`;
     const htmlConfirm = esPost
-        ? `<p>Se generará una NC vinculada al DTE original.</p>
+        ? `<p><strong>Se emitirá NC por ${totalDevolver} unidad(es) devuelta(s)</strong>, vinculada al DTE original.</p>
            <p class="small text-muted">La mercadería saldrá de <strong>${window.ajusteDteActual.sucursal_destino || 'destino'}</strong> y reingresará a tu bodega de origen. Si hay stock insuficiente en destino el ajuste será bloqueado.</p>
            ${resumenAjusteHtml}`
-        : `<p>Se generará un documento de trazabilidad con los productos retirados.</p>
+        : `<p><strong>Se retirarán ${totalDevolver} unidad(es) del DTE</strong> y se generará el documento de trazabilidad (NC o Ajuste) por esa cantidad.</p>
            <p class="small text-muted">Esta acción reversa el stock al emisor y notifica al receptor.</p>
            ${resumenAjusteHtml}`;
 
@@ -6675,14 +6683,14 @@ $(document).ready(function () {
     // Input cantidad -> recalcular diferencial
     $(document).on('input', '#ajusteProductosBody .input-ajuste-cantidad', actualizarDiferencialAjuste);
 
-    // Poner en 0 con el boton X -> lleva al mínimo permitido (respeta stock destino)
+    // Botón X -> devolver el máximo permitido (respeta stock destino)
     $(document).on('click', '#ajusteProductosBody .btn-poner-cero', function () {
         const $tr = $(this).closest('tr');
         const cantOriginal = parseInt($tr.data('cantidad-original'), 10) || 0;
         const maxDevolver = ($tr.data('max-devolver') !== undefined && $tr.data('max-devolver') !== '')
             ? parseInt($tr.data('max-devolver'), 10)
             : cantOriginal;
-        $tr.find('.input-ajuste-cantidad').val(cantOriginal - maxDevolver);
+        $tr.find('.input-ajuste-cantidad').val(maxDevolver);
         actualizarDiferencialAjuste();
     });
 
