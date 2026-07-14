@@ -18317,7 +18317,8 @@ def verificar_existencia_producto(request):
     if not articulo:
         return JsonResponse({'existe': False})
 
-    existe = Producto.objects.filter(articulo=articulo).exists()
+    # iexact: los códigos históricos quedaron con mayúsculas/minúsculas mezcladas
+    existe = Producto.objects.filter(articulo__iexact=articulo.strip()).exists()
     return JsonResponse({'existe': existe})
  
 @transaction.atomic
@@ -18951,8 +18952,9 @@ def verificar_producto_existente(request):
             })
 
             # Buscar productos con mismo artículo y atributos en OTRAS sucursales
+            # (iexact: hay códigos históricos con mayúsculas/minúsculas mezcladas)
             filtros_otras = {
-                'articulo': articulo,
+                'articulo__iexact': articulo,
             }
             if producto.atributo1_id:
                 filtros_otras['atributo1_id'] = producto.atributo1_id
@@ -19104,7 +19106,7 @@ def _build_edel_producto_ref(articulo, producto_local):
             p = producto_local
         else:
             p = Producto.objects.filter(
-                articulo=articulo,
+                articulo__iexact=articulo,
                 sucursal__alias__iexact='EDEL'
             ).select_related('atributo1', 'atributo2', 'atributo3', 'categoria', 'sucursal').first()
 
@@ -19210,7 +19212,11 @@ def crear_producto_desde_recepcion(request):
         filtro_sucursal_recepciones = (
             Q(sucursal_destino=sucursal) | Q(sucursal_destino__isnull=True)
         )
-    articulo = data.get('articulo')
+    # Canonizar SIEMPRE el código al guardarlo (mayúsculas, sin espacios dobles
+    # ni acentos): es el mismo canon que usa el matching de identidad. Antes se
+    # guardaba tal cual se tipeó y quedaban códigos en minúscula en el catálogo.
+    from .utils_producto_match import normalizar_articulo as _normart
+    articulo = _normart(data.get('articulo'))
     descripcion = data.get('descripcion')
     atributo1 = data.get('atributo1') or None
     atributo2 = data.get('atributo2') or None
@@ -20998,7 +21004,11 @@ def crear_producto_manual(request):
         aplicar_todas_bodegas = request.POST.get('aplicar_todas_bodegas') == 'true'
         proveedor_id = request.POST.get('proveedor')
         dte_id = request.POST.get('dte_manual')
-        articulo = request.POST.get('articulo')
+        # Canonizar SIEMPRE el código al guardarlo (mayúsculas, sin espacios
+        # dobles ni acentos): mismo canon que usa el matching de identidad.
+        # Antes se guardaba tal cual se tipeó y quedaban códigos en minúscula.
+        from .utils_producto_match import normalizar_articulo as _normart
+        articulo = _normart(request.POST.get('articulo'))
         descripcion = request.POST.get('descripcion', '')
         atributo1 = request.POST.get('atributo1')  # Marca
         atributo2 = request.POST.get('atributo2')  # Color

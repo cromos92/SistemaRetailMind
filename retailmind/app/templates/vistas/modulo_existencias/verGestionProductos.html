@@ -275,6 +275,8 @@
     }
     .chipSimilarManual { cursor: pointer; }
     .chipSimilarManual:hover { background: #fff3cd !important; }
+    /* Código de artículo SIEMPRE en mayúsculas (el JS fuerza el valor real) */
+    .articulo-autocomplete { text-transform: uppercase; }
 
     /* Tabs panel derecho Crear Manual */
     #tabsCrearManual .nav-link {
@@ -10599,6 +10601,18 @@ $(document).on('click', '.chipSimilarManual', function() {
     const art = $(this).data('articulo');
     if (!art) return;
     $('#modalCrearProductoManual input[name="articulo"]').val(art).trigger('change');
+});
+
+// ✅ CÓDIGO SIEMPRE EN MAYÚSCULAS: fuerza el VALOR (no solo el estilo) en el
+// input de artículo de ambos modales (manual y recepción), preservando el
+// cursor. El backend además canoniza al guardar (normalizar_articulo).
+$(document).on('input', '.articulo-autocomplete', function() {
+    const mayus = this.value.toUpperCase();
+    if (this.value !== mayus) {
+        const ini = this.selectionStart, fin = this.selectionEnd;
+        this.value = mayus;
+        try { this.setSelectionRange(ini, fin); } catch (e) { /* input sin selección */ }
+    }
 });
 
 function verificarProductoExistenteManual() {
