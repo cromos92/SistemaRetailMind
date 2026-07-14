@@ -144,7 +144,7 @@ class Command(BaseCommand):
         parser.add_argument('--modelos', default=None,
                             help='JSON de clasificaciones marca+modelo del workflow.')
         parser.add_argument('--export-modelos', dest='export_modelos', default=None,
-                            help='Exporta los modelos únicos a clasificar (top 80%) y sale.')
+                            help='Exporta los modelos únicos a clasificar (top 80%%) y sale.')
         parser.add_argument('--cobertura', type=float, default=0.80,
                             help='Cobertura objetivo para --export-modelos (0-1).')
         parser.add_argument('--out', default=None)
