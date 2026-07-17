@@ -1192,7 +1192,9 @@ def actualizar_productos_masivo(request):
         data = json.loads(request.body)
         producto_ids = data.get('producto_ids', [])
         campos = data.get('campos', {})
-        propagar = data.get('propagar_sucursales', False)
+        # La edición SIEMPRE debe alcanzar el código en todas las sucursales
+        # (política 2026-07: una variante no puede quedar distinta por bodega).
+        propagar = data.get('propagar_sucursales', True)
 
         if not producto_ids:
             return JsonResponse({'success': False, 'error': 'No se seleccionaron productos'}, status=400)
@@ -1254,7 +1256,27 @@ def actualizar_productos_masivo(request):
             except (ValueError, TypeError):
                 return JsonResponse({'success': False, 'error': 'Valores de precio inválidos'}, status=400)
 
-        if not update_kwargs:
+        # ── Especialidades v1.2 (multi-etiqueta, atributo "Especialidad") ──
+        # Modos: agregar (suma sin tocar las existentes) | reemplazar (deja solo
+        # las seleccionadas) | quitar (elimina las seleccionadas).
+        esp_modo = None
+        esp_attr = None
+        esp_opciones = []
+        if campos.get('aplicar_especialidad'):
+            from .models import Productos_Atributos, ProductoAtributoValor
+            esp_modo = campos.get('especialidad_modo', 'agregar')
+            if esp_modo not in ('agregar', 'reemplazar', 'quitar'):
+                return JsonResponse({'success': False, 'error': 'Modo de especialidad inválido'}, status=400)
+            esp_attr = Productos_Atributos.objects.filter(nombre__iexact='Especialidad').first()
+            if esp_attr is None:
+                return JsonResponse({'success': False, 'error': 'El atributo Especialidad no existe (corre sembrar_taxonomia_v12)'}, status=400)
+            esp_ids = [e for e in (campos.get('especialidad_ids') or []) if e]
+            esp_opciones = list(AtributoOpcion.objects.filter(atributo=esp_attr, id__in=esp_ids))
+            if not esp_opciones and esp_modo != 'reemplazar':
+                return JsonResponse({'success': False, 'error': 'No se seleccionaron especialidades'}, status=400)
+            campos_aplicados.append(f'especialidades ({esp_modo})')
+
+        if not update_kwargs and not esp_modo:
             return JsonResponse({'success': False, 'error': 'No hay campos válidos para actualizar'}, status=400)
 
         count = 0
@@ -1262,9 +1284,10 @@ def actualizar_productos_masivo(request):
         lotes_total = 0
 
         for prod in productos:
-            for field, value in update_kwargs.items():
-                setattr(prod, field, value)
-            prod.save()
+            if update_kwargs:
+                for field, value in update_kwargs.items():
+                    setattr(prod, field, value)
+                prod.save()
             count += 1
             if prod.sucursal:
                 sucursales_set.add(prod.sucursal.alias)
@@ -1280,6 +1303,29 @@ def actualizar_productos_masivo(request):
                     sobreprecio_unitario=update_kwargs.get('sobreprecio', prod.sobreprecio),
                 )
                 lotes_total += lotes
+
+        # ── Aplicar especialidades en bloque ──
+        if esp_modo:
+            from .models import ProductoAtributoValor
+            prod_ids_all = list(productos.values_list('id', flat=True))
+            ids_sel = [o.id for o in esp_opciones]
+            if esp_modo == 'reemplazar':
+                ProductoAtributoValor.objects.filter(
+                    producto_id__in=prod_ids_all, atributo=esp_attr
+                ).exclude(opcion_id__in=ids_sel).delete()
+            if esp_modo == 'quitar':
+                ProductoAtributoValor.objects.filter(
+                    producto_id__in=prod_ids_all, atributo=esp_attr, opcion_id__in=ids_sel
+                ).delete()
+            else:  # agregar / reemplazar: asegurar presencia sin duplicar
+                existentes = set(ProductoAtributoValor.objects.filter(
+                    producto_id__in=prod_ids_all, atributo=esp_attr, opcion_id__in=ids_sel
+                ).values_list('producto_id', 'opcion_id'))
+                nuevos = [ProductoAtributoValor(producto_id=pid, atributo=esp_attr, opcion_id=oid)
+                          for pid in prod_ids_all for oid in ids_sel
+                          if (pid, oid) not in existentes]
+                if nuevos:
+                    ProductoAtributoValor.objects.bulk_create(nuevos)
 
         talla_ids = list(
             Producto_Talla.objects.filter(producto__in=productos).values_list('id', flat=True)
@@ -1315,7 +1361,7 @@ def preview_edicion_masiva(request):
     try:
         data = json.loads(request.body)
         producto_ids = data.get('producto_ids', [])
-        propagar = data.get('propagar_sucursales', False)
+        propagar = data.get('propagar_sucursales', True)
 
         productos_base = Producto.objects.filter(id__in=producto_ids).select_related('sucursal')
 

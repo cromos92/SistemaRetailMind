@@ -109,12 +109,20 @@ def forma_fisica(tallas):
 
 def clasificar(cat_id, descripcion, marca):
     """Capa 1 + Capa 2. Devuelve (dep, tipo, regla, revisar, excluir)."""
-    if cat_id in MAPEO_DIRECTO:
-        dep, tipo, rev = MAPEO_DIRECTO[cat_id]
-        return dep, tipo, 'mapeo_directo', rev, False
-
     desc_f = _fold(descripcion)
     marca_f = _fold(marca)
+
+    if cat_id in MAPEO_DIRECTO:
+        dep, tipo, rev = MAPEO_DIRECTO[cat_id]
+        if rev:
+            # Bucket mixto (VESTIR / SALUD Y ORTOPEDIA / ZAPATON): una keyword
+            # clara de tipo le gana al mapeo — ej. RODILLERA dentro de "SALUD Y
+            # ORTOPEDIA" es Accesorios/Protecciones, no calzado confort.
+            for toks, kdep, ktipo in _KW_FOLDED:
+                for tok in toks:
+                    if tok and tok in desc_f:
+                        return kdep, ktipo, 'keyword', (tok in _KW_AMBIG_FOLDED), False
+        return dep, tipo, 'mapeo_directo', rev, False
 
     if desc_f in _NOPROD_EXACT_FOLDED or desc_f.startswith(_NOPROD_PREFIX_FOLDED):
         return OTROS, 'No-Producto', 'no_producto', False, True

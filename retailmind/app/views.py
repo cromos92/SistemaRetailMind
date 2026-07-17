@@ -2907,17 +2907,38 @@ def ajustar_dte_emisor_api(request):
 
                     # Código de referencia SII: 1 = anula el documento completo,
                     # 3 = corrige montos (NC parcial). Solo corresponde 1 cuando
-                    # este ajuste deja el DTE sin unidades (pre-recepción) o
-                    # acredita el 100% de lo despachado (post-recepción, donde
-                    # el DTE original conserva sus unidades intactas).
+                    # ESTA NC, por sí sola, cubre el documento completo: deja el
+                    # DTE sin unidades (pre-recepción) o acredita el 100% de lo
+                    # despachado (post-recepción, donde las líneas del DTE
+                    # original quedan intactas).
                     if es_post_recepcion:
-                        unidades_dte_original = int(dte.unidades_productos or 0)
+                        # Sumar líneas activas en vez del header
+                        # unidades_productos, que puede tener drift legacy.
+                        unidades_despachadas = int(
+                            Dte_Productos.objects
+                            .filter(dte=dte, activo=True)
+                            .aggregate(u=Sum('stock'))['u'] or 0
+                        )
                         anula_doc_completo = (
-                            unidades_dte_original > 0
-                            and diferencial_unidades >= unidades_dte_original
+                            unidades_despachadas > 0
+                            and diferencial_unidades >= unidades_despachadas
                         )
                     else:
                         anula_doc_completo = int(nuevas_unidades or 0) == 0
+                    # Si ya existían NC vivas sobre este DTE, esta NC solo
+                    # COMPLETA la devolución (es complementaria): ante el SII
+                    # razón 1 exige que la NC cubra el documento entero, así
+                    # que en ese caso va razón 3 aunque el DTE quede en 0.
+                    if anula_doc_completo:
+                        hay_nc_previas = (
+                            Dte.objects
+                            .filter(documento_afectado=dte, es_nota_credito=True)
+                            .exclude(id=doc_nuevo.id)
+                            .exclude(estado_dte__in=('ANULADO', 'CANCELADO'))
+                            .exists()
+                        )
+                        if hay_nc_previas:
+                            anula_doc_completo = False
                     razon_referencia_sii = '1' if anula_doc_completo else '3'
 
                     sucursal_destino_nc = None
@@ -2961,17 +2982,17 @@ def ajustar_dte_emisor_api(request):
                             'ciudad': limpiar_texto(doc_nuevo.receptor.ciudad if doc_nuevo.receptor else ''),
                         },
                         'totales': {
-                            'monto_neto': int(diferencial_neto),
+                            'monto_neto': _monto_entero(diferencial_neto),
                             'monto_exento': 0,
-                            'iva': int(iva_dif),
-                            'monto_total': int(total_dif),
+                            'iva': _monto_entero(iva_dif),
+                            'monto_total': _monto_entero(total_dif),
                         },
                         'detalle': [],
                         'referencias': [{
                             'tipo_documento': tipo_sii_ref,
                             'folio': str(dte.numero_documento),
                             'fecha': dte.fecha_emision.strftime('%Y-%m-%d') if dte.fecha_emision else '',
-                            'razon': '1',  # 1 = anula documento
+                            'razon': razon_referencia_sii,  # 1 = anula, 3 = corrige montos
                         }],
                     }
 
@@ -2984,8 +3005,10 @@ def ajustar_dte_emisor_api(request):
                             'descripcion': limpiar_texto(linea['descripcion'] or ''),
                             'cantidad': int(linea['cantidad_ajustada']),
                             'unidad': 'UN',
-                            'precio_unitario': int(linea['precio'] or 0),
-                            'monto_item': int((linea['cantidad_ajustada'] or 0) * (linea['precio'] or 0)),
+                            'precio_unitario': _monto_entero(linea['precio']),
+                            'monto_item': _monto_entero(
+                                Decimal(str(linea['cantidad_ajustada'] or 0)) * Decimal(str(linea['precio'] or 0))
+                            ),
                             'indicador_exencion': '',
                         })
 
@@ -8601,10 +8624,16 @@ def verGestionProducto(request):
             # Valores por defecto en caso de error
             marca = color = genero = None
 
+    # Atributo transversal "Especialidad" (deporte/uso, multi-etiqueta) de la
+    # taxonomía v1.2. Se pasa su id para que el modal Crear Manual cargue sus
+    # opciones con el mismo mecanismo select2-atributo que Marca/Color/Género.
+    especialidad = Productos_Atributos.objects.filter(nombre__iexact='Especialidad').first()
+
     context = {
         'id_atributo_marca': marca.id if marca else 0,
         'id_atributo_color': color.id if color else 0,
         'id_atributo_genero': genero.id if genero else 0,
+        'id_atributo_especialidad': especialidad.id if especialidad else 0,
     }
 
     return render(request, 'vistas/modulo_existencias/verGestionProductos.html', context)
@@ -18951,6 +18980,19 @@ def verificar_producto_existente(request):
             'precioventa': int(producto.precioventa or 0),
             'stock_total': sum(t.get('stock', 0) for t in tallas_existentes)
         }
+
+        # Especialidades v1.2 del producto (atributo transversal multi-etiqueta),
+        # para que "copiar datos" del modal manual las precargue en el picker.
+        try:
+            from .models import ProductoAtributoValor
+            producto_encontrado['especialidades'] = [
+                {'id': pav.opcion_id, 'valor': pav.opcion.valor}
+                for pav in ProductoAtributoValor.objects.filter(
+                    producto=producto, atributo__nombre__iexact='Especialidad'
+                ).select_related('opcion')
+            ]
+        except Exception:
+            producto_encontrado['especialidades'] = []
         
         # ========== BUSCAR PRECIOS EN OTRAS SUCURSALES ==========
         productos_otras_sucursales = []
@@ -20670,7 +20712,7 @@ def obtener_productos(request):
         sucursal_id = sucursal_id_param
     else:
         sucursal_id = request.session.get('idSucursalActual')
-    productos = Producto_Talla.objects.select_related('producto')
+    productos = Producto_Talla.objects.select_related('producto', 'producto__categoria')
     if sucursal_id:
         productos = productos.filter(producto__sucursal_id=sucursal_id)
     if q:
@@ -20682,6 +20724,18 @@ def obtener_productos(request):
             Q(producto__atributo3__valor__icontains=q) |
             Q(sku__icontains=q)
         )
+    # Filtro por categoría v1.2: un padre (Calzado/Ropa/Accesorios) incluye
+    # también sus hijas; una hija filtra exacto.
+    categoria_id = request.GET.get('categoria_id', '')
+    if categoria_id and str(categoria_id).isdigit():
+        cat_ids = [int(categoria_id)]
+        cat_ids += list(Categoria.objects.filter(padre_id=categoria_id).values_list('id', flat=True))
+        productos = productos.filter(producto__categoria_id__in=cat_ids)
+    # Filtro por especialidad v1.2 (AtributoOpcion del atributo "Especialidad",
+    # vía ProductoAtributoValor; related_name='atributos' en Producto).
+    especialidad_id = request.GET.get('especialidad_id', '')
+    if especialidad_id and str(especialidad_id).isdigit():
+        productos = productos.filter(producto__atributos__opcion_id=especialidad_id).distinct()
     total_count = productos.count()
     offset = (page - 1) * page_size
     productos = productos.order_by('producto__articulo', 'talla')[offset:offset+page_size]
@@ -20719,6 +20773,8 @@ def obtener_productos(request):
             'sucursal_id': prod.sucursal_id,
             'sucursal_nombre': prod.sucursal.alias if prod.sucursal else '',
             'excluir_de_analitica': prod.excluir_de_analitica,
+            'categoria': prod.categoria.nombre if prod.categoria else '',
+            'categoria_id': prod.categoria_id,
         })
     return JsonResponse({
         'results': results,
@@ -21033,6 +21089,9 @@ def crear_producto_manual(request):
         atributo2 = request.POST.get('atributo2')  # Color
         atributo3 = request.POST.get('atributo3')  # Género
         categoria_id = request.POST.get('categoria')
+        # Especialidades v1.2 (multi-etiqueta): lista de ids de AtributoOpcion del
+        # atributo "Especialidad". Opcional — el producto puede no tener ninguna.
+        especialidad_ids = [e for e in request.POST.getlist('especialidad[]') if e]
         tipo_talla = request.POST.get('tipo_talla')
         guia_talla_id = request.POST.get('guia_talla')
         costo = Decimal(request.POST.get('costo', 0))
@@ -21216,6 +21275,28 @@ def crear_producto_manual(request):
                 sucursal=sucursal
             )
             logger.info("Producto nuevo creado manualmente: producto_id=%s articulo=%s", producto.id, articulo)
+
+        # ========== ESPECIALIDADES v1.2 (multi-etiqueta) ==========
+        # Guarda/actualiza las especialidades como ProductoAtributoValor del
+        # atributo "Especialidad". Idempotente (get_or_create) y aditivo: quita
+        # las que el usuario deseleccionó y agrega las nuevas, sin tocar otros
+        # atributos del producto. Silencioso si el atributo no existe todavía.
+        try:
+            from .models import ProductoAtributoValor
+            attr_esp = Productos_Atributos.objects.filter(nombre__iexact='Especialidad').first()
+            if attr_esp is not None:
+                opciones_validas = list(AtributoOpcion.objects.filter(
+                    atributo=attr_esp, id__in=especialidad_ids)) if especialidad_ids else []
+                ids_ok = {o.id for o in opciones_validas}
+                # Quitar las que ya no están seleccionadas
+                ProductoAtributoValor.objects.filter(
+                    producto=producto, atributo=attr_esp).exclude(opcion_id__in=ids_ok).delete()
+                # Agregar las nuevas (no duplica)
+                for opcion in opciones_validas:
+                    ProductoAtributoValor.objects.get_or_create(
+                        producto=producto, atributo=attr_esp, opcion=opcion)
+        except Exception as e:
+            logger.warning("Error guardando especialidades del producto %s: %s", producto.id, e)
 
         # ========== PROPAGAR DESCRIPCIÓN A TODAS LAS BODEGAS DEL CÓDIGO ==========
         bodegas_actualizadas = 0

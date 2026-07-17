@@ -550,6 +550,35 @@
         letter-spacing: .3px;
     }
 
+    /* ===== Selector padre→hijo (categoría) y multi-etiqueta (especialidad) ===== */
+    .nexo-picker-btn {
+        display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+        min-height: 31px; cursor: pointer; background: #fff;
+    }
+    .nexo-picker-btn:focus { outline: 2px solid #b9c8f5; }
+    .nexo-picker-caret { margin-left: auto; color: #99a; font-size: .8rem; }
+    .nexo-picker-panel {
+        position: absolute; z-index: 1080; left: 0; right: 0; top: 100%; margin-top: 4px;
+        background: #fff; border: 1px solid #cdd2e0; border-radius: 10px;
+        box-shadow: 0 10px 30px rgba(20,20,60,.18); padding: 8px;
+    }
+    .nexo-picker-list { max-height: 240px; overflow: auto; }
+    .nexo-prow {
+        padding: 5px 10px; border-radius: 7px; cursor: pointer; font-size: .82rem;
+        display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    }
+    .nexo-prow:hover { background: #eaf0ff; }
+    .nexo-prow.parent { font-weight: 700; margin-top: 4px; background: #f4f6fb; }
+    .nexo-prow.child { padding-left: 24px; }
+    .nexo-prow.fam { font-weight: 700; margin-top: 4px; background: #f1ebfd; color: #6b3fd4; cursor: default; }
+    .nexo-prow .lvl { font-size: .64rem; color: #99a; font-weight: 600; text-transform: uppercase; white-space: nowrap; }
+    .nexo-prow.sel { outline: 2px solid #405189; }
+    .nexo-prow.sel-esp { background: #e3f4f8; }
+    .nexo-crumb { background: #eaf0ff; color: #2456d6; border-radius: 6px; padding: 1px 8px; font-weight: 700; font-size: .76rem; }
+    .nexo-crumb.child { background: #e3f4f8; color: #0b7285; }
+    .nexo-crumb.general { background: #eef0f5; color: #66708a; font-weight: 600; }
+    .nexo-crumb.esp { background: #f1ebfd; color: #6b3fd4; }
+
     /* Resumen stock estilizado */
     .resumen-stock-crear {
         background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
@@ -2966,12 +2995,41 @@
                                                     data-select="atributo3"><i class="bi bi-plus-lg"></i></button>
                                             </div>
                                         </div>
-                                        <div class="col-6 mb-1">
+                                        <!-- Categoría: selector padre → hijo en una sola lista (taxonomía v1.2) -->
+                                        <div class="col-12 mb-1">
                                             <label class="form-label">Categoría <span class="text-danger">*</span></label>
-                                            <div class="input-group input-group-sm">
-                                                <select name="categoria" class="form-select select2-atributo" required></select>
-                                                <button class="btn btn-outline-secondary abrir-modal-categoria" type="button"><i class="bi bi-plus-lg"></i></button>
+                                            <input type="hidden" name="categoria" id="catManualValue" required>
+                                            <div class="nexo-picker position-relative">
+                                                <button type="button" class="form-select form-select-sm text-start nexo-picker-btn" id="catManualBtn">
+                                                    <span id="catManualCrumbs" class="text-muted">Elige categoría…</span>
+                                                    <i class="bi bi-chevron-down nexo-picker-caret"></i>
+                                                </button>
+                                                <div class="nexo-picker-panel" id="catManualPanel" hidden>
+                                                    <input type="text" class="form-control form-control-sm mb-1" id="catManualSearch"
+                                                        placeholder="Busca o navega: padre (general) o hijo (específico)…" autocomplete="off">
+                                                    <div class="nexo-picker-list" id="catManualList"></div>
+                                                </div>
                                             </div>
+                                            <div class="form-text" style="font-size:.7rem;">¿No sabes el subtipo? Elige el padre (general): nunca es error, entra igual a los menús generales.</div>
+                                        </div>
+                                        <!-- Especialidades: deporte/uso, multi-etiqueta (transversal) -->
+                                        <div class="col-12 mb-1">
+                                            <label class="form-label">Especialidades
+                                                <span class="text-muted" style="font-weight:400;font-size:.72rem;">(deporte / uso — múltiples, opcional)</span>
+                                            </label>
+                                            <div id="espManualHidden"></div>
+                                            <div class="nexo-picker position-relative">
+                                                <button type="button" class="form-select form-select-sm text-start nexo-picker-btn" id="espManualBtn">
+                                                    <span id="espManualCrumbs" class="text-muted">Sin especialidad</span>
+                                                    <i class="bi bi-chevron-down nexo-picker-caret"></i>
+                                                </button>
+                                                <div class="nexo-picker-panel" id="espManualPanel" hidden>
+                                                    <input type="text" class="form-control form-control-sm mb-1" id="espManualSearch"
+                                                        placeholder="Filtra especialidades…" autocomplete="off">
+                                                    <div class="nexo-picker-list" id="espManualList"></div>
+                                                </div>
+                                            </div>
+                                            <div class="form-text" style="font-size:.7rem;">Marca todos los usos que apliquen (ej: escolar blanco + urbano).</div>
                                         </div>
                                     </div>
                                 </div>
@@ -3664,6 +3722,30 @@
                         </div>
                     </div>
 
+                    <!-- Especialidades v1.2 (multi-etiqueta) -->
+                    <div class="mass-field-row mb-2">
+                        <div class="form-check form-switch d-flex align-items-center gap-2">
+                            <input class="form-check-input mass-field-toggle" type="checkbox" id="massToggleEspecialidad" data-target="massFieldEspecialidad">
+                            <label class="form-check-label fw-semibold" style="font-size:.8rem;" for="massToggleEspecialidad">Especialidades <span class="text-muted" style="font-weight:400;font-size:.72rem;">(deporte/uso)</span></label>
+                        </div>
+                        <div id="massFieldEspecialidad" class="mt-1" style="display:none;">
+                            <div class="row g-2">
+                                <div class="col-4">
+                                    <label class="form-label" style="font-size:.72rem;">Acción</label>
+                                    <select id="massEspModo" class="form-select form-select-sm">
+                                        <option value="agregar">Agregar (suma)</option>
+                                        <option value="reemplazar">Reemplazar (deja solo estas)</option>
+                                        <option value="quitar">Quitar (elimina estas)</option>
+                                    </select>
+                                </div>
+                                <div class="col-8">
+                                    <label class="form-label" style="font-size:.72rem;">Especialidades (Ctrl+clic para varias)</label>
+                                    <select id="massSelectEspecialidad" class="form-select form-select-sm" multiple size="5"></select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Precios -->
                     <div class="mass-field-row mb-2">
                         <div class="form-check form-switch d-flex align-items-center gap-2">
@@ -3748,6 +3830,20 @@
                             <i class="bi bi-building text-muted"></i>
                             <select class="form-select form-select-sm border-0 bg-light fw-semibold" id="filtroSucursalEditar" style="min-width:180px; border-radius:8px;">
                                 <option value="todas">Todas las bodegas</option>
+                            </select>
+                        </div>
+                        <!-- Filtro por categoría v1.2 (padre = incluye hijas) -->
+                        <div class="d-flex align-items-center gap-2 me-2">
+                            <i class="bi bi-diagram-3 text-muted"></i>
+                            <select class="form-select form-select-sm border-0 bg-light fw-semibold" id="filtroCategoriaEditar" style="min-width:170px; border-radius:8px;">
+                                <option value="">Todas las categorías</option>
+                            </select>
+                        </div>
+                        <!-- Filtro por especialidad v1.2 (deporte/uso) -->
+                        <div class="d-flex align-items-center gap-2 me-2">
+                            <i class="bi bi-tags text-muted"></i>
+                            <select class="form-select form-select-sm border-0 bg-light fw-semibold" id="filtroEspecialidadEditar" style="min-width:160px; border-radius:8px;">
+                                <option value="">Toda especialidad</option>
                             </select>
                         </div>
                         <span class="text-muted small" id="txtScopeActual"></span>
@@ -5072,10 +5168,15 @@ function showError(msg) {
     const ID_ATRIBUTO_MARCA = parseInt("{{ id_atributo_marca|default:0 }}");
     const ID_ATRIBUTO_COLOR = parseInt("{{ id_atributo_color|default:0 }}");
     const ID_ATRIBUTO_GENERO = parseInt("{{ id_atributo_genero|default:0 }}");
+    const ID_ATRIBUTO_ESPECIALIDAD = parseInt("{{ id_atributo_especialidad|default:0 }}");
 
     // === NUEVAS FUNCIONES PARA CARGAR Y SELECCIONAR OPCIONES ===
     function cargarOpcionesAtributoYSeleccionar(atributo_id, select_name, valorSeleccionado) {
         $.get(`/app/opciones_atributo/?atributo_id=${atributo_id}`, function (data) {
+            // DAMA está deprecada (migra a MUJER en la v1.2): no ofrecerla al crear.
+            if (String(atributo_id) === String(ID_ATRIBUTO_GENERO)) {
+                data = data.filter(o => String(o.valor).toUpperCase() !== 'DAMA');
+            }
             const select = $(`select[name="${select_name}"]`);
             select.empty().append('<option></option>');
             let existe = false;
@@ -5141,6 +5242,147 @@ function showError(msg) {
             console.error('❌ Error cargando categorías:', error);
         });
     }
+
+    // ==================================================================
+    // Selector de Categoría (padre→hijo en una sola lista) + Especialidad
+    // multi-etiqueta para el modal Crear Producto Manual (taxonomía v1.2).
+    // Escribe en <input name="categoria"> y en <input name="especialidad[]">.
+    // ==================================================================
+    const ESP_FAMILIAS = [
+      ['Fútbol', [['pasto','Pasto natural (FG/MG)'],['baby','Sintético / Baby (TF)'],['sala','Fútsal / Sala'],['futbol','Fútbol genérico (accesorios/ropa)']]],
+      ['Performance', [['running','Running'],['atletismo','Atletismo'],['basket','Basketball'],['training','Training / Fitness'],['tenis','Tenis / Pádel / Squash'],['voley','Voleibol'],['handball','Handball'],['rugby','Rugby'],['boxeo','Boxeo'],['artesm','Artes marciales'],['natacion','Natación'],['ciclismo','Ciclismo'],['pingpong','Ping pong'],['badminton','Bádminton'],['beisbol','Béisbol'],['hockey','Hockey'],['pool','Pool / Billar'],['skate','Skate / Patinaje'],['recre','Recreativos'],['golf','Golf']]],
+      ['Outdoor', [['trekking','Trekking / Outdoor'],['camping','Camping'],['pesca','Pesca y caza']]],
+      ['Escolar', [['oficial','Escolar oficial'],['blanco','Escolar deportivo blanco'],['negro','Escolar deportivo negro']]],
+      ['Urbano', [['urbano','Urbano (uso diario)']]],
+      ['Otros', [['cueca','Cueca / Danza'],['vestir','Formal vestir'],['fiesta','Formal fiesta'],['descanso','Descanso'],['gim','Gimnasia'],['seguridad','Seguridad / Trabajo']]],
+    ];
+    const ESP_LABEL = {}; ESP_FAMILIAS.forEach(([f,items]) => items.forEach(([id,l]) => ESP_LABEL[id] = l));
+
+    const NexoManualPicker = (function(){
+      let cats = null, espOpts = null;
+      let selCat = { id:null, label:null };
+      let selEsp = [];  // [{id, valor}]  id = AtributoOpcion.id
+
+      function loadCats(cb){
+        if (cats) { cb && cb(); return; }
+        $.get('/app/categorias_existentes/?tree=1', function(d){ cats = d || []; cb && cb(); })
+          .fail(function(){ cats = []; cb && cb(); });
+      }
+      function loadEsp(cb){
+        if (espOpts) { cb && cb(); return; }
+        if (!ID_ATRIBUTO_ESPECIALIDAD) { espOpts = []; cb && cb(); return; }
+        $.get('/app/opciones_atributo/?atributo_id=' + ID_ATRIBUTO_ESPECIALIDAD, function(d){
+          espOpts = (d || []).map(o => ({ id:o.id, valor:o.valor, label: ESP_LABEL[o.valor] || o.valor }));
+          cb && cb();
+        }).fail(function(){ espOpts = []; cb && cb(); });
+      }
+
+      function esc(s){ return String(s == null ? '' : s).replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+      function buildCatList(){
+        const q = ($('#catManualSearch').val() || '').toLowerCase();
+        const roots = cats.filter(c => !c.padre_id);
+        let h = '';
+        roots.forEach(r => {
+          const kids = cats.filter(c => c.padre_id === r.id);
+          const kidsF = kids.filter(k => !q || k.nombre.toLowerCase().includes(q));
+          const rootHit = !q || r.nombre.toLowerCase().includes(q);
+          if (!rootHit && !kidsF.length) return;
+          const selP = (selCat.id === r.id) ? ' sel' : '';
+          h += `<div class="nexo-prow parent${selP}" data-id="${r.id}" data-label="${esc(r.nombre)}">📁 ${esc(r.nombre)} <span class="lvl">general</span></div>`;
+          kidsF.forEach(k => {
+            const selC = (selCat.id === k.id) ? ' sel' : '';
+            h += `<div class="nexo-prow child${selC}" data-id="${k.id}" data-label="${esc(r.nombre)} › ${esc(k.nombre)}">└ ${esc(k.nombre)} <span class="lvl">específico</span></div>`;
+          });
+        });
+        $('#catManualList').html(h || '<div class="text-muted small p-2">Sin resultados</div>');
+      }
+      function renderCatCrumb(){
+        const $c = $('#catManualCrumbs');
+        if (!selCat.id){ $c.html('<span class="text-muted">Elige categoría…</span>'); $('#catManualValue').val(''); return; }
+        const parts = String(selCat.label || '').split(' › ');
+        $c.html(parts.length > 1
+          ? `<span class="nexo-crumb">${esc(parts[0])}</span> <span class="nexo-crumb child">${esc(parts[1])}</span>`
+          : `<span class="nexo-crumb">${esc(parts[0])}</span> <span class="nexo-crumb general">general</span>`);
+        $('#catManualValue').val(selCat.id);
+      }
+      function buildEspList(){
+        const q = ($('#espManualSearch').val() || '').toLowerCase();
+        const byValor = {}; espOpts.forEach(o => byValor[o.valor] = o);
+        let h = '';
+        ESP_FAMILIAS.forEach(([fam, items]) => {
+          const rows = items.filter(([slug,l]) => byValor[slug] && (!q || l.toLowerCase().includes(q) || slug.includes(q)));
+          if (!rows.length) return;
+          h += `<div class="nexo-prow fam">${fam}</div>`;
+          rows.forEach(([slug,l]) => {
+            const o = byValor[slug];
+            const on = selEsp.some(e => e.id === o.id);
+            h += `<div class="nexo-prow child${on ? ' sel-esp' : ''}" data-eid="${o.id}" data-evalor="${esc(o.valor)}">└ ${esc(l)} <span class="lvl">${on ? '✔' : ''}</span></div>`;
+          });
+        });
+        $('#espManualList').html(h || '<div class="text-muted small p-2">Sin resultados</div>');
+      }
+      function renderEspCrumb(){
+        const $c = $('#espManualCrumbs');
+        if (!selEsp.length){ $c.html('<span class="text-muted">Sin especialidad</span>'); $('#espManualHidden').empty(); return; }
+        $c.html(selEsp.map(e => `<span class="nexo-crumb esp">${esc(ESP_LABEL[e.valor] || e.valor)}</span>`).join(' '));
+        $('#espManualHidden').html(selEsp.map(e => `<input type="hidden" name="especialidad[]" value="${e.id}">`).join(''));
+      }
+
+      function reset(){ selCat = {id:null,label:null}; selEsp = []; renderCatCrumb(); renderEspCrumb(); }
+      function setCat(id, label){
+        if (!id) return;
+        selCat = { id:id, label: label || '' };
+        renderCatCrumb();
+        // Resolver la ruta "padre › hijo" desde el árbol (async si aún no cargó)
+        loadCats(function(){
+          const c = cats.find(x => String(x.id) === String(id));
+          if (c){
+            const p = c.padre_id ? cats.find(x => x.id === c.padre_id) : null;
+            selCat.label = p ? (p.nombre + ' › ' + c.nombre) : c.nombre;
+            renderCatCrumb();
+          }
+        });
+      }
+      // arr: [{id, valor}] con id = AtributoOpcion.id
+      function setEsp(arr){ selEsp = (arr || []).filter(e => e && e.id).map(e => ({ id:e.id, valor:e.valor || '' })); renderEspCrumb(); }
+
+      $(document).on('click', '#catManualBtn', function(e){
+        e.stopPropagation();
+        const p = $('#catManualPanel'), wasHidden = p.prop('hidden');
+        $('.nexo-picker-panel').prop('hidden', true);
+        if (wasHidden) loadCats(() => { $('#catManualSearch').val(''); buildCatList(); p.prop('hidden', false); $('#catManualSearch').focus(); });
+      });
+      $(document).on('input', '#catManualSearch', buildCatList);
+      $(document).on('click', '#catManualList .nexo-prow', function(){
+        selCat = { id: $(this).data('id'), label: $(this).data('label') };
+        renderCatCrumb(); $('#catManualPanel').prop('hidden', true);
+      });
+      $(document).on('click', '#espManualBtn', function(e){
+        e.stopPropagation();
+        const p = $('#espManualPanel'), wasHidden = p.prop('hidden');
+        $('.nexo-picker-panel').prop('hidden', true);
+        if (wasHidden) loadEsp(() => { $('#espManualSearch').val(''); buildEspList(); p.prop('hidden', false); $('#espManualSearch').focus(); });
+      });
+      $(document).on('input', '#espManualSearch', buildEspList);
+      $(document).on('click', '#espManualList .nexo-prow.child', function(){
+        const id = $(this).data('eid'), valor = String($(this).data('evalor'));
+        const i = selEsp.findIndex(e => e.id === id);
+        if (i >= 0) selEsp.splice(i, 1); else selEsp.push({ id:id, valor:valor });
+        buildEspList(); renderEspCrumb();
+      });
+      $(document).on('click', function(e){ if (!$(e.target).closest('.nexo-picker').length) $('.nexo-picker-panel').prop('hidden', true); });
+
+      return { loadCats, loadEsp, reset, setCat, setEsp, getCat: () => selCat, getEsp: () => selEsp };
+    })();
+    window.NexoManualPicker = NexoManualPicker;
+    window.ESP_LABEL_V12 = ESP_LABEL;
+    window.ID_ATRIBUTO_ESP_V12 = ID_ATRIBUTO_ESPECIALIDAD;
+
+    // Precargar árbol + especialidades al abrir el modal Crear Manual.
+    $('#modalCrearProductoManual').on('show.bs.modal', function(){
+      NexoManualPicker.loadCats(); NexoManualPicker.loadEsp();
+    });
 
     // ==================================================================
     // Reset completo del modal "Crear Producto desde Recepción" para que
@@ -5438,6 +5680,10 @@ function showError(msg) {
 
     function cargarOpcionesAtributo(atributo_id, select_name) {
         $.get(`/app/opciones_atributo/?atributo_id=${atributo_id}`, function (data) {
+            // DAMA está deprecada (migra a MUJER en la v1.2): no ofrecerla al crear.
+            if (String(atributo_id) === String(ID_ATRIBUTO_GENERO)) {
+                data = data.filter(o => String(o.valor).toUpperCase() !== 'DAMA');
+            }
             const select = $(`select[name="${select_name}"]`);
             select.empty().append('<option></option>'); // opción en blanco
             data.forEach(o => {
@@ -9223,6 +9469,7 @@ function cargarOpcionesAtributoYSeleccionarPorTexto(atributo_id, select_name, te
 function abrirModalCrearProductoManual() {
     // Limpiar formulario
     $('#formCrearProductoManual')[0].reset();
+    if (window.NexoManualPicker) NexoManualPicker.reset();  // categoría + especialidades v1.2
     $('#tablaTallasManual tbody').empty();
     
     // ✅ Limpiar campo hidden del DTE
@@ -10805,10 +11052,14 @@ $(document).on('click', '#btnCopiarDatosProducto', function() {
     if (prod.genero_id) {
         $('#modalCrearProductoManual select[name="atributo3"]').val(prod.genero_id).trigger('change');
     }
-    if (prod.categoria_id) {
-        $('#modalCrearProductoManual select[name="categoria"]').val(prod.categoria_id).trigger('change');
+    if (prod.categoria_id && window.NexoManualPicker) {
+        NexoManualPicker.setCat(prod.categoria_id, prod.categoria);
     }
-    
+    // Especialidades v1.2 del producto de referencia (si el backend las provee)
+    if (window.NexoManualPicker) {
+        NexoManualPicker.setEsp(prod.especialidades || []);
+    }
+
     // Copiar tallas existentes a la tabla CON LOS SKUs REALES
     if (tallas && tallas.length > 0) {
         // ✅ Preservar stock tipeado antes de vaciar (patrón anti-pérdida)
@@ -10961,7 +11212,12 @@ $(document).on('click', '#btnCopiarDatosProducto', function() {
         if (p.marca_id) $form.find('select[name="atributo1"]').val(p.marca_id).trigger('change');
         if (p.color_id) $form.find('select[name="atributo2"]').val(p.color_id).trigger('change');
         if (p.genero_id) $form.find('select[name="atributo3"]').val(p.genero_id).trigger('change');
-        if (p.categoria_id) $form.find('select[name="categoria"]').val(p.categoria_id).trigger('change');
+        if (isManualModal && window.NexoManualPicker) {
+            if (p.categoria_id) NexoManualPicker.setCat(p.categoria_id, p.categoria);
+            NexoManualPicker.setEsp(p.especialidades || []);
+        } else if (p.categoria_id) {
+            $form.find('select[name="categoria"]').val(p.categoria_id).trigger('change');
+        }
 
         // Copiar tipo de talla
         if (p.tipo_talla) $form.find('select[name="tipo_talla"]').val(p.tipo_talla).trigger('change');
@@ -11156,7 +11412,10 @@ function copiarProductoCoincidencia(producto) {
     if (producto.atributo1) cargarOpcionesAtributoYSeleccionar(ID_ATRIBUTO_MARCA, 'atributo1', producto.atributo1);
     if (producto.atributo2) cargarOpcionesAtributoYSeleccionar(ID_ATRIBUTO_COLOR, 'atributo2', producto.atributo2);
     if (producto.atributo3) cargarOpcionesAtributoYSeleccionar(ID_ATRIBUTO_GENERO, 'atributo3', producto.atributo3);
-    if (producto.categoria_id) cargarCategoriasYSeleccionar(producto.categoria_id);
+    if (window.NexoManualPicker) {
+        if (producto.categoria_id) NexoManualPicker.setCat(producto.categoria_id, producto.categoria);
+        NexoManualPicker.setEsp(producto.especialidades || []);
+    }
 
     // Copiar tipo de talla
     if (producto.tipo_talla) {
@@ -12690,7 +12949,10 @@ $('#btnConfirmarActualizacion').on('click', function() {
         if (producto.atributo1) cargarOpcionesAtributoYSeleccionar(ID_ATRIBUTO_MARCA, 'atributo1', producto.atributo1);
         if (producto.atributo2) cargarOpcionesAtributoYSeleccionar(ID_ATRIBUTO_COLOR, 'atributo2', producto.atributo2);
         if (producto.atributo3) cargarOpcionesAtributoYSeleccionar(ID_ATRIBUTO_GENERO, 'atributo3', producto.atributo3);
-        if (producto.categoria_id) cargarCategoriasYSeleccionar(producto.categoria_id);
+        if (window.NexoManualPicker) {
+            if (producto.categoria_id) NexoManualPicker.setCat(producto.categoria_id, producto.categoria);
+            NexoManualPicker.setEsp(producto.especialidades || []);
+        }
         if (producto.tipo_talla) {
             $('#modalCrearProductoManual select[name="tipo_talla"]').val(producto.tipo_talla).trigger('change');
         }
@@ -14595,8 +14857,10 @@ $('#btnConfirmarActualizacion').on('click', function() {
                 return;
             }
             
-            // Verificar si se debe propagar a todas las sucursales
-            const propagarSucursales = $('#edit_propagar_sucursales').is(':checked');
+            // Política 2026-07: la edición SIEMPRE se propaga a todas las
+            // sucursales (una variante no puede quedar distinta por bodega).
+            $('#edit_propagar_sucursales').prop('checked', true).prop('disabled', true);
+            const propagarSucursales = true;
             
             const datos = {
                 articulo: articulo,
@@ -14940,12 +15204,14 @@ $('#btnConfirmarActualizacion').on('click', function() {
     function buscarProductosParaEditar(filtro = '') {
         const termino = $('#inputBuscarProductoEditar').val().trim();
         const sucursalId = $('#filtroSucursalEditar').val() || 'todas';
-        
-        if (!termino && !filtro && sucursalId === 'todas') {
+        const categoriaId = $('#filtroCategoriaEditar').val() || '';
+        const especialidadId = $('#filtroEspecialidadEditar').val() || '';
+
+        if (!termino && !filtro && sucursalId === 'todas' && !categoriaId && !especialidadId) {
             Swal.fire({
                 icon: 'warning',
                 title: 'Búsqueda vacía',
-                text: 'Ingrese un término de búsqueda, seleccione una sucursal o use un filtro'
+                text: 'Ingrese un término, seleccione bodega, categoría o especialidad, o use un filtro'
             });
             return;
         }
@@ -14967,7 +15233,9 @@ $('#btnConfirmarActualizacion').on('click', function() {
             data: {
                 q: termino,
                 page_size: 50,
-                sucursal_id: sucursalId
+                sucursal_id: sucursalId,
+                categoria_id: categoriaId,
+                especialidad_id: especialidadId
             },
             success: function(response) {
                 // La API devuelve { results: [...], pagination: {...} }
@@ -15012,7 +15280,33 @@ $('#btnConfirmarActualizacion').on('click', function() {
                 });
             }
         });
+        cargarFiltrosTaxonomiaEditar();
     }
+
+    // Cargar filtros de categoría (árbol indentado) y especialidad v1.2
+    function cargarFiltrosTaxonomiaEditar() {
+        const $cat = $('#filtroCategoriaEditar');
+        if ($cat.find('option').length <= 1) {
+            $.get('/app/categorias_existentes/', function (data) {
+                (data || []).forEach(c => $cat.append(`<option value="${c.id}">${c.nombre}</option>`));
+            });
+        }
+        const $esp = $('#filtroEspecialidadEditar');
+        if ($esp.find('option').length <= 1 && window.ID_ATRIBUTO_ESP_V12) {
+            $.get('/app/opciones_atributo/?atributo_id=' + window.ID_ATRIBUTO_ESP_V12, function (data) {
+                (data || []).forEach(o => {
+                    const label = (window.ESP_LABEL_V12 && window.ESP_LABEL_V12[o.valor]) || o.valor;
+                    $esp.append(`<option value="${o.id}">${label}</option>`);
+                });
+            });
+        }
+    }
+
+    // Cambios en filtros de taxonomía → re-buscar
+    $(document).on('change', '#filtroCategoriaEditar, #filtroEspecialidadEditar', function () {
+        resetearSeleccion();
+        buscarProductosParaEditar();
+    });
 
     // Al cambiar sucursal: actualizar texto del scope y auto-buscar
     $('#filtroSucursalEditar').on('change', function() {
@@ -15091,12 +15385,27 @@ $('#btnConfirmarActualizacion').on('click', function() {
         $('#btnAplicarEdicionMasiva').prop('disabled', true);
         $('#massImpactoPanel').hide();
 
+        // Política 2026-07: la edición masiva SIEMPRE alcanza todas las sucursales
+        $('#massPropagar').prop('checked', true).prop('disabled', true);
+
         // Cargar categorías
         $.get('/app/categorias_existentes/', function (data) {
             const sel = $('#massSelectCategoria');
             sel.empty().append('<option value="">-- Seleccionar --</option>');
             data.forEach(c => sel.append(`<option value="${c.id}">${c.nombre}</option>`));
         });
+
+        // Cargar especialidades v1.2 (multi-select con etiquetas legibles)
+        if (window.ID_ATRIBUTO_ESP_V12) {
+            $.get('/app/opciones_atributo/?atributo_id=' + window.ID_ATRIBUTO_ESP_V12, function (data) {
+                const sel = $('#massSelectEspecialidad');
+                sel.empty();
+                (data || []).forEach(o => {
+                    const label = (window.ESP_LABEL_V12 && window.ESP_LABEL_V12[o.valor]) || o.valor;
+                    sel.append(`<option value="${o.id}">${label}</option>`);
+                });
+            });
+        }
 
         // Cargar atributos en Select2
         $('#modalEdicionMasiva .select2-mass').each(function () {
@@ -15122,7 +15431,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
     }
 
     function cargarPreviewEdicionMasiva(ids) {
-        const propagar = $('#massPropagar').is(':checked');
+        const propagar = true;  // política: siempre todas las sucursales
         $.ajax({
             url: '/app/productos/preview-edicion-masiva/',
             method: 'POST',
@@ -15188,6 +15497,17 @@ $('#btnConfirmarActualizacion').on('click', function() {
             campos.aplicar_atributo3 = true;
             campos.atributo3_id = $('#massSelectGenero').val() || null;
         }
+        if ($('#massToggleEspecialidad').is(':checked')) {
+            const espIds = $('#massSelectEspecialidad').val() || [];
+            const espModo = $('#massEspModo').val() || 'agregar';
+            if (!espIds.length && espModo !== 'reemplazar') {
+                Swal.fire({ icon: 'warning', title: 'Sin especialidades', text: 'Selecciona al menos una especialidad (o usa "Reemplazar" con ninguna para limpiarlas).', timer: 3000 });
+                return;
+            }
+            campos.aplicar_especialidad = true;
+            campos.especialidad_modo = espModo;
+            campos.especialidad_ids = espIds;
+        }
         if ($('#massTogglePrecios').is(':checked')) {
             const costo = parseInt($('#massCosto').val());
             const sobre = parseInt($('#massSobreprecio').val());
@@ -15202,7 +15522,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
             campos.precioventa = precio;
         }
 
-        const propagar = $('#massPropagar').is(':checked');
+        const propagar = true;  // política: siempre todas las sucursales
         const totalCampos = Object.keys(campos).filter(k => k.startsWith('aplicar_')).length;
 
         Swal.fire({

@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<script type="application/json" id="cowork-artifact-meta">
+{
+  "name": "Modal Prueba Categorias",
+  "schemaVersion": 1,
+  "description": "Prototipo interactivo del modal «Crear Producto» del ERP con la recategorización: Categoría→Subcategoría en cascada, Especialidad transversal, Género corregido, árbol padre→hijo y simulador de en qué menús de realsport.cl y calzadospaola.cl aparece cada producto.",
+  "mcpTools": [],
+  "mcpServerNames": []
+}
+</script>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Modal de prueba · Recategorización padre → hijo</title>
+<style>
+  :root{
+    --bg:#eef0f6; --card:#fff; --ink:#1a2233; --muted:#66708a; --line:#e2e5ee;
+    --brand1:#5b3fd4; --brand2:#8146e0; --blue:#2456d6; --blue-soft:#eaf0ff;
+    --teal:#0b7285; --teal-soft:#e3f4f8; --violet:#6b3fd4; --violet-soft:#f1ebfd;
+    --pink:#b0367e; --pink-soft:#fdf0f6; --green:#0e8a5f; --green-soft:#e6f5ef;
+    --amber:#8a6d00; --amber-soft:#fff8d6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45}
+  .wrap{max-width:1180px;margin:0 auto;padding:26px 18px 80px}
+  .intro{background:linear-gradient(120deg,#1d1440,#5b3fd4);color:#fff;border-radius:16px;padding:24px 28px;margin-bottom:20px}
+  .intro h1{margin:0 0 6px;font-size:1.4rem}
+  .intro p{margin:0;color:#d5cdf5;font-size:.92rem;max-width:920px}
+  .answer{background:#fff;border-left:4px solid var(--brand1);border-radius:12px;padding:16px 20px;margin-bottom:22px;font-size:.9rem;box-shadow:0 1px 4px rgba(20,20,60,.06)}
+  .answer b.q{display:block;font-size:.95rem;margin-bottom:6px}
+  h2{font-size:1.1rem;margin:30px 0 12px}
+  /* ===== modal replica ===== */
+  .modal-frame{background:rgba(20,18,40,.45);border-radius:18px;padding:26px;margin-bottom:8px}
+  .modal-x{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 18px 50px rgba(10,10,40,.35);max-width:1050px;margin:0 auto}
+  .mhead{background:linear-gradient(100deg,var(--brand1),var(--brand2));color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px}
+  .mhead .ic{width:36px;height:36px;background:rgba(255,255,255,.16);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.05rem}
+  .mhead h3{margin:0;font-size:1.02rem}
+  .mhead small{color:rgba(255,255,255,.65);font-size:.72rem;display:block}
+  .mbody{display:grid;grid-template-columns:1.05fr .95fr;gap:0}
+  @media(max-width:860px){.mbody{grid-template-columns:1fr}}
+  .mleft{padding:18px 20px;border-right:1px solid var(--line)}
+  .mright{padding:18px 20px;background:#f8f9fd}
+  .sec{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px}
+  .sec-t{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--brand1);margin-bottom:10px}
+  .frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .fg{margin-bottom:2px}
+  label{display:block;font-size:.76rem;font-weight:600;margin-bottom:3px}
+  label .req{color:#d23}
+  select,input[type=text]{width:100%;padding:7px 10px;border:1px solid #cdd2e0;border-radius:8px;font-size:.86rem;background:#fff;color:var(--ink)}
+  select:focus{outline:2px solid #b9c8f5}
+  select:disabled{background:#f0f1f6;color:#999}
+  .ghost{opacity:.55;pointer-events:none}
+  .hintline{font-size:.7rem;color:var(--muted);margin-top:3px}
+  .newflag{font-size:.66rem;background:var(--amber-soft);color:var(--amber);border:1px dashed #d4b106;border-radius:5px;padding:0 5px;margin-left:5px;font-weight:700}
+  /* result */
+  .tags{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 14px}
+  .tg{border-radius:7px;padding:3px 10px;font-size:.78rem;font-weight:700}
+  .tg.gen{background:var(--pink-soft);color:var(--pink)}
+  .tg.cat{background:var(--blue-soft);color:var(--blue)}
+  .tg.sub{background:var(--teal-soft);color:var(--teal)}
+  .tg.esp{background:var(--violet-soft);color:var(--violet)}
+  .tg.empty{background:#eef0f5;color:#99a;font-weight:500}
+  .storeblock{margin-bottom:14px}
+  .storeblock h5{margin:0 0 6px;font-size:.8rem;display:flex;align-items:center;gap:7px}
+  .storeblock h5 .n{background:var(--green-soft);color:var(--green);border-radius:999px;padding:1px 9px;font-size:.72rem}
+  .slots{display:flex;flex-direction:column;gap:4px;max-height:190px;overflow:auto}
+  .slot{background:#fff;border:1px solid var(--line);border-left:3px solid var(--green);border-radius:7px;padding:5px 10px;font-size:.79rem}
+  .noslot{font-size:.79rem;color:var(--muted);font-style:italic;padding:4px 2px}
+  .examples{display:flex;gap:7px;flex-wrap:wrap;margin:2px 0 14px}
+  .exbtn{border:1px solid #cdd2e0;background:#fff;border-radius:999px;padding:5px 13px;font-size:.76rem;cursor:pointer;color:var(--ink)}
+  .exbtn:hover{border-color:var(--brand1);color:var(--brand1)}
+  .mfoot{padding:12px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px;background:#fff}
+  /* picker padre+hijo */
+  .pick{width:100%;text-align:left;background:#fff;border:1px solid #cdd2e0;border-radius:8px;padding:7px 10px;font-size:.86rem;cursor:pointer;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .pick:focus{outline:2px solid #b9c8f5}
+  .crumb{background:var(--blue-soft);color:var(--blue);border-radius:6px;padding:1px 8px;font-weight:700;font-size:.78rem}
+  .crumb.child{background:var(--teal-soft);color:var(--teal)}
+  .crumb.general{background:#eef0f5;color:#66708a;font-weight:600}
+  .caret{margin-left:auto;color:#99a}
+  .pickpanel{position:absolute;z-index:30;left:0;right:0;top:100%;margin-top:4px;background:#fff;border:1px solid #cdd2e0;border-radius:10px;box-shadow:0 10px 30px rgba(20,20,60,.18);padding:8px}
+  .pickpanel input{margin-bottom:6px}
+  .picklist{max-height:250px;overflow:auto}
+  .prow{padding:6px 10px;border-radius:7px;cursor:pointer;font-size:.84rem;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .prow:hover{background:var(--blue-soft)}
+  .prow.parent{font-weight:700;margin-top:4px;background:#f4f6fb}
+  .prow.child{padding-left:26px}
+  .prow .lvl{font-size:.66rem;color:#99a;font-weight:600;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+  .prow.sel{outline:2px solid var(--brand1)}
+  .refine{margin-top:8px}
+  .rc{display:inline-block;background:var(--amber-soft);color:var(--amber);border:1px dashed #d4b106;border-radius:999px;padding:2px 10px;font-size:.73rem;cursor:pointer;margin:0 5px 5px 0;font-weight:600}
+  .rc.up{background:#eef0f5;color:#66708a;border-color:#c6cbdb}
+  .btn{border:none;border-radius:8px;padding:8px 18px;font-size:.85rem;cursor:pointer}
+  .btn.pri{background:var(--brand1);color:#fff}
+  .btn.sec{background:#fff;border:1px solid #cdd2e0;color:var(--muted)}
+  /* ===== tree ===== */
+  .treegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+  .tree{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .tree h4{margin:0 0 10px;font-size:.88rem;display:flex;gap:8px;align-items:center}
+  .parent{font-weight:700;font-size:.84rem;padding:6px 10px;border-radius:8px;margin:10px 0 4px}
+  .parent.p-cal{background:var(--blue-soft);color:var(--blue)}
+  .parent.p-ves{background:var(--teal-soft);color:var(--teal)}
+  .parent.p-acc{background:var(--green-soft);color:var(--green)}
+  .parent.p-esp{background:var(--violet-soft);color:var(--violet)}
+  .parent.p-gen{background:var(--pink-soft);color:var(--pink)}
+  .child{font-size:.8rem;padding:3px 8px 3px 22px;position:relative;color:#333}
+  .child::before{content:"";position:absolute;left:9px;top:0;bottom:50%;width:9px;border-left:1.5px solid #c6cbdb;border-bottom:1.5px solid #c6cbdb;border-radius:0 0 0 5px}
+  .child.new{color:var(--amber);font-weight:600}
+  .child small{color:var(--muted);font-weight:400}
+  footer{margin-top:36px;text-align:center;color:var(--muted);font-size:.76rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="intro">
+  <h1>Modal de prueba — así queda «Crear Producto» con la recategorización</h1>
+  <p>Un <b>solo selector con padre e hijos mezclados</b>: el usuario puede englobar en la categoría general (calzado) o afinar al hijo (calzado › zapatillas), navegando los niveles. Elegir el padre <b>nunca es un error</b> — el producto igual entra a los menús generales — y el sistema le muestra cuántas vitrinas más gana si especifica. A la derecha ves <b>en qué menús de realsport.cl y calzadospaola.cl aparecería</b> con cada nivel.</p>
+</div>
+
+<div class="answer">
+  <b class="q">¿Un producto puede tener más de 1 categoría?</b>
+  Sí — pero por el lado correcto. El <b>tipo</b> es único (una zapatilla no puede ser también un bolso: categoría padre → hijo, una sola), pero los <b>usos son múltiples</b>: la Especialidad ahora acepta <b>varias etiquetas a la vez</b>. Una zapatilla blanca puede ser <i>escolar blanco + urbano</i> y aparece en el menú Escolar <b>y</b> en las urbanas; un botín TF puede ser <i>baby + sala</i>; un zapato reina, <i>fiesta + vestir</i>. Y además cada combinación entra automáticamente a todos los menús de ambas tiendas cuyas reglas cumpla — esa es la multiplicidad real, sin doble mantención.
+  <br><br><b class="q">¿Y Escolar?</b>
+  Escolar tiene <b>su propio menú/categoría en ambas tiendas</b> (como hoy: «Escolar 2026» en Calzados Paola, «Escolares» en Realsport). En el ERP se etiqueta como especialidad (oficial / blanco / negro) porque lo escolar cruza tipos: zapatillas, zapatos mafalda, mochilas, camisas. Cualquier producto con una etiqueta escolar cae solo al menú Escolar, sea calzado o mochila.
+  <br><br><b class="q">¿Una zapatilla escolar que también sirve para moda?</b>
+  Caso perfecto de multi-etiqueta: <span class="tg gen" style="font-size:.78rem">Juvenil</span> <span class="tg cat" style="font-size:.78rem">calzado</span> <span class="tg sub" style="font-size:.78rem">zapatillas</span> <span class="tg esp" style="font-size:.78rem">escolar negro</span> <span class="tg esp" style="font-size:.78rem">urbano</span> — aparece en <b>Escolar</b> (por la etiqueta escolar) y en <b>zapatillas urbanas</b> (por la etiqueta urbano), en ambas tiendas, sin duplicar el producto. Pruébalo con los botones de ejemplo.
+  <br><br><b class="q">¿Cuál era la diferencia entre urbano, casual y moda?</b>
+  Ninguna que sirviera — por eso <b>se fusionan en una sola especialidad: «urbano (uso diario)»</b>. Investigué cómo lo hacen Bata y Guante: ambos clasifican por <i>ocasión de uso</i> (diario, formal, deportivo, outdoor) y ninguno separa casual de moda. Y en tus menús las reglas siempre pedían «casual O moda» juntas, así que distinguirlas solo agregaba una decisión imposible al etiquetar. Lo que antes era «moda» de vestir se cubre con <i>formal fiesta / formal vestir</i>, y el estilo trendy de un taco o plataforma ya lo dice la subcategoría.
+  <br><br><b class="q">¿Necesitamos más niveles de árbol (nietos)?</b>
+  No: mirando el menú real de Calzados Paola, sus terceros niveles son <b>hijo × especialidad</b>: «Sandalias de Fiesta» = sandalias + fiesta · «Bolsos Deportivos» = bolsos + deporte · «Balones de Fútbol» = balones + fútbol · «Zapatillas Deportivas › Running» = zapatillas + running. El árbol del ERP se queda en 2 niveles y los menús generan los nietos cruzando los campos. (Cosas como «calcetines cortos/largos» son variante del producto, como la talla — no una categoría.)
+  <br><br><b class="q">¿Y si el usuario no sabe la subcategoría exacta?</b>
+  El selector mezcla padre e hijos en una sola lista: puede quedarse en <b>«calzado (general)»</b> y el producto entra igual a todos los menús que no exigen subcategoría — nunca queda mal clasificado. Los chips amarillos le muestran cuántos menús extra gana con cada hijo, para «jugar con los niveles» hasta acertar. Un reporte nocturno lista los productos que quedaron en nivel general para afinarlos con calma.
+</div>
+
+<h2>🧪 Pruébalo — elige un ejemplo o arma tu propia combinación</h2>
+<div class="examples">
+  <button class="exbtn" data-ex="Mujer|calzado||">🤷 Solo sé que es calzado de Mujer (general)</button>
+  <button class="exbtn" data-ex="Niña|calzado|zapatillas|blanco,urbano">🎒 Escolar blanca Niña (escolar + urbana)</button>
+  <button class="exbtn" data-ex="Juvenil|calzado|zapatillas|negro,urbano">👟 Escolar negra Juvenil (escolar + urbana)</button>
+  <button class="exbtn" data-ex="Unisex|accesorios|equipamiento|training">🏋️ Disco de pesas</button>
+  <button class="exbtn" data-ex="Unisex|accesorios|mochilas|oficial">🎒 Mochila escolar</button>
+  <button class="exbtn" data-ex="Hombre|calzado|botines|baby,sala">⚽ Botín TF (baby + sala)</button>
+  <button class="exbtn" data-ex="Mujer|calzado|zapatillas|running">👟 Zapatilla running Mujer</button>
+  <button class="exbtn" data-ex="Mujer|calzado|tacos|fiesta,vestir">👠 Zapato reina (fiesta + vestir)</button>
+  <button class="exbtn" data-ex="Mujer|calzado|zvestir|cueca">💃 Zapato cueca Mujer</button>
+  <button class="exbtn" data-ex="Hombre|calzado|botas|trekking">🥾 Bota trekking Hombre</button>
+  <button class="exbtn" data-ex="Bebé|calzado|gateadores|">👶 Gateador bebé</button>
+  <button class="exbtn" data-ex="Unisex|accesorios|balones|basket">🏀 Balón basketball</button>
+  <button class="exbtn" data-ex="Niño|vestuario|poleras|pasto">👕 Camiseta fútbol Niño</button>
+</div>
+
+<div class="modal-frame">
+  <div class="modal-x">
+    <div class="mhead">
+      <div class="ic">✏️</div>
+      <div><h3>Crear Producto Manual</h3><small>Paso 2 · Artículo / Atributos — versión recategorizada</small></div>
+    </div>
+    <div class="mbody">
+      <div class="mleft">
+        <div class="sec ghost">
+          <div class="sec-t">🏷 Identificación (igual que hoy)</div>
+          <div class="frow">
+            <div class="fg"><label>Artículo <span class="req">*</span></label><input type="text" value="ZAP-001" disabled></div>
+            <div class="fg"><label>Descripción</label><input type="text" value="Ej: Zapatilla Running Mujer" disabled></div>
+          </div>
+        </div>
+        <div class="sec ghost">
+          <div class="sec-t">🎨 Marca y color (igual que hoy)</div>
+          <div class="frow">
+            <div class="fg"><label>Marca <span class="req">*</span></label><select disabled><option>NIKE</option></select></div>
+            <div class="fg"><label>Color <span class="req">*</span></label><select disabled><option>BLANCO/ROSA</option></select></div>
+          </div>
+        </div>
+        <div class="sec">
+          <div class="sec-t">🗂 Clasificación — lo nuevo</div>
+          <div class="frow">
+            <div class="fg">
+              <label>Género <span class="req">*</span></label>
+              <select id="sGen"></select>
+              <div class="hintline">Se elimina DAMA (migra a MUJER) y se agrega BEBÉ</div>
+            </div>
+            <div class="fg" style="position:relative">
+              <label>Especialidades <span style="font-weight:400;color:var(--muted)">(múltiples)</span></label>
+              <button type="button" class="pick" id="espBtn"><span id="espCrumbs"></span><span class="caret">▾</span></button>
+              <div class="pickpanel" id="espPanel" hidden>
+                <div class="picklist" id="espList"></div>
+              </div>
+              <div class="hintline">Marca todos los usos que apliquen (ej: escolar blanco + urbano)</div>
+            </div>
+          </div>
+          <div class="fg" style="margin-top:10px;position:relative">
+            <label>Categoría — padre e hijos en una sola lista <span class="req">*</span></label>
+            <button type="button" class="pick" id="pickBtn"><span id="crumbs"></span><span class="caret">▾</span></button>
+            <div class="pickpanel" id="pickPanel" hidden>
+              <input type="text" id="pickSearch" placeholder="Busca o navega: elige el padre (general) o un hijo (específico)">
+              <div class="picklist" id="pickList"></div>
+            </div>
+            <div class="hintline">¿No estás seguro? Elige el padre: nunca es error. Especificar el hijo llega a más vitrinas.</div>
+            <div class="refine" id="refine"></div>
+          </div>
+        </div>
+      </div>
+      <div class="mright">
+        <div class="sec-t" style="margin-bottom:6px">🔎 Vista previa: tags del producto</div>
+        <div class="tags" id="tags"></div>
+        <div class="sec-t" style="margin-bottom:6px">🛒 Dónde aparece en las tiendas</div>
+        <div class="storeblock">
+          <h5>realsport.cl <span class="n" id="nRS">0 menús</span></h5>
+          <div class="slots" id="slotsRS"></div>
+        </div>
+        <div class="storeblock">
+          <h5>calzadospaola.cl <small style="color:var(--muted);font-weight:400">(menú propuesto)</small> <span class="n" id="nCP">0 menús</span></h5>
+          <div class="slots" id="slotsCP"></div>
+        </div>
+        <div class="hintline">Unisex actúa como comodín: entra a los menús de Hombre y Mujer.</div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn sec">Cancelar</button>
+      <button class="btn pri">✔ Crear Producto</button>
+    </div>
+  </div>
+</div>
+
+<h2>🌳 Árbol de categorías propuesto (padre → hijo)</h2>
+<div class="treegrid">
+  <div class="tree">
+    <h4><span class="tg cat">categoría → sub</span></h4>
+    <div class="parent p-cal">calzado</div>
+    <div class="child">Zapatillas</div>
+    <div class="child">Botines</div>
+    <div class="child">Botas</div>
+    <div class="child">Sandalias / Chalas</div>
+    <div class="child">Mocasín</div>
+    <div class="child">Zapato de vestir</div>
+    <div class="child">Alpargata</div>
+    <div class="child">Pantuflas</div>
+    <div class="child new">Tacos <small>(tacones / reina)</small> <span class="newflag">NUEVO</span></div>
+    <div class="child new">Ballerinas <small>(chinitas / planos / mafalda)</small> <span class="newflag">NUEVO</span></div>
+    <div class="child new">Plataformas <span class="newflag">NUEVO</span></div>
+    <div class="child new">Gateadores <small>(bebé)</small> <span class="newflag">NUEVO</span></div>
+    <div class="child new">Danza <small>(puntillas / chicles / zuecos)</small> <span class="newflag">NUEVO</span></div>
+  </div>
+  <div class="tree">
+    <h4><span class="tg cat">categoría → sub</span></h4>
+    <div class="parent p-ves">vestuario</div>
+    <div class="child">Poleras / Camisetas / Camisas</div>
+    <div class="child">Shorts / Patas</div>
+    <div class="child">Buzo / Pantalones</div>
+    <div class="child">Chaquetas, chalecos y polerones</div>
+    <div class="child">Traje de baño</div>
+    <div class="child new">Mallas <small>(gimnasia / ballet)</small> <span class="newflag">NUEVO</span></div>
+    <div class="parent p-acc">accesorios</div>
+    <div class="child">Mochilas / Bolsos / Carteras</div>
+    <div class="child">Gorros</div>
+    <div class="child">Medias / Calcetas</div>
+    <div class="child">Acc. de vestuario <small>(correas, pulseras, trabas)</small></div>
+    <div class="child">Trofeos y medallas</div>
+    <div class="child">Protecciones</div>
+    <div class="child">Balones</div>
+    <div class="child">Guantes</div>
+    <div class="child new">Equipamiento fitness <small>(discos, pesas, bandas)</small> <span class="newflag">NUEVO</span></div>
+    <div class="child">Acc. deportivos <small>(bombín, ortopedia, juegos)</small></div>
+    <div class="parent p-acc" style="background:#f4f6fb;color:#66708a">nietos = hijo × especialidad</div>
+    <div class="child"><small>Sandalias + fiesta = «Sandalias de Fiesta» · Bolsos + urbano = «Bolsos Urbanos» · Balones + fútbol = «Balones de Fútbol» · Zapatillas + escolar blanco = «Escolares blancas» — el menú los crea solo, sin agregar niveles al árbol.</small></div>
+  </div>
+  <div class="tree">
+    <h4><span class="tg esp">especialidad</span> <small style="color:var(--muted)">(transversal — cruza con cualquier sub)</small></h4>
+    <div class="parent p-esp">Fútbol</div>
+    <div class="child">Pasto natural (FG/MG) · Sintético/Baby (TF) · Fútsal</div>
+    <div class="parent p-esp">Performance</div>
+    <div class="child">Running · Atletismo · Basketball · Training <small>(absorbe fitness y físico)</small></div>
+    <div class="child">Tenis/Pádel/Squash · Voleibol · Handball · Rugby · Boxeo · Artes marciales</div>
+    <div class="child">Natación · Ciclismo · Ping pong · Bádminton · Béisbol · Hockey · Pool · Skate · Recreativos</div>
+    <div class="child new">Golf <span class="newflag">NUEVO</span></div>
+    <div class="parent p-esp">Outdoor</div>
+    <div class="child">Trekking · Camping</div>
+    <div class="child new">Pesca y caza <span class="newflag">NUEVO</span></div>
+    <div class="parent p-esp">Escolar <small style="font-weight:400">— con menú propio en ambas tiendas</small></div>
+    <div class="child">Oficial · Deportivo blanco · Deportivo negro <small>(cruza calzado, vestuario y mochilas)</small></div>
+    <div class="parent p-esp">Urbano</div>
+    <div class="child new">Urbano (uso diario) <small>— fusiona los antiguos «casual» y «moda»: ningún retailer los separa y en los menús siempre iban juntos</small> <span class="newflag">CAMBIO</span></div>
+    <div class="parent p-esp">Otros</div>
+    <div class="child">Cueca/Danza · Formal vestir · Formal fiesta · Descanso · Gimnasia</div>
+    <div class="child new">Seguridad / Trabajo <span class="newflag">NUEVO</span></div>
+    <div class="parent p-gen">género</div>
+    <div class="child">Hombre · Mujer <small>(absorbe DAMA)</small> · Juvenil · Niño · Niña · Unisex</div>
+    <div class="child new">Bebé (0-4) <span class="newflag">NUEVO</span></div>
+  </div>
+</div>
+
+<footer>Modal de prueba · recategorización ERP · realsport.cl + calzadospaola.cl · proyecto «re mapeo»</footer>
+</div>
+
+<script>
+/* ===== taxonomía ===== */
+const GENS=["Hombre","Mujer","Juvenil","Niño","Niña","Bebé","Unisex"];
+const SUBS={
+ calzado:[["zapatillas","Zapatillas"],["botines","Botines"],["botas","Botas"],["sandalias","Sandalias / Chalas"],["mocasin","Mocasín"],["zvestir","Zapato de vestir"],["alpargata","Alpargata"],["pantuflas","Pantuflas"],["tacos","Tacos (tacones/reina) ✦"],["ballerinas","Ballerinas (chinitas/planos) ✦"],["plataformas","Plataformas ✦"],["gateadores","Gateadores ✦"],["danza","Danza (puntillas/chicles) ✦"]],
+ vestuario:[["poleras","Poleras / Camisetas / Camisas"],["shorts","Shorts / Patas"],["buzo","Buzo / Pantalones"],["chaquetas","Chaquetas / Polerones"],["tbano","Traje de baño"],["mallas","Mallas (gimnasia) ✦"]],
+ accesorios:[["mochilas","Mochilas / Bolsos / Carteras"],["gorros","Gorros / Jockeys"],["medias","Medias / Calcetas"],["accvest","Acc. de vestuario"],["trofeos","Trofeos y medallas"],["protecciones","Protecciones / Canilleras"],["balones","Balones"],["guantes","Guantes"],["equipamiento","Equipamiento fitness (discos/pesas) ✦"],["accdep","Acc. deportivos (bombín, ortopedia, juegos)"]]
+};
+const ESPG={
+ "Fútbol":[["pasto","Pasto natural (FG/MG)"],["baby","Sintético / Baby (TF)"],["sala","Fútsal / Sala"]],
+ "Performance":[["running","Running"],["atletismo","Atletismo"],["basket","Basketball"],["training","Training / Fitness"],["tenis","Tenis / Pádel / Squash"],["voley","Voleibol"],["handball","Handball"],["rugby","Rugby"],["boxeo","Boxeo"],["artesm","Artes marciales"],["natacion","Natación"],["ciclismo","Ciclismo"],["pingpong","Ping pong"],["badminton","Bádminton"],["beisbol","Béisbol"],["hockey","Hockey"],["pool","Pool"],["skate","Skate"],["recre","Recreativos"],["golf","Golf ✦"]],
+ "Outdoor":[["trekking","Trekking / Outdoor"],["camping","Camping"],["pesca","Pesca y caza ✦"]],
+ "Escolar":[["oficial","Escolar oficial"],["blanco","Escolar deportivo blanco"],["negro","Escolar deportivo negro"]],
+ "Urbano":[["urbano","Urbano (uso diario) ✦"]],
+ "Otros":[["cueca","Cueca / Danza"],["vestir","Formal vestir"],["fiesta","Formal fiesta"],["descanso","Descanso"],["gim","Gimnasia"],["seguridad","Seguridad / Trabajo ✦"]]
+};
+/* ===== menús: reglas reales de realsport (mapeo v1) ===== */
+const RS=[
+["Fútbol › Zapatillas › Pasto Natural (FG/MG)",{esp:["pasto"],cat:["calzado"]}],
+["Fútbol › Zapatillas › Pasto Sintético (TF)",{esp:["baby"],cat:["calzado"]}],
+["Fútbol › Zapatillas › Fútsal (Indoor)",{esp:["sala"],cat:["calzado"]}],
+["Fútbol › Equipo › Indumentarias oficiales",{esp:["pasto","baby","sala"],cat:["vestuario"]}],
+["Fútbol › Equipo › Accesorios de fútbol",{esp:["pasto","baby","sala"],cat:["accesorios"]}],
+["Fútbol › Equipo › Tus equipos favoritos",{esp:["pasto","baby","sala"]}],
+["Deportes › Zapatillas › Running",{esp:["running"],cat:["calzado"]}],
+["Deportes › Zapatillas › Basketball",{esp:["basket"],cat:["calzado"]}],
+["Deportes › Zapatillas › Training",{esp:["training"],cat:["calzado"]}],
+["Deportes › Zapatillas › Boxeo",{esp:["boxeo"],cat:["calzado"]}],
+["Deportes › Balones › Fútbol",{esp:["pasto","baby","sala"],cat:["accesorios"],sub:["balones"]}],
+["Deportes › Balones › Basketball",{esp:["basket"],cat:["accesorios"],sub:["balones"]}],
+["Deportes › Balones › Voleyball",{esp:["voley"],cat:["accesorios"],sub:["balones"]}],
+["Deportes › Protecciones",{cat:["accesorios"],sub:["protecciones"]}],
+["Hombre › Zapatillas › Urban",{gen:["Hombre"],cat:["calzado"],esp:["urbano"]}],
+["Hombre › Zapatillas › Running",{gen:["Hombre"],cat:["calzado"],esp:["running"]}],
+["Hombre › Zapatillas › Basketball",{gen:["Hombre"],cat:["calzado"],esp:["basket"]}],
+["Hombre › Zapatillas › Training",{gen:["Hombre"],cat:["calzado"],esp:["training"]}],
+["Hombre › Vestuario › Poleras & Camisetas",{gen:["Hombre"],cat:["vestuario"],sub:["poleras"]}],
+["Hombre › Vestuario › Polerones & Parkas",{gen:["Hombre"],cat:["vestuario"],sub:["chaquetas"]}],
+["Hombre › Vestuario › Pantalones & Shorts",{gen:["Hombre"],cat:["vestuario"],sub:["buzo","shorts"]}],
+["Mujer › Zapatillas › Urban",{gen:["Mujer"],cat:["calzado"],esp:["urbano"]}],
+["Mujer › Zapatillas › Running",{gen:["Mujer"],cat:["calzado"],esp:["running"]}],
+["Mujer › Zapatillas › Training",{gen:["Mujer"],cat:["calzado"],esp:["training"]}],
+["Mujer › Sandalias",{gen:["Mujer"],cat:["calzado"],sub:["sandalias"]}],
+["Mujer › Vestuario › Poleras & Tops",{gen:["Mujer"],cat:["vestuario"],sub:["poleras"]}],
+["Mujer › Vestuario › Calzas & Shorts",{gen:["Mujer"],cat:["vestuario"],sub:["buzo","shorts"]}],
+["Mujer › Vestuario › Polerones",{gen:["Mujer"],cat:["vestuario"],sub:["chaquetas"]}],
+["Niños › Bebé e Infantil (0-4)",{gen:["Bebé"]}],
+["Niños › Niños (5-9)",{gen:["Niño","Niña"]}],
+["Niños › Juvenil (10-15)",{gen:["Juvenil"]}],
+["Niños › Escolares (blancas y negras)",{gen:["Niño","Niña","Juvenil"],cat:["calzado"],esp:["blanco","negro"]}],
+["Niños › Zapatillas urbanas",{gen:["Niño","Niña","Juvenil","Bebé"],cat:["calzado"],sub:["zapatillas"],esp:["urbano"]}],
+["Niños › Zapatillas de basketball",{gen:["Niño","Niña","Juvenil"],cat:["calzado"],esp:["basket"]}],
+["Niños › Zapatillas de running",{gen:["Niño","Niña","Juvenil"],cat:["calzado"],esp:["running"]}],
+["Accesorios › Mochilas y bolsos",{cat:["accesorios"],sub:["mochilas"]}],
+["Accesorios › Calcetines",{cat:["accesorios"],sub:["medias"]}],
+["Accesorios › Gorros",{cat:["accesorios"],sub:["gorros"]}],
+["Deportes › Fitness y equipamiento ⭐propuesto",{cat:["accesorios"],sub:["equipamiento"]}]
+];
+/* ===== menús propuestos para calzadospaola.cl ===== */
+const CP=[
+["Mujer › Zapatillas urbanas",{gen:["Mujer"],cat:["calzado"],sub:["zapatillas"],esp:["urbano"]}],
+["Mujer › Zapatillas deportivas",{gen:["Mujer"],cat:["calzado"],sub:["zapatillas"],esp:["running","training"]}],
+["Mujer › Tacones",{gen:["Mujer"],cat:["calzado"],sub:["tacos"]}],
+["Mujer › Botas y botines",{gen:["Mujer"],cat:["calzado"],sub:["botas","botines"]}],
+["Mujer › Sandalias",{gen:["Mujer"],cat:["calzado"],sub:["sandalias"]}],
+["Mujer › Ballerinas y mocasines",{gen:["Mujer"],cat:["calzado"],sub:["ballerinas","mocasin"]}],
+["Mujer › Plataformas",{gen:["Mujer"],cat:["calzado"],sub:["plataformas"]}],
+["Mujer › Formales",{gen:["Mujer"],cat:["calzado"],esp:["vestir","fiesta"]}],
+["Hombre › Zapatillas urbanas",{gen:["Hombre"],cat:["calzado"],sub:["zapatillas"],esp:["urbano"]}],
+["Hombre › Zapatillas deportivas",{gen:["Hombre"],cat:["calzado"],sub:["zapatillas"],esp:["running","training","basket"]}],
+["Hombre › Fútbol",{gen:["Hombre"],cat:["calzado"],esp:["pasto","baby","sala"]}],
+["Hombre › Botines y mocasines",{gen:["Hombre"],cat:["calzado"],sub:["botines","mocasin"]}],
+["Hombre › Formales",{gen:["Hombre"],cat:["calzado"],esp:["vestir","fiesta"]}],
+["Infantil › Bebé (0-4)",{gen:["Bebé"],cat:["calzado"]}],
+["Infantil › Gateadores",{gen:["Bebé"],cat:["calzado"],sub:["gateadores"]}],
+["Infantil › Niño/a (5-9)",{gen:["Niño","Niña"],cat:["calzado"]}],
+["Infantil › Juvenil (10-15)",{gen:["Juvenil"],cat:["calzado"]}],
+["Escolar",{esp:["oficial","blanco","negro"]}],
+["Cueca",{esp:["cueca"]}],
+["Descanso › Pantuflas",{cat:["calzado"],sub:["pantuflas"]}],
+["Accesorios › Vestuario",{cat:["accesorios"],sub:["medias","gorros","guantes","accvest"]}],
+["Accesorios › Bolsos y mochilas",{cat:["accesorios"],sub:["mochilas"]}],
+["Accesorios › Deportivos",{cat:["accesorios"],sub:["balones","protecciones","equipamiento","accdep"]}]
+];
+/* ===== ui ===== */
+const $=id=>document.getElementById(id);
+const sGen=$("sGen");
+sGen.innerHTML=GENS.map(g=>`<option>${g}</option>`).join("");
+let sel={cat:"calzado",sub:"zapatillas"}; /* sub:null = nivel general (padre) */
+let selEsp=["running"]; /* multi-etiqueta; [] = general */
+function match(rule,p){
+  for(const k of ["gen","cat","sub","esp"]){
+    if(!rule[k])continue;
+    if(k==="gen"&&p.gen==="Unisex")continue; /* comodín */
+    if(k==="esp"){ /* multi: basta que un uso del producto calce con la regla */
+      if(!p.esp.length||!p.esp.some(e=>rule.esp.includes(e)))return false;
+      continue;
+    }
+    if(!p[k]||!rule[k].includes(p[k]))return false; /* sin tag = no cumple reglas que lo exigen */
+  }
+  return true;
+}
+function hitCount(p){return RS.filter(([_,r])=>match(r,p)).length+CP.filter(([_,r])=>match(r,p)).length}
+function labelOf(cat,id){const f=SUBS[cat].find(([i])=>i===id);return f?f[1].replace(" ✦",""):id}
+function espLabel(id){for(const g of Object.values(ESPG)){const f=g.find(([i])=>i===id);if(f)return f[1].replace(" ✦","")}return id}
+/* --- picker padre+hijo mezclados --- */
+const pickBtn=$("pickBtn"),pickPanel=$("pickPanel"),pickSearch=$("pickSearch"),pickList=$("pickList");
+function buildList(){
+  const q=pickSearch.value.toLowerCase();
+  let h="";
+  for(const cat of ["calzado","vestuario","accesorios"]){
+    const kids=SUBS[cat].filter(([id,l])=>!q||l.toLowerCase().includes(q)||cat.includes(q));
+    const parentHit=!q||cat.includes(q);
+    if(!parentHit&&!kids.length)continue;
+    const pSel=sel.cat===cat&&!sel.sub?" sel":"";
+    h+=`<div class="prow parent${pSel}" data-cat="${cat}">📁 ${cat} <span class="lvl">padre · engloba todo</span></div>`;
+    for(const[id,l] of kids){
+      const cSel=sel.cat===cat&&sel.sub===id?" sel":"";
+      h+=`<div class="prow child${cSel}" data-cat="${cat}" data-sub="${id}">└ ${l} <span class="lvl">hijo</span></div>`;
+    }
+  }
+  pickList.innerHTML=h||`<div class="noslot">Sin resultados</div>`;
+  pickList.querySelectorAll(".prow").forEach(r=>r.addEventListener("click",()=>{
+    sel={cat:r.dataset.cat,sub:r.dataset.sub||null};
+    pickPanel.hidden=true;render();
+  }));
+}
+pickBtn.addEventListener("click",()=>{pickPanel.hidden=!pickPanel.hidden;if(!pickPanel.hidden){pickSearch.value="";buildList();pickSearch.focus()}});
+pickSearch.addEventListener("input",buildList);
+/* --- picker de especialidades múltiples --- */
+const espBtn=$("espBtn"),espPanel=$("espPanel"),espList=$("espList");
+function buildEsp(){
+  espList.innerHTML=Object.entries(ESPG).map(([fam,items])=>
+    `<div class="prow parent" style="cursor:default">${fam}${fam==="Escolar"?' <span class="lvl">menú propio en ambas tiendas</span>':""}</div>`+
+    items.map(([id,l])=>{const on=selEsp.includes(id);
+      return `<div class="prow child${on?" sel":""}" data-esp="${id}">└ ${l.replace(" ✦","")} <span class="lvl">${on?"✔ marcada":""}</span></div>`}).join("")
+  ).join("");
+  espList.querySelectorAll(".prow.child").forEach(r=>r.addEventListener("click",()=>{
+    const id=r.dataset.esp;
+    selEsp=selEsp.includes(id)?selEsp.filter(x=>x!==id):[...selEsp,id];
+    buildEsp();render();
+  }));
+}
+espBtn.addEventListener("click",()=>{espPanel.hidden=!espPanel.hidden;if(!espPanel.hidden)buildEsp()});
+document.addEventListener("click",e=>{if(!e.target.closest(".fg")){pickPanel.hidden=true;espPanel.hidden=true}});
+function render(){
+  const p={gen:sGen.value,cat:sel.cat,sub:sel.sub,esp:selEsp};
+  $("crumbs").innerHTML=`<span class="crumb">${sel.cat}</span>`+
+    (sel.sub?` <span style="color:#99a">›</span> <span class="crumb child">${labelOf(sel.cat,sel.sub)}</span>`
+            :` <span class="crumb general">nivel general</span>`);
+  $("espCrumbs").innerHTML=selEsp.length
+    ?selEsp.map(e=>`<span class="crumb child" style="background:var(--violet-soft);color:var(--violet)">${espLabel(e)}</span>`).join(" ")
+    :`<span class="crumb general">general — sin especialidad aún</span>`;
+  $("tags").innerHTML=
+    `<span class="tg gen">${p.gen}</span><span class="tg cat">${p.cat}</span>`+
+    (p.sub?`<span class="tg sub">${labelOf(p.cat,p.sub)}</span>`:`<span class="tg empty">sub: general</span>`)+
+    (selEsp.length?selEsp.map(e=>`<span class="tg esp">${espLabel(e)}</span>`).join(""):`<span class="tg empty">esp: general</span>`);
+  const base=hitCount(p);
+  for(const[rules,slotsId,nId] of [[RS,"slotsRS","nRS"],[CP,"slotsCP","nCP"]]){
+    const hits=rules.filter(([_,r])=>match(r,p));
+    $(nId).textContent=hits.length+(hits.length===1?" menú":" menús");
+    $(slotsId).innerHTML=hits.length?hits.map(([l])=>`<div class="slot">${l}</div>`).join(""):`<div class="noslot">No aparece en ningún menú con este nivel — afina la categoría o especialidad, o agrega un slot.</div>`;
+  }
+  /* chips para jugar con los niveles */
+  let rf="";
+  if(!sel.sub){
+    const opts=SUBS[sel.cat].map(([id,l])=>({id,l:l.replace(" ✦",""),n:hitCount({...p,sub:id})}))
+      .filter(o=>o.n>base).sort((a,b)=>b.n-a.n).slice(0,6);
+    if(opts.length)rf=`<span style="font-size:.72rem;color:var(--muted)">⤷ afinando al hijo ganas vitrinas: </span>`+
+      opts.map(o=>`<span class="rc" data-sub="${o.id}">${o.l} → ${o.n} menús</span>`).join("");
+  }else{
+    rf=`<span class="rc up" data-sub="">↑ englobar en «${sel.cat}» (general, ${hitCount({...p,sub:null})} menús)</span>`;
+  }
+  $("refine").innerHTML=rf;
+  $("refine").querySelectorAll(".rc").forEach(c=>c.addEventListener("click",()=>{sel.sub=c.dataset.sub||null;render()}));
+}
+sGen.addEventListener("change",render);
+document.querySelectorAll(".exbtn").forEach(b=>b.addEventListener("click",()=>{
+  const[g,c,s,e]=b.dataset.ex.split("|");
+  sGen.value=g;sel={cat:c,sub:s||null};selEsp=e?e.split(","):[];render();
+}));
+/* estado inicial */
+sGen.value="Mujer";sel={cat:"calzado",sub:"zapatillas"};selEsp=["running"];render();
+</script>
+</body>
+</html>

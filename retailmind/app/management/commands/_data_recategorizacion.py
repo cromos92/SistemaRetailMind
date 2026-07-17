@@ -153,8 +153,9 @@ REGLAS_KEYWORD = [
     (("BALLERINA", "BALERINA"),                   CALZADO, "Ballerinas y Bajas"),
     (("CANILLERA", "ESPINILLERA", "RODILLERA",
       "MUÑEQUERA", "COQUILLA", "PROTECCION"),     ACCESORIOS, "Protecciones y Canilleras"),
-    (("MOCHILA", "BOLSO", "MORRAL", "BOLSON",
+    (("MOCHILA", "BOLSO", "MORRAL", "BOLSON", "BOLSA",
       "CARTERA", "RIÑONERA", "BALONERO"),         ACCESORIOS, "Bolsos y Mochilas"),
+    (("SCRUNCHIE", "COLET", "CINTILLO"),          ACCESORIOS, "Accesorios de Pelo"),
     (("GORRO", "JOCKEY", "JOKEY", "VISERA"),      ACCESORIOS, "Gorros"),
     (("CALCETIN", "CALCETA", "SOQUETE"),          ROPA, "Calcetines y Medias"),
     (("HOODIE", "POLERON", "PARKA", "CHAQUETA",
@@ -188,6 +189,20 @@ REGLAS_MARCA = {
     "MIKASA":   (DEPORTE, "Voleyball"),
     "SPALDING": (DEPORTE, "Basketball"),
     "PENALTY":  (DEPORTE, "Fútbol"),
+    # Marcas de calzado: barren el residuo de "SIN DEFINIR" (cat 63), que no
+    # entra al default de RAMA CASUAL. Quedan revisar=True por diseño.
+    "SKECHERS": (CALZADO, "Zapatillas Urbanas"),
+    "NIKE": (CALZADO, "Zapatillas Urbanas"),
+    "NIKE PANAMA": (CALZADO, "Zapatillas Urbanas"),
+    "NIKE TODODEPORTE": (CALZADO, "Zapatillas Urbanas"),
+    "ADIDAS": (CALZADO, "Zapatillas Urbanas"),
+    "REEBOK": (CALZADO, "Zapatillas Urbanas"),
+    "REEBOK VALCAO": (CALZADO, "Zapatillas Urbanas"),
+    "PUMA": (CALZADO, "Zapatillas Urbanas"),
+    "FILA": (CALZADO, "Zapatillas Urbanas"),
+    "NEW BALANCE": (CALZADO, "Zapatillas Urbanas"),
+    "UNDERARMON": (CALZADO, "Zapatillas Urbanas"),
+    "CONVERSE": (CALZADO, "Zapatillas Lona"),
 }
 
 # ── Descripciones que NO son productos vendibles -> OTROS/No-Producto + excluir_de_analitica.

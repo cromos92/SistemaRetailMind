@@ -13,6 +13,7 @@ Cubren los casos del plan `trazabilidad-compras-despachos-nc`:
 4. Trazabilidad: padre (compras), hijos (NCs), movimientos por sucursal.
 """
 import json
+import tempfile
 from decimal import Decimal
 from unittest import mock
 
@@ -169,6 +170,97 @@ class AjusteTraspasoPreRecepcionTest(TestCase):
         # Para GUIA no factura → AJUSTE TRASPASO (pre).
         self.assertEqual(hijo.tipo_documento, 'AJUSTE TRASPASO')
 
+    def _ajustar_factura_capturando_txt(self, dte, dp, nueva_cantidad):
+        """POST al endpoint interceptando los datos con que se arma el TXT."""
+        capturado = {}
+
+        def _fake_generar_txt(datos):
+            capturado['datos'] = datos
+            return 'TXT-TEST'
+
+        with _patch_permiso_aprobar(), _patch_permiso_helper(), \
+                mock.patch(
+                    'app.views_modulo_documentos.generar_txt_dte_acepta',
+                    side_effect=_fake_generar_txt,
+                ), \
+                self.settings(MEDIA_ROOT=tempfile.mkdtemp()):
+            resp = self.client.post(
+                '/app/dte/ajustar_traspaso/',
+                data=json.dumps({
+                    'dte_id': dte.id,
+                    'ajustes': [{'dte_producto_id': dp.id,
+                                 'nueva_cantidad': nueva_cantidad}],
+                    'motivo': 'Test razón referencia SII',
+                }),
+                content_type='application/json',
+            )
+        return resp, capturado
+
+    def test_nc_parcial_factura_usa_razon_3_y_acredita_lo_devuelto(self):
+        crear_correlativo(self.sucursal_origen, tipo_dte='NOTA DE CREDITO')
+        dte, dp = _crear_traspaso(
+            self.sucursal_origen, self.sucursal_destino,
+            self.talla_origen, cantidad=5, tipo_documento='FACTURA ELECTRONICA',
+        )
+
+        # Devuelve 1 unidad: la línea queda en 4.
+        resp, capturado = self._ajustar_factura_capturando_txt(dte, dp, nueva_cantidad=4)
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        self.assertTrue(data['success'])
+        self.assertTrue(data['doc_trazador']['es_nota_credito'])
+        self.assertIsNotNone(data['doc_trazador']['archivo_txt_url'])
+
+        datos = capturado['datos']
+        # NC parcial → razón 3 (corrige montos), NUNCA 1 (anula documento).
+        self.assertEqual(datos['referencias'][0]['razon'], '3')
+        self.assertEqual(datos['referencias'][0]['folio'], str(dte.numero_documento))
+        # El TXT acredita exactamente lo devuelto (1 ud), no lo que queda.
+        self.assertEqual(len(datos['detalle']), 1)
+        self.assertEqual(datos['detalle'][0]['cantidad'], 1)
+        self.assertEqual(datos['detalle'][0]['monto_item'], 1000)
+        self.assertEqual(datos['totales']['monto_neto'], 1000)
+
+    def test_nc_total_factura_usa_razon_1(self):
+        crear_correlativo(self.sucursal_origen, tipo_dte='NOTA DE CREDITO')
+        dte, dp = _crear_traspaso(
+            self.sucursal_origen, self.sucursal_destino,
+            self.talla_origen, cantidad=5, tipo_documento='FACTURA ELECTRONICA',
+        )
+
+        # Devuelve TODO: el DTE queda sin unidades → razón 1 (anula).
+        resp, capturado = self._ajustar_factura_capturando_txt(dte, dp, nueva_cantidad=0)
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        datos = capturado['datos']
+        self.assertEqual(datos['referencias'][0]['razon'], '1')
+        self.assertEqual(datos['detalle'][0]['cantidad'], 5)
+        self.assertEqual(datos['totales']['monto_neto'], 5000)
+        dp.refresh_from_db()
+        self.assertFalse(dp.activo)
+
+    def test_segunda_nc_que_completa_devolucion_usa_razon_3(self):
+        """Razón 1 exige que UNA sola NC cubra el documento completo: si ya
+        hay una NC previa viva, la NC que devuelve el resto va con razón 3."""
+        crear_correlativo(self.sucursal_origen, tipo_dte='NOTA DE CREDITO')
+        dte, dp = _crear_traspaso(
+            self.sucursal_origen, self.sucursal_destino,
+            self.talla_origen, cantidad=5, tipo_documento='FACTURA ELECTRONICA',
+        )
+
+        # NC #1: devuelve 2 de 5 → razón 3.
+        resp1, cap1 = self._ajustar_factura_capturando_txt(dte, dp, nueva_cantidad=3)
+        self.assertEqual(resp1.status_code, 200, resp1.content)
+        self.assertEqual(cap1['datos']['referencias'][0]['razon'], '3')
+
+        # NC #2: devuelve las 3 restantes. El DTE queda en 0, pero como ya
+        # existe la NC previa, esta solo COMPLETA la devolución → razón 3.
+        resp2, cap2 = self._ajustar_factura_capturando_txt(dte, dp, nueva_cantidad=0)
+        self.assertEqual(resp2.status_code, 200, resp2.content)
+        self.assertEqual(cap2['datos']['referencias'][0]['razon'], '3')
+        self.assertEqual(cap2['datos']['detalle'][0]['cantidad'], 3)
+
 
 class AjusteTraspasoPostRecepcionTest(TestCase):
     def setUp(self):
@@ -308,6 +400,70 @@ class AjusteTraspasoPostRecepcionTest(TestCase):
                 dte=dte, concepto='DEVOLUCION_NC_POST_RECEPCION'
             ).exists()
         )
+
+    def _ajustar_factura_post_capturando_txt(self, dte, dp, nueva_cantidad):
+        """POST al endpoint interceptando los datos con que se arma el TXT."""
+        capturado = {}
+
+        def _fake_generar_txt(datos):
+            capturado['datos'] = datos
+            return 'TXT-TEST'
+
+        with _patch_permiso_aprobar(), _patch_permiso_helper(), \
+                mock.patch(
+                    'app.views_modulo_documentos.generar_txt_dte_acepta',
+                    side_effect=_fake_generar_txt,
+                ), \
+                self.settings(MEDIA_ROOT=tempfile.mkdtemp()):
+            resp = self.client.post(
+                '/app/dte/ajustar_traspaso/',
+                data=json.dumps({
+                    'dte_id': dte.id,
+                    'ajustes': [{'dte_producto_id': dp.id,
+                                 'nueva_cantidad': nueva_cantidad}],
+                    'motivo': 'Test razón referencia SII post-recepción',
+                }),
+                content_type='application/json',
+            )
+        return resp, capturado
+
+    def test_nc_post_recepcion_parcial_usa_razon_3(self):
+        crear_correlativo(self.sucursal_origen, tipo_dte='NOTA DE CREDITO')
+        dte, dp = _crear_traspaso(
+            self.sucursal_origen, self.sucursal_destino,
+            self.talla_origen, cantidad=5, tipo_documento='FACTURA ELECTRONICA',
+        )
+        self._simular_recepcion(dte, 5)
+
+        # Devuelve 3 de 5 → NC parcial, razón 3.
+        resp, capturado = self._ajustar_factura_post_capturando_txt(dte, dp, nueva_cantidad=2)
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertTrue(resp.json()['es_post_recepcion'])
+        datos = capturado['datos']
+        self.assertEqual(datos['referencias'][0]['razon'], '3')
+        self.assertEqual(datos['detalle'][0]['cantidad'], 3)
+        self.assertEqual(datos['totales']['monto_neto'], 3000)
+
+    def test_nc_post_recepcion_total_usa_razon_1(self):
+        crear_correlativo(self.sucursal_origen, tipo_dte='NOTA DE CREDITO')
+        dte, dp = _crear_traspaso(
+            self.sucursal_origen, self.sucursal_destino,
+            self.talla_origen, cantidad=5, tipo_documento='FACTURA ELECTRONICA',
+        )
+        self._simular_recepcion(dte, 5)
+
+        # Devuelve las 5 → acredita el 100% de lo despachado, razón 1.
+        resp, capturado = self._ajustar_factura_post_capturando_txt(dte, dp, nueva_cantidad=0)
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        datos = capturado['datos']
+        self.assertEqual(datos['referencias'][0]['razon'], '1')
+        self.assertEqual(datos['detalle'][0]['cantidad'], 5)
+        # El DTE original NO se modifica en post-recepción.
+        dp.refresh_from_db()
+        self.assertEqual(dp.stock, 5)
+        self.assertTrue(dp.activo)
 
 
 class TrazabilidadApiTest(TestCase):
