@@ -20749,6 +20749,15 @@ def obtener_productos(request):
     especialidad_id = request.GET.get('especialidad_id', '')
     if especialidad_id and str(especialidad_id).isdigit():
         productos = productos.filter(producto__atributos__opcion_id=especialidad_id).distinct()
+    # Filtro "sin especialidad": productos que NO tienen ninguna etiqueta del
+    # atributo Especialidad (para encontrarlos y completarlos en la revisión).
+    if request.GET.get('sin_especialidad') == '1':
+        productos = productos.exclude(
+            producto__atributos__atributo__nombre__iexact='Especialidad')
+    # Filtro por talla (revisión): productos que tienen esa talla.
+    talla_filtro = request.GET.get('talla', '').strip()
+    if talla_filtro:
+        productos = productos.filter(talla__iexact=talla_filtro)
     total_count = productos.count()
     offset = (page - 1) * page_size
     productos = list(productos.order_by('producto__articulo', 'talla')[offset:offset+page_size])

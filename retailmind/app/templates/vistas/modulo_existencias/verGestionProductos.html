@@ -3888,6 +3888,15 @@
                                 <option value="">Toda especialidad</option>
                             </select>
                         </div>
+                        <!-- Filtro por talla (revisión) -->
+                        <div class="d-flex align-items-center gap-2 me-2">
+                            <i class="bi bi-rulers text-muted"></i>
+                            <input type="text" class="form-control form-control-sm border-0 bg-light fw-semibold" id="filtroTallaEditar" placeholder="Talla (ej: 40)" style="width:110px; border-radius:8px;">
+                        </div>
+                        <!-- Pill: solo productos SIN especialidad (para completarlos) -->
+                        <button type="button" class="btn btn-sm rounded-pill px-3 btn-toggle-sinesp" id="btnFiltroSinEsp" style="font-size:.78rem;" title="Mostrar solo productos sin especialidad">
+                            <i class="bi bi-tag me-1"></i>Sin especialidad
+                        </button>
                         <span class="text-muted small" id="txtScopeActual"></span>
                         
                         <!-- Separador -->
@@ -15263,6 +15272,10 @@ $('#btnConfirmarActualizacion').on('click', function() {
     $('#btnLimpiarBusquedaProducto').on('click', function() {
         $('#inputBuscarProductoEditar').val('');
         $('#filtroSucursalEditar').val('todas').trigger('change');
+        $('#filtroTallaEditar').val('');
+        $('#btnFiltroSinEsp').removeClass('active btn-warning');
+        if ($('#filtroCategoriaEditar').val()) $('#filtroCategoriaEditar').val('').trigger('change.select2');
+        if ($('#filtroEspecialidadEditar').val()) $('#filtroEspecialidadEditar').val('').trigger('change.select2');
         $('#resultadosBusquedaProductos').html(`
             <div class="alert alert-info text-center">
                 <i class="fas fa-info-circle me-2"></i>
@@ -15287,12 +15300,14 @@ $('#btnConfirmarActualizacion').on('click', function() {
         const sucursalId = $('#filtroSucursalEditar').val() || 'todas';
         const categoriaId = $('#filtroCategoriaEditar').val() || '';
         const especialidadId = $('#filtroEspecialidadEditar').val() || '';
+        const tallaFiltro = $('#filtroTallaEditar').val().trim();
+        const sinEsp = $('#btnFiltroSinEsp').hasClass('active') ? '1' : '';
 
-        if (!termino && !filtro && sucursalId === 'todas' && !categoriaId && !especialidadId) {
+        if (!termino && !filtro && sucursalId === 'todas' && !categoriaId && !especialidadId && !tallaFiltro && !sinEsp) {
             Swal.fire({
                 icon: 'warning',
                 title: 'Búsqueda vacía',
-                text: 'Ingrese un término, seleccione bodega, categoría o especialidad, o use un filtro'
+                text: 'Ingrese un término, seleccione bodega/categoría/especialidad/talla, o use un filtro'
             });
             return;
         }
@@ -15316,7 +15331,9 @@ $('#btnConfirmarActualizacion').on('click', function() {
                 page_size: 50,
                 sucursal_id: sucursalId,
                 categoria_id: categoriaId,
-                especialidad_id: especialidadId
+                especialidad_id: especialidadId,
+                talla: tallaFiltro,
+                sin_especialidad: sinEsp
             },
             success: function(response) {
                 // La API devuelve { results: [...], pagination: {...} }
@@ -15470,6 +15487,23 @@ $('#btnConfirmarActualizacion').on('click', function() {
     $(document).on('change', '#filtroCategoriaEditar, #filtroEspecialidadEditar', function () {
         resetearSeleccion();
         buscarProductosParaEditar();
+    });
+
+    // Pill "Sin especialidad": alterna y re-busca
+    $(document).on('click', '#btnFiltroSinEsp', function () {
+        $(this).toggleClass('active btn-warning');
+        resetearSeleccion();
+        buscarProductosParaEditar();
+    });
+
+    // Filtro por talla: Enter o debounce
+    let _debTalla = null;
+    $(document).on('keydown', '#filtroTallaEditar', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); resetearSeleccion(); buscarProductosParaEditar(); }
+    });
+    $(document).on('input', '#filtroTallaEditar', function () {
+        clearTimeout(_debTalla);
+        _debTalla = setTimeout(() => { resetearSeleccion(); buscarProductosParaEditar(); }, 600);
     });
 
     // Búsqueda mientras escribes (debounce 500ms, mínimo 2 caracteres)
@@ -15906,23 +15940,22 @@ $('#btnConfirmarActualizacion').on('click', function() {
     // Agrupar Producto_Talla por Producto
     function agruparProductosTallas(results) {
         const productosMap = new Map();
-        
+
         results.forEach(item => {
-            // Extraer información del texto
-            // Formato: "codigo - descripcion | Marca: X | Color: Y | Género: Z | Talla: T | SKU: S"
+            // Formato text: "codigo - descripcion | Marca: X | Color: Y | ..."
             const partes = item.text.split('|');
-            const nombreParte = partes[0].trim(); // "codigo - descripcion"
-            const nombrePartes = nombreParte.split(' - ');
+            const nombrePartes = partes[0].trim().split(' - ');
             const codigo = nombrePartes[0].trim();
             const nombre = nombrePartes.slice(1).join(' - ').trim();
-            
-            // Crear clave única por producto (nombre + marca + color)
-            const clave = `${nombre}_${item.marca}_${item.color}`;
-            
+
+            // Identidad del PRODUCTO (misma referencia en cualquier bodega):
+            // código + marca + color + género. Así una referencia presente en
+            // varias bodegas se muestra como UNA sola fila.
+            const clave = `${codigo}|${item.marca}|${item.color}|${item.genero}`;
+
             if (!productosMap.has(clave)) {
-                // Crear nuevo producto
                 productosMap.set(clave, {
-                    id: item.id, // Usaremos el ID de la primera talla
+                    id: item.id,
                     producto_id: item.producto_id || item.id,
                     codigo: codigo,
                     nombre: nombre || 'Sin nombre',
@@ -15933,31 +15966,41 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     stock_total: 0,
                     costo: item.costo || 0,
                     precioventa: item.precioventa || 0,
-                    tallas_count: 0,
-                    tallas: [],
-                    activo: true,
                     excluir_de_analitica: item.excluir_de_analitica || false,
-                    sucursal_nombre: item.sucursal_nombre || '',
                     especialidades: item.especialidades || [],
+                    _tallas: new Map(),     // talla -> {talla, sku, stock sumado}
+                    _bodegas: new Map(),    // sucursal -> stock sumado
                 });
             }
-            
-            // Agregar talla al producto
+
             const producto = productosMap.get(clave);
-            const stock_talla = parseInt(item.stock) || 0;
-            producto.tallas.push({
-                talla: item.talla,
-                sku: item.sku,
-                id_talla: item.id,
-                stock: stock_talla
-            });
-            producto.tallas_count = producto.tallas.length;
-            // ✅ ACTUALIZAR STOCK TOTAL sumando el stock de esta talla
-            producto.stock_total += stock_talla;
+            const st = parseInt(item.stock) || 0;
+            producto.stock_total += st;
+
+            // Tallas AGREGADAS por nombre de talla (suma el stock de todas las
+            // bodegas → una talla 35 no aparece repetida por bodega).
+            const tprev = producto._tallas.get(item.talla) || { talla: item.talla, sku: item.sku, stock: 0 };
+            tprev.stock += st;
+            producto._tallas.set(item.talla, tprev);
+
+            // Bodegas donde existe la referencia + su stock
+            if (item.sucursal_nombre) {
+                producto._bodegas.set(item.sucursal_nombre,
+                    (producto._bodegas.get(item.sucursal_nombre) || 0) + st);
+            }
         });
-        
-        // Convertir Map a Array
-        return Array.from(productosMap.values());
+
+        // Normalizar Maps a arrays para el render
+        return Array.from(productosMap.values()).map(p => {
+            p.tallas = Array.from(p._tallas.values());
+            p.tallas_count = p.tallas.length;
+            p.bodegas = Array.from(p._bodegas.entries())
+                .map(([nombre, stock]) => ({ nombre, stock }))
+                .sort((a, b) => b.stock - a.stock);
+            p.sucursal_nombre = p.bodegas.map(b => b.nombre).join(', ');
+            delete p._tallas; delete p._bodegas;
+            return p;
+        });
     }
 
     // Mostrar resultados de búsqueda - DISEÑO MEJORADO
@@ -16160,11 +16203,15 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     <td>${producto.marca !== '-' ? producto.marca : '<span class="text-muted">—</span>'}</td>
                     <td>${producto.color !== '-' ? producto.color : '<span class="text-muted">—</span>'}</td>
                     <td>${producto.genero !== '-' ? producto.genero : '<span class="text-muted">—</span>'}</td>
-                    <td>${producto.categoria ? `<span class="badge bg-light text-dark border">${producto.categoria}</span>` : '<span class="text-muted">—</span>'}</td>
-                    <td style="min-width:120px;">${(producto.especialidades && producto.especialidades.length)
-                        ? producto.especialidades.map(e => `<span class="badge" style="background:#f1ebfd;color:#6b3fd4;">${(window.ESP_LABEL_V12 && window.ESP_LABEL_V12[e]) || e}</span>`).join(' ')
+                    <td style="min-width:120px;">${producto.categoria
+                        ? `<span class="badge" style="background:#e3f4f8;color:#0b7285;font-size:.74rem;font-weight:700;"><i class="bi bi-diagram-3 me-1"></i>${producto.categoria}</span>`
+                        : '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning"><i class="bi bi-exclamation-triangle me-1"></i>sin categoría</span>'}</td>
+                    <td style="min-width:130px;">${(producto.especialidades && producto.especialidades.length)
+                        ? producto.especialidades.map(e => `<span class="badge" style="background:#f1ebfd;color:#6b3fd4;font-size:.74rem;font-weight:700;">${(window.ESP_LABEL_V12 && window.ESP_LABEL_V12[e]) || e}</span>`).join(' ')
+                        : '<span class="badge" style="background:#f0f1f6;color:#99a;font-weight:600;">sin especialidad</span>'}</td>
+                    <td style="min-width:120px;">${(producto.bodegas && producto.bodegas.length)
+                        ? producto.bodegas.map(b => `<span class="badge" style="background:#eaf0ff;color:#2456d6;" title="${b.nombre}: ${b.stock} uds">${b.nombre}<sup style="font-size:.6rem;margin-left:2px;">${b.stock}</sup></span>`).join(' ')
                         : '<span class="text-muted">—</span>'}</td>
-                    <td>${producto.sucursal_nombre ? `<span class="badge" style="background:#eaf0ff;color:#2456d6;">${producto.sucursal_nombre}</span>` : '<span class="text-muted">—</span>'}</td>
                     <td style="min-width:150px;">${tallasHtml || '<span class="text-muted small">Sin tallas</span>'}</td>
                     <td class="text-center">
                         <span class="stock-pill" style="color:${stockColor};background:${stockBg};border-color:${stockBorder};">${stockVal}</span>
