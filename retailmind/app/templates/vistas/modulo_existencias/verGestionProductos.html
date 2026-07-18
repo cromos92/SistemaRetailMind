@@ -3040,12 +3040,17 @@
                                         <div class="col-12 mb-1">
                                             <label class="form-label">Categoría <span class="text-danger">*</span></label>
                                             <input type="hidden" name="categoria" id="catManualValue" required>
-                                            <div class="nexo-picker position-relative input-group input-group-sm">
-                                                <button type="button" class="form-select form-select-sm text-start nexo-picker-btn" id="catManualBtn">
-                                                    <span id="catManualCrumbs" class="text-muted">Elige categoría…</span>
-                                                    <i class="bi bi-chevron-down nexo-picker-caret"></i>
-                                                </button>
-                                                <button class="btn btn-outline-secondary abrir-modal-categoria" type="button" title="Crear categoría nueva"><i class="bi bi-plus-lg"></i></button>
+                                            <div class="nexo-picker position-relative">
+                                                <!-- Botón del picker + "crear categoría" en un flex interno.
+                                                     OJO: NO usar input-group (Bootstrap flex) aquí: rompía el
+                                                     panel absoluto y la categoría "no desplegaba". -->
+                                                <div class="d-flex gap-1">
+                                                    <button type="button" class="form-select form-select-sm text-start nexo-picker-btn flex-grow-1" id="catManualBtn">
+                                                        <span id="catManualCrumbs" class="text-muted">Elige categoría…</span>
+                                                        <i class="bi bi-chevron-down nexo-picker-caret"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-secondary btn-sm abrir-modal-categoria" type="button" title="Crear categoría nueva" style="flex:0 0 auto;"><i class="bi bi-plus-lg"></i></button>
+                                                </div>
                                                 <div class="nexo-picker-panel" id="catManualPanel" hidden>
                                                     <input type="text" class="form-control form-control-sm mb-1" id="catManualSearch"
                                                         placeholder="Busca o navega: padre (general) o hijo (específico)…" autocomplete="off">
@@ -5356,6 +5361,13 @@ function showError(msg) {
       function esc(s){ return String(s == null ? '' : s).replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
       function buildCatList(){
+        // Guarda: si el usuario teclea antes de que llegue el árbol, cats es null
+        // y cats.filter() lanzaría → el buscador "no mostraba nada al escribir".
+        if (!cats) {
+          $('#catManualList').html('<div class="text-muted small p-2"><i class="bi bi-hourglass-split me-1"></i>Cargando categorías…</div>');
+          loadCats(() => buildCatList());
+          return;
+        }
         const q = ($('#catManualSearch').val() || '').toLowerCase();
         // Solo el árbol v1.2: raíces que YA tienen hijas (Calzado/Ropa/Accesorios).
         // Las 83 categorías viejas planas quedan fuera del selector de creación.
@@ -5388,6 +5400,7 @@ function showError(msg) {
         if (cambio) $('#catManualValue').trigger('change');
       }
       function buildEspList(){
+        if (!espOpts) { loadEsp(() => buildEspList()); return; }
         const q = ($('#espManualSearch').val() || '').toLowerCase();
         const byValor = {}; espOpts.forEach(o => byValor[o.valor] = o);
         let h = '';
