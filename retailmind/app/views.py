@@ -17888,24 +17888,37 @@ def ajustar_margenes(request):
 def categorias_existentes(request):
     tree_mode = request.GET.get('tree', '0') == '1'
 
-    def recorrer(categorias, prefijo='', nivel=0):
+    # Antes: N+1 grave — 1 subquery + 2 COUNT por categoría (≈336 queries / 63s
+    # contra la BD remota, con 112 categorías). Ahora: 2 queries totales
+    # (todas las categorías + un agregado de productos por categoría) y el árbol
+    # se arma en memoria. Beneficia a los ~15 llamadores del endpoint.
+    todas = list(Categoria.objects.order_by('nombre').values('id', 'nombre', 'padre_id'))
+    hijos_por_padre = {}
+    for c in todas:
+        hijos_por_padre.setdefault(c['padre_id'], []).append(c)
+
+    prod_count = {}
+    if tree_mode:
+        prod_count = dict(
+            Producto.objects.values_list('categoria_id').annotate(n=Count('id'))
+        )
+
+    def recorrer(padre_id, prefijo='', nivel=0):
         resultado = []
-        for c in categorias:
-            hijos = c.subcategorias.all().order_by('nombre')
-            entry = {
-                'id': c.id,
-                'nombre': f"{prefijo}{c.nombre}" if not tree_mode else c.nombre,
-                'padre_id': c.padre_id,
+        for c in hijos_por_padre.get(padre_id, []):
+            hijos = hijos_por_padre.get(c['id'], [])
+            resultado.append({
+                'id': c['id'],
+                'nombre': f"{prefijo}{c['nombre']}" if not tree_mode else c['nombre'],
+                'padre_id': c['padre_id'],
                 'nivel': nivel,
-                'hijos_count': hijos.count(),
-                'productos_count': c.categoria_productos.count() if tree_mode else 0,
-            }
-            resultado.append(entry)
-            resultado += recorrer(hijos, prefijo + '› ', nivel + 1)
+                'hijos_count': len(hijos),
+                'productos_count': prod_count.get(c['id'], 0),
+            })
+            resultado += recorrer(c['id'], prefijo + '› ', nivel + 1)
         return resultado
 
-    categorias_raiz = Categoria.objects.filter(padre__isnull=True).order_by('nombre')
-    data = recorrer(categorias_raiz)
+    data = recorrer(None)
     return JsonResponse(data, safe=False)
 
 
@@ -20738,7 +20751,19 @@ def obtener_productos(request):
         productos = productos.filter(producto__atributos__opcion_id=especialidad_id).distinct()
     total_count = productos.count()
     offset = (page - 1) * page_size
-    productos = productos.order_by('producto__articulo', 'talla')[offset:offset+page_size]
+    productos = list(productos.order_by('producto__articulo', 'talla')[offset:offset+page_size])
+
+    # Especialidades v1.2 de los productos de ESTA página en UNA sola query
+    # (evita N+1). Map producto_id -> [valores de especialidad].
+    esp_por_producto = {}
+    _pids_pagina = {pt.producto_id for pt in productos}
+    if _pids_pagina:
+        from .models import ProductoAtributoValor
+        for pav in ProductoAtributoValor.objects.filter(
+                producto_id__in=_pids_pagina, atributo__nombre__iexact='Especialidad'
+        ).select_related('opcion').values('producto_id', 'opcion__valor'):
+            esp_por_producto.setdefault(pav['producto_id'], []).append(pav['opcion__valor'])
+
     def limpiar_prefijo(valor):
         if not valor:
             return ''
@@ -20775,6 +20800,7 @@ def obtener_productos(request):
             'excluir_de_analitica': prod.excluir_de_analitica,
             'categoria': prod.categoria.nombre if prod.categoria else '',
             'categoria_id': prod.categoria_id,
+            'especialidades': esp_por_producto.get(prod.id, []),
         })
     return JsonResponse({
         'results': results,

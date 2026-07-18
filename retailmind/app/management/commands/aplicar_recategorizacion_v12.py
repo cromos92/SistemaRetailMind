@@ -123,69 +123,110 @@ class Command(BaseCommand):
         log_path = os.path.join(os.path.dirname(os.path.abspath(opts['excel'])),
                                 f'recategorizacion_v12_log_{stamp}_{modo}.csv')
 
+        # ── 1) Armar la lista de trabajo desde el Excel (sin tocar la BD) ──
+        # Se respeta --lote / --filtro-cat / --solo-confiables con la MISMA
+        # semántica que la versión fila-a-fila.
         n_art = n_prod = n_esp = n_gen = n_skip = n_sin = 0
+        worklist = []          # (articulo, Categoria destino, [slugs esp])
+        filas_sin = []         # artículos sin destino (para el CSV)
+        for fila in self._cargar_excel(opts['excel']):
+            if opts['lote'] and n_art >= opts['lote']:
+                break
+            art = str(fila['articulo'] or '').strip()
+            if not art:
+                continue
+            if opts['filtro_cat'] and opts['filtro_cat'].upper() not in str(
+                    fila['categoria_original'] or '').upper():
+                continue
+            if opts['solo_confiables'] and str(fila['revisar_final'] or '') == 'Sí':
+                n_skip += 1
+                continue
+            cat_slug = str(fila['cat_v12'] or '').strip()
+            sub_slug = str(fila['sub_v12'] or '').strip()
+            if not cat_slug or sub_slug not in cat_map:
+                n_sin += 1
+                filas_sin.append(art)
+                continue
+            n_art += 1
+            esps = [e.strip() for e in str(fila['esp_v12'] or '').split(',')
+                    if e.strip() and e.strip() in esp_ops]
+            worklist.append((art, cat_map[sub_slug], esps))
+
+        # ── 2) Procesar en CHUNKS con operaciones en bloque ──
+        # Antes: ~7 round-trips por artículo (36k artículos ≈ horas contra una BD
+        # remota). Ahora: ~4 queries por chunk de 400 artículos (≈ minutos).
+        CHUNK = 400
+        ahora = timezone.now()
         with open(log_path, 'w', newline='', encoding='utf-8') as fh:
             w = csv.writer(fh)
             w.writerow(['articulo', 'productos_afectados', 'cat_antes(ids)', 'cat_despues',
                         'especialidades', 'genero_migrado', 'accion'])
+            for art in filas_sin:
+                w.writerow([art, 0, '', '', '', '', 'SIN DESTINO (no-producto/sin resolver)'])
 
             with transaction.atomic():
-                for fila in self._cargar_excel(opts['excel']):
-                    if opts['lote'] and n_art >= opts['lote']:
-                        break
-                    art = str(fila['articulo'] or '').strip()
-                    if not art:
-                        continue
-                    if opts['filtro_cat'] and opts['filtro_cat'].upper() not in str(
-                            fila['categoria_original'] or '').upper():
-                        continue
-                    if opts['solo_confiables'] and str(fila['revisar_final'] or '') == 'Sí':
-                        n_skip += 1
-                        continue
-                    cat_slug = str(fila['cat_v12'] or '').strip()
-                    sub_slug = str(fila['sub_v12'] or '').strip()
-                    if not cat_slug or sub_slug not in cat_map:
-                        n_sin += 1
-                        w.writerow([art, 0, '', '', '', '', 'SIN DESTINO (no-producto/sin resolver)'])
-                        continue
+                for i in range(0, len(worklist), CHUNK):
+                    chunk = worklist[i:i + CHUNK]
+                    arts_chunk = [a for a, _, _ in chunk]
+                    # 1 query: todos los productos (todas las bodegas) del chunk
+                    por_art = {}
+                    for p in Producto.objects.filter(articulo__in=arts_chunk):
+                        por_art.setdefault(p.articulo, []).append(p)
 
-                    n_art += 1
-                    destino = cat_map[sub_slug]
-                    esps = [e.strip() for e in str(fila['esp_v12'] or '').split(',')
-                            if e.strip() and e.strip() in esp_ops]
-
-                    productos = list(Producto.objects.filter(articulo=art))
-                    if not productos:
-                        w.writerow([art, 0, '', destino.nombre, ','.join(esps), '', 'ARTÍCULO NO ENCONTRADO EN BD'])
-                        continue
-
-                    antes = sorted({p.categoria_id for p in productos if p.categoria_id})
-                    gen_migrados = 0
-                    for p in productos:
-                        if apply_:
-                            cambios = []
+                    a_actualizar = []       # productos con categoria/atributo3 nuevos
+                    pav_deseados = set()    # (producto_id, opcion_id) a garantizar
+                    for art, destino, esps in chunk:
+                        productos = por_art.get(art, [])
+                        if not productos:
+                            w.writerow([art, 0, '', destino.nombre, ','.join(esps), '',
+                                        'ARTÍCULO NO ENCONTRADO EN BD'])
+                            continue
+                        antes = sorted({p.categoria_id for p in productos if p.categoria_id})
+                        gen_migrados = 0
+                        for p in productos:
+                            cambio = False
                             if p.categoria_id != destino.id:
                                 p.categoria = destino
-                                cambios.append('categoria')
+                                cambio = True
                             if p.atributo3_id in gen_map:
                                 p.atributo3 = gen_map[p.atributo3_id]
-                                cambios.append('atributo3')
                                 gen_migrados += 1
-                            if cambios:
-                                p.save(update_fields=cambios + ['fecha_actualizacion'])
+                                cambio = True
+                            if cambio:
+                                # bulk_update no dispara auto_now: se setea a mano
+                                p.fecha_actualizacion = ahora
+                                a_actualizar.append(p)
                             for slug in esps:
-                                _, creado = ProductoAtributoValor.objects.get_or_create(
-                                    producto=p, atributo=esp_attr, opcion=esp_ops[slug])
-                                if creado:
-                                    n_esp += 1
-                        else:
-                            if p.atributo3_id in gen_map:
-                                gen_migrados += 1
-                            n_esp += len(esps)   # estimación dry-run
-                    n_prod += len(productos)
-                    n_gen += gen_migrados
-                    w.writerow([art, len(productos), ';'.join(map(str, antes)), destino.nombre,
-                                ','.join(esps), gen_migrados, modo])
+                                pav_deseados.add((p.id, esp_ops[slug].id))
+                        n_prod += len(productos)
+                        n_gen += gen_migrados
+                        w.writerow([art, len(productos), ';'.join(map(str, antes)),
+                                    destino.nombre, ','.join(esps), gen_migrados, modo])
+
+                    # 1 query: PAV ya existentes del chunk (no duplicar)
+                    ids_chunk = [pid for pid, _ in pav_deseados]
+                    existentes = set()
+                    if ids_chunk:
+                        existentes = set(ProductoAtributoValor.objects.filter(
+                            atributo=esp_attr, producto_id__in=ids_chunk
+                        ).values_list('producto_id', 'opcion_id'))
+                    faltantes = [ProductoAtributoValor(producto_id=pid, atributo=esp_attr,
+                                                       opcion_id=oid)
+                                 for pid, oid in pav_deseados if (pid, oid) not in existentes]
+                    n_esp += len(faltantes)
+
+                    if apply_:
+                        # 1-2 queries: updates masivos + inserts masivos
+                        if a_actualizar:
+                            Producto.objects.bulk_update(
+                                a_actualizar,
+                                ['categoria', 'atributo3', 'fecha_actualizacion'],
+                                batch_size=500)
+                        if faltantes:
+                            ProductoAtributoValor.objects.bulk_create(faltantes, batch_size=500)
+
+                    if (i // CHUNK) % 5 == 0:
+                        self.stdout.write(f"  ...{min(i + CHUNK, len(worklist))}/{len(worklist)} artículos")
 
                 if not apply_:
                     transaction.set_rollback(True)

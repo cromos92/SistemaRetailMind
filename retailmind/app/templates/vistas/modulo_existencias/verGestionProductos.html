@@ -3998,24 +3998,49 @@
                     </div>
 
                     <!-- Barra de selección masiva -->
-                    <div id="barraSeleccionMasiva" class="alert alert-primary d-flex align-items-center gap-3 mb-3 py-2 px-3 rounded-3" style="display:none!important;">
-                        <i class="bi bi-check2-square fs-5"></i>
-                        <div>
-                            <strong id="textoProductosSeleccionados">0 seleccionados</strong>
-                            <div class="small text-primary-emphasis" style="font-size:.76rem;">
-                                <i class="bi bi-bar-chart me-1"></i>Para excluir/incluir en analítica usa el panel <strong>Analítica</strong> de arriba
+                    <!-- Barra de EDICIÓN INLINE al marcar filas: categoría + especialidad
+                         sin abrir otro modal. "Más campos" abre la edición masiva completa. -->
+                    <div id="barraSeleccionMasiva" class="mb-3 py-2 px-3 rounded-3" style="display:none!important; background:#fff8e1; border:1px solid #ffe082;">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="fw-bold text-warning-emphasis" style="white-space:nowrap;">
+                                <i class="bi bi-check2-square me-1"></i><span id="textoProductosSeleccionados">0 seleccionados</span>
+                            </span>
+                            <div class="vr d-none d-md-block" style="height:26px;"></div>
+
+                            <!-- Categoría -->
+                            <div class="d-flex align-items-center gap-1">
+                                <i class="bi bi-diagram-3 text-muted"></i>
+                                <select id="inlineCategoria" class="form-select form-select-sm" style="min-width:180px; border-radius:8px;">
+                                    <option value="">Categoría…</option>
+                                </select>
+                            </div>
+
+                            <!-- Especialidad + modo -->
+                            <div class="d-flex align-items-center gap-1">
+                                <i class="bi bi-tags text-muted"></i>
+                                <select id="inlineEspModo" class="form-select form-select-sm" style="width:auto; border-radius:8px;" title="Cómo aplicar las especialidades">
+                                    <option value="agregar">+ Agregar</option>
+                                    <option value="reemplazar">= Reemplazar</option>
+                                    <option value="quitar">− Quitar</option>
+                                </select>
+                                <select id="inlineEspecialidad" class="form-select form-select-sm" multiple size="1" style="min-width:170px; border-radius:8px;"></select>
+                            </div>
+
+                            <button class="btn btn-sm btn-warning fw-semibold" id="btnAplicarInline" style="border-radius:8px; white-space:nowrap;">
+                                <i class="bi bi-check2-circle me-1"></i>Aplicar a la selección
+                            </button>
+
+                            <div class="ms-auto d-flex gap-2">
+                                <button class="btn btn-sm btn-outline-secondary" id="btnEdicionMasiva" title="Editar también marca/color/género/precios" style="border-radius:8px; white-space:nowrap;">
+                                    <i class="bi bi-sliders me-1"></i>Más campos…
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" id="btnDeseleccionarTodo" style="border-radius:8px;">
+                                    <i class="bi bi-x me-1"></i>Desmarcar
+                                </button>
                             </div>
                         </div>
-                        <div class="ms-auto d-flex gap-2">
-                            <button class="btn btn-sm btn-warning rounded-pill" id="btnEdicionMasiva" title="Editar campos en lote">
-                                <i class="bi bi-pencil-square me-1"></i>Edición Masiva
-                            </button>
-                            <button class="btn btn-sm btn-outline-primary rounded-pill" id="btnIrAAnalitica" title="Abrir panel de Analítica con los seleccionados">
-                                <i class="bi bi-bar-chart me-1"></i>Analítica
-                            </button>
-                            <button class="btn btn-sm btn-outline-secondary rounded-pill" id="btnDeseleccionarTodo">
-                                <i class="bi bi-x me-1"></i>Desmarcar
-                            </button>
+                        <div class="small text-muted mt-1" style="font-size:.72rem;">
+                            <i class="bi bi-globe2 me-1"></i>Los cambios se aplican a la selección en <strong>todas las bodegas</strong>. Para excluir de analítica usa el icono <i class="bi bi-bar-chart-line"></i> de cada fila.
                         </div>
                     </div>
                     
@@ -5323,7 +5348,9 @@ function showError(msg) {
 
       function buildCatList(){
         const q = ($('#catManualSearch').val() || '').toLowerCase();
-        const roots = cats.filter(c => !c.padre_id);
+        // Solo el árbol v1.2: raíces que YA tienen hijas (Calzado/Ropa/Accesorios).
+        // Las 83 categorías viejas planas quedan fuera del selector de creación.
+        const roots = cats.filter(c => !c.padre_id && cats.some(x => x.padre_id === c.id));
         let h = '';
         roots.forEach(r => {
           const kids = cats.filter(c => c.padre_id === r.id);
@@ -5396,9 +5423,14 @@ function showError(msg) {
         e.stopPropagation();
         const p = $('#catManualPanel'), wasHidden = p.prop('hidden');
         $('.nexo-picker-panel').prop('hidden', true);
-        // Refrescar SIEMPRE el árbol al abrir: recoge categorías recién creadas
-        // con el botón "+" sin recargar la página.
-        if (wasHidden) { cats = null; loadCats(() => { $('#catManualSearch').val(''); buildCatList(); p.prop('hidden', false); $('#catManualSearch').focus(); }); }
+        if (!wasHidden) return;
+        // Abrir YA con estado de carga (el árbol puede tardar ~2s la 1ª vez);
+        // así el picker nunca se siente "muerto".
+        $('#catManualSearch').val('');
+        $('#catManualList').html('<div class="text-muted small p-2"><i class="bi bi-hourglass-split me-1"></i>Cargando categorías…</div>');
+        p.prop('hidden', false);
+        $('#catManualSearch').focus();
+        loadCats(() => buildCatList());
       });
       $(document).on('input', '#catManualSearch', buildCatList);
       $(document).on('click', '#catManualList .nexo-prow', function(){
@@ -15345,26 +15377,94 @@ $('#btnConfirmarActualizacion').on('click', function() {
         cargarFiltrosTaxonomiaEditar();
     }
 
-    // Cargar filtros de categoría (árbol indentado) y especialidad v1.2 — con buscador
+    // Cargar filtros de categoría (árbol indentado) y especialidad v1.2 — con buscador.
+    // Con el mismo fetch se llenan los selectores de la EDICIÓN INLINE.
     function cargarFiltrosTaxonomiaEditar() {
         const $cat = $('#filtroCategoriaEditar');
         if ($cat.find('option').length <= 1) {
             $.get('/app/categorias_existentes/', function (data) {
-                (data || []).forEach(c => $cat.append(`<option value="${c.id}">${c.nombre}</option>`));
+                const $inCat = $('#inlineCategoria');
+                (data || []).forEach(c => {
+                    $cat.append(`<option value="${c.id}">${c.nombre}</option>`);
+                    $inCat.append(`<option value="${c.id}">${c.nombre}</option>`);
+                });
                 _select2Filtro($cat, 'Categoría');
+                if ($.fn.select2) $inCat.select2({ dropdownParent: $('#modalBusquedaEdicionProductos'), width: 'style', placeholder: 'Categoría…' });
             });
         }
         const $esp = $('#filtroEspecialidadEditar');
         if ($esp.find('option').length <= 1 && window.ID_ATRIBUTO_ESP_V12) {
             $.get('/app/opciones_atributo/?atributo_id=' + window.ID_ATRIBUTO_ESP_V12, function (data) {
+                const $inEsp = $('#inlineEspecialidad');
                 (data || []).forEach(o => {
                     const label = (window.ESP_LABEL_V12 && window.ESP_LABEL_V12[o.valor]) || o.valor;
                     $esp.append(`<option value="${o.id}">${label}</option>`);
+                    $inEsp.append(`<option value="${o.id}">${label}</option>`);
                 });
                 _select2Filtro($esp, 'Especialidad');
+                if ($.fn.select2) $inEsp.select2({ dropdownParent: $('#modalBusquedaEdicionProductos'), width: 'style', placeholder: 'Especialidad…', closeOnSelect: false });
             });
         }
     }
+
+    // ── APLICAR edición inline (categoría y/o especialidad) a la selección ──
+    $(document).on('click', '#btnAplicarInline', function () {
+        const ids = obtenerIdsSeleccionados();
+        if (!ids.length) { Swal.fire({ icon: 'warning', title: 'Sin selección', text: 'Marca al menos un producto.', timer: 2000 }); return; }
+
+        const catId = $('#inlineCategoria').val();
+        const espIds = $('#inlineEspecialidad').val() || [];
+        const espModo = $('#inlineEspModo').val() || 'agregar';
+
+        const campos = {};
+        if (catId) { campos.aplicar_categoria = true; campos.categoria_id = catId; }
+        if (espIds.length || espModo === 'reemplazar') {
+            campos.aplicar_especialidad = true;
+            campos.especialidad_modo = espModo;
+            campos.especialidad_ids = espIds;
+        }
+        if (!Object.keys(campos).length) {
+            Swal.fire({ icon: 'info', title: 'Nada que aplicar', text: 'Elige una categoría y/o especialidades.', timer: 2500 });
+            return;
+        }
+
+        const partes = [];
+        if (campos.aplicar_categoria) partes.push('categoría');
+        if (campos.aplicar_especialidad) partes.push(`especialidades (${espModo})`);
+        const $btn = $(this);
+        Swal.fire({
+            title: 'Aplicar a la selección',
+            html: `Se cambiará <strong>${partes.join(' y ')}</strong> en <strong>${ids.length} producto(s)</strong>,<br><small class="text-muted">en todas las bodegas.</small>`,
+            icon: 'question', showCancelButton: true, confirmButtonColor: '#f0a500',
+            confirmButtonText: 'Aplicar', cancelButtonText: 'Cancelar',
+        }).then(res => {
+            if (!res.isConfirmed) return;
+            $btn.prop('disabled', true).html('<i class="bi bi-arrow-clockwise spin-icon me-1"></i>Aplicando…');
+            $.ajax({
+                url: '/app/productos/actualizar-masivo/',
+                method: 'POST', contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                data: JSON.stringify({ producto_ids: ids, campos: campos, propagar_sucursales: true }),
+                success: function (r) {
+                    $btn.prop('disabled', false).html('<i class="bi bi-check2-circle me-1"></i>Aplicar a la selección');
+                    if (r.success) {
+                        const d = r.detalle || {};
+                        Swal.fire({ icon: 'success', title: 'Aplicado', timer: 2200, showConfirmButton: false,
+                            html: `<strong>${d.productos_actualizados || ids.length}</strong> producto(s) actualizados` });
+                        $('#inlineCategoria').val('').trigger('change');
+                        $('#inlineEspecialidad').val(null).trigger('change');
+                        buscarProductosParaEditar();
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'Error', text: r.error || 'No se pudo aplicar.' });
+                    }
+                },
+                error: function () {
+                    $btn.prop('disabled', false).html('<i class="bi bi-check2-circle me-1"></i>Aplicar a la selección');
+                    Swal.fire({ icon: 'error', title: 'Error', text: 'Error de conexión.' });
+                }
+            });
+        });
+    });
 
     // Cambios en filtros de taxonomía → re-buscar
     $(document).on('change', '#filtroCategoriaEditar, #filtroEspecialidadEditar', function () {
@@ -15721,7 +15821,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
         if (n > 0) {
             const txt = n + ' producto' + (n > 1 ? 's' : '') + ' seleccionado' + (n > 1 ? 's' : '');
             $('#textoProductosSeleccionados').text(txt);
-            $('#barraSeleccionMasiva').css('display', 'flex');
+            $('#barraSeleccionMasiva').css('display', 'block');
             $scopeCount
                 .removeClass('bg-light text-secondary')
                 .addClass('bg-primary-subtle text-primary-emphasis')
@@ -15838,6 +15938,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     activo: true,
                     excluir_de_analitica: item.excluir_de_analitica || false,
                     sucursal_nombre: item.sucursal_nombre || '',
+                    especialidades: item.especialidades || [],
                 });
             }
             
@@ -16002,6 +16103,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
                         <th>Color</th>
                         <th>Género</th>
                         <th>Categoría</th>
+                        <th>Especialidad</th>
                         <th>Bodega</th>
                         <th>Tallas</th>
                         <th class="text-center">Stock</th>
@@ -16059,6 +16161,9 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     <td>${producto.color !== '-' ? producto.color : '<span class="text-muted">—</span>'}</td>
                     <td>${producto.genero !== '-' ? producto.genero : '<span class="text-muted">—</span>'}</td>
                     <td>${producto.categoria ? `<span class="badge bg-light text-dark border">${producto.categoria}</span>` : '<span class="text-muted">—</span>'}</td>
+                    <td style="min-width:120px;">${(producto.especialidades && producto.especialidades.length)
+                        ? producto.especialidades.map(e => `<span class="badge" style="background:#f1ebfd;color:#6b3fd4;">${(window.ESP_LABEL_V12 && window.ESP_LABEL_V12[e]) || e}</span>`).join(' ')
+                        : '<span class="text-muted">—</span>'}</td>
                     <td>${producto.sucursal_nombre ? `<span class="badge" style="background:#eaf0ff;color:#2456d6;">${producto.sucursal_nombre}</span>` : '<span class="text-muted">—</span>'}</td>
                     <td style="min-width:150px;">${tallasHtml || '<span class="text-muted small">Sin tallas</span>'}</td>
                     <td class="text-center">
