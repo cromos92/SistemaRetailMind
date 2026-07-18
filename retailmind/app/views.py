@@ -21281,20 +21281,24 @@ def crear_producto_manual(request):
         # atributo "Especialidad". Idempotente (get_or_create) y aditivo: quita
         # las que el usuario deseleccionó y agrega las nuevas, sin tocar otros
         # atributos del producto. Silencioso si el atributo no existe todavía.
+        # Solo se sincroniza si el usuario SELECCIONÓ especialidades. Con el picker
+        # vacío no se toca nada: al agregar tallas a un producto EXISTENTE (flujo
+        # típico post-recategorización) un borrado incondicional limpiaría las
+        # especialidades que la migración v1.2 ya le asignó.
         try:
-            from .models import ProductoAtributoValor
-            attr_esp = Productos_Atributos.objects.filter(nombre__iexact='Especialidad').first()
-            if attr_esp is not None:
-                opciones_validas = list(AtributoOpcion.objects.filter(
-                    atributo=attr_esp, id__in=especialidad_ids)) if especialidad_ids else []
-                ids_ok = {o.id for o in opciones_validas}
-                # Quitar las que ya no están seleccionadas
-                ProductoAtributoValor.objects.filter(
-                    producto=producto, atributo=attr_esp).exclude(opcion_id__in=ids_ok).delete()
-                # Agregar las nuevas (no duplica)
-                for opcion in opciones_validas:
-                    ProductoAtributoValor.objects.get_or_create(
-                        producto=producto, atributo=attr_esp, opcion=opcion)
+            if especialidad_ids:
+                from .models import ProductoAtributoValor
+                attr_esp = Productos_Atributos.objects.filter(nombre__iexact='Especialidad').first()
+                if attr_esp is not None:
+                    opciones_validas = list(AtributoOpcion.objects.filter(
+                        atributo=attr_esp, id__in=especialidad_ids))
+                    ids_ok = {o.id for o in opciones_validas}
+                    # Quitar las deseleccionadas y agregar las nuevas (no duplica)
+                    ProductoAtributoValor.objects.filter(
+                        producto=producto, atributo=attr_esp).exclude(opcion_id__in=ids_ok).delete()
+                    for opcion in opciones_validas:
+                        ProductoAtributoValor.objects.get_or_create(
+                            producto=producto, atributo=attr_esp, opcion=opcion)
         except Exception as e:
             logger.warning("Error guardando especialidades del producto %s: %s", producto.id, e)
 

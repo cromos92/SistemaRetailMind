@@ -579,6 +579,47 @@
     .nexo-crumb.general { background: #eef0f5; color: #66708a; font-weight: 600; }
     .nexo-crumb.esp { background: #f1ebfd; color: #6b3fd4; }
 
+    /* ===== Gestión de Productos: modal grande + tabla de resultados ===== */
+    #modalBusquedaEdicionProductos .modal-dialog {
+        max-width: 96vw !important;
+        width: 96vw;
+        margin: 0.8rem auto;
+    }
+    #modalBusquedaEdicionProductos .busq-resultados-scroll {
+        max-height: calc(100vh - 330px) !important;
+    }
+    .tabla-gestion-prod { border-collapse: separate; border-spacing: 0; width: 100%; }
+    .tabla-gestion-prod thead th {
+        position: sticky; top: 0; z-index: 2;
+        background: #405189; color: #fff;
+        font-size: .7rem; text-transform: uppercase; letter-spacing: .04em;
+        white-space: nowrap; padding: 8px 10px; border: 0;
+    }
+    .tabla-gestion-prod td {
+        font-size: .8rem; vertical-align: middle; padding: 6px 10px;
+        border-bottom: 1px solid #eef0f5; background: #fff;
+    }
+    .tabla-gestion-prod tbody tr:hover td { background: #f4f7ff; }
+    .tabla-gestion-prod tbody tr.fila-sel td { background: #fff8e1; }
+    .tabla-gestion-prod .prod-nombre { font-weight: 700; color: #1a2233; line-height: 1.15; }
+    .tabla-gestion-prod .prod-codigo { font-size: .7rem; color: #66708a; }
+    .tabla-gestion-prod .stock-pill {
+        display: inline-block; min-width: 44px; text-align: center; font-weight: 700;
+        border-radius: 8px; padding: 2px 8px; border: 1px solid transparent; font-size: .8rem;
+    }
+    /* Los select2 de la barra de filtros del modal */
+    #modalBusquedaEdicionProductos .select2-container .select2-selection--single {
+        height: 31px; border-radius: 8px; border: 0; background: #f3f6f9;
+    }
+    #modalBusquedaEdicionProductos .select2-container .select2-selection__rendered {
+        line-height: 31px; font-size: .8rem; font-weight: 600;
+    }
+    #modalBusquedaEdicionProductos .select2-container .select2-selection__arrow { height: 29px; }
+
+    /* ===== Apilamiento: alertas y modales anidados SIEMPRE sobre el modal base ===== */
+    .swal2-container { z-index: 200000 !important; }
+    .select2-container--open { z-index: 200001 !important; }
+
     /* Resumen stock estilizado */
     .resumen-stock-crear {
         background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
@@ -2999,11 +3040,12 @@
                                         <div class="col-12 mb-1">
                                             <label class="form-label">Categoría <span class="text-danger">*</span></label>
                                             <input type="hidden" name="categoria" id="catManualValue" required>
-                                            <div class="nexo-picker position-relative">
+                                            <div class="nexo-picker position-relative input-group input-group-sm">
                                                 <button type="button" class="form-select form-select-sm text-start nexo-picker-btn" id="catManualBtn">
                                                     <span id="catManualCrumbs" class="text-muted">Elige categoría…</span>
                                                     <i class="bi bi-chevron-down nexo-picker-caret"></i>
                                                 </button>
+                                                <button class="btn btn-outline-secondary abrir-modal-categoria" type="button" title="Crear categoría nueva"><i class="bi bi-plus-lg"></i></button>
                                                 <div class="nexo-picker-panel" id="catManualPanel" hidden>
                                                     <input type="text" class="form-control form-control-sm mb-1" id="catManualSearch"
                                                         placeholder="Busca o navega: padre (general) o hijo (específico)…" autocomplete="off">
@@ -5304,7 +5346,10 @@ function showError(msg) {
         $c.html(parts.length > 1
           ? `<span class="nexo-crumb">${esc(parts[0])}</span> <span class="nexo-crumb child">${esc(parts[1])}</span>`
           : `<span class="nexo-crumb">${esc(parts[0])}</span> <span class="nexo-crumb general">general</span>`);
+        const cambio = String($('#catManualValue').val()) !== String(selCat.id);
         $('#catManualValue').val(selCat.id);
+        // Notificar al resto del modal (re-verificación de producto existente)
+        if (cambio) $('#catManualValue').trigger('change');
       }
       function buildEspList(){
         const q = ($('#espManualSearch').val() || '').toLowerCase();
@@ -5351,7 +5396,9 @@ function showError(msg) {
         e.stopPropagation();
         const p = $('#catManualPanel'), wasHidden = p.prop('hidden');
         $('.nexo-picker-panel').prop('hidden', true);
-        if (wasHidden) loadCats(() => { $('#catManualSearch').val(''); buildCatList(); p.prop('hidden', false); $('#catManualSearch').focus(); });
+        // Refrescar SIEMPRE el árbol al abrir: recoge categorías recién creadas
+        // con el botón "+" sin recargar la página.
+        if (wasHidden) { cats = null; loadCats(() => { $('#catManualSearch').val(''); buildCatList(); p.prop('hidden', false); $('#catManualSearch').focus(); }); }
       });
       $(document).on('input', '#catManualSearch', buildCatList);
       $(document).on('click', '#catManualList .nexo-prow', function(){
@@ -10874,7 +10921,8 @@ function verificarProductoExistenteManual() {
     const marca = $('#modalCrearProductoManual select[name="atributo1"]').val();
     const color = $('#modalCrearProductoManual select[name="atributo2"]').val();
     const genero = $('#modalCrearProductoManual select[name="atributo3"]').val();
-    const categoria = $('#modalCrearProductoManual select[name="categoria"]').val();
+    // La categoría v1.2 vive en un input hidden (picker), ya no en un <select>
+    const categoria = $('#modalCrearProductoManual [name="categoria"]').val();
 
     console.log('🔍 Verificando producto existente en modal manual:', { articulo, marca, color, genero, categoria });
 
@@ -11708,7 +11756,8 @@ $('#modalCrearProductoManual input[name="articulo"]').on('change input', functio
 });
 
 // Eventos para verificar producto cuando cambian otros campos (color, género, categoría)
-$('#modalCrearProductoManual select[name="atributo2"], #modalCrearProductoManual select[name="atributo3"], #modalCrearProductoManual select[name="categoria"]').on('change', function() {
+// (la categoría es un input hidden del picker; su change se dispara manualmente)
+$('#modalCrearProductoManual select[name="atributo2"], #modalCrearProductoManual select[name="atributo3"], #modalCrearProductoManual input[name="categoria"]').on('change', function() {
     clearTimeout(timeoutVerificacionManual);
     timeoutVerificacionManual = setTimeout(function() {
         verificarProductoExistenteManual();
@@ -11954,7 +12003,7 @@ $('#formCrearProductoManual').on('submit', function(e) {
         { selector: modal.find('select[name="atributo1"]'), nombre: 'Marca' },
         { selector: modal.find('select[name="atributo2"]'), nombre: 'Color' },
         { selector: modal.find('select[name="atributo3"]'), nombre: 'Género' },
-        { selector: modal.find('select[name="categoria"]'), nombre: 'Categoría' },
+        { selector: modal.find('[name="categoria"]'), nombre: 'Categoría' },
         { selector: modal.find('select[name="tipo_talla"]'), nombre: 'Tipo de Talla' },
         { selector: modal.find('input[name="costo"]'), nombre: 'Costo' },
         { selector: modal.find('input[name="precioventa"]'), nombre: 'Precio Venta' }
@@ -15267,10 +15316,22 @@ $('#btnConfirmarActualizacion').on('click', function() {
         });
     }
 
+    // Convierte un filtro del modal en select con BUSCADOR (Select2).
+    // dropdownParent es clave: sin él, el buscador queda detrás del modal.
+    function _select2Filtro($sel, placeholder) {
+        if (!$.fn.select2) return;
+        if ($sel.hasClass('select2-hidden-accessible')) $sel.select2('destroy');
+        $sel.select2({
+            dropdownParent: $('#modalBusquedaEdicionProductos'),
+            width: 'style',
+            placeholder: placeholder,
+        });
+    }
+
     // Cargar sucursales en el selector del modal de edición
     function cargarSucursalesEnFiltroEditar() {
         const $select = $('#filtroSucursalEditar');
-        if ($select.find('option').length > 1) return;
+        if ($select.find('option').length > 1) { cargarFiltrosTaxonomiaEditar(); return; }
         $.ajax({
             url: '/app/api/sucursales/listar/',
             method: 'GET',
@@ -15278,17 +15339,19 @@ $('#btnConfirmarActualizacion').on('click', function() {
                 (response.sucursales || []).forEach(function(suc) {
                     $select.append(`<option value="${suc.id}">${suc.alias}</option>`);
                 });
+                _select2Filtro($select, 'Bodega');
             }
         });
         cargarFiltrosTaxonomiaEditar();
     }
 
-    // Cargar filtros de categoría (árbol indentado) y especialidad v1.2
+    // Cargar filtros de categoría (árbol indentado) y especialidad v1.2 — con buscador
     function cargarFiltrosTaxonomiaEditar() {
         const $cat = $('#filtroCategoriaEditar');
         if ($cat.find('option').length <= 1) {
             $.get('/app/categorias_existentes/', function (data) {
                 (data || []).forEach(c => $cat.append(`<option value="${c.id}">${c.nombre}</option>`));
+                _select2Filtro($cat, 'Categoría');
             });
         }
         const $esp = $('#filtroEspecialidadEditar');
@@ -15298,6 +15361,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     const label = (window.ESP_LABEL_V12 && window.ESP_LABEL_V12[o.valor]) || o.valor;
                     $esp.append(`<option value="${o.id}">${label}</option>`);
                 });
+                _select2Filtro($esp, 'Especialidad');
             });
         }
     }
@@ -15306,6 +15370,29 @@ $('#btnConfirmarActualizacion').on('click', function() {
     $(document).on('change', '#filtroCategoriaEditar, #filtroEspecialidadEditar', function () {
         resetearSeleccion();
         buscarProductosParaEditar();
+    });
+
+    // Búsqueda mientras escribes (debounce 500ms, mínimo 2 caracteres)
+    let _debounceBusqEditar = null;
+    $(document).on('input', '#inputBuscarProductoEditar', function () {
+        const termino = $(this).val().trim();
+        clearTimeout(_debounceBusqEditar);
+        if (termino.length < 2) return;
+        _debounceBusqEditar = setTimeout(() => buscarProductosParaEditar(), 500);
+    });
+
+    // ===== Apilamiento de modales: cada modal nuevo (y su backdrop) queda SOBRE
+    // el anterior. Sin esto, "Editar producto" abría detrás de Gestión. =====
+    $(document).on('show.bs.modal', '.modal', function () {
+        const abiertos = document.querySelectorAll('.modal.show').length;
+        if (!abiertos) return;                         // primer modal: default de Bootstrap
+        const z = 1056 + 10 * abiertos;
+        this.style.zIndex = z;
+        setTimeout(() => {
+            const bds = document.querySelectorAll('.modal-backdrop:not(.stacked-fix)');
+            const ultimo = bds[bds.length - 1];
+            if (ultimo) { ultimo.style.zIndex = z - 5; ultimo.classList.add('stacked-fix'); }
+        }, 0);
     });
 
     // Al cambiar sucursal: actualizar texto del scope y auto-buscar
@@ -15414,7 +15501,11 @@ $('#btnConfirmarActualizacion').on('click', function() {
             if (!attrId) return;
             $.get(`/app/opciones_atributo/?atributo_id=${attrId}`, function (data) {
                 $sel.empty().append('<option value="">-- Seleccionar --</option>');
-                const opciones = Array.isArray(data) ? data : (data.opciones || []);
+                let opciones = Array.isArray(data) ? data : (data.opciones || []);
+                // DAMA deprecada (v1.2): tampoco ofrecerla en la edición masiva
+                if (String(attrId) === String(ID_ATRIBUTO_GENERO)) {
+                    opciones = opciones.filter(op => String(op.valor || '').toUpperCase() !== 'DAMA');
+                }
                 opciones.forEach(op => {
                     $sel.append(`<option value="${op.id}">${op.valor || op.nombre || op.text}</option>`);
                 });
@@ -15735,7 +15826,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     producto_id: item.producto_id || item.id,
                     codigo: codigo,
                     nombre: nombre || 'Sin nombre',
-                    categoria: '', // No disponible en esta API
+                    categoria: item.categoria || '',
                     marca: item.marca || '-',
                     color: item.color || '-',
                     genero: item.genero || '-',
@@ -15891,6 +15982,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
                 <div class="d-flex align-items-center gap-2">
                     <span class="fw-bold" style="font-size:.88rem;">${productosFiltrados.length} producto${productosFiltrados.length !== 1 ? 's' : ''}</span>
                     ${productosFiltrados.length < productos.length ? `<span class="text-muted small">de ${productos.length} total</span>` : ''}
+                    <span class="text-muted small d-none d-md-inline"><i class="bi bi-check2-square me-1"></i>Marca filas y usa <strong>Edición Masiva</strong></span>
                 </div>
                 <div class="d-flex align-items-center gap-1">
                     <input type="checkbox" id="selectAllProductos" class="form-check-input" title="Seleccionar todo">
@@ -15899,35 +15991,44 @@ $('#btnConfirmarActualizacion').on('click', function() {
             </div>
         `;
 
-        html += `<div class="busq-resultados-scroll" style="max-height:460px; overflow-y:auto; padding-right:4px;">`;
+        // ===== Vista TABLA =====
+        html += `<div class="busq-resultados-scroll table-responsive" style="max-height:460px; overflow-y:auto; padding-right:4px; border:1px solid #eef0f5; border-radius:10px;">
+            <table class="tabla-gestion-prod">
+                <thead>
+                    <tr>
+                        <th style="width:34px;"></th>
+                        <th>Producto</th>
+                        <th>Marca</th>
+                        <th>Color</th>
+                        <th>Género</th>
+                        <th>Categoría</th>
+                        <th>Bodega</th>
+                        <th>Tallas</th>
+                        <th class="text-center">Stock</th>
+                        <th class="text-end">Precio</th>
+                        <th class="text-center" style="width:110px;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>`;
 
         productosFiltrados.forEach((producto) => {
             const precioFormateado = new Intl.NumberFormat('es-CL', {
                 style: 'currency', currency: 'CLP', minimumFractionDigits: 0
             }).format(producto.precioventa);
 
-            // Stock visual
             const stockVal = producto.stock_total || 0;
             const stockColor = stockVal === 0 ? '#dc3545' : stockVal < 5 ? '#f0a500' : '#0ab39c';
             const stockBg = stockVal === 0 ? '#ffeaea' : stockVal < 5 ? '#fff8e1' : '#e9f7ef';
             const stockBorder = stockVal === 0 ? '#f5c6cb' : stockVal < 5 ? '#ffe082' : '#a3d9a5';
 
-            // Attribute pills
-            const marcaPill = (producto.marca && producto.marca !== '-')
-                ? `<span class="attr-pill marca"><i class="bi bi-tag-fill"></i>${producto.marca}</span>` : '';
-            const colorPill = (producto.color && producto.color !== '-')
-                ? `<span class="attr-pill color"><i class="bi bi-circle-fill" style="font-size:.45rem;"></i>${producto.color}</span>` : '';
-            const generoPill = (producto.genero && producto.genero !== '-')
-                ? `<span class="attr-pill genero"><i class="bi bi-person-fill"></i>${producto.genero}</span>` : '';
-
             // Tallas compactas
             let tallasHtml = '';
             if (producto.tallas && producto.tallas.length > 0) {
-                const maxShow = 5;
+                const maxShow = 6;
                 const visible = producto.tallas.slice(0, maxShow);
                 tallasHtml = visible.map(t => {
-                    const tc = t.stock === 0 ? 'color:#dc3545;background:#ffeaea;border-color:#f5c6cb;' 
-                              : t.stock < 3 ? 'color:#856404;background:#fff8e1;border-color:#ffe082;' 
+                    const tc = t.stock === 0 ? 'color:#dc3545;background:#ffeaea;border-color:#f5c6cb;'
+                              : t.stock < 3 ? 'color:#856404;background:#fff8e1;border-color:#ffe082;'
                               : 'color:#0ab39c;background:#e9f7ef;border-color:#a3d9a5;';
                     return `<span class="talla-chip" style="${tc}" title="${t.talla}: ${t.stock} uds">${t.talla}<sup style="font-size:.55rem;margin-left:2px;">${t.stock}</sup></span>`;
                 }).join('');
@@ -15936,70 +16037,69 @@ $('#btnConfirmarActualizacion').on('click', function() {
                 }
             }
 
-            // Analítica badge
             const analiticaHtml = producto.excluir_de_analitica
                 ? `<span class="badge-analitica excluido" title="Excluido de analítica"><i class="bi bi-eye-slash"></i></span>`
                 : `<span class="badge-analitica incluido" title="Incluido en analítica"><i class="bi bi-eye"></i></span>`;
 
             html += `
-            <div class="prod-card" data-producto-id="${producto.producto_id}">
-                <div class="prod-card-check">
-                    <input type="checkbox" class="form-check-input chk-producto" value="${producto.producto_id}">
-                </div>
-                <div class="prod-card-body">
-                    <div class="prod-card-main">
-                        <div class="prod-card-info">
-                            <div class="d-flex align-items-start gap-2">
-                                <div class="prod-card-nombre">${producto.nombre}</div>
-                                ${analiticaHtml}
+                <tr data-producto-id="${producto.producto_id}">
+                    <td class="text-center">
+                        <input type="checkbox" class="form-check-input chk-producto" value="${producto.producto_id}">
+                    </td>
+                    <td style="min-width:170px;">
+                        <div class="d-flex align-items-center gap-2">
+                            <div>
+                                <div class="prod-nombre">${producto.nombre}</div>
+                                ${producto.codigo ? `<div class="prod-codigo"><code>${producto.codigo}</code></div>` : ''}
                             </div>
-                            <div class="prod-card-attrs">${marcaPill}${colorPill}${generoPill}</div>
-                            <div class="prod-card-meta">
-                                ${producto.codigo ? `<code>${producto.codigo}</code>` : ''}
-                                ${producto.sucursal_nombre ? `<span><i class="bi bi-building"></i>${producto.sucursal_nombre}</span>` : ''}
-                                ${producto.categoria ? `<span><i class="bi bi-folder"></i>${producto.categoria}</span>` : ''}
-                            </div>
+                            ${analiticaHtml}
                         </div>
-                        <div class="prod-card-stats">
-                            <div class="prod-card-stock" style="color:${stockColor};background:${stockBg};border-color:${stockBorder};">
-                                <span class="stock-value">${stockVal}</span>
-                                <span class="stock-label">stock</span>
-                            </div>
-                            <div class="prod-card-precio">${precioFormateado}</div>
-                        </div>
-                    </div>
-                    ${tallasHtml ? `<div class="prod-card-tallas">${tallasHtml}</div>` : ''}
-                </div>
-                <div class="prod-card-actions">
-                    <button class="btn-action-busq editar" onclick="editarProductoCompleto(${producto.id});" title="Editar producto">
-                        <i class="bi bi-pencil-square"></i>
-                    </button>
-                    <button class="btn-action-busq analitica btn-toggle-analitica"
-                            data-producto-id="${producto.producto_id}"
-                            data-excluido="${producto.excluir_de_analitica}"
-                            title="${producto.excluir_de_analitica ? 'Incluir este producto en analítica (en todas las bodegas)' : 'Excluir este producto de analítica (en todas las bodegas)'}">
-                        <i class="bi bi-${producto.excluir_de_analitica ? 'eye-slash' : 'bar-chart-line'}"></i>
-                    </button>
-                    <button class="btn-action-busq eliminar btn-eliminar-producto-todas"
-                            data-producto-id="${producto.producto_id}"
-                            data-producto-nombre="${producto.nombre || ''}"
-                            data-producto-marca="${producto.marca || ''}"
-                            data-producto-color="${producto.color || ''}"
-                            data-producto-stock="${stockVal}"
-                            data-producto-sucursal="${producto.sucursal_nombre || ''}"
-                            title="Eliminar definitivamente de TODAS las bodegas"
-                            style="color:#dc3545;">
-                        <i class="bi bi-trash3"></i>
-                    </button>
-                </div>
-            </div>`;
+                    </td>
+                    <td>${producto.marca !== '-' ? producto.marca : '<span class="text-muted">—</span>'}</td>
+                    <td>${producto.color !== '-' ? producto.color : '<span class="text-muted">—</span>'}</td>
+                    <td>${producto.genero !== '-' ? producto.genero : '<span class="text-muted">—</span>'}</td>
+                    <td>${producto.categoria ? `<span class="badge bg-light text-dark border">${producto.categoria}</span>` : '<span class="text-muted">—</span>'}</td>
+                    <td>${producto.sucursal_nombre ? `<span class="badge" style="background:#eaf0ff;color:#2456d6;">${producto.sucursal_nombre}</span>` : '<span class="text-muted">—</span>'}</td>
+                    <td style="min-width:150px;">${tallasHtml || '<span class="text-muted small">Sin tallas</span>'}</td>
+                    <td class="text-center">
+                        <span class="stock-pill" style="color:${stockColor};background:${stockBg};border-color:${stockBorder};">${stockVal}</span>
+                    </td>
+                    <td class="text-end fw-semibold">${precioFormateado}</td>
+                    <td class="text-center" style="white-space:nowrap;">
+                        <button class="btn-action-busq editar" onclick="editarProductoCompleto(${producto.id});" title="Editar producto">
+                            <i class="bi bi-pencil-square"></i>
+                        </button>
+                        <button class="btn-action-busq analitica btn-toggle-analitica"
+                                data-producto-id="${producto.producto_id}"
+                                data-excluido="${producto.excluir_de_analitica}"
+                                title="${producto.excluir_de_analitica ? 'Incluir en analítica (todas las bodegas)' : 'Excluir de analítica (todas las bodegas)'}">
+                            <i class="bi bi-${producto.excluir_de_analitica ? 'eye-slash' : 'bar-chart-line'}"></i>
+                        </button>
+                        <button class="btn-action-busq eliminar btn-eliminar-producto-todas"
+                                data-producto-id="${producto.producto_id}"
+                                data-producto-nombre="${producto.nombre || ''}"
+                                data-producto-marca="${producto.marca || ''}"
+                                data-producto-color="${producto.color || ''}"
+                                data-producto-stock="${stockVal}"
+                                data-producto-sucursal="${producto.sucursal_nombre || ''}"
+                                title="Eliminar definitivamente de TODAS las bodegas"
+                                style="color:#dc3545;">
+                            <i class="bi bi-trash3"></i>
+                        </button>
+                    </td>
+                </tr>`;
         });
 
-        html += `</div>`;
+        html += `</tbody></table></div>`;
 
         $('#resultadosBusquedaProductos').html(html);
         resetearSeleccion();
     }
+
+    // Resaltar visualmente las filas marcadas de la tabla
+    $(document).on('change', '.tabla-gestion-prod .chk-producto', function () {
+        $(this).closest('tr').toggleClass('fila-sel', this.checked);
+    });
     
     // Función para ver tallas de un producto
     function verTallasProducto(tallas, nombreProducto) {
