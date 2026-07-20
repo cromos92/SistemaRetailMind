@@ -40,7 +40,7 @@ def fold(x):
 REGLAS = [
     # --- Accesorios muy específicos primero (evita que "BALON FUTBOL" caiga en otra) ---
     (r'BALON(ES)?|PELOTA', 'accesorios', 'balones'),
-    (r'CANILLERA|ESPINILLERA|RODILLERA|TOBILLERA|MUNEQUERA|CODERA|MENISQUERA|VENDA|BUCAL|PROTECTOR|CORAQUILLA|SUSPENSOR', 'accesorios', 'protecciones'),
+    (r'CANILLERA|ESPINILLERA|RODILLERA|TOBILLERA|MUNEQUERA|CODERA|MENISQUERA|VENDA|BUCAL|PROTECTOR|CORAQUILLA|SUSPENSOR|\bCASCO\b|COQUILLA|ANTIPARRA', 'accesorios', 'protecciones'),
     (r'GUANTILLA|GUANTE', 'accesorios', 'guantes'),
     (r'MOCHILA|BOLSO|MORRAL|CARTERA|BANANO|BACKPACK|MALETA|BOLSA|CANGUR', 'accesorios', 'mochilas'),
     (r'JOCKEY|VISERA|GORRA|GORRO|BEANIE|PASAMONTA', 'accesorios', 'gorros'),
@@ -64,6 +64,10 @@ REGLAS = [
     (r'BALLERINA|BALERINA|GUILLERMINA', 'calzado', 'ballerinas'),
     (r'ALPARGATA', 'calzado', 'alpargata'),
     (r'GATEADOR', 'calzado', 'gateadores'),
+    # --- Pistas de descripción específicas de ESTE catálogo (baja prioridad,
+    #     al final: solo aplican si nada físico matcheó antes) ---
+    (r'\bMODA\b', 'calzado', 'zapatillas'),    # "MODA" = zapatilla urbana
+    (r'\bVESTIR\b', 'calzado', 'zvestir'),     # "VESTIR" = zapato de vestir
 ]
 REGLAS = [(re.compile(r'\b(' + pat + r')') if not pat.startswith(r'\b') else re.compile(pat), c, s)
           for pat, c, s in REGLAS]
@@ -75,6 +79,7 @@ SUB_NOMBRE = {
     'zapatillas': 'Zapatillas', 'botines': 'Botines', 'botas': 'Botas',
     'sandalias': 'Sandalias y Chalas', 'mocasin': 'Mocasines', 'pantuflas': 'Pantuflas',
     'ballerinas': 'Ballerinas', 'alpargata': 'Alpargatas', 'gateadores': 'Gateadores',
+    'zvestir': 'Zapatos de Vestir',
     'poleras': 'Poleras y Camisetas', 'shorts': 'Shorts', 'buzo': 'Buzos y Pantalones',
     'chaquetas': 'Chaquetas y Polerones', 'tbano': 'Trajes de Baño',
     'balones': 'Balones', 'protecciones': 'Protecciones', 'guantes': 'Guantes',
@@ -105,7 +110,7 @@ class Command(BaseCommand):
         cat_obj = {}
         for slug, nombre in SUB_NOMBRE.items():
             padre = SUB_PADRE[[c for c, subs in
-                               {'calzado': ['zapatillas','botines','botas','sandalias','mocasin','pantuflas','ballerinas','alpargata','gateadores'],
+                               {'calzado': ['zapatillas','botines','botas','sandalias','mocasin','pantuflas','ballerinas','alpargata','gateadores','zvestir'],
                                 'vestuario': ['poleras','shorts','buzo','chaquetas','tbano'],
                                 'accesorios': ['balones','protecciones','guantes','mochilas','gorros','medias','trofeos','equipamiento','accvest']}.items()
                                if slug in subs][0]]

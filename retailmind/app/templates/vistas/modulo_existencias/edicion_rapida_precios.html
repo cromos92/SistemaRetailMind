@@ -1975,9 +1975,10 @@
                         </span>
                     </p>
                 </div>
-                <button class="btn-historial-header" onclick="abrirAuditoriaPrecios()">
+                <button class="btn-historial-header" onclick="window.location.href='/app/gestion-precios/revisar-pendientes/?tab=alertas'"
+                        title="Abrir el hub de precios: cambios, historial, auditoría y alertas en un solo lugar">
                     <i class="ri-history-line"></i>
-                    Últimas Ediciones / Auditoría
+                    Historial / Auditoría de Precios
                     <span class="badge-count" id="historialCount" title="Ediciones de hoy">0</span>
                 </button>
             </div>
@@ -2194,8 +2195,8 @@
                         </select>
                     </div>
                     <div class="filtro-group" style="flex: 1; min-width: 160px;">
-                        <label for="audSearch">Artículo / usuario</label>
-                        <input type="text" id="audSearch" placeholder="Buscar..."
+                        <label for="audSearch">Artículo / SKU / usuario</label>
+                        <input type="text" id="audSearch" placeholder="Artículo, SKU (dígitos) o usuario..."
                                onkeydown="if(event.key==='Enter'){event.preventDefault(); cargarRegistroAuditoria(1);}">
                     </div>
                     <button type="button" class="btn-auditoria-aplicar" onclick="cargarRegistroAuditoria(1)">

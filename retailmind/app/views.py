@@ -27297,15 +27297,31 @@ def buscar_productos_sucursal(request):
     
     # Obtener todos los atributos disponibles para los filtros
     atributos = Productos_Atributos.objects.all().prefetch_related('opciones')
-    
-    # Obtener categorías
-    categorias = Categoria.objects.all()
-    
+
+    # Categorías para el filtro: ocultar las deprecadas (_ZZ_) y ordenar como
+    # árbol (padre luego sus hijas), para que el select refleje la taxonomía v1.2.
+    cats_raw = list(Categoria.objects.exclude(nombre__startswith='_ZZ_')
+                    .select_related('padre').values('id', 'nombre', 'padre_id', 'padre__nombre'))
+    hijos = {}
+    for c in cats_raw:
+        hijos.setdefault(c['padre_id'], []).append(c)
+    categorias = []
+    for raiz in sorted(hijos.get(None, []), key=lambda c: c['nombre']):
+        categorias.append({'id': raiz['id'], 'nombre': raiz['nombre'], 'nivel': 0})
+        for h in sorted(hijos.get(raiz['id'], []), key=lambda c: c['nombre']):
+            categorias.append({'id': h['id'], 'nombre': '› ' + h['nombre'], 'nivel': 1})
+
+    # Especialidades v1.2 para el filtro (con etiqueta legible si existe)
+    esp_attr = Productos_Atributos.objects.filter(nombre__iexact='Especialidad').first()
+    especialidades = (list(AtributoOpcion.objects.filter(atributo=esp_attr)
+                           .order_by('valor').values('id', 'valor')) if esp_attr else [])
+
     context = {
         'sucursales': sucursales,
         'sucursal_actual_id': sucursal_actual_id,
         'atributos': atributos,
         'categorias': categorias,
+        'especialidades': especialidades,
     }
     
     return render(request, 'vistas/modulo_existencias/buscar_productos_sucursal.html', context)
@@ -27321,11 +27337,14 @@ def obtener_productos_sucursal(request):
         search = request.GET.get('search', '').strip()
         filtro_tabla = request.GET.get('filtro_tabla', '').strip()
         categoria_id = request.GET.get('categoria_id')
+        especialidad_id = request.GET.get('especialidad_id')  # Especialidad v1.2
         atributo1_id = request.GET.get('atributo1_id')  # Marca
         atributo2_id = request.GET.get('atributo2_id')  # Color
         atributo3_id = request.GET.get('atributo3_id')  # Género
         sucursal_id = request.GET.get('sucursal_id')  # Filtro por sucursal
         solo_con_stock = request.GET.get('solo_con_stock') == 'on'  # Filtro de stock
+        sin_categoria = request.GET.get('sin_categoria') == 'on'      # Filtro inteligente
+        sin_especialidad = request.GET.get('sin_especialidad') == 'on'  # Filtro inteligente
 
         # Parámetros de paginación
         page = int(request.GET.get('page', 1))
@@ -27337,7 +27356,7 @@ def obtener_productos_sucursal(request):
         # paginados — el prefetch acá las traería para TODOS los productos
         # antes del paginado, gastando memoria y BD.
         productos_query = Producto.objects.all().select_related(
-            'sucursal', 'categoria', 'atributo1', 'atributo2', 'atributo3'
+            'sucursal', 'categoria', 'categoria__padre', 'atributo1', 'atributo2', 'atributo3'
         )
 
         # Filtrar por sucursal específica si se seleccionó una
@@ -27383,10 +27402,26 @@ def obtener_productos_sucursal(request):
                 filtros_tabla = filtros_tabla | Q(producto_talla__sku=int(filtro_strip))
             productos_query = productos_query.filter(filtros_tabla)
 
-        # Filtrar por categoría
+        # Filtrar por categoría: un padre v1.2 (Calzado/Ropa/Accesorios) incluye
+        # también sus hijas; una hoja filtra exacto.
         if categoria_id:
-            productos_query = productos_query.filter(categoria_id=categoria_id)
-        
+            cat_ids = [int(categoria_id)]
+            cat_ids += list(Categoria.objects.filter(padre_id=categoria_id).values_list('id', flat=True))
+            productos_query = productos_query.filter(categoria_id__in=cat_ids)
+
+        # Filtrar por especialidad v1.2 (atributo "Especialidad" vía ProductoAtributoValor)
+        if especialidad_id:
+            productos_query = productos_query.filter(atributos__opcion_id=especialidad_id)
+
+        # Filtros inteligentes para cazar lo no clasificado:
+        # "sin categoría v1.2" = sin categoría o aún en una raíz vieja (no en una hija).
+        if sin_categoria:
+            productos_query = productos_query.filter(
+                Q(categoria__isnull=True) | Q(categoria__padre__isnull=True))
+        if sin_especialidad:
+            productos_query = productos_query.exclude(
+                atributos__atributo__nombre__iexact='Especialidad')
+
         # Filtrar por atributos específicos
         if atributo1_id:  # Marca
             productos_query = productos_query.filter(atributo1_id=atributo1_id)
@@ -27442,6 +27477,15 @@ def obtener_productos_sucursal(request):
         # ═══════════════════════════════════════════════════════════════
         productos = list(productos)  # materializar una sola vez
         producto_ids = [p.id for p in productos]
+
+        # Especialidades v1.2 de los productos de ESTA página en UNA query.
+        from app.models import ProductoAtributoValor
+        esp_por_producto = {}
+        if producto_ids:
+            for pav in ProductoAtributoValor.objects.filter(
+                    producto_id__in=producto_ids, atributo__nombre__iexact='Especialidad'
+            ).values('producto_id', 'opcion__valor'):
+                esp_por_producto.setdefault(pav['producto_id'], []).append(pav['opcion__valor'])
 
         # Obtener todas las tallas de los productos paginados
         tallas_query = Producto_Talla.objects.filter(producto_id__in=producto_ids)
@@ -27536,6 +27580,9 @@ def obtener_productos_sucursal(request):
                 'sucursal': producto.sucursal.alias,
                 'sucursal_id': producto.sucursal_id,
                 'categoria': producto.categoria.nombre if producto.categoria else '',
+                'categoria_padre': (producto.categoria.padre.nombre
+                                    if producto.categoria and producto.categoria.padre_id else ''),
+                'especialidades': esp_por_producto.get(producto.id, []),
                 'marca': producto.atributo1.valor if producto.atributo1 else '',
                 'color': producto.atributo2.valor if producto.atributo2 else '',
                 'genero': producto.atributo3.valor if producto.atributo3 else '',

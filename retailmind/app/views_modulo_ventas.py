@@ -17085,7 +17085,25 @@ def dashboard_ventas(request):
 @login_required
 def dashboard_ventas_mejorado(request):
     """Vista del dashboard de ventas mejorado - NEXO Design System"""
-    return render(request, 'vistas/modulo_dashboards/dashboard_ventas_nexo.html')
+    from app.models import Categoria, Productos_Atributos, AtributoOpcion
+    # Categorías v1.2 para el filtro (árbol Padre › Hijo, ocultando deprecadas).
+    cats_raw = list(Categoria.objects.exclude(nombre__startswith='_ZZ_')
+                    .values('id', 'nombre', 'padre_id'))
+    hijos = {}
+    for c in cats_raw:
+        hijos.setdefault(c['padre_id'], []).append(c)
+    categorias = []
+    for raiz in sorted(hijos.get(None, []), key=lambda c: c['nombre']):
+        categorias.append({'id': raiz['id'], 'nombre': raiz['nombre']})
+        for h in sorted(hijos.get(raiz['id'], []), key=lambda c: c['nombre']):
+            categorias.append({'id': h['id'], 'nombre': '› ' + h['nombre']})
+    esp_attr = Productos_Atributos.objects.filter(nombre__iexact='Especialidad').first()
+    especialidades = (list(AtributoOpcion.objects.filter(atributo=esp_attr)
+                           .order_by('valor').values('id', 'valor')) if esp_attr else [])
+    return render(request, 'vistas/modulo_dashboards/dashboard_ventas_nexo.html', {
+        'categorias_filtro': categorias,
+        'especialidades_filtro': especialidades,
+    })
 
 
 @require_GET
@@ -18291,6 +18309,200 @@ def obtener_productos_mas_vendidos(request):
             'success': False,
             'error': f'Error al obtener productos más vendidos: {str(e)}'
         }, status=500)
+
+
+def _rango_periodo(request):
+    """Helper: (fecha_inicio, fecha_fin) del período pedido; default últimos 30 días."""
+    fecha_inicio = request.GET.get('fecha_inicio')
+    fecha_fin = request.GET.get('fecha_fin')
+    if not fecha_inicio or not fecha_fin:
+        fecha_fin = timezone.localdate()
+        fecha_inicio = fecha_fin - timedelta(days=30)
+    else:
+        fecha_inicio = timezone.datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+        fecha_fin = timezone.datetime.strptime(fecha_fin, '%Y-%m-%d').date()
+    return fecha_inicio, fecha_fin
+
+
+def _tickets_pagados_periodo(request):
+    """Helper: queryset de Ticket del período (fecha/sucursal/estado) para los
+    dashboards de ventas por categoría/especialidad. created_at = fecha real."""
+    fecha_inicio, fecha_fin = _rango_periodo(request)
+    sucursal_id = request.GET.get('sucursal_id')
+    estado = request.GET.get('estado', '')
+    tickets = Ticket.objects.filter(
+        created_at__date__gte=fecha_inicio, created_at__date__lte=fecha_fin)
+    tickets = tickets.filter(estado=estado) if estado else tickets.filter(estado='PAGADO')
+    if sucursal_id:
+        tickets = tickets.filter(sucursal_id=sucursal_id)
+    return tickets
+
+
+@require_GET
+@login_required
+def obtener_ventas_por_categoria(request):
+    """Ventas ($ y unidades) agrupadas por categoría v1.2 (Padre › Hijo).
+    Recién con la recategorización esto es útil (antes RAMA CASUAL = todo).
+    Opcional: ?especialidad_id= para ver una especialidad dentro."""
+    try:
+        especialidad_id = request.GET.get('especialidad_id')
+        ticket_ids = _tickets_pagados_periodo(request).values_list('id', flat=True)
+        lineas = (Ticket_Productos.objects
+                  .filter(idTicket_id__in=ticket_ids, ProductoTalla__isnull=False)
+                  .exclude(ProductoTalla__producto__excluir_de_analitica=True))
+        if especialidad_id:
+            lineas = lineas.filter(ProductoTalla__producto__atributos__opcion_id=especialidad_id)
+        agg = (lineas.values(
+                   'ProductoTalla__producto__categoria__nombre',
+                   'ProductoTalla__producto__categoria__padre__nombre')
+               .annotate(cantidad=Sum('stock'), total=Sum('subtotal'))
+               .order_by('-total'))
+        agg = list(agg)
+        total_general = sum(float(a['total'] or 0) for a in agg)
+        categorias = []
+        for a in agg[:20]:
+            nombre = a['ProductoTalla__producto__categoria__nombre'] or 'Sin categoría'
+            padre = a['ProductoTalla__producto__categoria__padre__nombre'] or ''
+            total = float(a['total'] or 0)
+            categorias.append({
+                'categoria': nombre,
+                'padre': padre,
+                'label': (padre + ' › ' + nombre) if padre else nombre,
+                'cantidad': a['cantidad'] or 0,
+                'total': total,
+                'participacion': round(total / total_general * 100, 1) if total_general else 0,
+            })
+        return JsonResponse({'success': True, 'categorias': categorias})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error ventas por categoría: {str(e)}'}, status=500)
+
+
+@require_GET
+@login_required
+def obtener_ventas_por_especialidad(request):
+    """Ventas ($ y unidades) por especialidad v1.2 (deporte/uso). Multi-etiqueta:
+    un producto con [running, urbano] suma a AMBAS (es una vista de atribución,
+    no una partición; la suma total puede exceder las ventas). Opcional:
+    ?categoria_id= (padre incluye hijas) para acotar el deporte a una categoría."""
+    try:
+        categoria_id = request.GET.get('categoria_id')
+        ticket_ids = _tickets_pagados_periodo(request).values_list('id', flat=True)
+        lineas = (Ticket_Productos.objects
+                  .filter(idTicket_id__in=ticket_ids, ProductoTalla__isnull=False)
+                  .exclude(ProductoTalla__producto__excluir_de_analitica=True))
+        if categoria_id:
+            from app.models import Categoria
+            cat_ids = [int(categoria_id)]
+            cat_ids += list(Categoria.objects.filter(padre_id=categoria_id).values_list('id', flat=True))
+            lineas = lineas.filter(ProductoTalla__producto__categoria_id__in=cat_ids)
+        lineas = lineas.filter(
+            ProductoTalla__producto__atributos__atributo__nombre__iexact='Especialidad')
+        agg = (lineas.values('ProductoTalla__producto__atributos__opcion__valor')
+               .annotate(cantidad=Sum('stock'), total=Sum('subtotal'))
+               .order_by('-total'))
+        agg = list(agg)
+        especialidades = [{
+            'slug': a['ProductoTalla__producto__atributos__opcion__valor'] or '',
+            'cantidad': a['cantidad'] or 0,
+            'total': float(a['total'] or 0),
+        } for a in agg[:25] if a['ProductoTalla__producto__atributos__opcion__valor']]
+        return JsonResponse({'success': True, 'especialidades': especialidades})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error ventas por especialidad: {str(e)}'}, status=500)
+
+
+@require_GET
+@login_required
+def obtener_indicador_compra_categoria(request):
+    """Indicador de compra por categoría v1.2: cruza ventas (unidades del período)
+    contra stock actual → cobertura en días → veredicto (¿qué comprar / qué sobra?).
+
+    cobertura_dias = stock_actual / (unidades_vendidas / dias_periodo)
+        · muy baja + hay ventas  → QUIEBRE  (reponer / comprar)
+        · alta o sin ventas       → SOBRE-STOCK / SIN ROTACIÓN (no comprar, liquidar)
+
+    Respeta los mismos filtros del dashboard (fecha, sucursal, estado) y excluye
+    excluir_de_analitica. Solo categorías hijas v1.2 (con padre)."""
+    try:
+        from app.models import Producto_Talla
+        fecha_inicio, fecha_fin = _rango_periodo(request)
+        dias = max(1, (fecha_fin - fecha_inicio).days + 1)
+        sucursal_id = request.GET.get('sucursal_id')
+
+        # 1) Ventas del período (unidades y monto) por categoría hija
+        ticket_ids = _tickets_pagados_periodo(request).values_list('id', flat=True)
+        ventas_agg = (Ticket_Productos.objects
+                      .filter(idTicket_id__in=ticket_ids, ProductoTalla__isnull=False)
+                      .exclude(ProductoTalla__producto__excluir_de_analitica=True)
+                      .filter(ProductoTalla__producto__categoria__padre__isnull=False)
+                      .values('ProductoTalla__producto__categoria_id')
+                      .annotate(unidades=Sum('stock'), monto=Sum('subtotal')))
+        ventas = {v['ProductoTalla__producto__categoria_id']:
+                  (int(v['unidades'] or 0), float(v['monto'] or 0)) for v in ventas_agg}
+
+        # 2) Stock actual por categoría hija (mismo scope de sucursal)
+        #    Sin sucursal específica excluimos los centros de distribución: su
+        #    stock es mayorista y no vende a público, así la cobertura refleja
+        #    la rotación real del punto de venta (no el bodegón).
+        stock_qs = (Producto_Talla.objects
+                    .filter(producto__categoria__padre__isnull=False)
+                    .exclude(producto__excluir_de_analitica=True))
+        if sucursal_id:
+            stock_qs = stock_qs.filter(producto__sucursal_id=sucursal_id)
+        else:
+            stock_qs = stock_qs.exclude(producto__sucursal__es_centro_distribucion=True)
+        stock_agg = (stock_qs.values(
+                         'producto__categoria_id',
+                         'producto__categoria__nombre',
+                         'producto__categoria__padre__nombre')
+                     .annotate(stock=Sum('stock')))
+
+        indicadores = []
+        for s in stock_agg:
+            cid = s['producto__categoria_id']
+            stock = max(0, int(s['stock'] or 0))
+            unidades, monto = ventas.get(cid, (0, 0.0))
+            if stock == 0 and unidades == 0:
+                continue  # categoría sin stock ni ventas: irrelevante
+            venta_diaria = unidades / dias if unidades else 0
+            if venta_diaria > 0:
+                cobertura = round(stock / venta_diaria, 1)
+            else:
+                cobertura = None  # sin rotación
+            # Veredicto accionable
+            if unidades == 0:
+                veredicto, color, orden = ('SIN ROTACIÓN', 'muerto', 4)
+            elif cobertura is not None and cobertura < 15:
+                veredicto, color, orden = ('QUIEBRE', 'quiebre', 0)
+            elif cobertura is not None and cobertura < 30:
+                veredicto, color, orden = ('BAJO', 'bajo', 1)
+            elif cobertura is not None and cobertura <= 120:
+                veredicto, color, orden = ('SANO', 'sano', 2)
+            else:
+                veredicto, color, orden = ('SOBRE-STOCK', 'sobre', 3)
+            nombre = s['producto__categoria__nombre'] or 'Sin categoría'
+            padre = s['producto__categoria__padre__nombre'] or ''
+            indicadores.append({
+                'categoria_id': cid,
+                'categoria': nombre,
+                'padre': padre,
+                'label': (padre + ' › ' + nombre) if padre else nombre,
+                'unidades': unidades,
+                'monto': monto,
+                'stock': stock,
+                'cobertura_dias': cobertura,
+                'veredicto': veredicto,
+                'color': color,
+                '_orden': orden,
+            })
+        # Comprar-primero: quiebre/bajo arriba; dentro, menor cobertura primero
+        indicadores.sort(key=lambda x: (x['_orden'],
+                                        x['cobertura_dias'] if x['cobertura_dias'] is not None else 1e9))
+        for x in indicadores:
+            x.pop('_orden', None)
+        return JsonResponse({'success': True, 'dias': dias, 'indicadores': indicadores})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error indicador de compra: {str(e)}'}, status=500)
 
 
 @require_GET

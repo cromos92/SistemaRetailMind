@@ -367,6 +367,14 @@ kbd.sc {
 .tc-art   { min-width: 130px; max-width: 170px; }
 .tc-desc  { min-width: 150px; max-width: 210px; }
 .tc-attr  { min-width: 80px;  text-align: center; }
+.tc-clasif{ min-width: 150px; max-width: 220px; }
+.cls-wrap { display:flex; flex-direction:column; gap:3px; align-items:flex-start; }
+.cls-cat  { background:#e3f4f8; color:#0b7285; border-radius:6px; padding:1px 7px; font-size:.72rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px; }
+.cls-esp  { background:#f1ebfd; color:#6b3fd4; border-radius:6px; padding:1px 6px; font-size:.7rem; font-weight:700; display:inline-block; margin:1px 1px 0 0; }
+.cls-none { color:#9aa; font-size:.7rem; font-style:italic; }
+.pos-chip { border:1px solid #cdd2e0; background:#fff; border-radius:999px; padding:4px 12px; font-size:.78rem; cursor:pointer; color:#334; display:inline-flex; align-items:center; gap:5px; }
+.pos-chip:hover { border-color:#8146e0; color:#6b3fd4; }
+.pos-chip.active { background:#f1ebfd; border-color:#8146e0; color:#6b3fd4; font-weight:700; }
 .tc-talla { min-width: 130px; text-align: center; }
 .tc-stock { min-width: 64px;  text-align: center; }
 .tc-price { min-width: 95px;  text-align: right; }
@@ -876,6 +884,15 @@ kbd.sc {
                                     </select>
                                 </div>
                                 <div class="col-xl-2 col-lg-3 col-md-4 col-6">
+                                    <label class="filter-label"><i class="bi bi-tags"></i> Especialidad</label>
+                                    <select class="form-select form-select-sm" id="especialidad_select" name="especialidad_id">
+                                        <option value="">Todas</option>
+                                        {% for esp in especialidades %}
+                                        <option value="{{ esp.id }}" data-valor="{{ esp.valor }}">{{ esp.valor }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-xl-2 col-lg-3 col-md-4 col-6">
                                     <label class="filter-label"><i class="bi bi-boxes"></i> Stock</label>
                                     <div class="form-check form-switch" style="padding-top:.375rem;">
                                         <input class="form-check-input" type="checkbox" id="solo_con_stock" name="solo_con_stock"
@@ -884,6 +901,17 @@ kbd.sc {
                                                style="font-size:.8125rem;cursor:pointer;color:var(--np-gray-700);">
                                             Con stock
                                         </label>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="filter-label"><i class="bi bi-lightbulb"></i> Filtros inteligentes</label>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <button type="button" class="pos-chip" id="chipSinCategoria" data-flag="sin_categoria">
+                                            <i class="bi bi-diagram-3"></i> Sin categoría v1.2
+                                        </button>
+                                        <button type="button" class="pos-chip" id="chipSinEspecialidad" data-flag="sin_especialidad">
+                                            <i class="bi bi-tags"></i> Sin especialidad
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -947,6 +975,7 @@ kbd.sc {
                                 <th class="tc-desc"><i class="bi bi-card-text me-1"></i>Descripción</th>
                                 <th class="tc-attr"><i class="bi bi-award me-1"></i>Marca</th>
                                 <th class="tc-attr"><i class="bi bi-palette me-1"></i>Color</th>
+                                <th class="tc-clasif"><i class="bi bi-diagram-3 me-1"></i>Categoría · Especialidad</th>
                                 <th class="tc-talla"><i class="bi bi-rulers me-1"></i>Tallas · Stock</th>
                                 <th class="tc-stock"><i class="bi bi-boxes me-1"></i>Total</th>
                                 <th class="tc-price"><i class="bi bi-currency-dollar me-1"></i>Precio</th>
@@ -1133,10 +1162,36 @@ $(document).ready(function () {
     });
 
     /* ---------- Auto-buscar al cambiar filtros (solo si ya buscamos) ---------- */
-    $('#sucursal_select,#marca_select,#color_select,#genero_select,#categoria_select')
+    $('#sucursal_select,#marca_select,#color_select,#genero_select,#categoria_select,#especialidad_select')
         .on('select2:select select2:clear change', function () {
             if (Object.keys(ultimosFiltros).length > 0) { paginaActual = 1; buscarProductos(); }
         });
+
+    /* ---------- Etiquetas legibles de especialidad + chips inteligentes ---------- */
+    const ESP_LABEL_SUC = {
+        pasto:'Pasto natural (FG/MG)', baby:'Sintético/Baby (TF)', sala:'Fútsal/Sala', futbol:'Fútbol genérico',
+        running:'Running', atletismo:'Atletismo', basket:'Basketball', training:'Training/Fitness',
+        tenis:'Tenis/Pádel/Squash', voley:'Voleibol', handball:'Handball', rugby:'Rugby', boxeo:'Boxeo',
+        artesm:'Artes marciales', natacion:'Natación', ciclismo:'Ciclismo', pingpong:'Ping pong',
+        badminton:'Bádminton', beisbol:'Béisbol', hockey:'Hockey', pool:'Pool/Billar', skate:'Skate/Patinaje',
+        recre:'Recreativos', golf:'Golf', trekking:'Trekking/Outdoor', camping:'Camping', pesca:'Pesca y caza',
+        oficial:'Escolar oficial', blanco:'Escolar blanco', negro:'Escolar negro', urbano:'Urbano (uso diario)',
+        cueca:'Cueca/Danza', vestir:'Formal vestir', fiesta:'Formal fiesta', descanso:'Descanso',
+        gim:'Gimnasia', seguridad:'Seguridad/Trabajo'
+    };
+    window.ESP_LABEL_SUC = ESP_LABEL_SUC;
+    // Reemplazar el texto del combo (slug → etiqueta legible), ordenado
+    $('#especialidad_select option').each(function () {
+        const val = $(this).data('valor');
+        if (val && ESP_LABEL_SUC[val]) $(this).text(ESP_LABEL_SUC[val]);
+    });
+
+    // Chips inteligentes: alternan estado y re-buscan
+    $('.pos-chip').on('click', function () {
+        $(this).toggleClass('active');
+        paginaActual = 1;
+        buscarProductos();
+    });
 
     $('#solo_con_stock').on('change', function () {
         if (Object.keys(ultimosFiltros).length > 0) { paginaActual = 1; buscarProductos(); }
@@ -1154,7 +1209,8 @@ $(document).ready(function () {
     function limpiar() {
         $('#filtrosForm')[0].reset();
         $('#solo_con_stock').prop('checked', false);
-        $('#sucursal_select,#marca_select,#color_select,#genero_select,#categoria_select').val(null).trigger('change');
+        $('.pos-chip').removeClass('active');
+        $('#sucursal_select,#marca_select,#color_select,#genero_select,#categoria_select,#especialidad_select').val(null).trigger('change');
         $('#ordenarSelect').val('');
         $('#search_input').val('').focus();
         setEstadoInicial();
@@ -1212,6 +1268,12 @@ $(document).ready(function () {
             if (v.trim && v.trim() !== '') params.append(k, v);
         }
         if ($('#solo_con_stock').is(':checked')) params.append('solo_con_stock', 'on');
+
+        // Chips inteligentes (botones, no van en el FormData)
+        $('.pos-chip.active').each(function () {
+            const flag = $(this).data('flag');
+            if (flag) params.append(flag, 'on');
+        });
 
         const ordenar = $('#ordenarSelect').val();
         if (ordenar) params.append('ordenar', ordenar);
@@ -1298,6 +1360,19 @@ $(document).ready(function () {
             const marcaHtml    = p.marca    ? `<span class="attr-pill" title="${escHtml(p.marca)}">${escHtml(p.marca)}</span>`    : '<span style="color:var(--np-gray-300);">—</span>';
             const colorHtml    = p.color    ? `<span class="attr-pill" title="${escHtml(p.color)}">${escHtml(p.color)}</span>`    : '<span style="color:var(--np-gray-300);">—</span>';
 
+            // Clasificación v1.2: categoría (padre › hijo) + especialidades
+            let catHtml;
+            if (p.categoria) {
+                const cn = p.categoria_padre ? `${escHtml(p.categoria_padre)} › ${escHtml(p.categoria)}` : escHtml(p.categoria);
+                catHtml = `<span class="cls-cat" title="${cn}">${cn}</span>`;
+            } else {
+                catHtml = `<span class="cls-none">sin categoría</span>`;
+            }
+            const espHtml = (p.especialidades && p.especialidades.length)
+                ? p.especialidades.map(e => `<span class="cls-esp">${escHtml((window.ESP_LABEL_SUC && window.ESP_LABEL_SUC[e]) || e)}</span>`).join(' ')
+                : `<span class="cls-none">sin especialidad</span>`;
+            const clasifHtml = `<div class="cls-wrap">${catHtml}<div>${espHtml}</div></div>`;
+
             const dataAttr = escAttr(JSON.stringify(p));
 
             const fotoUrl = p.foto_portada_url || '{% static "images/producto_placeholder.svg" %}';
@@ -1317,6 +1392,7 @@ $(document).ready(function () {
                     </td>
                     <td class="tc-attr">${marcaHtml}</td>
                     <td class="tc-attr">${colorHtml}</td>
+                    <td class="tc-clasif">${clasifHtml}</td>
                     <td class="tc-talla">
                         <div class="tallas-grid">${tallasHtml}</div>
                     </td>

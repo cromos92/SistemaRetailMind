@@ -133,6 +133,24 @@
                         <option value="ANULADO">Anulado</option>
                     </select>
                 </div>
+                <div class="col-lg-2 col-md-4">
+                    <label class="nexo-form-label">Categoría</label>
+                    <select id="filtroCategoria" class="form-select nexo-form-select">
+                        <option value="">Todas</option>
+                        {% for c in categorias_filtro %}
+                        <option value="{{ c.id }}">{{ c.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-4">
+                    <label class="nexo-form-label">Especialidad</label>
+                    <select id="filtroEspecialidad" class="form-select nexo-form-select">
+                        <option value="">Todas</option>
+                        {% for e in especialidades_filtro %}
+                        <option value="{{ e.id }}" data-valor="{{ e.valor }}">{{ e.valor }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
             <div class="row mt-3">
                 <div class="col-12 d-flex justify-content-between align-items-center">
@@ -290,6 +308,85 @@
                     <div class="nexo-chart-body">
                         <div class="nexo-chart-container-sm">
                             <canvas id="chartMetodosPago"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════════════════
+             VENTAS POR CATEGORÍA Y ESPECIALIDAD v1.2 (recategorización)
+             ═══════════════════════════════════════════════════════════════════════════════ -->
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="nexo-chart-card" style="height: calc(100% - 24px);">
+                    <div class="nexo-chart-header">
+                        <h5 class="nexo-chart-title">
+                            <i class="bi bi-diagram-3"></i>
+                            Ventas por categoría
+                        </h5>
+                        <span class="nexo-badge nexo-badge-primary" id="badgeTopCategoria">—</span>
+                    </div>
+                    <div class="nexo-chart-body">
+                        <div class="nexo-chart-container-sm">
+                            <canvas id="chartVentasCategoria"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="nexo-chart-card" style="height: calc(100% - 24px);">
+                    <div class="nexo-chart-header">
+                        <h5 class="nexo-chart-title">
+                            <i class="bi bi-tags"></i>
+                            Ventas por especialidad <small class="text-muted" style="font-weight:400;font-size:.72rem;">(deporte / uso)</small>
+                        </h5>
+                        <span class="nexo-badge nexo-badge-success" id="badgeTopEspecialidad">—</span>
+                    </div>
+                    <div class="nexo-chart-body">
+                        <div class="nexo-chart-container-sm">
+                            <canvas id="chartVentasEspecialidad"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── INDICADOR DE COMPRA: ventas × stock → cobertura → qué comprar ── -->
+        <div class="row">
+            <div class="col-12">
+                <div class="nexo-chart-card">
+                    <div class="nexo-chart-header">
+                        <h5 class="nexo-chart-title">
+                            <i class="bi bi-cart-check"></i>
+                            Indicador de compra por categoría
+                            <small class="text-muted" style="font-weight:400;font-size:.72rem;">(cobertura = días de stock al ritmo de venta actual)</small>
+                        </h5>
+                        <span class="nexo-badge nexo-badge-danger" id="badgeQuiebres">—</span>
+                    </div>
+                    <div class="nexo-chart-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0" id="tablaIndicadorCompra">
+                                <thead>
+                                    <tr class="text-muted" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.03em;">
+                                        <th>Categoría</th>
+                                        <th class="text-end">Vendidas</th>
+                                        <th class="text-end">Stock</th>
+                                        <th class="text-end">Cobertura</th>
+                                        <th class="text-center">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bodyIndicadorCompra">
+                                    <tr><td colspan="5" class="text-center text-muted py-3">Cargando…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-2" style="font-size:.72rem;" id="leyendaIndicadorCompra">
+                            <span class="badge" style="background:#dc3545;">Quiebre &lt;15d</span>
+                            <span class="badge" style="background:#fd7e14;">Bajo &lt;30d</span>
+                            <span class="badge" style="background:#0ab39c;">Sano</span>
+                            <span class="badge" style="background:#6c757d;">Sobre-stock &gt;120d</span>
+                            <span class="badge" style="background:#343a40;">Sin rotación</span>
                         </div>
                     </div>
                 </div>
@@ -1191,7 +1288,9 @@ function cargarDashboard() {
         fecha_fin: fechaFin,
         sucursal_id: $('#filtroSucursal').val() || '',
         vendedor_id: $('#filtroVendedor').val() || '',
-        estado: $('#filtroEstado').val() || ''
+        estado: $('#filtroEstado').val() || '',
+        categoria_id: $('#filtroCategoria').val() || '',
+        especialidad_id: $('#filtroEspecialidad').val() || ''
     };
     
     // Actualizar fecha
@@ -1236,7 +1335,10 @@ function cargarDatosPeriodoActual(params) {
         cargarCambiosDevoluciones(params),
         cargarIndicadoresAvanzados(params),
         cargarEstadoOperacional(params),
-        cargarControlFugas(params)
+        cargarControlFugas(params),
+        cargarVentasPorCategoria(params),
+        cargarVentasPorEspecialidad(params),
+        cargarIndicadorCompra(params)
     ]).then(() => {
         generarAlertas();
     }).catch(err => {
@@ -1342,6 +1444,109 @@ function cargarMetodosPago(params) {
             actualizarChartMetodosPago(response.metodos_pago);
         }
     });
+}
+
+// ── Ventas por categoría v1.2 y por especialidad (recategorización) ──────────
+const ESP_LABEL_DASH = {
+    pasto:'Pasto (FG)', baby:'Baby (TF)', sala:'Fútsal', futbol:'Fútbol',
+    running:'Running', atletismo:'Atletismo', basket:'Basketball', training:'Training',
+    tenis:'Tenis/Pádel', voley:'Voleibol', handball:'Handball', rugby:'Rugby', boxeo:'Boxeo',
+    artesm:'Artes marciales', natacion:'Natación', ciclismo:'Ciclismo', pingpong:'Ping pong',
+    badminton:'Bádminton', beisbol:'Béisbol', hockey:'Hockey', pool:'Pool', skate:'Skate',
+    recre:'Recreativos', golf:'Golf', trekking:'Trekking', camping:'Camping', pesca:'Pesca',
+    oficial:'Escolar oficial', blanco:'Escolar blanco', negro:'Escolar negro',
+    urbano:'Urbano', cueca:'Cueca', vestir:'Vestir', fiesta:'Fiesta', descanso:'Descanso',
+    gim:'Gimnasia', seguridad:'Seguridad'
+};
+
+function cargarVentasPorCategoria(params) {
+    return $.get('/app/api/ventas/por-categoria/', params, function(response) {
+        if (response.success && response.categorias) {
+            dashboardData.ventasCategoria = response.categorias;
+            actualizarChartVentasCategoria(response.categorias);
+            if (response.categorias.length) $('#badgeTopCategoria').text('Top: ' + response.categorias[0].label);
+        }
+    });
+}
+function cargarVentasPorEspecialidad(params) {
+    return $.get('/app/api/ventas/por-especialidad/', params, function(response) {
+        if (response.success && response.especialidades) {
+            dashboardData.ventasEspecialidad = response.especialidades;
+            actualizarChartVentasEspecialidad(response.especialidades);
+            if (response.especialidades.length) {
+                const t = response.especialidades[0];
+                $('#badgeTopEspecialidad').text('Top: ' + (ESP_LABEL_DASH[t.slug] || t.slug));
+            }
+        }
+    });
+}
+function _chartBarrasHorizontales(canvasId, chartKey, labels, valores, color) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    if (charts[chartKey]) charts[chartKey].destroy();
+    charts[chartKey] = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: labels, datasets: [{
+            data: valores, backgroundColor: color, borderRadius: 6, maxBarThickness: 22
+        }]},
+        options: {
+            indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { backgroundColor:'#1A1A2E', cornerRadius:8,
+                    callbacks: { label: c => formatMoney(c.parsed.x) } }
+            },
+            scales: {
+                x: { ticks: { callback: v => formatMoney(v) }, grid: { color:'rgba(0,0,0,.05)' } },
+                y: { grid: { display:false } }
+            }
+        }
+    });
+}
+function actualizarChartVentasCategoria(data) {
+    const top = data.slice(0, 12);
+    _chartBarrasHorizontales('chartVentasCategoria', 'ventasCategoria',
+        top.map(d => d.label), top.map(d => d.total), NEXO_COLORS.primary);
+}
+function actualizarChartVentasEspecialidad(data) {
+    const top = data.slice(0, 12);
+    _chartBarrasHorizontales('chartVentasEspecialidad', 'ventasEspecialidad',
+        top.map(d => ESP_LABEL_DASH[d.slug] || d.slug), top.map(d => d.total), NEXO_COLORS.success);
+}
+
+// ── Indicador de compra: cobertura de stock por categoría (qué comprar) ──────
+const IND_COLOR = { quiebre:'#dc3545', bajo:'#fd7e14', sano:'#0ab39c', sobre:'#6c757d', muerto:'#343a40' };
+function cargarIndicadorCompra(params) {
+    return $.get('/app/api/ventas/indicador-compra/', params, function(response) {
+        if (response.success && response.indicadores) {
+            dashboardData.indicadorCompra = response.indicadores;
+            actualizarTablaIndicadorCompra(response.indicadores);
+            const quiebres = response.indicadores.filter(i => i.veredicto === 'QUIEBRE').length;
+            $('#badgeQuiebres').text(quiebres + ' en quiebre');
+        }
+    });
+}
+function actualizarTablaIndicadorCompra(data) {
+    const body = document.getElementById('bodyIndicadorCompra');
+    if (!body) return;
+    if (!data.length) {
+        body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Sin datos en el período</td></tr>';
+        return;
+    }
+    body.innerHTML = data.map(function(i) {
+        const cob = (i.cobertura_dias === null || i.cobertura_dias === undefined)
+            ? '<span class="text-muted">—</span>'
+            : (i.cobertura_dias >= 999 ? '999+' : i.cobertura_dias) + ' d';
+        const color = IND_COLOR[i.color] || '#6c757d';
+        return '<tr>'
+            + '<td><span class="fw-semibold">' + i.categoria + '</span>'
+            +   (i.padre ? ' <small class="text-muted">' + i.padre + '</small>' : '') + '</td>'
+            + '<td class="text-end">' + formatNumber(i.unidades) + '</td>'
+            + '<td class="text-end">' + formatNumber(i.stock) + '</td>'
+            + '<td class="text-end">' + cob + '</td>'
+            + '<td class="text-center"><span class="badge" style="background:' + color + ';">' + i.veredicto + '</span></td>'
+            + '</tr>';
+    }).join('');
 }
 
 function cargarProductosMasVendidos(params) {

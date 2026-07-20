@@ -1619,12 +1619,16 @@ def obtener_historial_ediciones_recientes(request):
             query = query.filter(producto__sucursal_id=sucursal_id)
 
         # Filtrar por término de búsqueda si existe
+        # Incluye SKU (Producto_Talla.sku) para paridad con el buscador de Edición Rápida.
+        # OJO: sku es BigIntegerField → icontains solo matchea dígitos, nunca letras.
+        # El join a producto_talla es 1:N, por eso .distinct() para no duplicar cambios.
         if search_term:
             query = query.filter(
                 Q(producto__articulo__icontains=search_term) |
                 Q(producto__descripcion__icontains=search_term) |
+                Q(producto__producto_talla__sku__icontains=search_term) |
                 Q(usuario__username__icontains=search_term)
-            )
+            ).distinct()
 
         if usuario_id:
             query = query.filter(usuario_id=usuario_id)
