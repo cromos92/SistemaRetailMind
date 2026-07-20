@@ -17892,7 +17892,9 @@ def categorias_existentes(request):
     # contra la BD remota, con 112 categorías). Ahora: 2 queries totales
     # (todas las categorías + un agregado de productos por categoría) y el árbol
     # se arma en memoria. Beneficia a los ~15 llamadores del endpoint.
-    todas = list(Categoria.objects.order_by('nombre').values('id', 'nombre', 'padre_id'))
+    # Excluir las categorías deprecadas (_ZZ_ = viejas vacías ya limpiadas).
+    todas = list(Categoria.objects.exclude(nombre__startswith='_ZZ_')
+                 .order_by('nombre').values('id', 'nombre', 'padre_id'))
     hijos_por_padre = {}
     for c in todas:
         hijos_por_padre.setdefault(c['padre_id'], []).append(c)
