@@ -324,8 +324,11 @@ def buscar_productos(request):
             # Si no hay lotes pero hay stock, usar el costo del producto
             # Con incluir_sin_stock=1 (filtro avanzado) se muestran igual, para
             # poder editar el precio de fichas en 0 (se sincroniza a toda la red)
-            if cantidad_total == 0 and stock_total == 0 and not incluir_sin_stock:
-                # Solo excluir si NO tiene stock ni lotes
+            # ✅ Si el usuario buscó por texto (nombre/SKU/artículo), NO ocultar
+            #    las fichas en 0: buscó ese producto explícitamente para editar su
+            #    precio, aunque no tenga stock en la sucursal seleccionada.
+            if cantidad_total == 0 and stock_total == 0 and not incluir_sin_stock and not search:
+                # Solo excluir si NO tiene stock ni lotes y NO hubo búsqueda por texto
                 logger.debug("Producto excluido de precios sin stock ni lotes: producto_id=%s articulo=%s", producto.id, producto.articulo)
                 productos_excluidos['sin_stock_ni_lotes'] += 1
                 continue

@@ -1,0 +1,4603 @@
+articulo,productos_afectados,cat_antes(ids),cat_despues,especialidades,genero_migrado,accion
+1184,1,1,Zapatos de Vestir,vestir,0,APPLY
+2163-108-11853,1,2,Zapatos de Vestir,vestir,0,APPLY
+4777-343-6410,1,2,Zapatos de Vestir,vestir,0,APPLY
+5230,2,1;2,Zapatos de Vestir,vestir,0,APPLY
+7014-129-12583,1,2,Zapatos de Vestir,vestir,0,APPLY
+7305-100-12773,1,2,Zapatos de Vestir,vestir,0,APPLY
+7305-107-13018,2,2,Zapatos de Vestir,vestir,0,APPLY
+7305-107-13018-15745,1,2,Zapatos de Vestir,vestir,0,APPLY
+1230,3,87,Zapatos de Vestir,vestir,0,APPLY
+1185-102-11566,2,2,Zapatos de Vestir,vestir,0,APPLY
+1185-102-11566-15745,1,2,Zapatos de Vestir,vestir,0,APPLY
+1185-102-11566-46176,1,2,Zapatos de Vestir,vestir,0,APPLY
+1214-205-11808,1,2,Zapatos de Vestir,vestir,0,APPLY
+1214-205-11808-66,1,2,Zapatos de Vestir,vestir,0,APPLY
+1230-200-11566-15745,1,2,Zapatos de Vestir,vestir,0,APPLY
+1230-200-11566,1,2,Zapatos de Vestir,vestir,0,APPLY
+1245-101-12784,2,2,Zapatos de Vestir,vestir,0,APPLY
+1245-101-12784-16554,1,2,Zapatos de Vestir,vestir,0,APPLY
+1253-100-5881-15745,1,2,Zapatos de Vestir,vestir,0,APPLY
+1253-100-5881,1,2,Zapatos de Vestir,vestir,0,APPLY
+1185102,2,2,Zapatos de Vestir,vestir,0,APPLY
+1235-102-5881,1,2,Zapatos de Vestir,vestir,0,APPLY
+1781-421-5881,1,2,Zapatos de Vestir,vestir,0,APPLY
+1781-421-7286,2,2,Zapatos de Vestir,vestir,0,APPLY
+1781-621-11808,1,2,Zapatos de Vestir,vestir,0,APPLY
+1235-102-5881-15745,1,2,Zapatos de Vestir,vestir,0,APPLY
+1143-309-11566-15745,1,2,Zapatos de Vestir,vestir,0,APPLY
+1143-309-8794,1,2,Zapatos de Vestir,vestir,0,APPLY
+1143-309-8794-41573,1,2,Zapatos de Vestir,vestir,0,APPLY
+1245-102-5881-15745,1,2,Zapatos de Vestir,vestir,0,APPLY
+1781-421-5881-28667,1,2,Zapatos de Vestir,vestir,0,APPLY
+1781-421-7286-28667,1,2,Zapatos de Vestir,vestir,0,APPLY
+1781-621-11808-41,1,2,Zapatos de Vestir,vestir,0,APPLY
+2163-108-11853-17165,1,2,Zapatos de Vestir,vestir,0,APPLY
+4180-100-11808,2,2,Zapatos de Vestir,vestir,0,APPLY
+4180-100-11808-23,1,2,Zapatos de Vestir,vestir,0,APPLY
+4180-100-11808-34,1,2,Zapatos de Vestir,vestir,0,APPLY
+4180-100-12812,2,2,Zapatos de Vestir,vestir,0,APPLY
+4180-100-12812-3,1,2,Zapatos de Vestir,vestir,0,APPLY
+4180-100-12836,1,2,Zapatos de Vestir,vestir,0,APPLY
+4180-100-12836-1574,1,2,Zapatos de Vestir,vestir,0,APPLY
+4180-102-6410,1,2,Zapatos de Vestir,vestir,0,APPLY
+4180-102-6410-15745,1,2,Zapatos de Vestir,vestir,0,APPLY
+4777-343-6410-15745,1,2,Zapatos de Vestir,vestir,0,APPLY
+7014-129-12194-48024,1,2,Zapatos de Vestir,vestir,0,APPLY
+7014-129-12583-15745,1,2,Zapatos de Vestir,vestir,0,APPLY
+7305-100-12773-15745,1,2,Zapatos de Vestir,vestir,0,APPLY
+7305-101-9683-15745,1,2,Zapatos de Vestir,vestir,0,APPLY
+1143-309-11566,1,2,Zapatos de Vestir,vestir,0,APPLY
+1245-102-5881,2,2,Zapatos de Vestir,vestir,0,APPLY
+21281EL,1,4,Equipamiento Fitness,futbol,0,APPLY
+213204FM,1,4,Equipamiento Fitness,futbol,0,APPLY
+67928100IXL,1,4,Equipamiento Fitness,futbol,0,APPLY
+89721101BL,1,4,Equipamiento Fitness,futbol,0,APPLY
+985,2,4;12,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO23,2,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO24,2,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO25,2,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO26,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO27,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO28,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO29,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO30,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO31,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO32,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO33,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO38,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO39,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO40,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO41,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO42,1,4,Equipamiento Fitness,futbol,0,APPLY
+20112EQU,1,4,Equipamiento Fitness,futbol,0,APPLY
+20113EQU,1,4,Equipamiento Fitness,futbol,0,APPLY
+20114EQU,1,4,Equipamiento Fitness,futbol,0,APPLY
+20115EQU,1,4,Equipamiento Fitness,futbol,0,APPLY
+20116EQU,1,4,Equipamiento Fitness,futbol,0,APPLY
+20117EQU,1,4,Equipamiento Fitness,futbol,0,APPLY
+20118EQU,1,4,Equipamiento Fitness,futbol,0,APPLY
+20119EQU,1,4,Equipamiento Fitness,futbol,0,APPLY
+20120EQU,1,4,Equipamiento Fitness,futbol,0,APPLY
+2012EQU,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO986,1,4,Equipamiento Fitness,futbol,0,APPLY
+87937969KL,1,4,Equipamiento Fitness,futbol,0,APPLY
+SP0284-331,1,7,Zapatillas,futbol,0,APPLY
+SP0284-671,1,7,Zapatillas,futbol,0,APPLY
+538128-014,1,19,Zapatillas,futbol,0,APPLY
+651632-170,1,9,Zapatillas,futbol,0,APPLY
+651632-650,1,9,Zapatillas,futbol,0,APPLY
+651632-690,1,9,Zapatillas,futbol,0,APPLY
+651632-760,1,9,Zapatillas,futbol,0,APPLY
+651632-800,1,9,Zapatillas,futbol,0,APPLY
+651646-060,1,19,Zapatillas,futbol,0,APPLY
+651646-170,1,9,Zapatillas,futbol,0,APPLY
+651646-650,1,9,Zapatillas,futbol,0,APPLY
+651646-660,1,9,Zapatillas,futbol,0,APPLY
+651646-690,1,9,Zapatillas,futbol,0,APPLY
+651646-760,1,9,Zapatillas,futbol,0,APPLY
+651646-800,1,9,Zapatillas,futbol,0,APPLY
+651649-440,1,19,Zapatillas,futbol,0,APPLY
+651647-107,3,19,Zapatillas,futbol,0,APPLY
+725249-018,1,19,Zapatillas,futbol,0,APPLY
+555447-003,1,9,Zapatillas,futbol,0,APPLY
+555447-103,1,9,Zapatillas,futbol,0,APPLY
+555447-380,1,9,Zapatillas,futbol,0,APPLY
+555447-474,1,9,Zapatillas,futbol,0,APPLY
+555447-570,1,9,Zapatillas,futbol,0,APPLY
+555447-703,1,9,Zapatillas,futbol,0,APPLY
+555608-703,1,19,Zapatillas,futbol,0,APPLY
+441985-547,1,9,Zapatillas,futbol,0,APPLY
+651649-107,2,19,Zapatillas,futbol,0,APPLY
+831969-870,1,9,Zapatillas,futbol,0,APPLY
+831971-870,1,19,Zapatillas,futbol,0,APPLY
+903609-616,1,9,Zapatillas,futbol,0,APPLY
+903612-401,1,19,Zapatillas,futbol,0,APPLY
+903614-616,3,19,Zapatillas,futbol,0,APPLY
+580481-174,1,9,Zapatillas,futbol,0,APPLY
+442005-754,1,9,Zapatillas,futbol,0,APPLY
+555613-010,1,9,Zapatillas,futbol,0,APPLY
+555613-103,1,9,Zapatillas,futbol,0,APPLY
+555613-380,1,9,Zapatillas,futbol,0,APPLY
+555613-474,1,9,Zapatillas,futbol,0,APPLY
+555613-635,1,9,Zapatillas,futbol,0,APPLY
+555613-708,1,9,Zapatillas,futbol,0,APPLY
+555613-778,1,9,Zapatillas,futbol,0,APPLY
+555614-474,1,19,Zapatillas,futbol,0,APPLY
+555614-570,1,19,Zapatillas,futbol,0,APPLY
+555614-635,1,19,Zapatillas,futbol,0,APPLY
+555614-708,1,19,Zapatillas,futbol,0,APPLY
+555615-103,1,19,Zapatillas,futbol,0,APPLY
+555615-380,1,19,Zapatillas,futbol,0,APPLY
+555615-570,1,19,Zapatillas,futbol,0,APPLY
+555615-635,1,19,Zapatillas,futbol,0,APPLY
+555615-703,1,19,Zapatillas,futbol,0,APPLY
+555615-474,1,19,Zapatillas,futbol,0,APPLY
+555615-708,1,19,Zapatillas,futbol,0,APPLY
+555615-778,1,19,Zapatillas,futbol,0,APPLY
+555639-474,1,19,Zapatillas,futbol,0,APPLY
+555639-570,1,19,Zapatillas,futbol,0,APPLY
+555639-635,1,19,Zapatillas,futbol,0,APPLY
+555639-708,1,19,Zapatillas,futbol,0,APPLY
+580471-174,1,19,Zapatillas,futbol,0,APPLY
+580471-403,2,19,Zapatillas,futbol,0,APPLY
+580481-403,1,9,Zapatillas,futbol,0,APPLY
+651617-690,1,19,Zapatillas,futbol,0,APPLY
+684867-014,1,19,Zapatillas,futbol,0,APPLY
+684878-014,1,9,Zapatillas,futbol,0,APPLY
+831968-801,1,19,Zapatillas,futbol,0,APPLY
+030638 02,1,7,Zapatillas,futbol,0,APPLY
+040976 01,1,7,Zapatillas,futbol,0,APPLY
+041022 02,1,7,Zapatillas,futbol,0,APPLY
+082235 01,1,9,Zapatillas,futbol,0,APPLY
+082737 41,1,9,Zapatillas,futbol,0,APPLY
+082229 01,1,9,Zapatillas,futbol,0,APPLY
+082229 15,1,9,Zapatillas,futbol,0,APPLY
+082232 15,1,9,Zapatillas,futbol,0,APPLY
+082235 15,1,9,Zapatillas,futbol,0,APPLY
+082564 21,1,9,Zapatillas,futbol,0,APPLY
+082564 23,1,9,Zapatillas,futbol,0,APPLY
+082554 01,1,9,Zapatillas,futbol,0,APPLY
+082554 31,1,9,Zapatillas,futbol,0,APPLY
+082563 42,1,9,Zapatillas,futbol,0,APPLY
+082566 31,1,19,Zapatillas,futbol,0,APPLY
+082567 01,1,9,Zapatillas,futbol,0,APPLY
+082595 31,2,9,Zapatillas,futbol,0,APPLY
+082596 03,1,9,Zapatillas,futbol,0,APPLY
+082596 04,1,9,Zapatillas,futbol,0,APPLY
+103220 07,1,9,Zapatillas,futbol,0,APPLY
+103223 01,1,19,Zapatillas,futbol,0,APPLY
+103223 05,1,19,Zapatillas,futbol,0,APPLY
+103215 01,1,9,Zapatillas,futbol,0,APPLY
+104198 01,2,9,Zapatillas,futbol,0,APPLY
+103539 01,1,19,Zapatillas,futbol,0,APPLY
+103540 01,1,19,Zapatillas,futbol,0,APPLY
+104458 01,1,9,Zapatillas,futbol,0,APPLY
+082233 01,1,9,Zapatillas,futbol,0,APPLY
+103220 01,1,9,Zapatillas,futbol,0,APPLY
+103536 01,1,19,Zapatillas,futbol,0,APPLY
+2831,1,2,Zapatos de Vestir,vestir,0,APPLY
+3462,2,2,Zapatos de Vestir,vestir,0,APPLY
+3723,2,2,Zapatos de Vestir,vestir,0,APPLY
+3950,3,2;41;54,Zapatos de Vestir,vestir,0,APPLY
+4284,2,2;9,Zapatos de Vestir,vestir,0,APPLY
+4580,1,2,Zapatos de Vestir,vestir,0,APPLY
+4582,1,2,Zapatos de Vestir,vestir,0,APPLY
+4735,1,2,Zapatos de Vestir,vestir,0,APPLY
+4759,1,2,Zapatos de Vestir,vestir,0,APPLY
+4938,2,2;63,Zapatos de Vestir,vestir,0,APPLY
+4966,1,2,Zapatos de Vestir,vestir,0,APPLY
+5051,1,2,Zapatos de Vestir,vestir,0,APPLY
+5340,1,2,Zapatos de Vestir,vestir,0,APPLY
+5341,2,2,Zapatos de Vestir,vestir,0,APPLY
+6283,2,2;63,Zapatos de Vestir,vestir,0,APPLY
+8130,1,2,Zapatos de Vestir,vestir,0,APPLY
+8805,1,2,Zapatos de Vestir,vestir,0,APPLY
+8809,1,2,Zapatos de Vestir,vestir,0,APPLY
+2885,1,2,Zapatos de Vestir,vestir,0,APPLY
+3170,1,2,Zapatos de Vestir,vestir,0,APPLY
+4752,1,2,Zapatos de Vestir,vestir,0,APPLY
+4936,1,2,Zapatos de Vestir,vestir,0,APPLY
+5250,1,2,Zapatos de Vestir,vestir,0,APPLY
+3722,1,2,Zapatos de Vestir,vestir,0,APPLY
+3613,1,2,Zapatos de Vestir,vestir,0,APPLY
+5802,1,2,Zapatos de Vestir,vestir,0,APPLY
+9137,1,2,Zapatos de Vestir,vestir,0,APPLY
+6729,1,2,Zapatos de Vestir,vestir,0,APPLY
+599075-303,1,9,Zapatillas,futbol,0,APPLY
+599075-570,1,9,Zapatillas,futbol,0,APPLY
+599730-800,1,9,Zapatillas,futbol,0,APPLY
+599809-107,1,9,Zapatillas,futbol,0,APPLY
+599809-303,1,9,Zapatillas,futbol,0,APPLY
+599809-700,1,9,Zapatillas,futbol,0,APPLY
+599844-148,1,19,Zapatillas,futbol,0,APPLY
+599844-303,1,19,Zapatillas,futbol,0,APPLY
+599844-570,1,19,Zapatillas,futbol,0,APPLY
+599844-690,1,19,Zapatillas,futbol,0,APPLY
+599844-700,1,19,Zapatillas,futbol,0,APPLY
+599844-800,1,19,Zapatillas,futbol,0,APPLY
+599846-148,1,9,Zapatillas,futbol,0,APPLY
+599846-303,1,9,Zapatillas,futbol,0,APPLY
+599846-570,1,9,Zapatillas,futbol,0,APPLY
+599846-690,1,9,Zapatillas,futbol,0,APPLY
+599846-700,1,9,Zapatillas,futbol,0,APPLY
+599846-800,1,9,Zapatillas,futbol,0,APPLY
+852545-001,1,19,Zapatillas,futbol,0,APPLY
+852545-104,1,19,Zapatillas,futbol,0,APPLY
+852545-308,1,19,Zapatillas,futbol,0,APPLY
+599844-107,1,19,Zapatillas,futbol,0,APPLY
+917764-616,1,9,Zapatillas,futbol,0,APPLY
+852545-616,1,19,Zapatillas,futbol,0,APPLY
+852545-801,1,19,Zapatillas,futbol,0,APPLY
+917769-616,1,19,Zapatillas,futbol,0,APPLY
+G91046,1,7,Zapatillas,futbol,0,APPLY
+M33977,1,7,Zapatillas,futbol,0,APPLY
+GW2278,2,2,Zapatillas,futbol,0,APPLY
+GW9999,2,2,Zapatillas,futbol,0,APPLY
+BB9084A,1,19,Zapatillas,futbol,0,APPLY
+EE9134,2,9,Zapatillas,futbol,0,APPLY
+G83964,1,9,Zapatillas,futbol,0,APPLY
+G83967,1,9,Zapatillas,futbol,0,APPLY
+M20614,1,19,Zapatillas,futbol,0,APPLY
+BB8111,2,9,Zapatillas,futbol,0,APPLY
+BB8112,2,9,Zapatillas,futbol,0,APPLY
+BB9084,2,19,Zapatillas,futbol,0,APPLY
+BC0555,3,19,Zapatillas,futbol,0,APPLY
+D97962,2,9,Zapatillas,futbol,0,APPLY
+D97969,2,9,Zapatillas,futbol,0,APPLY
+DB1997,2,9,Zapatillas,futbol,0,APPLY
+DB1999,1,9,Zapatillas,futbol,0,APPLY
+DB2003,2,9,Zapatillas,futbol,0,APPLY
+DB2135,1,19,Zapatillas,futbol,0,APPLY
+F35594,1,9,Zapatillas,futbol,0,APPLY
+F35626,2,9,Zapatillas,futbol,0,APPLY
+F35627,2,19,Zapatillas,futbol,0,APPLY
+BQ5451-001,3,1,Zapatillas,urbano,0,APPLY
+BQ5448-001,8,1,Zapatillas,urbano,0,APPLY
+AT4662-001,2,1,Zapatillas,urbano,0,APPLY
+BQ5448-007,2,1,Zapatillas,urbano,0,APPLY
+BQ5448-120,2,1,Zapatillas,urbano,0,APPLY
+BQ5448-403,2,1,Zapatillas,urbano,0,APPLY
+BQ5451-002,2,1,Zapatillas,urbano,0,APPLY
+BQ5451-003,2,1,Zapatillas,urbano,0,APPLY
+BQ5451-012,3,1,Zapatillas,urbano,0,APPLY
+BQ5451-014,5,1,Zapatillas,urbano,0,APPLY
+BQ5451-100,12,1,Zapatillas,urbano,0,APPLY
+BQ5451-114,2,1,Zapatillas,urbano,0,APPLY
+BQ5451-120,2,1,Zapatillas,urbano,0,APPLY
+BQ5451-200,3,1,Zapatillas,urbano,0,APPLY
+BQ5451-403,2,1,Zapatillas,urbano,0,APPLY
+BQ5453-001,5,1,Zapatillas,urbano,0,APPLY
+BQ5453-002,2,1,Zapatillas,urbano,0,APPLY
+BQ5453-012,3,1,Zapatillas,urbano,0,APPLY
+BQ5453-114,2,1,Zapatillas,urbano,0,APPLY
+BQ5453-120,2,1,Zapatillas,urbano,0,APPLY
+BQ5453-403,3,1,Zapatillas,urbano,0,APPLY
+DM0839-600,2,1,Zapatillas,urbano,0,APPLY
+CA100007W,3,1,Zapatillas,urbano,0,APPLY
+CP101236Y,4,1,Zapatillas,urbano,0,APPLY
+CA100005W,6,1,Zapatillas,urbano,0,APPLY
+CP101240M,4,1,Zapatillas,urbano,0,APPLY
+CA100001W,2,1,Zapatillas,urbano,0,APPLY
+CA100006W,5,1,Zapatillas,urbano,0,APPLY
+CA100008W,5,1,Zapatillas,urbano,0,APPLY
+CA100072M,4,1,Zapatillas,urbano,0,APPLY
+CA100073M,3,1,Zapatillas,urbano,0,APPLY
+CA100080M,4,1,Zapatillas,urbano,0,APPLY
+CA100080Y,5,1,Zapatillas,urbano,0,APPLY
+CA100081Y,2,1,Zapatillas,urbano,0,APPLY
+CA100082Y,2,1,Zapatillas,urbano,0,APPLY
+CP101235M,5,1,Zapatillas,urbano,0,APPLY
+CP101235Y,3,1,Zapatillas,urbano,0,APPLY
+CP101240Y,4,1,Zapatillas,urbano,0,APPLY
+CP101241Y,3,1,Zapatillas,urbano,0,APPLY
+CP101243M,3,1,Zapatillas,urbano,0,APPLY
+CP101243Y,3,1,Zapatillas,urbano,0,APPLY
+CP101244Y,3,1,Zapatillas,urbano,0,APPLY
+CP101245Y,2,1,Zapatillas,urbano,0,APPLY
+ATWOOD Z,1,1,Zapatillas,skate,0,APPLY
+VN-0K2UDDC,2,1,Zapatillas,skate,0,APPLY
+VN-0K5186,1,1,Zapatillas,skate,0,APPLY
+VN-0K5187,1,1,Zapatillas,skate,0,APPLY
+VN-0KC44,1,1,Zapatillas,skate,0,APPLY
+VN-0KC47,1,1,Zapatillas,skate,0,APPLY
+VN-0NJO186,1,1,Zapatillas,skate,0,APPLY
+VN-0TUY1,1,1,Zapatillas,skate,0,APPLY
+VN-0TUY186,1,1,Zapatillas,skate,0,APPLY
+VN-0TUY187,1,1,Zapatillas,skate,0,APPLY
+VN-0TUYD8E,1,1,Zapatillas,skate,0,APPLY
+VN-0UDM8IZ,1,1,Zapatillas,skate,0,APPLY
+VN-0UDM9T6,1,1,Zapatillas,skate,0,APPLY
+VN-0UDTDDU,1,1,Zapatillas,skate,0,APPLY
+VN-0XBOFN8,1,1,Zapatillas,skate,0,APPLY
+VN00015GK89,1,1,Zapatillas,skate,0,APPLY
+VN000ZUNK34,1,1,Zapatillas,skate,0,APPLY
+VN000ZUNK37,1,1,Zapatillas,skate,0,APPLY
+VN-0U4IALZ,1,1,Zapatillas,skate,0,APPLY
+VN-0U4IAME,1,1,Zapatillas,skate,0,APPLY
+ZVATWOOD LOW,4,1,Zapatillas,skate,0,APPLY
+721,2,19,Zapatillas,"futbol,sala",0,APPLY
+AGUIW,1,9,Zapatillas,"futbol,sala",0,APPLY
+AGUIW818,1,19,Zapatillas,"futbol,sala",0,APPLY
+CHAJW704,1,19,Zapatillas,"futbol,sala",0,APPLY
+CHAJW709,1,19,Zapatillas,"futbol,sala",0,APPLY
+DRIJW704,2,19,Zapatillas,"futbol,sala",0,APPLY
+DRIS802,2,19,Zapatillas,"futbol,sala",0,APPLY
+DRIW720,2,19,Zapatillas,"futbol,sala",0,APPLY
+DRIW721,2,19,Zapatillas,"futbol,sala",0,APPLY
+MAXW701,1,19,Zapatillas,"futbol,sala",0,APPLY
+MAXW704,1,19,Zapatillas,"futbol,sala",0,APPLY
+MAXW801,1,19,Zapatillas,"futbol,sala",0,APPLY
+N-10W704,1,19,Zapatillas,"futbol,sala",0,APPLY
+N-10W711,1,19,Zapatillas,"futbol,sala",0,APPLY
+N10721,2,9,Zapatillas,"futbol,sala",0,APPLY
+N10831,2,9,Zapatillas,"futbol,sala",0,APPLY
+TACS802,2,19,Zapatillas,"futbol,sala",0,APPLY
+TACS811,2,19,Zapatillas,"futbol,sala",0,APPLY
+TACW703,1,19,Zapatillas,"futbol,sala",0,APPLY
+TOLIS803,2,19,Zapatillas,"futbol,sala",0,APPLY
+TOLIW704,1,19,Zapatillas,"futbol,sala",0,APPLY
+ZF4003,1,1,Zapatillas,urbano,0,APPLY
+ZF4024,1,1,Zapatillas,urbano,0,APPLY
+ZF4026,1,1,Zapatillas,urbano,0,APPLY
+ZF4027,1,1,Zapatillas,urbano,0,APPLY
+ZF4211,1,1,Zapatillas,urbano,0,APPLY
+ZF4213,1,1,Zapatillas,urbano,0,APPLY
+ZF4214,1,1,Zapatillas,urbano,0,APPLY
+ZM4106,1,1,Zapatillas,urbano,0,APPLY
+ZM4107,1,1,Zapatillas,urbano,0,APPLY
+ZM4208,1,1,Zapatillas,urbano,0,APPLY
+ZM4249,1,1,Zapatillas,urbano,0,APPLY
+ZM4253,1,1,Zapatillas,urbano,0,APPLY
+ZF3659,1,1,Zapatillas,urbano,0,APPLY
+ZF3660,1,1,Zapatillas,urbano,0,APPLY
+ZF3703,1,1,Zapatillas,urbano,0,APPLY
+ZF3801,1,1,Zapatillas,urbano,0,APPLY
+ZF3722,1,1,Zapatillas,urbano,0,APPLY
+ZM3819,1,1,Zapatillas,urbano,0,APPLY
+ZM3818,1,1,Zapatillas,urbano,0,APPLY
+ZM3902,1,1,Zapatillas,urbano,0,APPLY
+454309-013,1,9,Zapatillas,futbol,0,APPLY
+454309-105,1,9,Zapatillas,futbol,0,APPLY
+454309-108,1,9,Zapatillas,futbol,0,APPLY
+454309-130,1,9,Zapatillas,futbol,0,APPLY
+454309-177,1,9,Zapatillas,futbol,0,APPLY
+454309-419,1,9,Zapatillas,futbol,0,APPLY
+454309-618,1,9,Zapatillas,futbol,0,APPLY
+454309-703,1,9,Zapatillas,futbol,0,APPLY
+454314-010,1,19,Zapatillas,futbol,0,APPLY
+454314-105,1,19,Zapatillas,futbol,0,APPLY
+454314-108,1,19,Zapatillas,futbol,0,APPLY
+454314-160,1,19,Zapatillas,futbol,0,APPLY
+454314-419,1,19,Zapatillas,futbol,0,APPLY
+454314-618,1,19,Zapatillas,futbol,0,APPLY
+454314-703,1,19,Zapatillas,futbol,0,APPLY
+454309-160,1,9,Zapatillas,futbol,0,APPLY
+454336-018,1,9,Zapatillas,futbol,0,APPLY
+6180,1,9,Zapatillas,futbol,0,APPLY
+7610,2,5;19,Zapatillas,futbol,0,APPLY
+454309-140,1,9,Zapatillas,futbol,0,APPLY
+ZVERAU,3,1,Zapatillas,skate,0,APPLY
+ZVAUTHENTIC,1,1,Zapatillas,skate,0,APPLY
+ZV106VULCANIZED,4,1,Zapatillas,skate,0,APPLY
+ZVATWOOD M,7,1,Zapatillas,skate,0,APPLY
+ZVATWOOD M MID,2,1,Zapatillas,skate,0,APPLY
+ZVATWOOD W,2,1,Zapatillas,skate,0,APPLY
+ZVAUTHENLOPRO,1,1,Zapatillas,skate,0,APPLY
+ZVAUTHENLOPRO U,4,1,Zapatillas,skate,0,APPLY
+ZVAUTHENTIC LP,2,1,Zapatillas,skate,0,APPLY
+ZVAUTHENTIC U,4,1,Zapatillas,skate,0,APPLY
+ZVERA,1,1,Zapatillas,skate,0,APPLY
+ZVERA1,1,1,Zapatillas,skate,0,APPLY
+ZVFAUTHENTIC,1,1,Zapatillas,skate,0,APPLY
+ZVLACRIPTADMID M,2,1,Zapatillas,skate,0,APPLY
+ZVLACRIPTADOS M,1,1,Zapatillas,skate,0,APPLY
+ZVMADERO U,1,1,Zapatillas,skate,0,APPLY
+ZVOLDSKOOL,1,1,Zapatillas,skate,0,APPLY
+ZVOLDSKOOL U,1,1,Zapatillas,skate,0,APPLY
+ZVZAPDELBARCO U,1,1,Zapatillas,skate,0,APPLY
+631289-418,1,19,Zapatillas,"futbol,sala",0,APPLY
+631289-858,1,19,Zapatillas,"futbol,sala",0,APPLY
+819233-004,1,9,Zapatillas,"futbol,sala",0,APPLY
+819233-108,1,19,Zapatillas,"futbol,sala",0,APPLY
+819233-443,1,9,Zapatillas,"futbol,sala",0,APPLY
+819237-001,1,19,Zapatillas,"futbol,sala",0,APPLY
+819237-004,1,19,Zapatillas,"futbol,sala",0,APPLY
+819237-010,1,19,Zapatillas,"futbol,sala",0,APPLY
+819233-307,1,19,Zapatillas,"futbol,sala",0,APPLY
+819237-307,1,19,Zapatillas,"futbol,sala",0,APPLY
+819237-103,1,19,Zapatillas,"futbol,sala",0,APPLY
+819237-108,1,19,Zapatillas,"futbol,sala",0,APPLY
+819237-707,1,19,Zapatillas,"futbol,sala",0,APPLY
+897759-002,1,9,Zapatillas,"futbol,sala",0,APPLY
+897759-008,1,9,Zapatillas,"futbol,sala",0,APPLY
+897770-008,1,19,Zapatillas,"futbol,sala",0,APPLY
+897770-002,1,19,Zapatillas,"futbol,sala",0,APPLY
+631289-007,1,19,Zapatillas,"futbol,sala",0,APPLY
+897759-616,1,9,Zapatillas,"futbol,sala",0,APPLY
+7005-329-11506,2,1,Zapatos de Vestir,vestir,0,APPLY
+2507-100-13096,2,1,Zapatos de Vestir,vestir,0,APPLY
+2507-100-11950,1,1,Zapatos de Vestir,vestir,0,APPLY
+5156-439-11803,1,1,Zapatos de Vestir,vestir,0,APPLY
+5230-325-5881,1,1,Zapatos de Vestir,vestir,0,APPLY
+7005-329-12391,2,1,Zapatos de Vestir,vestir,0,APPLY
+2507-100-11950-23146,1,1,Zapatos de Vestir,vestir,0,APPLY
+2507-100-13096-17105,1,1,Zapatos de Vestir,vestir,0,APPLY
+5156-439-11803-15787,1,1,Zapatos de Vestir,vestir,0,APPLY
+5230-325-5881-15745,1,1,Zapatos de Vestir,vestir,0,APPLY
+5314-206-11364-42448,1,1,Zapatos de Vestir,vestir,0,APPLY
+5263-201-12701-37,1,1,Zapatos de Vestir,vestir,0,APPLY
+7005-311-10585-29926,1,1,Zapatos de Vestir,vestir,0,APPLY
+7005-329-11506-29452,1,1,Zapatos de Vestir,vestir,0,APPLY
+7005-329-12391-1574,1,1,Zapatos de Vestir,vestir,0,APPLY
+5314-206-11364,1,1,Zapatos de Vestir,vestir,0,APPLY
+5263-201-12701,1,1,Zapatos de Vestir,vestir,0,APPLY
+7005-311-10585,1,1,Zapatos de Vestir,vestir,0,APPLY
+831969-002,1,9,Zapatillas,futbol,0,APPLY
+831969-006,1,9,Zapatillas,futbol,0,APPLY
+831969-585,1,9,Zapatillas,futbol,0,APPLY
+831969-616,1,9,Zapatillas,futbol,0,APPLY
+831969-801,1,9,Zapatillas,futbol,0,APPLY
+831971-006,1,9,Zapatillas,futbol,0,APPLY
+831971-303,1,9,Zapatillas,futbol,0,APPLY
+831971-585,1,9,Zapatillas,futbol,0,APPLY
+831971-601,1,9,Zapatillas,futbol,0,APPLY
+831971-616,1,19,Zapatillas,futbol,0,APPLY
+831971-002,1,19,Zapatillas,futbol,0,APPLY
+852534-001,1,9,Zapatillas,futbol,0,APPLY
+852534-376,1,9,Zapatillas,futbol,0,APPLY
+852535-401,1,9,Zapatillas,futbol,0,APPLY
+921519-400,1,19,Zapatillas,futbol,0,APPLY
+651649-580,2,19,Zapatillas,futbol,0,APPLY
+831971-801,1,19,Zapatillas,futbol,0,APPLY
+852534-401,1,9,Zapatillas,futbol,0,APPLY
+ZM3753,1,1,Zapatillas,urbano,0,APPLY
+ZF4019,1,1,Zapatillas,urbano,0,APPLY
+ZF4020,1,1,Zapatillas,urbano,0,APPLY
+ZF4021,1,1,Zapatillas,urbano,0,APPLY
+ZF4102,1,1,Zapatillas,urbano,0,APPLY
+ZM4000,1,1,Zapatillas,urbano,0,APPLY
+ZM4101,1,1,Zapatillas,urbano,0,APPLY
+ZM4102,1,1,Zapatillas,urbano,0,APPLY
+ZM4200,1,1,Zapatillas,urbano,0,APPLY
+ZF3645,1,1,Zapatillas,urbano,0,APPLY
+ZF3646,1,1,Zapatillas,urbano,0,APPLY
+ZF3720,1,1,Zapatillas,urbano,0,APPLY
+ZF3800,1,1,Zapatillas,urbano,0,APPLY
+ZM3651,1,1,Zapatillas,urbano,0,APPLY
+ZM3824,1,1,Zapatillas,urbano,0,APPLY
+ZM3843,1,1,Zapatillas,urbano,0,APPLY
+ZM3901,1,1,Zapatillas,urbano,0,APPLY
+509128-486,1,9,Zapatillas,futbol,0,APPLY
+509132-486,1,19,Zapatillas,futbol,0,APPLY
+509133-486,1,19,Zapatillas,futbol,0,APPLY
+509128-106,1,9,Zapatillas,futbol,0,APPLY
+509128-146,1,9,Zapatillas,futbol,0,APPLY
+509128-376,1,9,Zapatillas,futbol,0,APPLY
+509128-800,1,9,Zapatillas,futbol,0,APPLY
+509129-800,1,9,Zapatillas,futbol,0,APPLY
+509132-106,1,19,Zapatillas,futbol,0,APPLY
+509132-146,1,19,Zapatillas,futbol,0,APPLY
+509132-376,1,19,Zapatillas,futbol,0,APPLY
+509132-800,2,19,Zapatillas,futbol,0,APPLY
+509133-106,1,19,Zapatillas,futbol,0,APPLY
+509133-146,1,19,Zapatillas,futbol,0,APPLY
+509133-376,1,19,Zapatillas,futbol,0,APPLY
+509133-800,1,19,Zapatillas,futbol,0,APPLY
+537735-014,1,9,Zapatillas,futbol,0,APPLY
+ZM6021,1,1,Zapatillas,urbano,0,APPLY
+ZM6022,1,1,Zapatillas,urbano,0,APPLY
+ZM6025,2,1,Zapatillas,urbano,0,APPLY
+ZM6031,1,1,Zapatillas,urbano,0,APPLY
+ZM6032,1,1,Zapatillas,urbano,0,APPLY
+ZF6024,1,1,Zapatillas,urbano,0,APPLY
+ZF6026,1,1,Zapatillas,urbano,0,APPLY
+ZM6020,1,1,Zapatillas,urbano,0,APPLY
+ZM6023,1,1,Zapatillas,urbano,0,APPLY
+ZM6024,1,1,Zapatillas,urbano,0,APPLY
+ZM6030,1,1,Zapatillas,urbano,0,APPLY
+ZM6033,1,1,Zapatillas,urbano,0,APPLY
+ZN3614,1,1,Zapatillas,urbano,0,APPLY
+ZN3615,1,1,Zapatillas,urbano,0,APPLY
+ZN3616,1,1,Zapatillas,urbano,0,APPLY
+ZN3617,1,1,Zapatillas,urbano,0,APPLY
+AH7363-077,1,19,Zapatillas,"futbol,sala",0,APPLY
+AH7364-070,2,19,Zapatillas,"futbol,sala",0,APPLY
+AH7362-070,2,19,Zapatillas,"futbol,sala",0,APPLY
+AH7362-077,1,19,Zapatillas,"futbol,sala",0,APPLY
+AH7362-107,2,19,Zapatillas,"futbol,sala",0,APPLY
+AH7363-060,1,19,Zapatillas,"futbol,sala",0,APPLY
+AH7363-070,1,19,Zapatillas,"futbol,sala",0,APPLY
+AH7363-701,2,19,Zapatillas,"futbol,sala",0,APPLY
+AH7363-710,2,9,Zapatillas,"futbol,sala",0,APPLY
+AH7363-801,1,19,Zapatillas,"futbol,sala",0,APPLY
+AH7363-810,1,19,Zapatillas,"futbol,sala",0,APPLY
+AH7371-060,1,19,Zapatillas,"futbol,sala",0,APPLY
+AH7371-701,2,19,Zapatillas,"futbol,sala",0,APPLY
+AT7949-414,2,9,Zapatillas,"futbol,sala",0,APPLY
+AT7980-001,1,9,Zapatillas,"futbol,sala",0,APPLY
+AT7980-414,1,9,Zapatillas,"futbol,sala",0,APPLY
+Q9802000,1,9,Zapatillas,futbol,0,APPLY
+R5151,1,9,Zapatillas,futbol,0,APPLY
+S2411,1,9,Zapatillas,futbol,0,APPLY
+S2428,1,19,Zapatillas,futbol,0,APPLY
+S2431,1,19,Zapatillas,futbol,0,APPLY
+S2433,1,19,Zapatillas,futbol,0,APPLY
+S9902,1,19,Zapatillas,futbol,0,APPLY
+R8790,1,9,Zapatillas,futbol,0,APPLY
+S7250,1,19,Zapatillas,futbol,0,APPLY
+S7252,1,19,Zapatillas,futbol,0,APPLY
+S7774,1,19,Zapatillas,futbol,0,APPLY
+S8020,1,19,Zapatillas,futbol,0,APPLY
+S9713,1,9,Zapatillas,futbol,0,APPLY
+S9731,1,19,Zapatillas,futbol,0,APPLY
+S9903,1,19,Zapatillas,futbol,0,APPLY
+T0517,2,19,Zapatillas,futbol,0,APPLY
+1206,4,1;12;26,Zapatillas,skate,0,APPLY
+1090101,3,1,Zapatillas,skate,0,APPLY
+1090104,3,1,Zapatillas,skate,0,APPLY
+1090102,3,1,Zapatillas,skate,0,APPLY
+1287,3,1,Zapatillas,skate,0,APPLY
+1275,8,1;2;12;26,Zapatillas,skate,0,APPLY
+1276,3,1,Zapatillas,skate,0,APPLY
+1277,5,1,Zapatillas,skate,0,APPLY
+1282,5,1;2,Zapatillas,skate,0,APPLY
+1284,2,1,Zapatillas,skate,0,APPLY
+13155,2,1,Zapatillas,skate,0,APPLY
+1286,4,1;33,Zapatillas,skate,0,APPLY
+1289,4,1,Zapatillas,skate,0,APPLY
+1294,2,1,Zapatillas,skate,0,APPLY
+1283,2,1,Zapatillas,skate,0,APPLY
+3503,1,19,Zapatillas,"futbol,sala",0,APPLY
+F32583,1,19,Zapatillas,"futbol,sala",0,APPLY
+G64956,1,9,Zapatillas,"futbol,sala",0,APPLY
+G64959,1,9,Zapatillas,"futbol,sala",0,APPLY
+G64967,1,19,Zapatillas,"futbol,sala",0,APPLY
+M17656,1,9,Zapatillas,"futbol,sala",0,APPLY
+M20165,1,19,Zapatillas,"futbol,sala",0,APPLY
+M20166,1,19,Zapatillas,"futbol,sala",0,APPLY
+Q21652,1,9,Zapatillas,"futbol,sala",0,APPLY
+Q21674,1,19,Zapatillas,"futbol,sala",0,APPLY
+Q21675,1,19,Zapatillas,"futbol,sala",0,APPLY
+Q22439,1,19,Zapatillas,"futbol,sala",0,APPLY
+V22133,1,9,Zapatillas,"futbol,sala",0,APPLY
+V22139,1,19,Zapatillas,"futbol,sala",0,APPLY
+F32561,1,9,Zapatillas,"futbol,sala",0,APPLY
+525170-303,1,9,Zapatillas,futbol,0,APPLY
+525170-470,1,9,Zapatillas,futbol,0,APPLY
+525170-703,1,9,Zapatillas,futbol,0,APPLY
+525170-710,1,9,Zapatillas,futbol,0,APPLY
+525170-800,1,9,Zapatillas,futbol,0,APPLY
+525179-303,1,9,Zapatillas,futbol,0,APPLY
+525179-703,1,9,Zapatillas,futbol,0,APPLY
+525170-810,1,9,Zapatillas,futbol,0,APPLY
+525169-173,1,19,Zapatillas,futbol,0,APPLY
+525169-303,1,19,Zapatillas,futbol,0,APPLY
+525169-470,1,19,Zapatillas,futbol,0,APPLY
+525169-710,1,19,Zapatillas,futbol,0,APPLY
+525169-810,1,19,Zapatillas,futbol,0,APPLY
+525170-180,1,9,Zapatillas,futbol,0,APPLY
+525179-710,2,9,Zapatillas,futbol,0,APPLY
+BQ8718,3,9,Balones,futbol,0,APPLY
+F93743,1,9,Balones,futbol,0,APPLY
+F93744,1,9,Balones,futbol,0,APPLY
+F93745,1,9,Balones,futbol,0,APPLY
+G83969,1,9,Balones,futbol,0,APPLY
+G83970,1,9,Balones,futbol,0,APPLY
+G83971,1,9,Balones,futbol,0,APPLY
+B10545,1,9,Balones,futbol,0,APPLY
+B10546,1,9,Balones,futbol,0,APPLY
+BQ8721,2,9,Balones,futbol,0,APPLY
+BQ8724,1,9,Balones,futbol,0,APPLY
+CW53423,2,9,Balones,futbol,0,APPLY
+CW5344,2,9,Balones,futbol,0,APPLY
+GK3499,2,9,Balones,futbol,0,APPLY
+GU0248,2,9,Balones,futbol,0,APPLY
+040887 01,1,7,Zapatillas,futbol,0,APPLY
+102871 01,1,19,Zapatillas,futbol,0,APPLY
+104026 01,1,19,Zapatillas,futbol,0,APPLY
+102868 01,1,9,Zapatillas,futbol,0,APPLY
+102871 02,1,19,Zapatillas,futbol,0,APPLY
+103018 01,1,9,Zapatillas,futbol,0,APPLY
+103283 01,1,19,Zapatillas,futbol,0,APPLY
+103283 03,1,19,Zapatillas,futbol,0,APPLY
+103286 01,1,19,Zapatillas,futbol,0,APPLY
+103286 03,1,19,Zapatillas,futbol,0,APPLY
+103021 01,1,9,Zapatillas,futbol,0,APPLY
+102581 06,1,9,Zapatillas,futbol,0,APPLY
+103286 04,1,19,Zapatillas,futbol,0,APPLY
+104026 03,1,19,Zapatillas,futbol,0,APPLY
+CP102044W,3,1,Zapatillas,urbano,0,APPLY
+CP100989M,2,1,Zapatillas,urbano,0,APPLY
+CP101003M,3,1,Zapatillas,urbano,0,APPLY
+CP101004M,2,1,Zapatillas,urbano,0,APPLY
+CP101397Y,2,1,Zapatillas,urbano,0,APPLY
+CP101399Y,2,1,Zapatillas,urbano,0,APPLY
+CP101403M,2,1,Zapatillas,urbano,0,APPLY
+CP101404M,2,1,Zapatillas,urbano,0,APPLY
+CP101404Y,2,1,Zapatillas,urbano,0,APPLY
+CP101405M,2,1,Zapatillas,urbano,0,APPLY
+CP101406M,2,1,Zapatillas,urbano,0,APPLY
+CP101407M,4,1,Zapatillas,urbano,0,APPLY
+CP101889Y,3,1,Zapatillas,urbano,0,APPLY
+CP101897Y,3,1,Zapatillas,urbano,0,APPLY
+AP7043,1,7,Zapatillas,"futbol,sala",0,APPLY
+AP7044,1,7,Zapatillas,"futbol,sala",0,APPLY
+AP7045,1,7,Zapatillas,"futbol,sala",0,APPLY
+AZ9861,1,7,Zapatillas,"futbol,sala",0,APPLY
+AZ9862,1,7,Zapatillas,"futbol,sala",0,APPLY
+AZ9863,1,7,Zapatillas,"futbol,sala",0,APPLY
+BR5366,1,7,Zapatillas,"futbol,sala",0,APPLY
+BR5369,1,7,Zapatillas,"futbol,sala",0,APPLY
+CF2431,2,7,Zapatillas,"futbol,sala",0,APPLY
+BQ8402,1,7,Zapatillas,"futbol,sala",0,APPLY
+CF2411,1,7,Zapatillas,"futbol,sala",0,APPLY
+CF2412,1,7,Zapatillas,"futbol,sala",0,APPLY
+CF2413,1,7,Zapatillas,"futbol,sala",0,APPLY
+DJ2006-100,7,1,Zapatillas,urbano,0,APPLY
+DA5381-106,3,1,Zapatillas,urbano,0,APPLY
+CT4063-400,3,1,Zapatillas,urbano,0,APPLY
+CT4063-600,3,1,Zapatillas,urbano,0,APPLY
+CQ9246-001,4,1,Zapatillas,urbano,0,APPLY
+DA5382-103,3,1,Zapatillas,urbano,0,APPLY
+CD5434-001,4,1,Zapatillas,urbano,0,APPLY
+CQ9246-101,5,1,Zapatillas,urbano,0,APPLY
+CT3964-600,2,1,Zapatillas,urbano,0,APPLY
+CT3965-001,2,1,Zapatillas,urbano,0,APPLY
+CT3965-600,3,1,Zapatillas,urbano,0,APPLY
+DA5380-106,3,1,Zapatillas,urbano,0,APPLY
+DD3021-100,3,1,Zapatillas,urbano,0,APPLY
+323,1,19,Zapatillas,futbol,0,APPLY
+326,2,9;63,Zapatillas,futbol,0,APPLY
+328,2,9;63,Zapatillas,futbol,0,APPLY
+3567,1,19,Zapatillas,futbol,0,APPLY
+4690,1,19,Zapatillas,futbol,0,APPLY
+4691,1,19,Zapatillas,futbol,0,APPLY
+4692,1,19,Zapatillas,futbol,0,APPLY
+G50435,1,9,Zapatillas,futbol,0,APPLY
+G61509,1,19,Zapatillas,futbol,0,APPLY
+G65446,1,19,Zapatillas,futbol,0,APPLY
+Q33929,1,9,Zapatillas,futbol,0,APPLY
+V22135,1,9,Zapatillas,futbol,0,APPLY
+V22142,1,19,Zapatillas,futbol,0,APPLY
+81264U-EPW,2,19,Zapatillas,futbol,0,APPLY
+81264U-FC6,2,19,Zapatillas,futbol,0,APPLY
+81334U-A66,1,19,Zapatillas,futbol,0,APPLY
+81334U-FNQ,2,19,Zapatillas,futbol,0,APPLY
+81334U-FNR,2,19,Zapatillas,futbol,0,APPLY
+81334U-FZ6,1,19,Zapatillas,futbol,0,APPLY
+81334U-FZB,2,19,Zapatillas,futbol,0,APPLY
+81336U-A66,2,9,Zapatillas,futbol,0,APPLY
+85946U-090,1,19,Zapatillas,futbol,0,APPLY
+85946U-FZ4,1,19,Zapatillas,futbol,0,APPLY
+85946U-FZ9,1,19,Zapatillas,futbol,0,APPLY
+85946U-HFA,2,19,Zapatillas,futbol,0,APPLY
+85946U-HL3,2,19,Zapatillas,futbol,0,APPLY
+F87169,1,7,Zapatillas,"futbol,sala",0,APPLY
+G84073,1,7,Zapatillas,"futbol,sala",0,APPLY
+M38654,1,7,Zapatillas,"futbol,sala",0,APPLY
+G73378,1,7,Zapatillas,"futbol,sala",0,APPLY
+G73379,1,7,Zapatillas,"futbol,sala",0,APPLY
+V87170,1,7,Zapatillas,"futbol,sala",0,APPLY
+V87171,1,7,Zapatillas,"futbol,sala",0,APPLY
+W44156,1,7,Zapatillas,"futbol,sala",0,APPLY
+X17006,1,7,Zapatillas,"futbol,sala",0,APPLY
+X17007,1,7,Zapatillas,"futbol,sala",0,APPLY
+Z19188,1,7,Zapatillas,"futbol,sala",0,APPLY
+Z19189,1,7,Zapatillas,"futbol,sala",0,APPLY
+1143-809,2,2,Zapatos de Vestir,vestir,0,APPLY
+1143-848,2,2,Zapatos de Vestir,vestir,0,APPLY
+1184-101,5,2,Zapatos de Vestir,vestir,0,APPLY
+1184-301,1,2,Zapatos de Vestir,vestir,0,APPLY
+1184101,4,2,Zapatos de Vestir,vestir,0,APPLY
+1185-102,2,2,Zapatos de Vestir,vestir,0,APPLY
+1185-402,2,2,Zapatos de Vestir,vestir,0,APPLY
+1781-421,2,2,Zapatos de Vestir,vestir,0,APPLY
+1781407,2,2,Zapatos de Vestir,vestir,0,APPLY
+1781421,1,2,Zapatos de Vestir,vestir,0,APPLY
+1265100,2,2,Zapatos de Vestir,vestir,0,APPLY
+1267100,1,2,Zapatos de Vestir,vestir,0,APPLY
+21015J,5,4,Equipamiento Fitness,futbol,0,APPLY
+213202,3,4,Equipamiento Fitness,futbol,0,APPLY
+2140,2,4,Equipamiento Fitness,futbol,0,APPLY
+214009,1,4,Equipamiento Fitness,futbol,0,APPLY
+214019,1,4,Equipamiento Fitness,futbol,0,APPLY
+21011,1,4,Equipamiento Fitness,futbol,0,APPLY
+21015,5,4,Equipamiento Fitness,futbol,0,APPLY
+21015JJJ,1,4,Equipamiento Fitness,futbol,0,APPLY
+21016,1,4,Equipamiento Fitness,futbol,0,APPLY
+21040D,1,4,Equipamiento Fitness,futbol,0,APPLY
+21101,1,4,Equipamiento Fitness,futbol,0,APPLY
+21109,1,4,Equipamiento Fitness,futbol,0,APPLY
+AQ4292,1,19,Zapatillas,futbol,0,APPLY
+AQ4302,1,19,Zapatillas,futbol,0,APPLY
+AQ4281,2,9,Zapatillas,futbol,0,APPLY
+B26197,1,19,Zapatillas,futbol,0,APPLY
+B27067,1,9,Zapatillas,futbol,0,APPLY
+B27092,1,19,Zapatillas,futbol,0,APPLY
+F33028,1,19,Zapatillas,futbol,0,APPLY
+F33033,1,19,Zapatillas,futbol,0,APPLY
+BB0583,1,19,Zapatillas,futbol,0,APPLY
+S77228,1,9,Zapatillas,futbol,0,APPLY
+AQ4282,1,19,Zapatillas,futbol,0,APPLY
+S77225,1,9,Zapatillas,futbol,0,APPLY
+S2408,1,9,Zapatillas,futbol,0,APPLY
+S7153,2,9,Zapatillas,futbol,0,APPLY
+T3518,1,9,Zapatillas,futbol,0,APPLY
+L605631NI,2,9,Zapatillas,futbol,0,APPLY
+L605641HB,2,9,Zapatillas,futbol,0,APPLY
+Q5327,1,19,Zapatillas,futbol,0,APPLY
+T3502,2,9,Zapatillas,futbol,0,APPLY
+T6949,2,9,Zapatillas,futbol,0,APPLY
+T8945,2,19,Zapatillas,futbol,0,APPLY
+T8946,2,19,Zapatillas,futbol,0,APPLY
+T8948,2,19,Zapatillas,futbol,0,APPLY
+T8949,2,19,Zapatillas,futbol,0,APPLY
+S90509,1,7,Zapatillas,futbol,0,APPLY
+AC5526,1,19,Zapatillas,futbol,0,APPLY
+AQ3529,1,19,Zapatillas,futbol,0,APPLY
+B23944,2,9,Zapatillas,futbol,0,APPLY
+F93740,1,9,Zapatillas,futbol,0,APPLY
+G73681,1,9,Zapatillas,futbol,0,APPLY
+S02930,1,9,Zapatillas,futbol,0,APPLY
+AQ3526,1,9,Zapatillas,futbol,0,APPLY
+AF4671,3,9,Zapatillas,futbol,0,APPLY
+AF4683,1,19,Zapatillas,futbol,0,APPLY
+AQ3524,1,19,Zapatillas,futbol,0,APPLY
+4306,1,2,Zapatos de Vestir,vestir,0,APPLY
+4962,1,2,Zapatos de Vestir,vestir,0,APPLY
+1493,2,2;34,Zapatos de Vestir,vestir,0,APPLY
+1496,1,2,Zapatos de Vestir,vestir,0,APPLY
+1497,2,2;63,Zapatos de Vestir,vestir,0,APPLY
+6341,1,2,Zapatos de Vestir,vestir,0,APPLY
+6342,1,2,Zapatos de Vestir,vestir,0,APPLY
+1255,1,2,Zapatos de Vestir,vestir,0,APPLY
+2005,3,2;9;36,Zapatos de Vestir,vestir,0,APPLY
+7251,1,2,Zapatos de Vestir,vestir,0,APPLY
+7261,1,2,Zapatos de Vestir,vestir,0,APPLY
+6311616-008,1,19,Zapatillas,futbol,0,APPLY
+631282-010,1,9,Zapatillas,futbol,0,APPLY
+631282-017,1,9,Zapatillas,futbol,0,APPLY
+631282-418,1,9,Zapatillas,futbol,0,APPLY
+631282-770,1,9,Zapatillas,futbol,0,APPLY
+631282-810,1,9,Zapatillas,futbol,0,APPLY
+631284-010,1,19,Zapatillas,futbol,0,APPLY
+631284-770,1,19,Zapatillas,futbol,0,APPLY
+631284-810,1,19,Zapatillas,futbol,0,APPLY
+631285-008,1,19,Zapatillas,futbol,0,APPLY
+631616-418,1,19,Zapatillas,futbol,0,APPLY
+749889-080,1,9,Zapatillas,futbol,0,APPLY
+749889-888,1,9,Zapatillas,futbol,0,APPLY
+749891-080,1,19,Zapatillas,futbol,0,APPLY
+749891-888,1,19,Zapatillas,futbol,0,APPLY
+749896-080,1,9,Zapatillas,futbol,0,APPLY
+749896-888,1,9,Zapatillas,futbol,0,APPLY
+749899-080,1,19,Zapatillas,futbol,0,APPLY
+749899-888,1,19,Zapatillas,futbol,0,APPLY
+852547-104,1,9,Zapatillas,futbol,0,APPLY
+852547-308,1,9,Zapatillas,futbol,0,APPLY
+852547-801,2,9,Zapatillas,futbol,0,APPLY
+SC2203-168,1,9,Balones,futbol,0,APPLY
+SC2296-157,1,9,Balones,futbol,0,APPLY
+SC2416-190,1,9,Balones,futbol,0,APPLY
+SC2554-746,1,19,Balones,futbol,0,APPLY
+SC2601-187,1,9,Balones,futbol,0,APPLY
+SC2754-639,1,9,Balones,futbol,0,APPLY
+SC2754-671,1,9,Balones,futbol,0,APPLY
+SC2983-822,1,9,Balones,futbol,0,APPLY
+SC3066-170,1,9,Balones,futbol,0,APPLY
+SC2983-135,1,9,Balones,futbol,0,APPLY
+SC3329-455,1,9,Balones,futbol,0,APPLY
+SP2128-043,3,7,Zapatillas,futbol,0,APPLY
+SP2120-010,1,7,Zapatillas,futbol,0,APPLY
+SP2120-012,1,7,Zapatillas,futbol,0,APPLY
+SP2120-020,1,7,Zapatillas,futbol,0,APPLY
+SP2120-043,1,7,Zapatillas,futbol,0,APPLY
+SP2120-102,1,7,Zapatillas,futbol,0,APPLY
+SP2120-610,1,7,Zapatillas,futbol,0,APPLY
+SP2120-703,1,7,Zapatillas,futbol,0,APPLY
+SP2128-060,2,7,Zapatillas,futbol,0,APPLY
+SP2128-486,2,7,Zapatillas,futbol,0,APPLY
+AR4162-100,6,1,Zapatillas,urbano,0,APPLY
+AR4161-001,6,1,Zapatillas,urbano,0,APPLY
+AR4161-005,3,1,Zapatillas,urbano,0,APPLY
+AR4161-100,6,1,Zapatillas,urbano,0,APPLY
+AR4162-001,6,1,Zapatillas,urbano,0,APPLY
+AR4161-504,3,1,Zapatillas,urbano,0,APPLY
+AR4162-400,2,1,Zapatillas,urbano,0,APPLY
+AR4162-004,3,1,Zapatillas,urbano,0,APPLY
+AR4162-005,2,1,Zapatillas,urbano,0,APPLY
+AR4161-004,3,1,Zapatillas,urbano,0,APPLY
+2483,2,2;12,Zapatos de Vestir,vestir,0,APPLY
+439,1,2,Zapatos de Vestir,vestir,0,APPLY
+562,2,2;14,Zapatos de Vestir,vestir,0,APPLY
+8228,1,2,Zapatos de Vestir,vestir,0,APPLY
+1167,1,2,Zapatos de Vestir,vestir,0,APPLY
+8630,2,2;14,Zapatos de Vestir,vestir,0,APPLY
+913,2,2;38,Zapatos de Vestir,vestir,0,APPLY
+9211,2,1;2,Zapatos de Vestir,vestir,0,APPLY
+1612,2,2;12,Zapatos de Vestir,vestir,0,APPLY
+1406,1,2,Zapatos de Vestir,vestir,0,APPLY
+13077,2,1,Zapatillas,skate,0,APPLY
+13032,2,1,Zapatillas,skate,0,APPLY
+13075,2,1,Zapatillas,skate,0,APPLY
+13071,2,1,Zapatillas,skate,0,APPLY
+13039,3,1,Zapatillas,skate,0,APPLY
+13054,3,1,Zapatillas,skate,0,APPLY
+13069,2,1,Zapatillas,skate,0,APPLY
+13072,2,1,Zapatillas,skate,0,APPLY
+13074,2,1,Zapatillas,skate,0,APPLY
+13076,2,1,Zapatillas,skate,0,APPLY
+EQUI10,3,4,Equipamiento Fitness,futbol,0,APPLY
+EQUI,3,4,Equipamiento Fitness,futbol,0,APPLY
+EQUI09,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUI1,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUI101,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUI108,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUI109,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUI110,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUI120,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUI2,1,4,Equipamiento Fitness,futbol,0,APPLY
+21340159G,1,9,Zapatillas,futbol,0,APPLY
+21165059G,2,9,Zapatillas,futbol,0,APPLY
+T6957,2,9,Zapatillas,futbol,0,APPLY
+2124285BQ,2,9,Zapatillas,futbol,0,APPLY
+L591671J1,2,9,Zapatillas,futbol,0,APPLY
+L591721J1,1,9,Zapatillas,futbol,0,APPLY
+L591725BQ,1,19,Zapatillas,futbol,0,APPLY
+L605632CA,2,9,Zapatillas,futbol,0,APPLY
+T6956,2,9,Zapatillas,futbol,0,APPLY
+T6977,1,19,Zapatillas,futbol,0,APPLY
+082666 01,1,9,Zapatillas,"futbol,sala",0,APPLY
+082666 05,1,19,Zapatillas,"futbol,sala",0,APPLY
+082836 02,1,9,Zapatillas,"futbol,sala",0,APPLY
+082836 01,1,9,Zapatillas,"futbol,sala",0,APPLY
+082836 04,1,19,Zapatillas,"futbol,sala",0,APPLY
+082666 02,1,9,Zapatillas,"futbol,sala",0,APPLY
+082666 03,1,9,Zapatillas,"futbol,sala",0,APPLY
+082666 04,1,9,Zapatillas,"futbol,sala",0,APPLY
+082666 06,1,19,Zapatillas,"futbol,sala",0,APPLY
+082666 07,1,19,Zapatillas,"futbol,sala",0,APPLY
+082758 07,1,9,Zapatillas,futbol,0,APPLY
+082758 08,1,9,Zapatillas,futbol,0,APPLY
+082758 09,1,9,Zapatillas,futbol,0,APPLY
+082758 10,1,9,Zapatillas,futbol,0,APPLY
+083044 06,3,19,Zapatillas,futbol,0,APPLY
+083044 07,3,19,Zapatillas,futbol,0,APPLY
+082758 04,1,9,Zapatillas,futbol,0,APPLY
+082758 01,1,9,Zapatillas,futbol,0,APPLY
+082758 02,1,9,Zapatillas,futbol,0,APPLY
+083044 03,1,19,Zapatillas,futbol,0,APPLY
+651343-858,1,9,Zapatillas,futbol,0,APPLY
+651548-318,1,19,Zapatillas,futbol,0,APPLY
+651548-770,1,19,Zapatillas,futbol,0,APPLY
+651548-858,1,19,Zapatillas,futbol,0,APPLY
+844420-375,1,9,Zapatillas,futbol,0,APPLY
+844420-708,1,9,Zapatillas,futbol,0,APPLY
+844429-845,1,9,Zapatillas,futbol,0,APPLY
+651343-318,1,9,Zapatillas,futbol,0,APPLY
+651343-770,1,9,Zapatillas,futbol,0,APPLY
+844420-801,1,9,Zapatillas,futbol,0,APPLY
+D67080,1,9,Zapatillas,futbol,0,APPLY
+F32559,1,9,Zapatillas,futbol,0,APPLY
+F32575,1,19,Zapatillas,futbol,0,APPLY
+G64903,1,9,Zapatillas,futbol,0,APPLY
+G64917,1,19,Zapatillas,futbol,0,APPLY
+M17629,1,9,Zapatillas,futbol,0,APPLY
+M17635,1,19,Zapatillas,futbol,0,APPLY
+M17700,1,9,Zapatillas,futbol,0,APPLY
+M18327,1,9,Zapatillas,futbol,0,APPLY
+Q21655,1,9,Zapatillas,futbol,0,APPLY
+S82477,1,9,Zapatillas,futbol,0,APPLY
+BB9431,2,9,Zapatillas,futbol,0,APPLY
+BB9438,1,19,Zapatillas,futbol,0,APPLY
+BP7756,2,9,Zapatillas,futbol,0,APPLY
+BP7762,1,9,Zapatillas,futbol,0,APPLY
+CP8987,1,9,Zapatillas,futbol,0,APPLY
+DA9590,1,9,Zapatillas,futbol,0,APPLY
+EF8291,2,19,Zapatillas,futbol,0,APPLY
+S80599,2,9,Zapatillas,futbol,0,APPLY
+S80604,2,19,Zapatillas,futbol,0,APPLY
+HA2683,3,2,Poleras y Camisetas,futbol,0,APPLY
+GA4475,2,2,Poleras y Camisetas,futbol,0,APPLY
+GA4482,2,2,Poleras y Camisetas,futbol,0,APPLY
+GB3078,2,2,Poleras y Camisetas,futbol,0,APPLY
+GB3083,2,2,Poleras y Camisetas,futbol,0,APPLY
+HA2688,2,2,Poleras y Camisetas,futbol,0,APPLY
+HA8349,2,2,Poleras y Camisetas,futbol,0,APPLY
+HA2690,2,2,Poleras y Camisetas,futbol,0,APPLY
+IJ8205,3,2,Poleras y Camisetas,futbol,0,APPLY
+AO4857,1,7,Balones,futbol,0,APPLY
+AC5415,2,9,Balones,futbol,0,APPLY
+AC5418,1,9,Balones,futbol,0,APPLY
+AO4850,1,9,Balones,futbol,0,APPLY
+AO4856,1,9,Balones,futbol,0,APPLY
+AO4860,1,9,Balones,futbol,0,APPLY
+AO4909,2,9,Balones,futbol,0,APPLY
+AO4851,2,9,Balones,futbol,0,APPLY
+AO4847,1,9,Balones,futbol,0,APPLY
+CZ5358-005,2,1,Zapatillas,urbano,0,APPLY
+CW4555-002,3,1,Zapatillas,urbano,0,APPLY
+AA2146-006,2,1,Zapatillas,urbano,0,APPLY
+CW4555-005,2,1,Zapatillas,urbano,0,APPLY
+CW4555-10,1,1,Zapatillas,urbano,0,APPLY
+CW4555-102,2,1,Zapatillas,urbano,0,APPLY
+CW4555-103,3,1,Zapatillas,urbano,0,APPLY
+CZ5358-200,2,1,Zapatillas,urbano,0,APPLY
+DQ5016-100,2,1,Zapatillas,urbano,0,APPLY
+SC3136-671,2,9,Balones,futbol,0,APPLY
+SC3101-406,1,9,Balones,futbol,0,APPLY
+SC3136-715,1,9,Balones,futbol,0,APPLY
+SC3166-803,1,9,Balones,futbol,0,APPLY
+SC3101-008,1,9,Balones,futbol,0,APPLY
+SC3101-702,1,9,Balones,futbol,0,APPLY
+SC3136-711,1,9,Balones,futbol,0,APPLY
+SC3166-701,1,9,Balones,futbol,0,APPLY
+SC3318-100,1,9,Balones,futbol,0,APPLY
+454331-177,1,9,Zapatillas,futbol,0,APPLY
+509085-013,1,9,Zapatillas,futbol,0,APPLY
+509085-105,1,9,Zapatillas,futbol,0,APPLY
+509085-108,1,9,Zapatillas,futbol,0,APPLY
+509085-618,1,9,Zapatillas,futbol,0,APPLY
+509089-013,1,19,Zapatillas,futbol,0,APPLY
+6207,1,19,Zapatillas,futbol,0,APPLY
+7597,1,19,Zapatillas,futbol,0,APPLY
+7599,1,9,Zapatillas,futbol,0,APPLY
+5205600373379,2,19,Zapatillas,"futbol,sala",0,APPLY
+5205600373287,1,19,Zapatillas,"futbol,sala",0,APPLY
+5205600373294,2,19,Zapatillas,"futbol,sala",0,APPLY
+5205600373300,1,19,Zapatillas,"futbol,sala",0,APPLY
+5205600373317,1,19,Zapatillas,"futbol,sala",0,APPLY
+5205600373348,2,19,Zapatillas,"futbol,sala",0,APPLY
+5205600373355,1,19,Zapatillas,"futbol,sala",0,APPLY
+5205600373362,1,19,Zapatillas,"futbol,sala",0,APPLY
+5205600373416,1,19,Zapatillas,"futbol,sala",0,APPLY
+AF4694,3,9,Zapatillas,futbol,0,APPLY
+AF4697,1,9,Zapatillas,futbol,0,APPLY
+B32793,2,19,Zapatillas,futbol,0,APPLY
+S83159,1,9,Zapatillas,futbol,0,APPLY
+S83186,1,9,Zapatillas,futbol,0,APPLY
+B32948,1,9,Zapatillas,futbol,0,APPLY
+AF4977,2,9,Zapatillas,futbol,0,APPLY
+B32947,1,19,Zapatillas,futbol,0,APPLY
+S74608,1,19,Zapatillas,futbol,0,APPLY
+041442 22,1,7,Zapatillas,futbol,0,APPLY
+030766 01,2,7,Zapatillas,futbol,0,APPLY
+030766 05,1,7,Zapatillas,futbol,0,APPLY
+41480,3,7,Zapatillas,futbol,0,APPLY
+082821 01,1,9,Zapatillas,futbol,0,APPLY
+082821 04,2,9,Zapatillas,futbol,0,APPLY
+104074 01,1,9,Zapatillas,futbol,0,APPLY
+104556 01,1,9,Zapatillas,futbol,0,APPLY
+F87292,1,7,Zapatillas,"futbol,sala",0,APPLY
+F87293,1,7,Zapatillas,"futbol,sala",0,APPLY
+G84138,1,7,Zapatillas,"futbol,sala",0,APPLY
+G73409,1,7,Zapatillas,"futbol,sala",0,APPLY
+W44145,1,7,Zapatillas,"futbol,sala",0,APPLY
+W44150,1,7,Zapatillas,"futbol,sala",0,APPLY
+Z19177,1,7,Zapatillas,"futbol,sala",0,APPLY
+Z19178,1,7,Zapatillas,"futbol,sala",0,APPLY
+G84074,1,7,Zapatillas,futbol,0,APPLY
+D66956,1,19,Zapatillas,futbol,0,APPLY
+F32812,1,9,Zapatillas,futbol,0,APPLY
+M29932,1,19,Zapatillas,futbol,0,APPLY
+Q33670,1,9,Zapatillas,futbol,0,APPLY
+Q33672,1,9,Zapatillas,futbol,0,APPLY
+Q33687,1,9,Zapatillas,futbol,0,APPLY
+Q33938,1,19,Zapatillas,futbol,0,APPLY
+SC2302-407,1,7,Balones,futbol,0,APPLY
+SC2137-410,1,9,Balones,futbol,0,APPLY
+SC2303-301,1,9,Balones,futbol,0,APPLY
+SC2400-814,1,9,Balones,futbol,0,APPLY
+SC2491-665,1,9,Balones,futbol,0,APPLY
+SC2137-601,1,9,Balones,futbol,0,APPLY
+SC3023-060,2,9,Balones,futbol,0,APPLY
+SC3023-625,2,9,Balones,futbol,0,APPLY
+DD2978-100,5,1,Zapatillas,urbano,0,APPLY
+CD6892-009,2,1,Zapatillas,urbano,0,APPLY
+AJ6910-100,3,1,Zapatillas,urbano,0,APPLY
+CD6892-010,3,1,Zapatillas,urbano,0,APPLY
+CD6893-009,2,1,Zapatillas,urbano,0,APPLY
+CD6893-011,2,1,Zapatillas,urbano,0,APPLY
+CD6893-013,2,1,Zapatillas,urbano,0,APPLY
+CK7173-002,2,1,Zapatillas,urbano,0,APPLY
+CP102017M,3,1,Zapatillas,urbano,0,APPLY
+CP101897M,3,1,Zapatillas,urbano,0,APPLY
+CP101903M,3,1,Zapatillas,urbano,0,APPLY
+CP101916M,3,1,Zapatillas,urbano,0,APPLY
+CP102009M,3,1,Zapatillas,urbano,0,APPLY
+CP102016M,3,1,Zapatillas,urbano,0,APPLY
+CP102020M,2,1,Zapatillas,urbano,0,APPLY
+CP102034M,2,1,Zapatillas,urbano,0,APPLY
+2476,4,103,Zapatos de Vestir,vestir,0,APPLY
+1453,4,2,Zapatos de Vestir,vestir,0,APPLY
+1375,1,2,Zapatos de Vestir,vestir,0,APPLY
+1377,4,1;2;12;46,Zapatos de Vestir,vestir,0,APPLY
+6371,1,2,Zapatos de Vestir,vestir,0,APPLY
+9236,1,2,Zapatos de Vestir,vestir,0,APPLY
+2275,1,2,Zapatos de Vestir,vestir,0,APPLY
+6373,1,2,Zapatos de Vestir,vestir,0,APPLY
+ZN5130,1,1,Zapatillas,urbano,0,APPLY
+ZN5131,1,1,Zapatillas,urbano,0,APPLY
+ZN5132,1,1,Zapatillas,urbano,0,APPLY
+ZN5133,1,1,Zapatillas,urbano,0,APPLY
+ZN5134,1,1,Zapatillas,urbano,0,APPLY
+ZN5135,1,1,Zapatillas,urbano,0,APPLY
+ZN5138,1,1,Zapatillas,urbano,0,APPLY
+ZN5139,1,1,Zapatillas,urbano,0,APPLY
+510338-1450,1,19,Balones,"futbol,sala",0,APPLY
+510338-1461,1,19,Balones,"futbol,sala",0,APPLY
+510338-1612,1,19,Balones,"futbol,sala",0,APPLY
+510338-9999,1,19,Balones,"futbol,sala",0,APPLY
+540122-1540,1,19,Balones,"futbol,sala",0,APPLY
+540122-1960,1,19,Balones,"futbol,sala",0,APPLY
+540122-9999,1,19,Balones,"futbol,sala",0,APPLY
+540125-1610,1,19,Balones,"futbol,sala",0,APPLY
+F93365,1,9,Balones,futbol,0,APPLY
+F93369,1,9,Balones,futbol,0,APPLY
+G73499,1,9,Balones,futbol,0,APPLY
+CW4134,1,9,Balones,futbol,0,APPLY
+CW4140,2,9,Balones,futbol,0,APPLY
+CW4144,1,9,Balones,futbol,0,APPLY
+DN8676,1,9,Balones,futbol,0,APPLY
+DN8679,1,9,Balones,futbol,0,APPLY
+2112295BR,2,19,Zapatillas,futbol,0,APPLY
+21165259J,2,9,Zapatillas,futbol,0,APPLY
+21122823A,2,9,Zapatillas,futbol,0,APPLY
+21122923A,1,19,Zapatillas,futbol,0,APPLY
+21122923D,1,9,Zapatillas,futbol,0,APPLY
+2112295BU,2,9,Zapatillas,futbol,0,APPLY
+T6961,1,9,Zapatillas,futbol,0,APPLY
+T6981,1,19,Zapatillas,futbol,0,APPLY
+525168-173,1,19,Zapatillas,futbol,0,APPLY
+525168-710,1,19,Zapatillas,futbol,0,APPLY
+525168-800,1,19,Zapatillas,futbol,0,APPLY
+525168-810,1,19,Zapatillas,futbol,0,APPLY
+525168-303,1,19,Zapatillas,futbol,0,APPLY
+SC2120-071,1,9,Zapatillas,futbol,0,APPLY
+SC2120-447,1,9,Zapatillas,futbol,0,APPLY
+SC2120-733,1,9,Zapatillas,futbol,0,APPLY
+SC3039-406,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC3039-012,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC3039-060,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC3039-104,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC3039-410,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC3039-673,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC3039-731,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC3039-834,1,9,Zapatillas,"futbol,sala",0,APPLY
+127104,1,33,Zapatos de Vestir,vestir,0,APPLY
+5202,1,2,Zapatos de Vestir,vestir,0,APPLY
+5205,1,2,Zapatos de Vestir,vestir,0,APPLY
+6208,2,2;14,Zapatos de Vestir,vestir,0,APPLY
+1103,1,2,Zapatos de Vestir,vestir,0,APPLY
+8202,1,2,Zapatos de Vestir,vestir,0,APPLY
+1106,4,1;2;19,Zapatos de Vestir,vestir,0,APPLY
+DA5381-109,2,1,Zapatillas,urbano,0,APPLY
+DD0162-001,2,1,Zapatillas,urbano,0,APPLY
+DA5380-108,2,1,Zapatillas,urbano,0,APPLY
+DA5380-109,2,1,Zapatillas,urbano,0,APPLY
+DA5380-111,2,1,Zapatillas,urbano,0,APPLY
+DA5382-108,2,1,Zapatillas,urbano,0,APPLY
+DA5382-109,2,1,Zapatillas,urbano,0,APPLY
+DC3728-001,6,1,Zapatillas,running,0,APPLY
+BQ3204-404,2,1,Zapatillas,running,0,APPLY
+BQ5671-020,2,1,Zapatillas,running,0,APPLY
+DC3728-007,2,1,Zapatillas,running,0,APPLY
+DC3729-005,3,1,Zapatillas,running,0,APPLY
+DC3729-400,2,1,Zapatillas,running,0,APPLY
+DC3729-600,2,1,Zapatillas,running,0,APPLY
+91101,5,2;9,Zapatos de Vestir,vestir,0,APPLY
+96401,3,2,Zapatos de Vestir,vestir,0,APPLY
+48302,1,2,Zapatos de Vestir,vestir,0,APPLY
+48303,1,2,Zapatos de Vestir,vestir,0,APPLY
+68901,2,2,Zapatos de Vestir,vestir,0,APPLY
+71602,1,2,Zapatos de Vestir,vestir,0,APPLY
+71603,1,2,Zapatos de Vestir,vestir,0,APPLY
+3551,3,2;64,Zapatos de Vestir,vestir,0,APPLY
+2652,2,2,Zapatos de Vestir,vestir,0,APPLY
+4053,1,2,Zapatos de Vestir,vestir,0,APPLY
+1552,2,2,Zapatos de Vestir,vestir,0,APPLY
+9753,1,2,Zapatos de Vestir,vestir,0,APPLY
+1753,3,1;2,Zapatos de Vestir,vestir,0,APPLY
+1751,3,105,Zapatos de Vestir,vestir,0,APPLY
+180722-02,2,2,Zapatos de Vestir,vestir,0,APPLY
+180764-04,1,2,Zapatos de Vestir,vestir,0,APPLY
+180767-05,2,2,Zapatos de Vestir,vestir,0,APPLY
+180903-04,2,2,Zapatos de Vestir,vestir,0,APPLY
+181201-06,2,2,Zapatos de Vestir,vestir,0,APPLY
+181252-04,1,2,Zapatos de Vestir,vestir,0,APPLY
+122115-01,1,2,Zapatos de Vestir,vestir,0,APPLY
+13208,2,1,Zapatillas,skate,0,APPLY
+14079,2,1,Zapatillas,skate,0,APPLY
+13209,2,1,Zapatillas,skate,0,APPLY
+13092,2,1,Zapatillas,skate,0,APPLY
+13094,2,1,Zapatillas,skate,0,APPLY
+13091,2,1,Zapatillas,skate,0,APPLY
+13093,2,1,Zapatillas,skate,0,APPLY
+13066,3,1,Zapatillas,skate,0,APPLY
+13079,3,1,Zapatillas,skate,0,APPLY
+13067,3,1,Zapatillas,skate,0,APPLY
+13064,3,1,Zapatillas,skate,0,APPLY
+13110,2,1,Zapatillas,skate,0,APPLY
+13173,2,1,Zapatillas,skate,0,APPLY
+13196,2,1,Zapatillas,skate,0,APPLY
+200-GN,3,9,Zapatillas,futbol,0,APPLY
+100-BL,2,9,Zapatillas,futbol,0,APPLY
+100-NE,2,9,Zapatillas,futbol,0,APPLY
+400-NA,3,9,Zapatillas,futbol,0,APPLY
+400-NN,2,9,Zapatillas,futbol,0,APPLY
+400-NV,2,9,Zapatillas,futbol,0,APPLY
+200-BO,2,9,Zapatillas,futbol,0,APPLY
+304252 01,1,9,Zapatillas,futbol,0,APPLY
+102346 08,2,9,Zapatillas,futbol,0,APPLY
+102346 02,1,9,Zapatillas,futbol,0,APPLY
+102346 01,1,9,Zapatillas,futbol,0,APPLY
+102346 11,2,9,Zapatillas,futbol,0,APPLY
+304252 03,1,9,Zapatillas,futbol,0,APPLY
+102346 10,1,9,Zapatillas,futbol,0,APPLY
+472547-703,1,9,Zapatillas,futbol,0,APPLY
+472547-808,1,9,Zapatillas,futbol,0,APPLY
+472547-060,1,9,Zapatillas,futbol,0,APPLY
+472547-170,1,9,Zapatillas,futbol,0,APPLY
+472547-400,1,9,Zapatillas,futbol,0,APPLY
+472547-610,1,9,Zapatillas,futbol,0,APPLY
+472547-643,1,9,Zapatillas,futbol,0,APPLY
+843881-001,1,19,Zapatillas,running,0,APPLY
+843881-003,1,19,Zapatillas,running,0,APPLY
+843881-007,1,19,Zapatillas,running,0,APPLY
+843881-008,1,19,Zapatillas,running,0,APPLY
+843881-010,1,19,Zapatillas,running,0,APPLY
+843881-403,1,19,Zapatillas,running,0,APPLY
+843881-011,1,19,Zapatillas,running,0,APPLY
+AF5145,2,9,Zapatillas,futbol,0,APPLY
+AF5146,2,9,Zapatillas,futbol,0,APPLY
+AQ3428,1,19,Zapatillas,futbol,0,APPLY
+AQ3429,1,19,Zapatillas,futbol,0,APPLY
+AQ3438,1,9,Zapatillas,futbol,0,APPLY
+AQ3439,1,9,Zapatillas,futbol,0,APPLY
+AQ3442,1,9,Zapatillas,futbol,0,APPLY
+F32747,1,9,Zapatillas,futbol,0,APPLY
+F32763,1,19,Zapatillas,futbol,0,APPLY
+G65437,1,9,Zapatillas,futbol,0,APPLY
+G95011,1,19,Zapatillas,futbol,0,APPLY
+Q33915,1,9,Zapatillas,futbol,0,APPLY
+Q33931,1,19,Zapatillas,futbol,0,APPLY
+V21412,1,9,Zapatillas,futbol,0,APPLY
+R2735,1,19,Zapatillas,futbol,0,APPLY
+Q9804000,1,19,Zapatillas,futbol,0,APPLY
+R2736,1,19,Zapatillas,futbol,0,APPLY
+R2737,1,19,Zapatillas,futbol,0,APPLY
+R2750,1,19,Zapatillas,futbol,0,APPLY
+Q7236000,1,9,Zapatillas,futbol,0,APPLY
+R0267,1,19,Zapatillas,futbol,0,APPLY
+TOLS201PM,1,9,Zapatillas,futbol,0,APPLY
+TOLS201PT,1,19,Zapatillas,futbol,0,APPLY
+TOLS202PM,1,9,Zapatillas,futbol,0,APPLY
+TOLS202PT,1,19,Zapatillas,futbol,0,APPLY
+TOLS203PM,1,9,Zapatillas,futbol,0,APPLY
+TOLS203PT,1,19,Zapatillas,futbol,0,APPLY
+TOLS80424,2,9,Zapatillas,futbol,0,APPLY
+U17ZICO-BKB,1,19,Zapatillas,futbol,0,APPLY
+U17ZICO2-Y70,1,19,Zapatillas,futbol,0,APPLY
+U17ZICO-BKG,1,19,Zapatillas,futbol,0,APPLY
+U17ZICO-BLG,1,19,Zapatillas,futbol,0,APPLY
+U17ZICO-WOR,1,19,Zapatillas,futbol,0,APPLY
+U17ZICO2-002,1,19,Zapatillas,futbol,0,APPLY
+U17ZICO2-BLY,1,19,Zapatillas,futbol,0,APPLY
+72040101,1,33,Zapatillas,urbano,0,APPLY
+72020101,1,33,Zapatillas,urbano,0,APPLY
+7208,2,12;56,Zapatillas,urbano,0,APPLY
+7210,1,56,Zapatillas,urbano,0,APPLY
+1208-10,1,33,Zapatillas,urbano,0,APPLY
+1208-32,1,33,Zapatillas,urbano,0,APPLY
+422201,1,33,Zapatillas,urbano,0,APPLY
+422884,1,33,Zapatillas,urbano,0,APPLY
+121410,1,33,Zapatillas,urbano,0,APPLY
+1224-30,1,33,Zapatillas,urbano,0,APPLY
+122210,1,33,Zapatillas,urbano,0,APPLY
+221410,1,1,Zapatillas,urbano,0,APPLY
+030361 01,1,7,Zapatillas,futbol,0,APPLY
+030361 02,1,7,Zapatillas,futbol,0,APPLY
+081872 01,1,9,Zapatillas,futbol,0,APPLY
+081872 02,1,9,Zapatillas,futbol,0,APPLY
+81872 02,1,9,Zapatillas,futbol,0,APPLY
+81872 01,1,9,Zapatillas,futbol,0,APPLY
+S90370,1,7,Zapatillas,"futbol,sala",0,APPLY
+S90371,1,7,Zapatillas,"futbol,sala",0,APPLY
+CW9715,1,7,Zapatillas,"futbol,sala",0,APPLY
+CW9717,1,7,Zapatillas,"futbol,sala",0,APPLY
+DY2578,2,7,Zapatillas,"futbol,sala",0,APPLY
+DY2579,2,7,Zapatillas,"futbol,sala",0,APPLY
+ZM5023,2,1,Zapatillas,skate,0,APPLY
+ZM5006,1,1,Zapatillas,skate,0,APPLY
+ZM5007,1,1,Zapatillas,skate,0,APPLY
+ZM5008,1,1,Zapatillas,skate,0,APPLY
+ZM5022,1,1,Zapatillas,skate,0,APPLY
+ZM51242171,1,1,Zapatillas,skate,0,APPLY
+CA100185M,7,84,Zapatillas,urbano,0,APPLY
+CA100183M,3,1,Zapatillas,urbano,0,APPLY
+CA100184M,3,1,Zapatillas,urbano,0,APPLY
+CA100212Y,2,1,Zapatillas,urbano,0,APPLY
+CA100309W,2,1,Zapatillas,urbano,0,APPLY
+CA100313W,3,1,Zapatillas,urbano,0,APPLY
+K18669-20B,3,1,Zapatillas,urbano,0,APPLY
+K18669-20A,3,1,Zapatillas,urbano,0,APPLY
+K18669-90A,3,1,Zapatillas,urbano,0,APPLY
+K18669-70A,3,1,Zapatillas,urbano,0,APPLY
+K18669-70B,3,1,Zapatillas,urbano,0,APPLY
+K18669-90B,3,1,Zapatillas,urbano,0,APPLY
+CA100085M,4,1,Zapatillas,urbano,0,APPLY
+CP101299M,3,1,Zapatillas,urbano,0,APPLY
+CA100083M,3,1,Zapatillas,urbano,0,APPLY
+CP101223W,3,1,Zapatillas,urbano,0,APPLY
+CP101226W,2,1,Zapatillas,urbano,0,APPLY
+CP101300M,6,1,Zapatillas,urbano,0,APPLY
+VN-0U1WAML,1,1,Zapatillas,skate,0,APPLY
+VN-0TSW9V7,1,1,Zapatillas,skate,0,APPLY
+VN-0QEV9RW,1,1,Zapatillas,skate,0,APPLY
+VN-0U1W6LM,2,1,Zapatillas,skate,0,APPLY
+VN-0U1WAIJ,1,1,Zapatillas,skate,0,APPLY
+VN-0U1WALT,1,1,Zapatillas,skate,0,APPLY
+VN-OKOF7XK,1,1,Zapatillas,skate,0,APPLY
+VN-0RQX14A,1,1,Zapatillas,skate,0,APPLY
+VN-OKC47OG,1,1,Zapatillas,skate,0,APPLY
+VN-OKOF7XP,1,1,Zapatillas,skate,0,APPLY
+VN-ONJ07RM,1,1,Zapatillas,skate,0,APPLY
+VN-ONJ07R2,1,1,Zapatillas,skate,0,APPLY
+CA100152M,4,1,Sandalias y Chalas,urbano,0,APPLY
+CA100153M,3,1,Sandalias y Chalas,urbano,0,APPLY
+CA100154Y,4,1,Sandalias y Chalas,urbano,0,APPLY
+CA100155Y,3,1,Sandalias y Chalas,urbano,0,APPLY
+CA100156M,2,1,Sandalias y Chalas,urbano,0,APPLY
+CA100156Y,4,1,Sandalias y Chalas,urbano,0,APPLY
+CP101118M,5,1,Zapatillas,urbano,0,APPLY
+CP101118Y,3,1,Zapatillas,urbano,0,APPLY
+CP101163M,6,1,Zapatillas,urbano,0,APPLY
+CP101163Y,3,1,Zapatillas,urbano,0,APPLY
+CP101164M,4,1,Zapatillas,urbano,0,APPLY
+CP101165Y,3,1,Zapatillas,urbano,0,APPLY
+SP003233,1,1,Zapatillas,urbano,0,APPLY
+SP003375,2,1,Zapatillas,urbano,0,APPLY
+SP003520,1,1,Zapatillas,urbano,0,APPLY
+SP004585,1,1,Zapatillas,urbano,0,APPLY
+660066,2,1,Zapatillas,urbano,0,APPLY
+SP0000990,1,1,Zapatillas,urbano,0,APPLY
+4570,1,2,Zapatos de Vestir,vestir,0,APPLY
+5523,1,2,Zapatos de Vestir,vestir,0,APPLY
+5533,1,2,Zapatos de Vestir,vestir,0,APPLY
+6788,3,1;2;14,Zapatos de Vestir,vestir,0,APPLY
+7403,2,2;11,Zapatos de Vestir,vestir,0,APPLY
+772,1,2,Zapatos de Vestir,vestir,0,APPLY
+5907,1,2,Zapatos de Vestir,vestir,0,APPLY
+6706,1,2,Zapatos de Vestir,vestir,0,APPLY
+6708,1,2,Zapatos de Vestir,vestir,0,APPLY
+6803,1,2,Zapatos de Vestir,vestir,0,APPLY
+8107,1,2,Zapatos de Vestir,vestir,0,APPLY
+9202,1,2,Zapatos de Vestir,vestir,0,APPLY
+ZN3633,2,1,Zapatillas,urbano,0,APPLY
+ZN3632,1,1,Zapatillas,urbano,0,APPLY
+ZN3634,1,1,Zapatillas,urbano,0,APPLY
+ZN3635,1,1,Zapatillas,urbano,0,APPLY
+ZF6021,1,1,Zapatillas,urbano,0,APPLY
+ZF6022,1,1,Zapatillas,urbano,0,APPLY
+13052,2,1,Zapatillas,skate,0,APPLY
+13051,3,1,Zapatillas,skate,0,APPLY
+13046,5,1,Zapatillas,skate,0,APPLY
+13026,2,1,Zapatillas,skate,0,APPLY
+13096,2,1,Zapatillas,skate,0,APPLY
+13095,2,1,Zapatillas,skate,0,APPLY
+082585 01,3,9,Balones,futbol,0,APPLY
+082668 01,1,9,Balones,futbol,0,APPLY
+082483 02,1,9,Balones,futbol,0,APPLY
+082811 01,2,9,Balones,futbol,0,APPLY
+082815 01,1,9,Balones,futbol,0,APPLY
+032897 01,4,9,Balones,futbol,0,APPLY
+Q2586000,1,9,Zapatillas,futbol,0,APPLY
+Q2590000,1,9,Zapatillas,futbol,0,APPLY
+Q2627000,1,9,Zapatillas,futbol,0,APPLY
+Q2602000,1,9,Zapatillas,futbol,0,APPLY
+Q5085000,1,9,Zapatillas,futbol,0,APPLY
+R7983,1,9,Zapatillas,futbol,0,APPLY
+U13TRBN1-BTRW,1,19,Zapatillas,futbol,0,APPLY
+80415U-YW5,2,9;19,Zapatillas,futbol,0,APPLY
+U12TRBN5-BTRW,1,9,Zapatillas,futbol,0,APPLY
+U12TRBN5-BWCB,1,9,Zapatillas,futbol,0,APPLY
+U12TRBN5-DNWS,1,9,Zapatillas,futbol,0,APPLY
+U13TRBN1-BWCB,1,9,Zapatillas,futbol,0,APPLY
+454334-018,2,19,Zapatillas,futbol,0,APPLY
+454334-130,1,19,Zapatillas,futbol,0,APPLY
+454334-134,1,19,Zapatillas,futbol,0,APPLY
+454334-160,1,19,Zapatillas,futbol,0,APPLY
+454334-177,1,19,Zapatillas,futbol,0,APPLY
+454334-140,1,19,Zapatillas,futbol,0,APPLY
+472560-007,1,9,Zapatillas,futbol,0,APPLY
+472560-060,1,9,Zapatillas,futbol,0,APPLY
+472560-480,1,9,Zapatillas,futbol,0,APPLY
+472560-610,1,9,Zapatillas,futbol,0,APPLY
+472543-060,1,19,Zapatillas,futbol,0,APPLY
+472543-703,1,19,Zapatillas,futbol,0,APPLY
+509123-106,1,9,Zapatillas,futbol,0,APPLY
+509123-146,1,9,Zapatillas,futbol,0,APPLY
+509123-376,1,9,Zapatillas,futbol,0,APPLY
+509123-486,1,9,Zapatillas,futbol,0,APPLY
+509123-800,1,9,Zapatillas,futbol,0,APPLY
+537920-014,1,9,Zapatillas,futbol,0,APPLY
+525173-173,1,9,Zapatillas,futbol,0,APPLY
+525173-303,2,9,Zapatillas,futbol,0,APPLY
+525173-470,1,9,Zapatillas,futbol,0,APPLY
+525173-800,1,9,Zapatillas,futbol,0,APPLY
+525173-810,1,9,Zapatillas,futbol,0,APPLY
+9553,1,9,Zapatillas,futbol,0,APPLY
+651543-130,1,19,Zapatillas,futbol,0,APPLY
+651543-318,1,19,Zapatillas,futbol,0,APPLY
+651549-130,1,19,Zapatillas,futbol,0,APPLY
+651549-318,1,19,Zapatillas,futbol,0,APPLY
+651329-318,1,19,Zapatillas,futbol,0,APPLY
+651329-858,1,19,Zapatillas,futbol,0,APPLY
+Q0082000,1,9,Zapatillas,futbol,0,APPLY
+Q0092000,1,9,Zapatillas,futbol,0,APPLY
+Q0103000,1,19,Zapatillas,futbol,0,APPLY
+Q1276000,1,9,Zapatillas,futbol,0,APPLY
+Q1277000,1,19,Zapatillas,futbol,0,APPLY
+Q1550000,1,9,Zapatillas,futbol,0,APPLY
+Q9798000,1,9,Zapatillas,futbol,0,APPLY
+Q9799000,1,9,Zapatillas,futbol,0,APPLY
+Q9806000,1,19,Zapatillas,futbol,0,APPLY
+Q9808000,1,19,Zapatillas,futbol,0,APPLY
+R2576,1,9,Zapatillas,futbol,0,APPLY
+R2582,1,19,Zapatillas,futbol,0,APPLY
+SC1843-642,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC1843-700,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC2005-071,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC2005-460,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC2005-702,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC2168-751,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC1900-533,1,9,Zapatillas,futbol,0,APPLY
+SC2072-067,1,9,Zapatillas,futbol,0,APPLY
+SC2072-400,1,9,Zapatillas,futbol,0,APPLY
+SC2205-007,1,9,Zapatillas,futbol,0,APPLY
+SC2205-438,1,9,Zapatillas,futbol,0,APPLY
+SC2205-780,1,9,Zapatillas,futbol,0,APPLY
+8434666010219,2,9,Guantes,futbol,0,APPLY
+8434666011216,2,9,Guantes,futbol,0,APPLY
+8434666012169,2,9,Guantes,futbol,0,APPLY
+8434666044146,2,9,Guantes,futbol,0,APPLY
+8434666044160,2,9,Guantes,futbol,0,APPLY
+8434666044184,2,9,Guantes,futbol,0,APPLY
+1372637-001,2,2,Chaquetas y Polerones,,0,APPLY
+1372637-369,2,2,Chaquetas y Polerones,,0,APPLY
+1372637-695,2,2,Chaquetas y Polerones,,0,APPLY
+1370356-600,2,2,Chaquetas y Polerones,,0,APPLY
+1364180-012,4,2,Chaquetas y Polerones,,0,APPLY
+5-NATHAN-91,3,56,Sandalias y Chalas,urbano,0,APPLY
+5-NATAHAN-72,5,56,Sandalias y Chalas,urbano,0,APPLY
+5-OSLO-2,1,56,Sandalias y Chalas,urbano,0,APPLY
+5-NATAHAN-91,1,56,Sandalias y Chalas,urbano,0,APPLY
+5-NATHAN-77,3,56,Sandalias y Chalas,urbano,0,APPLY
+030498 02,1,7,Zapatillas,futbol,0,APPLY
+030498 04,1,7,Zapatillas,futbol,0,APPLY
+030498 05,1,7,Zapatillas,futbol,0,APPLY
+030498 03,1,7,Zapatillas,futbol,0,APPLY
+081963 01,1,9,Zapatillas,futbol,0,APPLY
+F87187,1,7,Zapatillas,futbol,0,APPLY
+F87188,1,7,Zapatillas,futbol,0,APPLY
+M38737,1,7,Zapatillas,futbol,0,APPLY
+G73418,1,7,Zapatillas,futbol,0,APPLY
+G73420,1,7,Zapatillas,futbol,0,APPLY
+F87290,1,7,Zapatillas,futbol,0,APPLY
+F87291,1,7,Zapatillas,futbol,0,APPLY
+G73412,1,7,Zapatillas,futbol,0,APPLY
+Z19175,1,7,Zapatillas,futbol,0,APPLY
+Z19176,1,7,Zapatillas,futbol,0,APPLY
+G84070,1,7,Zapatillas,futbol,0,APPLY
+X16996,1,7,Zapatillas,futbol,0,APPLY
+X17001,1,7,Zapatillas,futbol,0,APPLY
+Z19186,1,7,Zapatillas,futbol,0,APPLY
+Z19187,1,7,Zapatillas,futbol,0,APPLY
+SC2014-162,1,7,Zapatillas,"futbol,sala",0,APPLY
+SC2743-022,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC2753-010,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC1840-103,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC1840-140,1,9,Zapatillas,"futbol,sala",0,APPLY
+5208340202824,2,7,Equipamiento Fitness,natacion,0,APPLY
+5208340602020,3,7,Equipamiento Fitness,natacion,0,APPLY
+5208340602822,3,7,Equipamiento Fitness,natacion,0,APPLY
+5208340602952,2,7,Equipamiento Fitness,natacion,0,APPLY
+5208340602983,2,7,Equipamiento Fitness,natacion,0,APPLY
+100250388,4,1,Zapatillas,urbano,0,APPLY
+100257646,3,1,Zapatillas,urbano,0,APPLY
+100257644,3,1,Zapatillas,urbano,0,APPLY
+100250378,3,1,Zapatillas,urbano,0,APPLY
+100262448,3,1,Zapatillas,urbano,0,APPLY
+CP101202W,4,1,Zapatillas,urbano,0,APPLY
+CA100026W,4,1,Zapatillas,urbano,0,APPLY
+CA100024W,5,1,Zapatillas,urbano,0,APPLY
+CP101283M,5,1,Zapatillas,urbano,0,APPLY
+CP101285M,5,1,Zapatillas,urbano,0,APPLY
+AT4662-408,3,1,Zapatillas,running,0,APPLY
+AT4665-606,4,1,Zapatillas,running,0,APPLY
+AT4663-001,4,1,Zapatillas,running,0,APPLY
+AT4663-408,3,1,Zapatillas,running,0,APPLY
+AT4665-408,4,1,Zapatillas,running,0,APPLY
+DH2987-103,3,1,Zapatillas,running,0,APPLY
+DA2776-003,3,1,Zapatillas,running,0,APPLY
+DA2776-501,3,1,Zapatillas,running,0,APPLY
+DA2776-601,3,1,Zapatillas,running,0,APPLY
+DA2778-601,3,1,Zapatillas,running,0,APPLY
+VN000KI5186,2,1,Zapatillas,skate,0,APPLY
+VN000KI5187,1,1,Zapatillas,skate,0,APPLY
+VN000ZNR4WV,2,1,Zapatillas,skate,0,APPLY
+VN0A2XSPJKT,1,1,Zapatillas,skate,0,APPLY
+VN0A45JTUZN,2,1,Zapatillas,skate,0,APPLY
+VN-0GYQBKA,2,1,Zapatillas,skate,0,APPLY
+VN-0T9N65L,1,1,Zapatillas,skate,0,APPLY
+VN-0T9N9UO,1,1,Zapatillas,skate,0,APPLY
+VN-0T9NA4N,1,1,Zapatillas,skate,0,APPLY
+VN-0T9NAJM,1,1,Zapatillas,skate,0,APPLY
+CP101169Y,3,1,Zapatillas,urbano,0,APPLY
+CP101166M,4,1,Zapatillas,urbano,0,APPLY
+CP101167M,4,1,Zapatillas,urbano,0,APPLY
+CP101168M,6,1,Zapatillas,urbano,0,APPLY
+CP101168Y,3,1,Zapatillas,urbano,0,APPLY
+7322-101,2,2,Zapatos de Vestir,vestir,0,APPLY
+7016-123,3,2,Zapatos de Vestir,vestir,0,APPLY
+7322-103,2,2,Zapatos de Vestir,vestir,0,APPLY
+7013-531,1,2,Zapatos de Vestir,vestir,0,APPLY
+7305-119,1,2,Zapatos de Vestir,vestir,0,APPLY
+216007BYL,2,2,Equipamiento Fitness,futbol,0,APPLY
+216007CYM,2,2,Equipamiento Fitness,futbol,0,APPLY
+216007EYM,2,2,Equipamiento Fitness,futbol,0,APPLY
+216007QS,2,2,Equipamiento Fitness,futbol,0,APPLY
+216007A,1,4,Equipamiento Fitness,futbol,0,APPLY
+075487 43,5,2,Bolsos y Mochilas,,0,APPLY
+075487 44,3,2,Bolsos y Mochilas,,0,APPLY
+075487 48,5,2,Bolsos y Mochilas,,0,APPLY
+075487 49,7,2,Bolsos y Mochilas,,0,APPLY
+075487 38,1,2,Bolsos y Mochilas,,0,APPLY
+3371,1,2,Zapatos de Vestir,vestir,0,APPLY
+3377,1,2,Zapatos de Vestir,vestir,0,APPLY
+3384,1,2,Zapatos de Vestir,vestir,0,APPLY
+3393,1,2,Zapatos de Vestir,vestir,0,APPLY
+3424,2,2;9,Zapatos de Vestir,vestir,0,APPLY
+AD90210M-WS,3,1,Zapatillas,basket,0,APPLY
+AD90210M-B,3,1,Zapatillas,basket,0,APPLY
+AD90210G-YOX,2,1,Zapatillas,basket,0,APPLY
+AD90210M-R,3,1,Zapatillas,basket,0,APPLY
+AD90210M-WB,3,1,Zapatillas,basket,0,APPLY
+AD90179M-R,4,1,Zapatillas,basket,0,APPLY
+AD90179M-BY,4,1,Zapatillas,basket,0,APPLY
+AD90179B-VR,2,1,Zapatillas,basket,0,APPLY
+AD90179M-WD,2,1,Zapatillas,basket,0,APPLY
+AD90179M-B,2,1,Zapatillas,basket,0,APPLY
+13197,3,1,Zapatillas,skate,0,APPLY
+13194,2,1,Zapatillas,skate,0,APPLY
+13146,2,1,Zapatillas,skate,0,APPLY
+13216,2,1,Zapatillas,skate,0,APPLY
+13217,2,1,Zapatillas,skate,0,APPLY
+510742-1090,2,19,Balones,futbol,0,APPLY
+510392-2420,1,19,Balones,futbol,0,APPLY
+510392-4240,1,19,Balones,futbol,0,APPLY
+510742-1830,1,19,Balones,futbol,0,APPLY
+510745-1970,2,19,Balones,futbol,0,APPLY
+SC2752-810,2,9,Zapatillas,"futbol,sala",0,APPLY
+SC2587-787,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC2752-010,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC2752-600,1,9,Zapatillas,"futbol,sala",0,APPLY
+SC2910-100,1,9,Zapatillas,"futbol,sala",0,APPLY
+213208,2,4,Equipamiento Fitness,futbol,0,APPLY
+214020,1,4,Equipamiento Fitness,futbol,0,APPLY
+217006,6,4,Equipamiento Fitness,futbol,0,APPLY
+217007,2,4,Equipamiento Fitness,futbol,0,APPLY
+1033216008L,1,4,Equipamiento Fitness,futbol,0,APPLY
+216007AXL,1,4,Equipamiento Fitness,futbol,0,APPLY
+219009,2,4,Equipamiento Fitness,futbol,0,APPLY
+2012A,1,4,Equipamiento Fitness,futbol,0,APPLY
+2012J,1,4,Equipamiento Fitness,futbol,0,APPLY
+21100,1,4,Equipamiento Fitness,futbol,0,APPLY
+082974 09,2,19,Zapatillas,"futbol,sala",0,APPLY
+082973 01,1,19,Zapatillas,"futbol,sala",0,APPLY
+082974 02,2,19,Zapatillas,"futbol,sala",0,APPLY
+082974 08,1,19,Zapatillas,"futbol,sala",0,APPLY
+082974 03,1,19,Zapatillas,"futbol,sala",0,APPLY
+081842 01,1,9,Zapatillas,futbol,0,APPLY
+081842 02,1,9,Zapatillas,futbol,0,APPLY
+81842 01,1,9,Zapatillas,futbol,0,APPLY
+81842 03,1,9,Zapatillas,futbol,0,APPLY
+081842 03,1,9,Zapatillas,futbol,0,APPLY
+083410 01,2,9,Zapatillas,"futbol,sala",0,APPLY
+083410 02,2,9,Zapatillas,"futbol,sala",0,APPLY
+083410 03,3,9,Zapatillas,"futbol,sala",0,APPLY
+082974 04,1,19,Zapatillas,"futbol,sala",0,APPLY
+082974 06,1,19,Zapatillas,"futbol,sala",0,APPLY
+3610,1,19,Zapatillas,futbol,0,APPLY
+G65169,1,19,Zapatillas,futbol,0,APPLY
+M19883,1,9,Zapatillas,futbol,0,APPLY
+M19885,1,19,Zapatillas,futbol,0,APPLY
+V23556,1,9,Zapatillas,futbol,0,APPLY
+415130-003,1,19,Zapatillas,"futbol,sala",0,APPLY
+415130-104,1,19,Zapatillas,"futbol,sala",0,APPLY
+415130-108,1,19,Zapatillas,"futbol,sala",0,APPLY
+415130-707,1,19,Zapatillas,"futbol,sala",0,APPLY
+415130-004,1,19,Zapatillas,"futbol,sala",0,APPLY
+441994-505,1,19,Zapatillas,futbol,0,APPLY
+441994-754,1,19,Zapatillas,futbol,0,APPLY
+476710-464,1,19,Zapatillas,futbol,0,APPLY
+441994-403,1,19,Zapatillas,futbol,0,APPLY
+441994-800,1,19,Zapatillas,futbol,0,APPLY
+442005-051,1,9,Zapatillas,futbol,0,APPLY
+442005-403,1,9,Zapatillas,futbol,0,APPLY
+442005-505,1,9,Zapatillas,futbol,0,APPLY
+442005-800,1,19,Zapatillas,futbol,0,APPLY
+476708-464,1,9,Zapatillas,futbol,0,APPLY
+4573,1,19,Zapatillas,futbol,0,APPLY
+5416,1,9,Zapatillas,futbol,0,APPLY
+8879,1,19,Zapatillas,futbol,0,APPLY
+8881,1,19,Zapatillas,futbol,0,APPLY
+8893,1,9,Zapatillas,futbol,0,APPLY
+509089-001,1,19,Zapatillas,futbol,0,APPLY
+509089-010,1,19,Zapatillas,futbol,0,APPLY
+509089-108,1,19,Zapatillas,futbol,0,APPLY
+509089-419,1,19,Zapatillas,futbol,0,APPLY
+509089-105,1,19,Zapatillas,futbol,0,APPLY
+510720-1150,1,19,Balones,futbol,0,APPLY
+510720-1170,1,19,Balones,futbol,0,APPLY
+510730-1450,1,19,Balones,futbol,0,APPLY
+511241-1040,1,19,Balones,futbol,0,APPLY
+520167-1950,1,19,Balones,futbol,0,APPLY
+5205091532736,2,4,Equipamiento Fitness,futbol,0,APPLY
+5205091532804,2,4,Equipamiento Fitness,futbol,0,APPLY
+5205091533733,2,4,Equipamiento Fitness,futbol,0,APPLY
+5205091533757,2,4,Equipamiento Fitness,futbol,0,APPLY
+5205091533801,4,4,Equipamiento Fitness,futbol,0,APPLY
+631521-008,1,9,Zapatillas,futbol,0,APPLY
+631521-010,1,9,Zapatillas,futbol,0,APPLY
+631521-104,1,9,Zapatillas,futbol,0,APPLY
+631521-418,1,9,Zapatillas,futbol,0,APPLY
+631521-810,1,9,Zapatillas,futbol,0,APPLY
+66143999007,3,9,Equipamiento Fitness,futbol,0,APPLY
+66143090254,2,9,Equipamiento Fitness,futbol,0,APPLY
+66143291002,4,9,Equipamiento Fitness,futbol,0,APPLY
+66143291019,3,9,Equipamiento Fitness,futbol,0,APPLY
+66143291040,2,9,Equipamiento Fitness,futbol,0,APPLY
+7015,1,9,Zapatillas,futbol,0,APPLY
+7017,2,7;9,Zapatillas,futbol,0,APPLY
+8660,1,9,Zapatillas,futbol,0,APPLY
+8856,1,9,Zapatillas,futbol,0,APPLY
+G40286,1,9,Zapatillas,futbol,0,APPLY
+802260U-137,1,9,Zapatillas,futbol,0,APPLY
+802260U-YW5,1,19,Zapatillas,futbol,0,APPLY
+802260U-YWD,1,19,Zapatillas,futbol,0,APPLY
+85563U-090,1,19,Zapatillas,futbol,0,APPLY
+85563U-096,1,19,Zapatillas,futbol,0,APPLY
+80260U-3YO,1,19,Zapatillas,futbol,0,APPLY
+80260U-944,1,19,Zapatillas,futbol,0,APPLY
+80260U-YW6,1,19,Zapatillas,futbol,0,APPLY
+80260U-YWD,1,19,Zapatillas,futbol,0,APPLY
+85328U-M29,1,19,Zapatillas,futbol,0,APPLY
+819300-006,1,19,Zapatillas,running,0,APPLY
+819300-402,1,19,Zapatillas,running,0,APPLY
+819300-001,1,19,Zapatillas,running,0,APPLY
+819300-002,1,19,Zapatillas,running,0,APPLY
+819300-406,1,19,Zapatillas,running,0,APPLY
+844408-061,1,9,Zapatillas,futbol,0,APPLY
+844408-801,1,9,Zapatillas,futbol,0,APPLY
+844408-808,1,9,Zapatillas,futbol,0,APPLY
+844408-107,1,9,Zapatillas,futbol,0,APPLY
+844420-107,1,9,Zapatillas,futbol,0,APPLY
+85494U-090,1,19,Zapatillas,futbol,0,APPLY
+85494U-CGZ,1,19,Zapatillas,futbol,0,APPLY
+85494U-J46,1,19,Zapatillas,futbol,0,APPLY
+80684U-FR6,1,19,Zapatillas,futbol,0,APPLY
+80684U-DJL,1,19,Zapatillas,futbol,0,APPLY
+AO0577-600,1,19,Zapatillas,futbol,0,APPLY
+AJ6959-400,1,9,Zapatillas,futbol,0,APPLY
+AJ6959-410,1,9,Zapatillas,futbol,0,APPLY
+AO0579-600,1,19,Zapatillas,futbol,0,APPLY
+AO3269-400,2,19,Zapatillas,futbol,0,APPLY
+B40459,1,19,Zapatillas,futbol,0,APPLY
+B40460,1,19,Zapatillas,futbol,0,APPLY
+B40542,1,19,Zapatillas,futbol,0,APPLY
+B44367,1,9,Zapatillas,futbol,0,APPLY
+F33122,1,19,Zapatillas,futbol,0,APPLY
+BA8505,1,9,Zapatillas,futbol,0,APPLY
+BB0863,1,19,Zapatillas,futbol,0,APPLY
+BB5972,1,19,Zapatillas,futbol,0,APPLY
+BY2198,1,9,Zapatillas,futbol,0,APPLY
+S77065,1,9,Zapatillas,futbol,0,APPLY
+D67145,1,19,Zapatillas,futbol,0,APPLY
+G65347,1,19,Zapatillas,futbol,0,APPLY
+G97727,1,9,Zapatillas,futbol,0,APPLY
+Q22437,1,19,Zapatillas,futbol,0,APPLY
+V23922,1,9,Zapatillas,futbol,0,APPLY
+G64887,1,19,Zapatillas,futbol,0,APPLY
+G65096,1,9,Zapatillas,futbol,0,APPLY
+Q21625,1,19,Zapatillas,futbol,0,APPLY
+Z19228,1,9,Zapatillas,futbol,0,APPLY
+Z19229,1,9,Zapatillas,futbol,0,APPLY
+G65349,1,9,Zapatillas,futbol,0,APPLY
+M17607,1,9,Zapatillas,futbol,0,APPLY
+M19857,1,9,Zapatillas,futbol,0,APPLY
+M19858,1,9,Zapatillas,futbol,0,APPLY
+B34859,2,19,Zapatillas,futbol,0,APPLY
+082917 03,1,9,Zapatillas,futbol,0,APPLY
+082917 05,1,9,Zapatillas,futbol,0,APPLY
+082917 08,1,9,Zapatillas,futbol,0,APPLY
+082917 09,1,9,Zapatillas,futbol,0,APPLY
+082917 02,1,9,Zapatillas,futbol,0,APPLY
+S31979,1,19,Zapatillas,futbol,0,APPLY
+AF4978,2,9,Zapatillas,futbol,0,APPLY
+AF5057,1,19,Zapatillas,futbol,0,APPLY
+AF5059,2,19,Zapatillas,futbol,0,APPLY
+S31976,1,19,Zapatillas,futbol,0,APPLY
+SC1935-467,1,9,Balones,futbol,0,APPLY
+SC2027-647,1,9,Balones,futbol,0,APPLY
+SC2085-499,1,9,Balones,futbol,0,APPLY
+SC2176-746,1,9,Balones,futbol,0,APPLY
+SC2682-618,1,9,Balones,futbol,0,APPLY
+SC2076-147,1,9,Zapatillas,futbol,0,APPLY
+SC2076-187,1,9,Zapatillas,futbol,0,APPLY
+SC2208-146,1,9,Zapatillas,futbol,0,APPLY
+SC2208-150,1,9,Zapatillas,futbol,0,APPLY
+SC2208-173,1,9,Zapatillas,futbol,0,APPLY
+V87266,1,9,Zapatillas,futbol,0,APPLY
+V87267,1,9,Zapatillas,futbol,0,APPLY
+V87268,1,9,Zapatillas,futbol,0,APPLY
+X16978,1,9,Zapatillas,futbol,0,APPLY
+X16979,1,9,Zapatillas,futbol,0,APPLY
+8434666083961,2,1,Guantes,futbol,0,APPLY
+8434666084029,2,1,Guantes,futbol,0,APPLY
+8434666084081,2,1,Guantes,futbol,0,APPLY
+8434666084142,2,1,Guantes,futbol,0,APPLY
+8434666084227,4,1;7,Guantes,futbol,0,APPLY
+214-6895,1,56,Zapatillas,urbano,0,APPLY
+304-6893,1,56,Zapatillas,urbano,0,APPLY
+314-6895,1,56,Zapatillas,urbano,0,APPLY
+204-6893,1,56,Zapatillas,urbano,0,APPLY
+220002,10,1;33,Gateadores,urbano,0,APPLY
+220602,2,33,Gateadores,urbano,0,APPLY
+321602,2,33,Gateadores,urbano,0,APPLY
+421202,2,33,Gateadores,urbano,0,APPLY
+261-1170,2,33,Zapatillas,urbano,0,APPLY
+261-5170,2,33,Zapatillas,urbano,0,APPLY
+361-1170,2,33,Zapatillas,urbano,0,APPLY
+361-5170,2,33,Zapatillas,urbano,0,APPLY
+271105,1,56,Zapatillas,urbano,0,APPLY
+170205,1,56,Zapatillas,urbano,0,APPLY
+170209,1,56,Zapatillas,urbano,0,APPLY
+170605,1,56,Zapatillas,urbano,0,APPLY
+030442 01,2,7,Zapatillas,futbol,0,APPLY
+030442 02,1,7,Zapatillas,futbol,0,APPLY
+030442 03,1,7,Zapatillas,futbol,0,APPLY
+030442 04,1,7,Zapatillas,futbol,0,APPLY
+0111012801,2,7,Guantes,futbol,0,APPLY
+0111012901,2,7,Guantes,futbol,0,APPLY
+0111016501,2,7,Guantes,futbol,0,APPLY
+0111010201,3,7,Guantes,futbol,0,APPLY
+4051309681526,2,7,Guantes,boxeo,0,APPLY
+4051309681540,2,7,Guantes,boxeo,0,APPLY
+4051309681618,2,7,Guantes,boxeo,0,APPLY
+4051309681632,2,7,Guantes,boxeo,0,APPLY
+20015U-CAV,1,7,Zapatillas,"futbol,sala",0,APPLY
+20015U-H94,1,7,Zapatillas,"futbol,sala",0,APPLY
+20015U-J47,1,7,Zapatillas,"futbol,sala",0,APPLY
+20488U,1,9,Zapatillas,"futbol,sala",0,APPLY
+SP0215-001,1,7,Zapatillas,futbol,0,APPLY
+SP0216-067,1,7,Zapatillas,futbol,0,APPLY
+SP0216-118,1,7,Zapatillas,futbol,0,APPLY
+SP0216-140,1,7,Zapatillas,futbol,0,APPLY
+SP2093-010,1,7,Zapatillas,futbol,0,APPLY
+SP2093-021,1,7,Zapatillas,futbol,0,APPLY
+SP2093-411,1,7,Zapatillas,futbol,0,APPLY
+SP2093-836,1,7,Zapatillas,futbol,0,APPLY
+602302,1,7,Sandalias y Chalas,natacion,0,APPLY
+60230134,1,1,Sandalias y Chalas,natacion,0,APPLY
+60230240,2,1,Sandalias y Chalas,natacion,0,APPLY
+60230128,1,1,Sandalias y Chalas,natacion,0,APPLY
+CW9716,1,7,Zapatillas,"futbol,sala",0,APPLY
+DN8601,2,7,Zapatillas,"futbol,sala",0,APPLY
+DN8611,1,7,Zapatillas,"futbol,sala",0,APPLY
+FK0483,3,7,Zapatillas,"futbol,sala",0,APPLY
+ZM5346,1,1,Zapatillas,skate,0,APPLY
+ZM51022171,1,1,Zapatillas,skate,0,APPLY
+ZM51052171,1,1,Zapatillas,skate,0,APPLY
+ZM51032171,1,1,Zapatillas,skate,0,APPLY
+100233884,4,1,Zapatillas,running,0,APPLY
+100256916,4,1,Zapatillas,running,0,APPLY
+100256925,3,1,Zapatillas,running,0,APPLY
+100256910,2,1,Zapatillas,running,0,APPLY
+100261914,4,1,Zapatillas,urbano,0,APPLY
+100261905,4,1,Zapatillas,urbano,0,APPLY
+100261912,4,1,Zapatillas,urbano,0,APPLY
+100261911,3,1,Zapatillas,urbano,0,APPLY
+TFY62,10,1,Zapatillas,urbano,0,APPLY
+TFY61,5,1,Zapatillas,urbano,0,APPLY
+CF1609,3,1,Zapatillas,urbano,0,APPLY
+CF1608,2,1,Zapatillas,urbano,0,APPLY
+100232866,2,1,Zapatillas,urbano,0,APPLY
+100232573,2,1,Zapatillas,urbano,0,APPLY
+100232572,2,1,Zapatillas,urbano,0,APPLY
+100044073,2,1,Zapatillas,urbano,0,APPLY
+VN000NJO186,3,1,Zapatillas,skate,0,APPLY
+VN000K0F187,1,1,Zapatillas,skate,0,APPLY
+VN000UDM186,1,1,Zapatillas,skate,0,APPLY
+VN000UDMTDD,2,1,Zapatillas,skate,0,APPLY
+CP101294M,3,1,Zapatillas,urbano,0,APPLY
+CP101212W,5,1,Zapatillas,urbano,0,APPLY
+CP101213W,3,1,Zapatillas,urbano,0,APPLY
+CP101214W,5,1,Zapatillas,urbano,0,APPLY
+6312,8,56,Zapatillas,oficial,0,APPLY
+6314,7,56,Zapatillas,oficial,0,APPLY
+6311,6,56;64,Zapatillas,oficial,0,APPLY
+6304,6,2;56,Zapatillas,oficial,0,APPLY
+VN-0TSWA4O,1,1,Zapatillas,skate,0,APPLY
+VN-0TSWAL2,1,1,Zapatillas,skate,0,APPLY
+VN-0TSWAMK,1,1,Zapatillas,skate,0,APPLY
+VN-0TSWAMO,1,1,Zapatillas,skate,0,APPLY
+8434666150250,2,1,Guantes,futbol,0,APPLY
+8434666150236,2,1,Guantes,futbol,0,APPLY
+8434666150243,2,1,Guantes,futbol,0,APPLY
+8434666150267,3,1,Guantes,futbol,0,APPLY
+CA100089M,3,1,Zapatillas,urbano,0,APPLY
+CA100089Y,2,1,Zapatillas,urbano,0,APPLY
+CA100090Y,4,1,Zapatillas,urbano,0,APPLY
+CP101296M,5,1,Zapatillas,urbano,0,APPLY
+CQ9356-401,2,1,Zapatillas,urbano,0,APPLY
+CQ9356-001,3,1,Zapatillas,urbano,0,APPLY
+CQ9356-400,2,1,Zapatillas,urbano,0,APPLY
+DJ1196-101,3,1,Zapatillas,urbano,0,APPLY
+CW3411-004,4,1,Zapatillas,running,0,APPLY
+CW3413-102,4,1,Zapatillas,running,0,APPLY
+CW3413-501,8,1,Zapatillas,running,0,APPLY
+CW3413-601,4,1,Zapatillas,running,0,APPLY
+MBNSS17006,1,1,Zapatillas,urbano,0,APPLY
+MBNSS17007,1,1,Zapatillas,urbano,0,APPLY
+MCNSS17006,1,1,Zapatillas,urbano,0,APPLY
+CRNSS17006,1,1,Zapatillas,urbano,0,APPLY
+CA100553M,3,1,Zapatillas,urbano,0,APPLY
+CA100384M,3,1,Zapatillas,urbano,0,APPLY
+CA100410M,3,1,Zapatillas,urbano,0,APPLY
+CA100561M,3,1,Zapatillas,urbano,0,APPLY
+CA100015W,5,1,Zapatillas,urbano,0,APPLY
+CA100016W,4,1,Zapatillas,urbano,0,APPLY
+CA100017W,5,1,Zapatillas,urbano,0,APPLY
+CA100018W,3,1,Zapatillas,urbano,0,APPLY
+CA100136M,3,1,Zapatillas,urbano,0,APPLY
+CA100137M,4,1,Zapatillas,urbano,0,APPLY
+CP101303M,3,1,Zapatillas,urbano,0,APPLY
+CP101304M,3,1,Zapatillas,urbano,0,APPLY
+CM100022M,5,1,Zapatillas,urbano,0,APPLY
+CP100018M,2,1,Zapatillas,urbano,0,APPLY
+CPS10125M,2,1,Zapatillas,urbano,0,APPLY
+CPS10126M,2,1,Zapatillas,urbano,0,APPLY
+CU4826-003,2,1,Zapatillas,urbano,0,APPLY
+CU4870-001,2,1,Zapatillas,urbano,0,APPLY
+CU4870-103,2,1,Zapatillas,urbano,0,APPLY
+CU4870-600,3,1,Zapatillas,urbano,0,APPLY
+CW3411-006,4,1,Zapatillas,running,0,APPLY
+CW3411-007,2,1,Zapatillas,running,0,APPLY
+CW3411-402,3,1,Zapatillas,running,0,APPLY
+CW3413-006,3,1,Zapatillas,running,0,APPLY
+VN000TUY187,1,1,Zapatillas,skate,0,APPLY
+VN000TUY8J3,3,1,Zapatillas,skate,0,APPLY
+VN0A45J925V,1,1,Zapatillas,skate,0,APPLY
+VN0A45J9VEJ,2,1,Zapatillas,skate,0,APPLY
+2833,1,2,Zapatos de Vestir,vestir,0,APPLY
+8815,1,2,Zapatos de Vestir,vestir,0,APPLY
+8818,1,2,Zapatos de Vestir,vestir,0,APPLY
+9741,1,2,Zapatos de Vestir,vestir,0,APPLY
+9126,2,1;2,Zapatos de Vestir,vestir,0,APPLY
+9291,1,2,Zapatos de Vestir,vestir,0,APPLY
+9192,1,2,Zapatos de Vestir,vestir,0,APPLY
+9191,1,2,Zapatos de Vestir,vestir,0,APPLY
+AD90104B-BOI,4,1,Zapatillas,"basket,urbano",0,APPLY
+AD90104B-BVR,4,1,Zapatillas,"basket,urbano",0,APPLY
+AD90104B-D,4,1,Zapatillas,"basket,urbano",0,APPLY
+AD90104B-WXY,2,1,Zapatillas,"basket,urbano",0,APPLY
+AD90105M-WBM,3,1,Zapatillas,"basket,urbano",0,APPLY
+AD90105M-BS,3,1,Zapatillas,"basket,urbano",0,APPLY
+AD90105M-GBW,3,1,Zapatillas,"basket,urbano",0,APPLY
+AD90105M-RB,3,1,Zapatillas,"basket,urbano",0,APPLY
+AD90080B-BV,2,1,Zapatillas,"basket,urbano",0,APPLY
+AD90023M-WD,3,1,Zapatillas,"basket,urbano",0,APPLY
+AD90080B-BWZ,3,1,Zapatillas,"basket,urbano",0,APPLY
+AD90080B-BZ,2,1,Zapatillas,"basket,urbano",0,APPLY
+ZF3626,1,1,Zapatillas,urbano,0,APPLY
+ZF3676,1,1,Zapatillas,urbano,0,APPLY
+ZF3677,1,1,Zapatillas,urbano,0,APPLY
+ZF3686,1,1,Zapatillas,urbano,0,APPLY
+1203,7,1;12,Zapatillas,"skate,urbano",0,APPLY
+13206,2,1,Zapatillas,"skate,urbano",0,APPLY
+1261,4,1;2;14,Zapatillas,"skate,urbano",0,APPLY
+13157,2,1,Zapatillas,"skate,urbano",0,APPLY
+TESCMPK250GN,1,12,Bolsos y Mochilas,oficial,0,APPLY
+TESCMPK250IA,1,12,Bolsos y Mochilas,oficial,0,APPLY
+TESCMPK250OF,1,12,Bolsos y Mochilas,oficial,0,APPLY
+TESCMPK250PP,1,12,Bolsos y Mochilas,oficial,0,APPLY
+COL008,2,56,Zapatillas,oficial,0,APPLY
+COL009,1,56,Zapatillas,oficial,0,APPLY
+COL014,2,1,Zapatillas,oficial,0,APPLY
+COL017,2,1,Zapatillas,oficial,0,APPLY
+066143090810,6,9,Accesorios Deportivos,futbol,0,APPLY
+066143291040,5,9,Accesorios Deportivos,futbol,0,APPLY
+066143291002,5,9,Accesorios Deportivos,futbol,0,APPLY
+066143291019,7,9,Accesorios Deportivos,futbol,0,APPLY
+5.10.40ZA,4,3;9,Accesorios Deportivos,,0,APPLY
+5.10.40,2,9,Accesorios Deportivos,,0,APPLY
+5.10.40AJ,2,9,Accesorios Deportivos,,0,APPLY
+5.10.40NF,2,9,Accesorios Deportivos,,0,APPLY
+PIZARRA GRANDE BASKET,2,4,Accesorios Deportivos,futbol,0,APPLY
+PIZARRA FUTBOL,4,4,Accesorios Deportivos,futbol,0,APPLY
+PIZARRA FUTBOL PRO,2,4,Accesorios Deportivos,futbol,0,APPLY
+PIZARRA GRANDE FUTBOL,2,4,Accesorios Deportivos,futbol,0,APPLY
+AJ3541-390,3,9,Zapatillas,futbol,0,APPLY
+AJ3541-109,1,9,Zapatillas,futbol,0,APPLY
+AJ3570-390,1,19,Zapatillas,futbol,0,APPLY
+AJ3570-600,1,19,Zapatillas,futbol,0,APPLY
+25-MOSU-VE,1,9,Zapatillas,futbol,0,APPLY
+25-MOSU-NE,1,9,Zapatillas,futbol,0,APPLY
+25-MOSU-OR,1,9,Zapatillas,futbol,0,APPLY
+25-MOSU-RO,1,9,Zapatillas,futbol,0,APPLY
+25641U-CM2,1,9,Zapatillas,"futbol,sala",0,APPLY
+25641U-DDM,1,9,Zapatillas,"futbol,sala",0,APPLY
+25641U-DE5,1,9,Zapatillas,"futbol,sala",0,APPLY
+20492U,1,19,Zapatillas,"futbol,sala",0,APPLY
+25FC-1,1,9,Zapatillas,futbol,0,APPLY
+25FC-2,1,9,Zapatillas,futbol,0,APPLY
+28FC-1,1,9,Zapatillas,futbol,0,APPLY
+28FC-2,1,9,Zapatillas,futbol,0,APPLY
+28-MOSU-VE,1,9,Zapatillas,futbol,0,APPLY
+28-MOSU-NE,1,9,Zapatillas,futbol,0,APPLY
+28-MOSU-OR,1,9,Zapatillas,futbol,0,APPLY
+28-MOSU-RO,1,9,Zapatillas,futbol,0,APPLY
+N8214000,1,9,Zapatillas,futbol,0,APPLY
+N8213000,1,9,Zapatillas,futbol,0,APPLY
+R0025,1,19,Zapatillas,futbol,0,APPLY
+R0027,1,19,Zapatillas,futbol,0,APPLY
+081876 01,1,19,Zapatillas,"futbol,sala",0,APPLY
+081876 02,1,19,Zapatillas,"futbol,sala",0,APPLY
+081876 08,1,19,Zapatillas,"futbol,sala",0,APPLY
+082021 01,1,9,Zapatillas,"futbol,sala",0,APPLY
+684658-025,1,19,Zapatillas,"running,urbano",0,APPLY
+684658-005,1,19,Zapatillas,"running,urbano",0,APPLY
+684658-417,1,19,Zapatillas,"running,urbano",0,APPLY
+684658-027,1,19,Zapatillas,"running,urbano",0,APPLY
+3473,1,9,Zapatillas,futbol,0,APPLY
+4249,1,9,Zapatillas,futbol,0,APPLY
+V24847,1,9,Zapatillas,futbol,0,APPLY
+D67196,1,9,Zapatillas,futbol,0,APPLY
+45243U-A66,1,19,Zapatillas,futbol,0,APPLY
+45243U-D62,1,19,Zapatillas,futbol,0,APPLY
+45243U-DHF,1,19,Zapatillas,futbol,0,APPLY
+45243U-796,1,19,Zapatillas,futbol,0,APPLY
+454323-018,1,19,Zapatillas,"futbol,sala",0,APPLY
+454323-130,1,19,Zapatillas,"futbol,sala",0,APPLY
+454323-160,1,19,Zapatillas,"futbol,sala",0,APPLY
+454323-177,1,19,Zapatillas,"futbol,sala",0,APPLY
+509038-013,1,9,Zapatillas,futbol,0,APPLY
+509039-010,1,19,Zapatillas,futbol,0,APPLY
+509038-002,1,9,Zapatillas,futbol,0,APPLY
+509038-010,1,9,Zapatillas,futbol,0,APPLY
+509086-001,1,19,Zapatillas,futbol,0,APPLY
+509086-013,1,19,Zapatillas,futbol,0,APPLY
+509086-105,1,19,Zapatillas,futbol,0,APPLY
+509086-703,1,19,Zapatillas,futbol,0,APPLY
+102586 01,1,9,Zapatillas,futbol,0,APPLY
+102586 04,1,9,Zapatillas,futbol,0,APPLY
+102586 06,1,9,Zapatillas,futbol,0,APPLY
+102586 08,1,9,Zapatillas,futbol,0,APPLY
+102588 06,1,19,Zapatillas,futbol,0,APPLY
+102588 01,1,19,Zapatillas,futbol,0,APPLY
+102588 04,1,19,Zapatillas,futbol,0,APPLY
+102588 05,1,19,Zapatillas,futbol,0,APPLY
+5207340000000,11,7;9;35;60,Equipamiento Fitness,futbol,0,APPLY
+5207340141737,2,9,Equipamiento Fitness,futbol,0,APPLY
+5207340141744,1,9,Equipamiento Fitness,futbol,0,APPLY
+5207340142734,1,9,Equipamiento Fitness,futbol,0,APPLY
+555447-635,1,9,Zapatillas,futbol,0,APPLY
+580475-174,1,9,Zapatillas,futbol,0,APPLY
+580475-403,1,9,Zapatillas,futbol,0,APPLY
+684863-014,1,19,Zapatillas,futbol,0,APPLY
+780800000000,1,9,Accesorios Deportivos,futbol,0,APPLY
+JS2075,1,9,Accesorios Deportivos,futbol,0,APPLY
+780799868110,1,9,Accesorios Deportivos,futbol,0,APPLY
+7807998681103,2,9,Accesorios Deportivos,futbol,0,APPLY
+1608,3,9;12;19,Zapatillas,futbol,0,APPLY
+1645,1,19,Zapatillas,futbol,0,APPLY
+1716,1,9,Zapatillas,futbol,0,APPLY
+1717,1,9,Zapatillas,futbol,0,APPLY
+AQ4352,1,19,Zapatillas,futbol,0,APPLY
+BB5641,1,9,Zapatillas,futbol,0,APPLY
+BB5855,1,9,Zapatillas,futbol,0,APPLY
+S79483,1,19,Zapatillas,futbol,0,APPLY
+AZ5202,1,19,Balones,futbol,0,APPLY
+AZ5205,2,9,Balones,futbol,0,APPLY
+AZ9609,1,9,Balones,futbol,0,APPLY
+AZ5203,1,9,Balones,futbol,0,APPLY
+B44233,1,19,Zapatillas,futbol,0,APPLY
+M18319,1,9,Zapatillas,futbol,0,APPLY
+M18372,1,19,Zapatillas,futbol,0,APPLY
+M18374,1,19,Zapatillas,futbol,0,APPLY
+BB5683,1,19,Zapatillas,futbol,0,APPLY
+BB5684,1,19,Zapatillas,futbol,0,APPLY
+S75708,1,19,Zapatillas,futbol,0,APPLY
+BB5904,1,19,Zapatillas,futbol,0,APPLY
+CW4680,2,9,Balones,futbol,0,APPLY
+CW4683,1,9,Balones,futbol,0,APPLY
+CW4684,2,9,Balones,futbol,0,APPLY
+CW4693,1,9,Balones,futbol,0,APPLY
+D66093,1,19,Zapatillas,futbol,0,APPLY
+D67462,1,19,Zapatillas,futbol,0,APPLY
+G62137,1,19,Zapatillas,futbol,0,APPLY
+G95273,1,19,Zapatillas,futbol,0,APPLY
+D84856,1,9,Equipamiento Fitness,futbol,0,APPLY
+F82133,2,9,Equipamiento Fitness,futbol,0,APPLY
+F82134,1,9,Equipamiento Fitness,futbol,0,APPLY
+F82135,1,9,Equipamiento Fitness,futbol,0,APPLY
+190037 01,2,9,Zapatillas,"running,urbano",0,APPLY
+190037 03,1,9,Zapatillas,"running,urbano",0,APPLY
+190037 04,1,9,Zapatillas,"running,urbano",0,APPLY
+190037 05,2,1;9,Zapatillas,"running,urbano",0,APPLY
+1265904-001,1,9,Balones,futbol,0,APPLY
+1265905-001,1,9,Balones,futbol,0,APPLY
+1266714-001,1,9,Balones,futbol,0,APPLY
+1266714-100,1,9,Balones,futbol,0,APPLY
+102348 01,1,19,Zapatillas,futbol,0,APPLY
+102348 02,1,19,Zapatillas,futbol,0,APPLY
+102348 10,1,19,Zapatillas,futbol,0,APPLY
+102348 11,1,19,Zapatillas,futbol,0,APPLY
+N7965000,1,9,Zapatillas,futbol,0,APPLY
+N7966000,1,9,Zapatillas,futbol,0,APPLY
+N7968000,1,19,Zapatillas,futbol,0,APPLY
+N7969000,1,19,Zapatillas,futbol,0,APPLY
+SC2138-144,1,9,Zapatillas,futbol,0,APPLY
+SC2274-177,1,9,Zapatillas,futbol,0,APPLY
+SC2368-177,1,9,Zapatillas,futbol,0,APPLY
+SC2420-447,1,9,Zapatillas,futbol,0,APPLY
+SC3496-100,2,19,Balones,futbol,0,APPLY
+SC3147-100,1,9,Balones,futbol,0,APPLY
+SC3147-104,1,9,Balones,futbol,0,APPLY
+SC3310-101,1,9,Balones,futbol,0,APPLY
+U13SSWT1-P30,1,19,Zapatillas,futbol,0,APPLY
+U13SWT1-BLSS,1,19,Zapatillas,futbol,0,APPLY
+U13SWT1-CTJ,1,19,Zapatillas,futbol,0,APPLY
+U13SWT1-DNCB,1,19,Zapatillas,futbol,0,APPLY
+V21411,1,9,Zapatillas,futbol,0,APPLY
+V23946,1,9,Zapatillas,futbol,0,APPLY
+V23947,1,19,Zapatillas,futbol,0,APPLY
+V23950,1,19,Zapatillas,futbol,0,APPLY
+V22134,1,9,Zapatillas,futbol,0,APPLY
+V23636,1,19,Zapatillas,futbol,0,APPLY
+V23637,1,9,Zapatillas,futbol,0,APPLY
+V23644,1,19,Zapatillas,futbol,0,APPLY
+Z20578,1,9,Balones,futbol,0,APPLY
+Z20587,1,9,Balones,futbol,0,APPLY
+Z20594,1,9,Balones,futbol,0,APPLY
+Z20595,1,9,Balones,futbol,0,APPLY
+5205321308643,2,9,Guantes,futbol,0,APPLY
+5205321308926,2,9,Guantes,futbol,0,APPLY
+5205321309640,2,9,Guantes,futbol,0,APPLY
+5205321309923,2,9,Guantes,futbol,0,APPLY
+81234U-FBZ,2,19,Zapatillas,futbol,0,APPLY
+81403U-FZ4,1,19,Zapatillas,futbol,0,APPLY
+81404U-GY9,2,19,Zapatillas,futbol,0,APPLY
+81406U-GY9,2,19,Zapatillas,futbol,0,APPLY
+AH7357-107,1,19,Zapatillas,futbol,0,APPLY
+AT8161-801,3,9,Zapatillas,futbol,0,APPLY
+AT8177-801,3,9,Zapatillas,futbol,0,APPLY
+AT8178-801,2,9,Zapatillas,futbol,0,APPLY
+BB9367,2,9,Zapatillas,futbol,0,APPLY
+BB9399,2,9,Zapatillas,futbol,0,APPLY
+BB9400,4,1;9,Zapatillas,futbol,0,APPLY
+DB2183,3,9,Zapatillas,futbol,0,APPLY
+CD6577,1,9,Balones,futbol,0,APPLY
+CW5354,1,9,Balones,futbol,0,APPLY
+DN8715,1,9,Balones,futbol,0,APPLY
+DN8717,1,9,Balones,futbol,0,APPLY
+H57784,2,9,Balones,futbol,0,APPLY
+H57785,2,9,Balones,futbol,0,APPLY
+H57786,4,9,Balones,futbol,0,APPLY
+H57787,3,9,Balones,futbol,0,APPLY
+H57808,2,9,Balones,futbol,0,APPLY
+H57809,3,9,Balones,futbol,0,APPLY
+H57814,2,9,Balones,futbol,0,APPLY
+H57817,2,9,Balones,futbol,0,APPLY
+1383544-402,2,2,Poleras y Camisetas,,0,APPLY
+1383544-672,2,2,Poleras y Camisetas,,0,APPLY
+1383544-001,2,2,Poleras y Camisetas,,0,APPLY
+1363281-422,2,2,Poleras y Camisetas,training,0,APPLY
+1274034-001,1,7,Poleras y Camisetas,training,0,APPLY
+1274034-428,1,7,Poleras y Camisetas,training,0,APPLY
+CD4508-411,2,2,Poleras y Camisetas,futbol,0,APPLY
+SC2436-144,1,9,Poleras y Camisetas,futbol,0,APPLY
+SC3608-410,2,9,Poleras y Camisetas,futbol,0,APPLY
+BOXER NINOS,2,10,Shorts,,0,APPLY
+N011,2,7,Shorts,,0,APPLY
+PN01,2,7,Shorts,,0,APPLY
+4046,4,56,Zapatillas,oficial,0,APPLY
+4045,4,26;56,Zapatillas,oficial,0,APPLY
+1036,6,106,Zapatillas,oficial,0,APPLY
+31,7,86,Zapatillas,oficial,0,APPLY
+381,3,12;56;63,Zapatillas,oficial,0,APPLY
+1451,1,56,Zapatillas,oficial,0,APPLY
+383,2,5;56,Zapatillas,oficial,0,APPLY
+243,3,87,Zapatillas,oficial,0,APPLY
+473,3,2;38;46,Zapatillas,oficial,0,APPLY
+9206,1,63,Zapatillas,"skate,urbano",0,APPLY
+9207,1,63,Zapatillas,"skate,urbano",0,APPLY
+9208,1,63,Zapatillas,"skate,urbano",0,APPLY
+33905,1,7,Guantes,futbol,0,APPLY
+033905,2,7,Guantes,futbol,0,APPLY
+O33905,1,7,Guantes,futbol,0,APPLY
+030262 10,1,7,Protecciones,futbol,0,APPLY
+030368 03,1,7,Protecciones,futbol,0,APPLY
+030368 10,1,7,Protecciones,futbol,0,APPLY
+AP7072,1,7,Protecciones,futbol,0,APPLY
+AZ9869,1,7,Protecciones,futbol,0,APPLY
+AZ9870,1,7,Protecciones,futbol,0,APPLY
+041138 01,1,7,Guantes,futbol,0,APPLY
+041612 01,2,7,Guantes,futbol,0,APPLY
+041138 03,1,7,Guantes,futbol,0,APPLY
+S22008,1,7,Accesorios Deportivos,tenis,0,APPLY
+S97909,1,7,Accesorios Deportivos,tenis,0,APPLY
+S97911,1,7,Accesorios Deportivos,tenis,0,APPLY
+S90146,1,7,Guantes,futbol,0,APPLY
+S90154,3,7,Guantes,futbol,0,APPLY
+AP7001,2,19,Guantes,futbol,0,APPLY
+S90383,1,7,Guantes,futbol,0,APPLY
+DN8623,3,7,Guantes,futbol,0,APPLY
+DN8626,3,7,Guantes,futbol,0,APPLY
+SP2075-636,1,7,Protecciones,futbol,0,APPLY
+SP2178-100,1,7,Protecciones,futbol,0,APPLY
+SC3897-100,1,9,Protecciones,futbol,0,APPLY
+SP2077-100,1,7,Protecciones,futbol,0,APPLY
+SC2359-103,1,9,Protecciones,futbol,0,APPLY
+SC3022-103,1,19,Protecciones,futbol,0,APPLY
+V42263,1,7,Zapatillas,"running,urbano",0,APPLY
+V87192,1,7,Zapatillas,"running,urbano",0,APPLY
+X16836,1,7,Zapatillas,"running,urbano",0,APPLY
+X16988,1,7,Guantes,futbol,0,APPLY
+Z19180,1,7,Guantes,futbol,0,APPLY
+Z19184,1,7,Guantes,futbol,0,APPLY
+SP2169-100,1,7,Protecciones,futbol,0,APPLY
+SC3891-100,3,9,Protecciones,futbol,0,APPLY
+SC3617-010,3,9,Protecciones,futbol,0,APPLY
+ZM5106,1,1,Sandalias y Chalas,urbano,0,APPLY
+ZM5107,1,1,Sandalias y Chalas,urbano,0,APPLY
+ZM5305,1,1,Sandalias y Chalas,urbano,0,APPLY
+ZM5121,1,1,Sandalias y Chalas,urbano,0,APPLY
+ZM51222171,1,1,Sandalias y Chalas,urbano,0,APPLY
+ZM5121217,1,1,Sandalias y Chalas,urbano,0,APPLY
+100247363,4,1,Zapatillas,urbano,0,APPLY
+100238481,4,1,Zapatillas,urbano,0,APPLY
+100033494,7,1,Zapatillas,urbano,0,APPLY
+DJ1974-001,3,1,Zapatillas,urbano,0,APPLY
+DH2987-102,3,1,Zapatillas,urbano,0,APPLY
+DM1186-600,2,1,Zapatillas,urbano,0,APPLY
+28-NK-4002,1,1,Zapatillas,futbol,0,APPLY
+28-NK-4005,2,1,Zapatillas,futbol,0,APPLY
+28-NK-6004,1,1,Zapatillas,futbol,0,APPLY
+28-OUTSK-2,1,1,Zapatillas,futbol,0,APPLY
+28-OUTSK-1,1,1,Zapatillas,futbol,0,APPLY
+28-OUTSK-3,1,1,Zapatillas,futbol,0,APPLY
+28-NK-5016,1,1,Zapatillas,futbol,0,APPLY
+28-NK-8029,1,1,Zapatillas,futbol,0,APPLY
+28-NK-8031,1,1,Zapatillas,futbol,0,APPLY
+VN-OMAP7KC,2,1,Zapatillas,"skate,urbano",0,APPLY
+CEDAR W,3,1,Zapatillas,"skate,urbano",0,APPLY
+VN-OMAP7IT,1,1,Zapatillas,"skate,urbano",0,APPLY
+VN-OUC08YX,1,1,Zapatillas,"skate,urbano",0,APPLY
+VN-OUC0ALY,1,1,Zapatillas,"skate,urbano",0,APPLY
+VN-0SDI4FS,1,1,Zapatillas,"skate,urbano",0,APPLY
+5511171,1,1,Zapatillas,trekking,0,APPLY
+5511173,1,1,Zapatillas,trekking,0,APPLY
+5511175,1,1,Zapatillas,trekking,0,APPLY
+B631A,6,1,Zapatillas,urbano,0,APPLY
+LEA-0314,1,1,Zapatillas,urbano,0,APPLY
+LEA-B631A,4,1,Zapatillas,urbano,0,APPLY
+CV0955-090,2,1,Zapatillas,futbol,0,APPLY
+CV0953-090,2,1,Zapatillas,futbol,0,APPLY
+AT7979-001,2,1,Zapatillas,futbol,0,APPLY
+DH3162-001,2,1,Zapatillas,urbano,0,APPLY
+CU4150-002,2,1,Zapatillas,urbano,0,APPLY
+CU4150-103,2,1,Zapatillas,urbano,0,APPLY
+DJ1997-100,5,1,Zapatillas,urbano,0,APPLY
+CZ5356-002,3,1,Zapatillas,urbano,0,APPLY
+CZ5361-101,3,1,Zapatillas,urbano,0,APPLY
+EK-KORR-H1,1,1,Zapatillas,urbano,0,APPLY
+EK-ASHFORD-H2,1,1,Zapatillas,urbano,0,APPLY
+EK-ASHFORD-H3,1,1,Zapatillas,urbano,0,APPLY
+RF-003222BLA,1,1,Zapatillas,"skate,urbano",0,APPLY
+RF-003222GRE,1,1,Zapatillas,"skate,urbano",0,APPLY
+RF-003222TAN,1,1,Zapatillas,"skate,urbano",0,APPLY
+CA100110M,5,1,Zapatillas,urbano,0,APPLY
+CP101287M,3,1,Zapatillas,urbano,0,APPLY
+CP101290M,3,1,Zapatillas,urbano,0,APPLY
+CK2576-010,3,1,Zapatillas,"running,urbano",0,APPLY
+DB0522-101,4,1,Zapatillas,"running,urbano",0,APPLY
+DC9010-601,4,1,Zapatillas,"running,urbano",0,APPLY
+CK8470-090,3,1,Zapatillas,futbol,0,APPLY
+CK8470-400,2,1,Zapatillas,futbol,0,APPLY
+CW6666-090,2,1,Zapatillas,futbol,0,APPLY
+CP101889M,2,1,Zapatillas,urbano,0,APPLY
+CP101981M,3,1,Zapatillas,urbano,0,APPLY
+CP102007M,2,1,Zapatillas,urbano,0,APPLY
+DB1560-100,2,1,Zapatillas,urbano,0,APPLY
+DM0984-700,2,1,Zapatillas,urbano,0,APPLY
+DN1434-001,2,1,Zapatillas,urbano,0,APPLY
+VN000KC44K1,1,1,Zapatillas,"skate,urbano",0,APPLY
+VN0A45NM1WX,1,1,Zapatillas,"skate,urbano",0,APPLY
+VN0A45NMMC0,1,1,Zapatillas,"skate,urbano",0,APPLY
+VN000NJO187,2,1,Zapatillas,"skate,urbano",0,APPLY
+VN000U4I8C2,1,1,Zapatillas,"skate,urbano",0,APPLY
+VN0A3WLJVI4,2,1,Zapatillas,"skate,urbano",0,APPLY
+VN0A3IL3186,2,1,Zapatillas,urbano,0,APPLY
+VN0A3IL3IJU,1,1,Zapatillas,urbano,0,APPLY
+VN0A3IL3R5P,1,1,Zapatillas,urbano,0,APPLY
+7054116,3,2,Zapatos de Vestir,vestir,0,APPLY
+5633105,1,2,Zapatos de Vestir,vestir,0,APPLY
+7032223,2,2,Zapatos de Vestir,vestir,0,APPLY
+2340,2,2;50,Zapatos de Vestir,vestir,0,APPLY
+7891,1,2,Zapatos de Vestir,vestir,0,APPLY
+7887,1,2,Zapatos de Vestir,vestir,0,APPLY
+2819,1,2,Zapatos de Vestir,vestir,0,APPLY
+6077,1,2,Zapatos de Vestir,vestir,0,APPLY
+8864,1,2,Zapatos de Vestir,vestir,0,APPLY
+3317,1,2,Zapatos de Vestir,vestir,0,APPLY
+5705,1,2,Zapatos de Vestir,vestir,0,APPLY
+3320,3,2;12;14,Zapatos de Vestir,vestir,0,APPLY
+1001,18,86,Zapatos de Vestir,vestir,0,APPLY
+6309,1,2,Zapatos de Vestir,vestir,0,APPLY
+7733,1,2,Zapatos de Vestir,vestir,0,APPLY
+1327926-112,3,97,Poleras y Camisetas,,0,APPLY
+1327926-457,2,97,Poleras y Camisetas,,0,APPLY
+1327927-830,1,97,Poleras y Camisetas,,0,APPLY
+1327938-112,2,2,Poleras y Camisetas,,0,APPLY
+1327940-046,1,2,Poleras y Camisetas,,0,APPLY
+1327940-411,1,2,Poleras y Camisetas,,0,APPLY
+1328630-001,1,2,Gorros,,0,APPLY
+1328630-357,2,2,Gorros,,0,APPLY
+1328630-012,1,2,Gorros,,0,APPLY
+AD90179B-WD,2,1,Zapatillas,"basket,urbano",0,APPLY
+AD90104M-WBR,2,1,Zapatillas,"basket,urbano",0,APPLY
+AD90104M-BW,2,1,Zapatillas,"basket,urbano",0,APPLY
+AD90210B-BO,2,1,Zapatillas,"basket,urbano",0,APPLY
+AD90210B-NHK,3,1,Zapatillas,"basket,urbano",0,APPLY
+AD90210M-NHK,2,1,Zapatillas,"basket,urbano",0,APPLY
+ZF4009,2,1,Zapatillas,urbano,0,APPLY
+ZF3817,1,1,Zapatillas,urbano,0,APPLY
+ZF3819,1,1,Zapatillas,urbano,0,APPLY
+ZM4108,2,1,Zapatillas,urbano,0,APPLY
+ZM4110,1,1,Zapatillas,urbano,0,APPLY
+ZM4111,1,1,Zapatillas,urbano,0,APPLY
+ZF3808,1,1,Zapatillas,urbano,0,APPLY
+ZM3905,1,1,Zapatillas,urbano,0,APPLY
+ZM3907,1,1,Zapatillas,urbano,0,APPLY
+ZF6008,1,1,Zapatillas,urbano,0,APPLY
+ZF6009,1,1,Zapatillas,urbano,0,APPLY
+ZF6010,1,1,Zapatillas,urbano,0,APPLY
+ZM3810,1,1,Zapatillas,urbano,0,APPLY
+ZM3811,1,1,Zapatillas,urbano,0,APPLY
+ZM3813,1,1,Zapatillas,urbano,0,APPLY
+ZM8000,1,1,Zapatillas,urbano,0,APPLY
+ZM8001,1,1,Zapatillas,urbano,0,APPLY
+ZM8002,1,1,Zapatillas,urbano,0,APPLY
+13011,4,1,Zapatillas,"skate,urbano",0,APPLY
+13009,2,1,Zapatillas,"skate,urbano",0,APPLY
+13012,2,1,Zapatillas,"skate,urbano",0,APPLY
+13230,2,1,Zapatillas,"skate,urbano",0,APPLY
+13063,2,1,Zapatillas,"skate,urbano",0,APPLY
+13190,2,1,Zapatillas,"skate,urbano",0,APPLY
+13027,5,1,Zapatillas,"skate,urbano",0,APPLY
+13048,3,1,Zapatillas,"skate,urbano",0,APPLY
+13049,2,1,Zapatillas,"skate,urbano",0,APPLY
+160320-1,3,1,Zapatillas,"skate,urbano",0,APPLY
+160320-3,3,1,Zapatillas,"skate,urbano",0,APPLY
+160324-2,3,1,Zapatillas,"skate,urbano",0,APPLY
+13156,2,1,Zapatillas,"skate,urbano",0,APPLY
+13177,2,1,Zapatillas,"skate,urbano",0,APPLY
+13176,2,1,Zapatillas,"skate,urbano",0,APPLY
+160304-1,2,1,Zapatillas,"skate,urbano",0,APPLY
+160304-2,2,1,Zapatillas,"skate,urbano",0,APPLY
+160304-3,2,1,Zapatillas,"skate,urbano",0,APPLY
+160314-2,2,1,Zapatillas,"skate,urbano",0,APPLY
+160314-3,6,1,Zapatillas,"skate,urbano",0,APPLY
+160314-4,4,1,Zapatillas,"skate,urbano",0,APPLY
+13133 205,2,1,Zapatillas,"skate,urbano",0,APPLY
+13011 205 VULC,2,1,Zapatillas,"skate,urbano",0,APPLY
+13099 205 VULC,2,1,Zapatillas,"skate,urbano",0,APPLY
+13037,2,1,Zapatillas,"skate,urbano",0,APPLY
+13040,3,1;62,Zapatillas,"skate,urbano",0,APPLY
+P59387-549314 POWERBLEND,2,1,Zapatillas,"skate,urbano",0,APPLY
+050327-2,3,1,Zapatillas,urbano,0,APPLY
+050318-2,3,1,Zapatillas,urbano,0,APPLY
+050318-4,2,1,Zapatillas,urbano,0,APPLY
+050322-2,2,1,Zapatillas,urbano,0,APPLY
+050322-3,2,1,Zapatillas,urbano,0,APPLY
+050324-3,1,1,Zapatillas,urbano,0,APPLY
+6013113,2,7,Equipamiento Fitness,futbol,0,APPLY
+071125L,4,9,Equipamiento Fitness,futbol,0,APPLY
+150173000000,1,9,Equipamiento Fitness,futbol,0,APPLY
+MO21716,2,1,Balones,basket,0,APPLY
+MO21717,2,1,Balones,basket,0,APPLY
+MO21720,2,1,Balones,basket,0,APPLY
+XO 1348,3,9,Equipamiento Fitness,futbol,0,APPLY
+XO 000P,1,9,Equipamiento Fitness,futbol,0,APPLY
+XO 6043,2,9,Equipamiento Fitness,futbol,0,APPLY
+RED FUTBOLITO,5,9,Equipamiento Fitness,futbol,0,APPLY
+RED FUTBOLITO2,2,9,Equipamiento Fitness,futbol,0,APPLY
+RED FUTBOLITO3,1,9,Equipamiento Fitness,futbol,0,APPLY
+DN8724,4,9,Balones,futbol,0,APPLY
+CE9976,3,9,Balones,futbol,0,APPLY
+CW4119,3,9,Balones,futbol,0,APPLY
+M36882,3,9,Balones,futbol,0,APPLY
+M36896,1,9,Balones,futbol,0,APPLY
+M36884,1,9,Balones,futbol,0,APPLY
+SC2362-741,2,9,Balones,futbol,0,APPLY
+SC2362-098,1,9,Balones,futbol,0,APPLY
+SC28581-106,1,9,Balones,futbol,0,APPLY
+214023,1,9,Balones,futbol,0,APPLY
+216039-6076,2,19,Balones,futbol,0,APPLY
+216039-7985,2,19,Balones,futbol,0,APPLY
+2253,1,9,Zapatillas,futbol,0,APPLY
+2269,1,19,Zapatillas,futbol,0,APPLY
+7035,2,1;9,Zapatillas,futbol,0,APPLY
+23-MOSU-OR,2,9,Zapatillas,futbol,0,APPLY
+23-MOSU-RO,2,9,Zapatillas,futbol,0,APPLY
+23-MOSU-VE,1,9,Zapatillas,futbol,0,APPLY
+082812 01,1,9,Balones,futbol,0,APPLY
+082816 01,1,9,Balones,futbol,0,APPLY
+082822 01,1,9,Balones,futbol,0,APPLY
+4051309108337,1,19,Guantes,futbol,0,APPLY
+4051309108375,1,19,Guantes,futbol,0,APPLY
+8399,2,19,Guantes,futbol,0,APPLY
+415131-100,1,19,Zapatillas,"futbol,sala",0,APPLY
+415131-810,2,19,Zapatillas,"futbol,sala",0,APPLY
+437530-101,1,19,Zapatillas,"futbol,sala",0,APPLY
+429555-070,1,19,Zapatillas,futbol,0,APPLY
+429555-140,1,19,Zapatillas,futbol,0,APPLY
+429555-414,1,19,Zapatillas,futbol,0,APPLY
+442465-010,1,9,Zapatillas,futbol,0,APPLY
+442465-100,1,9,Zapatillas,futbol,0,APPLY
+442465-104,1,9,Zapatillas,futbol,0,APPLY
+442467-010,1,9,Zapatillas,futbol,0,APPLY
+442467-100,1,9,Zapatillas,futbol,0,APPLY
+442467-104,1,9,Zapatillas,futbol,0,APPLY
+45242U-FZ9,1,19,Zapatillas,futbol,0,APPLY
+45242U-880,1,19,Zapatillas,futbol,0,APPLY
+45242U-FNF,1,19,Zapatillas,futbol,0,APPLY
+454318-130,1,9,Zapatillas,futbol,0,APPLY
+454318-160,1,9,Zapatillas,futbol,0,APPLY
+454318-018,1,9,Zapatillas,futbol,0,APPLY
+488118-018,1,9,Zapatillas,futbol,0,APPLY
+488118-070,1,9,Zapatillas,futbol,0,APPLY
+488118-414,1,9,Zapatillas,futbol,0,APPLY
+509040-002,1,19,Zapatillas,futbol,0,APPLY
+509040-010,1,19,Zapatillas,futbol,0,APPLY
+509040-013,1,19,Zapatillas,futbol,0,APPLY
+511274-1590,1,19,Balones,futbol,0,APPLY
+511274-1710,1,19,Balones,futbol,0,APPLY
+511274-1810,1,19,Balones,futbol,0,APPLY
+511284-1450,1,19,Balones,futbol,0,APPLY
+511284-7073,1,19,Balones,futbol,0,APPLY
+511284-1711,1,19,Balones,futbol,0,APPLY
+102039 06,1,19,Zapatillas,"futbol,sala",0,APPLY
+102039 08,1,19,Zapatillas,"futbol,sala",0,APPLY
+102039 01,1,19,Zapatillas,"futbol,sala",0,APPLY
+102478 01,1,9,Zapatillas,futbol,0,APPLY
+102478 04,1,9,Zapatillas,futbol,0,APPLY
+102482 04,1,9,Zapatillas,futbol,0,APPLY
+5207000000000,3,9;32,Equipamiento Fitness,futbol,0,APPLY
+5207000110813,1,9,Equipamiento Fitness,futbol,0,APPLY
+5207000130811,1,9,Equipamiento Fitness,futbol,0,APPLY
+102697 01,1,9,Zapatillas,futbol,0,APPLY
+102697 03,1,9,Zapatillas,futbol,0,APPLY
+102699 01,1,9,Zapatillas,futbol,0,APPLY
+104204 06,1,9,Zapatillas,futbol,0,APPLY
+104204 01,1,9,Zapatillas,futbol,0,APPLY
+104212 01,1,19,Zapatillas,futbol,0,APPLY
+104339 01,1,19,Zapatillas,futbol,0,APPLY
+104341 01,1,19,Zapatillas,futbol,0,APPLY
+104344 01,1,19,Zapatillas,futbol,0,APPLY
+724933-020,1,19,Zapatillas,"running,urbano",0,APPLY
+819135-001,1,19,Zapatillas,"running,urbano",0,APPLY
+819135-006,1,19,Zapatillas,"running,urbano",0,APPLY
+Q2762000,1,19,Zapatillas,futbol,0,APPLY
+Q2765000,1,19,Zapatillas,futbol,0,APPLY
+Q2770000,1,19,Zapatillas,futbol,0,APPLY
+831969-014,1,9,Zapatillas,futbol,0,APPLY
+831969-601,1,9,Zapatillas,futbol,0,APPLY
+831969-303,1,9,Zapatillas,futbol,0,APPLY
+9612,2,5;19,Zapatillas,futbol,0,APPLY
+9616,1,9,Zapatillas,futbol,0,APPLY
+9609,1,9,Zapatillas,futbol,0,APPLY
+9760,1,9,Zapatillas,futbol,0,APPLY
+9766,1,9,Zapatillas,futbol,0,APPLY
+P1GD1405,1,9,Zapatillas,futbol,0,APPLY
+AF6024,1,9,Zapatillas,"running,urbano",0,APPLY
+AF6028,1,9,Zapatillas,"running,urbano",0,APPLY
+BB0805,1,19,Zapatillas,"running,urbano",0,APPLY
+AH7248-100,1,19,Zapatillas,futbol,0,APPLY
+AH7248-006,1,19,Zapatillas,futbol,0,APPLY
+AH7248-107,1,19,Zapatillas,futbol,0,APPLY
+AV9000,1,19,Accesorios Deportivos,futbol,0,APPLY
+AV9095,1,9,Accesorios Deportivos,futbol,0,APPLY
+AV9600,2,9,Accesorios Deportivos,futbol,0,APPLY
+B22816,1,9,Zapatillas,trekking,0,APPLY
+B25468,1,19,Zapatillas,trekking,0,APPLY
+B40652,1,19,Zapatillas,trekking,0,APPLY
+B44303,1,19,Zapatillas,futbol,0,APPLY
+B44304,1,19,Zapatillas,futbol,0,APPLY
+G65448,1,19,Zapatillas,futbol,0,APPLY
+C16,1,4,Equipamiento Fitness,futbol,0,APPLY
+FAML16,2,4,Equipamiento Fitness,futbol,0,APPLY
+CAMGL14,1,4,Equipamiento Fitness,futbol,0,APPLY
+D67018,1,9,Zapatillas,futbol,0,APPLY
+G65423,1,9,Zapatillas,futbol,0,APPLY
+Q33913,1,9,Zapatillas,futbol,0,APPLY
+1289534-101,1,9,Zapatillas,futbol,0,APPLY
+1289534-400,1,9,Zapatillas,futbol,0,APPLY
+1289539-101,1,19,Zapatillas,futbol,0,APPLY
+G40955,1,9,Zapatillas,futbol,0,APPLY
+V23641,1,19,Zapatillas,futbol,0,APPLY
+V23642,1,9,Zapatillas,futbol,0,APPLY
+LA4OPB,1,9,Equipamiento Fitness,futbol,0,APPLY
+LA50PB,2,9,Equipamiento Fitness,futbol,0,APPLY
+LAMPTH,1,9,Equipamiento Fitness,futbol,0,APPLY
+M1001,4,9,Equipamiento Fitness,futbol,0,APPLY
+M1000,3,9,Equipamiento Fitness,futbol,0,APPLY
+M1003,2,9,Equipamiento Fitness,futbol,0,APPLY
+M36908,1,9,Zapatillas,futbol,0,APPLY
+M36909,1,9,Zapatillas,futbol,0,APPLY
+X16981,1,9,Zapatillas,futbol,0,APPLY
+Q5008000,1,9,Zapatillas,futbol,0,APPLY
+Q0925000,1,9,Zapatillas,futbol,0,APPLY
+Q5009000,1,9,Zapatillas,futbol,0,APPLY
+PITO FOX,1,9,Accesorios Deportivos,futbol,0,APPLY
+PITO OFICIAL,1,9,Accesorios Deportivos,futbol,0,APPLY
+PITO OFICIAL CLAS,1,9,Accesorios Deportivos,futbol,0,APPLY
+AJ6959-060,1,9,Zapatillas,futbol,0,APPLY
+AJ6959-717,3,9,Zapatillas,futbol,0,APPLY
+AJ6959-600,1,19,Zapatillas,futbol,0,APPLY
+BA9688,2,9,Zapatillas,futbol,0,APPLY
+BB1051,2,9,Zapatillas,futbol,0,APPLY
+BB1060,1,19,Zapatillas,futbol,0,APPLY
+S82362,1,9,Zapatillas,futbol,0,APPLY
+CP9192,1,9,Zapatillas,futbol,0,APPLY
+S82365,1,9,Zapatillas,futbol,0,APPLY
+Q5923000,1,9,Zapatillas,futbol,0,APPLY
+Q5927000,1,19,Zapatillas,futbol,0,APPLY
+Q5963000,1,19,Zapatillas,futbol,0,APPLY
+BA9021,2,9,Zapatillas,futbol,0,APPLY
+S79632,1,19,Zapatillas,futbol,0,APPLY
+S79641,1,19,Zapatillas,futbol,0,APPLY
+R6596,1,9,Balones,futbol,0,APPLY
+S7286,1,9,Balones,futbol,0,APPLY
+T4834,1,9,Balones,futbol,0,APPLY
+SC2100-499,1,9,Balones,futbol,0,APPLY
+SC2379-076,1,9,Balones,futbol,0,APPLY
+SC2708-618,1,9,Balones,futbol,0,APPLY
+SC2361-639,1,9,Balones,futbol,0,APPLY
+SC2361-701,1,9,Balones,futbol,0,APPLY
+SC2361-867,1,9,Balones,futbol,0,APPLY
+SC2415-190,1,9,Balones,"futbol,sala",0,APPLY
+SC2518-167,1,9,Balones,"futbol,sala",0,APPLY
+SC2625-885,1,9,Balones,"futbol,sala",0,APPLY
+R0470N,1,9,Balones,futbol,0,APPLY
+R0471N,1,9,Balones,futbol,0,APPLY
+R8925,1,9,Balones,futbol,0,APPLY
+5207000120812,2,9,Equipamiento Fitness,futbol,0,APPLY
+5207000170817,1,9,Equipamiento Fitness,futbol,0,APPLY
+SET ARQUE,1,9,Equipamiento Fitness,futbol,0,APPLY
+81266U-2VZ,2,19,Zapatillas,futbol,0,APPLY
+81266U-EPW,1,19,Zapatillas,futbol,0,APPLY
+81266U-EPX,1,19,Zapatillas,futbol,0,APPLY
+86004U-GXY,1,19,Zapatillas,futbol,0,APPLY
+86004U-GY9,2,19,Zapatillas,futbol,0,APPLY
+86114U-GXY,2,19,Zapatillas,futbol,0,APPLY
+86129U-88D,2,19,Zapatillas,futbol,0,APPLY
+86131U-88D,3,19,Zapatillas,futbol,0,APPLY
+86131U-GGQ,2,19,Zapatillas,futbol,0,APPLY
+AT8150-606,4,9,Zapatillas,futbol,0,APPLY
+AT8150-801,2,9,Zapatillas,futbol,0,APPLY
+AT8156-801,2,9,Zapatillas,futbol,0,APPLY
+CF1199,2,9,Balones,futbol,0,APPLY
+CF1201,1,9,Balones,futbol,0,APPLY
+CF1204,1,9,Balones,futbol,0,APPLY
+FH7342,2,9,Balones,futbol,0,APPLY
+FH7349,3,9,Balones,futbol,0,APPLY
+FH7356,2,9,Balones,futbol,0,APPLY
+1368010-002,2,7,Accesorios Deportivos,,0,APPLY
+1368010-013,2,7,Accesorios Deportivos,,0,APPLY
+H67174,2,14,Sandalias y Chalas,urbano,0,APPLY
+AI0037,1,7,Sandalias y Chalas,urbano,0,APPLY
+NESSB430,4,2,Poleras y Camisetas,natacion,0,APPLY
+NESSA587,4,2,Poleras y Camisetas,natacion,0,APPLY
+91818U-JEM,2,2,Chaquetas y Polerones,futbol,0,APPLY
+91818U-JES,2,2,Chaquetas y Polerones,futbol,0,APPLY
+894230-739,3,2,Poleras y Camisetas,futbol,0,APPLY
+894230-815,2,2,Poleras y Camisetas,futbol,0,APPLY
+HA8344,2,2,Chaquetas y Polerones,futbol,0,APPLY
+HA8346,2,2,Chaquetas y Polerones,futbol,0,APPLY
+O04450,1,22,Buzos y Pantalones,urbano,0,APPLY
+O04451,1,22,Buzos y Pantalones,urbano,0,APPLY
+O04454,1,22,Buzos y Pantalones,urbano,0,APPLY
+O04455,1,22,Buzos y Pantalones,urbano,0,APPLY
+O58859,1,22,Buzos y Pantalones,urbano,0,APPLY
+O58863,1,22,Buzos y Pantalones,urbano,0,APPLY
+O58864,1,22,Chaquetas y Polerones,urbano,0,APPLY
+O58865,1,22,Chaquetas y Polerones,urbano,0,APPLY
+X13146,1,22,Buzos y Pantalones,urbano,0,APPLY
+X24775,1,22,Buzos y Pantalones,urbano,0,APPLY
+3893112,2,97,Trajes de Baño,futbol,0,APPLY
+K15Z701,2,97,Trajes de Baño,futbol,0,APPLY
+45000001,1,21,Poleras y Camisetas,futbol,0,APPLY
+45001001,1,21,Poleras y Camisetas,futbol,0,APPLY
+X25073,1,97,Poleras y Camisetas,urbano,0,APPLY
+X25074,1,97,Poleras y Camisetas,urbano,0,APPLY
+24-16A,5,33,Zapatos de Vestir,vestir,0,APPLY
+24-16B,1,33,Zapatos de Vestir,vestir,0,APPLY
+231,6,5;7;12;63,Zapatillas,skate,0,APPLY
+202,10,2;7;9;14;17;45;63,Zapatillas,skate,0,APPLY
+304-6986,1,56,Zapatillas,recre,0,APPLY
+204-6986,1,56,Zapatillas,recre,0,APPLY
+3652,1,63,Zapatillas,skate,0,APPLY
+4073,1,63,Zapatillas,skate,0,APPLY
+4502,1,63,Zapatillas,skate,0,APPLY
+4922,1,63,Zapatillas,skate,0,APPLY
+6580,3,87,Sandalias y Chalas,natacion,0,APPLY
+6579,2,,Sandalias y Chalas,natacion,0,APPLY
+7062,1,63,Zapatos de Vestir,vestir,0,APPLY
+7063,1,63,Zapatos de Vestir,vestir,0,APPLY
+7963,1,63,Zapatillas,skate,0,APPLY
+7961,1,63,Zapatillas,skate,0,APPLY
+8306,1,63,Zapatillas,skate,0,APPLY
+8308,1,63,Zapatillas,skate,0,APPLY
+9203,1,63,Zapatillas,skate,0,APPLY
+9204,1,63,Zapatillas,skate,0,APPLY
+204,4,2;7;46;63,Zapatillas,skate,0,APPLY
+8206,3,2;63,Zapatillas,skate,0,APPLY
+MONEDERO1,1,63,Accesorios de Vestuario,,0,APPLY
+MONEDERO2,1,63,Accesorios de Vestuario,,0,APPLY
+453,4,7;12,Gorros,urbano,0,APPLY
+1400,9,6;7;10;12;17;21,Gorros,urbano,0,APPLY
+Z19138,1,7,Guantes,futbol,0,APPLY
+Z19140,1,7,Guantes,futbol,0,APPLY
+AZ9859,1,7,Protecciones,futbol,0,APPLY
+AZ9860,1,7,Protecciones,futbol,0,APPLY
+BR5317,1,7,Guantes,futbol,0,APPLY
+CF0113,1,7,Guantes,futbol,0,APPLY
+DRELAO8123,1,108,Protecciones,,0,APPLY
+PRELAO8223,1,108,Protecciones,,0,APPLY
+F87186,1,7,Guantes,futbol,0,APPLY
+G84087,1,7,Guantes,futbol,0,APPLY
+F87252,1,7,Guantes,futbol,0,APPLY
+M38638,1,7,Guantes,futbol,0,APPLY
+20137U-CGC,1,7,Guantes,futbol,0,APPLY
+20137U-ZQ1,1,7,Guantes,futbol,0,APPLY
+M38662,1,7,Guantes,futbol,0,APPLY
+M38663,1,7,Guantes,futbol,0,APPLY
+M38733,1,7,Guantes,futbol,0,APPLY
+G84105,1,9,Guantes,futbol,0,APPLY
+AP7035,1,7,Guantes,futbol,0,APPLY
+CW5562,3,7,Guantes,futbol,0,APPLY
+G73380,1,7,Guantes,futbol,0,APPLY
+G73381,1,7,Guantes,futbol,0,APPLY
+S22483,1,7,Guantes,futbol,0,APPLY
+X15712,1,7,Guantes,futbol,0,APPLY
+S90148,1,7,Guantes,futbol,0,APPLY
+S90149,1,7,Guantes,futbol,0,APPLY
+V00738,1,7,Guantes,futbol,0,APPLY
+V00739,1,7,Guantes,futbol,0,APPLY
+V87147,1,7,Guantes,futbol,0,APPLY
+V87149,1,7,Guantes,futbol,0,APPLY
+5207340194023,2,7,Equipamiento Fitness,futbol,0,APPLY
+5207340194986,2,7,Equipamiento Fitness,futbol,0,APPLY
+5207435000109,4,7;19,Equipamiento Fitness,futbol,0,APPLY
+5207440000000,1,9,Equipamiento Fitness,futbol,0,APPLY
+J0011,6,7;9,Accesorios Deportivos,futbol,0,APPLY
+J0012,2,7,Accesorios Deportivos,futbol,0,APPLY
+SG 00CN,2,7,Protecciones,futbol,0,APPLY
+SGOCNC,2,7,Protecciones,futbol,0,APPLY
+100247366,4,1,Zapatillas,urbano,0,APPLY
+100245892,4,1,Zapatillas,urbano,0,APPLY
+100227359,4,1,Zapatillas,"running,urbano",0,APPLY
+100244539,4,1,Zapatillas,"running,urbano",0,APPLY
+100200461,3,1,Zapatillas,"running,urbano",0,APPLY
+100200460,2,1,Zapatillas,"running,urbano",0,APPLY
+100237345,2,1,Zapatillas,"running,urbano",0,APPLY
+100237347,2,1,Zapatillas,"running,urbano",0,APPLY
+5699226,2,1,Zapatillas,"futbol,pasto",0,APPLY
+569926,2,1,Zapatillas,"futbol,pasto",0,APPLY
+CZ7836-600,2,1,Sandalias y Chalas,urbano,0,APPLY
+CZ5478-400,3,1,Sandalias y Chalas,urbano,0,APPLY
+FJ2557-100,2,1,Zapatillas,"futbol,pasto",0,APPLY
+FJ2587-100,2,1,Zapatillas,"futbol,pasto",0,APPLY
+100233092,2,1,Zapatillas,urbano,0,APPLY
+100233089,2,1,Zapatillas,urbano,0,APPLY
+CD6279-203,5,1,Zapatillas,skate,0,APPLY
+CD6279-003,6,1,Zapatillas,skate,0,APPLY
+CU4870-101,4,1,Zapatillas,urbano,0,APPLY
+CV8727-101,4,1,Zapatillas,urbano,0,APPLY
+VN000ZSO186,3,1,Zapatillas,skate,0,APPLY
+VN000ZSO187,1,1,Zapatillas,skate,0,APPLY
+VN3MVNOOOTU,1,1,Zapatillas,skate,0,APPLY
+VN000TUY186,1,1,Zapatillas,skate,0,APPLY
+2213,1,46,Zapatillas,oficial,0,APPLY
+512,4,12;46;63,Zapatillas,oficial,0,APPLY
+VN-0RQRAK8,1,1,Zapatillas,skate,0,APPLY
+VN-0RQRAK9,2,1,Zapatillas,skate,0,APPLY
+63,3,12;46,Zapatillas,oficial,0,APPLY
+78,5,1;13;41;46,Zapatillas,oficial,0,APPLY
+6353,1,46,Zapatillas,oficial,0,APPLY
+8840,2,26;46,Zapatillas,oficial,0,APPLY
+6410,1,1,Zapatillas,urbano,0,APPLY
+6510,2,1,Zapatillas,urbano,0,APPLY
+6553,2,1,Sandalias y Chalas,natacion,0,APPLY
+6554,1,1,Sandalias y Chalas,natacion,0,APPLY
+660095,2,1,Zapatillas,recre,0,APPLY
+660075,2,1,Zapatillas,recre,0,APPLY
+AT7993-906,2,1,Zapatillas,"futbol,baby",0,APPLY
+AT7993-010,2,1,Zapatillas,"futbol,baby",0,APPLY
+AUTHENTIC U POP,2,1,Zapatillas,skate,0,APPLY
+AUTHENTIC U,2,1,Zapatillas,skate,0,APPLY
+170410,2,1,Gateadores,,0,APPLY
+170510,1,1,Gateadores,,0,APPLY
+CN8490-003,4,1,Zapatillas,urbano,0,APPLY
+CN8490-100,4,1,Zapatillas,urbano,0,APPLY
+Q22957,1,56,Zapatillas,urbano,0,APPLY
+Q22959,1,56,Zapatillas,urbano,0,APPLY
+CA100088Y,2,1,Zapatillas,urbano,0,APPLY
+CA100087Y,3,1,Zapatillas,urbano,0,APPLY
+RF-003130BBW,1,1,Zapatillas,skate,0,APPLY
+RF-003130BR,1,1,Zapatillas,skate,0,APPLY
+VN-0EWZBLK,1,1,Zapatillas,skate,0,APPLY
+VN-0EWZNVY,2,1,Zapatillas,skate,0,APPLY
+VN-0RRFAIT,1,1,Zapatillas,skate,0,APPLY
+VN-0RRFAIU,1,1,Zapatillas,skate,0,APPLY
+VN-0SCQ7YW,1,1,Zapatillas,skate,0,APPLY
+VN-0SCQ7YX,1,1,Zapatillas,skate,0,APPLY
+VN-0T9N76N,1,1,Zapatillas,skate,0,APPLY
+VN-0GYQNWD,1,1,Zapatillas,skate,0,APPLY
+AVASS21033,10,109,Balones,,0,APPLY
+AVASS21008,6,1,Balones,,0,APPLY
+660033,1,1,Zapatillas,recre,0,APPLY
+660064,2,1,Zapatillas,recre,0,APPLY
+660082,2,1,Zapatillas,recre,0,APPLY
+660083,2,1,Zapatillas,recre,0,APPLY
+AT1801-001,3,1,Zapatillas,"running,urbano",0,APPLY
+AT1801-010,2,1,Zapatillas,"running,urbano",0,APPLY
+AT6099-030,2,1,Zapatillas,"futbol,baby",0,APPLY
+AT6099-104,2,1,Zapatillas,"futbol,baby",0,APPLY
+AT8144-104,3,1,Zapatillas,futbol,0,APPLY
+AT8145-906,3,1,Zapatillas,futbol,0,APPLY
+BQ3999-105,2,1,Zapatillas,"urbano,running",0,APPLY
+BQ3999-106,5,1,Zapatillas,"urbano,running",0,APPLY
+CA100100M,2,1,Zapatillas,urbano,0,APPLY
+CA100103M,4,1,Zapatillas,urbano,0,APPLY
+CA100110Y,2,1,Zapatillas,urbano,0,APPLY
+CA100112Y,3,1,Zapatillas,urbano,0,APPLY
+CJ1682-004,2,1,Zapatillas,urbano,0,APPLY
+CJ1682-011,2,1,Zapatillas,urbano,0,APPLY
+CJ2067-004,3,1,Zapatillas,"running,urbano",0,APPLY
+CJ2067-010,2,1,Zapatillas,"running,urbano",0,APPLY
+CJ4066-103,2,1,Zapatillas,urbano,0,APPLY
+CJ4066-104,2,1,Zapatillas,urbano,0,APPLY
+CP100990M,2,1,Zapatillas,urbano,0,APPLY
+CP101687M,2,1,Zapatillas,urbano,0,APPLY
+CP101072M,3,1,Zapatillas,urbano,0,APPLY
+CP101075M,3,1,Zapatillas,urbano,0,APPLY
+CP101112M,2,1,Zapatillas,urbano,0,APPLY
+CP101114M,2,1,Zapatillas,urbano,0,APPLY
+CP101258Y,2,1,Zapatillas,urbano,0,APPLY
+CP101260Y,2,1,Zapatillas,urbano,0,APPLY
+CP101306M,2,1,Zapatillas,urbano,0,APPLY
+CP101307M,2,1,Zapatillas,urbano,0,APPLY
+CQ9246-104,4,1,Zapatillas,urbano,0,APPLY
+CU9038-105,3,1,Zapatillas,urbano,0,APPLY
+CU9452-004,2,1,Zapatillas,"urbano,running",0,APPLY
+CU9453-001,3,1,Zapatillas,"urbano,running",0,APPLY
+CV0978-090,2,1,Zapatillas,"futbol,pasto",0,APPLY
+CV0978-600,2,1,Zapatillas,"futbol,pasto",0,APPLY
+DM3513-002,2,1,Zapatillas,skate,0,APPLY
+DM3513-200,2,1,Zapatillas,skate,0,APPLY
+GS3882-010,2,1,Zapatillas,urbano,0,APPLY
+GS3882-100,2,1,Zapatillas,urbano,0,APPLY
+MZ30,4,1,Equipamiento Fitness,tenis,0,APPLY
+MZ50,4,1,Equipamiento Fitness,tenis,0,APPLY
+VN0A38JAIJU,1,1,Zapatillas,skate,0,APPLY
+VN0A38JAJY3,2,1,Zapatillas,skate,0,APPLY
+VN0A3IUNOLN,1,1,Zapatillas,skate,0,APPLY
+VN0A3IUNVVT,1,1,Zapatillas,skate,0,APPLY
+VN0A3MTF187,1,1,Zapatillas,skate,0,APPLY
+VN0A3MTJIJU,1,1,Zapatillas,skate,0,APPLY
+VN0A3WKZ187,1,1,Zapatillas,skate,0,APPLY
+VN0A3WKZ8J7,1,1,Zapatillas,skate,0,APPLY
+G57461,2,2,Zapatillas,"training,urbano",0,APPLY
+GZ0295,3,2,Zapatillas,"training,urbano",0,APPLY
+3102,1,2,Zapatos de Vestir,vestir,0,APPLY
+3105,1,2,Zapatos de Vestir,vestir,0,APPLY
+8129,1,2,Zapatos de Vestir,vestir,0,APPLY
+9141,1,2,Zapatos de Vestir,vestir,0,APPLY
+MI36053,2,2,Poleras y Camisetas,futbol,0,APPLY
+MI36052,3,1;2,Poleras y Camisetas,futbol,0,APPLY
+688446,2,2,Gorros,urbano,0,APPLY
+688485,1,2,Gorros,urbano,0,APPLY
+688481,2,2,Gorros,urbano,0,APPLY
+688482,2,2,Gorros,urbano,0,APPLY
+BS8458,5,2,Zapatillas,urbano,0,APPLY
+GW2440,3,2,Zapatillas,urbano,0,APPLY
+GS2087,7,2,Gorros,urbano,0,APPLY
+GS2089,2,2,Gorros,urbano,0,APPLY
+GW4957,2,2,Zapatillas,urbano,0,APPLY
+GW4964,2,2,Zapatillas,urbano,0,APPLY
+AD90231M-WB,3,1,Zapatillas,"basket,urbano",0,APPLY
+AD90238M-BB,3,1,Zapatillas,"basket,urbano",0,APPLY
+DA8026-004,3,1,Zapatillas,"basket,urbano",0,APPLY
+DA8026-331,2,1,Zapatillas,"basket,urbano",0,APPLY
+DQ8401-100,3,1,Zapatillas,"basket,urbano",0,APPLY
+DQ8401-016,3,1,Zapatillas,"basket,urbano",0,APPLY
+DD6958-001,2,1,Zapatillas,"basket,urbano",0,APPLY
+DD9304-002,3,1,Zapatillas,"basket,urbano",0,APPLY
+DN3687-061,2,1,Zapatillas,"basket,urbano",0,APPLY
+DN3687-104,3,1,Zapatillas,"basket,urbano",0,APPLY
+14110,2,1,Zapatillas,skate,0,APPLY
+14111,2,1,Zapatillas,skate,0,APPLY
+1805,2,1,Zapatillas,skate,0,APPLY
+1813,2,1,Zapatillas,skate,0,APPLY
+160303-3,2,1,Zapatillas,skate,0,APPLY
+160303-2,3,1,Zapatillas,skate,0,APPLY
+160290-4,2,1,Zapatillas,skate,0,APPLY
+160290-2,2,1,Zapatillas,skate,0,APPLY
+160325-3,3,1,Zapatillas,skate,0,APPLY
+160325-1,3,1,Zapatillas,skate,0,APPLY
+160343-1,2,1,Zapatillas,skate,0,APPLY
+160343-3,2,1,Zapatillas,skate,0,APPLY
+13018,3,1,Zapatillas,skate,0,APPLY
+13019,2,1,Zapatillas,skate,0,APPLY
+13219,2,1,Zapatillas,skate,0,APPLY
+13220,3,1,Zapatillas,skate,0,APPLY
+160275-01,2,1,Zapatillas,skate,0,APPLY
+160275-03,2,1,Zapatillas,skate,0,APPLY
+160294-3,2,1,Zapatillas,skate,0,APPLY
+160294-4,2,1,Zapatillas,skate,0,APPLY
+160296-2,2,1,Zapatillas,skate,0,APPLY
+160296-4,2,1,Zapatillas,skate,0,APPLY
+160312-2,4,1,Zapatillas,skate,0,APPLY
+160312-4,4,1,Zapatillas,skate,0,APPLY
+13006,1,1,Zapatillas,skate,0,APPLY
+13005,2,1,Zapatillas,skate,0,APPLY
+13136,3,1,Zapatillas,skate,0,APPLY
+13137,2,1,Zapatillas,skate,0,APPLY
+13226,2,1,Zapatillas,skate,0,APPLY
+13183,2,1,Zapatillas,skate,0,APPLY
+28R-1,1,1,Zapatillas,"running,urbano",0,APPLY
+28R-2,1,1,Zapatillas,"running,urbano",0,APPLY
+050321-2,3,1,Zapatillas,urbano,0,APPLY
+050321-4,3,1,Zapatillas,urbano,0,APPLY
+050315-4,3,1,Zapatillas,urbano,0,APPLY
+050315-2,3,1,Zapatillas,urbano,0,APPLY
+050400-1,2,1,Zapatillas,urbano,0,APPLY
+050400-2,3,1,Zapatillas,urbano,0,APPLY
+19511,4,108,Accesorios Deportivos,,0,APPLY
+19510,6,108,Accesorios Deportivos,,0,APPLY
+066143999335,4,9,Accesorios Deportivos,futbol,0,APPLY
+0661432910,3,9,Accesorios Deportivos,futbol,0,APPLY
+8434666085,2,9,Balones,futbol,0,APPLY
+8434666085002,2,9,Balones,futbol,0,APPLY
+MEDIDOR PRESION,3,4,Equipamiento Fitness,futbol,0,APPLY
+BIMBIN DE PIEL,2,4,Equipamiento Fitness,futbol,0,APPLY
+510769-1090,2,19,Balones,"futbol,baby",0,APPLY
+510769-1711,1,19,Balones,"futbol,baby",0,APPLY
+AP0396,2,9,Balones,futbol,0,APPLY
+AP0394,1,9,Balones,futbol,0,APPLY
+2.10.34,2,4,Equipamiento Fitness,futbol,0,APPLY
+2.10.30,2,4,Equipamiento Fitness,futbol,0,APPLY
+AP0400,2,9,Balones,futbol,0,APPLY
+AP0401,1,9,Balones,futbol,0,APPLY
+SET ARO CUADRADO,2,9,Equipamiento Fitness,futbol,0,APPLY
+SET ARO HEXAGONAL,2,9,Equipamiento Fitness,futbol,0,APPLY
+082669 01,1,9,Balones,futbol,0,APPLY
+032898 01,3,19,Balones,futbol,0,APPLY
+25389U-137,1,9,Balones,futbol,0,APPLY
+25389U-356,1,9,Balones,futbol,0,APPLY
+29032,4,9,Accesorios Deportivos,futbol,0,APPLY
+29033,2,9,Accesorios Deportivos,futbol,0,APPLY
+29064,1,9,Accesorios Deportivos,futbol,0,APPLY
+29067,2,9,Accesorios Deportivos,futbol,0,APPLY
+3000116-401,1,19,Zapatillas,"futbol,pasto",0,APPLY
+3000116-600,1,19,Zapatillas,"futbol,pasto",0,APPLY
+081660 01,1,19,Zapatillas,"futbol,baby",0,APPLY
+081660 04,1,19,Zapatillas,"futbol,baby",0,APPLY
+082917 01,2,9,Balones,futbol,0,APPLY
+082917 04,1,9,Balones,futbol,0,APPLY
+083765 01,4,9,Balones,"futbol,baby",0,APPLY
+083765 02,4,9,Balones,"futbol,baby",0,APPLY
+RED ETO2,1,19,Equipamiento Fitness,futbol,0,APPLY
+RED ETO,2,19,Equipamiento Fitness,futbol,0,APPLY
+0102059131,2,9,Balones,futbol,0,APPLY
+102059123,2,9,Balones,futbol,0,APPLY
+3490,2,9;53,Zapatillas,"futbol,pasto",0,APPLY
+9749,1,9,Zapatillas,"futbol,pasto",0,APPLY
+0201040209,2,9,Equipamiento Fitness,futbol,0,APPLY
+AV09S1,1,9,Equipamiento Fitness,futbol,0,APPLY
+3527,1,9,Zapatillas,"futbol,pasto",0,APPLY
+M3527000,1,9,Zapatillas,"futbol,pasto",0,APPLY
+1033217010,2,4,Equipamiento Fitness,futbol,0,APPLY
+780799,1,4,Equipamiento Fitness,futbol,0,APPLY
+4051309385776,1,9,Equipamiento Fitness,futbol,0,APPLY
+4051310000000,6,9;19;50,Equipamiento Fitness,futbol,0,APPLY
+4051309681786,2,9,Guantes,futbol,0,APPLY
+4051309681793,2,9,Guantes,futbol,0,APPLY
+4051309841340,2,9,Guantes,futbol,0,APPLY
+4051309841364,2,9,Guantes,futbol,0,APPLY
+4135755-0190,1,9,Balones,futbol,0,APPLY
+4135759-0039,2,9,Balones,futbol,0,APPLY
+415131-608,1,19,Zapatillas,"sala,futbol",0,APPLY
+415131-701,1,19,Zapatillas,"sala,futbol",0,APPLY
+419873-486,1,4,Equipamiento Fitness,futbol,0,APPLY
+478320-410,1,4,Equipamiento Fitness,futbol,0,APPLY
+426065-462,1,4,Chaquetas y Polerones,urbano,0,APPLY
+426065-616,1,4,Chaquetas y Polerones,urbano,0,APPLY
+428731-105,2,9,Zapatillas,"pasto,futbol",0,APPLY
+428731-414,1,9,Zapatillas,"pasto,futbol",0,APPLY
+4343,1,9,Zapatillas,"pasto,futbol",0,APPLY
+7638,1,9,Zapatillas,"pasto,futbol",0,APPLY
+442460-030,1,9,Zapatillas,futbol,0,APPLY
+442461-030,1,19,Zapatillas,futbol,0,APPLY
+454316-703,1,9,Zapatillas,"pasto,futbol",0,APPLY
+509085-703,1,9,Zapatillas,"pasto,futbol",0,APPLY
+4596,1,9,Equipamiento Fitness,futbol,0,APPLY
+5207,3,2;4,Equipamiento Fitness,futbol,0,APPLY
+459703-170,1,19,Zapatillas,"pasto,futbol",0,APPLY
+472541-170,1,9,Zapatillas,"pasto,futbol",0,APPLY
+472559-060,1,9,Zapatillas,"pasto,futbol",0,APPLY
+472559-170,1,9,Zapatillas,"pasto,futbol",0,APPLY
+476702-464,1,9,Zapatillas,"pasto,futbol",0,APPLY
+441985-505,1,9,Zapatillas,"pasto,futbol",0,APPLY
+4779,1,19,Zapatillas,futbol,0,APPLY
+4985,1,19,Zapatillas,futbol,0,APPLY
+481497-604,1,4,Poleras y Camisetas,futbol,0,APPLY
+481497-618,1,4,Poleras y Camisetas,futbol,0,APPLY
+509090-013,1,19,Zapatillas,"pasto,futbol",0,APPLY
+509090-419,1,19,Zapatillas,"pasto,futbol",0,APPLY
+510332-1590,1,19,Balones,"sala,futbol",0,APPLY
+510332-1080,1,19,Balones,"sala,futbol",0,APPLY
+510563-1341,1,19,Balones,"sala,futbol",0,APPLY
+510591-2200,1,19,Balones,"sala,futbol",0,APPLY
+511263-1090,1,19,Balones,futbol,0,APPLY
+511283-1711,1,19,Balones,futbol,0,APPLY
+102008 01,1,9,Zapatillas,"pasto,futbol",0,APPLY
+102008 03,1,9,Zapatillas,"pasto,futbol",0,APPLY
+520165-1950,1,19,Balones,"sala,futbol",0,APPLY
+520196-1090,1,19,Balones,"sala,futbol",0,APPLY
+520248-1191,1,19,Balones,"sala,futbol",0,APPLY
+520261-1875,1,19,Balones,"sala,futbol",0,APPLY
+5207340171987,2,9,Equipamiento Fitness,futbol,0,APPLY
+5207340171062,2,9,Equipamiento Fitness,futbol,0,APPLY
+XF 00CA,2,4,Equipamiento Fitness,futbol,0,APPLY
+XF 0SAN,1,4,Equipamiento Fitness,futbol,0,APPLY
+XF00VG,1,4,Equipamiento Fitness,futbol,0,APPLY
+XFOOBE,1,4,Equipamiento Fitness,futbol,0,APPLY
+103309 01,1,9,Zapatillas,"pasto,futbol",0,APPLY
+103311 01,1,19,Zapatillas,"pasto,futbol",0,APPLY
+541332-1711,1,19,Balones,"sala,futbol",0,APPLY
+PENPEN01055,3,9,Balones,"sala,futbol",0,APPLY
+105613 01,2,9,Zapatillas,"pasto,futbol",0,APPLY
+105690 01,1,19,Zapatillas,"pasto,futbol",0,APPLY
+150173001003,2,9,Equipamiento Fitness,futbol,0,APPLY
+150173001013,2,9,Equipamiento Fitness,futbol,0,APPLY
+605744-402,1,4,Equipamiento Fitness,futbol,0,APPLY
+605744-659,1,4,Equipamiento Fitness,futbol,0,APPLY
+6117,1,19,Zapatillas,"pasto,futbol",0,APPLY
+6138,1,19,Zapatillas,"pasto,futbol",0,APPLY
+620218,1,19,Guantes,futbol,0,APPLY
+620225,1,19,Guantes,futbol,0,APPLY
+631760-015,1,9,Zapatillas,"running,urbano",0,APPLY
+631760-017,1,9,Zapatillas,"running,urbano",0,APPLY
+6840,1,19,Zapatillas,"pasto,futbol",0,APPLY
+6841,3,1;19;63,Zapatillas,"pasto,futbol",0,APPLY
+6869,1,9,Zapatillas,"pasto,futbol",0,APPLY
+6870,1,9,Zapatillas,"pasto,futbol",0,APPLY
+13ANOOL,2,4,Equipamiento Fitness,futbol,0,APPLY
+MIFUGKKML15BB,1,4,Equipamiento Fitness,futbol,0,APPLY
+701950 01,1,4,Equipamiento Fitness,futbol,0,APPLY
+701952 01,1,4,Equipamiento Fitness,futbol,0,APPLY
+7122,1,19,Zapatillas,"pasto,futbol",0,APPLY
+8170,1,19,Zapatillas,"pasto,futbol",0,APPLY
+717058-858,1,19,Zapatillas,"pasto,futbol",0,APPLY
+717061-858,1,19,Zapatillas,"pasto,futbol",0,APPLY
+717081-650,1,19,Zapatillas,"pasto,futbol",0,APPLY
+831952-801,1,9,Zapatillas,"pasto,futbol",0,APPLY
+749904-480,1,19,Zapatillas,"pasto,futbol",0,APPLY
+749904-903,1,19,Zapatillas,"pasto,futbol",0,APPLY
+795,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUI5,1,4,Equipamiento Fitness,futbol,0,APPLY
+80250U-796,1,9,Zapatillas,"pasto,futbol",0,APPLY
+80250U-J46,1,9,Zapatillas,"pasto,futbol",0,APPLY
+80257U-944,1,9,Zapatillas,"pasto,futbol",0,APPLY
+80626U-440,1,9,Zapatillas,"pasto,futbol",0,APPLY
+80397U-CTO,1,9,Zapatillas,"pasto,futbol",0,APPLY
+80397U-CU2,1,9,Zapatillas,"pasto,futbol",0,APPLY
+80415U-YVZ,2,9;19,Zapatillas,futbol,0,APPLY
+85334U-791,1,9,Zapatillas,futbol,0,APPLY
+80625U-440,1,9,Zapatillas,"pasto,futbol",0,APPLY
+80625U-BCZ,1,9,Zapatillas,"pasto,futbol",0,APPLY
+8528,1,9,Zapatillas,"pasto,futbol",0,APPLY
+8537,1,9,Zapatillas,"pasto,futbol",0,APPLY
+8532,1,19,Zapatillas,futbol,0,APPLY
+9517,1,19,Zapatillas,futbol,0,APPLY
+85344U-Y77,1,19,Zapatillas,"pasto,futbol",0,APPLY
+85344U-ZOT,1,19,Zapatillas,"pasto,futbol",0,APPLY
+885652000000,1,9,Medias y Calcetines,gim,0,APPLY
+885652004138,1,9,Medias y Calcetines,gim,0,APPLY
+897-21100AYL,1,4,Equipamiento Fitness,futbol,0,APPLY
+897-21100LL,1,4,Equipamiento Fitness,futbol,0,APPLY
+AB1657,1,9,Accesorios Deportivos,,0,APPLY
+AB1656,1,9,Accesorios Deportivos,,0,APPLY
+AP0392,2,9,Balones,futbol,0,APPLY
+AP0393,1,9,Balones,futbol,0,APPLY
+AQ2288,3,9,Zapatillas,tenis,0,APPLY
+B23055,1,9,Zapatillas,tenis,0,APPLY
+ARCO,2,19,Equipamiento Fitness,"sala,futbol",0,APPLY
+MSAFAB-B,2,9,Equipamiento Fitness,"sala,futbol",0,APPLY
+1227309-100,1,9,Zapatillas,"pasto,futbol",0,APPLY
+1229830-002,1,9,Zapatillas,"pasto,futbol",0,APPLY
+1227310-002,1,9,Zapatillas,"pasto,futbol",0,APPLY
+1227310-324,1,9,Zapatillas,"pasto,futbol",0,APPLY
+AT19743,1,9,Equipamiento Fitness,futbol,0,APPLY
+MSAFSCPL-50,1,9,Equipamiento Fitness,futbol,0,APPLY
+AV 0012,1,9,Equipamiento Fitness,futbol,0,APPLY
+0201050309,2,9,Equipamiento Fitness,futbol,0,APPLY
+AV9080,2,9,Equipamiento Fitness,futbol,0,APPLY
+AV 9803,2,19,Equipamiento Fitness,futbol,0,APPLY
+AVOEDC,1,9,Equipamiento Fitness,futbol,0,APPLY
+AVEDCC,2,9,Equipamiento Fitness,futbol,0,APPLY
+AZ3188,2,9,Balones,futbol,0,APPLY
+AZ3201,1,9,Balones,futbol,0,APPLY
+B23099,1,9,Zapatillas,running,0,APPLY
+S81688,1,9,Zapatillas,running,0,APPLY
+B23305,1,9,Zapatillas,"running,urbano",0,APPLY
+B34813,1,19,Zapatillas,"running,urbano",0,APPLY
+B25819,1,19,Zapatillas,"pasto,futbol",0,APPLY
+S77218,1,9,Zapatillas,"pasto,futbol",0,APPLY
+B34861,1,19,Zapatillas,"pasto,futbol",0,APPLY
+B34862,1,9,Zapatillas,"pasto,futbol",0,APPLY
+B35108,1,9,Zapatillas,"pasto,futbol",0,APPLY
+B44212,1,19,Zapatillas,"pasto,futbol",0,APPLY
+B40102,1,9,Zapatillas,"pasto,futbol",0,APPLY
+M29531,1,9,Zapatillas,"pasto,futbol",0,APPLY
+102003 02,1,9,Zapatillas,"pasto,futbol",0,APPLY
+102003 03,1,9,Zapatillas,"pasto,futbol",0,APPLY
+B48010,1,9,Balones,futbol,0,APPLY
+AZ5443,1,9,Balones,futbol,0,APPLY
+BA9024,1,19,Zapatillas,"pasto,futbol",0,APPLY
+S79658,1,19,Zapatillas,"pasto,futbol",0,APPLY
+BB0680,1,19,Zapatillas,"pasto,futbol",0,APPLY
+BB0672,1,9,Zapatillas,"pasto,futbol",0,APPLY
+BQ1378,1,9,Balones,futbol,0,APPLY
+BQ1375,1,9,Balones,futbol,0,APPLY
+C75638,1,19,Zapatillas,urbano,0,APPLY
+C75710,1,19,Zapatillas,urbano,0,APPLY
+C75663,1,19,Zapatillas,running,0,APPLY
+C75664,1,19,Zapatillas,running,0,APPLY
+C77907,1,19,Zapatillas,running,0,APPLY
+B26795,1,19,Zapatillas,running,0,APPLY
+Q2782000,1,19,Zapatillas,"pasto,futbol",0,APPLY
+Q5086000,1,19,Zapatillas,"pasto,futbol",0,APPLY
+032836 03,1,19,Balones,"sala,futbol",0,APPLY
+032836 04,1,19,Balones,"sala,futbol",0,APPLY
+CE8148,1,9,Balones,futbol,0,APPLY
+CE8135,1,9,Balones,futbol,0,APPLY
+CE9973,3,9,Balones,futbol,0,APPLY
+CE9974,3,9,Balones,futbol,0,APPLY
+1311164-101,2,19,Balones,"sala,futbol",0,APPLY
+1311164-100,1,19,Balones,"sala,futbol",0,APPLY
+CIN120,1,9,Accesorios Deportivos,futbol,0,APPLY
+GEFBC1CIN18YY,3,9,Accesorios Deportivos,futbol,0,APPLY
+1264202-003,1,9,Zapatillas,"pasto,futbol",0,APPLY
+1264202-103,2,9,Zapatillas,"pasto,futbol",0,APPLY
+1264204-003,1,9,Zapatillas,futbol,0,APPLY
+1264204-103,1,9,Zapatillas,futbol,0,APPLY
+190556 17,1,19,Zapatillas,running,0,APPLY
+190556 32,3,19,Zapatillas,running,0,APPLY
+1269082-002,1,9,Zapatillas,futbol,0,APPLY
+1269082-600,2,9,Zapatillas,futbol,0,APPLY
+EQUIPO13,1,4,Equipamiento Fitness,futbol,0,APPLY
+MATWUFROM15R,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO35,1,4,Equipamiento Fitness,basket,0,APPLY
+EQUIPO34,1,4,Equipamiento Fitness,basket,0,APPLY
+G61506,1,19,Zapatillas,"sala,futbol",0,APPLY
+G65408,1,19,Zapatillas,"sala,futbol",0,APPLY
+F32560,1,9,Zapatillas,"pasto,futbol",0,APPLY
+F32582,1,9,Zapatillas,"pasto,futbol",0,APPLY
+F32694,1,9,Zapatillas,"pasto,futbol",0,APPLY
+F32716,1,19,Zapatillas,"pasto,futbol",0,APPLY
+F32749,1,9,Zapatillas,"pasto,futbol",0,APPLY
+F32769,1,19,Zapatillas,"pasto,futbol",0,APPLY
+F32987,1,19,Zapatillas,futbol,0,APPLY
+F32988,1,19,Zapatillas,futbol,0,APPLY
+1919,1,19,Balones,futbol,0,APPLY
+1933,2,19,Balones,futbol,0,APPLY
+F98086,1,19,Zapatillas,"pasto,futbol",0,APPLY
+F98087,1,19,Zapatillas,"pasto,futbol",0,APPLY
+DA9334,3,9,Zapatillas,"pasto,futbol",0,APPLY
+DA9335,3,9,Zapatillas,"pasto,futbol",0,APPLY
+1975,1,9,Zapatillas,"pasto,futbol",0,APPLY
+1976,2,9;19,Zapatillas,"pasto,futbol",0,APPLY
+FRCO,1,4,Equipamiento Fitness,futbol,0,APPLY
+FRCO1,1,4,Equipamiento Fitness,futbol,0,APPLY
+G40785,1,9,Zapatillas,futbol,0,APPLY
+G40786,1,9,Zapatillas,futbol,0,APPLY
+G40888,1,9,Zapatillas,futbol,0,APPLY
+V23572,1,19,Zapatillas,futbol,0,APPLY
+G61575,1,19,Zapatillas,"pasto,futbol",0,APPLY
+G61802,1,9,Zapatillas,"pasto,futbol",0,APPLY
+G61651,1,19,Zapatillas,urbano,0,APPLY
+G62266,1,19,Zapatillas,urbano,0,APPLY
+G73502,1,9,Balones,futbol,0,APPLY
+G73509,1,9,Balones,futbol,0,APPLY
+G73620,1,9,Balones,futbol,0,APPLY
+G73621,1,9,Balones,futbol,0,APPLY
+G73653,1,9,Balones,"sala,futbol",0,APPLY
+G73654,1,9,Balones,"sala,futbol",0,APPLY
+G83958,1,9,Balones,futbol,0,APPLY
+S15436,1,9,Balones,futbol,0,APPLY
+105012 01,1,9,Zapatillas,"pasto,futbol",0,APPLY
+105013 01,1,19,Zapatillas,"pasto,futbol",0,APPLY
+2.10.40,2,4,Equipamiento Fitness,futbol,0,APPLY
+2.10.44,2,4,Equipamiento Fitness,futbol,0,APPLY
+GS0235-007,1,9,Guantes,futbol,0,APPLY
+GS0235-140,1,9,Guantes,futbol,0,APPLY
+1264213-002,1,9,Zapatillas,futbol,0,APPLY
+1264213-600,1,9,Zapatillas,futbol,0,APPLY
+I0006000,1,9,Balones,futbol,0,APPLY
+M5984000,2,9,Balones,futbol,0,APPLY
+M18175,3,19,Zapatillas,running,0,APPLY
+M18180,2,19,Zapatillas,running,0,APPLY
+M36916,1,9,Balones,futbol,0,APPLY
+M36923,1,9,Balones,futbol,0,APPLY
+M5983,2,19,Balones,futbol,0,APPLY
+R6249,1,19,Balones,futbol,0,APPLY
+M6139000,1,9,Zapatillas,"pasto,futbol",0,APPLY
+M6140000,1,9,Zapatillas,"pasto,futbol",0,APPLY
+N7009000,1,19,Balones,futbol,0,APPLY
+J3359000,1,19,Balones,futbol,0,APPLY
+N7930000,1,19,Zapatillas,"pasto,futbol",0,APPLY
+N7932000,1,19,Zapatillas,"pasto,futbol",0,APPLY
+N7950000,1,9,Zapatillas,"pasto,futbol",0,APPLY
+N7952000,1,9,Zapatillas,"pasto,futbol",0,APPLY
+21164959F,3,9,Zapatillas,"pasto,futbol",0,APPLY
+21165159G,1,9,Zapatillas,"pasto,futbol",0,APPLY
+P1GA1415,2,9,Protecciones,futbol,0,APPLY
+P1GD1415,1,9,Protecciones,futbol,0,APPLY
+Q0045000,1,9,Zapatillas,"pasto,futbol",0,APPLY
+Q0048000,1,9,Zapatillas,"pasto,futbol",0,APPLY
+441980-505,1,9,Zapatillas,"pasto,futbol",0,APPLY
+441980-754,1,9,Zapatillas,"pasto,futbol",0,APPLY
+CG6707,2,9,Zapatillas,urbano,0,APPLY
+DB3346,2,9,Zapatillas,urbano,0,APPLY
+Q33681,1,9,Zapatillas,"pasto,futbol",0,APPLY
+Q33936,1,19,Zapatillas,"pasto,futbol",0,APPLY
+Q8851000,1,9,Zapatillas,"pasto,futbol",0,APPLY
+Q9065000,1,19,Zapatillas,"pasto,futbol",0,APPLY
+R0198,1,9,Zapatillas,"pasto,futbol",0,APPLY
+S1976,1,19,Zapatillas,"pasto,futbol",0,APPLY
+R5509,1,9,Zapatillas,"pasto,futbol",0,APPLY
+R5518,1,9,Zapatillas,"pasto,futbol",0,APPLY
+RED FOOT1,1,9,Equipamiento Fitness,futbol,0,APPLY
+RED FOOT,1,9,Equipamiento Fitness,futbol,0,APPLY
+RED FUTBOLITO E33,1,9,Equipamiento Fitness,futbol,0,APPLY
+E33F,2,9,Equipamiento Fitness,futbol,0,APPLY
+S1352,3,9,Balones,"sala,futbol",0,APPLY
+S1353,1,9,Balones,"sala,futbol",0,APPLY
+S31977,1,19,Zapatillas,"pasto,futbol",0,APPLY
+S79728,1,19,Zapatillas,"pasto,futbol",0,APPLY
+S5-B,3,9,Balones,futbol,0,APPLY
+S5-A,2,19,Balones,futbol,0,APPLY
+S7287,1,9,Balones,futbol,0,APPLY
+T4835,1,9,Balones,futbol,0,APPLY
+SC1842-130,1,9,Balones,"sala,futbol",0,APPLY
+SC1842-160,1,9,Balones,"sala,futbol",0,APPLY
+SC1939-104,1,9,Balones,futbol,0,APPLY
+SC2088-103,1,9,Balones,futbol,0,APPLY
+SC1952-774,1,9,Balones,futbol,0,APPLY
+SC2136-643,1,9,Balones,futbol,0,APPLY
+SC2016-080,1,9,Balones,futbol,0,APPLY
+SC2016-857,1,9,Balones,futbol,0,APPLY
+SC2033-060,1,9,Balones,futbol,0,APPLY
+SC2182-062,1,9,Balones,futbol,0,APPLY
+SC2285-687,1,9,Balones,futbol,0,APPLY
+SC2285-750,1,9,Balones,futbol,0,APPLY
+SC2423-107,1,9,Balones,futbol,0,APPLY
+SC2434-477,1,9,Balones,futbol,0,APPLY
+SC2729-100,1,9,Balones,futbol,0,APPLY
+SC2729-790,1,9,Balones,futbol,0,APPLY
+SC3050-888,1,9,Balones,futbol,0,APPLY
+SC3099-010,3,9,Balones,futbol,0,APPLY
+SC3200-100,2,9,Balones,futbol,0,APPLY
+SC3233-451,2,9,Balones,futbol,0,APPLY
+SC3204-453,2,9,Balones,futbol,0,APPLY
+SC3237-750,2,9,Balones,futbol,0,APPLY
+SC3974-101,5,9,Balones,"sala,futbol",0,APPLY
+SC3974-100,2,9,Balones,"sala,futbol",0,APPLY
+SC9197-567,2,9,Balones,futbol,0,APPLY
+SC9197-607,1,9,Balones,futbol,0,APPLY
+SP0240-154,1,9,Balones,futbol,0,APPLY
+SP0297-022,1,9,Balones,futbol,0,APPLY
+SP0245-044,1,19,Zapatillas,"sala,futbol",0,APPLY
+SP0245-088,1,19,Zapatillas,"sala,futbol",0,APPLY
+U11PRT-01M,1,9,Zapatillas,futbol,0,APPLY
+U11PRT1-137,1,9,Zapatillas,futbol,0,APPLY
+U16KPR2-606,1,19,Zapatillas,"pasto,futbol",0,APPLY
+U16KPR2-BKB,1,19,Zapatillas,"pasto,futbol",0,APPLY
+U41979,1,9,Zapatillas,"pasto,futbol",0,APPLY
+V23554,1,19,Zapatillas,"pasto,futbol",0,APPLY
+V23707,1,9,Zapatillas,"pasto,futbol",0,APPLY
+V23708,1,9,Zapatillas,"pasto,futbol",0,APPLY
+V23709,1,19,Zapatillas,futbol,0,APPLY
+V23710,1,19,Zapatillas,futbol,0,APPLY
+V24845,1,19,Zapatillas,"pasto,futbol",0,APPLY
+V24846,1,9,Zapatillas,"pasto,futbol",0,APPLY
+V87250,1,9,Balones,futbol,0,APPLY
+X16992,1,9,Balones,futbol,0,APPLY
+W43130,1,9,Balones,futbol,0,APPLY
+W43134,1,19,Balones,futbol,0,APPLY
+Z18708,1,9,Balones,futbol,0,APPLY
+Z18710,1,9,Balones,futbol,0,APPLY
+Z19717,1,9,Balones,futbol,0,APPLY
+Z19760,1,19,Balones,futbol,0,APPLY
+B32920,1,9,Zapatillas,"pasto,futbol",0,APPLY
+B32934,1,19,Zapatillas,"pasto,futbol",0,APPLY
+FPWS-216P,1,9,Equipamiento Fitness,futbol,0,APPLY
+MSAFPIPL-N,2,9,Equipamiento Fitness,futbol,0,APPLY
+M29623,1,19,Zapatillas,running,0,APPLY
+M29624,1,19,Zapatillas,running,0,APPLY
+R1238,1,9,Equipamiento Fitness,futbol,0,APPLY
+S3898,1,9,Equipamiento Fitness,futbol,0,APPLY
+R8779,1,9,Zapatillas,"pasto,futbol",0,APPLY
+R8782,1,9,Zapatillas,"pasto,futbol",0,APPLY
+5207140000000,1,9,Equipamiento Fitness,futbol,0,APPLY
+RED ETO1,1,9,Equipamiento Fitness,futbol,0,APPLY
+5207340181061,2,9,Equipamiento Fitness,futbol,0,APPLY
+5207340181986,2,9,Equipamiento Fitness,futbol,0,APPLY
+801-15,2,19,Balones,futbol,0,APPLY
+812-15,2,19,Balones,futbol,0,APPLY
+81338U-FZ6,1,19,Zapatillas,"pasto,futbol",0,APPLY
+81338U-FZB,1,19,Zapatillas,"pasto,futbol",0,APPLY
+81433U-FWY,1,19,Zapatillas,"pasto,futbol",0,APPLY
+85944U-FZ4,1,19,Zapatillas,"pasto,futbol",0,APPLY
+81545U-090,1,9,Zapatillas,"pasto,futbol",0,APPLY
+81546U-090,2,9,Zapatillas,"pasto,futbol",0,APPLY
+8431000000000,2,9;19,Balones,"sala,futbol",0,APPLY
+8431000303020,1,19,Balones,"sala,futbol",0,APPLY
+8433823995222,2,19,Balones,futbol,0,APPLY
+8433823995307,2,19,Balones,futbol,0,APPLY
+8434666001910,1,4,Equipamiento Fitness,futbol,0,APPLY
+8434666002078,1,4,Equipamiento Fitness,futbol,0,APPLY
+85959U-FWY,2,19,Zapatillas,"pasto,futbol",0,APPLY
+85959U-FZ4,2,19,Zapatillas,"pasto,futbol",0,APPLY
+921694-011,1,19,Zapatillas,"urbano,running",0,APPLY
+921694-100,1,19,Zapatillas,"urbano,running",0,APPLY
+AH7378-701,2,19,Zapatillas,"pasto,futbol",0,APPLY
+AH7386-701,1,19,Zapatillas,"pasto,futbol",0,APPLY
+AJ3568-109,1,9,Zapatillas,"pasto,futbol",0,APPLY
+AJ3568-390,1,19,Zapatillas,"pasto,futbol",0,APPLY
+AO2596-100,2,9,Zapatillas,"pasto,futbol",0,APPLY
+AO2597-100,2,9,Zapatillas,"pasto,futbol",0,APPLY
+AP0380,1,9,Balones,futbol,0,APPLY
+AP0391,1,9,Balones,futbol,0,APPLY
+AQ7901-001,1,19,Zapatillas,"pasto,futbol",0,APPLY
+AQ7902-001,1,9,Zapatillas,"pasto,futbol",0,APPLY
+B33623,1,19,Zapatillas,"running,trekking",0,APPLY
+B33628,1,19,Zapatillas,"running,trekking",0,APPLY
+CM7667,1,9,Zapatillas,"pasto,futbol",0,APPLY
+CP9301,1,9,Zapatillas,"pasto,futbol",0,APPLY
+F35373,1,19,Zapatillas,"pasto,futbol",0,APPLY
+F35381,2,9,Zapatillas,"pasto,futbol",0,APPLY
+F35564,1,19,Sandalias y Chalas,descanso,0,APPLY
+F35565,1,19,Sandalias y Chalas,descanso,0,APPLY
+F35595,3,9,Zapatillas,"pasto,futbol",0,APPLY
+F35629,2,9,Zapatillas,"pasto,futbol",0,APPLY
+FOX40,2,9,Equipamiento Fitness,futbol,0,APPLY
+TW300,1,9,Equipamiento Fitness,futbol,0,APPLY
+GU0207,2,9,Balones,futbol,0,APPLY
+H57812,2,4,Balones,futbol,0,APPLY
+L591291MH,3,9,Balones,"sala,futbol",0,APPLY
+L591291WK,3,9,Balones,"sala,futbol",0,APPLY
+M1002,3,9,Equipamiento Fitness,futbol,0,APPLY
+M1002 0,2,9,Equipamiento Fitness,futbol,0,APPLY
+MA30618,2,4,Balones,futbol,0,APPLY
+MA30621,2,4,Balones,futbol,0,APPLY
+MA31247,2,4,Equipamiento Fitness,futbol,0,APPLY
+MI33990,2,4,Equipamiento Fitness,futbol,0,APPLY
+MO21707,3,9,Equipamiento Fitness,futbol,0,APPLY
+PIT1200,1,9,Equipamiento Fitness,futbol,0,APPLY
+PESA RUSA 10KG,2,111,Accesorios Deportivos,gim,0,APPLY
+PESA RUSA 16KG,2,111,Accesorios Deportivos,gim,0,APPLY
+RE00081,2,19,Guantes,futbol,0,APPLY
+RE00118,2,9,Guantes,futbol,0,APPLY
+SC3137-056,1,9,Balones,futbol,0,APPLY
+SC3479-166,1,9,Balones,futbol,0,APPLY
+SC3148-100,1,9,Balones,futbol,0,APPLY
+SC3597-100,1,9,Balones,futbol,0,APPLY
+SC3255-012,1,9,Balones,futbol,0,APPLY
+SC3339-710,2,9,Balones,futbol,0,APPLY
+SC3311-101,3,9,Balones,futbol,0,APPLY
+SC3311-710,2,9,Balones,futbol,0,APPLY
+SC3971-101,2,9,Balones,"sala,futbol",0,APPLY
+SC3971-102,2,9,Balones,"sala,futbol",0,APPLY
+T6867,1,9,Balones,futbol,0,APPLY
+T6868,1,9,Balones,futbol,0,APPLY
+U17CRGIO-010,1,19,Zapatillas,"pasto,futbol",0,APPLY
+U17CRGIO-EQF,1,19,Zapatillas,"pasto,futbol",0,APPLY
+1361034-001,2,7,Poleras y Camisetas,training,0,APPLY
+6013313,2,7,Equipamiento Fitness,futbol,0,APPLY
+91500,4,7,Protecciones,seguridad,0,APPLY
+1318546-001,2,7,Chaquetas y Polerones,training,0,APPLY
+H06651,2,2,Poleras y Camisetas,urbano,0,APPLY
+1366318-413,3,2,Chaquetas y Polerones,training,0,APPLY
+JZ0300,2,2,Buzos y Pantalones,training,0,APPLY
+451140400 C,2,97,Mallas,training,0,APPLY
+1370404-474,2,2,Poleras y Camisetas,urbano,0,APPLY
+4511404004,2,97,Poleras y Camisetas,training,0,APPLY
+537313 01,2,2,Poleras y Camisetas,urbano,0,APPLY
+793682,2,2,Poleras y Camisetas,urbano,0,APPLY
+FM0676,2,2,Medias y Calcetines,,0,APPLY
+1332981-422,2,2,Poleras y Camisetas,urbano,0,APPLY
+1357143-310,2,2,Poleras y Camisetas,urbano,0,APPLY
+1363282-001,3,2,Poleras y Camisetas,urbano,0,APPLY
+1352023-012,2,2,Poleras y Camisetas,urbano,0,APPLY
+765409,2,2,Poleras y Camisetas,urbano,0,APPLY
+835504,2,2,Poleras y Camisetas,urbano,0,APPLY
+851704,2,2,Shorts,urbano,0,APPLY
+91836U-FK5,2,2,Poleras y Camisetas,futbol,0,APPLY
+93259U-KIT,2,2,Poleras y Camisetas,futbol,0,APPLY
+93265U-KIT,2,2,Poleras y Camisetas,futbol,0,APPLY
+GA3794,6,2;12,Shorts,futbol,0,APPLY
+GA3806,2,2,Poleras y Camisetas,futbol,0,APPLY
+GA3833,2,2,Buzos y Pantalones,futbol,0,APPLY
+GH7250,2,2,Buzos y Pantalones,training,0,APPLY
+GJ6623,2,2,Buzos y Pantalones,urbano,0,APPLY
+GK9545,2,2,Poleras y Camisetas,futbol,0,APPLY
+GQ1241,2,2,Buzos y Pantalones,futbol,0,APPLY
+GU0056,5,2,Gorros,futbol,0,APPLY
+GU0111,3,2,Gorros,futbol,0,APPLY
+HS5941,2,2,Poleras y Camisetas,futbol,0,APPLY
+PRIMERA CAPA HOMBRE,4,97,Poleras y Camisetas,training,0,APPLY
+TR130004-110,2,2,Buzos y Pantalones,urbano,0,APPLY
+O58885,1,22,Buzos y Pantalones,baby,0,APPLY
+X13083,1,22,Buzos y Pantalones,baby,0,APPLY
+X13188,1,22,Buzos y Pantalones,baby,0,APPLY
+X30516,1,22,Buzos y Pantalones,"baby,futbol",0,APPLY
+X32465,1,22,Buzos y Pantalones,baby,0,APPLY
+1031,2,1;8,Poleras y Camisetas,urbano,0,APPLY
+44000001,1,21,Poleras y Camisetas,futbol,0,APPLY
+47000001,1,21,Poleras y Camisetas,futbol,0,APPLY
+1383258-001,2,8,Poleras y Camisetas,running,0,APPLY
+1383333-410,2,8,Poleras y Camisetas,urbano,0,APPLY
+N6010000,1,8,Poleras y Camisetas,urbano,0,APPLY
+O58860,1,8,Poleras y Camisetas,baby,0,APPLY
+O58868,1,97,Poleras y Camisetas,baby,0,APPLY
+X25698,1,97,Poleras y Camisetas,"baby,futbol",0,APPLY
+X31924,1,97,Poleras y Camisetas,baby,0,APPLY
+46000001,1,21,Poleras y Camisetas,futbol,0,APPLY
+1054,2,100,Chaquetas y Polerones,urbano,0,APPLY
+N5815000,1,32,Buzos y Pantalones,training,0,APPLY
+O58848,1,31,Chaquetas y Polerones,baby,0,APPLY
+O58880,1,31,Chaquetas y Polerones,baby,0,APPLY
+X32351,1,32,Chaquetas y Polerones,baby,0,APPLY
+X32363,1,32,Chaquetas y Polerones,baby,0,APPLY
+HT9972,2,10,Shorts,"futbol,baby",0,APPLY
+4758,2,1;20,Trajes de Baño,natacion,0,APPLY
+NESS8370,2,20,Trajes de Baño,natacion,0,APPLY
+PANUELO,7,7;63,Accesorios de Vestuario,,0,APPLY
+4044,4,10;56,Zapatos de Vestir,oficial,0,APPLY
+6200,2,56,Zapatos de Vestir,oficial,0,APPLY
+7300,1,56,Zapatos de Vestir,oficial,0,APPLY
+7302,1,56,Zapatos de Vestir,oficial,0,APPLY
+22023209,1,33,Zapatos de Vestir,oficial,0,APPLY
+2898,1,33,Zapatos de Vestir,oficial,0,APPLY
+2,24,1;2;5;8;11;14;17;18;26;28;41;46;58;63,Zapatillas,baby,0,APPLY
+306,5,36;46;63,Zapatillas,skate,0,APPLY
+306102,1,33,Zapatos de Vestir,oficial,0,APPLY
+320401,2,33,Zapatos de Vestir,oficial,0,APPLY
+32149120,2,33,Zapatos de Vestir,oficial,0,APPLY
+321420,2,33,Zapatos de Vestir,oficial,0,APPLY
+325,2,14;63,Zapatillas,skate,0,APPLY
+3293,1,63,Zapatillas,skate,0,APPLY
+339,1,33,Zapatos de Vestir,oficial,0,APPLY
+420280,2,33,Zapatos de Vestir,oficial,0,APPLY
+4210,3,33;63,Zapatos de Vestir,oficial,0,APPLY
+42220110,1,33,Zapatos de Vestir,oficial,0,APPLY
+42249109,1,33,Zapatos de Vestir,oficial,0,APPLY
+422810,3,33,Zapatos de Vestir,oficial,0,APPLY
+428884,1,33,Zapatos de Vestir,oficial,0,APPLY
+4312,2,2;63,Zapatillas,skate,0,APPLY
+465,2,56;63,Zapatos de Vestir,oficial,0,APPLY
+4672,1,63,Zapatillas,skate,0,APPLY
+480,1,33,Zapatos de Vestir,oficial,0,APPLY
+102,10,1;2;7;57;59;63;64,Zapatillas,skate,0,APPLY
+5223,2,2;63,Zapatillas,skate,0,APPLY
+5746,1,63,Zapatos de Vestir,vestir,0,APPLY
+6468,2,2;63,Zapatillas,skate,0,APPLY
+6585,1,63,Zapatillas,skate,0,APPLY
+703,2,1;63,Zapatos de Vestir,oficial,0,APPLY
+7121,1,63,Zapatillas,skate,0,APPLY
+72240101,1,33,Zapatos de Vestir,oficial,0,APPLY
+7482,1,63,Zapatillas,skate,0,APPLY
+7857,1,63,Zapatillas,skate,0,APPLY
+7922,1,63,Zapatillas,skate,0,APPLY
+8031,3,7;11;63,Mocasines,vestir,0,APPLY
+8310,1,63,Zapatillas,skate,0,APPLY
+8372,1,63,Zapatillas,skate,0,APPLY
+1200,7,9;19;41;53;60;63,Accesorios de Vestuario,,0,APPLY
+9115,1,63,Zapatillas,skate,0,APPLY
+9117,3,1;63;64,Zapatillas,skate,0,APPLY
+9200,1,63,Zapatillas,skate,0,APPLY
+9213,2,12;63,Zapatillas,skate,0,APPLY
+9215,1,63,Zapatillas,skate,0,APPLY
+944,1,33,Zapatos de Vestir,oficial,0,APPLY
+12103223,1,33,Zapatos de Vestir,oficial,0,APPLY
+ARO,1,63,Accesorios de Vestuario,fiesta,0,APPLY
+123610,1,33,Zapatos de Vestir,oficial,0,APPLY
+124,2,20;33,Zapatos de Vestir,oficial,0,APPLY
+COLLAR,2,63,Accesorios de Vestuario,fiesta,0,APPLY
+ESPEJO,1,63,Accesorios de Vestuario,,0,APPLY
+137,4,2;25;46;63,Zapatillas,skate,0,APPLY
+2043,2,7;33,Zapatos de Vestir,oficial,0,APPLY
+206,3,26;63,Zapatillas,skate,0,APPLY
+207,3,2;9;63,Zapatillas,skate,0,APPLY
+PA,1,63,Accesorios de Vestuario,fiesta,0,APPLY
+RC15703,1,33,Zapatos de Vestir,oficial,0,APPLY
+42200110,2,33,Zapatos de Vestir,oficial,0,APPLY
+COMPRESOR ELEC,2,63,Accesorios Deportivos,,0,APPLY
+E-PLW MI-525,2,63,Equipamiento Fitness,training,0,APPLY
+ESTOPEROLES GOMA,2,63,Accesorios Deportivos,futbol,0,APPLY
+MARCO,2,63,Trofeos y Medallas,,0,APPLY
+PALA DIAMOND,3,63,Accesorios Deportivos,tenis,0,APPLY
+WILWRZ522800,2,7,Accesorios Deportivos,tenis,0,APPLY
+8.40.00,2,7,Accesorios Deportivos,pingpong,0,APPLY
+29055,4,7,Accesorios Deportivos,,0,APPLY
+M.20.00,2,7,Accesorios Deportivos,,0,APPLY
+WILWRZ535201,2,7,Accesorios Deportivos,tenis,0,APPLY
+DA.00PE,2,7,Accesorios Deportivos,futbol,0,APPLY
+F.30.32,2,7,Accesorios Deportivos,gim,0,APPLY
+MSFFRL60,2,7,Accesorios Deportivos,gim,0,APPLY
+SPACONE011,2,7,Protecciones,gim,0,APPLY
+5021,3,7;9,Protecciones,,0,APPLY
+659878,2,7,Guantes,futbol,0,APPLY
+CMP-305,2,7,Accesorios Deportivos,ciclismo,0,APPLY
+MSFPREC,2,7,Accesorios Deportivos,gim,0,APPLY
+27000,3,7,Guantes,futbol,0,APPLY
+27022,1,7,Guantes,futbol,0,APPLY
+27021,3,7,Guantes,futbol,0,APPLY
+030718 01,1,7,Guantes,futbol,0,APPLY
+30062U,2,7,Bolsos y Mochilas,,0,APPLY
+302031901,2,7,Accesorios Deportivos,futbol,0,APPLY
+X16826,1,7,Balones,futbol,0,APPLY
+3290,1,110,Guantes,gim,0,APPLY
+3301,5,5;7;12;47,Bolsos y Mochilas,basket,0,APPLY
+3316,2,7;12,Accesorios Deportivos,tenis,0,APPLY
+3504050000000,1,7,Accesorios Deportivos,gim,0,APPLY
+36985,2,7,Guantes,futbol,0,APPLY
+36988,2,7,Guantes,futbol,0,APPLY
+3700378385149,1,7,Accesorios Deportivos,boxeo,0,APPLY
+030696 01,2,7,Guantes,futbol,0,APPLY
+4051309684855,3,7;50,Accesorios Deportivos,boxeo,0,APPLY
+4051309779,2,7,Accesorios Deportivos,gim,0,APPLY
+456978,3,7,Guantes,futbol,0,APPLY
+52005,2,7,Accesorios Deportivos,natacion,0,APPLY
+52009,4,7,Accesorios Deportivos,natacion,0,APPLY
+5203350000000,1,7,Equipamiento Fitness,voley,0,APPLY
+WILWR055110,2,7,Accesorios Deportivos,tenis,0,APPLY
+WILWR08401,2,7,Accesorios Deportivos,tenis,0,APPLY
+WILWR24202BK,2,7,Accesorios Deportivos,tenis,0,APPLY
+WILWRZ4202,2,7,Accesorios Deportivos,tenis,0,APPLY
+XSF33,1,7,Accesorios Deportivos,gim,0,APPLY
+5208510000000,1,7,Accesorios Deportivos,natacion,0,APPLY
+Z19133,1,7,Guantes,futbol,0,APPLY
+PR2015,2,7,Accesorios Deportivos,futbol,0,APPLY
+5600,5,7;9;14;20,Protecciones,,0,APPLY
+1501,1,7,Accesorios Deportivos,basket,0,APPLY
+61201U-Y70,1,7,Guantes,futbol,0,APPLY
+620138 9870,1,7,Guantes,futbol,0,APPLY
+620153 1110,1,7,Guantes,futbol,0,APPLY
+70008,1,7,Accesorios Deportivos,futbol,0,APPLY
+1559,1,7,Balones,futbol,0,APPLY
+8232,1,7,Protecciones,futbol,0,APPLY
+867,1,7,Accesorios Deportivos,tenis,0,APPLY
+878,2,1;7,Accesorios Deportivos,tenis,0,APPLY
+1222224,2,7,Guantes,futbol,0,APPLY
+12345678,2,7,Guantes,futbol,0,APPLY
+AJ9508,2,7,Guantes,gim,0,APPLY
+ANT1200,1,7,Equipamiento Fitness,voley,0,APPLY
+ARKAR08231,1,7,Protecciones,futbol,0,APPLY
+123333,1,7,Guantes,futbol,0,APPLY
+987546,2,7,Guantes,futbol,0,APPLY
+040614 01,1,7,Guantes,futbol,0,APPLY
+040712 10,1,7,Guantes,futbol,0,APPLY
+CO0KTP,1,7,Protecciones,,0,APPLY
+DRNEO08021,1,108,Protecciones,,0,APPLY
+DRNEO08131,2,7,Protecciones,,0,APPLY
+DSHAC,1,7,Protecciones,hockey,0,APPLY
+EXOTIBIAL,2,7,Protecciones,futbol,0,APPLY
+EXOTILIAL,2,7,Protecciones,futbol,0,APPLY
+129,3,7;25,Zapatillas,basket,0,APPLY
+F87175,1,7,Guantes,futbol,0,APPLY
+F87289,1,7,Guantes,futbol,0,APPLY
+F9005,6,111,Equipamiento Fitness,gim,0,APPLY
+040806 01,1,7,Guantes,futbol,0,APPLY
+040886 01,1,7,Guantes,futbol,0,APPLY
+G73393,1,7,Guantes,futbol,0,APPLY
+G73395,1,7,Guantes,futbol,0,APPLY
+G84085,1,7,Guantes,futbol,0,APPLY
+G84060,2,7,Guantes,futbol,0,APPLY
+G87597,1,7,Guantes,futbol,0,APPLY
+G91047,1,7,Guantes,futbol,0,APPLY
+131,8,108,Zapatos de Vestir,oficial,0,APPLY
+20092U-356,2,7,Protecciones,futbol,0,APPLY
+JERSE BRAVE,2,7,Guantes,futbol,0,APPLY
+M38624,1,7,Guantes,futbol,0,APPLY
+M38653,1,7,Guantes,futbol,0,APPLY
+O59460,1,7,Guantes,gim,0,APPLY
+69898,3,7,Guantes,futbol,0,APPLY
+D84009,1,7,Guantes,futbol,0,APPLY
+G73399,1,7,Guantes,futbol,0,APPLY
+G73426,1,7,Guantes,futbol,0,APPLY
+G73435,2,7,Guantes,futbol,0,APPLY
+G73445,1,7,Guantes,futbol,0,APPLY
+G73449,1,7,Guantes,futbol,0,APPLY
+S02466,2,7,Guantes,gim,0,APPLY
+S90125,1,7,Guantes,futbol,0,APPLY
+S90147,1,7,Guantes,futbol,0,APPLY
+SKT,1,7,Protecciones,skate,0,APPLY
+SP0179-004,1,7,Guantes,futbol,0,APPLY
+SP0180-070,1,7,Guantes,futbol,0,APPLY
+SP0206-616,1,7,Guantes,futbol,0,APPLY
+SP0266-153,1,7,Guantes,futbol,0,APPLY
+29016,3,7,Equipamiento Fitness,futbol,0,APPLY
+V87152,1,7,Guantes,futbol,0,APPLY
+V87181,1,7,Guantes,futbol,0,APPLY
+V87186,1,7,Guantes,futbol,0,APPLY
+V87193,1,7,Guantes,futbol,0,APPLY
+V87194,1,7,Guantes,futbol,0,APPLY
+V87326,1,7,Guantes,futbol,0,APPLY
+V87352,1,7,Guantes,futbol,0,APPLY
+V87150,1,7,Guantes,futbol,0,APPLY
+X16833,1,7,Guantes,futbol,0,APPLY
+X18342,1,7,Guantes,futbol,0,APPLY
+Z10082,2,7,Guantes,futbol,0,APPLY
+ZACUTR0416CR,1,7,Accesorios Deportivos,tenis,0,APPLY
+459789,2,7,Guantes,futbol,0,APPLY
+122222,2,7,Guantes,futbol,0,APPLY
+5211201500014,2,7,Equipamiento Fitness,boxeo,0,APPLY
+543210,3,7,Guantes,futbol,0,APPLY
+54978,2,7,Guantes,futbol,0,APPLY
+54979,2,7,Guantes,futbol,0,APPLY
+554788,3,7,Guantes,futbol,0,APPLY
+564578,2,7,Guantes,futbol,0,APPLY
+56897,2,7,Guantes,futbol,0,APPLY
+569878,3,7,Guantes,futbol,0,APPLY
+78789,3,7,Guantes,futbol,0,APPLY
+848049047361,2,111,Protecciones,boxeo,0,APPLY
+9283544171,1,7,Guantes,boxeo,0,APPLY
+AC-JB3001,2,7,Equipamiento Fitness,gim,0,APPLY
+AY4364,1,7,Guantes,gim,0,APPLY
+BM6138B,2,7,Equipamiento Fitness,,0,APPLY
+BOTON,3,7,Protecciones,,0,APPLY
+C0004,2,7,Equipamiento Fitness,tenis,0,APPLY
+C0006,2,7,Equipamiento Fitness,tenis,0,APPLY
+CMP-304,2,7,Accesorios Deportivos,ciclismo,0,APPLY
+CW9708,2,7,Guantes,futbol,0,APPLY
+ESPO,2,7,Protecciones,,0,APPLY
+FG OON1,3,7,Guantes,futbol,0,APPLY
+FL1369,2,7,Guantes,futbol,0,APPLY
+M2008,2,7,Equipamiento Fitness,,0,APPLY
+MO21774,2,7,Equipamiento Fitness,,0,APPLY
+SG0CCC,2,7,Guantes,gim,0,APPLY
+SP2128-702,5,7,Guantes,futbol,0,APPLY
+SP2158-620,1,7,Guantes,futbol,0,APPLY
+TALO,1,7,Protecciones,,0,APPLY
+355152-140,6,1,Zapatillas,urbano,0,APPLY
+DN3577-100,10,1,Zapatillas,urbano,0,APPLY
+100259993,4,1,Zapatillas,urbano,0,APPLY
+CI9964-002,9,1,Zapatillas,"running,urbano",0,APPLY
+DA5381-102,8,1,Zapatillas,urbano,0,APPLY
+DJ5961-700,4,1,Zapatillas,futbol,0,APPLY
+100239766,2,1,Zapatillas,"running,urbano",0,APPLY
+100208663,2,1,Zapatillas,"running,urbano",0,APPLY
+DQ4127-200,2,1,Zapatillas,urbano,0,APPLY
+IH5289,4,1,Zapatillas,urbano,0,APPLY
+FQ6474-100,2,1,Zapatillas,urbano,0,APPLY
+DA6364-001,3,1,Zapatillas,urbano,0,APPLY
+100010617,2,1,Zapatillas,urbano,0,APPLY
+CW6539-001,3,1,Zapatillas,urbano,0,APPLY
+DQ8401-106,2,1,Zapatillas,"basket,urbano",0,APPLY
+56987130,2,1,Zapatillas,futbol,0,APPLY
+CI9838-100,2,1,Zapatillas,urbano,0,APPLY
+CJ5632-001,3,1,Zapatillas,"running,urbano",0,APPLY
+487754-101,3,1,Zapatillas,urbano,0,APPLY
+GZ8477,4,1,Zapatillas,urbano,0,APPLY
+904764-103,3,1,Zapatillas,urbano,0,APPLY
+CJ0842-007,11,1,Zapatillas,"training,urbano",0,APPLY
+DJ5965-700,2,1,Zapatillas,futbol,0,APPLY
+DA2781-005,3,1,Zapatillas,"basket,urbano",0,APPLY
+BQ3207-014,2,1,Zapatillas,"running,urbano",0,APPLY
+905373-006,2,1,Zapatillas,"skate,urbano",0,APPLY
+CZ3959-605,3,1,Zapatillas,"running,urbano",0,APPLY
+DB2880-100,5,1,Zapatillas,urbano,0,APPLY
+CK0714-400,3,1,Zapatillas,"running,urbano",0,APPLY
+CZ0189-500,2,1,Zapatillas,"running,urbano",0,APPLY
+DC9836-160,2,1,Zapatillas,"basket,urbano",0,APPLY
+VN000SEGATP,2,1,Zapatillas,"skate,urbano",0,APPLY
+2227,1,46,Zapatos de Vestir,oficial,0,APPLY
+230,8,97,Zapatos de Vestir,oficial,0,APPLY
+25,7,87,Zapatos de Vestir,oficial,0,APPLY
+2550,4,1;5;41;46,Zapatos de Vestir,oficial,0,APPLY
+2627,1,46,Zapatos de Vestir,oficial,0,APPLY
+VN-0RQLAIF,1,1,Zapatillas,"skate,urbano",0,APPLY
+303,4,1;2;36;64,Zapatillas,urbano,0,APPLY
+ZVATWOOD LOW W,2,1,Zapatillas,skate,0,APPLY
+ZVCEDAR W,3,1;5,Zapatillas,skate,0,APPLY
+654,3,12;26;46,Zapatillas,oficial,0,APPLY
+3276,1,46,Zapatillas,oficial,0,APPLY
+340,1,1,Zapatillas,urbano,0,APPLY
+100230822,2,1,Zapatillas,urbano,0,APPLY
+3710,2,1,Zapatillas,urbano,0,APPLY
+390,7,1;9;13;26;44;55,Accesorios Deportivos,badminton,0,APPLY
+100251859,2,1,Zapatillas,urbano,0,APPLY
+1444,4,1;7;9;12,Zapatillas,urbano,0,APPLY
+415445-102,6,1,Zapatillas,urbano,0,APPLY
+433,1,1,Zapatillas,urbano,0,APPLY
+4430,1,1,Zapatillas,urbano,0,APPLY
+454256-118,2,1,Zapatillas,"tenis,urbano",0,APPLY
+4736,1,1,Zapatillas,urbano,0,APPLY
+1006,6,1;7;27;45;51,Zapatillas,urbano,0,APPLY
+ZM51112171,2,1,Zapatillas,skate,0,APPLY
+ZM5131000,1,1,Zapatillas,skate,0,APPLY
+ZM5216,1,1,Zapatillas,skate,0,APPLY
+54,3,87,Zapatillas,oficial,0,APPLY
+569,2,1;12,Zapatillas,urbano,0,APPLY
+5994,1,1,Zapatillas,skate,0,APPLY
+6027,1,46,Zapatillas,urbano,0,APPLY
+6322,1,46,Zapatillas,oficial,0,APPLY
+6384,1,1,Zapatillas,urbano,0,APPLY
+6466,1,1,Zapatillas,urbano,0,APPLY
+1512,4,1;7;14;47,Zapatillas,urbano,0,APPLY
+6710,2,1;25,Zapatillas,urbano,0,APPLY
+6915,1,46,Zapatillas,urbano,0,APPLY
+1052,3,1;24;63,Zapatillas,urbano,0,APPLY
+710,3,1;14,Zapatillas,urbano,0,APPLY
+1058,1,1,Zapatillas,urbano,0,APPLY
+1059,1,1,Zapatillas,urbano,0,APPLY
+7390,4,1;14,Zapatillas,urbano,0,APPLY
+7495,1,1,Zapatillas,urbano,0,APPLY
+1066,3,1;38;45,Zapatillas,urbano,0,APPLY
+7710,1,1,Zapatillas,urbano,0,APPLY
+8037,4,1;7;10;46,Zapatos de Vestir,vestir,0,APPLY
+8099,4,1;5;14,Sandalias y Chalas,urbano,0,APPLY
+8566,1,1,Zapatillas,skate,0,APPLY
+1178,2,1;63,Zapatillas,urbano,0,APPLY
+CD4079-606,6,1,Zapatillas,futbol,0,APPLY
+160292-1,2,1,Zapatillas,skate,0,APPLY
+160342-2,2,1,Zapatillas,skate,0,APPLY
+9099,1,46,Zapatillas,oficial,0,APPLY
+9110,1,1,Zapatillas,urbano,0,APPLY
+161,1,46,Zapatillas,oficial,0,APPLY
+9991,3,1;8;36,Zapatillas,urbano,0,APPLY
+1217,2,1;12,Zapatillas,urbano,0,APPLY
+AT1803-001,5,1,Zapatillas,"running,urbano",0,APPLY
+AT7996-606,2,1,Zapatillas,futbol,0,APPLY
+ATWOOD Y,4,1,Zapatillas,skate,0,APPLY
+AVASS21034,3,1,Guantes,futbol,0,APPLY
+1711,2,1;9,Zapatillas,urbano,0,APPLY
+1315,2,1;11,Zapatillas,urbano,0,APPLY
+BSSSC16001-A,1,1,Zapatillas,skate,0,APPLY
+BSSSC16004,1,1,Zapatillas,skate,0,APPLY
+CA100163Y,4,1,Zapatillas,urbano,0,APPLY
+CAMARYN,1,1,Zapatillas,skate,0,APPLY
+CD4172-906,7,1,Zapatillas,futbol,0,APPLY
+CJ1174-401,3,1,Zapatillas,futbol,0,APPLY
+COLLINS M,1,1,Zapatillas,skate,0,APPLY
+CQ2560-100,4,1,Zapatillas,urbano,0,APPLY
+CW3419-006,6,1,Zapatillas,running,0,APPLY
+1325,1,1,Zapatillas,urbano,0,APPLY
+1917,1,1,Zapatillas,urbano,0,APPLY
+1918,1,1,Zapatillas,urbano,0,APPLY
+2-96D1,3,111,Accesorios Deportivos,gim,0,APPLY
+1060,2,1,Zapatillas,urbano,0,APPLY
+1166,2,1;8,Zapatillas,urbano,0,APPLY
+134,4,1;2;14,Zapatillas,urbano,0,APPLY
+MILTON Y,1,1,Zapatillas,skate,0,APPLY
+OLD SKOOL U,2,1,Zapatillas,skate,0,APPLY
+588,1,46,Zapatos de Vestir,vestir,0,APPLY
+7502,1,1,Zapatillas,skate,0,APPLY
+AQ8830-200,3,1,Zapatillas,basket,0,APPLY
+BQ5448-002,7,1,Zapatillas,urbano,0,APPLY
+CP101347W,5,1,Zapatillas,urbano,0,APPLY
+CW6539-002,6,1,Zapatillas,urbano,0,APPLY
+660104,3,1,Zapatillas,urbano,0,APPLY
+RF-003311GR,1,1,Zapatillas,skate,0,APPLY
+DV5457-003,2,1,Zapatillas,urbano,0,APPLY
+VN-015GGFA,1,1,Zapatillas,skate,0,APPLY
+VN-0D3HBKA,1,1,Zapatillas,skate,0,APPLY
+VN-0EWZW00,1,1,Zapatillas,skate,0,APPLY
+VN-0EYEBLK,2,1,Zapatillas,skate,0,APPLY
+VN-0GYQ195,2,1,Zapatillas,skate,0,APPLY
+VN-0QFF8,1,1,Zapatillas,skate,0,APPLY
+VN-0SEG8,2,1,Zapatillas,skate,0,APPLY
+VN-0TN98,1,1,Zapatillas,skate,0,APPLY
+VN-0UCY9SK,2,1,Zapatillas,skate,0,APPLY
+VN-ONKA5CO,2,1,Zapatillas,skate,0,APPLY
+3202,2,23;46,Zapatillas,oficial,0,APPLY
+ZF6000,2,1,Zapatillas,skate,0,APPLY
+ZM3630,1,1,Zapatillas,skate,0,APPLY
+ZM3802,1,1,Zapatillas,skate,0,APPLY
+ZM5037,1,1,Zapatillas,skate,0,APPLY
+ZM5041,1,1,Zapatillas,skate,0,APPLY
+ZM513400000,1,1,Zapatillas,skate,0,APPLY
+ZM6004,2,1,Zapatillas,skate,0,APPLY
+435,2,1;12,Zapatillas,urbano,0,APPLY
+6918,1,1,Zapatillas,urbano,0,APPLY
+8030,1,46,Mocasines,vestir,0,APPLY
+VN-0OKT7OW,1,1,Zapatillas,skate,0,APPLY
+VN-0OKT9Y8,1,1,Zapatillas,skate,0,APPLY
+VN-0QES80T,1,1,Zapatillas,skate,0,APPLY
+VN-OKV4BA2,1,1,Zapatillas,skate,0,APPLY
+ZVATWOOD LOW CNVS,1,1,Zapatillas,skate,0,APPLY
+620057,1,1,Zapatillas,urbano,0,APPLY
+620077,1,1,Zapatillas,urbano,0,APPLY
+640053,2,1,Zapatillas,urbano,0,APPLY
+660063,1,1,Zapatillas,urbano,0,APPLY
+660078,1,1,Zapatillas,urbano,0,APPLY
+660084,2,1,Zapatillas,urbano,0,APPLY
+660090,2,1,Zapatillas,urbano,0,APPLY
+660098,2,1,Zapatillas,urbano,0,APPLY
+660099,2,1,Zapatillas,urbano,0,APPLY
+660108,2,1,Zapatillas,urbano,0,APPLY
+6923656823059,2,1,Accesorios Deportivos,ciclismo,0,APPLY
+807471-102,9,1,Zapatillas,urbano,0,APPLY
+980536003,3,1,Zapatillas,urbano,0,APPLY
+AH5222-001,3,1,Zapatillas,urbano,0,APPLY
+AO0571-008,2,1,Zapatillas,futbol,0,APPLY
+AQ3542-013,3,1,Zapatillas,urbano,0,APPLY
+AQ3542-603,4,1,Zapatillas,"running,urbano",0,APPLY
+AQ7488-004,3,1,Zapatillas,running,0,APPLY
+AQ9211-003,2,1,Zapatillas,urbano,0,APPLY
+AR8836-008,2,1,Zapatillas,tenis,0,APPLY
+AT4665-001,2,1,Zapatillas,urbano,0,APPLY
+AT6107-090,2,1,Zapatillas,futbol,0,APPLY
+AT6110-060,2,1,Zapatillas,futbol,0,APPLY
+AT7960-104,2,1,Zapatillas,futbol,0,APPLY
+AT7978-906,3,1,Zapatillas,futbol,0,APPLY
+AT7979-606,4,1,Zapatillas,futbol,0,APPLY
+AT7997-001,2,1,Zapatillas,"futbol,sala",0,APPLY
+BQ3204-001,2,1,Zapatillas,running,0,APPLY
+BQ5430-703,2,1,Zapatillas,"futbol,sala",0,APPLY
+BQ5448-014,3,1,Zapatillas,urbano,0,APPLY
+BQ5673-003,3,1,Zapatillas,running,0,APPLY
+BQ5673-020,2,1,Zapatillas,running,0,APPLY
+CA100125M,4,1,Zapatillas,urbano,0,APPLY
+CA100587M,2,1,Zapatillas,urbano,0,APPLY
+CD0197-002,5,1,Zapatillas,running,0,APPLY
+CD4156-010,2,1,Zapatillas,futbol,0,APPLY
+CD4168-606,2,1,Zapatillas,"futbol,sala",0,APPLY
+CD5463-001,7,1,Zapatillas,urbano,0,APPLY
+CD7782-110,2,1,Zapatillas,urbano,0,APPLY
+CJ0813-005,4,1,Zapatillas,urbano,0,APPLY
+CJ1179-401,2,1,Zapatillas,futbol,0,APPLY
+CJ2084-001,2,1,Zapatillas,running,0,APPLY
+CJ3816-103,2,1,Zapatillas,urbano,0,APPLY
+CJ3816-402,2,1,Zapatillas,urbano,0,APPLY
+CJ7199-100,3,1,Zapatillas,urbano,0,APPLY
+CK0715-008,3,1,Zapatillas,running,0,APPLY
+CK1069-001,3,1,Zapatillas,basket,0,APPLY
+CK2612-002,6,1,Zapatillas,urbano,0,APPLY
+CK2612-100,2,1,Zapatillas,urbano,0,APPLY
+CN8558-014,3,1,Zapatillas,urbano,0,APPLY
+CN9675-002,7,1,Zapatillas,urbano,0,APPLY
+CP101071M,2,1,Zapatillas,urbano,0,APPLY
+CP101884M,3,1,Zapatillas,urbano,0,APPLY
+CP101886Y,5,1,Zapatillas,urbano,0,APPLY
+CT4066-400,2,1,Zapatillas,basket,0,APPLY
+CT5066-100,2,1,Zapatillas,urbano,0,APPLY
+CU3503-001,3,1,Zapatillas,basket,0,APPLY
+CU3503-002,4,1,Zapatillas,basket,0,APPLY
+CV0952-118,2,1,Zapatillas,futbol,0,APPLY
+CV0973-600,2,1,Zapatillas,"futbol,sala",0,APPLY
+CV0985-600,2,1,Zapatillas,futbol,0,APPLY
+CV7663-100,2,1,Zapatillas,urbano,0,APPLY
+CW1627-003,3,1,Zapatillas,urbano,0,APPLY
+CW3400-002,4,1,Zapatillas,basket,0,APPLY
+CW3411-002,3,1,Zapatillas,running,0,APPLY
+CW4555-007,3,1,Zapatillas,urbano,0,APPLY
+CW5830-100,2,1,Zapatillas,urbano,0,APPLY
+CW6666-400,2,1,Zapatillas,futbol,0,APPLY
+CW7306-001,2,1,Zapatillas,urbano,0,APPLY
+CZ0187-500,2,1,Zapatillas,running,0,APPLY
+CZ0361-100,2,1,Zapatillas,urbano,0,APPLY
+CZ2662-100,3,1,Zapatillas,urbano,0,APPLY
+CZ3950-100,2,1,Zapatillas,urbano,0,APPLY
+CZ5361-002,3,1,Zapatillas,urbano,0,APPLY
+CZ6685-100,2,1,Zapatillas,urbano,0,APPLY
+DA4075-101,3,1,Zapatillas,urbano,0,APPLY
+DB8148-003,2,1,Zapatillas,basket,0,APPLY
+DB9582-100,3,1,Zapatillas,urbano,0,APPLY
+DC3637-001,3,1,Zapatillas,basket,0,APPLY
+DC8997-002,2,1,Zapatillas,running,0,APPLY
+DD0162-100,6,1,Zapatillas,urbano,0,APPLY
+DD4459-100,2,1,Zapatillas,urbano,0,APPLY
+DD9486-040,2,1,Zapatillas,futbol,0,APPLY
+DH0833-660,3,1,Zapatillas,basket,0,APPLY
+DJ5961-600,2,1,Zapatillas,futbol,0,APPLY
+DM1124-010,1,1,Zapatillas,basket,0,APPLY
+DV4355-040,2,1,Zapatillas,futbol,0,APPLY
+DX9176-108,2,1,Zapatillas,urbano,0,APPLY
+EG0917,2,1,Zapatillas,"futbol,pasto",0,APPLY
+EG7132,2,1,Zapatillas,futbol,0,APPLY
+FV4057-600,3,1,Zapatillas,basket,0,APPLY
+FX6563,3,1,Zapatillas,urbano,0,APPLY
+IG3756,2,1,Zapatillas,urbano,0,APPLY
+JI4463,2,1,Zapatillas,urbano,0,APPLY
+SPASS21017,3,1,Guantes,futbol,0,APPLY
+VN0A3MVZ187,1,1,Zapatillas,skate,0,APPLY
+PRIMERA CAPA JUV,3,97,Trajes de Baño,futbol,0,APPLY
+GY7806,2,2,Zapatillas,running,0,APPLY
+2282,1,2,Zapatos de Vestir,vestir,0,APPLY
+2514,1,2,Zapatos de Vestir,vestir,0,APPLY
+279,1,2,Zapatos de Vestir,vestir,0,APPLY
+286,1,2,Zapatos de Vestir,vestir,0,APPLY
+3021,2,1;2,Zapatos de Vestir,vestir,0,APPLY
+3026,1,2,Zapatillas,oficial,0,APPLY
+021269 24,1,2,Gorros,urbano,0,APPLY
+1425,1,2,Zapatos de Vestir,vestir,0,APPLY
+1435,1,2,Zapatos de Vestir,vestir,0,APPLY
+144,1,2,Zapatos de Vestir,vestir,0,APPLY
+1073,2,1;2,Zapatos de Vestir,vestir,0,APPLY
+4075,1,2,Zapatos de Vestir,vestir,0,APPLY
+1454,1,2,Zapatos de Vestir,vestir,0,APPLY
+4501,1,2,Zapatos de Vestir,vestir,0,APPLY
+4515,1,2,Zapatos de Vestir,vestir,0,APPLY
+69,4,87,Zapatos de Vestir,vestir,0,APPLY
+4780,1,2,Zapatos de Vestir,vestir,0,APPLY
+4904,1,2,Zapatos de Vestir,vestir,0,APPLY
+4991,1,2,Zapatos de Vestir,vestir,0,APPLY
+112,3,2;3;21,Zapatos de Vestir,vestir,0,APPLY
+535,1,2,Zapatos de Vestir,vestir,0,APPLY
+551,2,2;12,Zapatos de Vestir,vestir,0,APPLY
+5683,1,2,Zapatos de Vestir,vestir,0,APPLY
+022557 03,1,2,Gorros,basket,0,APPLY
+6082,2,2;46,Zapatos de Vestir,vestir,0,APPLY
+6102,3,1;2,Zapatos de Vestir,vestir,0,APPLY
+1120,6,1;2;7;9;12,Accesorios Deportivos,futbol,0,APPLY
+6136,3,1;2;9,Ballerinas,urbano,0,APPLY
+6137,2,1;2,Ballerinas,urbano,0,APPLY
+6203,4,2;8;18,Zapatos de Vestir,vestir,0,APPLY
+6400,1,2,Zapatos de Vestir,vestir,0,APPLY
+6801,3,2;63,Zapatos de Vestir,vestir,0,APPLY
+7011,2,1;2,Zapatos de Vestir,vestir,0,APPLY
+708,3,2;14;63,Zapatos de Vestir,vestir,0,APPLY
+722,1,2,Zapatos de Vestir,vestir,0,APPLY
+74,1,2,Zapatos de Vestir,vestir,0,APPLY
+1072,2,1;2,Zapatos de Vestir,vestir,0,APPLY
+8065,1,2,Zapatos de Vestir,vestir,0,APPLY
+8216,1,2,Zapatos de Vestir,vestir,0,APPLY
+8217,1,2,Zapatos de Vestir,vestir,0,APPLY
+1137,2,2;63,Zapatos de Vestir,vestir,0,APPLY
+8790,1,2,Zapatos de Vestir,vestir,0,APPLY
+947,3,2,Zapatos de Vestir,vestir,0,APPLY
+1327951-046,1,2,Buzos y Pantalones,training,0,APPLY
+1327952-457,3,2,Chaquetas y Polerones,training,0,APPLY
+1974,1,2,Zapatos de Vestir,vestir,0,APPLY
+1328621-001,2,2,Guantes,training,0,APPLY
+1038,1,2,Zapatos de Vestir,vestir,0,APPLY
+12-COLD-6,1,2,Zapatos de Vestir,vestir,0,APPLY
+GY0952,4,2,Zapatillas,urbano,0,APPLY
+136,3,2;14,Zapatos de Vestir,vestir,0,APPLY
+628,1,2,Zapatos de Vestir,vestir,0,APPLY
+73,2,2;46,Zapatos de Vestir,vestir,0,APPLY
+4606,2,2;21,Zapatos de Vestir,vestir,0,APPLY
+7104,3,2;11,Zapatos de Vestir,vestir,0,APPLY
+97,1,2,Zapatos de Vestir,vestir,0,APPLY
+1331185-001,1,2,Poleras y Camisetas,training,0,APPLY
+67107,1,2,Zapatillas,"training,urbano",0,APPLY
+78058570095,2,97,Mallas,training,0,APPLY
+813,1,2,Zapatos de Vestir,vestir,0,APPLY
+BA5876-020,7,2,Bolsos y Mochilas,urbano,0,APPLY
+CF1053,2,2,Accesorios Deportivos,futbol,0,APPLY
+CMP-042,2,2,Equipamiento Fitness,basket,0,APPLY
+EF7599,1,2,Zapatillas,"basket,urbano",0,APPLY
+EG4958,4,2,Zapatillas,urbano,0,APPLY
+G58583,2,2,Zapatillas,"running,urbano",0,APPLY
+GV9728,2,2,Zapatillas,"running,urbano",0,APPLY
+GW2577,3,2,Zapatillas,"basket,urbano",0,APPLY
+GW2615,2,2,Zapatillas,urbano,0,APPLY
+GX7833,2,2,Zapatillas,urbano,0,APPLY
+GZ0257,3,2,Zapatillas,"running,urbano",0,APPLY
+H00875,2,2,Zapatillas,"running,urbano",0,APPLY
+H01608,5,2,Zapatillas,"running,urbano",0,APPLY
+H34799,2,2,Gorros,beisbol,0,APPLY
+KIT,2,2,Accesorios Deportivos,futbol,0,APPLY
+MA30633,2,2,Balones,futbol,0,APPLY
+MA308,3,2,Poleras y Camisetas,futbol,0,APPLY
+MI35213,2,2,Balones,futbol,0,APPLY
+MI36030,2,2,Balones,futbol,0,APPLY
+FB8066-100,3,1,Zapatillas,"training,urbano",0,APPLY
+DN3680-101,2,1,Zapatillas,"basket,urbano",0,APPLY
+DQ8417-071,3,1,Zapatillas,"basket,urbano",0,APPLY
+FB1396-100,3,1,Zapatillas,"basket,urbano",0,APPLY
+311046-162,3,1,Zapatillas,"basket,urbano",0,APPLY
+ZF4014,1,1,Zapatillas,urbano,0,APPLY
+ZF6007,2,1,Zapatillas,urbano,0,APPLY
+ZF6047,1,1,Zapatillas,urbano,0,APPLY
+ZM6042,1,1,Zapatillas,"running,urbano",0,APPLY
+DO7193-061,3,1,Zapatillas,"basket,urbano",0,APPLY
+YU74529,1,1,Zapatillas,urbano,0,APPLY
+YU74531Z,1,1,Zapatillas,urbano,0,APPLY
+YU74537Z,1,1,Zapatillas,urbano,0,APPLY
+ZF3639,1,1,Zapatillas,urbano,0,APPLY
+ZF3693,1,1,Zapatillas,urbano,0,APPLY
+ZF3701,1,1,Zapatillas,urbano,0,APPLY
+ZF3724,1,1,Zapatillas,urbano,0,APPLY
+ZM3801,1,1,Zapatillas,"trekking,urbano",0,APPLY
+ZM3836,1,1,Zapatillas,urbano,0,APPLY
+ZM3841,1,1,Zapatillas,urbano,0,APPLY
+ZM3851,1,1,Zapatillas,"trekking,urbano",0,APPLY
+ZM3861,1,1,Zapatillas,urbano,0,APPLY
+ZM6012,1,1,Zapatillas,urbano,0,APPLY
+AD90024B-RB,4,1,Zapatillas,"basket,urbano",0,APPLY
+AD90024B-RB PRE,3,1,Zapatillas,"basket,urbano",0,APPLY
+BQ4422-001,2,1,Zapatillas,"basket,urbano",0,APPLY
+BQ6472-502,2,1,Zapatillas,"basket,urbano",0,APPLY
+D3004B-BRS PRE,3,1,Zapatillas,"basket,urbano",0,APPLY
+DD9538-007,3,1,Zapatillas,"basket,urbano",0,APPLY
+DH3158-105,3,1,Zapatillas,"basket,urbano",0,APPLY
+DN1772-436,3,1,Zapatillas,"basket,urbano",0,APPLY
+DQ5601-710,5,1,Zapatillas,"basket,urbano",0,APPLY
+DQ8401-001,3,1,Zapatillas,"basket,urbano",0,APPLY
+DR5415-103,2,1,Zapatillas,"basket,urbano",0,APPLY
+DV0813-001,3,1,Zapatillas,urbano,0,APPLY
+DX4400-106,3,1,Zapatillas,"basket,urbano",0,APPLY
+FD1437-410,4,1,Zapatillas,"basket,urbano",0,APPLY
+FJ1213,3,1,Zapatillas,"basket,urbano",0,APPLY
+FJ1213-106,3,1,Zapatillas,"basket,urbano",0,APPLY
+FQ1306-006,3,1,Zapatillas,"basket,urbano",0,APPLY
+009283560485,2,1,Protecciones,boxeo,0,APPLY
+009283587994,2,108,Protecciones,boxeo,0,APPLY
+MALLA,1,109,Accesorios Deportivos,futbol,0,APPLY
+SET PALETAS PLAYA,2,7,Balones,recre,0,APPLY
+1809,5,1;50,Zapatillas,skate,0,APPLY
+14101,2,1,Zapatillas,skate,0,APPLY
+1818,2,1,Zapatillas,skate,0,APPLY
+13212,2,1,Zapatillas,skate,0,APPLY
+14102,2,1,Zapatillas,skate,0,APPLY
+1810,3,1;13,Zapatillas,skate,0,APPLY
+160340-2,2,1,Zapatillas,skate,0,APPLY
+14100,2,1,Zapatillas,skate,0,APPLY
+160317-4,2,1,Zapatillas,skate,0,APPLY
+160346-2,2,1,Zapatillas,skate,0,APPLY
+1815,3,1;5,Zapatillas,skate,0,APPLY
+160273-01,3,1,Zapatillas,skate,0,APPLY
+160280-04,2,1,Zapatillas,skate,0,APPLY
+160283-04,2,1,Zapatillas,skate,0,APPLY
+160310-4,2,1,Zapatillas,skate,0,APPLY
+160315-1,2,1,Zapatillas,skate,0,APPLY
+13081,2,1,Zapatillas,skate,0,APPLY
+13090,2,1,Zapatillas,skate,0,APPLY
+PETO KID,2,63,Accesorios Deportivos,futbol,0,APPLY
+IND-M2,4,1,Zapatillas,urbano,0,APPLY
+050324-4,4,1,Zapatillas,urbano,0,APPLY
+050326-1,3,1,Zapatillas,"running,urbano",0,APPLY
+PETO CALADO,7,63,Accesorios Deportivos,futbol,0,APPLY
+IND-M3,2,1,Zapatillas,urbano,0,APPLY
+050409-1,3,1,Zapatillas,urbano,0,APPLY
+050316-3,3,1,Zapatillas,urbano,0,APPLY
+21002,3,2,Accesorios Deportivos,futbol,0,APPLY
+21030,3,2;9,Accesorios Deportivos,futbol,0,APPLY
+050319-3,2,1,Zapatillas,urbano,0,APPLY
+050323-3,2,1,Zapatillas,urbano,0,APPLY
+050406-3,3,1,Zapatillas,urbano,0,APPLY
+CB12,2,7,Equipamiento Fitness,training,0,APPLY
+NESS8110,2,,Trajes de Baño,natacion,0,APPLY
+TESS0053,2,,Trajes de Baño,natacion,0,APPLY
+8016,3,106,Accesorios Deportivos,tenis,0,APPLY
+172,6,56;63,Zapatillas,oficial,0,APPLY
+2900,3,28;60;63,Zapatos de Vestir,vestir,0,APPLY
+3611,2,28;46,Zapatos de Vestir,vestir,0,APPLY
+5035,1,28,Zapatos de Vestir,vestir,0,APPLY
+6066,1,28,Zapatos de Vestir,vestir,0,APPLY
+613,1,28,Zapatos de Vestir,vestir,0,APPLY
+619,1,28,Zapatos de Vestir,vestir,0,APPLY
+6508,1,28,Zapatos de Vestir,vestir,0,APPLY
+685,1,28,Zapatos de Vestir,vestir,0,APPLY
+769,2,28;63,Zapatos de Vestir,vestir,0,APPLY
+7901,1,28,Zapatos de Vestir,vestir,0,APPLY
+804-02,1,28,Zapatos de Vestir,vestir,0,APPLY
+1131,3,1;12;28,Zapatos de Vestir,vestir,0,APPLY
+8730,1,28,Zapatos de Vestir,vestir,0,APPLY
+9077,1,28,Zapatos de Vestir,vestir,0,APPLY
+700137,1,28,Zapatos de Vestir,vestir,0,APPLY
+TIP007,2,9,Protecciones,seguridad,0,APPLY
+2.90.13,4,4,Accesorios Deportivos,futbol,0,APPLY
+2.90.11,4,9,Accesorios Deportivos,futbol,0,APPLY
+J.00.11,3,9,Accesorios Deportivos,oficial,0,APPLY
+201040220,2,9,Equipamiento Fitness,training,0,APPLY
+2.60.05,3,9,Accesorios Deportivos,futbol,0,APPLY
+CALCETA ANT ECO AD,2,9,Medias y Calcetines,futbol,0,APPLY
+2.90.73,3,9,Accesorios Deportivos,oficial,0,APPLY
+TO520966,2,9,Accesorios Deportivos,,0,APPLY
+728,5,9,Accesorios Deportivos,futbol,0,APPLY
+066143441414,3,19,Accesorios Deportivos,oficial,0,APPLY
+2.90.31,3,9,Accesorios Deportivos,"oficial,futbol",0,APPLY
+2.60.00,2,9,Accesorios Deportivos,futbol,0,APPLY
+CALCETA ANT ECO JUV,2,9,Medias y Calcetines,futbol,0,APPLY
+843466631,6,9,Guantes,futbol,0,APPLY
+CALCETA ANTIDES INF,3,9,Medias y Calcetines,futbol,0,APPLY
+2.60.01,2,9,Accesorios Deportivos,futbol,0,APPLY
+TO5212,2,9,Guantes,futbol,0,APPLY
+1.80.00,3,4,Accesorios Deportivos,tenis,0,APPLY
+CINTA CAPITAN,4,4;9,Accesorios Deportivos,futbol,0,APPLY
+MO22217,2,9,Balones,"futbol,sala",0,APPLY
+8434666247,3,9,Equipamiento Fitness,futbol,0,APPLY
+DEPFUTACC092,2,9,Equipamiento Fitness,training,0,APPLY
+CONO 30CMS,2,9,Equipamiento Fitness,training,0,APPLY
+M.10.01,3,4,Equipamiento Fitness,training,0,APPLY
+TARJETA ARBITRO,6,9;63,Accesorios Deportivos,"oficial,futbol",0,APPLY
+MSBRBBTN,3,19,Balones,baby,0,APPLY
+PIZARRA,3,9;63,Accesorios Deportivos,futbol,0,APPLY
+8.05.02,2,9,Accesorios Deportivos,,0,APPLY
+AV9S1H,2,9,Equipamiento Fitness,training,0,APPLY
+TO520225,2,9,Balones,tenis,0,APPLY
+3.90.13,2,4,Equipamiento Fitness,basket,0,APPLY
+FENIX ETERNAL,2,9,Guantes,futbol,0,APPLY
+FIT ROLL,2,9,Equipamiento Fitness,gim,0,APPLY
+M.20.10,2,9,Equipamiento Fitness,futbol,0,APPLY
+MI34702,2,9,Poleras y Camisetas,futbol,0,APPLY
+PETO ETTO,2,9,Accesorios Deportivos,futbol,0,APPLY
+M.10.22,2,9,Equipamiento Fitness,training,0,APPLY
+TO5211,2,9,Guantes,futbol,0,APPLY
+SET ARQ,6,4;9,Equipamiento Fitness,futbol,0,APPLY
+066143090254,3,19,Accesorios Deportivos,oficial,0,APPLY
+SC2361-702,2,9,Balones,futbol,0,APPLY
+DEMARCADOR FUTBOL PLAYA,2,9,Equipamiento Fitness,futbol,0,APPLY
+DEPFUTTEN001,2,1,Equipamiento Fitness,futbol,0,APPLY
+HA5544,7,4,Gorros,urbano,0,APPLY
+M.10.24,2,9,Equipamiento Fitness,training,0,APPLY
+TO520995,2,9,Accesorios Deportivos,futbol,0,APPLY
+5208402122015,3,9;45,Equipamiento Fitness,basket,0,APPLY
+5208901603985,2,9,Balones,gim,0,APPLY
+60134177,2,9,Accesorios Deportivos,basket,0,APPLY
+DEPFUTACC313,2,9,Equipamiento Fitness,training,0,APPLY
+M1006,3,9,Equipamiento Fitness,training,0,APPLY
+MK-3003,2,9,Equipamiento Fitness,futbol,0,APPLY
+PETO,4,9,Equipamiento Fitness,futbol,0,APPLY
+PR2014,2,9,Equipamiento Fitness,futbol,0,APPLY
+SPABASP015,2,9,Equipamiento Fitness,basket,0,APPLY
+XT-004AC,3,9,Bolsos y Mochilas,gim,0,APPLY
+G.10.01,3,9,Equipamiento Fitness,,0,APPLY
+21034,3,4,Equipamiento Fitness,futbol,0,APPLY
+968,2,9,Equipamiento Fitness,futbol,0,APPLY
+BANDERIN ARBITRO,2,9,Equipamiento Fitness,futbol,0,APPLY
+SET 10 CONOS + BASTONES,2,9,Equipamiento Fitness,futbol,0,APPLY
+29073,5,9;48,Equipamiento Fitness,futbol,0,APPLY
+48111000,2,9,Equipamiento Fitness,training,0,APPLY
+FICHA REFEREE,2,9,Equipamiento Fitness,futbol,0,APPLY
+066143999007,3,19,Equipamiento Fitness,futbol,0,APPLY
+PARACAIDA,6,4;16,Equipamiento Fitness,training,0,APPLY
+SC2378-149,2,9,Balones,futbol,0,APPLY
+SC2593-491,2,9,Balones,futbol,0,APPLY
+SC2596-190,2,9,Balones,futbol,0,APPLY
+SC3149-100,2,9,Balones,futbol,0,APPLY
+AR 0FFP,2,19,Equipamiento Fitness,futbol,0,APPLY
+A0015,2,9,Balones,handball,0,APPLY
+AZ3195,2,9,Balones,futbol,0,APPLY
+DEPFUTACC310,2,9,Equipamiento Fitness,futbol,0,APPLY
+L.10.0001,2,9,Equipamiento Fitness,pool,0,APPLY
+LA40PB,2,9,Equipamiento Fitness,futbol,0,APPLY
+214042-1900,1,9,Balones,futbol,0,APPLY
+082685 01,1,9,Balones,futbol,0,APPLY
+082977 01,1,19,Balones,futbol,0,APPLY
+082987 01,2,19,Balones,futbol,0,APPLY
+242035,1,9,Balones,futbol,0,APPLY
+25503U,1,9,Balones,futbol,0,APPLY
+25504U,1,9,Balones,futbol,0,APPLY
+26000,2,9,Equipamiento Fitness,futbol,0,APPLY
+26001,4,9,Equipamiento Fitness,futbol,0,APPLY
+26005,5,9,Equipamiento Fitness,futbol,0,APPLY
+26007,1,9,Equipamiento Fitness,futbol,0,APPLY
+27028,2,9,Guantes,futbol,0,APPLY
+27029,1,9,Guantes,futbol,0,APPLY
+28310,1,9,Zapatillas,futbol,0,APPLY
+28311,1,9,Zapatillas,futbol,0,APPLY
+29021,2,9,Equipamiento Fitness,futbol,0,APPLY
+29030,1,9,Equipamiento Fitness,futbol,0,APPLY
+29014,2,9,Equipamiento Fitness,futbol,0,APPLY
+29018,2,9,Equipamiento Fitness,futbol,0,APPLY
+29031,2,9,Equipamiento Fitness,futbol,0,APPLY
+29078,4,9,Equipamiento Fitness,futbol,0,APPLY
+29084,2,9,Equipamiento Fitness,futbol,0,APPLY
+29089,1,9,Equipamiento Fitness,futbol,0,APPLY
+Q22513,1,9,Zapatillas,futbol,0,APPLY
+081665 01,1,9,Zapatillas,futbol,0,APPLY
+081840 02,1,9,Zapatillas,futbol,0,APPLY
+082019 01,1,9,Zapatillas,futbol,0,APPLY
+082478 01,1,9,Balones,futbol,0,APPLY
+303132,1,9,Equipamiento Fitness,futbol,0,APPLY
+082586 01,1,9,Balones,futbol,0,APPLY
+082742 01,4,9,Balones,futbol,0,APPLY
+082818 01,2,9,Balones,futbol,0,APPLY
+082827 01,1,9,Balones,futbol,0,APPLY
+082905 01,2,9,Balones,futbol,0,APPLY
+082906 01,3,9,Balones,futbol,0,APPLY
+082913 01,1,19,Balones,futbol,0,APPLY
+083399 01,2,9,Balones,futbol,0,APPLY
+1938,1,19,Zapatillas,futbol,0,APPLY
+306190 01,2,19,Zapatillas,futbol,0,APPLY
+4939,1,19,Zapatillas,futbol,0,APPLY
+5208340000000,5,7;9;42;63,Equipamiento Fitness,futbol,0,APPLY
+3209091864219,2,9,Equipamiento Fitness,pool,0,APPLY
+3250,1,9,Equipamiento Fitness,futbol,0,APPLY
+3326,1,9,Zapatillas,futbol,0,APPLY
+3350,2,19;63,Zapatillas,futbol,0,APPLY
+0102030230,2,9,Balones,futbol,0,APPLY
+0102050231,2,9,Balones,futbol,0,APPLY
+3491,1,19,Zapatillas,futbol,0,APPLY
+3438,1,9,Zapatillas,futbol,0,APPLY
+3493,1,19,Zapatillas,futbol,0,APPLY
+3600,2,9,Zapatillas,futbol,0,APPLY
+3875,1,19,Zapatillas,futbol,0,APPLY
+3904,1,9,Zapatillas,futbol,0,APPLY
+3923,1,19,Zapatillas,futbol,0,APPLY
+3927,1,19,Zapatillas,futbol,0,APPLY
+10045,6,19,Bolsos y Mochilas,futbol,0,APPLY
+39980,1,9,Equipamiento Fitness,futbol,0,APPLY
+405-00,2,19,Zapatillas,futbol,0,APPLY
+405130938,1,9,Guantes,futbol,0,APPLY
+4051309494614,3,9,Balones,futbol,0,APPLY
+4051309494621,1,9,Guantes,futbol,0,APPLY
+4051309789857,4,9,Guantes,futbol,0,APPLY
+4051309789840,5,9,Guantes,futbol,0,APPLY
+4054,3,4;42,Equipamiento Fitness,futbol,0,APPLY
+4126,1,9,Zapatillas,futbol,0,APPLY
+4135742-1787,2,9,Balones,futbol,0,APPLY
+4135756-0239,1,9,Balones,futbol,0,APPLY
+4135759-0246,1,9,Balones,futbol,0,APPLY
+4135728-0292,1,9,Balones,futbol,0,APPLY
+4234,2,19;35,Zapatillas,futbol,0,APPLY
+423970-623,1,4,Poleras y Camisetas,futbol,0,APPLY
+429543-140,1,19,Zapatillas,futbol,0,APPLY
+4549,2,9,Zapatillas,futbol,0,APPLY
+4611,1,9,Equipamiento Fitness,futbol,0,APPLY
+46185000,1,9,Equipamiento Fitness,futbol,0,APPLY
+4648,1,9,Zapatillas,futbol,0,APPLY
+472562-643,1,9,Zapatillas,futbol,0,APPLY
+4738,1,19,Zapatillas,futbol,0,APPLY
+48112000,1,9,Equipamiento Fitness,futbol,0,APPLY
+4889,2,9,Equipamiento Fitness,futbol,0,APPLY
+4918,1,19,Zapatillas,futbol,0,APPLY
+4919,1,19,Zapatillas,futbol,0,APPLY
+4941,1,19,Zapatillas,futbol,0,APPLY
+4968,1,19,Zapatillas,futbol,0,APPLY
+4978,1,19,Zapatillas,futbol,0,APPLY
+4984,1,9,Zapatillas,futbol,0,APPLY
+5.10.24,2,9,Accesorios Deportivos,natacion,0,APPLY
+5.10.26,2,9,Accesorios Deportivos,natacion,0,APPLY
+5.20.20,4,9,Accesorios Deportivos,,0,APPLY
+5.20.22,4,9,Accesorios Deportivos,,0,APPLY
+509039-105,1,19,Zapatillas,futbol,0,APPLY
+509125-486,1,19,Zapatillas,futbol,0,APPLY
+510334-1080,3,19,Balones,futbol,0,APPLY
+510372-4370,1,19,Balones,futbol,0,APPLY
+510373-2650,1,19,Balones,futbol,0,APPLY
+510374-1570,1,19,Balones,futbol,0,APPLY
+510586-1160,1,19,Balones,futbol,0,APPLY
+510609-1590,1,19,Balones,futbol,0,APPLY
+101711 01,1,19,Zapatillas,futbol,0,APPLY
+510607-1040,1,19,Balones,futbol,0,APPLY
+1019,4,9;25,Zapatillas,basket,0,APPLY
+101901 07,1,9,Zapatillas,futbol,0,APPLY
+511243-1690,1,19,Balones,futbol,0,APPLY
+511281-1450,3,19,Balones,futbol,0,APPLY
+5119,1,19,Zapatillas,futbol,0,APPLY
+5130,3,10;19;22,Zapatillas,futbol,0,APPLY
+102303 04,1,9,Zapatillas,futbol,0,APPLY
+102330 02,1,9,Zapatillas,futbol,0,APPLY
+102337 02,1,9,Zapatillas,futbol,0,APPLY
+102339 02,1,19,Zapatillas,futbol,0,APPLY
+5205000000000,1,4,Guantes,futbol,0,APPLY
+102542 01,1,9,Zapatillas,futbol,0,APPLY
+520734020,1,9,Equipamiento Fitness,futbol,0,APPLY
+XF0SAN,2,4,Guantes,futbol,0,APPLY
+XT-004AC-VE,3,9,Bolsos y Mochilas,gim,0,APPLY
+520834,1,9,Equipamiento Fitness,futbol,0,APPLY
+525162-710,1,9,Zapatillas,futbol,0,APPLY
+536600-014,1,19,Zapatillas,futbol,0,APPLY
+540120-3610,1,19,Balones,futbol,0,APPLY
+541291-1830,1,19,Balones,futbol,0,APPLY
+5422,1,9,Zapatillas,futbol,0,APPLY
+5438,1,19,Zapatillas,futbol,0,APPLY
+545320-140,1,9,Zapatillas,futbol,0,APPLY
+105545 01,1,9,Zapatillas,futbol,0,APPLY
+59725,3,9,Guantes,futbol,0,APPLY
+509122-486,1,9,Zapatillas,futbol,0,APPLY
+6013170820,1,9,Equipamiento Fitness,futbol,0,APPLY
+6013314,2,9,Equipamiento Fitness,futbol,0,APPLY
+6013F-600,2,4,Equipamiento Fitness,futbol,0,APPLY
+525166-173,1,9,Zapatillas,futbol,0,APPLY
+6134,1,9,Zapatillas,futbol,0,APPLY
+6206,1,19,Zapatillas,futbol,0,APPLY
+6232,1,19,Zapatillas,futbol,0,APPLY
+6235,1,19,Zapatillas,futbol,0,APPLY
+6241,1,19,Zapatillas,futbol,0,APPLY
+6397,1,19,Zapatillas,futbol,0,APPLY
+6471,1,19,Zapatillas,futbol,0,APPLY
+6507,2,9,Zapatillas,futbol,0,APPLY
+658720-411,1,4,Poleras y Camisetas,futbol,0,APPLY
+66143441414,3,9,Equipamiento Fitness,futbol,0,APPLY
+6713,3,1;9,Zapatillas,futbol,0,APPLY
+6767,1,19,Zapatillas,futbol,0,APPLY
+6899,1,19,Zapatillas,futbol,0,APPLY
+695,1,9,Equipamiento Fitness,futbol,0,APPLY
+704941-604,1,19,Zapatillas,futbol,0,APPLY
+7077,1,9,Zapatillas,futbol,0,APPLY
+7078,1,9,Zapatillas,futbol,0,APPLY
+714,1,9,Equipamiento Fitness,futbol,0,APPLY
+717073-858,1,19,Zapatillas,futbol,0,APPLY
+7262,2,1;9,Zapatillas,futbol,0,APPLY
+7355,1,19,Zapatillas,futbol,0,APPLY
+7364,1,9,Zapatillas,futbol,0,APPLY
+7500,1,9,Equipamiento Fitness,futbol,0,APPLY
+7546,1,4,Equipamiento Fitness,futbol,0,APPLY
+7631,1,9,Equipamiento Fitness,futbol,0,APPLY
+7730,1,19,Zapatillas,futbol,0,APPLY
+80103U-TCM,1,19,Zapatillas,futbol,0,APPLY
+80391U-BDZ,1,9,Zapatillas,futbol,0,APPLY
+806707-673,1,4,Poleras y Camisetas,futbol,0,APPLY
+807570-479,1,19,Zapatillas,futbol,0,APPLY
+819233-018,1,19,Zapatillas,futbol,0,APPLY
+819237-018,1,19,Zapatillas,futbol,0,APPLY
+82477,2,9,Balones,futbol,0,APPLY
+8294,1,9,Zapatillas,"futbol,sala",0,APPLY
+15WY004,1,19,Balones,"sala,futbol",0,APPLY
+8533,1,19,Zapatillas,"futbol,baby",0,APPLY
+85334U-075,1,9,Zapatillas,futbol,0,APPLY
+909765BL,2,9,Balones,futbol,0,APPLY
+8892,1,19,Balones,futbol,0,APPLY
+892,3,3;12;19,Zapatillas,"futbol,baby",0,APPLY
+893,2,9;12,Accesorios Deportivos,futbol,0,APPLY
+897-07112-3L,4,9,Equipamiento Fitness,futbol,0,APPLY
+8651,1,9,Zapatillas,futbol,0,APPLY
+906,1,4,Equipamiento Fitness,futbol,0,APPLY
+9327,1,19,Zapatillas,futbol,0,APPLY
+9335,1,9,Accesorios Deportivos,futbol,0,APPLY
+952,1,19,Zapatillas,futbol,0,APPLY
+9572,1,19,Zapatillas,futbol,0,APPLY
+9594,1,9,Zapatillas,futbol,0,APPLY
+9789,1,9,Zapatillas,futbol,0,APPLY
+993LEGENG,3,9,Balones,"sala,futbol",0,APPLY
+993TEMPO,5,4;9,Balones,"sala,futbol",0,APPLY
+9970,2,9;12,Accesorios Deportivos,futbol,0,APPLY
+1617,1,9,Zapatillas,futbol,0,APPLY
+AC5431,1,19,Balones,"sala,futbol",0,APPLY
+AC5735,1,9,Chaquetas y Polerones,futbol,0,APPLY
+120000,2,9,Equipamiento Fitness,futbol,0,APPLY
+AC5742,1,97,Poleras y Camisetas,futbol,0,APPLY
+120013,1,9,Accesorios Deportivos,futbol,0,APPLY
+120018,1,9,Equipamiento Fitness,futbol,0,APPLY
+8590,1,19,Equipamiento Fitness,"baby,futbol",0,APPLY
+AO4031,1,9,Balones,"sala,futbol",0,APPLY
+AP0397,1,9,Balones,futbol,0,APPLY
+AQ2552,1,9,Zapatillas,futbol,0,APPLY
+AQ2555,1,9,Zapatillas,futbol,0,APPLY
+AQ4308,1,9,Zapatillas,futbol,0,APPLY
+AR 00B1,1,19,Equipamiento Fitness,"baby,futbol",0,APPLY
+AR 00BP,1,19,Equipamiento Fitness,"baby,futbol",0,APPLY
+AR 0FB1,2,19,Equipamiento Fitness,futbol,0,APPLY
+AR3112,1,19,Zapatillas,"training,urbano",0,APPLY
+ARELA08223,1,9,Accesorios Deportivos,futbol,0,APPLY
+ARRFCT,1,9,Equipamiento Fitness,futbol,0,APPLY
+1694,2,19,Zapatillas,urbano,0,APPLY
+ATCRM-12,1,9,Equipamiento Fitness,futbol,0,APPLY
+ATSFT01,2,9,Equipamiento Fitness,futbol,0,APPLY
+AV 9095,1,9,Accesorios Deportivos,futbol,0,APPLY
+AV0AFM,1,9,Equipamiento Fitness,futbol,0,APPLY
+B23308,1,9,Zapatillas,"running,urbano",0,APPLY
+B26322,1,19,Sandalias y Chalas,urbano,0,APPLY
+B44173,1,9,Zapatillas,futbol,0,APPLY
+17126,1,9,Equipamiento Fitness,handball,0,APPLY
+BB5968,1,9,Zapatillas,futbol,0,APPLY
+BD1456,1,19,Zapatillas,running,0,APPLY
+1736,1,9,Zapatillas,futbol,0,APPLY
+1738,2,1;19,Zapatillas,"futbol,baby",0,APPLY
+1739,1,9,Zapatillas,futbol,0,APPLY
+1770,1,19,Zapatillas,futbol,0,APPLY
+1771,1,19,Zapatillas,futbol,0,APPLY
+BQ1367,1,9,Balones,futbol,0,APPLY
+BSS15003,1,9,Zapatillas,skate,0,APPLY
+BSS15004,1,9,Zapatillas,skate,0,APPLY
+BSS15015,1,9,Zapatillas,skate,0,APPLY
+CD8503,3,9,Balones,futbol,0,APPLY
+CD8505,3,9,Balones,futbol,0,APPLY
+CK8473-160,2,9,Zapatillas,"futbol,baby",0,APPLY
+CORNER,1,9,Equipamiento Fitness,futbol,0,APPLY
+082925 01,3,9,Balones,futbol,0,APPLY
+083382 02,4,19,Balones,futbol,0,APPLY
+CW4171,2,9,Balones,futbol,0,APPLY
+1832,2,9;63,Zapatillas,futbol,0,APPLY
+D66949,1,9,Zapatillas,futbol,0,APPLY
+D67019,1,19,Zapatillas,futbol,0,APPLY
+D67155,1,19,Zapatillas,"running,urbano",0,APPLY
+D67555,1,19,Zapatillas,futbol,0,APPLY
+DC12V,1,9,Accesorios Deportivos,futbol,0,APPLY
+1879,1,9,Balones,futbol,0,APPLY
+E34026,1,9,Balones,futbol,0,APPLY
+EQUIP,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO,3,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO36,1,4,Equipamiento Fitness,futbol,0,APPLY
+EQUIPO37,1,4,Buzos y Pantalones,futbol,0,APPLY
+EQUIPO43,1,4,Equipamiento Fitness,futbol,0,APPLY
+F32538,1,19,Zapatillas,"sala,futbol",0,APPLY
+F32982,1,9,Zapatillas,futbol,0,APPLY
+191487 01,1,19,Zapatillas,"training,running",0,APPLY
+F38670,4,19,Zapatillas,urbano,0,APPLY
+F47525,1,9,Balones,futbol,0,APPLY
+19228,2,1;9,Zapatillas,futbol,0,APPLY
+F72307,1,9,Equipamiento Fitness,futbol,0,APPLY
+F76517,1,19,Zapatillas,urbano,0,APPLY
+1292218-001,1,9,Bolsos y Mochilas,urbano,0,APPLY
+F98802,3,19,Zapatillas,futbol,0,APPLY
+FB ACB4,1,9,Balones,futbol,0,APPLY
+FCMN-23,1,9,Equipamiento Fitness,futbol,0,APPLY
+12KP270,1,9,Zapatillas,futbol,0,APPLY
+1980,1,4,Equipamiento Fitness,futbol,0,APPLY
+FMEN-60,1,19,Equipamiento Fitness,"baby,futbol",0,APPLY
+1994,2,19;41,Zapatillas,futbol,0,APPLY
+FRSA,1,4,Equipamiento Fitness,futbol,0,APPLY
+FS38033,2,9,Equipamiento Fitness,futbol,0,APPLY
+G40719,1,19,Zapatillas,futbol,0,APPLY
+G40781,1,9,Zapatillas,futbol,0,APPLY
+G40891,1,9,Zapatillas,futbol,0,APPLY
+G52153,1,9,Zapatillas,futbol,0,APPLY
+G61574,1,19,Zapatillas,futbol,0,APPLY
+G62123,2,19,Zapatillas,"futbol,baby",0,APPLY
+G62271,1,19,Zapatillas,urbano,0,APPLY
+G64904,1,9,Zapatillas,futbol,0,APPLY
+G64906,1,9,Zapatillas,futbol,0,APPLY
+G64964,1,9,Zapatillas,futbol,0,APPLY
+G65168,3,9,Zapatillas,futbol,0,APPLY
+G65383,2,9,Zapatillas,futbol,0,APPLY
+G73598,1,9,Zapatillas,futbol,0,APPLY
+G73622,1,9,Balones,futbol,0,APPLY
+G73636,1,9,Balones,futbol,0,APPLY
+G83303,1,9,Gorros,futbol,0,APPLY
+G84004,1,9,Balones,futbol,0,APPLY
+G84006,1,9,Balones,futbol,0,APPLY
+G84009,1,9,Balones,futbol,0,APPLY
+G84010,1,9,Balones,futbol,0,APPLY
+G84012,1,9,Balones,futbol,0,APPLY
+G84019,1,9,Balones,futbol,0,APPLY
+G91044,1,9,Balones,futbol,0,APPLY
+G95932,1,19,Zapatillas,futbol,0,APPLY
+082446 01,2,9,Balones,futbol,0,APPLY
+104561 01,1,19,Zapatillas,futbol,0,APPLY
+104832 02,1,9,Zapatillas,futbol,0,APPLY
+104841 02,1,19,Zapatillas,futbol,0,APPLY
+1303942,1,4,Equipamiento Fitness,futbol,0,APPLY
+GS0279-100,1,9,Guantes,futbol,0,APPLY
+1264211-600,2,9,Zapatillas,futbol,0,APPLY
+2.90.38,2,9,Accesorios Deportivos,futbol,0,APPLY
+2.90.77,3,9,Accesorios Deportivos,futbol,0,APPLY
+2.90.78,3,9,Accesorios Deportivos,futbol,0,APPLY
+20032,1,9,Balones,futbol,0,APPLY
+20075,3,9,Balones,futbol,0,APPLY
+201014,3,4,Equipamiento Fitness,futbol,0,APPLY
+066143095365,2,9,Accesorios Deportivos,futbol,0,APPLY
+20507U,1,9,Balones,futbol,0,APPLY
+K4003000,1,19,Zapatillas,"sala,futbol",0,APPLY
+2092,1,9,Zapatillas,futbol,0,APPLY
+LA27S4,1,9,Equipamiento Fitness,futbol,0,APPLY
+LA2M2P,1,9,Equipamiento Fitness,futbol,0,APPLY
+M1004,4,9,Equipamiento Fitness,futbol,0,APPLY
+M1009,4,9,Equipamiento Fitness,futbol,0,APPLY
+M1014,6,7;9,Equipamiento Fitness,futbol,0,APPLY
+M17444,1,19,Zapatillas,"running,trekking",0,APPLY
+M17626,2,9,Zapatillas,futbol,0,APPLY
+M18545,1,19,Zapatillas,trekking,0,APPLY
+M19893,1,19,Zapatillas,futbol,0,APPLY
+M25049,1,19,Zapatillas,futbol,0,APPLY
+M25838,1,9,Zapatillas,"urbano,running",0,APPLY
+M29901,1,19,Zapatillas,futbol,0,APPLY
+M36936,1,9,Balones,futbol,0,APPLY
+M47719,1,19,Zapatillas,running,0,APPLY
+M5801000,1,9,Zapatillas,futbol,0,APPLY
+M67436,1,9,Bolsos y Mochilas,futbol,0,APPLY
+21036,4,9;17,Equipamiento Fitness,futbol,0,APPLY
+083258 01,1,9,Balones,futbol,0,APPLY
+083260 02,1,19,Zapatillas,futbol,0,APPLY
+MALLA BABY,2,19,Equipamiento Fitness,"baby,futbol",0,APPLY
+MEDUSA,1,9,Guantes,futbol,0,APPLY
+MSAFAMF-B,1,9,Equipamiento Fitness,futbol,0,APPLY
+MSAFMVE-15,2,9,Equipamiento Fitness,futbol,0,APPLY
+MSBRFAC-RA,1,9,Balones,futbol,0,APPLY
+N7008000,1,19,Balones,futbol,0,APPLY
+N8456000,1,9,Zapatillas,futbol,0,APPLY
+NA OPPC,1,9,Balones,tenis,0,APPLY
+P1GA1405,1,9,Zapatillas,futbol,0,APPLY
+P1GA1564,2,9,Zapatillas,futbol,0,APPLY
+PS 0304,1,9,Equipamiento Fitness,futbol,0,APPLY
+PS P250,1,9,Equipamiento Fitness,futbol,0,APPLY
+13ANOOLL,2,4,Equipamiento Fitness,futbol,0,APPLY
+Q21649,1,9,Zapatillas,futbol,0,APPLY
+Q21656,1,9,Zapatillas,futbol,0,APPLY
+Q21658,1,9,Zapatillas,futbol,0,APPLY
+Q21667,1,9,Zapatillas,futbol,0,APPLY
+Q21671,1,9,Zapatillas,futbol,0,APPLY
+Q1744000,1,19,Balones,futbol,0,APPLY
+Q1GB1451,1,9,Zapatillas,"sala,futbol",0,APPLY
+Q23830,1,9,Zapatillas,futbol,0,APPLY
+Q23871,1,19,Zapatillas,futbol,0,APPLY
+1400004,1,9,Balones,"sala,futbol",0,APPLY
+206572,1,9,Accesorios Deportivos,futbol,0,APPLY
+28930,1,9,Equipamiento Fitness,futbol,0,APPLY
+415122-107,1,9,Zapatillas,"sala,futbol",0,APPLY
+478311-410,1,4,Equipamiento Fitness,futbol,0,APPLY
+5208901604029,3,9,Balones,"gim,training",0,APPLY
+75-2012CM,1,9,Equipamiento Fitness,futbol,0,APPLY
+75-2012CYM,1,9,Equipamiento Fitness,futbol,0,APPLY
+75-2012GM,2,9,Equipamiento Fitness,futbol,0,APPLY
+847355-457,1,4,Equipamiento Fitness,futbol,0,APPLY
+BALON MEDICINAL,4,4;50,Equipamiento Fitness,training,0,APPLY
+CONO LENTEJA,2,9,Equipamiento Fitness,futbol,0,APPLY
+DEPBOMBRP003,2,9,Accesorios Deportivos,futbol,0,APPLY
+C005,4,7;9,Equipamiento Fitness,futbol,0,APPLY
+Q33868,1,9,Zapatillas,"futbol,pasto",0,APPLY
+Q33887,1,9,Zapatillas,futbol,0,APPLY
+Q7246000,1,9,Zapatillas,futbol,0,APPLY
+Q7252000,1,9,Zapatillas,futbol,0,APPLY
+Q7271000,1,19,Zapatillas,baby,0,APPLY
+R0175,1,19,Zapatillas,baby,0,APPLY
+R5259,1,9,Zapatillas,futbol,0,APPLY
+R6595,1,9,Balones,futbol,0,APPLY
+R9038,1,9,Balones,futbol,0,APPLY
+RED ALEMAN,2,9,Equipamiento Fitness,futbol,0,APPLY
+RED BABY1,1,19,Equipamiento Fitness,baby,0,APPLY
+RED FOOT2,1,9,Equipamiento Fitness,futbol,0,APPLY
+S31885,1,9,Zapatillas,futbol,0,APPLY
+S4083,1,9,Balones,futbol,0,APPLY
+S77082,1,9,Zapatillas,futbol,0,APPLY
+S77222,1,19,Zapatillas,baby,0,APPLY
+S79485,1,19,Zapatillas,baby,0,APPLY
+S79538,1,19,Zapatillas,baby,0,APPLY
+SC-2222-403,1,9,Balones,"futbol,sala",0,APPLY
+SC1839-162,1,9,Balones,"futbol,sala",0,APPLY
+SC1887-810,1,9,Balones,futbol,0,APPLY
+SC1937-407,1,9,Balones,futbol,0,APPLY
+SC1948-143,1,9,Balones,futbol,0,APPLY
+SC1953-470,1,9,Balones,futbol,0,APPLY
+SC1977-140,1,9,Balones,futbol,0,APPLY
+SC1981-475,1,9,Balones,futbol,0,APPLY
+SC1983-476,1,9,Balones,futbol,0,APPLY
+SC1988-010,1,9,Balones,futbol,0,APPLY
+SC1999-170,1,9,Balones,futbol,0,APPLY
+SC2006-140,1,9,Balones,"futbol,sala",0,APPLY
+SC2010-170,1,9,Balones,futbol,0,APPLY
+SC2012-751,1,9,Balones,futbol,0,APPLY
+SC2067-444,1,9,Balones,futbol,0,APPLY
+SC2070-018,1,9,Balones,futbol,0,APPLY
+SC2103-103,1,9,Balones,futbol,0,APPLY
+SC2104-642,1,9,Balones,futbol,0,APPLY
+SC2111-744,1,9,Balones,futbol,0,APPLY
+SC2114-084,1,9,Balones,futbol,0,APPLY
+SC2115-001,1,9,Balones,futbol,0,APPLY
+SC2157-140,1,9,Balones,futbol,0,APPLY
+SC2187-861,1,9,Balones,futbol,0,APPLY
+SC2188-677,1,9,Balones,futbol,0,APPLY
+SC2242-414,1,9,Balones,futbol,0,APPLY
+SC2359-106,1,9,Balones,futbol,0,APPLY
+SC2377-773,1,9,Balones,futbol,0,APPLY
+SC2380-411,1,9,Balones,futbol,0,APPLY
+SC2384-881,1,9,Balones,futbol,0,APPLY
+SC2431-644,1,9,Balones,futbol,0,APPLY
+SC2452-401,1,9,Balones,futbol,0,APPLY
+SC2464-773,1,19,Balones,futbol,0,APPLY
+SC2465-471,1,19,Balones,futbol,0,APPLY
+SC2472-411,1,19,Balones,futbol,0,APPLY
+SC2543-705,1,9,Balones,futbol,0,APPLY
+SC2585-005,1,9,Balones,futbol,0,APPLY
+SC2603-190,1,9,Balones,futbol,0,APPLY
+SC2693-401,1,9,Balones,futbol,0,APPLY
+SC2705-100,1,9,Balones,futbol,0,APPLY
+SC2705-475,1,9,Balones,futbol,0,APPLY
+SC2710-100,1,9,Balones,futbol,0,APPLY
+SC2736-657,1,9,Balones,futbol,0,APPLY
+SC2752-012,1,9,Balones,futbol,0,APPLY
+SC2814-830,1,9,Balones,futbol,0,APPLY
+SC3051-100,1,9,Balones,futbol,0,APPLY
+SC3105-410,1,9,Balones,futbol,0,APPLY
+SC3138-100,1,9,Balones,futbol,0,APPLY
+SC3201-100,2,9,Balones,futbol,0,APPLY
+SC3223-451,2,19,Balones,futbol,0,APPLY
+SE 6105,1,9,Equipamiento Fitness,training,0,APPLY
+SET ULH,3,4,Equipamiento Fitness,futbol,0,APPLY
+SET-3,1,4,Equipamiento Fitness,futbol,0,APPLY
+SILBATO,1,9,Accesorios Deportivos,futbol,0,APPLY
+SILBATO ETO M,1,9,Accesorios Deportivos,futbol,0,APPLY
+SILBATO ETO P,1,9,Accesorios Deportivos,futbol,0,APPLY
+SOPORTE,1,9,Equipamiento Fitness,futbol,0,APPLY
+SP0215-118,2,9,Protecciones,futbol,0,APPLY
+29017,2,9,Equipamiento Fitness,futbol,0,APPLY
+U11PRT1-01M,1,19,Zapatillas,baby,0,APPLY
+V20988,1,9,Zapatillas,futbol,0,APPLY
+V22125,1,9,Zapatillas,"futbol,pasto",0,APPLY
+V23006,1,19,Zapatillas,baby,0,APPLY
+V23635,1,9,Zapatillas,futbol,0,APPLY
+V23829,1,19,Zapatillas,baby,0,APPLY
+V23948,1,9,Zapatillas,futbol,0,APPLY
+V23952,1,19,Zapatillas,baby,0,APPLY
+V42330,1,19,Balones,"futbol,sala",0,APPLY
+V42344,1,9,Balones,futbol,0,APPLY
+V42349,1,9,Balones,futbol,0,APPLY
+V86535,1,9,Balones,futbol,0,APPLY
+V87029,1,9,Balones,futbol,0,APPLY
+V87032,1,9,Balones,futbol,0,APPLY
+V87034,1,9,Balones,futbol,0,APPLY
+V87056,1,19,Balones,"futbol,sala",0,APPLY
+V87065,2,9,Balones,futbol,0,APPLY
+V87070,1,9,Balones,futbol,0,APPLY
+V87073,1,9,Balones,futbol,0,APPLY
+V87196,1,9,Zapatillas,"futbol,sala",0,APPLY
+V87370,1,9,Balones,futbol,0,APPLY
+VALLA6,1,9,Equipamiento Fitness,futbol,0,APPLY
+VALLA9,1,9,Equipamiento Fitness,futbol,0,APPLY
+W43102,1,9,Balones,futbol,0,APPLY
+W43147,1,9,Balones,futbol,0,APPLY
+W43151,1,9,Balones,futbol,0,APPLY
+W43911,1,9,Balones,futbol,0,APPLY
+W44981,1,9,Balones,futbol,0,APPLY
+X16692,1,9,Balones,futbol,0,APPLY
+X16706,1,9,Balones,futbol,0,APPLY
+X16993,1,9,Balones,futbol,0,APPLY
+X17280,1,9,Balones,futbol,0,APPLY
+X17285,1,9,Balones,futbol,0,APPLY
+X18185,1,19,Balones,"futbol,sala",0,APPLY
+X36424,1,9,Balones,futbol,0,APPLY
+X38164,1,19,Balones,futbol,0,APPLY
+X53045,1,9,Balones,futbol,0,APPLY
+XF 00NA,1,4,Equipamiento Fitness,futbol,0,APPLY
+3426,2,9;26,Zapatillas,futbol,0,APPLY
+Z19728,1,9,Balones,futbol,0,APPLY
+ZAPATO BABY TOUCH,1,9,Balones,futbol,0,APPLY
+363722 01,1,19,Zapatillas,baby,0,APPLY
+510333-1590,1,19,Balones,futbol,0,APPLY
+6427,1,4,Equipamiento Fitness,futbol,0,APPLY
+672006-9990,2,9,Accesorios Deportivos,futbol,0,APPLY
+82023,1,9,Balones,futbol,0,APPLY
+8303,1,19,Zapatillas,baby,0,APPLY
+AC5400,1,9,Balones,futbol,0,APPLY
+AH7302-080,1,9,Zapatillas,futbol,0,APPLY
+AQ3111,2,9,Zapatillas,futbol,0,APPLY
+AZ5445,2,9,Balones,futbol,0,APPLY
+AZ9608,1,19,Balones,futbol,0,APPLY
+B32868,1,9,Zapatillas,futbol,0,APPLY
+B32900,1,9,Zapatillas,futbol,0,APPLY
+B36022,1,19,Zapatillas,baby,0,APPLY
+FB BOAB,1,9,Balones,"futbol,sala",0,APPLY
+LA MPTH,1,9,Equipamiento Fitness,futbol,0,APPLY
+PETO DAMA,1,9,Equipamiento Fitness,futbol,0,APPLY
+80680U-FR6,1,9,Zapatillas,futbol,0,APPLY
+R2615,1,9,Zapatillas,futbol,0,APPLY
+X18256,1,9,Balones,futbol,0,APPLY
+SC1986-104,1,9,Balones,futbol,0,APPLY
+2126411KH,2,9,Zapatillas,futbol,0,APPLY
+RED BABY,5,9;19,Equipamiento Fitness,baby,0,APPLY
+MK-893,2,9,Equipamiento Fitness,futbol,0,APPLY
+ARCOS BABY FUTBOL,2,9,Equipamiento Fitness,futbol,0,APPLY
+082966 01,1,9,Balones,futbol,0,APPLY
+082988 01,1,19,Balones,futbol,0,APPLY
+104212 06,1,19,Zapatillas,baby,0,APPLY
+1101031999,2,4,Accesorios Deportivos,futbol,0,APPLY
+1332,1,9,Accesorios Deportivos,futbol,0,APPLY
+170115 01,1,9,Zapatillas,futbol,0,APPLY
+5205321409098,2,9,Guantes,futbol,0,APPLY
+5205340017014,2,9,Equipamiento Fitness,futbol,0,APPLY
+520700000000,2,4,Equipamiento Fitness,futbol,0,APPLY
+5207135000508,3,4;9,Equipamiento Fitness,futbol,0,APPLY
+5207340708985,2,9,Equipamiento Fitness,training,0,APPLY
+5207540000000,1,9,Equipamiento Fitness,futbol,0,APPLY
+520834040,2,9,Accesorios Deportivos,natacion,0,APPLY
+5208402123104,3,9,Accesorios Deportivos,natacion,0,APPLY
+5208402124101,3,9;45,Accesorios Deportivos,natacion,0,APPLY
+5208510010006,2,19,Accesorios Deportivos,natacion,0,APPLY
+530500-9651,1,19,Balones,basket,0,APPLY
+6013417,2,9,Equipamiento Fitness,futbol,0,APPLY
+6013418,2,9,Accesorios Deportivos,futbol,0,APPLY
+66143090810,5,9,Accesorios Deportivos,futbol,0,APPLY
+701071999,2,4,Equipamiento Fitness,futbol,0,APPLY
+749760-001,1,19,Zapatillas,baby,0,APPLY
+8.20.00,2,9,Equipamiento Fitness,pingpong,0,APPLY
+81296U-FBS,1,19,Zapatillas,baby,0,APPLY
+819216-002,1,19,Zapatillas,futbol,0,APPLY
+82011,2,4,Equipamiento Fitness,pingpong,0,APPLY
+8434666264186,3,9,Guantes,futbol,0,APPLY
+844408-708,1,19,Zapatillas,baby,0,APPLY
+844437-001,1,19,Zapatillas,baby,0,APPLY
+847326-430,1,4,Equipamiento Fitness,futbol,0,APPLY
+897744-616,1,9,Zapatillas,futbol,0,APPLY
+90863LOGO5NF,2,4,Balones,"futbol,sala",0,APPLY
+909724BA,2,9,Balones,"futbol,sala",0,APPLY
+917787-061,1,9,Zapatillas,futbol,0,APPLY
+917796-061,1,19,Zapatillas,baby,0,APPLY
+921514-407,2,19,Zapatillas,baby,0,APPLY
+98546,2,9,Equipamiento Fitness,baby,0,APPLY
+996,2,9,Equipamiento Fitness,futbol,0,APPLY
+999007,1,9,Accesorios Deportivos,futbol,0,APPLY
+A0010,2,9,Balones,handball,0,APPLY
+AC5412,1,9,Balones,futbol,0,APPLY
+AH7372-070,1,19,Zapatillas,baby,0,APPLY
+AJ3738-600,1,19,Zapatillas,baby,0,APPLY
+AJ3811-107,1,19,Zapatillas,baby,0,APPLY
+AJ4145-107,1,9,Zapatillas,futbol,0,APPLY
+ANILLAS,2,4,Equipamiento Fitness,training,0,APPLY
+AO2597-006,1,19,Zapatillas,baby,0,APPLY
+AP0399,1,9,Balones,futbol,0,APPLY
+AP0406,1,9,Balones,futbol,0,APPLY
+AV9970,1,9,Accesorios Deportivos,futbol,0,APPLY
+AVACS1,2,9,Equipamiento Fitness,futbol,0,APPLY
+AW4294,1,19,Zapatillas,urbano,0,APPLY
+B22942,2,9,Zapatillas,"running,urbano",0,APPLY
+B30634,1,9,Balones,rugby,0,APPLY
+B32972,1,19,Zapatillas,baby,0,APPLY
+BA00960,5,9,Accesorios Deportivos,futbol,0,APPLY
+BAL FUTBOLITO RX,2,19,Balones,futbol,0,APPLY
+BALON PRO,2,9,Balones,futbol,0,APPLY
+BALON PRO N5,2,9,Balones,futbol,0,APPLY
+BALON RINAT,2,9,Balones,futbol,0,APPLY
+BANCA MULTI,2,4,Equipamiento Fitness,training,0,APPLY
+BANDA HIP,2,4,Equipamiento Fitness,training,0,APPLY
+BB1220,1,19,Zapatillas,urbano,0,APPLY
+BB1774,1,19,Zapatillas,baby,0,APPLY
+BB1980,1,19,Zapatillas,trekking,0,APPLY
+BB3657,1,9,Zapatillas,futbol,0,APPLY
+BB4325,2,9,Zapatillas,futbol,0,APPLY
+BB4841,1,9,Zapatillas,futbol,0,APPLY
+BB9239,1,9,Zapatillas,basket,0,APPLY
+BB9333,3,9,Zapatillas,futbol,0,APPLY
+BB9363,2,9,Zapatillas,futbol,0,APPLY
+BB9368,3,9,Zapatillas,futbol,0,APPLY
+BG00PL,2,9,Equipamiento Fitness,boxeo,0,APPLY
+BQ1369,1,9,Balones,futbol,0,APPLY
+CALLERA,2,4,Protecciones,futbol,0,APPLY
+CD8506,3,9,Balones,futbol,0,APPLY
+CE9968,2,9,Balones,futbol,0,APPLY
+CK8483-160,2,19,Zapatillas,"futbol,sala",0,APPLY
+CM7666,2,9,Zapatillas,futbol,0,APPLY
+CONED,2,9,Equipamiento Fitness,futbol,0,APPLY
+CONES30-1,2,9,Equipamiento Fitness,futbol,0,APPLY
+CONO,2,9;41,Equipamiento Fitness,futbol,0,APPLY
+CORREA,2,9,Equipamiento Fitness,futbol,0,APPLY
+CP8971,2,9,Zapatillas,futbol,0,APPLY
+CP9187,2,9,Zapatillas,futbol,0,APPLY
+CQ7151-420,2,9,Balones,futbol,0,APPLY
+CV0589-100,3,9,Balones,futbol,0,APPLY
+CW4147,1,9,Balones,futbol,0,APPLY
+D96554,3,9,Zapatillas,urbano,0,APPLY
+D97986,1,9,Zapatillas,futbol,0,APPLY
+DAOOTE,1,9,Equipamiento Fitness,futbol,0,APPLY
+DB2001,3,9,Zapatillas,futbol,0,APPLY
+DB2109,1,9,Zapatillas,futbol,0,APPLY
+DB3095,2,19,Zapatillas,"skate,urbano",0,APPLY
+DEPBOMBRP005,2,9,Equipamiento Fitness,futbol,0,APPLY
+DM4153-101,3,9,Balones,sala,0,APPLY
+E33A,2,9,Equipamiento Fitness,futbol,0,APPLY
+E33B,2,9,Equipamiento Fitness,futbol,0,APPLY
+E33N,2,9,Equipamiento Fitness,futbol,0,APPLY
+EF8366,2,19,Zapatillas,futbol,0,APPLY
+FB 0BBA,1,9,Balones,futbol,0,APPLY
+FB ACB5,1,9,Balones,futbol,0,APPLY
+FB.BB0A,3,9,Balones,sala,0,APPLY
+FB.BBOA,2,9,Balones,sala,0,APPLY
+FB.FTSL,2,9,Balones,futbol,0,APPLY
+FBBBOA,2,9,Balones,futbol,0,APPLY
+FOAM ROLLER 45,2,9,Equipamiento Fitness,gim,0,APPLY
+FOX40-01,2,9,Equipamiento Fitness,futbol,0,APPLY
+FOX40-3,2,9,Equipamiento Fitness,futbol,0,APPLY
+FSWS-211P,1,9,Equipamiento Fitness,futbol,0,APPLY
+FT.DUMM 205,2,9,Equipamiento Fitness,futbol,0,APPLY
+G64931,1,9,Zapatillas,futbol,0,APPLY
+GE17539,6,9;69,Accesorios Deportivos,futbol,0,APPLY
+GE17630,2,9,Equipamiento Fitness,futbol,0,APPLY
+GL13,1,4,Poleras y Camisetas,futbol,0,APPLY
+GT3917,2,9,Balones,futbol,0,APPLY
+GT7790,2,9,Balones,futbol,0,APPLY
+GU0206,3,9,Balones,futbol,0,APPLY
+GUANTE 4,2,9,Guantes,futbol,0,APPLY
+H57818,2,4,Balones,futbol,0,APPLY
+HU1577,2,9,Balones,futbol,0,APPLY
+HUINCHA,2,9,Equipamiento Fitness,futbol,0,APPLY
+LA 0E9C,1,9,Equipamiento Fitness,futbol,0,APPLY
+LA00HD,1,9,Equipamiento Fitness,futbol,0,APPLY
+LA2126,1,9,Equipamiento Fitness,futbol,0,APPLY
+LAOAMP,1,9,Equipamiento Fitness,futbol,0,APPLY
+LAR02M,1,9,Equipamiento Fitness,futbol,0,APPLY
+M.10.03,2,9,Equipamiento Fitness,futbol,0,APPLY
+M.10.21,2,9,Equipamiento Fitness,futbol,0,APPLY
+M1040,2,9,Equipamiento Fitness,futbol,0,APPLY
+M2010,2,9,Equipamiento Fitness,futbol,0,APPLY
+MI34009,1,4,Poleras y Camisetas,futbol,0,APPLY
+MI34107,1,4,Poleras y Camisetas,futbol,0,APPLY
+MI34392,2,19,Equipamiento Fitness,futbol,0,APPLY
+MI34718,2,4,Poleras y Camisetas,futbol,0,APPLY
+MI34936,2,4,Poleras y Camisetas,futbol,0,APPLY
+MI35296,2,9,Poleras y Camisetas,futbol,0,APPLY
+MI35301,2,9,Poleras y Camisetas,futbol,0,APPLY
+MI35309,2,4,Poleras y Camisetas,futbol,0,APPLY
+MI36731,2,4,Poleras y Camisetas,futbol,0,APPLY
+MI36866,2,9,Poleras y Camisetas,futbol,0,APPLY
+MK-3017,2,4,Equipamiento Fitness,futbol,0,APPLY
+MO21844,2,4,Balones,sala,0,APPLY
+MONEDA,2,4,Equipamiento Fitness,futbol,0,APPLY
+MSAFMVE-30,1,9,Equipamiento Fitness,futbol,0,APPLY
+MSFSTA,2,9,Equipamiento Fitness,futbol,0,APPLY
+MUUK02009,2,9,Equipamiento Fitness,futbol,0,APPLY
+MUUK1001,2,9,Equipamiento Fitness,futbol,0,APPLY
+MUUK3213,2,9,Equipamiento Fitness,futbol,0,APPLY
+MUUK3672,2,9,Equipamiento Fitness,futbol,0,APPLY
+MUUK7118,2,9,Equipamiento Fitness,futbol,0,APPLY
+MUUK72257230,2,9,Equipamiento Fitness,futbol,0,APPLY
+MUUKPS19B,2,9,Balones,futbol,0,APPLY
+MUUKPS24,4,9,Balones,futbol,0,APPLY
+PENPEN01041,2,9,Balones,futbol,0,APPLY
+PENPEN01042,4,9,Balones,futbol,0,APPLY
+PENPEN01074,2,9,Balones,futbol,0,APPLY
+PETO INFAN,2,9,Equipamiento Fitness,futbol,0,APPLY
+PETOS,2,9,Equipamiento Fitness,futbol,0,APPLY
+PETOS P,2,9,Equipamiento Fitness,futbol,0,APPLY
+PIZARRA TRAINING FUTBOL,2,9,Equipamiento Fitness,futbol,0,APPLY
+R9039,1,9,Balones,futbol,0,APPLY
+RE00098,2,9,Guantes,futbol,0,APPLY
+RE00104,2,9,Guantes,futbol,0,APPLY
+RE00114,2,19,Guantes,futbol,0,APPLY
+RE00142,2,9,Guantes,futbol,0,APPLY
+RE00154,2,9,Guantes,futbol,0,APPLY
+RE00155,2,19,Guantes,futbol,0,APPLY
+RE00158,2,19,Guantes,futbol,0,APPLY
+RE00437,2,4,Equipamiento Fitness,futbol,0,APPLY
+REBOTADOR METALICO,2,9,Equipamiento Fitness,futbol,0,APPLY
+RED 60,1,19,Equipamiento Fitness,futbol,0,APPLY
+RED 80,1,19,Equipamiento Fitness,futbol,0,APPLY
+RED ALE,2,9,Equipamiento Fitness,futbol,0,APPLY
+RED BABY 60 PRO,2,4,Equipamiento Fitness,futbol,0,APPLY
+RED BASQUET,6,9;25,Equipamiento Fitness,basket,0,APPLY
+RED BASQUET TR,2,9,Equipamiento Fitness,basket,0,APPLY
+RED ETO6,1,9,Equipamiento Fitness,tenis,0,APPLY
+RED FUTBOL ECO,2,9,Equipamiento Fitness,futbol,0,APPLY
+RED FUTBOLITO ECO,2,9,Equipamiento Fitness,futbol,0,APPLY
+RED VOLEY PRO,2,9,Equipamiento Fitness,voley,0,APPLY
+S1551,1,9,Zapatillas,futbol,0,APPLY
+S2407,1,9,Zapatillas,futbol,0,APPLY
+S82325,2,9,Zapatillas,futbol,0,APPLY
+SANTO PRO,4,9,Guantes,futbol,0,APPLY
+SC2004-140,1,19,Balones,sala,0,APPLY
+SC3092-103,1,9,Balones,futbol,0,APPLY
+SC3145-125,1,9,Balones,futbol,0,APPLY
+SC3176-100,1,9,Balones,futbol,0,APPLY
+SC3283-455,1,9,Balones,futbol,0,APPLY
+SC3291-702,1,9,Balones,futbol,0,APPLY
+SC3325-100,1,9,Balones,futbol,0,APPLY
+SC3552-103,3,9,Balones,futbol,0,APPLY
+SC3563-100,1,9,Balones,futbol,0,APPLY
+SC3564-100,1,9,Balones,futbol,0,APPLY
+SC3604-455,2,9,Balones,futbol,0,APPLY
+SC3639-105,2,19,Balones,futbol,0,APPLY
+SC3786-492,2,9,Balones,futbol,0,APPLY
+SC3972-446,2,9,Balones,futbol,0,APPLY
+SC3975-446,2,9,Balones,futbol,0,APPLY
+SPABASP019,2,9,Equipamiento Fitness,futbol,0,APPLY
+UNDERWEAR,2,97,Trajes de Baño,futbol,0,APPLY
+V66480,1,9,Zapatillas,"running,urbano",0,APPLY
+VALLA12,1,9,Equipamiento Fitness,futbol,0,APPLY
+PUNTA,1,52,Danza,,0,APPLY
+CONO PATINAJE,2,1,Equipamiento Fitness,skate,0,APPLY
+VIS-51463S,6,2;39,Equipamiento Fitness,skate,0,APPLY
+SX7840-010,2,105,Medias y Calcetines,,0,APPLY
+SX7840-100,7,105,Medias y Calcetines,,0,APPLY
