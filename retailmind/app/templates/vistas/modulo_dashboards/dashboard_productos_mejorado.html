@@ -1016,10 +1016,10 @@ $(document).ready(function() {
     
     // Eventos
     $('#buscarProducto').on('keyup', debounce(filtrarTabla, 300));
-    
-    // Actualizar cada 60 segundos
-    setInterval(actualizarDashboard, 60000);
-    
+
+    // Sin auto-refresh: la API materializa el catálogo completo en cada
+    // request — recargar manualmente o al cambiar filtros.
+
     console.log('✅ Dashboard inicializado');
 });
 

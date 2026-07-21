@@ -564,11 +564,9 @@
                 <div class="row g-3 align-items-end">
                     <div class="col-md-2">
                         <label class="form-label"><i class="bi bi-calendar3 me-1"></i>Año</label>
-                        <select class="form-select" id="filtroAnio">
-                            <option value="2025" selected>2025</option>
-                            <option value="2024">2024</option>
-                            <option value="2023">2023</option>
-                        </select>
+                        <!-- Opciones generadas por JS: año actual hacia atrás (antes
+                             estaba hardcodeado 2023-2025 y el año corriente no existía) -->
+                        <select class="form-select" id="filtroAnio"></select>
                     </div>
                     <div class="col-md-2">
                         <label class="form-label"><i class="bi bi-calendar-range me-1"></i>Período</label>
@@ -762,6 +760,63 @@
                                 </thead>
                                 <tbody id="tbodyTopProductos">
                                     <!-- Datos dinámicos -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ INVERSIÓN POR CATEGORÍA v1.2 Y MARCA (recategorización) ═══ -->
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="chart-card animate-fadein">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-diagram-3"></i>
+                                Inversión por Categoría
+                            </h5>
+                            <span class="badge badge-info" id="badgeEnlaceCategoria">—</span>
+                        </div>
+                        <div class="chart-body p-0">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Categoría</th>
+                                        <th class="text-end">Unidades</th>
+                                        <th class="text-end">Inversión</th>
+                                        <th class="text-end">% del total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyInversionCategoria">
+                                    <tr><td colspan="4" class="text-center text-muted py-3">Cargando…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="chart-card animate-fadein">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-tags"></i>
+                                Inversión por Marca vs Rotación
+                            </h5>
+                            <span class="badge badge-warning" title="Sell-through 90d = vendido / (vendido + stock). <10% = la marca no rota: no recomprar.">ST% 90d</span>
+                        </div>
+                        <div class="chart-body p-0">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Marca</th>
+                                        <th class="text-end">Inversión</th>
+                                        <th class="text-end">Stock hoy</th>
+                                        <th class="text-end">Venta 90d</th>
+                                        <th class="text-end">ST% 90d</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyInversionMarca">
+                                    <tr><td colspan="5" class="text-center text-muted py-3">Cargando…</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1221,6 +1276,12 @@ const COLORS = {
 // Inicialización
 $(document).ready(function() {
     console.log('🚀 Inicializando Dashboard Compras Mejorado...');
+    // Años dinámicos: año actual (seleccionado) hacia atrás hasta 2023
+    const anioActual = new Date().getFullYear();
+    const selAnio = $('#filtroAnio');
+    for (let a = anioActual; a >= 2023; a--) {
+        selAnio.append(`<option value="${a}"${a === anioActual ? ' selected' : ''}>${a}</option>`);
+    }
     cargarProveedores();
     cargarDatosDashboard();
     
@@ -1276,6 +1337,7 @@ function cargarDatosDashboard() {
             actualizarKPIs(data);
             actualizarGraficos(data);
             actualizarTablas(data);
+            actualizarCategoriaMarca(data.categoria_marca);
             actualizarAlertas(data);
             actualizarInsights(data);
             hideLoader();
@@ -1290,6 +1352,47 @@ function cargarDatosDashboard() {
             });
         }
     });
+}
+
+// ═══ Inversión por categoría v1.2 y marca vs rotación ═══
+function actualizarCategoriaMarca(cm) {
+    if (!cm) return;
+    // Badge de cobertura del enlace OC→producto (honestidad del dato)
+    const badge = $('#badgeEnlaceCategoria');
+    if (cm.inversion_total > 0) {
+        badge.text(cm.pct_enlace + '% enlazado');
+        badge.attr('title', 'Parte de la inversión cuyas líneas de OC están enlazadas a un producto del catálogo. El resto (' +
+            formatMoney(cm.inversion_sin_enlace) + ') no se puede clasificar por categoría/marca.');
+    }
+    const bodyCat = $('#tbodyInversionCategoria');
+    if (!cm.categorias || !cm.categorias.length) {
+        bodyCat.html('<tr><td colspan="4" class="text-center text-muted py-3">Sin líneas enlazadas a catálogo en el período</td></tr>');
+    } else {
+        bodyCat.html(cm.categorias.map(c => `
+            <tr>
+                <td><strong>${c.categoria}</strong>${c.padre ? ' <small class="text-muted">' + c.padre + '</small>' : ''}</td>
+                <td class="text-end">${formatNumber(c.unidades)}</td>
+                <td class="text-end"><strong>${formatMoney(c.inversion)}</strong></td>
+                <td class="text-end">${c.participacion}%</td>
+            </tr>`).join(''));
+    }
+    const bodyMar = $('#tbodyInversionMarca');
+    if (!cm.marcas || !cm.marcas.length) {
+        bodyMar.html('<tr><td colspan="5" class="text-center text-muted py-3">Sin líneas enlazadas a catálogo en el período</td></tr>');
+    } else {
+        bodyMar.html(cm.marcas.map(m => {
+            const st = m.sell_through_90d || 0;
+            const stColor = st >= 20 ? '#0ab39c' : (st >= 10 ? '#fd7e14' : '#dc3545');
+            return `
+            <tr>
+                <td><strong>${m.marca}</strong></td>
+                <td class="text-end">${formatMoney(m.inversion)}</td>
+                <td class="text-end">${formatNumber(m.stock_actual)}</td>
+                <td class="text-end">${formatNumber(m.venta_90d)}</td>
+                <td class="text-end"><strong style="color:${stColor};">${st.toFixed(1)}%</strong></td>
+            </tr>`;
+        }).join(''));
+    }
 }
 
 // Actualizar KPIs

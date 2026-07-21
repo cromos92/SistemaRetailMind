@@ -18455,12 +18455,18 @@ def obtener_indicador_compra_categoria(request):
                          'producto__categoria_id',
                          'producto__categoria__nombre',
                          'producto__categoria__padre__nombre')
-                     .annotate(stock=Sum('stock')))
+                     # OJO: el alias no puede llamarse 'stock' — sombrearía al
+                     # campo dentro de la expresión de 'dinero'.
+                     .annotate(stock_total=Sum('stock'),
+                               # $ a costo del stock parado (solo filas positivas)
+                               dinero=Sum(F('stock') * F('producto__costo'),
+                                          filter=Q(stock__gt=0))))
 
         indicadores = []
         for s in stock_agg:
             cid = s['producto__categoria_id']
-            stock = max(0, int(s['stock'] or 0))
+            stock = max(0, int(s['stock_total'] or 0))
+            dinero = float(s['dinero'] or 0)
             unidades, monto = ventas.get(cid, (0, 0.0))
             if stock == 0 and unidades == 0:
                 continue  # categoría sin stock ni ventas: irrelevante
@@ -18469,6 +18475,10 @@ def obtener_indicador_compra_categoria(request):
                 cobertura = round(stock / venta_diaria, 1)
             else:
                 cobertura = None  # sin rotación
+            # Sell-through del período: vendido / (vendido + stock). En un
+            # catálogo sobre-stockeado la cobertura satura (todo >120d) y es el
+            # ST% el que discrimina qué rota de verdad (rango real 5%-28%).
+            st_pct = round(unidades / (unidades + stock) * 100, 1) if (unidades + stock) else 0.0
             # Veredicto accionable
             if unidades == 0:
                 veredicto, color, orden = ('SIN ROTACIÓN', 'muerto', 4)
@@ -18490,14 +18500,18 @@ def obtener_indicador_compra_categoria(request):
                 'unidades': unidades,
                 'monto': monto,
                 'stock': stock,
+                'dinero_inmovilizado': dinero,
+                'sell_through': st_pct,
                 'cobertura_dias': cobertura,
                 'veredicto': veredicto,
                 'color': color,
                 '_orden': orden,
             })
-        # Comprar-primero: quiebre/bajo arriba; dentro, menor cobertura primero
+        # Comprar-primero: quiebre/bajo arriba (menor cobertura primero); entre
+        # iguales, mayor sell-through primero (lo que mejor rota encabeza).
         indicadores.sort(key=lambda x: (x['_orden'],
-                                        x['cobertura_dias'] if x['cobertura_dias'] is not None else 1e9))
+                                        x['cobertura_dias'] if x['cobertura_dias'] is not None else 1e9,
+                                        -x['sell_through']))
         for x in indicadores:
             x.pop('_orden', None)
         return JsonResponse({'success': True, 'dias': dias, 'indicadores': indicadores})

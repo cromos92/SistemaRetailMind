@@ -22602,19 +22602,34 @@ def obtener_datos_dashboard_fifo(request):
             elif periodo == 'anio':
                 fecha_inicio = hoy - timedelta(days=365)
         
-        # Filtro base de lotes
-        filtro_lotes = Q(lotes__activo=True, lotes__agotado=False)
-        
+        # Filtro base de lotes (mismo criterio que los helpers FIFO)
+        filtro_lotes = Q(lotes__activo=True, lotes__agotado=False,
+                         lotes__cantidad_disponible__gt=0)
+
         # Aplicar filtro de fechas a los lotes
         if fecha_inicio:
             filtro_lotes &= Q(lotes__fecha_ingreso__gte=fecha_inicio)
         if fecha_fin:
             filtro_lotes &= Q(lotes__fecha_ingreso__lte=fecha_fin)
-        
-        # Obtener productos con lotes según filtros de tiempo
-        productos_con_lotes = Producto_Talla.objects.filter(
-            producto__sucursal_id=sucursal_id
-        ).filter(filtro_lotes).distinct()
+
+        # Obtener productos con lotes según filtros de tiempo.
+        # Todo el detalle FIFO sale de UNA query anotada — antes eran 4+ queries
+        # por SKU-talla (valor, costo promedio, lote más antiguo, count) y el
+        # endpoint tardaba minutos contra producción.
+        # OJO: se filtra por la anotación (HAVING), no por .filter(filtro_lotes),
+        # para no duplicar el join reverso y contaminar los Sum.
+        productos_con_lotes = (Producto_Talla.objects
+            .filter(producto__sucursal_id=sucursal_id)
+            .exclude(producto__excluir_de_analitica=True)
+            .select_related('producto')
+            .annotate(
+                valor_fifo_agg=Sum(F('lotes__cantidad_disponible') * F('lotes__costo_unitario'),
+                                   filter=filtro_lotes),
+                disp_total_agg=Sum('lotes__cantidad_disponible', filter=filtro_lotes),
+                fecha_lote_min=Min('lotes__fecha_ingreso', filter=filtro_lotes),
+                n_lotes_agg=Count('lotes', filter=filtro_lotes, distinct=True),
+            )
+            .filter(n_lotes_agg__gt=0))
         
         # Aplicar filtros de producto y talla
         if filtro_producto:
@@ -22643,60 +22658,57 @@ def obtener_datos_dashboard_fifo(request):
         sin_stock = 0
         
         # Contadores para métricas de tiempo
+        # Umbrales calibrados al negocio real (cobertura media ~641 días):
+        # <90 fresco / 90-180 normal / 180-365 antiguo / >365 crítico
         total_antiguedad_dias = 0
         total_lotes_analizados = 0
-        lotes_frescos = 0      # < 30 días
-        lotes_normales = 0     # 30-60 días
-        lotes_antiguos = 0     # 60-90 días
-        lotes_criticos = 0     # > 90 días
+        lotes_frescos = 0      # < 90 días
+        lotes_normales = 0     # 90-180 días
+        lotes_antiguos = 0     # 180-365 días
+        lotes_criticos = 0     # > 365 días
         
         for producto_talla in productos_con_lotes:
-            valor_inventario = obtener_valor_inventario_fifo(producto_talla)
-            costo_promedio = obtener_costo_promedio_fifo(producto_talla)
+            # Leído de las anotaciones — cero queries extra por fila
+            disp_total = int(producto_talla.disp_total_agg or 0)
+            valor_inventario = int(producto_talla.valor_fifo_agg or 0)
+            costo_promedio = (valor_inventario / disp_total) if disp_total else 0
             valor_sistema = producto_talla.stock * producto_talla.producto.costo
             diferencia = valor_inventario - valor_sistema
-            
+
             # Calcular porcentaje de diferencia
             porcentaje_diferencia = 0
             if valor_sistema > 0:
                 porcentaje_diferencia = (diferencia / valor_sistema) * 100
-            
-            # ========== CALCULAR ANTIGÜEDAD DEL LOTE MÁS ANTIGUO ==========
-            lotes_activos = producto_talla.lotes.filter(activo=True, agotado=False)
-            if fecha_inicio:
-                lotes_activos = lotes_activos.filter(fecha_ingreso__gte=fecha_inicio)
-            if fecha_fin:
-                lotes_activos = lotes_activos.filter(fecha_ingreso__lte=fecha_fin)
-            
-            lote_mas_antiguo = lotes_activos.order_by('fecha_ingreso').first()
+
+            # ========== ANTIGÜEDAD DEL LOTE MÁS ANTIGUO (anotado) ==========
             antiguedad_dias = 0
             fecha_lote_antiguo = None
-            
-            if lote_mas_antiguo:
-                antiguedad_dias = (hoy - lote_mas_antiguo.fecha_ingreso).days
-                fecha_lote_antiguo = lote_mas_antiguo.fecha_ingreso.strftime('%Y-%m-%d')
+
+            if producto_talla.fecha_lote_min:
+                antiguedad_dias = (hoy - producto_talla.fecha_lote_min).days
+                fecha_lote_antiguo = producto_talla.fecha_lote_min.strftime('%Y-%m-%d')
                 total_antiguedad_dias += antiguedad_dias
                 total_lotes_analizados += 1
                 
-                # Clasificar por antigüedad
-                if antiguedad_dias < 30:
+                # Clasificar por antigüedad (umbrales de negocio: 90/180/365)
+                if antiguedad_dias < 90:
                     lotes_frescos += 1
-                elif antiguedad_dias < 60:
+                elif antiguedad_dias < 180:
                     lotes_normales += 1
-                elif antiguedad_dias < 90:
+                elif antiguedad_dias < 365:
                     lotes_antiguos += 1
                 else:
                     lotes_criticos += 1
-            
+
             # ========== APLICAR FILTRO DE ANTIGÜEDAD ==========
             if filtro_antiguedad:
-                if filtro_antiguedad == 'fresco' and antiguedad_dias >= 30:
+                if filtro_antiguedad == 'fresco' and antiguedad_dias >= 90:
                     continue
-                elif filtro_antiguedad == 'normal' and (antiguedad_dias < 30 or antiguedad_dias >= 60):
+                elif filtro_antiguedad == 'normal' and (antiguedad_dias < 90 or antiguedad_dias >= 180):
                     continue
-                elif filtro_antiguedad == 'antiguo' and (antiguedad_dias < 60 or antiguedad_dias >= 90):
+                elif filtro_antiguedad == 'antiguo' and (antiguedad_dias < 180 or antiguedad_dias >= 365):
                     continue
-                elif filtro_antiguedad == 'critico' and antiguedad_dias < 90:
+                elif filtro_antiguedad == 'critico' and antiguedad_dias < 365:
                     continue
             
             # Aplicar filtros adicionales
@@ -22764,7 +22776,7 @@ def obtener_datos_dashboard_fifo(request):
                 'sku': producto_talla.sku,
                 'antiguedad_dias': antiguedad_dias,
                 'fecha_lote_antiguo': fecha_lote_antiguo,
-                'total_lotes': lotes_activos.count()
+                'total_lotes': int(producto_talla.n_lotes_agg or 0)
             })
         
         # Ordenar datos
@@ -22796,46 +22808,78 @@ def obtener_datos_dashboard_fifo(request):
         # Eficiencia FIFO (% de lotes frescos + normales vs total)
         eficiencia_fifo = round(((lotes_frescos + lotes_normales) / total_lotes_analizados) * 100, 1) if total_lotes_analizados > 0 else 100
         
-        # Generar alertas
+        # ========== AGING DEL CAPITAL (agregación en DB, snapshot completo) ==========
+        # OJO: a propósito NO respeta el filtro de período — el aging es una foto
+        # del inventario completo de la sucursal; filtrar por fecha de ingreso
+        # ocultaría justamente el capital viejo.
+        lotes_snapshot = LoteProducto.objects.filter(
+            activo=True, agotado=False, cantidad_disponible__gt=0,
+            producto_talla__producto__sucursal_id=sucursal_id,
+        ).exclude(producto_talla__producto__excluir_de_analitica=True)
+        _hoy_d = timezone.localdate()
+        _cortes = [('0_90', 0, 90), ('90_180', 90, 180), ('180_365', 180, 365), ('mas_365', 365, 36500)]
+        aging_capital = {}
+        for clave, d1, d2 in _cortes:
+            agg = lotes_snapshot.filter(
+                fecha_ingreso__date__gt=_hoy_d - timedelta(days=d2),
+                fecha_ingreso__date__lte=_hoy_d - timedelta(days=d1),
+            ).aggregate(u=Sum('cantidad_disponible'),
+                        d=Sum(F('cantidad_disponible') * F('costo_unitario')))
+            aging_capital[clave] = {'unidades': int(agg['u'] or 0), 'valor': float(agg['d'] or 0)}
+        capital_total_lotes = sum(b['valor'] for b in aging_capital.values())
+        capital_viejo = aging_capital['180_365']['valor'] + aging_capital['mas_365']['valor']
+        pct_capital_viejo = round(capital_viejo / capital_total_lotes * 100, 1) if capital_total_lotes else 0
+
+        # Capital >180d por categoría v1.2 y por marca (top 10 c/u): la vista
+        # que decide liquidaciones. Solo lotes de esta sucursal.
+        _viejos = lotes_snapshot.filter(fecha_ingreso__date__lte=_hoy_d - timedelta(days=180))
+        aging_categoria = [{
+            'categoria': r['producto_talla__producto__categoria__nombre'] or 'Sin categoría',
+            'padre': r['producto_talla__producto__categoria__padre__nombre'] or '',
+            'unidades': int(r['u'] or 0),
+            'valor': float(r['d'] or 0),
+        } for r in (_viejos.values('producto_talla__producto__categoria__nombre',
+                                   'producto_talla__producto__categoria__padre__nombre')
+                    .annotate(u=Sum('cantidad_disponible'),
+                              d=Sum(F('cantidad_disponible') * F('costo_unitario')))
+                    .order_by('-d')[:10])]
+        aging_marca = [{
+            'marca': r['producto_talla__producto__atributo1__valor'] or 'Sin marca',
+            'unidades': int(r['u'] or 0),
+            'valor': float(r['d'] or 0),
+        } for r in (_viejos.values('producto_talla__producto__atributo1__valor')
+                    .annotate(u=Sum('cantidad_disponible'),
+                              d=Sum(F('cantidad_disponible') * F('costo_unitario')))
+                    .order_by('-d')[:10])]
+
+        # Generar alertas (con $, accionables — no conteos genéricos)
         alertas = []
         diferencias_altas = sum(1 for p in productos_data if abs(p['porcentaje_diferencia']) > 20)
         if diferencias_altas > 0:
             alertas.append({
                 'tipo': 'warning',
-                'mensaje': f'{diferencias_altas} productos tienen diferencias superiores al 20%'
+                'mensaje': f'{diferencias_altas} SKU-talla con descalce lotes vs stock >20% — correr reconciliar_stock_lotes para diagnóstico'
             })
-        
-        if stock_bajo > 5:
+
+        if aging_capital['mas_365']['valor'] > 0:
             alertas.append({
                 'tipo': 'danger',
-                'mensaje': f'{stock_bajo} productos tienen stock bajo (<10 unidades)'
+                'mensaje': f"Capital crítico: ${aging_capital['mas_365']['valor']/1e6:,.0f}M a costo con más de 1 año en bodega ({aging_capital['mas_365']['unidades']:,} unidades) — candidato a liquidación"
             })
-        
-        if sin_stock > 0:
-            alertas.append({
-                'tipo': 'danger',
-                'mensaje': f'{sin_stock} productos están sin stock'
-            })
-        
-        # Alertas de antigüedad
-        if lotes_criticos > 0:
-            alertas.append({
-                'tipo': 'danger',
-                'mensaje': f'{lotes_criticos} productos tienen stock con más de 90 días de antigüedad (crítico)'
-            })
-        
-        if lotes_antiguos > 3:
+
+        if pct_capital_viejo > 40:
             alertas.append({
                 'tipo': 'warning',
-                'mensaje': f'{lotes_antiguos} productos tienen stock entre 60-90 días (revisar rotación)'
+                'mensaje': f'{pct_capital_viejo}% del capital en lotes tiene más de 180 días — priorizar liquidación sobre compra nueva'
             })
-        
-        if antiguedad_promedio > 60:
+
+        if aging_marca and aging_marca[0]['valor'] > 0:
+            top_m = aging_marca[0]
             alertas.append({
-                'tipo': 'warning',
-                'mensaje': f'Antigüedad promedio del inventario: {antiguedad_promedio} días (objetivo: <45 días)'
+                'tipo': 'info',
+                'mensaje': f"Marca con más capital viejo (>180d): {top_m['marca']} con ${top_m['valor']/1e6:,.0f}M — revisar antes de recomprar"
             })
-        
+
         return JsonResponse({
             'success': True,
             'productos': productos_data,
@@ -22865,6 +22909,13 @@ def obtener_datos_dashboard_fifo(request):
                 'lotes_criticos': lotes_criticos,
                 'total_lotes_analizados': total_lotes_analizados
             },
+            # ========== AGING DEL CAPITAL (snapshot completo, ignora período) ==========
+            'aging_capital': aging_capital,
+            'capital_total_lotes': capital_total_lotes,
+            'capital_viejo': capital_viejo,
+            'pct_capital_viejo': pct_capital_viejo,
+            'aging_categoria': aging_categoria,
+            'aging_marca': aging_marca,
             'filtros_aplicados': {
                 'periodo': periodo,
                 'fecha_desde': fecha_inicio.strftime('%Y-%m-%d') if fecha_inicio else None,
@@ -24658,8 +24709,8 @@ def dashboard_productos_mejorado_api(request):
         # ========== BASE QUERY CON FILTROS ==========
         productos_talla_qs = Producto_Talla.objects.select_related(
             'producto', 'producto__categoria'
-        )
-        
+        ).exclude(producto__excluir_de_analitica=True)
+
         if categoria_id:
             productos_talla_qs = productos_talla_qs.filter(producto__categoria_id=categoria_id)
         
@@ -24716,12 +24767,16 @@ def dashboard_productos_mejorado_api(request):
         margen_porcentaje = (margen_potencial / float(valor_costo) * 100) if valor_costo > 0 else 0
         
         # ========== VENTAS Y ROTACIÓN (UNA CONSULTA) ==========
+        # created_at = fecha real de la venta (Ticket.fecha es auto_now y se
+        # reescribe con cada save); subtotal = monto real con descuentos.
         ventas_periodo = Ticket_Productos.objects.filter(
-            idTicket__fecha__gte=fecha_inicio.date(),
+            idTicket__created_at__date__gte=fecha_inicio.date(),
             idTicket__estado='PAGADO'
+        ).exclude(
+            ProductoTalla__producto__excluir_de_analitica=True
         ).aggregate(
             total_unidades=Coalesce(Sum('stock'), 0),
-            total_ingresos=Coalesce(Sum(F('stock') * F('precio')), 0)
+            total_ingresos=Coalesce(Sum('subtotal'), 0)
         )
         
         total_vendido = ventas_periodo['total_unidades'] or 0
@@ -24846,8 +24901,11 @@ def dashboard_productos_mejorado_api(request):
         # ========== TOP VENDIDOS (UNA CONSULTA) ==========
         top_vendidos = list(
             Ticket_Productos.objects.filter(
-                idTicket__fecha__gte=fecha_inicio.date(),
-                idTicket__estado='PAGADO'
+                idTicket__created_at__date__gte=fecha_inicio.date(),
+                idTicket__estado='PAGADO',
+                ProductoTalla__isnull=False  # sin esto, las líneas sin SKU se agrupan en un bucket fantasma
+            ).exclude(
+                ProductoTalla__producto__excluir_de_analitica=True
             ).values(
                 pt_id=F('ProductoTalla__id'),
                 sku=F('ProductoTalla__sku'),
@@ -24856,7 +24914,7 @@ def dashboard_productos_mejorado_api(request):
                 stock_actual=F('ProductoTalla__stock')
             ).annotate(
                 ventas=Coalesce(Sum('stock'), 0),
-                ingresos=Coalesce(Sum(F('stock') * F('precio')), 0)
+                ingresos=Coalesce(Sum('subtotal'), 0)
             ).order_by('-ventas')[:10]
         )
         top_vendidos = [{
@@ -24873,7 +24931,7 @@ def dashboard_productos_mejorado_api(request):
         # Obtener ventas por producto en una sola consulta
         ventas_por_producto = dict(
             Ticket_Productos.objects.filter(
-                idTicket__fecha__gte=fecha_inicio.date(),
+                idTicket__created_at__date__gte=fecha_inicio.date(),
                 idTicket__estado='PAGADO'
             ).values('ProductoTalla_id').annotate(
                 total=Coalesce(Sum('stock'), 0)
@@ -25024,7 +25082,7 @@ def dashboard_productos_mejorado_api(request):
         ventas_tabla = dict(
             Ticket_Productos.objects.filter(
                 ProductoTalla_id__in=pt_ids,
-                idTicket__fecha__gte=fecha_inicio.date(),
+                idTicket__created_at__date__gte=fecha_inicio.date(),
                 idTicket__estado='PAGADO'
             ).values('ProductoTalla_id').annotate(
                 total=Coalesce(Sum('stock'), 0)
@@ -25052,8 +25110,15 @@ def dashboard_productos_mejorado_api(request):
             })
         
         # ========== FILTROS DISPONIBLES ==========
+        # Solo taxonomía v1.2 viva: sin '_ZZ_' deprecadas; hijas con prefijo
+        # del padre para que el dropdown tenga jerarquía legible.
+        _cats = []
+        for c in (Categoria.objects.exclude(nombre__startswith='_ZZ_')
+                  .select_related('padre').order_by('padre__nombre', 'nombre')):
+            _cats.append({'id': c.id,
+                          'nombre': (c.padre.nombre + ' › ' + c.nombre) if c.padre_id else c.nombre})
         filtros = {
-            'categorias': list(Categoria.objects.values('id', 'nombre')),
+            'categorias': _cats,
             'sucursales': [{'id': s.id, 'nombre': s.alias} for s in Sucursal.objects.all()]
         }
         
@@ -25099,13 +25164,13 @@ def dashboard_productos_mejorado_api(request):
         }
         
         return JsonResponse(response_data)
-        
+
     except Exception as e:
-        import traceback
+        # El traceback va al log, no al navegador (fuga de detalles internos)
+        logger.exception('Error en dashboard_productos_mejorado_api')
         return JsonResponse({
             'success': False,
-            'error': f'Error al generar dashboard: {str(e)}',
-            'traceback': traceback.format_exc()
+            'error': f'Error al generar dashboard: {str(e)}'
         }, status=500)
 
 

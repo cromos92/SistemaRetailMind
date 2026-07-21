@@ -791,34 +791,34 @@
                     </div>
                 </div>
 
-                <!-- Rotación de Inventario -->
-                <div class="kpi-card success animate-fade-in animate-delay-1">
+                <!-- Capital >1 año (crítico, candidato a liquidación) -->
+                <div class="kpi-card danger animate-fade-in animate-delay-1">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <div class="kpi-label">Rotación de Inventario</div>
-                            <div class="kpi-value" id="rotacionInventario">
+                            <div class="kpi-label">Capital &gt;1 Año (a costo)</div>
+                            <div class="kpi-value" id="capitalCritico">
                                 <span class="loading-shimmer" style="width: 80px; height: 28px; display: inline-block;"></span>
                             </div>
-                            <div class="kpi-trend" id="trendRotacion">
-                                <span id="rotacionStatus" class="nexo-badge nexo-badge-success">Óptimo</span>
+                            <div class="kpi-trend" id="trendCapitalCritico">
+                                <span id="capitalCriticoUds" class="nexo-badge nexo-badge-danger">—</span>
                             </div>
                         </div>
-                        <div class="kpi-icon success">
-                            <i class="bi bi-arrow-repeat"></i>
+                        <div class="kpi-icon danger">
+                            <i class="bi bi-hourglass-bottom"></i>
                         </div>
                     </div>
                 </div>
 
-                <!-- Días de Inventario -->
+                <!-- Capital 180-365 días -->
                 <div class="kpi-card warning animate-fade-in animate-delay-2">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <div class="kpi-label">Días de Inventario</div>
-                            <div class="kpi-value" id="diasInventario">
+                            <div class="kpi-label">Capital 6-12 Meses (a costo)</div>
+                            <div class="kpi-value" id="capitalAntiguo">
                                 <span class="loading-shimmer" style="width: 60px; height: 28px; display: inline-block;"></span>
                             </div>
-                            <div class="kpi-trend" id="trendDias">
-                                <span id="diasStatus" class="nexo-badge nexo-badge-warning">Normal</span>
+                            <div class="kpi-trend" id="trendCapitalAntiguo">
+                                <span id="capitalAntiguoUds" class="nexo-badge nexo-badge-warning">—</span>
                             </div>
                         </div>
                         <div class="kpi-icon warning">
@@ -827,20 +827,20 @@
                     </div>
                 </div>
 
-                <!-- Eficiencia FIFO -->
+                <!-- % del capital viejo -->
                 <div class="kpi-card accent animate-fade-in animate-delay-3">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <div class="kpi-label">Eficiencia FIFO</div>
-                            <div class="kpi-value" id="eficienciaFIFO">
+                            <div class="kpi-label">% Capital Viejo (&gt;180d)</div>
+                            <div class="kpi-value" id="pctCapitalViejo">
                                 <span class="loading-shimmer" style="width: 70px; height: 28px; display: inline-block;"></span>
                             </div>
-                            <div class="kpi-trend" id="trendEficiencia">
-                                <span id="eficienciaStatus" class="nexo-badge nexo-badge-success">Excelente</span>
+                            <div class="kpi-trend" id="trendPctViejo">
+                                <span id="pctViejoStatus" class="nexo-badge nexo-badge-success">—</span>
                             </div>
                         </div>
                         <div class="kpi-icon accent">
-                            <i class="bi bi-speedometer2"></i>
+                            <i class="bi bi-pie-chart"></i>
                         </div>
                     </div>
                 </div>
@@ -848,16 +848,16 @@
 
             <!-- ========== SEGUNDA FILA KPIs ========== -->
             <div class="kpi-grid">
-                <!-- Productos con Lotes -->
+                <!-- Capital fresco (0-90d) -->
                 <div class="kpi-card info animate-fade-in">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <div class="kpi-label">Productos con Lotes Activos</div>
-                            <div class="kpi-value" id="totalProductos">
+                            <div class="kpi-label">Capital Fresco &lt;90d (a costo)</div>
+                            <div class="kpi-value" id="capitalFresco">
                                 <span class="loading-shimmer" style="width: 50px; height: 28px; display: inline-block;"></span>
                             </div>
                             <div class="kpi-trend neutral">
-                                <i class="bi bi-box-seam"></i> Total en sistema
+                                <span id="capitalFrescoUds"><i class="bi bi-box-seam"></i> —</span>
                             </div>
                         </div>
                         <div class="kpi-icon info">
@@ -921,123 +921,6 @@
                 </div>
             </div>
 
-            <!-- ========== PANEL DE LEYENDAS KPIs ========== -->
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="nexo-card">
-                        <div class="nexo-card-header">
-                            <h6>
-                                <i class="bi bi-info-circle text-primary"></i>
-                                Guía de Indicadores - ¿Cómo interpretar los KPIs?
-                            </h6>
-                        </div>
-                        <div class="nexo-card-body">
-                            <div class="row g-4">
-                                <!-- Rotación de Inventario -->
-                                <div class="col-lg-3 col-md-6">
-                                    <div class="legend-panel">
-                                        <div class="legend-title">
-                                            <i class="bi bi-arrow-repeat"></i>
-                                            Rotación de Inventario
-                                        </div>
-                                        <p class="small text-muted mb-3">
-                                            Indica cuántas veces se renueva el inventario en un período. Mayor rotación = mejor eficiencia.
-                                        </p>
-                                        <div class="legend-item">
-                                            <span class="legend-badge optimal">Óptimo</span>
-                                            <span class="legend-text"><span class="legend-range">> 6 veces/año</span> - Excelente flujo de productos</span>
-                                        </div>
-                                        <div class="legend-item">
-                                            <span class="legend-badge warning">Normal</span>
-                                            <span class="legend-text"><span class="legend-range">3-6 veces/año</span> - Rotación aceptable</span>
-                                        </div>
-                                        <div class="legend-item">
-                                            <span class="legend-badge critical">Bajo</span>
-                                            <span class="legend-text"><span class="legend-range">< 3 veces/año</span> - Inventario estancado</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Días de Inventario -->
-                                <div class="col-lg-3 col-md-6">
-                                    <div class="legend-panel">
-                                        <div class="legend-title">
-                                            <i class="bi bi-calendar3"></i>
-                                            Días de Inventario
-                                        </div>
-                                        <p class="small text-muted mb-3">
-                                            Cuántos días de venta representa el stock actual. Menos días = menor inversión atrapada.
-                                        </p>
-                                        <div class="legend-item">
-                                            <span class="legend-badge optimal">Óptimo</span>
-                                            <span class="legend-text"><span class="legend-range">30-60 días</span> - Balance ideal cobertura/costo</span>
-                                        </div>
-                                        <div class="legend-item">
-                                            <span class="legend-badge warning">Alto</span>
-                                            <span class="legend-text"><span class="legend-range">61-90 días</span> - Sobreinventario moderado</span>
-                                        </div>
-                                        <div class="legend-item">
-                                            <span class="legend-badge critical">Excesivo</span>
-                                            <span class="legend-text"><span class="legend-range">> 90 días</span> - Capital inmovilizado</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Eficiencia FIFO -->
-                                <div class="col-lg-3 col-md-6">
-                                    <div class="legend-panel">
-                                        <div class="legend-title">
-                                            <i class="bi bi-speedometer2"></i>
-                                            Eficiencia FIFO
-                                        </div>
-                                        <p class="small text-muted mb-3">
-                                            Porcentaje de lotes consumidos en orden correcto (primero en entrar, primero en salir).
-                                        </p>
-                                        <div class="legend-item">
-                                            <span class="legend-badge optimal">Excelente</span>
-                                            <span class="legend-text"><span class="legend-range">> 95%</span> - FIFO correctamente aplicado</span>
-                                        </div>
-                                        <div class="legend-item">
-                                            <span class="legend-badge warning">Mejorable</span>
-                                            <span class="legend-text"><span class="legend-range">80-95%</span> - Revisar procesos de despacho</span>
-                                        </div>
-                                        <div class="legend-item">
-                                            <span class="legend-badge critical">Deficiente</span>
-                                            <span class="legend-text"><span class="legend-range">< 80%</span> - Urgente revisar operación</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Diferencia FIFO vs Sistema -->
-                                <div class="col-lg-3 col-md-6">
-                                    <div class="legend-panel">
-                                        <div class="legend-title">
-                                            <i class="bi bi-graph-down"></i>
-                                            Diferencia FIFO vs Sistema
-                                        </div>
-                                        <p class="small text-muted mb-3">
-                                            Discrepancia entre el valor calculado por FIFO y el costo fijo del sistema.
-                                        </p>
-                                        <div class="legend-item">
-                                            <span class="legend-badge optimal">Normal</span>
-                                            <span class="legend-text"><span class="legend-range">< 5%</span> - Variación esperada por lotes</span>
-                                        </div>
-                                        <div class="legend-item">
-                                            <span class="legend-badge warning">Atención</span>
-                                            <span class="legend-text"><span class="legend-range">5-15%</span> - Revisar costos de compra</span>
-                                        </div>
-                                        <div class="legend-item">
-                                            <span class="legend-badge critical">Crítico</span>
-                                            <span class="legend-text"><span class="legend-range">> 15%</span> - Anomalía en costos</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- ========== ANÁLISIS DETALLADO ========== -->
             <div class="row mb-4">
                 <!-- Distribución de Diferencias -->
@@ -1085,93 +968,111 @@
                             <hr class="my-3">
                             <div class="small text-muted">
                                 <i class="bi bi-lightbulb text-warning me-1"></i>
-                                <strong>Tip:</strong> Las diferencias positivas indican que los lotes actuales tienen mayor costo que el promedio del sistema. Esto puede ocurrir por aumentos de precio en proveedores.
+                                <strong>Qué significa:</strong> el descalce entre lotes FIFO y stock plano proviene principalmente del drift histórico (ventas que bajaron stock sin consumir lotes). Para diagnosticarlo: <code>python manage.py reconciliar_stock_lotes</code>.
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Análisis de Stock -->
+                <!-- Aging del capital (a costo de lote) -->
                 <div class="col-lg-6">
                     <div class="nexo-card h-100">
                         <div class="nexo-card-header">
                             <h6>
-                                <i class="bi bi-box-seam-fill text-primary"></i>
-                                Salud del Stock
+                                <i class="bi bi-hourglass-split text-primary"></i>
+                                Aging del Capital (a costo)
                             </h6>
                         </div>
                         <div class="nexo-card-body">
                             <div class="row g-3">
                                 <div class="col-3">
                                     <div class="analysis-block">
-                                        <div class="analysis-value text-danger" id="sinStock">0</div>
-                                        <div class="analysis-label">Sin Stock</div>
+                                        <div class="analysis-value text-success" id="agingFresco">$0</div>
+                                        <div class="analysis-label">&lt; 90 días</div>
                                         <div class="mt-2">
-                                            <span class="nexo-badge nexo-badge-danger">
-                                                <i class="bi bi-x-circle"></i> 0 uds
-                                            </span>
+                                            <span class="nexo-badge nexo-badge-success" id="agingFrescoUds">0 uds</span>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-3">
                                     <div class="analysis-block">
-                                        <div class="analysis-value text-warning" id="stockBajo">0</div>
-                                        <div class="analysis-label">Stock Bajo</div>
+                                        <div class="analysis-value text-primary" id="agingNormal">$0</div>
+                                        <div class="analysis-label">90-180 días</div>
                                         <div class="mt-2">
-                                            <span class="nexo-badge nexo-badge-warning">
-                                                < 10 uds
-                                            </span>
+                                            <span class="nexo-badge nexo-badge-primary" id="agingNormalUds">0 uds</span>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-3">
                                     <div class="analysis-block">
-                                        <div class="analysis-value text-primary" id="stockMedio">0</div>
-                                        <div class="analysis-label">Stock Medio</div>
+                                        <div class="analysis-value text-warning" id="agingAntiguo">$0</div>
+                                        <div class="analysis-label">180-365 días</div>
                                         <div class="mt-2">
-                                            <span class="nexo-badge nexo-badge-primary">
-                                                10-50 uds
-                                            </span>
+                                            <span class="nexo-badge nexo-badge-warning" id="agingAntiguoUds">0 uds</span>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-3">
                                     <div class="analysis-block">
-                                        <div class="analysis-value text-success" id="stockAlto">0</div>
-                                        <div class="analysis-label">Stock Alto</div>
+                                        <div class="analysis-value text-danger" id="agingCritico">$0</div>
+                                        <div class="analysis-label">&gt; 1 año</div>
                                         <div class="mt-2">
-                                            <span class="nexo-badge nexo-badge-success">
-                                                > 50 uds
-                                            </span>
+                                            <span class="nexo-badge nexo-badge-danger" id="agingCriticoUds">0 uds</span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             <hr class="my-3">
                             <div class="small text-muted">
-                                <i class="bi bi-shield-check text-success me-1"></i>
-                                <strong>Recomendación:</strong> Mantener al menos 70% de productos con stock medio o alto para asegurar disponibilidad.
+                                <i class="bi bi-info-circle text-primary me-1"></i>
+                                Foto del inventario completo de la sucursal (no depende del período). El capital &gt;180 días es el candidato natural a liquidación.
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- ========== CHARTS FIFO ========== -->
+            <!-- ========== CAPITAL VIEJO POR CATEGORÍA Y MARCA ========== -->
             <div class="row mb-4">
-                <div class="col-lg-5">
+                <div class="col-lg-6">
                     <div class="nexo-card h-100">
-                        <div class="nexo-card-header"><h6><i class="bi bi-pie-chart-fill text-primary"></i> Distribución de Diferencias</h6></div>
-                        <div class="nexo-card-body" style="display:flex;align-items:center;justify-content:center;">
-                            <div style="position:relative;height:260px;width:100%;"><canvas id="chartDifPie"></canvas></div>
+                        <div class="nexo-card-header"><h6><i class="bi bi-diagram-3 text-primary"></i> Capital &gt;180d por Categoría</h6></div>
+                        <div class="nexo-card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead>
+                                        <tr class="text-muted" style="font-size:.72rem;text-transform:uppercase;">
+                                            <th class="ps-3">Categoría</th>
+                                            <th class="text-end">Unidades</th>
+                                            <th class="text-end pe-3">$ a costo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="bodyAgingCategoria">
+                                        <tr><td colspan="3" class="text-center text-muted py-3">Cargando…</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-lg-7">
+                <div class="col-lg-6">
                     <div class="nexo-card h-100">
-                        <div class="nexo-card-header"><h6><i class="bi bi-bar-chart-fill text-primary"></i> Salud del Stock por Rango</h6></div>
-                        <div class="nexo-card-body">
-                            <div style="position:relative;height:260px;"><canvas id="chartStockBar"></canvas></div>
+                        <div class="nexo-card-header"><h6><i class="bi bi-tags text-primary"></i> Capital &gt;180d por Marca</h6></div>
+                        <div class="nexo-card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead>
+                                        <tr class="text-muted" style="font-size:.72rem;text-transform:uppercase;">
+                                            <th class="ps-3">Marca</th>
+                                            <th class="text-end">Unidades</th>
+                                            <th class="text-end pe-3">$ a costo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="bodyAgingMarca">
+                                        <tr><td colspan="3" class="text-center text-muted py-3">Cargando…</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1217,10 +1118,12 @@
                             Período Rápido
                         </label>
                         <select class="form-select nexo-select" id="filtroPeriodo">
-                            <option value="todo">📊 Todo el historial</option>
+                            <!-- Default "todo": con 30 días el dashboard nacía ciego al
+                                 inventario viejo (todo salía verde por construcción) -->
+                            <option value="todo" selected>📊 Todo el historial</option>
                             <option value="hoy">📅 Hoy</option>
                             <option value="semana">📆 Últimos 7 días</option>
-                            <option value="mes" selected>🗓️ Últimos 30 días</option>
+                            <option value="mes">🗓️ Últimos 30 días</option>
                             <option value="trimestre">📈 Último trimestre (90 días)</option>
                             <option value="semestre">📉 Último semestre (180 días)</option>
                             <option value="anio">🗃️ Último año</option>
@@ -1250,10 +1153,10 @@
                         </label>
                         <select class="form-select nexo-select" id="filtroAntiguedad">
                             <option value="">Todas</option>
-                            <option value="fresco">🟢 Fresco (< 30 días)</option>
-                            <option value="normal">🟡 Normal (30-60 días)</option>
-                            <option value="antiguo">🟠 Antiguo (60-90 días)</option>
-                            <option value="critico">🔴 Crítico (> 90 días)</option>
+                            <option value="fresco">🟢 Fresco (< 90 días)</option>
+                            <option value="normal">🟡 Normal (90-180 días)</option>
+                            <option value="antiguo">🟠 Antiguo (180-365 días)</option>
+                            <option value="critico">🔴 Crítico (> 1 año)</option>
                         </select>
                     </div>
                     <!-- Info -->
@@ -1374,6 +1277,7 @@
                                 <th class="text-end">Costo Sistema</th>
                                 <th class="text-end">Diferencia</th>
                                 <th class="text-center">% Dif.</th>
+                                <th class="text-center" title="Días desde el lote más antiguo con stock disponible">Antigüedad</th>
                                 <th class="text-center">Acciones</th>
                             </tr>
                         </thead>
@@ -1415,22 +1319,24 @@ function showAlert(type, title, message) {
 }
 
 // ========== ACTUALIZAR STATUS GENERAL ==========
+// La salud del inventario es el % de capital viejo (>180d), no el descalce
+// de datos lotes-vs-stock (eso es calidad de datos, no salud comercial).
 function actualizarStatusGeneral(data) {
     const statusEl = document.getElementById('statusGeneral');
-    const porcentajeDif = Math.abs(data.porcentaje_diferencia || 0);
-    
+    const pctViejo = data.pct_capital_viejo || 0;
+
     let statusClass, statusText;
-    if (porcentajeDif < 5) {
+    if (pctViejo < 25) {
         statusClass = 'optimal';
         statusText = 'Inventario Saludable';
-    } else if (porcentajeDif < 15) {
+    } else if (pctViejo < 40) {
         statusClass = 'warning';
-        statusText = 'Requiere Atención';
+        statusText = `Capital viejo ${pctViejo.toFixed(0)}% — revisar`;
     } else {
         statusClass = 'critical';
-        statusText = 'Estado Crítico';
+        statusText = `Capital viejo ${pctViejo.toFixed(0)}% — liquidar antes de comprar`;
     }
-    
+
     statusEl.className = `status-indicator ${statusClass}`;
     statusEl.innerHTML = `<span class="status-dot ${statusClass}"></span> ${statusText}`;
 }
@@ -1469,6 +1375,7 @@ function cargarDatosDashboard() {
                 actualizarKPIs(data);
                 actualizarKPIsTiempo(data.metricas_tiempo);
                 actualizarAnalisis(data.analisis);
+                actualizarAging(data);
                 actualizarTabla(data.productos);
                 actualizarAlertas(data.alertas);
                 actualizarStatusGeneral(data);
@@ -1512,10 +1419,26 @@ function actualizarBadgePeriodo(periodo, fechaDesde, fechaHasta) {
 function actualizarKPIs(data) {
     // Valor Total FIFO
     document.getElementById('valorTotalFIFO').textContent = formatCurrency(data.valor_total_inventario);
-    
-    // Total Productos
-    document.getElementById('totalProductos').textContent = data.total_productos;
-    
+
+    // ===== KPIs de aging del capital (snapshot completo, no depende del período) =====
+    const aging = data.aging_capital || {};
+    const fmtM = v => '$' + ((v || 0) / 1e6).toFixed(0) + 'M';
+    const b365 = aging['mas_365'] || {valor: 0, unidades: 0};
+    const b180 = aging['180_365'] || {valor: 0, unidades: 0};
+    const b90 = aging['0_90'] || {valor: 0, unidades: 0};
+    document.getElementById('capitalCritico').textContent = fmtM(b365.valor);
+    document.getElementById('capitalCriticoUds').textContent = (b365.unidades || 0).toLocaleString('es-CL') + ' uds — liquidar';
+    document.getElementById('capitalAntiguo').textContent = fmtM(b180.valor);
+    document.getElementById('capitalAntiguoUds').textContent = (b180.unidades || 0).toLocaleString('es-CL') + ' uds';
+    document.getElementById('capitalFresco').textContent = fmtM(b90.valor);
+    document.getElementById('capitalFrescoUds').innerHTML = '<i class="bi bi-box-seam"></i> ' + (b90.unidades || 0).toLocaleString('es-CL') + ' uds';
+    const pctViejo = data.pct_capital_viejo || 0;
+    document.getElementById('pctCapitalViejo').textContent = pctViejo.toFixed(1) + '%';
+    const pctStatus = document.getElementById('pctViejoStatus');
+    if (pctViejo < 25) { pctStatus.className = 'nexo-badge nexo-badge-success'; pctStatus.textContent = 'Sano'; }
+    else if (pctViejo < 40) { pctStatus.className = 'nexo-badge nexo-badge-warning'; pctStatus.textContent = 'Alto'; }
+    else { pctStatus.className = 'nexo-badge nexo-badge-danger'; pctStatus.textContent = 'Crítico — liquidar antes de comprar'; }
+
     // Productos con Diferencia
     document.getElementById('productosConDiferencia').textContent = data.productos_con_diferencia;
     
@@ -1542,129 +1465,65 @@ function actualizarKPIs(data) {
 // ========== ACTUALIZAR KPIs DE TIEMPO (DATOS REALES) ==========
 function actualizarKPIsTiempo(metricas) {
     if (!metricas) return;
-    
-    // Rotación de Inventario (calculado desde antigüedad real)
-    const rotacion = metricas.rotacion_estimada || 0;
-    document.getElementById('rotacionInventario').textContent = rotacion + 'x';
-    
-    const rotacionStatus = document.getElementById('rotacionStatus');
-    if (rotacion > 6) {
-        rotacionStatus.className = 'nexo-badge nexo-badge-success';
-        rotacionStatus.textContent = 'Óptimo';
-    } else if (rotacion >= 3) {
-        rotacionStatus.className = 'nexo-badge nexo-badge-warning';
-        rotacionStatus.textContent = 'Normal';
-    } else {
-        rotacionStatus.className = 'nexo-badge nexo-badge-danger';
-        rotacionStatus.textContent = 'Bajo';
-    }
-    
-    // Días de Inventario (antigüedad promedio real)
-    const dias = metricas.dias_inventario || 0;
-    document.getElementById('diasInventario').textContent = dias + ' días';
-    
-    const diasStatus = document.getElementById('diasStatus');
-    if (dias <= 60) {
-        diasStatus.className = 'nexo-badge nexo-badge-success';
-        diasStatus.textContent = 'Óptimo';
-    } else if (dias <= 90) {
-        diasStatus.className = 'nexo-badge nexo-badge-warning';
-        diasStatus.textContent = 'Alto';
-    } else {
-        diasStatus.className = 'nexo-badge nexo-badge-danger';
-        diasStatus.textContent = 'Excesivo';
-    }
-    
-    // Eficiencia FIFO (% lotes frescos + normales)
-    const eficiencia = metricas.eficiencia_fifo || 100;
-    document.getElementById('eficienciaFIFO').textContent = eficiencia + '%';
-    
-    const eficienciaStatus = document.getElementById('eficienciaStatus');
-    if (eficiencia >= 95) {
-        eficienciaStatus.className = 'nexo-badge nexo-badge-success';
-        eficienciaStatus.textContent = 'Excelente';
-    } else if (eficiencia >= 80) {
-        eficienciaStatus.className = 'nexo-badge nexo-badge-warning';
-        eficienciaStatus.textContent = 'Mejorable';
-    } else {
-        eficienciaStatus.className = 'nexo-badge nexo-badge-danger';
-        eficienciaStatus.textContent = 'Deficiente';
-    }
-    
-    // Antigüedad Promedio (real del backend)
+
+    // Antigüedad Promedio (real del backend) — umbrales de negocio 90/180
     const antiguedad = metricas.antiguedad_promedio || 0;
     document.getElementById('antiguedadPromedio').textContent = antiguedad + ' días';
-    
+
     const antiguedadStatus = document.getElementById('antiguedadStatus');
-    if (antiguedad <= 45) {
+    if (antiguedad <= 90) {
         antiguedadStatus.className = 'nexo-badge nexo-badge-success';
         antiguedadStatus.textContent = 'Fresco';
-    } else if (antiguedad <= 75) {
+    } else if (antiguedad <= 180) {
         antiguedadStatus.className = 'nexo-badge nexo-badge-warning';
-        antiguedadStatus.textContent = 'Normal';
+        antiguedadStatus.textContent = 'Medio';
     } else {
         antiguedadStatus.className = 'nexo-badge nexo-badge-danger';
         antiguedadStatus.textContent = 'Antiguo';
     }
-    
-    // Mostrar info de lotes en consola para debug
-    console.log('📊 Métricas de tiempo:', {
-        'Lotes Frescos (<30d)': metricas.lotes_frescos,
-        'Lotes Normales (30-60d)': metricas.lotes_normales,
-        'Lotes Antiguos (60-90d)': metricas.lotes_antiguos,
-        'Lotes Críticos (>90d)': metricas.lotes_criticos,
-        'Total Analizados': metricas.total_lotes_analizados
-    });
+}
+
+// ========== ACTUALIZAR AGING (bloques + tablas categoría/marca) ==========
+function actualizarAging(data) {
+    const aging = data.aging_capital || {};
+    const fmtM = v => '$' + ((v || 0) / 1e6).toFixed(0) + 'M';
+    const setB = (id, b) => {
+        const el = document.getElementById(id);
+        const uds = document.getElementById(id + 'Uds');
+        if (el) el.textContent = fmtM((b || {}).valor);
+        if (uds) uds.textContent = (((b || {}).unidades) || 0).toLocaleString('es-CL') + ' uds';
+    };
+    setB('agingFresco', aging['0_90']);
+    setB('agingNormal', aging['90_180']);
+    setB('agingAntiguo', aging['180_365']);
+    setB('agingCritico', aging['mas_365']);
+
+    const fila = (nom, r) => '<tr>'
+        + '<td class="ps-3"><span class="fw-semibold">' + nom + '</span></td>'
+        + '<td class="text-end">' + (r.unidades || 0).toLocaleString('es-CL') + '</td>'
+        + '<td class="text-end pe-3 fw-semibold">' + fmtM(r.valor) + '</td>'
+        + '</tr>';
+    const bodyCat = document.getElementById('bodyAgingCategoria');
+    if (bodyCat) {
+        const rows = (data.aging_categoria || []);
+        bodyCat.innerHTML = rows.length
+            ? rows.map(r => fila(r.categoria + (r.padre ? ' <small class="text-muted">' + r.padre + '</small>' : ''), r)).join('')
+            : '<tr><td colspan="3" class="text-center text-muted py-3">Sin capital &gt;180d</td></tr>';
+    }
+    const bodyMar = document.getElementById('bodyAgingMarca');
+    if (bodyMar) {
+        const rows = (data.aging_marca || []);
+        bodyMar.innerHTML = rows.length
+            ? rows.map(r => fila(r.marca, r)).join('')
+            : '<tr><td colspan="3" class="text-center text-muted py-3">Sin capital &gt;180d</td></tr>';
+    }
 }
 
 // ========== ACTUALIZAR ANÁLISIS ==========
-let fifoCharts = {};
 function actualizarAnalisis(analisis) {
     document.getElementById('diferenciasPositivas').textContent = analisis.diferencias_positivas;
     document.getElementById('diferenciasNegativas').textContent = analisis.diferencias_negativas;
     document.getElementById('sinDiferencias').textContent = analisis.sin_diferencias;
-    document.getElementById('stockBajo').textContent = analisis.stock_bajo;
-    document.getElementById('stockMedio').textContent = analisis.stock_medio;
-    document.getElementById('stockAlto').textContent = analisis.stock_alto;
-    document.getElementById('sinStock').textContent = analisis.sin_stock;
-
-    Object.values(fifoCharts).forEach(c => c.destroy());
-
-    const pieCtx = document.getElementById('chartDifPie');
-    if (pieCtx) {
-        fifoCharts.difPie = new Chart(pieCtx, {
-            type: 'doughnut',
-            data: {
-                labels: ['Positivas (FIFO > Sistema)', 'Negativas (FIFO < Sistema)', 'Sin Diferencia'],
-                datasets: [{
-                    data: [analisis.diferencias_positivas, analisis.diferencias_negativas, analisis.sin_diferencias],
-                    backgroundColor: ['#0ab39c', '#f06548', '#adb5bd'],
-                }]
-            },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
-        });
-    }
-
-    const barCtx = document.getElementById('chartStockBar');
-    if (barCtx) {
-        fifoCharts.stockBar = new Chart(barCtx, {
-            type: 'bar',
-            data: {
-                labels: ['Sin Stock', 'Stock Bajo (<10)', 'Stock Medio (10-50)', 'Stock Alto (>50)'],
-                datasets: [{
-                    label: 'Productos',
-                    data: [analisis.sin_stock, analisis.stock_bajo, analisis.stock_medio, analisis.stock_alto],
-                    backgroundColor: ['#f06548', '#f7b84b', '#405189', '#0ab39c'],
-                    borderRadius: 8,
-                }]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
-            }
-        });
-    }
 }
 
 // ========== ACTUALIZAR TABLA ==========
@@ -1674,7 +1533,7 @@ function actualizarTabla(productos) {
     if (productos.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="9" class="text-center py-5">
+                <td colspan="10" class="text-center py-5">
                     <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
                     <p class="text-muted mt-3 mb-0">No se encontraron productos con los filtros aplicados</p>
                 </td>
@@ -1742,6 +1601,12 @@ function actualizarTabla(productos) {
                 <td class="text-center">
                     <span class="nexo-badge ${porcBadge}">
                         ${producto.porcentaje_diferencia.toFixed(1)}%
+                    </span>
+                </td>
+                <td class="text-center">
+                    <span class="nexo-badge ${producto.antiguedad_dias > 365 ? 'nexo-badge-danger' : (producto.antiguedad_dias > 180 ? 'nexo-badge-warning' : 'nexo-badge-success')}"
+                          title="Lote más antiguo: ${producto.fecha_lote_antiguo || '—'} (${producto.total_lotes} lote${producto.total_lotes === 1 ? '' : 's'})">
+                        ${producto.antiguedad_dias}d
                     </span>
                 </td>
                 <td class="text-center">
@@ -1904,10 +1769,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     document.getElementById('mostrarSoloDiferencias').addEventListener('change', cargarDatosDashboard);
-    
-    // Actualización automática cada 60 segundos
-    setInterval(cargarDatosDashboard, 60000);
-    
+
+    // Sin auto-refresh: el endpoint es pesado y los datos de lotes no cambian
+    // minuto a minuto — recargar con los filtros o refrescando la página.
+
     console.log('✅ Dashboard FIFO inicializado correctamente');
 });
 

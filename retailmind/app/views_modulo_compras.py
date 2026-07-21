@@ -1015,8 +1015,10 @@ def dashboard_compras_estrategico(request):
         proveedor_id = request.GET.get('proveedor', '')
         responsable = request.GET.get('responsable', '')
         
-        # Query base para compras
-        compras_query = Compras.objects.filter(fecha__year=anio)
+        # Query base para compras. Excluye eliminadas/canceladas: antes
+        # inflaban inversión, pareto y cumplimiento con compras borradas.
+        compras_query = Compras.objects.filter(fecha__year=anio).exclude(
+            estado__in=['ELIMINADA', 'CANCELADA'])
 
         # Filtro de temporada: acepta código de familia normalizada
         # (VERANO/OTONO/INVIERNO/PRIMAVERA) o texto libre (fallback legacy).
@@ -2897,8 +2899,10 @@ def dashboard_compras_mejorado_api(request):
         
         fecha_fin = hoy
         
-        # Query base para compras
-        compras_query = Compras.objects.filter(fecha__year=anio)
+        # Query base para compras. Excluye eliminadas/canceladas: antes
+        # inflaban inversión, pareto y cumplimiento con compras borradas.
+        compras_query = Compras.objects.filter(fecha__year=anio).exclude(
+            estado__in=['ELIMINADA', 'CANCELADA'])
         
         # Filtro de temporada: acepta código de familia normalizada
         # (VERANO/OTONO/INVIERNO/PRIMAVERA) o texto libre (fallback legacy).
@@ -2934,6 +2938,14 @@ def dashboard_compras_mejorado_api(request):
         
         # ===== TOP PRODUCTOS =====
         top_productos = calcular_top_productos_mejorado(compras_ids)
+
+        # ===== INVERSIÓN POR CATEGORÍA v1.2 Y MARCA =====
+        try:
+            categoria_marca = calcular_compras_por_categoria_marca(compras_ids)
+        except Exception as e:
+            logging.getLogger('app').warning('Error compras por categoria/marca: %s', e)
+            categoria_marca = {'categorias': [], 'marcas': [], 'inversion_total': 0,
+                               'inversion_enlazada': 0, 'inversion_sin_enlace': 0, 'pct_enlace': 0}
         
         # ===== CUMPLIMIENTO PROVEEDORES =====
         cumplimiento_proveedores = calcular_cumplimiento_proveedores_mejorado(compras_query, compras_ids)
@@ -3003,6 +3015,7 @@ def dashboard_compras_mejorado_api(request):
             'roi_temporadas': roi_temporadas,
             'top_proveedores': top_proveedores,
             'top_productos': top_productos,
+            'categoria_marca': categoria_marca,
             'cumplimiento_proveedores': cumplimiento_proveedores,
             'rendimiento_detallado': rendimiento_detallado,
             'alertas': alertas,
@@ -3483,6 +3496,96 @@ def calcular_cumplimiento_proveedores_mejorado(compras_query, compras_ids):
     
     resultado.sort(key=lambda x: x['cumplimiento'], reverse=True)
     return resultado[:12]
+
+
+def calcular_compras_por_categoria_marca(compras_ids):
+    """Inversión del período por categoría v1.2 (Padre › Hija) y por MARCA
+    (Producto.atributo1, FK real — no el texto libre de la OC), cruzada con
+    stock actual y venta 90d para responder dónde se está sobre/sub-invirtiendo.
+
+    Usa Compras_Producto_Talla.producto_talla → Producto; las líneas sin
+    enlace a producto se reportan aparte (inversion_sin_enlace) en vez de
+    desaparecer en silencio."""
+    from datetime import timedelta
+    from app.models import Ticket, Ticket_Productos, Producto_Talla
+
+    lineas = Compras_Producto_Talla.objects.filter(
+        compra_producto__compras_id__in=compras_ids)
+    enlazadas = lineas.filter(producto_talla__isnull=False)
+
+    # Cobertura del enlace (honestidad del dato)
+    inv_total = float(lineas.aggregate(
+        v=Sum(F('stock') * F('compra_producto__costo')))['v'] or 0)
+    inv_enlazada = float(enlazadas.aggregate(
+        v=Sum(F('stock') * F('compra_producto__costo')))['v'] or 0)
+
+    # --- Inversión por categoría v1.2 (solo hijas) ---
+    inv_cat = (enlazadas
+               .filter(producto_talla__producto__categoria__padre__isnull=False)
+               .values('producto_talla__producto__categoria__nombre',
+                       'producto_talla__producto__categoria__padre__nombre')
+               .annotate(inversion=Sum(F('stock') * F('compra_producto__costo')),
+                         unidades=Sum('stock'))
+               .order_by('-inversion'))
+    categorias = [{
+        'categoria': r['producto_talla__producto__categoria__nombre'] or 'Sin categoría',
+        'padre': r['producto_talla__producto__categoria__padre__nombre'] or '',
+        'inversion': float(r['inversion'] or 0),
+        'unidades': int(r['unidades'] or 0),
+        'participacion': round(float(r['inversion'] or 0) / inv_enlazada * 100, 1) if inv_enlazada else 0,
+    } for r in inv_cat[:12]]
+
+    # --- Inversión por marca + contexto (stock actual y venta 90d) ---
+    inv_mar = (enlazadas
+               .values('producto_talla__producto__atributo1__valor')
+               .annotate(inversion=Sum(F('stock') * F('compra_producto__costo')),
+                         unidades=Sum('stock'))
+               .order_by('-inversion'))[:12]
+    marcas_nombres = [r['producto_talla__producto__atributo1__valor'] for r in inv_mar
+                      if r['producto_talla__producto__atributo1__valor']]
+    # Stock actual por marca (una query)
+    stock_mar = {r['producto__atributo1__valor']: int(r['st'] or 0)
+                 for r in (Producto_Talla.objects
+                           .filter(producto__atributo1__valor__in=marcas_nombres, stock__gt=0)
+                           .exclude(producto__excluir_de_analitica=True)
+                           .values('producto__atributo1__valor')
+                           .annotate(st=Sum('stock')))}
+    # Venta 90d por marca (una query; created_at = fecha real)
+    fi90 = timezone.localdate() - timedelta(days=90)
+    tickets_90 = Ticket.objects.filter(
+        created_at__date__gte=fi90, estado='PAGADO').values_list('id', flat=True)
+    venta_mar = {r['ProductoTalla__producto__atributo1__valor']: int(r['u'] or 0)
+                 for r in (Ticket_Productos.objects
+                           .filter(idTicket_id__in=tickets_90,
+                                   ProductoTalla__producto__atributo1__valor__in=marcas_nombres)
+                           .exclude(ProductoTalla__producto__excluir_de_analitica=True)
+                           .values('ProductoTalla__producto__atributo1__valor')
+                           .annotate(u=Sum('stock')))}
+    marcas = []
+    for r in inv_mar:
+        mk = r['producto_talla__producto__atributo1__valor']
+        if not mk:
+            continue
+        st_actual = stock_mar.get(mk, 0)
+        v90 = venta_mar.get(mk, 0)
+        st_pct = round(v90 / (v90 + st_actual) * 100, 1) if (v90 + st_actual) else 0.0
+        marcas.append({
+            'marca': mk,
+            'inversion': float(r['inversion'] or 0),
+            'unidades': int(r['unidades'] or 0),
+            'stock_actual': st_actual,
+            'venta_90d': v90,
+            'sell_through_90d': st_pct,
+        })
+
+    return {
+        'categorias': categorias,
+        'marcas': marcas,
+        'inversion_total': inv_total,
+        'inversion_enlazada': inv_enlazada,
+        'inversion_sin_enlace': inv_total - inv_enlazada,
+        'pct_enlace': round(inv_enlazada / inv_total * 100, 1) if inv_total else 0,
+    }
 
 
 def calcular_rendimiento_detallado_mejorado(compras_query, compras_ids):

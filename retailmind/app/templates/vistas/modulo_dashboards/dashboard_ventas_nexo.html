@@ -373,11 +373,13 @@
                                         <th class="text-end">Vendidas</th>
                                         <th class="text-end">Stock</th>
                                         <th class="text-end">Cobertura</th>
+                                        <th class="text-end" title="Vendido / (vendido + stock) en el período. Mide qué rota de verdad.">Sell-through</th>
+                                        <th class="text-end" title="Stock × costo. Capital parado en la categoría.">$ Inmovilizado</th>
                                         <th class="text-center">Acción</th>
                                     </tr>
                                 </thead>
                                 <tbody id="bodyIndicadorCompra">
-                                    <tr><td colspan="5" class="text-center text-muted py-3">Cargando…</td></tr>
+                                    <tr><td colspan="7" class="text-center text-muted py-3">Cargando…</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -387,6 +389,7 @@
                             <span class="badge" style="background:#0ab39c;">Sano</span>
                             <span class="badge" style="background:#6c757d;">Sobre-stock &gt;120d</span>
                             <span class="badge" style="background:#343a40;">Sin rotación</span>
+                            <span class="text-muted ms-2">Sell-through: <span style="color:#0ab39c;">≥20% rota bien</span> · <span style="color:#fd7e14;">10-20% lento</span> · <span style="color:#dc3545;">&lt;10% no comprar / liquidar</span></span>
                         </div>
                     </div>
                 </div>
@@ -1530,7 +1533,7 @@ function actualizarTablaIndicadorCompra(data) {
     const body = document.getElementById('bodyIndicadorCompra');
     if (!body) return;
     if (!data.length) {
-        body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Sin datos en el período</td></tr>';
+        body.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">Sin datos en el período</td></tr>';
         return;
     }
     body.innerHTML = data.map(function(i) {
@@ -1538,12 +1541,22 @@ function actualizarTablaIndicadorCompra(data) {
             ? '<span class="text-muted">—</span>'
             : (i.cobertura_dias >= 999 ? '999+' : i.cobertura_dias) + ' d';
         const color = IND_COLOR[i.color] || '#6c757d';
+        // Sell-through: verde rota bien / naranjo medio / rojo casi no rota
+        const st = i.sell_through || 0;
+        const stColor = st >= 20 ? '#0ab39c' : (st >= 10 ? '#fd7e14' : '#dc3545');
+        const stCell = '<span class="fw-semibold" style="color:' + stColor + ';">' + st.toFixed(1) + '%</span>';
+        const dinero = i.dinero_inmovilizado || 0;
+        const dineroCell = dinero >= 1e6
+            ? '$' + (dinero / 1e6).toFixed(0) + 'M'
+            : formatMoney(dinero);
         return '<tr>'
             + '<td><span class="fw-semibold">' + i.categoria + '</span>'
             +   (i.padre ? ' <small class="text-muted">' + i.padre + '</small>' : '') + '</td>'
             + '<td class="text-end">' + formatNumber(i.unidades) + '</td>'
             + '<td class="text-end">' + formatNumber(i.stock) + '</td>'
             + '<td class="text-end">' + cob + '</td>'
+            + '<td class="text-end">' + stCell + '</td>'
+            + '<td class="text-end">' + dineroCell + '</td>'
             + '<td class="text-center"><span class="badge" style="background:' + color + ';">' + i.veredicto + '</span></td>'
             + '</tr>';
     }).join('');
