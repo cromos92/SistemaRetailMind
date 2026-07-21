@@ -190,6 +190,17 @@ class Dte(models.Model):
         help_text="DTE creado manualmente desde Gestión de Documentos (sin productos, solo cabecera + pago)"
     )
 
+    # === COMPRA POR CONCEPTO ===
+    # True cuando la factura de COMPRA se registra "por concepto": solo la
+    # cabecera Dte (cuenta por pagar), SIN líneas de producto (Dte_Productos)
+    # y SIN ingreso de stock. Es stock-neutral. Permite distinguir en reportes
+    # y dashboard las compras no inventariables de las itemizadas/recepcionadas,
+    # sin inferirlo en runtime por Count(dte_productos)==0.
+    es_por_concepto = models.BooleanField(
+        default=False,
+        help_text="Compra registrada por concepto: solo cabecera financiera, sin productos ni stock"
+    )
+
     # === COMPROBANTE DE PAGO ENVIADO POR CORREO ===
     # Se setean cuando se envía el "Comprobante de Pago" al proveedor por correo
     # desde Gestión de DTEs de Compras (solo facturas pagadas).

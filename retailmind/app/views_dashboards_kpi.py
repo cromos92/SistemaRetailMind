@@ -418,6 +418,171 @@ def dashboard_despachos(request):
     return render(request, 'vistas/modulo_dashboards/dashboard_despachos.html')
 
 
+def _es_cd_q(prefix=None):
+    """Predicado ORM canónico para 'es centro de distribución' (CD/bodega).
+    Usa OR porque es_centro_distribucion y tipo_sucursal pueden divergir
+    (una MIXTA/CD marcada solo por tipo se caería con el booleano crudo)."""
+    p = (prefix + '__') if prefix else ''
+    return Q(**{f'{p}es_centro_distribucion': True}) | Q(**{f'{p}tipo_sucursal': 'CENTRO_DISTRIBUCION'})
+
+
+@login_required
+@require_GET
+def api_despachos_flujo(request):
+    """Zona DESPACHO del dashboard: cuenta SOLO la pierna TRASPASO_SALIDA COMPLETADA
+    que sale de un CD (es_compradora) hacia una sucursal destino.
+
+    Reglas duras (verificadas contra el kardex):
+    - Detectar por `concepto` (tipo_movimiento nunca vale 'TRASPASO', el save() lo pisa por signo).
+    - `cantidad` de la SALIDA es NEGATIVA -> se presenta con abs(). NUNCA sumar TRASPASO_ENTRADA
+      (sería la misma unidad recibida -> doble conteo).
+    - Un solo qs base (con sucursal_destino__isnull=False) para que KPIs y árbol reconcilien.
+    Devuelve KPIs, árbol CD->sucursal (nodes/links Sankey), matriz, cantidad por marca por
+    sucursal y distribución temporal. Los traspasos legacy single-leg (sin destino) NO entran.
+    """
+    from django.db.models import Max
+    from django.db.models.functions import TruncWeek
+
+    suc_id, emp_id = _get_sucursal_empresa(request)
+    inicio, fin = _parse_date_range(request)
+    granularidad = request.GET.get('g', 'mes')
+    cd_filtro = request.GET.get('cd')
+    destino_filtro = request.GET.get('destino')
+
+    qs = Movimientos_Producto.objects.filter(
+        concepto='TRASPASO_SALIDA',
+        estado='COMPLETADO',
+        sucursal_destino__isnull=False,
+        fecha__range=[inicio, fin],
+    ).filter(_es_cd_q('sucursal_origen'))
+    if emp_id:
+        qs = qs.filter(sucursal_origen__empresa_id=emp_id)
+    if cd_filtro:
+        qs = qs.filter(sucursal_origen_id=cd_filtro)
+    if destino_filtro:
+        qs = qs.filter(sucursal_destino_id=destino_filtro)
+
+    def _abs(v):
+        return abs(int(v or 0))
+
+    # --- KPIs (mismo qs base) ---
+    agg = qs.aggregate(
+        uds=Sum('cantidad'),
+        movs=Count('id'),
+        guias=Count('dte', distinct=True),
+        cds=Count('sucursal_origen', distinct=True),
+        destinos=Count('sucursal_destino', distinct=True),
+        valor=Sum(F('cantidad') * F('costo')),
+    )
+    kpis = {
+        'unidades': _abs(agg['uds']),
+        'movimientos': agg['movs'] or 0,
+        'guias': agg['guias'] or 0,
+        'cds_activos': agg['cds'] or 0,
+        'destinos_atendidos': agg['destinos'] or 0,
+        'valor': _abs(agg['valor']),
+    }
+
+    # --- Árbol + matriz CD -> Sucursal (un solo group-by) ---
+    pares = list(qs.values('sucursal_origen__alias', 'sucursal_destino__alias')
+                 .annotate(uds=Sum('cantidad')).order_by('uds'))
+    origenes, destinos, links = [], [], []
+    matriz = {}
+    tot_origen, tot_destino = defaultdict(int), defaultdict(int)
+    for p in pares:
+        o = p['sucursal_origen__alias'] or 'CD?'
+        d = p['sucursal_destino__alias'] or 'Suc?'
+        u = _abs(p['uds'])
+        if o not in origenes:
+            origenes.append(o)
+        if d not in destinos:
+            destinos.append(d)
+        links.append({'source': 'CD:' + o, 'target': 'T:' + d, 'value': u})
+        matriz.setdefault(o, {})[d] = u
+        tot_origen[o] += u
+        tot_destino[d] += u
+    nodes = [{'name': 'CD:' + o} for o in origenes] + [{'name': 'T:' + d} for d in destinos]
+    filas = sorted(tot_origen, key=lambda k: -tot_origen[k])
+    cols = sorted(tot_destino, key=lambda k: -tot_destino[k])
+    arbol = {'nodes': nodes, 'links': links}
+    matriz_data = {
+        'filas': filas,
+        'cols': cols,
+        'celdas': {o: {d: matriz.get(o, {}).get(d, 0) for d in cols} for o in filas},
+        'tot_origen': {k: tot_origen[k] for k in filas},
+        'tot_destino': {k: tot_destino[k] for k in cols},
+    }
+
+    # --- Cantidad por marca por sucursal (pivot, top 10 + 'Otras') ---
+    marca_rows = qs.values(
+        'sucursal_destino__alias',
+        marca=Coalesce('ProductoTalla__producto__atributo1__valor', Value('Sin marca')),
+    ).annotate(uds=Sum('cantidad'))
+    piv = defaultdict(lambda: defaultdict(int))
+    tot_marca = defaultdict(int)
+    sucs = []
+    for r in marca_rows:
+        s = r['sucursal_destino__alias'] or 'Suc?'
+        m = r['marca'] or 'Sin marca'
+        u = _abs(r['uds'])
+        piv[s][m] += u
+        tot_marca[m] += u
+        if s not in sucs:
+            sucs.append(s)
+    sucs = sorted(sucs, key=lambda s: -sum(piv[s].values()))
+    top_marcas = sorted(tot_marca, key=lambda k: -tot_marca[k])[:10]
+    series = [{'name': m, 'data': [piv[s].get(m, 0) for s in sucs]} for m in top_marcas]
+    otras = [sum(v for k, v in piv[s].items() if k not in top_marcas) for s in sucs]
+    if any(otras):
+        series.append({'name': 'Otras', 'data': otras})
+    marca_por_sucursal = {'sucursales': sucs, 'series': series}
+
+    # --- Distribución temporal ---
+    trunc = {'dia': TruncDate, 'semana': TruncWeek, 'mes': TruncMonth}.get(granularidad, TruncMonth)
+    serie = qs.annotate(periodo=trunc('fecha')).values('periodo').annotate(
+        uds=Sum('cantidad'), guias=Count('dte', distinct=True)
+    ).order_by('periodo')
+    serie_tiempo = [{
+        'periodo': r['periodo'].strftime('%Y-%m-%d') if r['periodo'] else None,
+        'unidades': _abs(r['uds']),
+        'guias': r['guias'] or 0,
+    } for r in serie]
+
+    # --- Detalle por sucursal destino (drill) ---
+    detalle = qs.values('sucursal_destino_id', 'sucursal_destino__alias').annotate(
+        uds=Sum('cantidad'), guias=Count('dte', distinct=True), ultimo=Max('fecha')
+    ).order_by('uds')
+    detalle_sucursal = [{
+        'sucursal_id': r['sucursal_destino_id'],
+        'alias': r['sucursal_destino__alias'],
+        'unidades': _abs(r['uds']),
+        'guias': r['guias'] or 0,
+        'ultimo': r['ultimo'].strftime('%Y-%m-%d') if r['ultimo'] else None,
+    } for r in detalle]
+
+    # --- Lista de CDs para el filtro (de la empresa) ---
+    cds_qs = Sucursal.objects.filter(_es_cd_q())
+    if emp_id:
+        cds_qs = cds_qs.filter(empresa_id=emp_id)
+    cds_disponibles = [{'id': s.id, 'alias': s.alias} for s in cds_qs.order_by('alias')]
+
+    return JsonResponse({
+        'success': True,
+        'periodo': {
+            'inicio': inicio.strftime('%Y-%m-%d'),
+            'fin': fin.strftime('%Y-%m-%d'),
+            'granularidad': granularidad,
+        },
+        'kpis': kpis,
+        'arbol': arbol,
+        'matriz': matriz_data,
+        'marca_por_sucursal': marca_por_sucursal,
+        'serie_tiempo': serie_tiempo,
+        'detalle_sucursal': detalle_sucursal,
+        'cds_disponibles': cds_disponibles,
+    })
+
+
 @login_required
 @require_GET
 def api_dashboard_despachos(request):

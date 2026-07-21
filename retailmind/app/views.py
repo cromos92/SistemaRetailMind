@@ -10294,7 +10294,10 @@ def crearDteCompras(request):
                 tipo_transaccion='COMPRA',
                 sucursal=sucursal_receptora,
                 motivo_rechazo=motivo_rechazo,
-                documento_padre=documento_padre
+                documento_padre=documento_padre,
+                # Esta vía registra SOLO la cabecera (sin Dte_Productos ni stock):
+                # es una compra "por concepto" / no inventariable.
+                es_por_concepto=True,
             )
             
             if tipo_documento == 'Nota de Crédito':
@@ -22930,98 +22933,92 @@ def obtener_datos_dashboard_fifo(request):
 
 @require_GET
 @login_required
-def obtener_metricas_fifo(request):
-    """
-    API para obtener métricas generales del FIFO
-    """
-    try:
-        sucursal_id = request.session.get('idSucursalActual')
-        if not sucursal_id:
-            return JsonResponse({'success': False, 'error': 'No hay sucursal activa'})
-        
-        # Obtener productos con lotes activos
-        productos_con_lotes = Producto_Talla.objects.filter(
-            producto__sucursal_id=sucursal_id,
-            lotes__activo=True,
-            lotes__agotado=False
-        ).distinct()
-        
-        # Calcular métricas
-        total_productos = productos_con_lotes.count()
-        valor_total_inventario = 0
-        productos_con_diferencia = 0
-        diferencia_total = 0
-        
-        for producto_talla in productos_con_lotes:
-            valor_inventario = obtener_valor_inventario_fifo(producto_talla)
-            valor_sistema = producto_talla.stock * producto_talla.producto.costo
-            diferencia = valor_inventario - valor_sistema
-            
-            valor_total_inventario += valor_inventario
-            diferencia_total += diferencia
-            
-            if diferencia != 0:
-                productos_con_diferencia += 1
-        
-        return JsonResponse({
-            'success': True,
-            'metricas': {
-                'total_productos': total_productos,
-                'valor_total_inventario': valor_total_inventario,
-                'productos_con_diferencia': productos_con_diferencia,
-                'diferencia_total': diferencia_total,
-                'porcentaje_diferencia': (diferencia_total / valor_total_inventario * 100) if valor_total_inventario > 0 else 0
-            }
-        })
-        
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
-@require_GET
-@login_required
 def exportar_dashboard_fifo(request):
-    """
-    Exportar datos del dashboard FIFO
-    """
+    """Exporta el detalle FIFO en CSV respetando TODOS los filtros de la UI
+    (antes ignoraba periodo/fechas/antigüedad y el CSV no coincidía con la
+    pantalla). Misma query anotada del dashboard: sin N+1."""
     try:
+        from datetime import datetime, timedelta
+
         sucursal_id = request.session.get('idSucursalActual')
         if not sucursal_id:
             return JsonResponse({'success': False, 'error': 'No hay sucursal activa'})
-        
-        # Obtener parámetros de filtrado
+
+        # Filtros — el mismo set que obtener_datos_dashboard_fifo
         filtro_producto = request.GET.get('filtro_producto', '').lower()
         filtro_talla = request.GET.get('filtro_talla', '').lower()
         filtro_diferencia = request.GET.get('filtro_diferencia', '')
         filtro_stock = request.GET.get('filtro_stock', '')
-        
-        # Obtener productos con lotes activos
-        productos_con_lotes = Producto_Talla.objects.filter(
-            producto__sucursal_id=sucursal_id,
-            lotes__activo=True,
-            lotes__agotado=False
-        ).distinct()
-        
-        # Aplicar filtros
+        periodo = request.GET.get('periodo', 'todo')
+        fecha_desde = request.GET.get('fecha_desde', '')
+        fecha_hasta = request.GET.get('fecha_hasta', '')
+        filtro_antiguedad = request.GET.get('filtro_antiguedad', '')
+
+        hoy = timezone.now()
+        fecha_inicio = None
+        fecha_fin = hoy
+        if fecha_desde:
+            try:
+                fecha_inicio = timezone.make_aware(datetime.strptime(fecha_desde, '%Y-%m-%d'))
+            except ValueError:
+                pass
+        if fecha_hasta:
+            try:
+                fecha_fin = timezone.make_aware(datetime.strptime(fecha_hasta, '%Y-%m-%d').replace(hour=23, minute=59, second=59))
+            except ValueError:
+                pass
+        if not fecha_desde and periodo != 'todo':
+            dias_periodo = {'hoy': 0, 'semana': 7, 'mes': 30, 'trimestre': 90, 'semestre': 180, 'anio': 365}.get(periodo)
+            if dias_periodo == 0:
+                fecha_inicio = hoy.replace(hour=0, minute=0, second=0, microsecond=0)
+            elif dias_periodo:
+                fecha_inicio = hoy - timedelta(days=dias_periodo)
+
+        filtro_lotes = Q(lotes__activo=True, lotes__agotado=False,
+                         lotes__cantidad_disponible__gt=0)
+        if fecha_inicio:
+            filtro_lotes &= Q(lotes__fecha_ingreso__gte=fecha_inicio)
+        if fecha_fin:
+            filtro_lotes &= Q(lotes__fecha_ingreso__lte=fecha_fin)
+
+        qs = (Producto_Talla.objects
+              .filter(producto__sucursal_id=sucursal_id)
+              .exclude(producto__excluir_de_analitica=True)
+              .select_related('producto', 'producto__categoria',
+                              'producto__categoria__padre', 'producto__atributo1')
+              .annotate(
+                  valor_fifo_agg=Sum(F('lotes__cantidad_disponible') * F('lotes__costo_unitario'),
+                                     filter=filtro_lotes),
+                  disp_total_agg=Sum('lotes__cantidad_disponible', filter=filtro_lotes),
+                  fecha_lote_min=Min('lotes__fecha_ingreso', filter=filtro_lotes),
+                  n_lotes_agg=Count('lotes', filter=filtro_lotes, distinct=True),
+              )
+              .filter(n_lotes_agg__gt=0))
         if filtro_producto:
-            productos_con_lotes = productos_con_lotes.filter(
-                producto__articulo__icontains=filtro_producto
-            )
-        
+            qs = qs.filter(producto__articulo__icontains=filtro_producto)
         if filtro_talla:
-            productos_con_lotes = productos_con_lotes.filter(
-                talla__icontains=filtro_talla
-            )
-        
-        # Generar datos para exportación
+            qs = qs.filter(talla__icontains=filtro_talla)
+
         datos_exportacion = []
-        for producto_talla in productos_con_lotes:
-            valor_inventario = obtener_valor_inventario_fifo(producto_talla)
-            costo_promedio = obtener_costo_promedio_fifo(producto_talla)
-            valor_sistema = producto_talla.stock * producto_talla.producto.costo
+        for pt in qs:
+            disp_total = int(pt.disp_total_agg or 0)
+            valor_inventario = int(pt.valor_fifo_agg or 0)
+            costo_promedio = round(valor_inventario / disp_total) if disp_total else 0
+            valor_sistema = pt.stock * pt.producto.costo
             diferencia = valor_inventario - valor_sistema
             porcentaje_diferencia = (diferencia / valor_sistema * 100) if valor_sistema > 0 else 0
-            
-            # Aplicar filtros adicionales
+            antiguedad_dias = (hoy - pt.fecha_lote_min).days if pt.fecha_lote_min else 0
+
+            if filtro_antiguedad:
+                if filtro_antiguedad == 'fresco' and antiguedad_dias >= 90:
+                    continue
+                elif filtro_antiguedad == 'normal' and (antiguedad_dias < 90 or antiguedad_dias >= 180):
+                    continue
+                elif filtro_antiguedad == 'antiguo' and (antiguedad_dias < 180 or antiguedad_dias >= 365):
+                    continue
+                elif filtro_antiguedad == 'critico' and antiguedad_dias < 365:
+                    continue
+
             if filtro_diferencia:
                 if filtro_diferencia == 'positiva' and diferencia <= 0:
                     continue
@@ -23033,164 +23030,55 @@ def exportar_dashboard_fifo(request):
                     continue
                 elif filtro_diferencia == 'baja' and porcentaje_diferencia >= 5:
                     continue
-            
+
             if filtro_stock:
-                if filtro_stock == 'bajo' and producto_talla.stock >= 10:
+                if filtro_stock == 'bajo' and pt.stock >= 10:
                     continue
-                elif filtro_stock == 'medio' and (producto_talla.stock < 10 or producto_talla.stock > 50):
+                elif filtro_stock == 'medio' and (pt.stock < 10 or pt.stock > 50):
                     continue
-                elif filtro_stock == 'alto' and producto_talla.stock <= 50:
+                elif filtro_stock == 'alto' and pt.stock <= 50:
                     continue
-                elif filtro_stock == 'agotado' and producto_talla.stock > 0:
+                elif filtro_stock == 'agotado' and pt.stock > 0:
                     continue
-            
+
+            cat = pt.producto.categoria
             datos_exportacion.append({
-                'SKU': producto_talla.sku,
-                'Artículo': producto_talla.producto.articulo,
-                'Talla': producto_talla.talla,
-                'Stock Sistema': producto_talla.stock,
-                'Costo Sistema': producto_talla.producto.costo,
+                'SKU': pt.sku,
+                'Artículo': pt.producto.articulo,
+                'Talla': pt.talla,
+                'Categoría': (f"{cat.padre.nombre} › {cat.nombre}" if cat and cat.padre_id else (cat.nombre if cat else '')),
+                'Marca': pt.producto.atributo1.valor if pt.producto.atributo1_id else '',
+                'Stock Sistema': pt.stock,
+                'Costo Sistema': pt.producto.costo,
                 'Valor Sistema': valor_sistema,
                 'Valor FIFO': valor_inventario,
                 'Costo Promedio FIFO': costo_promedio,
                 'Diferencia': diferencia,
                 'Porcentaje Diferencia': f"{porcentaje_diferencia:.2f}%",
-                'Estado': 'Con Diferencia' if diferencia != 0 else 'Sin Diferencia'
+                'Antigüedad (días)': antiguedad_dias,
+                'Fecha Lote Más Antiguo': pt.fecha_lote_min.strftime('%Y-%m-%d') if pt.fecha_lote_min else '',
+                'Lotes': int(pt.n_lotes_agg or 0),
             })
-        
-        # Generar CSV
+
+        # CSV ordenado por antigüedad desc: lo más viejo (liquidable) primero
+        datos_exportacion.sort(key=lambda d: d['Antigüedad (días)'], reverse=True)
+
         import csv
-        from django.http import HttpResponse
-        from io import StringIO
-        
-        response = HttpResponse(content_type='text/csv')
+
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename="dashboard_fifo_{sucursal_id}_{timezone.localtime().strftime("%Y%m%d_%H%M%S")}.csv"'
-        
+        response.write('﻿')  # BOM para que Excel abra el UTF-8 bien
+
         if datos_exportacion:
             writer = csv.DictWriter(response, fieldnames=datos_exportacion[0].keys())
             writer.writeheader()
             writer.writerows(datos_exportacion)
-        
-        return response
-        
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
-def obtener_analisis_fifo_detallado(request):
-    """
-    API para obtener análisis detallado del FIFO
-    """
-    try:
-        sucursal_id = request.session.get('idSucursalActual')
-        if not sucursal_id:
-            return JsonResponse({'success': False, 'error': 'No hay sucursal activa'})
-        
-        # Obtener productos con lotes activos
-        productos_con_lotes = Producto_Talla.objects.filter(
-            producto__sucursal_id=sucursal_id,
-            lotes__activo=True,
-            lotes__agotado=False
-        ).distinct()
-        
-        # Análisis detallado
-        analisis = {
-            'distribucion_diferencias': {
-                'positivas': 0,
-                'negativas': 0,
-                'sin_diferencia': 0
-            },
-            'distribucion_stock': {
-                'bajo': 0,
-                'medio': 0,
-                'alto': 0,
-                'sin_stock': 0
-            },
-            'rangos_diferencia': {
-                '0_5': 0,
-                '5_10': 0,
-                '10_20': 0,
-                '20_50': 0,
-                'mas_50': 0
-            },
-            'productos_criticos': [],
-            'tendencias': {
-                'valor_total_fifo': 0,
-                'diferencia_promedio': 0,
-                'productos_con_problemas': 0
-            }
-        }
-        
-        valor_total_fifo = 0
-        diferencia_total = 0
-        productos_con_problemas = 0
-        
-        for producto_talla in productos_con_lotes:
-            valor_inventario = obtener_valor_inventario_fifo(producto_talla)
-            valor_sistema = producto_talla.stock * producto_talla.producto.costo
-            diferencia = valor_inventario - valor_sistema
-            porcentaje_diferencia = abs((diferencia / valor_sistema * 100)) if valor_sistema > 0 else 0
-            
-            valor_total_fifo += valor_inventario
-            diferencia_total += diferencia
-            
-            # Distribución de diferencias
-            if diferencia > 0:
-                analisis['distribucion_diferencias']['positivas'] += 1
-            elif diferencia < 0:
-                analisis['distribucion_diferencias']['negativas'] += 1
-            else:
-                analisis['distribucion_diferencias']['sin_diferencia'] += 1
-            
-            # Distribución de stock
-            if producto_talla.stock == 0:
-                analisis['distribucion_stock']['sin_stock'] += 1
-            elif producto_talla.stock < 10:
-                analisis['distribucion_stock']['bajo'] += 1
-            elif producto_talla.stock <= 50:
-                analisis['distribucion_stock']['medio'] += 1
-            else:
-                analisis['distribucion_stock']['alto'] += 1
-            
-            # Rangos de diferencia
-            if porcentaje_diferencia <= 5:
-                analisis['rangos_diferencia']['0_5'] += 1
-            elif porcentaje_diferencia <= 10:
-                analisis['rangos_diferencia']['5_10'] += 1
-            elif porcentaje_diferencia <= 20:
-                analisis['rangos_diferencia']['10_20'] += 1
-            elif porcentaje_diferencia <= 50:
-                analisis['rangos_diferencia']['20_50'] += 1
-            else:
-                analisis['rangos_diferencia']['mas_50'] += 1
-            
-            # Productos críticos (diferencia > 20% o stock bajo)
-            if porcentaje_diferencia > 20 or producto_talla.stock < 5:
-                productos_con_problemas += 1
-                analisis['productos_criticos'].append({
-                    'id': producto_talla.id,
-                    'articulo': producto_talla.producto.articulo,
-                    'talla': producto_talla.talla,
-                    'stock': producto_talla.stock,
-                    'diferencia': diferencia,
-                    'porcentaje_diferencia': porcentaje_diferencia,
-                    'problema': 'Diferencia alta' if porcentaje_diferencia > 20 else 'Stock bajo'
-                })
-        
-        # Calcular tendencias
-        total_productos = productos_con_lotes.count()
-        analisis['tendencias'] = {
-            'valor_total_fifo': valor_total_fifo,
-            'diferencia_promedio': diferencia_total / total_productos if total_productos > 0 else 0,
-            'productos_con_problemas': productos_con_problemas
-        }
-        
-        return JsonResponse({
-            'success': True,
-            'analisis': analisis
-        })
-        
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
+        return response
+
+    except Exception as e:
+        logger.exception('Error exportando dashboard FIFO')
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 @require_GET
 def dashboard_compras_estrategico(request):
     """

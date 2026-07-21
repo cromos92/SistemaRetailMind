@@ -109,6 +109,11 @@
     .incompletos-grid { grid-template-columns: 1fr; }
     .doc-pipeline-step { min-width: 100%; }
 }
+/* Zona despacho (nuevo) */
+.doc-gran-btn { padding:5px 12px; font-size:.78rem; font-weight:600; border:1px solid #cdd2e0; background:#fff; color:var(--doc-gray-700); border-radius:8px; cursor:pointer; }
+.doc-gran-btn.active { background:var(--doc-primary); color:#fff; border-color:var(--doc-primary); }
+.tbl-matriz-cell { text-align:center; padding:4px 6px; white-space:nowrap; }
+#tblMatriz th { position:sticky; top:0; background:var(--doc-primary); color:#fff; z-index:1; }
 </style>
 
 <div class="page-content">
@@ -130,6 +135,106 @@
             <i class="ri-refresh-line me-1"></i>Actualizar
         </button>
     </div>
+</div>
+
+<!-- ═══════════════════ ZONA DESPACHO (desde los CD) ═══════════════════ -->
+<div class="doc-section-title" style="margin-top:4px;font-size:.95rem;">
+    <i class="ri-send-plane-line"></i>Flujo de despacho — desde los centros de distribución (EDEL / IMP / GILD / PA00)
+</div>
+
+<div class="doc-card" style="margin-bottom:16px;">
+    <div class="doc-card-body" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+        <label style="font-size:.78rem;font-weight:600;color:var(--doc-gray-700);">Centro de distribución:</label>
+        <select id="despCd" onchange="cargarDespacho()" style="font-size:.82rem;padding:6px 10px;border:1px solid #cdd2e0;border-radius:8px;">
+            <option value="">Todos los CD</option>
+        </select>
+        <span style="margin-left:auto;font-size:.78rem;font-weight:600;color:var(--doc-gray-700);">Granularidad:</span>
+        <div style="display:inline-flex;gap:4px;">
+            <button type="button" class="doc-gran-btn" data-g="dia" onclick="setGranularidad('dia')">Día</button>
+            <button type="button" class="doc-gran-btn" data-g="semana" onclick="setGranularidad('semana')">Semana</button>
+            <button type="button" class="doc-gran-btn active" data-g="mes" onclick="setGranularidad('mes')">Mes</button>
+        </div>
+    </div>
+</div>
+
+<!-- KPIs de despacho -->
+<div class="doc-kpi-grid" style="margin-bottom:16px;">
+    <div class="doc-kpi-card">
+        <div class="doc-kpi-top"><div class="doc-kpi-icon-box" style="background:var(--doc-primary-light);color:var(--doc-primary);"><i class="ri-box-3-line"></i></div></div>
+        <div class="doc-kpi-value" id="despUnidades" style="color:var(--doc-primary);">-</div>
+        <div class="doc-kpi-label">Unidades despachadas</div>
+    </div>
+    <div class="doc-kpi-card">
+        <div class="doc-kpi-top"><div class="doc-kpi-icon-box" style="background:var(--doc-success-light);color:var(--doc-success);"><i class="ri-money-dollar-circle-line"></i></div></div>
+        <div class="doc-kpi-value" id="despValor" style="color:var(--doc-success);">-</div>
+        <div class="doc-kpi-label">Valorizado (a costo)</div>
+    </div>
+    <div class="doc-kpi-card">
+        <div class="doc-kpi-top"><div class="doc-kpi-icon-box" style="background:var(--doc-info-light);color:var(--doc-info);"><i class="ri-file-list-3-line"></i></div></div>
+        <div class="doc-kpi-value" id="despGuias" style="color:var(--doc-info);">-</div>
+        <div class="doc-kpi-label">Guías de despacho</div>
+    </div>
+    <div class="doc-kpi-card">
+        <div class="doc-kpi-top"><div class="doc-kpi-icon-box" style="background:var(--doc-primary-light);color:var(--doc-primary);"><i class="ri-store-2-line"></i></div></div>
+        <div class="doc-kpi-value" id="despCds">-</div>
+        <div class="doc-kpi-label">CD activos</div>
+    </div>
+    <div class="doc-kpi-card">
+        <div class="doc-kpi-top"><div class="doc-kpi-icon-box" style="background:var(--doc-warning-light);color:var(--doc-warning);"><i class="ri-map-pin-line"></i></div></div>
+        <div class="doc-kpi-value" id="despDestinos">-</div>
+        <div class="doc-kpi-label">Sucursales atendidas</div>
+    </div>
+</div>
+
+<!-- Árbol Sankey + Matriz -->
+<div class="row g-3 mb-3">
+    <div class="col-lg-7">
+        <div class="doc-card"><div class="doc-card-body">
+            <div class="doc-section-title"><i class="ri-node-tree"></i>Árbol de despacho CD → Sucursal</div>
+            <div id="despSankey" style="width:100%;height:420px;"></div>
+            <div id="despSankeyVacio" style="display:none;text-align:center;color:var(--doc-gray-500);padding:40px;font-size:.85rem;">Sin despachos en el período/filtros seleccionados.</div>
+        </div></div>
+    </div>
+    <div class="col-lg-5">
+        <div class="doc-card"><div class="doc-card-body">
+            <div class="doc-section-title"><i class="ri-grid-line"></i>Matriz CD × Sucursal (unidades)</div>
+            <div class="table-responsive" style="max-height:420px;overflow:auto;">
+                <table class="tbl-despachos" id="tblMatriz" style="font-size:.75rem;"></table>
+            </div>
+        </div></div>
+    </div>
+</div>
+
+<!-- Marca por sucursal + Distribución temporal -->
+<div class="row g-3 mb-3">
+    <div class="col-lg-6">
+        <div class="doc-card"><div class="doc-card-body">
+            <div class="doc-section-title"><i class="ri-price-tag-3-line"></i>Cantidad por marca despachada por sucursal</div>
+            <div id="despMarca" style="width:100%;min-height:360px;"></div>
+        </div></div>
+    </div>
+    <div class="col-lg-6">
+        <div class="doc-card"><div class="doc-card-body">
+            <div class="doc-section-title"><i class="ri-calendar-line"></i>Distribución de despachos en el tiempo</div>
+            <div id="despTiempo" style="width:100%;min-height:360px;"></div>
+        </div></div>
+    </div>
+</div>
+
+<!-- Detalle por sucursal destino -->
+<div class="doc-card" style="margin-bottom:8px;"><div class="doc-card-body">
+    <div class="doc-section-title"><i class="ri-store-3-line"></i>Detalle por sucursal destino</div>
+    <div class="table-responsive">
+        <table class="tbl-despachos" id="tblDespDetalle">
+            <thead><tr><th>Sucursal</th><th class="text-center">Unidades</th><th class="text-center">Guías</th><th class="text-center">Último despacho</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div></div>
+
+<!-- ═══════════════════ ZONA RECEPCIÓN (operativo, existente) ═══════════════════ -->
+<div class="doc-section-title" style="margin-top:22px;font-size:.95rem;border-top:2px solid var(--doc-gray-200,#e9ecef);padding-top:18px;">
+    <i class="ri-inbox-archive-line"></i>Recepción y regularizaciones
 </div>
 
 <!-- Acciones pendientes (headline: por recibir / por regularizar) -->
@@ -389,7 +494,10 @@
 </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<!-- Charts: librerías locales (sin CDN — cumple CSP/offline y la convención del proyecto) -->
+<script src="{% static 'libs/chart.js/chart.min.js' %}"></script>
+<script src="{% static 'libs/echarts/echarts.min.js' %}"></script>
+<script src="{% static 'libs/apexcharts/apexcharts.min.js' %}"></script>
 <script>
 let chartTendencia = null;
 
@@ -407,6 +515,8 @@ function cargarDatos() {
     const params = new URLSearchParams({ fecha_inicio: inicio, fecha_fin: fin });
     if (document.getElementById('chkTodasSucursales').checked) params.set('todas', '1');
 
+    cargarDespacho();  // zona de despacho (endpoint separado /flujo/)
+
     fetch(`/app/api/dashboard-despachos/datos/?${params}`)
         .then(r => r.json())
         .then(data => {
@@ -423,6 +533,171 @@ function cargarDatos() {
             renderAlertasRegularizacion(data.kpis, data.dtes_incompletos || []);
         })
         .catch(err => console.error('Error:', err));
+}
+
+// ═══════════════════ ZONA DESPACHO (endpoint /flujo/) ═══════════════════
+let despGranularidad = 'mes';
+let despSankeyChart = null, despMarcaChart = null, despTiempoChart = null;
+let _despCdsCargados = false;
+const PALETA_DESP = ['#4361ee','#0ab39c','#f7b84b','#f06548','#6b3fd4','#299cdb','#405189','#f1963b','#0e8a5f','#b0367e','#00c2c7'];
+const fmtNumDesp = n => (n || 0).toLocaleString('es-CL');
+const fmtMoneyDesp = n => '$' + (n || 0).toLocaleString('es-CL');
+const sinPrefijo = s => (s || '').replace(/^(CD:|T:)/, '');
+
+function setGranularidad(g) {
+    despGranularidad = g;
+    document.querySelectorAll('.doc-gran-btn').forEach(b => b.classList.toggle('active', b.dataset.g === g));
+    cargarDespacho();
+}
+
+function cargarDespacho() {
+    const inicio = document.getElementById('fechaInicio').value;
+    const fin = document.getElementById('fechaFin').value;
+    const params = new URLSearchParams({ fecha_inicio: inicio, fecha_fin: fin, g: despGranularidad });
+    if (document.getElementById('chkTodasSucursales').checked) params.set('todas', '1');
+    const cd = document.getElementById('despCd').value;
+    if (cd) params.set('cd', cd);
+
+    fetch(`/app/api/dashboard-despachos/flujo/?${params}`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return;
+            renderDespKPIs(data.kpis);
+            poblarDespCds(data.cds_disponibles);
+            renderSankey(data.arbol);
+            renderMatriz(data.matriz);
+            renderMarca(data.marca_por_sucursal);
+            renderTiempo(data.serie_tiempo);
+            renderDespDetalle(data.detalle_sucursal);
+        })
+        .catch(err => console.error('Error despacho:', err));
+}
+
+function renderDespKPIs(k) {
+    k = k || {};
+    document.getElementById('despUnidades').textContent = fmtNumDesp(k.unidades);
+    document.getElementById('despValor').textContent = fmtMoneyDesp(k.valor);
+    document.getElementById('despGuias').textContent = fmtNumDesp(k.guias);
+    document.getElementById('despCds').textContent = fmtNumDesp(k.cds_activos);
+    document.getElementById('despDestinos').textContent = fmtNumDesp(k.destinos_atendidos);
+}
+
+function poblarDespCds(cds) {
+    if (_despCdsCargados || !cds) return;
+    const sel = document.getElementById('despCd');
+    cds.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c.id; o.textContent = c.alias;
+        sel.appendChild(o);
+    });
+    _despCdsCargados = true;
+}
+
+function renderSankey(arbol) {
+    const cont = document.getElementById('despSankey');
+    const vacio = document.getElementById('despSankeyVacio');
+    if (!arbol || !arbol.links || arbol.links.length === 0) {
+        if (despSankeyChart) despSankeyChart.clear();
+        cont.style.display = 'none'; vacio.style.display = 'block';
+        return;
+    }
+    cont.style.display = 'block'; vacio.style.display = 'none';
+    if (!despSankeyChart) despSankeyChart = echarts.init(cont);
+    despSankeyChart.setOption({
+        tooltip: {
+            trigger: 'item', triggerOn: 'mousemove',
+            formatter: p => p.dataType === 'edge'
+                ? `${sinPrefijo(p.data.source)} → ${sinPrefijo(p.data.target)}<br><b>${fmtNumDesp(p.data.value)}</b> uds`
+                : sinPrefijo(p.name)
+        },
+        series: [{
+            type: 'sankey', emphasis: { focus: 'adjacency' }, nodeAlign: 'justify', nodeGap: 10,
+            data: arbol.nodes.map((n, i) => ({
+                name: n.name,
+                itemStyle: { color: PALETA_DESP[i % PALETA_DESP.length] },
+                label: { formatter: sinPrefijo(n.name) }
+            })),
+            links: arbol.links,
+            lineStyle: { color: 'gradient', opacity: 0.45 },
+            label: { fontSize: 11 }
+        }]
+    }, true);
+}
+
+function renderMatriz(m) {
+    const tbl = document.getElementById('tblMatriz');
+    if (!m || !m.filas || m.filas.length === 0) {
+        tbl.innerHTML = '<tbody><tr><td style="padding:20px;color:#99a;text-align:center;">Sin datos</td></tr></tbody>';
+        return;
+    }
+    let maxVal = 1;
+    m.filas.forEach(o => m.cols.forEach(d => { maxVal = Math.max(maxVal, m.celdas[o][d] || 0); }));
+    let h = '<thead><tr><th style="text-align:left;">CD ↓ / Suc →</th>';
+    m.cols.forEach(d => { h += `<th class="text-center">${d}</th>`; });
+    h += '<th class="text-center">Total</th></tr></thead><tbody>';
+    m.filas.forEach(o => {
+        h += `<tr><td style="font-weight:700;">${o}</td>`;
+        m.cols.forEach(d => {
+            const v = m.celdas[o][d] || 0;
+            const alpha = v ? (0.12 + 0.55 * (v / maxVal)) : 0;
+            h += `<td class="tbl-matriz-cell" style="background:rgba(10,179,156,${alpha.toFixed(2)});">${v ? fmtNumDesp(v) : ''}</td>`;
+        });
+        h += `<td class="text-center" style="font-weight:700;">${fmtNumDesp(m.tot_origen[o] || 0)}</td></tr>`;
+    });
+    h += '<tr style="border-top:2px solid #cdd2e0;"><td style="font-weight:700;">Total</td>';
+    m.cols.forEach(d => { h += `<td class="text-center" style="font-weight:700;">${fmtNumDesp(m.tot_destino[d] || 0)}</td>`; });
+    h += '<td></td></tr></tbody>';
+    tbl.innerHTML = h;
+}
+
+function renderMarca(mp) {
+    const cont = document.getElementById('despMarca');
+    if (!mp || !mp.sucursales || mp.sucursales.length === 0) {
+        cont.innerHTML = '<div style="text-align:center;color:#99a;padding:40px;font-size:.85rem;">Sin datos de marca</div>';
+        if (despMarcaChart) { despMarcaChart.destroy(); despMarcaChart = null; }
+        return;
+    }
+    const opts = {
+        chart: { type: 'bar', height: 360, stacked: true, toolbar: { show: false }, fontFamily: 'inherit' },
+        plotOptions: { bar: { horizontal: true, barHeight: '72%' } },
+        series: mp.series, xaxis: { categories: mp.sucursales },
+        colors: PALETA_DESP, legend: { position: 'bottom', fontSize: '11px' },
+        dataLabels: { enabled: false }, tooltip: { y: { formatter: v => fmtNumDesp(v) + ' uds' } }
+    };
+    if (despMarcaChart) { despMarcaChart.destroy(); }
+    despMarcaChart = new ApexCharts(cont, opts); despMarcaChart.render();
+}
+
+function renderTiempo(serie) {
+    const cont = document.getElementById('despTiempo');
+    if (!serie || serie.length === 0) {
+        cont.innerHTML = '<div style="text-align:center;color:#99a;padding:40px;font-size:.85rem;">Sin datos en el período</div>';
+        if (despTiempoChart) { despTiempoChart.destroy(); despTiempoChart = null; }
+        return;
+    }
+    const opts = {
+        chart: { type: 'area', height: 360, toolbar: { show: false }, fontFamily: 'inherit' },
+        series: [{ name: 'Unidades', data: serie.map(x => x.unidades) }],
+        xaxis: { categories: serie.map(x => x.periodo) },
+        colors: ['#4361ee'], stroke: { curve: 'smooth', width: 2 },
+        fill: { type: 'gradient', gradient: { opacityFrom: 0.4, opacityTo: 0.05 } },
+        dataLabels: { enabled: false }, tooltip: { y: { formatter: v => fmtNumDesp(v) + ' uds' } }
+    };
+    if (despTiempoChart) { despTiempoChart.destroy(); }
+    despTiempoChart = new ApexCharts(cont, opts); despTiempoChart.render();
+}
+
+function renderDespDetalle(det) {
+    const tb = document.querySelector('#tblDespDetalle tbody');
+    if (!det || det.length === 0) {
+        tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#99a;padding:16px;">Sin despachos</td></tr>';
+        return;
+    }
+    tb.innerHTML = det.map(r => `<tr>
+        <td style="font-weight:600;">${r.alias || '-'}</td>
+        <td class="text-center">${fmtNumDesp(r.unidades)}</td>
+        <td class="text-center">${fmtNumDesp(r.guias)}</td>
+        <td class="text-center">${r.ultimo || '-'}</td></tr>`).join('');
 }
 
 function renderKPIs(k) {

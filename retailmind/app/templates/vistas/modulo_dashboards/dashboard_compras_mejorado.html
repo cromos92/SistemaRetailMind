@@ -658,6 +658,14 @@
                     <div class="kpi-label">Margen Esperado</div>
                     <small class="text-muted" id="subtextMargen">0% sobre inversión</small>
                 </div>
+
+                <!-- Compras no inventariables (por concepto) -->
+                <div class="kpi-card kpi-info" title="Facturas de compra registradas solo como cabecera (por concepto): sin productos ni ingreso de stock. Antes eran invisibles en este dashboard.">
+                    <div class="kpi-icon"><i class="bi bi-receipt"></i></div>
+                    <div class="kpi-value" id="kpiComprasConcepto">$0</div>
+                    <div class="kpi-label">Compras no inventariables</div>
+                    <small class="text-muted" id="subtextComprasConcepto">0 facturas por concepto (sin stock)</small>
+                </div>
             </div>
 
             <!-- Fila de Gráficos Principal -->
@@ -1430,7 +1438,12 @@ function actualizarKPIs(data) {
         ((margen / metricas.inversion_total) * 100).toFixed(1) : 0;
     $('#kpiMargen').text(formatMoney(margen));
     $('#subtextMargen').text(margenPorcentaje + '% sobre inversión');
-    
+
+    // Compras no inventariables (por concepto): antes invisibles en este dashboard
+    const cni = data.compras_no_inventariables || {};
+    $('#kpiComprasConcepto').text(formatMoney(cni.monto || 0));
+    $('#subtextComprasConcepto').text(formatNumber(cni.cantidad || 0) + ' facturas por concepto (sin stock)');
+
     // ===== KPIs DE DISTRIBUCIÓN =====
     const distribucion = data.distribucion || {};
     
@@ -1896,10 +1909,12 @@ function crearGraficoFlujoDistribucion(datos) {
     
     if (charts.flujoDistribucion) charts.flujoDistribucion.destroy();
     
-    // Usar datos de evolución mensual más datos de despachos
+    // Usar datos de evolución mensual más datos de despachos.
+    // Solo datos reales: si no hay despachos ese mes, se grafica 0 —
+    // antes se INVENTABA inversión×0.85 y se mostraba como real.
     const meses = datos.map(d => d.mes_nombre || d.mes);
     const compras = datos.map(d => d.inversion || 0);
-    const despachos = datos.map(d => d.despachos || d.inversion * 0.85 || 0); // Estimado si no hay datos
+    const despachos = datos.map(d => d.despachos || 0);
     const ventas = datos.map(d => d.ventas || 0);
     
     charts.flujoDistribucion = new Chart(ctx.getContext('2d'), {
@@ -2577,8 +2592,10 @@ function hideLoader() {
 
 // Exportar dashboard
 function exportarDashboard() {
+    // Mismos filtros que la pantalla (incluye periodo — el export usa el API nuevo)
     const params = new URLSearchParams({
         anio: $('#filtroAnio').val(),
+        periodo: $('#filtroPeriodo').val(),
         temporada: $('#filtroTemporada').val(),
         proveedor: $('#filtroProveedor').val()
     });

@@ -1022,8 +1022,11 @@ def dashboard_compras_estrategico(request):
 
         # Filtro de temporada: acepta código de familia normalizada
         # (VERANO/OTONO/INVIERNO/PRIMAVERA) o texto libre (fallback legacy).
+        # fold de acentos: 'Otoño'.upper()='OTOÑO' debe matchear 'OTONO'.
         if temporada:
-            _t_norm = temporada.strip().upper()
+            import unicodedata
+            _t_norm = ''.join(c for c in unicodedata.normalize('NFKD', temporada.strip().upper())
+                              if not unicodedata.combining(c))
             if _t_norm in {'VERANO', 'OTONO', 'INVIERNO', 'PRIMAVERA'}:
                 compras_query = compras_query.filter(temporada_familia=_t_norm)
             else:
@@ -1367,81 +1370,80 @@ def dashboard_compras_estrategico(request):
 
 
 @require_GET
+@login_required
 def exportar_dashboard_compras(request):
-    """Exportar datos del dashboard de compras a Excel"""
+    """Exporta a Excel el dashboard de compras MEJORADO (antes consumía la API
+    del dashboard antiguo y el Excel no coincidía con la pantalla). Pasa los
+    mismos filtros GET (anio/periodo/temporada/proveedor) al API nuevo."""
     try:
         import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment
-        
-        # Obtener datos del dashboard
-        dashboard_response = dashboard_compras_estrategico(request)
-        dashboard_payload = json.loads(dashboard_response.content)
-        if isinstance(dashboard_payload, dict) and dashboard_payload.get('success') is False:
+
+        dashboard_response = dashboard_compras_mejorado_api(request)
+        dashboard_data = json.loads(dashboard_response.content)
+        if dashboard_data.get('success') is False:
             return JsonResponse({
                 'success': False,
-                'error': dashboard_payload.get('error', 'Error al generar dashboard')
+                'error': dashboard_data.get('error', 'Error al generar dashboard')
             })
 
-        dashboard_data = dashboard_payload.get('dashboard', dashboard_payload)
-        
-        # Crear workbook
         wb = openpyxl.Workbook()
-        
-        # Hoja de métricas generales
-        ws_metricas = wb.active
-        ws_metricas.title = "Métricas Generales"
-        
-        # Escribir métricas
-        metricas = dashboard_data.get('metricas_generales', {})
-        metricas_adicionales = dashboard_data.get('metricas_adicionales', {})
-        total_compras = metricas.get('total_compras', metricas_adicionales.get('total_compras', 0))
-        monto_total = metricas.get('monto_total', metricas_adicionales.get('inversion_total', 0))
-        promedio_compra = metricas.get(
-            'promedio_compra',
-            round(monto_total / total_compras, 2) if total_compras else 0
-        )
-        dtes_pendientes = metricas.get('dtes_pendientes', 0)
-        monto_pendiente = metricas.get('monto_pendiente', 0)
 
-        ws_metricas.append(['Métrica', 'Valor'])
-        ws_metricas.append(['Total Compras', total_compras])
-        ws_metricas.append(['Monto Total', monto_total])
-        ws_metricas.append(['Promedio por Compra', promedio_compra])
-        ws_metricas.append(['DTEs Pendientes', dtes_pendientes])
-        ws_metricas.append(['Monto Pendiente', monto_pendiente])
-        
-        # Hoja de compras por proveedor
-        ws_proveedores = wb.create_sheet("Compras por Proveedor")
-        ws_proveedores.append(['Proveedor', 'Total Compras', 'Monto Total'])
-        
-        compras_por_proveedor = dashboard_data.get('compras_por_proveedor')
-        if not compras_por_proveedor:
-            compras_por_proveedor = [
-                {
-                    'proveedor': item.get('proveedor', '-'),
-                    'total_compras': item.get('total_compras', ''),
-                    'monto_total': item.get('inversion', 0)
-                }
-                for item in dashboard_data.get('top_proveedores', [])
-            ]
+        # Hoja 1: métricas principales
+        ws = wb.active
+        ws.title = "Métricas"
+        m = dashboard_data.get('metricas', {})
+        ws.append(['Métrica', 'Valor'])
+        ws.append(['Total Compras', m.get('total_compras', 0)])
+        ws.append(['Inversión Total', m.get('inversion_total', 0)])
+        ws.append(['Unidades Esperadas', m.get('unidades_esperadas', 0)])
+        ws.append(['Unidades Recepcionadas', m.get('unidades_recepcionadas', 0)])
+        ws.append(['Cumplimiento %', m.get('cumplimiento_general', 0)])
+        ws.append(['ROI Promedio % (markup lista, teórico)', m.get('roi_promedio', 0)])
+        f = dashboard_data.get('filtros_aplicados', {})
+        ws.append([])
+        ws.append(['Filtros', f'anio={f.get("anio")} periodo={f.get("periodo")} temporada={f.get("temporada") or "-"} proveedor={f.get("proveedor_id") or "-"}'])
 
-        for item in compras_por_proveedor:
-            ws_proveedores.append([
-                item.get('proveedor', '-'),
-                item.get('total_compras', ''),
-                item.get('monto_total', 0)
-            ])
-        
-        # Preparar respuesta
+        # Hoja 2: top proveedores
+        ws_p = wb.create_sheet("Proveedores")
+        ws_p.append(['Proveedor', 'Compras', 'Inversión', 'Cumplimiento %'])
+        for p in dashboard_data.get('top_proveedores', []):
+            ws_p.append([p.get('proveedor', '-'), p.get('total_compras', ''),
+                         p.get('inversion', 0), p.get('cumplimiento', '')])
+
+        # Hoja 3: inversión por categoría v1.2
+        cm = dashboard_data.get('categoria_marca', {})
+        ws_c = wb.create_sheet("Por Categoría")
+        ws_c.append(['Categoría', 'Padre', 'Unidades', 'Inversión', '% del total'])
+        for c in cm.get('categorias', []):
+            ws_c.append([c.get('categoria'), c.get('padre'), c.get('unidades'),
+                         c.get('inversion'), c.get('participacion')])
+        ws_c.append([])
+        ws_c.append(['Inversión enlazada a catálogo', cm.get('inversion_enlazada', 0)])
+        ws_c.append(['Inversión sin enlace (no clasificable)', cm.get('inversion_sin_enlace', 0)])
+
+        # Hoja 4: inversión por marca vs rotación
+        ws_m = wb.create_sheet("Por Marca")
+        ws_m.append(['Marca', 'Inversión', 'Unidades compradas', 'Stock hoy', 'Venta 90d', 'Sell-through 90d %'])
+        for mk in cm.get('marcas', []):
+            ws_m.append([mk.get('marca'), mk.get('inversion'), mk.get('unidades'),
+                         mk.get('stock_actual'), mk.get('venta_90d'), mk.get('sell_through_90d')])
+
+        # Hoja 5: top productos
+        ws_tp = wb.create_sheet("Top Productos")
+        ws_tp.append(['Producto', 'Marca (texto OC)', 'Unidades', 'Inversión'])
+        for tp in dashboard_data.get('top_productos', []):
+            ws_tp.append([tp.get('nombre', '-'), tp.get('marca', ''),
+                          tp.get('unidades', 0), tp.get('inversion', 0)])
+
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        response['Content-Disposition'] = 'attachment; filename="dashboard_compras.xlsx"'
-        
+        response['Content-Disposition'] = f'attachment; filename="dashboard_compras_{f.get("anio", "")}.xlsx"'
         wb.save(response)
         return response
-        
+
     except Exception as e:
+        logger.exception('Error exportando dashboard compras')
         return JsonResponse({
             'success': False,
             'error': f'Error al exportar: {str(e)}'
@@ -2903,11 +2905,22 @@ def dashboard_compras_mejorado_api(request):
         # inflaban inversión, pareto y cumplimiento con compras borradas.
         compras_query = Compras.objects.filter(fecha__year=anio).exclude(
             estado__in=['ELIMINADA', 'CANCELADA'])
-        
+
+        # Filtro Período (antes era un no-op: se calculaba el rango y jamás se
+        # aplicaba). Solo tiene sentido sobre el año en curso — para años
+        # pasados "último mes" sería siempre vacío, así que ahí se ignora.
+        if periodo != 'anual' and anio == hoy.year:
+            compras_query = compras_query.filter(
+                fecha__gte=fecha_inicio.date() if hasattr(fecha_inicio, 'date') else fecha_inicio,
+                fecha__lte=fecha_fin.date() if hasattr(fecha_fin, 'date') else fecha_fin)
+
         # Filtro de temporada: acepta código de familia normalizada
         # (VERANO/OTONO/INVIERNO/PRIMAVERA) o texto libre (fallback legacy).
+        # fold de acentos: 'Otoño'.upper()='OTOÑO' debe matchear 'OTONO'.
         if temporada:
-            _t_norm = temporada.strip().upper()
+            import unicodedata
+            _t_norm = ''.join(c for c in unicodedata.normalize('NFKD', temporada.strip().upper())
+                              if not unicodedata.combining(c))
             if _t_norm in {'VERANO', 'OTONO', 'INVIERNO', 'PRIMAVERA'}:
                 compras_query = compras_query.filter(temporada_familia=_t_norm)
             else:
@@ -2917,7 +2930,7 @@ def dashboard_compras_mejorado_api(request):
 
         # IDs de compras para filtrar relaciones
         compras_ids = list(compras_query.values_list('id', flat=True))
-        
+
         # ===== MÉTRICAS PRINCIPALES =====
         metricas = calcular_metricas_principales_mejorado(compras_query, compras_ids, anio)
         
@@ -3005,10 +3018,34 @@ def dashboard_compras_mejorado_api(request):
         except Exception as e:
             _logger.warning(f'Error en rentabilidad tipo: {e}')
             rentabilidad_tipo = {'centros_distribucion': [], 'sucursales_vendedoras': []}
-        
+
+        # ===== COMPRAS POR CONCEPTO (no inventariables) =====
+        # Facturas de compra registradas solo como cabecera (Dte.es_por_concepto),
+        # sin productos ni stock. Antes eran INVISIBLES en este dashboard (que se
+        # construye sobre el modelo Compras/OC). Se exponen como bucket $ aparte.
+        try:
+            emp_actual_id = request.session.get('idEmpresaActual')
+            concepto_qs = Dte.objects.filter(
+                tipo_transaccion='COMPRA', es_por_concepto=True,
+                descartado=False, fecha_emision__year=anio,
+            )
+            if emp_actual_id:
+                concepto_qs = concepto_qs.filter(receptor_id=emp_actual_id)
+            if proveedor_id:
+                concepto_qs = concepto_qs.filter(emisor_id=proveedor_id)
+            _ca = concepto_qs.aggregate(n=Count('id'), monto=Sum('monto_con_iva'))
+            compras_no_inventariables = {
+                'cantidad': _ca['n'] or 0,
+                'monto': float(_ca['monto'] or 0),
+            }
+        except Exception as e:
+            _logger.warning(f'Error compras por concepto: {e}')
+            compras_no_inventariables = {'cantidad': 0, 'monto': 0}
+
         return JsonResponse({
             'success': True,
             'metricas': metricas,
+            'compras_no_inventariables': compras_no_inventariables,
             'evolucion_mensual': evolucion_mensual,
             'pareto_proveedores': pareto_proveedores,
             'comparativa_anual': comparativa_anual,
@@ -3881,32 +3918,39 @@ def calcular_rendimiento_sucursales_destino(anio):
                 concepto='TRASPASO_ENTRADA',
                 estado='COMPLETADO'
             ).aggregate(total=Sum('cantidad'))['total'] or 0
-            
+
             # Ventas de esta sucursal
             tickets = Ticket.objects.filter(
                 sucursal_id=suc_id,
                 created_at__year=anio,
                 estado='PAGADO'
             )
-            
+
             ventas_monto = tickets.aggregate(total=Sum('total'))['total'] or 0
-            
-            # Unidades vendidas
-            vendido = Ticket_Productos.objects.filter(
-                ticket__in=tickets
-            ).aggregate(total=Sum('cantidad'))['total'] or 0
-            
-            # Costo estimado (basado en promedio de compras)
-            costo_estimado = despachado * 10000  # Placeholder - se debería calcular con FIFO
-            
+
+            # Unidades vendidas + costo FIFO real de lo vendido.
+            # OJO nombres reales: FK=idTicket, cantidad=stock (antes usaba
+            # ticket__in/cantidad → FieldError silenciado y la tabla salía
+            # vacía desde siempre).
+            lineas_agg = Ticket_Productos.objects.filter(
+                idTicket__in=tickets
+            ).aggregate(
+                unidades=Sum('stock'),
+                costo=Sum(F('stock') * F('costo_fifo')),
+            )
+            vendido = lineas_agg['unidades'] or 0
+            # Costo FIFO real de lo vendido (costo_fifo=0 en líneas legacy:
+            # ahí el margen sale optimista, pero es dato real, no inventado)
+            costo_vendido = lineas_agg['costo'] or 0
+
             resultado.append({
                 'sucursal_id': suc_id,
-                'sucursal': sucursal.alias or sucursal.nombre or 'Sin nombre',
+                'sucursal': sucursal.alias or 'Sin nombre',
                 'empresa': sucursal.empresa.nombre if sucursal.empresa else '-',
                 'despachado': int(despachado),
                 'vendido': int(vendido),
                 'ventas_monto': float(ventas_monto),
-                'costo': float(costo_estimado)
+                'costo': float(costo_vendido)
             })
         except Sucursal.DoesNotExist:
             continue

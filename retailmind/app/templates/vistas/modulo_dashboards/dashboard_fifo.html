@@ -1246,6 +1246,14 @@
                         <i class="bi bi-file-earmark-excel"></i> Exportar Filtrado
                     </button>
                     <div class="form-check form-switch ms-auto">
+                        <input class="form-check-input" type="checkbox" id="agruparPorArticulo" checked style="cursor: pointer;"
+                               onchange="actualizarTabla(datosProductos || [])">
+                        <label class="form-check-label small" for="agruparPorArticulo" style="cursor: pointer;"
+                               title="Junta todas las tallas/SKU de un mismo artículo en una fila (expandible)">
+                            Agrupar por artículo
+                        </label>
+                    </div>
+                    <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" id="mostrarSoloDiferencias" style="cursor: pointer;">
                         <label class="form-check-label small" for="mostrarSoloDiferencias" style="cursor: pointer;">
                             Solo productos con diferencias
@@ -1527,9 +1535,130 @@ function actualizarAnalisis(analisis) {
 }
 
 // ========== ACTUALIZAR TABLA ==========
+function badgeStockClaseFIFO(stock) {
+    if (stock === 0) return 'nexo-badge-danger';
+    if (stock < 10) return 'nexo-badge-warning';
+    if (stock <= 50) return 'nexo-badge-primary';
+    return 'nexo-badge-success';
+}
+function badgePorcClaseFIFO(porc) {
+    const a = Math.abs(porc);
+    if (a < 5) return 'nexo-badge-success';
+    if (a < 15) return 'nexo-badge-warning';
+    return 'nexo-badge-danger';
+}
+function badgeAntigClaseFIFO(d) {
+    return d > 365 ? 'nexo-badge-danger' : (d > 180 ? 'nexo-badge-warning' : 'nexo-badge-success');
+}
+
+// Fila de un SKU-talla individual. esHijo=true -> fila anidada bajo un grupo (oculta por defecto).
+function filaSkuFIFO(producto, esHijo) {
+    const difClass = producto.diferencia_valor > 0 ? 'text-success' : producto.diferencia_valor < 0 ? 'text-danger' : 'text-secondary';
+    const difIcon = producto.diferencia_valor > 0 ? '↗' : producto.diferencia_valor < 0 ? '↘' : '→';
+    const clase = esHijo ? `grupo-hijo grupo-${producto.producto_id}` : 'producto-fila';
+    const estilo = esHijo ? 'style="display:none; background: var(--nexo-gray-50, #f8f9fd);"' : '';
+    const prodCell = esHijo
+        ? `<td style="padding-left: 2.4rem;"><small class="text-muted">SKU: ${producto.sku}</small></td>`
+        : `<td><div><strong style="color: var(--nexo-secondary);">${producto.articulo}</strong><br><small class="text-muted">SKU: ${producto.sku}</small></div></td>`;
+    return `
+        <tr class="${clase}" ${estilo} data-producto="${producto.articulo}" data-diferencia="${producto.diferencia_valor}">
+            ${prodCell}
+            <td class="text-center"><span class="nexo-badge nexo-badge-gray">${producto.talla}</span></td>
+            <td class="text-center"><span class="nexo-badge ${badgeStockClaseFIFO(producto.stock_sistema)}">${producto.stock_sistema}</span></td>
+            <td class="text-end" style="font-weight: 600; color: var(--nexo-secondary);">${formatCurrency(producto.valor_inventario_fifo)}</td>
+            <td class="text-end">${formatCurrency(producto.costo_promedio_fifo)}</td>
+            <td class="text-end">${formatCurrency(producto.costo_sistema)}</td>
+            <td class="text-end ${difClass}" style="font-weight: 600;">${difIcon} ${formatCurrency(Math.abs(producto.diferencia_valor))}</td>
+            <td class="text-center"><span class="nexo-badge ${badgePorcClaseFIFO(producto.porcentaje_diferencia)}">${producto.porcentaje_diferencia.toFixed(1)}%</span></td>
+            <td class="text-center"><span class="nexo-badge ${badgeAntigClaseFIFO(producto.antiguedad_dias)}" title="Lote más antiguo: ${producto.fecha_lote_antiguo || '—'} (${producto.total_lotes} lote${producto.total_lotes === 1 ? '' : 's'})">${producto.antiguedad_dias}d</span></td>
+            <td class="text-center">
+                <div class="d-flex gap-1 justify-content-center">
+                    <button class="nexo-btn nexo-btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="verLotesFIFO(${producto.producto_talla_id})" title="Ver Lotes"><i class="bi bi-layers"></i></button>
+                    <button class="nexo-btn nexo-btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="verMovimientosProducto(${producto.producto_talla_id})" title="Ver Movimientos"><i class="bi bi-arrow-left-right"></i></button>
+                </div>
+            </td>
+        </tr>
+    `;
+}
+
+// Agrupa las filas por artículo (producto_id) y agrega los valores de sus SKU/tallas.
+function agruparProductosPorArticulo(productos) {
+    const mapa = new Map();
+    productos.forEach(p => {
+        let g = mapa.get(p.producto_id);
+        if (!g) {
+            g = {
+                producto_id: p.producto_id, articulo: p.articulo,
+                costo_sistema: p.costo_sistema,   // constante por producto
+                n_tallas: 0, stock_sistema: 0, valor_inventario_fifo: 0, valor_sistema: 0,
+                diferencia_valor: 0, unidades_fifo: 0, total_lotes: 0,
+                antiguedad_dias: 0, fecha_lote_antiguo: null, children: [],
+            };
+            mapa.set(p.producto_id, g);
+        }
+        g.n_tallas += 1;
+        g.stock_sistema += p.stock_sistema;
+        g.valor_inventario_fifo += p.valor_inventario_fifo;
+        g.valor_sistema += p.valor_sistema;
+        g.diferencia_valor += p.diferencia_valor;
+        g.total_lotes += p.total_lotes;
+        // reconstruye las unidades FIFO para poder ponderar el costo promedio
+        if (p.costo_promedio_fifo > 0) g.unidades_fifo += p.valor_inventario_fifo / p.costo_promedio_fifo;
+        if (p.antiguedad_dias > g.antiguedad_dias) {
+            g.antiguedad_dias = p.antiguedad_dias;
+            g.fecha_lote_antiguo = p.fecha_lote_antiguo;
+        }
+        g.children.push(p);
+    });
+    const grupos = Array.from(mapa.values());
+    grupos.forEach(g => {
+        g.costo_promedio_fifo = g.unidades_fifo > 0 ? g.valor_inventario_fifo / g.unidades_fifo : 0;
+        g.porcentaje_diferencia = g.valor_sistema > 0 ? (g.diferencia_valor / g.valor_sistema) * 100 : 0;
+    });
+    return grupos;
+}
+
+// Fila agregada de un artículo (cabecera expandible a sus SKU).
+function filaGrupoFIFO(g) {
+    const difClass = g.diferencia_valor > 0 ? 'text-success' : g.diferencia_valor < 0 ? 'text-danger' : 'text-secondary';
+    const difIcon = g.diferencia_valor > 0 ? '↗' : g.diferencia_valor < 0 ? '↘' : '→';
+    return `
+        <tr class="producto-fila grupo-cabecera" data-grupo="${g.producto_id}" data-producto="${g.articulo}" data-diferencia="${g.diferencia_valor}" style="cursor: pointer;" onclick="toggleGrupoFIFO(${g.producto_id}, this)">
+            <td>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-chevron-right chevron-grupo" style="transition: transform .15s;"></i>
+                    <div>
+                        <strong style="color: var(--nexo-secondary);">${g.articulo}</strong><br>
+                        <small class="text-muted">${g.n_tallas} talla${g.n_tallas === 1 ? '' : 's'} / SKU agrupados</small>
+                    </div>
+                </div>
+            </td>
+            <td class="text-center"><span class="nexo-badge nexo-badge-gray">${g.n_tallas} tallas</span></td>
+            <td class="text-center"><span class="nexo-badge ${badgeStockClaseFIFO(g.stock_sistema)}">${g.stock_sistema}</span></td>
+            <td class="text-end" style="font-weight: 600; color: var(--nexo-secondary);">${formatCurrency(g.valor_inventario_fifo)}</td>
+            <td class="text-end">${formatCurrency(g.costo_promedio_fifo)}</td>
+            <td class="text-end">${formatCurrency(g.costo_sistema)}</td>
+            <td class="text-end ${difClass}" style="font-weight: 600;">${difIcon} ${formatCurrency(Math.abs(g.diferencia_valor))}</td>
+            <td class="text-center"><span class="nexo-badge ${badgePorcClaseFIFO(g.porcentaje_diferencia)}">${g.porcentaje_diferencia.toFixed(1)}%</span></td>
+            <td class="text-center"><span class="nexo-badge ${badgeAntigClaseFIFO(g.antiguedad_dias)}" title="Lote más antiguo del artículo: ${g.fecha_lote_antiguo || '—'} (${g.total_lotes} lote${g.total_lotes === 1 ? '' : 's'})">${g.antiguedad_dias}d</span></td>
+            <td class="text-center"><span class="nexo-badge nexo-badge-gray" title="Clic en la fila para ver los SKU"><i class="bi bi-layers"></i> ${g.n_tallas}</span></td>
+        </tr>
+    `;
+}
+
+// Expandir / colapsar las filas hijas (SKU) de un grupo
+function toggleGrupoFIFO(productoId, tr) {
+    const hijos = document.querySelectorAll('.grupo-' + productoId);
+    const chev = tr.querySelector('.chevron-grupo');
+    const abrir = hijos.length > 0 && hijos[0].style.display === 'none';
+    hijos.forEach(h => { h.style.display = abrir ? 'table-row' : 'none'; });
+    if (chev) chev.style.transform = abrir ? 'rotate(90deg)' : 'rotate(0deg)';
+}
+
 function actualizarTabla(productos) {
+    productos = productos || [];
     const tbody = document.getElementById('tablaFIFOBody');
-    
+
     if (productos.length === 0) {
         tbody.innerHTML = `
             <tr>
@@ -1542,91 +1671,24 @@ function actualizarTabla(productos) {
         document.getElementById('contadorProductos').textContent = '0 productos';
         return;
     }
-    
+
+    const agrupar = document.getElementById('agruparPorArticulo')?.checked;
     let html = '';
-    productos.forEach(producto => {
-        const difClass = producto.diferencia_valor > 0 ? 'text-success' : producto.diferencia_valor < 0 ? 'text-danger' : 'text-secondary';
-        const difIcon = producto.diferencia_valor > 0 ? '↗' : producto.diferencia_valor < 0 ? '↘' : '→';
-        
-        // Badge de stock
-        let stockBadge;
-        if (producto.stock_sistema === 0) {
-            stockBadge = 'nexo-badge-danger';
-        } else if (producto.stock_sistema < 10) {
-            stockBadge = 'nexo-badge-warning';
-        } else if (producto.stock_sistema <= 50) {
-            stockBadge = 'nexo-badge-primary';
-        } else {
-            stockBadge = 'nexo-badge-success';
-        }
-        
-        // Badge de porcentaje
-        let porcBadge;
-        const absPorc = Math.abs(producto.porcentaje_diferencia);
-        if (absPorc < 5) {
-            porcBadge = 'nexo-badge-success';
-        } else if (absPorc < 15) {
-            porcBadge = 'nexo-badge-warning';
-        } else {
-            porcBadge = 'nexo-badge-danger';
-        }
-        
-        html += `
-            <tr class="producto-fila" data-producto="${producto.articulo}" data-diferencia="${producto.diferencia_valor}">
-                <td>
-                    <div>
-                        <strong style="color: var(--nexo-secondary);">${producto.articulo}</strong>
-                        <br>
-                        <small class="text-muted">SKU: ${producto.sku}</small>
-                    </div>
-                </td>
-                <td class="text-center">
-                    <span class="nexo-badge nexo-badge-gray">${producto.talla}</span>
-                </td>
-                <td class="text-center">
-                    <span class="nexo-badge ${stockBadge}">${producto.stock_sistema}</span>
-                </td>
-                <td class="text-end" style="font-weight: 600; color: var(--nexo-secondary);">
-                    ${formatCurrency(producto.valor_inventario_fifo)}
-                </td>
-                <td class="text-end">
-                    ${formatCurrency(producto.costo_promedio_fifo)}
-                </td>
-                <td class="text-end">
-                    ${formatCurrency(producto.costo_sistema)}
-                </td>
-                <td class="text-end ${difClass}" style="font-weight: 600;">
-                    ${difIcon} ${formatCurrency(Math.abs(producto.diferencia_valor))}
-                </td>
-                <td class="text-center">
-                    <span class="nexo-badge ${porcBadge}">
-                        ${producto.porcentaje_diferencia.toFixed(1)}%
-                    </span>
-                </td>
-                <td class="text-center">
-                    <span class="nexo-badge ${producto.antiguedad_dias > 365 ? 'nexo-badge-danger' : (producto.antiguedad_dias > 180 ? 'nexo-badge-warning' : 'nexo-badge-success')}"
-                          title="Lote más antiguo: ${producto.fecha_lote_antiguo || '—'} (${producto.total_lotes} lote${producto.total_lotes === 1 ? '' : 's'})">
-                        ${producto.antiguedad_dias}d
-                    </span>
-                </td>
-                <td class="text-center">
-                    <div class="d-flex gap-1 justify-content-center">
-                        <button class="nexo-btn nexo-btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" 
-                                onclick="verLotesFIFO(${producto.producto_talla_id})" title="Ver Lotes">
-                            <i class="bi bi-layers"></i>
-                        </button>
-                        <button class="nexo-btn nexo-btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" 
-                                onclick="verMovimientosProducto(${producto.producto_talla_id})" title="Ver Movimientos">
-                            <i class="bi bi-arrow-left-right"></i>
-                        </button>
-                    </div>
-                </td>
-            </tr>
-        `;
-    });
-    
-    tbody.innerHTML = html;
-    document.getElementById('contadorProductos').textContent = productos.length + ' productos';
+
+    if (agrupar) {
+        const grupos = agruparProductosPorArticulo(productos);
+        grupos.forEach(g => {
+            html += filaGrupoFIFO(g);
+            g.children.forEach(c => { html += filaSkuFIFO(c, true); });
+        });
+        tbody.innerHTML = html;
+        document.getElementById('contadorProductos').textContent =
+            `${grupos.length} artículo${grupos.length === 1 ? '' : 's'} · ${productos.length} SKU`;
+    } else {
+        productos.forEach(p => { html += filaSkuFIFO(p, false); });
+        tbody.innerHTML = html;
+        document.getElementById('contadorProductos').textContent = productos.length + ' productos';
+    }
 }
 
 // ========== ACTUALIZAR ALERTAS ==========

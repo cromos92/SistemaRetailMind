@@ -410,6 +410,7 @@ from .views_dashboards_kpi import (
     api_dashboard_requerimientos,
     dashboard_despachos,
     api_dashboard_despachos,
+    api_despachos_flujo,
 )
 from .views_prediccion_compras import (
     dashboard_prediccion,
@@ -671,10 +672,10 @@ urlpatterns = [
     path('dashboard_fifo/', views.dashboard_fifo, name='dashboard_fifo'),
     
     # === URLs AJAX PARA DASHBOARD FIFO ===
+    # (obtener_metricas_fifo y obtener_analisis_fifo_detallado eliminados 2026-07:
+    #  endpoints muertos sin consumidores; el segundo estaba expuesto sin login)
     path('obtener_datos_dashboard_fifo/', views.obtener_datos_dashboard_fifo, name='obtener_datos_dashboard_fifo'),
-    path('obtener_metricas_fifo/', views.obtener_metricas_fifo, name='obtener_metricas_fifo'),
     path('exportar_dashboard_fifo/', views.exportar_dashboard_fifo, name='exportar_dashboard_fifo'),
-    path('obtener_analisis_fifo_detallado/', views.obtener_analisis_fifo_detallado, name='obtener_analisis_fifo_detallado'),
 
     # === URLs PARA DASHBOARD DE PRODUCTOS ===
     path('dashboard_productos/', views.dashboard_productos_mejorado, name='dashboard_productos'),  # Redirige al mejorado
@@ -1441,6 +1442,7 @@ urlpatterns = [
 
     path('dashboard-despachos/', dashboard_despachos, name='dashboard_despachos'),
     path('api/dashboard-despachos/datos/', api_dashboard_despachos, name='api_dashboard_despachos'),
+    path('api/dashboard-despachos/flujo/', api_despachos_flujo, name='api_despachos_flujo'),
 
     path('dashboard-requerimientos/', dashboard_requerimientos, name='dashboard_requerimientos'),
     path('api/dashboard-requerimientos/datos/', api_dashboard_requerimientos, name='api_dashboard_requerimientos'),
