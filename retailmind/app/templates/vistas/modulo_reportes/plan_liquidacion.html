@@ -79,7 +79,7 @@ const PL_API = "{% url 'obtener_plan_liquidacion' %}";
 const fmt = n => (n == null ? '—' : Math.round(n).toLocaleString('es-CL'));
 const money = n => (n == null ? '—' : '$' + Math.round(n).toLocaleString('es-CL'));
 const moneyM = n => (n == null ? '—' : '$' + (n/1e6).toLocaleString('es-CL',{maximumFractionDigits:1}) + 'M');
-let PL_DATA = [], plCharts = [], plSort = { key: 'dead_costo', dir: -1 }, plFilter = 'Todas';
+let PL_DATA = [], PL_CAT = [], plCharts = [], plSort = { key: 'dead_costo', dir: -1 }, plFilter = 'Todas';
 
 document.addEventListener('DOMContentLoaded', () => {
     fetch(PL_API, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
@@ -88,6 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('pl-loading').style.display = 'none';
             if (!res.success) { document.getElementById('pl-results').innerHTML = '<div class="pl-alert">Error: ' + (res.error || '') + '</div>'; document.getElementById('pl-results').style.display = 'block'; return; }
             PL_DATA = res.data.marcas;
+            PL_CAT = res.data.categorias || [];
             renderPlan(res.data);
             document.getElementById('pl-results').style.display = 'block';
         })
@@ -140,10 +141,54 @@ function renderPlan(d) {
                 <tbody id="pl-tbody"></tbody>
             </table>
         </div>
+    </div>
+
+    <div class="pl-tablewrap" style="margin-top:16px;">
+        <div class="pl-filters">
+            <span style="font-weight:700; color:var(--nexo-gray-700); font-size:.85rem;">
+                <i class="ri-node-tree"></i> Por categoría (árbol v1.2 · Padre › Hijo)
+            </span>
+            <span style="margin-left:auto; color:var(--nexo-gray-500); font-size:.78rem;">Mismas métricas, dimensión categoría — orden por capital inmovilizado</span>
+        </div>
+        <div style="overflow-x:auto; max-height:480px; overflow-y:auto;">
+            <table class="pl-table" id="pl-table-cat">
+                <thead><tr>
+                    <th class="txt">Categoría</th>
+                    <th>Stock</th>
+                    <th>Valor $ costo</th>
+                    <th>GMROI</th>
+                    <th>Rotación</th>
+                    <th>Cob. (m)</th>
+                    <th>Inmovil. $</th>
+                    <th>% dead</th>
+                    <th class="txt">Acción</th>
+                </tr></thead>
+                <tbody id="pl-tbody-cat"></tbody>
+            </table>
+        </div>
     </div>`;
     document.getElementById('pl-results').innerHTML = html;
     renderTable();
+    renderTableCat();
     drawCharts(d);
+}
+
+function renderTableCat() {
+    const rows = PL_CAT.slice().sort((a, b) => (b.dead_costo || 0) - (a.dead_costo || 0));
+    const tb = document.getElementById('pl-tbody-cat');
+    if (!tb) return;
+    tb.innerHTML = rows.map(r => `
+        <tr>
+            <td><b>${r.categoria}</b></td>
+            <td>${fmt(r.stock)}</td>
+            <td>${money(r.valor_costo)}</td>
+            <td class="badge-gm ${gmClass(r.gmroi)}">${r.gmroi != null ? r.gmroi : '—'}</td>
+            <td>${r.rotacion != null ? r.rotacion + 'x' : '—'}</td>
+            <td>${r.cobertura != null ? r.cobertura : '—'}</td>
+            <td style="font-weight:700;">${money(r.dead_costo)}</td>
+            <td>${r.pct_dead}%</td>
+            <td style="text-align:left;"><span class="pl-tag ${r.accion}">${r.accion}</span></td>
+        </tr>`).join('');
 }
 
 function renderTable() {

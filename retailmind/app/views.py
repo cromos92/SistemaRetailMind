@@ -7935,7 +7935,17 @@ def reporte_movimientos_kardex(request):
     page_size = min(int(request.GET.get('page_size', 100)), 500)
     if not producto_talla_id:
         return JsonResponse({'success': False, 'error': 'ID de producto requerido'}, status=400)
-    producto_talla = get_object_or_404(Producto_Talla, id=producto_talla_id)
+    producto_talla = get_object_or_404(
+        Producto_Talla.objects.select_related('producto'), id=producto_talla_id
+    )
+    # Scoping: el kardex de un SKU solo es visible para usuarios con acceso
+    # a la sucursal dueña del producto (mismo criterio que ver_dte).
+    from app.utils_permisos import puede_ver_sucursal
+    if not puede_ver_sucursal(request.user, producto_talla.producto.sucursal_id):
+        return JsonResponse(
+            {'success': False, 'error': 'No tiene acceso al kardex de esta sucursal.'},
+            status=403,
+        )
     movimientos = Movimientos_Producto.objects.filter(
         ProductoTalla=producto_talla
     ).select_related('sucursal_destino').order_by('fecha', 'hora')
@@ -8002,9 +8012,17 @@ def reporte_kardex_agrupado(request):
     
     if not producto_id:
         return JsonResponse({'success': False, 'error': 'ID de producto requerido'}, status=400)
-    
+
     producto = get_object_or_404(Producto, id=producto_id)
-    
+
+    # Scoping: mismo criterio que reporte_movimientos_kardex.
+    from app.utils_permisos import puede_ver_sucursal
+    if not puede_ver_sucursal(request.user, producto.sucursal_id):
+        return JsonResponse(
+            {'success': False, 'error': 'No tiene acceso al kardex de esta sucursal.'},
+            status=403,
+        )
+
     # Obtener todos los movimientos del producto (todas las tallas)
     movimientos = Movimientos_Producto.objects.filter(
         ProductoTalla__producto=producto
@@ -25825,18 +25843,36 @@ def obtener_marcas(request):
 @login_required
 def obtener_categorias(request):
     """
-    Obtener lista de categorías disponibles
+    Obtener lista de categorías disponibles (árbol v1.2).
+
+    Devuelve [{id, nombre}] con los padres primero ("X (toda la rama)") y sus
+    hijas etiquetadas "Padre › Hija"; filtrar por el id de un padre incluye la
+    rama completa en los reportes (ver _expandir_categoria_ids). Las categorías
+    deprecadas por la recategorización (prefijo _ZZ_) se ocultan.
     """
     try:
-        categorias = Categoria.objects.all().order_by('nombre')
-        
+        categorias = list(
+            Categoria.objects.exclude(nombre__startswith='_ZZ_')
+            .order_by('nombre').values('id', 'nombre', 'padre_id')
+        )
+        hijas_por_padre = {}
+        for c in categorias:
+            if c['padre_id']:
+                hijas_por_padre.setdefault(c['padre_id'], []).append(c)
+
         data = []
-        for categoria in categorias:
-            data.append({
-                'id': categoria.id,
-                'nombre': categoria.nombre
-            })
-        
+        for p in (c for c in categorias if not c['padre_id']):
+            hijas = hijas_por_padre.get(p['id'], [])
+            if hijas:
+                data.append({'id': p['id'], 'nombre': f"{p['nombre']} (toda la rama)"})
+                data.extend(
+                    {'id': h['id'], 'nombre': f"{p['nombre']} › {h['nombre']}"}
+                    for h in hijas
+                )
+            else:
+                # Plana antigua aún con productos: visible pero marcada
+                data.append({'id': p['id'], 'nombre': f"{p['nombre']} (sin recategorizar)"})
+
         return JsonResponse(data, safe=False)
         
     except Exception as e:
@@ -31838,10 +31874,13 @@ def obtener_existencias_reporte(request):
             productos_talla = productos_talla.filter(producto__sucursal_id=sucursal_id)
             logger.info(f'Filtro sucursal aplicado: {sucursal_id}')
         
-        # Filtro por categoría
+        # Filtro por categoría — árbol v1.2: un padre incluye todas sus hijas
         if categoria_id:
-            productos_talla = productos_talla.filter(producto__categoria_id=categoria_id)
-            logger.info(f'Filtro categoría aplicado: {categoria_id}')
+            from app.views_modulo_reportes import _expandir_categoria_ids
+            productos_talla = productos_talla.filter(
+                producto__categoria_id__in=_expandir_categoria_ids(categoria_id)
+            )
+            logger.info(f'Filtro categoría aplicado (rama v1.2): {categoria_id}')
         
         # Filtro por búsqueda de texto
         if busqueda:
@@ -31992,12 +32031,30 @@ def obtener_existencias_reporte(request):
                 ).distinct().values('id', 'alias').order_by('alias')
             )
 
-            # Categorías que tienen productos en sucursales del usuario
-            categorias = list(
+            # Categorías árbol v1.2 con productos del usuario: padres primero
+            # (filtran su rama completa vía _expandir_categoria_ids) y luego
+            # las hijas como "Padre › Hija". Se ocultan las _ZZ_ deprecadas.
+            cats_con_prod = list(
                 Categoria.objects.filter(
                     categoria_productos__sucursal_id__in=sucursales_usuario
-                ).distinct().values('id', 'nombre').order_by('nombre')
+                ).exclude(nombre__startswith='_ZZ_')
+                .distinct().values('id', 'nombre', 'padre_id', 'padre__nombre')
+                .order_by('nombre')
             )
+            padres_vistos = {}
+            for c in cats_con_prod:
+                if c['padre_id'] and c['padre_id'] not in padres_vistos:
+                    padres_vistos[c['padre_id']] = c['padre__nombre'] or ''
+            categorias = [
+                {'id': pid, 'nombre': f'{nombre} (toda la rama)'}
+                for pid, nombre in sorted(padres_vistos.items(), key=lambda x: x[1])
+            ]
+            categorias += [
+                {'id': c['id'],
+                 'nombre': (f"{c['padre__nombre']} › {c['nombre']}" if c['padre_id']
+                            else f"{c['nombre']} (sin recategorizar)")}
+                for c in cats_con_prod
+            ]
         
         logger.info(f'Retornando página {pagina} con {len(existencias)} existencias')
         

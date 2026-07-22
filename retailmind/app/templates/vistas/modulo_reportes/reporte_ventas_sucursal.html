@@ -17,6 +17,18 @@
             </div>
         </div>
 
+        <!-- Nota metodológica: por qué este total puede diferir de cuadratura -->
+        <div class="alert alert-light border d-flex align-items-start gap-2 py-2 px-3 mb-3" style="font-size:.8rem">
+            <i class="ri-information-line text-primary fs-6 mt-1"></i>
+            <div>
+                <strong>Facturación histórica, no caja:</strong> este reporte cuenta todo lo emitido
+                (incluye DTEs luego <em>anulados</em> y facturas fuera del POS, tipo VENTA) y resta
+                <em>todas</em> las Notas de Crédito el día en que se emitieron. La <em>cuadratura de caja</em>
+                excluye anulados y facturas fuera de mesón, por eso ambos totales pueden diferir por diseño.
+                Usa el botón <em>"Diagnóstico vs cuadratura"</em> para ver la conciliación DTE por DTE.
+            </div>
+        </div>
+
         <!-- Filtros -->
         <div class="row mb-4">
             <div class="col-12">

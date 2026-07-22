@@ -234,11 +234,12 @@ def _aggregar_por_categoria_actual(empresas_usuario, sucursales_ids, marca_id=No
     Agregación SQL del inventario ACTUAL por (categoria_producto, sucursal).
     El mapeo a categoría raíz se hace en Python.
     """
+    # OJO: no se exige categoria__isnull=False — el stock sin categoría se
+    # agrega como bucket "Sin categoría" en vez de quedar invisible.
     talla_qs = Producto_Talla.objects.filter(
         producto__sucursal__empresa_id__in=empresas_usuario,
         producto__sucursal_id__in=sucursales_ids,
         producto__excluir_de_analitica=False,
-        producto__categoria__isnull=False,
         stock__gt=0,
     )
     if marca_id:
@@ -271,7 +272,6 @@ def _aggregar_por_categoria_historico(empresas_usuario, sucursales_ids, fecha_co
         producto__sucursal__empresa_id__in=empresas_usuario,
         producto__sucursal_id__in=sucursales_ids,
         producto__excluir_de_analitica=False,
-        producto__categoria__isnull=False,
     )
     if marca_id:
         talla_qs = talla_qs.filter(producto__atributo1_id=marca_id)
@@ -320,9 +320,7 @@ def _aggregar_por_categoria_historico(empresas_usuario, sucursales_ids, fecha_co
     acum = {}  # (cat_id, suc_id) -> dict
     for t in tallas_data:
         sid = t['producto__sucursal_id']
-        cid = t['producto__categoria_id']
-        if cid is None:
-            continue
+        cid = t['producto__categoria_id']  # None => bucket "Sin categoría"
         ingresos_post = ingresos_map.get((t['id'], sid), 0)
         egresos_post = egresos_map.get((t['id'], sid), 0)
         stock_hist = (t['stock'] or 0) - ingresos_post + abs(egresos_post)
@@ -643,6 +641,19 @@ def _resumen_por_categoria(request, marca_id, fecha_corte, es_historico, empresa
         )
         nombre_raiz = {c.id: c.nombre for c in categorias_raiz}
 
+        # Árbol v1.2: solo las raíces CON hijas son padres reales (Calzado /
+        # Ropa / Accesorios...). Las raíces sin hijas son categorías planas
+        # antiguas aún vivas: se agrupan en un bucket único "Sin recategorizar"
+        # en vez de aparecer mezcladas como raíces del árbol.
+        padres_v12 = set(
+            Categoria.objects.filter(
+                padre__isnull=True, subcategorias__isnull=False,
+            ).values_list('id', flat=True)
+        )
+        LEGACY_KEY = '_legacy'
+        SINCAT_KEY = '_sincat'
+        legacy_nombres = set()
+
         # Datos agregados por (categoria_id, sucursal_id)
         if es_historico and fecha_corte:
             agg_rows = _aggregar_por_categoria_historico(
@@ -663,9 +674,16 @@ def _resumen_por_categoria(request, marca_id, fecha_corte, es_historico, empresa
         for row in agg_rows:
             cat_id = row['producto__categoria_id']
             suc_id = row['producto__sucursal_id']
-            root_id = cat_to_root.get(cat_id)
-            if root_id is None:
-                continue
+            if cat_id is None:
+                root_id = SINCAT_KEY
+            else:
+                root_id = cat_to_root.get(cat_id)
+                if root_id is None:
+                    continue
+                if root_id not in padres_v12:
+                    # Plana antigua viva (o residuo _ZZ_): bucket único.
+                    legacy_nombres.add(nombre_raiz.get(root_id, f'ID {root_id}'))
+                    root_id = LEGACY_KEY
 
             pares = int(row['total_pares'] or 0)
             if pares <= 0:
@@ -708,15 +726,35 @@ def _resumen_por_categoria(request, marca_id, fecha_corte, es_historico, empresa
                 emp_b['p_venta'] += p_venta
                 sucursales_por_empresa[emp_id].add(suc_id)
 
-        # Construir resumen por categoría en orden alfabético de raíces
+        # Construir resumen: padres v1.2 en orden alfabético, luego el bucket
+        # "Sin recategorizar" (planas antiguas) y "Sin categoría" al final.
         resumen_categorias = []
         for cat in categorias_raiz:
+            if cat.id not in padres_v12:
+                continue
             b = cat_acum.get(cat.id)
             if not b or b['pares'] <= 0:
                 continue
             resumen_categorias.append({
                 'categoria_id': cat.id,
                 'categoria': cat.nombre,
+                'num_sucursales': len(b['sucursales']),
+                'total_pares': b['pares'],
+                'total_costo': float(b['costo']),
+                'total_precio_interno': float(b['p_interno']),
+                'total_precio_venta': float(b['p_venta']),
+            })
+        for key, etiqueta in (
+            (LEGACY_KEY, 'Sin recategorizar ({n} categorías antiguas)'),
+            (SINCAT_KEY, 'Sin categoría'),
+        ):
+            b = cat_acum.get(key)
+            if not b or b['pares'] <= 0:
+                continue
+            resumen_categorias.append({
+                'categoria_id': None,
+                'categoria': etiqueta.format(n=len(legacy_nombres)),
+                'detalle_categorias': sorted(legacy_nombres) if key == LEGACY_KEY else [],
                 'num_sucursales': len(b['sucursales']),
                 'total_pares': b['pares'],
                 'total_costo': float(b['costo']),

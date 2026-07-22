@@ -477,90 +477,123 @@ def ver_plan_liquidacion(request):
 @require_GET
 @login_required
 def obtener_plan_liquidacion(request):
-    """Ranking de marcas por capital inmovilizado (dead-stock 180d) + GMROI/rotación."""
+    """Ranking por capital inmovilizado (dead-stock 180d) + GMROI/rotación.
+
+    Dimensiones: marca (histórica) y categoría hija v1.2 ("Padre › Hijo").
+    Opcional `?categoria_id=` (un padre incluye su rama) para acotar el
+    ranking de marcas a una familia de producto — marca × categoría.
+    Siempre excluye centros de distribución del denominador de rotación.
+    """
     try:
         sucursales = list(_sucursales_usuario(request))
         tiendas_ids = [s.id for s in sucursales if not s.es_centro_distribucion]
         hoy = timezone.localdate()
 
+        categoria_id = request.GET.get('categoria_id')
+        cat_scope = None
+        if categoria_id:
+            from app.views_modulo_reportes import _expandir_categoria_ids
+            cat_scope = _expandir_categoria_ids(categoria_id)
+
         base_pt = Producto_Talla.objects.filter(
             stock__gt=0, producto__excluir_de_analitica=False,
             producto__sucursal__es_centro_distribucion=False,
             producto__sucursal_id__in=tiendas_ids,
-            producto__atributo1__isnull=False,
         )
-        # inventario por marca
-        inv = {r['producto__atributo1_id']: r for r in
-               base_pt.values('producto__atributo1_id', 'producto__atributo1__valor')
-               .annotate(stock_u=Sum('stock', output_field=BI),
-                         valor_costo=Sum(F('stock') * F('producto__costo'), output_field=BI),
-                         skus=Count('id'))}
+        mov_base = Movimientos_Producto.objects.filter(
+            estado='COMPLETADO', concepto__in=CONCEPTOS_VENTA,
+            ProductoTalla__producto__sucursal__es_centro_distribucion=False,
+            ProductoTalla__producto__sucursal_id__in=tiendas_ids,
+        )
+        if cat_scope:
+            base_pt = base_pt.filter(producto__categoria_id__in=cat_scope)
+            mov_base = mov_base.filter(ProductoTalla__producto__categoria_id__in=cat_scope)
 
-        # ventas TTM (12m) por marca
-        mv = (Movimientos_Producto.objects.filter(
-                estado='COMPLETADO', concepto__in=CONCEPTOS_VENTA,
-                fecha__gte=hoy - timedelta(days=365),
-                ProductoTalla__producto__sucursal__es_centro_distribucion=False,
-                ProductoTalla__producto__sucursal_id__in=tiendas_ids)
-              .values('ProductoTalla__producto__atributo1_id')
-              .annotate(u=Sum(Abs('cantidad'), output_field=BI),
-                        venta=Sum(Abs(F('cantidad')) * F('precio'), output_field=BI),
-                        costo=Sum(Abs(F('cantidad')) * F('costo'), output_field=BI)))
-        ttm = {r['ProductoTalla__producto__atributo1_id']: r for r in mv}
-
-        # dead-stock 180d por marca
-        vend180 = (Movimientos_Producto.objects.filter(
-                    estado='COMPLETADO', concepto__in=CONCEPTOS_VENTA,
-                    fecha__gte=hoy - timedelta(days=180),
-                    ProductoTalla__producto__sucursal__es_centro_distribucion=False,
-                    ProductoTalla__producto__sucursal_id__in=tiendas_ids)
+        vend180 = (mov_base.filter(fecha__gte=hoy - timedelta(days=180))
                    .values('ProductoTalla'))
-        dead = {r['producto__atributo1_id']: r for r in
-                base_pt.exclude(id__in=vend180).values('producto__atributo1_id')
-                .annotate(dead_u=Sum('stock', output_field=BI),
-                          dead_costo=Sum(F('stock') * F('producto__costo'), output_field=BI),
-                          dead_skus=Count('id'))}
 
-        filas = []
-        for mid, ir in inv.items():
-            stock = ir['stock_u'] or 0
-            if stock <= 0:
-                continue
-            valor_costo = ir['valor_costo'] or 0
-            skus = ir['skus'] or 0
-            t = ttm.get(mid, {})
-            u = t.get('u') or 0
-            venta = t.get('venta') or 0
-            costo = t.get('costo') or 0
-            dd = dead.get(mid, {})
-            dead_u = dd.get('dead_u') or 0
-            dead_costo = dd.get('dead_costo') or 0
-            dead_skus = dd.get('dead_skus') or 0
+        def _filas_por(campo_id, campos_label, nombre_key, etiquetar, filtro_extra=None):
+            """Ranking con métricas de liquidación agrupado por una dimensión.
 
-            rotacion = round(u / stock, 2) if stock else None
-            cobertura = round(stock / (u / 12.0), 1) if u else None
-            margen = (venta - costo) if (venta > 0 and 0 < costo < venta) else None
-            gmroi = round(margen / valor_costo, 2) if (margen and valor_costo) else None
-            pct_dead = round(100.0 * dead_skus / skus, 1) if skus else 0
+            campo_id: campo id en Producto ('atributo1_id' | 'categoria_id').
+            etiquetar: fn(row_inv) -> nombre visible de la fila.
+            """
+            pt = base_pt.filter(**filtro_extra) if filtro_extra else base_pt
+            v_inv = [f'producto__{campo_id}'] + [f'producto__{l}' for l in campos_label]
+            inv = {r[f'producto__{campo_id}']: r for r in
+                   pt.values(*v_inv)
+                   .annotate(stock_u=Sum('stock', output_field=BI),
+                             valor_costo=Sum(F('stock') * F('producto__costo'), output_field=BI),
+                             skus=Count('id'))}
+            mv = (mov_base.filter(fecha__gte=hoy - timedelta(days=365))
+                  .values(f'ProductoTalla__producto__{campo_id}')
+                  .annotate(u=Sum(Abs('cantidad'), output_field=BI),
+                            venta=Sum(Abs(F('cantidad')) * F('precio'), output_field=BI),
+                            costo=Sum(Abs(F('cantidad')) * F('costo'), output_field=BI)))
+            ttm = {r[f'ProductoTalla__producto__{campo_id}']: r for r in mv}
+            dead = {r[f'producto__{campo_id}']: r for r in
+                    pt.exclude(id__in=vend180).values(f'producto__{campo_id}')
+                    .annotate(dead_u=Sum('stock', output_field=BI),
+                              dead_costo=Sum(F('stock') * F('producto__costo'), output_field=BI),
+                              dead_skus=Count('id'))}
 
-            if gmroi is not None and gmroi < 1 and (cobertura is None or cobertura > 12):
-                accion = 'Liquidar'
-            elif gmroi is not None and gmroi >= 3 and cobertura is not None and cobertura < 6:
-                accion = 'Reponer'
-            elif pct_dead >= 70:
-                accion = 'Depurar'
-            else:
-                accion = 'Monitorear'
+            filas = []
+            for did, ir in inv.items():
+                stock = ir['stock_u'] or 0
+                if stock <= 0:
+                    continue
+                valor_costo = ir['valor_costo'] or 0
+                skus = ir['skus'] or 0
+                t = ttm.get(did, {})
+                u = t.get('u') or 0
+                venta = t.get('venta') or 0
+                costo = t.get('costo') or 0
+                dd = dead.get(did, {})
+                dead_u = dd.get('dead_u') or 0
+                dead_costo = dd.get('dead_costo') or 0
+                dead_skus = dd.get('dead_skus') or 0
 
-            filas.append({
-                'marca': ir['producto__atributo1__valor'], 'stock': stock, 'skus': skus,
-                'valor_costo': valor_costo, 'ttm_u': u, 'rotacion': rotacion,
-                'cobertura': cobertura, 'gmroi': gmroi, 'dead_u': dead_u,
-                'dead_costo': dead_costo, 'dead_skus': dead_skus, 'pct_dead': pct_dead,
-                'accion': accion,
-            })
+                rotacion = round(u / stock, 2) if stock else None
+                cobertura = round(stock / (u / 12.0), 1) if u else None
+                margen = (venta - costo) if (venta > 0 and 0 < costo < venta) else None
+                gmroi = round(margen / valor_costo, 2) if (margen and valor_costo) else None
+                pct_dead = round(100.0 * dead_skus / skus, 1) if skus else 0
 
-        filas.sort(key=lambda x: -x['dead_costo'])
+                if gmroi is not None and gmroi < 1 and (cobertura is None or cobertura > 12):
+                    accion = 'Liquidar'
+                elif gmroi is not None and gmroi >= 3 and cobertura is not None and cobertura < 6:
+                    accion = 'Reponer'
+                elif pct_dead >= 70:
+                    accion = 'Depurar'
+                else:
+                    accion = 'Monitorear'
+
+                filas.append({
+                    nombre_key: etiquetar(ir), 'stock': stock, 'skus': skus,
+                    'valor_costo': valor_costo, 'ttm_u': u, 'rotacion': rotacion,
+                    'cobertura': cobertura, 'gmroi': gmroi, 'dead_u': dead_u,
+                    'dead_costo': dead_costo, 'dead_skus': dead_skus, 'pct_dead': pct_dead,
+                    'accion': accion,
+                })
+            filas.sort(key=lambda x: -x['dead_costo'])
+            return filas
+
+        filas = _filas_por(
+            'atributo1_id', ['atributo1__valor'], 'marca',
+            lambda ir: ir['producto__atributo1__valor'],
+            filtro_extra={'producto__atributo1__isnull': False},
+        )
+
+        def _label_cat(ir):
+            nombre = ir.get('producto__categoria__nombre') or 'Sin categoría'
+            padre = ir.get('producto__categoria__padre__nombre') or ''
+            return f'{padre} › {nombre}' if padre else nombre
+
+        filas_cat = _filas_por(
+            'categoria_id', ['categoria__nombre', 'categoria__padre__nombre'],
+            'categoria', _label_cat,
+            filtro_extra={'producto__categoria__isnull': False},
+        )
 
         tot_valor = sum(f['valor_costo'] for f in filas)
         tot_dead_costo = sum(f['dead_costo'] for f in filas)
@@ -577,6 +610,9 @@ def obtener_plan_liquidacion(request):
                 'n_liquidar': n_liquidar, 'n_reponer': n_reponer,
             },
             'marcas': filas,
+            # Dimensión v1.2: mismas métricas por categoría hija (Padre › Hijo)
+            'categorias': filas_cat,
+            'categoria_filtrada': categoria_id or None,
         }
         return JsonResponse({'success': True, 'data': data})
 

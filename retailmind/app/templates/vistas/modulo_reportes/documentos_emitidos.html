@@ -393,7 +393,12 @@ document.addEventListener('DOMContentLoaded', function() {
             .finally(() => cargarDocumentos());
     }
 
-    function cargarDocumentos() {
+    let paginaActualDocs = 1;
+
+    function cargarDocumentos(pagina) {
+        // `pagina` numérica cuando viene de los controles de paginación;
+        // cualquier otra cosa (click de botón/evento) reinicia a la página 1.
+        paginaActualDocs = (typeof pagina === 'number' && pagina >= 1) ? pagina : 1;
         const fechaDesde = document.getElementById('filtroFechaDesde').value;
         const fechaHasta = document.getElementById('filtroFechaHasta').value;
         const tipoDoc    = document.getElementById('filtroTipoDoc').value;
@@ -406,6 +411,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tipoDoc)     url += `tipo_documento=${tipoDoc}&`;
         if (metodoPago)  url += `metodo_pago=${metodoPago}&`;
         if (sucursalId)  url += `sucursal_id=${sucursalId}&`;
+        url += `page=${paginaActualDocs}&per_page=100&`;
 
         setLoading(true);
         actualizarLblPeriodo();
@@ -414,7 +420,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(r => { if (!r.ok) throw new Error('Error servidor'); return r.json(); })
             .then(data => {
                 if (data.success) {
-                    llenarTablaDocumentos(data.documentos, data.total_real || data.total_registros);
+                    llenarTablaDocumentos(data.documentos, data.total_real || data.total_registros, data.pagination);
                     actualizarResumenes(data.resumen);
                     actualizarDiagnostico(data.diagnostico, data.resumen);
                 } else {
@@ -553,13 +559,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }).join('');
     }
 
-    function llenarTablaDocumentos(documentos, totalReal) {
+    function llenarTablaDocumentos(documentos, totalReal, pagination) {
         const tbody = document.getElementById('tbodyDocumentos');
         tbody.innerHTML = '';
         const badge = document.getElementById('badgeCantidad');
 
-        // Limpiar aviso anterior
+        // Limpiar aviso/paginación anterior
         document.getElementById('avisoLimite')?.remove();
+        document.getElementById('navPaginacionDocs')?.remove();
 
         if (!documentos || documentos.length === 0) {
             tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4"><i class="ri-inbox-line fs-3 d-block mb-1"></i>No hay documentos para mostrar</td></tr>';
@@ -569,14 +576,26 @@ document.addEventListener('DOMContentLoaded', function() {
 
         badge.textContent = totalReal || documentos.length;
 
-        // Mostrar aviso si hay mas registros que los mostrados
-        if (totalReal && totalReal > documentos.length) {
-            const aviso = document.createElement('div');
-            aviso.id = 'avisoLimite';
-            aviso.className = 'alert alert-info py-2 px-3 mb-2 d-flex align-items-center gap-2';
-            aviso.style.fontSize = '.8rem';
-            aviso.innerHTML = `<i class="bi bi-info-circle"></i>Mostrando <strong>${documentos.length}</strong> de <strong>${totalReal}</strong> documentos. Usa filtros para acotar o exporta a Excel para ver todos.`;
-            tbody.closest('.table-responsive')?.parentElement?.insertBefore(aviso, tbody.closest('.table-responsive'));
+        // Controles de paginación (reemplazan el antiguo truncado a 100)
+        if (pagination && pagination.total_pages > 1) {
+            const nav = document.createElement('div');
+            nav.id = 'navPaginacionDocs';
+            nav.className = 'd-flex align-items-center justify-content-between flex-wrap gap-2 py-2 px-1';
+            nav.style.fontSize = '.82rem';
+            const desde = (pagination.page - 1) * pagination.per_page + 1;
+            const hasta = Math.min(pagination.page * pagination.per_page, pagination.total);
+            nav.innerHTML = `
+                <span class="text-muted">Mostrando <strong>${desde}–${hasta}</strong> de <strong>${pagination.total}</strong> documentos</span>
+                <div class="btn-group btn-group-sm">
+                    <button type="button" id="btnPagDocsPrev" class="btn btn-outline-secondary" ${pagination.has_previous ? '' : 'disabled'}><i class="ri-arrow-left-s-line"></i> Anterior</button>
+                    <button type="button" class="btn btn-outline-secondary" disabled>Página ${pagination.page} / ${pagination.total_pages}</button>
+                    <button type="button" id="btnPagDocsNext" class="btn btn-outline-secondary" ${pagination.has_next ? '' : 'disabled'}>Siguiente <i class="ri-arrow-right-s-line"></i></button>
+                </div>`;
+            tbody.closest('.table-responsive')?.parentElement?.insertBefore(nav, tbody.closest('.table-responsive'));
+            // El script vive dentro de DOMContentLoaded: nada de onclick inline
+            // (ReferenceError) — listeners programáticos sobre el closure.
+            nav.querySelector('#btnPagDocsPrev')?.addEventListener('click', () => cargarDocumentos(pagination.page - 1));
+            nav.querySelector('#btnPagDocsNext')?.addEventListener('click', () => cargarDocumentos(pagination.page + 1));
         }
 
         let html = '';

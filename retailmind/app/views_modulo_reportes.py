@@ -43,6 +43,19 @@ from .utils_permisos import (
 logger = logging.getLogger('app')
 
 
+def _expandir_categoria_ids(categoria_id):
+    """[id] + ids de sus hijas directas.
+
+    Árbol v1.2 (2 niveles): filtrar por un PADRE debe incluir toda su rama;
+    filtrar por una hija se comporta igual que antes (sin hijas propias).
+    """
+    ids = [categoria_id]
+    ids += list(
+        Categoria.objects.filter(padre_id=categoria_id).values_list('id', flat=True)
+    )
+    return ids
+
+
 
 # ========== REPORTE DE VENTAS POR SUCURSAL ==========
 
@@ -1779,6 +1792,7 @@ def obtener_documentos_vendedor_reporte(request):
                 'origen': 'DTE',
                 'tipo': d.tipo_documento or '',
                 'numero': d.numero_documento or '',
+                '_orden': d.fecha_emision.isoformat() if d.fecha_emision else '',
                 'fecha': d.fecha_emision.strftime('%d/%m/%Y') if d.fecha_emision else '',
                 'cliente': d.receptor.razon_social if d.receptor else 'Público General',
                 'sucursal': d.sucursal.alias if d.sucursal else '-',
@@ -1801,6 +1815,7 @@ def obtener_documentos_vendedor_reporte(request):
                 'origen': 'TICKET',
                 'tipo': 'Ticket POS',
                 'numero': str(t.id),
+                '_orden': t.created_at.date().isoformat() if t.created_at else '',
                 'fecha': t.created_at.strftime('%d/%m/%Y') if t.created_at else '',
                 'cliente': 'Venta Directa',
                 'sucursal': t.sucursal.alias if t.sucursal else '-',
@@ -1808,8 +1823,12 @@ def obtener_documentos_vendedor_reporte(request):
                 'estado': 'PAGADO',
             })
 
-        # Ordenar todos por fecha descendente
-        documentos.sort(key=lambda x: x['fecha'], reverse=True)
+        # Ordenar todos por fecha real descendente. OJO: ordenar por el string
+        # dd/mm/YYYY mezclaba meses (01/07 > 30/06 alfabéticamente NO se cumple);
+        # se usa la clave ISO interna y se retira antes de responder.
+        documentos.sort(key=lambda x: x['_orden'], reverse=True)
+        for d in documentos:
+            d.pop('_orden', None)
 
         return JsonResponse({
             'success': True,
@@ -1835,9 +1854,14 @@ def obtener_comparativa_mensual(request):
         meses_set = set()
 
         # ========== TICKETS (POS nuevo) ==========
+        # Solo tickets SIN DTE: un ticket con boleta ya está representado en
+        # la suma de DTEs de abajo (misma regla anti-doble-conteo que
+        # ventas-global y ventas-comparativo). Sin este filtro la comparativa
+        # contaba ~2x las ventas POS (medido jun-2026: $180M duplicados/mes).
         queryset_tickets = Ticket.objects.filter(
             created_at__gte=fecha_inicio,
             estado='PAGADO',
+            dte_generado=False,
             modulo_origen__in=['VENTA_PUBLICO', 'POS', 'ECOMMERCE'],
         ).select_related('sucursal')
 
@@ -2099,7 +2123,21 @@ def obtener_documentos_emitidos(request):
         # Preparar datos de documentos
         documentos_data = []
         total_real = len(dtes_todos)
-        for dte in dtes_todos[:100]:  # Limitar a 100 registros
+
+        # Paginación real (antes: truncado silencioso a 100 filas que dejaba
+        # documentos invisibles sin aviso cuando el rango superaba los 100).
+        try:
+            page = max(1, int(request.GET.get('page', 1)))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            per_page = int(request.GET.get('per_page', 100))
+        except (TypeError, ValueError):
+            per_page = 100
+        per_page = max(10, min(per_page, 500))
+        offset = (page - 1) * per_page
+
+        for dte in dtes_todos[offset:offset + per_page]:
             # Obtener información del cliente
             cliente_info = 'N.N'
             if dte.receptor:
@@ -2384,6 +2422,7 @@ def obtener_documentos_emitidos(request):
             'total_neto': resumen['total_global'],
         }
 
+        total_pages = max(1, (total_real + per_page - 1) // per_page)
         return JsonResponse({
             'success': True,
             'documentos': documentos_data,
@@ -2391,8 +2430,16 @@ def obtener_documentos_emitidos(request):
             'diagnostico': diagnostico,
             'total_registros': len(documentos_data),
             'total_real': total_real,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total_real,
+                'total_pages': total_pages,
+                'has_next': page < total_pages,
+                'has_previous': page > 1,
+            },
         })
-        
+
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -2708,10 +2755,11 @@ def obtener_reporte_existencias_marca(request):
         # ========== APLICAR FILTROS ==========
         if marca_id:
             queryset = queryset.filter(atributo1_id=marca_id)
-        
+
         if departamento_id:
-            queryset = queryset.filter(categoria_id=departamento_id)
-        
+            # Árbol v1.2: un padre incluye todas sus hijas
+            queryset = queryset.filter(categoria_id__in=_expandir_categoria_ids(departamento_id))
+
         if busqueda:
             # Búsqueda por artículo, marca o color
             queryset = queryset.filter(
@@ -2719,7 +2767,7 @@ def obtener_reporte_existencias_marca(request):
                 Q(atributo1__valor__icontains=busqueda) |
                 Q(atributo2__valor__icontains=busqueda)
             )
-        
+
         # ========== AGREGAR STOCK CON ANOTACIÓN ==========
         # Anotar el stock total por producto (suma de todas las tallas)
         queryset = queryset.annotate(
@@ -5511,17 +5559,18 @@ def obtener_reporte_movimientos_sucursal(request):
 
         if marca_id:
             queryset = queryset.filter(atributo1_id=marca_id)
-        
+
         if departamento_id:
-            queryset = queryset.filter(categoria_id=departamento_id)
-        
+            # Árbol v1.2: un padre incluye todas sus hijas
+            queryset = queryset.filter(categoria_id__in=_expandir_categoria_ids(departamento_id))
+
         if busqueda:
             queryset = queryset.filter(
                 Q(articulo__icontains=busqueda) |
                 Q(atributo1__valor__icontains=busqueda) |
                 Q(atributo2__valor__icontains=busqueda)
             )
-        
+
         queryset = queryset.order_by('atributo1__valor', 'articulo')
         
         if limite:
@@ -6165,15 +6214,19 @@ def api_reporte_despachos_detallado(request):
 
         despachos = []
         for dte in dtes_compra.order_by('-fecha_emision'):
+            # OJO nombres reales: Dte_Productos.productoTalla (camelCase) y la
+            # cantidad de línea es `stock` — con 'producto_talla'/'cantidad'
+            # este reporte devolvía 500 siempre (detectado por la suite
+            # _test_reportes_readonly, jul-2026).
             productos_dte = Dte_Productos.objects.filter(dte=dte).select_related(
-                'producto_talla__producto',
+                'productoTalla__producto',
             )
             recepciones = Productos_Recepcionados.objects.filter(
                 dte=dte,
             ).select_related('sucursal_destino', 'producto_talla__producto')
 
-            total_esperado = sum(p.cantidad for p in productos_dte)
-            total_recibido = sum(r.stockArribado for r in recepciones)
+            total_esperado = sum(p.stock or 0 for p in productos_dte)
+            total_recibido = sum(r.stockArribado or 0 for r in recepciones)
 
             sucursales_destino = {}
             for rec in recepciones:
@@ -6188,12 +6241,12 @@ def api_reporte_despachos_detallado(request):
 
             despachos.append({
                 'dte_id': dte.id,
-                'numero_dte': dte.numero_dte,
+                'numero_dte': dte.numero_documento,
                 'tipo_documento': dte.tipo_documento,
-                'fecha_emision': dte.fecha_emision.strftime('%d/%m/%Y'),
+                'fecha_emision': dte.fecha_emision.strftime('%d/%m/%Y') if dte.fecha_emision else '',
                 'proveedor': dte.emisor.nombre if dte.emisor else '',
                 'rut_proveedor': dte.emisor.rut if dte.emisor else '',
-                'total': float(dte.total),
+                'total': float(dte.monto_con_iva or 0),
                 'estado': dte.estado_dte,
                 'total_esperado': total_esperado,
                 'total_recibido': total_recibido,
@@ -7271,6 +7324,14 @@ def obtener_ventas_global_por_empresa(request):
         fecha_inicio_ant = fecha_inicio - timedelta(days=delta_dias)
         fecha_fin_ant = fecha_inicio - timedelta(days=1)
 
+        # Scoping multi-empresa: sin permiso "ver todas", el reporte global
+        # solo agrega las sucursales asignadas al usuario (EmpresaUser).
+        _scope = {}
+        if not usuario_puede_ver_todas_sucursales(request.user):
+            _scope = {'sucursal_id__in': list(
+                obtener_sucursales_usuario(request.user).values_list('id', flat=True)
+            )}
+
         def _sumar_periodo(fi, ff):
             """Suma ventas de Tickets + DTEs por sucursal para un rango"""
             fi_date = fi.date() if hasattr(fi, 'date') else fi
@@ -7286,6 +7347,7 @@ def obtener_ventas_global_por_empresa(request):
                 estado='PAGADO',
                 dte_generado=False,
                 modulo_origen__in=['VENTA_PUBLICO', 'POS', 'ECOMMERCE'],
+                **_scope,
             ).values('sucursal_id', 'sucursal__alias', 'sucursal__empresa_id', 'sucursal__empresa__nombre').annotate(
                 total=Sum('total'), dcto=Sum('descuento'), docs=Count('id'),
             ):
@@ -7307,6 +7369,7 @@ def obtener_ventas_global_por_empresa(request):
             for r in Dte.objects.filter(
                 fecha_emision__gte=fi_date, fecha_emision__lte=ff_date,
                 tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
+                **_scope,
             ).exclude(
                 estado_dte__in=['ANULADO', 'CANCELADO', 'RECHAZADO']
             ).exclude(
@@ -7333,6 +7396,7 @@ def obtener_ventas_global_por_empresa(request):
                 fecha_emision__gte=fi_date, fecha_emision__lte=ff_date,
                 tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
                 tipo_documento='NOTA DE CREDITO',
+                **_scope,
             ).exclude(
                 estado_dte__in=['ANULADO', 'CANCELADO', 'RECHAZADO']
             ).values('sucursal_id').annotate(total=Sum('monto_con_iva')):
@@ -8112,7 +8176,21 @@ def _aplicar_filtros_producto(qs, prefix, filtros):
     if filtros.get('genero_id'):
         qs = qs.filter(**{f'{prefix}__atributo4_id': filtros['genero_id']})
     if filtros.get('categoria_id'):
-        qs = qs.filter(**{f'{prefix}__categoria_id': filtros['categoria_id']})
+        # Árbol v1.2: filtrar por un PADRE debe incluir todas sus hijas
+        # (patrón obtener_ventas_por_especialidad). El resultado expandido se
+        # cachea en filtros para las 3 llamadas (tickets, dtes, devoluciones).
+        if '_categoria_ids' not in filtros:
+            cid = filtros['categoria_id']
+            ids = [cid] + [
+                str(x) for x in Categoria.objects.filter(padre_id=cid)
+                .values_list('id', flat=True)
+            ]
+            filtros['_categoria_ids'] = ids
+        qs = qs.filter(**{f'{prefix}__categoria_id__in': filtros['_categoria_ids']})
+    if filtros.get('especialidad_id'):
+        # Especialidad v1.2 (multi-etiqueta vía ProductoAtributoValor). Filtrar
+        # por UNA opción no duplica líneas (una fila PAV por producto+opción).
+        qs = qs.filter(**{f'{prefix}__atributos__opcion_id': filtros['especialidad_id']})
     if filtros.get('temporada'):
         qs = qs.filter(**{f'{prefix}__temporada': filtros['temporada']})
     if filtros.get('anio_temporada'):
@@ -8189,13 +8267,18 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
     sucursales_por_producto = {}  # {producto_id: set(sucursal_id)}
 
     def _get_prod(pid, data_row):
+        nombre_cat = data_row.get('prod_categoria') or '-'
+        padre_cat = data_row.get('prod_categoria_padre') or ''
         return productos_acum.setdefault(pid, {
             'producto_id': pid,
             'articulo': data_row.get('prod_articulo') or '-',
             'descripcion': data_row.get('prod_descripcion') or '',
             'marca': data_row.get('prod_marca') or '-',
             'marca_id': data_row.get('prod_marca_id'),
-            'categoria': data_row.get('prod_categoria') or '-',
+            'categoria': nombre_cat,
+            # Árbol v1.2: label "Padre › Hijo" para desambiguar hijas homónimas
+            # (patrón obtener_ventas_por_categoria).
+            'categoria_label': f'{padre_cat} › {nombre_cat}' if padre_cat else nombre_cat,
             'categoria_id': data_row.get('prod_categoria_id'),
             'sexo': data_row.get('prod_sexo') or '-',
             'sexo_id': data_row.get('prod_sexo_id'),
@@ -8213,6 +8296,7 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
         prod_marca=F('ProductoTalla__producto__atributo1__valor'),
         prod_marca_id=F('ProductoTalla__producto__atributo1_id'),
         prod_categoria=F('ProductoTalla__producto__categoria__nombre'),
+        prod_categoria_padre=F('ProductoTalla__producto__categoria__padre__nombre'),
         prod_categoria_id=F('ProductoTalla__producto__categoria_id'),
         prod_sexo=F('ProductoTalla__producto__atributo3__valor'),
         prod_sexo_id=F('ProductoTalla__producto__atributo3_id'),
@@ -8253,6 +8337,7 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
         prod_marca=F('productoTalla__producto__atributo1__valor'),
         prod_marca_id=F('productoTalla__producto__atributo1_id'),
         prod_categoria=F('productoTalla__producto__categoria__nombre'),
+        prod_categoria_padre=F('productoTalla__producto__categoria__padre__nombre'),
         prod_categoria_id=F('productoTalla__producto__categoria_id'),
         prod_sexo=F('productoTalla__producto__atributo3__valor'),
         prod_sexo_id=F('productoTalla__producto__atributo3_id'),
@@ -8425,22 +8510,60 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
         return filas
 
     por_marca = _agrupar_por('marca_id', 'marca')
-    por_categoria = _agrupar_por('categoria_id', 'categoria')
+    # Árbol v1.2: agrupar por id pero mostrar "Padre › Hijo" (desambigua
+    # hijas homónimas de padres distintos).
+    por_categoria = _agrupar_por('categoria_id', 'categoria_label')
     por_sexo = _agrupar_por('sexo_id', 'sexo')
     por_genero = _agrupar_por('genero_id', 'genero')
+
+    # ---------- Agregación por ESPECIALIDAD v1.2 (multi-etiqueta) ----------
+    # Vista de ATRIBUCIÓN, no partición: un producto [running, urbano] suma a
+    # ambas etiquetas, así que la suma puede exceder el total (mismo criterio
+    # que obtener_ventas_por_especialidad del dashboard).
+    por_especialidad = []
+    if productos_acum:
+        from app.models import ProductoAtributoValor
+        esp_por_prod = {}
+        for pav in ProductoAtributoValor.objects.filter(
+            producto_id__in=productos_acum.keys(),
+            atributo__nombre__iexact='Especialidad',
+        ).values('producto_id', 'opcion_id', 'opcion__valor'):
+            esp_por_prod.setdefault(pav['producto_id'], []).append(
+                (pav['opcion_id'], pav['opcion__valor'])
+            )
+        esp_acc = {}
+        for pid, p in productos_acum.items():
+            for eid, valor in esp_por_prod.get(pid, []):
+                slot = esp_acc.setdefault(eid, {
+                    'id': eid, 'nombre': valor,
+                    'unidades': 0, 'monto': 0, 'skus': 0,
+                })
+                slot['unidades'] += p['unidades']
+                slot['monto'] += p['monto']
+                slot['skus'] += 1
+        por_especialidad = sorted(
+            esp_acc.values(), key=lambda x: x['unidades'], reverse=True)
+        for e in por_especialidad:
+            e['participacion'] = round(e['unidades'] / tot_unid * 100, 1) if tot_unid > 0 else 0
 
     # ---------- Heatmap Sucursal × Categoría ----------
     # Recalcular directo en DB para mejor precisión (evitar perder unidades por producto sin categoría)
     heat = {}  # {(sid, cat_nombre): {unidades, monto}}
 
+    def _cat_label(row):
+        nombre = row.get('cat_nombre') or 'Sin clasificar'
+        padre = row.get('cat_padre') or ''
+        return f'{padre} › {nombre}' if padre else nombre
+
     for r in qs_tp.values(
         'idTicket__sucursal_id',
         suc_nombre=F('idTicket__sucursal__alias'),
         cat_nombre=F('ProductoTalla__producto__categoria__nombre'),
+        cat_padre=F('ProductoTalla__producto__categoria__padre__nombre'),
     ).annotate(unid=Sum('stock'), monto=Sum('subtotal')):
         sid = r['idTicket__sucursal_id']
         suc = r['suc_nombre'] or '-'
-        cat = r['cat_nombre'] or 'Sin clasificar'
+        cat = _cat_label(r)
         key = (sid, cat)
         h = heat.setdefault(key, {'sucursal_id': sid, 'sucursal': suc,
                                    'categoria': cat, 'unidades': 0, 'monto': 0})
@@ -8451,13 +8574,14 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
         'dte__sucursal_id',
         suc_nombre=F('dte__sucursal__alias'),
         cat_nombre=F('productoTalla__producto__categoria__nombre'),
+        cat_padre=F('productoTalla__producto__categoria__padre__nombre'),
     ).annotate(unid=Sum('stock'),
                monto_item_total=Sum('monto_item'),
                monto_precio_total=Sum(ExpressionWrapper(
                    F('precio') * F('stock'), output_field=DecimalField()))):
         sid = r['dte__sucursal_id']
         suc = r['suc_nombre'] or '-'
-        cat = r['cat_nombre'] or 'Sin clasificar'
+        cat = _cat_label(r)
         key = (sid, cat)
         monto = int(r['monto_item_total'] or 0)
         if monto <= 0:
@@ -8472,12 +8596,13 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
     for r in qs_dev.values(
         'cambio_devolucion__sucursal_id',
         cat_nombre=F('producto_original__ProductoTalla__producto__categoria__nombre'),
+        cat_padre=F('producto_original__ProductoTalla__producto__categoria__padre__nombre'),
     ).annotate(unid=Sum('cantidad_original'),
                monto=Sum(ExpressionWrapper(
                    F('precio_original_unitario') * F('cantidad_original'),
                    output_field=DecimalField()))):
         sid = r['cambio_devolucion__sucursal_id']
-        cat = r['cat_nombre'] or 'Sin clasificar'
+        cat = _cat_label(r)
         h = heat.get((sid, cat))
         if h:
             h['unidades'] -= int(r['unid'] or 0)
@@ -8518,6 +8643,7 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
         'por_categoria': por_categoria,
         'por_sexo': por_sexo,
         'por_genero': por_genero,
+        'por_especialidad': por_especialidad,
         'heatmap': heatmap,
         'kpis': kpis,
     }
@@ -8560,6 +8686,7 @@ def obtener_productos_vendidos(request):
             'sexo_id': request.GET.get('sexo_id') or None,
             'genero_id': request.GET.get('genero_id') or None,
             'categoria_id': request.GET.get('categoria_id') or None,
+            'especialidad_id': request.GET.get('especialidad_id') or None,
             'temporada': request.GET.get('temporada') or None,
             'anio_temporada': request.GET.get('anio_temporada') or None,
             'rango_precio': request.GET.get('rango_precio') or None,
@@ -8592,6 +8719,7 @@ def obtener_productos_vendidos(request):
             'por_categoria': data['por_categoria'][:100],
             'por_sexo': data['por_sexo'],
             'por_genero': data['por_genero'],
+            'por_especialidad': data['por_especialidad'],
             'heatmap': data['heatmap'],
         })
 
@@ -8618,17 +8746,45 @@ def obtener_atributo_opciones(request):
         }
 
         if tipo == 'categoria':
-            qs = Categoria.objects.order_by('nombre').values('id', 'nombre')
+            # Árbol v1.2: padres primero (filtran su rama completa) y luego
+            # sus hijas con label "Padre › Hija". Se ocultan las _ZZ_
+            # (categorías planas deprecadas por la recategorización).
+            padres = list(
+                Categoria.objects.filter(padre__isnull=True)
+                .exclude(nombre__startswith='_ZZ_')
+                .order_by('nombre').values('id', 'nombre')
+            )
+            hijas_por_padre = {}
+            for h in Categoria.objects.filter(padre__isnull=False) \
+                    .exclude(nombre__startswith='_ZZ_') \
+                    .order_by('nombre').values('id', 'nombre', 'padre_id'):
+                hijas_por_padre.setdefault(h['padre_id'], []).append(h)
+            opciones = []
+            for p in padres:
+                hijas = hijas_por_padre.get(p['id'], [])
+                if hijas:
+                    opciones.append({'id': p['id'], 'nombre': f"{p['nombre']} (toda la rama)"})
+                    for h in hijas:
+                        opciones.append({'id': h['id'], 'nombre': f"{p['nombre']} › {h['nombre']}"})
+                else:
+                    # Plana vieja aún con productos: visible pero marcada
+                    opciones.append({'id': p['id'], 'nombre': f"{p['nombre']} (sin recategorizar)"})
+            return JsonResponse({'success': True, 'opciones': opciones})
+
+        if tipo == 'especialidad':
+            qs = AtributoOpcion.objects.filter(
+                atributo__nombre__iexact='Especialidad'
+            ).order_by('valor').values('id', 'valor')
             return JsonResponse({
                 'success': True,
-                'opciones': [{'id': x['id'], 'nombre': x['nombre']} for x in qs],
+                'opciones': [{'id': x['id'], 'nombre': x['valor']} for x in qs],
             })
 
         nombre_atributo = mapping.get(tipo)
         if not nombre_atributo:
             return JsonResponse({
                 'success': False,
-                'error': "Parametro 'tipo' invalido. Use: marca | color | sexo | genero | categoria",
+                'error': "Parametro 'tipo' invalido. Use: marca | color | sexo | genero | categoria | especialidad",
             })
 
         qs = AtributoOpcion.objects.filter(

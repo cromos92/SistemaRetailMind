@@ -82,15 +82,15 @@
                                 </select>
                             </div>
                             <div class="col-md-2">
-                                <label class="form-label fw-semibold small">Sexo</label>
+                                <label class="form-label fw-semibold small">Género</label>
                                 <select class="form-select form-select-sm" id="filtroSexo">
                                     <option value="">Todos</option>
                                 </select>
                             </div>
                             <div class="col-md-2">
-                                <label class="form-label fw-semibold small">Género</label>
-                                <select class="form-select form-select-sm" id="filtroGenero">
-                                    <option value="">Todos</option>
+                                <label class="form-label fw-semibold small">Especialidad</label>
+                                <select class="form-select form-select-sm" id="filtroEspecialidad">
+                                    <option value="">Todas</option>
                                 </select>
                             </div>
                             <div class="col-md-2">
@@ -236,7 +236,7 @@
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#tabSexo" role="tab">
-                                    <i class="ri-user-line"></i> Sexo / Género
+                                    <i class="ri-user-line"></i> Género / Especialidad
                                 </a>
                             </li>
                             <li class="nav-item">
@@ -266,7 +266,7 @@
                                                 <th>Descripción</th>
                                                 <th>Marca</th>
                                                 <th>Categoría</th>
-                                                <th>Sexo</th>
+                                                <th>Género</th>
                                                 <th>Género</th>
                                                 <th class="text-end" title="Unidades vendidas netas de devoluciones">Unidades</th>
                                                 <th class="text-center" title="Unidades devueltas por clientes en el período (ya restadas de Unidades)">Devol.</th>
@@ -383,7 +383,7 @@
                                         <div class="card border shadow-sm h-100">
                                             <div class="card-header bg-light">
                                                 <h6 class="card-title mb-0">
-                                                    <i class="ri-pie-chart-line text-primary"></i> Por Sexo
+                                                    <i class="ri-pie-chart-line text-primary"></i> Por Género
                                                 </h6>
                                             </div>
                                             <div class="card-body">
@@ -392,7 +392,7 @@
                                                     <table class="table table-sm mb-0" id="tablaSexo">
                                                         <thead class="table-light">
                                                             <tr>
-                                                                <th>Sexo</th>
+                                                                <th>Género</th>
                                                                 <th class="text-end">Unid.</th>
                                                                 <th class="text-end">Monto</th>
                                                                 <th class="text-center">%</th>
@@ -408,7 +408,8 @@
                                         <div class="card border shadow-sm h-100">
                                             <div class="card-header bg-light">
                                                 <h6 class="card-title mb-0">
-                                                    <i class="ri-pie-chart-2-line text-success"></i> Por Género
+                                                    <i class="ri-pie-chart-2-line text-success"></i> Por Especialidad
+                                                    <small class="text-muted fw-normal">(multi-etiqueta: un producto puede sumar a varias)</small>
                                                 </h6>
                                             </div>
                                             <div class="card-body">
@@ -417,7 +418,7 @@
                                                     <table class="table table-sm mb-0" id="tablaGenero">
                                                         <thead class="table-light">
                                                             <tr>
-                                                                <th>Género</th>
+                                                                <th>Especialidad</th>
                                                                 <th class="text-end">Unid.</th>
                                                                 <th class="text-end">Monto</th>
                                                                 <th class="text-center">%</th>
@@ -510,12 +511,12 @@
             cargarOpciones('marca', 'filtroMarca'),
             cargarOpciones('categoria', 'filtroCategoria'),
             cargarOpciones('sexo', 'filtroSexo'),
-            cargarOpciones('genero', 'filtroGenero'),
+            cargarOpciones('especialidad', 'filtroEspecialidad'),
         ]).then(() => consultar());
 
         document.getElementById('btnConsultar').addEventListener('click', consultar);
         document.getElementById('btnLimpiar').addEventListener('click', limpiarFiltros);
-        ['filtroSucursal','filtroMarca','filtroCategoria','filtroSexo','filtroGenero',
+        ['filtroSucursal','filtroMarca','filtroCategoria','filtroSexo','filtroEspecialidad',
          'filtroTemporada','filtroRangoPrecio','filtroOrden','incluirExcluidos'].forEach(id => {
             document.getElementById(id).addEventListener('change', consultar);
         });
@@ -580,7 +581,7 @@
 
     function limpiarFiltros() {
         document.getElementById('filtroBusqueda').value = '';
-        ['filtroMarca','filtroCategoria','filtroSexo','filtroGenero',
+        ['filtroMarca','filtroCategoria','filtroSexo','filtroEspecialidad',
          'filtroTemporada','filtroRangoPrecio'].forEach(id => {
             document.getElementById(id).value = '';
         });
@@ -606,7 +607,7 @@
             marca_id: 'filtroMarca',
             categoria_id: 'filtroCategoria',
             sexo_id: 'filtroSexo',
-            genero_id: 'filtroGenero',
+            especialidad_id: 'filtroEspecialidad',
             temporada: 'filtroTemporada',
             rango_precio: 'filtroRangoPrecio',
             orden: 'filtroOrden',
@@ -639,7 +640,7 @@
                 renderProductos(data.productos, data.productos_total);
                 renderMarca(data.por_marca);
                 renderCategoria(data.por_categoria);
-                renderSexoGenero(data.por_sexo, data.por_genero);
+                renderSexoGenero(data.por_sexo, data.por_especialidad);
                 renderHeatmap(data.heatmap);
             })
             .catch(err => {
