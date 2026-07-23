@@ -486,6 +486,31 @@ MAX_EXPORT_FILAS = 20000
 BUCKETS_ANTIGUEDAD = {
     '0-90': (0, 90), '90-180': (90, 180), '180-365': (180, 365), '365+': (365, None),
 }
+# Descuento de liquidación sugerido por antigüedad (mismo criterio que
+# analisis_inventario_antiguo: 6 meses / 1 año / 2 años -> 15 / 25 / 40 %).
+ESCALA_DESCUENTO_LIQUIDACION = [(730, 40), (365, 25), (180, 15)]
+PISO_COSTO_FACTOR = 1.1
+
+
+def _descuento_sugerido(dias):
+    """% de descuento de liquidación sugerido según días de antigüedad."""
+    if dias is None:
+        return 0
+    for umbral, pct in ESCALA_DESCUENTO_LIQUIDACION:
+        if dias >= umbral:
+            return pct
+    return 0
+
+
+def _precio_liq_sugerido(precioventa, costo, dias):
+    """Precio de liquidación sugerido (precioventa - descuento sugerido), con
+    piso en costo*1.1. Devuelve (precio, descuento_pct)."""
+    pct = _descuento_sugerido(dias)
+    if not pct:
+        return (precioventa or 0), 0
+    nuevo = int(round((precioventa or 0) * (1 - pct / 100.0)))
+    piso = int((costo or 0) * PISO_COSTO_FACTOR)
+    return max(nuevo, piso), pct
 
 
 def _scope_plan(request):
@@ -873,6 +898,8 @@ def _serializar_detalle(qs, hoy):
         ult = r['ultima_venta']
         cat_n = r['categoria__nombre'] or 'Sin categoría'
         cat_p = r['categoria__padre__nombre'] or ''
+        dias = (hoy - fecha_fifo).days if fecha_fifo else None
+        precio_liq, pct = _precio_liq_sugerido(r['precioventa'], r['costo'], dias)
         out.append({
             'producto_id': r['id'], 'articulo': r['articulo'],
             'descripcion': r['descripcion'], 'marca': r['atributo1__valor'],
@@ -884,10 +911,13 @@ def _serializar_detalle(qs, hoy):
             'valor_costo': (r['stock_u'] or 0) * (r['costo'] or 0),
             'precioventa': r['precioventa'], 'costo': r['costo'],
             'fecha_fifo': fecha_fifo, 'antiguedad_fuente': fuente,
+            'anio': fecha_fifo.year if fecha_fifo else None,
             'ultima_venta': ult,
             'dias_sin_venta': (hoy - ult).days if ult else None,
             'u365': r['u365'] or 0,
-            'dias_antiguedad': (hoy - fecha_fifo).days if fecha_fifo else None,
+            'dias_antiguedad': dias,
+            'descuento_sugerido': pct,
+            'precio_liquidacion': precio_liq,
         })
     return out
 
@@ -955,6 +985,94 @@ def obtener_plan_liquidacion_detalle(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
+def _analisis_liquidacion(base_pt, hoy, top_marcas=8):
+    """Análisis de antigüedad del stock filtrado en UNA query agrupada por
+    (marca, año). Pivotea a dos vistas:
+      - `anios`: capital + pares por año de antigüedad.
+      - `por_marca`: top marcas con su capital dividido en buckets de urgencia
+        (reciente / 1 año / 2+ años). El resto de marcas se agrupa en "Otras".
+
+    El año sale de la misma antigüedad del drill-down (lote vivo más antiguo
+    y, si no hay lotes, fecha_creacion — corregida en prod).
+    """
+    lote_sq = (LoteProducto.objects.filter(
+        producto_talla__producto=OuterRef('pk'),
+        activo=True, agotado=False, cantidad_disponible__gt=0,
+    ).order_by('fecha_ingreso').values('fecha_ingreso')[:1])
+    stock_f = Q(producto_talla__stock__gt=0)
+    rows = list(Producto.objects.filter(id__in=base_pt.values('producto_id'))
+                .annotate(anio=ExtractYear(Coalesce(Subquery(lote_sq), F('fecha_creacion'))))
+                .values('anio', 'atributo1__valor')
+                .annotate(
+                    valor=Coalesce(Sum(F('producto_talla__stock') * F('costo'),
+                                       filter=stock_f, output_field=BI), 0),
+                    pares=Coalesce(Sum('producto_talla__stock', filter=stock_f, output_field=BI), 0),
+                    productos=Count('id', distinct=True)))
+    anio_actual = hoy.year
+    por_anio, por_marca = {}, {}
+    for r in rows:
+        anio = r['anio']
+        marca = r['atributo1__valor'] or 'Sin marca'
+        valor, pares = r['valor'] or 0, r['pares'] or 0
+        if anio:
+            a = por_anio.setdefault(anio, {'anio': anio, 'valor': 0, 'pares': 0, 'productos': 0})
+            a['valor'] += valor
+            a['pares'] += pares
+            a['productos'] += r['productos'] or 0
+        m = por_marca.setdefault(marca, {
+            'marca': marca, 'val_reciente': 0, 'val_1anio': 0, 'val_2mas': 0,
+            'valor': 0, 'pares': 0})
+        m['valor'] += valor
+        m['pares'] += pares
+        if anio is None or anio >= anio_actual:
+            m['val_reciente'] += valor
+        elif anio == anio_actual - 1:
+            m['val_1anio'] += valor
+        else:
+            m['val_2mas'] += valor
+
+    anios = sorted(por_anio.values(), key=lambda x: x['anio'])
+    for a in anios:
+        antig = anio_actual - a['anio']
+        a['antiguedad_anios'] = antig
+        a['descuento_sugerido'] = _descuento_sugerido(antig * 365)
+
+    marcas = sorted(por_marca.values(), key=lambda x: -x['valor'])
+    top = marcas[:top_marcas]
+    if len(marcas) > top_marcas:
+        otras = {'marca': 'Otras', 'val_reciente': 0, 'val_1anio': 0,
+                 'val_2mas': 0, 'valor': 0, 'pares': 0}
+        for m in marcas[top_marcas:]:
+            for k in ('val_reciente', 'val_1anio', 'val_2mas', 'valor', 'pares'):
+                otras[k] += m[k]
+        top.append(otras)
+    return anios, top
+
+
+@require_GET
+@login_required
+def obtener_plan_liquidacion_por_anio(request):
+    """Análisis de antigüedad para los gráficos: capital/pares por año y por
+    marca (dividido por urgencia). Mismos filtros; se carga aparte para no
+    frenar la vista principal."""
+    try:
+        hoy = timezone.localdate()
+        base_pt, mov_base, ctx = _scope_plan(request)
+        anios, por_marca = _analisis_liquidacion(base_pt, hoy)
+        total_valor = sum(a['valor'] for a in anios)
+        total_pares = sum(a['pares'] for a in anios)
+        valor_liquidar = sum(a['valor'] for a in anios if (a['descuento_sugerido'] or 0) > 0)
+        pares_liquidar = sum(a['pares'] for a in anios if (a['descuento_sugerido'] or 0) > 0)
+        return JsonResponse({'success': True, 'anios': anios, 'por_marca': por_marca,
+                             'anio_actual': hoy.year,
+                             'totales': {'valor': total_valor, 'pares': total_pares,
+                                         'valor_liquidar': valor_liquidar,
+                                         'pares_liquidar': pares_liquidar}})
+    except Exception as e:
+        logger.exception('Error en plan de liquidación por año')
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
 @require_GET
 @login_required
 def exportar_plan_liquidacion_excel(request):
@@ -982,25 +1100,54 @@ def exportar_plan_liquidacion_excel(request):
 
         wb = Workbook(write_only=True)
         ws = wb.create_sheet('Detalle')
-        ws.append(['Sucursal', 'CD', 'Marca', 'Color', 'Categoría',
+        # Columnas clave de liquidación primero (año, descuento y precio
+        # sugerido) para que la lista sea accionable de un vistazo.
+        ws.append(['Año', 'Antigüedad (años)', 'Días antigüedad',
+                   'Descuento sugerido %', 'Precio venta', 'Precio liquidación sugerido',
+                   'Ahorro cliente', 'Sucursal', 'CD', 'Marca', 'Color', 'Categoría',
                    'Especialidades', 'Artículo', 'Descripción', 'Tallas',
-                   'Stock (pares)', 'Costo unit.', 'Valor costo', 'Precio venta',
-                   'Fecha ingreso FIFO', 'Días antigüedad', 'Fuente antigüedad',
+                   'Stock (pares)', 'Costo unit.', 'Valor costo',
+                   'Fecha ingreso FIFO', 'Fuente antigüedad',
                    'Última venta', 'Días sin venta', 'Ventas 365d (pares)'])
+        resumen_anio = {}  # anio -> {pares, valor, valor_liq}
         for f in filas:
+            dias = f['dias_antiguedad']
+            anio = f['fecha_fifo'].year if f['fecha_fifo'] else None
+            antig_anios = (hoy.year - anio) if anio else None
+            precio_liq, pct = _precio_liq_sugerido(f['precioventa'], f['costo'], dias)
+            ahorro = (f['precioventa'] or 0) - precio_liq
             ws.append([
+                anio if anio else 's/d',
+                antig_anios if antig_anios is not None else 's/d',
+                dias if dias is not None else 's/d',
+                pct, f['precioventa'], precio_liq, ahorro,
                 f['sucursal'], 'Sí' if f['es_cd'] else 'No', f['marca'],
                 f['color'], f['categoria'],
                 ', '.join(esp_por_prod.get(f['producto_id'], [])),
                 f['articulo'], f['descripcion'], f['tallas'], f['stock_u'],
-                f['costo'], f['valor_costo'], f['precioventa'],
+                f['costo'], f['valor_costo'],
                 f['fecha_fifo'].strftime('%Y-%m-%d') if f['fecha_fifo'] else 's/d',
-                f['dias_antiguedad'] if f['dias_antiguedad'] is not None else 's/d',
                 f['antiguedad_fuente'] or 's/d',
                 f['ultima_venta'].strftime('%Y-%m-%d') if f['ultima_venta'] else 'Nunca',
                 f['dias_sin_venta'] if f['dias_sin_venta'] is not None else 'Nunca',
                 f['u365'],
             ])
+            k = anio if anio else 's/d'
+            r = resumen_anio.setdefault(k, {'pares': 0, 'valor': 0, 'valor_liq': 0})
+            r['pares'] += f['stock_u'] or 0
+            r['valor'] += f['valor_costo'] or 0
+            r['valor_liq'] += (precio_liq * (f['stock_u'] or 0)) if pct else 0
+
+        # Hoja Resumen por año (capital y descuento sugerido).
+        ws3 = wb.create_sheet('Resumen por año')
+        ws3.append(['Año', 'Antigüedad (años)', 'Descuento sugerido %',
+                    'Productos (pares)', 'Valor a costo', 'Valor liquidación estimado'])
+        for k in sorted(resumen_anio.keys(), key=lambda x: (x == 's/d', x)):
+            r = resumen_anio[k]
+            antig = (hoy.year - k) if isinstance(k, int) else 's/d'
+            pct = _descuento_sugerido(antig * 365 if isinstance(antig, int) else None)
+            ws3.append([k, antig, pct, r['pares'], r['valor'],
+                        r['valor_liq'] if r['valor_liq'] else '—'])
 
         ws2 = wb.create_sheet('Filtros')
         ws2.append(['Filtro', 'Valor'])

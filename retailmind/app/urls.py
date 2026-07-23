@@ -1251,6 +1251,7 @@ urlpatterns = [
     path('reportes/plan-liquidacion/', views_inteligencia_compra.ver_plan_liquidacion, name='ver_plan_liquidacion'),
     path('api/plan-liquidacion/', views_inteligencia_compra.obtener_plan_liquidacion, name='obtener_plan_liquidacion'),
     path('api/plan-liquidacion/detalle/', views_inteligencia_compra.obtener_plan_liquidacion_detalle, name='obtener_plan_liquidacion_detalle'),
+    path('api/plan-liquidacion/por-anio/', views_inteligencia_compra.obtener_plan_liquidacion_por_anio, name='obtener_plan_liquidacion_por_anio'),
     path('api/plan-liquidacion/exportar-excel/', views_inteligencia_compra.exportar_plan_liquidacion_excel, name='exportar_plan_liquidacion_excel'),
 
     # Campañas de liquidación (gestión masiva de precios + promos NxM)

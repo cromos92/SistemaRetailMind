@@ -119,21 +119,19 @@
                 <table class="pl-table" id="det-table">
                     <thead><tr>
                         <th style="width:34px;"><input type="checkbox" id="det-selall" onclick="toggleSelAll(this)" title="Seleccionar página"></th>
-                        <th class="txt" onclick="ordenarDetalle('articulo')">Artículo</th>
-                        <th class="txt">Descripción</th>
-                        <th class="txt">Marca</th>
-                        <th class="txt">Categoría</th>
+                        <th class="txt" data-k="articulo" onclick="ordenarDetalle('articulo')">Artículo</th>
                         <th class="txt">Sucursal</th>
-                        <th onclick="ordenarDetalle('stock_u')">Pares</th>
-                        <th onclick="ordenarDetalle('valor_costo')">Valor $ costo</th>
-                        <th onclick="ordenarDetalle('precioventa')">Precio</th>
-                        <th onclick="ordenarDetalle('dias_antiguedad')">Ingreso FIFO</th>
-                        <th onclick="ordenarDetalle('dias_antiguedad')">Antig. (d)</th>
-                        <th onclick="ordenarDetalle('dias_sin_venta')">Últ. venta</th>
-                        <th onclick="ordenarDetalle('dias_sin_venta')">Sin venta (d)</th>
-                        <th onclick="ordenarDetalle('u365')">Vta 365d</th>
+                        <th data-k="stock_u" onclick="ordenarDetalle('stock_u')">Pares</th>
+                        <th data-k="dias_antiguedad" onclick="ordenarDetalle('dias_antiguedad')">Año</th>
+                        <th data-k="dias_antiguedad" onclick="ordenarDetalle('dias_antiguedad')">Antig.</th>
+                        <th data-k="dias_sin_venta" onclick="ordenarDetalle('dias_sin_venta')">Sin venta</th>
+                        <th data-k="precioventa" onclick="ordenarDetalle('precioventa')">Precio</th>
+                        <th title="Descuento de liquidación sugerido por antigüedad">Desc. sug.</th>
+                        <th title="Precio de venta ya con el descuento sugerido (piso: costo×1.1)">Precio liq.</th>
+                        <th data-k="valor_costo" onclick="ordenarDetalle('valor_costo')">Valor $ costo</th>
+                        <th data-k="u365" onclick="ordenarDetalle('u365')">Vta 365d</th>
                     </tr></thead>
-                    <tbody id="det-tbody"><tr><td colspan="14" style="text-align:center; padding:30px;">Cargando…</td></tr></tbody>
+                    <tbody id="det-tbody"><tr><td colspan="12" style="text-align:center; padding:30px;">Cargando…</td></tr></tbody>
                 </table>
             </div>
             <div class="pl-pag">
@@ -157,6 +155,7 @@
 <script>
 const PL_API = "{% url 'obtener_plan_liquidacion' %}";
 const PL_DET_API = "{% url 'obtener_plan_liquidacion_detalle' %}";
+const PL_ANIO_API = "{% url 'obtener_plan_liquidacion_por_anio' %}";
 const PL_XLS_API = "{% url 'exportar_plan_liquidacion_excel' %}";
 const fmt = n => (n == null ? '—' : Math.round(n).toLocaleString('es-CL'));
 const money = n => (n == null ? '—' : '$' + Math.round(n).toLocaleString('es-CL'));
@@ -171,6 +170,9 @@ const DIMS = {
     sucursales:     { label: 'Sucursal',     field: 'sucursal',     filtro: 'sucursal_id' },
 };
 let PL_RES = null;                       // respuesta completa de la API
+let PL_ANIO_RES = null;                   // análisis por año/marca
+let anioMetric = 'valor';                 // 'valor' (dinero) | 'pares'
+let chartAnio = null, chartMarca = null;
 let plDim = 'marcas';
 let plCharts = [], plSort = { key: 'dead_costo', dir: -1 }, plFilter = 'Todas';
 let PL_F = { sucursal_id: '', marca_id: '', categoria_id: '', especialidad_id: '', incluir_cd: '' };
@@ -204,6 +206,7 @@ function cargarPlan() {
             cont.style.display = 'block';
             document.getElementById('pl-det-wrap').style.display = 'block';
             cargarDetalle();
+            cargarPorAnio();
         })
         .catch(e => { document.getElementById('pl-loading').innerHTML = 'Error de red: ' + esc(e); });
 }
@@ -257,8 +260,21 @@ function renderPlan(d) {
     </div>
 
     <div class="pl-grid">
-        <div class="pl-card"><h3><i class="ri-bar-chart-horizontal-line"></i> Top 15 por capital inmovilizado <span class="pl-note" id="chart-dim-lbl"></span></h3><div id="pl-chart-top"></div></div>
-        <div class="pl-card"><h3><i class="ri-bubble-chart-line"></i> Matriz estratégica — GMROI vs cobertura <span style="font-weight:500; color:var(--nexo-gray-500); font-size:.78rem;">(burbuja = capital)</span></h3><div id="pl-chart-matrix"></div></div>
+        <div class="pl-card">
+            <h3><i class="ri-calendar-line"></i> Capital a liquidar por año <span class="pl-note" id="anio-kpi"></span></h3>
+            <div class="pl-filters" style="margin-bottom:4px;">
+                <span style="font-weight:700; color:var(--nexo-gray-700); font-size:.8rem;">Medir en:</span>
+                <button class="pl-fbtn active" data-metric="valor" onclick="setAnioMetric('valor')">Dinero</button>
+                <button class="pl-fbtn" data-metric="pares" onclick="setAnioMetric('pares')">Pares</button>
+            </div>
+            <div id="pl-chart-anio"><div class="pl-note" style="padding:20px;">Calculando antigüedad…</div></div>
+            <div class="pl-note" style="margin-top:6px;">Año de ingreso del stock más antiguo en mano. <span style="color:#00A88A;">■</span> reciente · <span style="color:#FFB020;">■</span> 1 año · <span style="color:#f06548;">■</span> 2+ años (liquidar).</div>
+        </div>
+        <div class="pl-card">
+            <h3><i class="ri-price-tag-3-line"></i> Top marcas — capital por antigüedad</h3>
+            <div id="pl-chart-marca"><div class="pl-note" style="padding:20px;">Calculando…</div></div>
+            <div class="pl-note" style="margin-top:6px;">Cada barra = capital de la marca dividido por antigüedad. Priorizá las de más <span style="color:#f06548;">rojo</span> (2+ años).</div>
+        </div>
     </div>
 
     <div class="pl-tablewrap">
@@ -292,7 +308,7 @@ function renderPlan(d) {
     </div>`;
     document.getElementById('pl-results').innerHTML = html;
     renderTable();
-    drawCharts();
+    if (PL_ANIO_RES) { drawChartAnio(); drawChartMarca(); }  // re-render si ya había datos
 }
 
 function filasDim() {
@@ -310,7 +326,6 @@ function setDim(d) {
         ? 'Vista de atribución multi-etiqueta: un producto suma en cada especialidad — el total puede exceder el 100%.'
         : (d === 'sucursales' ? 'Tiendas primero; bodegas/CD al final con acción Traspasar.' : '');
     renderTable();
-    drawCharts();
 }
 
 function gmClass(g) { return g == null ? '' : (g >= 3 ? 'gm-good' : (g >= 1 ? 'gm-ok' : 'gm-bad')); }
@@ -362,51 +377,82 @@ function sortBy(key) {
     renderTable();
 }
 
-function drawCharts() {
-    plCharts.forEach(c => { try { c.destroy(); } catch (e) {} });
-    plCharts = [];
-    const rows = filasDim();
-    const lbl = document.getElementById('chart-dim-lbl');
-    if (lbl) lbl.textContent = '· por ' + DIMS[plDim].label.toLowerCase();
-    const elTop = document.querySelector('#pl-chart-top');
-    if (!elTop) return;
-    const top = rows.slice().sort((a, b) => (b.dead_costo || 0) - (a.dead_costo || 0)).slice(0, 15);
-    let c1 = new ApexCharts(elTop, {
-        chart: { type: 'bar', height: 380, toolbar: { show: false }, fontFamily: 'inherit' },
-        series: [{ name: 'Capital inmovilizado', data: top.map(x => x.dead_costo) }],
-        colors: ['#f06548'], plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '70%' } },
-        dataLabels: { enabled: true, formatter: v => moneyM(v), style: { fontSize: '10px', colors: ['#fff'] } },
-        xaxis: { categories: top.map(x => x._label), labels: { formatter: v => moneyM(v) } },
-        yaxis: { labels: { style: { fontSize: '11px' } } }, grid: { borderColor: '#eef0f5' },
-        tooltip: { y: { formatter: v => money(v) } },
-    });
-    c1.render(); plCharts.push(c1);
+// Colores de urgencia por antigüedad (teal→ámbar→rojo; legibles y CVD-ok).
+const URG = { reciente: '#00A88A', un_anio: '#FFB020', dos_mas: '#f06548' };
 
-    const cap = (v, m) => v == null ? null : Math.min(v, m);
-    const grupos = { Liquidar: '#f06548', Depurar: '#FFB020', Reponer: '#00D4AA', Monitorear: '#8A8A9A' };
-    const series = Object.keys(grupos).map(g => ({
-        name: g,
-        data: rows.filter(r => r.accion === g && r.cobertura != null && r.gmroi != null)
-            .map(r => ({ x: cap(r.cobertura, 36), y: cap(r.gmroi, 6), z: Math.max(4, r.dead_costo / 3e6), marca: r._label })),
-    }));
-    let c2 = new ApexCharts(document.querySelector('#pl-chart-matrix'), {
-        chart: { type: 'bubble', height: 380, toolbar: { show: false }, fontFamily: 'inherit' },
-        series: series, colors: Object.values(grupos),
-        dataLabels: { enabled: false }, fill: { opacity: 0.7 },
-        xaxis: { title: { text: 'Cobertura (meses) →' }, tickAmount: 6, min: 0, max: 36 },
-        yaxis: { title: { text: 'GMROI →' }, min: 0, max: 6 },
-        grid: { borderColor: '#eef0f5' }, legend: { position: 'top' },
-        annotations: {
-            yaxis: [{ y: 1, borderColor: '#f06548', strokeDashArray: 4, label: { text: 'GMROI 1', style: { background: '#f06548', color: '#fff' } } },
-                    { y: 3, borderColor: '#00D4AA', strokeDashArray: 4, label: { text: 'GMROI 3', style: { background: '#00D4AA', color: '#fff' } } }],
-            xaxis: [{ x: 12, borderColor: '#FFB020', strokeDashArray: 4, label: { text: '12 m', style: { background: '#FFB020', color: '#fff' } } }],
-        },
-        tooltip: { custom: ({ seriesIndex, dataPointIndex, w }) => {
-            const p = w.config.series[seriesIndex].data[dataPointIndex];
-            return `<div style="padding:8px;"><b>${esc(p.marca)}</b><br>GMROI: ${p.y} · Cobertura: ${p.x}m<br>Capital: ${moneyM(p.z * 3e6)}</div>`;
+function anioColor(a) {
+    const ed = (a.antiguedad_anios == null) ? 0 : a.antiguedad_anios;
+    return ed >= 2 ? URG.dos_mas : (ed >= 1 ? URG.un_anio : URG.reciente);
+}
+
+function drawChartAnio() {
+    if (chartAnio) { try { chartAnio.destroy(); } catch (e) {} chartAnio = null; }
+    const cont = document.getElementById('pl-chart-anio');
+    if (!cont || !PL_ANIO_RES) return;
+    const anios = (PL_ANIO_RES.anios || []).filter(a => a.anio);
+    const t = PL_ANIO_RES.totales || {};
+    const kpi = document.getElementById('anio-kpi');
+    if (kpi) kpi.textContent = `· ${moneyM(t.valor_liquidar)} a liquidar (≥1 año) de ${moneyM(t.valor)}`;
+    if (!anios.length) { cont.innerHTML = '<div class="pl-note" style="padding:20px;">Sin datos de antigüedad.</div>'; return; }
+    cont.innerHTML = '';
+    const esDinero = anioMetric === 'valor';
+    const val = a => esDinero ? a.valor : a.pares;
+    const fmtV = v => esDinero ? moneyM(v) : fmt(v);
+    chartAnio = new ApexCharts(cont, {
+        chart: { type: 'bar', height: 320, toolbar: { show: false }, fontFamily: 'inherit' },
+        series: [{ name: esDinero ? 'Capital a costo' : 'Pares',
+                   data: anios.map(a => ({ x: String(a.anio), y: val(a), fillColor: anioColor(a) })) }],
+        plotOptions: { bar: { distributed: true, borderRadius: 4, columnWidth: '58%' } },
+        colors: anios.map(anioColor), legend: { show: false },
+        states: { hover: { filter: { type: 'darken', value: 0.9 } } },
+        dataLabels: { enabled: true, formatter: (v) => fmtV(v),
+            style: { fontSize: '10px', fontWeight: 700, colors: ['#1A1A2E'] }, offsetY: -16 },
+        xaxis: { categories: anios.map(a => String(a.anio)), axisBorder: { show: false },
+            axisTicks: { show: false }, labels: { style: { fontWeight: 600 } } },
+        yaxis: { labels: { formatter: v => fmtV(v) } },
+        grid: { borderColor: '#eef0f5', strokeDashArray: 3 },
+        tooltip: { custom: ({ dataPointIndex }) => {
+            const a = anios[dataPointIndex];
+            return `<div style="padding:8px; font-size:.8rem;"><b>Año ${a.anio}</b> · ${a.antiguedad_anios} año/s<br>
+                Capital: ${money(a.valor)}<br>Pares: ${fmt(a.pares)} · Productos: ${fmt(a.productos)}<br>
+                Descuento sugerido: <b>${a.descuento_sugerido}%</b></div>`;
         } },
     });
-    c2.render(); plCharts.push(c2);
+    chartAnio.render();
+}
+
+function setAnioMetric(m) {
+    anioMetric = m;
+    document.querySelectorAll('.pl-fbtn[data-metric]').forEach(b => b.classList.toggle('active', b.dataset.metric === m));
+    drawChartAnio();
+}
+
+function drawChartMarca() {
+    if (chartMarca) { try { chartMarca.destroy(); } catch (e) {} chartMarca = null; }
+    const cont = document.getElementById('pl-chart-marca');
+    if (!cont || !PL_ANIO_RES) return;
+    const marcas = (PL_ANIO_RES.por_marca || []).slice().reverse();  // mayor arriba
+    if (!marcas.length) { cont.innerHTML = '<div class="pl-note" style="padding:20px;">Sin datos.</div>'; return; }
+    cont.innerHTML = '';
+    chartMarca = new ApexCharts(cont, {
+        chart: { type: 'bar', height: 320, stacked: true, toolbar: { show: false }, fontFamily: 'inherit' },
+        series: [
+            { name: 'Reciente', data: marcas.map(m => m.val_reciente) },
+            { name: '1 año', data: marcas.map(m => m.val_1anio) },
+            { name: '2+ años', data: marcas.map(m => m.val_2mas) },
+        ],
+        colors: [URG.reciente, URG.un_anio, URG.dos_mas],
+        plotOptions: { bar: { horizontal: true, borderRadius: 3, barHeight: '72%' } },
+        dataLabels: { enabled: false },
+        stroke: { width: 2, colors: ['#fff'] },
+        xaxis: { categories: marcas.map(m => m.marca), labels: { formatter: v => moneyM(v) },
+            axisBorder: { show: false }, axisTicks: { show: false } },
+        yaxis: { labels: { style: { fontWeight: 600, fontSize: '11px' } } },
+        legend: { position: 'top', fontSize: '12px', markers: { radius: 3 } },
+        grid: { borderColor: '#eef0f5', strokeDashArray: 3 },
+        tooltip: { y: { formatter: v => money(v) } },
+    });
+    chartMarca.render();
 }
 
 // ------------------------------------------------ drill-down por producto
@@ -417,11 +463,11 @@ function qsDetalle() {
 
 function cargarDetalle() {
     const tb = document.getElementById('det-tbody');
-    tb.innerHTML = '<tr><td colspan="14" style="text-align:center; padding:30px;"><div class="spinner-border spinner-border-sm text-primary"></div> Cargando detalle…</td></tr>';
+    tb.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:30px;"><div class="spinner-border spinner-border-sm text-primary"></div> Cargando detalle…</td></tr>';
     fetch(PL_DET_API + '?' + qsDetalle().toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(r => r.json())
         .then(res => {
-            if (!res.success) { tb.innerHTML = `<tr><td colspan="14" style="text-align:center; padding:30px;">Error: ${esc(res.error || '')}</td></tr>`; return; }
+            if (!res.success) { tb.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:30px;">Error: ${esc(res.error || '')}</td></tr>`; return; }
             detTotal = res.total;
             renderDetalle(res.filas);
             const ini = (res.page - 1) * res.page_size;
@@ -430,34 +476,47 @@ function cargarDetalle() {
             document.getElementById('det-prev').disabled = res.page <= 1;
             document.getElementById('det-next').disabled = ini + res.page_size >= res.total;
         })
-        .catch(e => { tb.innerHTML = `<tr><td colspan="14" style="text-align:center; padding:30px;">Error de red: ${esc(e)}</td></tr>`; });
+        .catch(e => { tb.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:30px;">Error de red: ${esc(e)}</td></tr>`; });
 }
 
 function renderDetalle(filas) {
-    const badgeAnt = d => {
+    const badgeAnt = (d, fecha) => {
         if (d == null) return '<span class="pl-note">s/d</span>';
-        const color = d >= 365 ? 'var(--nexo-error)' : (d >= 180 ? '#b8860b' : (d >= 90 ? 'var(--nexo-warning)' : 'var(--nexo-accent)'));
-        return `<b style="color:${color};">${fmt(d)}</b>`;
+        const color = d >= 730 ? 'var(--nexo-error)' : (d >= 365 ? '#b8860b' : (d >= 180 ? 'var(--nexo-warning)' : 'var(--nexo-accent)'));
+        const txt = d >= 365 ? (Math.floor(d / 365) + 'a ' + Math.floor((d % 365) / 30) + 'm') : (fmt(d) + 'd');
+        return `<b style="color:${color};">${txt}</b>`;
     };
     const srcTag = f => f.antiguedad_fuente && f.antiguedad_fuente !== 'lote'
-        ? `<div class="pl-src">(${f.antiguedad_fuente === 'movimientos' ? 'kardex' : 'creación'})</div>` : '';
+        ? `<span class="pl-src" title="Antigüedad estimada por ${f.antiguedad_fuente === 'movimientos' ? 'kardex' : 'fecha de creación'}">~</span>` : '';
+    const descBadge = pct => {
+        if (!pct) return '<span class="pl-note">—</span>';
+        const bg = pct >= 40 ? 'var(--nexo-error)' : (pct >= 25 ? '#b8860b' : 'var(--nexo-warning)');
+        return `<span class="pl-tag" style="background:${bg}; color:#fff;">-${pct}%</span>`;
+    };
     document.getElementById('det-tbody').innerHTML = filas.map(f => `
         <tr>
             <td><input type="checkbox" class="det-chk" value="${f.producto_id}" ${SEL.has(f.producto_id) ? 'checked' : ''} onchange="toggleSel(${f.producto_id}, this.checked)"></td>
-            <td><b>${esc(f.articulo)}</b>${f.en_campana ? '<span class="pl-badge-cd" style="background:var(--nexo-accent);">EN CAMPAÑA</span>' : ''}</td>
-            <td>${esc(f.descripcion)}</td>
-            <td>${esc(f.marca || '—')}</td>
-            <td>${esc(f.categoria)}</td>
+            <td>
+                <b>${esc(f.articulo)}</b>${f.en_campana ? '<span class="pl-badge-cd" style="background:var(--nexo-accent);">EN CAMPAÑA</span>' : ''}
+                <div class="pl-note" style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(f.marca || '—')} · ${esc(f.categoria)}</div>
+            </td>
             <td>${esc(f.sucursal)}${f.es_cd ? '<span class="pl-badge-cd">CD</span>' : ''}</td>
-            <td><b>${fmt(f.stock_u)}</b> <span class="pl-note">/ ${f.tallas} tallas</span></td>
-            <td>${money(f.valor_costo)}</td>
+            <td><b>${fmt(f.stock_u)}</b> <span class="pl-note">/${f.tallas}t</span></td>
+            <td>${f.anio || 's/d'}${srcTag(f)}</td>
+            <td>${badgeAnt(f.dias_antiguedad, f.fecha_fifo)}</td>
+            <td>${f.dias_sin_venta != null ? fmt(f.dias_sin_venta) + 'd' : (f.ultima_venta ? '—' : 'Nunca')}</td>
             <td>${money(f.precioventa)}</td>
-            <td>${f.fecha_fifo || 's/d'}${srcTag(f)}</td>
-            <td>${badgeAnt(f.dias_antiguedad)}</td>
-            <td>${f.ultima_venta || 'Nunca'}</td>
-            <td>${f.dias_sin_venta != null ? fmt(f.dias_sin_venta) : '—'}</td>
+            <td style="text-align:center;">${descBadge(f.descuento_sugerido)}</td>
+            <td style="font-weight:800; color:${f.descuento_sugerido ? '#08917a' : 'var(--nexo-gray-500)'};">${money(f.precio_liquidacion)}</td>
+            <td style="font-weight:700;">${money(f.valor_costo)}</td>
             <td>${fmt(f.u365)}</td>
         </tr>`).join('');
+    // Indicador de orden en el encabezado activo.
+    const key = DET.orden.replace('-', ''); const desc = DET.orden.startsWith('-');
+    document.querySelectorAll('#det-table th[data-k]').forEach(th => {
+        th.style.color = th.dataset.k === key ? '#fff' : '';
+        th.innerHTML = th.innerHTML.replace(/ ?[▼▲]$/, '') + (th.dataset.k === key ? (desc ? ' ▼' : ' ▲') : '');
+    });
     const chks = filas.map(f => f.producto_id);
     const selAll = document.getElementById('det-selall');
     if (selAll) selAll.checked = chks.length > 0 && chks.every(id => SEL.has(id));
@@ -490,6 +549,26 @@ function cambiarPageSize() {
 function exportarExcel() {
     const p = qsFiltros({ antiguedad: DET.antiguedad, q: DET.q });
     window.location = PL_XLS_API + '?' + p.toString();
+}
+
+// ------------------------------------------------ análisis por año / marca
+function cargarPorAnio() {
+    ['pl-chart-anio', 'pl-chart-marca'].forEach(id => {
+        const c = document.getElementById(id);
+        if (c) c.innerHTML = '<div class="pl-note" style="padding:20px;"><span class="spinner-border spinner-border-sm text-primary"></span> Calculando antigüedad…</div>';
+    });
+    fetch(PL_ANIO_API + '?' + qsFiltros({}).toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.json())
+        .then(res => {
+            if (!res.success) {
+                document.getElementById('pl-chart-anio').innerHTML = '<div class="pl-note" style="padding:20px;">Error: ' + esc(res.error || '') + '</div>';
+                return;
+            }
+            PL_ANIO_RES = res;
+            drawChartAnio();
+            drawChartMarca();
+        })
+        .catch(e => { document.getElementById('pl-chart-anio').innerHTML = '<div class="pl-note" style="padding:20px;">Error de red: ' + esc(e) + '</div>'; });
 }
 
 // ------------------------------------------------ selección + campañas
