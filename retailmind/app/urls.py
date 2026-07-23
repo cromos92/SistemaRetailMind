@@ -318,6 +318,7 @@ from .views_modulo_giftcards import (
     modulo_giftcards,
     emitir_giftcard_vista,
     detalle_giftcard_vista,
+    trazabilidad_giftcards_vista,
     # APIs
     api_emitir_giftcard,
     api_listar_giftcards,
@@ -327,6 +328,12 @@ from .views_modulo_giftcards import (
     api_recargar_giftcard,
     api_anular_giftcard,
     api_reporte_giftcards,
+    api_bloquear_giftcard,
+    api_desbloquear_giftcard,
+    api_editar_giftcard,
+    api_trazabilidad_giftcards,
+    api_exportar_giftcards,
+    api_exportar_trazabilidad,
 )
 from .views_modulo_devolucion_garantia import (
     # Vistas HTML
@@ -1255,6 +1262,7 @@ urlpatterns = [
     path('api/campanas-liquidacion/<int:campana_id>/activar/', views_modulo_campanas_liquidacion.activar_campana_liquidacion, name='activar_campana_liquidacion'),
     path('api/campanas-liquidacion/<int:campana_id>/cerrar/', views_modulo_campanas_liquidacion.cerrar_campana_liquidacion, name='cerrar_campana_liquidacion'),
     path('api/promos-activas/', views_modulo_campanas_liquidacion.obtener_promos_activas, name='obtener_promos_activas'),
+    path('api/ofertas-activas/', views_modulo_campanas_liquidacion.obtener_ofertas_activas, name='obtener_ofertas_activas'),
 
     # Reporte de existencias por marca
     path('reportes/existencias-marca/', views_modulo_reportes.ver_reporte_existencias_marca, name='ver_reporte_existencias_marca'),
@@ -1316,16 +1324,23 @@ urlpatterns = [
     # Vistas HTML
     path('giftcards/', modulo_giftcards, name='modulo_giftcards'),
     path('giftcards/emitir/', emitir_giftcard_vista, name='emitir_giftcard_vista'),
+    path('giftcards/trazabilidad/', trazabilidad_giftcards_vista, name='trazabilidad_giftcards'),
     path('giftcards/<int:giftcard_id>/', detalle_giftcard_vista, name='detalle_giftcard_vista'),
     # APIs
     path('api/giftcards/emitir/', api_emitir_giftcard, name='api_emitir_giftcard'),
     path('api/giftcards/listar/', api_listar_giftcards, name='api_listar_giftcards'),
-    path('api/giftcards/<int:giftcard_id>/', api_detalle_giftcard, name='api_detalle_giftcard'),
     path('api/giftcards/consultar/', api_consultar_saldo_giftcard, name='api_consultar_saldo_giftcard'),
     path('api/giftcards/validar/', api_validar_giftcard, name='api_validar_giftcard'),
     path('api/giftcards/recargar/', api_recargar_giftcard, name='api_recargar_giftcard'),
     path('api/giftcards/anular/', api_anular_giftcard, name='api_anular_giftcard'),
+    path('api/giftcards/bloquear/', api_bloquear_giftcard, name='api_bloquear_giftcard'),
+    path('api/giftcards/desbloquear/', api_desbloquear_giftcard, name='api_desbloquear_giftcard'),
+    path('api/giftcards/editar/', api_editar_giftcard, name='api_editar_giftcard'),
     path('api/giftcards/reporte/', api_reporte_giftcards, name='api_reporte_giftcards'),
+    path('api/giftcards/trazabilidad/', api_trazabilidad_giftcards, name='api_trazabilidad_giftcards'),
+    path('api/giftcards/trazabilidad/exportar/', api_exportar_trazabilidad, name='api_exportar_trazabilidad'),
+    path('api/giftcards/exportar/', api_exportar_giftcards, name='api_exportar_giftcards'),
+    path('api/giftcards/<int:giftcard_id>/', api_detalle_giftcard, name='api_detalle_giftcard'),
 
     # ========== MÓDULO DEVOLUCIÓN DE DINERO POR GARANTÍA ==========
     # Vistas HTML

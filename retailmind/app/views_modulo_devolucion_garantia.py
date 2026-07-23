@@ -199,6 +199,11 @@ def api_generar_devolucion_garantia(request):
             usuario=request.user,
             detalles=productos,
             requerimiento=requerimiento,
+            metodo_solicitado=body.get('metodo_solicitado', ''),
+            banco=body.get('banco', ''),
+            tipo_cuenta=body.get('tipo_cuenta', ''),
+            numero_cuenta=body.get('numero_cuenta', ''),
+            cuenta_titular_rut=body.get('cuenta_titular_rut', ''),
         )
     except service.DevolucionGarantiaError as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
@@ -357,6 +362,14 @@ def api_detalle_solicitud_devolucion_garantia(request, devolucion_id):
             'monto_total': float(devolucion.monto_total),
             'solicitado_por': devolucion.solicitado_por.username if devolucion.solicitado_por else '',
             'fecha_solicitud': devolucion.created_at.strftime('%d/%m/%Y %H:%M'),
+            'metodo_solicitado': devolucion.metodo_solicitado,
+            'metodo_solicitado_display': devolucion.get_metodo_solicitado_display() if devolucion.metodo_solicitado else '',
+            'transferencia': {
+                'banco': devolucion.banco,
+                'tipo_cuenta': devolucion.get_tipo_cuenta_display() if devolucion.tipo_cuenta else '',
+                'numero_cuenta': devolucion.numero_cuenta,
+                'titular_rut': devolucion.cuenta_titular_rut,
+            } if devolucion.metodo_solicitado == 'TRANSFERENCIA_BANCARIA' else None,
             'receptor': {
                 'rut': devolucion.receptor.rut,
                 'nombre': devolucion.receptor.nombre,

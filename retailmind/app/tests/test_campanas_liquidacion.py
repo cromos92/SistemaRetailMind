@@ -11,11 +11,20 @@ from django.db import IntegrityError
 from django.test import TestCase
 from django.utils import timezone
 
+import json
+
+from django.test import RequestFactory
+
 from app.models import (
-    CampanaLiquidacion, CampanaLiquidacionProducto, HistorialCambioPrecio,
+    AtributoOpcion, CampanaLiquidacion, CampanaLiquidacionProducto,
+    HistorialCambioPrecio, Productos_Atributos,
 )
 from app.services import campanas_service
-from app.tests.factories import crear_sucursal, crear_producto_con_talla
+from app.views_modulo_campanas_liquidacion import crear_campana_liquidacion
+from app.tests.factories import (
+    crear_empresa, crear_empresa_user, crear_sucursal,
+    crear_producto_con_talla, crear_usuario,
+)
 
 
 class CampanasLiquidacionTests(TestCase):
@@ -110,6 +119,40 @@ class CampanasLiquidacionTests(TestCase):
         # que el mismo producto quede activo en dos campañas.
         with self.assertRaises(IntegrityError):
             campanas_service.aplicar_precios_campana(c2)
+
+    def test_crear_expande_articulo_a_varias_sucursales(self):
+        # Mismo artículo (marca+color) en 3 sucursales; el usuario selecciona
+        # solo la fila de una tienda pero pide alcance "todas".
+        empresa = crear_empresa(nombre='Emp Expand', rut='77.111.111-1')
+        marca_attr = Productos_Atributos.objects.create(nombre='Marca', descripcion='m')
+        color_attr = Productos_Atributos.objects.create(nombre='Color', descripcion='c')
+        nike = AtributoOpcion.objects.create(atributo=marca_attr, valor='Nike')
+        azul = AtributoOpcion.objects.create(atributo=color_attr, valor='Azul')
+        t1 = crear_sucursal(empresa=empresa, alias='T1')
+        t2 = crear_sucursal(empresa=empresa, alias='T2')
+        cd = crear_sucursal(empresa=empresa, alias='CD', es_centro_distribucion=True,
+                            tipo_sucursal='CENTRO_DISTRIBUCION')
+        p1, _ = crear_producto_con_talla(t1, articulo='AIR-1', sku=5100001,
+                                         atributo1=nike, atributo2=azul, precioventa=40000)
+        crear_producto_con_talla(t2, articulo='AIR-1', sku=5100002,
+                                 atributo1=nike, atributo2=azul, precioventa=40000)
+        crear_producto_con_talla(cd, articulo='AIR-1', sku=5100003,
+                                 atributo1=nike, atributo2=azul, precioventa=40000)
+        user = crear_usuario(username='jefe')
+        crear_empresa_user(user, empresa, t1)
+
+        req = RequestFactory().post(
+            '/x', data=json.dumps({
+                'nombre': 'Liq AIR-1', 'tipo_regla': 'PORCENTAJE',
+                'valor_porcentaje': 25, 'producto_ids': [p1.id],
+                'alcance_sucursales': 'todas', 'incluir_cd': False,
+            }), content_type='application/json')
+        req.user = user
+        res = json.loads(crear_campana_liquidacion(req).content)
+        self.assertTrue(res['success'], res.get('error'))
+        # Expandió a T1 y T2 (2 tiendas), NO al CD (incluir_cd=False).
+        self.assertEqual(res['n_items'], 2)
+        self.assertEqual(res['n_sucursales'], 2)
 
     def test_cerrar_vencidas_idempotente(self):
         c = self._campana('PORCENTAJE', valor_porcentaje=30,

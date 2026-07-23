@@ -305,6 +305,40 @@
                         <div class="text-white fw-semibold mb-2" style="font-size:0.85rem;"><i class="ri-checkbox-circle-line me-1" style="color:#00D4AA;"></i> Resumen</div>
                         <div id="dg-resumen" class="text-secondary" style="font-size:0.82rem;"></div>
                     </div>
+
+                    <!-- Método de devolución al cliente -->
+                    <div class="cliente-box mb-2">
+                        <div class="text-white fw-semibold mb-2" style="font-size:0.85rem;"><i class="ri-bank-line me-1" style="color:#0d6efd;"></i> Método de devolución al cliente</div>
+                        <div class="btn-group btn-group-sm w-100 mb-2" role="group">
+                            <input type="radio" class="btn-check" name="dg-metodo" id="dg-metodo-efectivo" value="EFECTIVO_CAJA" checked onchange="dgToggleMetodo()">
+                            <label class="btn btn-outline-light" for="dg-metodo-efectivo"><i class="ri-cash-line me-1"></i> Efectivo (caja)</label>
+                            <input type="radio" class="btn-check" name="dg-metodo" id="dg-metodo-transf" value="TRANSFERENCIA_BANCARIA" onchange="dgToggleMetodo()">
+                            <label class="btn btn-outline-light" for="dg-metodo-transf"><i class="ri-bank-card-line me-1"></i> Transferencia</label>
+                        </div>
+                        <div id="dg-transf-fields" class="row g-2 d-none">
+                            <div class="col-md-6"><input type="text" id="dg-banco" class="form-control form-control-sm" placeholder="Banco"></div>
+                            <div class="col-md-6">
+                                <select id="dg-tipo-cuenta" class="form-select form-select-sm">
+                                    <option value="">Tipo de cuenta...</option>
+                                    <option value="CORRIENTE">Cuenta Corriente</option>
+                                    <option value="VISTA">Cuenta Vista / RUT</option>
+                                    <option value="AHORRO">Cuenta de Ahorro</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6"><input type="text" id="dg-num-cuenta" class="form-control form-control-sm" placeholder="N° de cuenta"></div>
+                            <div class="col-md-6 d-flex align-items-center">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="dg-titular-mismo" checked onchange="dgToggleTitular()">
+                                    <label class="form-check-label text-white small" for="dg-titular-mismo">Titular = mismo RUT del cliente</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6 d-none" id="dg-wrap-titular">
+                                <input type="text" id="dg-titular-rut" class="form-control form-control-sm" placeholder="RUT del titular de la cuenta">
+                            </div>
+                        </div>
+                        <div id="dg-error-metodo" class="text-danger small mt-1 d-none"></div>
+                    </div>
+
                     <label class="form-label text-white fw-semibold" style="font-size:0.85rem;">
                         <i class="ri-file-text-line me-1" style="color:#0d6efd;"></i> Motivo
                     </label>
@@ -443,15 +477,43 @@
         $('#dg-folio').val('');
         $('#dg-doc-info').addClass('d-none').empty();
         $('#dg-lista-productos').empty();
-        $('#dg-error-total, #dg-error-cliente').addClass('d-none').empty();
+        $('#dg-error-total, #dg-error-cliente, #dg-error-metodo').addClass('d-none').empty();
         $('#dg-cliente-rut, #dg-cliente-nombre, #dg-cliente-email, #dg-cliente-telefono, #dg-cliente-giro, #dg-cliente-direccion, #dg-cliente-comuna, #dg-cliente-ciudad').val('');
         $('#dg-cliente-estado').addClass('d-none');
         $('#dg-alerta-generico').addClass('d-none');
         $('#dg-motivo').val('Garantía aprobada');
+        $('#dg-metodo-efectivo').prop('checked', true);
+        $('#dg-banco, #dg-num-cuenta, #dg-titular-rut').val('');
+        $('#dg-tipo-cuenta').val('');
+        $('#dg-titular-mismo').prop('checked', true);
+        dgToggleMetodo();
         window._dgClienteId = null;
         dgIrPaso(1, true);
     }
     $('#modalNuevaDevolucion').on('hidden.bs.modal', resetModalDevolucionGarantia);
+
+    // Enter: en folio busca el DTE; en RUT busca el cliente; en el resto avanza
+    // de paso (o crea la solicitud en el último). En textarea deja el salto de línea.
+    $('#modalNuevaDevolucion').on('keydown', function (e) {
+        if (e.key !== 'Enter') { return; }
+        const tag = (e.target.tagName || '').toUpperCase();
+        if (tag === 'TEXTAREA') { return; }
+        e.preventDefault();
+        if (e.target.id === 'dg-folio') { buscarDteDevolucionGarantia(); return; }
+        if (e.target.id === 'dg-cliente-rut') { buscarClienteDevolucionGarantia(); return; }
+        if (dgWizard.paso < 4) { dgIrPaso(dgWizard.paso + 1); }
+        else { confirmarDevolucionGarantia(); }
+    });
+
+    function dgToggleMetodo() {
+        const esTransf = $('#dg-metodo-transf').is(':checked');
+        $('#dg-transf-fields').toggleClass('d-none', !esTransf);
+        $('#dg-error-metodo').addClass('d-none');
+    }
+    function dgToggleTitular() {
+        const mismo = $('#dg-titular-mismo').is(':checked');
+        $('#dg-wrap-titular').toggleClass('d-none', mismo);
+    }
 
     function dgRenderPaso() {
         const p = dgWizard.paso;
@@ -510,10 +572,25 @@
             $('#dg-error-cliente').addClass('d-none');
             return true;
         }
+        if (p === 4) {
+            if ($('#dg-metodo-transf').is(':checked')) {
+                const banco = $('#dg-banco').val().trim();
+                const tipo = $('#dg-tipo-cuenta').val();
+                const num = $('#dg-num-cuenta').val().trim();
+                if (!banco || !tipo || !num) { dgMostrarErrorMetodo('Completa banco, tipo y número de cuenta.'); return false; }
+                if (!$('#dg-titular-mismo').is(':checked')) {
+                    const trut = $('#dg-titular-rut').val().trim();
+                    if (!trut || !validarRutChileno(trut)) { dgMostrarErrorMetodo('Ingresa un RUT válido del titular de la cuenta.'); return false; }
+                }
+            }
+            $('#dg-error-metodo').addClass('d-none');
+            return true;
+        }
         return true;
     }
     function dgMostrarErrorTotal(msg) { $('#dg-error-total').removeClass('d-none').text(msg); }
     function dgMostrarErrorCliente(msg) { $('#dg-error-cliente').removeClass('d-none').text(msg); }
+    function dgMostrarErrorMetodo(msg) { $('#dg-error-metodo').removeClass('d-none').text(msg); }
 
     function buscarDteDevolucionGarantia() {
         const folio = $('#dg-folio').val().trim();
@@ -699,12 +776,25 @@
 
     function confirmarDevolucionGarantia() {
         if (!dgWizard.dte) { return; }
+        if (!dgValidarPaso(4)) { return; }
         const productos = Object.values(dgWizard.seleccion).map(s => ({
             dte_producto_id: s.dte_producto_id, modo: s.modo,
             cantidad: s.modo === 'CANTIDAD' ? s.cantidad : 0,
             monto: s.modo === 'MONTO' ? s.monto : 0,
         }));
         if (!productos.length) { return; }
+
+        const esTransf = $('#dg-metodo-transf').is(':checked');
+        const titularRut = esTransf
+            ? ($('#dg-titular-mismo').is(':checked') ? $('#dg-cliente-rut').val().trim() : $('#dg-titular-rut').val().trim())
+            : '';
+        const datosTransf = {
+            metodo_solicitado: esTransf ? 'TRANSFERENCIA_BANCARIA' : 'EFECTIVO_CAJA',
+            banco: esTransf ? $('#dg-banco').val().trim() : '',
+            tipo_cuenta: esTransf ? $('#dg-tipo-cuenta').val() : '',
+            numero_cuenta: esTransf ? $('#dg-num-cuenta').val().trim() : '',
+            cuenta_titular_rut: titularRut,
+        };
 
         Swal.fire({
             title: 'Crear solicitud de devolución',
@@ -718,7 +808,7 @@
             $.ajax({
                 url: URLS_DG.generar, method: 'POST', contentType: 'application/json',
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
-                data: JSON.stringify({
+                data: JSON.stringify(Object.assign({
                     folio_dte: dgWizard.dte.folio, productos: productos,
                     cliente_id: window._dgClienteId || null,
                     rut: $('#dg-cliente-rut').val().trim(), nombre: $('#dg-cliente-nombre').val().trim(),
@@ -726,7 +816,7 @@
                     giro: $('#dg-cliente-giro').val().trim(), direccion: $('#dg-cliente-direccion').val().trim(),
                     comuna: $('#dg-cliente-comuna').val().trim(), ciudad: $('#dg-cliente-ciudad').val().trim(),
                     motivo: $('#dg-motivo').val().trim(), requerimiento_id: dgWizard.requerimientoId || null,
-                }),
+                }, datosTransf)),
                 success: function (resp) {
                     $('#dg-btn-confirmar').prop('disabled', false);
                     if (resp.success) {
@@ -835,6 +925,13 @@
                 const detalle = l.modo === 'CANTIDAD' ? `${l.cantidad} u × (${clp(l.subtotal)})` : `monto parcial ${clp(l.subtotal)}`;
                 lineas += `<div>• ${l.descripcion} — ${detalle}${l.conflicto ? ' <span class="text-danger">⚠ disponibilidad cambió</span>' : ''}</div>`;
             });
+            let metodoHtml = '';
+            if (d.metodo_solicitado_display) {
+                metodoHtml = `<div class="mt-1"><strong>Método pedido por el cliente:</strong> ${d.metodo_solicitado_display}</div>`;
+                if (d.transferencia) {
+                    metodoHtml += `<div class="small text-info">Banco ${d.transferencia.banco} · ${d.transferencia.tipo_cuenta} · N° ${d.transferencia.numero_cuenta} · Titular ${d.transferencia.titular_rut}</div>`;
+                }
+            }
             $('#apr-resumen').html(
                 `<div class="mb-1"><strong>Solicitante:</strong> ${d.solicitado_por} · ${d.fecha_solicitud}</div>` +
                 `<div class="mb-1"><strong>Documento:</strong> ${d.dte.tipo} #${d.dte.folio} (${d.dte.fecha}) — Total ${clp(d.dte.total)}</div>` +
@@ -842,8 +939,11 @@
                 `<div class="mb-1"><strong>Motivo:</strong> ${d.motivo}</div>` +
                 `<hr class="my-1" style="border-color:#2a3045;">` + lineas +
                 `<div class="mt-1"><strong>Total NC:</strong> ${clp(d.monto_total)}</div>` +
+                metodoHtml +
                 (d.hay_conflicto ? `<div class="alert alert-danger py-1 px-2 small mt-2 mb-0">Alguna línea ya no tiene disponibilidad suficiente. Si apruebas puede fallar; considera rechazar.</div>` : '')
             );
+            // Prefijar el método de caja con lo que pidió el cliente.
+            if (d.metodo_solicitado) { $('#apr-metodo').val(d.metodo_solicitado); }
             aprActualizarImpacto();
         }).fail(function (xhr) {
             $('#apr-resumen').html(`<span class="text-danger">${xhr.responseJSON?.error || 'Error al cargar'}</span>`);

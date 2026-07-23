@@ -1,0 +1,199 @@
+{% load static %}
+{% load permisos_tags %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<style>
+    .page-content { background: #ffffff !important; min-height: calc(100vh - 70px); }
+    .card.shadow { border: none; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(64,81,137,0.1); }
+    .module-header {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        color: white; padding: 16px 24px; display: flex;
+        justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+    }
+    .module-header-left { display: flex; align-items: center; gap: 14px; }
+    .module-header-icon {
+        width: 48px; height: 48px; background: rgba(255,255,255,0.2);
+        border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;
+    }
+    .module-header-info h5 { margin: 0; font-size: 18px; font-weight: 600; color: white; }
+    .module-header-actions .btn { border-radius:10px; font-weight:500; padding:8px 14px; font-size:13px; border:none; }
+    .pagination-controls {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid rgba(64,81,137,.1);
+    }
+    .gc-codigo { font-family: monospace; font-weight: 700; letter-spacing: 1px; }
+    .badge-mov { font-size: 11px; padding: 4px 10px; border-radius: 12px; font-weight:600; }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+        <div class="card shadow">
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon"><i class="ri-route-line"></i></div>
+                    <div class="module-header-info">
+                        <h5>Trazabilidad de Gift Cards</h5>
+                        <small style="opacity:.9;">Uso de todas las tarjetas (emisiones, consumos, recargas, ajustes)</small>
+                    </div>
+                </div>
+                <div class="module-header-actions">
+                    <a class="btn btn-light" href="{% url 'modulo_giftcards' %}">
+                        <i class="ri-arrow-left-line"></i> Volver
+                    </a>
+                    <button class="btn btn-light" onclick="exportarTrazabilidad()">
+                        <i class="ri-file-excel-2-line"></i> Exportar
+                    </button>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <!-- Filtros -->
+                <div class="pagination-controls">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-3">
+                            <input type="text" id="tz-busqueda" class="form-control" placeholder="Código, cliente o RUT...">
+                        </div>
+                        <div class="col-md-2">
+                            <select id="tz-tipo" class="form-select">
+                                <option value="">Todos los tipos</option>
+                                {% for val, label in tipo_mov_choices %}
+                                <option value="{{ val }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select id="tz-sucursal" class="form-select">
+                                <option value="">Todas las sucursales</option>
+                                {% for s in sucursales %}
+                                <option value="{{ s.id }}">{{ s.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <input type="text" id="tz-usuario" class="form-control" placeholder="Usuario...">
+                        </div>
+                        <div class="col-md-3">
+                            <div class="input-group">
+                                <input type="date" id="tz-desde" class="form-control" title="Desde">
+                                <input type="date" id="tz-hasta" class="form-control" title="Hasta">
+                            </div>
+                        </div>
+                        <div class="col-md-12 mt-2 text-end">
+                            <button class="btn btn-primary" onclick="cargarTrazabilidad(1)">
+                                <i class="ri-filter-line"></i> Filtrar
+                            </button>
+                            <button class="btn btn-light" onclick="limpiarFiltrosTz()">
+                                <i class="ri-refresh-line"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabla -->
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Código</th>
+                                <th>Cliente</th>
+                                <th>Tipo</th>
+                                <th class="text-end">Monto</th>
+                                <th class="text-end">Saldo</th>
+                                <th>Ticket</th>
+                                <th>Usuario</th>
+                                <th>Sucursal</th>
+                                <th>Observaciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tz-tbody">
+                            <tr><td colspan="10" class="text-center text-muted py-4">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                    <span class="text-muted small" id="tz-info"></span>
+                    <div class="btn-group" id="tz-paginacion"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const URLS_TZ = {
+    listar: "{% url 'api_trazabilidad_giftcards' %}",
+    exportar: "{% url 'api_exportar_trazabilidad' %}",
+};
+const MOV_COLORES = {EMISION:'primary', CARGA:'success', CONSUMO:'danger', ANULACION:'dark',
+    AJUSTE:'secondary', REVERSA:'info', BLOQUEO:'warning', DESBLOQUEO:'secondary'};
+function fmt(n) { return '$' + (n||0).toLocaleString('es-CL'); }
+
+function filtrosTzQuery() {
+    const p = new URLSearchParams();
+    const map = {q:'tz-busqueda', tipo:'tz-tipo', sucursal_id:'tz-sucursal', usuario:'tz-usuario', desde:'tz-desde', hasta:'tz-hasta'};
+    for (const [key, id] of Object.entries(map)) {
+        const v = document.getElementById(id).value;
+        if (v) p.set(key, v);
+    }
+    return p;
+}
+
+function limpiarFiltrosTz() {
+    ['tz-busqueda','tz-tipo','tz-sucursal','tz-usuario','tz-desde','tz-hasta']
+        .forEach(id => document.getElementById(id).value = '');
+    cargarTrazabilidad(1);
+}
+
+function exportarTrazabilidad() {
+    window.location.href = `${URLS_TZ.exportar}?${filtrosTzQuery().toString()}`;
+}
+
+function cargarTrazabilidad(page) {
+    const p = filtrosTzQuery();
+    p.set('page', page || 1);
+    fetch(`${URLS_TZ.listar}?${p.toString()}`).then(r=>r.json()).then(d=>{
+        const tbody = document.getElementById('tz-tbody');
+        if (!d.success || !d.items.length) {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">Sin movimientos</td></tr>';
+            document.getElementById('tz-info').textContent = '';
+            document.getElementById('tz-paginacion').innerHTML = '';
+            return;
+        }
+        tbody.innerHTML = d.items.map(m => `
+            <tr>
+                <td class="small text-nowrap">${m.fecha}</td>
+                <td><a class="gc-codigo" href="/app/giftcards/${m.giftcard_id}/">${m.codigo}</a></td>
+                <td class="small">${m.cliente || '<span class="text-muted">—</span>'}</td>
+                <td><span class="badge bg-${MOV_COLORES[m.tipo]||'secondary'} badge-mov">${m.tipo_display}</span></td>
+                <td class="text-end fw-bold ${m.monto < 0 ? 'text-danger' : 'text-success'}">${fmt(m.monto)}</td>
+                <td class="text-end">${fmt(m.saldo_resultante)}</td>
+                <td class="small">${m.ticket ? '#'+m.ticket : '—'}</td>
+                <td class="small">${m.usuario || '—'}</td>
+                <td class="small">${m.sucursal || '—'}</td>
+                <td class="small text-muted">${m.observaciones || ''}</td>
+            </tr>`).join('');
+        document.getElementById('tz-info').textContent = `${d.total} movimientos · página ${d.page}/${d.num_pages}`;
+        renderPaginacionTz(d.page, d.num_pages);
+    });
+}
+
+function renderPaginacionTz(page, total) {
+    const cont = document.getElementById('tz-paginacion');
+    let html = '';
+    if (page > 1) html += `<button class="btn btn-sm btn-outline-secondary" onclick="cargarTrazabilidad(${page-1})">«</button>`;
+    if (page < total) html += `<button class="btn btn-sm btn-outline-secondary" onclick="cargarTrazabilidad(${page+1})">»</button>`;
+    cont.innerHTML = html;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    cargarTrazabilidad(1);
+    document.getElementById('tz-busqueda').addEventListener('keyup', e => { if (e.key==='Enter') cargarTrazabilidad(1); });
+});
+</script>
+
+{% include '../../layout/footer.html' %}

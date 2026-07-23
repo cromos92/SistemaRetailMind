@@ -124,10 +124,46 @@ def _validar_regla(tipo, data):
     return True, None, kwargs
 
 
+def _expandir_por_articulo(base_ids, sucursal_ids):
+    """Expande los productos seleccionados a todas las filas de Producto del
+    MISMO artículo (identidad artículo+marca+color, igual que la
+    sincronización de precios de actualizar_precio) en las sucursales
+    objetivo. Así una campaña "por artículo" cubre varias tiendas aunque el
+    drill-down solo muestre una fila por sucursal.
+    """
+    ident = (Producto.objects.filter(id__in=base_ids)
+             .values('articulo', 'atributo1_id', 'atributo2_id').distinct())
+    cond = Q()
+    for i in ident:
+        cond |= Q(articulo=i['articulo'], atributo1_id=i['atributo1_id'],
+                  atributo2_id=i['atributo2_id'])
+    if not cond:
+        return []
+    return list(Producto.objects.filter(cond, sucursal_id__in=sucursal_ids)
+                .values_list('id', flat=True))
+
+
+def _sucursales_objetivo(request, alcance, sucursal_ids_in, incluir_cd):
+    """Sucursales donde aplicará la campaña, según el alcance elegido en el
+    modal ('todas' | 'algunas'), acotado a las sucursales del usuario y al
+    toggle de bodegas/CD."""
+    suc_user = set(_sucursales_usuario_ids(request))
+    cd_ids = set(Sucursal.objects.filter(
+        id__in=suc_user, es_centro_distribucion=True).values_list('id', flat=True))
+    if alcance == 'algunas':
+        target = {int(s) for s in sucursal_ids_in if int(s) in suc_user}
+    else:  # 'todas'
+        target = set(suc_user)
+    if not incluir_cd:
+        target -= cd_ids
+    return target
+
+
 @require_POST
 @login_required
 def crear_campana_liquidacion(request):
-    """Crea una campaña en BORRADOR con sus items (producto_ids del drill-down)."""
+    """Crea una campaña en BORRADOR expandiendo los artículos seleccionados a
+    las sucursales elegidas en el modal (todas / algunas, con o sin CD)."""
     try:
         data = json.loads(request.body or '{}')
         nombre = (data.get('nombre') or '').strip()
@@ -148,14 +184,22 @@ def crear_campana_liquidacion(request):
             return JsonResponse({'success': False, 'error': 'Selecciona al menos un producto.'}, status=400)
 
         suc_permitidas = set(_sucursales_usuario_ids(request))
-        productos = list(Producto.objects.filter(
+        base_ids = list(Producto.objects.filter(
             id__in=producto_ids, sucursal_id__in=suc_permitidas
         ).values_list('id', flat=True))
-        if not productos:
+        if not base_ids:
             return JsonResponse({'success': False, 'error': 'Ningún producto válido en tus sucursales.'}, status=400)
 
-        sucursal_ids = data.get('sucursal_ids') or []
-        sucursal_ids = [s for s in sucursal_ids if s in suc_permitidas]
+        alcance = data.get('alcance_sucursales') or 'todas'
+        incluir_cd = bool(data.get('incluir_cd'))
+        target = _sucursales_objetivo(request, alcance, data.get('sucursal_ids') or [], incluir_cd)
+        if not target:
+            return JsonResponse({'success': False, 'error': 'Selecciona al menos una sucursal de destino.'}, status=400)
+
+        # Expandir por identidad de artículo a las sucursales objetivo.
+        productos = _expandir_por_articulo(base_ids, target)
+        if not productos:
+            return JsonResponse({'success': False, 'error': 'Los artículos elegidos no existen en las sucursales seleccionadas.'}, status=400)
 
         with transaction.atomic():
             campana = CampanaLiquidacion.objects.create(
@@ -164,21 +208,16 @@ def crear_campana_liquidacion(request):
                 respetar_piso_costo=bool(data.get('respetar_piso_costo', True)),
                 creado_por=request.user, **regla_kwargs,
             )
-            if sucursal_ids:
-                campana.sucursales.set(sucursal_ids)
-            else:
-                # Por defecto, las sucursales de los productos elegidos.
-                suc_de_productos = Producto.objects.filter(
-                    id__in=productos).values_list('sucursal_id', flat=True).distinct()
-                campana.sucursales.set(list(suc_de_productos))
+            campana.sucursales.set(list(target))
             CampanaLiquidacionProducto.objects.bulk_create([
                 CampanaLiquidacionProducto(campana=campana, producto_id=pid)
                 for pid in productos
             ])
-        logger.info('Campaña #%s creada por %s con %s productos',
-                    campana.pk, request.user, len(productos))
+        logger.info('Campaña #%s creada por %s: %s artículos base -> %s productos en %s sucursales',
+                    campana.pk, request.user, len(base_ids), len(productos), len(target))
         return JsonResponse({'success': True, 'campana_id': campana.pk,
-                             'n_items': len(productos)})
+                             'n_items': len(productos),
+                             'n_sucursales': len(target)})
     except Exception as e:
         logger.exception('Error creando campaña de liquidación')
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
@@ -287,46 +326,91 @@ def cerrar_campana_liquidacion(request, campana_id):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
+def _skus_por_producto(prod_ids):
+    """{producto_id: [sku, ...]} para un conjunto de productos."""
+    skus = {}
+    for pt in Producto_Talla.objects.filter(
+            producto_id__in=prod_ids).values('producto_id', 'sku'):
+        skus.setdefault(pt['producto_id'], []).append(pt['sku'])
+    return skus
+
+
+def _ofertas_activas_sucursal(sucursal_id, ahora):
+    """Ofertas vigentes de una sucursal. Devuelve (promos_nxm, ofertas_por_sku):
+
+    - promos_nxm: [{campana_id, nombre, n, m, productos:[{producto_id, skus}]}].
+    - ofertas_por_sku: {sku: {producto_id, campana_id, campana_nombre, tipo,
+      precio_original, precio_liquidacion}} para campañas %/PRECIO_FIJO.
+
+    La vigencia se evalúa aquí (fecha_inicio<=ahora<=fecha_fin|null): una
+    campaña vencida que el scheduler aún no cerró NO figura como oferta.
+    """
+    vigente = (Q(activo=True, campana__estado='ACTIVA',
+                 campana__fecha_inicio__lte=ahora, campana__sucursales__id=sucursal_id)
+               & (Q(campana__fecha_fin__isnull=True) | Q(campana__fecha_fin__gte=ahora)))
+
+    # --- NxM ---
+    items_nxm = (CampanaLiquidacionProducto.objects
+                 .filter(vigente, campana__tipo_regla='NXM')
+                 .values('campana_id', 'campana__nombre', 'campana__nxm_n',
+                         'campana__nxm_m', 'producto_id'))
+    skus_nxm = _skus_por_producto({it['producto_id'] for it in items_nxm})
+    promos_map = {}
+    for it in items_nxm:
+        cid = it['campana_id']
+        p = promos_map.setdefault(cid, {
+            'campana_id': cid, 'nombre': it['campana__nombre'],
+            'n': it['campana__nxm_n'], 'm': it['campana__nxm_m'], 'productos': [],
+        })
+        p['productos'].append({'producto_id': it['producto_id'],
+                               'skus': skus_nxm.get(it['producto_id'], [])})
+
+    # --- %/PRECIO_FIJO ---
+    items_precio = (CampanaLiquidacionProducto.objects
+                    .filter(vigente, campana__tipo_regla__in=['PORCENTAJE', 'PRECIO_FIJO'])
+                    .values('campana_id', 'campana__nombre', 'campana__tipo_regla',
+                            'producto_id', 'precio_original', 'precio_liquidacion'))
+    skus_precio = _skus_por_producto({it['producto_id'] for it in items_precio})
+    ofertas_por_sku = {}
+    for it in items_precio:
+        for sku in skus_precio.get(it['producto_id'], []):
+            ofertas_por_sku[sku] = {
+                'producto_id': it['producto_id'], 'campana_id': it['campana_id'],
+                'campana_nombre': it['campana__nombre'],
+                'tipo': it['campana__tipo_regla'],
+                'precio_original': it['precio_original'],
+                'precio_liquidacion': it['precio_liquidacion'],
+            }
+    return list(promos_map.values()), ofertas_por_sku
+
+
 @require_GET
 @login_required
 def obtener_promos_activas(request):
-    """Promos NxM vigentes de una sucursal, con sus SKUs. Consumido por el POS.
-
-    La vigencia se evalúa aquí (fecha_inicio<=now<=fecha_fin|null): una
-    campaña vencida que el scheduler aún no cerró NO devuelve promos.
-    """
+    """Promos NxM vigentes de una sucursal, con sus SKUs. Consumido por la caja."""
     try:
         sucursal_id = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
         if not sucursal_id:
             return JsonResponse({'success': True, 'promos': []})
-        ahora = timezone.now()
-        items = (CampanaLiquidacionProducto.objects.filter(
-            activo=True, campana__estado='ACTIVA', campana__tipo_regla='NXM',
-            campana__fecha_inicio__lte=ahora, campana__sucursales__id=sucursal_id,
-        ).filter(Q(campana__fecha_fin__isnull=True) | Q(campana__fecha_fin__gte=ahora))
-            .select_related('campana')
-            .values('campana_id', 'campana__nombre', 'campana__nxm_n',
-                    'campana__nxm_m', 'producto_id'))
-
-        prod_ids = {it['producto_id'] for it in items}
-        skus_por_prod = {}
-        for pt in Producto_Talla.objects.filter(
-                producto_id__in=prod_ids).values('producto_id', 'sku'):
-            skus_por_prod.setdefault(pt['producto_id'], []).append(pt['sku'])
-
-        promos_map = {}
-        for it in items:
-            cid = it['campana_id']
-            p = promos_map.setdefault(cid, {
-                'campana_id': cid, 'nombre': it['campana__nombre'],
-                'n': it['campana__nxm_n'], 'm': it['campana__nxm_m'],
-                'productos': [],
-            })
-            p['productos'].append({
-                'producto_id': it['producto_id'],
-                'skus': skus_por_prod.get(it['producto_id'], []),
-            })
-        return JsonResponse({'success': True, 'promos': list(promos_map.values())})
+        promos, _ = _ofertas_activas_sucursal(sucursal_id, timezone.now())
+        return JsonResponse({'success': True, 'promos': promos})
     except Exception as e:
         logger.exception('Error obteniendo promos activas')
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@require_GET
+@login_required
+def obtener_ofertas_activas(request):
+    """Ofertas vigentes de la sucursal de sesión: promos NxM + descuentos
+    %/precio-fijo por SKU. Consumido por el ticket vendedor para badgear la
+    liquidación (precio de lista tachado) y aplicar el 2x1."""
+    try:
+        sucursal_id = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
+        if not sucursal_id:
+            return JsonResponse({'success': True, 'promos': [], 'ofertas': {}})
+        promos, ofertas = _ofertas_activas_sucursal(sucursal_id, timezone.now())
+        return JsonResponse({'success': True, 'promos': promos, 'ofertas': ofertas})
+    except Exception as e:
+        logger.exception('Error obteniendo ofertas activas')
         return JsonResponse({'success': False, 'error': str(e)}, status=500)

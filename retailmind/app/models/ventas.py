@@ -1203,6 +1203,13 @@ MODO_DETALLE_DG_CHOICES = [
     ('MONTO', 'Por monto parcial'),
 ]
 
+# Tipo de cuenta bancaria para devoluciones por transferencia.
+TIPO_CUENTA_DG_CHOICES = [
+    ('CORRIENTE', 'Cuenta Corriente'),
+    ('VISTA', 'Cuenta Vista / RUT'),
+    ('AHORRO', 'Cuenta de Ahorro'),
+]
+
 
 class DevolucionGarantia(models.Model):
     """
@@ -1265,6 +1272,24 @@ class DevolucionGarantia(models.Model):
     motivo_rechazo = models.TextField(
         blank=True, default='',
         help_text="Motivo obligatorio al rechazar",
+    )
+
+    # === MÉTODO PEDIDO POR EL CLIENTE (capturado al crear la solicitud) ===
+    # Cómo quiere el cliente recibir la devolución. Si es transferencia, se
+    # guardan sus datos bancarios para que quien ejecute el pago los tenga.
+    metodo_solicitado = models.CharField(
+        max_length=30, choices=METODO_DEVOLUCION_DG_CHOICES,
+        blank=True, default='',
+        help_text="Método de devolución pedido por el cliente (efectivo/transferencia)",
+    )
+    banco = models.CharField(max_length=60, blank=True, default='')
+    tipo_cuenta = models.CharField(
+        max_length=20, choices=TIPO_CUENTA_DG_CHOICES, blank=True, default='',
+    )
+    numero_cuenta = models.CharField(max_length=40, blank=True, default='')
+    cuenta_titular_rut = models.CharField(
+        max_length=20, blank=True, default='',
+        help_text="RUT del titular de la cuenta (igual o distinto al del cliente)",
     )
 
     # === IMPACTO EN CAJA (decidido por el aprobador) ===

@@ -68,6 +68,7 @@ from .ventas import (  # noqa: F401
     ESTADO_DEVOLUCION_GARANTIA_CHOICES,
     METODO_DEVOLUCION_DG_CHOICES,
     MODO_DETALLE_DG_CHOICES,
+    TIPO_CUENTA_DG_CHOICES,
     DevolucionGarantia,
     DevolucionGarantiaDetalle,
 )
@@ -219,6 +220,7 @@ from .configuracion import (  # noqa: F401
 
 from .giftcards import (  # noqa: F401
     ESTADO_GIFTCARD_CHOICES,
+    MOTIVO_GIFTCARD_CHOICES,
     TIPO_MOV_GIFTCARD_CHOICES,
     TIPO_TARJETA_GIFTCARD_CHOICES,
     GIFTCARD_VIGENCIA_MESES_DEFAULT,

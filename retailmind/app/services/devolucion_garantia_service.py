@@ -29,7 +29,7 @@ from django.utils import timezone
 from app.models import (
     Dte, Dte_Productos, Dte_Detalle_Pago, Empresa,
     DevolucionGarantia, DevolucionGarantiaDetalle,
-    METODO_DEVOLUCION_DG_CHOICES,
+    METODO_DEVOLUCION_DG_CHOICES, TIPO_CUENTA_DG_CHOICES,
 )
 
 logger = logging.getLogger('app')
@@ -405,18 +405,68 @@ def _registrar_historial_requerimiento(devolucion, accion, comentario, usuario, 
         req.save(update_fields=['devolucion_garantia'])
 
 
+def _validar_datos_transferencia(metodo_solicitado, banco, tipo_cuenta,
+                                 numero_cuenta, cuenta_titular_rut):
+    """Normaliza y valida el método pedido por el cliente. Para transferencia
+    exige banco/tipo/número/titular; devuelve la tupla normalizada."""
+    metodo = (metodo_solicitado or '').strip().upper()
+    if metodo and metodo not in dict(METODO_DEVOLUCION_DG_CHOICES):
+        raise DevolucionGarantiaError('Método de devolución inválido.')
+
+    banco = (banco or '').strip()
+    tipo_cuenta = (tipo_cuenta or '').strip().upper()
+    numero_cuenta = (numero_cuenta or '').strip()
+    cuenta_titular_rut = (cuenta_titular_rut or '').strip()
+
+    if metodo == 'TRANSFERENCIA_BANCARIA':
+        faltan = []
+        if not banco:
+            faltan.append('banco')
+        if not tipo_cuenta:
+            faltan.append('tipo de cuenta')
+        if not numero_cuenta:
+            faltan.append('número de cuenta')
+        if not cuenta_titular_rut:
+            faltan.append('RUT del titular')
+        if faltan:
+            raise DevolucionGarantiaError(
+                'Para transferencia debe indicar: ' + ', '.join(faltan) + '.'
+            )
+        from app.models.base import validar_rut_chileno
+        if not validar_rut_chileno(cuenta_titular_rut):
+            raise DevolucionGarantiaError(
+                f'RUT del titular inválido: {cuenta_titular_rut}. Verifique el dígito verificador.'
+            )
+        if tipo_cuenta not in dict(TIPO_CUENTA_DG_CHOICES):
+            raise DevolucionGarantiaError('Tipo de cuenta inválido.')
+    else:
+        # Efectivo (o sin especificar): no se guardan datos bancarios.
+        banco = tipo_cuenta = numero_cuenta = cuenta_titular_rut = ''
+
+    return metodo, banco, tipo_cuenta, numero_cuenta, cuenta_titular_rut
+
+
 @transaction.atomic
 def crear_solicitud_devolucion(*, dte_original, sucursal, receptor, motivo,
-                               usuario, detalles, requerimiento=None):
+                               usuario, detalles, requerimiento=None,
+                               metodo_solicitado='', banco='', tipo_cuenta='',
+                               numero_cuenta='', cuenta_titular_rut=''):
     """
     Registra una SOLICITUD de devolución en estado PENDIENTE. NO consume folio
     de NC, NO genera documento ni TXT: eso ocurre al aprobar.
 
     `detalles`: lista de dicts {dte_producto_id, modo, cantidad?, monto?}.
     `requerimiento`: instancia opcional de Requerimiento (puente de UI).
+    `metodo_solicitado` + datos bancarios: cómo quiere el cliente recibir la
+        devolución (efectivo o transferencia con banco/cuenta/titular).
 
     Devuelve la DevolucionGarantia creada.
     """
+    (metodo_solicitado, banco, tipo_cuenta, numero_cuenta,
+     cuenta_titular_rut) = _validar_datos_transferencia(
+        metodo_solicitado, banco, tipo_cuenta, numero_cuenta, cuenta_titular_rut,
+    )
+
     lineas, monto_total = _validar_lineas(dte_original, detalles, lock=True)
 
     saldo = saldo_documento(dte_original)
@@ -453,6 +503,11 @@ def crear_solicitud_devolucion(*, dte_original, sucursal, receptor, motivo,
         estado='PENDIENTE',
         monto_total=monto_total,
         numero_operacion=numero_operacion,
+        metodo_solicitado=metodo_solicitado,
+        banco=banco,
+        tipo_cuenta=tipo_cuenta,
+        numero_cuenta=numero_cuenta,
+        cuenta_titular_rut=cuenta_titular_rut,
     )
 
     for linea in lineas:

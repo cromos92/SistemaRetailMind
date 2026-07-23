@@ -28433,51 +28433,93 @@ def crear_ticket(request):
                     'cliente_telefono_secundario',
                 ])
 
+            # === Ofertas de liquidación (ticket vendedor) ===
+            # Validar promos NxM del payload contra las campañas vigentes.
+            from collections import defaultdict
+            from .services.campanas_service import validar_promos_nxm_payload
+            from .views_modulo_campanas_liquidacion import _ofertas_activas_sucursal
+            val_promo = validar_promos_nxm_payload(productos, sucursal)
+            if not val_promo['ok']:
+                raise ValidationError(
+                    'Promoción NxM inválida: ' + '; '.join(
+                        e['error'] for e in val_promo['errores']))
+            # Ofertas %/precio-fijo vigentes (para forzar el precio server-side).
+            _, ofertas_precio = _ofertas_activas_sucursal(sucursal_id, timezone.now())
+            # Stock se valida por TOTAL de SKU (paga + gratis del 2x1 suman físico).
+            cant_por_sku = defaultdict(int)
+            for pd in productos:
+                if pd.get('sku'):
+                    cant_por_sku[pd['sku']] += int(pd.get('cantidad', 1) or 1)
+
             # Agregar productos al ticket
             for producto_data in productos:
                 sku = producto_data.get('sku')
                 cantidad_raw = producto_data.get('cantidad', 1)
                 precio = int(producto_data.get('precio', 0))
-                
+                precio_original = int(producto_data.get('precio_original', precio) or precio)
+                descuento_unitario = int(producto_data.get('descuento_unitario', 0) or 0)
+                es_promo_nxm = bool(producto_data.get('es_promo_nxm'))
+                promo_campana_id = producto_data.get('promo_campana_id') if es_promo_nxm else None
+
                 # Validar cantidad - debe ser un número entero positivo
                 try:
                     cantidad = int(cantidad_raw)
                 except (ValueError, TypeError):
                     raise ValidationError(f'Cantidad inválida para SKU {sku}: debe ser un número entero')
-                
+
                 if cantidad < 1:
                     raise ValidationError(f'Cantidad inválida para SKU {sku}: debe ser mayor a 0')
-                
+
                 try:
                     producto_talla = Producto_Talla.objects.get(
                         sku=sku,
                         producto__sucursal=sucursal
                     )
-                    
-                    # Verificar stock
-                    if producto_talla.stock < cantidad:
+
+                    # Verificar stock por total del SKU (no por línea).
+                    total_sku = cant_por_sku.get(sku, cantidad)
+                    if producto_talla.stock < total_sku:
                         raise ValidationError(
-                            f'Stock insuficiente para SKU {sku}. Solicitado: {cantidad}, Disponible: {producto_talla.stock}'
+                            f'Stock insuficiente para SKU {sku}. Solicitado (total): {total_sku}, Disponible: {producto_talla.stock}'
                         )
-                    
-                    # Crear registro en Ticket_Productos
+
+                    # Safety-net: si el producto está en campaña %/fijo activa, el
+                    # precio de venta manda (ignora lo que envíe el cliente). La
+                    # línea gratis NxM conserva su precio (para el subtotal 0).
+                    if not es_promo_nxm and sku in ofertas_precio:
+                        precio = int(producto_talla.producto.precioventa)
+                        precio_original = ofertas_precio[sku].get('precio_original') or precio
+
+                    subtotal_linea = (precio - descuento_unitario) * cantidad
+                    porcentaje = round(descuento_unitario / precio * 100, 2) if (precio and descuento_unitario) else 0
+
+                    # Crear registro en Ticket_Productos (con oferta horneada)
                     Ticket_Productos.objects.create(
                         ProductoTalla=producto_talla,
                         idTicket=ticket,
                         stock=cantidad,
                         precio=precio,
-                        descuento_unitario=0,
-                        subtotal=precio * cantidad
+                        precio_original=precio_original,
+                        descuento_unitario=descuento_unitario,
+                        porcentaje_descuento=porcentaje,
+                        subtotal=subtotal_linea,
+                        promo_campana_id=promo_campana_id,
                     )
-                    
+
                     # ⚠️ NO DESCONTAR STOCK AQUÍ - Se descuenta al PAGAR el ticket en registrar_pagos_ticket
                     # El ticket se crea en estado PENDIENTE y el stock se descuenta cuando cambia a PAGADO
-                    # producto_talla.stock -= cantidad
-                    # producto_talla.save()
-                    
+
                 except Producto_Talla.DoesNotExist:
                     raise ValidationError(f'Producto con SKU {sku} no encontrado')
-            
+
+            # Totales server-authoritative desde las líneas (la oferta ya está
+            # horneada: descuento del 2x1 + precio de liquidación %/fijo).
+            _lineas = list(ticket.ticket_productos.all())
+            ticket.descuento = sum((l.descuento_unitario or 0) * l.stock for l in _lineas)
+            ticket.subTotal = sum((l.precio or 0) * l.stock for l in _lineas)
+            ticket.total = sum(l.subtotal for l in _lineas)
+            ticket.save(update_fields=['descuento', 'subTotal', 'total'])
+
             ticket_data = construir_ticket_data(ticket)
             ticket_html = generar_ticket_html(ticket_data)
             
@@ -28514,6 +28556,7 @@ def construir_ticket_data(ticket):
         'ProductoTalla__producto__atributo2',
         'ProductoTalla__producto__atributo3',
         'ProductoTalla__producto__atributo4',
+        'promo_campana',
     ).all():
         producto_talla = tp.ProductoTalla
         producto = producto_talla.producto if producto_talla else None
@@ -28545,6 +28588,12 @@ def construir_ticket_data(ticket):
             'lotes_utilizados': tp.lotes_utilizados,
             'stock_actual': producto_talla.stock if producto_talla else None,
             'stock': producto_talla.stock if producto_talla else 0,  # Alias para compatibilidad con frontend POS
+            # Flags de oferta NxM (impresión + reabsorción en caja).
+            'es_promo_nxm': tp.promo_campana_id is not None,
+            'promo_campana_id': tp.promo_campana_id,
+            'promo_label': (
+                f"{tp.promo_campana.nxm_n}x{tp.promo_campana.nxm_m} · {tp.promo_campana.nombre}"
+                if tp.promo_campana_id else None),
         })
 
     sucursal = ticket.sucursal

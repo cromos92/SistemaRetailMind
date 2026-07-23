@@ -513,14 +513,14 @@ function toggleSelAll(cb) {
 function abrirModalCampana() {
     if (!SEL.size) return;
     const opSuc = (PL_RES && PL_RES.opciones ? PL_RES.opciones.sucursales : [])
-        .map(s => `<label style="display:block; font-size:.82rem; margin:2px 0;"><input type="checkbox" class="mc-suc" value="${s.id}"> ${esc(s.alias)}${s.es_cd ? ' (CD)' : ''}</label>`).join('');
+        .map(s => `<label style="display:block; font-size:.82rem; margin:2px 0;"><input type="checkbox" class="mc-suc" value="${s.id}" ${s.es_cd ? '' : 'checked'}> ${esc(s.alias)}${s.es_cd ? ' <span class="pl-badge-cd">CD</span>' : ''}</label>`).join('');
     Swal.fire({
-        title: `Nueva campaña · ${SEL.size} productos`,
-        width: 620,
+        title: `Nueva campaña · ${SEL.size} artículo(s)`,
+        width: 640,
         html: `
             <div style="text-align:left; font-size:.85rem;">
                 <label style="font-weight:700;">Nombre</label>
-                <input id="mc-nombre" class="swal2-input" style="margin:4px 0 10px; width:100%;" placeholder="Ej: Liquidación invierno bodega EDEL">
+                <input id="mc-nombre" class="swal2-input" style="margin:4px 0 10px; width:100%;" placeholder="Ej: Liquidación invierno 2x1">
                 <label style="font-weight:700;">Tipo de regla</label>
                 <select id="mc-tipo" class="swal2-select" style="margin:4px 0 10px; width:100%;" onchange="mcTipoChange()">
                     <option value="PORCENTAJE">% Descuento</option>
@@ -533,15 +533,20 @@ function abrirModalCampana() {
                     <div style="flex:1;"><label style="font-weight:700;">Fin (opcional)</label><input id="mc-fin" type="datetime-local" class="swal2-input" style="margin:4px 0; width:100%;"></div>
                 </div>
                 <label style="display:block; margin:6px 0; font-weight:700;"><input type="checkbox" id="mc-piso" checked> Respetar piso de costo (costo×1.1)</label>
-                <details style="margin-top:6px;"><summary style="cursor:pointer; font-weight:700;">Sucursales de la promo (NxM)</summary>
-                    <div style="max-height:120px; overflow:auto; margin-top:6px; padding-left:6px;">${opSuc || '<span class="pl-note">sin sucursales</span>'}</div>
-                    <div class="pl-note">Por defecto se usan las sucursales de los productos elegidos.</div>
-                </details>
+                <div style="border-top:1px solid var(--nexo-gray-300); margin-top:10px; padding-top:10px;">
+                    <label style="font-weight:700; display:block; margin-bottom:4px;">Aplicar el artículo en:</label>
+                    <label style="font-size:.84rem; margin-right:14px;"><input type="radio" name="mc-alcance" value="todas" checked onchange="mcAlcanceChange()"> Todas mis sucursales</label>
+                    <label style="font-size:.84rem;"><input type="radio" name="mc-alcance" value="algunas" onchange="mcAlcanceChange()"> Algunas</label>
+                    <label style="display:block; margin:8px 0 4px; font-weight:700;"><input type="checkbox" id="mc-cd"> Incluir bodegas/CD</label>
+                    <div id="mc-suc-list" style="display:none; max-height:130px; overflow:auto; margin-top:6px; padding:6px 8px; border:1px solid var(--nexo-gray-300); border-radius:8px;">${opSuc || '<span class="pl-note">sin sucursales</span>'}</div>
+                    <div class="pl-note" style="margin-top:4px;">La campaña cubre ese artículo (mismo modelo+color) en las sucursales elegidas, aunque hoy solo tengas stock en algunas.</div>
+                </div>
             </div>`,
-        didOpen: () => { mcTipoChange(); },
+        didOpen: () => { mcTipoChange(); mcAlcanceChange(); },
         showCancelButton: true, confirmButtonText: 'Crear campaña (borrador)', cancelButtonText: 'Cancelar',
         preConfirm: () => {
             const tipo = document.getElementById('mc-tipo').value;
+            const alcance = document.querySelector('input[name=mc-alcance]:checked').value;
             const payload = {
                 nombre: document.getElementById('mc-nombre').value.trim(),
                 tipo_regla: tipo,
@@ -549,12 +554,15 @@ function abrirModalCampana() {
                 fecha_fin: document.getElementById('mc-fin').value ? document.getElementById('mc-fin').value + ':00' : '',
                 respetar_piso_costo: document.getElementById('mc-piso').checked,
                 producto_ids: Array.from(SEL),
+                alcance_sucursales: alcance,
+                incluir_cd: document.getElementById('mc-cd').checked,
                 sucursal_ids: Array.from(document.querySelectorAll('.mc-suc:checked')).map(c => parseInt(c.value, 10)),
             };
             if (tipo === 'PORCENTAJE') payload.valor_porcentaje = document.getElementById('mc-pct').value;
             if (tipo === 'PRECIO_FIJO') payload.valor_precio_fijo = document.getElementById('mc-fijo').value;
             if (tipo === 'NXM') { payload.nxm_n = document.getElementById('mc-n').value; payload.nxm_m = document.getElementById('mc-m').value; }
             if (!payload.nombre) { Swal.showValidationMessage('El nombre es obligatorio'); return false; }
+            if (alcance === 'algunas' && !payload.sucursal_ids.length) { Swal.showValidationMessage('Elige al menos una sucursal'); return false; }
             return payload;
         },
     }).then(r => {
@@ -565,12 +573,17 @@ function abrirModalCampana() {
                 if (!res.success) { Swal.fire({ icon: 'error', title: 'Error', text: res.error }); return; }
                 Swal.fire({
                     icon: 'success', title: 'Campaña creada',
-                    html: `Borrador #${res.campana_id} con ${res.n_items} productos. Actívala desde <b>Campañas de Liquidación</b>.`,
+                    html: `Borrador #${res.campana_id}: <b>${res.n_items}</b> productos en <b>${res.n_sucursales}</b> sucursal(es). Actívala desde <b>Campañas de Liquidación</b>.`,
                     showCancelButton: true, confirmButtonText: 'Ir a campañas', cancelButtonText: 'Seguir aquí',
                 }).then(x => { if (x.isConfirmed) window.location = "{% url 'ver_campanas_liquidacion' %}"; });
                 SEL.clear(); actualizarSelUI(); cargarDetalle();
             });
     });
+}
+
+function mcAlcanceChange() {
+    const alcance = document.querySelector('input[name=mc-alcance]:checked').value;
+    document.getElementById('mc-suc-list').style.display = alcance === 'algunas' ? 'block' : 'none';
 }
 
 function mcTipoChange() {

@@ -2093,6 +2093,91 @@ $(document).ready(function() {
     let paginaActual = 1;
     let totalPaginas = 1;
     let modoRapido = false;  // Modo Bolsa: SKU+Enter agrega directo y vuelve al SKU
+    let productoTallaIdCargado = null;  // producto_talla_id del SKU cargado en el form
+
+    // ===== OFERTAS DE LIQUIDACIÓN (ticket vendedor) =====
+    // OFERTA_BY_SKU: %/precio-fijo -> {precio_original, precio_liquidacion, campana_nombre, tipo}
+    // PROMO_BY_SKU:  NxM           -> {campana_id, nombre, n, m, producto_id}
+    const OFERTA_BY_SKU = {};
+    const PROMO_BY_SKU = {};
+
+    function cargarOfertasActivas() {
+        $.ajax({
+            url: '{% url "obtener_ofertas_activas" %}',
+            method: 'GET',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            success: function (res) {
+                Object.keys(OFERTA_BY_SKU).forEach(k => delete OFERTA_BY_SKU[k]);
+                Object.keys(PROMO_BY_SKU).forEach(k => delete PROMO_BY_SKU[k]);
+                if (!res || !res.success) return;
+                Object.entries(res.ofertas || {}).forEach(([sku, o]) => { OFERTA_BY_SKU[String(sku)] = o; });
+                (res.promos || []).forEach(promo => {
+                    (promo.productos || []).forEach(p => {
+                        (p.skus || []).forEach(sku => {
+                            PROMO_BY_SKU[String(sku)] = {
+                                campana_id: promo.campana_id, nombre: promo.nombre,
+                                n: promo.n, m: promo.m, producto_id: p.producto_id,
+                            };
+                        });
+                    });
+                });
+                if (productosTicket.length) { actualizarTotales(); }
+            },
+            error: function () { /* sin ofertas: el ticket opera normal */ }
+        });
+    }
+
+    // Motor NxM: parte líneas del mismo producto e inserta la unidad gratis.
+    // Idempotente: reabsorbe las gratis previas antes de recomputar. La unidad
+    // gratis sale de la línea más barata; el stock se controla por total del SKU.
+    function aplicarPromosNxMTicket() {
+        if (!Object.keys(PROMO_BY_SKU).length && !productosTicket.some(p => p.es_promo_nxm)) return;
+        // A. Reabsorber gratis previas hacia su línea pagada (o descartarlas).
+        const promoPrev = productosTicket.filter(p => p.es_promo_nxm);
+        const normales = productosTicket.filter(p => !p.es_promo_nxm);
+        promoPrev.forEach(pl => {
+            const dest = normales.find(n => n.sku === pl.sku);
+            if (dest) {
+                dest.cantidad += pl.cantidad;
+                dest.subtotal = (dest.precio - (dest.descuento_unitario || 0)) * dest.cantidad;
+            }
+            // Sin línea pagada del SKU -> la gratis se descarta (se recomputa).
+        });
+        // B. Agrupar por producto de la promo y calcular unidades gratis.
+        const grupos = {};
+        normales.forEach(p => {
+            const promo = PROMO_BY_SKU[String(p.sku)];
+            if (!promo) return;
+            const g = grupos[promo.producto_id] || (grupos[promo.producto_id] = { promo, lineas: [], q: 0 });
+            g.lineas.push(p); g.q += p.cantidad;
+        });
+        // C. Partir cheapest-first e insertar la línea gratis.
+        const nuevas = [];
+        Object.values(grupos).forEach(g => {
+            const n = g.promo.n, m = g.promo.m;
+            if (!n || !m || n <= m) return;
+            let f = Math.floor(g.q / n) * (n - m);
+            if (f <= 0) return;
+            g.lineas.slice().sort((a, b) => a.precio - b.precio).forEach(linea => {
+                if (f <= 0) return;
+                const take = Math.min(linea.cantidad, f);
+                if (take <= 0) return;
+                linea.cantidad -= take;
+                linea.subtotal = (linea.precio - (linea.descuento_unitario || 0)) * linea.cantidad;
+                contadorProductos++;
+                nuevas.push({
+                    id: contadorProductos, sku: linea.sku, producto_talla_id: linea.producto_talla_id,
+                    articulo: linea.articulo, descripcion: linea.descripcion || '', marca: linea.marca || '',
+                    talla: linea.talla || '', precio: linea.precio, precio_original: linea.precio,
+                    cantidad: take, stock: linea.stock, foto_portada_url: linea.foto_portada_url || '',
+                    descuento_unitario: linea.precio, subtotal: 0, es_promo_nxm: true,
+                    promo_campana_id: g.promo.campana_id, promo_label: `${n}x${m} · ${g.promo.nombre}`,
+                });
+                f -= take;
+            });
+        });
+        productosTicket = normales.filter(p => p.cantidad > 0).concat(nuevas);
+    }
 
     // Función para seleccionar vendedor
     function seleccionarVendedor(vendedor) {
@@ -2105,6 +2190,9 @@ $(document).ready(function() {
         // Ocultar sección de vendedores y mostrar sección de crear ticket
         $('#seccionVendedores').hide();
         $('#seccionCrearTicket').show();
+
+        // Cargar ofertas de liquidación vigentes de la sucursal (badges + 2x1)
+        cargarOfertasActivas();
 
         // Scroll al tope de la página para que se vean los accesos rápidos y
         // los shortcuts (Enter/F3/F2/Esc) apenas aparece la vista del ticket
@@ -2326,22 +2414,31 @@ $(document).ready(function() {
             success: function(response) {
                 if (response.success) {
                     const producto = response.producto;
+                    productoTallaIdCargado = producto.id || null;
+                    const oferta = OFERTA_BY_SKU[String(sku)];
+                    const promo = PROMO_BY_SKU[String(sku)];
                     $('#articuloProducto').text(producto.articulo);
                     $('#descripcionProducto').text(producto.descripcion);
                     $('#marcaProducto').text(producto.marca || '-');
                     $('#tallaProducto').text(producto.talla);
                     $('#precioProducto').val(producto.precio_venta);
                     $('#precioOriginal').val(producto.precio_venta);
+                    // La oferta manda: en campaña %/fijo el precio queda bloqueado.
+                    $('#precioProducto').prop('readonly', !!oferta);
                     $('#stockProducto').val(producto.stock);
                     $('#skuCargado').val(sku);
                     $('#fotoPortadaProducto').val(producto.foto_portada_url || '');
                     // Mostrar banner + panel de info del producto cargado
                     $('#bannerNombreProducto').text(producto.articulo + (producto.talla ? ' — ' + producto.talla : ''));
-                    $('#bannerInfoProducto').text(
-                        'SKU: ' + sku +
+                    let infoTxt = 'SKU: ' + sku +
                         '  |  Precio: $' + (parseFloat(producto.precio_venta || 0).toLocaleString('es-CL')) +
-                        '  |  Stock: ' + (producto.stock || 0)
-                    );
+                        '  |  Stock: ' + (producto.stock || 0);
+                    if (oferta) {
+                        infoTxt += '  |  🏷️ LIQUIDACIÓN (antes $' +
+                            (parseFloat(oferta.precio_original || 0).toLocaleString('es-CL')) + ')';
+                    }
+                    if (promo) { infoTxt += '  |  🎁 ' + promo.n + 'x' + promo.m; }
+                    $('#bannerInfoProducto').text(infoTxt);
                     $('#productoSeleccionadoBanner').removeClass('d-none');
                     $('#infoProductoWrap').removeClass('d-none');
 
@@ -2476,8 +2573,9 @@ $(document).ready(function() {
         }
 
         // Verificar si el producto ya está en el ticket con el mismo precio
-        const productoExistente = productosTicket.find(p => p.sku === sku && p.precio === precio);
-        
+        // (ignorando las líneas gratis de promo NxM, que gestiona el motor).
+        const productoExistente = productosTicket.find(p => p.sku === sku && p.precio === precio && !p.es_promo_nxm);
+
         if (productoExistente) {
             // Mismo producto, mismo precio -> Agregar cantidad
             productoExistente.cantidad += cantidad;
@@ -2493,7 +2591,7 @@ $(document).ready(function() {
             });
         } else {
             // Verificar si existe el mismo producto con DIFERENTE precio
-            const productoMismoPrecio = productosTicket.find(p => p.sku === sku && p.precio !== precio);
+            const productoMismoPrecio = productosTicket.find(p => p.sku === sku && p.precio !== precio && !p.es_promo_nxm);
             
             if (productoMismoPrecio) {
                 // Alerta: mismo producto, diferente precio
@@ -2537,18 +2635,26 @@ $(document).ready(function() {
 
     function agregarNuevoProductoAlTicket(sku, articulo, descripcion, marca, talla, precio, cantidad, stock, fotoPortadaUrl = '') {
         contadorProductos++;
+        const oferta = OFERTA_BY_SKU[String(sku)];
         const nuevoProducto = {
             id: contadorProductos,
             sku: sku,
+            producto_talla_id: productoTallaIdCargado || null,
             articulo: articulo,
             descripcion: descripcion,
             marca: marca,
             talla: talla,
             precio: precio,
+            precio_original: oferta ? oferta.precio_original : precio,
+            descuento_unitario: 0,
             cantidad: cantidad,
             stock: stock,
             foto_portada_url: fotoPortadaUrl || '',
-            subtotal: precio * cantidad
+            subtotal: precio * cantidad,
+            es_promo_nxm: false,
+            promo_campana_id: null,
+            es_oferta: !!oferta,
+            oferta_label: oferta ? 'LIQUIDACIÓN' : null,
         };
         productosTicket.push(nuevoProducto);
         
@@ -2630,6 +2736,38 @@ $(document).ready(function() {
                 ? `<img src="${producto.foto_portada_url}" class="producto-portada-img" loading="lazy" alt=""
                         style="width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid #e0e0e0;background:#f5f5f7;flex-shrink:0;">`
                 : '';
+            if (producto.es_promo_nxm) {
+                // Línea gratis de la promo NxM: bloqueada, subtotal $0.
+                tbody.append(`
+                    <tr class="table-success">
+                        <td class="text-center"><small>${producto.sku}</small></td>
+                        <td>
+                            <div style="display:flex;align-items:center;gap:10px;">
+                                ${portadaImg}
+                                <div style="min-width:0;">
+                                    <div class="fw-semibold" style="line-height:1.2;">🎁 ${producto.articulo}
+                                        <span class="badge bg-success ms-1">${producto.promo_label || 'GRATIS'}</span></div>
+                                    <div class="text-muted d-xl-none" style="font-size:0.75rem;">${producto.marca} | ${producto.talla}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="d-none d-xxl-table-cell"><small class="text-muted">${producto.descripcion}</small></td>
+                        <td class="d-none d-xl-table-cell"><small>${producto.marca}</small></td>
+                        <td class="text-center"><span class="badge bg-secondary">${producto.talla || '—'}</span></td>
+                        <td class="d-none d-xl-table-cell text-center"><small>${producto.stock}</small></td>
+                        <td class="text-end"><small class="text-decoration-line-through text-muted">$${producto.precio.toLocaleString()}</small></td>
+                        <td class="text-center"><span class="fw-bold">${producto.cantidad}</span><br><small class="text-success">gratis</small></td>
+                        <td class="text-end fw-bold text-success">$0</td>
+                        <td class="text-center"><span class="badge bg-success">Auto</span></td>
+                    </tr>`);
+                return;
+            }
+            const esOferta = producto.es_oferta && producto.precio_original > producto.precio;
+            const badgeOferta = esOferta
+                ? `<span class="badge bg-danger ms-1">${producto.oferta_label || 'LIQUIDACIÓN'}</span>` : '';
+            const precioCell = esOferta
+                ? `<small class="text-decoration-line-through text-muted">$${producto.precio_original.toLocaleString()}</small><br><small class="text-danger fw-bold">$${producto.precio.toLocaleString()}</small>`
+                : `<small>$${producto.precio.toLocaleString()}</small>`;
             const fila = `
                 <tr>
                     <td class="text-center"><small>${producto.sku}</small></td>
@@ -2637,7 +2775,7 @@ $(document).ready(function() {
                         <div style="display:flex;align-items:center;gap:10px;">
                             ${portadaImg}
                             <div style="min-width:0;">
-                                <div class="fw-semibold" style="line-height:1.2;">${producto.articulo}</div>
+                                <div class="fw-semibold" style="line-height:1.2;">${producto.articulo}${badgeOferta}</div>
                                 <div class="text-muted d-xl-none" style="font-size:0.75rem;">${producto.marca} | ${producto.talla}</div>
                             </div>
                         </div>
@@ -2646,9 +2784,9 @@ $(document).ready(function() {
                     <td class="d-none d-xl-table-cell"><small>${producto.marca}</small></td>
                     <td class="text-center"><span class="badge bg-secondary">${producto.talla || '—'}</span></td>
                     <td class="d-none d-xl-table-cell text-center"><small>${producto.stock}</small></td>
-                    <td class="text-end"><small>$${producto.precio.toLocaleString()}</small></td>
+                    <td class="text-end">${precioCell}</td>
                     <td class="text-center">
-                        <input type="number" class="form-control form-control-sm text-center cantidad-producto" 
+                        <input type="number" class="form-control form-control-sm text-center cantidad-producto"
                                data-id="${producto.id}" value="${producto.cantidad}" min="1" max="${producto.stock}"
                                style="width:64px;">
                     </td>
@@ -2765,9 +2903,12 @@ $(document).ready(function() {
 
     // Actualizar totales
     function actualizarTotales() {
+        // Reaplicar promos NxM (idempotente) antes de sumar y re-render.
+        aplicarPromosNxMTicket();
+        actualizarTablaTicket();
         const totalItems = productosTicket.reduce((sum, p) => sum + p.cantidad, 0);
         const totalTicket = productosTicket.reduce((sum, p) => sum + p.subtotal, 0);
-        
+
         $('#totalItems').val(totalItems);
         $('#totalTicket').val(totalTicket);
         // Actualizar badge de items en las barras de info (topbar + bottom bar)
@@ -2778,11 +2919,12 @@ $(document).ready(function() {
     function limpiarFormularioProducto() {
         // Inputs del formulario de entrada
         $('#skuProducto').val('').trigger('change');
-        $('#precioProducto').val('');
+        $('#precioProducto').val('').prop('readonly', false);
         $('#precioOriginal').val('');
         $('#skuCargado').val('');
         $('#cantidadProducto').val(1);
         $('#stockProducto').val('');
+        productoTallaIdCargado = null;
 
         // Info del producto (labels)
         $('#articuloProducto').text('—');
@@ -4029,8 +4171,13 @@ $(document).ready(function() {
             vendedor_id: vendedorSeleccionado.id,
             productos: productosTicket.map(p => ({
                 sku: p.sku,
+                producto_talla_id: p.producto_talla_id || null,
                 cantidad: p.cantidad,
-                precio: p.precio
+                precio: p.precio,
+                precio_original: p.precio_original || p.precio,
+                descuento_unitario: p.descuento_unitario || 0,
+                es_promo_nxm: p.es_promo_nxm || false,
+                promo_campana_id: p.promo_campana_id || null
             })),
             total: parseInt($('#totalTicket').val(), 10),
             total_items: parseInt($('#totalItems').val(), 10),
@@ -4180,12 +4327,21 @@ $(document).ready(function() {
         const productosHtml = productos.map((p) => {
             const cant      = p.cantidad || 0;
             const sku       = p.sku || '';
-            const nombre    = trunc(p.articulo, 36);
+            const esPromo   = !!p.es_promo_nxm;
+            const esLiq     = !esPromo && (p.precio_original || 0) > (p.precio || 0);
+            const nombre    = trunc((esPromo ? '🎁 ' : '') + p.articulo, 36);
             const desc      = trunc(p.descripcion, 36);
             const talla     = trunc(p.talla || '', 8);
             const precioU   = fmt(p.precio_unitario || p.precio || 0);
             const subtotal  = fmt(p.subtotal || 0);
             const mostrarDesc = desc && desc.toLowerCase() !== nombre.toLowerCase();
+
+            const precioHtml = esLiq
+                ? `<span class="i-punit"><s>$${fmt(p.precio_original)}</s> $${precioU} c/u</span>`
+                : `<span class="i-punit">$${precioU} c/u</span>`;
+            const subHtml = esPromo
+                ? `<span class="i-sub">GRATIS ${p.promo_label ? '(' + trunc(p.promo_label, 14) + ')' : ''}</span>`
+                : `<span class="i-sub">$${subtotal}</span>`;
 
             return `
 <div class="item">
@@ -4198,8 +4354,8 @@ $(document).ready(function() {
     <span class="i-sku">SKU: ${sku}</span>${talla ? `<span class="i-talla">${talla}</span>` : ''}
   </div>
   <div class="i-precios">
-    <span class="i-punit">$${precioU} c/u</span>
-    <span class="i-sub">$${subtotal}</span>
+    ${precioHtml}
+    ${subHtml}
   </div>
 </div>`;
         }).join('');
@@ -4841,15 +4997,22 @@ function generarEscPos(ticketData) {
 
     // ── Líneas de productos ──
     productos.forEach(function(p) {
+        const esPromo = !!p.es_promo_nxm;
+        const esLiq   = !esPromo && (p.precio_original || 0) > (p.precio || 0);
         const cant   = String(p.cantidad || p.stock || 1);
-        const nombre = String(p.articulo || p.nombre || '').toUpperCase().substring(0, 29);
+        const nombre = String((esPromo ? '* ' : '') + (p.articulo || p.nombre || '')).toUpperCase().substring(0, 29);
         const subT   = p.subtotal || ((p.cantidad || p.stock || 1) * (p.precio_unitario || p.precio || 0));
-        const total  = fmtCLP(subT);
+        const total  = esPromo ? 'GRATIS' : fmtCLP(subT);
         const precU  = fmtCLP(p.precio_unitario || p.precio || 0);
         const sku    = p.sku ? 'SKU:' + p.sku : '';
 
         c.push(padR(cant, 4) + ' ' + padL(nombre, 29) + padR(total, 10) + _LF);
         c.push('     ' + padL(sku, 15) + padL('P/U: ' + precU, 19) + _LF);
+        if (esPromo) {
+            c.push('     ' + padL('>> ' + String(p.promo_label || 'PROMO 2x1').substring(0, 24), 24) + _LF);
+        } else if (esLiq) {
+            c.push('     ' + padL('LIQUIDACION antes ' + fmtCLP(p.precio_original), 24) + _LF);
+        }
     });
 
     c.push(sep('='));

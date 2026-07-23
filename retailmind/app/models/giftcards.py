@@ -29,6 +29,15 @@ ESTADO_GIFTCARD_CHOICES = [
     ('BLOQUEADA', 'Bloqueada'),
 ]
 
+# Motivo/propósito de la gift card (para clasificar, filtrar y reportar).
+MOTIVO_GIFTCARD_CHOICES = [
+    ('PROMOCION', 'Promoción'),
+    ('COMPENSACION', 'Compensación'),
+    ('REGALO_CORP', 'Regalo corporativo'),
+    ('VENTA', 'Venta'),
+    ('OTRO', 'Otro'),
+]
+
 TIPO_MOV_GIFTCARD_CHOICES = [
     ('EMISION', 'Emisión'),
     ('CARGA', 'Carga / Recarga'),
@@ -36,6 +45,8 @@ TIPO_MOV_GIFTCARD_CHOICES = [
     ('ANULACION', 'Anulación'),
     ('AJUSTE', 'Ajuste manual'),
     ('REVERSA', 'Reversa (devolución/anulación de venta)'),
+    ('BLOQUEO', 'Bloqueo'),
+    ('DESBLOQUEO', 'Desbloqueo'),
 ]
 
 # Tipo de gift card:
@@ -154,6 +165,21 @@ class GiftCard(models.Model):
         blank=True,
         related_name='giftcards_vendidas',
         help_text="Venta en la que se vendió esta giftcard",
+    )
+
+    # === CLASIFICACIÓN / DESCRIPCIÓN ===
+    motivo = models.CharField(
+        max_length=20,
+        choices=MOTIVO_GIFTCARD_CHOICES,
+        default='OTRO',
+        db_index=True,
+        help_text="Propósito de la gift card (para filtrar y reportar)",
+    )
+    descripcion = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Descripción / nombre libre (ej. 'Regalo corporativo Empresa X')",
     )
 
     observaciones = models.TextField(blank=True, null=True)

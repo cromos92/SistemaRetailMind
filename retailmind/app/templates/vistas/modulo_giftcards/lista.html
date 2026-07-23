@@ -64,6 +64,12 @@
                     </div>
                 </div>
                 <div class="module-header-actions">
+                    <a class="btn btn-light" href="{% url 'trazabilidad_giftcards' %}">
+                        <i class="ri-route-line"></i> Trazabilidad
+                    </a>
+                    <button class="btn btn-light" onclick="exportarGiftCards()">
+                        <i class="ri-file-excel-2-line"></i> Exportar
+                    </button>
                     <button class="btn btn-light" onclick="abrirModalConsultar()">
                         <i class="ri-search-line"></i> Consultar saldo
                     </button>
@@ -115,10 +121,10 @@
                 <!-- Filtros -->
                 <div class="pagination-controls">
                     <div class="row g-2 align-items-center">
-                        <div class="col-md-5">
-                            <input type="text" id="gc-busqueda" class="form-control" placeholder="Buscar por código, cliente o RUT...">
+                        <div class="col-md-4">
+                            <input type="text" id="gc-busqueda" class="form-control" placeholder="Buscar por código, cliente, RUT o descripción...">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <select id="gc-estado" class="form-select">
                                 <option value="">Todos los estados</option>
                                 {% for val, label in estado_choices %}
@@ -127,8 +133,25 @@
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <button class="btn btn-primary w-100" onclick="cargarGiftCards(1)">
+                            <select id="gc-motivo" class="form-select">
+                                <option value="">Todos los motivos</option>
+                                {% for val, label in motivo_choices %}
+                                <option value="{{ val }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <input type="date" id="gc-desde" class="form-control" title="Emisión desde">
+                        </div>
+                        <div class="col-md-2">
+                            <input type="date" id="gc-hasta" class="form-control" title="Emisión hasta">
+                        </div>
+                        <div class="col-md-12 mt-2 text-end">
+                            <button class="btn btn-primary" onclick="cargarGiftCards(1)">
                                 <i class="ri-filter-line"></i> Filtrar
+                            </button>
+                            <button class="btn btn-light" onclick="limpiarFiltrosGc()">
+                                <i class="ri-refresh-line"></i> Limpiar
                             </button>
                         </div>
                     </div>
@@ -141,6 +164,7 @@
                             <tr>
                                 <th>Código</th>
                                 <th>Tipo</th>
+                                <th>Motivo</th>
                                 <th>Cliente</th>
                                 <th class="text-end">Saldo</th>
                                 <th>Estado</th>
@@ -150,7 +174,7 @@
                             </tr>
                         </thead>
                         <tbody id="gc-tbody">
-                            <tr><td colspan="8" class="text-center text-muted py-4">Cargando...</td></tr>
+                            <tr><td colspan="9" class="text-center text-muted py-4">Cargando...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -229,6 +253,20 @@
                                 <input type="text" id="em-pin" class="form-control" maxlength="8" placeholder="Sin PIN">
                             </div>
                         </div>
+                        <div class="row">
+                            <div class="col-md-5 mb-3">
+                                <label class="form-label">Motivo</label>
+                                <select id="em-motivo" class="form-select">
+                                    {% for val, label in motivo_choices %}
+                                    <option value="{{ val }}"{% if val == 'OTRO' %} selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-7 mb-3">
+                                <label class="form-label">Descripción</label>
+                                <input type="text" id="em-descripcion" class="form-control" maxlength="255" placeholder="Ej: Regalo corporativo Empresa X">
+                            </div>
+                        </div>
                         <div class="mb-1">
                             <label class="form-label">Observaciones</label>
                             <textarea id="em-obs" class="form-control" rows="2"></textarea>
@@ -274,10 +312,28 @@
                         <input type="number" id="gc-monto-input" class="form-control" min="1">
                     </div>
                 </div>
+                <div id="gc-editar-extra" class="d-none border-top pt-3">
+                    <label class="form-label fw-bold small text-muted">Editar descripción / motivo</label>
+                    <div class="row g-2">
+                        <div class="col-md-5">
+                            <select id="gc-edit-motivo" class="form-select form-select-sm">
+                                {% for val, label in motivo_choices %}
+                                <option value="{{ val }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-7">
+                            <input type="text" id="gc-edit-descripcion" class="form-control form-control-sm" maxlength="255" placeholder="Descripción">
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer flex-wrap">
                 <button class="btn btn-primary" onclick="consultarSaldoGc()"><i class="ri-search-line"></i> Consultar</button>
                 <button class="btn btn-success d-none" id="btn-recargar-gc" onclick="recargarGc()">Recargar</button>
+                <button class="btn btn-info text-white d-none" id="btn-editar-gc" onclick="editarGc()">Guardar edición</button>
+                <button class="btn btn-warning d-none" id="btn-bloquear-gc" onclick="bloquearGc()">Bloquear</button>
+                <button class="btn btn-secondary d-none" id="btn-desbloquear-gc" onclick="desbloquearGc()">Desbloquear</button>
                 <button class="btn btn-danger d-none" id="btn-anular-gc" onclick="anularGc()">Anular</button>
             </div>
         </div>
@@ -292,10 +348,15 @@ const URLS_GC = {
     recargar: "{% url 'api_recargar_giftcard' %}",
     anular: "{% url 'api_anular_giftcard' %}",
     emitir: "{% url 'api_emitir_giftcard' %}",
+    bloquear: "{% url 'api_bloquear_giftcard' %}",
+    desbloquear: "{% url 'api_desbloquear_giftcard' %}",
+    editar: "{% url 'api_editar_giftcard' %}",
+    exportar: "{% url 'api_exportar_giftcards' %}",
     buscarCliente: "{% url 'api_buscar_cliente_requerimiento' %}",
 };
 const PUEDE_EMITIR = {% if user|puede_crear_en:'giftcards_emitir' %}true{% else %}false{% endif %};
 const PUEDE_ANULAR_GC = {% if user|puede_editar_en:'giftcards_emitir' %}true{% else %}false{% endif %};
+const MOTIVO_COLORES = {PROMOCION:'info', COMPENSACION:'warning', REGALO_CORP:'primary', VENTA:'success', OTRO:'secondary'};
 let TIPO_GC = 'DIGITAL';
 let CLIENTE_ID = null;
 let modalEmitir = null, modalConsultar = null;
@@ -313,14 +374,42 @@ function cargarKpis() {
     });
 }
 
-function cargarGiftCards(page) {
+function filtrosGcQuery() {
     const q = document.getElementById('gc-busqueda').value;
     const estado = document.getElementById('gc-estado').value;
-    const url = `${URLS_GC.listar}?q=${encodeURIComponent(q)}&estado=${estado}&page=${page||1}`;
-    fetch(url).then(r=>r.json()).then(d=>{
+    const motivo = document.getElementById('gc-motivo').value;
+    const desde = document.getElementById('gc-desde').value;
+    const hasta = document.getElementById('gc-hasta').value;
+    const p = new URLSearchParams();
+    if (q) p.set('q', q);
+    if (estado) p.set('estado', estado);
+    if (motivo) p.set('motivo', motivo);
+    if (desde) p.set('desde', desde);
+    if (hasta) p.set('hasta', hasta);
+    return p;
+}
+
+function limpiarFiltrosGc() {
+    document.getElementById('gc-busqueda').value = '';
+    document.getElementById('gc-estado').value = '';
+    document.getElementById('gc-motivo').value = '';
+    document.getElementById('gc-desde').value = '';
+    document.getElementById('gc-hasta').value = '';
+    cargarGiftCards(1);
+}
+
+function exportarGiftCards() {
+    const p = filtrosGcQuery();
+    window.location.href = `${URLS_GC.exportar}?${p.toString()}`;
+}
+
+function cargarGiftCards(page) {
+    const p = filtrosGcQuery();
+    p.set('page', page || 1);
+    fetch(`${URLS_GC.listar}?${p.toString()}`).then(r=>r.json()).then(d=>{
         const tbody = document.getElementById('gc-tbody');
         if (!d.success || !d.items.length) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Sin resultados</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">Sin resultados</td></tr>';
             document.getElementById('gc-info').textContent = '';
             document.getElementById('gc-paginacion').innerHTML = '';
             return;
@@ -329,17 +418,20 @@ function cargarGiftCards(page) {
         tbody.innerHTML = d.items.map(gc => {
             const esFisica = gc.tipo_tarjeta === 'FISICA';
             const codigoMostrar = esFisica && gc.codigo_fisico ? gc.codigo_fisico : gc.codigo;
+            const desc = gc.descripcion ? `<div class="small text-muted">${gc.descripcion}</div>` : '';
             return `
             <tr>
-                <td class="gc-codigo">${codigoMostrar}</td>
+                <td><span class="gc-codigo">${codigoMostrar}</span>${desc}</td>
                 <td><span class="badge-tipo ${esFisica?'fisica':'digital'}">${esFisica?'Física':'Digital'}</span></td>
+                <td><span class="badge bg-${MOTIVO_COLORES[gc.motivo]||'secondary'} badge-estado">${gc.motivo_display}</span></td>
                 <td>${gc.cliente || '<span class="text-muted">—</span>'}</td>
                 <td class="text-end fw-bold">${fmt(gc.saldo_actual)}</td>
                 <td><span class="badge bg-${colores[gc.estado]||'secondary'} badge-estado">${gc.estado_display}</span></td>
                 <td class="small">${gc.fecha_emision}</td>
                 <td class="small ${gc.vencida?'text-danger':''}">${gc.fecha_vencimiento||'—'}</td>
-                <td class="text-center">
-                    <button class="btn btn-sm btn-outline-primary" onclick="verDetalle(${gc.id})"><i class="ri-eye-line"></i></button>
+                <td class="text-center text-nowrap">
+                    <button class="btn btn-sm btn-outline-primary" title="Ver detalle" onclick="verDetalle(${gc.id})"><i class="ri-eye-line"></i></button>
+                    <button class="btn btn-sm btn-outline-secondary" title="Gestionar" onclick="abrirModalConsultar('${gc.codigo}')"><i class="ri-settings-3-line"></i></button>
                 </td>
             </tr>`;
         }).join('');
@@ -367,6 +459,8 @@ function abrirModalEmitir() {
     document.getElementById('em-vencimiento').value = '';
     document.getElementById('em-pin').value = '';
     document.getElementById('em-obs').value = '';
+    document.getElementById('em-motivo').value = 'OTRO';
+    document.getElementById('em-descripcion').value = '';
     document.getElementById('em-cliente-nombre').textContent = '';
     document.getElementById('em-nuevo-nombre').value = '';
     document.getElementById('grp-nuevo-cliente').classList.add('d-none');
@@ -460,6 +554,8 @@ function emitirGc() {
         fecha_vencimiento: document.getElementById('em-vencimiento').value || null,
         pin: document.getElementById('em-pin').value.trim() || null,
         observaciones: document.getElementById('em-obs').value.trim(),
+        motivo: document.getElementById('em-motivo').value,
+        descripcion: document.getElementById('em-descripcion').value.trim(),
     };
     const btn = document.getElementById('btn-emitir');
     btn.disabled = true;
@@ -491,14 +587,20 @@ function emitirGc() {
 }
 
 /* ===== Consultar / Recargar / Anular ===== */
-function abrirModalConsultar() {
-    document.getElementById('gc-resultado').className = 'd-none alert';
+function ocultarAccionesGc() {
     document.getElementById('gc-acciones-extra').classList.add('d-none');
-    document.getElementById('btn-recargar-gc').classList.add('d-none');
-    document.getElementById('btn-anular-gc').classList.add('d-none');
-    document.getElementById('gc-codigo-input').value = '';
+    document.getElementById('gc-editar-extra').classList.add('d-none');
+    ['btn-recargar-gc','btn-anular-gc','btn-editar-gc','btn-bloquear-gc','btn-desbloquear-gc']
+        .forEach(id => document.getElementById(id).classList.add('d-none'));
+}
+
+function abrirModalConsultar(codigo) {
+    document.getElementById('gc-resultado').className = 'd-none alert';
+    ocultarAccionesGc();
+    document.getElementById('gc-codigo-input').value = codigo || '';
     if (!modalConsultar) modalConsultar = new bootstrap.Modal(document.getElementById('modalGc'));
     modalConsultar.show();
+    if (codigo) consultarSaldoGc();
 }
 
 function consultarSaldoGc() {
@@ -507,15 +609,32 @@ function consultarSaldoGc() {
     fetch(`${URLS_GC.consultar}?codigo=${encodeURIComponent(codigo)}`).then(r=>r.json()).then(d=>{
         const box = document.getElementById('gc-resultado');
         box.classList.remove('d-none');
+        ocultarAccionesGc();
         if (!d.success) { box.className = 'alert alert-danger'; box.textContent = d.error; return; }
         box.className = d.valida ? 'alert alert-success' : 'alert alert-warning';
         box.innerHTML = `<strong>${d.codigo}</strong>` +
             (d.codigo_fisico ? ` <span class="badge-tipo fisica">Física</span>` : ` <span class="badge-tipo digital">Digital</span>`) +
+            `<br>Motivo: ${d.motivo_display}` + (d.descripcion ? ` — ${d.descripcion}` : '') +
             `<br>Saldo: ${fmt(d.saldo_actual)}<br>Estado: ${d.estado_display}` +
             (d.fecha_vencimiento ? `<br>Vence: ${d.fecha_vencimiento}` : '');
-        if (PUEDE_EMITIR) {
+        // Recarga (solo estados no terminales)
+        if (PUEDE_EMITIR && !['ANULADA'].includes(d.estado)) {
             document.getElementById('gc-acciones-extra').classList.remove('d-none');
             document.getElementById('btn-recargar-gc').classList.remove('d-none');
+        }
+        // Edición de motivo/descripción
+        if (PUEDE_ANULAR_GC) {
+            document.getElementById('gc-editar-extra').classList.remove('d-none');
+            document.getElementById('gc-edit-motivo').value = d.motivo || 'OTRO';
+            document.getElementById('gc-edit-descripcion').value = d.descripcion || '';
+            document.getElementById('btn-editar-gc').classList.remove('d-none');
+        }
+        // Bloquear / Desbloquear
+        if (PUEDE_ANULAR_GC) {
+            if (['ACTIVA','AGOTADA'].includes(d.estado))
+                document.getElementById('btn-bloquear-gc').classList.remove('d-none');
+            if (d.estado === 'BLOQUEADA')
+                document.getElementById('btn-desbloquear-gc').classList.remove('d-none');
         }
         if (PUEDE_ANULAR_GC && d.estado === 'ACTIVA') document.getElementById('btn-anular-gc').classList.remove('d-none');
     });
@@ -542,6 +661,40 @@ function anularGc() {
             if (d.success) { Swal.fire('Anulada', '', 'success'); consultarSaldoGc(); cargarGiftCards(1); cargarKpis(); }
             else Swal.fire('Error', d.error, 'error');
         });
+    });
+}
+
+function bloquearGc() {
+    const codigo = document.getElementById('gc-codigo-input').value.trim();
+    Swal.fire({title:'¿Bloquear gift card?', text:'Queda inutilizable como pago hasta que la desbloquees.', icon:'warning',
+        input:'text', inputPlaceholder:'Motivo del bloqueo (opcional)',
+        showCancelButton:true, confirmButtonText:'Sí, bloquear'}).then(res=>{
+        if (!res.isConfirmed) return;
+        fetch(URLS_GC.bloquear, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+            body: JSON.stringify({codigo, motivo: res.value || ''})}).then(r=>r.json()).then(d=>{
+            if (d.success) { Swal.fire('Bloqueada', '', 'success'); consultarSaldoGc(); cargarGiftCards(1); }
+            else Swal.fire('Error', d.error, 'error');
+        });
+    });
+}
+
+function desbloquearGc() {
+    const codigo = document.getElementById('gc-codigo-input').value.trim();
+    fetch(URLS_GC.desbloquear, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+        body: JSON.stringify({codigo})}).then(r=>r.json()).then(d=>{
+        if (d.success) { Swal.fire('Desbloqueada', 'Estado: '+d.estado, 'success'); consultarSaldoGc(); cargarGiftCards(1); }
+        else Swal.fire('Error', d.error, 'error');
+    });
+}
+
+function editarGc() {
+    const codigo = document.getElementById('gc-codigo-input').value.trim();
+    const motivo = document.getElementById('gc-edit-motivo').value;
+    const descripcion = document.getElementById('gc-edit-descripcion').value.trim();
+    fetch(URLS_GC.editar, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+        body: JSON.stringify({codigo, motivo, descripcion})}).then(r=>r.json()).then(d=>{
+        if (d.success) { Swal.fire('Guardado', 'Descripción / motivo actualizados.', 'success'); cargarGiftCards(1); }
+        else Swal.fire('Error', d.error, 'error');
     });
 }
 

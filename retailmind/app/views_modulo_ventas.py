@@ -2548,6 +2548,7 @@ def construir_ticket_data(ticket):
         'ProductoTalla__producto__atributo2',
         'ProductoTalla__producto__atributo3',
         'ProductoTalla__producto__atributo4',
+        'promo_campana',
     ).all():
         producto_talla = tp.ProductoTalla
         producto = producto_talla.producto if producto_talla else None
@@ -2586,6 +2587,13 @@ def construir_ticket_data(ticket):
             'stock_actual': producto_talla.stock if producto_talla else None,
             'stock': producto_talla.stock_sucursal(ticket.sucursal_id) if producto_talla else 0,  # Stock real de la sucursal del ticket
             'foto_portada_url': foto_url,
+            # Flags de oferta NxM: la caja los usa para reabsorber la línea
+            # gratis (idempotencia) en vez de duplicarla al cargar el ticket.
+            'es_promo_nxm': tp.promo_campana_id is not None,
+            'promo_campana_id': tp.promo_campana_id,
+            'promo_label': (
+                f"{tp.promo_campana.nxm_n}x{tp.promo_campana.nxm_m} · {tp.promo_campana.nombre}"
+                if tp.promo_campana_id else None),
         })
 
     sucursal = ticket.sucursal
@@ -16811,41 +16819,54 @@ def buscar_ticket_para_cambio_response(ticket, request):
 @login_required
 @require_GET
 def buscar_ticket_para_cambio(request):
-    """Buscar ticket para iniciar proceso de cambio/devolución (retrocompatibilidad)"""
+    """Buscar ticket para iniciar proceso de cambio/devolución.
+
+    Busca por el FOLIO del DTE impreso en la boleta (Ticket.folio_dte) y, como
+    respaldo tolerante, por el correlativo interno. Acotado a la sucursal actual
+    (dentro de una sucursal el folio es único, así que no hace falta fecha ni
+    desambiguar entre sucursales)."""
     try:
         correlativo = request.GET.get('correlativo', '').strip()
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        
+
         if not correlativo:
             return JsonResponse({
                 'success': False,
-                'error': 'Número de ticket requerido'
+                'error': 'Número de boleta requerido'
             })
-        
+
         if not sucursal_id:
             return JsonResponse({
                 'success': False,
                 'error': 'No hay sucursal seleccionada'
             })
-        
+
+        try:
+            num = int(correlativo)
+        except (TypeError, ValueError):
+            return JsonResponse({
+                'success': False,
+                'error': f'Número de boleta inválido: {correlativo}'
+            })
+
         query = Ticket.objects.select_related(
                 'vendedor', 'sucursal'
             ).prefetch_related(
                 'ticket_productos__ProductoTalla__producto',
                 'cambios_devoluciones'
         ).filter(
-                correlativo=correlativo,
+                Q(folio_dte=num) | Q(correlativo=num),
                 sucursal_id=sucursal_id
-            )
-        
+            ).order_by('-id')
+
         ticket = query.first()
-        
+
         if not ticket:
             return JsonResponse({
                 'success': False,
-                'error': f'Ticket #{correlativo} no encontrado'
+                'error': f'Boleta N° {correlativo} no encontrada en esta sucursal'
             })
-        
+
         return buscar_ticket_para_cambio_response(ticket, request)
         
     except Exception as e:
@@ -17183,8 +17204,7 @@ def obtener_indicadores_globales_ventas(request):
                 qs = qs.filter(estado=estado)
             else:
                 qs = qs.filter(estado='PAGADO')
-            if sucursal_id:
-                qs = qs.filter(sucursal_id=sucursal_id)
+            qs = _scope_suc_emp(qs, request, sucursal_id)
             if vendedor_id:
                 qs = qs.filter(vendedor_id=vendedor_id)
             if metodo_pago:
@@ -17240,8 +17260,7 @@ def obtener_indicadores_globales_ventas(request):
             fecha_solicitud__date__gte=fecha_inicio,
             fecha_solicitud__date__lte=fecha_fin,
         )
-        if sucursal_id:
-            cambios_qs = cambios_qs.filter(sucursal_id=sucursal_id)
+        cambios_qs = _scope_suc_emp(cambios_qs, request, sucursal_id)
         cantidad_cambios = cambios_qs.count()
         ratio_cambios = (cantidad_cambios / cantidad_ventas * 100) if cantidad_ventas > 0 else 0
 
@@ -17355,8 +17374,7 @@ def obtener_ventas_por_vendedor(request):
         if estado:
             queryset = queryset.filter(estado=estado)
         
-        if sucursal_id:
-            queryset = queryset.filter(sucursal_id=sucursal_id)
+        queryset = _scope_suc_emp(queryset, request, sucursal_id)
         
         # Calcular total general para participación
         total_general = queryset.aggregate(total=Sum('total'))['total'] or 0
@@ -17430,16 +17448,19 @@ def obtener_ventas_por_vendedor(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('suc_dashboard', timeout=300, vary_on_session=True)
+@cache_ventas_json('suc_dashboard_v2', timeout=300, vary_on_session=True)
 def obtener_sucursales_dashboard(request):
     """
-    API para obtener lista de sucursales para filtros del dashboard.
+    API para obtener empresas y sucursales para los filtros del dashboard.
+    Cada sucursal incluye `empresa_id` para la cascada Empresa → Sucursal.
     Usa la utilidad centralizada de permisos para determinar visibilidad.
     """
     try:
-        from .utils_permisos import obtener_sucursales_usuario, usuario_puede_ver_todas_sucursales
+        from .utils_permisos import (
+            obtener_sucursales_usuario, usuario_puede_ver_todas_sucursales,
+        )
 
-        sucursales = obtener_sucursales_usuario(request.user)
+        sucursales = obtener_sucursales_usuario(request.user).select_related('empresa')
 
         sucursales_data = []
         for sucursal in sucursales:
@@ -17447,8 +17468,25 @@ def obtener_sucursales_dashboard(request):
                 'id': sucursal.id,
                 'nombre': sucursal.alias,
                 'alias': sucursal.alias,
-                'direccion': sucursal.direccion or ''
+                'direccion': sucursal.direccion or '',
+                'empresa_id': sucursal.empresa_id,
+                'empresa': sucursal.empresa.nombre if sucursal.empresa else '',
+                'es_cd': sucursal.es_centro_distribucion,
             })
+
+        # Empresas para el dropdown: SOLO las que operan sucursales visibles (las
+        # operadoras del holding), derivadas de las propias sucursales. OJO: NO
+        # usar la tabla Empresa completa ni obtener_empresas_usuario: `Empresa`
+        # también almacena clientes/proveedores (miles) y ensuciaría el filtro.
+        empresas_dict = {}
+        for s in sucursales_data:
+            eid = s['empresa_id']
+            if not eid:
+                continue
+            e = empresas_dict.setdefault(eid, {'id': eid, 'nombre': s['empresa'], 'tiene_tiendas': False})
+            if not s['es_cd']:
+                e['tiene_tiendas'] = True
+        empresas_data = sorted(empresas_dict.values(), key=lambda e: e['nombre'])
 
         empresa_user = EmpresaUser.objects.filter(
             user=request.user,
@@ -17458,6 +17496,7 @@ def obtener_sucursales_dashboard(request):
         return JsonResponse({
             'success': True,
             'sucursales': sucursales_data,
+            'empresas': empresas_data,
             'es_admin': usuario_puede_ver_todas_sucursales(request.user),
             'sucursal_actual': empresa_user.sucursal_id if empresa_user else None
         })
@@ -17579,8 +17618,7 @@ def obtener_ventas_por_metodo_pago(request):
         if estado:
             queryset = queryset.filter(estado=estado)
         
-        if sucursal_id:
-            queryset = queryset.filter(sucursal_id=sucursal_id)
+        queryset = _scope_suc_emp(queryset, request, sucursal_id)
         
         # Obtener IDs de tickets que cumplen con los filtros
         ticket_ids = queryset.values_list('id', flat=True)
@@ -17658,8 +17696,7 @@ def obtener_analisis_cambios_devoluciones(request):
             fecha_solicitud__date__lte=fecha_fin
         )
         
-        if sucursal_id:
-            queryset = queryset.filter(sucursal_id=sucursal_id)
+        queryset = _scope_suc_emp(queryset, request, sucursal_id)
         
         # Métricas generales
         total_cambios = queryset.count()
@@ -17674,8 +17711,7 @@ def obtener_analisis_cambios_devoluciones(request):
             estado='PAGADO'
         )
         
-        if sucursal_id:
-            ventas_total = ventas_total.filter(sucursal_id=sucursal_id)
+        ventas_total = _scope_suc_emp(ventas_total, request, sucursal_id)
         
         cantidad_ventas = ventas_total.count()
         ratio = (total_cambios / cantidad_ventas * 100) if cantidad_ventas > 0 else 0
@@ -17959,8 +17995,7 @@ def obtener_cola_revision_gerencial(request):
             'ticket_original', 'sucursal', 'solicitado_por', 'autorizado_por_usuario',
         ).order_by('-fecha_solicitud')
 
-        if sucursal_id:
-            qs = qs.filter(sucursal_id=sucursal_id)
+        qs = _scope_suc_emp(qs, request, sucursal_id)
 
         items = []
         for c in qs[:50]:
@@ -18047,8 +18082,7 @@ def exportar_cambios_devoluciones(request):
             qs = qs.filter(fecha_solicitud__date__gte=fecha_desde)
         if fecha_hasta:
             qs = qs.filter(fecha_solicitud__date__lte=fecha_hasta)
-        if sucursal_id:
-            qs = qs.filter(sucursal_id=sucursal_id)
+        qs = _scope_suc_emp(qs, request, sucursal_id)
 
         try:
             import openpyxl
@@ -18185,8 +18219,7 @@ def obtener_estado_cuadraturas(request):
             fecha_arqueo__lte=fecha_fin
         )
         
-        if sucursal_id:
-            queryset = queryset.filter(sucursal_id=sucursal_id)
+        queryset = _scope_suc_emp(queryset, request, sucursal_id)
         
         total_cuadraturas = queryset.count()
         
@@ -18370,18 +18403,37 @@ def _rango_periodo(request):
     return fecha_inicio, fecha_fin
 
 
+def _scope_suc_emp(qs, request, sucursal_id=None, campo_empresa='sucursal__empresa_id'):
+    """Filtra un queryset (con FK a Sucursal) por sucursal específica o, si no hay
+    sucursal, por empresa (empresa_id). Así el filtro Empresa del dashboard acota
+    todos los endpoints sin romper el filtro de sucursal existente.
+
+    · Con sucursal_id  → una tienda (empresa se ignora, la tienda ya la implica).
+    · Sin sucursal pero con empresa_id → todas las tiendas de esa empresa.
+    · Sin ninguno → sin filtro (todas las visibles).
+
+    `campo_empresa` permite el caso de líneas (ej. 'idTicket__sucursal__empresa_id'
+    o 'producto__sucursal__empresa_id')."""
+    if sucursal_id is None:
+        sucursal_id = request.GET.get('sucursal_id')
+    if sucursal_id:
+        # el campo de sucursal directa depende del queryset; asumimos 'sucursal_id'
+        return qs.filter(sucursal_id=sucursal_id)
+    empresa_id = request.GET.get('empresa_id')
+    if empresa_id:
+        return qs.filter(**{campo_empresa: empresa_id})
+    return qs
+
+
 def _tickets_pagados_periodo(request):
-    """Helper: queryset de Ticket del período (fecha/sucursal/estado) para los
-    dashboards de ventas por categoría/especialidad. created_at = fecha real."""
+    """Helper: queryset de Ticket del período (fecha/sucursal/empresa/estado) para
+    los dashboards de ventas por categoría/especialidad. created_at = fecha real."""
     fecha_inicio, fecha_fin = _rango_periodo(request)
-    sucursal_id = request.GET.get('sucursal_id')
     estado = request.GET.get('estado', '')
     tickets = Ticket.objects.filter(
         created_at__date__gte=fecha_inicio, created_at__date__lte=fecha_fin)
     tickets = tickets.filter(estado=estado) if estado else tickets.filter(estado='PAGADO')
-    if sucursal_id:
-        tickets = tickets.filter(sucursal_id=sucursal_id)
-    return tickets
+    return _scope_suc_emp(tickets, request)
 
 
 @require_GET
@@ -18496,6 +18548,9 @@ def obtener_indicador_compra_categoria(request):
         if sucursal_id:
             stock_qs = stock_qs.filter(producto__sucursal_id=sucursal_id)
         else:
+            empresa_id = request.GET.get('empresa_id')
+            if empresa_id:
+                stock_qs = stock_qs.filter(producto__sucursal__empresa_id=empresa_id)
             stock_qs = stock_qs.exclude(producto__sucursal__es_centro_distribucion=True)
         stock_agg = (stock_qs.values(
                          'producto__categoria_id',
@@ -18593,9 +18648,13 @@ def obtener_mix_por_sucursal(request):
 
         # Universo de tiendas: permisos server-side (no se puede burlar por GET),
         # sin centros de distribución (stock mayorista, no venden a público).
-        sucursales = list(obtener_sucursales_usuario(request.user)
-                          .filter(es_centro_distribucion=False)
-                          .values('id', 'alias'))
+        # Si viene empresa_id, se acota a las tiendas de esa empresa (el filtro
+        # Empresa del dashboard); sucursal_id se ignora aquí (comparamos tiendas).
+        suc_qs = obtener_sucursales_usuario(request.user).filter(es_centro_distribucion=False)
+        empresa_id = request.GET.get('empresa_id')
+        if empresa_id:
+            suc_qs = suc_qs.filter(empresa_id=empresa_id)
+        sucursales = list(suc_qs.values('id', 'alias'))
         suc_ids = [s['id'] for s in sucursales]
         if not suc_ids:
             return JsonResponse({'success': True, 'dimension': dimension,
@@ -18751,8 +18810,7 @@ def obtener_tendencias_ventas(request):
         else:
             queryset = queryset.filter(estado='PAGADO')  # Por defecto solo PAGADO para tendencias
         
-        if sucursal_id:
-            queryset = queryset.filter(sucursal_id=sucursal_id)
+        queryset = _scope_suc_emp(queryset, request, sucursal_id)
         
         # Ventas por hora del día
         ventas_por_hora = [0] * 24
@@ -18815,8 +18873,7 @@ def obtener_indicadores_avanzados_ventas(request):
             tickets_qs = tickets_qs.filter(estado=estado)
         else:
             tickets_qs = tickets_qs.filter(estado='PAGADO')
-        if sucursal_id:
-            tickets_qs = tickets_qs.filter(sucursal_id=sucursal_id)
+        tickets_qs = _scope_suc_emp(tickets_qs, request, sucursal_id)
 
         ticket_ids = tickets_qs.values_list('id', flat=True)
 
@@ -18842,6 +18899,8 @@ def obtener_indicadores_avanzados_ventas(request):
         stock_filter = {}
         if sucursal_id:
             stock_filter['producto__sucursal_id'] = sucursal_id
+        elif request.GET.get('empresa_id'):
+            stock_filter['producto__sucursal__empresa_id'] = request.GET.get('empresa_id')
         stock_actual = Producto_Talla.objects.filter(
             stock__gt=0, **stock_filter
         ).aggregate(
@@ -18917,8 +18976,7 @@ def obtener_estado_operacional_ventas(request):
             fecha__gte=fecha_inicio,
             fecha__lte=fecha_fin
         )
-        if sucursal_id:
-            tickets_qs = tickets_qs.filter(sucursal_id=sucursal_id)
+        tickets_qs = _scope_suc_emp(tickets_qs, request, sucursal_id)
 
         # --- Tickets por estado ---
         tickets_por_estado = list(
@@ -18962,6 +19020,8 @@ def obtener_estado_operacional_ventas(request):
         )
         if sucursal_id:
             pos_qs = pos_qs.filter(configuracion_pos__sucursal_id=sucursal_id)
+        elif request.GET.get('empresa_id'):
+            pos_qs = pos_qs.filter(configuracion_pos__sucursal__empresa_id=request.GET.get('empresa_id'))
 
         pos_por_estado = list(
             pos_qs.values('estado').annotate(
@@ -18981,8 +19041,7 @@ def obtener_estado_operacional_ventas(request):
             fecha_solicitud__date__gte=fecha_inicio,
             fecha_solicitud__date__lte=fecha_fin
         )
-        if sucursal_id:
-            cambios_qs = cambios_qs.filter(sucursal_id=sucursal_id)
+        cambios_qs = _scope_suc_emp(cambios_qs, request, sucursal_id)
 
         cambios_por_estado = list(
             cambios_qs.values('estado').annotate(

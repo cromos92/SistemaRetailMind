@@ -335,6 +335,45 @@ class DevolucionGarantiaServiceTest(TestCase):
             service.aprobar_devolucion(devolucion_id=dev.id, aprobador=self.user,
                                        metodo_devolucion='EFECTIVO_CAJA', fecha_imputacion=self.hoy)
 
+    # ---------- método pedido por el cliente / transferencia ----------
+
+    def test_transferencia_exige_datos_bancarios(self):
+        boleta = _crear_documento(self.env, 5016, [(self.pt, 1, 11900)])
+        with self.assertRaises(service.DevolucionGarantiaError):
+            service.crear_solicitud_devolucion(
+                dte_original=boleta, sucursal=self.sucursal, receptor=_receptor(self.env),
+                motivo='Garantía', usuario=self.user,
+                detalles=[{'dte_producto_id': boleta.dte_productos.first().id, 'modo': 'CANTIDAD', 'cantidad': 1}],
+                metodo_solicitado='TRANSFERENCIA_BANCARIA',  # sin banco/cuenta/titular
+            )
+
+    def test_transferencia_guarda_datos(self):
+        boleta = _crear_documento(self.env, 5017, [(self.pt, 1, 11900)])
+        dev = service.crear_solicitud_devolucion(
+            dte_original=boleta, sucursal=self.sucursal, receptor=_receptor(self.env),
+            motivo='Garantía', usuario=self.user,
+            detalles=[{'dte_producto_id': boleta.dte_productos.first().id, 'modo': 'CANTIDAD', 'cantidad': 1}],
+            metodo_solicitado='TRANSFERENCIA_BANCARIA', banco='BancoEstado',
+            tipo_cuenta='CORRIENTE', numero_cuenta='001234567', cuenta_titular_rut='11.111.111-1',
+        )
+        self.assertEqual(dev.metodo_solicitado, 'TRANSFERENCIA_BANCARIA')
+        self.assertEqual(dev.banco, 'BancoEstado')
+        self.assertEqual(dev.tipo_cuenta, 'CORRIENTE')
+        self.assertEqual(dev.numero_cuenta, '001234567')
+        self.assertEqual(dev.cuenta_titular_rut, '11.111.111-1')
+
+    def test_efectivo_no_guarda_datos_bancarios(self):
+        boleta = _crear_documento(self.env, 5018, [(self.pt, 1, 11900)])
+        dev = service.crear_solicitud_devolucion(
+            dte_original=boleta, sucursal=self.sucursal, receptor=_receptor(self.env),
+            motivo='Garantía', usuario=self.user,
+            detalles=[{'dte_producto_id': boleta.dte_productos.first().id, 'modo': 'CANTIDAD', 'cantidad': 1}],
+            metodo_solicitado='EFECTIVO_CAJA', banco='Banco X', numero_cuenta='999',
+        )
+        self.assertEqual(dev.metodo_solicitado, 'EFECTIVO_CAJA')
+        self.assertEqual(dev.banco, '')  # efectivo no persiste datos bancarios
+        self.assertEqual(dev.numero_cuenta, '')
+
     # ---------- receptor ----------
 
     def test_rut_generico_bloqueado(self):

@@ -33,6 +33,13 @@ def _normalizar_codigo(codigo):
     return (codigo or '').strip().upper()
 
 
+def _validar_motivo(motivo):
+    from app.models import MOTIVO_GIFTCARD_CHOICES
+    validos = {c[0] for c in MOTIVO_GIFTCARD_CHOICES}
+    if motivo not in validos:
+        raise GiftCardError('Motivo de gift card inválido.')
+
+
 def _resolver_giftcard(codigo, *, lock=False):
     """
     Busca una gift card por su código de sistema (GC-XXXX...) o por el código
@@ -77,7 +84,8 @@ def _registrar_movimiento(giftcard, tipo, monto, *, ticket=None, pago_ticket=Non
 
 def emitir(monto, *, sucursal=None, cliente=None, vendedor=None,
            ticket=None, vencimiento=None, pin=None, usuario=None,
-           observaciones='', tipo_tarjeta='DIGITAL', codigo_fisico=None):
+           observaciones='', tipo_tarjeta='DIGITAL', codigo_fisico=None,
+           motivo='OTRO', descripcion=''):
     """
     Emite una nueva gift card con `monto` de saldo inicial.
     Devuelve la GiftCard creada. El código de sistema se genera de forma segura
@@ -86,6 +94,8 @@ def emitir(monto, *, sucursal=None, cliente=None, vendedor=None,
     - tipo_tarjeta='DIGITAL': vinculada a un cliente (se recomienda pasar cliente).
     - tipo_tarjeta='FISICA':  requiere `codigo_fisico` (el impreso en la tarjeta);
       el cliente es opcional y puede vincularse al canjear.
+    - motivo: propósito de la tarjeta (ver MOTIVO_GIFTCARD_CHOICES).
+    - descripcion: etiqueta/nombre libre para el seguimiento.
     """
     monto = int(monto)
     if monto <= 0:
@@ -94,6 +104,9 @@ def emitir(monto, *, sucursal=None, cliente=None, vendedor=None,
     tipo_tarjeta = (tipo_tarjeta or 'DIGITAL').upper()
     if tipo_tarjeta not in ('DIGITAL', 'FISICA'):
         raise GiftCardError('Tipo de tarjeta inválido.')
+
+    motivo = (motivo or 'OTRO').upper()
+    _validar_motivo(motivo)
 
     codigo_fisico = _normalizar_codigo(codigo_fisico) or None
     if tipo_tarjeta == 'FISICA':
@@ -127,6 +140,8 @@ def emitir(monto, *, sucursal=None, cliente=None, vendedor=None,
             vendedor=vendedor,
             ticket_emision=ticket,
             pin=pin,
+            motivo=motivo,
+            descripcion=(descripcion or '').strip() or None,
             observaciones=observaciones,
             created_by=usuario,
             updated_by=usuario,
@@ -154,6 +169,9 @@ def consultar_saldo(codigo):
         'codigo': gc.codigo,
         'codigo_fisico': gc.codigo_fisico,
         'tipo_tarjeta': gc.tipo_tarjeta,
+        'motivo': gc.motivo,
+        'motivo_display': gc.get_motivo_display(),
+        'descripcion': gc.descripcion or '',
         'estado': gc.estado,
         'estado_display': gc.get_estado_display(),
         'saldo_actual': gc.saldo_actual,
@@ -338,3 +356,128 @@ def reversar(codigo, monto, *, ticket=None, usuario=None, idempotency_key=None,
             observaciones=observaciones or 'Reversa por devolución/anulación de venta',
         )
     return mov
+
+
+def bloquear(codigo, *, usuario=None, observaciones=''):
+    """
+    Bloquea temporalmente la gift card (estado BLOQUEADA). Reversible con
+    `desbloquear`. NO toca el saldo: deja una fila de auditoría monto=0 en el
+    ledger. Solo aplica desde ACTIVA/AGOTADA.
+    """
+    with transaction.atomic():
+        gc = _resolver_giftcard(codigo, lock=True)
+        if gc is None:
+            raise GiftCardError('Gift card no encontrada.')
+        if gc.estado == 'BLOQUEADA':
+            return gc
+        if gc.estado not in ('ACTIVA', 'AGOTADA'):
+            raise GiftCardError(
+                f'No se puede bloquear (estado: {gc.get_estado_display()}).'
+            )
+        MovimientoGiftCard.objects.create(
+            giftcard=gc,
+            tipo='BLOQUEO',
+            monto=0,
+            saldo_resultante=gc.saldo_actual,
+            usuario=usuario,
+            observaciones=observaciones or 'Bloqueo de gift card',
+        )
+        gc.estado = 'BLOQUEADA'
+        gc.updated_by = usuario
+        gc.save(update_fields=['estado', 'updated_by', 'updated_at'])
+    logger.info("GiftCard bloqueada codigo=%s", gc.codigo)
+    return gc
+
+
+def desbloquear(codigo, *, usuario=None, observaciones=''):
+    """
+    Levanta el bloqueo de una gift card. Recalcula el estado por saldo
+    (ACTIVA/AGOTADA) o VENCIDA si ya pasó su fecha. Solo aplica desde BLOQUEADA.
+    """
+    with transaction.atomic():
+        gc = _resolver_giftcard(codigo, lock=True)
+        if gc is None:
+            raise GiftCardError('Gift card no encontrada.')
+        if gc.estado != 'BLOQUEADA':
+            raise GiftCardError('La gift card no está bloqueada.')
+        if gc.esta_vencida:
+            nuevo_estado = 'VENCIDA'
+        else:
+            nuevo_estado = 'AGOTADA' if gc.saldo_actual <= 0 else 'ACTIVA'
+        MovimientoGiftCard.objects.create(
+            giftcard=gc,
+            tipo='DESBLOQUEO',
+            monto=0,
+            saldo_resultante=gc.saldo_actual,
+            usuario=usuario,
+            observaciones=observaciones or 'Desbloqueo de gift card',
+        )
+        gc.estado = nuevo_estado
+        gc.updated_by = usuario
+        gc.save(update_fields=['estado', 'updated_by', 'updated_at'])
+    logger.info("GiftCard desbloqueada codigo=%s estado=%s", gc.codigo, gc.estado)
+    return gc
+
+
+def editar(codigo, *, descripcion=None, motivo=None, observaciones=None, usuario=None):
+    """
+    Edita la metadata de una gift card ya emitida (descripción, motivo,
+    observaciones). No mueve saldo. Deja una fila de auditoría monto=0 (AJUSTE)
+    con el detalle del cambio para que aparezca en la trazabilidad.
+    """
+    with transaction.atomic():
+        gc = _resolver_giftcard(codigo, lock=True)
+        if gc is None:
+            raise GiftCardError('Gift card no encontrada.')
+
+        cambios = []
+        campos = ['updated_by', 'updated_at']
+        if descripcion is not None:
+            nueva = (descripcion or '').strip() or None
+            if nueva != gc.descripcion:
+                cambios.append('descripción')
+                gc.descripcion = nueva
+                campos.append('descripcion')
+        if motivo is not None:
+            motivo = (motivo or 'OTRO').upper()
+            _validar_motivo(motivo)
+            if motivo != gc.motivo:
+                cambios.append(f'motivo→{motivo}')
+                gc.motivo = motivo
+                campos.append('motivo')
+        if observaciones is not None and (observaciones or '') != (gc.observaciones or ''):
+            cambios.append('observaciones')
+            gc.observaciones = observaciones or None
+            campos.append('observaciones')
+
+        if not cambios:
+            return gc
+
+        gc.updated_by = usuario
+        gc.save(update_fields=campos)
+        MovimientoGiftCard.objects.create(
+            giftcard=gc,
+            tipo='AJUSTE',
+            monto=0,
+            saldo_resultante=gc.saldo_actual,
+            usuario=usuario,
+            observaciones='Edición: ' + ', '.join(cambios),
+        )
+    logger.info("GiftCard editada codigo=%s cambios=%s", gc.codigo, cambios)
+    return gc
+
+
+def marcar_vencidas():
+    """
+    Marca en estado VENCIDA las gift cards ACTIVA/AGOTADA cuya fecha de
+    vencimiento ya pasó. Devuelve el número de tarjetas afectadas.
+
+    El consumo ya rechaza vencidas de forma dinámica (`esta_vencida`); esto
+    persiste el estado para filtros, KPIs y reportes. Pensado para cron diario.
+    """
+    hoy = timezone.localdate()
+    return GiftCard.objects.filter(
+        estado__in=['ACTIVA', 'AGOTADA'],
+        fecha_vencimiento__isnull=False,
+        fecha_vencimiento__lt=hoy,
+    ).update(estado='VENCIDA')

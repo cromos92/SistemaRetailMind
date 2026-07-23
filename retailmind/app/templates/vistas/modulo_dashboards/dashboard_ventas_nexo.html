@@ -113,6 +113,12 @@
                     </select>
                 </div>
                 <div class="col-lg-2 col-md-4">
+                    <label class="nexo-form-label">Empresa</label>
+                    <select id="filtroEmpresa" class="form-select nexo-form-select">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-4">
                     <label class="nexo-form-label">Sucursal</label>
                     <select id="filtroSucursal" class="form-select nexo-form-select">
                         <option value="">Todas</option>
@@ -1190,6 +1196,9 @@ let tipoComparacion = 'periodo_anterior';
 let mixDimension = 'especialidad';   // 'especialidad' | 'categoria'
 let sortVentasTienda = 'total';      // 'total' | 'variacion'
 
+// Datos de sucursales (con empresa_id) para la cascada Empresa → Sucursal
+let _sucursalesData = [];
+
 // Colores NEXO
 const NEXO_COLORS = {
     primary: '#0066FF',
@@ -1245,6 +1254,15 @@ $(document).ready(function() {
             clearTimeout(_debounceFiltros);
             _debounceFiltros = setTimeout(aplicarFiltros, 400);
         });
+
+    // Cascada Empresa → Sucursal: al elegir empresa, acota el dropdown de tiendas
+    // (resetea sucursal a "Todas") y recarga. Handler propio para correr la
+    // cascada antes del reload.
+    $(document).on('change', '#filtroEmpresa', function() {
+        poblarSucursales($(this).val());
+        clearTimeout(_debounceFiltros);
+        _debounceFiltros = setTimeout(aplicarFiltros, 400);
+    });
 
     // Comparativo por tienda: toggle de dimensión del mix (especialidad ↔ categoría)
     $(document).on('click', '.mix-dim-btn', function() {
@@ -1383,15 +1401,32 @@ function formatearFecha(fechaStr) {
 }
 
 function cargarFiltros() {
-    // Cargar sucursales
+    // Cargar empresas + sucursales (con empresa_id para la cascada)
     $.get('/app/api/ventas/sucursales-dashboard/', function(response) {
-        if (response.success && response.sucursales) {
-            const select = $('#filtroSucursal');
-            response.sucursales.forEach(s => {
-                select.append(`<option value="${s.id}">${s.alias || s.nombre}</option>`);
+        if (!response.success) return;
+        _sucursalesData = response.sucursales || [];
+        if (response.empresas) {
+            const es = $('#filtroEmpresa');
+            response.empresas.forEach(e => {
+                es.append(`<option value="${e.id}">${e.nombre}</option>`);
             });
         }
+        poblarSucursales('');   // al inicio, todas las tiendas
     });
+}
+
+// Rellena #filtroSucursal, opcionalmente acotado a una empresa (cascada).
+// Conserva la selección actual si sigue siendo válida.
+function poblarSucursales(empresaId) {
+    const select = $('#filtroSucursal');
+    const actual = select.val();
+    select.empty().append('<option value="">Todas</option>');
+    _sucursalesData
+        .filter(s => !empresaId || String(s.empresa_id) === String(empresaId))
+        .forEach(s => {
+            select.append(`<option value="${s.id}">${s.alias || s.nombre}</option>`);
+        });
+    select.val(actual && select.find('option[value="' + actual + '"]').length ? actual : '');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1402,6 +1437,7 @@ function cargarDashboard() {
     const params = {
         fecha_inicio: fechaInicio,
         fecha_fin: fechaFin,
+        empresa_id: $('#filtroEmpresa').val() || '',
         sucursal_id: $('#filtroSucursal').val() || '',
         vendedor_id: $('#filtroVendedor').val() || '',
         estado: $('#filtroEstado').val() || '',
@@ -1640,6 +1676,7 @@ function cargarMixPorSucursal(params) {
         fecha_fin: params.fecha_fin,
         estado: params.estado,
         categoria_id: params.categoria_id,
+        empresa_id: params.empresa_id,   // acota qué tiendas se comparan
         dimension: mixDimension,
         top_n: 6
     };
@@ -1664,7 +1701,8 @@ function recargarMixTiendas() {
         fecha_inicio: fechaInicio,
         fecha_fin: fechaFin,
         estado: $('#filtroEstado').val() || '',
-        categoria_id: $('#filtroCategoria').val() || ''
+        categoria_id: $('#filtroCategoria').val() || '',
+        empresa_id: $('#filtroEmpresa').val() || ''
     });
 }
 
