@@ -198,10 +198,15 @@ class TicketSyncService:
         )
         
         # Crear items del ticket
+        # NOTA (motor NxM): el POS desktop NEXO aún no aplica promos NxM. Cuando
+        # se implemente, validar el payload con
+        # app.services.campanas_service.validar_promos_nxm_payload y setear
+        # Ticket_Productos.promo_campana_id en las líneas gratis (igual que en
+        # views_modulo_ventas.registrar_pagos_ticket).
         for item_proc in items_procesados:
             producto_talla = item_proc['producto_talla']
             item_data = item_proc['data']
-            
+
             Ticket_Productos.objects.create(
                 ProductoTalla=producto_talla,
                 idTicket=ticket,

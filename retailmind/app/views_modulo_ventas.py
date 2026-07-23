@@ -44,7 +44,7 @@ from .utils_ventas import (
     ONLY_DTE_PAGO,
     ONLY_TICKET_PRODUCTO_POS,
 )
-from .utils_permisos import obtener_configuracion_rango_arqueo
+from .utils_permisos import obtener_configuracion_rango_arqueo, obtener_sucursales_usuario
 from .decorators import requiere_rol
 
 # Caching del módulo ventas (Redis / LocMem, ver app.cache_utils)
@@ -1260,21 +1260,36 @@ def crear_ticket(request):
                     if resultado['max_limite'] is not None:
                         limite_descuento_rol = float(resultado['max_limite'])
             
+            # Validar promos NxM: las líneas gratis validadas quedan exentas del
+            # límite de descuento por rol (un 100% legítimo, no un descuento manual).
+            from .services.campanas_service import validar_promos_nxm_payload
+            val_promo = validar_promos_nxm_payload(productos, sucursal)
+            if not val_promo['ok']:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Promoción NxM inválida: ' + '; '.join(
+                        e['error'] for e in val_promo['errores']),
+                    'error_tipo': 'PROMO_INVALIDA',
+                }, status=400)
+            idx_promo_exentos = set(val_promo['lineas_ok'].keys())
+
             # Validar descuentos por producto contra el límite del rol
-            for item in productos:
+            for idx, item in enumerate(productos):
+                if idx in idx_promo_exentos:
+                    continue  # línea gratis de promo NxM validada
                 descuento_unitario = item.get('descuento_unitario', 0)
                 precio_unitario = item.get('precio_unitario', 0)
-                
+
                 if descuento_unitario > 0 and precio_unitario > 0:
                     porcentaje_descuento = (descuento_unitario / precio_unitario) * 100
-                    
+
                     # Validar que no exceda el límite del rol
                     if porcentaje_descuento > limite_descuento_rol and limite_descuento_rol > 0:
                         return JsonResponse({
                             'success': False,
                             'error': f'El descuento aplicado ({porcentaje_descuento:.1f}%) excede el límite permitido para tu rol ({limite_descuento_rol}%). Producto: {item.get("articulo", "")}'
                         })
-                    
+
                     # Si el límite es 0, no permitir ningún descuento
                     if limite_descuento_rol == 0:
                         return JsonResponse({
@@ -3891,6 +3906,20 @@ def registrar_pagos_ticket(request, correlativo):
                             'stock_requerido': cant_payload,
                         }, status=400)
 
+        # --- Validar promos NxM del payload contra las campañas vigentes ---
+        # Función pura sin escritura: reejecutable en cada sync sin efectos
+        # dobles (registrar_pagos_ticket no es atómico).
+        from .services.campanas_service import validar_promos_nxm_payload
+        val_promo = validar_promos_nxm_payload(productos_payload, ticket.sucursal)
+        if not val_promo['ok']:
+            return JsonResponse({
+                'success': False,
+                'error': 'Promoción NxM inválida: ' + '; '.join(
+                    e['error'] for e in val_promo['errores']),
+                'error_tipo': 'PROMO_INVALIDA',
+                'detalles': val_promo['errores'],
+            }, status=400)
+
         ids_existentes_usados = set()
 
         for prod_data in productos_payload:
@@ -3904,6 +3933,7 @@ def registrar_pagos_ticket(request, correlativo):
             descuento_unitario = int(prod_data.get('descuento_unitario', 0))
             subtotal = int(prod_data.get('subtotal', cantidad * precio_unitario))
             porcentaje_descuento = round((descuento_unitario / precio_unitario) * 100, 2) if precio_unitario > 0 and descuento_unitario > 0 else 0
+            promo_campana_id = prod_data.get('promo_campana_id') if prod_data.get('es_promo_nxm') else None
 
             # Buscar un TP existente del mismo SKU que aún no haya sido emparejado
             tp_match = None
@@ -3952,7 +3982,12 @@ def registrar_pagos_ticket(request, correlativo):
                     tp_match.descuento_unitario = descuento_unitario
                     tp_match.porcentaje_descuento = porcentaje_descuento
                     tp_match.subtotal = subtotal
+                    tp_match.promo_campana_id = promo_campana_id
                     tp_match.save()
+                elif tp_match.promo_campana_id != promo_campana_id:
+                    # Sin otros cambios pero cambió el marcador de promo NxM.
+                    tp_match.promo_campana_id = promo_campana_id
+                    tp_match.save(update_fields=['promo_campana'])
             else:
                 producto_talla_id = prod_data.get('producto_talla_id')
                 producto_talla = None
@@ -3978,7 +4013,8 @@ def registrar_pagos_ticket(request, correlativo):
                         precio_original=precio_original_payload,
                         descuento_unitario=descuento_unitario,
                         subtotal=subtotal,
-                        porcentaje_descuento=porcentaje_descuento
+                        porcentaje_descuento=porcentaje_descuento,
+                        promo_campana_id=promo_campana_id,
                     )
                     ids_existentes_usados.add(tp_nuevo.id)
                 else:
@@ -18213,98 +18249,108 @@ def obtener_estado_cuadraturas(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('prod_mas_vendidos', timeout=120)
+@cache_ventas_json('prod_mas_vendidos_v2', timeout=120)
 def obtener_productos_mas_vendidos(request):
-    """
-    API para obtener los productos más vendidos
-    Incluye: cantidades, montos, participación
-    """
+    """Top de productos vendidos agrupado por MODELO (articulo), enriquecido con
+    marca / categoría Padre › Hija / género / especialidad(es).
+
+    Cambios vs versión anterior (deliberados, para alinear con los charts v1.2):
+      · Agrupa por `articulo` (modelo), no por SKU (talla): Producto es por
+        sucursal, así el ranking se consolida entre tiendas y por curva de tallas.
+      · Usa `created_at` (fecha real de venta), no `fecha` (auto_now).
+      · Usa Sum('subtotal') (ingreso real tras descuentos), no stock*precio.
+      · `participacion` es sobre el total del período, no sobre el top-N.
+      · Excluye productos con excluir_de_analitica.
+    Las especialidades (multi-etiqueta) se resuelven en query aparte con
+    .distinct() para no duplicar filas ni inflar las sumas."""
     try:
-        # Obtener parámetros de filtro
-        fecha_inicio = request.GET.get('fecha_inicio')
-        fecha_fin = request.GET.get('fecha_fin')
-        sucursal_id = request.GET.get('sucursal_id')
-        estado = request.GET.get('estado', '')  # Vacío por defecto
+        from app.models import Producto, ProductoAtributoValor, Categoria
         limite = int(request.GET.get('limite', 20))
-        
-        # Validar fechas
-        if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.localdate()
-            fecha_inicio = fecha_fin - timedelta(days=30)
-        else:
-            try:
-                fecha_inicio = timezone.datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
-                fecha_fin = timezone.datetime.strptime(fecha_fin, '%Y-%m-%d').date()
-            except ValueError:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Formato de fecha inválido'
-                }, status=400)
-        
-        # Construir queryset base de tickets
-        tickets = Ticket.objects.filter(
-            fecha__gte=fecha_inicio,
-            fecha__lte=fecha_fin
-        )
-        
-        # Solo aplicar filtro de estado si tiene valor, por defecto mostrar solo PAGADO si no se especifica
-        if estado:
-            tickets = tickets.filter(estado=estado)
-        else:
-            tickets = tickets.filter(estado='PAGADO')  # Por defecto solo PAGADO para productos vendidos
-        
-        if sucursal_id:
-            tickets = tickets.filter(sucursal_id=sucursal_id)
-        
-        # Obtener IDs de tickets
-        ticket_ids = tickets.values_list('id', flat=True)
-        
-        # Consultar productos vendidos
-        productos_vendidos = Ticket_Productos.objects.filter(
-            idTicket_id__in=ticket_ids
-        ).values(
-            'ProductoTalla__sku',
-            'ProductoTalla__producto__articulo',
-            'ProductoTalla__producto__descripcion',
-            'ProductoTalla__producto__categoria__nombre'
-        ).annotate(
-            cantidad_vendida=Sum('stock'),
-            total_ventas=Sum(
-                ExpressionWrapper(
-                    F('stock') * F('precio'),
-                    output_field=DecimalField()
-                )
-            )
-        ).order_by('-cantidad_vendida')[:limite]
-        
-        # Calcular total general para participación
-        total_general = sum(float(p['total_ventas'] or 0) for p in productos_vendidos)
-        
+
+        # 1) Tickets del período (created_at real, estado PAGADO por defecto,
+        #    sucursal_id del GET) — mismo helper que los charts v1.2.
+        ticket_ids = _tickets_pagados_periodo(request).values_list('id', flat=True)
+        lineas = (Ticket_Productos.objects
+                  .filter(idTicket_id__in=ticket_ids, ProductoTalla__isnull=False)
+                  .exclude(ProductoTalla__producto__excluir_de_analitica=True))
+
+        # 2) Filtros cruzados que el dashboard ya envía
+        categoria_id = request.GET.get('categoria_id')
+        if categoria_id:  # el padre incluye a sus hijas
+            cat_ids = [int(categoria_id)]
+            cat_ids += list(Categoria.objects.filter(padre_id=categoria_id)
+                            .values_list('id', flat=True))
+            lineas = lineas.filter(ProductoTalla__producto__categoria_id__in=cat_ids)
+        especialidad_id = request.GET.get('especialidad_id')
+        if especialidad_id:  # Exists → no duplica filas aunque el producto tenga varias etiquetas
+            lineas = lineas.filter(Exists(
+                ProductoAtributoValor.objects.filter(
+                    producto_id=OuterRef('ProductoTalla__producto_id'),
+                    opcion_id=especialidad_id)))
+
+        # 3) Métricas por MODELO — sin join a atributos (cero doble conteo)
+        agg = list(lineas
+                   .values(articulo=F('ProductoTalla__producto__articulo'))
+                   .annotate(cantidad_vendida=Sum('stock'),
+                             total_ventas=Sum('subtotal'))
+                   .order_by('-cantidad_vendida'))
+        total_general = sum(float(a['total_ventas'] or 0) for a in agg)  # sobre TODO el período
+        top = agg[:limite]
+        arts = [a['articulo'] for a in top if a['articulo']]
+
+        # 4) Atributos por articulo (Producto es por-sucursal → preferir no-nulo al fusionar)
+        attrs = {}
+        for p in (Producto.objects.filter(articulo__in=arts)
+                  .values('articulo', 'descripcion',
+                          'atributo1__valor',   # Marca
+                          'atributo3__valor',   # Género
+                          'categoria__nombre', 'categoria__padre__nombre')):
+            cur = attrs.setdefault(p['articulo'], dict(p))
+            for k, v in p.items():
+                if not cur.get(k) and v:
+                    cur[k] = v
+
+        # 5) Especialidades por articulo (distinct → una fila por (articulo, slug))
+        esp_map = {}
+        for art, slug in (ProductoAtributoValor.objects
+                          .filter(producto__articulo__in=arts,
+                                  atributo__nombre__iexact='Especialidad')
+                          .values_list('producto__articulo', 'opcion__valor')
+                          .distinct()):
+            if slug:
+                esp_map.setdefault(art, set()).add(slug)
+
         productos_data = []
-        for producto in productos_vendidos:
-            cantidad = producto['cantidad_vendida'] or 0
-            total_ventas = float(producto['total_ventas'] or 0)
-            precio_promedio = total_ventas / cantidad if cantidad > 0 else 0
-            participacion = (total_ventas / total_general * 100) if total_general > 0 else 0
-            
+        for a in top:
+            art = a['articulo']
+            at = attrs.get(art, {})
+            cantidad = a['cantidad_vendida'] or 0
+            total_ventas = float(a['total_ventas'] or 0)
+            hija = at.get('categoria__nombre') or 'Sin categoría'
+            padre = at.get('categoria__padre__nombre') or ''
             productos_data.append({
-                'sku': producto['ProductoTalla__sku'],
-                'nombre': producto['ProductoTalla__producto__articulo'] or 'Sin nombre',
-                'descripcion': producto['ProductoTalla__producto__descripcion'] or '',
-                'categoria': producto['ProductoTalla__producto__categoria__nombre'] or 'Sin categoría',
+                'articulo': art or 'Sin código',
+                'nombre': art or 'Sin código',            # compat con el JS actual (p.nombre)
+                'descripcion': at.get('descripcion') or '',
+                'marca': at.get('atributo1__valor') or '—',
+                'categoria': hija,
+                'categoria_label': (padre + ' › ' + hija) if padre else hija,
+                'genero': at.get('atributo3__valor') or '—',
+                'especialidades': sorted(esp_map.get(art, [])),
                 'cantidad': cantidad,
                 'total_ventas': total_ventas,
-                'precio_promedio': precio_promedio,
-                'participacion': float(participacion)
+                'precio_promedio': total_ventas / cantidad if cantidad > 0 else 0,
+                'participacion': round(total_ventas / total_general * 100, 1) if total_general > 0 else 0,
             })
-        
+
         return JsonResponse({
             'success': True,
             'productos': productos_data,
             'total_productos': len(productos_data)
         })
-        
+
     except Exception as e:
+        logger.error(f'Error productos más vendidos: {e}')
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener productos más vendidos: {str(e)}'
@@ -18517,6 +18563,151 @@ def obtener_indicador_compra_categoria(request):
         return JsonResponse({'success': True, 'dias': dias, 'indicadores': indicadores})
     except Exception as e:
         return JsonResponse({'success': False, 'error': f'Error indicador de compra: {str(e)}'}, status=500)
+
+
+@require_GET
+@login_required
+@cache_ventas_json('mix_sucursal', timeout=120, vary_on_session=True)
+def obtener_mix_por_sucursal(request):
+    """Comparativo ENTRE tiendas (siempre todas las visibles del usuario, sin
+    centros de distribución). IGNORA a propósito sucursal_id y vendedor_id: la
+    sección compara tiendas, no filtra a una. SÍ respeta fecha/estado/categoría.
+
+    GET:
+      · dimension = especialidad | categoria   (default especialidad)
+      · top_n     = nº de segmentos globales    (default 6, máx 12)
+      · categoria_id                            (acota el mix a una categoría)
+      · fecha_inicio_comp / fecha_fin_comp      (opcionales → variación % por tienda)
+
+    El % del mix se normaliza sobre la suma de segmentos de cada tienda (vista de
+    atribución: un producto multi-etiqueta suma a todas sus especialidades), de
+    modo que cada barra suma 100% y es comparable entre tiendas. `cobertura_pct`
+    expone qué proporción de las unidades de la tienda tiene etiqueta (control de
+    calidad; es una cota superior porque las multi-etiqueta se cuentan N veces)."""
+    try:
+        from app.models import Categoria
+        dimension = request.GET.get('dimension', 'especialidad')
+        if dimension not in ('especialidad', 'categoria'):
+            return JsonResponse({'success': False, 'error': 'dimension inválida'}, status=400)
+        top_n = max(1, min(int(request.GET.get('top_n', 6)), 12))
+
+        # Universo de tiendas: permisos server-side (no se puede burlar por GET),
+        # sin centros de distribución (stock mayorista, no venden a público).
+        sucursales = list(obtener_sucursales_usuario(request.user)
+                          .filter(es_centro_distribucion=False)
+                          .values('id', 'alias'))
+        suc_ids = [s['id'] for s in sucursales]
+        if not suc_ids:
+            return JsonResponse({'success': True, 'dimension': dimension,
+                                 'segmentos': [], 'sucursales': []})
+
+        fecha_inicio, fecha_fin = _rango_periodo(request)
+        estado = request.GET.get('estado') or 'PAGADO'  # mezclar ANULADO distorsiona el mix
+
+        def _tickets(fi, ff):
+            return Ticket.objects.filter(
+                created_at__date__gte=fi, created_at__date__lte=ff,
+                estado=estado, sucursal_id__in=suc_ids)
+
+        # ── Totales por tienda (período actual) ──
+        tot_map = {r['sucursal_id']: r for r in
+                   _tickets(fecha_inicio, fecha_fin).values('sucursal_id')
+                   .annotate(total=Sum('total'), cantidad=Count('id'))}
+
+        # ── Comparativo opcional (para variación %) ──
+        tot_comp = {}
+        fic, ffc = request.GET.get('fecha_inicio_comp'), request.GET.get('fecha_fin_comp')
+        if fic and ffc:
+            try:
+                fic = timezone.datetime.strptime(fic, '%Y-%m-%d').date()
+                ffc = timezone.datetime.strptime(ffc, '%Y-%m-%d').date()
+                tot_comp = {r['sucursal_id']: float(r['total'] or 0) for r in
+                            _tickets(fic, ffc).values('sucursal_id').annotate(total=Sum('total'))}
+            except ValueError:
+                pass  # comparativo malformado → sin variación
+
+        # ── Líneas del período para el mix ──
+        ticket_ids = _tickets(fecha_inicio, fecha_fin).values_list('id', flat=True)
+        lineas = (Ticket_Productos.objects
+                  .filter(idTicket_id__in=ticket_ids, ProductoTalla__isnull=False)
+                  .exclude(ProductoTalla__producto__excluir_de_analitica=True))
+        categoria_id = request.GET.get('categoria_id')
+        if categoria_id:
+            cat_ids = [int(categoria_id)]
+            cat_ids += list(Categoria.objects.filter(padre_id=categoria_id)
+                            .values_list('id', flat=True))
+            lineas = lineas.filter(ProductoTalla__producto__categoria_id__in=cat_ids)
+
+        # Unidades totales por tienda (ANTES de unir atributos → sin fanout)
+        uds_totales = {r['idTicket__sucursal_id']: int(r['u'] or 0) for r in
+                       lineas.values('idTicket__sucursal_id').annotate(u=Sum('stock'))}
+
+        if dimension == 'especialidad':
+            lineas_dim = lineas.filter(
+                ProductoTalla__producto__atributos__atributo__nombre__iexact='Especialidad')
+            clave_expr = F('ProductoTalla__producto__atributos__opcion__valor')
+        else:
+            lineas_dim = lineas
+            clave_expr = Coalesce(F('ProductoTalla__producto__categoria__padre__nombre'),
+                                  F('ProductoTalla__producto__categoria__nombre'))
+
+        agg = list(lineas_dim.values('idTicket__sucursal_id', clave=clave_expr)
+                   .annotate(total=Sum('subtotal'), cantidad=Sum('stock')))
+
+        # ── Top-N GLOBAL por total $ del período (mismos segmentos/colores en todas las barras) ──
+        tot_por_clave = {}
+        for r in agg:
+            if r['clave']:
+                tot_por_clave[r['clave']] = tot_por_clave.get(r['clave'], 0) + float(r['total'] or 0)
+        segmentos = [k for k, _ in sorted(tot_por_clave.items(), key=lambda kv: -kv[1])[:top_n]]
+        seg_set = set(segmentos)
+        hay_otras = len(tot_por_clave) > len(segmentos)
+
+        # ── Mix por tienda: bucket 'otras' + % sobre la suma de segmentos de la tienda ──
+        mix_suc = {sid: {} for sid in suc_ids}
+        uds_tag = {sid: 0 for sid in suc_ids}
+        for r in agg:
+            sid, clave = r['idTicket__sucursal_id'], r['clave']
+            if not clave:
+                continue
+            seg = clave if clave in seg_set else 'otras'
+            d = mix_suc[sid].setdefault(seg, {'total': 0.0, 'cantidad': 0})
+            d['total'] += float(r['total'] or 0)
+            d['cantidad'] += int(r['cantidad'] or 0)
+            uds_tag[sid] += int(r['cantidad'] or 0)  # atribución (multi-tag cuenta N veces)
+
+        data = []
+        for s in sucursales:
+            sid = s['id']
+            t = tot_map.get(sid, {})
+            total = float(t.get('total') or 0)
+            cant = int(t.get('cantidad') or 0)
+            base_mix = sum(v['total'] for v in mix_suc[sid].values())
+            mix = {seg: {'total': v['total'], 'cantidad': v['cantidad'],
+                         'pct': round(v['total'] / base_mix * 100, 1) if base_mix else 0}
+                   for seg, v in mix_suc[sid].items()}
+            comp = tot_comp.get(sid)
+            if comp is None:
+                variacion = None
+            elif comp > 0:
+                variacion = round((total - comp) / comp * 100, 1)
+            else:
+                variacion = 100.0 if total > 0 else None
+            ut = uds_totales.get(sid, 0)
+            data.append({
+                'id': sid, 'alias': s['alias'], 'total': total, 'cantidad': cant,
+                'ticket_promedio': total / cant if cant else 0,
+                'variacion_pct': variacion, 'mix': mix,
+                'cobertura_pct': round(min(uds_tag[sid], ut) / ut * 100, 1) if ut else None,
+            })
+        data.sort(key=lambda x: -x['total'])
+        if hay_otras:
+            segmentos = segmentos + ['otras']
+        return JsonResponse({'success': True, 'dimension': dimension,
+                             'segmentos': segmentos, 'sucursales': data})
+    except Exception as e:
+        logger.error(f'Error mix por sucursal: {e}')
+        return JsonResponse({'success': False, 'error': f'Error mix por sucursal: {str(e)}'}, status=500)
 
 
 @require_GET

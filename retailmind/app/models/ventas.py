@@ -360,7 +360,15 @@ class Ticket_Productos(models.Model):
     # === CAMPOS FIFO ===
     costo_fifo = models.IntegerField(default=0)  # Costo calculado con FIFO
     lotes_utilizados = models.TextField(blank=True, null=True)  # JSON de lotes utilizados
-    
+
+    # === PROMO NxM (motor de campañas de liquidación) ===
+    # Cuando esta línea es la "unidad gratis" de una promo NxM (2x1, 3x2…),
+    # apunta a la campaña que la generó. Su descuento_unitario == precio.
+    promo_campana = models.ForeignKey(
+        'app.CampanaLiquidacion', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='lineas_ticket',
+    )
+
     class Meta:
         # unique_together removido: ProductoTalla puede ser null (varios ítems manuales por ticket)
         pass
@@ -1161,23 +1169,48 @@ class HistorialCambioDevolucion(models.Model):
 
 # ========== MÓDULO DEVOLUCIÓN DE DINERO POR GARANTÍA ==========
 # Dominio propio, separado de CambioDevolucion (cambio de producto por otro)
-# y de Requerimiento (reclamo a proveedor externo). Flujo de un solo actor:
-# jefe_local/administrador busca el DTE, elige el producto, registra el
-# cliente real como receptor, y genera la NC en el mismo paso.
+# y de Requerimiento (reclamo a proveedor externo). Flujo en dos pasos:
+# un usuario con acceso al módulo crea la SOLICITUD (PENDIENTE, sin NC ni
+# folio consumido) y un administrador la analiza: al aprobar decide el
+# impacto en caja (efectivo/transferencia/no afecta) y ahí recién se genera
+# la NC 61 + TXT Acepta; al rechazar queda el motivo. Nunca mueve stock.
 
 ESTADO_DEVOLUCION_GARANTIA_CHOICES = [
-    ('REGISTRADA', 'Registrada'),
+    ('PENDIENTE', 'Pendiente de Aprobación'),
+    ('REGISTRADA', 'Registrada'),  # legacy del flujo de un solo paso
     ('NC_GENERADA', 'NC Generada'),
+    ('RECHAZADA', 'Rechazada'),
     ('ANULADA', 'Anulada'),
+]
+
+# Decisión del aprobador: cómo impacta la NC en la cuadratura de caja.
+# EFECTIVO_CAJA/TRANSFERENCIA_BANCARIA -> NC tipo_transaccion='DEVOLUCION'
+# con Dte_Detalle_Pago.fecha_pago = fecha_imputacion_caja (resta teóricos);
+# NO_AFECTA_CAJA -> NC tipo_transaccion='ANULACION' sin detalle de pago
+# (informativa: cuenta como documento del día, no resta teóricos).
+METODO_DEVOLUCION_DG_CHOICES = [
+    ('EFECTIVO_CAJA', 'Efectivo de caja'),
+    ('TRANSFERENCIA_BANCARIA', 'Transferencia bancaria'),
+    ('NO_AFECTA_CAJA', 'No afecta caja'),
+]
+
+# Modo de devolución por línea: CANTIDAD = n unidades al precio cobrado
+# (la NC copia la talla); MONTO = un monto parcial libre sin devolución
+# física del producto (la NC lleva una línea conceptual sin talla, patrón
+# "corrige montos" / razón SII 3 de anular_factura_dte).
+MODO_DETALLE_DG_CHOICES = [
+    ('CANTIDAD', 'Por cantidad'),
+    ('MONTO', 'Por monto parcial'),
 ]
 
 
 class DevolucionGarantia(models.Model):
     """
     Devolución de DINERO al cliente por garantía/falla de producto — no cambio
-    de producto por otro (para eso existe CambioDevolucion). Flujo de un solo
-    actor: jefe_local/administrador busca el DTE, elige el producto, registra
-    el cliente real como receptor, y genera la NC en el mismo paso.
+    de producto por otro (para eso existe CambioDevolucion). Flujo en dos pasos:
+    un usuario con acceso al módulo crea la solicitud (`solicitado_por`,
+    estado PENDIENTE) y un administrador la resuelve (`autorizado_por` al
+    aprobar/rechazar). La NC 61 se genera recién al aprobar. Nunca mueve stock.
     """
     # === RELACIONES AL DOCUMENTO ORIGEN ===
     dte_original = models.ForeignKey(
@@ -1197,21 +1230,58 @@ class DevolucionGarantia(models.Model):
         help_text="Empresa (cliente real) resuelta/creada por RUT, usada como receptor de la NC",
     )
 
-    # === MOTIVO Y AUTORIZACIÓN ===
+    # === MOTIVO ===
     motivo = models.TextField(
         default='Garantía aprobada',
         help_text="Motivo de la devolución de dinero",
     )
+
+    # === SOLICITANTE Y APROBADOR ===
+    solicitado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='devoluciones_garantia_solicitadas',
+        null=True, blank=True,
+        help_text="Usuario que creó la solicitud de devolución",
+    )
     autorizado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
         related_name='devoluciones_garantia_autorizadas',
-        help_text="Jefe de local o administrador que ejecutó/autorizó la devolución",
+        null=True, blank=True,
+        help_text="Administrador que aprobó o rechazó la solicitud",
+    )
+    anulada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='devoluciones_garantia_anuladas',
+        null=True, blank=True,
+        help_text="Usuario que anuló la solicitud pendiente",
+    )
+    fecha_aprobacion = models.DateTimeField(null=True, blank=True)
+    fecha_rechazo = models.DateTimeField(null=True, blank=True)
+    fecha_anulacion = models.DateTimeField(null=True, blank=True)
+    observaciones_aprobacion = models.TextField(
+        blank=True, default='',
+        help_text="Notas del administrador al aprobar",
+    )
+    motivo_rechazo = models.TextField(
+        blank=True, default='',
+        help_text="Motivo obligatorio al rechazar",
+    )
+
+    # === IMPACTO EN CAJA (decidido por el aprobador) ===
+    metodo_devolucion = models.CharField(
+        max_length=30, choices=METODO_DEVOLUCION_DG_CHOICES,
+        blank=True, default='',
+        help_text="Cómo impacta la NC en la cuadratura de caja",
+    )
+    fecha_imputacion_caja = models.DateField(
+        null=True, blank=True,
+        help_text="Fecha a la que se imputa el egreso en la cuadratura (fecha_pago de la NC); null si no afecta caja",
     )
 
     # === ESTADO Y NC ===
     estado = models.CharField(
         max_length=20, choices=ESTADO_DEVOLUCION_GARANTIA_CHOICES,
-        default='REGISTRADA',
+        default='PENDIENTE',
     )
     nota_credito = models.ForeignKey(
         'app.Dte', on_delete=models.SET_NULL, null=True, blank=True,
@@ -1219,7 +1289,11 @@ class DevolucionGarantia(models.Model):
         help_text="Nota de Crédito (DTE 61) generada por esta devolución",
     )
 
-    # === MONTOS (calculados desde los DevolucionGarantiaDetalle) ===
+    # === MONTOS ===
+    # monto_total (y el subtotal/monto de cada DevolucionGarantiaDetalle) se
+    # guardan siempre CON IVA para filas nuevas — es lo que recibe el cliente
+    # y va a Dte_Detalle_Pago.monto. Filas legacy de facturas del flujo antiguo
+    # quedaron en neto (solo display histórico; la migración no las reescribe).
     monto_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     # === METADATA ===
@@ -1245,7 +1319,13 @@ class DevolucionGarantia(models.Model):
 
 
 class DevolucionGarantiaDetalle(models.Model):
-    """Línea(s) de producto específica(s) del DTE que se devuelven."""
+    """
+    Línea del DTE que se devuelve. Dos convenciones según `modo`:
+      - CANTIDAD: cantidad>0, precio_unitario = precio efectivo CON IVA,
+        subtotal = cantidad * precio_unitario, monto = None.
+      - MONTO: cantidad=0, precio_unitario=0, monto = monto CON IVA a
+        acreditar (parcial, sin devolución física), subtotal = monto.
+    """
     devolucion = models.ForeignKey(
         DevolucionGarantia, on_delete=models.CASCADE,
         related_name='detalles',
@@ -1254,8 +1334,15 @@ class DevolucionGarantiaDetalle(models.Model):
         'app.Dte_Productos', on_delete=models.PROTECT,
         related_name='devoluciones_garantia_detalle',
     )
+    modo = models.CharField(
+        max_length=10, choices=MODO_DETALLE_DG_CHOICES, default='CANTIDAD',
+    )
     cantidad = models.IntegerField()
     precio_unitario = models.DecimalField(max_digits=10, decimal_places=2)
+    monto = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text="Monto CON IVA a acreditar (solo modo MONTO)",
+    )
     subtotal = models.DecimalField(max_digits=12, decimal_places=2)
 
     class Meta:

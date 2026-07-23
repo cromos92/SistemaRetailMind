@@ -57,14 +57,21 @@
         <div class="detalle-card">
             <h6><i class="ri-shopping-bag-3-line me-1"></i> Productos devueltos</h6>
             <table class="table table-sm">
-                <thead><tr><th>Producto</th><th>Cantidad</th><th>Precio unit.</th><th>Subtotal</th></tr></thead>
+                <thead><tr><th>Producto</th><th>Modo</th><th>Cantidad</th><th>Precio unit.</th><th>Subtotal</th></tr></thead>
                 <tbody>
                     {% for detalle in devolucion.detalles.all %}
                     <tr>
                         <td>{{ detalle.dte_producto.descripcion }}</td>
+                        <td>{{ detalle.get_modo_display }}</td>
+                        {% if detalle.modo == 'MONTO' %}
+                        <td class="text-muted">—</td>
+                        <td class="text-muted">—</td>
+                        <td>${{ detalle.subtotal|floatformat:0 }}</td>
+                        {% else %}
                         <td>{{ detalle.cantidad }}</td>
                         <td>${{ detalle.precio_unitario|floatformat:0 }}</td>
                         <td>${{ detalle.subtotal|floatformat:0 }}</td>
+                        {% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -75,9 +82,24 @@
             <h6><i class="ri-price-tag-3-line me-1"></i> Motivo y estado</h6>
             <p class="mb-1"><strong>Motivo:</strong> {{ devolucion.motivo }}</p>
             <p class="mb-1"><strong>Estado:</strong> {{ devolucion.get_estado_display }}</p>
-            <p class="mb-1"><strong>Autorizado por:</strong> {{ devolucion.autorizado_por.username }}</p>
+            <p class="mb-1"><strong>Solicitado por:</strong> {{ devolucion.solicitado_por.username|default:"—" }} <span class="text-muted">({{ devolucion.created_at|date:"d/m/Y H:i" }})</span></p>
+            {% if devolucion.estado == 'NC_GENERADA' %}
+            <p class="mb-1"><strong>Aprobado por:</strong> {{ devolucion.autorizado_por.username|default:"—" }} <span class="text-muted">({{ devolucion.fecha_aprobacion|date:"d/m/Y H:i" }})</span></p>
+            {% if devolucion.metodo_devolucion %}
+            <p class="mb-1"><strong>Impacto en caja:</strong> {{ devolucion.get_metodo_devolucion_display }}{% if devolucion.fecha_imputacion_caja %} — imputa el {{ devolucion.fecha_imputacion_caja|date:"d/m/Y" }}{% endif %}</p>
+            {% endif %}
+            {% if devolucion.observaciones_aprobacion %}
+            <p class="mb-1"><strong>Observaciones:</strong> {{ devolucion.observaciones_aprobacion }}</p>
+            {% endif %}
+            {% elif devolucion.estado == 'RECHAZADA' %}
+            <p class="mb-1"><strong>Rechazado por:</strong> {{ devolucion.autorizado_por.username|default:"—" }} <span class="text-muted">({{ devolucion.fecha_rechazo|date:"d/m/Y H:i" }})</span></p>
+            <p class="mb-1"><strong>Motivo del rechazo:</strong> {{ devolucion.motivo_rechazo }}</p>
+            {% elif devolucion.estado == 'ANULADA' %}
+            <p class="mb-1"><strong>Anulada por:</strong> {{ devolucion.anulada_por.username|default:"—" }} <span class="text-muted">({{ devolucion.fecha_anulacion|date:"d/m/Y H:i" }})</span></p>
+            {% endif %}
             {% if devolucion.nota_credito %}
-            <p class="mb-0"><strong>Nota de Crédito:</strong> #{{ devolucion.nota_credito.numero_documento }} — ${{ devolucion.nota_credito.monto_con_iva|floatformat:0 }}</p>
+            <p class="mb-1"><strong>Nota de Crédito:</strong> #{{ devolucion.nota_credito.numero_documento }} — ${{ devolucion.nota_credito.monto_con_iva|floatformat:0 }}</p>
+            <a href="{% url 'descargar_txt_nc_api' devolucion.nota_credito.id %}" class="btn btn-sm btn-outline-primary"><i class="ri-download-line me-1"></i> Descargar TXT Acepta</a>
             {% endif %}
         </div>
 

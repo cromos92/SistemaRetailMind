@@ -20,11 +20,15 @@
     .pl-header h1 { font-size:1.7rem; font-weight:800; margin:0; position:relative; z-index:1; }
     .pl-header p { color:var(--nexo-gray-300); margin:4px 0 0; font-size:.85rem; position:relative; z-index:1; }
     .pl-body { padding:22px 34px; }
+    .pl-toolbar { background:#fff; border:1px solid var(--nexo-gray-300); border-radius:var(--nexo-radius); box-shadow:var(--nexo-shadow-md); padding:12px 16px; margin-bottom:16px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .pl-toolbar label { font-size:.72rem; font-weight:700; color:var(--nexo-gray-500); text-transform:uppercase; letter-spacing:.4px; display:block; margin:0 0 2px; }
+    .pl-select { border:1.5px solid var(--nexo-gray-300); border-radius:8px; padding:6px 10px; font-size:.83rem; font-weight:600; color:var(--nexo-gray-700); background:#fff; min-width:150px; }
+    .pl-check { display:flex; align-items:center; gap:6px; font-size:.82rem; font-weight:700; color:var(--nexo-gray-700); cursor:pointer; padding-top:14px; }
     .pl-kpis { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:18px; }
     .pl-kpi { background:#fff; border:1px solid var(--nexo-gray-300); border-radius:var(--nexo-radius); padding:14px 16px; box-shadow:var(--nexo-shadow-md); }
     .pl-kpi .lbl { font-size:.66rem; font-weight:700; color:var(--nexo-gray-500); text-transform:uppercase; letter-spacing:.4px; }
     .pl-kpi .val { font-size:1.35rem; font-weight:800; color:var(--nexo-secondary); line-height:1.15; margin-top:4px; }
-    .pl-kpi .val.red { color:var(--nexo-error); } .pl-kpi .val.green { color:var(--nexo-accent); }
+    .pl-kpi .val.red { color:var(--nexo-error); } .pl-kpi .val.green { color:var(--nexo-accent); } .pl-kpi .val.blue { color:var(--nexo-primary); }
     .pl-kpi .sub { font-size:.72rem; color:var(--nexo-gray-500); margin-top:2px; }
     .pl-alert { background:linear-gradient(135deg,#FFECEC,#fff); border:1px solid #ffd4d4; border-left:5px solid var(--nexo-error); border-radius:var(--nexo-radius); padding:16px 20px; margin-bottom:18px; }
     .pl-alert .big { font-size:1.15rem; font-weight:800; color:var(--nexo-secondary); }
@@ -35,22 +39,35 @@
     .pl-filters { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center; }
     .pl-fbtn { border:1.5px solid var(--nexo-gray-300); background:#fff; padding:6px 14px; border-radius:999px; font-size:.82rem; font-weight:700; cursor:pointer; color:var(--nexo-gray-700); }
     .pl-fbtn.active { background:var(--nexo-primary); color:#fff; border-color:var(--nexo-primary); }
+    .pl-fbtn.xls { border-color:var(--nexo-accent); color:#08917a; }
+    .pl-tabs { display:flex; gap:6px; margin-bottom:12px; border-bottom:2px solid var(--nexo-gray-100); }
+    .pl-tab { border:none; background:none; padding:8px 16px; font-size:.88rem; font-weight:700; color:var(--nexo-gray-500); cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; }
+    .pl-tab.active { color:var(--nexo-primary); border-bottom-color:var(--nexo-primary); }
     .pl-table { width:100%; border-collapse:collapse; font-size:.83rem; }
     .pl-table th { background:var(--nexo-secondary); color:#fff; text-align:right; padding:8px 10px; font-weight:700; cursor:pointer; white-space:nowrap; position:sticky; top:0; }
     .pl-table th:first-child, .pl-table td:first-child { text-align:left; }
     .pl-table th.txt { text-align:left; }
     .pl-table td { padding:6px 10px; border-bottom:1px solid var(--nexo-gray-100); text-align:right; }
     .pl-table tbody tr:hover { background:var(--nexo-primary-light); }
+    .pl-table tbody tr.clickable { cursor:pointer; }
     .pl-tag { display:inline-block; padding:2px 9px; border-radius:999px; font-size:.72rem; font-weight:700; }
     .pl-tag.Liquidar { background:#FFECEC; color:var(--nexo-error); }
     .pl-tag.Depurar { background:#FFF6E6; color:#b8860b; }
     .pl-tag.Reponer { background:#E6FBF5; color:#08917a; }
     .pl-tag.Monitorear { background:var(--nexo-gray-100); color:var(--nexo-gray-500); }
+    .pl-tag.Traspasar { background:var(--nexo-primary-light); color:var(--nexo-primary-dark); }
+    .pl-badge-cd { display:inline-block; background:var(--nexo-secondary); color:#fff; font-size:.62rem; font-weight:800; border-radius:5px; padding:1px 6px; margin-left:6px; vertical-align:middle; letter-spacing:.5px; }
     .badge-gm { font-weight:800; } .gm-bad{color:var(--nexo-error);} .gm-ok{color:var(--nexo-warning);} .gm-good{color:var(--nexo-accent);}
     .pl-tablewrap { background:#fff; border:1px solid var(--nexo-gray-300); border-radius:var(--nexo-radius); box-shadow:var(--nexo-shadow-md); padding:16px 18px; }
     .pl-loading { text-align:center; padding:70px; color:var(--nexo-gray-500); }
+    .pl-input { border:1.5px solid var(--nexo-gray-300); border-radius:8px; padding:6px 10px; font-size:.83rem; min-width:220px; }
+    .pl-pag { display:flex; gap:10px; align-items:center; justify-content:flex-end; margin-top:12px; font-size:.82rem; color:var(--nexo-gray-700); flex-wrap:wrap; }
+    .pl-pag button { border:1.5px solid var(--nexo-gray-300); background:#fff; border-radius:8px; padding:5px 12px; font-weight:700; cursor:pointer; color:var(--nexo-gray-700); }
+    .pl-pag button:disabled { opacity:.4; cursor:default; }
+    .pl-note { font-size:.74rem; color:var(--nexo-gray-500); }
+    .pl-src { font-size:.68rem; color:var(--nexo-gray-500); }
     @media (max-width:900px){ .pl-kpis{grid-template-columns:repeat(2,1fr);} .pl-grid{grid-template-columns:1fr;} }
-    @media print { #app-menu,.navbar-header,.pl-filters,footer{display:none!important;} }
+    @media print { #app-menu,.navbar-header,.pl-filters,.pl-toolbar,.pl-pag,footer{display:none!important;} }
 </style>
 
 <div class="pl-wrap">
@@ -58,14 +75,77 @@
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
             <div>
                 <h1><i class="ri-scissors-cut-line"></i> Plan de Liquidación</h1>
-                <p>Ranking de marcas por capital inmovilizado · dónde liberar caja y dónde reponer · datos en vivo del kardex</p>
+                <p>Capital inmovilizado por marca · categoría · especialidad · sucursal — con antigüedad FIFO por producto · datos en vivo del kardex</p>
             </div>
             <button class="pl-fbtn" onclick="window.print()"><i class="ri-printer-line"></i> Imprimir / PDF</button>
         </div>
     </div>
     <div class="pl-body">
-        <div id="pl-loading" class="pl-loading"><div class="spinner-border text-primary"></div><p style="margin-top:12px;">Calculando capital inmovilizado en todas las marcas…</p></div>
+
+        <!-- Barra de filtros global -->
+        <div class="pl-toolbar">
+            <div><label>Sucursal</label><select id="f-sucursal" class="pl-select" onchange="cambiarFiltro()"><option value="">Todas</option></select></div>
+            <div><label>Marca</label><select id="f-marca" class="pl-select" onchange="cambiarFiltro()"><option value="">Todas</option></select></div>
+            <div><label>Categoría</label><select id="f-categoria" class="pl-select" onchange="cambiarFiltro()"><option value="">Todas</option></select></div>
+            <div><label>Especialidad</label><select id="f-especialidad" class="pl-select" onchange="cambiarFiltro()"><option value="">Todas</option></select></div>
+            <label class="pl-check"><input type="checkbox" id="f-cd" onchange="cambiarFiltro()"> Incluir bodegas/CD</label>
+            <div style="margin-left:auto; display:flex; gap:8px; padding-top:12px;">
+                <button class="pl-fbtn xls" onclick="exportarExcel()"><i class="ri-file-excel-2-line"></i> Exportar Excel</button>
+            </div>
+        </div>
+
+        <div id="pl-loading" class="pl-loading"><div class="spinner-border text-primary"></div><p style="margin-top:12px;">Calculando capital inmovilizado…</p></div>
         <div id="pl-results" style="display:none;"></div>
+
+        <!-- Drill-down por producto -->
+        <div class="pl-tablewrap" id="pl-det-wrap" style="display:none; margin-top:16px;">
+            <div class="pl-filters">
+                <span style="font-weight:800; color:var(--nexo-secondary); font-size:.95rem;"><i class="ri-search-eye-line"></i> Detalle por producto</span>
+                <span class="pl-note">antigüedad FIFO del stock en mano · pares por sucursal</span>
+                <span style="margin-left:auto;"></span>
+                <button class="pl-fbtn" id="btn-campana" style="border-color:var(--nexo-primary); color:var(--nexo-primary);" onclick="abrirModalCampana()" disabled><i class="ri-price-tag-2-line"></i> Crear campaña (<span id="sel-count">0</span>)</button>
+                <input type="text" id="det-q" class="pl-input" placeholder="Buscar artículo / descripción / marca…" oninput="buscarDetalle()">
+            </div>
+            <div class="pl-filters">
+                <span style="font-weight:700; color:var(--nexo-gray-700); font-size:.82rem;">Antigüedad:</span>
+                <button class="pl-fbtn active" data-b="" onclick="setBucket('')">Todos</button>
+                <button class="pl-fbtn" data-b="0-90" onclick="setBucket('0-90')">0–90d</button>
+                <button class="pl-fbtn" data-b="90-180" onclick="setBucket('90-180')">90–180d</button>
+                <button class="pl-fbtn" data-b="180-365" onclick="setBucket('180-365')">180–365d</button>
+                <button class="pl-fbtn" data-b="365+" onclick="setBucket('365+')">+1 año</button>
+                <button class="pl-fbtn" data-b="sin-dato" onclick="setBucket('sin-dato')">Sin dato</button>
+            </div>
+            <div style="overflow-x:auto; max-height:640px; overflow-y:auto;">
+                <table class="pl-table" id="det-table">
+                    <thead><tr>
+                        <th style="width:34px;"><input type="checkbox" id="det-selall" onclick="toggleSelAll(this)" title="Seleccionar página"></th>
+                        <th class="txt" onclick="ordenarDetalle('articulo')">Artículo</th>
+                        <th class="txt">Descripción</th>
+                        <th class="txt">Marca</th>
+                        <th class="txt">Categoría</th>
+                        <th class="txt">Sucursal</th>
+                        <th onclick="ordenarDetalle('stock_u')">Pares</th>
+                        <th onclick="ordenarDetalle('valor_costo')">Valor $ costo</th>
+                        <th onclick="ordenarDetalle('precioventa')">Precio</th>
+                        <th onclick="ordenarDetalle('dias_antiguedad')">Ingreso FIFO</th>
+                        <th onclick="ordenarDetalle('dias_antiguedad')">Antig. (d)</th>
+                        <th onclick="ordenarDetalle('dias_sin_venta')">Últ. venta</th>
+                        <th onclick="ordenarDetalle('dias_sin_venta')">Sin venta (d)</th>
+                        <th onclick="ordenarDetalle('u365')">Vta 365d</th>
+                    </tr></thead>
+                    <tbody id="det-tbody"><tr><td colspan="14" style="text-align:center; padding:30px;">Cargando…</td></tr></tbody>
+                </table>
+            </div>
+            <div class="pl-pag">
+                <span id="det-info"></span>
+                <select id="det-psize" class="pl-select" style="min-width:auto;" onchange="cambiarPageSize()">
+                    <option value="50">50 / pág</option><option value="100">100 / pág</option><option value="200">200 / pág</option>
+                </select>
+                <button id="det-prev" onclick="paginaDetalle(-1)">&laquo; Anterior</button>
+                <button id="det-next" onclick="paginaDetalle(1)">Siguiente &raquo;</button>
+            </div>
+        </div>
+
     </div>
 </div>
 
@@ -76,61 +156,128 @@
 
 <script>
 const PL_API = "{% url 'obtener_plan_liquidacion' %}";
+const PL_DET_API = "{% url 'obtener_plan_liquidacion_detalle' %}";
+const PL_XLS_API = "{% url 'exportar_plan_liquidacion_excel' %}";
 const fmt = n => (n == null ? '—' : Math.round(n).toLocaleString('es-CL'));
 const money = n => (n == null ? '—' : '$' + Math.round(n).toLocaleString('es-CL'));
 const moneyM = n => (n == null ? '—' : '$' + (n/1e6).toLocaleString('es-CL',{maximumFractionDigits:1}) + 'M');
-let PL_DATA = [], PL_CAT = [], plCharts = [], plSort = { key: 'dead_costo', dir: -1 }, plFilter = 'Todas';
+const esc = s => (s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'));
 
-document.addEventListener('DOMContentLoaded', () => {
-    fetch(PL_API, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+// Dimensiones de la tabla agregada
+const DIMS = {
+    marcas:         { label: 'Marca',        field: 'marca',        filtro: 'marca_id' },
+    categorias:     { label: 'Categoría',    field: 'categoria',    filtro: 'categoria_id' },
+    especialidades: { label: 'Especialidad', field: 'especialidad', filtro: 'especialidad_id' },
+    sucursales:     { label: 'Sucursal',     field: 'sucursal',     filtro: 'sucursal_id' },
+};
+let PL_RES = null;                       // respuesta completa de la API
+let plDim = 'marcas';
+let plCharts = [], plSort = { key: 'dead_costo', dir: -1 }, plFilter = 'Todas';
+let PL_F = { sucursal_id: '', marca_id: '', categoria_id: '', especialidad_id: '', incluir_cd: '' };
+let DET = { page: 1, page_size: 50, orden: '-valor_costo', antiguedad: '', q: '' };
+let detTotal = 0, detTimer = null, opcionesCargadas = false;
+const SEL = new Set();          // producto_ids seleccionados para campaña
+const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
+const CREAR_CAMPANA_API = "{% url 'crear_campana_liquidacion' %}";
+
+document.addEventListener('DOMContentLoaded', () => { cargarPlan(); });
+
+function qsFiltros(extra) {
+    const p = new URLSearchParams();
+    Object.entries(PL_F).forEach(([k, v]) => { if (v) p.set(k, v); });
+    if (extra) Object.entries(extra).forEach(([k, v]) => { if (v) p.set(k, v); });
+    return p;
+}
+
+function cargarPlan() {
+    document.getElementById('pl-loading').style.display = 'block';
+    const p = qsFiltros(opcionesCargadas ? {} : { con_opciones: '1' });
+    fetch(PL_API + '?' + p.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(r => r.json())
         .then(res => {
             document.getElementById('pl-loading').style.display = 'none';
-            if (!res.success) { document.getElementById('pl-results').innerHTML = '<div class="pl-alert">Error: ' + (res.error || '') + '</div>'; document.getElementById('pl-results').style.display = 'block'; return; }
-            PL_DATA = res.data.marcas;
-            PL_CAT = res.data.categorias || [];
+            const cont = document.getElementById('pl-results');
+            if (!res.success) { cont.innerHTML = '<div class="pl-alert">Error: ' + esc(res.error || '') + '</div>'; cont.style.display = 'block'; return; }
+            PL_RES = res.data;
+            if (res.data.opciones && !opcionesCargadas) { poblarFiltros(res.data.opciones); opcionesCargadas = true; }
             renderPlan(res.data);
-            document.getElementById('pl-results').style.display = 'block';
+            cont.style.display = 'block';
+            document.getElementById('pl-det-wrap').style.display = 'block';
+            cargarDetalle();
         })
-        .catch(e => { document.getElementById('pl-loading').innerHTML = 'Error de red: ' + e; });
-});
+        .catch(e => { document.getElementById('pl-loading').innerHTML = 'Error de red: ' + esc(e); });
+}
 
-function gmClass(g) { return g == null ? '' : (g >= 3 ? 'gm-good' : (g >= 1 ? 'gm-ok' : 'gm-bad')); }
+function poblarFiltros(op) {
+    const suc = document.getElementById('f-sucursal');
+    op.sucursales.forEach(s => { suc.insertAdjacentHTML('beforeend',
+        `<option value="${s.id}">${esc(s.alias)}${s.es_cd ? ' (CD)' : ''}</option>`); });
+    const mar = document.getElementById('f-marca');
+    op.marcas.forEach(m => { mar.insertAdjacentHTML('beforeend', `<option value="${m.id}">${esc(m.valor)}</option>`); });
+    const cat = document.getElementById('f-categoria');
+    op.categorias.forEach(c => { cat.insertAdjacentHTML('beforeend',
+        `<option value="${c.id}">${c.padre__nombre ? esc(c.padre__nombre) + ' › ' : ''}${esc(c.nombre)}</option>`); });
+    const espSel = document.getElementById('f-especialidad');
+    op.especialidades.forEach(e2 => { espSel.insertAdjacentHTML('beforeend', `<option value="${e2.id}">${esc(e2.valor)}</option>`); });
+}
+
+function cambiarFiltro() {
+    PL_F.sucursal_id = document.getElementById('f-sucursal').value;
+    PL_F.marca_id = document.getElementById('f-marca').value;
+    PL_F.categoria_id = document.getElementById('f-categoria').value;
+    PL_F.especialidad_id = document.getElementById('f-especialidad').value;
+    PL_F.incluir_cd = document.getElementById('f-cd').checked ? '1' : '';
+    DET.page = 1;
+    cargarPlan();
+}
+
+function conCD() { return PL_F.incluir_cd === '1' || (PL_RES && (PL_RES.totales.stock_cd || 0) > 0); }
 
 function renderPlan(d) {
     const t = d.totales;
+    const cd = conCD();
+    let kpiCD = '';
+    if (cd) {
+        kpiCD = `<div class="pl-kpi"><div class="lbl">Stock en bodegas/CD</div><div class="val blue">${fmt(t.stock_cd)}</div><div class="sub">${moneyM(t.valor_cd)} a costo · a traspasar</div></div>`;
+    }
     let html = `
-    <div class="pl-kpis">
-        <div class="pl-kpi"><div class="lbl">Capital en inventario</div><div class="val">${moneyM(t.valor_costo)}</div><div class="sub">a costo · ${fmt(t.stock_u)} pares</div></div>
-        <div class="pl-kpi"><div class="lbl">Capital inmovilizado 180d</div><div class="val red">${moneyM(t.dead_costo)}</div><div class="sub">${t.dead_pct_valor}% del inventario</div></div>
+    <div class="pl-kpis" style="${cd ? 'grid-template-columns:repeat(7,1fr);' : ''}">
+        <div class="pl-kpi"><div class="lbl">Capital en tiendas</div><div class="val">${moneyM(t.valor_costo)}</div><div class="sub">a costo · ${fmt(t.stock_u)} pares</div></div>
+        ${kpiCD}
+        <div class="pl-kpi"><div class="lbl">Capital inmovilizado 180d</div><div class="val red">${moneyM(t.dead_costo)}</div><div class="sub">${t.dead_pct_valor}% del inventario tiendas</div></div>
         <div class="pl-kpi"><div class="lbl">Pares muertos</div><div class="val red">${fmt(t.dead_u)}</div><div class="sub">sin venta 180 días</div></div>
-        <div class="pl-kpi"><div class="lbl">Marcas analizadas</div><div class="val">${fmt(t.marcas)}</div><div class="sub">con stock en tiendas</div></div>
+        <div class="pl-kpi"><div class="lbl">Marcas analizadas</div><div class="val">${fmt(t.marcas)}</div><div class="sub">con stock en alcance</div></div>
         <div class="pl-kpi"><div class="lbl">Marcas a liquidar</div><div class="val red">${fmt(t.n_liquidar)}</div><div class="sub">GMROI &lt;1 + sobre-stock</div></div>
         <div class="pl-kpi"><div class="lbl">Marcas a reponer</div><div class="val green">${fmt(t.n_reponer)}</div><div class="sub">GMROI ≥3 + cobertura sana</div></div>
     </div>
 
     <div class="pl-alert">
-        <div class="big"><i class="ri-alarm-warning-line"></i> ${moneyM(t.dead_costo)} inmovilizados (${t.dead_pct_valor}% del inventario) en ${fmt(t.dead_u)} pares sin rotación</div>
-        <div style="margin-top:6px; color:var(--nexo-gray-700);">Priorizá la liquidación por las marcas de arriba de la tabla (mayor capital atrapado). Reponé solo las marcas verdes de la matriz.</div>
+        <div class="big"><i class="ri-alarm-warning-line"></i> ${moneyM(t.dead_costo)} inmovilizados (${t.dead_pct_valor}% del inventario de tiendas) en ${fmt(t.dead_u)} pares sin rotación</div>
+        <div style="margin-top:6px; color:var(--nexo-gray-700);">Priorizá la liquidación por las filas de arriba (mayor capital atrapado). Usá el detalle por producto para armar la lista y exportarla a Excel.</div>
     </div>
 
     <div class="pl-grid">
-        <div class="pl-card"><h3><i class="ri-bar-chart-horizontal-line"></i> Top 15 marcas por capital inmovilizado</h3><div id="pl-chart-top"></div></div>
+        <div class="pl-card"><h3><i class="ri-bar-chart-horizontal-line"></i> Top 15 por capital inmovilizado <span class="pl-note" id="chart-dim-lbl"></span></h3><div id="pl-chart-top"></div></div>
         <div class="pl-card"><h3><i class="ri-bubble-chart-line"></i> Matriz estratégica — GMROI vs cobertura <span style="font-weight:500; color:var(--nexo-gray-500); font-size:.78rem;">(burbuja = capital)</span></h3><div id="pl-chart-matrix"></div></div>
     </div>
 
     <div class="pl-tablewrap">
+        <div class="pl-tabs">
+            ${Object.entries(DIMS).map(([k, c]) => `<button class="pl-tab ${k === plDim ? 'active' : ''}" data-dim="${k}" onclick="setDim('${k}')">${c.label}</button>`).join('')}
+        </div>
         <div class="pl-filters">
             <span style="font-weight:700; color:var(--nexo-gray-700); font-size:.85rem;">Filtrar:</span>
-            ${['Todas', 'Liquidar', 'Depurar', 'Reponer', 'Monitorear'].map(f => `<button class="pl-fbtn ${f === 'Todas' ? 'active' : ''}" data-f="${f}" onclick="setFilter('${f}')">${f}</button>`).join('')}
-            <span style="margin-left:auto; color:var(--nexo-gray-500); font-size:.78rem;">Click en encabezados para ordenar</span>
+            ${['Todas', 'Liquidar', 'Depurar', 'Traspasar', 'Reponer', 'Monitorear'].map(f => `<button class="pl-fbtn ${f === plFilter ? 'active' : ''}" data-f="${f}" onclick="setFilter('${f}')">${f}</button>`).join('')}
+            <span id="dim-nota" class="pl-note" style="margin-left:auto;"></span>
         </div>
         <div style="overflow-x:auto; max-height:600px; overflow-y:auto;">
             <table class="pl-table" id="pl-table">
                 <thead><tr>
-                    <th class="txt" onclick="sortBy('marca')">Marca</th>
-                    <th onclick="sortBy('stock')">Stock</th>
+                    <th class="txt" id="th-dim" onclick="sortBy('_label')">Dimensión</th>
+                    <th onclick="sortBy('stock')">Stock tiendas</th>
+                    ${cd ? '<th onclick="sortBy(\'stock_cd\')">Stock CD</th>' : ''}
                     <th onclick="sortBy('valor_costo')">Valor $ costo</th>
+                    ${cd ? '<th onclick="sortBy(\'valor_cd\')">Valor $ CD</th>' : ''}
                     <th onclick="sortBy('gmroi')">GMROI</th>
                     <th onclick="sortBy('rotacion')">Rotación</th>
                     <th onclick="sortBy('cobertura')">Cob. (m)</th>
@@ -141,58 +288,38 @@ function renderPlan(d) {
                 <tbody id="pl-tbody"></tbody>
             </table>
         </div>
-    </div>
-
-    <div class="pl-tablewrap" style="margin-top:16px;">
-        <div class="pl-filters">
-            <span style="font-weight:700; color:var(--nexo-gray-700); font-size:.85rem;">
-                <i class="ri-node-tree"></i> Por categoría (árbol v1.2 · Padre › Hijo)
-            </span>
-            <span style="margin-left:auto; color:var(--nexo-gray-500); font-size:.78rem;">Mismas métricas, dimensión categoría — orden por capital inmovilizado</span>
-        </div>
-        <div style="overflow-x:auto; max-height:480px; overflow-y:auto;">
-            <table class="pl-table" id="pl-table-cat">
-                <thead><tr>
-                    <th class="txt">Categoría</th>
-                    <th>Stock</th>
-                    <th>Valor $ costo</th>
-                    <th>GMROI</th>
-                    <th>Rotación</th>
-                    <th>Cob. (m)</th>
-                    <th>Inmovil. $</th>
-                    <th>% dead</th>
-                    <th class="txt">Acción</th>
-                </tr></thead>
-                <tbody id="pl-tbody-cat"></tbody>
-            </table>
-        </div>
+        <div class="pl-note" style="margin-top:8px;">Click en una fila filtra el reporte y el detalle por esa dimensión. Ventas, rotación y GMROI consideran SOLO tiendas vendedoras; el stock CD se muestra aparte.</div>
     </div>`;
     document.getElementById('pl-results').innerHTML = html;
     renderTable();
-    renderTableCat();
-    drawCharts(d);
+    drawCharts();
 }
 
-function renderTableCat() {
-    const rows = PL_CAT.slice().sort((a, b) => (b.dead_costo || 0) - (a.dead_costo || 0));
-    const tb = document.getElementById('pl-tbody-cat');
-    if (!tb) return;
-    tb.innerHTML = rows.map(r => `
-        <tr>
-            <td><b>${r.categoria}</b></td>
-            <td>${fmt(r.stock)}</td>
-            <td>${money(r.valor_costo)}</td>
-            <td class="badge-gm ${gmClass(r.gmroi)}">${r.gmroi != null ? r.gmroi : '—'}</td>
-            <td>${r.rotacion != null ? r.rotacion + 'x' : '—'}</td>
-            <td>${r.cobertura != null ? r.cobertura : '—'}</td>
-            <td style="font-weight:700;">${money(r.dead_costo)}</td>
-            <td>${r.pct_dead}%</td>
-            <td style="text-align:left;"><span class="pl-tag ${r.accion}">${r.accion}</span></td>
-        </tr>`).join('');
+function filasDim() {
+    const rows = (PL_RES && PL_RES[plDim]) || [];
+    const f = DIMS[plDim].field;
+    return rows.map(r => Object.assign({ _label: r[f] }, r));
 }
+
+function setDim(d) {
+    plDim = d;
+    document.querySelectorAll('.pl-tab').forEach(b => b.classList.toggle('active', b.dataset.dim === d));
+    document.getElementById('th-dim').textContent = DIMS[d].label;
+    const nota = document.getElementById('dim-nota');
+    nota.textContent = d === 'especialidades'
+        ? 'Vista de atribución multi-etiqueta: un producto suma en cada especialidad — el total puede exceder el 100%.'
+        : (d === 'sucursales' ? 'Tiendas primero; bodegas/CD al final con acción Traspasar.' : '');
+    renderTable();
+    drawCharts();
+}
+
+function gmClass(g) { return g == null ? '' : (g >= 3 ? 'gm-good' : (g >= 1 ? 'gm-ok' : 'gm-bad')); }
 
 function renderTable() {
-    let rows = plFilter === 'Todas' ? PL_DATA : PL_DATA.filter(r => r.accion === plFilter);
+    const cd = conCD();
+    document.getElementById('th-dim').textContent = DIMS[plDim].label;
+    let rows = filasDim();
+    if (plFilter !== 'Todas') rows = rows.filter(r => r.accion === plFilter);
     rows = rows.slice().sort((a, b) => {
         let x = a[plSort.key], y = b[plSort.key];
         if (x == null) x = -Infinity; if (y == null) y = -Infinity;
@@ -200,10 +327,12 @@ function renderTable() {
         return plSort.dir * (x - y);
     });
     document.getElementById('pl-tbody').innerHTML = rows.map(r => `
-        <tr>
-            <td><b>${r.marca}</b></td>
+        <tr class="clickable" onclick="filtrarDesdeFila('${plDim}', ${r.id})" title="Filtrar por ${esc(r._label)}">
+            <td><b>${esc(r._label)}</b>${r.es_cd ? '<span class="pl-badge-cd">CD</span>' : ''}</td>
             <td>${fmt(r.stock)}</td>
+            ${cd ? `<td>${fmt(r.stock_cd)}</td>` : ''}
             <td>${money(r.valor_costo)}</td>
+            ${cd ? `<td>${money(r.valor_cd)}</td>` : ''}
             <td class="badge-gm ${gmClass(r.gmroi)}">${r.gmroi != null ? r.gmroi : '—'}</td>
             <td>${r.rotacion != null ? r.rotacion + 'x' : '—'}</td>
             <td>${r.cobertura != null ? r.cobertura : '—'}</td>
@@ -211,6 +340,15 @@ function renderTable() {
             <td>${r.pct_dead}%</td>
             <td style="text-align:left;"><span class="pl-tag ${r.accion}">${r.accion}</span></td>
         </tr>`).join('');
+}
+
+function filtrarDesdeFila(dim, id) {
+    const filtro = DIMS[dim].filtro;
+    const selId = { marca_id: 'f-marca', categoria_id: 'f-categoria', especialidad_id: 'f-especialidad', sucursal_id: 'f-sucursal' }[filtro];
+    document.getElementById(selId).value = String(id);
+    cambiarFiltro();
+    const det = document.getElementById('pl-det-wrap');
+    if (det) det.scrollIntoView({ behavior: 'smooth' });
 }
 
 function setFilter(f) {
@@ -224,29 +362,32 @@ function sortBy(key) {
     renderTable();
 }
 
-function drawCharts(d) {
+function drawCharts() {
     plCharts.forEach(c => { try { c.destroy(); } catch (e) {} });
     plCharts = [];
-    const top = PL_DATA.slice(0, 15);
-    // 1. barra horizontal top capital atrapado
-    let c1 = new ApexCharts(document.querySelector('#pl-chart-top'), {
+    const rows = filasDim();
+    const lbl = document.getElementById('chart-dim-lbl');
+    if (lbl) lbl.textContent = '· por ' + DIMS[plDim].label.toLowerCase();
+    const elTop = document.querySelector('#pl-chart-top');
+    if (!elTop) return;
+    const top = rows.slice().sort((a, b) => (b.dead_costo || 0) - (a.dead_costo || 0)).slice(0, 15);
+    let c1 = new ApexCharts(elTop, {
         chart: { type: 'bar', height: 380, toolbar: { show: false }, fontFamily: 'inherit' },
         series: [{ name: 'Capital inmovilizado', data: top.map(x => x.dead_costo) }],
         colors: ['#f06548'], plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '70%' } },
         dataLabels: { enabled: true, formatter: v => moneyM(v), style: { fontSize: '10px', colors: ['#fff'] } },
-        xaxis: { categories: top.map(x => x.marca), labels: { formatter: v => moneyM(v) } },
+        xaxis: { categories: top.map(x => x._label), labels: { formatter: v => moneyM(v) } },
         yaxis: { labels: { style: { fontSize: '11px' } } }, grid: { borderColor: '#eef0f5' },
         tooltip: { y: { formatter: v => money(v) } },
     });
     c1.render(); plCharts.push(c1);
 
-    // 2. matriz estratégica (bubble) por acción
     const cap = (v, m) => v == null ? null : Math.min(v, m);
     const grupos = { Liquidar: '#f06548', Depurar: '#FFB020', Reponer: '#00D4AA', Monitorear: '#8A8A9A' };
     const series = Object.keys(grupos).map(g => ({
         name: g,
-        data: PL_DATA.filter(r => r.accion === g && r.cobertura != null && r.gmroi != null)
-            .map(r => ({ x: cap(r.cobertura, 36), y: cap(r.gmroi, 6), z: Math.max(4, r.dead_costo / 3e6), marca: r.marca })),
+        data: rows.filter(r => r.accion === g && r.cobertura != null && r.gmroi != null)
+            .map(r => ({ x: cap(r.cobertura, 36), y: cap(r.gmroi, 6), z: Math.max(4, r.dead_costo / 3e6), marca: r._label })),
     }));
     let c2 = new ApexCharts(document.querySelector('#pl-chart-matrix'), {
         chart: { type: 'bubble', height: 380, toolbar: { show: false }, fontFamily: 'inherit' },
@@ -262,9 +403,181 @@ function drawCharts(d) {
         },
         tooltip: { custom: ({ seriesIndex, dataPointIndex, w }) => {
             const p = w.config.series[seriesIndex].data[dataPointIndex];
-            return `<div style="padding:8px;"><b>${p.marca}</b><br>GMROI: ${p.y} · Cobertura: ${p.x}m<br>Capital: ${moneyM(p.z * 3e6)}</div>`;
+            return `<div style="padding:8px;"><b>${esc(p.marca)}</b><br>GMROI: ${p.y} · Cobertura: ${p.x}m<br>Capital: ${moneyM(p.z * 3e6)}</div>`;
         } },
     });
     c2.render(); plCharts.push(c2);
+}
+
+// ------------------------------------------------ drill-down por producto
+function qsDetalle() {
+    return qsFiltros({ antiguedad: DET.antiguedad, q: DET.q, orden: DET.orden,
+                       page: String(DET.page), page_size: String(DET.page_size) });
+}
+
+function cargarDetalle() {
+    const tb = document.getElementById('det-tbody');
+    tb.innerHTML = '<tr><td colspan="14" style="text-align:center; padding:30px;"><div class="spinner-border spinner-border-sm text-primary"></div> Cargando detalle…</td></tr>';
+    fetch(PL_DET_API + '?' + qsDetalle().toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.json())
+        .then(res => {
+            if (!res.success) { tb.innerHTML = `<tr><td colspan="14" style="text-align:center; padding:30px;">Error: ${esc(res.error || '')}</td></tr>`; return; }
+            detTotal = res.total;
+            renderDetalle(res.filas);
+            const ini = (res.page - 1) * res.page_size;
+            document.getElementById('det-info').textContent =
+                res.total ? `${ini + 1}–${Math.min(ini + res.page_size, res.total)} de ${fmt(res.total)} productos` : 'Sin productos con los filtros actuales';
+            document.getElementById('det-prev').disabled = res.page <= 1;
+            document.getElementById('det-next').disabled = ini + res.page_size >= res.total;
+        })
+        .catch(e => { tb.innerHTML = `<tr><td colspan="14" style="text-align:center; padding:30px;">Error de red: ${esc(e)}</td></tr>`; });
+}
+
+function renderDetalle(filas) {
+    const badgeAnt = d => {
+        if (d == null) return '<span class="pl-note">s/d</span>';
+        const color = d >= 365 ? 'var(--nexo-error)' : (d >= 180 ? '#b8860b' : (d >= 90 ? 'var(--nexo-warning)' : 'var(--nexo-accent)'));
+        return `<b style="color:${color};">${fmt(d)}</b>`;
+    };
+    const srcTag = f => f.antiguedad_fuente && f.antiguedad_fuente !== 'lote'
+        ? `<div class="pl-src">(${f.antiguedad_fuente === 'movimientos' ? 'kardex' : 'creación'})</div>` : '';
+    document.getElementById('det-tbody').innerHTML = filas.map(f => `
+        <tr>
+            <td><input type="checkbox" class="det-chk" value="${f.producto_id}" ${SEL.has(f.producto_id) ? 'checked' : ''} onchange="toggleSel(${f.producto_id}, this.checked)"></td>
+            <td><b>${esc(f.articulo)}</b>${f.en_campana ? '<span class="pl-badge-cd" style="background:var(--nexo-accent);">EN CAMPAÑA</span>' : ''}</td>
+            <td>${esc(f.descripcion)}</td>
+            <td>${esc(f.marca || '—')}</td>
+            <td>${esc(f.categoria)}</td>
+            <td>${esc(f.sucursal)}${f.es_cd ? '<span class="pl-badge-cd">CD</span>' : ''}</td>
+            <td><b>${fmt(f.stock_u)}</b> <span class="pl-note">/ ${f.tallas} tallas</span></td>
+            <td>${money(f.valor_costo)}</td>
+            <td>${money(f.precioventa)}</td>
+            <td>${f.fecha_fifo || 's/d'}${srcTag(f)}</td>
+            <td>${badgeAnt(f.dias_antiguedad)}</td>
+            <td>${f.ultima_venta || 'Nunca'}</td>
+            <td>${f.dias_sin_venta != null ? fmt(f.dias_sin_venta) : '—'}</td>
+            <td>${fmt(f.u365)}</td>
+        </tr>`).join('');
+    const chks = filas.map(f => f.producto_id);
+    const selAll = document.getElementById('det-selall');
+    if (selAll) selAll.checked = chks.length > 0 && chks.every(id => SEL.has(id));
+}
+
+function setBucket(b) {
+    DET.antiguedad = b;
+    DET.page = 1;
+    document.querySelectorAll('.pl-fbtn[data-b]').forEach(x => x.classList.toggle('active', x.dataset.b === b));
+    cargarDetalle();
+}
+function buscarDetalle() {
+    clearTimeout(detTimer);
+    detTimer = setTimeout(() => { DET.q = document.getElementById('det-q').value.trim(); DET.page = 1; cargarDetalle(); }, 400);
+}
+function ordenarDetalle(key) {
+    DET.orden = (DET.orden === '-' + key) ? key : '-' + key;
+    DET.page = 1;
+    cargarDetalle();
+}
+function paginaDetalle(delta) {
+    DET.page = Math.max(1, DET.page + delta);
+    cargarDetalle();
+}
+function cambiarPageSize() {
+    DET.page_size = parseInt(document.getElementById('det-psize').value, 10);
+    DET.page = 1;
+    cargarDetalle();
+}
+function exportarExcel() {
+    const p = qsFiltros({ antiguedad: DET.antiguedad, q: DET.q });
+    window.location = PL_XLS_API + '?' + p.toString();
+}
+
+// ------------------------------------------------ selección + campañas
+function actualizarSelUI() {
+    document.getElementById('sel-count').textContent = SEL.size;
+    document.getElementById('btn-campana').disabled = SEL.size === 0;
+}
+function toggleSel(id, checked) {
+    if (checked) SEL.add(id); else SEL.delete(id);
+    actualizarSelUI();
+}
+function toggleSelAll(cb) {
+    document.querySelectorAll('.det-chk').forEach(chk => {
+        const id = parseInt(chk.value, 10);
+        chk.checked = cb.checked;
+        if (cb.checked) SEL.add(id); else SEL.delete(id);
+    });
+    actualizarSelUI();
+}
+
+function abrirModalCampana() {
+    if (!SEL.size) return;
+    const opSuc = (PL_RES && PL_RES.opciones ? PL_RES.opciones.sucursales : [])
+        .map(s => `<label style="display:block; font-size:.82rem; margin:2px 0;"><input type="checkbox" class="mc-suc" value="${s.id}"> ${esc(s.alias)}${s.es_cd ? ' (CD)' : ''}</label>`).join('');
+    Swal.fire({
+        title: `Nueva campaña · ${SEL.size} productos`,
+        width: 620,
+        html: `
+            <div style="text-align:left; font-size:.85rem;">
+                <label style="font-weight:700;">Nombre</label>
+                <input id="mc-nombre" class="swal2-input" style="margin:4px 0 10px; width:100%;" placeholder="Ej: Liquidación invierno bodega EDEL">
+                <label style="font-weight:700;">Tipo de regla</label>
+                <select id="mc-tipo" class="swal2-select" style="margin:4px 0 10px; width:100%;" onchange="mcTipoChange()">
+                    <option value="PORCENTAJE">% Descuento</option>
+                    <option value="PRECIO_FIJO">Precio fijo</option>
+                    <option value="NXM">Promo NxM (2x1, 3x2…)</option>
+                </select>
+                <div id="mc-param"></div>
+                <div style="display:flex; gap:10px; margin-top:8px;">
+                    <div style="flex:1;"><label style="font-weight:700;">Inicio</label><input id="mc-inicio" type="datetime-local" class="swal2-input" style="margin:4px 0; width:100%;"></div>
+                    <div style="flex:1;"><label style="font-weight:700;">Fin (opcional)</label><input id="mc-fin" type="datetime-local" class="swal2-input" style="margin:4px 0; width:100%;"></div>
+                </div>
+                <label style="display:block; margin:6px 0; font-weight:700;"><input type="checkbox" id="mc-piso" checked> Respetar piso de costo (costo×1.1)</label>
+                <details style="margin-top:6px;"><summary style="cursor:pointer; font-weight:700;">Sucursales de la promo (NxM)</summary>
+                    <div style="max-height:120px; overflow:auto; margin-top:6px; padding-left:6px;">${opSuc || '<span class="pl-note">sin sucursales</span>'}</div>
+                    <div class="pl-note">Por defecto se usan las sucursales de los productos elegidos.</div>
+                </details>
+            </div>`,
+        didOpen: () => { mcTipoChange(); },
+        showCancelButton: true, confirmButtonText: 'Crear campaña (borrador)', cancelButtonText: 'Cancelar',
+        preConfirm: () => {
+            const tipo = document.getElementById('mc-tipo').value;
+            const payload = {
+                nombre: document.getElementById('mc-nombre').value.trim(),
+                tipo_regla: tipo,
+                fecha_inicio: document.getElementById('mc-inicio').value ? document.getElementById('mc-inicio').value + ':00' : '',
+                fecha_fin: document.getElementById('mc-fin').value ? document.getElementById('mc-fin').value + ':00' : '',
+                respetar_piso_costo: document.getElementById('mc-piso').checked,
+                producto_ids: Array.from(SEL),
+                sucursal_ids: Array.from(document.querySelectorAll('.mc-suc:checked')).map(c => parseInt(c.value, 10)),
+            };
+            if (tipo === 'PORCENTAJE') payload.valor_porcentaje = document.getElementById('mc-pct').value;
+            if (tipo === 'PRECIO_FIJO') payload.valor_precio_fijo = document.getElementById('mc-fijo').value;
+            if (tipo === 'NXM') { payload.nxm_n = document.getElementById('mc-n').value; payload.nxm_m = document.getElementById('mc-m').value; }
+            if (!payload.nombre) { Swal.showValidationMessage('El nombre es obligatorio'); return false; }
+            return payload;
+        },
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        fetch(CREAR_CAMPANA_API, { method: 'POST', headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' }, body: JSON.stringify(r.value) })
+            .then(res => res.json())
+            .then(res => {
+                if (!res.success) { Swal.fire({ icon: 'error', title: 'Error', text: res.error }); return; }
+                Swal.fire({
+                    icon: 'success', title: 'Campaña creada',
+                    html: `Borrador #${res.campana_id} con ${res.n_items} productos. Actívala desde <b>Campañas de Liquidación</b>.`,
+                    showCancelButton: true, confirmButtonText: 'Ir a campañas', cancelButtonText: 'Seguir aquí',
+                }).then(x => { if (x.isConfirmed) window.location = "{% url 'ver_campanas_liquidacion' %}"; });
+                SEL.clear(); actualizarSelUI(); cargarDetalle();
+            });
+    });
+}
+
+function mcTipoChange() {
+    const tipo = document.getElementById('mc-tipo').value;
+    const cont = document.getElementById('mc-param');
+    if (tipo === 'PORCENTAJE') cont.innerHTML = `<label style="font-weight:700;">% de descuento</label><input id="mc-pct" type="number" min="1" max="99" class="swal2-input" style="margin:4px 0 4px; width:100%;" placeholder="30">`;
+    else if (tipo === 'PRECIO_FIJO') cont.innerHTML = `<label style="font-weight:700;">Precio fijo ($)</label><input id="mc-fijo" type="number" min="1" class="swal2-input" style="margin:4px 0 4px; width:100%;" placeholder="9990">`;
+    else cont.innerHTML = `<div style="display:flex; gap:10px; align-items:center;"><div><label style="font-weight:700;">Lleva (N)</label><input id="mc-n" type="number" min="2" value="2" class="swal2-input" style="margin:4px 0; width:90px;"></div><div><label style="font-weight:700;">Paga (M)</label><input id="mc-m" type="number" min="1" value="1" class="swal2-input" style="margin:4px 0; width:90px;"></div><div class="pl-note" style="padding-top:22px;">2x1 → N=2, M=1</div></div><div class="pl-note">NxM no cambia el precio: aplica la unidad gratis en el POS.</div>`;
 }
 </script>

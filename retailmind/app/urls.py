@@ -13,6 +13,7 @@ from . import views_etiquetas_zebra
 from . import views_fusion_duplicados
 from . import views_ecommerce
 from . import views_cron
+from . import views_modulo_campanas_liquidacion
 from .views_modulo_ventas import (
     # Funciones POS Dashboard
     pos_dashboard,
@@ -147,6 +148,7 @@ from .views_modulo_ventas import (
     obtener_ventas_por_categoria,
     obtener_ventas_por_especialidad,
     obtener_indicador_compra_categoria,
+    obtener_mix_por_sucursal,
     obtener_tendencias_ventas,
     exportar_dashboard_ventas_excel,
     obtener_indicadores_avanzados_ventas,
@@ -330,10 +332,16 @@ from .views_modulo_devolucion_garantia import (
     # Vistas HTML
     modulo_devolucion_garantia,
     detalle_devolucion_garantia,
-    # APIs
+    # APIs — solicitante
     api_buscar_dte_devolucion_garantia,
     api_generar_devolucion_garantia,
     api_listar_devoluciones_garantia,
+    api_anular_solicitud_devolucion_garantia,
+    # APIs — aprobador
+    api_detalle_solicitud_devolucion_garantia,
+    api_impacto_caja_devolucion_garantia,
+    api_aprobar_devolucion_garantia,
+    api_rechazar_devolucion_garantia,
 )
 from .views_modulo_fidelizacion import (
     # Vistas HTML
@@ -1059,6 +1067,7 @@ urlpatterns = [
     path('api/ventas/por-categoria/', obtener_ventas_por_categoria, name='obtener_ventas_por_categoria'),
     path('api/ventas/por-especialidad/', obtener_ventas_por_especialidad, name='obtener_ventas_por_especialidad'),
     path('api/ventas/indicador-compra/', obtener_indicador_compra_categoria, name='obtener_indicador_compra_categoria'),
+    path('api/ventas/mix-por-sucursal/', obtener_mix_por_sucursal, name='obtener_mix_por_sucursal'),
     path('api/ventas/tendencias/', obtener_tendencias_ventas, name='obtener_tendencias_ventas'),
     path('api/ventas/indicadores-avanzados/', obtener_indicadores_avanzados_ventas, name='obtener_indicadores_avanzados_ventas'),
     path('api/ventas/estado-operacional/', obtener_estado_operacional_ventas, name='obtener_estado_operacional_ventas'),
@@ -1231,9 +1240,21 @@ urlpatterns = [
     # Inteligencia de Compra (análisis + pronóstico por marca)
     path('reportes/inteligencia-compra/', views_inteligencia_compra.ver_inteligencia_compra, name='ver_inteligencia_compra'),
     path('api/inteligencia-compra/', views_inteligencia_compra.obtener_inteligencia_compra, name='obtener_inteligencia_compra'),
-    # Plan de Liquidación (ranking consolidado de marcas)
+    # Plan de Liquidación (ranking multi-dimensión + drill-down + export)
     path('reportes/plan-liquidacion/', views_inteligencia_compra.ver_plan_liquidacion, name='ver_plan_liquidacion'),
     path('api/plan-liquidacion/', views_inteligencia_compra.obtener_plan_liquidacion, name='obtener_plan_liquidacion'),
+    path('api/plan-liquidacion/detalle/', views_inteligencia_compra.obtener_plan_liquidacion_detalle, name='obtener_plan_liquidacion_detalle'),
+    path('api/plan-liquidacion/exportar-excel/', views_inteligencia_compra.exportar_plan_liquidacion_excel, name='exportar_plan_liquidacion_excel'),
+
+    # Campañas de liquidación (gestión masiva de precios + promos NxM)
+    path('campanas-liquidacion/', views_modulo_campanas_liquidacion.ver_campanas_liquidacion, name='ver_campanas_liquidacion'),
+    path('api/campanas-liquidacion/', views_modulo_campanas_liquidacion.listar_campanas_liquidacion, name='listar_campanas_liquidacion'),
+    path('api/campanas-liquidacion/crear/', views_modulo_campanas_liquidacion.crear_campana_liquidacion, name='crear_campana_liquidacion'),
+    path('api/campanas-liquidacion/<int:campana_id>/', views_modulo_campanas_liquidacion.detalle_campana_liquidacion, name='detalle_campana_liquidacion'),
+    path('api/campanas-liquidacion/<int:campana_id>/productos/', views_modulo_campanas_liquidacion.modificar_productos_campana, name='modificar_productos_campana'),
+    path('api/campanas-liquidacion/<int:campana_id>/activar/', views_modulo_campanas_liquidacion.activar_campana_liquidacion, name='activar_campana_liquidacion'),
+    path('api/campanas-liquidacion/<int:campana_id>/cerrar/', views_modulo_campanas_liquidacion.cerrar_campana_liquidacion, name='cerrar_campana_liquidacion'),
+    path('api/promos-activas/', views_modulo_campanas_liquidacion.obtener_promos_activas, name='obtener_promos_activas'),
 
     # Reporte de existencias por marca
     path('reportes/existencias-marca/', views_modulo_reportes.ver_reporte_existencias_marca, name='ver_reporte_existencias_marca'),
@@ -1314,6 +1335,11 @@ urlpatterns = [
     path('api/devolucion-garantia/buscar-dte/', api_buscar_dte_devolucion_garantia, name='api_buscar_dte_devolucion_garantia'),
     path('api/devolucion-garantia/generar/', api_generar_devolucion_garantia, name='api_generar_devolucion_garantia'),
     path('api/devolucion-garantia/listar/', api_listar_devoluciones_garantia, name='api_listar_devoluciones_garantia'),
+    path('api/devolucion-garantia/<int:devolucion_id>/detalle/', api_detalle_solicitud_devolucion_garantia, name='api_detalle_solicitud_devolucion_garantia'),
+    path('api/devolucion-garantia/<int:devolucion_id>/impacto-caja/', api_impacto_caja_devolucion_garantia, name='api_impacto_caja_devolucion_garantia'),
+    path('api/devolucion-garantia/<int:devolucion_id>/aprobar/', api_aprobar_devolucion_garantia, name='api_aprobar_devolucion_garantia'),
+    path('api/devolucion-garantia/<int:devolucion_id>/rechazar/', api_rechazar_devolucion_garantia, name='api_rechazar_devolucion_garantia'),
+    path('api/devolucion-garantia/<int:devolucion_id>/anular/', api_anular_solicitud_devolucion_garantia, name='api_anular_solicitud_devolucion_garantia'),
 
     # ========== MÓDULO FIDELIZACIÓN (PUNTOS) ==========
     # Landing PÚBLICA (QR impreso en tickets del POS) — sin login

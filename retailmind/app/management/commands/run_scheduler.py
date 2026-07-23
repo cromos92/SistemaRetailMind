@@ -27,7 +27,7 @@ import time
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from app.services import fidelizacion_service
+from app.services import campanas_service, fidelizacion_service
 
 logger = logging.getLogger('app')
 
@@ -78,6 +78,9 @@ class Command(BaseCommand):
         vales = fidelizacion_service.expirar_vales_vencidos()
         if reservas or vales:
             logger.info('Scheduler: %s reservas y %s vales expirados.', reservas, vales)
+        campanas = campanas_service.cerrar_campanas_vencidas()
+        if campanas:
+            logger.info('Scheduler: %s campañas de liquidación cerradas por vencimiento.', campanas)
         if incluir_diario:
             lotes = fidelizacion_service.expirar_lotes_vencidos()
             logger.info('Scheduler (diario): %s puntos expirados.', lotes)

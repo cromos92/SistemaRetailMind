@@ -1,0 +1,230 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<div class="page-content">
+<div class="container-fluid">
+
+<style>
+    :root {
+        --nexo-primary:#0066FF; --nexo-primary-dark:#0052CC; --nexo-primary-light:#E6F0FF;
+        --nexo-secondary:#1A1A2E; --nexo-accent:#00D4AA; --nexo-warning:#FFB020; --nexo-error:#f06548;
+        --nexo-gray-700:#4A4A5A; --nexo-gray-500:#8A8A9A; --nexo-gray-300:#D1D1D9; --nexo-gray-100:#F5F5F7;
+        --nexo-shadow-md:0 4px 6px rgba(26,26,46,.08); --nexo-radius:12px;
+    }
+    .cl-wrap { background:var(--nexo-gray-100); min-height:calc(100vh - 70px); padding-bottom:40px; }
+    .cl-header { background:var(--nexo-secondary); color:#fff; padding:26px 34px; position:relative; overflow:hidden; border-radius:0 0 18px 18px; }
+    .cl-header::before { content:''; position:absolute; top:0; right:0; width:420px; height:100%; background:linear-gradient(135deg,var(--nexo-accent) 0%,transparent 70%); opacity:.2; }
+    .cl-header h1 { font-size:1.7rem; font-weight:800; margin:0; position:relative; z-index:1; }
+    .cl-header p { color:var(--nexo-gray-300); margin:4px 0 0; font-size:.85rem; position:relative; z-index:1; }
+    .cl-body { padding:22px 34px; }
+    .cl-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
+    .cl-kpi { background:#fff; border:1px solid var(--nexo-gray-300); border-radius:var(--nexo-radius); padding:14px 16px; box-shadow:var(--nexo-shadow-md); }
+    .cl-kpi .lbl { font-size:.66rem; font-weight:700; color:var(--nexo-gray-500); text-transform:uppercase; letter-spacing:.4px; }
+    .cl-kpi .val { font-size:1.6rem; font-weight:800; color:var(--nexo-secondary); margin-top:4px; }
+    .cl-card { background:#fff; border:1px solid var(--nexo-gray-300); border-radius:var(--nexo-radius); box-shadow:var(--nexo-shadow-md); padding:16px 18px; }
+    .cl-table { width:100%; border-collapse:collapse; font-size:.85rem; }
+    .cl-table th { background:var(--nexo-secondary); color:#fff; text-align:left; padding:9px 12px; font-weight:700; }
+    .cl-table td { padding:8px 12px; border-bottom:1px solid var(--nexo-gray-100); vertical-align:middle; }
+    .cl-table tbody tr:hover { background:var(--nexo-primary-light); }
+    .cl-tag { display:inline-block; padding:2px 10px; border-radius:999px; font-size:.72rem; font-weight:800; }
+    .cl-tag.BORRADOR { background:var(--nexo-gray-100); color:var(--nexo-gray-700); }
+    .cl-tag.ACTIVA { background:#E6FBF5; color:#08917a; }
+    .cl-tag.FINALIZADA { background:var(--nexo-primary-light); color:var(--nexo-primary-dark); }
+    .cl-tag.CANCELADA { background:#FFECEC; color:var(--nexo-error); }
+    .cl-tag.APLICADO { background:#E6FBF5; color:#08917a; }
+    .cl-tag.REVERTIDO { background:var(--nexo-gray-100); color:var(--nexo-gray-700); }
+    .cl-tag.CONFLICTO { background:#FFF6E6; color:#b8860b; }
+    .cl-tag.PENDIENTE { background:var(--nexo-primary-light); color:var(--nexo-primary-dark); }
+    .cl-btn { border:1.5px solid var(--nexo-gray-300); background:#fff; padding:5px 12px; border-radius:8px; font-size:.8rem; font-weight:700; cursor:pointer; color:var(--nexo-gray-700); }
+    .cl-btn.primary { background:var(--nexo-primary); border-color:var(--nexo-primary); color:#fff; }
+    .cl-btn.success { background:var(--nexo-accent); border-color:var(--nexo-accent); color:#fff; }
+    .cl-btn.danger { background:var(--nexo-error); border-color:var(--nexo-error); color:#fff; }
+    .cl-filters { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; align-items:center; }
+    .cl-fbtn { border:1.5px solid var(--nexo-gray-300); background:#fff; padding:6px 14px; border-radius:999px; font-size:.82rem; font-weight:700; cursor:pointer; color:var(--nexo-gray-700); }
+    .cl-fbtn.active { background:var(--nexo-primary); color:#fff; border-color:var(--nexo-primary); }
+    .cl-detail { background:var(--nexo-gray-100); }
+    .cl-detail td { padding:0; }
+    .cl-detail-inner { padding:14px 18px; }
+    .cl-empty { text-align:center; padding:50px; color:var(--nexo-gray-500); }
+    @media (max-width:900px){ .cl-kpis{grid-template-columns:repeat(2,1fr);} }
+</style>
+
+<div class="cl-wrap">
+    <div class="cl-header">
+        <h1><i class="ri-price-tag-2-line"></i> Campañas de Liquidación</h1>
+        <p>Gestión masiva de precios de liquidación y promos NxM (2x1, 3x2) · las campañas se crean desde el <a href="{% url 'ver_plan_liquidacion' %}" style="color:#fff; text-decoration:underline;">Plan de Liquidación</a></p>
+    </div>
+    <div class="cl-body">
+        <div class="cl-kpis" id="cl-kpis"></div>
+
+        <div class="cl-card">
+            <div class="cl-filters">
+                <span style="font-weight:800; color:var(--nexo-secondary);">Campañas</span>
+                <button class="cl-fbtn active" data-e="" onclick="filtrarEstado('')">Todas</button>
+                <button class="cl-fbtn" data-e="BORRADOR" onclick="filtrarEstado('BORRADOR')">Borrador</button>
+                <button class="cl-fbtn" data-e="ACTIVA" onclick="filtrarEstado('ACTIVA')">Activas</button>
+                <button class="cl-fbtn" data-e="FINALIZADA" onclick="filtrarEstado('FINALIZADA')">Finalizadas</button>
+                <span style="margin-left:auto;"><button class="cl-btn" onclick="cargar()"><i class="ri-refresh-line"></i> Actualizar</button></span>
+            </div>
+            <div style="overflow-x:auto;">
+                <table class="cl-table">
+                    <thead><tr>
+                        <th>#</th><th>Nombre</th><th>Regla</th><th>Estado</th>
+                        <th>Vigencia</th><th>Productos</th><th style="text-align:right;">Acciones</th>
+                    </tr></thead>
+                    <tbody id="cl-tbody"><tr><td colspan="7" class="cl-empty">Cargando…</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+const CL_LIST = "{% url 'listar_campanas_liquidacion' %}";
+const CL_DET = id => `/app/api/campanas-liquidacion/${id}/`;
+const CL_ACT = id => `/app/api/campanas-liquidacion/${id}/activar/`;
+const CL_CLOSE = id => `/app/api/campanas-liquidacion/${id}/cerrar/`;
+const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
+const money = n => (n == null ? '—' : '$' + Math.round(n).toLocaleString('es-CL'));
+const esc = s => (s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'));
+let CAMPANAS = [], filtroEstado = '', abierta = null;
+
+document.addEventListener('DOMContentLoaded', cargar);
+
+function reglaLabel(c) {
+    if (c.tipo_regla === 'PORCENTAJE') return `-${c.valor_porcentaje}%`;
+    if (c.tipo_regla === 'PRECIO_FIJO') return `Precio fijo ${money(c.valor_precio_fijo)}`;
+    if (c.tipo_regla === 'NXM') return `${c.nxm_n}x${c.nxm_m}`;
+    return c.tipo_label;
+}
+
+function cargar() {
+    const p = filtroEstado ? '?estado=' + filtroEstado : '';
+    fetch(CL_LIST + p, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.json())
+        .then(res => {
+            if (!res.success) { document.getElementById('cl-tbody').innerHTML = `<tr><td colspan="7" class="cl-empty">Error: ${esc(res.error)}</td></tr>`; return; }
+            CAMPANAS = res.campanas;
+            renderKpis(res.kpis);
+            renderTabla();
+        });
+}
+
+function renderKpis(k) {
+    const cards = [
+        ['Activas', k.ACTIVA || 0, 'var(--nexo-accent)'],
+        ['Borrador', k.BORRADOR || 0, 'var(--nexo-gray-700)'],
+        ['Finalizadas', k.FINALIZADA || 0, 'var(--nexo-primary)'],
+        ['Total', Object.values(k).reduce((a, b) => a + b, 0), 'var(--nexo-secondary)'],
+    ];
+    document.getElementById('cl-kpis').innerHTML = cards.map(([l, v, c]) =>
+        `<div class="cl-kpi"><div class="lbl">${l}</div><div class="val" style="color:${c};">${v}</div></div>`).join('');
+}
+
+function renderTabla() {
+    const tb = document.getElementById('cl-tbody');
+    if (!CAMPANAS.length) { tb.innerHTML = '<tr><td colspan="7" class="cl-empty">No hay campañas. Creá una desde el Plan de Liquidación.</td></tr>'; return; }
+    tb.innerHTML = CAMPANAS.map(c => `
+        <tr>
+            <td><b>#${c.id}</b></td>
+            <td><b>${esc(c.nombre)}</b>${c.descripcion ? `<div style="font-size:.75rem; color:var(--nexo-gray-500);">${esc(c.descripcion)}</div>` : ''}</td>
+            <td><span class="cl-tag ${c.tipo_regla === 'NXM' ? 'ACTIVA' : 'FINALIZADA'}">${reglaLabel(c)}</span></td>
+            <td><span class="cl-tag ${c.estado}">${c.estado_label}</span></td>
+            <td style="font-size:.78rem;">${c.fecha_inicio || '—'}<br>${c.fecha_fin ? '→ ' + c.fecha_fin : '<span style="color:var(--nexo-gray-500);">sin término</span>'}</td>
+            <td>${c.n_items != null ? c.n_items : '—'}</td>
+            <td style="text-align:right; white-space:nowrap;">
+                <button class="cl-btn" onclick="verDetalle(${c.id})"><i class="ri-eye-line"></i></button>
+                ${c.estado === 'BORRADOR' ? `<button class="cl-btn success" onclick="activar(${c.id})"><i class="ri-play-line"></i> Activar</button>` : ''}
+                ${c.estado === 'ACTIVA' ? `<button class="cl-btn danger" onclick="cerrar(${c.id})"><i class="ri-stop-line"></i> Cerrar</button>` : ''}
+            </td>
+        </tr>
+        <tr class="cl-detail" id="det-${c.id}" style="display:none;"><td colspan="7"><div class="cl-detail-inner" id="det-inner-${c.id}"></div></td></tr>
+    `).join('');
+}
+
+function filtrarEstado(e) {
+    filtroEstado = e;
+    document.querySelectorAll('.cl-fbtn[data-e]').forEach(b => b.classList.toggle('active', b.dataset.e === e));
+    cargar();
+}
+
+function verDetalle(id) {
+    const row = document.getElementById('det-' + id);
+    if (row.style.display === 'table-row') { row.style.display = 'none'; return; }
+    document.querySelectorAll('.cl-detail').forEach(r => r.style.display = 'none');
+    row.style.display = 'table-row';
+    const inner = document.getElementById('det-inner-' + id);
+    inner.innerHTML = '<div class="spinner-border spinner-border-sm text-primary"></div> Cargando detalle…';
+    fetch(CL_DET(id), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.json())
+        .then(res => {
+            if (!res.success) { inner.innerHTML = 'Error: ' + esc(res.error); return; }
+            const c = res.campana;
+            const conflictos = c.items.filter(i => i.estado === 'CONFLICTO').length;
+            inner.innerHTML = `
+                ${conflictos ? `<div style="background:#FFF6E6; border-left:4px solid var(--nexo-warning); padding:8px 12px; border-radius:8px; margin-bottom:10px; font-size:.82rem;"><b>${conflictos}</b> producto(s) en conflicto: su precio se cambió a mano durante la campaña y no se revirtió.</div>` : ''}
+                <table class="cl-table" style="font-size:.8rem;">
+                    <thead><tr><th>Artículo</th><th>Sucursal</th><th style="text-align:right;">Precio original</th><th style="text-align:right;">Precio liquidación</th><th style="text-align:right;">Precio actual</th><th>Estado</th></tr></thead>
+                    <tbody>${c.items.map(i => `
+                        <tr>
+                            <td><b>${esc(i.articulo)}</b><div style="color:var(--nexo-gray-500);">${esc(i.descripcion)}</div></td>
+                            <td>${esc(i.sucursal)}</td>
+                            <td style="text-align:right;">${money(i.precio_original)}</td>
+                            <td style="text-align:right;">${i.precio_liquidacion != null ? money(i.precio_liquidacion) : '<span style="color:var(--nexo-gray-500);">NxM</span>'}</td>
+                            <td style="text-align:right;"><b>${money(i.precio_actual)}</b></td>
+                            <td><span class="cl-tag ${i.estado}">${i.estado_label}</span>${i.observaciones ? `<div style="font-size:.7rem; color:var(--nexo-gray-500);">${esc(i.observaciones)}</div>` : ''}</td>
+                        </tr>`).join('')}</tbody>
+                </table>`;
+        });
+}
+
+function activar(id) {
+    Swal.fire({
+        title: '¿Activar campaña?', icon: 'question', showCancelButton: true,
+        confirmButtonText: 'Sí, activar', cancelButtonText: 'Cancelar',
+        text: 'Se aplicarán los precios de liquidación (o se activarán las promos NxM). El stock verá los precios nuevos de inmediato.',
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        fetch(CL_ACT(id), { method: 'POST', headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' } })
+            .then(r => r.json())
+            .then(res => {
+                if (!res.success) {
+                    let msg = res.error || 'Error';
+                    if (res.conflictos) msg += '<br><br>' + res.conflictos.map(c => `• ${esc(c.producto__articulo)} en "${esc(c.campana__nombre)}"`).join('<br>');
+                    Swal.fire({ icon: 'error', title: 'No se pudo activar', html: msg }); return;
+                }
+                const r2 = res.resultado;
+                Swal.fire({ icon: 'success', title: 'Campaña activada',
+                    html: `${r2.aplicados || 0} precios aplicados · ${r2.nxm || 0} productos NxM${r2.clamps ? ` · ${r2.clamps} en piso de costo` : ''}` });
+                cargar();
+            });
+    });
+}
+
+function cerrar(id) {
+    Swal.fire({
+        title: '¿Cerrar campaña?', icon: 'warning', showCancelButton: true,
+        confirmButtonText: 'Sí, cerrar y revertir', cancelButtonText: 'Cancelar',
+        text: 'Se restaurarán los precios originales (salvo los que se cambiaron a mano durante la campaña, que quedan en conflicto).',
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        fetch(CL_CLOSE(id), { method: 'POST', headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' } })
+            .then(r => r.json())
+            .then(res => {
+                if (!res.success) { Swal.fire({ icon: 'error', title: 'Error', text: res.error }); return; }
+                const r2 = res.resultado;
+                Swal.fire({ icon: 'success', title: 'Campaña cerrada',
+                    html: `${r2.revertidos || 0} precios revertidos${r2.conflictos ? ` · ${r2.conflictos} conflictos` : ''}${r2.nxm ? ` · ${r2.nxm} NxM` : ''}` });
+                cargar();
+            });
+    });
+}
+</script>

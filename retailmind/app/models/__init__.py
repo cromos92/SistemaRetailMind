@@ -66,6 +66,8 @@ from .ventas import (  # noqa: F401
     HistorialCambioDevolucion,
     METODO_DEVOLUCION_NC_CHOICES,
     ESTADO_DEVOLUCION_GARANTIA_CHOICES,
+    METODO_DEVOLUCION_DG_CHOICES,
+    MODO_DETALLE_DG_CHOICES,
     DevolucionGarantia,
     DevolucionGarantiaDetalle,
 )
@@ -138,6 +140,11 @@ from .precios import (  # noqa: F401
     CambioPrecioPendiente,
     NotificacionCambioPrecio,
     HistorialCambioPrecio,
+    TIPO_REGLA_CAMPANA_CHOICES,
+    ESTADO_CAMPANA_CHOICES,
+    ESTADO_ITEM_CAMPANA_CHOICES,
+    CampanaLiquidacion,
+    CampanaLiquidacionProducto,
 )
 
 from .permisos import (  # noqa: F401

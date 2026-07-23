@@ -3793,6 +3793,107 @@ document.addEventListener('DOMContentLoaded', function() {
             .reduce((sum, p) => sum + (p.cantidad || 0), 0);
     }
 
+    // ===================== MOTOR NxM (campañas de liquidación) =====================
+    // PROMO_BY_SKU: sku -> {campana_id, nombre, n, m, producto_id}. Se carga al
+    // iniciar el POS y se reaplica en cada recálculo del ticket (idempotente).
+    const PROMO_BY_SKU = {};
+
+    function cargarPromosNxM() {
+        fetch(apiUrls.promosActivas, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.json())
+            .then(res => {
+                Object.keys(PROMO_BY_SKU).forEach(k => delete PROMO_BY_SKU[k]);
+                if (res && res.success) {
+                    (res.promos || []).forEach(promo => {
+                        (promo.productos || []).forEach(p => {
+                            (p.skus || []).forEach(sku => {
+                                PROMO_BY_SKU[String(sku)] = {
+                                    campana_id: promo.campana_id, nombre: promo.nombre,
+                                    n: promo.n, m: promo.m, producto_id: p.producto_id,
+                                };
+                            });
+                        });
+                    });
+                }
+                if (ticketActual && ticketActual.productos) {
+                    aplicarPromosNxM();
+                    recalcularTotalesTicket();
+                    cargarProductosTicket(ticketActual.productos);
+                    if (typeof actualizarResumenVenta === 'function') actualizarResumenVenta();
+                }
+            })
+            .catch(() => { /* sin promos: el POS opera normal */ });
+    }
+
+    function aplicarPromosNxM() {
+        if (!ticketActual || !ticketActual.productos) return;
+        if (ticketActual.modulo_origen === 'CAMBIO_DEVOLUCION') return;
+        if (!Object.keys(PROMO_BY_SKU).length &&
+            !ticketActual.productos.some(p => p.es_promo_nxm)) return;
+
+        // A. Reabsorber líneas promo previas → volver a cantidades enteras (idempotencia).
+        const promoPrevias = ticketActual.productos.filter(p => p.es_promo_nxm);
+        const normales = ticketActual.productos.filter(p => !p.es_promo_nxm);
+        promoPrevias.forEach(pl => {
+            const destino = normales.find(n => n.sku == pl.sku);
+            if (destino) {
+                destino.cantidad += (pl.cantidad || 0);
+                const precioU = destino.precio_unitario || destino.precio;
+                destino.subtotal = (precioU - (destino.descuento_unitario || 0)) * destino.cantidad;
+            } else {
+                const precioU = pl.precio_unitario || pl.precio;
+                pl.es_promo_nxm = false; pl.promo_campana_id = null; pl.promo_label = null;
+                pl.descuento_unitario = 0; pl.porcentaje_descuento = 0;
+                pl.subtotal = precioU * (pl.cantidad || 0);
+                normales.push(pl);
+            }
+        });
+
+        // B. Agrupar por producto (todas las tallas comparten producto_id) y calcular gratis.
+        const grupos = {};
+        normales.forEach(p => {
+            const promo = PROMO_BY_SKU[String(p.sku)];
+            if (!promo) return;
+            const g = grupos[promo.producto_id] || (grupos[promo.producto_id] = { promo, lineas: [], q: 0 });
+            g.lineas.push(p);
+            g.q += (p.cantidad || 0);
+        });
+
+        // C. Partir líneas: las unidades gratis salen de las más baratas primero.
+        const promoNuevas = [];
+        Object.values(grupos).forEach(g => {
+            const n = g.promo.n, m = g.promo.m;
+            if (!n || !m || n <= m) return;
+            let f = Math.floor(g.q / n) * (n - m);
+            if (f <= 0) return;
+            const orden = g.lineas.slice().sort((a, b) =>
+                ((a.precio_unitario || a.precio) - (b.precio_unitario || b.precio)));
+            orden.forEach(linea => {
+                if (f <= 0) return;
+                const precioU = linea.precio_unitario || linea.precio;
+                const take = Math.min(linea.cantidad || 0, f);
+                if (take <= 0) return;
+                linea.cantidad -= take;
+                linea.subtotal = (precioU - (linea.descuento_unitario || 0)) * linea.cantidad;
+                promoNuevas.push({
+                    line_id: nextLineId(), sku: linea.sku,
+                    producto_talla_id: linea.producto_talla_id,
+                    articulo: linea.articulo, descripcion: linea.descripcion || '',
+                    marca: linea.marca || '', talla: linea.talla || '', color: linea.color || '',
+                    cantidad: take, precio_unitario: precioU, precio: precioU,
+                    precio_original: precioU, descuento_unitario: precioU,
+                    porcentaje_descuento: 100, subtotal: 0, stock: linea.stock,
+                    es_promo_nxm: true, promo_campana_id: g.promo.campana_id,
+                    promo_label: `${n}x${m} · ${g.promo.nombre}`,
+                });
+                f -= take;
+            });
+        });
+
+        // Descartar líneas pagadas que quedaron en 0 y añadir las gratis.
+        ticketActual.productos = normales.filter(p => (p.cantidad || 0) > 0).concat(promoNuevas);
+    }
+
     // === PERSISTENCIA LOCAL — Auto-guardar estado del POS ===
     const POS_STORAGE_PREFIX = 'pos_draft_';
 
@@ -3823,6 +3924,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 fecha_descuento: p.fecha_descuento || null,
                 es_pendiente_despacho: p.es_pendiente_despacho || false,
                 cotizacion_item_id: p.cotizacion_item_id || null,
+                es_promo_nxm: p.es_promo_nxm || false,
+                promo_campana_id: p.promo_campana_id || null,
+                promo_label: p.promo_label || null,
             })),
             pagos: pagosActuales.map(p => ({...p})),
             totales: ticketActual.totales ? {...ticketActual.totales} : null
@@ -3873,6 +3977,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const apiUrls = {
         dashboard: '{% url "dashboard_stats" %}',
         buscarTicket: '{% url "buscar_ticket_pos" %}',
+        promosActivas: '{% url "obtener_promos_activas" %}',
         crearTicket: '{% url "crear_ticket" %}',
         crearTicketPendiente: '{% url "crear_ticket_pendiente_pos" %}',
         registrarPagos: (correlativo) => `{% url 'registrar_pagos_ticket' correlativo=0 %}`.replace('/0/', `/${correlativo}/`),
@@ -5245,7 +5350,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function cargarTicket(ticket) {
         ticketActual = ticket;
-        
+
+        // Cargar promos NxM vigentes de la sucursal (reaplica sobre el ticket).
+        cargarPromosNxM();
+
         // Preserve global discount so recalcularTotalesTicket can account for
         // tickets that store a global discount (ticket.descuento) without
         // per-product descuento_unitario values.
@@ -5552,6 +5660,31 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         tbody.innerHTML = htmlHeader + productos.map((producto, index) => {
+            // ── Línea gratis de promo NxM (motor de campañas): fila dedicada,
+            //    bloqueada (la gobierna el motor), subtotal $0.
+            if (producto.es_promo_nxm) {
+                const fotoPlaceholderP = '{% static "images/producto_placeholder.svg" %}';
+                const fotoUrlP = producto.foto_portada_url || fotoPlaceholderP;
+                return `
+                <tr data-producto-index="${index}" class="table-success bg-opacity-10">
+                    <td class="text-center" style="padding:4px;">
+                        <img src="${fotoUrlP}" alt="" loading="lazy" style="width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid #e0e0e0;background:#f5f5f7;" onerror="this.src='${fotoPlaceholderP}';">
+                    </td>
+                    <td><code>${producto.sku || '-'}</code></td>
+                    <td>
+                        <span class="badge bg-success me-2">🎁 ${producto.promo_label || 'PROMO'}</span>
+                        <h6 class="mb-0 fs-14 d-inline">${producto.articulo}</h6>
+                        ${producto.descripcion ? `<br><small class="text-muted">${producto.descripcion}</small>` : ''}
+                    </td>
+                    <td><span class="badge bg-info">${producto.talla || '-'}</span></td>
+                    <td class="text-center"><span class="fw-bold">${producto.cantidad}</span><small class="text-muted d-block">Gratis</small></td>
+                    <td class="text-end"><span class="text-decoration-line-through text-muted small">${formatearMoneda(producto.precio_unitario || producto.precio)}</span></td>
+                    <td class="text-end"><span class="badge bg-success">100%</span></td>
+                    <td class="text-end fw-bold text-success">${formatearMoneda(0)}</td>
+                    <td class="text-center"><span class="badge bg-success">Automático</span></td>
+                </tr>
+            `;
+            }
             const descuento = producto.descuento_unitario || 0;
             const precioOriginal = producto.precio_unitario || producto.precio;
             const precioConDescuento = precioOriginal - descuento;
@@ -7608,8 +7741,11 @@ document.addEventListener('DOMContentLoaded', function() {
     function recalcularTotalesTicket() {
         if (!ticketActual) return;
 
+        // Reaplicar promos NxM antes de sumar (idempotente, single choke point).
+        aplicarPromosNxM();
+
         const productos = ticketActual.productos || [];
-        
+
         let totalItems = 0;
         let subtotalSinDescuento = 0;
         let totalDescuentos = 0;
@@ -8321,6 +8457,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 subtotal: (p.subtotal != null && p.subtotal !== undefined) ? p.subtotal : ((precio - dcto) * qty),
                 es_pendiente_despacho: p.es_pendiente_despacho || false,
                 cotizacion_item_id: p.cotizacion_item_id || null,
+                es_promo_nxm: p.es_promo_nxm || false,
+                promo_campana_id: p.promo_campana_id || null,
             };
         });
         

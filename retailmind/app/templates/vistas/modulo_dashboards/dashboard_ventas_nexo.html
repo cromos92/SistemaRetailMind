@@ -397,6 +397,79 @@
         </div>
 
         <!-- ═══════════════════════════════════════════════════════════════════════════════
+             COMPARATIVO POR TIENDA  (ignora el filtro de sucursal a propósito:
+             compara TODAS las tiendas visibles del usuario en el mismo período)
+             ═══════════════════════════════════════════════════════════════════════════════ -->
+        <div class="nexo-section-header mt-4 nexo-animate-fadein">
+            <div class="nexo-section-icon" style="background: linear-gradient(135deg, #6C5CE7 0%, #4FACFE 100%);">
+                <i class="bi bi-shop"></i>
+            </div>
+            <h3 class="nexo-section-title">Comparativo por Tienda</h3>
+        </div>
+
+        <div class="row nexo-animate-fadein">
+            <!-- Mix por especialidad (barras 100% apiladas horizontales) -->
+            <div class="col-lg-7">
+                <div class="nexo-chart-card" style="height: calc(100% - 24px);">
+                    <div class="nexo-chart-header">
+                        <h5 class="nexo-chart-title">
+                            <i class="bi bi-bar-chart-steps"></i>
+                            Mix por <span id="mixDimLabel">especialidad</span>
+                            <small class="text-muted" id="mixDimSubtitle" style="font-weight:400;font-size:.72rem;">(todas las tiendas · % del mix etiquetado del período)</small>
+                        </h5>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Dimensión del mix">
+                                <button type="button" class="btn btn-primary btn-sm mix-dim-btn active" data-dimension="especialidad">Especialidad</button>
+                                <button type="button" class="btn btn-outline-primary btn-sm mix-dim-btn" data-dimension="categoria">Categoría</button>
+                            </div>
+                            <span class="nexo-badge nexo-badge-primary" id="badgeMixTiendas">—</span>
+                        </div>
+                    </div>
+                    <div class="nexo-chart-body">
+                        <div class="nexo-chart-container-sm">
+                            <canvas id="chartMixTiendas"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ventas por tienda (tabla + variación vs período comparativo) -->
+            <div class="col-lg-5">
+                <div class="nexo-chart-card" style="height: calc(100% - 24px);">
+                    <div class="nexo-chart-header">
+                        <h5 class="nexo-chart-title">
+                            <i class="bi bi-shop-window"></i>
+                            Ventas por tienda
+                        </h5>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Ordenar por">
+                            <button type="button" class="btn btn-outline-secondary btn-sm sort-vt-btn active" data-sort="total">Total</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm sort-vt-btn" data-sort="variacion">Var %</button>
+                        </div>
+                    </div>
+                    <div class="nexo-chart-body p-0">
+                        <table class="nexo-table">
+                            <thead>
+                                <tr>
+                                    <th>Tienda</th>
+                                    <th class="text-end">Total</th>
+                                    <th class="text-end">Tickets</th>
+                                    <th class="text-end">Var %</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyVentasTienda">
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-4">
+                                        <i class="bi bi-hourglass-split"></i> Cargando...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════════════════
              ANÁLISIS TEMPORAL - PEAK HOURS
              ═══════════════════════════════════════════════════════════════════════════════ -->
         <div class="nexo-section-header mt-4 nexo-animate-fadein">
@@ -487,34 +560,43 @@
                 </div>
             </div>
 
-            <!-- Top Productos -->
-            <div class="col-lg-6">
+        </div>
+
+        <!-- Top Productos (modelos) — fila completa: tabla plana enriquecida -->
+        <div class="row nexo-animate-fadein">
+            <div class="col-12">
                 <div class="nexo-chart-card">
                     <div class="nexo-chart-header">
                         <h5 class="nexo-chart-title">
                             <i class="bi bi-box-seam"></i>
-                            Top 10 Productos
+                            Top 10 Productos <small class="text-muted" style="font-weight:400;font-size:.72rem;">(por modelo · marca / categoría / género / especialidad)</small>
                         </h5>
                     </div>
                     <div class="nexo-chart-body p-0">
-                        <table class="nexo-table">
-                            <thead>
-                                <tr>
-                                    <th style="width: 50px;">#</th>
-                                    <th>Producto</th>
-                                    <th class="text-end">Unid.</th>
-                                    <th class="text-end">Total</th>
-                                    <th class="text-end">Part.</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tbodyProductos">
-                                <tr>
-                                    <td colspan="5" class="text-center text-muted py-4">
-                                        <i class="bi bi-hourglass-split"></i> Cargando...
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <div class="table-responsive">
+                            <table class="nexo-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50px;">#</th>
+                                        <th>Producto</th>
+                                        <th>Marca</th>
+                                        <th>Categoría</th>
+                                        <th>Género</th>
+                                        <th>Especialidad</th>
+                                        <th class="text-end">Unid.</th>
+                                        <th class="text-end">Total</th>
+                                        <th class="text-end">Part.</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyProductos">
+                                    <tr>
+                                        <td colspan="9" class="text-center text-muted py-4">
+                                            <i class="bi bi-hourglass-split"></i> Cargando...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1104,6 +1186,10 @@ let fechaInicio, fechaFin;
 let fechaInicioComparativo, fechaFinComparativo;
 let tipoComparacion = 'periodo_anterior';
 
+// Estado del "Comparativo por tienda": dimensión del mix y orden de la tabla
+let mixDimension = 'especialidad';   // 'especialidad' | 'categoria'
+let sortVentasTienda = 'total';      // 'total' | 'variacion'
+
 // Colores NEXO
 const NEXO_COLORS = {
     primary: '#0066FF',
@@ -1148,7 +1234,34 @@ $(document).ready(function() {
     
     // Cargar filtros
     cargarFiltros();
-    
+
+    // Auto-aplicar filtros al cambiar cualquier control (debounce 400ms).
+    // Delegado en document porque #filtroSucursal/#filtroVendedor se pueblan por AJAX.
+    let _debounceFiltros = null;
+    $(document).on('change',
+        '#filtroFechaInicio, #filtroFechaFin, #filtroComparacion, #filtroSucursal,' +
+        ' #filtroVendedor, #filtroEstado, #filtroCategoria, #filtroEspecialidad',
+        function() {
+            clearTimeout(_debounceFiltros);
+            _debounceFiltros = setTimeout(aplicarFiltros, 400);
+        });
+
+    // Comparativo por tienda: toggle de dimensión del mix (especialidad ↔ categoría)
+    $(document).on('click', '.mix-dim-btn', function() {
+        mixDimension = $(this).data('dimension');
+        $('.mix-dim-btn').removeClass('active btn-primary').addClass('btn-outline-primary');
+        $(this).addClass('active btn-primary').removeClass('btn-outline-primary');
+        recargarMixTiendas();   // solo recarga esta sección (respuesta cacheada)
+    });
+
+    // Comparativo por tienda: orden de la tabla (total ↔ variación), sin refetch
+    $(document).on('click', '.sort-vt-btn', function() {
+        sortVentasTienda = $(this).data('sort');
+        $('.sort-vt-btn').removeClass('active');
+        $(this).addClass('active');
+        if (dashboardData.mixTiendas) actualizarTablaVentasTienda(dashboardData.mixTiendas.sucursales);
+    });
+
     console.log('✅ Dashboard NEXO inicializado correctamente');
 });
 
@@ -1341,7 +1454,8 @@ function cargarDatosPeriodoActual(params) {
         cargarControlFugas(params),
         cargarVentasPorCategoria(params),
         cargarVentasPorEspecialidad(params),
-        cargarIndicadorCompra(params)
+        cargarIndicadorCompra(params),
+        cargarMixPorSucursal(params)
     ]).then(() => {
         generarAlertas();
     }).catch(err => {
@@ -1515,6 +1629,132 @@ function actualizarChartVentasEspecialidad(data) {
     const top = data.slice(0, 12);
     _chartBarrasHorizontales('chartVentasEspecialidad', 'ventasEspecialidad',
         top.map(d => ESP_LABEL_DASH[d.slug] || d.slug), top.map(d => d.total), NEXO_COLORS.success);
+}
+
+// ── Comparativo por tienda: mix de especialidad + ventas por tienda ──────────
+// OJO: esta sección compara TODAS las tiendas visibles del usuario, por eso NO
+// envía sucursal_id ni vendedor_id (el backend los ignora a propósito).
+function cargarMixPorSucursal(params) {
+    const p = {
+        fecha_inicio: params.fecha_inicio,
+        fecha_fin: params.fecha_fin,
+        estado: params.estado,
+        categoria_id: params.categoria_id,
+        dimension: mixDimension,
+        top_n: 6
+    };
+    if (tipoComparacion !== 'sin_comparacion' && fechaInicioComparativo && fechaFinComparativo) {
+        p.fecha_inicio_comp = fechaInicioComparativo;
+        p.fecha_fin_comp = fechaFinComparativo;
+    }
+    return $.get('/app/api/ventas/mix-por-sucursal/', p, function(response) {
+        if (response.success) {
+            dashboardData.mixTiendas = response;
+            actualizarChartMixTiendas(response);
+            actualizarTablaVentasTienda(response.sucursales);
+            $('#badgeMixTiendas').text(response.sucursales.length + ' tiendas');
+        }
+    });
+}
+
+// Recarga SOLO el comparativo por tienda (al cambiar la dimensión), reconstruyendo
+// los params desde los filtros actuales — no dispara el resto del dashboard.
+function recargarMixTiendas() {
+    cargarMixPorSucursal({
+        fecha_inicio: fechaInicio,
+        fecha_fin: fechaFin,
+        estado: $('#filtroEstado').val() || '',
+        categoria_id: $('#filtroCategoria').val() || ''
+    });
+}
+
+function actualizarChartMixTiendas(resp) {
+    const ctx = document.getElementById('chartMixTiendas');
+    if (!ctx) return;
+    // Título/subtítulo dinámicos según la dimensión que devolvió el backend
+    const dimEsp = (resp.dimension || 'especialidad') === 'especialidad';
+    $('#mixDimLabel').text(dimEsp ? 'especialidad' : 'categoría');
+    $('#mixDimSubtitle').text(dimEsp
+        ? '(todas las tiendas · % del mix etiquetado del período)'
+        : '(todas las tiendas · % del mix del período)');
+    if (charts.mixTiendas) charts.mixTiendas.destroy();
+    const sucs = resp.sucursales || [];
+    const datasets = (resp.segmentos || []).map((seg, i) => ({
+        label: seg === 'otras' ? 'Otras' : (ESP_LABEL_DASH[seg] || seg),
+        _slug: seg,
+        data: sucs.map(s => (s.mix && s.mix[seg]) ? s.mix[seg].pct : 0),
+        backgroundColor: seg === 'otras' ? NEXO_COLORS.gray
+            : NEXO_COLORS.gradients[i % NEXO_COLORS.gradients.length],
+        maxBarThickness: 26
+    }));
+    charts.mixTiendas = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: sucs.map(s => s.alias), datasets: datasets },
+        options: {
+            indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
+                tooltip: { backgroundColor: '#1A1A2E', cornerRadius: 8, callbacks: {
+                    label: function(c) {
+                        const m = sucs[c.dataIndex].mix[c.dataset._slug];
+                        return c.dataset.label + ': ' + c.parsed.x.toFixed(1) + '%'
+                             + (m ? ' (' + formatMoney(m.total) + ')' : '');
+                    }
+                }}
+            },
+            scales: {
+                x: { stacked: true, min: 0, max: 100,
+                     ticks: { callback: v => v + '%' }, grid: { color: 'rgba(0,0,0,.05)' } },
+                y: { stacked: true, grid: { display: false } }
+            }
+        }
+    });
+}
+
+// Tinte de fondo para la celda Var%: rojo si cae, verde si sube; intensidad ∝
+// magnitud (tope 50%). Ayuda a que salte a la vista qué tienda se mueve más.
+function _varBgTint(v) {
+    if (v === null || v === undefined) return '';
+    const mag = Math.min(Math.abs(v), 50) / 50;      // 0..1
+    const alpha = (0.08 + mag * 0.24).toFixed(2);
+    return v >= 0 ? 'background: rgba(10,179,150,' + alpha + ');'
+                  : 'background: rgba(220,53,69,' + alpha + ');';
+}
+
+function actualizarTablaVentasTienda(sucs) {
+    const tbody = $('#tbodyVentasTienda');
+    if (!sucs || !sucs.length) {
+        tbody.html('<tr><td colspan="4" class="text-center text-muted py-4">Sin tiendas visibles</td></tr>');
+        return;
+    }
+    // Orden según el control activo (sin refetch). Variación: peor caída primero;
+    // las tiendas sin comparativo (null) van al final.
+    const rows = sucs.slice();
+    if (sortVentasTienda === 'variacion') {
+        rows.sort(function(a, b) {
+            const av = a.variacion_pct, bv = b.variacion_pct;
+            if (av === null || av === undefined) return 1;
+            if (bv === null || bv === undefined) return -1;
+            return av - bv;
+        });
+    } else {
+        rows.sort((a, b) => b.total - a.total);
+    }
+    tbody.html(rows.map(function(s) {
+        let varCell = '<span class="text-muted">—</span>';
+        if (s.variacion_pct !== null && s.variacion_pct !== undefined) {
+            const up = s.variacion_pct >= 0;
+            varCell = '<span class="fw-semibold" style="color:' + (up ? '#0ab39c' : '#dc3545') + ';">'
+                + '<i class="bi bi-arrow-' + (up ? 'up' : 'down') + '"></i> '
+                + Math.abs(s.variacion_pct).toFixed(1) + '%</span>';
+        }
+        const totalCell = s.total > 0 ? '<strong>' + formatMoney(s.total) + '</strong>'
+                                      : '<span class="text-muted">Sin ventas</span>';
+        return '<tr><td><strong>' + s.alias + '</strong></td>'
+             + '<td class="text-end">' + totalCell + '</td>'
+             + '<td class="text-end">' + formatNumber(s.cantidad) + '</td>'
+             + '<td class="text-end" style="' + _varBgTint(s.variacion_pct) + '">' + varCell + '</td></tr>';
+    }).join(''));
 }
 
 // ── Indicador de compra: cobertura de stock por categoría (qué comprar) ──────
@@ -1998,10 +2238,10 @@ function actualizarTablaProductos(productos) {
     tbody.empty();
     
     if (!productos || productos.length === 0) {
-        tbody.html('<tr><td colspan="5" class="text-center text-muted py-4">Sin datos</td></tr>');
+        tbody.html('<tr><td colspan="9" class="text-center text-muted py-4">Sin datos</td></tr>');
         return;
     }
-    
+
     productos.slice(0, 10).forEach((p, i) => {
         const rankClass = i === 0 ? 'nexo-rank-1' : i === 1 ? 'nexo-rank-2' : i === 2 ? 'nexo-rank-3' : 'nexo-rank-default';
         // Usar total_ventas que es el campo correcto de la API
@@ -2010,14 +2250,21 @@ function actualizarTablaProductos(productos) {
         // Usar participación en lugar de margen si no hay datos de costo
         const participacion = p.participacion || 0;
         const participacionClass = participacion >= 15 ? 'success' : participacion >= 5 ? 'primary' : 'warning';
-        
+        const chips = (p.especialidades || []).map(s =>
+            '<span class="nexo-badge nexo-badge-primary" style="font-size:.65rem;">' + (ESP_LABEL_DASH[s] || s) + '</span>'
+        ).join(' ') || '<span class="text-muted">—</span>';
+
         tbody.append(`
             <tr>
                 <td><span class="nexo-rank-badge ${rankClass}">${i + 1}</span></td>
                 <td>
-                    <strong>${(p.nombre || p.articulo || '-').substring(0, 25)}</strong>
-                    <br><small class="text-muted">${p.sku || ''}</small>
+                    <strong>${(p.nombre || p.articulo || '-')}</strong>
+                    <br><small class="text-muted">${(p.descripcion || '').substring(0, 40)}</small>
                 </td>
+                <td>${p.marca || '—'}</td>
+                <td><small>${p.categoria_label || p.categoria || '—'}</small></td>
+                <td>${p.genero || '—'}</td>
+                <td>${chips}</td>
                 <td class="text-end">${formatNumber(cantidadVendida)}</td>
                 <td class="text-end"><strong>${formatMoney(totalVenta)}</strong></td>
                 <td class="text-end">

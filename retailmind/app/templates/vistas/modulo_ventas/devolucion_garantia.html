@@ -31,9 +31,7 @@
         --nexo-radius-sm: 4px;
         --nexo-radius-md: 8px;
         --nexo-radius-lg: 12px;
-        --nexo-radius-xl: 16px;
         --nexo-radius-full: 9999px;
-        --nexo-transition-fast: 150ms ease;
         --nexo-transition-normal: 250ms ease;
     }
 
@@ -41,11 +39,7 @@
         background: linear-gradient(135deg, var(--nexo-gray-100) 0%, #ECEEF2 100%);
         min-height: 100vh;
     }
-
-    .page-content > .container-fluid {
-        padding-left: 1rem;
-        padding-right: 1rem;
-    }
+    .page-content > .container-fluid { padding-left: 1rem; padding-right: 1rem; }
 
     /* ========== PAGE HEADER ========== */
     .page-header-nexo {
@@ -56,29 +50,10 @@
         color: var(--nexo-white);
         box-shadow: var(--nexo-shadow-md);
     }
-
-    .page-header-nexo h1 {
-        font-weight: 700;
-        font-size: 1.3rem;
-        margin-bottom: 0.15rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .page-header-nexo h1 i {
-        color: var(--nexo-accent);
-        font-size: 1.5rem;
-    }
-
-    .page-header-nexo .sucursal-info {
-        color: var(--nexo-gray-300);
-        font-size: 0.82rem;
-    }
-
-    .page-header-nexo .sucursal-info strong {
-        color: var(--nexo-accent);
-    }
+    .page-header-nexo h1 { font-weight: 700; font-size: 1.3rem; margin-bottom: 0.15rem; display: flex; align-items: center; gap: 0.5rem; }
+    .page-header-nexo h1 i { color: var(--nexo-accent); font-size: 1.5rem; }
+    .page-header-nexo .sucursal-info { color: var(--nexo-gray-300); font-size: 0.82rem; }
+    .page-header-nexo .sucursal-info strong { color: var(--nexo-accent); }
 
     /* ========== CARD STATS NEXO ========== */
     .card-stats-nexo {
@@ -89,77 +64,57 @@
         border: 1px solid var(--nexo-gray-300);
         overflow: hidden;
     }
-
-    .card-stats-nexo:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--nexo-shadow-md);
-        border-color: var(--nexo-primary);
-    }
-
-    .card-stats-nexo .card-body {
-        padding: 0.5rem 0.75rem;
-    }
-
+    .card-stats-nexo:hover { transform: translateY(-2px); box-shadow: var(--nexo-shadow-md); border-color: var(--nexo-primary); }
+    .card-stats-nexo .card-body { padding: 0.5rem 0.75rem; }
     .card-stats-nexo .stat-icon {
-        width: 34px;
-        height: 34px;
-        border-radius: var(--nexo-radius-sm);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1rem;
-        color: var(--nexo-white);
-        flex-shrink: 0;
+        width: 34px; height: 34px; border-radius: var(--nexo-radius-sm);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1rem; color: var(--nexo-white); flex-shrink: 0;
     }
-
     .card-stats-nexo .stat-icon.bg-nexo-primary { background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%); }
     .card-stats-nexo .stat-icon.bg-nexo-warning { background: linear-gradient(135deg, var(--nexo-warning) 0%, #E59B00 100%); }
     .card-stats-nexo .stat-icon.bg-nexo-success { background: linear-gradient(135deg, var(--nexo-success) 0%, #00B08A 100%); }
-
-    .card-stats-nexo .stat-label {
-        color: var(--nexo-gray-500);
-        font-size: 0.7rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.4px;
-        margin-bottom: 0;
-        line-height: 1.1;
-    }
-
-    .card-stats-nexo .stat-value {
-        color: var(--nexo-secondary);
-        font-size: 1.4rem;
-        font-weight: 800;
-        line-height: 1.1;
-    }
+    .card-stats-nexo .stat-label { color: var(--nexo-gray-500); font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 0; line-height: 1.1; }
+    .card-stats-nexo .stat-value { color: var(--nexo-secondary); font-size: 1.4rem; font-weight: 800; line-height: 1.1; }
 
     /* ========== STATUS BADGES ========== */
-    .status-badge {
-        padding: 6px 14px;
-        border-radius: var(--nexo-radius-full);
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.3px;
-    }
+    .status-badge { padding: 6px 14px; border-radius: var(--nexo-radius-full); font-size: 12px; font-weight: 600; letter-spacing: 0.3px; }
+    .status-pendiente { background: rgba(255, 176, 32, 0.15); color: #CC8C00; border: 1px solid rgba(255, 176, 32, 0.3); }
     .status-registrada { background: rgba(255, 176, 32, 0.15); color: #CC8C00; border: 1px solid rgba(255, 176, 32, 0.3); }
     .status-nc_generada { background: rgba(0, 212, 170, 0.15); color: #00A080; border: 1px solid rgba(0, 212, 170, 0.3); }
-    .status-anulada { background: rgba(255, 77, 77, 0.15); color: var(--nexo-error); border: 1px solid rgba(255, 77, 77, 0.3); }
+    .status-rechazada { background: rgba(255, 77, 77, 0.12); color: #CC3333; border: 1px solid rgba(255, 77, 77, 0.25); }
+    .status-anulada { background: rgba(138, 138, 154, 0.15); color: var(--nexo-gray-700); border: 1px solid rgba(138, 138, 154, 0.3); }
 
     /* ========== TABLA ========== */
-    .table-nexo {
-        background: var(--nexo-white);
-        border-radius: var(--nexo-radius-md);
-        box-shadow: var(--nexo-shadow-sm);
-        overflow: hidden;
-    }
+    .table-nexo { background: var(--nexo-white); border-radius: var(--nexo-radius-md); box-shadow: var(--nexo-shadow-sm); overflow: hidden; }
 
-    /* ========== BÚSQUEDA DE CLIENTE (paleta dark, mismo patrón que modalGenerarNC) ========== */
-    .cliente-box {
-        background: #161b27;
-        border: 1px solid #2a3045;
-        border-radius: var(--nexo-radius-md);
-        padding: 0.75rem;
+    /* ========== CAJAS DARK EN MODAL ========== */
+    .cliente-box { background: #161b27; border: 1px solid #2a3045; border-radius: var(--nexo-radius-md); padding: 0.75rem; }
+
+    /* ========== WIZARD STEPPER ========== */
+    .dg-stepper { display: flex; gap: 0.25rem; margin-bottom: 1rem; }
+    .dg-step { flex: 1; text-align: center; position: relative; padding-top: 34px; color: #6c7a92; font-size: 0.72rem; font-weight: 600; }
+    .dg-step::before {
+        content: attr(data-num);
+        position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+        width: 26px; height: 26px; border-radius: 50%;
+        background: #232a3d; color: #8a97ad; border: 2px solid #2a3045;
+        display: flex; align-items: center; justify-content: center; font-size: 0.78rem; font-weight: 700;
     }
+    .dg-step::after {
+        content: ''; position: absolute; top: 13px; left: 50%; width: 100%; height: 2px; background: #2a3045; z-index: -0;
+    }
+    .dg-step:last-child::after { display: none; }
+    .dg-step.active { color: #fff; }
+    .dg-step.active::before { background: var(--nexo-primary); color: #fff; border-color: var(--nexo-primary); }
+    .dg-step.done { color: var(--nexo-accent); }
+    .dg-step.done::before { content: '✓'; background: var(--nexo-accent); color: #08131f; border-color: var(--nexo-accent); }
+    .dg-pane { min-height: 180px; }
+    .dg-prod-row { border: 1px solid #2a3045; border-radius: 6px; padding: 0.5rem; margin-bottom: 0.5rem; }
+    .dg-prod-row.sel { border-color: var(--nexo-primary); background: rgba(0,102,255,0.05); }
+    .dg-total-nc { font-size: 1.05rem; font-weight: 800; color: var(--nexo-accent); }
+    .dg-modo-btn.active { background: var(--nexo-primary) !important; color: #fff !important; border-color: var(--nexo-primary) !important; }
+    .apr-impacto-box { background: #0f1420; border: 1px solid #2a3045; border-radius: 8px; padding: 0.75rem; font-size: 0.82rem; }
 </style>
 
 <div class="page-content">
@@ -176,7 +131,7 @@
             </div>
             <div class="col-auto">
                 <button class="btn btn-nexo-success" data-bs-toggle="modal" data-bs-target="#modalNuevaDevolucion" style="font-size:0.88rem; padding:0.45rem 1rem;">
-                    <i class="ri-add-line me-1"></i> Nueva Devolución
+                    <i class="ri-add-line me-1"></i> Nueva Solicitud
                 </button>
             </div>
         </div>
@@ -184,44 +139,29 @@
 
     <!-- Estadísticas -->
     <div class="row mb-2 g-2" id="estadisticas-cards">
-        <div class="col-6 col-md-4">
-            <div class="card-stats-nexo">
-                <div class="card-body">
-                    <div class="d-flex align-items-center gap-2">
-                        <div class="stat-icon bg-nexo-primary"><i class="ri-file-list-3-line"></i></div>
-                        <div>
-                            <p class="stat-label">Total</p>
-                            <h3 class="stat-value mb-0" id="stat-total">0</h3>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="col-6 col-md-3">
+            <div class="card-stats-nexo"><div class="card-body"><div class="d-flex align-items-center gap-2">
+                <div class="stat-icon bg-nexo-primary"><i class="ri-file-list-3-line"></i></div>
+                <div><p class="stat-label">Total</p><h3 class="stat-value mb-0" id="stat-total">0</h3></div>
+            </div></div></div>
         </div>
-        <div class="col-6 col-md-4">
-            <div class="card-stats-nexo">
-                <div class="card-body">
-                    <div class="d-flex align-items-center gap-2">
-                        <div class="stat-icon bg-nexo-success"><i class="ri-check-double-line"></i></div>
-                        <div>
-                            <p class="stat-label">NC Generadas</p>
-                            <h3 class="stat-value mb-0" id="stat-nc-generadas">0</h3>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="col-6 col-md-3">
+            <div class="card-stats-nexo"><div class="card-body"><div class="d-flex align-items-center gap-2">
+                <div class="stat-icon bg-nexo-warning"><i class="ri-time-line"></i></div>
+                <div><p class="stat-label">Pendientes</p><h3 class="stat-value mb-0" id="stat-pendientes">0</h3></div>
+            </div></div></div>
         </div>
-        <div class="col-6 col-md-4">
-            <div class="card-stats-nexo">
-                <div class="card-body">
-                    <div class="d-flex align-items-center gap-2">
-                        <div class="stat-icon bg-nexo-warning"><i class="ri-money-dollar-circle-line"></i></div>
-                        <div>
-                            <p class="stat-label">Monto Total</p>
-                            <h3 class="stat-value mb-0" id="stat-monto-total">$0</h3>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="col-6 col-md-3">
+            <div class="card-stats-nexo"><div class="card-body"><div class="d-flex align-items-center gap-2">
+                <div class="stat-icon bg-nexo-success"><i class="ri-check-double-line"></i></div>
+                <div><p class="stat-label">NC Generadas</p><h3 class="stat-value mb-0" id="stat-nc-generadas">0</h3></div>
+            </div></div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card-stats-nexo"><div class="card-body"><div class="d-flex align-items-center gap-2">
+                <div class="stat-icon bg-nexo-warning"><i class="ri-money-dollar-circle-line"></i></div>
+                <div><p class="stat-label">Monto Total</p><h3 class="stat-value mb-0" id="stat-monto-total">$0</h3></div>
+            </div></div></div>
         </div>
     </div>
 
@@ -259,12 +199,13 @@
                         <th>Monto</th>
                         <th>NC</th>
                         <th>Estado</th>
-                        <th>Autorizado por</th>
+                        <th>Solicitado por</th>
                         <th>Fecha</th>
+                        <th class="text-end">Acciones</th>
                     </tr>
                 </thead>
                 <tbody id="tbody-devoluciones">
-                    <tr><td colspan="8" class="text-center text-muted py-4">Cargando...</td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-4">Cargando...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -273,42 +214,58 @@
     </div>
 </div>
 
-<!-- ========== MODAL NUEVA DEVOLUCIÓN ========== -->
+<!-- ========== MODAL WIZARD: NUEVA SOLICITUD ========== -->
 <div class="modal fade" id="modalNuevaDevolucion" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content border-0" style="background:#1a1f2e;">
             <div class="modal-header py-2 px-3" style="background:#1a1f2e; border-bottom:2px solid #0d6efd;">
                 <div class="text-white fw-bold" style="font-size:0.95rem;">
-                    <i class="ri-refund-2-line me-1"></i> Nueva Devolución por Garantía
+                    <i class="ri-refund-2-line me-1"></i> Nueva Solicitud de Devolución por Garantía
                 </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body px-3 py-3" style="background:#0f1117;">
 
-                <!-- Paso 1: buscar boleta/factura -->
-                <div class="mb-3">
+                <!-- Stepper -->
+                <div class="dg-stepper">
+                    <div class="dg-step active" data-paso="1" data-num="1">Documento</div>
+                    <div class="dg-step" data-paso="2" data-num="2">Productos</div>
+                    <div class="dg-step" data-paso="3" data-num="3">Cliente</div>
+                    <div class="dg-step" data-paso="4" data-num="4">Confirmación</div>
+                </div>
+
+                <!-- Paso 1: Documento -->
+                <div id="dg-paso-1" class="dg-pane">
                     <label class="form-label text-white fw-semibold" style="font-size:0.85rem;">
                         <i class="ri-file-search-line me-1" style="color:#0d6efd;"></i> Boleta / Factura con el producto fallado
                     </label>
-                    <div class="input-group input-group-sm">
+                    <div class="input-group input-group-sm" style="max-width:420px;">
                         <input type="text" id="dg-folio" class="form-control" placeholder="N° de folio">
                         <button type="button" class="btn btn-primary" onclick="buscarDteDevolucionGarantia()">
                             <i class="ri-search-line"></i> Buscar
                         </button>
                     </div>
-                    <div id="dg-doc-info" class="text-secondary mt-1 d-none" style="font-size:0.75rem;"></div>
+                    <div id="dg-doc-info" class="text-secondary mt-2 d-none" style="font-size:0.8rem;"></div>
                 </div>
 
-                <!-- Paso 2: productos -->
-                <div id="dg-seccion-productos" class="mb-3 d-none">
-                    <label class="form-label text-white fw-semibold" style="font-size:0.85rem;">
-                        <i class="ri-shopping-bag-3-line me-1" style="color:#0d6efd;"></i> Producto(s) a devolver
-                    </label>
-                    <div id="dg-lista-productos" class="cliente-box"></div>
+                <!-- Paso 2: Productos -->
+                <div id="dg-paso-2" class="dg-pane d-none">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label text-white fw-semibold mb-0" style="font-size:0.85rem;">
+                            <i class="ri-shopping-bag-3-line me-1" style="color:#0d6efd;"></i> Producto(s) a devolver
+                        </label>
+                        <div class="text-white small">Total NC: <span id="dg-total-nc" class="dg-total-nc">$0</span></div>
+                    </div>
+                    <div class="alert alert-info py-1 px-2 small mb-2">
+                        <i class="ri-information-line me-1"></i> Elige <strong>Por cantidad</strong> (devuelves unidades completas) o
+                        <strong>Por monto</strong> (acreditas un monto parcial sin devolver el producto físico).
+                    </div>
+                    <div id="dg-lista-productos"></div>
+                    <div id="dg-error-total" class="text-danger small mt-1 d-none"></div>
                 </div>
 
-                <!-- Paso 3: cliente / receptor real -->
-                <div id="dg-seccion-cliente" class="mb-3 d-none">
+                <!-- Paso 3: Cliente / Receptor real -->
+                <div id="dg-paso-3" class="dg-pane d-none">
                     <div class="cliente-box">
                         <div class="text-white fw-semibold mb-2" style="font-size:0.85rem;">
                             <i class="ri-user-line me-1" style="color:#0d6efd;"></i> Cliente / Receptor real de la Nota de Crédito
@@ -330,37 +287,31 @@
                             </div>
                         </div>
                         <div class="row g-2">
-                            <div class="col-md-6">
-                                <input type="text" id="dg-cliente-nombre" class="form-control form-control-sm" placeholder="Nombre / Razón social">
-                            </div>
-                            <div class="col-md-6">
-                                <input type="text" id="dg-cliente-email" class="form-control form-control-sm" placeholder="Correo">
-                            </div>
-                            <div class="col-md-6">
-                                <input type="text" id="dg-cliente-telefono" class="form-control form-control-sm" placeholder="Teléfono">
-                            </div>
-                            <div class="col-md-6">
-                                <input type="text" id="dg-cliente-giro" class="form-control form-control-sm" placeholder="Giro">
-                            </div>
-                            <div class="col-md-8">
-                                <input type="text" id="dg-cliente-direccion" class="form-control form-control-sm" placeholder="Dirección">
-                            </div>
-                            <div class="col-md-4">
-                                <input type="text" id="dg-cliente-comuna" class="form-control form-control-sm" placeholder="Comuna">
-                            </div>
-                            <div class="col-md-6">
-                                <input type="text" id="dg-cliente-ciudad" class="form-control form-control-sm" placeholder="Ciudad">
-                            </div>
+                            <div class="col-md-6"><input type="text" id="dg-cliente-nombre" class="form-control form-control-sm" placeholder="Nombre / Razón social"></div>
+                            <div class="col-md-6"><input type="text" id="dg-cliente-email" class="form-control form-control-sm" placeholder="Correo"></div>
+                            <div class="col-md-6"><input type="text" id="dg-cliente-telefono" class="form-control form-control-sm" placeholder="Teléfono"></div>
+                            <div class="col-md-6"><input type="text" id="dg-cliente-giro" class="form-control form-control-sm" placeholder="Giro"></div>
+                            <div class="col-md-8"><input type="text" id="dg-cliente-direccion" class="form-control form-control-sm" placeholder="Dirección"></div>
+                            <div class="col-md-4"><input type="text" id="dg-cliente-comuna" class="form-control form-control-sm" placeholder="Comuna"></div>
+                            <div class="col-md-6"><input type="text" id="dg-cliente-ciudad" class="form-control form-control-sm" placeholder="Ciudad"></div>
                         </div>
+                        <div id="dg-error-cliente" class="text-danger small mt-2 d-none"></div>
                     </div>
                 </div>
 
-                <!-- Paso 4: motivo -->
-                <div id="dg-seccion-motivo" class="mb-0 d-none">
+                <!-- Paso 4: Confirmación -->
+                <div id="dg-paso-4" class="dg-pane d-none">
+                    <div class="cliente-box mb-2">
+                        <div class="text-white fw-semibold mb-2" style="font-size:0.85rem;"><i class="ri-checkbox-circle-line me-1" style="color:#00D4AA;"></i> Resumen</div>
+                        <div id="dg-resumen" class="text-secondary" style="font-size:0.82rem;"></div>
+                    </div>
                     <label class="form-label text-white fw-semibold" style="font-size:0.85rem;">
                         <i class="ri-file-text-line me-1" style="color:#0d6efd;"></i> Motivo
                     </label>
-                    <textarea id="dg-motivo" class="form-control form-control-sm" rows="2">Garantía aprobada, autorizada por jefe de local</textarea>
+                    <textarea id="dg-motivo" class="form-control form-control-sm" rows="2">Garantía aprobada</textarea>
+                    <div class="alert alert-warning py-1 px-2 small mt-2 mb-0">
+                        <i class="ri-time-line me-1"></i> La solicitud quedará <strong>pendiente de aprobación</strong> por un administrador. La NC se genera al aprobar.
+                    </div>
                 </div>
 
             </div>
@@ -368,160 +319,339 @@
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
                     <i class="ri-close-line"></i> Cancelar
                 </button>
-                <button type="button" class="btn btn-sm btn-primary" id="dg-btn-confirmar" onclick="confirmarDevolucionGarantia()" disabled>
-                    <i class="ri-file-text-line me-1"></i> Generar Nota de Crédito
+                <button type="button" class="btn btn-sm btn-outline-light d-none" id="dg-btn-anterior" onclick="dgIrPaso(dgWizard.paso - 1)">
+                    <i class="ri-arrow-left-line"></i> Anterior
+                </button>
+                <button type="button" class="btn btn-sm btn-primary" id="dg-btn-siguiente" onclick="dgIrPaso(dgWizard.paso + 1)">
+                    Siguiente <i class="ri-arrow-right-line"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-success d-none" id="dg-btn-confirmar" onclick="confirmarDevolucionGarantia()">
+                    <i class="ri-check-line me-1"></i> Crear Solicitud
                 </button>
             </div>
         </div>
     </div>
 </div>
 
+{% if puede_aprobar %}
+<!-- ========== MODAL APROBACIÓN (solo administrador) ========== -->
+<div class="modal fade" id="modalAprobarDevolucion" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0" style="background:#1a1f2e;">
+            <div class="modal-header py-2 px-3" style="background:#1a1f2e; border-bottom:2px solid #00D4AA;">
+                <div class="text-white fw-bold" style="font-size:0.95rem;">
+                    <i class="ri-shield-check-line me-1"></i> Analizar solicitud <span id="apr-num-operacion"></span>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-3 py-3" style="background:#0f1117;">
+                <div id="apr-resumen" class="cliente-box mb-3 text-secondary" style="font-size:0.82rem;">Cargando...</div>
+
+                <div class="cliente-box mb-3">
+                    <div class="text-white fw-semibold mb-2" style="font-size:0.85rem;"><i class="ri-bank-line me-1" style="color:#0d6efd;"></i> Impacto en caja</div>
+                    <div class="row g-2 align-items-center mb-2">
+                        <div class="col-md-7">
+                            <select id="apr-metodo" class="form-select form-select-sm" onchange="aprActualizarImpacto()">
+                                <option value="EFECTIVO_CAJA">Efectivo de caja</option>
+                                <option value="TRANSFERENCIA_BANCARIA">Transferencia bancaria</option>
+                                <option value="NO_AFECTA_CAJA">No afecta caja</option>
+                            </select>
+                        </div>
+                        <div class="col-md-5" id="apr-fecha-wrap">
+                            <input type="date" id="apr-fecha" class="form-control form-control-sm" onchange="aprActualizarImpacto()">
+                        </div>
+                    </div>
+                    <div id="apr-impacto" class="apr-impacto-box text-secondary">—</div>
+                </div>
+
+                <label class="form-label text-white fw-semibold" style="font-size:0.85rem;"><i class="ri-chat-1-line me-1" style="color:#0d6efd;"></i> Observaciones (opcional)</label>
+                <textarea id="apr-observaciones" class="form-control form-control-sm" rows="2"></textarea>
+            </div>
+            <div class="modal-footer py-2 px-3" style="background:#161b27; border-top:1px solid #2a3045;">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal"><i class="ri-close-line"></i> Cerrar</button>
+                <button type="button" class="btn btn-sm btn-danger" onclick="aprRechazar()"><i class="ri-close-circle-line me-1"></i> Rechazar</button>
+                <button type="button" class="btn btn-sm btn-success" id="apr-btn-aprobar" onclick="aprAprobar()"><i class="ri-check-double-line me-1"></i> Aprobar y generar NC</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Extra JS -->
 <script src="{% static 'libs/sweetalert2/sweetalert2.min.js' %}"></script>
 <script>
+    const PUEDE_APROBAR = {{ puede_aprobar|yesno:"true,false" }};
     const URLS_DG = {
         buscarDte: '{% url "api_buscar_dte_devolucion_garantia" %}',
         buscarCliente: '{% url "buscar_cliente_rut" %}',
         generar: '{% url "api_generar_devolucion_garantia" %}',
         listar: '{% url "api_listar_devoluciones_garantia" %}',
+        // Plantillas con id=0 que se reemplazan por el id real.
+        detalle: '{% url "api_detalle_solicitud_devolucion_garantia" 0 %}',
+        impacto: '{% url "api_impacto_caja_devolucion_garantia" 0 %}',
+        aprobar: '{% url "api_aprobar_devolucion_garantia" 0 %}',
+        rechazar: '{% url "api_rechazar_devolucion_garantia" 0 %}',
+        anular: '{% url "api_anular_solicitud_devolucion_garantia" 0 %}',
     };
+    const urlCon = (plantilla, id) => plantilla.replace('/0/', '/' + id + '/');
 
-    let dgDteActual = null;
-    let dgProductosSeleccion = {};
-    let dgRequerimientoId = null;
+    // Estado del wizard
+    let dgWizard = { paso: 1, dte: null, seleccion: {}, requerimientoId: null };
 
     function getCookie(name) {
-        let cookieValue = null;
+        let v = null;
         if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
+            document.cookie.split(';').forEach(function (c) {
+                c = c.trim();
+                if (c.substring(0, name.length + 1) === (name + '=')) {
+                    v = decodeURIComponent(c.substring(name.length + 1));
                 }
-            }
+            });
         }
-        return cookieValue;
+        return v;
     }
+    const clp = (n) => '$' + Number(n || 0).toLocaleString('es-CL');
 
     function validarRutChileno(rut) {
         const rutLimpio = (rut || '').replace(/[^0-9kK]/g, '');
         if (rutLimpio.length < 2) return false;
         const cuerpo = rutLimpio.slice(0, -1);
         const dv = rutLimpio.slice(-1).toLowerCase();
-        let suma = 0, multiplicador = 2;
+        let suma = 0, mul = 2;
         for (let i = cuerpo.length - 1; i >= 0; i--) {
-            suma += parseInt(cuerpo[i]) * multiplicador;
-            multiplicador = multiplicador === 7 ? 2 : multiplicador + 1;
+            suma += parseInt(cuerpo[i]) * mul;
+            mul = mul === 7 ? 2 : mul + 1;
         }
         const resto = suma % 11;
-        const dvCalculado = resto === 0 ? '0' : resto === 1 ? 'k' : (11 - resto).toString();
-        return dv === dvCalculado;
+        const dvCalc = resto === 0 ? '0' : resto === 1 ? 'k' : (11 - resto).toString();
+        return dv === dvCalc;
+    }
+    // RUT jurídico: cuerpo >= 50.000.000 (misma regla que es_rut_empresa del backend)
+    function esRutJuridico(rut) {
+        const d = (rut || '').replace(/[^0-9kK]/g, '');
+        if (d.length < 2) return false;
+        return parseInt(d.slice(0, -1)) >= 50000000;
+    }
+    function rutEsGenerico(rut) {
+        const d = (rut || '').replace(/[.\-]/g, '').toLowerCase();
+        return d === '666666666';
     }
 
+    // ===================== WIZARD =====================
     function resetModalDevolucionGarantia() {
-        dgDteActual = null;
-        dgProductosSeleccion = {};
-        dgRequerimientoId = null;
+        dgWizard = { paso: 1, dte: null, seleccion: {}, requerimientoId: null };
         $('#dg-folio').val('');
         $('#dg-doc-info').addClass('d-none').empty();
-        $('#dg-seccion-productos, #dg-seccion-cliente, #dg-seccion-motivo').addClass('d-none');
         $('#dg-lista-productos').empty();
+        $('#dg-error-total, #dg-error-cliente').addClass('d-none').empty();
         $('#dg-cliente-rut, #dg-cliente-nombre, #dg-cliente-email, #dg-cliente-telefono, #dg-cliente-giro, #dg-cliente-direccion, #dg-cliente-comuna, #dg-cliente-ciudad').val('');
         $('#dg-cliente-estado').addClass('d-none');
         $('#dg-alerta-generico').addClass('d-none');
-        $('#dg-motivo').val('Garantía aprobada, autorizada por jefe de local');
-        $('#dg-btn-confirmar').prop('disabled', true);
+        $('#dg-motivo').val('Garantía aprobada');
+        window._dgClienteId = null;
+        dgIrPaso(1, true);
     }
     $('#modalNuevaDevolucion').on('hidden.bs.modal', resetModalDevolucionGarantia);
+
+    function dgRenderPaso() {
+        const p = dgWizard.paso;
+        [1, 2, 3, 4].forEach(function (n) {
+            $('#dg-paso-' + n).toggleClass('d-none', n !== p);
+        });
+        $('.dg-step').each(function () {
+            const n = parseInt($(this).data('paso'));
+            $(this).toggleClass('active', n === p).toggleClass('done', n < p);
+        });
+        $('#dg-btn-anterior').toggleClass('d-none', p === 1);
+        $('#dg-btn-siguiente').toggleClass('d-none', p === 4);
+        $('#dg-btn-confirmar').toggleClass('d-none', p !== 4);
+        if (p === 4) { dgRenderResumen(); }
+    }
+
+    function dgIrPaso(n, force) {
+        if (!force && n > dgWizard.paso && !dgValidarPaso(dgWizard.paso)) { return; }
+        if (n < 1) n = 1; if (n > 4) n = 4;
+        dgWizard.paso = n;
+        dgRenderPaso();
+    }
+
+    function dgValidarPaso(p) {
+        if (p === 1) {
+            if (!dgWizard.dte) { Swal.fire({ icon: 'info', title: 'Busca un documento', text: 'Ingresa el folio y presiona Buscar.' }); return false; }
+            return true;
+        }
+        if (p === 2) {
+            const items = Object.values(dgWizard.seleccion);
+            if (!items.length) { dgMostrarErrorTotal('Selecciona al menos un producto.'); return false; }
+            for (const s of items) {
+                if (s.modo === 'CANTIDAD' && (!s.cantidad || s.cantidad < 1 || s.cantidad > s.max_cantidad)) {
+                    dgMostrarErrorTotal('Revisa la cantidad de ' + s.articulo + ' (máx ' + s.max_cantidad + ').'); return false;
+                }
+                if (s.modo === 'MONTO' && (!s.monto || s.monto < 1 || s.monto > s.max_monto)) {
+                    dgMostrarErrorTotal('Revisa el monto de ' + s.articulo + ' (máx ' + clp(s.max_monto) + ').'); return false;
+                }
+            }
+            if (dgTotalNC() > dgWizard.dte.monto_restante_nc) {
+                dgMostrarErrorTotal('El total (' + clp(dgTotalNC()) + ') supera el saldo de NC del documento (' + clp(dgWizard.dte.monto_restante_nc) + ').');
+                return false;
+            }
+            return true;
+        }
+        if (p === 3) {
+            const rut = $('#dg-cliente-rut').val().trim();
+            const nombre = $('#dg-cliente-nombre').val().trim();
+            if (!rut || !validarRutChileno(rut)) { dgMostrarErrorCliente('Ingresa un RUT válido.'); return false; }
+            if (rutEsGenerico(rut)) { dgMostrarErrorCliente('El RUT 66666666-6 es Consumidor Final. Ingresa el RUT real del cliente.'); return false; }
+            if (!nombre) { dgMostrarErrorCliente('Ingresa el nombre / razón social.'); return false; }
+            if (esRutJuridico(rut)) {
+                const faltan = ['giro', 'direccion', 'comuna', 'ciudad'].filter(f => !$('#dg-cliente-' + f).val().trim());
+                if (faltan.length) { dgMostrarErrorCliente('Para RUT de empresa completa: ' + faltan.join(', ') + '.'); return false; }
+            }
+            $('#dg-error-cliente').addClass('d-none');
+            return true;
+        }
+        return true;
+    }
+    function dgMostrarErrorTotal(msg) { $('#dg-error-total').removeClass('d-none').text(msg); }
+    function dgMostrarErrorCliente(msg) { $('#dg-error-cliente').removeClass('d-none').text(msg); }
 
     function buscarDteDevolucionGarantia() {
         const folio = $('#dg-folio').val().trim();
         if (!folio) { return; }
-
         $.get(URLS_DG.buscarDte, { folio: folio }, function (resp) {
-            if (!resp.success) {
-                Swal.fire({ icon: 'error', title: 'No encontrado', text: resp.error || 'Error al buscar el documento' });
-                return;
-            }
-            dgDteActual = resp.dte;
-            dgProductosSeleccion = {};
+            if (!resp.success) { Swal.fire({ icon: 'error', title: 'No encontrado', text: resp.error || 'Error al buscar el documento' }); return; }
+            dgWizard.dte = resp.dte;
+            dgWizard.seleccion = {};
 
             $('#dg-doc-info').removeClass('d-none').html(
                 `<i class="ri-checkbox-circle-line text-success me-1"></i>` +
-                `${resp.dte.tipo_documento} #${resp.dte.folio} — ${resp.dte.fecha_emision} — $${Number(resp.dte.total).toLocaleString('es-CL')}`
+                `${resp.dte.tipo_documento} #${resp.dte.folio} — ${resp.dte.fecha_emision} — Total ${clp(resp.dte.total)}` +
+                `<br><span class="text-info">Saldo de NC disponible: ${clp(resp.dte.monto_restante_nc)}</span>`
             );
 
             const $lista = $('#dg-lista-productos').empty();
+            if (!resp.productos.length) {
+                $lista.append('<div class="text-warning small">No quedan líneas con saldo disponible para devolver en este documento.</div>');
+            }
             resp.productos.forEach(function (p) {
-                const rowId = `dg-prod-${p.dte_producto_id}`;
+                const id = p.dte_producto_id;
+                const sinCantidad = p.cantidad_disponible <= 0;
                 $lista.append(`
-                    <div class="row g-2 align-items-center mb-2" id="${rowId}">
-                        <div class="col-1">
-                            <input type="checkbox" class="form-check-input" onchange="dgToggleProducto(${p.dte_producto_id}, this.checked, ${p.precio_unitario})">
+                    <div class="dg-prod-row" id="dg-prod-${id}">
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="checkbox" class="form-check-input mt-0" id="dg-chk-${id}" onchange="dgToggleProducto(${id}, this.checked)">
+                            <div class="flex-grow-1 text-white" style="font-size:0.82rem;">
+                                ${p.articulo} ${p.talla ? '(' + p.talla + ')' : ''}
+                                <div class="text-secondary" style="font-size:0.72rem;">Disp: ${p.cantidad_disponible} u · ${clp(p.monto_disponible)} · unit ${clp(p.precio_unitario_con_iva)}</div>
+                            </div>
                         </div>
-                        <div class="col-5 text-white" style="font-size:0.82rem;">${p.articulo} ${p.talla ? '(' + p.talla + ')' : ''}</div>
-                        <div class="col-3">
-                            <input type="number" min="1" max="${p.cantidad_disponible}" value="1" class="form-control form-control-sm"
-                                   id="dg-cant-${p.dte_producto_id}" disabled
-                                   onchange="dgActualizarCantidad(${p.dte_producto_id}, this.value)">
+                        <div class="row g-2 align-items-center mt-1 d-none" id="dg-controls-${id}">
+                            <div class="col-auto">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button type="button" class="btn btn-outline-light dg-modo-btn ${sinCantidad ? '' : 'active'}" id="dg-modobtn-cant-${id}" ${sinCantidad ? 'disabled' : ''} onclick="dgCambiarModo(${id}, 'CANTIDAD')">Por cantidad</button>
+                                    <button type="button" class="btn btn-outline-light dg-modo-btn ${sinCantidad ? 'active' : ''}" id="dg-modobtn-monto-${id}" onclick="dgCambiarModo(${id}, 'MONTO')">Por monto</button>
+                                </div>
+                            </div>
+                            <div class="col-auto ${sinCantidad ? 'd-none' : ''}" id="dg-wrap-cant-${id}">
+                                <input type="number" min="1" max="${p.cantidad_disponible}" value="1" class="form-control form-control-sm" style="width:90px;" id="dg-cant-${id}" oninput="dgActualizarLinea(${id})">
+                            </div>
+                            <div class="col-auto ${sinCantidad ? '' : 'd-none'}" id="dg-wrap-monto-${id}">
+                                <input type="number" min="1" max="${p.monto_disponible}" class="form-control form-control-sm" style="width:130px;" id="dg-monto-${id}" placeholder="Monto $" oninput="dgActualizarLinea(${id})">
+                            </div>
+                            <div class="col text-end text-white" style="font-size:0.82rem;">Subtotal: <span id="dg-subtotal-${id}">$0</span></div>
                         </div>
-                        <div class="col-3 text-secondary" style="font-size:0.75rem;">Disp: ${p.cantidad_disponible}</div>
                     </div>
                 `);
+                // Guardar metadatos en dataset via jQuery data
+                $(`#dg-prod-${id}`).data('meta', {
+                    dte_producto_id: id, articulo: p.articulo,
+                    max_cantidad: p.cantidad_disponible, max_monto: p.monto_disponible,
+                    precio_unitario_con_iva: p.precio_unitario_con_iva,
+                    modo_inicial: sinCantidad ? 'MONTO' : 'CANTIDAD',
+                });
             });
 
-            $('#dg-seccion-productos, #dg-seccion-cliente, #dg-seccion-motivo').removeClass('d-none');
-
+            // Autocompletar receptor si no es genérico y el RUT no viene precargado
             if (resp.receptor_es_generico) {
                 $('#dg-alerta-generico').removeClass('d-none');
             } else if (resp.receptor_actual && !$('#dg-cliente-rut').val().trim()) {
-                // No pisar el RUT/nombre si ya vienen precargados (ej. desde
-                // el puente con Requerimientos) — solo autocompletar cuando
-                // el campo está vacío.
                 $('#dg-cliente-rut').val(resp.receptor_actual.rut);
                 $('#dg-cliente-nombre').val(resp.receptor_actual.nombre);
             }
 
-            dgValidarFormulario();
+            dgIrPaso(2);
         }).fail(function (xhr) {
-            const msg = xhr.responseJSON?.error || 'Error al buscar el documento';
-            Swal.fire({ icon: 'error', title: 'No encontrado', text: msg });
+            Swal.fire({ icon: 'error', title: 'No encontrado', text: xhr.responseJSON?.error || 'Error al buscar el documento' });
         });
     }
 
-    function dgToggleProducto(dteProductoId, checked, precioUnitario) {
-        $(`#dg-cant-${dteProductoId}`).prop('disabled', !checked);
+    function dgToggleProducto(id, checked) {
+        const meta = $(`#dg-prod-${id}`).data('meta');
+        $(`#dg-prod-${id}`).toggleClass('sel', checked);
+        $(`#dg-controls-${id}`).toggleClass('d-none', !checked);
         if (checked) {
-            dgProductosSeleccion[dteProductoId] = {
-                dte_producto_id: dteProductoId,
-                cantidad: parseInt($(`#dg-cant-${dteProductoId}`).val() || '1', 10),
-                precio_unitario: precioUnitario,
+            dgWizard.seleccion[id] = {
+                dte_producto_id: id, modo: meta.modo_inicial,
+                cantidad: meta.modo_inicial === 'CANTIDAD' ? 1 : 0,
+                monto: 0, max_cantidad: meta.max_cantidad, max_monto: meta.max_monto,
+                precio_unitario_con_iva: meta.precio_unitario_con_iva, articulo: meta.articulo,
             };
+            dgActualizarLinea(id);
         } else {
-            delete dgProductosSeleccion[dteProductoId];
+            delete dgWizard.seleccion[id];
         }
-        dgValidarFormulario();
+        dgTotalNC();
     }
 
-    function dgActualizarCantidad(dteProductoId, valor) {
-        if (dgProductosSeleccion[dteProductoId]) {
-            dgProductosSeleccion[dteProductoId].cantidad = parseInt(valor || '1', 10);
+    function dgCambiarModo(id, modo) {
+        if (!dgWizard.seleccion[id]) { return; }
+        dgWizard.seleccion[id].modo = modo;
+        $(`#dg-modobtn-cant-${id}`).toggleClass('active', modo === 'CANTIDAD');
+        $(`#dg-modobtn-monto-${id}`).toggleClass('active', modo === 'MONTO');
+        $(`#dg-wrap-cant-${id}`).toggleClass('d-none', modo !== 'CANTIDAD');
+        $(`#dg-wrap-monto-${id}`).toggleClass('d-none', modo !== 'MONTO');
+        dgActualizarLinea(id);
+    }
+
+    function dgActualizarLinea(id) {
+        const s = dgWizard.seleccion[id];
+        if (!s) { return; }
+        let subtotal = 0;
+        if (s.modo === 'CANTIDAD') {
+            let c = parseInt($(`#dg-cant-${id}`).val() || '0', 10);
+            if (c > s.max_cantidad) { c = s.max_cantidad; $(`#dg-cant-${id}`).val(c); }
+            if (c < 1) c = 1;
+            s.cantidad = c;
+            subtotal = c * s.precio_unitario_con_iva;
+        } else {
+            let m = parseInt($(`#dg-monto-${id}`).val() || '0', 10);
+            if (m > s.max_monto) { m = s.max_monto; $(`#dg-monto-${id}`).val(m); }
+            if (m < 0) m = 0;
+            s.monto = m;
+            subtotal = m;
         }
+        $(`#dg-subtotal-${id}`).text(clp(subtotal));
+        dgTotalNC();
+    }
+
+    function dgTotalNC() {
+        let total = 0;
+        Object.values(dgWizard.seleccion).forEach(function (s) {
+            total += s.modo === 'CANTIDAD' ? (s.cantidad * s.precio_unitario_con_iva) : (s.monto || 0);
+        });
+        $('#dg-total-nc').text(clp(total));
+        $('#dg-error-total').addClass('d-none');
+        return total;
     }
 
     function buscarClienteDevolucionGarantia() {
         const rut = $('#dg-cliente-rut').val().trim();
         const $estado = $('#dg-cliente-estado');
-
         if (!rut || !validarRutChileno(rut)) {
             $estado.removeClass('d-none').attr('class', 'badge bg-danger d-inline-block w-100 py-1').text('RUT inválido');
             return;
         }
-
         $estado.removeClass('d-none').attr('class', 'badge bg-secondary d-inline-block w-100 py-1').text('Buscando...');
-
         $.get(URLS_DG.buscarCliente, { rut: rut }, function (data) {
             if (data.success && data.cliente) {
                 const c = data.cliente;
@@ -532,83 +662,83 @@
                 $('#dg-cliente-direccion').val(c.direccion || '');
                 $('#dg-cliente-comuna').val(c.comuna || '');
                 $('#dg-cliente-ciudad').val(c.ciudad || '');
-                window._dgClienteId = (data.cliente_origen === 'EMPRESA') ? (data.cliente_id || null) : null;
-                $estado.attr('class', 'badge bg-success d-inline-block w-100 py-1').text('Encontrado');
+                if (data.cliente_origen === 'EMPRESA') {
+                    window._dgClienteId = data.cliente_id || null;
+                    $estado.attr('class', 'badge bg-success d-inline-block w-100 py-1').text('Cliente registrado');
+                } else {
+                    window._dgClienteId = null;
+                    $estado.attr('class', 'badge bg-info text-dark d-inline-block w-100 py-1').text('En CRM — se registrará como receptor');
+                }
             } else {
                 window._dgClienteId = null;
-                $estado.attr('class', 'badge bg-warning text-dark d-inline-block w-100 py-1').text('No encontrado — complete los datos');
+                $estado.attr('class', 'badge bg-warning text-dark d-inline-block w-100 py-1').text('Nuevo — complete los datos');
             }
-            dgValidarFormulario();
         }).fail(function () {
             $estado.attr('class', 'badge bg-danger d-inline-block w-100 py-1').text('Error de conexión');
         });
     }
+    $(document).on('input', '#dg-cliente-rut, #dg-cliente-nombre', function () { $('#dg-error-cliente').addClass('d-none'); });
 
-    function dgValidarFormulario() {
-        const tieneProductos = Object.keys(dgProductosSeleccion).length > 0;
-        const rut = $('#dg-cliente-rut').val().trim();
-        const nombre = $('#dg-cliente-nombre').val().trim();
-        const valido = dgDteActual && tieneProductos && rut && nombre && validarRutChileno(rut);
-        $('#dg-btn-confirmar').prop('disabled', !valido);
+    function dgRenderResumen() {
+        const d = dgWizard.dte;
+        let filas = '';
+        Object.values(dgWizard.seleccion).forEach(function (s) {
+            if (s.modo === 'CANTIDAD') {
+                filas += `<div>• ${s.articulo} — <span class="text-info">${s.cantidad} u</span> × ${clp(s.precio_unitario_con_iva)} = ${clp(s.cantidad * s.precio_unitario_con_iva)}</div>`;
+            } else {
+                filas += `<div>• ${s.articulo} — <span class="text-warning">monto parcial</span> ${clp(s.monto)}</div>`;
+            }
+        });
+        $('#dg-resumen').html(
+            `<div class="mb-1"><strong>Documento:</strong> ${d.tipo_documento} #${d.folio}</div>` +
+            filas +
+            `<div class="mt-1"><strong>Total NC:</strong> <span class="dg-total-nc">${clp(dgTotalNC())}</span></div>` +
+            `<div class="mt-1"><strong>Cliente:</strong> ${$('#dg-cliente-nombre').val()} (${$('#dg-cliente-rut').val()})</div>`
+        );
     }
 
-    $(document).on('input', '#dg-cliente-rut, #dg-cliente-nombre', dgValidarFormulario);
-
     function confirmarDevolucionGarantia() {
-        if (!dgDteActual) { return; }
-        const productos = Object.values(dgProductosSeleccion);
+        if (!dgWizard.dte) { return; }
+        const productos = Object.values(dgWizard.seleccion).map(s => ({
+            dte_producto_id: s.dte_producto_id, modo: s.modo,
+            cantidad: s.modo === 'CANTIDAD' ? s.cantidad : 0,
+            monto: s.modo === 'MONTO' ? s.monto : 0,
+        }));
         if (!productos.length) { return; }
 
         Swal.fire({
-            title: 'Confirmar Devolución por Garantía',
-            html: `Se generará una <strong>Nota de Crédito</strong> a nombre de ` +
-                  `<strong>${$('#dg-cliente-nombre').val()}</strong> (${$('#dg-cliente-rut').val()}).`,
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonColor: '#0d6efd',
-            confirmButtonText: '<i class="ri-file-text-line me-1"></i> Generar NC',
-            cancelButtonText: 'Cancelar',
+            title: 'Crear solicitud de devolución',
+            html: `Quedará <strong>pendiente de aprobación</strong> por un administrador.<br>` +
+                  `Total: <strong>${clp(dgTotalNC())}</strong> a nombre de <strong>${$('#dg-cliente-nombre').val()}</strong>.`,
+            icon: 'question', showCancelButton: true, confirmButtonColor: '#00A080',
+            confirmButtonText: '<i class="ri-check-line me-1"></i> Crear', cancelButtonText: 'Cancelar',
         }).then(function (result) {
             if (!result.isConfirmed) { return; }
-
             $('#dg-btn-confirmar').prop('disabled', true);
-
             $.ajax({
-                url: URLS_DG.generar,
-                method: 'POST',
-                contentType: 'application/json',
+                url: URLS_DG.generar, method: 'POST', contentType: 'application/json',
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
                 data: JSON.stringify({
-                    folio_dte: dgDteActual.folio,
-                    productos: productos,
+                    folio_dte: dgWizard.dte.folio, productos: productos,
                     cliente_id: window._dgClienteId || null,
-                    rut: $('#dg-cliente-rut').val().trim(),
-                    nombre: $('#dg-cliente-nombre').val().trim(),
-                    email: $('#dg-cliente-email').val().trim(),
-                    telefono: $('#dg-cliente-telefono').val().trim(),
-                    giro: $('#dg-cliente-giro').val().trim(),
-                    direccion: $('#dg-cliente-direccion').val().trim(),
-                    comuna: $('#dg-cliente-comuna').val().trim(),
-                    ciudad: $('#dg-cliente-ciudad').val().trim(),
-                    motivo: $('#dg-motivo').val().trim(),
-                    requerimiento_id: dgRequerimientoId || null,
+                    rut: $('#dg-cliente-rut').val().trim(), nombre: $('#dg-cliente-nombre').val().trim(),
+                    email: $('#dg-cliente-email').val().trim(), telefono: $('#dg-cliente-telefono').val().trim(),
+                    giro: $('#dg-cliente-giro').val().trim(), direccion: $('#dg-cliente-direccion').val().trim(),
+                    comuna: $('#dg-cliente-comuna').val().trim(), ciudad: $('#dg-cliente-ciudad').val().trim(),
+                    motivo: $('#dg-motivo').val().trim(), requerimiento_id: dgWizard.requerimientoId || null,
                 }),
                 success: function (resp) {
+                    $('#dg-btn-confirmar').prop('disabled', false);
                     if (resp.success) {
                         bootstrap.Modal.getInstance(document.getElementById('modalNuevaDevolucion'))?.hide();
                         Swal.fire({
-                            icon: 'success',
-                            title: 'Devolución registrada',
+                            icon: 'success', title: 'Solicitud creada',
                             html: `<p><strong>${resp.data.numero_operacion}</strong></p>` +
-                                  `<p>NC #${resp.data.nc_numero} — $${Number(resp.data.monto_total).toLocaleString('es-CL')}</p>` +
-                                  `<p>Cliente: ${resp.data.receptor.nombre} (${resp.data.receptor.rut})</p>` +
-                                  (resp.data.requerimiento_vinculado
-                                      ? `<p class="small text-muted">Vinculada al requerimiento ${resp.data.requerimiento_vinculado}</p>`
-                                      : ''),
+                                  `<p>Total ${clp(resp.data.monto_total)} — pendiente de aprobación.</p>` +
+                                  (resp.data.requerimiento_vinculado ? `<p class="small text-muted">Vinculada al requerimiento ${resp.data.requerimiento_vinculado}</p>` : ''),
                         });
                         cargarDevoluciones();
                     } else {
-                        $('#dg-btn-confirmar').prop('disabled', false);
                         Swal.fire({ icon: 'error', title: 'Error', text: resp.error });
                     }
                 },
@@ -620,69 +750,206 @@
         });
     }
 
+    // ===================== LISTADO =====================
     function cargarDevoluciones() {
-        const params = {
-            q: $('#filtro-busqueda').val().trim(),
-            estado: $('#filtro-estado').val(),
-        };
+        const params = { q: $('#filtro-busqueda').val().trim(), estado: $('#filtro-estado').val() };
         $.get(URLS_DG.listar, params, function (resp) {
             if (!resp.success) {
-                $('#tbody-devoluciones').html(`<tr><td colspan="8" class="text-center text-danger py-4">${resp.error || 'Error al cargar el listado'}</td></tr>`);
+                $('#tbody-devoluciones').html(`<tr><td colspan="9" class="text-center text-danger py-4">${resp.error || 'Error al cargar el listado'}</td></tr>`);
                 return;
             }
             const $tbody = $('#tbody-devoluciones').empty();
-
             if (!resp.data.length) {
-                $tbody.append('<tr><td colspan="8" class="text-center text-muted py-4">Sin devoluciones registradas</td></tr>');
+                $tbody.append('<tr><td colspan="9" class="text-center text-muted py-4">Sin solicitudes registradas</td></tr>');
             }
-
             let montoTotal = 0, ncGeneradas = 0;
             resp.data.forEach(function (d) {
                 montoTotal += d.monto_total;
                 if (d.estado === 'NC_GENERADA') { ncGeneradas++; }
+                let acciones = `<a href="/app/devolucion-garantia/${d.id}/" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Ver"><i class="ri-eye-line"></i></a>`;
+                if (PUEDE_APROBAR && d.estado === 'PENDIENTE') {
+                    acciones += ` <button class="btn btn-sm btn-outline-success py-0 px-1" onclick="abrirModalAprobacion(${d.id})" title="Analizar"><i class="ri-shield-check-line"></i></button>`;
+                }
+                if (d.puede_anular) {
+                    acciones += ` <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="anularSolicitudDG(${d.id}, '${d.numero_operacion}')" title="Anular"><i class="ri-delete-bin-line"></i></button>`;
+                }
                 $tbody.append(`
                     <tr>
                         <td>${d.numero_operacion}</td>
                         <td>#${d.dte_folio}</td>
                         <td>${d.receptor_nombre}<br><small class="text-muted">${d.receptor_rut}</small></td>
-                        <td>$${Number(d.monto_total).toLocaleString('es-CL')}</td>
+                        <td>${clp(d.monto_total)}</td>
                         <td>${d.nc_numero ? '#' + d.nc_numero : '-'}</td>
                         <td><span class="status-badge status-${d.estado.toLowerCase()}">${d.estado_display}</span></td>
-                        <td>${d.autorizado_por}</td>
+                        <td>${d.solicitado_por}</td>
                         <td>${d.fecha}</td>
+                        <td class="text-end">${acciones}</td>
                     </tr>
                 `);
             });
-
             $('#stat-total').text(resp.total);
+            $('#stat-pendientes').text(resp.pendientes);
             $('#stat-nc-generadas').text(ncGeneradas);
-            $('#stat-monto-total').text('$' + Number(montoTotal).toLocaleString('es-CL'));
+            $('#stat-monto-total').text(clp(montoTotal));
         });
     }
 
-    // Puente desde el detalle de un Requerimiento (garantía ya resuelta con
-    // el proveedor): precarga folio/cliente/motivo que llegan por querystring
-    // y abre el modal directo, para no retipear los datos.
+    function anularSolicitudDG(id, num) {
+        Swal.fire({
+            title: 'Anular solicitud', text: `¿Anular ${num}? Esta acción no se puede deshacer.`,
+            icon: 'warning', showCancelButton: true, confirmButtonColor: '#FF4D4D',
+            confirmButtonText: 'Sí, anular', cancelButtonText: 'Cancelar',
+        }).then(function (r) {
+            if (!r.isConfirmed) { return; }
+            $.ajax({
+                url: urlCon(URLS_DG.anular, id), method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function (resp) {
+                    if (resp.success) { Swal.fire({ icon: 'success', title: 'Anulada', timer: 1400, showConfirmButton: false }); cargarDevoluciones(); }
+                    else { Swal.fire({ icon: 'error', title: 'Error', text: resp.error }); }
+                },
+                error: function (xhr) { Swal.fire({ icon: 'error', title: 'Error', text: xhr.responseJSON?.error || 'Error de conexión' }); },
+            });
+        });
+    }
+
+    // ===================== APROBACIÓN (solo admin) =====================
+    let aprActual = null;
+    function abrirModalAprobacion(id) {
+        if (!PUEDE_APROBAR) { return; }
+        aprActual = id;
+        $('#apr-num-operacion').text('');
+        $('#apr-resumen').html('Cargando...');
+        $('#apr-observaciones').val('');
+        $('#apr-metodo').val('EFECTIVO_CAJA');
+        const hoy = new Date().toISOString().slice(0, 10);
+        $('#apr-fecha').val(hoy).attr('max', hoy);
+        new bootstrap.Modal(document.getElementById('modalAprobarDevolucion')).show();
+
+        $.get(urlCon(URLS_DG.detalle, id), function (resp) {
+            if (!resp.success) { $('#apr-resumen').html(`<span class="text-danger">${resp.error}</span>`); return; }
+            const d = resp.data;
+            $('#apr-num-operacion').text(d.numero_operacion);
+            let lineas = '';
+            d.lineas.forEach(function (l) {
+                const detalle = l.modo === 'CANTIDAD' ? `${l.cantidad} u × (${clp(l.subtotal)})` : `monto parcial ${clp(l.subtotal)}`;
+                lineas += `<div>• ${l.descripcion} — ${detalle}${l.conflicto ? ' <span class="text-danger">⚠ disponibilidad cambió</span>' : ''}</div>`;
+            });
+            $('#apr-resumen').html(
+                `<div class="mb-1"><strong>Solicitante:</strong> ${d.solicitado_por} · ${d.fecha_solicitud}</div>` +
+                `<div class="mb-1"><strong>Documento:</strong> ${d.dte.tipo} #${d.dte.folio} (${d.dte.fecha}) — Total ${clp(d.dte.total)}</div>` +
+                `<div class="mb-1"><strong>Cliente:</strong> ${d.receptor.nombre} (${d.receptor.rut})</div>` +
+                `<div class="mb-1"><strong>Motivo:</strong> ${d.motivo}</div>` +
+                `<hr class="my-1" style="border-color:#2a3045;">` + lineas +
+                `<div class="mt-1"><strong>Total NC:</strong> ${clp(d.monto_total)}</div>` +
+                (d.hay_conflicto ? `<div class="alert alert-danger py-1 px-2 small mt-2 mb-0">Alguna línea ya no tiene disponibilidad suficiente. Si apruebas puede fallar; considera rechazar.</div>` : '')
+            );
+            aprActualizarImpacto();
+        }).fail(function (xhr) {
+            $('#apr-resumen').html(`<span class="text-danger">${xhr.responseJSON?.error || 'Error al cargar'}</span>`);
+        });
+    }
+
+    function aprActualizarImpacto() {
+        if (!aprActual) { return; }
+        const metodo = $('#apr-metodo').val();
+        const afecta = metodo !== 'NO_AFECTA_CAJA';
+        $('#apr-fecha-wrap').toggleClass('d-none', !afecta);
+        const params = { metodo: metodo };
+        if (afecta) { params.fecha = $('#apr-fecha').val(); }
+        $.get(urlCon(URLS_DG.impacto, aprActual), params, function (resp) {
+            if (!resp.success) { $('#apr-impacto').html(`<span class="text-danger">${resp.error}</span>`); return; }
+            const im = resp.data;
+            let html = `<div>${im.descripcion}</div>`;
+            (im.advertencias || []).forEach(function (a) {
+                html += `<div class="alert alert-warning py-1 px-2 small mt-2 mb-0"><i class="ri-alert-line me-1"></i>${a}</div>`;
+            });
+            $('#apr-impacto').html(html);
+            $('#apr-btn-aprobar').prop('disabled', !im.fecha_valida);
+        });
+    }
+
+    function aprAprobar() {
+        if (!aprActual) { return; }
+        const metodo = $('#apr-metodo').val();
+        const fecha = metodo !== 'NO_AFECTA_CAJA' ? $('#apr-fecha').val() : null;
+        Swal.fire({
+            title: 'Aprobar y generar NC',
+            html: `Se generará la Nota de Crédito y el TXT Acepta.<br><small class="text-muted">${$('#apr-impacto').text()}</small>`,
+            icon: 'question', showCancelButton: true, confirmButtonColor: '#00A080',
+            confirmButtonText: 'Aprobar', cancelButtonText: 'Cancelar',
+        }).then(function (r) {
+            if (!r.isConfirmed) { return; }
+            $('#apr-btn-aprobar').prop('disabled', true);
+            $.ajax({
+                url: urlCon(URLS_DG.aprobar, aprActual), method: 'POST', contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                data: JSON.stringify({ metodo_devolucion: metodo, fecha_imputacion: fecha, observaciones: $('#apr-observaciones').val().trim() }),
+                success: function (resp) {
+                    $('#apr-btn-aprobar').prop('disabled', false);
+                    if (resp.success) {
+                        bootstrap.Modal.getInstance(document.getElementById('modalAprobarDevolucion'))?.hide();
+                        Swal.fire({
+                            icon: 'success', title: 'Aprobada',
+                            html: `<p>NC #${resp.data.nc_numero} — ${clp(resp.data.monto_total)}</p>` +
+                                  `<a href="${resp.data.nc_txt_url}" class="btn btn-sm btn-outline-primary"><i class="ri-download-line me-1"></i> Descargar TXT Acepta</a>`,
+                        });
+                        cargarDevoluciones();
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'No se pudo aprobar', text: resp.error });
+                    }
+                },
+                error: function (xhr) {
+                    $('#apr-btn-aprobar').prop('disabled', false);
+                    Swal.fire({ icon: 'error', title: 'Error', text: xhr.responseJSON?.error || 'Error de conexión' });
+                },
+            });
+        });
+    }
+
+    function aprRechazar() {
+        if (!aprActual) { return; }
+        Swal.fire({
+            title: 'Rechazar solicitud', input: 'textarea', inputLabel: 'Motivo del rechazo (obligatorio)',
+            inputPlaceholder: 'Explica por qué se rechaza...', showCancelButton: true, confirmButtonColor: '#FF4D4D',
+            confirmButtonText: 'Rechazar', cancelButtonText: 'Cancelar',
+            inputValidator: (v) => (!v || !v.trim()) ? 'Debes indicar el motivo.' : null,
+        }).then(function (r) {
+            if (!r.isConfirmed) { return; }
+            $.ajax({
+                url: urlCon(URLS_DG.rechazar, aprActual), method: 'POST', contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                data: JSON.stringify({ motivo_rechazo: r.value.trim() }),
+                success: function (resp) {
+                    if (resp.success) {
+                        bootstrap.Modal.getInstance(document.getElementById('modalAprobarDevolucion'))?.hide();
+                        Swal.fire({ icon: 'success', title: 'Rechazada', timer: 1400, showConfirmButton: false });
+                        cargarDevoluciones();
+                    } else { Swal.fire({ icon: 'error', title: 'Error', text: resp.error }); }
+                },
+                error: function (xhr) { Swal.fire({ icon: 'error', title: 'Error', text: xhr.responseJSON?.error || 'Error de conexión' }); },
+            });
+        });
+    }
+
+    // ===================== PUENTE DESDE REQUERIMIENTOS =====================
     function precargarDesdeRequerimiento() {
         const params = new URLSearchParams(window.location.search);
         const folio = params.get('folio');
         if (!folio) { return; }
-
-        dgRequerimientoId = params.get('requerimiento_id') || null;
+        dgWizard.requerimientoId = params.get('requerimiento_id') || null;
         $('#dg-folio').val(folio);
         $('#dg-cliente-rut').val(params.get('rut') || '');
         $('#dg-cliente-nombre').val(params.get('nombre') || '');
         $('#dg-cliente-telefono').val(params.get('telefono') || '');
         $('#dg-cliente-email').val(params.get('email') || '');
-        if (params.get('motivo')) {
-            $('#dg-motivo').val(params.get('motivo'));
-        }
-
+        if (params.get('motivo')) { $('#dg-motivo').val(params.get('motivo')); }
         new bootstrap.Modal(document.getElementById('modalNuevaDevolucion')).show();
         buscarDteDevolucionGarantia();
     }
 
     $(document).ready(function () {
+        dgRenderPaso();
         cargarDevoluciones();
         precargarDesdeRequerimiento();
     });
