@@ -6,7 +6,8 @@ import json
 from datetime import date
 from types import SimpleNamespace
 
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
+from app.views_modulo_ventas import cuadrar_detalle_neto
 from app.views_modulo_documentos import (
     generar_txt_dte_acepta,
     generar_txt_boleta_acepta,
@@ -101,6 +102,71 @@ def _datos_boleta_base():
         },
         'detalle': [],
     }
+
+
+class TestCuadraturaDetalleNeto(SimpleTestCase):
+    """
+    El detalle de una factura debe cuadrar con el MntNeto del header:
+    sum(MontoItem) - descuentos + recargos == MntNeto. Si no, Acepta rechaza.
+    """
+
+    def _detalle(self, *montos):
+        return [{'nombre': f'Item {i}', 'monto_item': m}
+                for i, m in enumerate(montos, start=1)]
+
+    def _suma(self, detalle):
+        return sum(int(d['monto_item']) for d in detalle)
+
+    def test_sin_residuo_no_toca_nada(self):
+        detalle = self._detalle(1000, 2000, 3000)
+        residuo = cuadrar_detalle_neto(detalle, 6000)
+        self.assertEqual(residuo, 0)
+        self.assertEqual(self._suma(detalle), 6000)
+
+    def test_absorbe_residuo_positivo_en_la_ultima_linea(self):
+        # Caso real: 3 líneas de $9.990 IVA-incl -> round(9990/1.19)=8395 c/u
+        # => suma 25185, pero el header hace round(29970/1.19)=25185... si el
+        # total difiere en $1 el detalle queda descuadrado.
+        detalle = self._detalle(8395, 8395, 8395)
+        residuo = cuadrar_detalle_neto(detalle, 25186)
+        self.assertEqual(residuo, 1)
+        self.assertEqual(self._suma(detalle), 25186)
+        self.assertEqual(detalle[-1]['monto_item'], 8396)
+        # las líneas anteriores no se tocan
+        self.assertEqual(detalle[0]['monto_item'], 8395)
+
+    def test_absorbe_residuo_negativo(self):
+        detalle = self._detalle(8395, 8395, 8395)
+        residuo = cuadrar_detalle_neto(detalle, 25183)
+        self.assertEqual(residuo, -2)
+        self.assertEqual(self._suma(detalle), 25183)
+
+    def test_descuento_global_entra_en_la_ecuacion(self):
+        # sum(items) - dcto debe dar el neto
+        detalle = self._detalle(10000, 5000)
+        dr = [{'tpo_mov': 'D', 'valor_dr': 1000}]
+        residuo = cuadrar_detalle_neto(detalle, 14000, dr)
+        self.assertEqual(residuo, 0)
+        self.assertEqual(self._suma(detalle) - 1000, 14000)
+
+    def test_descuento_global_con_residuo(self):
+        detalle = self._detalle(10000, 5000)
+        dr = [{'tpo_mov': 'D', 'valor_dr': 1000}]
+        cuadrar_detalle_neto(detalle, 13998, dr)
+        self.assertEqual(self._suma(detalle) - 1000, 13998)
+
+    def test_recargo_global_suma(self):
+        detalle = self._detalle(10000)
+        dr = [{'tpo_mov': 'R', 'valor_dr': 500}]
+        residuo = cuadrar_detalle_neto(detalle, 10500)
+        # sin pasar los DR el residuo sería 500; pasándolos, cuadra
+        self.assertEqual(residuo, 500)
+        detalle2 = self._detalle(10000)
+        residuo2 = cuadrar_detalle_neto(detalle2, 10500, dr)
+        self.assertEqual(residuo2, 0)
+
+    def test_detalle_vacio_no_revienta(self):
+        self.assertEqual(cuadrar_detalle_neto([], 1000), 0)
 
 
 class TestFacturaConDescuentoItem(TestCase):

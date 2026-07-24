@@ -4767,6 +4767,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const tipoDocumentoActual = document.querySelector('input[name="tipoDocumento"]:checked')?.value || 'BOLETA_ELECTRONICA';
             actualizarInfoTipoDocumento(tipoDocumentoActual);
             actualizarRequerimientosCliente(tipoDocumentoActual);
+            actualizarVisibilidadFidelizacion();
             // Auto-detectar condición de pago para DTE basado en pagos ya registrados
             if (tipoDocumentoActual === 'FACTURA_ELECTRONICA') {
                 autoDetectarCondicionPago();
@@ -4805,6 +4806,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ── Funciones de Vale de Puntos ──────────────────────────────────────────
     function validarVale() {
+        if (fidelizacionBloqueada()) {
+            mostrarNotificacion(
+                'Los vales de puntos solo aplican a clientes particulares (no a facturas ni cotizaciones)',
+                'warning'
+            );
+            limpiarVale();
+            return;
+        }
         const codigo = (document.getElementById('valeCanjeInput').value || '').trim().toUpperCase();
         if (!codigo) { mostrarNotificacion('Ingrese el código del vale', 'warning'); return; }
         const msgEl = document.getElementById('valeCanjeMsg');
@@ -4863,9 +4872,51 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    // La fidelización (acumular puntos y canjear vales) es SOLO para clientes
+    // particulares. Se apaga en facturas y en ventas que vienen de una
+    // cotización — el backend lo rechaza igual (ver venta_fideliza), pero la UI
+    // no debe ofrecer algo que después va a fallar.
+    function fidelizacionBloqueada() {
+        const tipoDoc = document.querySelector('input[name="tipoDocumento"]:checked')?.value;
+        return tipoDoc === 'FACTURA_ELECTRONICA' || !!cotizacionActual;
+    }
+
+    function actualizarVisibilidadFidelizacion() {
+        const tipoDoc = document.querySelector('input[name="tipoDocumento"]:checked')?.value;
+        const esFactura = tipoDoc === 'FACTURA_ELECTRONICA';
+        const esCotizacion = !!cotizacionActual;
+        const bloqueada = esFactura || esCotizacion;
+
+        const valeCard = document.getElementById('valeCanjeCard');
+        if (valeCard) valeCard.style.display = bloqueada ? 'none' : '';
+
+        const aviso = document.getElementById('empresaNoFidelizaAviso');
+        if (aviso) {
+            if (bloqueada) {
+                aviso.innerHTML = esCotizacion
+                    ? '<i class="ri-file-list-3-line me-1"></i> Venta desde cotización — no acumula ni canjea puntos de fidelización.'
+                    : '<i class="ri-building-line me-1"></i> Venta con factura — no acumula ni canjea puntos de fidelización.';
+                aviso.style.display = '';
+            } else {
+                aviso.style.display = 'none';
+            }
+        }
+
+        if (bloqueada) {
+            // Un vale ya validado no debe viajar en el payload del cobro.
+            if (valeCanjeActual) limpiarVale();
+            fidelizacionActual = null;
+            const fidel = document.getElementById('fidelCard');
+            if (fidel) fidel.style.display = 'none';
+        }
+    }
+
     function mostrarTarjetaFidelizacion() {
         const card = document.getElementById('fidelCard');
         if (!card) return;
+        // La búsqueda por RUT puede repoblar `fidelizacionActual` justo después
+        // de que el flujo la haya bloqueado (factura/cotización): acá se corta.
+        if (fidelizacionBloqueada()) { card.style.display = 'none'; return; }
         if (!fidelizacionActual) { card.style.display = 'none'; return; }
 
         const f = fidelizacionActual;
@@ -5415,6 +5466,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (seccionRef) {
                     seccionRef.style.display = 'block';
                 }
+
+                // Cotización = venta a empresa: apagar vale y puntos.
+                actualizarVisibilidadFidelizacion();
             }, 100);
             
             // Mostrar notificación informativa
@@ -5426,6 +5480,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             // No es cotización, limpiar variable
             cotizacionActual = null;
+            actualizarVisibilidadFidelizacion();
         }
         // =========================================================================
         // FIN: Manejo de cotización
@@ -8680,6 +8735,18 @@ document.addEventListener('DOMContentLoaded', function() {
                                 console.error('Error al descargar TXT:', error);
                             }
                         }
+
+                        // El DTE se emitió pero el TXT de Acepta falló: avisarlo,
+                        // no dejar que la venta se vea 100% OK sin archivo.
+                        if (data.archivo_txt_error) {
+                            htmlMensaje += `
+                                <div class="alert alert-warning text-start mb-0 mt-2 py-2">
+                                    <i class="ri-error-warning-line"></i>
+                                    <strong>Sin archivo TXT para Acepta</strong><br>
+                                    <small>${data.archivo_txt_error_mensaje || 'No se pudo generar el TXT.'}</small><br>
+                                    <small class="text-muted">Detalle: ${data.archivo_txt_error}</small>
+                                </div>`;
+                        }
                     } else {
                         // Sin DTE - mostrar número de ticket
                         htmlMensaje = `<p><strong>Ticket #${ticketActual.ticket_id}</strong> procesado exitosamente</p>`;
@@ -10433,6 +10500,7 @@ body {
 
             actualizarInfoTipoDocumento(tipoSeleccionado);
             actualizarRequerimientosCliente(tipoSeleccionado);
+            actualizarVisibilidadFidelizacion();
             window.cambioTipoDocumentoInterno = false;
         }
     });

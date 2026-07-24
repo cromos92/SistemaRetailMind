@@ -49,6 +49,8 @@
 {% puede_ver_opcion_tag 'reporte_documentos_emitidos' as permiso_reporte_documentos_emitidos %}
 {% puede_ver_opcion_tag 'reporte_existencias' as permiso_reporte_existencias %}
 {% puede_ver_opcion_tag 'reporte_existencias_marca' as permiso_reporte_existencias_marca %}
+{% puede_ver_opcion_tag 'plan_liquidacion' as permiso_plan_liquidacion %}
+{% puede_ver_opcion_tag 'campanas_liquidacion' as permiso_campanas_liquidacion %}
 {% puede_ver_opcion_tag 'reporte_existencias_sucursal' as permiso_reporte_existencias_sucursal %}
 {% puede_ver_opcion_tag 'reporte_movimientos_sucursal' as permiso_reporte_movimientos_sucursal %}
 {% puede_ver_opcion_tag 'reporte_productos_vendidos' as permiso_reporte_productos_vendidos %}
@@ -2612,7 +2614,7 @@
                                     </li>
                                     {% endif %}
                                     <!-- Sección: Reportes Existencias -->
-                                    {% if permiso_reporte_existencias or permiso_reporte_existencias_marca or permiso_reporte_existencias_sucursal %}
+                                    {% if permiso_reporte_existencias or permiso_reporte_existencias_marca or permiso_reporte_existencias_sucursal or permiso_plan_liquidacion or permiso_campanas_liquidacion %}
                                     <li class="nav-item">
                                         <a class="nav-link menu-link collapsed" href="#reportesExistencias" data-bs-toggle="collapse"
                                             role="button" aria-expanded="false" aria-controls="reportesExistencias">
@@ -2633,16 +2635,22 @@
                                                         <i class="ri-brain-line"></i> Inteligencia de Compra <span class="badge bg-success-subtle text-success ms-1">IA</span>
                                                     </a>
                                                 </li>
+                                                {% endif %}
+                                                {% if permiso_plan_liquidacion %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_plan_liquidacion' %}" class="nav-link" data-key="t-plan-liquidacion">
                                                         <i class="ri-scissors-cut-line"></i> Plan de Liquidación
                                                     </a>
                                                 </li>
+                                                {% endif %}
+                                                {% if permiso_campanas_liquidacion %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_campanas_liquidacion' %}" class="nav-link" data-key="t-campanas-liquidacion">
                                                         <i class="ri-price-tag-2-line"></i> Campañas de Liquidación
                                                     </a>
                                                 </li>
+                                                {% endif %}
+                                                {% if permiso_reporte_existencias_marca %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_reporte_existencias_marca' %}" class="nav-link" data-key="t-reporte-existencias-marca">
                                                         <i class="ri-price-tag-3-line"></i> Existencias por Marca

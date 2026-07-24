@@ -19,6 +19,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.http import require_GET, require_POST
 
+from .decorators import requiere_permiso
 from .models import (
     CampanaLiquidacion, CampanaLiquidacionProducto, EmpresaUser, Producto,
     Producto_Talla, Sucursal,
@@ -65,13 +66,13 @@ def _campana_dict(c, incluir_items=False):
     return d
 
 
-@login_required
+@requiere_permiso('campanas_liquidacion', 'puede_ver')
 def ver_campanas_liquidacion(request):
     return render(request, 'vistas/modulo_campanas/campanas_liquidacion.html', {})
 
 
 @require_GET
-@login_required
+@requiere_permiso('campanas_liquidacion', 'puede_ver')
 def listar_campanas_liquidacion(request):
     """Lista de campañas + KPIs por estado."""
     try:
@@ -160,7 +161,7 @@ def _sucursales_objetivo(request, alcance, sucursal_ids_in, incluir_cd):
 
 
 @require_POST
-@login_required
+@requiere_permiso('campanas_liquidacion', 'puede_crear')
 def crear_campana_liquidacion(request):
     """Crea una campaña en BORRADOR expandiendo los artículos seleccionados a
     las sucursales elegidas en el modal (todas / algunas, con o sin CD)."""
@@ -224,7 +225,7 @@ def crear_campana_liquidacion(request):
 
 
 @require_GET
-@login_required
+@requiere_permiso('campanas_liquidacion', 'puede_ver')
 def detalle_campana_liquidacion(request, campana_id):
     try:
         campana = (CampanaLiquidacion.objects
@@ -239,7 +240,7 @@ def detalle_campana_liquidacion(request, campana_id):
 
 
 @require_POST
-@login_required
+@requiere_permiso('campanas_liquidacion', 'puede_editar')
 def modificar_productos_campana(request, campana_id):
     """Agregar/quitar productos de una campaña en BORRADOR."""
     try:
@@ -272,7 +273,7 @@ def modificar_productos_campana(request, campana_id):
 
 
 @require_POST
-@login_required
+@requiere_permiso('campanas_liquidacion', 'puede_editar')
 def activar_campana_liquidacion(request, campana_id):
     """Valida colisiones y aplica la campaña (baja precios / activa NxM)."""
     try:
@@ -308,7 +309,7 @@ def activar_campana_liquidacion(request, campana_id):
 
 
 @require_POST
-@login_required
+@requiere_permiso('campanas_liquidacion', 'puede_editar')
 def cerrar_campana_liquidacion(request, campana_id):
     """Reversión manual: restaura precios y finaliza la campaña."""
     try:

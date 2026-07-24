@@ -17,7 +17,8 @@ from django.test import RequestFactory
 
 from app.models import (
     AtributoOpcion, CampanaLiquidacion, CampanaLiquidacionProducto,
-    HistorialCambioPrecio, Productos_Atributos,
+    HistorialCambioPrecio, ModuloSistema, OpcionMenu, PermisoRol,
+    Productos_Atributos,
 )
 from app.services import campanas_service
 from app.views_modulo_campanas_liquidacion import crear_campana_liquidacion
@@ -43,6 +44,17 @@ class CampanasLiquidacionTests(TestCase):
         c.sucursales.add(self.sucursal)
         CampanaLiquidacionProducto.objects.create(campana=c, producto=self.producto)
         return c
+
+    def _grant_permiso(self, rol, codigo, **flags):
+        """Siembra el permiso de rol que exige la vista gateada."""
+        modulo, _ = ModuloSistema.objects.get_or_create(
+            codigo='liquidacion', defaults={'nombre': 'Liquidacion', 'orden': 11})
+        opcion, _ = OpcionMenu.objects.get_or_create(
+            codigo=codigo, defaults={'modulo': modulo, 'nombre': codigo, 'orden': 1})
+        defaults = {'puede_ver': True}
+        defaults.update(flags)
+        PermisoRol.objects.update_or_create(
+            rol=rol, opcion_menu=opcion, defaults=defaults)
 
     def test_aplicar_porcentaje_baja_precio_y_audita(self):
         c = self._campana('PORCENTAJE', valor_porcentaje=30)
@@ -140,6 +152,7 @@ class CampanasLiquidacionTests(TestCase):
                                  atributo1=nike, atributo2=azul, precioventa=40000)
         user = crear_usuario(username='jefe')
         crear_empresa_user(user, empresa, t1)
+        self._grant_permiso(user.rol, 'campanas_liquidacion', puede_crear=True)
 
         req = RequestFactory().post(
             '/x', data=json.dumps({
@@ -148,6 +161,7 @@ class CampanasLiquidacionTests(TestCase):
                 'alcance_sucursales': 'todas', 'incluir_cd': False,
             }), content_type='application/json')
         req.user = user
+        req.session = {'idSucursalActual': t1.id}
         res = json.loads(crear_campana_liquidacion(req).content)
         self.assertTrue(res['success'], res.get('error'))
         # Expandió a T1 y T2 (2 tiendas), NO al CD (incluir_cd=False).

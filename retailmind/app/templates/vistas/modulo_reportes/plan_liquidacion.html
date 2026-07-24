@@ -101,8 +101,11 @@
         <div class="pl-tablewrap" id="pl-det-wrap" style="display:none; margin-top:16px;">
             <div class="pl-filters">
                 <span style="font-weight:800; color:var(--nexo-secondary); font-size:.95rem;"><i class="ri-search-eye-line"></i> Detalle por producto</span>
-                <span class="pl-note">antigüedad FIFO del stock en mano · pares por sucursal</span>
+                <span class="pl-note">antigüedad FIFO · precio de liquidación sugerido por producto</span>
                 <span style="margin-left:auto;"></span>
+                <button class="pl-fbtn xls" onclick="exportarExcel()"><i class="ri-file-excel-2-line"></i> Exportar</button>
+                <button class="pl-fbtn" style="border-color:var(--nexo-accent); color:#08917a;" onclick="document.getElementById('det-import-file').click()"><i class="ri-upload-2-line"></i> Importar</button>
+                <input type="file" id="det-import-file" accept=".xlsx,.csv" style="display:none;" onchange="importarSeleccion(this)">
                 <button class="pl-fbtn" id="btn-campana" style="border-color:var(--nexo-primary); color:var(--nexo-primary);" onclick="abrirModalCampana()" disabled><i class="ri-price-tag-2-line"></i> Crear campaña (<span id="sel-count">0</span>)</button>
                 <input type="text" id="det-q" class="pl-input" placeholder="Buscar artículo / descripción / marca…" oninput="buscarDetalle()">
             </div>
@@ -114,6 +117,9 @@
                 <button class="pl-fbtn" data-b="180-365" onclick="setBucket('180-365')">180–365d</button>
                 <button class="pl-fbtn" data-b="365+" onclick="setBucket('365+')">+1 año</button>
                 <button class="pl-fbtn" data-b="sin-dato" onclick="setBucket('sin-dato')">Sin dato</button>
+                <span style="width:1px; height:22px; background:var(--nexo-gray-300); margin:0 4px;"></span>
+                <span style="font-weight:700; color:var(--nexo-gray-700); font-size:.82rem;">Año:</span>
+                <span id="det-anio-chips" class="pl-note">—</span>
             </div>
             <div style="overflow-x:auto; max-height:640px; overflow-y:auto;">
                 <table class="pl-table" id="det-table">
@@ -170,17 +176,19 @@ const DIMS = {
     sucursales:     { label: 'Sucursal',     field: 'sucursal',     filtro: 'sucursal_id' },
 };
 let PL_RES = null;                       // respuesta completa de la API
-let PL_ANIO_RES = null;                   // análisis por año/marca
+let PL_ANIO_RES = null;                   // análisis por año/dimensión
 let anioMetric = 'valor';                 // 'valor' (dinero) | 'pares'
-let chartAnio = null, chartMarca = null;
+let dimGrafico = 'marca';                 // 'marca' | 'especialidad'
+let chartAnio = null, chartDim = null;
 let plDim = 'marcas';
 let plCharts = [], plSort = { key: 'dead_costo', dir: -1 }, plFilter = 'Todas';
 let PL_F = { sucursal_id: '', marca_id: '', categoria_id: '', especialidad_id: '', incluir_cd: '' };
-let DET = { page: 1, page_size: 50, orden: '-valor_costo', antiguedad: '', q: '' };
+let DET = { page: 1, page_size: 50, orden: '-valor_costo', antiguedad: '', q: '', anios: new Set() };
 let detTotal = 0, detTimer = null, opcionesCargadas = false;
 const SEL = new Set();          // producto_ids seleccionados para campaña
 const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
 const CREAR_CAMPANA_API = "{% url 'crear_campana_liquidacion' %}";
+const PL_IMPORT_API = "{% url 'importar_seleccion_liquidacion' %}";
 
 document.addEventListener('DOMContentLoaded', () => { cargarPlan(); });
 
@@ -271,9 +279,14 @@ function renderPlan(d) {
             <div class="pl-note" style="margin-top:6px;">Año de ingreso del stock más antiguo en mano. <span style="color:#00A88A;">■</span> reciente · <span style="color:#FFB020;">■</span> 1 año · <span style="color:#f06548;">■</span> 2+ años (liquidar).</div>
         </div>
         <div class="pl-card">
-            <h3><i class="ri-price-tag-3-line"></i> Top marcas — capital por antigüedad</h3>
-            <div id="pl-chart-marca"><div class="pl-note" style="padding:20px;">Calculando…</div></div>
-            <div class="pl-note" style="margin-top:6px;">Cada barra = capital de la marca dividido por antigüedad. Priorizá las de más <span style="color:#f06548;">rojo</span> (2+ años).</div>
+            <h3><i class="ri-price-tag-3-line"></i> Top <span id="dim-graf-lbl">marcas</span> — capital por antigüedad</h3>
+            <div class="pl-filters" style="margin-bottom:4px;">
+                <span style="font-weight:700; color:var(--nexo-gray-700); font-size:.8rem;">Ver por:</span>
+                <button class="pl-fbtn active" data-dimg="marca" onclick="setDimGrafico('marca')">Marca</button>
+                <button class="pl-fbtn" data-dimg="especialidad" onclick="setDimGrafico('especialidad')">Especialidad</button>
+            </div>
+            <div id="pl-chart-dim"><div class="pl-note" style="padding:20px;">Calculando…</div></div>
+            <div class="pl-note" style="margin-top:6px;">Cada barra = capital dividido por antigüedad. Priorizá las de más <span style="color:#f06548;">rojo</span> (2+ años).</div>
         </div>
     </div>
 
@@ -308,7 +321,7 @@ function renderPlan(d) {
     </div>`;
     document.getElementById('pl-results').innerHTML = html;
     renderTable();
-    if (PL_ANIO_RES) { drawChartAnio(); drawChartMarca(); }  // re-render si ya había datos
+    if (PL_ANIO_RES) { drawChartAnio(); drawChartDim(); }  // re-render si ya había datos
 }
 
 function filasDim() {
@@ -427,38 +440,75 @@ function setAnioMetric(m) {
     drawChartAnio();
 }
 
-function drawChartMarca() {
-    if (chartMarca) { try { chartMarca.destroy(); } catch (e) {} chartMarca = null; }
-    const cont = document.getElementById('pl-chart-marca');
+function drawChartDim() {
+    if (chartDim) { try { chartDim.destroy(); } catch (e) {} chartDim = null; }
+    const cont = document.getElementById('pl-chart-dim');
     if (!cont || !PL_ANIO_RES) return;
-    const marcas = (PL_ANIO_RES.por_marca || []).slice().reverse();  // mayor arriba
-    if (!marcas.length) { cont.innerHTML = '<div class="pl-note" style="padding:20px;">Sin datos.</div>'; return; }
+    const items = (PL_ANIO_RES.por_dimension || []).slice().reverse();  // mayor arriba
+    const lbl = document.getElementById('dim-graf-lbl');
+    if (lbl) lbl.textContent = dimGrafico === 'especialidad' ? 'especialidades' : 'marcas';
+    if (!items.length) { cont.innerHTML = '<div class="pl-note" style="padding:20px;">Sin datos.</div>'; return; }
     cont.innerHTML = '';
-    chartMarca = new ApexCharts(cont, {
-        chart: { type: 'bar', height: 320, stacked: true, toolbar: { show: false }, fontFamily: 'inherit' },
+    chartDim = new ApexCharts(cont, {
+        chart: { type: 'bar', height: 340, stacked: true, toolbar: { show: false }, fontFamily: 'inherit' },
         series: [
-            { name: 'Reciente', data: marcas.map(m => m.val_reciente) },
-            { name: '1 año', data: marcas.map(m => m.val_1anio) },
-            { name: '2+ años', data: marcas.map(m => m.val_2mas) },
+            { name: 'Reciente', data: items.map(m => m.val_reciente) },
+            { name: '1 año', data: items.map(m => m.val_1anio) },
+            { name: '2+ años', data: items.map(m => m.val_2mas) },
         ],
         colors: [URG.reciente, URG.un_anio, URG.dos_mas],
-        plotOptions: { bar: { horizontal: true, borderRadius: 3, barHeight: '72%' } },
+        plotOptions: { bar: { horizontal: true, borderRadius: 3, barHeight: '74%' } },
         dataLabels: { enabled: false },
         stroke: { width: 2, colors: ['#fff'] },
-        xaxis: { categories: marcas.map(m => m.marca), labels: { formatter: v => moneyM(v) },
+        xaxis: { categories: items.map(m => m.nombre), labels: { formatter: v => moneyM(v) },
             axisBorder: { show: false }, axisTicks: { show: false } },
         yaxis: { labels: { style: { fontWeight: 600, fontSize: '11px' } } },
         legend: { position: 'top', fontSize: '12px', markers: { radius: 3 } },
         grid: { borderColor: '#eef0f5', strokeDashArray: 3 },
         tooltip: { y: { formatter: v => money(v) } },
     });
-    chartMarca.render();
+    chartDim.render();
+}
+
+function setDimGrafico(dim) {
+    dimGrafico = dim;
+    document.querySelectorAll('.pl-fbtn[data-dimg]').forEach(b => b.classList.toggle('active', b.dataset.dimg === dim));
+    const cont = document.getElementById('pl-chart-dim');
+    if (cont) cont.innerHTML = '<div class="pl-note" style="padding:20px;"><span class="spinner-border spinner-border-sm text-primary"></span> Cargando…</div>';
+    // Recarga dinámica: solo la dimensión (no recalcula el gráfico de años).
+    fetch(PL_ANIO_API + '?' + qsFiltros({ dim: dim, solo: 'dim' }).toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.json())
+        .then(res => {
+            if (!res.success) { cont.innerHTML = '<div class="pl-note" style="padding:20px;">Error: ' + esc(res.error || '') + '</div>'; return; }
+            if (PL_ANIO_RES) PL_ANIO_RES.por_dimension = res.por_dimension;
+            drawChartDim();
+        })
+        .catch(e => { cont.innerHTML = '<div class="pl-note" style="padding:20px;">Error de red: ' + esc(e) + '</div>'; });
 }
 
 // ------------------------------------------------ drill-down por producto
 function qsDetalle() {
     return qsFiltros({ antiguedad: DET.antiguedad, q: DET.q, orden: DET.orden,
+                       anio: Array.from(DET.anios).join(','),
                        page: String(DET.page), page_size: String(DET.page_size) });
+}
+
+// Chips de año (multi-selección) del detalle, poblados desde el análisis.
+function renderChipsAnio(anios) {
+    const cont = document.getElementById('det-anio-chips');
+    if (!cont) return;
+    if (!anios.length) { cont.innerHTML = '<span class="pl-note">sin datos</span>'; return; }
+    const todos = `<button class="pl-fbtn ${DET.anios.size === 0 ? 'active' : ''}" onclick="toggleAnio('')">Todos</button>`;
+    const chips = anios.map(y => `<button class="pl-fbtn ${DET.anios.has(y) ? 'active' : ''}" data-anio="${y}" onclick="toggleAnio(${y})">${y}</button>`).join('');
+    cont.innerHTML = todos + chips;
+}
+function toggleAnio(y) {
+    if (y === '') DET.anios.clear();
+    else if (DET.anios.has(y)) DET.anios.delete(y);
+    else DET.anios.add(y);
+    DET.page = 1;
+    renderChipsAnio(PL_ANIO_RES ? (PL_ANIO_RES.anios_disponibles || []) : []);
+    cargarDetalle();
 }
 
 function cargarDetalle() {
@@ -547,17 +597,41 @@ function cambiarPageSize() {
     cargarDetalle();
 }
 function exportarExcel() {
-    const p = qsFiltros({ antiguedad: DET.antiguedad, q: DET.q });
+    const p = qsFiltros({ antiguedad: DET.antiguedad, q: DET.q, anio: Array.from(DET.anios).join(',') });
     window.location = PL_XLS_API + '?' + p.toString();
 }
 
-// ------------------------------------------------ análisis por año / marca
+// Importar un Excel/CSV exportado (columna ID) -> selecciona esos productos.
+function importarSeleccion(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('archivo', file);
+    Swal.fire({ title: 'Importando…', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+    fetch(PL_IMPORT_API, { method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd })
+        .then(r => r.json())
+        .then(res => {
+            input.value = '';
+            if (!res.success) { Swal.fire({ icon: 'error', title: 'No se pudo importar', text: res.error }); return; }
+            (res.producto_ids || []).forEach(id => SEL.add(id));
+            actualizarSelUI();
+            cargarDetalle();
+            Swal.fire({
+                icon: 'success', title: 'Importado',
+                html: `<b>${res.importados}</b> productos seleccionados${res.no_encontrados ? ` · ${res.no_encontrados} no válidos en tus sucursales` : ''}.<br>Ya podés <b>Crear campaña</b> con la selección.`,
+                showCancelButton: res.importados > 0, confirmButtonText: res.importados > 0 ? 'Crear campaña' : 'OK',
+            }).then(x => { if (x.isConfirmed && res.importados > 0) abrirModalCampana(); });
+        })
+        .catch(e => { input.value = ''; Swal.fire({ icon: 'error', title: 'Error de red', text: String(e) }); });
+}
+
+// ------------------------------------------------ análisis por año / dimensión
 function cargarPorAnio() {
-    ['pl-chart-anio', 'pl-chart-marca'].forEach(id => {
+    ['pl-chart-anio', 'pl-chart-dim'].forEach(id => {
         const c = document.getElementById(id);
         if (c) c.innerHTML = '<div class="pl-note" style="padding:20px;"><span class="spinner-border spinner-border-sm text-primary"></span> Calculando antigüedad…</div>';
     });
-    fetch(PL_ANIO_API + '?' + qsFiltros({}).toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    fetch(PL_ANIO_API + '?' + qsFiltros({ dim: dimGrafico }).toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(r => r.json())
         .then(res => {
             if (!res.success) {
@@ -566,7 +640,8 @@ function cargarPorAnio() {
             }
             PL_ANIO_RES = res;
             drawChartAnio();
-            drawChartMarca();
+            drawChartDim();
+            renderChipsAnio(res.anios_disponibles || []);
         })
         .catch(e => { document.getElementById('pl-chart-anio').innerHTML = '<div class="pl-note" style="padding:20px;">Error de red: ' + esc(e) + '</div>'; });
 }

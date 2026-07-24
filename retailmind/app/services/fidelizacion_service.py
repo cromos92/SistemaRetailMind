@@ -78,6 +78,52 @@ def es_rut_empresa(rut):
         return False
 
 
+# Documentos tributarios que, por definición, son venta a empresa (B2B).
+TIPOS_DOCUMENTO_NO_FIDELIZAN = {'FACTURA_ELECTRONICA', 'FACTURA ELECTRONICA'}
+
+# RUTs genéricos que se usan para venta sin cliente identificado.
+RUT_FICTICIOS = {'66666666-6'}
+
+
+def venta_fideliza(ticket, *, tipo_documento=None, cotizacion=None):
+    """
+    Decide si una venta participa del programa de fidelización.
+
+    Fuente única de verdad para acumular puntos Y para aceptar vales de canje:
+    ambos son "beneficio de cliente particular" y deben excluirse juntos.
+
+    La fidelización es SOLO para clientes particulares. Se excluye si:
+      - La venta viene de una cotización (las cotizaciones son a empresas).
+      - El documento es Factura Electrónica (venta B2B).
+      - El RUT es de persona jurídica (>= 50.000.000).
+      - El RUT falta, es inválido, o es el genérico de consumidor final.
+
+    Ojo: `es_rut_empresa` por sí solo NO alcanza — una EIRL o una persona
+    natural con giro tiene RUT < 50M y antes acumulaba puntos al facturarle.
+
+    Devuelve (fideliza: bool, motivo: str). `motivo` es '' cuando fideliza.
+    """
+    if cotizacion is not None:
+        return False, 'venta originada en cotización (cliente empresa)'
+
+    if tipo_documento and str(tipo_documento).upper() in TIPOS_DOCUMENTO_NO_FIDELIZAN:
+        return False, 'documento de tipo factura (venta a empresa)'
+
+    rut = (getattr(ticket, 'cliente_rut', '') or '').strip()
+    if not rut:
+        return False, 'venta sin RUT de cliente'
+    if rut in RUT_FICTICIOS:
+        return False, 'RUT genérico de consumidor final'
+
+    from app.models.base import validar_rut_chileno as _validar_rut
+    if not _validar_rut(rut):
+        return False, 'RUT inválido'
+    if es_rut_empresa(rut):
+        return False, 'RUT de empresa'
+
+    return True, ''
+
+
 def resolver_cliente_por_rut(rut):
     """
     Devuelve el Cliente del CRM cuyo RUT coincide (comparación robusta sin
@@ -330,16 +376,22 @@ def _auto_registrar_cliente_desde_historial(rut, *, ticket_actual=None, usuario=
         return None, False
 
 
-def acumular_puntos_por_venta(ticket, usuario=None):
+def acumular_puntos_por_venta(ticket, usuario=None, *, tipo_documento=None,
+                              cotizacion=None):
     """
     Hook de cobro: acumula puntos por una venta pagada.
 
+    - Aplica `venta_fideliza()`: solo clientes particulares (no facturas, no
+      cotizaciones, no RUT de empresa).
     - Resuelve el Cliente por `ticket.cliente_rut`. Si no hay cliente
       identificado → venta anónima → no acumula (devuelve None sin error).
     - Si el RUT existe en historial de tickets pero no en el CRM, auto-registra
       al cliente (con bono de bienvenida) antes de acumular.
     - Setea `ticket.cliente` si lo encuentra.
     - Idempotente por `acum:{ticket.id}`.
+
+    `tipo_documento` y `cotizacion` los pasa el POS al cobrar; sin ellos el
+    guard sigue funcionando pero solo por RUT (comportamiento histórico).
 
     Devuelve dict {puntos_ganados, saldo_total, valor_punto, valor_ganado_pesos,
     saldo_pesos} o None.
@@ -348,16 +400,17 @@ def acumular_puntos_por_venta(ticket, usuario=None):
     if not programa:
         return None
 
-    rut_ticket = getattr(ticket, 'cliente_rut', '') or ''
-    # Solo acumular para RUTs reales: deben pasar la validación módulo 11 y
-    # no ser el RUT genérico ficticio que se usa para ventas sin cliente.
-    _RUT_FICTICIOS = {'66666666-6'}
-    from app.models.base import validar_rut_chileno as _validar_rut
-    if (not rut_ticket
-            or not _validar_rut(rut_ticket)
-            or rut_ticket in _RUT_FICTICIOS
-            or es_rut_empresa(rut_ticket)):
+    fideliza, motivo = venta_fideliza(
+        ticket, tipo_documento=tipo_documento, cotizacion=cotizacion,
+    )
+    if not fideliza:
+        logger.debug(
+            "Venta no fideliza ticket=%s motivo=%s",
+            getattr(ticket, 'correlativo', '?'), motivo,
+        )
         return None
+
+    rut_ticket = getattr(ticket, 'cliente_rut', '') or ''
     cliente = resolver_cliente_por_rut(rut_ticket)
     if not cliente and rut_ticket:
         # RUT presente pero sin registro CRM → auto-registrar desde historial.

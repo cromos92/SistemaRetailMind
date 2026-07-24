@@ -10,8 +10,8 @@ from django.test import RequestFactory, TestCase
 from django.utils import timezone
 
 from app.models import (
-    AtributoOpcion, LoteProducto, Producto, ProductoAtributoValor,
-    Productos_Atributos,
+    AtributoOpcion, LoteProducto, ModuloSistema, OpcionMenu, PermisoRol,
+    Producto, ProductoAtributoValor, Productos_Atributos,
 )
 from app.views_inteligencia_compra import (
     obtener_plan_liquidacion, obtener_plan_liquidacion_detalle,
@@ -31,6 +31,15 @@ class PlanLiquidacionDetalleTests(TestCase):
             es_centro_distribucion=True, tipo_sucursal='CENTRO_DISTRIBUCION')
         self.user = crear_usuario(username='analista')
         crear_empresa_user(self.user, self.empresa, self.tienda)
+        # Las vistas del Plan de Liquidacion exigen el permiso plan_liquidacion.puede_ver.
+        modulo, _ = ModuloSistema.objects.get_or_create(
+            codigo='liquidacion', defaults={'nombre': 'Liquidacion', 'orden': 11})
+        opcion, _ = OpcionMenu.objects.get_or_create(
+            codigo='plan_liquidacion',
+            defaults={'modulo': modulo, 'nombre': 'Plan de Liquidacion', 'orden': 1})
+        PermisoRol.objects.update_or_create(
+            rol=self.user.rol, opcion_menu=opcion,
+            defaults={'puede_ver': True, 'puede_exportar': True})
 
     def _req(self, **params):
         req = RequestFactory().get('/x', data=params)

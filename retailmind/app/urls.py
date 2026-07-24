@@ -242,6 +242,8 @@ from .views_modulo_cotizaciones import (
     convertir_cotizacion_factura,
     # APIs de búsqueda
     buscar_productos_cotizacion,
+    # APIs de vendedores
+    listar_vendedores_cotizacion,
     # APIs de clientes
     crear_cliente_cotizacion,
     # APIs de integración POS
@@ -250,6 +252,7 @@ from .views_modulo_cotizaciones import (
     enviar_cotizacion_correo,
     # Despacho diferido
     asignar_sku_pendiente,
+    revertir_sku_despachado,
 )
 from .views_modulo_existencias_nuevo import (
     # Tarjeta de Movimiento por Producto
@@ -1046,13 +1049,17 @@ urlpatterns = [
     path('api/cotizaciones/anular/', anular_cotizacion, name='anular_cotizacion'),
     path('api/cotizaciones/convertir-factura/', convertir_cotizacion_factura, name='convertir_cotizacion_factura'),
     path('api/cotizaciones/asignar-sku-pendiente/', asignar_sku_pendiente, name='asignar_sku_pendiente'),
+    path('api/cotizaciones/revertir-sku-despachado/', revertir_sku_despachado, name='revertir_sku_despachado'),
     
     # APIs de integración POS
     path('api/cotizaciones/cargar-como-ticket/<int:cotizacion_id>/', cargar_cotizacion_como_ticket, name='cargar_cotizacion_como_ticket'),
     
     # APIs de búsqueda
     path('api/cotizaciones/buscar-productos/', buscar_productos_cotizacion, name='buscar_productos_cotizacion'),
-    
+
+    # APIs de vendedores
+    path('api/cotizaciones/vendedores/', listar_vendedores_cotizacion, name='listar_vendedores_cotizacion'),
+
     # APIs de clientes
     path('api/cotizaciones/crear-cliente/', crear_cliente_cotizacion, name='crear_cliente_cotizacion'),
     path('api/actualizar-email-cliente/', actualizar_email_cliente, name='actualizar_email_cliente'),
@@ -1253,6 +1260,7 @@ urlpatterns = [
     path('api/plan-liquidacion/detalle/', views_inteligencia_compra.obtener_plan_liquidacion_detalle, name='obtener_plan_liquidacion_detalle'),
     path('api/plan-liquidacion/por-anio/', views_inteligencia_compra.obtener_plan_liquidacion_por_anio, name='obtener_plan_liquidacion_por_anio'),
     path('api/plan-liquidacion/exportar-excel/', views_inteligencia_compra.exportar_plan_liquidacion_excel, name='exportar_plan_liquidacion_excel'),
+    path('api/plan-liquidacion/importar/', views_inteligencia_compra.importar_seleccion_liquidacion, name='importar_seleccion_liquidacion'),
 
     # Campañas de liquidación (gestión masiva de precios + promos NxM)
     path('campanas-liquidacion/', views_modulo_campanas_liquidacion.ver_campanas_liquidacion, name='ver_campanas_liquidacion'),

@@ -3,8 +3,8 @@ Tests del módulo Devolución de Dinero por Garantía (flujo de aprobación en
 dos pasos + modo cantidad/monto + control de caja).
 
 Cubre el service `devolucion_garantia_service` (crear/aprobar/rechazar/anular,
-disponibilidad, razón SII, impacto en cuadratura) y el gate de rol del
-endpoint de aprobación.
+disponibilidad, razón SII, impacto en cuadratura) y el gate de permiso
+(`devolucion_garantia.puede_aprobar`) del endpoint de aprobación.
 """
 from datetime import timedelta
 from decimal import Decimal
@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from app.models import (
     Dte, Dte_Productos, Dte_Detalle_Pago, Empresa, Correlativo,
-    DevolucionGarantia,
+    DevolucionGarantia, ModuloSistema, OpcionMenu, PermisoRol,
 )
 from app.services import devolucion_garantia_service as service
 from app.views_modulo_ventas import _calcular_cuadratura_data
@@ -385,7 +385,9 @@ class DevolucionGarantiaServiceTest(TestCase):
 
 @override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)
 class DevolucionGarantiaPermisoAprobadorTest(TestCase):
-    """El endpoint de aprobación exige rol administrador (requiere_rol)."""
+    """El endpoint de aprobación exige el permiso `devolucion_garantia.puede_aprobar`
+    (ya no un rol fijo): un rol sin ese permiso recibe 403 aunque sea jefe_local,
+    y cualquier rol al que se le otorgue el permiso puede aprobar."""
 
     def setUp(self):
         self.env = setup_entorno_completo()
@@ -400,6 +402,12 @@ class DevolucionGarantiaPermisoAprobadorTest(TestCase):
                        'modo': 'CANTIDAD', 'cantidad': 1}],
         )
         self.url = reverse('api_aprobar_devolucion_garantia', args=[self.dev.id])
+        # Opción de menú que gobierna el permiso de aprobar.
+        modulo, _ = ModuloSistema.objects.get_or_create(
+            codigo='ventas', defaults={'nombre': 'Ventas', 'orden': 2})
+        self.opcion, _ = OpcionMenu.objects.get_or_create(
+            codigo='devolucion_garantia',
+            defaults={'modulo': modulo, 'nombre': 'Devolucion por Garantia', 'orden': 3})
 
     def _login(self, rol):
         user = crear_usuario(username=f'user_{rol}', rol=rol)
@@ -410,7 +418,13 @@ class DevolucionGarantiaPermisoAprobadorTest(TestCase):
         session.save()
         return client
 
+    def _grant_aprobar(self, rol):
+        PermisoRol.objects.update_or_create(
+            rol=rol, opcion_menu=self.opcion,
+            defaults={'puede_ver': True, 'puede_aprobar': True})
+
     def test_jefe_local_no_puede_aprobar(self):
+        # Jefe de local SIN el permiso puede_aprobar -> 403 (solo puede crear).
         client = self._login('jefe_local')
         resp = client.post(self.url, data='{}', content_type='application/json',
                            HTTP_X_REQUESTED_WITH='XMLHttpRequest')
@@ -419,6 +433,7 @@ class DevolucionGarantiaPermisoAprobadorTest(TestCase):
         self.assertEqual(self.dev.estado, 'PENDIENTE')
 
     def test_administrador_puede_aprobar(self):
+        self._grant_aprobar('administrador')
         client = self._login('administrador')
         resp = client.post(
             self.url,

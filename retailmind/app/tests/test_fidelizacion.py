@@ -6,7 +6,7 @@ from datetime import timedelta
 from io import StringIO
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from app.models import (
@@ -52,6 +52,64 @@ class ProgramaCalculoTest(TestCase):
         self.assertEqual(p.tasa_descuento_efectiva, 1.0)
 
 
+class VentaFidelizaTest(SimpleTestCase):
+    """
+    Guard de elegibilidad: la fidelización es SOLO para clientes particulares.
+    Función pura, no toca la BD.
+    """
+
+    class _TicketStub:
+        def __init__(self, rut='', correlativo=1):
+            self.cliente_rut = rut
+            self.correlativo = correlativo
+
+    def test_particular_con_rut_valido_fideliza(self):
+        ok, motivo = fidelizacion_service.venta_fideliza(
+            self._TicketStub(rut='12.345.678-5')
+        )
+        self.assertTrue(ok)
+        self.assertEqual(motivo, '')
+
+    def test_factura_electronica_no_fideliza(self):
+        ok, motivo = fidelizacion_service.venta_fideliza(
+            self._TicketStub(rut='12.345.678-5'),
+            tipo_documento='FACTURA_ELECTRONICA',
+        )
+        self.assertFalse(ok)
+        self.assertIn('factura', motivo)
+
+    def test_cotizacion_no_fideliza_aunque_el_rut_sea_de_persona(self):
+        # El caso que se escapaba antes: EIRL / persona con giro tiene RUT
+        # < 50M, así que `es_rut_empresa` no lo detectaba y acumulaba puntos.
+        ok, motivo = fidelizacion_service.venta_fideliza(
+            self._TicketStub(rut='12.345.678-5'),
+            cotizacion=object(),
+        )
+        self.assertFalse(ok)
+        self.assertIn('cotización', motivo)
+
+    def test_rut_de_empresa_no_fideliza(self):
+        ok, _ = fidelizacion_service.venta_fideliza(
+            self._TicketStub(rut='76.104.936-4')
+        )
+        self.assertFalse(ok)
+
+    def test_rut_generico_y_vacio_no_fidelizan(self):
+        self.assertFalse(
+            fidelizacion_service.venta_fideliza(self._TicketStub(rut='66666666-6'))[0]
+        )
+        self.assertFalse(
+            fidelizacion_service.venta_fideliza(self._TicketStub(rut=''))[0]
+        )
+
+    def test_boleta_electronica_sigue_fidelizando(self):
+        ok, _ = fidelizacion_service.venta_fideliza(
+            self._TicketStub(rut='12.345.678-5'),
+            tipo_documento='BOLETA_ELECTRONICA',
+        )
+        self.assertTrue(ok)
+
+
 class FidelizacionServiceTest(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -64,10 +122,10 @@ class FidelizacionServiceTest(TestCase):
             puntos_bienvenida=200, activo=True,
         )
         cls.cliente = Cliente.objects.create(
-            nombre='Juan', apellido='Pérez', rut='12.345.678-9',
+            nombre='Juan', apellido='Pérez', rut='12.345.678-5',
         )
 
-    def _ticket(self, total=10000, correlativo=1, rut='12.345.678-9'):
+    def _ticket(self, total=10000, correlativo=1, rut='12.345.678-5'):
         return Ticket.objects.create(
             vendedor=self.vendedor, sucursal=self.sucursal,
             correlativo=correlativo, estado='PAGADO',
@@ -77,10 +135,10 @@ class FidelizacionServiceTest(TestCase):
 
     def test_resolver_cliente_por_rut_con_y_sin_formato(self):
         self.assertEqual(
-            fidelizacion_service.resolver_cliente_por_rut('123456789'), self.cliente
+            fidelizacion_service.resolver_cliente_por_rut('123456785'), self.cliente
         )
         self.assertEqual(
-            fidelizacion_service.resolver_cliente_por_rut('12.345.678-9'), self.cliente
+            fidelizacion_service.resolver_cliente_por_rut('12.345.678-5'), self.cliente
         )
         self.assertIsNone(fidelizacion_service.resolver_cliente_por_rut('99.999.999-9'))
 
@@ -100,6 +158,27 @@ class FidelizacionServiceTest(TestCase):
         ticket = self._ticket(total=10000, rut='', correlativo=2)
         res = fidelizacion_service.acumular_puntos_por_venta(ticket)
         self.assertIsNone(res)
+
+    def test_factura_a_particular_no_acumula(self):
+        """Mismo RUT que sí acumula con boleta: con factura no debe acumular."""
+        ticket = self._ticket(total=10000, correlativo=31)
+        res = fidelizacion_service.acumular_puntos_por_venta(
+            ticket, tipo_documento='FACTURA_ELECTRONICA',
+        )
+        self.assertIsNone(res)
+        self.assertFalse(
+            MovimientoPuntos.objects.filter(ticket=ticket).exists()
+        )
+
+    def test_venta_desde_cotizacion_no_acumula(self):
+        ticket = self._ticket(total=10000, correlativo=32)
+        res = fidelizacion_service.acumular_puntos_por_venta(
+            ticket, cotizacion=object(),
+        )
+        self.assertIsNone(res)
+        self.assertFalse(
+            MovimientoPuntos.objects.filter(ticket=ticket).exists()
+        )
 
     def test_acumulacion_es_idempotente(self):
         ticket = self._ticket(total=20000)
@@ -163,7 +242,7 @@ class FidelizacionServiceTest(TestCase):
 
     def test_consultar_saldo_por_rut(self):
         fidelizacion_service.acumular_puntos_por_venta(self._ticket(correlativo=9))
-        info = fidelizacion_service.consultar_saldo(rut='12.345.678-9')
+        info = fidelizacion_service.consultar_saldo(rut='12.345.678-5')
         self.assertEqual(info['saldo_puntos'], 300)  # 200 + 100
         self.assertEqual(info['valor_pesos'], 300)
 
@@ -414,7 +493,7 @@ class ReescalarSaldosFidelizacionCommandTest(TestCase):
             puntos_bienvenida=20, activo=True,
         )
         self.cliente = Cliente.objects.create(
-            nombre='Juan', apellido='Pérez', rut='12.345.678-9',
+            nombre='Juan', apellido='Pérez', rut='12.345.678-5',
         )
         # Escenario: un lote ACUMULACION de 100 puntos parcialmente consumido
         # (60 canjeados) → saldo 40, lote 100/60.
@@ -422,7 +501,7 @@ class ReescalarSaldosFidelizacionCommandTest(TestCase):
         ticket = Ticket.objects.create(
             vendedor=self.vendedor, sucursal=self.sucursal, correlativo=1,
             estado='PAGADO', subTotal=100000, total=100000, responsable='t',
-            cliente_rut='12.345.678-9',
+            cliente_rut='12.345.678-5',
         )
         fidelizacion_service.acumular_puntos_por_venta(ticket)   # +100 ACUMULACION
         fidelizacion_service.canjear_puntos(self.cliente, 60)    # -60 CANJE (FIFO)

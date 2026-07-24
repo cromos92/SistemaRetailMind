@@ -20,6 +20,7 @@ class Command(BaseCommand):
         self.crear_modulo_compras()
         self.crear_modulo_requerimientos()
         self.crear_modulo_reportes()
+        self.crear_modulo_liquidacion()  # Plan de Liquidacion + Campanas
         self.crear_modulo_configuracion()
         self.crear_modulo_ecommerce()
         self.crear_modulo_fidelizacion()  # GiftCards + Puntos de fidelizaci?n
@@ -455,6 +456,38 @@ class Command(BaseCommand):
 
         self.stdout.write('[Fidelizacion] Modulo Fidelizacion creado')
 
+    def crear_modulo_liquidacion(self):
+        """Crear modulo Liquidacion (Plan de Liquidacion + Campanas)"""
+        modulo, created = ModuloSistema.objects.get_or_create(
+            codigo='liquidacion',
+            defaults={
+                'nombre': 'Liquidaci?n',
+                'descripcion': 'Plan de liquidaci?n de stock y campa?as de precios/NxM',
+                'icono': 'ri-scissors-cut-line',
+                'orden': 11
+            }
+        )
+
+        opciones = [
+            ('plan_liquidacion', 'Plan de Liquidaci?n', 'ver_plan_liquidacion', None, 'ri-scissors-cut-line', 1),
+            ('campanas_liquidacion', 'Campa?as de Liquidaci?n', 'ver_campanas_liquidacion', None, 'ri-price-tag-2-line', 2),
+        ]
+
+        for codigo, nombre, url_name, url_path, icono, orden in opciones:
+            OpcionMenu.objects.get_or_create(
+                codigo=codigo,
+                defaults={
+                    'modulo': modulo,
+                    'nombre': nombre,
+                    'url_name': url_name,
+                    'url_path': url_path,
+                    'icono': icono,
+                    'orden': orden
+                }
+            )
+
+        self.stdout.write('[Liquidacion] Modulo Liquidacion creado')
+
     def crear_permisos_administrador(self):
         """Crear permisos para el rol Administrador (acceso total)"""
         self.stdout.write('[ADMIN] Creando permisos para Administrador...')
@@ -470,9 +503,10 @@ class Command(BaseCommand):
                     'puede_editar': True,
                     'puede_eliminar': True,
                     'puede_exportar': True,
+                    'puede_aprobar': True,
                 }
             )
-        
+
         self.stdout.write(f'   >> {opciones.count()} permisos creados para Administrador')
 
     def crear_permisos_administracion(self):
@@ -528,6 +562,8 @@ class Command(BaseCommand):
             'reporte_existencias_marca', 'reporte_existencias_sucursal', 'reporte_despachos_proveedor',
             'resumen_existencias', 'reporte_movimientos_sucursal', 'reporte_compras',
             'reporte_rendimiento_proveedor',
+            # Liquidaci?n
+            'plan_liquidacion', 'campanas_liquidacion',
             # Configuraci?n
             'gestion_clientes', 'gestion_vendedores',
             # Fidelizaci?n (sin config del programa)

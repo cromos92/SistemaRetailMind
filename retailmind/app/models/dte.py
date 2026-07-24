@@ -458,6 +458,14 @@ class Dte_Productos(models.Model):
         default=False,
         help_text="True cuando corresponde a un ítem de cotización sin SKU asignado"
     )
+    cotizacion_detalle_id = models.IntegerField(
+        null=True, blank=True, db_index=True,
+        help_text=(
+            "ID del Cotizacion_Empresa_Detalle que originó la línea. Espejo del "
+            "campo homónimo de Ticket_Productos: permite localizar esta línea "
+            "cuando se asigna el SKU después de facturar (despacho diferido)."
+        )
+    )
 
     def clean(self):
         from django.core.exceptions import ValidationError

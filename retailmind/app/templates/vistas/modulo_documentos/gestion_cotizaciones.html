@@ -335,20 +335,31 @@
                             <input type="hidden" id="clienteIdActual" value="">
                         </div>
                         <div class="col-md-3">
+                            <label class="nexo-form-label">
+                                Vendedor <span style="color: var(--nexo-error);">*</span>
+                            </label>
+                            <select class="form-select nexo-input" id="vendedorCotizacion" required>
+                                <option value="">Cargando vendedores...</option>
+                            </select>
+                            <small style="color: var(--nexo-text-muted);" id="vendedorSucursalHint">
+                                Vendedores de la sucursal activa
+                            </small>
+                        </div>
+                        <div class="col-md-3">
                             <label class="nexo-form-label">Fecha Emisión <span style="color: var(--nexo-error);">*</span></label>
                             <input type="date" class="form-control nexo-input" id="fechaEmisionCotizacion" required>
                         </div>
+                    </div>
+
+                    <div class="row mb-3">
                         <div class="col-md-3">
                             <label class="nexo-form-label">Días de Validez <span style="color: var(--nexo-error);">*</span></label>
                             <input type="number" class="form-control nexo-input" id="diasValidez" min="1" value="30" required>
                             <small style="color: var(--nexo-text-muted);">Días que la cotización estará vigente</small>
                         </div>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-md-12">
+                        <div class="col-md-9">
                             <label class="nexo-form-label">Descripción General</label>
-                            <textarea class="form-control nexo-input" id="descripcionCotizacion" rows="2" 
+                            <textarea class="form-control nexo-input" id="descripcionCotizacion" rows="2"
                                       placeholder="Descripción general de la cotización..."></textarea>
                         </div>
                     </div>
@@ -422,7 +433,7 @@
                 <button type="button" class="nexo-btn-secondary" data-bs-dismiss="modal">
                     <i class="ri-close-line me-1"></i> Cancelar
                 </button>
-                <button type="button" class="nexo-btn-primary" onclick="guardarCotizacion()">
+                <button type="button" class="nexo-btn-primary" id="btnGuardarCotizacion" onclick="guardarCotizacion()">
                     <i class="ri-save-line me-1"></i> Guardar Cotización
                 </button>
             </div>
@@ -1704,6 +1715,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let itemIndexForProducto = null;
     let cotizacionActual = null;
     let clientesData = []; // Para almacenar datos de clientes con email
+    let vendedoresData = []; // Vendedores elegibles de la sucursal activa
     let datosEdicionCotizacion = null; // Datos de cotización para cargar en edición
 
     // URLs de API
@@ -1714,6 +1726,7 @@ document.addEventListener('DOMContentLoaded', function() {
         editarCotizacion: (id) => `{% url "editar_cotizacion" cotizacion_id=0 %}`.replace('/0/', `/${id}/`),
         anularCotizacion: '{% url "anular_cotizacion" %}',
         convertirFactura: '{% url "convertir_cotizacion_factura" %}',
+        listarVendedores: '{% url "listar_vendedores_cotizacion" %}',
         asignarSkuPendiente: '{% url "asignar_sku_pendiente" %}',
         buscarProductos: '{% url "buscar_productos_cotizacion" %}',
         listarClientes: '{% url "empresas_clientes" %}',
@@ -1723,6 +1736,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Inicialización
     inicializarFechas();
     cargarClientes();
+    cargarVendedores();
     cargarCotizaciones();
     configurarEventos();
 
@@ -2104,6 +2118,55 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log(`✅ ${clientes.length} clientes cargados`);
             })
             .catch(error => console.error('Error al cargar clientes:', error));
+    }
+
+    // Vendedores elegibles de la sucursal activa. Se guardan para poder
+    // repoblar el select al editar una cotización existente.
+    function cargarVendedores(seleccionarId = null) {
+        const select = document.getElementById('vendedorCotizacion');
+        if (!select) return Promise.resolve();
+
+        return fetch(apiUrls.listarVendedores)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    select.innerHTML = '<option value="">Sin vendedores disponibles</option>';
+                    const hint = document.getElementById('vendedorSucursalHint');
+                    if (hint) {
+                        hint.textContent = data.error || 'No se pudieron cargar los vendedores';
+                        hint.style.color = 'var(--nexo-error)';
+                    }
+                    return;
+                }
+
+                vendedoresData = data.vendedores || [];
+                select.innerHTML = '<option value="">Seleccione vendedor...</option>';
+                vendedoresData.forEach(v => {
+                    const etiqueta = v.codigo_vendedor
+                        ? `${v.nombre} (#${v.codigo_vendedor})`
+                        : v.nombre;
+                    select.add(new Option(etiqueta, v.id));
+                });
+
+                const hint = document.getElementById('vendedorSucursalHint');
+                if (hint && data.sucursal) {
+                    hint.textContent = `Vendedores de ${data.sucursal.alias}`;
+                    hint.style.color = 'var(--nexo-text-muted)';
+                }
+
+                if (seleccionarId) {
+                    select.value = String(seleccionarId);
+                } else if (vendedoresData.length === 1) {
+                    // Un solo vendedor en la sucursal: preseleccionarlo.
+                    select.value = String(vendedoresData[0].id);
+                }
+
+                console.log(`✅ ${vendedoresData.length} vendedores cargados`);
+            })
+            .catch(error => {
+                console.error('Error al cargar vendedores:', error);
+                select.innerHTML = '<option value="">Error al cargar vendedores</option>';
+            });
     }
 
     function cargarCotizaciones() {
@@ -3093,6 +3156,15 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // El vendedor es obligatorio: si falta, al facturar el POS elegiría uno
+        // arbitrario y el DTE/comisión quedaría mal asignado.
+        const vendedor = document.getElementById('vendedorCotizacion').value;
+        if (!vendedor) {
+            mostrarError('Debe seleccionar el vendedor de la sucursal');
+            document.getElementById('vendedorCotizacion').focus();
+            return;
+        }
+
         const items = [];
         let valid = true;
         
@@ -3144,6 +3216,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const formData = {
             cliente_id: cliente,
+            vendedor_id: vendedor,
             fecha_emision: document.getElementById('fechaEmisionCotizacion').value,
             dias_validez: document.getElementById('diasValidez').value,
             descripcion: document.getElementById('descripcionCotizacion').value,
@@ -3167,6 +3240,23 @@ document.addEventListener('DOMContentLoaded', function() {
             formData
         });
 
+        // Bloquear el botón mientras se guarda: el doble clic generaba dos
+        // requests que calculaban el mismo correlativo y la segunda reventaba
+        // por el unique de numero_cotizacion.
+        const btnGuardar = document.getElementById('btnGuardarCotizacion');
+        const btnGuardarHtml = btnGuardar ? btnGuardar.innerHTML : '';
+        if (btnGuardar) {
+            btnGuardar.disabled = true;
+            btnGuardar.innerHTML =
+                '<span class="spinner-border spinner-border-sm me-1" role="status"></span> Guardando...';
+        }
+        const restaurarBotonGuardar = () => {
+            if (btnGuardar) {
+                btnGuardar.disabled = false;
+                btnGuardar.innerHTML = btnGuardarHtml;
+            }
+        };
+
         fetch(url, {
             method: 'POST',
             headers: {
@@ -3177,6 +3267,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(data => {
+            restaurarBotonGuardar();
             if (data.success) {
                 mostrarExito(mensajeExito);
                 bootstrap.Modal.getInstance(document.getElementById('modalNuevaCotizacion')).hide();
@@ -3188,6 +3279,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .catch(error => {
+            restaurarBotonGuardar();
             console.error('Error:', error);
             mostrarError('Error al guardar cotización');
         });
@@ -3220,7 +3312,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (selectCliente.data('select2')) {
             selectCliente.val(null).trigger('change');
         }
-        
+
+        // Vendedor: volver al estado inicial (form.reset() no repuebla el select).
+        // Si la sucursal tiene un único vendedor, queda preseleccionado.
+        const selectVendedor = document.getElementById('vendedorCotizacion');
+        if (selectVendedor) {
+            selectVendedor.value = (vendedoresData.length === 1)
+                ? String(vendedoresData[0].id)
+                : '';
+        }
+
         // Limpiar campos de texto
         document.getElementById('descripcionCotizacion').value = '';
         const observaciones = document.getElementById('observacionesCotizacion');
@@ -3355,6 +3456,18 @@ document.addEventListener('DOMContentLoaded', function() {
                             <a href="mailto:${cot.cliente_email}" style="color:#0066FF;text-decoration:none;">${cot.cliente_email}</a>
                         </div>` : `<div style="color:#FFB020;font-size:10px;"><i class="ri-alert-line me-1"></i>Sin email</div>`}
                         ${cot.cliente_telefono ? `<div style="color:#6B7280;font-size:11px;"><i class="ri-phone-line me-1 text-primary"></i>${cot.cliente_telefono}</div>` : ''}
+                    </div>
+                </div>
+
+                <!-- Vendedor -->
+                <div>
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#8A8A9A;margin-bottom:6px;">
+                        <i class="ri-user-star-line me-1"></i>Vendedor
+                    </div>
+                    <div style="background:#fff;border:1px solid ${cot.vendedor_id ? '#E8EAF0' : '#FFB020'};border-radius:8px;padding:10px;">
+                        ${cot.vendedor_id
+                            ? `<div style="font-weight:700;color:#1A1A2E;font-size:12px;line-height:1.3;">${cot.vendedor_nombre}</div>`
+                            : `<div style="color:#B07000;font-size:11px;"><i class="ri-alert-line me-1"></i>Sin vendedor asignado — edite la cotización antes de facturar</div>`}
                     </div>
                 </div>
 
@@ -3650,7 +3763,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     };
 
-    // Ejecuta la conversión a factura y redirige al POS
+    // Valida la cotización en el backend y abre el POS para emitir el documento.
+    // OJO: este endpoint NO marca la cotización como facturada — eso lo hace el
+    // POS recién después de emitir el DTE real. Si marcáramos acá, el POS la
+    // rechazaría por "no vigente" y quedaría zombi (FACTURADA sin documento).
     function ejecutarFacturacion(cotizacionId, forzarConPendientes) {
         fetch(apiUrls.convertirFactura, {
             method: 'POST',
@@ -3667,10 +3783,23 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (data.success) {
                 bootstrap.Modal.getInstance(document.getElementById('modalDetalleCotizacion'))?.hide();
-                window.location.href = `/app/pos-dashboard/?cotizacion_id=${cotizacionId}`;
+                window.location.href = data.redirect_url || `/app/pos-dashboard/?cotizacion_id=${cotizacionId}`;
             } else if (data.requiere_confirmacion) {
                 // No debería ocurrir aquí (ya se confirmó arriba), pero por seguridad:
                 mostrarError(data.message || 'Se requiere confirmación adicional');
+            } else if (data.error_tipo === 'SIN_VENDEDOR') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Falta el vendedor',
+                    text: data.error,
+                    confirmButtonText: 'Editar cotización',
+                    confirmButtonColor: '#0066FF',
+                }).then((r) => {
+                    if (r.isConfirmed) {
+                        bootstrap.Modal.getInstance(document.getElementById('modalDetalleCotizacion'))?.hide();
+                        editarCotizacion(cotizacionId);
+                    }
+                });
             } else {
                 mostrarError(data.error || 'Error al convertir cotización');
             }
@@ -3740,7 +3869,23 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelector('#modalNuevaCotizacion .modal-title').innerHTML = `
             <i class="ri-edit-line me-2" style="color: white;"></i> <span style="color: white;">Editar Cotización ${cot.numero_cotizacion}</span>
         `;
-        
+
+        // Preseleccionar el vendedor guardado. Si la cotización es antigua y no
+        // tiene vendedor (o el suyo ya no es elegible), el select queda vacío y
+        // el guardado lo exigirá.
+        const selectVendedor = document.getElementById('vendedorCotizacion');
+        if (selectVendedor) {
+            const idVendedor = cot.vendedor_id ? String(cot.vendedor_id) : '';
+            const existeOpcion = idVendedor &&
+                vendedoresData.some(v => String(v.id) === idVendedor);
+            selectVendedor.value = existeOpcion ? idVendedor : '';
+            if (idVendedor && !existeOpcion) {
+                console.warn(
+                    `Vendedor ${idVendedor} de la cotización no está entre los elegibles de esta sucursal`
+                );
+            }
+        }
+
         // Seleccionar cliente en Select2
         const selectCliente = $('#clienteCotizacion');
         const clienteId = cot.cliente_id;

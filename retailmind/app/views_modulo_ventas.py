@@ -2799,6 +2799,44 @@ def crear_ticket_pendiente_pos(request):
         return JsonResponse({'success': False, 'error': f'Error al crear ticket: {str(e)}'}, status=500)
 
 
+def cuadrar_detalle_neto(detalle, monto_neto, descuentos_recargos=None):
+    """
+    Ajusta el detalle de una FACTURA para que `sum(MontoItem) - descuentos`
+    coincida exactamente con el `MntNeto` del header.
+
+    Por qué hace falta: cada línea calcula su neto con `round(precio / 1.19)`
+    mientras el header redondea el total completo una sola vez. Con varias
+    líneas los redondeos no conmutan y queda una diferencia de $1..$N. Acepta
+    rechaza el DTE cuando el detalle no cuadra con el header.
+
+    El residuo se absorbe en la ÚLTIMA línea: el total cobrado no cambia, solo
+    se reparte el peso del redondeo.
+
+    Devuelve el residuo aplicado (0 si ya cuadraba). Muta `detalle` in-place.
+    """
+    if not detalle:
+        return 0
+
+    descuento_neto = sum(
+        int(dr.get('valor_dr') or 0)
+        for dr in (descuentos_recargos or [])
+        if dr.get('tpo_mov') == 'D'
+    )
+    recargo_neto = sum(
+        int(dr.get('valor_dr') or 0)
+        for dr in (descuentos_recargos or [])
+        if dr.get('tpo_mov') == 'R'
+    )
+
+    suma_items = sum(int(d['monto_item']) for d in detalle)
+    residuo = int(monto_neto) - (suma_items - descuento_neto + recargo_neto)
+
+    if residuo:
+        detalle[-1]['monto_item'] = int(detalle[-1]['monto_item']) + residuo
+
+    return residuo
+
+
 def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
     """
     Generar DTE (Boleta o Factura Electrónica) desde un Ticket
@@ -2986,6 +3024,10 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
             monto_item=tp.subtotal,
             descripcion=descripcion_prod[:255],
             es_pendiente_despacho=tp.es_pendiente_despacho,
+            # Espejo del ítem de cotización que originó la línea: sin esto no
+            # hay forma de completar esta fila cuando el SKU se asigna después
+            # (despacho diferido) y el costo del documento queda en $0.
+            cotizacion_detalle_id=tp.cotizacion_detalle_id,
         )
     
     # Copiar métodos de pago
@@ -3093,7 +3135,9 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                 for tp in ticket.ticket_productos.all():
                     if tp.ProductoTalla is None:
                         productos_txt.append({
-                            'sku': tp.cotizacion_detalle_id or 'PEND',
+                            # Marcador trazable, no el ID interno de tabla.
+                            'sku': (f'PEND-{tp.cotizacion_detalle_id}'
+                                    if tp.cotizacion_detalle_id else 'PEND'),
                             'nombre': (tp.descripcion_linea or 'Ítem pendiente')[:80],
                             'descripcion': '',
                             'cantidad': tp.stock,
@@ -3156,10 +3200,25 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                     except Exception:
                         logger.exception("Error al cargar descripciones de cotizacion para TXT ticket_id=%s", ticket.id)
                 
+                # SKU esperado de los ítems pendientes de la cotización, para no
+                # emitir el ID interno de tabla como CdgItem del DTE.
+                skus_pendientes_cot = {}
+                if cotizacion:
+                    for item in cotizacion.items.all():
+                        if item.sku_producto_pendiente:
+                            skus_pendientes_cot[item.id] = item.sku_producto_pendiente
+
                 for tp in ticket.ticket_productos.all():
                     if tp.ProductoTalla is None:
-                        # Ítem manual / pendiente de despacho — usar descripción de línea
-                        sku = tp.cotizacion_detalle_id or 'PEND'
+                        # Ítem manual / pendiente de despacho — usar descripción de línea.
+                        # El código del ítem debe ser algo trazable: el SKU esperado
+                        # que cargó el vendedor, o un marcador PEND-<linea>. Antes se
+                        # emitía `tp.cotizacion_detalle_id`, un ID de tabla interno.
+                        sku = (
+                            skus_pendientes_cot.get(tp.cotizacion_detalle_id)
+                            or (f'PEND-{tp.cotizacion_detalle_id}'
+                                if tp.cotizacion_detalle_id else 'PEND')
+                        )
                         nombre_producto = tp.descripcion_linea or 'Ítem pendiente de despacho'
                     else:
                         producto = tp.ProductoTalla.producto
@@ -3338,7 +3397,22 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                 )
                 # monto_total ya es correcto (int(total) = ticket.total = monto
                 # descontado IVA-inclusive). NO se sobreescribe aquí.
-            
+
+            # ── Cuadratura del detalle contra el header (solo facturas) ──────
+            # En boleta el detalle va IVA-inclusive y ya cuadra por construcción.
+            if not es_boleta:
+                residuo = cuadrar_detalle_neto(
+                    datos_txt['detalle'],
+                    int(neto),
+                    datos_txt.get('descuentos_recargos'),
+                )
+                if residuo:
+                    logger.info(
+                        "TXT factura: residuo de redondeo %s absorbido en la última "
+                        "línea. ticket_id=%s dte=%s neto=%s",
+                        residuo, ticket.id, dte.numero_documento, int(neto),
+                    )
+
             # Generar TXT
             contenido_txt = generar_txt_dte_acepta(datos_txt)
             
@@ -4095,6 +4169,28 @@ def registrar_pagos_ticket(request, correlativo):
     _vale_descuento_pts = 0
     if _codigo_vale_pts:
         from .services import fidelizacion_service as _fid_svc
+
+        # Los vales de puntos son beneficio de cliente particular: no se pueden
+        # aplicar a facturas ni a ventas originadas en una cotización. El POS
+        # oculta la tarjeta en esos casos, pero el backend es el que manda.
+        _fideliza, _motivo_no_fid = _fid_svc.venta_fideliza(
+            ticket,
+            tipo_documento=payload.get('tipo_documento'),
+            cotizacion=cotizacion_obj,
+        )
+        if not _fideliza:
+            logger.warning(
+                "Vale de puntos rechazado ticket=%s codigo=%s motivo=%s",
+                ticket.correlativo, _codigo_vale_pts, _motivo_no_fid,
+            )
+            return JsonResponse(
+                {'success': False,
+                 'error': ('Los vales de puntos solo aplican a clientes '
+                           f'particulares ({_motivo_no_fid}).'),
+                 'error_tipo': 'VALE_NO_APLICA'},
+                status=400,
+            )
+
         _info_vale = _fid_svc.validar_vale(_codigo_vale_pts)
         if not _info_vale.get('canjeable'):
             return JsonResponse(
@@ -4545,14 +4641,33 @@ def registrar_pagos_ticket(request, correlativo):
                     # Usar solo el número de documento (el campo numero_factura tiene max_length=20)
                     numero_documento_corto = str(dte_generado.numero_documento)[:20]
                     numero_documento_completo = f"{dte_generado.tipo_documento} #{dte_generado.numero_documento}"
-                    cotizacion_obj.marcar_como_facturada(numero_documento_corto)
-                    
+
+                    # ⚠️ Pasar el flag real de pendientes. Sin él,
+                    # marcar_como_facturada() usa su default (tiene_pendientes=False)
+                    # y deja estado_despacho=COMPLETADO aunque haya ítems sin SKU:
+                    # el flujo de "Despacho Diferido" nunca se ofrecía y ese stock
+                    # jamás se descontaba.
+                    tiene_pendientes_cot = cotizacion_obj.items.filter(
+                        es_producto_pendiente=True,
+                        sku_asignado_post_factura=False,
+                    ).exists()
+                    cotizacion_obj.marcar_como_facturada(
+                        numero_documento_corto,
+                        tiene_pendientes=tiene_pendientes_cot,
+                        dte=dte_generado,
+                    )
+
                     # Registrar en historial
                     Historial_Cotizacion.objects.create(
                         cotizacion=cotizacion_obj,
                         usuario=request.user,
                         accion='FACTURADA',
-                        descripcion=f'Cotización facturada desde POS. Documento: {numero_documento_completo}. Ticket: #{ticket.correlativo}',
+                        descripcion=(
+                            f'Cotización facturada desde POS. Documento: {numero_documento_completo}. '
+                            f'Ticket: #{ticket.correlativo}'
+                            + (' Quedan ítems con despacho diferido pendiente.'
+                               if tiene_pendientes_cot else '')
+                        ),
                         ip_address=request.META.get('REMOTE_ADDR', '')
                     )
                     logger.info(
@@ -4595,10 +4710,23 @@ def registrar_pagos_ticket(request, correlativo):
             'numero': dte_generado.numero_documento,
             'tipo': dte_generado.tipo_documento
         }
-        
+
         # Incluir datos del archivo TXT si se generó
         if hasattr(dte_generado, 'archivo_txt_data') and dte_generado.archivo_txt_data:
             response_data['archivo_txt'] = dte_generado.archivo_txt_data
+
+        # El DTE se emite aunque el TXT de Acepta falle (son cosas separadas),
+        # pero el cajero tiene que enterarse: antes el motivo quedaba solo en
+        # `dte._txt_error` y en el log, así que la venta se veía 100% OK y
+        # nadie sabía que no había archivo para subir a Acepta.
+        _txt_error = getattr(dte_generado, '_txt_error', None)
+        if _txt_error:
+            response_data['archivo_txt_error'] = _txt_error
+            response_data['archivo_txt_error_mensaje'] = (
+                f'El documento #{dte_generado.numero_documento} se emitió, pero no '
+                'se pudo generar el archivo TXT para Acepta. Reintente desde '
+                'Consulta de Documentos.'
+            )
     
     # Incluir info de cotización si fue facturada desde una cotización
     if cotizacion_obj:
@@ -4609,13 +4737,18 @@ def registrar_pagos_ticket(request, correlativo):
         }
 
     # ===== FIDELIZACIÓN: acumular puntos al cliente identificado por RUT =====
-    # Solo si el ticket quedó PAGADO. Venta anónima (sin cliente en CRM) no
-    # acumula. Idempotente por ticket. No debe tumbar la respuesta del cobro.
+    # Solo si el ticket quedó PAGADO y la venta es a cliente particular: se
+    # excluyen facturas y ventas originadas en cotización (ver venta_fideliza).
+    # Venta anónima (sin cliente en CRM) tampoco acumula. Idempotente por
+    # ticket. No debe tumbar la respuesta del cobro.
     if ticket.estado == 'PAGADO':
         try:
             from .services import fidelizacion_service
             resultado_pts = fidelizacion_service.acumular_puntos_por_venta(
-                ticket, usuario=request.user
+                ticket,
+                usuario=request.user,
+                tipo_documento=tipo_documento_seleccionado,
+                cotizacion=cotizacion_obj,
             )
             if resultado_pts:
                 response_data['fidelizacion'] = resultado_pts

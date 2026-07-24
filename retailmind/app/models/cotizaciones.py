@@ -132,9 +132,20 @@ class Cotizacion_Empresa(models.Model):
         help_text="Indica si la cotización fue convertida en factura"
     )
     numero_factura = models.CharField(
-        max_length=20, 
+        max_length=20,
         blank=True, null=True,
         help_text="Número de factura si fue facturada"
+    )
+    dte = models.ForeignKey(
+        'Dte',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='cotizaciones',
+        help_text=(
+            "Documento tributario emitido al facturar. `numero_factura` guarda "
+            "solo el número, que se repite entre tipos de DTE y sucursales: "
+            "esta FK es la que identifica el documento de verdad."
+        )
     )
     fecha_facturacion = models.DateTimeField(
         blank=True, null=True,
@@ -237,24 +248,30 @@ class Cotizacion_Empresa(models.Model):
         Calcula los totales de la cotización basándose en sus items.
         IMPORTANTE: Los precios unitarios ya INCLUYEN IVA (19%).
         Por lo tanto, debemos calcular el neto y el IVA desde el total con IVA.
+
+        El desglose se hace sobre el total YA DESCONTADO y el IVA se deriva por
+        diferencia (`total - neto`), igual que `generar_dte_desde_ticket`. Así
+        `subtotal + impuesto == total` siempre. Antes el neto y el IVA se
+        calculaban sobre el bruto pre-descuento y el total post-descuento, así
+        que con descuento el desglose del PDF no sumaba el total.
         """
         from decimal import Decimal, ROUND_HALF_UP
-        
+
         items = self.items.all()
         # total_bruto = suma de (cantidad * precio_unitario) - El precio YA incluye IVA
         total_bruto = sum((item.subtotal for item in items), Decimal('0'))
-        
-        # Calcular neto desde el bruto (precio con IVA)
-        # Fórmula: neto = bruto / 1.19
-        self.subtotal = (total_bruto / Decimal('1.19')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
-        
-        # Calcular IVA (19% del neto)
-        self.impuesto = (self.subtotal * Decimal('0.19')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
-        
-        # Total = neto + IVA - descuento (debe ser igual al total_bruto si no hay descuento)
-        self.total = total_bruto - (self.descuento or Decimal('0'))
-        
-        self.save()
+
+        total_final = total_bruto - (self.descuento or Decimal('0'))
+
+        # Neto desde el total con IVA: neto = total / 1.19
+        self.subtotal = (total_final / Decimal('1.19')).quantize(
+            Decimal('1'), rounding=ROUND_HALF_UP
+        )
+        # IVA por diferencia: evita el doble redondeo que descuadraba el desglose.
+        self.impuesto = total_final - self.subtotal
+        self.total = total_final
+
+        self.save(update_fields=['subtotal', 'impuesto', 'total', 'updated_at'])
     
     def anular(self, usuario, motivo=""):
         """Anula la cotización"""
@@ -264,12 +281,20 @@ class Cotizacion_Empresa(models.Model):
         self.motivo_anulacion = motivo
         self.save()
     
-    def marcar_como_facturada(self, numero_factura, tiene_pendientes=False):
-        """Marca la cotización como facturada, opcionalmente con despacho pendiente."""
+    def marcar_como_facturada(self, numero_factura, tiene_pendientes=False, dte=None):
+        """
+        Marca la cotización como facturada, opcionalmente con despacho pendiente.
+
+        `dte` es el documento tributario realmente emitido: guardarlo permite
+        enlazar después los movimientos de despacho diferido al documento y
+        completar las líneas del DTE que quedaron sin SKU.
+        """
         self.facturada = True
         self.estado = self.ESTADO_FACTURADA
         self.numero_factura = numero_factura
         self.fecha_facturacion = timezone.now()
+        if dte is not None:
+            self.dte = dte
         if tiene_pendientes:
             self.estado_despacho = self.DESPACHO_PENDIENTE
         else:
@@ -425,29 +450,39 @@ class Cotizacion_Empresa_Detalle(models.Model):
                 return f"{self.cotizacion.numero_cotizacion} - {producto_nombre.articulo}"
         return f"{self.cotizacion.numero_cotizacion} - {self.descripcion[:50]}"
     
-    def save(self, *args, **kwargs):
+    def save(self, *args, recalcular_cotizacion=True, **kwargs):
+        """
+        Guarda el ítem y, por defecto, recalcula los totales de la cotización.
+
+        `recalcular_cotizacion=False` para cargas masivas: recalcular por ítem
+        es O(n²) — cada save recorre TODOS los ítems y escribe la cotización.
+        Crear/editar una cotización de 30 líneas disparaba ~900 iteraciones y 30
+        UPDATE extra. Los llamadores masivos llaman `calcular_totales()` una vez
+        al final.
+        """
         from decimal import Decimal
         # Calcular subtotal
         subtotal_antes_descuento = Decimal(str(self.cantidad)) * self.precio_unitario
-        
+
         # Aplicar descuento
         if self.descuento_porcentaje and self.descuento_porcentaje > 0:
             self.descuento_monto = subtotal_antes_descuento * (self.descuento_porcentaje / Decimal('100'))
         else:
             self.descuento_monto = Decimal('0')
-        
+
         self.subtotal = subtotal_antes_descuento - self.descuento_monto
-        
+
         # Obtener stock si hay producto existente
         if self.producto_existente and not self.es_producto_pendiente:
             # Aquí podrías calcular el stock real desde el inventario
             # Por ahora dejamos el valor que se asigne manualmente
             pass
-        
+
         super().save(*args, **kwargs)
-        
+
         # Recalcular totales de la cotización
-        self.cotizacion.calcular_totales()
+        if recalcular_cotizacion:
+            self.cotizacion.calcular_totales()
     
     @property
     def tiene_stock_suficiente(self):

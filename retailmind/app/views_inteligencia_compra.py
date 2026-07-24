@@ -26,9 +26,10 @@ from django.db.utils import ProgrammingError
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 
 from .constants_kardex import CONCEPTOS_ABASTECIMIENTO, CONCEPTOS_VENTA
+from .decorators import requiere_permiso
 from .models import (
     AtributoOpcion, CampanaLiquidacionProducto, Categoria, Compras_Producto,
     EmpresaUser, LoteProducto, Movimientos_Producto, Producto, Producto_Talla,
@@ -473,7 +474,7 @@ def obtener_inteligencia_compra(request):
 # ══════════════════════════════════════════════════════════════
 #  PLAN DE LIQUIDACIÓN — ranking consolidado de TODAS las marcas
 # ══════════════════════════════════════════════════════════════
-@login_required
+@requiere_permiso('plan_liquidacion', 'puede_ver')
 def ver_plan_liquidacion(request):
     return render(request, 'vistas/modulo_reportes/plan_liquidacion.html', {})
 
@@ -645,7 +646,7 @@ def _fila_liquidacion(ir, t, dd):
 
 
 @require_GET
-@login_required
+@requiere_permiso('plan_liquidacion', 'puede_ver')
 def obtener_plan_liquidacion(request):
     """Ranking por capital inmovilizado (dead-stock 180d) + GMROI/rotación.
 
@@ -882,6 +883,23 @@ def _bucket_filter(qs, bucket, hoy):
     return qs
 
 
+def _parse_anios(raw):
+    """'2025,2026' -> [2025, 2026] (ignora no-numéricos)."""
+    anios = []
+    for p in (raw or '').split(','):
+        p = p.strip()
+        if p.isdigit():
+            anios.append(int(p))
+    return anios
+
+
+def _anio_filter(qs, anios):
+    """Filtra el queryset del detalle por AÑO(s) de antigüedad (sobre aging_dt)."""
+    if not anios:
+        return qs
+    return qs.annotate(_anio=ExtractYear('aging_dt')).filter(_anio__in=anios)
+
+
 def _serializar_detalle(qs, hoy):
     """Convierte una página del queryset (ya sliceada) en dicts JSON."""
     filas = list(qs.values(
@@ -923,7 +941,7 @@ def _serializar_detalle(qs, hoy):
 
 
 @require_GET
-@login_required
+@requiere_permiso('plan_liquidacion', 'puede_ver')
 def obtener_plan_liquidacion_detalle(request):
     """Drill-down del plan de liquidación a nivel Producto, paginado en el DB.
 
@@ -940,6 +958,7 @@ def obtener_plan_liquidacion_detalle(request):
         bucket = request.GET.get('antiguedad') or None
         if bucket:
             qs = _bucket_filter(qs, bucket, hoy)
+        qs = _anio_filter(qs, _parse_anios(request.GET.get('anio')))
 
         orden = request.GET.get('orden') or '-valor_costo'
         rev = orden.startswith('-')
@@ -985,86 +1004,107 @@ def obtener_plan_liquidacion_detalle(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-def _analisis_liquidacion(base_pt, hoy, top_marcas=8):
-    """Análisis de antigüedad del stock filtrado en UNA query agrupada por
-    (marca, año). Pivotea a dos vistas:
-      - `anios`: capital + pares por año de antigüedad.
-      - `por_marca`: top marcas con su capital dividido en buckets de urgencia
-        (reciente / 1 año / 2+ años). El resto de marcas se agrupa en "Otras".
-
-    El año sale de la misma antigüedad del drill-down (lote vivo más antiguo
-    y, si no hay lotes, fecha_creacion — corregida en prod).
-    """
+def _aging_year_expr():
+    """ExtractYear de la antigüedad FIFO (lote vivo más antiguo o creación)."""
     lote_sq = (LoteProducto.objects.filter(
         producto_talla__producto=OuterRef('pk'),
         activo=True, agotado=False, cantidad_disponible__gt=0,
     ).order_by('fecha_ingreso').values('fecha_ingreso')[:1])
+    return ExtractYear(Coalesce(Subquery(lote_sq), F('fecha_creacion')))
+
+
+def _anios_liquidacion(base_pt, hoy):
+    """Capital + pares por AÑO de antigüedad del stock filtrado."""
     stock_f = Q(producto_talla__stock__gt=0)
-    rows = list(Producto.objects.filter(id__in=base_pt.values('producto_id'))
-                .annotate(anio=ExtractYear(Coalesce(Subquery(lote_sq), F('fecha_creacion'))))
-                .values('anio', 'atributo1__valor')
-                .annotate(
-                    valor=Coalesce(Sum(F('producto_talla__stock') * F('costo'),
-                                       filter=stock_f, output_field=BI), 0),
-                    pares=Coalesce(Sum('producto_talla__stock', filter=stock_f, output_field=BI), 0),
-                    productos=Count('id', distinct=True)))
+    rows = (Producto.objects.filter(id__in=base_pt.values('producto_id'))
+            .annotate(anio=_aging_year_expr())
+            .values('anio')
+            .annotate(
+                valor=Coalesce(Sum(F('producto_talla__stock') * F('costo'),
+                                   filter=stock_f, output_field=BI), 0),
+                pares=Coalesce(Sum('producto_talla__stock', filter=stock_f, output_field=BI), 0),
+                productos=Count('id', distinct=True))
+            .order_by('anio'))
     anio_actual = hoy.year
-    por_anio, por_marca = {}, {}
+    anios = []
     for r in rows:
+        if not r['anio']:
+            continue
+        antig = anio_actual - r['anio']
+        anios.append({
+            'anio': r['anio'], 'valor': r['valor'] or 0, 'pares': r['pares'] or 0,
+            'productos': r['productos'] or 0, 'antiguedad_anios': antig,
+            'descuento_sugerido': _descuento_sugerido(antig * 365)})
+    return anios
+
+
+def _dimension_liquidacion(base_pt, hoy, dim='marca', top_n=10):
+    """Top items de una dimensión (marca|especialidad) con su capital dividido
+    en buckets de urgencia (reciente / 1 año / 2+ años). Especialidad es
+    multi-etiqueta (atribución): un producto suma en cada una que tenga.
+    """
+    stock_f = Q(producto_talla__stock__gt=0)
+    qs = (Producto.objects.filter(id__in=base_pt.values('producto_id'))
+          .annotate(anio=_aging_year_expr()))
+    if dim == 'especialidad':
+        qs = qs.filter(atributos__atributo__nombre__iexact=NOMBRE_ATRIBUTO_ESPECIALIDAD)
+        campo, etiqueta = 'atributos__opcion__valor', 'especialidad'
+    else:
+        campo, etiqueta = 'atributo1__valor', 'marca'
+    rows = list(qs.values(campo, 'anio').annotate(
+        valor=Coalesce(Sum(F('producto_talla__stock') * F('costo'),
+                           filter=stock_f, output_field=BI), 0),
+        pares=Coalesce(Sum('producto_talla__stock', filter=stock_f, output_field=BI), 0)))
+    anio_actual = hoy.year
+    acc = {}
+    for r in rows:
+        nombre = r[campo] or f'Sin {etiqueta}'
         anio = r['anio']
-        marca = r['atributo1__valor'] or 'Sin marca'
         valor, pares = r['valor'] or 0, r['pares'] or 0
-        if anio:
-            a = por_anio.setdefault(anio, {'anio': anio, 'valor': 0, 'pares': 0, 'productos': 0})
-            a['valor'] += valor
-            a['pares'] += pares
-            a['productos'] += r['productos'] or 0
-        m = por_marca.setdefault(marca, {
-            'marca': marca, 'val_reciente': 0, 'val_1anio': 0, 'val_2mas': 0,
-            'valor': 0, 'pares': 0})
-        m['valor'] += valor
-        m['pares'] += pares
+        it = acc.setdefault(nombre, {'nombre': nombre, 'val_reciente': 0,
+                                     'val_1anio': 0, 'val_2mas': 0, 'valor': 0, 'pares': 0})
+        it['valor'] += valor
+        it['pares'] += pares
         if anio is None or anio >= anio_actual:
-            m['val_reciente'] += valor
+            it['val_reciente'] += valor
         elif anio == anio_actual - 1:
-            m['val_1anio'] += valor
+            it['val_1anio'] += valor
         else:
-            m['val_2mas'] += valor
-
-    anios = sorted(por_anio.values(), key=lambda x: x['anio'])
-    for a in anios:
-        antig = anio_actual - a['anio']
-        a['antiguedad_anios'] = antig
-        a['descuento_sugerido'] = _descuento_sugerido(antig * 365)
-
-    marcas = sorted(por_marca.values(), key=lambda x: -x['valor'])
-    top = marcas[:top_marcas]
-    if len(marcas) > top_marcas:
-        otras = {'marca': 'Otras', 'val_reciente': 0, 'val_1anio': 0,
+            it['val_2mas'] += valor
+    items = sorted(acc.values(), key=lambda x: -x['valor'])
+    top = items[:top_n]
+    if len(items) > top_n:
+        otras = {'nombre': 'Otras', 'val_reciente': 0, 'val_1anio': 0,
                  'val_2mas': 0, 'valor': 0, 'pares': 0}
-        for m in marcas[top_marcas:]:
+        for m in items[top_n:]:
             for k in ('val_reciente', 'val_1anio', 'val_2mas', 'valor', 'pares'):
                 otras[k] += m[k]
         top.append(otras)
-    return anios, top
+    return top
 
 
 @require_GET
 @login_required
 def obtener_plan_liquidacion_por_anio(request):
     """Análisis de antigüedad para los gráficos: capital/pares por año y por
-    marca (dividido por urgencia). Mismos filtros; se carga aparte para no
-    frenar la vista principal."""
+    dimensión (marca|especialidad, param `dim`). `solo=dim` omite el año (para
+    el toggle de dimensión, que no recalcula el gráfico de años)."""
     try:
         hoy = timezone.localdate()
         base_pt, mov_base, ctx = _scope_plan(request)
-        anios, por_marca = _analisis_liquidacion(base_pt, hoy)
+        dim = request.GET.get('dim') or 'marca'
+        solo = request.GET.get('solo')
+        por_dimension = _dimension_liquidacion(base_pt, hoy, dim=dim)
+        if solo == 'dim':
+            return JsonResponse({'success': True, 'dim': dim, 'por_dimension': por_dimension})
+        anios = _anios_liquidacion(base_pt, hoy)
         total_valor = sum(a['valor'] for a in anios)
         total_pares = sum(a['pares'] for a in anios)
         valor_liquidar = sum(a['valor'] for a in anios if (a['descuento_sugerido'] or 0) > 0)
         pares_liquidar = sum(a['pares'] for a in anios if (a['descuento_sugerido'] or 0) > 0)
-        return JsonResponse({'success': True, 'anios': anios, 'por_marca': por_marca,
-                             'anio_actual': hoy.year,
+        return JsonResponse({'success': True, 'anios': anios, 'dim': dim,
+                             'por_dimension': por_dimension, 'anio_actual': hoy.year,
+                             'anios_disponibles': [a['anio'] for a in anios],
                              'totales': {'valor': total_valor, 'pares': total_pares,
                                          'valor_liquidar': valor_liquidar,
                                          'pares_liquidar': pares_liquidar}})
@@ -1074,7 +1114,7 @@ def obtener_plan_liquidacion_por_anio(request):
 
 
 @require_GET
-@login_required
+@requiere_permiso('plan_liquidacion', 'puede_exportar')
 def exportar_plan_liquidacion_excel(request):
     """Excel del drill-down filtrado (mismos GET params que el detalle, sin
     paginación; tope MAX_EXPORT_FILAS). Hoja Detalle + hoja Filtros."""
@@ -1087,6 +1127,7 @@ def exportar_plan_liquidacion_excel(request):
         bucket = request.GET.get('antiguedad') or None
         if bucket:
             qs = _bucket_filter(qs, bucket, hoy)
+        qs = _anio_filter(qs, _parse_anios(request.GET.get('anio')))
         qs = qs.order_by(F('valor_ord').desc(nulls_last=True), 'id')
         truncado = qs.count() > MAX_EXPORT_FILAS
         filas = _serializar_detalle(qs[:MAX_EXPORT_FILAS], hoy)
@@ -1102,7 +1143,7 @@ def exportar_plan_liquidacion_excel(request):
         ws = wb.create_sheet('Detalle')
         # Columnas clave de liquidación primero (año, descuento y precio
         # sugerido) para que la lista sea accionable de un vistazo.
-        ws.append(['Año', 'Antigüedad (años)', 'Días antigüedad',
+        ws.append(['ID', 'Año', 'Antigüedad (años)', 'Días antigüedad',
                    'Descuento sugerido %', 'Precio venta', 'Precio liquidación sugerido',
                    'Ahorro cliente', 'Sucursal', 'CD', 'Marca', 'Color', 'Categoría',
                    'Especialidades', 'Artículo', 'Descripción', 'Tallas',
@@ -1117,6 +1158,7 @@ def exportar_plan_liquidacion_excel(request):
             precio_liq, pct = _precio_liq_sugerido(f['precioventa'], f['costo'], dias)
             ahorro = (f['precioventa'] or 0) - precio_liq
             ws.append([
+                f['producto_id'],
                 anio if anio else 's/d',
                 antig_anios if antig_anios is not None else 's/d',
                 dias if dias is not None else 's/d',
@@ -1168,6 +1210,51 @@ def exportar_plan_liquidacion_excel(request):
         return resp
     except Exception as e:
         logger.exception('Error exportando plan de liquidación')
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def _leer_ids_archivo(archivo):
+    """Extrae los producto_id de la primera columna de un .xlsx/.csv exportado."""
+    nombre = (archivo.name or '').lower()
+    ids = []
+    if nombre.endswith('.csv'):
+        import csv
+        import io
+        txt = archivo.read().decode('utf-8-sig', errors='replace')
+        for row in csv.reader(io.StringIO(txt)):
+            if row and str(row[0]).strip().isdigit():
+                ids.append(int(str(row[0]).strip()))
+    else:
+        from openpyxl import load_workbook
+        wb = load_workbook(archivo, read_only=True, data_only=True)
+        for row in wb.active.iter_rows(min_row=2, values_only=True):
+            if row and row[0] is not None and str(row[0]).strip().isdigit():
+                ids.append(int(str(row[0]).strip()))
+    return ids
+
+
+@require_POST
+@login_required
+def importar_seleccion_liquidacion(request):
+    """Importa un .xlsx/.csv (columna ID = producto_id, como el export) y
+    devuelve los producto_ids válidos en las sucursales del usuario, para
+    seleccionarlos y armar una campaña de liquidación."""
+    try:
+        archivo = request.FILES.get('archivo')
+        if not archivo:
+            return JsonResponse({'success': False, 'error': 'Sube un archivo .xlsx o .csv'}, status=400)
+        ids = _leer_ids_archivo(archivo)
+        if not ids:
+            return JsonResponse({'success': False,
+                                 'error': 'No se encontraron IDs en la primera columna (usá el Excel exportado).'}, status=400)
+        sucursales = [s.id for s in _sucursales_usuario(request)]
+        validos = list(Producto.objects.filter(
+            id__in=ids, sucursal_id__in=sucursales).values_list('id', flat=True))
+        return JsonResponse({'success': True, 'producto_ids': validos,
+                             'importados': len(validos),
+                             'no_encontrados': len(set(ids)) - len(validos)})
+    except Exception as e:
+        logger.exception('Error importando selección de liquidación')
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 

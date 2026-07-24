@@ -6,9 +6,10 @@ Vistas HTML (render) + APIs JSON, 100% function-based. Flujo en dos pasos:
   - Un usuario con acceso al módulo (permiso `devolucion_garantia`) CREA la
     solicitud (busca el DTE, elige líneas por cantidad o por monto parcial,
     registra el cliente real como receptor). Queda PENDIENTE, sin NC.
-  - Un administrador la ANALIZA y responde: aprueba (decide el impacto en
-    caja y ahí se genera la NC 61 + TXT Acepta) o rechaza con motivo. El
-    solicitante puede anular su propia solicitud pendiente.
+  - Un usuario con permiso de aprobar (`devolucion_garantia.puede_aprobar`)
+    la ANALIZA y responde: aprueba (decide el impacto en caja y ahí se genera
+    la NC 61 + TXT Acepta) o rechaza con motivo. El solicitante puede anular
+    su propia solicitud pendiente.
 
 La lógica de negocio vive en `app/services/devolucion_garantia_service.py`.
 """
@@ -23,8 +24,8 @@ from django.views.decorators.http import require_POST, require_GET
 from django.core.paginator import Paginator
 from django.db.models import Q
 
-from .decorators import requiere_permiso, requiere_rol
-from .models import Sucursal, DevolucionGarantia
+from .decorators import requiere_permiso
+from .models import Sucursal, DevolucionGarantia, PermisoRol
 from .services import devolucion_garantia_service as service
 
 logger = logging.getLogger('app')
@@ -39,6 +40,16 @@ def _sucursal_actual(request):
 
 def _es_admin(request):
     return getattr(request.user, 'rol', '') == 'administrador'
+
+
+def _puede_aprobar(request):
+    """¿El usuario puede aprobar/rechazar solicitudes? Gobernado por el permiso
+    granular `devolucion_garantia.puede_aprobar` (configurable en /permisos/gestion/),
+    ya no por rol fijo. La sucursal activa puede restringirlo vía PermisoSucursal."""
+    return PermisoRol.tiene_permiso(
+        request.user, 'devolucion_garantia', 'puede_aprobar',
+        sucursal_id=request.session.get('idSucursalActual'),
+    )
 
 
 def _cargar_devolucion(devolucion_id, sucursal, extra_select=None):
@@ -61,7 +72,7 @@ def modulo_devolucion_garantia(request):
     context = {
         'sucursal_actual': _sucursal_actual(request),
         'estado_choices': DevolucionGarantia._meta.get_field('estado').choices,
-        'puede_aprobar': _es_admin(request),
+        'puede_aprobar': _puede_aprobar(request),
         'usuario_id': request.user.id,
     }
     return render(request, 'vistas/modulo_ventas/devolucion_garantia.html', context)
@@ -311,10 +322,10 @@ def api_listar_devoluciones_garantia(request):
     })
 
 
-# ========== APIs JSON — APROBADOR (solo administrador) ==========
+# ========== APIs JSON — APROBADOR (permiso devolucion_garantia.puede_aprobar) ==========
 
 @require_GET
-@requiere_rol('administrador')
+@requiere_permiso('devolucion_garantia', 'puede_aprobar')
 def api_detalle_solicitud_devolucion_garantia(request, devolucion_id):
     """Detalle completo de una solicitud para el panel de aprobación, con
     re-chequeo de disponibilidad por línea (marca conflictos)."""
@@ -390,7 +401,7 @@ def api_detalle_solicitud_devolucion_garantia(request, devolucion_id):
 
 
 @require_GET
-@requiere_rol('administrador')
+@requiere_permiso('devolucion_garantia', 'puede_aprobar')
 def api_impacto_caja_devolucion_garantia(request, devolucion_id):
     """Previsualiza el impacto en cuadratura de caja de aprobar con un método/fecha."""
     sucursal = _sucursal_actual(request)
@@ -416,7 +427,7 @@ def api_impacto_caja_devolucion_garantia(request, devolucion_id):
 
 
 @require_POST
-@requiere_rol('administrador')
+@requiere_permiso('devolucion_garantia', 'puede_aprobar')
 def api_aprobar_devolucion_garantia(request, devolucion_id):
     """Aprueba una solicitud: genera la NC 61 + TXT con el impacto en caja elegido."""
     sucursal = _sucursal_actual(request)
@@ -468,7 +479,7 @@ def api_aprobar_devolucion_garantia(request, devolucion_id):
 
 
 @require_POST
-@requiere_rol('administrador')
+@requiere_permiso('devolucion_garantia', 'puede_aprobar')
 def api_rechazar_devolucion_garantia(request, devolucion_id):
     """Rechaza una solicitud PENDIENTE con motivo obligatorio."""
     sucursal = _sucursal_actual(request)
