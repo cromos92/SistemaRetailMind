@@ -5,6 +5,8 @@
     - habilitado: bool
     - nombre_impresora: str
   Expone globalmente: imprimirConQZ(ticketData) → Promise<bool>
+  El formato se elige por ticketData.modulo_origen:
+    CAMBIO_DEVOLUCION | DEVOLUCION_GARANTIA | ECOMMERCE | (default) venta
 {% endcomment %}
 <script>
 /* ================================================================
@@ -413,10 +415,154 @@ function _generarEscPosEcommerce(td) {
     return c;
 }
 
+/* ── Generar comandos ESC/POS — modo DEVOLUCION POR GARANTIA ── */
+function _generarEscPosDevolucionGarantia(td) {
+    const suc  = td.sucursal || {};
+    const cli  = td.cliente  || {};
+    const dte  = td.dte      || {};
+    const tr   = td.transferencia;
+    const prod = td.productos || [];
+
+    const empNombre = String(suc.empresa    || 'MI EMPRESA');
+    const empRut    = String(suc.rut_empresa|| '');
+    const numOp     = String(td.numero_operacion || '');
+
+    const fechaStr = td.fecha
+        ? (td.fecha + (td.hora ? ' ' + td.hora : ''))
+        : new Date().toLocaleString('es-CL');
+
+    // Word-wrap a 48 columnas (para el motivo, que es texto libre).
+    function _wrap(texto) {
+        const out = [];
+        let linea = '';
+        String(texto || '').split(/\s+/).forEach(function (w) {
+            if (!w) return;
+            if ((linea + ' ' + w).trim().length > _COLS) { out.push(linea.trim() + _N); linea = w; }
+            else { linea = (linea + ' ' + w).trim(); }
+        });
+        if (linea) out.push(linea.trim() + _N);
+        return out;
+    }
+
+    const c = [];
+    c.push(_EP.INIT, _EP.CP1252);
+
+    // Cabecera empresa
+    c.push(_EP.CENTER, _EP.BOLD_ON);
+    c.push(empNombre.toUpperCase().substring(0, _COLS) + _N);
+    c.push(_EP.BOLD_OFF);
+    if (suc.alias)     c.push(String(suc.alias).toUpperCase().substring(0, _COLS) + _N);
+    if (suc.direccion) c.push(String(suc.direccion).substring(0, _COLS) + _N);
+    if (empRut)        c.push('RUT: ' + empRut + _N);
+    if (suc.telefono)  c.push('Tel: ' + suc.telefono + _N);
+    c.push(_sep('='));
+
+    // Banner (doble tamaño, 2 líneas para que quepa en 80mm)
+    c.push(_EP.CENTER, _EP.DBL_ON, _EP.BOLD_ON);
+    c.push('DEVOLUCION' + _N);
+    c.push('POR GARANTIA' + _N);
+    c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
+    c.push(_sep('-'));
+
+    // Código de barras CODE128 con el N° de operación (escaneable en mesón)
+    if (numOp) {
+        c.push(..._escBarcode128(numOp));
+        c.push(_EP.CENTER, _EP.BOLD_ON);
+        c.push(numOp + _N);
+        c.push(_EP.BOLD_OFF);
+    }
+    c.push(_sep('='));
+
+    // Estado destacado
+    c.push(_EP.CENTER, _EP.BOLD_ON);
+    c.push('* ' + String(td.estado_display || td.estado || '').toUpperCase().substring(0, _COLS - 4) + ' *' + _N);
+    c.push(_EP.BOLD_OFF);
+    c.push(_sep('='));
+
+    // Datos de la solicitud
+    c.push(_EP.LEFT);
+    c.push(_row('Fecha:', fechaStr));
+    if (dte.folio)      c.push(_row('Documento:', String(dte.tipo || '') + ' #' + dte.folio));
+    if (dte.fecha)      c.push(_row('Fec. doc.:', String(dte.fecha)));
+    if (td.solicitante) c.push(_row('Solicita:',  String(td.solicitante)));
+    if (cli.nombre)     c.push(_row('Cliente:',   String(cli.nombre)));
+    if (cli.rut)        c.push(_row('RUT:',       String(cli.rut)));
+    if (td.metodo_solicitado_display) c.push(_row('Devolucion:', String(td.metodo_solicitado_display)));
+
+    // Datos bancarios (solo si pidió transferencia)
+    if (tr) {
+        c.push(_sep('-'));
+        c.push(_EP.BOLD_ON); c.push('DATOS DE TRANSFERENCIA' + _N); c.push(_EP.BOLD_OFF);
+        if (tr.banco)         c.push(_row('Banco:',   String(tr.banco)));
+        if (tr.tipo_cuenta)   c.push(_row('Tipo:',    String(tr.tipo_cuenta)));
+        if (tr.numero_cuenta) c.push(_row('Cuenta:',  String(tr.numero_cuenta)));
+        if (tr.titular_rut)   c.push(_row('Titular:', String(tr.titular_rut)));
+    }
+    c.push(_sep('='));
+
+    // Detalle
+    c.push(_EP.BOLD_ON);
+    c.push(_pL('CANT',5) + _pL('DESCRIPCION',29) + _pR('MONTO',10) + _N);
+    c.push(_EP.BOLD_OFF);
+    c.push(_sep('-'));
+
+    prod.forEach(function (p) {
+        const esMonto = p.modo === 'MONTO';
+        const cant = esMonto ? '-' : String(p.cantidad || 0);
+        const nom  = String(p.descripcion || '').toUpperCase().substring(0, 29);
+        c.push(_pR(cant,4) + ' ' + _pL(nom,29) + _pR(_clp(p.subtotal||0),10) + _N);
+        const det = [];
+        if (p.sku)   det.push('SKU:' + p.sku);
+        if (p.talla) det.push('T:' + p.talla);
+        if (det.length) c.push('     ' + _pL(det.join(' | '), 43) + _N);
+        if (esMonto) c.push('     ' + _pL('ABONO PARCIAL (sin retiro de producto)', 43) + _N);
+        else if (p.precio_unitario) c.push('     ' + _pL('P/U: ' + _clp(p.precio_unitario), 43) + _N);
+    });
+    c.push(_sep('='));
+
+    // Motivo
+    if (td.motivo) {
+        c.push(_EP.BOLD_ON); c.push('MOTIVO:' + _N); c.push(_EP.BOLD_OFF);
+        c.push(..._wrap(td.motivo));
+        c.push(_sep('-'));
+    }
+
+    // Total (doble tamaño)
+    c.push(_EP.CENTER, _EP.DBL_ON, _EP.BOLD_ON);
+    c.push('TOTAL: ' + _clp(td.total || 0) + _N);
+    c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
+    c.push(_sep('='));
+
+    // Leyenda tributaria: solo la NC es documento válido.
+    c.push(_EP.CENTER);
+    if (td.nota_credito) {
+        c.push(_EP.BOLD_ON);
+        c.push('NOTA DE CREDITO N\xB0 ' + td.nota_credito + _N);
+        c.push(_EP.BOLD_OFF);
+    } else {
+        c.push('COMPROBANTE NO TRIBUTARIO' + _N);
+        c.push('No v\xE1lido como nota de cr\xE9dito' + _N);
+        c.push('Sujeto a aprobaci\xF3n' + _N);
+    }
+    c.push(_sep('-'));
+
+    // Firma del cliente
+    c.push(_EP.LEFT, _N);
+    c.push('  Firma cliente: ' + '_'.repeat(29) + _N, _N);
+    c.push(_EP.CENTER);
+    c.push('Conserve este comprobante' + _N);
+    c.push(_EP.FEED3, _EP.CUT);
+
+    return c;
+}
+
 /* ── Generar comandos ESC/POS a partir de ticketData ────────── */
 function _generarEscPos(td) {
     if (td.modulo_origen === 'CAMBIO_DEVOLUCION') {
         return _generarEscPosCambio(td);
+    }
+    if (td.modulo_origen === 'DEVOLUCION_GARANTIA') {
+        return _generarEscPosDevolucionGarantia(td);
     }
     if (td.modulo_origen === 'ECOMMERCE') {
         return _generarEscPosEcommerce(td);

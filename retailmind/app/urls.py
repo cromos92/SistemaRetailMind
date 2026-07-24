@@ -253,6 +253,7 @@ from .views_modulo_cotizaciones import (
     # Despacho diferido
     asignar_sku_pendiente,
     revertir_sku_despachado,
+    validar_despacho_cotizacion,
 )
 from .views_modulo_existencias_nuevo import (
     # Tarjeta de Movimiento por Producto
@@ -349,6 +350,7 @@ from .views_modulo_devolucion_garantia import (
     api_anular_solicitud_devolucion_garantia,
     # APIs — aprobador
     api_detalle_solicitud_devolucion_garantia,
+    api_ticket_devolucion_garantia,
     api_impacto_caja_devolucion_garantia,
     api_aprobar_devolucion_garantia,
     api_rechazar_devolucion_garantia,
@@ -1050,6 +1052,7 @@ urlpatterns = [
     path('api/cotizaciones/convertir-factura/', convertir_cotizacion_factura, name='convertir_cotizacion_factura'),
     path('api/cotizaciones/asignar-sku-pendiente/', asignar_sku_pendiente, name='asignar_sku_pendiente'),
     path('api/cotizaciones/revertir-sku-despachado/', revertir_sku_despachado, name='revertir_sku_despachado'),
+    path('api/cotizaciones/validar-despacho/', validar_despacho_cotizacion, name='validar_despacho_cotizacion'),
     
     # APIs de integración POS
     path('api/cotizaciones/cargar-como-ticket/<int:cotizacion_id>/', cargar_cotizacion_como_ticket, name='cargar_cotizacion_como_ticket'),
@@ -1261,6 +1264,7 @@ urlpatterns = [
     path('api/plan-liquidacion/por-anio/', views_inteligencia_compra.obtener_plan_liquidacion_por_anio, name='obtener_plan_liquidacion_por_anio'),
     path('api/plan-liquidacion/exportar-excel/', views_inteligencia_compra.exportar_plan_liquidacion_excel, name='exportar_plan_liquidacion_excel'),
     path('api/plan-liquidacion/importar/', views_inteligencia_compra.importar_seleccion_liquidacion, name='importar_seleccion_liquidacion'),
+    path('reportes/plan-liquidacion/imprimir/', views_inteligencia_compra.imprimir_plan_liquidacion, name='imprimir_plan_liquidacion'),
 
     # Campañas de liquidación (gestión masiva de precios + promos NxM)
     path('campanas-liquidacion/', views_modulo_campanas_liquidacion.ver_campanas_liquidacion, name='ver_campanas_liquidacion'),
@@ -1360,6 +1364,7 @@ urlpatterns = [
     path('api/devolucion-garantia/generar/', api_generar_devolucion_garantia, name='api_generar_devolucion_garantia'),
     path('api/devolucion-garantia/listar/', api_listar_devoluciones_garantia, name='api_listar_devoluciones_garantia'),
     path('api/devolucion-garantia/<int:devolucion_id>/detalle/', api_detalle_solicitud_devolucion_garantia, name='api_detalle_solicitud_devolucion_garantia'),
+    path('api/devolucion-garantia/<int:devolucion_id>/ticket/', api_ticket_devolucion_garantia, name='api_ticket_devolucion_garantia'),
     path('api/devolucion-garantia/<int:devolucion_id>/impacto-caja/', api_impacto_caja_devolucion_garantia, name='api_impacto_caja_devolucion_garantia'),
     path('api/devolucion-garantia/<int:devolucion_id>/aprobar/', api_aprobar_devolucion_garantia, name='api_aprobar_devolucion_garantia'),
     path('api/devolucion-garantia/<int:devolucion_id>/rechazar/', api_rechazar_devolucion_garantia, name='api_rechazar_devolucion_garantia'),

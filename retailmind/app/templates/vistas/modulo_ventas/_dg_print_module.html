@@ -1,0 +1,146 @@
+{% comment %}
+  _dg_print_module.html
+  Impresión térmica 80mm del comprobante de Devolución por Garantía.
+
+  Reutiliza el módulo compartido _qz_tray_module.html (mismo mecanismo del
+  ticket de venta): QZ Tray → ESC/POS silencioso en modo DEVOLUCION_GARANTIA,
+  y si QZ no está habilitado o falla, cae a window.print() con el mismo layout.
+
+  Requiere en el contexto: {{ qz_config }} y un {% csrf_token %} en la página.
+  Expone globalmente: imprimirDevolucionGarantia(devolucionId)
+
+  NO incluir además _qz_tray_module.html en la misma página (QZ_CONFIG se
+  declara con const y se duplicaría).
+{% endcomment %}
+{% include 'vistas/modulo_ventas/_qz_tray_module.html' %}
+<script>
+(function () {
+    // Plantilla con id=0 que se reemplaza por el id real.
+    const URL_TICKET_DG = '{% url "api_ticket_devolucion_garantia" 0 %}';
+    const _clpDG = (n) => '$' + Number(n || 0).toLocaleString('es-CL');
+    const _escDG = (s) => String(s == null ? '' : s)
+        .replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+    function imprimirDevolucionGarantia(id) {
+        $.get(URL_TICKET_DG.replace('/0/', '/' + id + '/'), function (resp) {
+            if (!resp.success) {
+                Swal.fire({ icon: 'error', title: 'Error', text: resp.error || 'No se pudo obtener el comprobante' });
+                return;
+            }
+            imprimirComprobanteDG(resp.data);
+        }).fail(function (xhr) {
+            Swal.fire({ icon: 'error', title: 'Error', text: xhr.responseJSON?.error || 'Error de conexión' });
+        });
+    }
+
+    async function imprimirComprobanteDG(td) {
+        const qzOn = typeof QZ_CONFIG !== 'undefined' && QZ_CONFIG.habilitado
+                     && typeof imprimirConQZ !== 'undefined';
+        if (qzOn) {
+            if (await imprimirConQZ(td)) { return; }
+            const r = await Swal.fire({
+                icon: 'warning', title: 'QZ Tray no disponible',
+                text: 'No se pudo conectar con QZ Tray. ¿Desea imprimir con el diálogo del navegador?',
+                showCancelButton: true, confirmButtonText: 'Sí, imprimir igual',
+                cancelButtonText: 'Cancelar', confirmButtonColor: '#0066FF',
+            });
+            if (!r.isConfirmed) { return; }
+        }
+        const v = window.open('', '_blank', 'width=320,height=650,left=200,top=100');
+        if (!v) {
+            Swal.fire({ icon: 'warning', title: 'Ventana bloqueada', text: 'Permite las ventanas emergentes para imprimir.' });
+            return;
+        }
+        v.document.write(generarHtmlComprobanteDG(td));
+        v.document.close();
+        v.focus();
+        setTimeout(function () { v.print(); v.close(); }, 350);
+    }
+
+    /* Fallback HTML: mismo contenido y orden que el ESC/POS, a 80mm. */
+    function generarHtmlComprobanteDG(td) {
+        const suc = td.sucursal || {}, cli = td.cliente || {}, dte = td.dte || {}, tr = td.transferencia;
+        const kv = (k, v) => `<div class="kv"><span>${k}</span><span>${_escDG(v)}</span></div>`;
+
+        const filas = (td.productos || []).map(function (p) {
+            const esMonto = p.modo === 'MONTO';
+            const det = [];
+            if (p.sku) { det.push('SKU:' + _escDG(p.sku)); }
+            if (p.talla) { det.push('T:' + _escDG(p.talla)); }
+            const nota = esMonto
+                ? '<div class="sub">ABONO PARCIAL (sin retiro de producto)</div>'
+                : (p.precio_unitario ? `<div class="sub">P/U: ${_clpDG(p.precio_unitario)}</div>` : '');
+            return `<tr>
+                <td class="c">${esMonto ? '&mdash;' : (p.cantidad || 0)}</td>
+                <td>${_escDG(p.descripcion).toUpperCase()}
+                    ${det.length ? `<div class="sub">${det.join(' | ')}</div>` : ''}${nota}</td>
+                <td class="r">${_clpDG(p.subtotal)}</td></tr>`;
+        }).join('');
+
+        return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<title>${_escDG(td.numero_operacion)}</title><style>
+@page { size: 80mm auto; margin: 0; }
+* { box-sizing: border-box; }
+body { width: 72mm; margin: 0 auto; padding: 3mm 2mm; color: #000;
+       font-family: 'Courier New', Courier, monospace; font-size: 11px; line-height: 1.35; }
+.c { text-align: center; } .r { text-align: right; } .b { font-weight: bold; }
+.hr { border-top: 1px dashed #000; margin: 4px 0; }
+.hr2 { border-top: 2px solid #000; margin: 5px 0; }
+.emp { font-size: 13px; font-weight: bold; }
+.titulo { font-size: 17px; font-weight: bold; letter-spacing: 1px; margin: 5px 0; line-height: 1.1; }
+.op { font-size: 14px; font-weight: bold; letter-spacing: 1px; }
+.estado { font-size: 12px; font-weight: bold; border: 1.5px solid #000; padding: 3px; margin: 4px 0; }
+table { width: 100%; border-collapse: collapse; }
+th { font-size: 10px; text-align: left; border-bottom: 1px solid #000; padding: 3px 0; }
+td { font-size: 11px; vertical-align: top; padding: 3px 0; border-bottom: 1px dotted #bbb; }
+.sub { font-size: 9px; color: #333; }
+.kv { display: flex; justify-content: space-between; gap: 6px; }
+.kv span:first-child { font-weight: bold; white-space: nowrap; }
+.kv span:last-child { text-align: right; }
+.total { font-size: 16px; font-weight: bold; }
+.legal { font-size: 9px; line-height: 1.3; }
+.firma { margin-top: 20px; border-top: 1px solid #000; padding-top: 3px; font-size: 9px; }
+.motivo { font-size: 10px; word-wrap: break-word; }
+</style></head><body>
+<div class="c emp">${_escDG(suc.empresa)}</div>
+${suc.alias ? `<div class="c b">${_escDG(suc.alias).toUpperCase()}</div>` : ''}
+${suc.direccion ? `<div class="c">${_escDG(suc.direccion)}</div>` : ''}
+${suc.rut_empresa ? `<div class="c">RUT: ${_escDG(suc.rut_empresa)}</div>` : ''}
+${suc.telefono ? `<div class="c">Tel: ${_escDG(suc.telefono)}</div>` : ''}
+<div class="hr2"></div>
+<div class="c titulo">DEVOLUCIÓN<br>POR GARANTÍA</div>
+<div class="hr"></div>
+<div class="c op">${_escDG(td.numero_operacion)}</div>
+<div class="c estado">${_escDG(td.estado_display || td.estado)}</div>
+<div class="hr2"></div>
+${kv('Fecha:', (td.fecha || '') + ' ' + (td.hora || ''))}
+${dte.folio ? kv('Documento:', (dte.tipo || '') + ' #' + dte.folio) : ''}
+${dte.fecha ? kv('Fec. doc.:', dte.fecha) : ''}
+${td.solicitante ? kv('Solicita:', td.solicitante) : ''}
+${cli.nombre ? kv('Cliente:', cli.nombre) : ''}
+${cli.rut ? kv('RUT:', cli.rut) : ''}
+${td.metodo_solicitado_display ? kv('Devolución:', td.metodo_solicitado_display) : ''}
+${tr ? `<div class="hr"></div><div class="b">DATOS DE TRANSFERENCIA</div>
+${tr.banco ? kv('Banco:', tr.banco) : ''}
+${tr.tipo_cuenta ? kv('Tipo:', tr.tipo_cuenta) : ''}
+${tr.numero_cuenta ? kv('Cuenta:', tr.numero_cuenta) : ''}
+${tr.titular_rut ? kv('Titular:', tr.titular_rut) : ''}` : ''}
+<div class="hr2"></div>
+<table><thead><tr><th class="c" style="width:14%">CANT</th><th>DESCRIPCIÓN</th><th class="r" style="width:28%">MONTO</th></tr></thead>
+<tbody>${filas}</tbody></table>
+${td.motivo ? `<div class="hr"></div><div class="b">MOTIVO:</div><div class="motivo">${_escDG(td.motivo)}</div>` : ''}
+<div class="hr2"></div>
+<div class="c total">TOTAL: ${_clpDG(td.total)}</div>
+<div class="hr2"></div>
+<div class="c legal">${td.nota_credito
+    ? `<span class="b">NOTA DE CRÉDITO N° ${_escDG(td.nota_credito)}</span>`
+    : 'COMPROBANTE NO TRIBUTARIO<br>No válido como nota de crédito<br>Sujeto a aprobación'}</div>
+<div class="firma">Firma cliente</div>
+<div class="c legal" style="margin-top:6px">Conserve este comprobante</div>
+</body></html>`;
+    }
+
+    // Se invoca desde onclick inline → debe vivir en window.
+    window.imprimirDevolucionGarantia = imprimirDevolucionGarantia;
+})();
+</script>

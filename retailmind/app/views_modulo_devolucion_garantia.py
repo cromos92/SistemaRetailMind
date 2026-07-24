@@ -17,6 +17,7 @@ import json
 import logging
 from datetime import datetime
 
+from django.utils import timezone
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse
 from django.urls import reverse
@@ -29,6 +30,16 @@ from .models import Sucursal, DevolucionGarantia, PermisoRol
 from .services import devolucion_garantia_service as service
 
 logger = logging.getLogger('app')
+
+
+def _txt(valor):
+    """Lee un campo de texto del body JSON de forma segura.
+
+    El JSON puede traer números donde esperamos texto: `folio_dte` sale de
+    `Dte.numero_documento` (IntegerField), así que el front lo manda como
+    número y un `.strip()` directo reventaba con AttributeError.
+    """
+    return str(valor if valor is not None else '').strip()
 
 
 def _sucursal_actual(request):
@@ -69,11 +80,16 @@ def _cargar_devolucion(devolucion_id, sucursal, extra_select=None):
 @requiere_permiso('devolucion_garantia', 'puede_ver')
 def modulo_devolucion_garantia(request):
     """Listado / registro de solicitudes de devolución por garantía."""
+    from .views_modulo_ventas import _get_qz_config
+
+    sucursal = _sucursal_actual(request)
     context = {
-        'sucursal_actual': _sucursal_actual(request),
+        'sucursal_actual': sucursal,
         'estado_choices': DevolucionGarantia._meta.get_field('estado').choices,
         'puede_aprobar': _puede_aprobar(request),
         'usuario_id': request.user.id,
+        # Impresión térmica 80mm compartida con el ticket de venta (QZ Tray).
+        'qz_config': _get_qz_config(sucursal.id if sucursal else None),
     }
     return render(request, 'vistas/modulo_ventas/devolucion_garantia.html', context)
 
@@ -92,7 +108,13 @@ def detalle_devolucion_garantia(request, devolucion_id):
         ).prefetch_related('detalles__dte_producto__productoTalla__producto'),
         id=devolucion_id, sucursal=sucursal,
     )
-    context = {'devolucion': devolucion}
+    from .views_modulo_ventas import _get_qz_config
+
+    context = {
+        'devolucion': devolucion,
+        # Impresión térmica 80mm del comprobante (mismo módulo QZ del ticket).
+        'qz_config': _get_qz_config(sucursal.id),
+    }
     return render(request, 'vistas/modulo_ventas/detalle_devolucion_garantia.html', context)
 
 
@@ -166,9 +188,9 @@ def api_generar_devolucion_garantia(request):
     except (ValueError, json.JSONDecodeError):
         return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
 
-    folio = (body.get('folio_dte') or '').strip()
+    folio = _txt(body.get('folio_dte'))
     productos = body.get('productos') or []
-    motivo = (body.get('motivo') or '').strip() or 'Garantía aprobada'
+    motivo = _txt(body.get('motivo')) or 'Garantía aprobada'
     requerimiento_id = body.get('requerimiento_id')
 
     if not folio:
@@ -322,6 +344,87 @@ def api_listar_devoluciones_garantia(request):
     })
 
 
+@require_GET
+@requiere_permiso('devolucion_garantia', 'puede_ver')
+def api_ticket_devolucion_garantia(request, devolucion_id):
+    """Payload del comprobante 80mm de una solicitud.
+
+    Lo consume el front tanto al CREAR (impresión inmediata) como al reimprimir
+    desde el listado, vía QZ Tray (ESC/POS) o el fallback HTML de `window.print()`.
+    """
+    sucursal = _sucursal_actual(request)
+    if not sucursal:
+        return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'}, status=400)
+
+    devolucion = get_object_or_404(
+        DevolucionGarantia.objects.select_related(
+            'dte_original', 'receptor', 'sucursal', 'sucursal__empresa',
+            'solicitado_por', 'autorizado_por', 'nota_credito',
+        ).prefetch_related('detalles__dte_producto__productoTalla'),
+        id=devolucion_id, sucursal=sucursal,
+    )
+
+    suc, emp, dte = devolucion.sucursal, devolucion.sucursal.empresa, devolucion.dte_original
+    receptor, solicitante = devolucion.receptor, devolucion.solicitado_por
+
+    productos = []
+    for det in devolucion.detalles.all():
+        dp = det.dte_producto
+        pt = dp.productoTalla
+        productos.append({
+            'descripcion': dp.descripcion or '',
+            'sku': str(pt.sku) if pt else '',
+            'talla': (pt.talla or '') if pt else '',
+            'modo': det.modo,
+            'cantidad': int(det.cantidad or 0),
+            'precio_unitario': int(det.precio_unitario or 0),
+            'monto': int(det.monto) if det.monto is not None else None,
+            'subtotal': int(det.subtotal or 0),
+        })
+
+    creado = timezone.localtime(devolucion.created_at)
+    es_transf = devolucion.metodo_solicitado == 'TRANSFERENCIA_BANCARIA'
+
+    return JsonResponse({
+        'success': True,
+        'data': {
+            'modulo_origen': 'DEVOLUCION_GARANTIA',
+            'devolucion_id': devolucion.id,
+            'numero_operacion': devolucion.numero_operacion,
+            'estado': devolucion.estado,
+            'estado_display': devolucion.get_estado_display(),
+            'fecha': creado.strftime('%d/%m/%Y'),
+            'hora': creado.strftime('%H:%M'),
+            'motivo': devolucion.motivo or '',
+            'solicitante': (solicitante.get_full_name() or solicitante.username) if solicitante else '',
+            'sucursal': {
+                'empresa': emp.razon_social or emp.nombre or '',
+                'rut_empresa': emp.rut or '',
+                'alias': suc.alias or '',
+                'direccion': suc.direccion or '',
+                'telefono': suc.telefono or '',
+            },
+            'cliente': {'nombre': receptor.nombre or '', 'rut': receptor.rut or ''},
+            'dte': {
+                'tipo': dte.get_tipo_documento_display(),
+                'folio': dte.numero_documento,
+                'fecha': dte.fecha_emision.strftime('%d/%m/%Y') if dte.fecha_emision else '',
+            },
+            'metodo_solicitado_display': (
+                devolucion.get_metodo_solicitado_display() if devolucion.metodo_solicitado else ''),
+            'transferencia': {
+                'banco': devolucion.banco or '',
+                'tipo_cuenta': devolucion.get_tipo_cuenta_display() if devolucion.tipo_cuenta else '',
+                'numero_cuenta': devolucion.numero_cuenta or '',
+                'titular_rut': devolucion.cuenta_titular_rut or '',
+            } if es_transf else None,
+            'nota_credito': devolucion.nota_credito.numero_documento if devolucion.nota_credito_id else None,
+            'productos': productos,
+            'total': int(devolucion.monto_total or 0),
+        },
+    })
+
+
 # ========== APIs JSON — APROBADOR (permiso devolucion_garantia.puede_aprobar) ==========
 
 @require_GET
@@ -440,9 +543,9 @@ def api_aprobar_devolucion_garantia(request, devolucion_id):
     except (ValueError, json.JSONDecodeError):
         return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
 
-    metodo = (body.get('metodo_devolucion') or '').strip()
-    observaciones = (body.get('observaciones') or '').strip()
-    fecha_str = (body.get('fecha_imputacion') or '').strip()
+    metodo = _txt(body.get('metodo_devolucion'))
+    observaciones = _txt(body.get('observaciones'))
+    fecha_str = _txt(body.get('fecha_imputacion'))
     fecha_imp = None
     if fecha_str:
         try:
@@ -451,7 +554,7 @@ def api_aprobar_devolucion_garantia(request, devolucion_id):
             return JsonResponse({'success': False, 'error': 'Fecha de imputación inválida (use YYYY-MM-DD)'}, status=400)
 
     try:
-        devolucion, nc, contenido_txt = service.aprobar_devolucion(
+        devolucion, nc, contenido_txt, txt_warnings = service.aprobar_devolucion(
             devolucion_id=devolucion_id,
             aprobador=request.user,
             metodo_devolucion=metodo,
@@ -473,6 +576,7 @@ def api_aprobar_devolucion_garantia(request, devolucion_id):
             'nc_numero': nc.numero_documento,
             'monto_total': float(devolucion.monto_total),
             'txt_generado': contenido_txt is not None,
+            'txt_warnings': txt_warnings or [],
             'nc_txt_url': reverse('descargar_txt_nc_api', args=[nc.id]),
         },
     })
@@ -492,7 +596,7 @@ def api_rechazar_devolucion_garantia(request, devolucion_id):
     except (ValueError, json.JSONDecodeError):
         return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
 
-    motivo_rechazo = (body.get('motivo_rechazo') or '').strip()
+    motivo_rechazo = _txt(body.get('motivo_rechazo'))
 
     try:
         devolucion = service.rechazar_devolucion(

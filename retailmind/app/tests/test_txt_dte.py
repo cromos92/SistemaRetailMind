@@ -7,7 +7,7 @@ from datetime import date
 from types import SimpleNamespace
 
 from django.test import SimpleTestCase, TestCase
-from app.views_modulo_ventas import cuadrar_detalle_neto
+from app.views_modulo_ventas import cuadrar_detalle_neto, generar_dte_desde_ticket
 from app.views_modulo_documentos import (
     generar_txt_dte_acepta,
     generar_txt_boleta_acepta,
@@ -1168,3 +1168,98 @@ class TestConstruirDatosTxtDesdeDteExencion(TestCase):
         # El dispatcher rutea 56 al formato NC y escribe 56 en el IdDoc.
         txt = generar_txt_dte_acepta(datos)
         self.assertTrue(txt.split('\n')[0].startswith('56|'))
+
+
+class TestReceptorFacturaTomaDatosDelTicket(TestCase):
+    """Regresión: al facturar (típicamente una cotización a empresa) el receptor
+    del DTE/TXT debe reflejar la comuna/ciudad/giro del TICKET (lo que el cajero
+    vio y corrigió en el POS), NO la ficha Empresa.
+
+    Bug original: `generar_dte_desde_ticket` leía SOLO `receptor.*`, y buscaba la
+    Empresa con `filter(rut=...).first()` sin `order_by`. Con ~35 RUTs de ficha
+    duplicada, `.first()` era no determinístico ("no se sabía qué comuna tomaba"),
+    y con fichas legacy que guardan el RUT CON puntos ni siquiera la encontraba,
+    creando una ficha duplicada. Ahora: búsqueda determinística tolerante a puntos
+    + el TXT usa los datos del ticket con fallback a la ficha.
+    """
+
+    def setUp(self):
+        from app.tests.factories import setup_entorno_completo, crear_correlativo
+        self.entorno = setup_entorno_completo()
+        self.sucursal = self.entorno['sucursal']
+        self.vendedor = self.entorno['vendedor']
+        self.user = self.entorno['user']
+        self.producto_talla = self.entorno['producto_talla']
+        # generar_dte_desde_ticket pide el correlativo de FACTURA ELECTRONICA.
+        crear_correlativo(self.sucursal, tipo_dte='FACTURA ELECTRONICA')
+
+    def _crear_ticket_factura(self):
+        from app.models import Ticket, Ticket_Productos
+        ticket = Ticket.objects.create(
+            correlativo=5001,
+            sucursal=self.sucursal,
+            vendedor=self.vendedor,
+            subTotal=20000,
+            descuento=0,
+            total=20000,
+            estado='PAGADO',
+            responsable=self.user.username,
+            cliente_nombre='Cliente Factura SpA',
+            cliente_rut='77139990-8',        # normalizado, sin puntos
+            cliente_giro='GIRO TICKET',
+            cliente_direccion='DIRECCION TICKET 123',
+            cliente_comuna='COMUNATICKET',
+            cliente_ciudad='CIUDADTICKET',
+            modulo_origen='POS',
+        )
+        Ticket_Productos.objects.create(
+            idTicket=ticket,
+            ProductoTalla=self.producto_talla,
+            stock=1,
+            precio=20000,
+            precio_original=20000,
+            descuento_unitario=0,
+            subtotal=20000,
+            porcentaje_descuento=0,
+        )
+        return ticket
+
+    def test_txt_receptor_usa_comuna_ciudad_del_ticket_y_no_de_ficha(self):
+        from app.models import Empresa
+        from app.tests.factories import crear_empresa
+        # Ficha Empresa legacy con RUT CON puntos y datos VIEJOS/distintos.
+        receptor = crear_empresa(
+            nombre='Cliente Factura', rut='77.139.990-8',
+            comuna='COMUNAFICHA', ciudad='CIUDADFICHA', giro='GIRO FICHA',
+            direccion='DIRECCION FICHA 999',
+        )
+
+        ticket = self._crear_ticket_factura()
+        dte = generar_dte_desde_ticket(ticket, 'FACTURA_ELECTRONICA', self.user)
+
+        # 1) Se reusó la ficha existente pese al formato con puntos (no se duplicó).
+        self.assertEqual(dte.receptor_id, receptor.id)
+        self.assertEqual(
+            Empresa.objects.filter(rut__in=['77.139.990-8', '77139990-8']).count(), 1,
+            'No debe crearse una ficha Empresa duplicada por el formato del RUT',
+        )
+
+        # 2) El TXT del DTE lleva la comuna/ciudad DEL TICKET, no la de la ficha.
+        txt = dte.archivo_txt_data['contenido']
+        self.assertIn('COMUNATICKET', txt)
+        self.assertIn('CIUDADTICKET', txt)
+        self.assertNotIn('COMUNAFICHA', txt)
+        self.assertNotIn('CIUDADFICHA', txt)
+
+    def test_sin_ficha_previa_crea_receptor_con_datos_del_ticket(self):
+        from app.models import Empresa
+        self.assertFalse(Empresa.objects.filter(rut='77139990-8').exists())
+
+        ticket = self._crear_ticket_factura()
+        dte = generar_dte_desde_ticket(ticket, 'FACTURA_ELECTRONICA', self.user)
+
+        self.assertIsNotNone(dte.receptor_id)
+        txt = dte.archivo_txt_data['contenido']
+        self.assertIn('COMUNATICKET', txt)
+        self.assertIn('CIUDADTICKET', txt)
+

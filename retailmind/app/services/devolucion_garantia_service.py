@@ -45,6 +45,11 @@ TIPOS_DTE_VENTA_VALIDOS = ['BOLETA ELECTRONICA', 'FACTURA ELECTRONICA', 'BOLETA 
 ESTADOS_RESERVA = ['PENDIENTE', 'REGISTRADA']
 ESTADOS_CONSUMO = ['PENDIENTE', 'REGISTRADA', 'NC_GENERADA']
 
+# El SII exige giro del receptor en la NC (61). Para persona natural no
+# corresponde usar el nombre (el giro es la actividad económica), así que se
+# completa con el estándar chileno para boletas/NC a personas.
+GIRO_PARTICULAR_DEFAULT = 'PARTICULAR'
+
 
 def buscar_dte_para_devolucion(folio, sucursal=None):
     """
@@ -338,6 +343,10 @@ def resolver_o_crear_receptor(*, cliente_id=None, rut='', nombre='', giro='',
             empresa.razon_social = nombre
         if giro:
             empresa.giro = giro
+        elif not (empresa.giro or '').strip() and not es_rut_empresa(empresa.rut or rut_norm):
+            # Persona natural sin giro cargado: completarlo para que la NC no
+            # salga con el campo vacío. No pisa un giro real ya existente.
+            empresa.giro = GIRO_PARTICULAR_DEFAULT
         if direccion:
             empresa.direccion = direccion
         if comuna:
@@ -371,7 +380,8 @@ def resolver_o_crear_receptor(*, cliente_id=None, rut='', nombre='', giro='',
         rut=rut_norm,
         nombre_fantasia=nombre,
         razon_social=nombre,
-        giro=giro or '',
+        # Persona natural sin giro → 'PARTICULAR' (el SII lo exige en la NC).
+        giro=giro or ('' if es_juridica else GIRO_PARTICULAR_DEFAULT),
         direccion=direccion or '',
         comuna=comuna or '',
         ciudad=ciudad or '',
@@ -409,14 +419,18 @@ def _validar_datos_transferencia(metodo_solicitado, banco, tipo_cuenta,
                                  numero_cuenta, cuenta_titular_rut):
     """Normaliza y valida el método pedido por el cliente. Para transferencia
     exige banco/tipo/número/titular; devuelve la tupla normalizada."""
-    metodo = (metodo_solicitado or '').strip().upper()
+    # str() defensivo: por API el número de cuenta puede llegar numérico.
+    def _txt(v):
+        return str(v if v is not None else '').strip()
+
+    metodo = _txt(metodo_solicitado).upper()
     if metodo and metodo not in dict(METODO_DEVOLUCION_DG_CHOICES):
         raise DevolucionGarantiaError('Método de devolución inválido.')
 
-    banco = (banco or '').strip()
-    tipo_cuenta = (tipo_cuenta or '').strip().upper()
-    numero_cuenta = (numero_cuenta or '').strip()
-    cuenta_titular_rut = (cuenta_titular_rut or '').strip()
+    banco = _txt(banco)
+    tipo_cuenta = _txt(tipo_cuenta).upper()
+    numero_cuenta = _txt(numero_cuenta)
+    cuenta_titular_rut = _txt(cuenta_titular_rut)
 
     if metodo == 'TRANSFERENCIA_BANCARIA':
         faltan = []
@@ -560,7 +574,7 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
     lock; si cambió, lanza DevolucionGarantiaError y la solicitud queda
     PENDIENTE (el aprobador decide rechazar o esperar).
 
-    Devuelve (devolucion, nc, contenido_txt_o_None).
+    Devuelve (devolucion, nc, contenido_txt_o_None, txt_warnings).
     """
     from app.views import obtener_siguiente_correlativo
     from app.views_modulo_documentos import calcular_montos_nc, monto_real_linea_dte
@@ -751,8 +765,8 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
         aprobador, desvincular=False,
     )
 
-    contenido_txt = _generar_txt_nc(nc, devolucion)
-    return devolucion, nc, contenido_txt
+    contenido_txt, txt_warnings = _generar_txt_nc(nc, devolucion)
+    return devolucion, nc, contenido_txt, txt_warnings
 
 
 @transaction.atomic
@@ -883,10 +897,27 @@ def impacto_caja_preview(*, devolucion, metodo, fecha_imputacion=None):
 
 def _generar_txt_nc(nc, devolucion):
     """Genera y persiste el TXT Acepta de la NC por la vía canónica
-    (construir_datos_txt_desde_dte). No fatal si falla."""
-    from app.views_modulo_documentos import construir_datos_txt_desde_dte, generar_txt_dte_acepta
+    (construir_datos_txt_desde_dte). No fatal si falla.
+
+    Devuelve (contenido_o_None, warnings). Los warnings vienen de
+    `validar_dte_antes_de_guardar` (ej. falta giro/dirección del receptor):
+    no bloquean, pero hay que mostrarlos porque el SII sí los exige y Acepta
+    puede rechazar el TXT.
+    """
+    from app.views_modulo_documentos import (
+        construir_datos_txt_desde_dte, generar_txt_dte_acepta,
+        validar_dte_antes_de_guardar,
+    )
+    warnings = []
     try:
         datos = construir_datos_txt_desde_dte(nc)
+
+        try:
+            chequeo = validar_dte_antes_de_guardar(datos) or {}
+            warnings = list(chequeo.get('errores') or []) + list(chequeo.get('warnings') or [])
+        except Exception:
+            logger.exception("Error validando datos del TXT NC #%s", nc.numero_documento)
+
         contenido = generar_txt_dte_acepta(datos)
 
         import os
@@ -895,10 +926,11 @@ def _generar_txt_nc(nc, devolucion):
         nombre = f"NC_61_{nc.numero_documento}_{nc.fecha_emision.strftime('%Y%m%d')}.txt"
         with open(os.path.join(ruta_nc, nombre), 'w', encoding='utf-8') as f:
             f.write(contenido)
-        return contenido
-    except Exception:
+        return contenido, warnings
+    except Exception as e:
         logger.exception(
             "Error generando TXT Acepta para NC #%s (DevolucionGarantia %s)",
             nc.numero_documento, devolucion.numero_operacion,
         )
-        return None
+        warnings.append(f'No se pudo generar el TXT Acepta: {e}')
+        return None, warnings

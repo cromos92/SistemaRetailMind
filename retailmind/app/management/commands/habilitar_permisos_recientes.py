@@ -5,6 +5,8 @@ los permisos pedidos a los roles `administrador` y `jefe_local`:
   1. Gift Cards / Fidelizacion  (modulo `fidelizacion`)
   2. Devolucion por Garantia    (opcion `devolucion_garantia` del modulo Ventas)
   3. Liquidacion                (modulo `liquidacion`: Plan + Campanas)
+  4. Validacion de despacho de cotizaciones (OK admin a la cuadratura
+     facturado-vs-despachado): permiso `gestion_cotizaciones.puede_aprobar`
 
 El comando es IDEMPOTENTE y ADITIVO:
   - Solo CREA opciones/modulos que falten (get_or_create, nunca borra).
@@ -22,6 +24,9 @@ IMPORTANTE (cambios de comportamiento que este comando acompana):
     `plan_liquidacion` / `campanas_liquidacion` (antes solo requerian login).
     Hasta correr este comando esas pantallas quedan sin acceso para todos
     (incluido el administrador), asi que debe correrse junto con el deploy.
+  - El boton "Dar OK" al despacho de una cotizacion (validar cuadratura)
+    exige `gestion_cotizaciones.puede_aprobar`. Sin correr este comando el
+    boton simplemente no aparece para nadie (no rompe nada mas).
 """
 from django.core.management.base import BaseCommand
 from django.db import transaction
@@ -80,6 +85,10 @@ GRANTS = {
         'fidelizacion_cuentas': FULL,
         'fidelizacion_programa': FULL,
         'fidelizacion_reporte': FULL,
+        # Cotizaciones: OK final del despacho diferido (cuadratura facturado
+        # vs despachado). La opcion `gestion_cotizaciones` ya existe en el
+        # seed (inicializar_permisos); solo se enciende el flag de aprobar.
+        'gestion_cotizaciones': dict(puede_aprobar=True),
     },
     'jefe_local': {
         # Puede CREAR la solicitud de devolucion/garantia, pero NO aprobar

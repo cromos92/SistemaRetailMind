@@ -22,7 +22,7 @@ from app.views_modulo_ventas import _calcular_cuadratura_data
 
 from .factories import (
     setup_entorno_completo, crear_producto_con_talla, crear_correlativo,
-    crear_usuario,
+    crear_usuario, crear_sucursal,
 )
 
 STATICFILES_STORAGE_TEST = 'django.contrib.staticfiles.storage.StaticFilesStorage'
@@ -162,7 +162,7 @@ class DevolucionGarantiaServiceTest(TestCase):
         boleta = _crear_documento(self.env, 5002, [(self.pt, 2, 11900)])  # con IVA
         dev = self._crear_solicitud(boleta, [{'dte_producto_id': boleta.dte_productos.first().id,
                                               'modo': 'CANTIDAD', 'cantidad': 1}])
-        dev, nc, _txt = service.aprobar_devolucion(
+        dev, nc, _txt, _warns = service.aprobar_devolucion(
             devolucion_id=dev.id, aprobador=self.user,
             metodo_devolucion='EFECTIVO_CAJA', fecha_imputacion=self.hoy,
         )
@@ -182,7 +182,7 @@ class DevolucionGarantiaServiceTest(TestCase):
                                    tipo_documento='FACTURA ELECTRONICA', tipo_transaccion='VENTA')
         dev = self._crear_solicitud(factura, [{'dte_producto_id': factura.dte_productos.first().id,
                                               'modo': 'CANTIDAD', 'cantidad': 1}])
-        dev, nc, _txt = service.aprobar_devolucion(
+        dev, nc, _txt, _warns = service.aprobar_devolucion(
             devolucion_id=dev.id, aprobador=self.user,
             metodo_devolucion='EFECTIVO_CAJA', fecha_imputacion=self.hoy,
         )
@@ -193,7 +193,7 @@ class DevolucionGarantiaServiceTest(TestCase):
         boleta = _crear_documento(self.env, 5004, [(self.pt, 1, 39990)])
         dev = self._crear_solicitud(boleta, [{'dte_producto_id': boleta.dte_productos.first().id,
                                               'modo': 'MONTO', 'monto': 10000}])
-        dev, nc, _txt = service.aprobar_devolucion(
+        dev, nc, _txt, _warns = service.aprobar_devolucion(
             devolucion_id=dev.id, aprobador=self.user,
             metodo_devolucion='EFECTIVO_CAJA', fecha_imputacion=self.hoy,
         )
@@ -209,7 +209,7 @@ class DevolucionGarantiaServiceTest(TestCase):
         boleta = _crear_documento(self.env, 5005, [(self.pt, 1, 11900)])
         dev = self._crear_solicitud(boleta, [{'dte_producto_id': boleta.dte_productos.first().id,
                                               'modo': 'CANTIDAD', 'cantidad': 1}])
-        _dev, nc, _txt = service.aprobar_devolucion(
+        _dev, nc, _txt, _warns = service.aprobar_devolucion(
             devolucion_id=dev.id, aprobador=self.user,
             metodo_devolucion='EFECTIVO_CAJA', fecha_imputacion=self.hoy,
         )
@@ -221,7 +221,7 @@ class DevolucionGarantiaServiceTest(TestCase):
         dp = boleta.dte_productos.first()
         _nc_externa_por_talla(self.env, 9006, boleta, self.pt, 1, 11900)
         dev = self._crear_solicitud(boleta, [{'dte_producto_id': dp.id, 'modo': 'CANTIDAD', 'cantidad': 1}])
-        _dev, nc, _txt = service.aprobar_devolucion(
+        _dev, nc, _txt, _warns = service.aprobar_devolucion(
             devolucion_id=dev.id, aprobador=self.user,
             metodo_devolucion='EFECTIVO_CAJA', fecha_imputacion=self.hoy,
         )
@@ -235,7 +235,7 @@ class DevolucionGarantiaServiceTest(TestCase):
         boleta = _crear_documento(self.env, 5007, [(self.pt, 2, 11900)])
         dev = self._crear_solicitud(boleta, [{'dte_producto_id': boleta.dte_productos.first().id,
                                               'modo': 'CANTIDAD', 'cantidad': 1}])
-        _dev, nc, _txt = service.aprobar_devolucion(
+        _dev, nc, _txt, _warns = service.aprobar_devolucion(
             devolucion_id=dev.id, aprobador=self.user, metodo_devolucion='NO_AFECTA_CAJA',
         )
         self.assertEqual(nc.tipo_transaccion, 'ANULACION')
@@ -382,6 +382,73 @@ class DevolucionGarantiaServiceTest(TestCase):
         with self.assertRaises(service.DevolucionGarantiaError):
             service.resolver_o_crear_receptor(rut='66666666-6', nombre='Consumidor Final')
 
+    def test_persona_natural_sin_giro_queda_particular(self):
+        """El SII exige giro en la NC; para persona natural se completa solo."""
+        emp = service.resolver_o_crear_receptor(rut='13013448-3', nombre='Paola Tebes')
+        self.assertEqual(emp.giro, 'PARTICULAR')
+
+    def test_persona_natural_con_giro_real_no_se_pisa(self):
+        emp = service.resolver_o_crear_receptor(
+            rut='13013448-3', nombre='Paola Tebes', giro='Servicios profesionales',
+        )
+        self.assertEqual(emp.giro, 'Servicios profesionales')
+        # Al volver a resolver sin giro, se conserva el real (no lo pisa PARTICULAR).
+        emp2 = service.resolver_o_crear_receptor(rut='13013448-3', nombre='Paola Tebes')
+        self.assertEqual(emp2.giro, 'Servicios profesionales')
+
+    def test_rut_empresa_sin_giro_sigue_fallando(self):
+        with self.assertRaises(service.DevolucionGarantiaError):
+            service.resolver_o_crear_receptor(rut='76000000-K', nombre='Empresa X SpA')
+
+
+@override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)
+class DevolucionGarantiaEndpointCrearTest(TestCase):
+    """Regresión: el wizard manda `folio_dte` como NÚMERO (viene de
+    Dte.numero_documento, un IntegerField) y el endpoint reventaba con
+    `'int' object has no attribute 'strip'`."""
+
+    def setUp(self):
+        from app.models import ModuloSistema, OpcionMenu, PermisoRol
+        self.env = setup_entorno_completo()
+        self.sucursal = self.env['sucursal']
+        self.boleta = _crear_documento(self.env, 5200, [(self.env['producto_talla'], 2, 11900)])
+
+        modulo = ModuloSistema.objects.create(codigo='ventas_test', nombre='Ventas', orden=1)
+        opcion = OpcionMenu.objects.create(
+            modulo=modulo, codigo='devolucion_garantia', nombre='Devolución Garantía',
+            url_name='modulo_devolucion_garantia', orden=1,
+        )
+        PermisoRol.objects.create(
+            rol='jefe_local', opcion_menu=opcion, puede_ver=True, puede_crear=True,
+        )
+        self.user = crear_usuario(username='jefe_crea', rol='jefe_local')
+        self.client = Client()
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['idSucursalActual'] = self.sucursal.id
+        session.save()
+
+    def test_folio_numerico_no_revienta(self):
+        import json as _json
+        payload = {
+            'folio_dte': self.boleta.numero_documento,  # int, como lo manda el wizard
+            'productos': [{'dte_producto_id': self.boleta.dte_productos.first().id,
+                           'modo': 'CANTIDAD', 'cantidad': 1}],
+            'rut': '13013448-3', 'nombre': 'Paola Tebes',
+            'metodo_solicitado': 'EFECTIVO_CAJA',
+            'motivo': 'Garantía',
+        }
+        resp = self.client.post(
+            reverse('api_generar_devolucion_garantia'),
+            data=_json.dumps(payload), content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['success'])
+        dev = DevolucionGarantia.objects.get(id=resp.json()['data']['devolucion_id'])
+        self.assertEqual(dev.estado, 'PENDIENTE')
+        # Persona natural sin giro → se completa solo para que la NC no salga vacía.
+        self.assertEqual(dev.receptor.giro, 'PARTICULAR')
+
 
 @override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)
 class DevolucionGarantiaPermisoAprobadorTest(TestCase):
@@ -445,3 +512,67 @@ class DevolucionGarantiaPermisoAprobadorTest(TestCase):
         self.dev.refresh_from_db()
         self.assertEqual(self.dev.estado, 'NC_GENERADA')
         self.assertIsNotNone(self.dev.nota_credito_id)
+
+
+@override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)
+class DevolucionGarantiaTicketTest(TestCase):
+    """Payload del comprobante 80mm: de este contrato dependen el generador
+    ESC/POS (QZ Tray, modo DEVOLUCION_GARANTIA) y el fallback HTML."""
+
+    def setUp(self):
+        self.env = setup_entorno_completo()
+        self.sucursal = self.env['sucursal']
+        pt = self.env['producto_talla']
+        boleta = _crear_documento(self.env, 5200, [(pt, 2, 11900)])
+        dp = boleta.dte_productos.first()
+        self.dev = service.crear_solicitud_devolucion(
+            dte_original=boleta, sucursal=self.sucursal, receptor=_receptor(self.env),
+            motivo='Suela despegada', usuario=self.env['user'],
+            detalles=[{'dte_producto_id': dp.id, 'modo': 'CANTIDAD', 'cantidad': 1}],
+        )
+        modulo, _ = ModuloSistema.objects.get_or_create(
+            codigo='ventas', defaults={'nombre': 'Ventas', 'orden': 2})
+        opcion, _ = OpcionMenu.objects.get_or_create(
+            codigo='devolucion_garantia',
+            defaults={'modulo': modulo, 'nombre': 'Devolucion por Garantia', 'orden': 3})
+        user = crear_usuario(username='user_ticket_dg', rol='jefe_local')
+        PermisoRol.objects.update_or_create(
+            rol=user.rol, opcion_menu=opcion, defaults={'puede_ver': True})
+        self.client = Client()
+        self.client.force_login(user)
+        session = self.client.session
+        session['idSucursalActual'] = self.sucursal.id
+        session.save()
+
+    def test_payload_ticket_completo(self):
+        url = reverse('api_ticket_devolucion_garantia', args=[self.dev.id])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()['data']
+
+        # El generador ESC/POS despacha por este campo.
+        self.assertEqual(data['modulo_origen'], 'DEVOLUCION_GARANTIA')
+        self.assertEqual(data['numero_operacion'], self.dev.numero_operacion)
+        self.assertEqual(data['estado'], 'PENDIENTE')
+        self.assertEqual(data['total'], int(self.dev.monto_total))
+        self.assertIsNone(data['nota_credito'])  # aún sin aprobar
+        self.assertTrue(data['sucursal']['empresa'])
+        self.assertTrue(data['cliente']['nombre'])
+        self.assertTrue(data['dte']['folio'])
+        self.assertEqual(data['motivo'], 'Suela despegada')
+
+        self.assertEqual(len(data['productos']), 1)
+        linea = data['productos'][0]
+        self.assertEqual(linea['modo'], 'CANTIDAD')
+        self.assertEqual(linea['cantidad'], 1)
+        self.assertEqual(linea['subtotal'], 11900)
+        self.assertTrue(linea['sku'])
+
+    def test_aislado_por_sucursal(self):
+        """Una devolución de otra sucursal no se puede imprimir (anti-IDOR)."""
+        otra = crear_sucursal(empresa=self.env['empresa'], alias='OTRA-SUC')
+        session = self.client.session
+        session['idSucursalActual'] = otra.id
+        session.save()
+        resp = self.client.get(reverse('api_ticket_devolucion_garantia', args=[self.dev.id]))
+        self.assertEqual(resp.status_code, 404)

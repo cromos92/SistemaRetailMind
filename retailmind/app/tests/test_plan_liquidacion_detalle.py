@@ -9,12 +9,18 @@ from datetime import timedelta
 from django.test import RequestFactory, TestCase
 from django.utils import timezone
 
+import io
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+
 from app.models import (
     AtributoOpcion, LoteProducto, ModuloSistema, OpcionMenu, PermisoRol,
     Producto, ProductoAtributoValor, Productos_Atributos,
 )
 from app.views_inteligencia_compra import (
-    obtener_plan_liquidacion, obtener_plan_liquidacion_detalle,
+    exportar_plan_liquidacion_excel, importar_seleccion_liquidacion,
+    imprimir_plan_liquidacion, obtener_plan_liquidacion,
+    obtener_plan_liquidacion_detalle,
 )
 from app.tests.factories import (
     crear_empresa, crear_empresa_user, crear_sucursal, crear_producto_con_talla,
@@ -107,6 +113,91 @@ class PlanLiquidacionDetalleTests(TestCase):
         tot = data['data']['totales']
         self.assertEqual(tot['stock_u'], 4)   # solo tiendas
         self.assertEqual(tot['stock_cd'], 9)  # bodega aparte
+
+    # ---------------- export multi-tab / impresión / import ----------------
+
+    def _post_import(self, contenido, nombre, ctype):
+        req = RequestFactory().post('/x')
+        req.user = self.user
+        req.session = {'idSucursalActual': self.tienda.id,
+                       'idEmpresaActual': self.empresa.id}
+        req.FILES['archivo'] = SimpleUploadedFile(nombre, contenido, content_type=ctype)
+        return json.loads(importar_seleccion_liquidacion(req).content)
+
+    def _setup_marcas_orden(self):
+        """3 productos en la tienda con marcas/artículos para probar el orden."""
+        attr_m = Productos_Atributos.objects.create(nombre='Marca', descripcion='m')
+        nike = AtributoOpcion.objects.create(atributo=attr_m, valor='NIKE')
+        adidas = AtributoOpcion.objects.create(atributo=attr_m, valor='ADIDAS')
+        crear_producto_con_talla(self.tienda, articulo='B-ART', sku=7100001,
+                                 stock=2, atributo1=nike)
+        crear_producto_con_talla(self.tienda, articulo='Z-ART', sku=7100002,
+                                 stock=3, atributo1=adidas)
+        crear_producto_con_talla(self.tienda, articulo='A-ART', sku=7100003,
+                                 stock=4, atributo1=adidas)
+
+    def test_export_multitab_por_tienda_y_orden(self):
+        from openpyxl import load_workbook
+        self._setup_marcas_orden()
+        tienda2 = crear_sucursal(empresa=self.empresa, alias='TIENDA-2')
+        crear_producto_con_talla(tienda2, articulo='OTRA', sku=7100004, stock=1)
+
+        resp = exportar_plan_liquidacion_excel(self._req())
+        self.assertEqual(resp.status_code, 200)
+        wb = load_workbook(io.BytesIO(resp.content), data_only=True)
+        # 1 hoja por tienda + Resumen + Filtros.
+        self.assertIn('TIENDA-1', wb.sheetnames)
+        self.assertIn('TIENDA-2', wb.sheetnames)
+        self.assertIn('Resumen', wb.sheetnames)
+        self.assertIn('Filtros', wb.sheetnames)
+        ws = wb['TIENDA-1']
+        self.assertEqual(ws['A2'].value, 'ID')  # header para el re-import
+        # Orden marca → artículo asc (ADIDAS A-ART, ADIDAS Z-ART, NIKE B-ART).
+        filas = [(ws.cell(row=r, column=3).value, ws.cell(row=r, column=5).value)
+                 for r in range(3, 6)]
+        self.assertEqual(filas, [('ADIDAS', 'A-ART'), ('ADIDAS', 'Z-ART'),
+                                 ('NIKE', 'B-ART')])
+        # Sin costo en hojas de tienda (headers).
+        headers = [ws.cell(row=2, column=c).value for c in range(1, 18)]
+        self.assertNotIn('Costo unit.', headers)
+        self.assertIn('Precio caja $', headers)
+        self.assertIn('¿Coincide?', headers)
+
+    def test_import_multitab_roundtrip_ignora_resumen(self):
+        self._setup_marcas_orden()
+        resp = exportar_plan_liquidacion_excel(self._req())
+        res = self._post_import(resp.content, 'export.xlsx',
+                                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        self.assertTrue(res['success'], res.get('error'))
+        esperados = set(Producto.objects.filter(
+            sucursal=self.tienda).values_list('id', flat=True))
+        # Exactamente los productos exportados; los años del Resumen NO entran.
+        self.assertEqual(set(res['producto_ids']), esperados)
+
+    def test_import_csv_ia_con_discrepancias(self):
+        prod, _ = crear_producto_con_talla(
+            self.tienda, articulo='VERIF', sku=7100010, stock=2, precioventa=20000)
+        csv = (f'ID,PRECIO_CAJA,COINCIDE,OBSERVACION\n'
+               f'{prod.id},15990,NO,caja danada\n').encode('utf-8')
+        res = self._post_import(csv, 'ia.csv', 'text/csv')
+        self.assertTrue(res['success'], res.get('error'))
+        self.assertEqual(res['producto_ids'], [prod.id])
+        v = res['verificacion']
+        self.assertEqual(v['con_datos'], 1)
+        self.assertEqual(v['coincide_no'], 1)
+        self.assertEqual(v['precio_distinto'], 1)
+        self.assertEqual(v['detalles'][0]['precio_caja'], 15990)
+
+    def test_imprimir_formulario_html(self):
+        prod, _ = crear_producto_con_talla(
+            self.tienda, articulo='IMPRESO', sku=7100020, stock=3)
+        resp = imprimir_plan_liquidacion(self._req())
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode('utf-8')
+        self.assertIn('TIENDA-1', html)
+        self.assertIn(str(prod.id), html)
+        self.assertIn('LIQ-', html)          # barcode/código de lote
+        self.assertIn('Coincide', html)      # casillas de verificación
 
     def test_filtro_especialidad_no_duplica(self):
         prod, talla = crear_producto_con_talla(

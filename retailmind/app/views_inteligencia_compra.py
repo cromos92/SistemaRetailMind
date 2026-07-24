@@ -15,6 +15,7 @@ Reglas de dominio:
   - Pronóstico: seasonal-naive con tendencia acotada.
 """
 import logging
+import re
 from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
@@ -1113,90 +1114,175 @@ def obtener_plan_liquidacion_por_anio(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
+def _filas_export(request, hoy):
+    """Filas serializadas del detalle filtrado (sin paginar, cap
+    MAX_EXPORT_FILAS). Compartido por el Excel y el formulario de impresión."""
+    base_pt, mov_base, ctx = _scope_plan(request)
+    qs = _detalle_query(base_pt, mov_base, hoy, q=request.GET.get('q') or None)
+    bucket = request.GET.get('antiguedad') or None
+    if bucket:
+        qs = _bucket_filter(qs, bucket, hoy)
+    qs = _anio_filter(qs, _parse_anios(request.GET.get('anio')))
+    # valor desc SOLO para que el cap priorice lo más valioso; el orden final
+    # (marca → año → artículo asc) se aplica en Python por sucursal.
+    qs = qs.order_by(F('valor_ord').desc(nulls_last=True), 'id')
+    truncado = qs.count() > MAX_EXPORT_FILAS
+    filas = _serializar_detalle(qs[:MAX_EXPORT_FILAS], hoy)
+    return filas, ctx, bucket, truncado
+
+
+def _agrupar_por_sucursal(filas):
+    """{(es_cd, alias): [filas orden marca→año→artículo asc]} — tiendas
+    alfabético primero, bodegas/CD al final."""
+    grupos = {}
+    for f in filas:
+        grupos.setdefault((bool(f['es_cd']), f['sucursal'] or '—'), []).append(f)
+    for g in grupos.values():
+        g.sort(key=lambda f: ((f['marca'] or 'zzz').lower(),
+                              f['anio'] or 9999,
+                              (f['articulo'] or '').lower()))
+    return dict(sorted(grupos.items()))
+
+
+def _titulo_hoja(alias, es_cd):
+    """Título de hoja Excel válido (≤31 chars, sin caracteres prohibidos)."""
+    t = re.sub(r'[\[\]:*?/\\]', '-', alias or 'Sucursal')
+    if es_cd:
+        t += ' CD'
+    return t[:31]
+
+
+# Cabeceras del formato de verificación por tienda (Excel e impresión).
+# ID SIEMPRE en la columna A: el re-import y la extracción por IA lo usan
+# como clave. Las 3 últimas columnas van en blanco (se llenan a mano).
+HEADERS_VERIFICACION = [
+    'ID', 'N°', 'Marca', 'Año', 'Artículo', 'Descripción', 'Color', 'Tallas',
+    'Pares', 'F. ingreso', 'Últ. venta', 'Precio lista', 'Desc. %',
+    'Precio liq.', 'Precio caja $', '¿Coincide?', 'Observación',
+]
+ANCHOS_VERIFICACION = [9, 5, 14, 6, 16, 22, 12, 7, 7, 11, 11, 11, 8, 11, 12, 10, 24]
+
+
 @require_GET
 @requiere_permiso('plan_liquidacion', 'puede_exportar')
 def exportar_plan_liquidacion_excel(request):
-    """Excel del drill-down filtrado (mismos GET params que el detalle, sin
-    paginación; tope MAX_EXPORT_FILAS). Hoja Detalle + hoja Filtros."""
+    """Excel de verificación: UNA hoja por sucursal (orden marca → año →
+    artículo asc), con columnas en blanco para la verificación física
+    (Precio caja / ¿Coincide? / Observación) y SIN costo en las hojas de
+    tienda. Hoja Resumen (con costo, para el analista) + hoja Filtros.
+    Mismos GET params que el detalle; cap MAX_EXPORT_FILAS."""
     try:
         from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+        from openpyxl.utils import get_column_letter
+        from openpyxl.worksheet.properties import PageSetupProperties
 
         hoy = timezone.localdate()
-        base_pt, mov_base, ctx = _scope_plan(request)
-        qs = _detalle_query(base_pt, mov_base, hoy, q=request.GET.get('q') or None)
-        bucket = request.GET.get('antiguedad') or None
-        if bucket:
-            qs = _bucket_filter(qs, bucket, hoy)
-        qs = _anio_filter(qs, _parse_anios(request.GET.get('anio')))
-        qs = qs.order_by(F('valor_ord').desc(nulls_last=True), 'id')
-        truncado = qs.count() > MAX_EXPORT_FILAS
-        filas = _serializar_detalle(qs[:MAX_EXPORT_FILAS], hoy)
+        filas, ctx, bucket, truncado = _filas_export(request, hoy)
+        anios_txt = request.GET.get('anio') or 'Todos'
+        grupos = _agrupar_por_sucursal(filas)
 
-        esp_por_prod = {}
-        for pav in ProductoAtributoValor.objects.filter(
-                producto_id__in=[f['producto_id'] for f in filas],
-                atributo__nombre__iexact=NOMBRE_ATRIBUTO_ESPECIALIDAD,
-        ).values('producto_id', 'opcion__valor'):
-            esp_por_prod.setdefault(pav['producto_id'], []).append(pav['opcion__valor'])
+        wb = Workbook()
+        wb.remove(wb.active)
 
-        wb = Workbook(write_only=True)
-        ws = wb.create_sheet('Detalle')
-        # Columnas clave de liquidación primero (año, descuento y precio
-        # sugerido) para que la lista sea accionable de un vistazo.
-        ws.append(['ID', 'Año', 'Antigüedad (años)', 'Días antigüedad',
-                   'Descuento sugerido %', 'Precio venta', 'Precio liquidación sugerido',
-                   'Ahorro cliente', 'Sucursal', 'CD', 'Marca', 'Color', 'Categoría',
-                   'Especialidades', 'Artículo', 'Descripción', 'Tallas',
-                   'Stock (pares)', 'Costo unit.', 'Valor costo',
-                   'Fecha ingreso FIFO', 'Fuente antigüedad',
-                   'Última venta', 'Días sin venta', 'Ventas 365d (pares)'])
-        resumen_anio = {}  # anio -> {pares, valor, valor_liq}
-        for f in filas:
-            dias = f['dias_antiguedad']
-            anio = f['fecha_fifo'].year if f['fecha_fifo'] else None
-            antig_anios = (hoy.year - anio) if anio else None
-            precio_liq, pct = _precio_liq_sugerido(f['precioventa'], f['costo'], dias)
-            ahorro = (f['precioventa'] or 0) - precio_liq
-            ws.append([
-                f['producto_id'],
-                anio if anio else 's/d',
-                antig_anios if antig_anios is not None else 's/d',
-                dias if dias is not None else 's/d',
-                pct, f['precioventa'], precio_liq, ahorro,
-                f['sucursal'], 'Sí' if f['es_cd'] else 'No', f['marca'],
-                f['color'], f['categoria'],
-                ', '.join(esp_por_prod.get(f['producto_id'], [])),
-                f['articulo'], f['descripcion'], f['tallas'], f['stock_u'],
-                f['costo'], f['valor_costo'],
-                f['fecha_fifo'].strftime('%Y-%m-%d') if f['fecha_fifo'] else 's/d',
-                f['antiguedad_fuente'] or 's/d',
-                f['ultima_venta'].strftime('%Y-%m-%d') if f['ultima_venta'] else 'Nunca',
-                f['dias_sin_venta'] if f['dias_sin_venta'] is not None else 'Nunca',
-                f['u365'],
-            ])
-            k = anio if anio else 's/d'
-            r = resumen_anio.setdefault(k, {'pares': 0, 'valor': 0, 'valor_liq': 0})
-            r['pares'] += f['stock_u'] or 0
-            r['valor'] += f['valor_costo'] or 0
-            r['valor_liq'] += (precio_liq * (f['stock_u'] or 0)) if pct else 0
+        bold = Font(bold=True)
+        head_fill = PatternFill('solid', fgColor='E8EAF0')
+        thin = Side(style='thin', color='808080')
+        borde = Border(left=thin, right=thin, top=thin, bottom=thin)
+        centrado = Alignment(horizontal='center')
 
-        # Hoja Resumen por año (capital y descuento sugerido).
-        ws3 = wb.create_sheet('Resumen por año')
-        ws3.append(['Año', 'Antigüedad (años)', 'Descuento sugerido %',
-                    'Productos (pares)', 'Valor a costo', 'Valor liquidación estimado'])
-        for k in sorted(resumen_anio.keys(), key=lambda x: (x == 's/d', x)):
-            r = resumen_anio[k]
-            antig = (hoy.year - k) if isinstance(k, int) else 's/d'
+        resumen_suc = {}  # (alias, anio) -> {pares, costo, lista, liq}
+        for (es_cd, alias), items in grupos.items():
+            ws = wb.create_sheet(_titulo_hoja(alias, es_cd))
+            for i, ancho in enumerate(ANCHOS_VERIFICACION, start=1):
+                ws.column_dimensions[get_column_letter(i)].width = ancho
+            # Page setup imprimible: horizontal, ajustado al ancho, headers
+            # repetidos en cada página.
+            ws.page_setup.orientation = 'landscape'
+            ws.page_setup.fitToWidth = 1
+            ws.page_setup.fitToHeight = 0
+            ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+            ws.page_margins.left = ws.page_margins.right = 0.3
+            ws.page_margins.top = ws.page_margins.bottom = 0.5
+            ws.print_title_rows = '1:2'
+            ws.freeze_panes = 'A3'
+
+            titulo = (f'Plan de Liquidación · {alias}{" (CD)" if es_cd else ""}'
+                      f' · {hoy.strftime("%d-%m-%Y")} · Años: {anios_txt}')
+            c0 = ws.cell(row=1, column=1, value=titulo)
+            c0.font = Font(bold=True, size=13)
+            ws.merge_cells(start_row=1, start_column=1,
+                           end_row=1, end_column=len(HEADERS_VERIFICACION))
+            for c, h in enumerate(HEADERS_VERIFICACION, start=1):
+                cell = ws.cell(row=2, column=c, value=h)
+                cell.font = bold
+                cell.fill = head_fill
+                cell.border = borde
+                cell.alignment = centrado
+
+            tot_pares = tot_lista = tot_liq = 0
+            fila_n = 3
+            for n, f in enumerate(items, start=1):
+                pares = f['stock_u'] or 0
+                lista = f['precioventa'] or 0
+                liq = f['precio_liquidacion'] or 0
+                valores = [
+                    f['producto_id'], n, f['marca'] or '—', f['anio'] or 's/d',
+                    f['articulo'], f['descripcion'], f['color'] or '',
+                    f['tallas'], pares,
+                    f['fecha_fifo'].strftime('%d-%m-%Y') if f['fecha_fifo'] else 's/d',
+                    f['ultima_venta'].strftime('%d-%m-%Y') if f['ultima_venta'] else 'Nunca',
+                    lista, f['descuento_sugerido'] or 0, liq,
+                    '', '', '',  # Precio caja / ¿Coincide? / Observación (a mano)
+                ]
+                for c, v in enumerate(valores, start=1):
+                    ws.cell(row=fila_n, column=c, value=v).border = borde
+                tot_pares += pares
+                tot_lista += lista * pares
+                tot_liq += liq * pares
+                r = resumen_suc.setdefault((alias, f['anio'] or 0), {
+                    'pares': 0, 'costo': 0, 'lista': 0, 'liq': 0})
+                r['pares'] += pares
+                r['costo'] += f['valor_costo'] or 0
+                r['lista'] += lista * pares
+                r['liq'] += liq * pares
+                fila_n += 1
+
+            for col, val in ((2, 'TOTAL'), (9, tot_pares), (12, tot_lista), (14, tot_liq)):
+                cell = ws.cell(row=fila_n, column=col, value=val)
+                cell.font = bold
+                cell.border = borde
+
+        # ---- Hoja Resumen (analista: aquí SÍ va el costo) ----
+        ws_r = wb.create_sheet('Resumen')
+        ws_r.append(['Sucursal', 'Año', 'Pares', 'Valor a costo',
+                     'Valor precio lista', 'Valor liquidación est.'])
+        for c in range(1, 7):
+            ws_r.cell(row=1, column=c).font = bold
+        for (alias, anio), r in sorted(resumen_suc.items()):
+            ws_r.append([alias, anio or 's/d', r['pares'], r['costo'],
+                         r['lista'], r['liq']])
+        ws_r.append([])
+        ws_r.append(['Año', 'Antigüedad (años)', 'Descuento sugerido %',
+                     'Pares', 'Valor a costo', 'Valor liquidación est.'])
+        por_anio = {}
+        for (alias, anio), r in resumen_suc.items():
+            a = por_anio.setdefault(anio, {'pares': 0, 'costo': 0, 'liq': 0})
+            for k in ('pares', 'costo', 'liq'):
+                a[k] += r[k]
+        for anio in sorted(por_anio):
+            a = por_anio[anio]
+            antig = (hoy.year - anio) if anio else 's/d'
             pct = _descuento_sugerido(antig * 365 if isinstance(antig, int) else None)
-            ws3.append([k, antig, pct, r['pares'], r['valor'],
-                        r['valor_liq'] if r['valor_liq'] else '—'])
+            ws_r.append([anio or 's/d', antig, pct, a['pares'], a['costo'], a['liq']])
 
+        # ---- Hoja Filtros ----
         ws2 = wb.create_sheet('Filtros')
         ws2.append(['Filtro', 'Valor'])
         ws2.append(['Generado', hoy.strftime('%Y-%m-%d')])
-        etiquetas = _etiquetas_filtros(ctx)
-        for nombre, valor in etiquetas:
+        for nombre, valor in _etiquetas_filtros(ctx):
             ws2.append([nombre, valor])
+        ws2.append(['Años', anios_txt])
         ws2.append(['Bucket antigüedad', bucket or 'Todos'])
         ws2.append(['Búsqueda', request.GET.get('q') or '—'])
         if truncado:
@@ -1213,46 +1299,177 @@ def exportar_plan_liquidacion_excel(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-def _leer_ids_archivo(archivo):
-    """Extrae los producto_id de la primera columna de un .xlsx/.csv exportado."""
+def _fmt_clp(v):
+    return f'{int(v or 0):,}'.replace(',', '.')
+
+
+@require_GET
+@requiere_permiso('plan_liquidacion', 'puede_exportar')
+def imprimir_plan_liquidacion(request):
+    """Formulario de verificación IMPRIMIBLE: una sección por tienda con
+    layout fijo pensado para extracción por IA desde la foto del papel —
+    IDs impresos a máquina, casillas ☐ SÍ ☐ NO, barcode CODE128 por tienda
+    y encabezado repetido en cada página. Mismos GET params que el export."""
+    hoy = timezone.localdate()
+    filas, ctx, bucket, truncado = _filas_export(request, hoy)
+    grupos = _agrupar_por_sucursal(filas)
+    anios_txt = request.GET.get('anio') or 'Todos'
+
+    secciones = []
+    for (es_cd, alias), items in grupos.items():
+        for f in items:
+            f['lista_fmt'] = _fmt_clp(f['precioventa'])
+            f['liq_fmt'] = _fmt_clp(f['precio_liquidacion'])
+            f['fecha_txt'] = f['fecha_fifo'].strftime('%d-%m-%Y') if f['fecha_fifo'] else 's/d'
+        sid = items[0]['sucursal_id'] if items else 0
+        secciones.append({
+            'alias': alias, 'es_cd': es_cd,
+            'codigo': f'LIQ-{sid}-{hoy.strftime("%Y%m%d")}',
+            'items': items,
+            'total_pares': sum(i['stock_u'] or 0 for i in items),
+            'total_lista_fmt': _fmt_clp(sum((i['precioventa'] or 0) * (i['stock_u'] or 0) for i in items)),
+            'total_liq_fmt': _fmt_clp(sum((i['precio_liquidacion'] or 0) * (i['stock_u'] or 0) for i in items)),
+        })
+    return render(request, 'vistas/modulo_reportes/plan_liquidacion_imprimir.html', {
+        'secciones': secciones,
+        'fecha': hoy,
+        'anios': anios_txt,
+        'truncado': truncado,
+        'max_filas': MAX_EXPORT_FILAS,
+    })
+
+
+def _leer_archivo_verificacion(archivo):
+    """Lee un .xlsx/.csv de verificación. Devuelve (ids, verificaciones):
+    verificaciones = {producto_id: {'precio_caja', 'coincide', 'observacion'}}.
+
+    XLSX: solo hojas cuyo header (fila 1 o 2) empiece con 'ID' — las hojas
+    por tienda del export; ignora Resumen/Filtros (evita leer años como IDs).
+    CSV (p.ej. producido por la IA desde la foto del papel): columnas por
+    nombre — ID obligatoria; PRECIO_CAJA / COINCIDE / OBSERVACION opcionales.
+    """
+    def _norm(v):
+        return re.sub(r'[^A-Z_]', '', str(v or '').upper().replace(' ', '_'))
+
+    def _mapear(headers):
+        """{campo: índice} desde una fila de headers."""
+        m = {}
+        for i, h in enumerate(headers):
+            h = _norm(h)
+            if h == 'ID':
+                m.setdefault('id', i)
+            elif 'PRECIO_CAJA' in h or h == 'PRECIOCAJA':
+                m.setdefault('precio_caja', i)
+            elif 'COINCIDE' in h:
+                m.setdefault('coincide', i)
+            elif 'OBSERV' in h:
+                m.setdefault('observacion', i)
+        return m if 'id' in m else None
+
+    def _consumir(filas_iter, mapa, ids, verifs):
+        for row in filas_iter:
+            if not row:
+                continue
+            raw = row[mapa['id']] if mapa['id'] < len(row) else None
+            s = str(raw).strip() if raw is not None else ''
+            if not s.replace('.0', '').isdigit():
+                continue
+            pid = int(float(s))
+            ids.append(pid)
+            v = {}
+            for campo in ('precio_caja', 'coincide', 'observacion'):
+                idx = mapa.get(campo)
+                if idx is not None and idx < len(row) and row[idx] not in (None, ''):
+                    v[campo] = str(row[idx]).strip()
+            if v:
+                verifs[pid] = v
+
     nombre = (archivo.name or '').lower()
-    ids = []
+    ids, verifs = [], {}
     if nombre.endswith('.csv'):
         import csv
         import io
         txt = archivo.read().decode('utf-8-sig', errors='replace')
-        for row in csv.reader(io.StringIO(txt)):
-            if row and str(row[0]).strip().isdigit():
-                ids.append(int(str(row[0]).strip()))
+        rows = list(csv.reader(io.StringIO(txt)))
+        if not rows:
+            return [], {}
+        mapa = _mapear(rows[0])
+        if mapa:
+            _consumir(rows[1:], mapa, ids, verifs)
+        else:
+            # Sin header: primera columna = IDs (formato viejo).
+            _consumir(rows, {'id': 0}, ids, verifs)
     else:
         from openpyxl import load_workbook
         wb = load_workbook(archivo, read_only=True, data_only=True)
-        for row in wb.active.iter_rows(min_row=2, values_only=True):
-            if row and row[0] is not None and str(row[0]).strip().isdigit():
-                ids.append(int(str(row[0]).strip()))
-    return ids
+        for ws in wb.worksheets:
+            it = ws.iter_rows(values_only=True)
+            mapa = None
+            for _ in range(2):  # header en fila 1 (formato viejo) o 2 (título+header)
+                fila = next(it, None)
+                if fila is None:
+                    break
+                mapa = _mapear(fila)
+                if mapa:
+                    break
+            if mapa:
+                _consumir(it, mapa, ids, verifs)
+    return ids, verifs
 
 
 @require_POST
-@login_required
+@requiere_permiso('plan_liquidacion', 'puede_ver')
 def importar_seleccion_liquidacion(request):
-    """Importa un .xlsx/.csv (columna ID = producto_id, como el export) y
-    devuelve los producto_ids válidos en las sucursales del usuario, para
-    seleccionarlos y armar una campaña de liquidación."""
+    """Importa un .xlsx (multi-tab del export) o .csv (p.ej. extraído por IA
+    del formulario impreso: ID, PRECIO_CAJA, COINCIDE, OBSERVACION). Devuelve
+    los producto_ids válidos para seleccionar y armar campaña y, si vienen
+    columnas de verificación, un resumen de discrepancias (no persiste)."""
     try:
         archivo = request.FILES.get('archivo')
         if not archivo:
             return JsonResponse({'success': False, 'error': 'Sube un archivo .xlsx o .csv'}, status=400)
-        ids = _leer_ids_archivo(archivo)
+        ids, verifs = _leer_archivo_verificacion(archivo)
         if not ids:
             return JsonResponse({'success': False,
-                                 'error': 'No se encontraron IDs en la primera columna (usá el Excel exportado).'}, status=400)
+                                 'error': 'No se encontraron IDs (usá el Excel exportado o un CSV con columna ID).'}, status=400)
         sucursales = [s.id for s in _sucursales_usuario(request)]
-        validos = list(Producto.objects.filter(
-            id__in=ids, sucursal_id__in=sucursales).values_list('id', flat=True))
-        return JsonResponse({'success': True, 'producto_ids': validos,
-                             'importados': len(validos),
-                             'no_encontrados': len(set(ids)) - len(validos)})
+        productos = {p['id']: p for p in Producto.objects.filter(
+            id__in=ids, sucursal_id__in=sucursales,
+        ).values('id', 'articulo', 'precioventa')}
+        validos = list(productos.keys())
+
+        resultado = {'success': True, 'producto_ids': validos,
+                     'importados': len(validos),
+                     'no_encontrados': len(set(ids)) - len(validos)}
+
+        if verifs:
+            coincide_si = coincide_no = precio_distinto = 0
+            detalles = []
+            for pid, v in verifs.items():
+                p = productos.get(pid)
+                if not p:
+                    continue
+                resp = re.sub(r'[^A-Z]', '', str(v.get('coincide', '')).upper())
+                if resp.startswith('S'):
+                    coincide_si += 1
+                elif resp.startswith('N'):
+                    coincide_no += 1
+                pc_raw = re.sub(r'[^\d]', '', str(v.get('precio_caja', '')))
+                if pc_raw:
+                    pc = int(pc_raw)
+                    if pc != (p['precioventa'] or 0):
+                        precio_distinto += 1
+                        if len(detalles) < 20:
+                            detalles.append({'id': pid, 'articulo': p['articulo'],
+                                             'precio_lista': p['precioventa'],
+                                             'precio_caja': pc,
+                                             'observacion': v.get('observacion', '')})
+            resultado['verificacion'] = {
+                'con_datos': len(verifs), 'coincide_si': coincide_si,
+                'coincide_no': coincide_no, 'precio_distinto': precio_distinto,
+                'detalles': detalles,
+            }
+        return JsonResponse(resultado)
     except Exception as e:
         logger.exception('Error importando selección de liquidación')
         return JsonResponse({'success': False, 'error': str(e)}, status=500)

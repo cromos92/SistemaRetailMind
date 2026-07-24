@@ -103,8 +103,9 @@
                 <span style="font-weight:800; color:var(--nexo-secondary); font-size:.95rem;"><i class="ri-search-eye-line"></i> Detalle por producto</span>
                 <span class="pl-note">antigüedad FIFO · precio de liquidación sugerido por producto</span>
                 <span style="margin-left:auto;"></span>
-                <button class="pl-fbtn xls" onclick="exportarExcel()"><i class="ri-file-excel-2-line"></i> Exportar</button>
-                <button class="pl-fbtn" style="border-color:var(--nexo-accent); color:#08917a;" onclick="document.getElementById('det-import-file').click()"><i class="ri-upload-2-line"></i> Importar</button>
+                <button class="pl-fbtn xls" onclick="exportarExcel()" title="Excel: 1 hoja por tienda, con columnas de verificación"><i class="ri-file-excel-2-line"></i> Exportar</button>
+                <button class="pl-fbtn" style="border-color:var(--nexo-secondary); color:var(--nexo-secondary);" onclick="imprimirVerificacion()" title="Formulario impreso por tienda (para verificación física y lectura por IA)"><i class="ri-printer-line"></i> Imprimir verificación</button>
+                <button class="pl-fbtn" style="border-color:var(--nexo-accent); color:#08917a;" onclick="document.getElementById('det-import-file').click()" title="Sube el Excel exportado o el CSV extraído por IA del papel"><i class="ri-upload-2-line"></i> Importar</button>
                 <input type="file" id="det-import-file" accept=".xlsx,.csv" style="display:none;" onchange="importarSeleccion(this)">
                 <button class="pl-fbtn" id="btn-campana" style="border-color:var(--nexo-primary); color:var(--nexo-primary);" onclick="abrirModalCampana()" disabled><i class="ri-price-tag-2-line"></i> Crear campaña (<span id="sel-count">0</span>)</button>
                 <input type="text" id="det-q" class="pl-input" placeholder="Buscar artículo / descripción / marca…" oninput="buscarDetalle()">
@@ -189,6 +190,7 @@ const SEL = new Set();          // producto_ids seleccionados para campaña
 const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
 const CREAR_CAMPANA_API = "{% url 'crear_campana_liquidacion' %}";
 const PL_IMPORT_API = "{% url 'importar_seleccion_liquidacion' %}";
+const PL_PRINT_URL = "{% url 'imprimir_plan_liquidacion' %}";
 
 document.addEventListener('DOMContentLoaded', () => { cargarPlan(); });
 
@@ -601,7 +603,13 @@ function exportarExcel() {
     window.location = PL_XLS_API + '?' + p.toString();
 }
 
-// Importar un Excel/CSV exportado (columna ID) -> selecciona esos productos.
+// Abrir el formulario de verificación imprimible (1 sección por tienda).
+function imprimirVerificacion() {
+    const p = qsFiltros({ antiguedad: DET.antiguedad, q: DET.q, anio: Array.from(DET.anios).join(',') });
+    window.open(PL_PRINT_URL + '?' + p.toString(), '_blank');
+}
+
+// Importar Excel exportado o CSV de la IA (ID [+ PRECIO_CAJA, COINCIDE, OBS]).
 function importarSeleccion(input) {
     const file = input.files && input.files[0];
     if (!file) return;
@@ -616,10 +624,24 @@ function importarSeleccion(input) {
             (res.producto_ids || []).forEach(id => SEL.add(id));
             actualizarSelUI();
             cargarDetalle();
+            let html = `<b>${res.importados}</b> productos seleccionados${res.no_encontrados ? ` · ${res.no_encontrados} no válidos en tus sucursales` : ''}.`;
+            const v = res.verificacion;
+            if (v && v.con_datos) {
+                html += `<div style="text-align:left; margin-top:10px; padding:10px; background:#F5F5F7; border-radius:8px; font-size:.85rem;">
+                    <b>Verificación física (${v.con_datos} con datos):</b><br>
+                    ✅ Coincide: ${v.coincide_si} &nbsp; ❌ No coincide: ${v.coincide_no} &nbsp; 💲 Precio caja distinto: ${v.precio_distinto}`;
+                if (v.detalles && v.detalles.length) {
+                    html += `<hr style="margin:6px 0;"><div style="max-height:160px; overflow:auto;">` +
+                        v.detalles.map(d => `• <b>${d.articulo}</b>: lista $${(d.precio_lista || 0).toLocaleString('es-CL')} vs caja $${(d.precio_caja || 0).toLocaleString('es-CL')}${d.observacion ? ' — ' + d.observacion : ''}`).join('<br>') +
+                        `</div>`;
+                }
+                html += `</div>`;
+            }
+            html += `<br>Ya podés <b>Crear campaña</b> con la selección.`;
             Swal.fire({
-                icon: 'success', title: 'Importado',
-                html: `<b>${res.importados}</b> productos seleccionados${res.no_encontrados ? ` · ${res.no_encontrados} no válidos en tus sucursales` : ''}.<br>Ya podés <b>Crear campaña</b> con la selección.`,
+                icon: 'success', title: 'Importado', html: html, width: 640,
                 showCancelButton: res.importados > 0, confirmButtonText: res.importados > 0 ? 'Crear campaña' : 'OK',
+                cancelButtonText: 'Seguir aquí',
             }).then(x => { if (x.isConfirmed && res.importados > 0) abrirModalCampana(); });
         })
         .catch(e => { input.value = ''; Swal.fire({ icon: 'error', title: 'Error de red', text: String(e) }); });

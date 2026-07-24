@@ -2294,13 +2294,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <i class="ri-checkbox-circle-fill"></i> FACTURADA
                             </span>
                             ${cot.numero_factura ? `<div style="font-size: 10px; color: var(--nexo-text-muted); margin-top: 2px;">${cot.numero_factura}</div>` : ''}
-                            ${cot.tiene_despacho_pendiente ? `
-                                <div style="margin-top:3px;">
-                                    <span class="nexo-badge" style="background:rgba(255,140,0,.15);color:#FF8C00;font-size:10px;">
-                                        <i class="ri-truck-line"></i> Despacho pendiente
-                                    </span>
-                                </div>
-                            ` : ''}
+                            ${badgeCuadraturaDespacho(cot)}
                         ` : `
                             <span class="${obtenerClaseEstado(cot.estado)}">${cot.estado}</span>
                         `}
@@ -2323,12 +2317,94 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <i class="ri-truck-line"></i>
                                 </button>
                             ` : ''}
+                            ${cot.puede_validar_despacho ? `
+                                <button class="btn btn-action" style="background-color: var(--nexo-success); color: white; border-color: var(--nexo-success);" onclick="validarDespacho(${cot.id}, '${cot.numero_cotizacion}', ${cot.unidades_facturadas})" title="Dar OK al despacho (cuadratura facturado = despachado)">
+                                    <i class="ri-shield-check-line"></i>
+                                </button>
+                            ` : ''}
                         </div>
                     </td>
                 </tr>
             `;
         }).join('');
     }
+
+    // Badge de cuadratura de despacho para cotizaciones FACTURADAS.
+    // Naranja: faltan unidades por despachar (facturado ≠ sacado de stock).
+    // Verde: cuadra pero falta el OK del administrador.
+    // Verde con escudo: despacho validado por administrador.
+    function badgeCuadraturaDespacho(cot) {
+        const fact = cot.unidades_facturadas || 0;
+        if (!fact) return '';
+        const desp = cot.unidades_despachadas || 0;
+        const pend = cot.unidades_pendientes || 0;
+        if (pend > 0) {
+            return `
+                <div style="margin-top:3px;">
+                    <span class="nexo-badge" style="background:rgba(255,140,0,.15);color:#FF8C00;font-size:10px;" title="Facturadas ${fact} uds, despachadas ${desp}: faltan ${pend} por asociar/dar salida">
+                        <i class="ri-truck-line"></i> Despacho ${desp}/${fact} uds
+                    </span>
+                </div>`;
+        }
+        if (cot.despacho_validado) {
+            return `
+                <div style="margin-top:3px;">
+                    <span class="nexo-badge" style="background:rgba(0,212,170,.15);color:var(--nexo-accent);font-size:10px;" title="Cuadratura validada por ${cot.despacho_validado_por || 'administrador'}">
+                        <i class="ri-shield-check-fill"></i> Validado ${fact}/${fact} uds
+                    </span>
+                </div>`;
+        }
+        return `
+            <div style="margin-top:3px;">
+                <span class="nexo-badge" style="background:rgba(34,197,94,.15);color:#16a34a;font-size:10px;" title="Facturado = despachado (${fact} uds). Pendiente el OK del administrador">
+                    <i class="ri-checkbox-circle-line"></i> Despacho ${fact}/${fact} uds
+                </span>
+            </div>`;
+    }
+
+    // OK final del administrador a la cuadratura del despacho
+    window.validarDespacho = function(cotizacionId, numeroCotizacion, unidades) {
+        Swal.fire({
+            icon: 'question',
+            title: 'Validar despacho',
+            html: `
+                <div class="text-start">
+                    <p class="mb-2">Vas a dar el <strong>OK final</strong> al despacho de la cotización <strong>${numeroCotizacion}</strong>.</p>
+                    <div style="background:rgba(34,197,94,.1);border-radius:8px;padding:10px;">
+                        <div class="d-flex justify-content-between"><span>Unidades facturadas</span><strong>${unidades}</strong></div>
+                        <div class="d-flex justify-content-between"><span>Unidades despachadas</span><strong>${unidades}</strong></div>
+                    </div>
+                    <p class="small text-muted mt-2 mb-0">Confirma que todo lo facturado ya salió de stock. Quedará registrado a tu nombre en el historial.</p>
+                </div>`,
+            showCancelButton: true,
+            confirmButtonText: '<i class="ri-shield-check-line"></i> Dar OK',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#16a34a',
+        }).then((result) => {
+            if (!result.isConfirmed) return;
+            fetch('/app/api/cotizaciones/validar-despacho/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                },
+                body: JSON.stringify({ cotizacion_id: cotizacionId }),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarExito(data.message || 'Despacho validado');
+                    cargarCotizaciones();
+                } else {
+                    mostrarError(data.error || 'No se pudo validar el despacho');
+                }
+            })
+            .catch(err => {
+                console.error('Error validando despacho:', err);
+                mostrarError('Error de conexión al validar el despacho');
+            });
+        });
+    };
 
     function actualizarEstadisticas(stats) {
         document.getElementById('totalCotizaciones').querySelector('.counter-value').textContent = stats.total || 0;
@@ -4831,15 +4907,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 <p class="mt-2 text-muted">Cargando ítems pendientes...</p>
             </div>`;
 
-        new bootstrap.Modal(document.getElementById('modalAsignarSku')).show();
+        // getOrCreateInstance: esta función se re-invoca tras un despacho
+        // parcial con el modal ya abierto; `new Modal(...)` crearía una
+        // segunda instancia y duplicaría el backdrop.
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAsignarSku')).show();
 
         // Cargar detalle de cotización para obtener ítems pendientes
         fetch(apiUrls.detalleCotizacion(cotizacionId))
             .then(r => r.json())
             .then(data => {
                 if (!data.success) { container.innerHTML = `<div class="alert alert-danger">${data.error}</div>`; return; }
+                // Filtro por SALDO en unidades: un ítem despachado parcialmente
+                // sigue apareciendo con las unidades que le faltan.
                 const items = (data.cotizacion.items || []).filter(item =>
-                    (!item.tiene_sku || item.es_producto_pendiente) && !item.sku_asignado_post_factura
+                    (item.unidades_pendientes || 0) > 0
                 );
                 if (items.length === 0) {
                     container.innerHTML = `
@@ -4858,6 +4939,8 @@ document.addEventListener('DOMContentLoaded', function() {
         let html = `<p class="text-muted small mb-3"><i class="ri-information-line"></i> Busca el SKU correspondiente a cada ítem y confirma para descontar stock.</p>`;
         items.forEach((item, idx) => {
             const itemId = `sku-item-${item.id}`;
+            const pendientes = item.unidades_pendientes || item.cantidad;
+            const despachadas = item.unidades_despachadas || 0;
             html += `
             <div class="asignar-sku-item" id="${itemId}">
                 <div class="d-flex justify-content-between align-items-start mb-2">
@@ -4867,9 +4950,18 @@ document.addEventListener('DOMContentLoaded', function() {
                             ? `<span class="nexo-badge ms-1" style="background:var(--nexo-gray-100);color:var(--nexo-text-secondary);">SKU esperado: ${item.sku_producto_pendiente}</span>`
                             : ''}
                     </div>
-                    <span class="nexo-badge" style="background:rgba(255,140,0,.15);color:#FF8C00;">
-                        x${item.cantidad} unidades
-                    </span>
+                    <div class="text-end">
+                        <span class="nexo-badge" style="background:var(--nexo-gray-100);color:var(--nexo-text-secondary);">
+                            Facturado x${item.cantidad}
+                        </span>
+                        ${despachadas > 0 ? `
+                        <span class="nexo-badge" style="background:rgba(34,197,94,.15);color:#16a34a;">
+                            Despachado x${despachadas}
+                        </span>` : ''}
+                        <span class="nexo-badge" style="background:rgba(255,140,0,.15);color:#FF8C00;">
+                            Pendiente x${pendientes}
+                        </span>
+                    </div>
                 </div>
                 <div class="input-group input-group-sm mb-2">
                     <span class="input-group-text"><i class="ri-search-line"></i></span>
@@ -4884,11 +4976,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="d-flex align-items-center gap-2">
                     <label class="form-label mb-0 small">Cantidad a despachar:</label>
                     <input type="number" class="form-control form-control-sm" id="qty-${item.id}"
-                           value="${item.cantidad}" min="1" max="${item.cantidad}" style="width:80px;">
+                           value="${pendientes}" min="1" max="${pendientes}" style="width:80px;">
                     <button class="nexo-btn-primary btn-sm" onclick="confirmarAsignarSku(${item.id}, ${cotizacionId})"
                             id="btn-asignar-${item.id}" disabled style="font-size:12px;">
                         <i class="ri-check-line me-1"></i> Asignar y Despachar
                     </button>
+                    <small class="text-muted">Puedes despachar menos y completar el resto cuando llegue.</small>
                 </div>
             </div>`;
         });
@@ -4970,21 +5063,30 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(r => r.json())
         .then(data => {
             if (data.success) {
-                // Marcar ítem como resuelto
-                const itemEl = document.getElementById(`sku-item-${detalleId}`);
-                if (itemEl) {
-                    itemEl.classList.add('resuelto');
-                    itemEl.innerHTML = `
-                        <div class="d-flex align-items-center gap-2">
-                            <i class="ri-checkbox-circle-fill" style="color:var(--nexo-success);font-size:20px;"></i>
-                            <div>
-                                <strong>SKU ${data.sku}</strong> — ${data.nombre_producto}<br>
-                                <span class="text-muted small">x${cantidad} unidades despachadas · Stock decrementado</span>
-                            </div>
-                        </div>`;
+                const saldo = data.saldo_pendiente_item || 0;
+                if (data.item_completado) {
+                    // Ítem completo: marcarlo como resuelto
+                    const itemEl = document.getElementById(`sku-item-${detalleId}`);
+                    if (itemEl) {
+                        itemEl.classList.add('resuelto');
+                        itemEl.innerHTML = `
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="ri-checkbox-circle-fill" style="color:var(--nexo-success);font-size:20px;"></i>
+                                <div>
+                                    <strong>SKU ${data.sku}</strong> — ${data.nombre_producto}<br>
+                                    <span class="text-muted small">x${cantidad} unidades despachadas · Ítem completado</span>
+                                </div>
+                            </div>`;
+                    }
+                } else {
+                    // Despacho PARCIAL: re-render del modal para mostrar el
+                    // saldo actualizado (el ítem sigue pendiente por ${saldo} uds)
+                    abrirModalAsignarSku(cotizacionId);
                 }
                 if (data.despacho_completado) {
-                    mostrarExito('¡Todos los ítems han sido despachados! Despacho completado.');
+                    mostrarExito('¡Todas las unidades han sido despachadas! Despacho completado. Falta el OK del administrador.');
+                } else if (saldo > 0) {
+                    mostrarExito(`SKU ${data.sku} despachado (x${cantidad}). Quedan ${saldo} unidades pendientes de este ítem.`);
                 } else {
                     mostrarExito(`SKU ${data.sku} asignado correctamente. Stock decrementado.`);
                 }

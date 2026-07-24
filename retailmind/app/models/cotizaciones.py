@@ -167,7 +167,28 @@ class Cotizacion_Empresa(models.Model):
         null=True, blank=True,
         help_text="Estado del despacho cuando la cotización tiene ítems sin SKU al facturar"
     )
-    
+
+    # === VALIDACIÓN DE DESPACHO (OK del Administrador) ===
+    # Cierre formal del despacho diferido: un usuario con permiso
+    # `gestion_cotizaciones.puede_aprobar` confirma que las unidades
+    # facturadas coinciden con las despachadas (salidas de stock).
+    despacho_validado = models.BooleanField(
+        default=False,
+        help_text="True cuando un administrador dio el OK final al despacho (cuadratura facturado vs despachado)"
+    )
+    despacho_validado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='despachos_cotizacion_validados',
+        help_text="Usuario que validó el despacho completado"
+    )
+    fecha_validacion_despacho = models.DateTimeField(
+        blank=True, null=True,
+        help_text="Fecha/hora en que se validó el despacho"
+    )
+
+
     # === ARCHIVOS ADJUNTOS ===
     archivo_pdf = models.FileField(
         upload_to='cotizaciones/pdfs/', 
@@ -301,21 +322,64 @@ class Cotizacion_Empresa(models.Model):
             self.estado_despacho = self.DESPACHO_COMPLETADO
         self.save()
 
+    # ------------------------------------------------------------------
+    # Cuadratura por UNIDADES (facturado vs despachado)
+    #
+    # La factura siempre cubre el 100% de lo cotizado; el despacho puede ir
+    # saliendo por partes. Antes el estado se calculaba contando ÍTEMS con
+    # flag pendiente, así que un despacho parcial (facturado 5, sacado 2)
+    # cerraba el ítem y el descuadre quedaba invisible. Ahora todo se mide
+    # en unidades.
+    # ------------------------------------------------------------------
+
+    @property
+    def unidades_facturadas(self):
+        """Total de unidades cubiertas por la factura (todos los ítems)."""
+        from django.db.models import Sum
+        return self.items.aggregate(t=Sum('cantidad'))['t'] or 0
+
+    @property
+    def unidades_pendientes_despacho(self):
+        """Unidades facturadas que aún no tienen salida de stock."""
+        return sum(item.unidades_pendientes_despacho for item in self.items.all())
+
+    @property
+    def unidades_despachadas(self):
+        """Unidades con salida de stock (al facturar o post-factura)."""
+        return self.unidades_facturadas - self.unidades_pendientes_despacho
+
+    @property
+    def despacho_cuadrado(self):
+        """True si facturado == despachado (en unidades)."""
+        return self.facturada and self.unidades_pendientes_despacho == 0
+
     def actualizar_estado_despacho(self):
-        """Recalcula estado_despacho según ítems pendientes restantes."""
+        """Recalcula estado_despacho por UNIDADES pendientes (no por ítems)."""
         if not self.facturada:
             return
-        items_pendientes = self.items.filter(
-            es_producto_pendiente=True,
-            sku_asignado_post_factura=False
-        ).count()
-        if items_pendientes == 0:
+        pendientes = self.unidades_pendientes_despacho
+        if pendientes == 0:
             self.estado_despacho = self.DESPACHO_COMPLETADO
-        elif items_pendientes < self.items.count():
+        elif pendientes < self.unidades_facturadas:
             self.estado_despacho = self.DESPACHO_PARCIAL
         else:
             self.estado_despacho = self.DESPACHO_PENDIENTE
         self.save(update_fields=['estado_despacho'])
+
+    def invalidar_validacion_despacho(self):
+        """Limpia el OK del administrador (ej. al revertir un despacho).
+
+        Devuelve True si había una validación vigente (para que el llamador
+        registre el historial con contexto)."""
+        if not self.despacho_validado:
+            return False
+        self.despacho_validado = False
+        self.despacho_validado_por = None
+        self.fecha_validacion_despacho = None
+        self.save(update_fields=[
+            'despacho_validado', 'despacho_validado_por', 'fecha_validacion_despacho',
+        ])
+        return True
 
 
 class Cotizacion_Empresa_Detalle(models.Model):
@@ -513,6 +577,36 @@ class Cotizacion_Empresa_Detalle(models.Model):
             return str(self.producto_existente.sku)
         return self.sku_producto_pendiente or "N/A"
 
+    # --- Cuadratura por unidades (despacho diferido) ---
+
+    @property
+    def nacio_pendiente(self):
+        """True si el ítem se facturó SIN SKU (despacho diferido).
+
+        Tras completarse el despacho `es_producto_pendiente` vuelve a False,
+        pero `sku_asignado_post_factura` queda True, así que la condición
+        sigue siendo detectable."""
+        return self.es_producto_pendiente or self.sku_asignado_post_factura
+
+    @property
+    def unidades_despachadas_post_factura(self):
+        """Unidades ya despachadas después de facturar (suma de asignaciones)."""
+        from django.db.models import Sum
+        return (
+            self.skus_asociados.filter(asignado_post_factura=True)
+            .aggregate(t=Sum('cantidad'))['t'] or 0
+        )
+
+    @property
+    def unidades_pendientes_despacho(self):
+        """Unidades facturadas sin salida de stock todavía.
+
+        Un ítem que tenía SKU al facturar salió completo con el ticket → 0.
+        Un ítem que nació pendiente debe lo facturado menos lo ya despachado."""
+        if not self.nacio_pendiente:
+            return 0
+        return max(0, self.cantidad - self.unidades_despachadas_post_factura)
+
 
 class Cotizacion_Empresa_Detalle_SKU(models.Model):
     """
@@ -550,7 +644,16 @@ class Cotizacion_Empresa_Detalle_SKU(models.Model):
         default=0,
         help_text="Precio de venta unitario"
     )
-    
+    asignado_post_factura = models.BooleanField(
+        default=False,
+        help_text=(
+            "True cuando este SKU se asignó DESPUÉS de facturar (despacho "
+            "diferido con salida de stock). Los SKUs asociados al crear la "
+            "cotización quedan en False: sin esta marca la cuadratura "
+            "facturado-vs-despachado sería imposible."
+        )
+    )
+
     # === METADATA ===
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -612,6 +715,7 @@ class Historial_Cotizacion(models.Model):
             ('ITEM_ELIMINADO', 'Item Eliminado'),
             ('SKU_ASIGNADO', 'SKU Asignado Post-Factura'),
             ('DESPACHO_COMPLETADO', 'Despacho Completado'),
+            ('DESPACHO_VALIDADO', 'Despacho Validado (OK Admin)'),
         ]
     )
     descripcion = models.TextField(

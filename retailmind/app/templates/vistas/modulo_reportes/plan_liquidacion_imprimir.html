@@ -1,0 +1,139 @@
+{% load static %}<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Verificación Liquidación · {{ fecha|date:"d-m-Y" }}</title>
+<script src="{% static 'js/JsBarcode.all.min.js' %}"></script>
+<style>
+/* ============================================================
+   FORMULARIO DE VERIFICACIÓN DE LIQUIDACIÓN — impresión física
+   Layout FIJO para extracción por IA desde foto/escaneo:
+   - IDs impresos en monoespaciada (OCR sin error)
+   - Casillas ☐ SÍ ☐ NO (detección de marcas, no caligrafía)
+   - Encabezado repetido en cada página (thead) con la tienda
+   - Barcode CODE128 por tienda para atribuir páginas sueltas
+   ============================================================ */
+* { margin:0; padding:0; box-sizing:border-box; }
+@page { size: letter landscape; margin: 8mm; }
+body { font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; color:#000; background:#fff; }
+
+.toolbar { padding:10px 16px; background:#1A1A2E; display:flex; gap:10px; align-items:center; }
+.toolbar button { padding:8px 18px; border:none; border-radius:8px; font-weight:700; cursor:pointer; background:#0066FF; color:#fff; font-size:14px; }
+.toolbar span { color:#D1D1D9; font-size:12px; }
+@media print { .toolbar { display:none; } }
+
+section.tienda { page-break-after: always; padding: 4mm 0; }
+section.tienda:last-child { page-break-after: auto; }
+
+table { width:100%; border-collapse:collapse; table-layout:fixed; }
+thead { display: table-header-group; }   /* se repite en cada página impresa */
+tfoot { display: table-row-group; }      /* totales/firma SOLO al final */
+
+.head-title th { border:none; padding:0 0 2mm 0; text-align:left; }
+.head-flex { display:flex; justify-content:space-between; align-items:flex-end; gap:8mm; }
+.head-flex h1 { font-size:13pt; font-weight:800; letter-spacing:.3px; }
+.head-flex .meta { font-size:8pt; color:#222; margin-top:1mm; }
+.barcode { height:11mm; }
+
+th, td { border:1px solid #000; padding:1.5px 3px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+tr.cols th { background:#E8EAF0; font-size:7.5pt; font-weight:700; text-align:center; padding:2px 2px;
+             -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+tbody tr { height:8.5mm; }
+tbody td { vertical-align:middle; }
+td.num { text-align:right; }
+td.ctr { text-align:center; }
+td.id { font-family:'Courier New', Courier, monospace; font-weight:700; text-align:center; font-size:9pt; }
+td.blank { background:#fff; }
+
+.box { display:inline-block; width:4mm; height:4mm; border:1.4px solid #000; vertical-align:middle; margin:0 1mm 0 1.5mm; }
+td.check { text-align:center; font-size:7.5pt; font-weight:700; }
+
+tfoot td { border:1px solid #000; font-weight:800; }
+tr.firma td { border:none; border-top:2px solid #000; padding-top:4mm; height:12mm; font-size:9pt; }
+.aviso { margin:6mm 12mm; padding:4mm; border:2px solid #f06548; font-weight:700; }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+    <button onclick="window.print()">🖨 Imprimir</button>
+    <span>{{ secciones|length }} tienda(s) · Años: {{ anios }} · Generado: {{ fecha|date:"d-m-Y" }} — cada tienda sale en páginas separadas</span>
+</div>
+
+{% if truncado %}<div class="aviso">ADVERTENCIA: listado truncado a {{ max_filas }} filas. Acotá con filtros (sucursal / año / marca).</div>{% endif %}
+
+{% for s in secciones %}
+<section class="tienda">
+    <table>
+        <colgroup>
+            <col style="width:3%"><col style="width:6%"><col style="width:7%"><col style="width:4%">
+            <col style="width:9%"><col style="width:10%"><col style="width:6%"><col style="width:4%">
+            <col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:4%">
+            <col style="width:7%"><col style="width:8%"><col style="width:7%"><col style="width:7%">
+        </colgroup>
+        <thead>
+            <tr class="head-title"><th colspan="16">
+                <div class="head-flex">
+                    <div>
+                        <h1>VERIFICACIÓN LIQUIDACIÓN — {{ s.alias }}{% if s.es_cd %} (BODEGA/CD){% endif %}</h1>
+                        <div class="meta">Generado: {{ fecha|date:"d-m-Y" }} · Años: {{ anios }} · Código: {{ s.codigo }} · {{ s.items|length }} productos · Instrucción: anote el precio marcado en la caja, marque con X si coincide con el precio lista, y observaciones (caja dañada, sin caja, talla faltante, etc.)</div>
+                    </div>
+                    <svg class="barcode" data-code="{{ s.codigo }}"></svg>
+                </div>
+            </th></tr>
+            <tr class="cols">
+                <th>N°</th><th>ID</th><th>Marca</th><th>Año</th><th>Artículo</th><th>Descripción</th>
+                <th>Color</th><th>Pares</th><th>F. ingreso</th><th>P. lista</th><th>P. liq.</th><th>Desc%</th>
+                <th>Precio caja $</th><th>¿Coincide?</th><th>Fecha rev.</th><th>Observación</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in s.items %}
+            <tr>
+                <td class="ctr">{{ forloop.counter }}</td>
+                <td class="id">{{ f.producto_id }}</td>
+                <td>{{ f.marca|default:"—" }}</td>
+                <td class="ctr">{{ f.anio|default:"s/d" }}</td>
+                <td>{{ f.articulo }}</td>
+                <td>{{ f.descripcion|truncatechars:30 }}</td>
+                <td>{{ f.color|default:"" }}</td>
+                <td class="ctr">{{ f.stock_u }}</td>
+                <td class="ctr">{{ f.fecha_txt }}</td>
+                <td class="num">${{ f.lista_fmt }}</td>
+                <td class="num">${{ f.liq_fmt }}</td>
+                <td class="ctr">{% if f.descuento_sugerido %}-{{ f.descuento_sugerido }}%{% else %}—{% endif %}</td>
+                <td class="blank"></td>
+                <td class="check"><span class="box"></span>SÍ <span class="box"></span>NO</td>
+                <td class="blank"></td>
+                <td class="blank"></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="7">TOTAL {{ s.alias }}</td>
+                <td class="ctr">{{ s.total_pares }}</td>
+                <td></td>
+                <td class="num">${{ s.total_lista_fmt }}</td>
+                <td class="num">${{ s.total_liq_fmt }}</td>
+                <td colspan="5"></td>
+            </tr>
+            <tr class="firma">
+                <td colspan="16">Verificado por: ______________________________ &nbsp;&nbsp; RUT: ______________________ &nbsp;&nbsp; Fecha: ______ / ______ / __________ &nbsp;&nbsp; Firma: ______________________________</td>
+            </tr>
+        </tfoot>
+    </table>
+</section>
+{% endfor %}
+
+{% if not secciones %}<div class="aviso">Sin productos con los filtros actuales.</div>{% endif %}
+
+<script>
+document.querySelectorAll('.barcode').forEach(function (el) {
+    try {
+        JsBarcode(el, el.dataset.code, { format: 'CODE128', height: 34, fontSize: 11, margin: 0, displayValue: true });
+    } catch (e) { /* sin barcode: el código va igualmente en texto */ }
+});
+</script>
+</body>
+</html>

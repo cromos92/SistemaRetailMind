@@ -2860,9 +2860,27 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
     # Obtener o crear receptor (cliente)
     receptor = None
     if ticket.cliente_rut and ticket.cliente_nombre:
-        # Buscar si ya existe el cliente como Empresa
-        receptor = Empresa.objects.filter(rut=ticket.cliente_rut).first()
-        
+        # Buscar si ya existe el cliente como Empresa.
+        # OJO: `Empresa.rut` NO es único y hay ~35 RUTs con ficha duplicada;
+        # sin `order_by` el `.first()` era NO determinístico y la factura podía
+        # tomar la comuna/ciudad de cualquiera de las fichas. Además algunas
+        # fichas legacy guardan el RUT CON puntos (12.345.678-9) mientras que
+        # `ticket.cliente_rut` viene normalizado sin puntos, lo que provocaba
+        # que no se encontrara y se creara una ficha duplicada nueva.
+        rut_norm = formatear_rut(ticket.cliente_rut)  # sin puntos, con guión
+        candidatos_rut = {ticket.cliente_rut, rut_norm}
+        if '-' in rut_norm:
+            _cuerpo, _dv = rut_norm.split('-', 1)
+            if _cuerpo.isdigit():
+                _cuerpo_puntos = f"{int(_cuerpo):,}".replace(',', '.')
+                candidatos_rut.add(f"{_cuerpo_puntos}-{_dv}")
+        receptor = (
+            Empresa.objects
+            .filter(rut__in=candidatos_rut)
+            .order_by('id')
+            .first()
+        )
+
         if not receptor:
             # Crear empresa/cliente
             receptor = Empresa.objects.create(
@@ -3300,13 +3318,18 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                     'nombre_impresora_factura': getattr(ticket.sucursal, 'nombre_impresora_factura', 'factura') or 'factura',
                     'sucursal': limpiar_texto(ticket.sucursal.alias if ticket.sucursal else ''),
                 },
+                # Receptor de factura: la fuente de verdad son los datos del TICKET
+                # (lo que el cajero vio y corrigió en el POS), con fallback a la ficha
+                # Empresa. Antes se leía SOLO `receptor.*`, así que la factura salía con
+                # la comuna/ciudad vieja de la ficha (o de una ficha duplicada arbitraria)
+                # e ignoraba lo tipeado en el POS. Para boleta el receptor es consumidor final.
                 'receptor': {
-                    'rut': receptor.rut if receptor and not es_boleta else '66666666-6',  # Consumidor final para boletas
-                    'razon_social': limpiar_texto(receptor.razon_social if receptor and not es_boleta else 'CONSUMIDOR FINAL'),
-                    'giro': limpiar_texto(receptor.giro if receptor and not es_boleta else ''),
-                    'direccion': limpiar_texto(receptor.direccion if receptor and not es_boleta else ''),
-                    'comuna': limpiar_texto(receptor.comuna if receptor and not es_boleta else ''),
-                    'ciudad': limpiar_texto(receptor.ciudad if receptor and not es_boleta else '')
+                    'rut': (ticket.cliente_rut or (receptor.rut if receptor else '')) if not es_boleta else '66666666-6',
+                    'razon_social': limpiar_texto((ticket.cliente_nombre or (receptor.razon_social if receptor else '')) if not es_boleta else 'CONSUMIDOR FINAL'),
+                    'giro': limpiar_texto((ticket.cliente_giro or (receptor.giro if receptor else '')) if not es_boleta else ''),
+                    'direccion': limpiar_texto((ticket.cliente_direccion or (receptor.direccion if receptor else '')) if not es_boleta else ''),
+                    'comuna': limpiar_texto((ticket.cliente_comuna or (receptor.comuna if receptor else '')) if not es_boleta else ''),
+                    'ciudad': limpiar_texto((ticket.cliente_ciudad or (receptor.ciudad if receptor else '')) if not es_boleta else '')
                 },
                 'totales': {
                     'monto_neto': int(neto),

@@ -5429,43 +5429,44 @@ document.addEventListener('DOMContentLoaded', function() {
                 fecha_validez: ticket.fecha_validez
             };
             
-            // Pre-seleccionar Factura Electrónica (las cotizaciones son para empresas)
+            // Pre-seleccionar Factura Electrónica (las cotizaciones son para empresas).
+            // Se hace en setTimeout porque irAPaso(2) corre justo después de
+            // cargarTicket() y, con el radio aún en Boleta, deja la UI de factura
+            // oculta; este bloque (que corre al final) la re-muestra.
             setTimeout(() => {
                 const radioFactura = document.getElementById('tipoFacturaElectronica');
                 if (radioFactura) {
                     radioFactura.checked = true;
-                    radioFactura.dispatchEvent(new Event('change'));
-                    
-                    // ✅ OCULTAR secciones de búsqueda (ya sabemos la empresa de la cotización)
-                    const busquedaEmpresa = document.getElementById('busquedaEmpresaSection');
-                    if (busquedaEmpresa) {
-                        busquedaEmpresa.style.display = 'none';
-                    }
-                    const busquedaCliente = document.getElementById('buscarRut')?.closest('.col-md-6');
-                    if (busquedaCliente) {
-                        busquedaCliente.style.display = 'none';
-                    }
-                    
-                    // ✅ Mostrar sección de facturación con datos de la empresa
-                    const seccionFacturacion = document.getElementById('seccionFacturacion');
-                    if (seccionFacturacion) {
-                        seccionFacturacion.style.display = 'block';
+                    // ⚠️ El listener de `tipoDocumento` está DELEGADO en `document`.
+                    // `dispatchEvent(new Event('change'))` crea un evento que NO
+                    // burbujea (bubbles:false), por lo que el listener nunca se
+                    // disparaba y las secciones de factura (datos tributarios,
+                    // CONDICIÓN DE PAGO y REFERENCIAS) quedaban en display:none.
+                    // Llamamos directo a los handlers del listener, sin pasar por
+                    // limpiarFormularioCliente (conservamos los datos de la cotización).
+                    actualizarInfoTipoDocumento('FACTURA_ELECTRONICA');
+                    actualizarRequerimientosCliente('FACTURA_ELECTRONICA');
+
+                    // Volcar los datos de la empresa de la cotización al formulario
+                    // de factura: llena tanto los campos canónicos como el espejo *F
+                    // (clienteComunaF/clienteCiudadF/…) y refresca la vista previa.
+                    if (ticket.cliente) {
+                        llenarDatosEmpresa(ticket.cliente);
                     }
                 }
-                
-                // ✅ Mostrar datos de la empresa de la cotización
+
+                // Panel resumen de la empresa de la cotización (RUT, comuna, ciudad,
+                // y aviso de datos faltantes para factura). Vive dentro de
+                // busquedaEmpresaSection, que ahora queda visible.
                 if (ticket.cliente) {
                     mostrarDatosEmpresaCotizacion(ticket.cliente, ticket.numero_cotizacion);
                 }
-                
-                // Mostrar sección de referencias para que el usuario pueda agregar
-                // orden de compra, HES, guía de despacho, etc. si lo necesita
-                // NOTA: NO se agrega la cotización automáticamente al DTE
-                // La relación cotización-factura queda guardada internamente via cotizacion_id
-                const seccionRef = document.getElementById('seccionReferencia');
-                if (seccionRef) {
-                    seccionRef.style.display = 'block';
-                }
+
+                // NOTA: las secciones de REFERENCIAS (para agregar OC/HES/guía de
+                // despacho) y de CONDICIÓN DE PAGO quedan visibles vía
+                // actualizarInfoTipoDocumento('FACTURA_ELECTRONICA'). La cotización
+                // NO se agrega automáticamente al DTE; la relación cotización-factura
+                // queda guardada internamente vía cotizacion_id.
 
                 // Cotización = venta a empresa: apagar vale y puntos.
                 actualizarVisibilidadFidelizacion();

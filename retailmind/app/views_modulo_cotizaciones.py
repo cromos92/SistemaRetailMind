@@ -27,10 +27,23 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 from .models import (
     Cotizacion_Empresa, Cotizacion_Empresa_Detalle, Cotizacion_Empresa_Detalle_SKU,
     Historial_Cotizacion, Empresa, Sucursal, Producto_Talla, Vendedor,
-    Movimientos_Producto, Dte_Productos,
+    Movimientos_Producto, Dte_Productos, PermisoRol,
 )
 
 logger = logging.getLogger('app')
+
+
+def _puede_validar_despacho(request):
+    """¿El usuario puede dar el OK final al despacho de una cotización?
+
+    Gobernado por el permiso granular `gestion_cotizaciones.puede_aprobar`
+    (configurable en /permisos/gestion/), mismo patrón que la aprobación de
+    devoluciones por garantía. La sucursal activa puede restringirlo vía
+    PermisoSucursal."""
+    return PermisoRol.tiene_permiso(
+        request.user, 'gestion_cotizaciones', 'puede_aprobar',
+        sucursal_id=request.session.get('idSucursalActual'),
+    )
 
 
 # ==================== VISTAS PRINCIPALES ====================
@@ -249,6 +262,9 @@ def listar_cotizaciones(request):
         fin = inicio + per_page
         cotizaciones_paginadas = cotizaciones[inicio:fin]
         
+        # Permiso de validación (una sola vez, aplica a toda la lista)
+        puede_validar = _puede_validar_despacho(request)
+
         # Serializar datos
         cotizaciones_data = []
         for cot in cotizaciones_paginadas:
@@ -322,6 +338,41 @@ def listar_cotizaciones(request):
                     if esta_facturada else 0
                 ),
             })
+
+            # Cuadratura por UNIDADES (facturado vs despachado) + OK admin.
+            # Solo tiene sentido en facturadas; en el resto va en 0 para que
+            # el frontend no pinte badges.
+            if esta_facturada:
+                uds_facturadas = cot.unidades_facturadas
+                uds_pendientes = cot.unidades_pendientes_despacho
+                cotizaciones_data[-1].update({
+                    'unidades_facturadas': uds_facturadas,
+                    'unidades_despachadas': uds_facturadas - uds_pendientes,
+                    'unidades_pendientes': uds_pendientes,
+                    # Por UNIDADES, no por estado_despacho guardado: un parcial
+                    # cerrado en falso por el flujo viejo (estado COMPLETADO
+                    # stale) debe recuperar el botón de despacho.
+                    'tiene_despacho_pendiente': uds_pendientes > 0,
+                    'despacho_validado': cot.despacho_validado,
+                    'despacho_validado_por': (
+                        (cot.despacho_validado_por.get_full_name()
+                         or cot.despacho_validado_por.username)
+                        if cot.despacho_validado_por else ''
+                    ),
+                    'puede_validar_despacho': (
+                        puede_validar and not cot.despacho_validado
+                        and uds_pendientes == 0
+                    ),
+                })
+            else:
+                cotizaciones_data[-1].update({
+                    'unidades_facturadas': 0,
+                    'unidades_despachadas': 0,
+                    'unidades_pendientes': 0,
+                    'despacho_validado': False,
+                    'despacho_validado_por': '',
+                    'puede_validar_despacho': False,
+                })
         
         return JsonResponse({
             'success': True,
@@ -445,6 +496,9 @@ def detalle_cotizacion(request, cotizacion_id):
                 'tiene_stock': item.tiene_stock_suficiente,
                 'stock_disponible': item.stock_disponible,
                 'observaciones': item.observaciones or '',
+                # Cuadratura por unidades (despacho diferido parcial)
+                'unidades_despachadas': item.unidades_despachadas_post_factura,
+                'unidades_pendientes': item.unidades_pendientes_despacho,
             })
         
         # Datos de la cotización
@@ -473,6 +527,11 @@ def detalle_cotizacion(request, cotizacion_id):
             'items': items_data,
             'esta_vigente': cotizacion.esta_vigente,
             'dias_restantes': cotizacion.dias_restantes,
+            # Cuadratura por unidades + validación (solo aplica a facturadas)
+            'estado_despacho': cotizacion.estado_despacho or '',
+            'unidades_facturadas': cotizacion.unidades_facturadas if cotizacion.facturada else 0,
+            'unidades_pendientes': cotizacion.unidades_pendientes_despacho if cotizacion.facturada else 0,
+            'despacho_validado': cotizacion.despacho_validado,
         }
         
         return JsonResponse({
@@ -1227,20 +1286,26 @@ def asignar_sku_pendiente(request):
                 'error': 'Solo se puede asignar SKU a cotizaciones ya facturadas'
             }, status=400)
 
-        # Validar que el ítem realmente está pendiente
-        tiene_sku = detalle.skus_asociados.exists() or (
-            detalle.producto_existente is not None and not detalle.sku_asignado_post_factura
-        )
-        if tiene_sku and not detalle.es_producto_pendiente:
-            return JsonResponse({
-                'success': False,
-                'error': 'Este ítem ya tiene un SKU asignado'
-            }, status=400)
+        # Validar contra el SALDO pendiente en unidades, no contra flags.
+        # Antes un despacho parcial (facturado 5, despachado 2) cerraba el
+        # ítem con es_producto_pendiente=False y las 3 uds restantes quedaban
+        # sin salida de stock para siempre (descuadre facturado vs sacado).
+        saldo_pendiente = detalle.unidades_pendientes_despacho
+        if saldo_pendiente <= 0:
+            if detalle.nacio_pendiente:
+                error_msg = 'Este ítem ya está completamente despachado'
+            else:
+                error_msg = 'Este ítem tenía SKU al facturar (el stock salió con el ticket)'
+            return JsonResponse({'success': False, 'error': error_msg}, status=400)
 
-        if cantidad <= 0 or cantidad > detalle.cantidad:
+        if cantidad <= 0 or cantidad > saldo_pendiente:
             return JsonResponse({
                 'success': False,
-                'error': f'La cantidad debe estar entre 1 y {detalle.cantidad}'
+                'error': (
+                    f'La cantidad debe estar entre 1 y {saldo_pendiente} '
+                    f'(facturadas: {detalle.cantidad}, ya despachadas: '
+                    f'{detalle.unidades_despachadas_post_factura})'
+                )
             }, status=400)
 
         producto_talla = get_object_or_404(
@@ -1284,31 +1349,39 @@ def asignar_sku_pendiente(request):
                 else 0
             )
 
-            # 1. Crear/actualizar Cotizacion_Empresa_Detalle_SKU
+            # 1. Crear Cotizacion_Empresa_Detalle_SKU con marca post-factura
+            # (la marca separa estos despachos de los SKUs asociados al crear
+            # la cotización — es la base de la cuadratura por unidades).
             Cotizacion_Empresa_Detalle_SKU.objects.create(
                 detalle=detalle,
                 producto_talla=producto_talla,
                 cantidad=cantidad,
                 costo_unitario=costo_unitario,
                 precio_unitario=detalle.precio_unitario,
+                asignado_post_factura=True,
             )
 
-            # 2. Vincular producto_existente en el detalle y marcar como resuelto
-            detalle.producto_existente = producto_talla
-            detalle.es_producto_pendiente = False
-            detalle.sku_asignado_post_factura = True
-            detalle.fecha_asignacion_sku = timezone.now()
-            detalle.usuario_asignacion_sku = request.user
-            # recalcular_cotizacion=False: asignar el SKU no cambia montos, y
-            # recalcular acá reescribiría los totales de un documento ya emitido.
-            detalle.save(
-                update_fields=[
-                    'producto_existente', 'es_producto_pendiente',
-                    'sku_asignado_post_factura', 'fecha_asignacion_sku',
-                    'usuario_asignacion_sku',
-                ],
-                recalcular_cotizacion=False,
-            )
+            # 2. Cerrar el ítem SOLO si con este despacho se completa el saldo.
+            # Si queda saldo, el ítem sigue pendiente y reaparece en el modal
+            # con las unidades restantes.
+            saldo_restante = saldo_pendiente - cantidad
+            item_completado = saldo_restante == 0
+            if item_completado:
+                detalle.producto_existente = producto_talla
+                detalle.es_producto_pendiente = False
+                detalle.sku_asignado_post_factura = True
+                detalle.fecha_asignacion_sku = timezone.now()
+                detalle.usuario_asignacion_sku = request.user
+                # recalcular_cotizacion=False: asignar el SKU no cambia montos, y
+                # recalcular acá reescribiría los totales de un documento ya emitido.
+                detalle.save(
+                    update_fields=[
+                        'producto_existente', 'es_producto_pendiente',
+                        'sku_asignado_post_factura', 'fecha_asignacion_sku',
+                        'usuario_asignacion_sku',
+                    ],
+                    recalcular_cotizacion=False,
+                )
 
             # 3. Decrementar stock (y consumir lotes FIFO para no dejar la
             # capa de lotes inflada — best-effort, no bloquea el despacho)
@@ -1349,21 +1422,35 @@ def asignar_sku_pendiente(request):
                 hora=timezone.localtime().time(),
             )
 
-            # 4b. Completar la línea del DTE que se emitió sin SKU. Si no se
-            # hace, `Dte_Productos.costo` queda en 0 y el margen del documento
-            # sale inflado para siempre.
+            # 4b. Completar la línea del DTE que se emitió sin SKU — SOLO al
+            # completar el ítem. Si no se hace, `Dte_Productos.costo` queda en
+            # 0 y el margen del documento sale inflado para siempre. Con
+            # despacho parcial la línea espera: se completa cuando salen todas
+            # las unidades, usando el SKU principal (mayor cantidad despachada)
+            # y el costo PROMEDIO PONDERADO de los despachos (la línea puede
+            # haberse cubierto con varios SKUs de costos distintos).
             lineas_dte_actualizadas = 0
-            if dte_cotizacion:
+            if dte_cotizacion and item_completado:
+                despachos = list(
+                    detalle.skus_asociados
+                    .filter(asignado_post_factura=True)
+                    .select_related('producto_talla__producto')
+                )
+                total_uds = sum(d.cantidad for d in despachos) or 1
+                costo_ponderado = int(round(
+                    sum(float(d.costo_unitario) * d.cantidad for d in despachos) / total_uds
+                ))
+                sku_principal = max(despachos, key=lambda d: d.cantidad).producto_talla or producto_talla
                 lineas_dte_actualizadas = Dte_Productos.objects.filter(
                     dte=dte_cotizacion,
                     cotizacion_detalle_id=detalle.id,
                     es_pendiente_despacho=True,
                 ).update(
-                    productoTalla=producto_talla,
-                    costo=costo_unitario,
+                    productoTalla=sku_principal,
+                    costo=costo_ponderado,
                     sobreprecio=(
-                        producto_talla.producto.sobreprecio
-                        if producto_talla.producto and producto_talla.producto.sobreprecio
+                        sku_principal.producto.sobreprecio
+                        if sku_principal.producto and sku_principal.producto.sobreprecio
                         else 0
                     ),
                     es_pendiente_despacho=False,
@@ -1377,21 +1464,25 @@ def asignar_sku_pendiente(request):
                         cotizacion.numero_cotizacion, detalle.id,
                         dte_cotizacion.numero_documento,
                     )
-            else:
+            elif not dte_cotizacion:
                 logger.warning(
                     'Despacho diferido sin DTE enlazado cotizacion=%s '
                     '(facturada antes de la FK Cotizacion_Empresa.dte)',
                     cotizacion.numero_cotizacion,
                 )
+            # (si hay DTE pero el ítem quedó parcial, la línea se completa
+            # cuando salga la última unidad)
 
-            # 5. Registrar historial
+            # 5. Registrar historial (con saldo para poder auditar parciales)
             Historial_Cotizacion.objects.create(
                 cotizacion=cotizacion,
                 usuario=request.user,
                 accion='SKU_ASIGNADO',
                 descripcion=(
-                    f'SKU {producto_talla.sku} asignado al ítem "{detalle.descripcion[:60]}" '
-                    f'(x{cantidad}). Stock descontado en {cotizacion.sucursal.alias}.'
+                    f'SKU {producto_talla.sku} despachado para "{detalle.descripcion[:60]}" '
+                    f'(x{cantidad} de {detalle.cantidad} facturadas'
+                    + (f', quedan {saldo_restante} pendientes' if saldo_restante else ', ítem completado')
+                    + f'). Stock descontado en {cotizacion.sucursal.alias}.'
                     + (f' Línea del DTE #{dte_cotizacion.numero_documento} completada.'
                        if lineas_dte_actualizadas else '')
                 ),
@@ -1400,6 +1491,7 @@ def asignar_sku_pendiente(request):
                     'producto_talla_id': producto_talla.id,
                     'sku': str(producto_talla.sku),
                     'cantidad': cantidad,
+                    'saldo_pendiente': saldo_restante,
                     'sucursal_id': cotizacion.sucursal_id,
                     'dte_id': dte_cotizacion.id if dte_cotizacion else None,
                     'lineas_dte_actualizadas': lineas_dte_actualizadas,
@@ -1422,9 +1514,15 @@ def asignar_sku_pendiente(request):
 
         return JsonResponse({
             'success': True,
-            'message': f'SKU {producto_talla.sku} asignado correctamente',
+            'message': (
+                f'SKU {producto_talla.sku} despachado (x{cantidad})'
+                + (f'. Quedan {saldo_restante} unidades pendientes de este ítem'
+                   if saldo_restante else '')
+            ),
             'estado_despacho': cotizacion.estado_despacho,
             'despacho_completado': cotizacion.estado_despacho == Cotizacion_Empresa.DESPACHO_COMPLETADO,
+            'item_completado': item_completado,
+            'saldo_pendiente_item': saldo_restante,
             'sku': str(producto_talla.sku),
             'nombre_producto': producto_talla.producto.articulo if producto_talla.producto else '',
         })
@@ -1487,17 +1585,22 @@ def revertir_sku_despachado(request):
 
         # Solo se revierten asignaciones hechas DESPUÉS de facturar: un SKU que
         # venía en la cotización original se corrige editándola antes de facturar.
-        if not detalle.sku_asignado_post_factura:
+        # OJO: con despacho parcial el ítem puede tener despachos post-factura
+        # sin estar cerrado (sku_asignado_post_factura=False), por eso el gate
+        # mira las FILAS post-factura y no el flag del detalle.
+        if not detalle.skus_asociados.filter(asignado_post_factura=True).exists():
             return JsonResponse({
                 'success': False,
-                'error': 'Este ítem no tiene un SKU asignado post-factura para revertir'
+                'error': 'Este ítem no tiene despachos post-factura para revertir'
             }, status=400)
 
         from django.db import transaction
         with transaction.atomic():
+            # Solo las filas post-factura: las asociaciones creadas al cotizar
+            # no movieron stock y no deben reintegrarse.
             filas_sku = list(
                 Cotizacion_Empresa_Detalle_SKU.objects
-                .filter(detalle=detalle)
+                .filter(detalle=detalle, asignado_post_factura=True)
                 .select_related('producto_talla__producto')
             )
 
@@ -1551,8 +1654,12 @@ def revertir_sku_despachado(request):
                 )
 
             # Los vínculos SKU no son auditoría (el historial guarda el rastro):
-            # se eliminan para que el ítem vuelva a estar realmente pendiente.
-            Cotizacion_Empresa_Detalle_SKU.objects.filter(detalle=detalle).delete()
+            # se eliminan SOLO los post-factura para que el ítem vuelva a estar
+            # realmente pendiente (las asociaciones originales de la cotización
+            # no movieron stock y se conservan).
+            Cotizacion_Empresa_Detalle_SKU.objects.filter(
+                detalle=detalle, asignado_post_factura=True
+            ).delete()
 
             detalle.producto_existente = None
             detalle.es_producto_pendiente = True
@@ -1568,6 +1675,10 @@ def revertir_sku_despachado(request):
                 recalcular_cotizacion=False,
             )
 
+            # Si el despacho ya tenía el OK del administrador, la reversa lo
+            # invalida: la cuadratura dejó de estar vigente.
+            validacion_invalidada = cotizacion.invalidar_validacion_despacho()
+
             detalle_reintegro = ', '.join(
                 '{} x{}'.format(r['sku'], r['cantidad']) for r in reintegrados
             ) or 'ninguno'
@@ -1580,9 +1691,15 @@ def revertir_sku_despachado(request):
                     f'REVERSA de SKU en "{detalle.descripcion[:60]}". '
                     f'Stock reintegrado: {detalle_reintegro}. '
                     f'Motivo: {motivo[:120]}'
+                    + (' Se invalidó el OK de despacho del administrador.'
+                       if validacion_invalidada else '')
                 ),
                 datos_anteriores={'reintegrados': reintegrados},
-                datos_nuevos={'detalle_id': detalle.id, 'motivo': motivo[:200]},
+                datos_nuevos={
+                    'detalle_id': detalle.id,
+                    'motivo': motivo[:200],
+                    'validacion_invalidada': validacion_invalidada,
+                },
                 ip_address=get_client_ip(request),
             )
 
@@ -1602,6 +1719,114 @@ def revertir_sku_despachado(request):
 
     except Exception as e:
         logger.exception("Error al revertir SKU despachado")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def validar_despacho_cotizacion(request):
+    """
+    OK final del Administrador al despacho de una cotización facturada.
+
+    Body JSON:
+        cotizacion_id – ID de Cotizacion_Empresa
+
+    Confirma formalmente que las unidades FACTURADAS coinciden con las
+    DESPACHADAS (salidas de stock). Requiere el permiso granular
+    `gestion_cotizaciones.puede_aprobar`. La validación se invalida sola si
+    después se revierte un despacho (ver revertir_sku_despachado).
+    """
+    try:
+        if not _puede_validar_despacho(request):
+            return JsonResponse({
+                'success': False,
+                'error': 'No tiene permiso para validar despachos (gestion_cotizaciones.puede_aprobar)'
+            }, status=403)
+
+        data = json.loads(request.body)
+        cotizacion_id = data.get('cotizacion_id')
+        if not cotizacion_id:
+            return JsonResponse({'success': False, 'error': 'Falta cotizacion_id'}, status=400)
+
+        cotizacion = get_object_or_404(Cotizacion_Empresa, pk=cotizacion_id)
+
+        sucursal_id = _sucursal_activa_id(request)
+        if sucursal_id and cotizacion.sucursal_id != int(sucursal_id):
+            return JsonResponse({
+                'success': False,
+                'error': 'No tiene permisos sobre esta cotización'
+            }, status=403)
+
+        if not cotizacion.facturada:
+            return JsonResponse({
+                'success': False,
+                'error': 'Solo se puede validar el despacho de una cotización facturada'
+            }, status=400)
+
+        if cotizacion.despacho_validado:
+            return JsonResponse({
+                'success': False,
+                'error': 'El despacho de esta cotización ya fue validado'
+            }, status=400)
+
+        facturadas = cotizacion.unidades_facturadas
+        pendientes = cotizacion.unidades_pendientes_despacho
+        despachadas = facturadas - pendientes
+
+        if pendientes > 0:
+            return JsonResponse({
+                'success': False,
+                'error': (
+                    f'La cuadratura no cierra: facturadas {facturadas} uds, '
+                    f'despachadas {despachadas} uds ({pendientes} pendientes). '
+                    f'Complete el despacho antes de validar.'
+                ),
+                'unidades_facturadas': facturadas,
+                'unidades_despachadas': despachadas,
+                'unidades_pendientes': pendientes,
+            }, status=400)
+
+        from django.db import transaction
+        with transaction.atomic():
+            cotizacion.despacho_validado = True
+            cotizacion.despacho_validado_por = request.user
+            cotizacion.fecha_validacion_despacho = timezone.now()
+            # Asegurar coherencia del estado por si quedó desactualizado.
+            cotizacion.estado_despacho = Cotizacion_Empresa.DESPACHO_COMPLETADO
+            cotizacion.save(update_fields=[
+                'despacho_validado', 'despacho_validado_por',
+                'fecha_validacion_despacho', 'estado_despacho',
+            ])
+
+            Historial_Cotizacion.objects.create(
+                cotizacion=cotizacion,
+                usuario=request.user,
+                accion='DESPACHO_VALIDADO',
+                descripcion=(
+                    f'OK del administrador al despacho: {facturadas} uds facturadas '
+                    f'= {despachadas} uds despachadas. Cuadratura confirmada.'
+                ),
+                datos_nuevos={
+                    'unidades_facturadas': facturadas,
+                    'unidades_despachadas': despachadas,
+                },
+                ip_address=get_client_ip(request),
+            )
+
+        logger.info(
+            'Despacho validado cotizacion=%s por=%s (%s uds)',
+            cotizacion.numero_cotizacion, request.user.username, facturadas,
+        )
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Despacho de {cotizacion.numero_cotizacion} validado ({facturadas} uds)',
+            'despacho_validado': True,
+            'validado_por': request.user.get_full_name() or request.user.username,
+        })
+
+    except Exception as e:
+        logger.exception("Error al validar despacho de cotizacion")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
@@ -1971,14 +2196,32 @@ def crear_cliente_cotizacion(request):
 
 # ==================== GENERACIÓN DE PDF ====================
 
-@login_required
-def cotizacion_pdf(request, cotizacion_id):
+def _nombre_empresa_cotizacion(cotizacion):
+    """Nombre del emisor para PDF/correo, con fallbacks.
+
+    `Sucursal.nombre` es nullable: sin fallback el correo/PDF mostraba
+    literalmente "None"."""
+    sucursal = cotizacion.sucursal
+    if not sucursal:
+        return 'Nuestra Empresa'
+    return (
+        sucursal.nombre
+        or (sucursal.empresa.razon_social if sucursal.empresa_id else '')
+        or sucursal.alias
+        or 'Nuestra Empresa'
+    )
+
+
+def _generar_pdf_cotizacion(cotizacion):
     """
-    Genera un PDF profesional de la cotización
+    Genera el PDF de la cotización y devuelve los bytes.
+
+    Reutilizado por la vista de descarga (`cotizacion_pdf`) y por el envío
+    por correo (`enviar_cotizacion_correo`, que lo adjunta). Sin emojis en
+    los títulos: Helvetica no tiene esos glifos y ReportLab los renderizaba
+    como cuadros negros.
     """
     try:
-        cotizacion = get_object_or_404(Cotizacion_Empresa, pk=cotizacion_id)
-        
         # Crear buffer para el PDF
         buffer = BytesIO()
         
@@ -2045,8 +2288,9 @@ def cotizacion_pdf(request, cotizacion_id):
         elements = []
         
         # ===== ENCABEZADO =====
-        # Número de cotización grande
-        elements.append(Paragraph(f"COTIZACIÓN", style_title))
+        # Emisor + número de cotización grande
+        elements.append(Paragraph(_nombre_empresa_cotizacion(cotizacion), style_subtitle))
+        elements.append(Paragraph("COTIZACIÓN", style_title))
         elements.append(Paragraph(f"<b>{cotizacion.numero_cotizacion}</b>", style_subtitle))
         
         # Información de fechas y estado
@@ -2085,7 +2329,7 @@ def cotizacion_pdf(request, cotizacion_id):
         elements.append(Spacer(1, 20))
         
         # ===== INFORMACIÓN DEL CLIENTE =====
-        elements.append(Paragraph("📋 INFORMACIÓN DEL CLIENTE", style_section))
+        elements.append(Paragraph("INFORMACIÓN DEL CLIENTE", style_section))
         
         cliente_data = [
             ['Razón Social:', cotizacion.cliente.nombre],
@@ -2115,12 +2359,12 @@ def cotizacion_pdf(request, cotizacion_id):
         
         # ===== DESCRIPCIÓN =====
         if cotizacion.descripcion:
-            elements.append(Paragraph("📝 DESCRIPCIÓN", style_section))
+            elements.append(Paragraph("DESCRIPCIÓN", style_section))
             elements.append(Paragraph(cotizacion.descripcion, style_normal))
             elements.append(Spacer(1, 15))
         
         # ===== DETALLE DE ITEMS =====
-        elements.append(Paragraph("🛒 DETALLE DE PRODUCTOS/SERVICIOS", style_section))
+        elements.append(Paragraph("DETALLE DE PRODUCTOS/SERVICIOS", style_section))
         
         # Cabecera de tabla (nota: precios incluyen IVA)
         items_header = ['#', 'Descripción', 'Cant.', 'P. Unit. (IVA)', 'Subtotal']
@@ -2199,7 +2443,7 @@ def cotizacion_pdf(request, cotizacion_id):
         
         # ===== OBSERVACIONES =====
         if cotizacion.observaciones:
-            elements.append(Paragraph("📌 OBSERVACIONES", style_section))
+            elements.append(Paragraph("OBSERVACIONES", style_section))
             elements.append(Paragraph(cotizacion.observaciones, style_normal))
             elements.append(Spacer(1, 20))
         
@@ -2217,20 +2461,33 @@ def cotizacion_pdf(request, cotizacion_id):
         
         # Generar PDF
         doc.build(elements)
-        
+
         # Obtener el valor del buffer
         pdf = buffer.getvalue()
         buffer.close()
-        
-        # Crear respuesta HTTP
+        return pdf
+
+    except Exception:
+        logger.exception(
+            "Error generando PDF de cotizacion %s",
+            getattr(cotizacion, 'numero_cotizacion', cotizacion.pk if cotizacion else '?'),
+        )
+        raise
+
+
+@login_required
+def cotizacion_pdf(request, cotizacion_id):
+    """Descarga/visualización del PDF de la cotización."""
+    try:
+        cotizacion = get_object_or_404(Cotizacion_Empresa, pk=cotizacion_id)
+        pdf = _generar_pdf_cotizacion(cotizacion)
+
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = f'inline; filename="cotizacion_{cotizacion.numero_cotizacion}.pdf"'
         response.write(pdf)
-        
         return response
-        
+
     except Exception as e:
-        logger.exception("Error generando PDF de cotizacion")
         return HttpResponse(f"Error generando PDF: {str(e)}", status=500)
 
 
@@ -2305,8 +2562,9 @@ def enviar_cotizacion_correo(request, cotizacion_id):
         validez_color = "#22c55e" if dias_restantes >= 0 else "#ef4444"
         validez_texto = f"{dias_restantes} días restantes" if dias_restantes >= 0 else f"Vencida hace {abs(dias_restantes)} días"
         
-        # Obtener nombre de la sucursal/empresa
-        nombre_empresa = cotizacion.sucursal.nombre if cotizacion.sucursal else "Nuestra Empresa"
+        # Obtener nombre de la sucursal/empresa (con fallbacks — sucursal.nombre
+        # es nullable y sin esto el correo decía literalmente "None")
+        nombre_empresa = _nombre_empresa_cotizacion(cotizacion)
         
         # HTML del correo profesional
         html_content = f"""
@@ -2405,6 +2663,9 @@ def enviar_cotizacion_correo(request, cotizacion_id):
                     
                     <!-- Nota final -->
                     <div style="text-align: center; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+                        <p style="color: #374151; font-size: 13px; margin: 0 0 8px 0;">
+                            <strong>📎 Se adjunta la cotización en PDF</strong>
+                        </p>
                         <p style="color: #9ca3af; font-size: 12px; margin: 0 0 8px 0;">
                             Esta cotización tiene una validez de {cotizacion.dias_validez} días desde su emisión.
                         </p>
@@ -2460,14 +2721,15 @@ TOTAL: {formatear_moneda(cotizacion.total)}
 {f"OBSERVACIONES: {cotizacion.observaciones}" if cotizacion.observaciones else ""}
 
 ---
+Se adjunta la cotización en PDF.
 Esta cotización tiene una validez de {cotizacion.dias_validez} días desde su emisión.
 Los precios incluyen IVA.
         """
-        
+
         # Enviar correo
         try:
             subject = f"Cotización {cotizacion.numero_cotizacion} - {nombre_empresa}"
-            
+
             msg = EmailMultiAlternatives(
                 subject=subject,
                 body=text_content,
@@ -2475,6 +2737,23 @@ Los precios incluyen IVA.
                 to=[email_destino]
             )
             msg.attach_alternative(html_content, "text/html")
+
+            # Adjuntar el MISMO PDF que se descarga desde la web. Si el PDF
+            # falla, el correo igual sale (el cuerpo HTML tiene el detalle
+            # completo) y queda el error en el log.
+            try:
+                pdf_bytes = _generar_pdf_cotizacion(cotizacion)
+                msg.attach(
+                    f'Cotizacion_{cotizacion.numero_cotizacion}.pdf',
+                    pdf_bytes,
+                    'application/pdf',
+                )
+            except Exception:
+                logger.exception(
+                    'No se pudo adjuntar el PDF al correo de cotizacion %s',
+                    cotizacion.numero_cotizacion,
+                )
+
             msg.send(fail_silently=False)
             
             # Registrar en historial

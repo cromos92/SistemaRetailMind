@@ -290,7 +290,10 @@
                             <div class="col-md-6"><input type="text" id="dg-cliente-nombre" class="form-control form-control-sm" placeholder="Nombre / Razón social"></div>
                             <div class="col-md-6"><input type="text" id="dg-cliente-email" class="form-control form-control-sm" placeholder="Correo"></div>
                             <div class="col-md-6"><input type="text" id="dg-cliente-telefono" class="form-control form-control-sm" placeholder="Teléfono"></div>
-                            <div class="col-md-6"><input type="text" id="dg-cliente-giro" class="form-control form-control-sm" placeholder="Giro"></div>
+                            <div class="col-md-6">
+                                <input type="text" id="dg-cliente-giro" class="form-control form-control-sm" placeholder="Giro (actividad económica)">
+                                <div class="form-text text-secondary" style="font-size:0.68rem;">No es el nombre del cliente. Persona natural: PARTICULAR.</div>
+                            </div>
                             <div class="col-md-8"><input type="text" id="dg-cliente-direccion" class="form-control form-control-sm" placeholder="Dirección"></div>
                             <div class="col-md-4"><input type="text" id="dg-cliente-comuna" class="form-control form-control-sm" placeholder="Comuna"></div>
                             <div class="col-md-6"><input type="text" id="dg-cliente-ciudad" class="form-control form-control-sm" placeholder="Ciudad"></div>
@@ -411,6 +414,11 @@
 </div>
 {% endif %}
 
+{# El footer trae jQuery/Bootstrap/SweetAlert2: debe cargarse ANTES del JS del
+   módulo (mismo orden que generacionVentas.html y gestion_cambios_devoluciones.html),
+   si no el $(...) de más abajo revienta con "$ is not defined". #}
+{% include 'layout/footer.html' %}
+
 <!-- Extra JS -->
 <script src="{% static 'libs/sweetalert2/sweetalert2.min.js' %}"></script>
 <script>
@@ -426,6 +434,7 @@
         aprobar: '{% url "api_aprobar_devolucion_garantia" 0 %}',
         rechazar: '{% url "api_rechazar_devolucion_garantia" 0 %}',
         anular: '{% url "api_anular_solicitud_devolucion_garantia" 0 %}',
+        ticket: '{% url "api_ticket_devolucion_garantia" 0 %}',
     };
     const urlCon = (plantilla, id) => plantilla.replace('/0/', '/' + id + '/');
 
@@ -469,6 +478,13 @@
     function rutEsGenerico(rut) {
         const d = (rut || '').replace(/[.\-]/g, '').toLowerCase();
         return d === '666666666';
+    }
+    // El SII exige giro del receptor en la NC. Para persona natural el nombre
+    // NO sirve como giro (es la actividad económica) → se propone PARTICULAR.
+    function dgAutoGiro() {
+        const rut = $('#dg-cliente-rut').val().trim();
+        if (!rut || esRutJuridico(rut)) { return; }
+        if (!$('#dg-cliente-giro').val().trim()) { $('#dg-cliente-giro').val('PARTICULAR'); }
     }
 
     // ===================== WIZARD =====================
@@ -565,6 +581,7 @@
             if (!rut || !validarRutChileno(rut)) { dgMostrarErrorCliente('Ingresa un RUT válido.'); return false; }
             if (rutEsGenerico(rut)) { dgMostrarErrorCliente('El RUT 66666666-6 es Consumidor Final. Ingresa el RUT real del cliente.'); return false; }
             if (!nombre) { dgMostrarErrorCliente('Ingresa el nombre / razón social.'); return false; }
+            dgAutoGiro();
             if (esRutJuridico(rut)) {
                 const faltan = ['giro', 'direccion', 'comuna', 'ciudad'].filter(f => !$('#dg-cliente-' + f).val().trim());
                 if (faltan.length) { dgMostrarErrorCliente('Para RUT de empresa completa: ' + faltan.join(', ') + '.'); return false; }
@@ -750,6 +767,7 @@
                 window._dgClienteId = null;
                 $estado.attr('class', 'badge bg-warning text-dark d-inline-block w-100 py-1').text('Nuevo — complete los datos');
             }
+            dgAutoGiro();
         }).fail(function () {
             $estado.attr('class', 'badge bg-danger d-inline-block w-100 py-1').text('Error de conexión');
         });
@@ -826,6 +844,11 @@
                             html: `<p><strong>${resp.data.numero_operacion}</strong></p>` +
                                   `<p>Total ${clp(resp.data.monto_total)} — pendiente de aprobación.</p>` +
                                   (resp.data.requerimiento_vinculado ? `<p class="small text-muted">Vinculada al requerimiento ${resp.data.requerimiento_vinculado}</p>` : ''),
+                            showCancelButton: true, confirmButtonColor: '#0066FF',
+                            confirmButtonText: '<i class="ri-printer-line me-1"></i> Imprimir comprobante',
+                            cancelButtonText: 'Cerrar',
+                        }).then(function (r) {
+                            if (r.isConfirmed) { imprimirDevolucionGarantia(resp.data.devolucion_id); }
                         });
                         cargarDevoluciones();
                     } else {
@@ -857,6 +880,7 @@
                 montoTotal += d.monto_total;
                 if (d.estado === 'NC_GENERADA') { ncGeneradas++; }
                 let acciones = `<a href="/app/devolucion-garantia/${d.id}/" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Ver"><i class="ri-eye-line"></i></a>`;
+                acciones += ` <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="imprimirDevolucionGarantia(${d.id})" title="Imprimir comprobante 80mm"><i class="ri-printer-line"></i></button>`;
                 if (PUEDE_APROBAR && d.estado === 'PENDIENTE') {
                     acciones += ` <button class="btn btn-sm btn-outline-success py-0 px-1" onclick="abrirModalAprobacion(${d.id})" title="Analizar"><i class="ri-shield-check-line"></i></button>`;
                 }
@@ -989,10 +1013,17 @@
                     $('#apr-btn-aprobar').prop('disabled', false);
                     if (resp.success) {
                         bootstrap.Modal.getInstance(document.getElementById('modalAprobarDevolucion'))?.hide();
+                        const warns = resp.data.txt_warnings || [];
                         Swal.fire({
-                            icon: 'success', title: 'Aprobada',
+                            icon: warns.length ? 'warning' : 'success',
+                            title: 'Aprobada',
                             html: `<p>NC #${resp.data.nc_numero} — ${clp(resp.data.monto_total)}</p>` +
-                                  `<a href="${resp.data.nc_txt_url}" class="btn btn-sm btn-outline-primary"><i class="ri-download-line me-1"></i> Descargar TXT Acepta</a>`,
+                                  `<a href="${resp.data.nc_txt_url}" class="btn btn-sm btn-outline-primary"><i class="ri-download-line me-1"></i> Descargar TXT Acepta</a>` +
+                                  (warns.length
+                                      ? `<div class="alert alert-warning text-start small mt-3 mb-0">` +
+                                        `<strong>Revisa el TXT antes de subirlo a Acepta:</strong><ul class="mb-0 ps-3">` +
+                                        warns.map(w => `<li>${w}</li>`).join('') + `</ul></div>`
+                                      : ''),
                         });
                         cargarDevoluciones();
                     } else {
@@ -1055,4 +1086,5 @@
     });
 </script>
 
-{% include 'layout/footer.html' %}
+{# Impresión térmica 80mm del comprobante (QZ Tray ESC/POS + fallback HTML) #}
+{% include 'vistas/modulo_ventas/_dg_print_module.html' %}

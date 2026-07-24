@@ -107,9 +107,15 @@
             <p class="mb-1"><strong>Nota de Crédito:</strong> #{{ devolucion.nota_credito.numero_documento }} — ${{ devolucion.nota_credito.monto_con_iva|floatformat:0 }}</p>
             <a href="{% url 'descargar_txt_nc_api' devolucion.nota_credito.id %}" class="btn btn-sm btn-outline-primary"><i class="ri-download-line me-1"></i> Descargar TXT Acepta</a>
             {% endif %}
+            <button class="btn btn-sm btn-outline-primary" onclick="imprimirDevolucionGarantia({{ devolucion.id }})">
+                <i class="ri-printer-line me-1"></i> Imprimir comprobante 80mm
+            </button>
         </div>
 
     </div>
 </div>
+
+{# Impresión térmica 80mm del comprobante (QZ Tray ESC/POS + fallback HTML) #}
+{% include 'vistas/modulo_ventas/_dg_print_module.html' %}
 
 {% include 'layout/footer.html' %}
