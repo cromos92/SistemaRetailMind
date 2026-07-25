@@ -1365,3 +1365,83 @@ def api_editar_talla_producto_global(request):
         'bodegas': bodegas,
         'conflictos': conflictos,
     })
+
+
+# =====================================================
+# 6. CORRECCIÓN DE CATEGORÍA GLOBAL (todas las bodegas)
+# =====================================================
+
+@login_required
+@require_POST
+def api_editar_categoria_producto_global(request):
+    """
+    Cambia la categoría de un producto (misma VARIANTE: código normalizado +
+    marca + color + género) en TODAS las bodegas del usuario.
+
+    La categoría es parte de la identidad con la que se detectan duplicados:
+    corregirla en una sola bodega dejaría fichas de la misma variante con
+    identidades mezcladas (y el matching seguiría fallando en las demás),
+    por eso replica. SKUs, tallas y stock no se tocan.
+
+    Body JSON: { producto_id, categoria_id }
+    """
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    producto_id = data.get('producto_id')
+    categoria_id = data.get('categoria_id')
+    if not producto_id or not categoria_id:
+        return JsonResponse({'success': False, 'error': 'Faltan datos: producto y categoría nueva.'}, status=400)
+
+    from .models import Categoria
+    producto = get_object_or_404(Producto, id=producto_id)
+    categoria = get_object_or_404(Categoria, id=categoria_id)
+
+    emp_ids = EmpresaUser.objects.filter(user=request.user, status=True).values_list('empresa_id', flat=True)
+    suc_ids = list(Sucursal.objects.filter(empresa_id__in=emp_ids).values_list('id', flat=True))
+    if producto.sucursal_id not in suc_ids:
+        return JsonResponse({'success': False, 'error': 'No tienes acceso a la bodega de este producto.'}, status=403)
+
+    # Misma variante en todas las bodegas, con CUALQUIER categoría (cada ficha
+    # puede tener una distinta — justamente eso es lo que se corrige).
+    from .utils_producto_match import normalizar_articulo
+    objetivo = normalizar_articulo(producto.articulo)
+    token = objetivo.split(' ')[0] if objetivo else ''
+    if not token:
+        return JsonResponse({'success': False, 'error': 'El producto no tiene código válido.'}, status=400)
+    candidatos = Producto.objects.filter(
+        sucursal_id__in=suc_ids, articulo__icontains=token,
+        atributo1_id=producto.atributo1_id, atributo2_id=producto.atributo2_id,
+        atributo3_id=producto.atributo3_id,
+    ).select_related('sucursal', 'categoria')
+    afectados = [p for p in candidatos if normalizar_articulo(p.articulo) == objetivo]
+
+    bodegas = []
+    with transaction.atomic():
+        for p in afectados:
+            if p.categoria_id == categoria.id:
+                continue
+            bodegas.append({
+                'sucursal': p.sucursal.alias if p.sucursal else f'Sucursal {p.sucursal_id}',
+                'categoria_anterior': p.categoria.nombre if p.categoria else '-',
+            })
+            p.categoria = categoria
+            p.save(update_fields=['categoria', 'fecha_actualizacion'])
+
+    logger.info(
+        "Categoría corregida globalmente por %s: articulo=%s producto_ref=%s -> '%s' fichas=%s bodegas=%s",
+        request.user.username, producto.articulo, producto.id, categoria.nombre,
+        len(bodegas), [b['sucursal'] for b in bodegas],
+    )
+
+    if not bodegas:
+        return JsonResponse({'success': False, 'error': 'Ninguna ficha necesitaba cambio: ya tienen esa categoría.'}, status=400)
+
+    return JsonResponse({
+        'success': True,
+        'categoria_nueva': categoria.nombre,
+        'fichas_actualizadas': len(bodegas),
+        'bodegas': bodegas,
+    })

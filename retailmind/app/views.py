@@ -18840,7 +18840,41 @@ def verificar_producto_existente(request):
                     prod.articulo,
                 )
                 break
-    
+
+    # ========== MISMA VARIANTE PERO OTRA CATEGORÍA (guardia anti-duplicado) ==========
+    # La categoría es parte de la identidad: si el usuario seleccionó la
+    # categoría "correcta" pero la ficha guardada tiene otra, el match exacto
+    # falla y el flujo de creación terminaría en un DUPLICADO con SKUs nuevos.
+    # Se detecta acá para que la UI ofrezca corregir la categoría del existente.
+    producto_categoria_distinta = None
+    if (not producto and articulo and filtros.get('categoria_id')
+            and filtros.get('atributo1_id') and filtros.get('atributo2_id')
+            and filtros.get('atributo3_id')):
+        try:
+            _f = {k: v for k, v in filtros.items() if k != 'categoria_id'}
+            _p = (Producto.objects.filter(**_f)
+                  .exclude(categoria_id=filtros['categoria_id'])
+                  .select_related('categoria', 'atributo1', 'atributo2', 'atributo3')
+                  .first())
+            if _p:
+                _agg = Producto_Talla.objects.filter(producto=_p).aggregate(s=Sum('stock'), n=Count('id'))
+                _cat_form = Categoria.objects.filter(id=filtros['categoria_id']).first()
+                producto_categoria_distinta = {
+                    'id': _p.id,
+                    'articulo': _p.articulo,
+                    'marca': _p.atributo1.valor if _p.atributo1 else '-',
+                    'color': _p.atributo2.valor if _p.atributo2 else '-',
+                    'genero': _p.atributo3.valor if _p.atributo3 else '-',
+                    'categoria': _p.categoria.nombre if _p.categoria else '-',
+                    'categoria_id': _p.categoria_id,
+                    'categoria_form_id': filtros['categoria_id'],
+                    'categoria_form_nombre': _cat_form.nombre if _cat_form else '-',
+                    'n_tallas': _agg.get('n') or 0,
+                    'stock_total': _agg.get('s') or 0,
+                }
+        except Exception as e:
+            logger.warning("Error detectando producto con otra categoría: %s", e)
+
     # 🔍 BUSCAR PRODUCTOS SIMILARES POR SKU (solo en sucursal activa)
     productos_similares_sku = []
     if sku_base and sku_base.strip():
@@ -19183,6 +19217,7 @@ def verificar_producto_existente(request):
             'existe': False,
             'tallas_existentes': [],
             'producto_encontrado': None,
+            'producto_categoria_distinta': producto_categoria_distinta,
             'productos_similares_sku': productos_similares_sku,
             'productos_similares_nombre': productos_similares_nombre,
             'productos_otras_sucursales': productos_otras_sucursales,

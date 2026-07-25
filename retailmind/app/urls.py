@@ -276,8 +276,9 @@ from .views_modulo_existencias_nuevo import (
     api_buscar_productos_precios,
     api_modificar_precio_costo,
     api_modificar_precios_masivo,
-    # Corrección de talla global (todas las bodegas)
+    # Corrección de talla / categoría global (todas las bodegas)
     api_editar_talla_producto_global,
+    api_editar_categoria_producto_global,
 )
 from .views_edicion_productos import (
     # Edición de productos
@@ -1208,8 +1209,9 @@ urlpatterns = [
     path('api/precios-costos/modificar/', api_modificar_precio_costo, name='api_modificar_precio_costo'),
     path('api/precios-costos/modificar-masivo/', api_modificar_precios_masivo, name='api_modificar_precios_masivo'),
 
-    # Corrección de talla mal registrada — replica a TODAS las bodegas (modal Crear Manual)
+    # Corrección de talla / categoría mal registradas — replican a TODAS las bodegas (modal Crear Manual)
     path('api/editar-talla-global/', api_editar_talla_producto_global, name='api_editar_talla_producto_global'),
+    path('api/editar-categoria-global/', api_editar_categoria_producto_global, name='api_editar_categoria_producto_global'),
 
     path('reportes/existencias/', views.ver_reporte_existencias, name='ver_reporte_existencias'),
     path('api/obtener-existencias/', views.obtener_existencias_reporte, name='obtener_existencias_reporte'),

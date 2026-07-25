@@ -9624,6 +9624,39 @@ function cargarOpcionesAtributoYSeleccionarPorTexto(atributo_id, select_name, te
         }
     }
 
+    // ✅ Cierre ROBUSTO del modal Crear Manual. inst.hide() se pierde en
+    // silencio si no hay instancia o si Bootstrap quedó en una transición a
+    // medias (con el Swal de éxito encima), y el modal quedaba "pegado" en
+    // pantalla. Intenta el cierre normal y 500ms después VERIFICA: si el
+    // modal sigue visible lo fuerza a mano y limpia backdrop/body.
+    function cerrarModalCrearManualSeguro() {
+        const el = document.getElementById('modalCrearProductoManual');
+        if (!el) return;
+        try {
+            bootstrap.Modal.getOrCreateInstance(el).hide();
+        } catch (e) {
+            console.warn('hide() del modal manual falló:', e);
+        }
+        setTimeout(function () {
+            if (el.classList.contains('show')) {
+                console.warn('⚠️ Modal manual seguía abierto tras hide(): forzando cierre');
+                try { bootstrap.Modal.getOrCreateInstance(el).dispose(); } catch (e) { /* sin instancia */ }
+                el.classList.remove('show');
+                el.style.display = 'none';
+                el.setAttribute('aria-hidden', 'true');
+                el.removeAttribute('aria-modal');
+                // Dispara la limpieza ya existente (Select2, variables globales)
+                $(el).trigger('hidden.bs.modal');
+            }
+            if (!document.querySelector('.modal.show')) {
+                document.querySelectorAll('.modal-backdrop').forEach(function (b) { b.remove(); });
+                document.body.classList.remove('modal-open');
+                document.body.style.paddingRight = '';
+                document.body.style.overflow = '';
+            }
+        }, 500);
+    }
+
     // Helper para mostrar modal por selector jQuery (reemplaza .modal('show'))
     function mostrarModal(selector) {
         const el = $(selector)[0];
@@ -10227,13 +10260,17 @@ function stockPrevioDe(prev, sku, talla) {
 }
 
 function agregarFilaTallaManual() {
-    // Calcular el siguiente tabindex basado en las filas existentes
+    // Calcular el siguiente tabindex basado en las filas existentes.
+    // Stock usa 100+ y talla 300+: Tab recorre TODOS los stocks en orden y,
+    // como grupo aparte, todas las tallas en orden (flujo adicional para
+    // digitar tallas sin mouse).
     const numFilas = $('#tablaTallasManual tbody tr').length;
     const tabIdx = 100 + numFilas;
-    
+    const tabIdxTalla = 300 + numFilas;
+
     const fila = `
         <tr class="talla-nueva">
-            <td><input type="text" name="talla[]" class="form-control" placeholder="Ej: 36, 37, M, L..." required tabindex="-1" style="font-size:.92rem;"></td>
+            <td><input type="text" name="talla[]" class="form-control" placeholder="Ej: 36, 37, M, L..." required tabindex="${tabIdxTalla}" style="font-size:.92rem;"></td>
             <td><input type="number" name="stock[]" class="form-control stock-input text-center" value="0" min="0" required tabindex="${tabIdx}" style="font-size:.92rem;font-weight:600;"></td>
             <td><input type="text" name="sku[]" class="form-control sku-manual bg-light" readonly placeholder="Se generará..." tabindex="-1" style="font-size:.92rem;"></td>
             <td>
@@ -10662,8 +10699,10 @@ $('#selectGuiaTallaManual').on('change', function() {
             return $(this).find('input[name="talla[]"]').val().trim() !== '';
         });
 
-        if (filasConTalla.length === 0) {
-            // Tabla vacía o solo filas sin valor: poblar desde guía
+        // Poblar la tabla con TODAS las tallas de la guía (stock 0, SKUs auto).
+        // Talla con tabindex 300+ (grupo aparte del stock 100+): Tab recorre
+        // los stocks en orden y, como flujo adicional, las tallas en orden.
+        const poblarDesdeGuia = function() {
             $('#tablaTallasManual tbody').empty();
             const tipoKey = (tipoTalla || 'CL').toLowerCase();
             res.tallas.forEach(function(t, idx) {
@@ -10671,7 +10710,7 @@ $('#selectGuiaTallaManual').on('change', function() {
                 if (!tallaNorm) return;
                 const fila = `
                     <tr>
-                        <td><input type="text" name="talla[]" class="form-control form-control-sm" value="${tallaNorm}" tabindex="-1" style="font-size:.92rem;"></td>
+                        <td><input type="text" name="talla[]" class="form-control form-control-sm" value="${tallaNorm}" tabindex="${300 + idx}" style="font-size:.92rem;"></td>
                         <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center" value="0" min="0" tabindex="${100 + idx}" style="font-size:.92rem;font-weight:600;"></td>
                         <td><input type="text" name="sku[]" class="form-control form-control-sm sku-manual bg-light" readonly placeholder="Se generará..." tabindex="-1" style="font-size:.92rem;"></td>
                         <td>
@@ -10691,8 +10730,38 @@ $('#selectGuiaTallaManual').on('change', function() {
                 // Enfocar primer stock
                 $('#tablaTallasManual tbody tr:first .stock-input').focus().select();
             }, 200);
+        };
+
+        const hayExistentes = $('#tablaTallasManual tbody tr.talla-existente').length > 0;
+        let stockTipeado = 0;
+        $('#tablaTallasManual tbody input[name="stock[]"]').each(function() {
+            stockTipeado += parseInt($(this).val()) || 0;
+        });
+
+        if (filasConTalla.length === 0) {
+            // Tabla vacía o solo filas sin valor: poblar desde guía
+            poblarDesdeGuia();
+        } else if (!hayExistentes && stockTipeado === 0) {
+            // ✅ Producto NUEVO sin stock tipeado: reemplazar los residuos (la
+            // fila "00" del modo Sin guía, tallas a medio digitar) por las
+            // tallas de la guía — para eso se seleccionó. Antes cualquier fila
+            // con valor bloqueaba el poblado y había que digitar talla por talla.
+            poblarDesdeGuia();
+        } else if (!hayExistentes) {
+            // Producto nuevo pero YA hay stock tipeado: confirmar antes de pisar
+            Swal.fire({
+                title: '¿Usar las tallas de la guía?',
+                html: `La guía trae <b>${res.tallas.length}</b> tallas, pero ya escribiste stock en la tabla.<br>Si reemplazas, el stock tipeado se pierde.`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, reemplazar por la guía',
+                cancelButtonText: 'Mantener mis tallas',
+            }).then(r => {
+                if (r.isConfirmed) poblarDesdeGuia();
+                else actualizarEquivalenciasTallasManual(res.tallas, tipoTalla);
+            });
         } else {
-            // Ya hay tallas ingresadas: solo actualizar equivalencias
+            // Producto EXISTENTE: sus tallas reales no se pisan, solo equivalencias
             actualizarEquivalenciasTallasManual(res.tallas, tipoTalla);
         }
     });
@@ -10980,6 +11049,66 @@ $(document).on('click', '.chipTallaGlobalSwal', function() {
     $('#swalNuevaTallaGlobal').val(String($(this).data('talla')));
 });
 
+// ==================================================================
+// ✅ CORRECCIÓN DE CATEGORÍA GLOBAL — botón del estado "catdif".
+// El producto existe con OTRA categoría guardada; este botón la corrige
+// a la seleccionada en el formulario, en TODAS las bodegas donde exista
+// la misma variante (código+marca+color+género). SKUs/tallas/stock no
+// cambian. Tras corregir, la verificación re-matchea y carga las tallas.
+// ==================================================================
+$(document).on('click', '.btnCorregirCategoriaGlobal', function() {
+    const productoId = $(this).data('producto-id');
+    const categoriaId = $('#modalCrearProductoManual [name="categoria"]').val();
+    if (!productoId || !categoriaId) {
+        showErrorAlert('Falta la categoría', 'Selecciona primero la categoría correcta en el formulario.');
+        return;
+    }
+    Swal.fire({
+        title: '¿Corregir categoría?',
+        icon: 'question',
+        width: 480,
+        html: `
+            <div class="text-start" style="font-size:.9rem;">
+                <p class="mb-2">Se cambiará la categoría del producto existente a la <b>seleccionada en el formulario</b>.</p>
+                <div class="alert alert-warning py-2 px-2 mb-0" style="font-size:.8rem;">
+                    <i class="bi bi-buildings me-1"></i>El cambio se aplica a la ficha del producto en <b>TODAS las bodegas</b>. Los SKUs, tallas y stock NO cambian.
+                </div>
+            </div>`,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, corregir en todas',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#f0ad4e',
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        $.ajax({
+            url: '/app/api/editar-categoria-global/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ producto_id: productoId, categoria_id: categoriaId }),
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(res) {
+                if (!res.success) {
+                    showErrorAlert('Error', res.error || 'No se pudo corregir la categoría.');
+                    return;
+                }
+                const filas = (res.bodegas || []).map(b =>
+                    `<tr><td style="padding:2px 10px;">${b.sucursal}</td><td style="padding:2px 10px;">${b.categoria_anterior}</td></tr>`).join('');
+                Swal.fire({
+                    icon: 'success', title: 'Categoría corregida', width: 480,
+                    html: `<p style="font-size:.88rem;">Ahora: <b>${res.categoria_nueva}</b> (${res.fichas_actualizadas} ficha(s) actualizadas)</p>` +
+                          (filas ? `<table style="margin:0 auto;font-size:.84rem;border-collapse:collapse;"><thead><tr style="border-bottom:1px solid #dee2e6;"><th style="padding:2px 10px;">Bodega</th><th style="padding:2px 10px;">Categoría anterior</th></tr></thead><tbody>${filas}</tbody></table>` : ''),
+                });
+                // Re-verificar: ahora la identidad matchea → flujo "existe"
+                // con tallas/SKUs reales cargados para sumar stock
+                verificarProductoExistenteManual();
+            },
+            error: function(xhr) {
+                showErrorAlert('Error', xhr.responseJSON?.error || 'Error inesperado al corregir la categoría.');
+            }
+        });
+    });
+});
+
 // Evento para verificar producto existente en modal manual
 // ==================================================================
 // ✅ PANEL ÚNICO "ESTADO DEL CÓDIGO" (#estadoCodigoManual, columna derecha).
@@ -11004,6 +11133,7 @@ function renderEstadoCodigoManual(estado, response) {
         vacio:       { icono: 'bi-upc-scan',        titulo: 'Verificación del código', badge: '' },
         verificando: { icono: 'bi-hourglass-split', titulo: `Verificando <b>${articulo}</b>…`, badge: '<div class="spinner-border spinner-border-sm text-primary"></div>' },
         existe:      { icono: 'bi-box-seam',        titulo: `<b>${articulo}</b> YA EXISTE en esta bodega`, badge: '<span class="badge bg-warning text-dark">se SUMA stock</span>' },
+        catdif:      { icono: 'bi-diagram-3',       titulo: `<b>${articulo}</b> existe aquí con OTRA categoría`, badge: '<span class="badge bg-danger">categoría distinta</span>' },
         variante:    { icono: 'bi-palette',         titulo: `<b>${articulo}</b> existe aquí en OTRA variante`, badge: '<span class="badge bg-info text-dark">variante nueva</span>' },
         otras:       { icono: 'bi-buildings',       titulo: `<b>${articulo}</b> existe en otras bodegas`, badge: '<span class="badge bg-secondary">no está aquí</span>' },
         nuevo:       { icono: 'bi-plus-circle',     titulo: `<b>${articulo}</b> es un código NUEVO`, badge: '<span class="badge bg-success">se crea producto</span>' },
@@ -11015,12 +11145,14 @@ function renderEstadoCodigoManual(estado, response) {
         body = '<div class="ec-nota py-1"><i class="bi bi-info-circle me-1"></i>Escribe el código del artículo: aquí verás al instante si ya existe, en qué bodegas y con qué variantes.</div>';
     } else if (estado === 'existe') {
         body = _ecSeccionExistente(response);
+    } else if (estado === 'catdif') {
+        body = _ecSeccionCategoriaDistinta(response);
     } else if (estado === 'variante') {
         body = _ecSeccionVariantesLocales(response);
     } else if (estado === 'nuevo') {
         body = '<div class="ec-nota py-1"><i class="bi bi-check-circle text-success me-1"></i>No hay ningún producto con este código en tus bodegas. Se generarán SKUs nuevos.</div>';
     }
-    if (estado === 'existe' || estado === 'variante' || estado === 'otras' || estado === 'nuevo') {
+    if (estado === 'existe' || estado === 'catdif' || estado === 'variante' || estado === 'otras' || estado === 'nuevo') {
         body += _ecSeccionBodegas(response, estado);
         body += _ecSeccionSimilares(response, articulo, estado);
     }
@@ -11067,7 +11199,7 @@ function _ecSeccionExistente(r) {
             <span class="badge bg-dark">${p.marca || '-'}</span>
             <span class="badge bg-info text-dark">${p.color || '-'}</span>
             <span class="badge bg-secondary">${p.genero || '-'}</span>
-            <span class="badge bg-light text-dark border">${p.categoria || '-'}</span>
+            <span class="badge bg-light text-dark border" title="Categoría guardada del producto. ¿Está mal? Selecciona la correcta en el formulario y aparecerá el botón para corregirla en TODAS las bodegas.">${p.categoria || '-'}</span>
         </div>
         <div class="alert alert-success py-1 px-2 mb-2" style="font-size:.76rem;">
             <i class="bi bi-check-circle-fill me-1"></i>Las tallas ya se cargaron abajo en <b>Tallas y Stock</b> con sus SKUs reales — escribe solo las <b>cantidades a sumar</b>. No se crea un producto nuevo.
@@ -11086,6 +11218,30 @@ function _ecSeccionExistente(r) {
         <div id="avisoPreciosManual" class="mt-1"></div>
         <input type="hidden" name="actualizar_precios" id="hiddenActualizarPreciosManual" value="false">
         ${variantes}`;
+}
+
+// Sección estado "catdif": MISMO producto (código+marca+color+género) pero
+// guardado con OTRA categoría. Sin corrección, crear generaría un DUPLICADO
+// (la categoría es parte de la identidad del matching).
+function _ecSeccionCategoriaDistinta(r) {
+    const p = r.producto_categoria_distinta || {};
+    return `
+        <div class="ec-chips mb-2">
+            <span class="badge bg-dark">${p.marca || '-'}</span>
+            <span class="badge bg-info text-dark">${p.color || '-'}</span>
+            <span class="badge bg-secondary">${p.genero || '-'}</span>
+        </div>
+        <div class="alert alert-danger py-1 px-2 mb-2" style="font-size:.76rem;">
+            <i class="bi bi-exclamation-octagon-fill me-1"></i>Es el <b>MISMO producto</b> (${p.n_tallas || 0} tallas · ${(p.stock_total || 0).toLocaleString('es-CL')} uds) pero está guardado con la categoría
+            <b>${p.categoria || '-'}</b> y en el formulario elegiste <b>${p.categoria_form_nombre || 'otra'}</b>.
+            Si continúas así se creará un <b>DUPLICADO</b> con SKUs nuevos.
+        </div>
+        <div class="d-flex flex-column gap-1">
+            <button type="button" class="btn btn-sm btn-warning btnCorregirCategoriaGlobal" data-producto-id="${p.id}" style="font-size:.78rem;">
+                <i class="bi bi-diagram-3 me-1"></i>Corregir categoría del existente a "${p.categoria_form_nombre || 'la del formulario'}" (TODAS las bodegas)
+            </button>
+            <span class="text-muted" style="font-size:.72rem;">…o vuelve a seleccionar <b>${p.categoria || '-'}</b> en el formulario para sumar stock sin corregir nada.</span>
+        </div>`;
 }
 
 // Chip de una variante/bodega con botón "Usar" (reutiliza .btnCopiarTodoSucursal)
@@ -11367,10 +11523,14 @@ function verificarProductoExistenteManual() {
                 window.productoExistenteManual = null;
                 window.tallasExistentesManual = null;
 
-                // Panel único de estado: variante local / otras bodegas / código nuevo
+                // Panel único de estado: categoría distinta (guardia anti-duplicado)
+                // / variante local / otras bodegas / código nuevo
                 const bodegasResp = response.bodegas_codigo || [];
                 const hayLocal = bodegasResp.some(b => b.es_sucursal_actual);
-                renderEstadoCodigoManual(hayLocal ? 'variante' : (bodegasResp.length ? 'otras' : 'nuevo'), response);
+                const estadoPanel = response.producto_categoria_distinta
+                    ? 'catdif'
+                    : (hayLocal ? 'variante' : (bodegasResp.length ? 'otras' : 'nuevo'));
+                renderEstadoCodigoManual(estadoPanel, response);
 
                 // Convertir filas "talla-existente" (que tienen hidden SKU + badge verde)
                 // a filas normales con input vacío para que generarTodosLosSkusManual las llene
@@ -12784,7 +12944,9 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
                     // DTE/marca/guía intactos, listo para el siguiente producto
                     prepararSiguienteProductoManual();
                 } else {
-                    cerrarModal('modalCrearProductoManual');
+                    // Cierre robusto: verifica que el modal REALMENTE se cerró
+                    // y fuerza el cierre si quedó pegado (transición a medias)
+                    cerrarModalCrearManualSeguro();
                 }
                 // Refrescar la tabla de productos
                 const anioActual = new Date().getFullYear();
@@ -13072,7 +13234,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
                 });
                 
                 cerrarModal('modalProductoExistente');
-                cerrarModal('modalCrearProductoManual');
+                cerrarModalCrearManualSeguro();
 
                 // Refrescar la tabla de productos
                 const anioActual = new Date().getFullYear();
