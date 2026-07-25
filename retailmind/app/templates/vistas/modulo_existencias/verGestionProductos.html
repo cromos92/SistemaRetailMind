@@ -4409,9 +4409,13 @@
                         <hr>
 
                         <h6 class="mt-2">Tallas</h6>
+                        <div class="text-muted mb-1" style="font-size:.78rem;">
+                            <i class="bi bi-grip-vertical me-1"></i>Arrastra las filas para reordenarlas — el orden se guarda y define cómo se muestran las tallas al aplicar la guía.
+                        </div>
                         <table class="table table-bordered" id="tablaItemsGuia">
                             <thead class="table-light">
                                 <tr>
+                                    <th style="width:34px;"></th>
                                     <th>CL</th>
                                     <th>US</th>
                                     <th>EU</th>
@@ -4427,6 +4431,9 @@
                         </table>
                         <button type="button" class="btn btn-outline-primary btn-sm" id="btnAgregarFilaTalla">
                             <i class="bi bi-plus-circle"></i> Agregar Fila
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnOrdenarTallasGuia" title="Ordenar las filas de menor a mayor por talla CL">
+                            <i class="bi bi-sort-numeric-down"></i> Ordenar por CL
                         </button>
                     </div>
                     <div class="modal-footer">
@@ -6769,6 +6776,7 @@ function showError(msg) {
     function agregarFilaTalla(item = {}) {
         const fila = `
 <tr>
+    <td class="text-center align-middle drag-talla-handle" style="cursor:grab;color:#6c757d;" title="Arrastrar para ordenar"><i class="bi bi-grip-vertical"></i></td>
     <td><input type="text" name="cl[]" class="form-control form-control-sm" value="${item.cl || ''}" placeholder="Ej: 36"></td>
     <td><input type="text" name="us[]" class="form-control form-control-sm" value="${item.us || ''}" placeholder="Ej: 5"></td>
     <td><input type="text" name="eu[]" class="form-control form-control-sm" value="${item.eu || ''}" placeholder="Ej: 36"></td>
@@ -6780,6 +6788,8 @@ function showError(msg) {
         $('#tablaItemsGuia tbody').append(fila);
     }
 
+    // (handler único: antes estaba registrado DOS veces y cada clic
+    // en "Agregar Fila" insertaba dos filas)
     $(document).on('click', '#btnAgregarFilaTalla', function () {
         agregarFilaTalla();
     });
@@ -6788,13 +6798,16 @@ function showError(msg) {
         $(this).closest('tr').remove();
     });
 
-
-    $(document).on('click', '#btnAgregarFilaTalla', function () {
-        agregarFilaTalla();
-    });
-
-    $(document).on('click', '.btnEliminarFila', function () {
-        $(this).closest('tr').remove();
+    // ✅ Ordenar filas de la guía de menor a mayor por CL (numérico, tolera coma)
+    $(document).on('click', '#btnOrdenarTallasGuia', function () {
+        const $tbody = $('#tablaItemsGuia tbody');
+        const filas = $tbody.find('tr').get();
+        filas.sort((a, b) => {
+            const va = parseFloat(String($(a).find('input[name="cl[]"]').val() || '').replace(',', '.'));
+            const vb = parseFloat(String($(b).find('input[name="cl[]"]').val() || '').replace(',', '.'));
+            return (isNaN(va) ? Infinity : va) - (isNaN(vb) ? Infinity : vb);
+        });
+        filas.forEach(f => $tbody.append(f));
     });
     // Abrir modal de edición de guía de talla
     $('#btnEditarGuiaTalla').on('click', function () {
@@ -6852,6 +6865,61 @@ function showError(msg) {
                 }
             }, 300);
         }
+    });
+
+    // ✅ Drag & drop para reordenar las tallas de la guía (SortableJS).
+    // El orden visual de las filas ES el orden que se guarda (el backend
+    // asigna GuiaTallaItem.orden por índice de fila al guardar).
+    $('#modalGuiaTalla').on('shown.bs.modal', function () {
+        const tbody = document.querySelector('#tablaItemsGuia tbody');
+        if (window.Sortable && tbody && !this._sortableGuia) {
+            this._sortableGuia = Sortable.create(tbody, {
+                handle: '.drag-talla-handle',
+                animation: 150,
+                ghostClass: 'table-active',
+            });
+        }
+    });
+
+    // ==================================================================
+    // ✅ FIX PANTALLA NEGRA — #modalGuiaTalla se abre APILADO sobre el
+    // modal de creación (manual o recepción). Bootstrap 5 no soporta
+    // modales apilados: al cerrar la guía quitaba `modal-open` del body
+    // y dejaba backdrops huérfanos tapando el modal de creación.
+    // Al mostrar: se sube la guía y su backdrop por encima del modal de
+    // abajo. Al ocultar: se limpian los backdrops sobrantes y se
+    // restaura el estado del modal que sigue abierto.
+    // ==================================================================
+    $('#modalGuiaTalla').on('shown.bs.modal', function () {
+        const abiertos = $('.modal.show').length;
+        if (abiertos > 1) {
+            const z = 1055 + 10 * abiertos;
+            $(this).css('z-index', z);
+            $('.modal-backdrop').last().css('z-index', z - 5).addClass('backdrop-apilado-guia');
+        }
+    });
+    $('#modalGuiaTalla').on('hidden.bs.modal', function () {
+        $(this).css('z-index', '');
+        const limpiarBackdrops = function () {
+            $('.modal-backdrop.backdrop-apilado-guia').remove();
+            if ($('.modal.show').length) {
+                // El modal de creación sigue abierto: restaurar body y dejar
+                // exactamente UN backdrop debajo de él
+                $('body').addClass('modal-open');
+                const $bd = $('.modal-backdrop');
+                if ($bd.length > 1) $bd.slice(1).remove();
+                $bd.first().css('z-index', '');
+            } else {
+                // No queda ningún modal: limpieza total anti-backdrop huérfano
+                $('.modal-backdrop').remove();
+                $('body').removeClass('modal-open').css('padding-right', '').css('overflow', '');
+                $('html').css('overflow', '');
+            }
+        };
+        limpiarBackdrops();
+        // Segunda pasada tras el fade de Bootstrap (~300ms): captura el
+        // backdrop que su transición elimina/inserta DESPUÉS de este evento
+        setTimeout(limpiarBackdrops, 400);
     });
     // Al guardar/editar guía de talla, en vez de mostrar la alerta inmediatamente, la marca como pendiente
     $('#formGuiaTalla').off('submit').on('submit', function (e) {
@@ -10498,12 +10566,71 @@ function cargarGuiasTallaManual(marcaId) {
     });
 }
 
-// Evento para cambio de tipo de talla en modal manual
+// ✅ Convierte las tallas ya pobladas de la tabla manual al equivalente del
+// nuevo tipo usando la guía (ej: CL "28" → US "10.5K"). Solo toca filas
+// EDITABLES (producto nuevo); las tallas EXISTENTES (SKU real de BD, readonly)
+// no se convierten — esas se corrigen con el lápiz de talla global.
+// Si una talla no tiene equivalencia en el tipo destino, se deja como está
+// (y la validación de equivalencias mostrará la advertencia).
+function convertirTallasManualATipo(tallasGuia, tipoNuevo) {
+    const tipoKey = (tipoNuevo || 'CL').toLowerCase();
+    let convertidas = 0;
+    $('#tablaTallasManual tbody tr').each(function() {
+        const $fila = $(this);
+        if ($fila.hasClass('talla-existente')) return;
+        const $input = $fila.find('input[name="talla[]"]');
+        const actual = String($input.val() || '').trim();
+        if (!actual) return;
+        const match = buscarTallaInteligente(tallasGuia, actual, tipoNuevo);
+        if (match.encontrada) {
+            const destino = (match.talla[tipoKey] || '').toString().trim();
+            if (destino && destino !== actual) {
+                $input.val(destino);
+                convertidas++;
+            }
+        }
+    });
+    return convertidas;
+}
+
+// Evento para cambio de tipo de talla en modal manual.
+// ✅ Con guía seleccionada y tallas ya pobladas, las CONVIERTE al equivalente
+// del nuevo tipo (antes quedaban en el tipo anterior con la advertencia
+// "⚠ Encontrada como CL" en cada fila).
 $(document).on('change', '#modalCrearProductoManual select[name="tipo_talla"]', function() {
     const guiaId = $('#selectGuiaTallaManual').val();
-    if (guiaId) {
+    if (!guiaId) return;
+    if (guiaId === 'SIN_GUIA') {
         $('#selectGuiaTallaManual').trigger('change');
+        return;
     }
+
+    const tipoNuevo = $(this).val() || 'CL';
+    const hayTallas = $('#tablaTallasManual tbody tr').filter(function() {
+        return String($(this).find('input[name="talla[]"]').val() || '').trim() !== '';
+    }).length > 0;
+
+    if (!hayTallas) {
+        // Tabla vacía: repoblar desde la guía con el nuevo tipo
+        $('#selectGuiaTallaManual').trigger('change');
+        return;
+    }
+
+    $.get(`/app/guia_talla_detalle/${guiaId}/`, function(res) {
+        if (!res || !res.tallas || !res.tallas.length) return;
+        const n = convertirTallasManualATipo(res.tallas, tipoNuevo);
+        actualizarEquivalenciasTallasManual(res.tallas, tipoNuevo);
+        mostrarResumenBusquedaTallas(res.tallas, tipoNuevo);
+        if (n > 0 && typeof Toastify !== 'undefined') {
+            Toastify({
+                text: `↔ ${n} talla(s) convertidas a ${tipoNuevo}`,
+                duration: 2500,
+                gravity: 'bottom',
+                position: 'right',
+                style: { background: '#405189', borderRadius: '8px', fontSize: '.82rem' },
+            }).showToast();
+        }
+    });
 });
 
 // Evento para cambio de guía de talla en modal manual
@@ -10743,6 +10870,116 @@ $(document).on('click', '#tablaTallasManual .btn-usar-talla-disponible', functio
     setTimeout(() => $inputTalla.removeClass('is-valid'), 1500);
 });
 
+// ==================================================================
+// ✅ CORRECCIÓN DE TALLA GLOBAL (lápiz en filas de tallas EXISTENTES)
+// Para tallas mal registradas históricamente (ej. "12" que debió ser
+// "12K"): renombra la talla del producto en TODAS las bodegas donde
+// exista la misma identidad (este módulo es el maestro y replica).
+// El SKU NO cambia — solo la etiqueta de talla.
+// ==================================================================
+$(document).on('click', '.btnEditarTallaExistente', function() {
+    const $btn = $(this);
+    const tallaActual = String($btn.data('talla'));
+    const sku = String($btn.data('sku') || '');
+    const prod = window.productoExistenteManual;
+    if (!prod || !prod.id) {
+        Swal.fire({
+            icon: 'info',
+            title: 'Verifica el código primero',
+            text: 'Espera a que el panel "Estado del código" confirme el producto existente y vuelve a intentar.'
+        });
+        return;
+    }
+
+    const abrirDialogo = (chipsHtml) => {
+        Swal.fire({
+            title: 'Corregir talla',
+            width: 480,
+            html: `
+                <div class="text-start" style="font-size:.9rem;">
+                    <p class="mb-2">Talla actual: <b>${tallaActual}</b> · SKU <span class="badge bg-success">${sku}</span></p>
+                    <input type="text" id="swalNuevaTallaGlobal" class="form-control" placeholder="Nueva talla (ej: 12K)" value="${tallaActual}">
+                    ${chipsHtml ? `<div class="mt-2" style="font-size:.8rem;"><b>Tallas de la guía:</b> <span class="text-muted">(click para usar)</span><div class="d-flex flex-wrap gap-1 mt-1">${chipsHtml}</div></div>` : ''}
+                    <div class="alert alert-warning py-2 px-2 mt-2 mb-0" style="font-size:.8rem;">
+                        <i class="bi bi-buildings me-1"></i>El cambio se aplica en <b>TODAS las bodegas</b> donde exista este producto. El SKU se mantiene.
+                    </div>
+                </div>`,
+            showCancelButton: true,
+            confirmButtonText: 'Cambiar en todas las bodegas',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#0d6efd',
+            focusConfirm: false,
+            didOpen: () => {
+                const el = document.getElementById('swalNuevaTallaGlobal');
+                if (el) { el.focus(); el.select(); }
+            },
+            preConfirm: () => {
+                const v = (document.getElementById('swalNuevaTallaGlobal').value || '').trim();
+                if (!v) { Swal.showValidationMessage('Escribe la talla nueva'); return false; }
+                if (v === tallaActual) { Swal.showValidationMessage('La talla nueva es igual a la actual'); return false; }
+                return v;
+            }
+        }).then(r => {
+            if (!r.isConfirmed) return;
+            $.ajax({
+                url: '/app/api/editar-talla-global/',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ producto_id: prod.id, talla_actual: tallaActual, talla_nueva: r.value }),
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function(res) {
+                    if (!res.success) {
+                        showErrorAlert('Error', res.error || 'No se pudo cambiar la talla.');
+                        return;
+                    }
+                    const filasBod = (res.bodegas || []).map(b =>
+                        `<tr><td style="padding:2px 10px;">${b.sucursal}</td><td style="padding:2px 10px;text-align:center;">${b.filas}</td></tr>`).join('');
+                    const confl = (res.conflictos || []).length
+                        ? `<div class="alert alert-warning py-1 px-2 mt-2 mb-0" style="font-size:.78rem;text-align:left;">No se cambió en: ${res.conflictos.map(c => `<b>${c.sucursal}</b>`).join(', ')} — ahí el producto YA tiene la talla "${res.talla_nueva}" (resolver en Fusión de Duplicados).</div>` : '';
+                    Swal.fire({
+                        icon: 'success', title: 'Talla corregida', width: 460,
+                        html: `<p style="font-size:.88rem;">"<b>${res.talla_actual}</b>" → "<b>${res.talla_nueva}</b>" (${res.filas_actualizadas} registro(s))</p>` +
+                              (filasBod ? `<table style="margin:0 auto;font-size:.84rem;border-collapse:collapse;"><thead><tr style="border-bottom:1px solid #dee2e6;"><th style="padding:2px 10px;">Bodega</th><th style="padding:2px 10px;">Tallas</th></tr></thead><tbody>${filasBod}</tbody></table>` : '') +
+                              confl,
+                    });
+                    // Recargar las tallas del producto desde la BD (el stock ya
+                    // tipeado se preserva porque se captura indexado por SKU)
+                    verificarProductoExistenteManual();
+                },
+                error: function(xhr) {
+                    showErrorAlert('Error', xhr.responseJSON?.error || 'Error inesperado al cambiar la talla.');
+                }
+            });
+        });
+    };
+
+    // Chips con las tallas válidas de la guía seleccionada (si hay una)
+    const guiaId = $('#selectGuiaTallaManual').val();
+    const tipoTalla = ($('#modalCrearProductoManual select[name="tipo_talla"]').val() || 'CL').toLowerCase();
+    if (guiaId && guiaId !== 'SIN_GUIA') {
+        $.get(`/app/guia_talla_detalle/${guiaId}/`, function(res) {
+            let chips = '';
+            if (res && res.tallas) {
+                const vistos = new Set();
+                chips = res.tallas.map(t => {
+                    const v = (t[tipoTalla] || '').toString().trim();
+                    if (!v || vistos.has(v)) return '';
+                    vistos.add(v);
+                    return `<span class="badge bg-light text-dark border chipTallaGlobalSwal" data-talla="${v}" style="cursor:pointer;">${v}</span>`;
+                }).join(' ');
+            }
+            abrirDialogo(chips);
+        }).fail(() => abrirDialogo(''));
+    } else {
+        abrirDialogo('');
+    }
+});
+
+// Chip de talla de la guía dentro del Swal de corrección → llena el input
+$(document).on('click', '.chipTallaGlobalSwal', function() {
+    $('#swalNuevaTallaGlobal').val(String($(this).data('talla')));
+});
+
 // Evento para verificar producto existente en modal manual
 // ==================================================================
 // ✅ PANEL ÚNICO "ESTADO DEL CÓDIGO" (#estadoCodigoManual, columna derecha).
@@ -10846,10 +11083,7 @@ function _ecSeccionExistente(r) {
             <span style="font-size:.78rem;">Precio actual: <b>$${(p.precioventa || 0).toLocaleString('es-CL')}</b> · Costo: $${(p.costo || 0).toLocaleString('es-CL')}</span>
             <span id="comparePrecioManual"></span>
         </div>
-        <div class="form-check form-switch mt-1 mb-0">
-            <input class="form-check-input" type="checkbox" id="chkActualizarPreciosManual">
-            <label class="form-check-label" for="chkActualizarPreciosManual" style="font-size:.78rem;">Actualizar los precios del producto con los del formulario</label>
-        </div>
+        <div id="avisoPreciosManual" class="mt-1"></div>
         <input type="hidden" name="actualizar_precios" id="hiddenActualizarPreciosManual" value="false">
         ${variantes}`;
 }
@@ -10930,17 +11164,61 @@ function _ecSeccionSimilares(r, articulo, estado) {
         </div>`;
 }
 
-// Comparación viva precio formulario vs precio del producto existente
+// ✅ Comparación viva costo/sobreprecio/precio venta del formulario vs el
+// producto existente — SIN switch: si el usuario modificó alguno, los precios
+// del producto SE ACTUALIZAN SIEMPRE al crear. Aquí solo se AVISA qué va a
+// cambiar y se fija hiddenActualizarPreciosManual automáticamente.
 function actualizarComparePrecioManual() {
-    const $el = $('#comparePrecioManual');
-    if (!$el.length) return;
-    const actual = parseInt(window.productoExistenteManual && window.productoExistenteManual.precioventa) || 0;
-    const nuevo = parseInt($('#modalCrearProductoManual input[name="precioventa"]').val()) || 0;
-    if (!actual || !nuevo || actual === nuevo) { $el.empty(); return; }
-    const dif = nuevo - actual;
-    const pct = ((dif / actual) * 100).toFixed(1);
-    $el.html(`<span class="badge ${dif > 0 ? 'bg-success' : 'bg-danger'}" style="font-size:.7rem;">Formulario: $${nuevo.toLocaleString('es-CL')} (${dif > 0 ? '+' : ''}${pct}%)</span>
-        <span class="text-muted ms-1" style="font-size:.7rem;">se aplica solo si activas el switch</span>`);
+    const $badge = $('#comparePrecioManual');
+    const $aviso = $('#avisoPreciosManual');
+    const prod = window.productoExistenteManual;
+    if (!prod) {
+        $badge.empty(); $aviso.empty();
+        $('#hiddenActualizarPreciosManual').val('false');
+        return;
+    }
+
+    const $form = $('#modalCrearProductoManual');
+    const leer = (name) => parseInt($form.find(`input[name="${name}"]`).val()) || 0;
+    const nuevoCosto = leer('costo');
+    const nuevoSobre = leer('sobreprecio');
+    const nuevoVenta = leer('precioventa');
+    const costoActual = parseInt(prod.costo) || 0;
+    const sobreActual = parseInt(prod.sobreprecio) || 0;
+    const ventaActual = parseInt(prod.precioventa) || 0;
+
+    // Badge compacto junto al "Precio actual"
+    if (ventaActual && nuevoVenta && ventaActual !== nuevoVenta) {
+        const dif = nuevoVenta - ventaActual;
+        const pct = ((dif / ventaActual) * 100).toFixed(1);
+        $badge.html(`<span class="badge ${dif > 0 ? 'bg-success' : 'bg-danger'}" style="font-size:.7rem;">Formulario: $${nuevoVenta.toLocaleString('es-CL')} (${dif > 0 ? '+' : ''}${pct}%)</span>`);
+    } else {
+        $badge.empty();
+    }
+
+    // Sin costo o venta en el formulario aún no hay nada que decidir
+    if (!nuevoCosto || !nuevoVenta) {
+        $aviso.empty();
+        $('#hiddenActualizarPreciosManual').val('false');
+        return;
+    }
+
+    const cambios = [];
+    if (nuevoCosto !== costoActual) cambios.push(`Costo: $${costoActual.toLocaleString('es-CL')} → <b>$${nuevoCosto.toLocaleString('es-CL')}</b>`);
+    if (nuevoSobre !== sobreActual) cambios.push(`Sobreprecio: $${sobreActual.toLocaleString('es-CL')} → <b>$${nuevoSobre.toLocaleString('es-CL')}</b>`);
+    if (nuevoVenta !== ventaActual) cambios.push(`Venta: $${ventaActual.toLocaleString('es-CL')} → <b>$${nuevoVenta.toLocaleString('es-CL')}</b>`);
+
+    if (cambios.length) {
+        $('#hiddenActualizarPreciosManual').val('true');
+        $aviso.html(`
+            <div class="alert alert-warning py-1 px-2 mb-0" style="font-size:.78rem;">
+                <i class="bi bi-arrow-repeat me-1"></i><b>Modificaste los precios:</b> al crear SE ACTUALIZARÁN en el producto.<br>
+                ${cambios.join(' · ')}
+            </div>`);
+    } else {
+        $('#hiddenActualizarPreciosManual').val('false');
+        $aviso.html(`<div class="text-muted" style="font-size:.75rem;"><i class="bi bi-check-circle me-1"></i>Precios sin cambios: se conservan los del producto.</div>`);
+    }
 }
 
 // Chip de código similar → corrige el código y re-verifica.
@@ -11043,11 +11321,18 @@ function verificarProductoExistenteManual() {
                         const fila = `
                             <tr class="talla-existente">
                                 <td>
-                                    <input type="text" name="talla[]" class="form-control form-control-sm bg-light" 
-                                           value="${t.talla}" readonly tabindex="-1">
+                                    <div class="d-flex align-items-center gap-1">
+                                        <input type="text" name="talla[]" class="form-control form-control-sm bg-light"
+                                               value="${t.talla}" readonly tabindex="-1">
+                                        <button type="button" class="btn btn-sm btn-outline-primary btnEditarTallaExistente py-0 px-1"
+                                                data-talla="${t.talla}" data-sku="${t.sku}" tabindex="-1"
+                                                title="Corregir talla mal registrada — se cambia en TODAS las bodegas">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                    </div>
                                 </td>
                                 <td>
-                                    <input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold" 
+                                    <input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold"
                                            value="${stockPre}" min="0" tabindex="${tabIdx}"
                                            style="max-width: 80px;" placeholder="0">
                                 </td>
@@ -11100,7 +11385,9 @@ function verificarProductoExistenteManual() {
                     } else {
                         $hidden.val('').removeClass('bg-success-subtle bg-warning-subtle').addClass('bg-light').attr('placeholder', 'Se generará...');
                     }
-                    // Hacer la talla editable de nuevo
+                    // Hacer la talla editable de nuevo (y quitar el lápiz de
+                    // corrección global, que solo aplica a tallas con SKU real)
+                    $fila.find('.btnEditarTallaExistente').remove();
                     $fila.find('input[name="talla[]"]').prop('readonly', false).removeClass('bg-light');
                 });
 
@@ -11120,9 +11407,13 @@ function verificarProductoExistenteManual() {
 // (mostrarPanelProductoExistenteManual y mostrarVariantesCodigoManual fueron
 // reemplazados por el panel único renderEstadoCodigoManual en la columna derecha)
 
-// Toggle de actualización de precios (por defecto NO se tocan los precios)
-$(document).on('change', '#chkActualizarPreciosManual', function () {
-    $('#hiddenActualizarPreciosManual').val(this.checked ? 'true' : 'false');
+// ✅ SIN SWITCH de precios: si el usuario modifica costo/sobreprecio/precio
+// venta con un producto existente detectado, la actualización se aplica
+// SIEMPRE al crear. hiddenActualizarPreciosManual lo fija automáticamente
+// actualizarComparePrecioManual() (costo y precioventa ya tienen handler
+// propio; aquí solo falta reaccionar al sobreprecio).
+$(document).on('input', '#modalCrearProductoManual input[name="sobreprecio"]', function () {
+    actualizarComparePrecioManual();
 });
 
 // ✅ NUEVA: Copiar datos del producto existente al formulario
@@ -11182,7 +11473,16 @@ $(document).on('click', '#btnCopiarDatosProducto', function() {
             const tabIdx = 100 + i;
             const fila = `
                 <tr class="talla-existente">
-                    <td><input type="text" name="talla[]" class="form-control form-control-sm bg-light" value="${t.talla}" readonly tabindex="-1"></td>
+                    <td>
+                        <div class="d-flex align-items-center gap-1">
+                            <input type="text" name="talla[]" class="form-control form-control-sm bg-light" value="${t.talla}" readonly tabindex="-1">
+                            <button type="button" class="btn btn-sm btn-outline-primary btnEditarTallaExistente py-0 px-1"
+                                    data-talla="${t.talla}" data-sku="${t.sku}" tabindex="-1"
+                                    title="Corregir talla mal registrada — se cambia en TODAS las bodegas">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                        </div>
+                    </td>
                     <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold" value="${stockPrevioDe(prevCopiar, t.sku, t.talla)}" min="0" tabindex="${tabIdx}" style="max-width: 80px;"></td>
                     <td>
                         <span class="badge bg-success px-2 py-1" title="SKU: ${t.sku}">${t.sku}</span>
@@ -11352,7 +11652,16 @@ $(document).on('click', '#btnCopiarDatosProducto', function() {
                 tallasOrdenadas.forEach((t, i) => {
                     const fila = `
                         <tr class="talla-existente">
-                            <td><input type="text" name="talla[]" class="form-control form-control-sm bg-light" value="${t.talla}" readonly tabindex="-1"></td>
+                            <td>
+                                <div class="d-flex align-items-center gap-1">
+                                    <input type="text" name="talla[]" class="form-control form-control-sm bg-light" value="${t.talla}" readonly tabindex="-1">
+                                    <button type="button" class="btn btn-sm btn-outline-primary btnEditarTallaExistente py-0 px-1"
+                                            data-talla="${t.talla}" data-sku="${t.sku}" tabindex="-1"
+                                            title="Corregir talla mal registrada — se cambia en TODAS las bodegas">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                </div>
+                            </td>
                             <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold" value="${stockPrevioDe(prevAc, t.sku, t.talla)}" min="0" tabindex="${100+i}" style="max-width: 80px;"></td>
                             <td>
                                 <span class="badge bg-success px-2 py-1" title="SKU: ${t.sku}">${t.sku}</span>
@@ -11930,6 +12239,9 @@ $(document).on('input', '#modalCrearProductoManual input[name="costo"]', functio
     // Al cambiar costo, siempre recalcular con margenes predefinidos
     aplicarMargenesManual();
     actualizarIndicadoresMargen($('#modalCrearProductoManual'));
+    // aplicarMargenesManual cambia sobreprecio/precioventa con .val() (sin
+    // eventos): recalcular aquí el aviso de actualización de precios
+    actualizarComparePrecioManual();
 });
 
 // Detectar cambio de precio y comparar con producto existente (NO tocar sobreprecio)
@@ -12286,7 +12598,7 @@ function confirmarCreacionManual(modal, $btnSubmit) {
                     <span class="text-muted" style="font-size:.85rem;">${existente.marca || '-'} · ${existente.color || '-'} · ${existente.genero || '-'} · Código <b>${existente.articulo || articulo}</b></span></div>
                 <ul class="mb-2" style="font-size:.9rem;">
                     <li>Tallas del formulario: <b>${nTallas}</b> (las nuevas se agregan; a las existentes se les suma el stock)</li>
-                    <li>Precios: <b>${actualizarPrecios ? 'SE ACTUALIZARÁN con los del formulario' : 'se conservan los del producto'}</b></li></ul>
+                    <li>Precios: <b>${actualizarPrecios ? 'SE ACTUALIZARÁN con los del formulario (modificaste costo/precio)' : 'sin cambios — se conservan los del producto'}</b></li></ul>
                 <div>${chips}</div>
                 <div class="text-muted mt-2" style="font-size:.82rem;"><i class="bi bi-info-circle"></i> No se crea un producto nuevo.</div>
             </div>`;
@@ -13561,7 +13873,16 @@ $('#btnConfirmarActualizacion').on('click', function() {
             const stockCopia = stockPrevioDe(prevSel, talla.sku, talla.talla) || parseInt(talla.stock) || 0;
             const fila = `
                 <tr class="talla-existente">
-                    <td><input type="text" name="talla[]" class="form-control form-control-sm bg-light" value="${talla.talla}" readonly tabindex="-1"></td>
+                    <td>
+                        <div class="d-flex align-items-center gap-1">
+                            <input type="text" name="talla[]" class="form-control form-control-sm bg-light" value="${talla.talla}" readonly tabindex="-1">
+                            <button type="button" class="btn btn-sm btn-outline-primary btnEditarTallaExistente py-0 px-1"
+                                    data-talla="${talla.talla}" data-sku="${talla.sku}" tabindex="-1"
+                                    title="Corregir talla mal registrada — se cambia en TODAS las bodegas">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                        </div>
+                    </td>
                     <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold" value="${stockCopia}" min="0" tabindex="${tabIdx}" style="max-width: 80px;"></td>
                     <td>
                         <span class="badge bg-success px-2 py-1" title="SKU: ${talla.sku}">${talla.sku}</span>
@@ -14636,6 +14957,9 @@ $('#btnConfirmarActualizacion').on('click', function() {
 
 <!-- ========== SCRIPT DE EDICIÓN DE PRODUCTOS ========== -->
 <script src="{% static 'js/edicion_productos.js' %}?v=202604281209"></script>
+
+<!-- SortableJS: reordenar tallas en el modal de Guía de Talla (se inicializa en shown.bs.modal) -->
+<script src="{% static 'libs/sortablejs/Sortable.min.js' %}"></script>
 
 <script>
     // Verificar que edicion_productos.js se cargó correctamente

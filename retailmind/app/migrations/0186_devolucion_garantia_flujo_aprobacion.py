@@ -90,49 +90,11 @@ class Migration(migrations.Migration):
                 help_text='Motivo obligatorio al rechazar',
             ),
         ),
-        migrations.AddField(
-            model_name='devoluciongarantia',
-            name='metodo_solicitado',
-            field=models.CharField(
-                blank=True, default='', max_length=30,
-                choices=[
-                    ('EFECTIVO_CAJA', 'Efectivo de caja'),
-                    ('TRANSFERENCIA_BANCARIA', 'Transferencia bancaria'),
-                    ('NO_AFECTA_CAJA', 'No afecta caja'),
-                ],
-                help_text='Método de devolución pedido por el cliente (efectivo/transferencia)',
-            ),
-        ),
-        migrations.AddField(
-            model_name='devoluciongarantia',
-            name='banco',
-            field=models.CharField(blank=True, default='', max_length=60),
-        ),
-        migrations.AddField(
-            model_name='devoluciongarantia',
-            name='tipo_cuenta',
-            field=models.CharField(
-                blank=True, default='', max_length=20,
-                choices=[
-                    ('CORRIENTE', 'Cuenta Corriente'),
-                    ('VISTA', 'Cuenta Vista / RUT'),
-                    ('AHORRO', 'Cuenta de Ahorro'),
-                ],
-            ),
-        ),
-        migrations.AddField(
-            model_name='devoluciongarantia',
-            name='numero_cuenta',
-            field=models.CharField(blank=True, default='', max_length=40),
-        ),
-        migrations.AddField(
-            model_name='devoluciongarantia',
-            name='cuenta_titular_rut',
-            field=models.CharField(
-                blank=True, default='', max_length=20,
-                help_text='RUT del titular de la cuenta (igual o distinto al del cliente)',
-            ),
-        ),
+        # NOTA: los campos de método solicitado + datos de transferencia
+        # (metodo_solicitado/banco/tipo_cuenta/numero_cuenta/cuenta_titular_rut)
+        # viven en la migración 0192 — esta migración ya estaba APLICADA en
+        # producción cuando se agregaron esos campos al modelo, y una migración
+        # aplicada nunca se edita.
         migrations.AddField(
             model_name='devoluciongarantia',
             name='metodo_devolucion',

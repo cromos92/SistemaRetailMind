@@ -50,7 +50,9 @@ def _sucursal_actual(request):
 
 
 def _es_admin(request):
-    return getattr(request.user, 'rol', '') == 'administrador'
+    # Mismo criterio que service.anular_solicitud: ambos roles administrativos
+    # pueden anular pendientes de terceros. Mantener sincronizados.
+    return getattr(request.user, 'rol', '') in ('administrador', 'administracion')
 
 
 def _puede_aprobar(request):
@@ -87,6 +89,12 @@ def modulo_devolucion_garantia(request):
         'sucursal_actual': sucursal,
         'estado_choices': DevolucionGarantia._meta.get_field('estado').choices,
         'puede_aprobar': _puede_aprobar(request),
+        # Sin puede_crear el botón "Nueva Solicitud" no se muestra (el endpoint
+        # de crear igual lo exige — esto solo evita el wizard-callejón).
+        'puede_crear': PermisoRol.tiene_permiso(
+            request.user, 'devolucion_garantia', 'puede_crear',
+            sucursal_id=request.session.get('idSucursalActual'),
+        ),
         'usuario_id': request.user.id,
         # Impresión térmica 80mm compartida con el ticket de venta (QZ Tray).
         'qz_config': _get_qz_config(sucursal.id if sucursal else None),
@@ -99,7 +107,11 @@ def detalle_devolucion_garantia(request, devolucion_id):
     """Detalle de una solicitud de devolución con su NC asociada (si la tiene)."""
     sucursal = _sucursal_actual(request)
     if not sucursal:
-        return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'}, status=400)
+        # Vista HTML de navegación normal: mensaje + redirect, no JSON crudo.
+        from django.contrib import messages
+        from django.shortcuts import redirect
+        messages.error(request, 'No hay sucursal seleccionada.')
+        return redirect('bienvenida')
 
     devolucion = get_object_or_404(
         DevolucionGarantia.objects.select_related(
@@ -307,8 +319,11 @@ def api_listar_devoluciones_garantia(request):
     if estado:
         qs = qs.filter(estado=estado)
 
-    page = int(request.GET.get('page', 1))
-    per_page = int(request.GET.get('per_page', 20))
+    try:
+        page = max(1, int(request.GET.get('page') or 1))
+        per_page = min(max(int(request.GET.get('per_page') or 20), 1), 100)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'error': 'Paginación inválida'}, status=400)
     paginator = Paginator(qs, per_page)
     pagina = paginator.get_page(page)
 
@@ -326,7 +341,7 @@ def api_listar_devoluciones_garantia(request):
         'monto_total': float(d.monto_total),
         'nc_numero': d.nota_credito.numero_documento if d.nota_credito else None,
         'metodo_devolucion': d.get_metodo_devolucion_display() if d.metodo_devolucion else '',
-        'fecha': d.created_at.strftime('%d/%m/%Y %H:%M'),
+        'fecha': timezone.localtime(d.created_at).strftime('%d/%m/%Y %H:%M'),
         'solicitado_por': d.solicitado_por.username if d.solicitado_por else '',
         'autorizado_por': d.autorizado_por.username if d.autorizado_por else '',
         'puede_anular': d.estado == 'PENDIENTE' and (es_admin or d.solicitado_por_id == uid),
@@ -334,11 +349,21 @@ def api_listar_devoluciones_garantia(request):
 
     pendientes = DevolucionGarantia.objects.filter(sucursal=sucursal, estado='PENDIENTE').count()
 
+    # KPIs sobre el universo COMPLETO filtrado (no solo la página visible),
+    # para que las tarjetas no mientan cuando hay más de una página.
+    from django.db.models import Count, Sum
+    agg = qs.aggregate(
+        nc_generadas=Count('id', filter=Q(estado='NC_GENERADA')),
+        monto_total_global=Sum('monto_total', filter=Q(estado__in=['PENDIENTE', 'REGISTRADA', 'NC_GENERADA'])),
+    )
+
     return JsonResponse({
         'success': True,
         'data': data,
         'total': paginator.count,
         'pendientes': pendientes,
+        'nc_generadas': agg['nc_generadas'] or 0,
+        'monto_total_global': float(agg['monto_total_global'] or 0),
         'pagina_actual': pagina.number,
         'total_paginas': paginator.num_pages,
     })
@@ -459,6 +484,7 @@ def api_detalle_solicitud_devolucion_garantia(request, devolucion_id):
             'sku': dp.productoTalla.sku if dp.productoTalla else '',
             'modo': det.modo,
             'cantidad': det.cantidad,
+            'precio_unitario': float(det.precio_unitario or 0),
             'monto': float(det.monto) if det.monto is not None else None,
             'subtotal': float(det.subtotal),
             'disponible_cantidad': disp['cantidad_disponible'],
@@ -475,7 +501,7 @@ def api_detalle_solicitud_devolucion_garantia(request, devolucion_id):
             'motivo': devolucion.motivo,
             'monto_total': float(devolucion.monto_total),
             'solicitado_por': devolucion.solicitado_por.username if devolucion.solicitado_por else '',
-            'fecha_solicitud': devolucion.created_at.strftime('%d/%m/%Y %H:%M'),
+            'fecha_solicitud': timezone.localtime(devolucion.created_at).strftime('%d/%m/%Y %H:%M'),
             'metodo_solicitado': devolucion.metodo_solicitado,
             'metodo_solicitado_display': devolucion.get_metodo_solicitado_display() if devolucion.metodo_solicitado else '',
             'transferencia': {

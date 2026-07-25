@@ -87,15 +87,29 @@ class DesktopLoginSerializer(serializers.Serializer):
                 raise serializers.ValidationError({
                     'sucursal_id': 'Sucursal no encontrada'
                 })
-            
-            # Validar que el usuario tenga acceso a esta sucursal
-            if empresa_user and empresa_user.sucursal:
-                if empresa_user.sucursal_id != sucursal_id:
-                    # Verificar si es superuser o admin
-                    if getattr(user, 'rol', '') != 'administrador':
-                        raise serializers.ValidationError({
-                            'sucursal_id': f'No tienes acceso a esta sucursal. Tu sucursal es: {empresa_user.sucursal.alias}'
-                        })
+
+            # Validar contra el MISMO conjunto que ofrece el selector de
+            # SucursalesDisponiblesView: todas las EmpresaUser activas + las
+            # sucursales del Vendedor asociado. (Antes se validaba solo contra
+            # la primera EmpresaUser y el login rechazaba sucursales que el
+            # propio selector acababa de ofrecer.)
+            if getattr(user, 'rol', '') != 'administrador':
+                permitidas = set(
+                    EmpresaUser.objects.filter(
+                        user=user, status=True, sucursal__isnull=False
+                    ).values_list('sucursal_id', flat=True)
+                )
+                vendedor_acceso = Vendedor.objects.filter(
+                    correo=user.email, activo=True
+                ).first()
+                if vendedor_acceso:
+                    permitidas.update(
+                        vendedor_acceso.sucursales.values_list('id', flat=True)
+                    )
+                if permitidas and sucursal_id not in permitidas:
+                    raise serializers.ValidationError({
+                        'sucursal_id': 'No tienes acceso a esta sucursal.'
+                    })
         else:
             # Si NO se envía sucursal_id, obtener la del usuario
             if empresa_user and empresa_user.sucursal:

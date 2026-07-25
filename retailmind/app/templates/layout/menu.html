@@ -2400,52 +2400,20 @@
                         </li>
                         {% endif %}
                         <!-- ========== MÓDULO REQUERIMIENTOS ========== -->
+                        <!-- Lista/Crear/Gestionar viven en la misma pantalla (crear abre modal),
+                             por lo que el módulo se muestra como una sola opción de menú -->
                         {% contar_opciones_disponibles user 'requerimientos' as total_requerimientos %}
-                        {% if total_requerimientos == 1 %}
-                        {% if permiso_lista_requerimientos %}
+                        {% if total_requerimientos > 0 %}
                         <li class="nav-item">
-                            <a href="{% url 'modulo_requerimientos' %}" class="nav-link menu-link">
-                                <i class="ri-list-check"></i> <span>Requerimientos</span>
+                            {% if permiso_lista_requerimientos or permiso_gestionar_requerimientos %}
+                            <a href="{% url 'modulo_requerimientos' %}" class="nav-link menu-link" data-key="t-requerimientos">
+                                <i class="ri-customer-service-2-line"></i> <span>Requerimientos</span>
                             </a>
-                        </li>
-                        {% elif permiso_crear_requerimiento %}
-                        <li class="nav-item">
-                            <a href="{% url 'crear_requerimiento_vista' %}" class="nav-link menu-link">
+                            {% else %}
+                            <a href="{% url 'crear_requerimiento_vista' %}" class="nav-link menu-link" data-key="t-crear-requerimiento">
                                 <i class="ri-add-circle-line"></i> <span>Crear Requerimiento</span>
                             </a>
-                        </li>
-                        {% endif %}
-                        {% elif total_requerimientos > 1 %}
-                        <li class="nav-item">
-                            <a class="nav-link menu-link collapsed" href="#moduloRequerimientos" data-bs-toggle="collapse"
-                                role="button" aria-expanded="false" aria-controls="moduloRequerimientos">
-                                <i class="ri-customer-service-2-line"></i> <span data-key="t-charts">Requerimientos</span>
-                            </a>
-                            <div class="menu-dropdown collapse" id="moduloRequerimientos">
-                                <ul class="nav nav-sm flex-column">
-                                    {% if permiso_lista_requerimientos %}
-                                    <li class="nav-item">
-                                        <a href="{% url 'modulo_requerimientos' %}" class="nav-link" data-key="t-lista-requerimientos">
-                                            <i class="ri-list-check"></i> Requerimientos
-                                        </a>
-                                    </li>
-                                    {% endif %}
-                                    {% if permiso_crear_requerimiento %}
-                                    <li class="nav-item">
-                                        <a href="{% url 'crear_requerimiento_vista' %}" class="nav-link" data-key="t-crear-requerimiento">
-                                            <i class="ri-add-circle-line"></i> Crear Requerimiento
-                                        </a>
-                                    </li>
-                                    {% endif %}
-                                    {% if permiso_gestionar_requerimientos %}
-                                    <li class="nav-item">
-                                        <a href="{% url 'gestionar_requerimientos_vista' %}" class="nav-link" data-key="t-gestionar-requerimientos">
-                                            <i class="ri-settings-3-line"></i> Gestionar Requerimientos
-                                        </a>
-                                    </li>
-                                    {% endif %}
-                                </ul>
-                            </div>
+                            {% endif %}
                         </li>
                         {% endif %}
                         <!-- ========== MÓDULO FIDELIZACIÓN (GiftCards + Puntos) ========== -->

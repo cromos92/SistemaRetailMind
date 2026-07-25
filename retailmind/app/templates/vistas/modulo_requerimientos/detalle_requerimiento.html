@@ -185,16 +185,8 @@
             <div class="modal-body py-2">
                 <div class="mb-2">
                     <label class="form-label small">Nuevo Estado</label>
-                    <select class="form-select form-select-sm" id="nuevo-estado">
-                        <option value="PENDIENTE">Pendiente</option>
-                        <option value="EN_REVISION">En Revision</option>
-                        <option value="ESPERANDO_RESPUESTA">Esperando Proveedor</option>
-                        <option value="APROBADO">Aprobado</option>
-                        <option value="RECHAZADO">Rechazado</option>
-                        <option value="EN_PROCESO">En Proceso</option>
-                        <option value="COMPLETADO">Completado</option>
-                        <option value="CANCELADO">Cancelado</option>
-                    </select>
+                    <!-- Opciones pobladas por JS solo con las transiciones válidas desde el estado actual -->
+                    <select class="form-select form-select-sm" id="nuevo-estado"></select>
                 </div>
                 <div class="mb-0">
                     <label class="form-label small">Comentario</label>
@@ -307,7 +299,7 @@ function mostrarRequerimiento(r) {
     if (r.proveedor.id) {
         $('card-proveedor').style.display = 'block';
         $('proveedor-nombre').textContent = r.proveedor.nombre;
-        $('proveedor-email').textContent = r.correo_proveedor_destino || '';
+        $('proveedor-email').textContent = r.correo_proveedor_destino || r.proveedor.correo || 'Sin correo configurado';
         mostrarSeguimientoProveedor(r);
     }
 
@@ -414,7 +406,7 @@ function mostrarAccionesDisponibles(r) {
         h += `<a href="/app/devolucion-garantia/?${qs.toString()}" class="btn btn-warning btn-sm w-100" target="_blank"><i class="ri-refund-2-line me-1"></i>Generar devolución de dinero</a>`;
     }
 
-    if (['administrador','jefe_local'].includes(r.rol_usuario))
+    if (['administrador','jefe_local'].includes(r.rol_usuario) && (r.transiciones_permitidas||[]).length)
         h += `<button class="btn btn-soft-primary btn-sm w-100" onclick="cambiarEstado()"><i class="ri-refresh-line me-1"></i>Cambiar Estado</button>`;
 
     h += `<a href="/app/requerimientos/" class="btn btn-soft-secondary btn-sm w-100"><i class="ri-arrow-left-line me-1"></i>Volver</a>`;
@@ -442,7 +434,18 @@ function mostrarSeguimientoProveedor(r) {
 }
 
 // === ACCIONES ===
-function cambiarEstado() { new bootstrap.Modal(document.getElementById('modalCambiarEstado')).show(); }
+function cambiarEstado() {
+    const r = datosRequerimiento;
+    const permitidas = (r && r.transiciones_permitidas) || [];
+    if (!permitidas.length) {
+        Swal.fire('', 'No hay cambios de estado disponibles desde el estado actual', 'info');
+        return;
+    }
+    const labels = (r && r.estados_labels) || {};
+    document.getElementById('nuevo-estado').innerHTML =
+        permitidas.map(c => `<option value="${c}">${labels[c] || c}</option>`).join('');
+    new bootstrap.Modal(document.getElementById('modalCambiarEstado')).show();
+}
 
 function guardarEstado() {
     fetch(`/app/api/requerimientos/${requerimientoId}/actualizar-estado/`, {
@@ -477,30 +480,73 @@ function completarRequerimiento() {
     });
 }
 
-function enviarAProveedorMejorado() {
+function abrirModalEnvioProveedor(esReenvio) {
     const d = datosRequerimiento;
+    const correoSugerido = d.correo_proveedor_destino || d.proveedor.correo || '';
+    const copiaSugerida = d.correo_copia_default || '';
+    const nFotos = (d.fotos || []).length;
+    const avisoFotos = nFotos > 0
+        ? `<i class="ri-attachment-2 me-1"></i>${nFotos} foto(s) se adjuntarán al correo del proveedor. La copia de control NO lleva fotos.`
+        : `<i class="ri-error-warning-line me-1"></i>Este requerimiento no tiene fotos: el correo irá sin adjuntos.`;
+
     Swal.fire({
-        title:'Enviar a Proveedor', width:'600px',
-        html:`<div class="text-start small"><p><strong>Para:</strong> ${d.proveedor.nombre}</p><p><strong>Correo:</strong> ${d.correo_proveedor_destino||'No configurado'}</p><p><strong>Adjuntos:</strong> ${d.fotos.length} foto(s)</p><hr><p><strong>Producto:</strong> ${d.sku} — ${d.nombre_producto}</p><p><strong>Motivo:</strong> ${d.motivo}</p></div>`,
-        showCancelButton:true, confirmButtonText:'Enviar', confirmButtonColor:'#0066FF',
-        showLoaderOnConfirm:true,
-        preConfirm: () => fetch(`/app/api/requerimientos/${requerimientoId}/enviar-proveedor/`, {
-            method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'}, body:'{}'
-        }).then(r=>r.json()).then(d => { if(!d.success) throw new Error(d.error); return d; }).catch(e => Swal.showValidationMessage(e.message)),
+        title: esReenvio ? 'Re-enviar al Proveedor' : 'Enviar a Proveedor',
+        width: '640px',
+        html: `
+        <div class="text-start small">
+            <p class="mb-1"><strong>Proveedor:</strong> ${d.proveedor.nombre}</p>
+            <p class="mb-1"><strong>Producto:</strong> ${d.sku} — ${d.nombre_producto}</p>
+            <p class="mb-2"><strong>Motivo:</strong> ${d.motivo}</p>
+            <div class="mb-2">
+                <label class="form-label small mb-0 fw-semibold">Correo del proveedor <span class="text-danger">*</span></label>
+                <input type="email" id="swal-correo-destino" class="form-control form-control-sm" value="${correoSugerido}" placeholder="proveedor@correo.cl">
+                ${d.proveedor.correo_administrador ? `<small class="text-muted">Se enviará con copia (CC) a ${d.proveedor.correo_administrador}</small>` : ''}
+            </div>
+            <div class="mb-2">
+                <label class="form-label small mb-0 fw-semibold">Copia de control (resumen sin fotos)</label>
+                <input type="email" id="swal-correo-copia" class="form-control form-control-sm" value="${copiaSugerida}" placeholder="copia@miempresa.cl">
+                <small class="text-muted">Recibe un resumen para certificar que el envío al proveedor se realizó.</small>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small mb-0 fw-semibold">Mensaje adicional (opcional)</label>
+                <textarea id="swal-mensaje" class="form-control form-control-sm" rows="2" placeholder="Texto que se incluirá en el correo al proveedor..."></textarea>
+            </div>
+            <div class="alert ${nFotos > 0 ? 'alert-info' : 'alert-warning'} py-1 px-2 mb-0 small">${avisoFotos}</div>
+        </div>`,
+        showCancelButton: true,
+        confirmButtonText: esReenvio ? 'Re-enviar' : 'Enviar',
+        confirmButtonColor: '#0066FF',
+        showLoaderOnConfirm: true,
+        preConfirm: () => {
+            const destino = document.getElementById('swal-correo-destino').value.trim();
+            const copia = document.getElementById('swal-correo-copia').value.trim();
+            const emailRe = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+            if (!destino || !emailRe.test(destino)) {
+                Swal.showValidationMessage('Ingrese un correo de proveedor válido');
+                return false;
+            }
+            if (copia && !emailRe.test(copia)) {
+                Swal.showValidationMessage('El correo de copia no es válido');
+                return false;
+            }
+            return fetch(`/app/api/requerimientos/${requerimientoId}/enviar-proveedor/`, {
+                method:'POST',
+                headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+                body: JSON.stringify({
+                    correo_destino: destino,
+                    correo_copia: copia,
+                    mensaje: document.getElementById('swal-mensaje').value.trim(),
+                    es_reenvio: !!esReenvio,
+                })
+            }).then(r=>r.json()).then(res => { if(!res.success) throw new Error(res.error); return res; })
+              .catch(e => Swal.showValidationMessage(e.message));
+        },
         allowOutsideClick: () => !Swal.isLoading()
-    }).then(r => { if(r.isConfirmed&&r.value) { Swal.fire('Enviado',r.value.message,'success'); cargarRequerimiento(); } });
+    }).then(r => { if (r.isConfirmed && r.value) { Swal.fire('Enviado', r.value.message, 'success'); cargarRequerimiento(); } });
 }
 
-function reenviarCorreoProveedor() {
-    Swal.fire({ title:'Re-enviar?', text:`Enviar recordatorio a ${datosRequerimiento.proveedor.nombre}`, icon:'warning', showCancelButton:true, confirmButtonText:'Enviar' })
-    .then(r => {
-        if (r.isConfirmed) {
-            fetch(`/app/api/requerimientos/${requerimientoId}/enviar-proveedor/`, {
-                method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'}, body:'{}'
-            }).then(r=>r.json()).then(d => { if(d.success){Swal.fire('Enviado','Recordatorio enviado','success');cargarRequerimiento();}else Swal.fire('Error',d.error,'error'); });
-        }
-    });
-}
+function enviarAProveedorMejorado() { abrirModalEnvioProveedor(false); }
+function reenviarCorreoProveedor() { abrirModalEnvioProveedor(true); }
 
 function abrirModalRespuestaProveedor() {
     document.getElementById('fecha-respuesta-proveedor').value = new Date().toISOString().slice(0,16);

@@ -134,7 +134,10 @@ ${td.motivo ? `<div class="hr"></div><div class="b">MOTIVO:</div><div class="mot
 <div class="hr2"></div>
 <div class="c legal">${td.nota_credito
     ? `<span class="b">NOTA DE CRÉDITO N° ${_escDG(td.nota_credito)}</span>`
-    : 'COMPROBANTE NO TRIBUTARIO<br>No válido como nota de crédito<br>Sujeto a aprobación'}</div>
+    : 'COMPROBANTE NO TRIBUTARIO<br>No válido como nota de crédito<br>' + (
+        td.estado === 'RECHAZADA' ? '<span class="b">SOLICITUD RECHAZADA — SIN VALOR</span>'
+        : td.estado === 'ANULADA' ? '<span class="b">SOLICITUD ANULADA — SIN VALOR</span>'
+        : 'Sujeto a aprobación')}</div>
 <div class="firma">Firma cliente</div>
 <div class="c legal" style="margin-top:6px">Conserve este comprobante</div>
 </body></html>`;

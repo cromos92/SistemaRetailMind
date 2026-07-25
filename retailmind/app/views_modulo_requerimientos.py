@@ -14,11 +14,13 @@ from django.core.paginator import Paginator
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.core.mail import send_mail, EmailMessage
+from django.core.mail import send_mail, EmailMessage, EmailMultiAlternatives
+from django.core.validators import validate_email
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.template.loader import render_to_string
 import json
+import os
 import re
 import logging
 from decimal import Decimal
@@ -28,6 +30,7 @@ from .models import (
     Producto, Producto_Talla, Sucursal, EmpresaUser, Empresa,
     Requerimiento, FotoRequerimiento, HistorialRequerimiento,
     TipoFotoRequerimiento, MAX_FOTOS_POR_TIPO,
+    ESTADO_REQUERIMIENTO_CHOICES,
     Ticket, Dte, Dte_Productos
 )
 
@@ -125,6 +128,35 @@ def puede_cambiar_estado(estado_actual, estado_nuevo):
     return estado_nuevo in TRANSICIONES_PERMITIDAS.get(estado_actual, [])
 
 
+# ========== HELPERS DE CORREO ==========
+
+def _correo_proveedor(empresa):
+    """Primer correo configurado de la ficha del proveedor.
+
+    La ficha de Empresa tiene 4 campos de correo; el envío histórico solo
+    miraba correoVendedor y fallaba con proveedores que solo tienen `email`.
+    """
+    if not empresa:
+        return None
+    for campo in ('correoVendedor', 'email', 'correoIntercambio'):
+        valor = (getattr(empresa, campo, '') or '').strip()
+        if valor:
+            return valor
+    return None
+
+
+def _correo_copia_default(user):
+    """Correo de control que recibe el resumen (sin fotos) de cada envío.
+
+    Configurable con la env var REQUERIMIENTOS_CORREO_COPIA; si no está
+    definida se usa el correo del usuario que envía.
+    """
+    return (
+        os.environ.get('REQUERIMIENTOS_CORREO_COPIA', '').strip()
+        or (user.email or '').strip()
+    )
+
+
 # ========== VISTAS PRINCIPALES ==========
 
 @login_required
@@ -133,7 +165,7 @@ def modulo_requerimientos(request):
     # Obtener rol del usuario
     rol_usuario = obtener_rol_usuario(request.user)
     sucursales = Sucursal.objects.filter(empresa__empresauser__user=request.user)
-    proveedores = Empresa.objects.filter(esProveedor=True)
+    proveedores = Empresa.objects.filter(esProveedor=True).order_by('nombre')
     
     context = {
         'rol_usuario': rol_usuario,
@@ -536,8 +568,11 @@ def detalle_requerimiento(request, requerimiento_id):
             # Proveedor
             'proveedor': {
                 'id': requerimiento.proveedor.id if requerimiento.proveedor else None,
-                'nombre': requerimiento.proveedor.nombre if requerimiento.proveedor else ''
+                'nombre': requerimiento.proveedor.nombre if requerimiento.proveedor else '',
+                'correo': _correo_proveedor(requerimiento.proveedor) or '',
+                'correo_administrador': (requerimiento.proveedor.correoAdministrador or '') if requerimiento.proveedor else '',
             },
+            'correo_copia_default': _correo_copia_default(request.user),
             'correo_enviado_proveedor': requerimiento.correo_enviado_proveedor,
             'fecha_envio_proveedor': requerimiento.fecha_envio_proveedor.strftime('%d/%m/%Y %H:%M') if requerimiento.fecha_envio_proveedor else '',
             'correo_proveedor_destino': requerimiento.correo_proveedor_destino or '',
@@ -578,6 +613,12 @@ def detalle_requerimiento(request, requerimiento_id):
             'fotos': fotos,
             'historial': historial,
             
+            # Transiciones de estado válidas desde el estado actual (para el
+            # modal Cambiar Estado — antes ofrecía los 8 estados y el backend
+            # rechazaba la mayoría)
+            'transiciones_permitidas': TRANSICIONES_PERMITIDAS.get(requerimiento.estado, []),
+            'estados_labels': dict(ESTADO_REQUERIMIENTO_CHOICES),
+
             # Permisos del usuario actual
             'permisos': {
                 'puede_editar': usuario_puede_realizar_accion(request.user, requerimiento, 'editar'),
@@ -643,8 +684,8 @@ def actualizar_estado_requerimiento(request, requerimiento_id):
                     'error': 'Solo puede gestionar requerimientos de su sucursal'
                 }, status=403)
             
-            # Supervisor NO puede marcar como ESPERANDO_PROVEEDOR
-            if nuevo_estado == 'ESPERANDO_PROVEEDOR':
+            # Supervisor NO puede marcar como ESPERANDO_RESPUESTA (enviar a proveedor)
+            if nuevo_estado == 'ESPERANDO_RESPUESTA':
                 return JsonResponse({
                     'success': False,
                     'error': 'Solo administradores pueden enviar a proveedor'
@@ -693,160 +734,203 @@ def actualizar_estado_requerimiento(request, requerimiento_id):
 @login_required
 @require_POST
 def enviar_a_proveedor(request, requerimiento_id):
-    """Enviar requerimiento al proveedor por correo con adjuntos"""
+    """Enviar requerimiento al proveedor por correo (con fotos adjuntas).
+
+    Además despacha una copia-resumen SIN fotos a un correo de control para
+    certificar que el envío al proveedor ocurrió (env REQUERIMIENTOS_CORREO_COPIA,
+    campo correo_copia del POST, o el correo del usuario que envía).
+    """
     try:
-        data = json.loads(request.body)
-        
-        requerimiento = get_object_or_404(Requerimiento, id=requerimiento_id)
-        
-        # Validar permisos (solo administrador)
-        if not usuario_puede_realizar_accion(request.user, requerimiento, 'enviar_proveedor'):
-            return JsonResponse({
-                'success': False,
-                'error': 'No tiene permisos para enviar a proveedor'
-            }, status=403)
-        
-        if not requerimiento.proveedor:
-            return JsonResponse({
-                'success': False,
-                'error': 'El requerimiento no tiene proveedor asignado'
-            }, status=400)
-        
-        # Determinar correo destino
-        correo_destino = data.get('correo_destino') or requerimiento.proveedor.correoVendedor
-        
-        if not correo_destino:
-            return JsonResponse({
-                'success': False,
-                'error': 'El proveedor no tiene correo configurado'
-            }, status=400)
-        
-        try:
-            # Preparar asunto
-            asunto = f'Requerimiento de {requerimiento.get_tipo_display()} - {requerimiento.numero_requerimiento}'
-            
-            # Preparar contexto para template
-            context = {
-                'requerimiento': requerimiento,
-                'fotos': requerimiento.fotos.all(),
-                'usuario': request.user,
-                'empresa': requerimiento.sucursal.empresa,
-            }
-            
-            # Renderizar HTML (usaremos template simple si no existe el complejo)
-            try:
-                html_message = render_to_string('emails/requerimiento_proveedor.html', context)
-            except:
-                # Fallback a mensaje de texto formateado
-                html_message = f"""
-                <html>
-                <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <div style="background: #405189; color: white; padding: 20px; text-align: center;">
-                        <h2>Requerimiento de {requerimiento.get_tipo_display()}</h2>
-                        <p style="font-size: 24px; margin: 10px 0;">{requerimiento.numero_requerimiento}</p>
-                    </div>
-                    
-                    <div style="padding: 20px; background: #f8f9fa; margin: 20px 0;">
-                        <h3>Estimado proveedor {requerimiento.proveedor.nombre},</h3>
-                        <p>Se ha generado un requerimiento que requiere su atención:</p>
-                    </div>
-                    
-                    <div style="padding: 20px;">
-                        <h4 style="color: #405189;">Información del Producto</h4>
-                        <table style="width: 100%; border-collapse: collapse;">
-                            <tr><td style="padding: 8px; border-bottom: 1px solid #dee2e6;"><strong>SKU:</strong></td><td style="padding: 8px; border-bottom: 1px solid #dee2e6;">{requerimiento.sku}</td></tr>
-                            <tr><td style="padding: 8px; border-bottom: 1px solid #dee2e6;"><strong>Producto:</strong></td><td style="padding: 8px; border-bottom: 1px solid #dee2e6;">{requerimiento.nombre_producto}</td></tr>
-                            <tr><td style="padding: 8px; border-bottom: 1px solid #dee2e6;"><strong>Documento:</strong></td><td style="padding: 8px; border-bottom: 1px solid #dee2e6;">{requerimiento.tipo_documento or 'N/A'} {requerimiento.numero_boleta or ''}</td></tr>
-                            <tr><td style="padding: 8px; border-bottom: 1px solid #dee2e6;"><strong>Fecha Compra:</strong></td><td style="padding: 8px; border-bottom: 1px solid #dee2e6;">{requerimiento.fecha_compra or 'N/A'}</td></tr>
-                        </table>
-                        
-                        <h4 style="color: #405189; margin-top: 20px;">Descripción del Problema</h4>
-                        <div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107;">
-                            <p><strong>Motivo:</strong> {requerimiento.motivo}</p>
-                            <p><strong>Descripción:</strong> {requerimiento.descripcion_problema or 'N/A'}</p>
-                        </div>
-                        
-                        <h4 style="color: #405189; margin-top: 20px;">Información del Cliente</h4>
-                        <p><strong>Nombre:</strong> {requerimiento.cliente_nombre}</p>
-                        <p><strong>RUT:</strong> {requerimiento.cliente_rut or 'N/A'}</p>
-                        <p><strong>Contacto:</strong> {requerimiento.cliente_telefono or 'N/A'}</p>
-                        
-                        <div style="margin-top: 20px; padding: 15px; background: #d1ecf1; border-left: 4px solid #0dcaf0;">
-                            <p style="margin: 0;"><strong>📎 Se adjuntan {requerimiento.cantidad_fotos} foto(s) del producto/problema</strong></p>
-                        </div>
-                        
-                        <p style="margin-top: 30px;">Por favor, revise este requerimiento y responda indicando si procede o no.</p>
-                        <p style="color: #6c757d; font-size: 12px; margin-top: 30px;">
-                            Puede responder directamente a este correo.<br>
-                            Contacto: {request.user.get_full_name()}<br>
-                            {requerimiento.sucursal.empresa.nombre}<br>
-                            Sucursal: {requerimiento.sucursal.alias}
-                        </p>
-                    </div>
-                </body>
-                </html>
-                """
-            
-            # Crear email
-            email = EmailMessage(
-                subject=asunto,
-                body=html_message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[correo_destino],
-                cc=[requerimiento.proveedor.correoAdministrador] if requerimiento.proveedor.correoAdministrador else [],
-                reply_to=[request.user.email] if request.user.email else [],
-            )
-            email.content_subtype = 'html'
-            
-            # Adjuntar fotos
-            for foto in requerimiento.fotos.all():
-                if foto.imagen and default_storage.exists(foto.imagen.name):
-                    try:
-                        email.attach_file(foto.imagen.path)
-                    except Exception as e:
-                        logger.warning("Error al adjuntar foto de requerimiento %s: %s", requerimiento.id, e)
-            
-            # Enviar
-            email.send(fail_silently=False)
-            
-            # Actualizar requerimiento
-            estado_anterior = requerimiento.estado
-            with transaction.atomic():
-                requerimiento.correo_enviado_proveedor = True
-                requerimiento.fecha_envio_proveedor = timezone.now()
-                requerimiento.correo_proveedor_destino = correo_destino
-                requerimiento.intentos_envio = (requerimiento.intentos_envio or 0) + 1
-                requerimiento.estado = 'ESPERANDO_RESPUESTA'
-                requerimiento.save()
-                
-                # Registrar en historial
-                HistorialRequerimiento.objects.create(
-                    requerimiento=requerimiento,
-                    accion='ENVIADO_A_PROVEEDOR',
-                    estado_anterior=estado_anterior,
-                    estado_nuevo='ESPERANDO_RESPUESTA',
-                    comentario=f'Correo enviado a {requerimiento.proveedor.nombre} ({correo_destino}) - Intento #{requerimiento.intentos_envio}',
-                    usuario=request.user
-                )
-            
-            return JsonResponse({
-                'success': True,
-                'message': f'Requerimiento enviado a {requerimiento.proveedor.nombre}',
-                'fecha_envio': requerimiento.fecha_envio_proveedor.strftime('%d/%m/%Y %H:%M'),
-                'correo_destino': correo_destino
-            })
-            
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': f'Error al enviar correo: {str(e)}'
-            }, status=500)
-        
-    except Exception as e:
+        data = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        data = {}
+
+    requerimiento = get_object_or_404(
+        Requerimiento.objects.select_related('proveedor', 'sucursal', 'sucursal__empresa'),
+        id=requerimiento_id
+    )
+
+    # Validar permisos (solo administrador)
+    if not usuario_puede_realizar_accion(request.user, requerimiento, 'enviar_proveedor'):
         return JsonResponse({
             'success': False,
-            'error': f'Error: {str(e)}'
+            'error': 'No tiene permisos para enviar a proveedor'
+        }, status=403)
+
+    if not requerimiento.proveedor:
+        return JsonResponse({
+            'success': False,
+            'error': 'El requerimiento no tiene proveedor asignado'
+        }, status=400)
+
+    # Correo destino: manual > correoVendedor > email > correoIntercambio
+    correo_destino = (data.get('correo_destino') or '').strip() or _correo_proveedor(requerimiento.proveedor)
+    if not correo_destino:
+        return JsonResponse({
+            'success': False,
+            'error': 'El proveedor no tiene ningún correo configurado en su ficha. Ingrese uno manualmente.'
+        }, status=400)
+    try:
+        validate_email(correo_destino)
+    except ValidationError:
+        return JsonResponse({
+            'success': False,
+            'error': f'El correo destino no es válido: {correo_destino}'
+        }, status=400)
+
+    # Correo de copia (resumen sin fotos)
+    correo_copia = (data.get('correo_copia') or '').strip() or _correo_copia_default(request.user)
+    if correo_copia:
+        try:
+            validate_email(correo_copia)
+        except ValidationError:
+            return JsonResponse({
+                'success': False,
+                'error': f'El correo de copia no es válido: {correo_copia}'
+            }, status=400)
+
+    mensaje_adicional = (data.get('mensaje') or '').strip()
+    es_reenvio = bool(data.get('es_reenvio')) or requerimiento.correo_enviado_proveedor
+
+    # Fotos adjuntables (existentes en storage)
+    fotos_adjuntables = [
+        foto for foto in requerimiento.fotos.all()
+        if foto.imagen and default_storage.exists(foto.imagen.name)
+    ]
+
+    context = {
+        'requerimiento': requerimiento,
+        'fotos': requerimiento.fotos.all(),
+        'cantidad_fotos_adjuntas': len(fotos_adjuntables),
+        'usuario': request.user,
+        'empresa': requerimiento.sucursal.empresa,
+        'mensaje_adicional': mensaje_adicional,
+        'es_reenvio': es_reenvio,
+    }
+
+    prefijo = 'RECORDATORIO - ' if es_reenvio else ''
+    asunto = f'{prefijo}Requerimiento de {requerimiento.get_tipo_display()} - {requerimiento.numero_requerimiento}'
+
+    html_message = render_to_string('emails/requerimiento_proveedor.html', context)
+    texto_plano = (
+        f'Requerimiento {requerimiento.numero_requerimiento} - {requerimiento.get_tipo_display()}\n'
+        f'Proveedor: {requerimiento.proveedor.nombre}\n'
+        f'Producto: {requerimiento.sku} - {requerimiento.nombre_producto}\n'
+        f'Motivo: {requerimiento.motivo}\n'
+        f'{("Mensaje: " + mensaje_adicional) if mensaje_adicional else ""}\n'
+        f'Se adjuntan {len(fotos_adjuntables)} foto(s). Por favor responda indicando si procede.\n'
+        f'Contacto: {request.user.get_full_name()} - {requerimiento.sucursal.empresa.nombre}'
+    )
+
+    # CC al administrador del proveedor (si existe y no es el mismo destino)
+    cc = []
+    correo_admin_proveedor = (requerimiento.proveedor.correoAdministrador or '').strip()
+    if correo_admin_proveedor and correo_admin_proveedor.lower() != correo_destino.lower():
+        cc.append(correo_admin_proveedor)
+
+    email = EmailMultiAlternatives(
+        subject=asunto,
+        body=texto_plano,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[correo_destino],
+        cc=cc,
+        reply_to=[request.user.email] if request.user.email else [],
+    )
+    email.attach_alternative(html_message, 'text/html')
+
+    for foto in fotos_adjuntables:
+        try:
+            email.attach_file(foto.imagen.path)
+        except Exception as e:
+            logger.warning("Error al adjuntar foto de requerimiento %s: %s", requerimiento.id, e)
+
+    try:
+        email.send(fail_silently=False)
+    except Exception as e:
+        logger.exception("Error al enviar requerimiento %s al proveedor %s", requerimiento.id, correo_destino)
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al enviar correo al proveedor: {str(e)}'
         }, status=500)
+
+    # Actualizar requerimiento + historial
+    estado_anterior = requerimiento.estado
+    with transaction.atomic():
+        requerimiento.correo_enviado_proveedor = True
+        requerimiento.fecha_envio_proveedor = timezone.now()
+        requerimiento.correo_proveedor_destino = correo_destino
+        requerimiento.intentos_envio = (requerimiento.intentos_envio or 0) + 1
+        if es_reenvio:
+            requerimiento.ultimo_recordatorio = timezone.now()
+        requerimiento.estado = 'ESPERANDO_RESPUESTA'
+        requerimiento.save()
+
+        HistorialRequerimiento.objects.create(
+            requerimiento=requerimiento,
+            accion='RECORDATORIO_ENVIADO' if es_reenvio else 'ENVIADO_A_PROVEEDOR',
+            estado_anterior=estado_anterior,
+            estado_nuevo='ESPERANDO_RESPUESTA',
+            comentario=f'Correo enviado a {requerimiento.proveedor.nombre} ({correo_destino}) - Intento #{requerimiento.intentos_envio}',
+            usuario=request.user
+        )
+
+    # Copia-resumen de control: SIN fotos adjuntas (solo el conteo)
+    copia_enviada = False
+    if correo_copia:
+        try:
+            context_copia = dict(context)
+            context_copia.update({
+                'correo_destino': correo_destino,
+                'correo_cc': ', '.join(cc),
+                'fecha_envio': requerimiento.fecha_envio_proveedor,
+                'intento': requerimiento.intentos_envio,
+                'url_detalle': request.build_absolute_uri(f'/app/requerimientos/{requerimiento.id}/'),
+            })
+            html_copia = render_to_string('emails/requerimiento_copia_resumen.html', context_copia)
+            texto_copia = (
+                f'COPIA DE CONTROL - Requerimiento {requerimiento.numero_requerimiento}\n'
+                f'Enviado al proveedor {requerimiento.proveedor.nombre} ({correo_destino}) '
+                f'el {requerimiento.fecha_envio_proveedor.strftime("%d/%m/%Y %H:%M")} '
+                f'por {request.user.get_full_name()}.\n'
+                f'Producto: {requerimiento.sku} - {requerimiento.nombre_producto}\n'
+                f'Motivo: {requerimiento.motivo}\n'
+                f'Fotos adjuntadas al proveedor: {len(fotos_adjuntables)} (esta copia no incluye fotos).'
+            )
+            email_copia = EmailMultiAlternatives(
+                subject=f'[COPIA] {asunto} → {correo_destino}',
+                body=texto_copia,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[correo_copia],
+            )
+            email_copia.attach_alternative(html_copia, 'text/html')
+            email_copia.send(fail_silently=False)
+            copia_enviada = True
+
+            HistorialRequerimiento.objects.create(
+                requerimiento=requerimiento,
+                accion='COPIA_RESUMEN_ENVIADA',
+                comentario=f'Copia-resumen (sin fotos) enviada a {correo_copia}',
+                usuario=request.user
+            )
+        except Exception as e:
+            # La copia es de control: su falla no revierte el envío al proveedor
+            logger.exception("Error al enviar copia-resumen del requerimiento %s a %s", requerimiento.id, correo_copia)
+
+    mensaje_out = f'Requerimiento enviado a {requerimiento.proveedor.nombre} ({correo_destino}) con {len(fotos_adjuntables)} foto(s)'
+    if copia_enviada:
+        mensaje_out += f'. Copia-resumen enviada a {correo_copia}'
+    elif correo_copia:
+        mensaje_out += f'. ATENCIÓN: falló la copia-resumen a {correo_copia} (revisar logs)'
+
+    return JsonResponse({
+        'success': True,
+        'message': mensaje_out,
+        'fecha_envio': requerimiento.fecha_envio_proveedor.strftime('%d/%m/%Y %H:%M'),
+        'correo_destino': correo_destino,
+        'copia_enviada': copia_enviada,
+        'correo_copia': correo_copia or '',
+        'fotos_adjuntas': len(fotos_adjuntables),
+    })
 
 
 @login_required

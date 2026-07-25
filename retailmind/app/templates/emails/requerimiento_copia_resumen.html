@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Copia de control — Requerimiento {{ requerimiento.numero_requerimiento }}</title>
+</head>
+<!-- Copia-resumen de control: certifica que el requerimiento fue enviado al
+     proveedor. Deliberadamente NO incluye las fotos (van solo al proveedor). -->
+<body style="margin:0;padding:0;background-color:#f4f5f8;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;color:#333333;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f8;padding:20px 0;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb;">
+
+                    <!-- Header -->
+                    <tr>
+                        <td bgcolor="#0ab39c" style="background-color:#0ab39c;color:#ffffff;padding:22px 20px;text-align:center;">
+                            <div style="display:inline-block;background-color:#ffffff;color:#0ab39c;font-size:12px;font-weight:700;padding:4px 14px;border-radius:20px;margin-bottom:8px;">COPIA DE CONTROL — NO REQUIERE RESPUESTA</div>
+                            <h1 style="margin:0;font-size:20px;">Requerimiento enviado al proveedor</h1>
+                            <p style="margin:6px 0 0;font-size:15px;opacity:.95;">N° {{ requerimiento.numero_requerimiento }}{% if es_reenvio %} · Recordatorio{% endif %}</p>
+                        </td>
+                    </tr>
+
+                    <!-- Confirmación del envío -->
+                    <tr>
+                        <td style="padding:24px 24px 0;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+                                <tr>
+                                    <td style="background-color:#d4edda;border-left:4px solid #198754;padding:14px;border-radius:4px;font-size:14px;">
+                                        ✅ El requerimiento <strong>{{ requerimiento.numero_requerimiento }}</strong> fue enviado a
+                                        <strong>{{ requerimiento.proveedor.nombre }}</strong>
+                                        (<a href="mailto:{{ correo_destino }}" style="color:#155724;">{{ correo_destino }}</a>)
+                                        el <strong>{{ fecha_envio|date:"d/m/Y H:i" }}</strong>
+                                        por <strong>{{ usuario.get_full_name }}</strong>.
+                                        {% if intento and intento > 1 %}<br>Este fue el intento de envío <strong>#{{ intento }}</strong>.{% endif %}
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Detalle del envío -->
+                            <h3 style="color:#405189;font-size:15px;margin:0 0 8px;padding-bottom:5px;border-bottom:2px solid #f0f0f0;">📨 Detalle del Envío</h3>
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;margin-bottom:20px;">
+                                <tr>
+                                    <td width="160" style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Proveedor:</td>
+                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">{{ requerimiento.proveedor.nombre }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Correo destino:</td>
+                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">{{ correo_destino }}</td>
+                                </tr>
+                                {% if correo_cc %}
+                                <tr>
+                                    <td style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Con copia (CC):</td>
+                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">{{ correo_cc }}</td>
+                                </tr>
+                                {% endif %}
+                                <tr>
+                                    <td style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Enviado por:</td>
+                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">{{ usuario.get_full_name }} ({{ empresa.nombre }})</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:7px 0;color:#666666;font-weight:600;">Fotos adjuntadas:</td>
+                                    <td style="padding:7px 0;"><strong>{{ cantidad_fotos_adjuntas }}</strong> foto(s) — solo en el correo al proveedor</td>
+                                </tr>
+                            </table>
+
+                            <!-- Resumen del requerimiento -->
+                            <h3 style="color:#405189;font-size:15px;margin:0 0 8px;padding-bottom:5px;border-bottom:2px solid #f0f0f0;">📋 Resumen del Requerimiento</h3>
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;margin-bottom:20px;">
+                                <tr>
+                                    <td width="160" style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Tipo:</td>
+                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">{{ requerimiento.get_tipo_display }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Prioridad:</td>
+                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">{{ requerimiento.get_prioridad_display }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Sucursal:</td>
+                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">{{ requerimiento.sucursal.alias }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Producto:</td>
+                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;"><strong>{{ requerimiento.sku }}</strong> — {{ requerimiento.nombre_producto }}</td>
+                                </tr>
+                                {% if requerimiento.tipo_documento %}
+                                <tr>
+                                    <td style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Documento:</td>
+                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">{{ requerimiento.tipo_documento }} N° {{ requerimiento.numero_boleta }}{% if requerimiento.fecha_compra %} ({{ requerimiento.fecha_compra|date:"d/m/Y" }}){% endif %}</td>
+                                </tr>
+                                {% endif %}
+                                <tr>
+                                    <td style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Cliente:</td>
+                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">{{ requerimiento.cliente_nombre }}{% if requerimiento.cliente_rut %} · {{ requerimiento.cliente_rut }}{% endif %}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:7px 0;color:#666666;font-weight:600;vertical-align:top;">Motivo:</td>
+                                    <td style="padding:7px 0;">{{ requerimiento.motivo }}</td>
+                                </tr>
+                            </table>
+
+                            {% if mensaje_adicional %}
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+                                <tr>
+                                    <td style="background-color:#e7f3ff;border-left:4px solid #405189;padding:12px 14px;border-radius:4px;font-size:14px;">
+                                        <strong>Mensaje adicional incluido al proveedor:</strong><br>
+                                        {{ mensaje_adicional|linebreaksbr }}
+                                    </td>
+                                </tr>
+                            </table>
+                            {% endif %}
+
+                            <!-- Nota sin fotos -->
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+                                <tr>
+                                    <td style="background-color:#fff3cd;border-left:4px solid #ffc107;padding:12px 14px;border-radius:4px;font-size:13px;color:#856404;">
+                                        📎 Esta copia de control <strong>no incluye las fotos</strong>: las {{ cantidad_fotos_adjuntas }} foto(s) se adjuntaron únicamente en el correo enviado al proveedor. Puede verlas en el sistema.
+                                    </td>
+                                </tr>
+                            </table>
+
+                            {% if url_detalle %}
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                                <tr>
+                                    <td align="center">
+                                        <a href="{{ url_detalle }}" style="display:inline-block;background-color:#405189;color:#ffffff;padding:10px 28px;text-decoration:none;border-radius:6px;font-weight:600;font-size:14px;">Ver requerimiento en el sistema</a>
+                                    </td>
+                                </tr>
+                            </table>
+                            {% endif %}
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color:#f8f9fa;padding:16px 20px;text-align:center;font-size:12px;color:#666666;">
+                            <strong>RetailMind</strong> — Sistema de Gestión de Requerimientos<br>
+                            Correo automático de control · {{ fecha_envio|date:"d/m/Y H:i" }}
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

@@ -30,6 +30,7 @@ from .serializers import (
     SyncStatusSerializer,
 )
 from .permissions import IsAuthorizedDevice, IsMinimumAppVersion
+from .throttling import DesktopAuthRateThrottle
 
 
 class DesktopLoginView(APIView):
@@ -58,7 +59,8 @@ class DesktopLoginView(APIView):
     
     authentication_classes = []  # Sin autenticación requerida
     permission_classes = [AllowAny]
-    
+    throttle_classes = [DesktopAuthRateThrottle]  # anti fuerza-bruta
+
     def post(self, request):
         serializer = DesktopLoginSerializer(data=request.data)
         
@@ -406,7 +408,8 @@ class SucursalesDisponiblesView(APIView):
     
     authentication_classes = []  # Sin autenticación requerida
     permission_classes = [AllowAny]
-    
+    throttle_classes = [DesktopAuthRateThrottle]  # anti fuerza-bruta
+
     def post(self, request):
         from django.contrib.auth import authenticate
         from app.models import EmpresaUser, Vendedor

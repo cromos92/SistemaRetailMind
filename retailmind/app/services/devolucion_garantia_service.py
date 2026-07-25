@@ -255,6 +255,15 @@ def _validar_lineas(dte_original, detalles, lock=False, excluir_devolucion_id=No
                     f'{disp["cantidad_disponible"]} unidades disponibles.'
                 )
             monto_ci = cantidad * disp['precio_unitario_con_iva']
+            # Una devolución MONTO previa reduce monto_disponible pero NO
+            # cantidad_disponible (sus NC son conceptuales, sin talla): sin
+            # este guard, CANTIDAD podía sobre-acreditar la línea.
+            if monto_ci > disp['monto_disponible']:
+                raise DevolucionGarantiaError(
+                    f'Línea {sku}: {cantidad} unidad(es) equivalen a ${monto_ci:,} '
+                    f'pero solo quedan ${disp["monto_disponible"]:,} disponibles en esa '
+                    f'línea (ya tiene devoluciones por monto).'
+                )
             lineas.append({
                 'dte_producto': dp, 'modo': 'CANTIDAD', 'cantidad': cantidad,
                 'monto_con_iva': monto_ci,
@@ -645,12 +654,24 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
             f'sobre este documento (${saldo["monto_restante"]:,}).'
         )
 
-    # Razón SII dinámica: '1' solo si la NC cubre el saldo completo y no hay NC
-    # previas; si no '3' (corrige montos / NC parcial). Nunca anula el original.
-    razon = '1' if (monto_con_iva_nc == saldo['monto_restante'] and total_nc_previas == 0) else '3'
+    # Razón SII dinámica: '1' solo si la NC cubre el saldo REAL del documento
+    # (monto_original - NC previas vivas) y no hay NC previas; si no '3'.
+    # OJO: no comparar contra monto_restante, que además descuenta reservas de
+    # OTRAS solicitudes pendientes — una NC parcial saldría declarada como
+    # "anula documento" si otra solicitud reservaba el resto.
+    saldo_real_documento = saldo['monto_original'] - saldo['total_nc_previas']
+    razon = '1' if (monto_con_iva_nc == saldo_real_documento and total_nc_previas == 0) else '3'
 
     numero_nc = obtener_siguiente_correlativo(sucursal, 'NOTA DE CREDITO')
-    tipo_sii_original = 33 if 'FACTURA' in (dte_original.tipo_documento or '') else 39
+    # Referencia SII: 33 factura electrónica, 39 boleta electrónica, 35 boleta
+    # papel (referenciarla como 39 declararía un folio electrónico inexistente).
+    tipo_doc_orig = (dte_original.tipo_documento or '')
+    if 'FACTURA' in tipo_doc_orig:
+        tipo_sii_original = 33
+    elif tipo_doc_orig == 'BOLETA PAPEL':
+        tipo_sii_original = 35
+    else:
+        tipo_sii_original = 39
     referencias_json = json.dumps([{
         'tipo_documento': tipo_sii_original,
         'folio': str(dte_original.numero_documento),
@@ -692,6 +713,12 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
         referencias=referencias_json,
     )
 
+    # Todas las líneas de la NC deben quedar en la MISMA base que el documento
+    # original (boleta: CON IVA, factura: NETO): si las CANTIDAD van en base
+    # nativa y las MONTO siempre con IVA, una NC mixta sobre factura queda con
+    # dos bases mezcladas y normalizar_detalle_para_tipo no puede cuadrar el TXT.
+    es_bruto_nc = _base_es_bruto(dte_original)
+
     for linea in lineas:
         dp = linea['dte_producto']
         if linea['modo'] == 'CANTIDAD':
@@ -720,13 +747,19 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
             desc = f"[CORRIGE MONTO] {dp.descripcion}"
             if sku_ref:
                 desc += f" (SKU {sku_ref})"
+            monto_nativo = (
+                int(linea['monto_con_iva']) if es_bruto_nc
+                else int(round(linea['monto_con_iva'] / Decimal('1.19')))
+            )
             Dte_Productos.objects.create(
                 dte=nc,
                 productoTalla=None,
                 descripcion=desc[:255],
                 costo=0,
                 sobreprecio=0,
-                precio=int(linea['monto_con_iva']),
+                precio=monto_nativo,
+                precio_unitario=monto_nativo,
+                monto_item=monto_nativo,
                 stock=1,
                 activo=True,
             )
@@ -921,7 +954,10 @@ def _generar_txt_nc(nc, devolucion):
         contenido = generar_txt_dte_acepta(datos)
 
         import os
-        ruta_nc = os.path.join('MEDIA', 'documentos_electronicos', 'nc')
+        from django.conf import settings
+        # MEDIA_ROOT absoluto (misma ruta que views.py): 'MEDIA' relativo al
+        # CWD escribía en un directorio distinto según cómo corra el proceso.
+        ruta_nc = os.path.join(settings.MEDIA_ROOT, 'documentos_electronicos', 'nc')
         os.makedirs(ruta_nc, exist_ok=True)
         nombre = f"NC_61_{nc.numero_documento}_{nc.fecha_emision.strftime('%Y%m%d')}.txt"
         with open(os.path.join(ruta_nc, nombre), 'w', encoding='utf-8') as f:

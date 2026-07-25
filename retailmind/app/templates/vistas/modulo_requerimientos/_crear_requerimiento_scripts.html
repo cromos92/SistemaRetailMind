@@ -170,10 +170,20 @@ function actualizarChecklistFotos() {
     });
 }
 
+// Cuenta las fotos realmente seleccionadas: slots guiados con archivo + adicionales
+function contarFotosSeleccionadas() {
+    const slotsConFoto = Array.from(document.querySelectorAll('#fotos-slots-container input[type="file"]'))
+        .filter(i => i.files && i.files.length > 0).length;
+    const adicionales = Array.from(document.querySelectorAll('.foto-adicional-item input[type="file"]'))
+        .filter(i => i.files && i.files.length > 0).length;
+    return slotsConFoto + adicionales;
+}
+
 // Fotos adicionales
 function agregarFotoAdicional() {
-    const totalFotos = document.querySelectorAll('#fotos-slots-container .col-md-6').length +
-                       document.querySelectorAll('.foto-adicional-item').length;
+    const totalFotos = contarFotosSeleccionadas() +
+        Array.from(document.querySelectorAll('.foto-adicional-item input[type="file"]'))
+            .filter(i => !i.files || i.files.length === 0).length; // filas vacías ya agregadas
     if (totalFotos >= maxFotos) {
         Swal.fire('Limite alcanzado', `Solo puede agregar hasta ${maxFotos} fotos en total`, 'warning');
         return;
@@ -433,6 +443,12 @@ document.getElementById('form-requerimiento').addEventListener('submit', functio
     if (!tipoSeleccionado) {
         document.getElementById('tipo-error').style.display = 'block';
         document.getElementById('tipo-cards').scrollIntoView({ behavior: 'smooth' });
+        return;
+    }
+
+    // Validar límite total de fotos (el backend también lo aplica)
+    if (contarFotosSeleccionadas() > maxFotos) {
+        Swal.fire('Demasiadas fotos', `El máximo para este tipo de requerimiento es ${maxFotos} foto(s). Quite algunas antes de continuar.`, 'warning');
         return;
     }
 

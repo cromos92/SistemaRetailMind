@@ -115,7 +115,10 @@
     </div>
 </div>
 
+{# El footer trae jQuery: SIEMPRE antes de cualquier JS del módulo (misma
+   regla ya aplicada en devolucion_garantia.html — orden invertido rompía
+   toda la página con "$ is not defined"). #}
+{% include 'layout/footer.html' %}
+
 {# Impresión térmica 80mm del comprobante (QZ Tray ESC/POS + fallback HTML) #}
 {% include 'vistas/modulo_ventas/_dg_print_module.html' %}
-
-{% include 'layout/footer.html' %}

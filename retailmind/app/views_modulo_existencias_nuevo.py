@@ -1271,3 +1271,97 @@ def _registrar_cambio_precio(producto, tipo_cambio, valor_anterior, valor_nuevo,
         )
     except Exception:
         pass
+
+
+# =====================================================
+# 5. CORRECCIÓN DE TALLA GLOBAL (todas las bodegas)
+# =====================================================
+
+@login_required
+@require_POST
+def api_editar_talla_producto_global(request):
+    """
+    Renombra una talla mal registrada (ej. '12' que debió ser '12K') en TODAS
+    las bodegas donde exista el MISMO producto (identidad: código normalizado +
+    marca + color + género + categoría). El SKU de cada talla NO cambia — solo
+    la etiqueta — así que ventas, lotes FIFO y etiquetas siguen funcionando.
+
+    Body JSON: { producto_id, talla_actual, talla_nueva }
+
+    Si en alguna bodega el producto YA tiene una fila con talla_nueva, esa
+    bodega se salta y se reporta como conflicto (fusionar stock/lotes de dos
+    Producto_Talla es una operación de Fusión de Duplicados, no de renombre).
+    """
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    producto_id = data.get('producto_id')
+    talla_actual = str(data.get('talla_actual') or '').strip()
+    talla_nueva = str(data.get('talla_nueva') or '').strip()
+
+    if not producto_id or not talla_actual or not talla_nueva:
+        return JsonResponse({'success': False, 'error': 'Faltan datos: producto, talla actual y talla nueva.'}, status=400)
+    if talla_actual == talla_nueva:
+        return JsonResponse({'success': False, 'error': 'La talla nueva es igual a la actual.'}, status=400)
+    if len(talla_nueva) > 50:
+        return JsonResponse({'success': False, 'error': 'La talla nueva supera los 50 caracteres.'}, status=400)
+
+    producto = get_object_or_404(Producto, id=producto_id)
+
+    # Alcance: solo las sucursales de las empresas del usuario. Además el
+    # producto de referencia debe estar dentro de ese alcance.
+    emp_ids = EmpresaUser.objects.filter(user=request.user, status=True).values_list('empresa_id', flat=True)
+    suc_ids = list(Sucursal.objects.filter(empresa_id__in=emp_ids).values_list('id', flat=True))
+    if producto.sucursal_id not in suc_ids:
+        return JsonResponse({'success': False, 'error': 'No tienes acceso a la bodega de este producto.'}, status=403)
+
+    from .utils_producto_match import productos_por_identidad_sucursales
+    productos = productos_por_identidad_sucursales(
+        producto.articulo, producto.atributo1_id, producto.atributo2_id,
+        producto.atributo3_id, producto.categoria_id, suc_ids,
+    )
+    if producto.id not in {p.id for p in productos}:
+        productos.append(producto)
+
+    filas_actualizadas = 0
+    bodegas = []      # [{sucursal, filas, skus}]
+    conflictos = []   # [{sucursal, motivo}]
+
+    with transaction.atomic():
+        for p in productos:
+            qs = Producto_Talla.objects.filter(producto=p, talla=talla_actual)
+            skus = list(qs.values_list('sku', flat=True))
+            if not skus:
+                continue
+            alias = p.sucursal.alias if p.sucursal else f'Sucursal {p.sucursal_id}'
+            if Producto_Talla.objects.filter(producto=p, talla=talla_nueva).exists():
+                conflictos.append({
+                    'sucursal': alias,
+                    'motivo': f'ya existe la talla "{talla_nueva}" en ese producto (fusión manual requerida)',
+                })
+                continue
+            # .update() no dispara auto_now: fijar updated_at explícito.
+            n = qs.update(talla=talla_nueva, updated_at=timezone.now())
+            filas_actualizadas += n
+            bodegas.append({'sucursal': alias, 'filas': n, 'skus': skus})
+
+    logger.info(
+        "Talla renombrada globalmente por %s: articulo=%s producto_ref=%s '%s' -> '%s' filas=%s bodegas=%s conflictos=%s",
+        request.user.username, producto.articulo, producto.id,
+        talla_actual, talla_nueva, filas_actualizadas,
+        [b['sucursal'] for b in bodegas], [c['sucursal'] for c in conflictos],
+    )
+
+    if not filas_actualizadas and not conflictos:
+        return JsonResponse({'success': False, 'error': f'No se encontró la talla "{talla_actual}" en ninguna bodega.'}, status=404)
+
+    return JsonResponse({
+        'success': True,
+        'talla_actual': talla_actual,
+        'talla_nueva': talla_nueva,
+        'filas_actualizadas': filas_actualizadas,
+        'bodegas': bodegas,
+        'conflictos': conflictos,
+    })

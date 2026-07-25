@@ -229,6 +229,76 @@ class DevolucionGarantiaServiceTest(TestCase):
         # Cubre el saldo restante pero hay NC previa viva → razón '3'.
         self.assertEqual(json.loads(nc.referencias)[0]['razon'], '3')
 
+    def test_razon_sii_3_con_otra_solicitud_pendiente(self):
+        """Otra solicitud PENDIENTE reserva saldo pero NO convierte a la que se
+        aprueba en 'anula documento': la razón compara contra el saldo REAL."""
+        import json
+        _, pt2 = crear_producto_con_talla(self.sucursal, articulo='Sandalia', sku=3000003)
+        boleta = _crear_documento(self.env, 5020, [(self.pt, 1, 11900), (pt2, 1, 23800)])
+        dps = {dp.productoTalla_id: dp for dp in boleta.dte_productos.all()}
+        dev_a = self._crear_solicitud(boleta, [{'dte_producto_id': dps[self.pt.id].id,
+                                                'modo': 'CANTIDAD', 'cantidad': 1}])  # $11.900 pendiente
+        dev_b = self._crear_solicitud(boleta, [{'dte_producto_id': dps[pt2.id].id,
+                                                'modo': 'CANTIDAD', 'cantidad': 1}])  # $23.800
+        # Aprobar B: cubre el monto_restante (35.700-11.900=23.800) pero NO el
+        # documento completo → razón '3', no '1'.
+        _dev, nc, _txt, _warns = service.aprobar_devolucion(
+            devolucion_id=dev_b.id, aprobador=self.user,
+            metodo_devolucion='EFECTIVO_CAJA', fecha_imputacion=self.hoy,
+        )
+        self.assertEqual(json.loads(nc.referencias)[0]['razon'], '3')
+        dev_a.refresh_from_db()
+        self.assertEqual(dev_a.estado, 'PENDIENTE')  # A sigue aprobable
+
+    def test_cantidad_bloqueada_por_consumo_monto_previo(self):
+        """Una devolución MONTO aprobada reduce el $ de la línea: CANTIDAD no
+        puede ignorarlo y sobre-devolver (antes pasaba)."""
+        boleta = _crear_documento(self.env, 5021, [(self.pt, 2, 11900)])  # línea $23.800
+        dp = boleta.dte_productos.first()
+        dev_m = self._crear_solicitud(boleta, [{'dte_producto_id': dp.id, 'modo': 'MONTO', 'monto': 15000}])
+        service.aprobar_devolucion(devolucion_id=dev_m.id, aprobador=self.user,
+                                   metodo_devolucion='NO_AFECTA_CAJA')
+        # Quedan $8.800 de la línea: 1 unidad ($11.900) ya no cabe.
+        with self.assertRaises(service.DevolucionGarantiaError):
+            self._crear_solicitud(boleta, [{'dte_producto_id': dp.id, 'modo': 'CANTIDAD', 'cantidad': 1}])
+
+    def test_mixta_factura_lineas_nc_en_neto(self):
+        """NC mixta CANTIDAD+MONTO sobre factura: TODAS las líneas quedan en
+        base NETO (mezclar bases descuadraba el TXT)."""
+        _, pt2 = crear_producto_con_talla(self.sucursal, articulo='Zapato', sku=4000004)
+        factura = _crear_documento(self.env, 5022, [(self.pt, 1, 10000), (pt2, 1, 20000)],
+                                   tipo_documento='FACTURA ELECTRONICA', tipo_transaccion='VENTA')
+        dps = {dp.productoTalla_id: dp for dp in factura.dte_productos.all()}
+        dev = self._crear_solicitud(factura, [
+            {'dte_producto_id': dps[self.pt.id].id, 'modo': 'CANTIDAD', 'cantidad': 1},
+            {'dte_producto_id': dps[pt2.id].id, 'modo': 'MONTO', 'monto': 5950},  # con IVA
+        ])
+        _dev, nc, _txt, _warns = service.aprobar_devolucion(
+            devolucion_id=dev.id, aprobador=self.user,
+            metodo_devolucion='EFECTIVO_CAJA', fecha_imputacion=self.hoy,
+        )
+        linea_cant = nc.dte_productos.filter(productoTalla__isnull=False).first()
+        linea_monto = nc.dte_productos.filter(productoTalla__isnull=True).first()
+        self.assertEqual(int(linea_cant.precio), 10000)   # neto
+        self.assertEqual(int(linea_monto.precio), 5000)   # neto (5950/1.19)
+        # Cabecera: neto 15.000 / con IVA 11.900+5.950=17.850
+        self.assertEqual(int(nc.monto_neto), 15000)
+        self.assertEqual(int(nc.monto_con_iva), 17850)
+
+    def test_boleta_papel_referencia_tipo_35(self):
+        """La NC que devuelve una BOLETA PAPEL referencia TpoDocRef=35 (no 39,
+        que declararía un folio electrónico inexistente)."""
+        import json
+        boleta = _crear_documento(self.env, 5023, [(self.pt, 1, 11900)],
+                                  tipo_documento='BOLETA PAPEL')
+        dev = self._crear_solicitud(boleta, [{'dte_producto_id': boleta.dte_productos.first().id,
+                                              'modo': 'CANTIDAD', 'cantidad': 1}])
+        _dev, nc, _txt, _warns = service.aprobar_devolucion(
+            devolucion_id=dev.id, aprobador=self.user,
+            metodo_devolucion='EFECTIVO_CAJA', fecha_imputacion=self.hoy,
+        )
+        self.assertEqual(json.loads(nc.referencias)[0]['tipo_documento'], 35)
+
     # ---------- impacto en cuadratura ----------
 
     def test_no_afecta_caja_es_anulacion_y_no_resta_cuadratura(self):

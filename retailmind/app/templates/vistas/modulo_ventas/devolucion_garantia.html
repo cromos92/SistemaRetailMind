@@ -129,11 +129,13 @@
                     <i class="ri-store-2-line me-1"></i> <strong>{{ sucursal_actual.alias }}</strong>
                 </p>
             </div>
+            {% if puede_crear %}
             <div class="col-auto">
                 <button class="btn btn-nexo-success" data-bs-toggle="modal" data-bs-target="#modalNuevaDevolucion" style="font-size:0.88rem; padding:0.45rem 1rem;">
                     <i class="ri-add-line me-1"></i> Nueva Solicitud
                 </button>
             </div>
+            {% endif %}
         </div>
     </div>
 
@@ -209,12 +211,20 @@
                 </tbody>
             </table>
         </div>
+        <div class="d-flex justify-content-between align-items-center px-2 py-1" id="dg-paginacion" style="border-top:1px solid var(--nexo-gray-300);">
+            <small class="text-muted" id="dg-pag-info"></small>
+            <div>
+                <button class="btn btn-sm btn-outline-secondary py-0" id="dg-pag-prev" onclick="cargarDevoluciones(dgPaginaActual - 1)"><i class="ri-arrow-left-s-line"></i></button>
+                <button class="btn btn-sm btn-outline-secondary py-0" id="dg-pag-next" onclick="cargarDevoluciones(dgPaginaActual + 1)"><i class="ri-arrow-right-s-line"></i></button>
+            </div>
+        </div>
     </div>
 
     </div>
 </div>
 
 <!-- ========== MODAL WIZARD: NUEVA SOLICITUD ========== -->
+{% if puede_crear %}
 <div class="modal fade" id="modalNuevaDevolucion" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content border-0" style="background:#1a1f2e;">
@@ -369,9 +379,10 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 {% if puede_aprobar %}
-<!-- ========== MODAL APROBACIÓN (solo administrador) ========== -->
+<!-- ========== MODAL APROBACIÓN (permiso puede_aprobar) ========== -->
 <div class="modal fade" id="modalAprobarDevolucion" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content border-0" style="background:#1a1f2e;">
@@ -423,6 +434,7 @@
 <script src="{% static 'libs/sweetalert2/sweetalert2.min.js' %}"></script>
 <script>
     const PUEDE_APROBAR = {{ puede_aprobar|yesno:"true,false" }};
+    const PUEDE_CREAR = {{ puede_crear|yesno:"true,false" }};
     const URLS_DG = {
         buscarDte: '{% url "api_buscar_dte_devolucion_garantia" %}',
         buscarCliente: '{% url "buscar_cliente_rut" %}',
@@ -454,6 +466,31 @@
         return v;
     }
     const clp = (n) => '$' + Number(n || 0).toLocaleString('es-CL');
+    // Escape HTML para texto de origen usuario interpolado en .html()/template
+    // literals (nombre de cliente, motivo, descripciones). Mismo criterio que
+    // _escDG del módulo de impresión: sin esto hay XSS almacenado.
+    function esc(v) {
+        return String(v == null ? '' : v)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    // Mensaje de error legible desde cualquier respuesta AJAX: las vistas del
+    // módulo devuelven {error: '<string>'}, pero el decorador de permisos
+    // responde {error: true, mensaje: '...'} — sin esto el Swal mostraba "true".
+    function errMsg(xhr, fallback) {
+        const r = xhr && xhr.responseJSON;
+        if (r) {
+            if (typeof r.error === 'string' && r.error) { return r.error; }
+            if (typeof r.mensaje === 'string' && r.mensaje) { return r.mensaje; }
+        }
+        return fallback || 'Error de conexión';
+    }
+    // Fecha local del navegador en YYYY-MM-DD (toISOString devuelve UTC y desde
+    // las ~20:00 hora chilena marcaba el día SIGUIENTE, bloqueando Aprobar).
+    function fechaLocalISO() {
+        const d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
 
     function validarRutChileno(rut) {
         const rutLimpio = (rut || '').replace(/[^0-9kK]/g, '');
@@ -503,22 +540,27 @@
         $('#dg-tipo-cuenta').val('');
         $('#dg-titular-mismo').prop('checked', true);
         dgToggleMetodo();
+        dgToggleTitular();
         window._dgClienteId = null;
         dgIrPaso(1, true);
     }
     $('#modalNuevaDevolucion').on('hidden.bs.modal', resetModalDevolucionGarantia);
 
     // Enter: en folio busca el DTE; en RUT busca el cliente; en el resto avanza
-    // de paso (o crea la solicitud en el último). En textarea deja el salto de línea.
+    // de paso (o crea la solicitud en el último). En textarea deja el salto de
+    // línea, y sobre botones/selects/checkboxes respeta la acción nativa (si no,
+    // Enter sobre "Anterior" avanzaba de paso).
     $('#modalNuevaDevolucion').on('keydown', function (e) {
         if (e.key !== 'Enter') { return; }
-        const tag = (e.target.tagName || '').toUpperCase();
-        if (tag === 'TEXTAREA') { return; }
+        const t = e.target;
+        const tag = (t.tagName || '').toUpperCase();
+        if (tag === 'TEXTAREA' || tag === 'BUTTON' || tag === 'SELECT' || tag === 'A') { return; }
+        if (t.type === 'checkbox' || t.type === 'radio') { return; }
         e.preventDefault();
-        if (e.target.id === 'dg-folio') { buscarDteDevolucionGarantia(); return; }
-        if (e.target.id === 'dg-cliente-rut') { buscarClienteDevolucionGarantia(); return; }
+        if (t.id === 'dg-folio') { buscarDteDevolucionGarantia(); return; }
+        if (t.id === 'dg-cliente-rut') { buscarClienteDevolucionGarantia(); return; }
         if (dgWizard.paso < 4) { dgIrPaso(dgWizard.paso + 1); }
-        else { confirmarDevolucionGarantia(); }
+        else if (!(window.Swal && Swal.isVisible())) { confirmarDevolucionGarantia(); }
     });
 
     function dgToggleMetodo() {
@@ -556,6 +598,11 @@
     function dgValidarPaso(p) {
         if (p === 1) {
             if (!dgWizard.dte) { Swal.fire({ icon: 'info', title: 'Busca un documento', text: 'Ingresa el folio y presiona Buscar.' }); return false; }
+            // Si editó el folio sin re-buscar, no avanzar con el documento viejo.
+            if (String(dgWizard.dte.folio) !== $('#dg-folio').val().trim()) {
+                buscarDteDevolucionGarantia();
+                return false;
+            }
             return true;
         }
         if (p === 2) {
@@ -564,6 +611,12 @@
             for (const s of items) {
                 if (s.modo === 'CANTIDAD' && (!s.cantidad || s.cantidad < 1 || s.cantidad > s.max_cantidad)) {
                     dgMostrarErrorTotal('Revisa la cantidad de ' + s.articulo + ' (máx ' + s.max_cantidad + ').'); return false;
+                }
+                // Una devolución MONTO previa reduce el $ disponible de la línea
+                // aunque queden unidades: el equivalente en $ también debe caber.
+                if (s.modo === 'CANTIDAD' && (s.cantidad * s.precio_unitario_con_iva) > s.max_monto) {
+                    dgMostrarErrorTotal(s.articulo + ': ' + s.cantidad + ' u equivalen a ' + clp(s.cantidad * s.precio_unitario_con_iva) +
+                        ' pero solo quedan ' + clp(s.max_monto) + ' disponibles en esa línea.'); return false;
                 }
                 if (s.modo === 'MONTO' && (!s.monto || s.monto < 1 || s.monto > s.max_monto)) {
                     dgMostrarErrorTotal('Revisa el monto de ' + s.articulo + ' (máx ' + clp(s.max_monto) + ').'); return false;
@@ -614,6 +667,17 @@
         if (!folio) { return; }
         $.get(URLS_DG.buscarDte, { folio: folio }, function (resp) {
             if (!resp.success) { Swal.fire({ icon: 'error', title: 'No encontrado', text: resp.error || 'Error al buscar el documento' }); return; }
+            // Cambio de documento: limpiar el cliente autocompletado del folio
+            // anterior (si no, la solicitud del folio B salía con el cliente
+            // del folio A). La precarga desde Requerimientos es la 1ª búsqueda
+            // (dgWizard.dte aún null), así que no se pierde.
+            const cambioDeDoc = dgWizard.dte && String(dgWizard.dte.folio) !== String(resp.dte.folio);
+            if (cambioDeDoc) {
+                $('#dg-cliente-rut, #dg-cliente-nombre, #dg-cliente-email, #dg-cliente-telefono, #dg-cliente-giro, #dg-cliente-direccion, #dg-cliente-comuna, #dg-cliente-ciudad').val('');
+                $('#dg-cliente-estado').addClass('d-none');
+                $('#dg-alerta-generico').addClass('d-none');
+                window._dgClienteId = null;
+            }
             dgWizard.dte = resp.dte;
             dgWizard.seleccion = {};
 
@@ -635,7 +699,7 @@
                         <div class="d-flex align-items-center gap-2">
                             <input type="checkbox" class="form-check-input mt-0" id="dg-chk-${id}" onchange="dgToggleProducto(${id}, this.checked)">
                             <div class="flex-grow-1 text-white" style="font-size:0.82rem;">
-                                ${p.articulo} ${p.talla ? '(' + p.talla + ')' : ''}
+                                ${esc(p.articulo)} ${p.talla ? '(' + esc(p.talla) + ')' : ''}
                                 <div class="text-secondary" style="font-size:0.72rem;">Disp: ${p.cantidad_disponible} u · ${clp(p.monto_disponible)} · unit ${clp(p.precio_unitario_con_iva)}</div>
                             </div>
                         </div>
@@ -675,7 +739,7 @@
 
             dgIrPaso(2);
         }).fail(function (xhr) {
-            Swal.fire({ icon: 'error', title: 'No encontrado', text: xhr.responseJSON?.error || 'Error al buscar el documento' });
+            Swal.fire({ icon: 'error', title: 'No encontrado', text: errMsg(xhr, 'Error al buscar el documento') });
         });
     }
 
@@ -690,7 +754,11 @@
                 monto: 0, max_cantidad: meta.max_cantidad, max_monto: meta.max_monto,
                 precio_unitario_con_iva: meta.precio_unitario_con_iva, articulo: meta.articulo,
             };
-            dgActualizarLinea(id);
+            // Restaurar la UI al modo inicial (si antes cambió a "Por monto",
+            // los botones/inputs quedaban desincronizados del estado nuevo).
+            $(`#dg-cant-${id}`).val(1);
+            $(`#dg-monto-${id}`).val('');
+            dgCambiarModo(id, meta.modo_inicial);
         } else {
             delete dgWizard.seleccion[id];
         }
@@ -714,7 +782,9 @@
         if (s.modo === 'CANTIDAD') {
             let c = parseInt($(`#dg-cant-${id}`).val() || '0', 10);
             if (c > s.max_cantidad) { c = s.max_cantidad; $(`#dg-cant-${id}`).val(c); }
-            if (c < 1) c = 1;
+            // El mínimo también se refleja en el input: si queda vacío/0, el
+            // usuario debe VER el 1 que se va a enviar (no un campo vacío).
+            if (!c || c < 1) { c = 1; $(`#dg-cant-${id}`).val(c); }
             s.cantidad = c;
             subtotal = c * s.precio_unitario_con_iva;
         } else {
@@ -772,23 +842,30 @@
             $estado.attr('class', 'badge bg-danger d-inline-block w-100 py-1').text('Error de conexión');
         });
     }
-    $(document).on('input', '#dg-cliente-rut, #dg-cliente-nombre', function () { $('#dg-error-cliente').addClass('d-none'); });
+    $(document).on('input', '#dg-cliente-nombre', function () { $('#dg-error-cliente').addClass('d-none'); });
+    // Editar el RUT a mano invalida el cliente encontrado antes: sin esto, el
+    // POST mandaba el cliente_id viejo y la NC salía a nombre de OTRA empresa.
+    $(document).on('input', '#dg-cliente-rut', function () {
+        $('#dg-error-cliente').addClass('d-none');
+        window._dgClienteId = null;
+        $('#dg-cliente-estado').addClass('d-none');
+    });
 
     function dgRenderResumen() {
         const d = dgWizard.dte;
         let filas = '';
         Object.values(dgWizard.seleccion).forEach(function (s) {
             if (s.modo === 'CANTIDAD') {
-                filas += `<div>• ${s.articulo} — <span class="text-info">${s.cantidad} u</span> × ${clp(s.precio_unitario_con_iva)} = ${clp(s.cantidad * s.precio_unitario_con_iva)}</div>`;
+                filas += `<div>• ${esc(s.articulo)} — <span class="text-info">${s.cantidad} u</span> × ${clp(s.precio_unitario_con_iva)} = ${clp(s.cantidad * s.precio_unitario_con_iva)}</div>`;
             } else {
-                filas += `<div>• ${s.articulo} — <span class="text-warning">monto parcial</span> ${clp(s.monto)}</div>`;
+                filas += `<div>• ${esc(s.articulo)} — <span class="text-warning">monto parcial</span> ${clp(s.monto)}</div>`;
             }
         });
         $('#dg-resumen').html(
-            `<div class="mb-1"><strong>Documento:</strong> ${d.tipo_documento} #${d.folio}</div>` +
+            `<div class="mb-1"><strong>Documento:</strong> ${esc(d.tipo_documento)} #${esc(d.folio)}</div>` +
             filas +
             `<div class="mt-1"><strong>Total NC:</strong> <span class="dg-total-nc">${clp(dgTotalNC())}</span></div>` +
-            `<div class="mt-1"><strong>Cliente:</strong> ${$('#dg-cliente-nombre').val()} (${$('#dg-cliente-rut').val()})</div>`
+            `<div class="mt-1"><strong>Cliente:</strong> ${esc($('#dg-cliente-nombre').val())} (${esc($('#dg-cliente-rut').val())})</div>`
         );
     }
 
@@ -841,9 +918,9 @@
                         bootstrap.Modal.getInstance(document.getElementById('modalNuevaDevolucion'))?.hide();
                         Swal.fire({
                             icon: 'success', title: 'Solicitud creada',
-                            html: `<p><strong>${resp.data.numero_operacion}</strong></p>` +
+                            html: `<p><strong>${esc(resp.data.numero_operacion)}</strong></p>` +
                                   `<p>Total ${clp(resp.data.monto_total)} — pendiente de aprobación.</p>` +
-                                  (resp.data.requerimiento_vinculado ? `<p class="small text-muted">Vinculada al requerimiento ${resp.data.requerimiento_vinculado}</p>` : ''),
+                                  (resp.data.requerimiento_vinculado ? `<p class="small text-muted">Vinculada al requerimiento ${esc(resp.data.requerimiento_vinculado)}</p>` : ''),
                             showCancelButton: true, confirmButtonColor: '#0066FF',
                             confirmButtonText: '<i class="ri-printer-line me-1"></i> Imprimir comprobante',
                             cancelButtonText: 'Cerrar',
@@ -857,54 +934,63 @@
                 },
                 error: function (xhr) {
                     $('#dg-btn-confirmar').prop('disabled', false);
-                    Swal.fire({ icon: 'error', title: 'Error', text: xhr.responseJSON?.error || 'Error de conexión' });
+                    Swal.fire({ icon: 'error', title: 'Error', text: errMsg(xhr) });
                 },
             });
         });
     }
 
     // ===================== LISTADO =====================
-    function cargarDevoluciones() {
-        const params = { q: $('#filtro-busqueda').val().trim(), estado: $('#filtro-estado').val() };
+    let dgPaginaActual = 1;
+    function cargarDevoluciones(page) {
+        dgPaginaActual = Math.max(1, page || 1);
+        const params = { q: $('#filtro-busqueda').val().trim(), estado: $('#filtro-estado').val(), page: dgPaginaActual };
         $.get(URLS_DG.listar, params, function (resp) {
             if (!resp.success) {
-                $('#tbody-devoluciones').html(`<tr><td colspan="9" class="text-center text-danger py-4">${resp.error || 'Error al cargar el listado'}</td></tr>`);
+                $('#tbody-devoluciones').html(`<tr><td colspan="9" class="text-center text-danger py-4">${esc(resp.error || 'Error al cargar el listado')}</td></tr>`);
                 return;
             }
             const $tbody = $('#tbody-devoluciones').empty();
             if (!resp.data.length) {
                 $tbody.append('<tr><td colspan="9" class="text-center text-muted py-4">Sin solicitudes registradas</td></tr>');
             }
-            let montoTotal = 0, ncGeneradas = 0;
             resp.data.forEach(function (d) {
-                montoTotal += d.monto_total;
-                if (d.estado === 'NC_GENERADA') { ncGeneradas++; }
                 let acciones = `<a href="/app/devolucion-garantia/${d.id}/" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Ver"><i class="ri-eye-line"></i></a>`;
                 acciones += ` <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="imprimirDevolucionGarantia(${d.id})" title="Imprimir comprobante 80mm"><i class="ri-printer-line"></i></button>`;
                 if (PUEDE_APROBAR && d.estado === 'PENDIENTE') {
                     acciones += ` <button class="btn btn-sm btn-outline-success py-0 px-1" onclick="abrirModalAprobacion(${d.id})" title="Analizar"><i class="ri-shield-check-line"></i></button>`;
                 }
                 if (d.puede_anular) {
-                    acciones += ` <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="anularSolicitudDG(${d.id}, '${d.numero_operacion}')" title="Anular"><i class="ri-delete-bin-line"></i></button>`;
+                    acciones += ` <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="anularSolicitudDG(${d.id}, '${esc(d.numero_operacion)}')" title="Anular"><i class="ri-delete-bin-line"></i></button>`;
                 }
                 $tbody.append(`
                     <tr>
-                        <td>${d.numero_operacion}</td>
-                        <td>#${d.dte_folio}</td>
-                        <td>${d.receptor_nombre}<br><small class="text-muted">${d.receptor_rut}</small></td>
+                        <td>${esc(d.numero_operacion)}</td>
+                        <td>#${esc(d.dte_folio)}</td>
+                        <td>${esc(d.receptor_nombre)}<br><small class="text-muted">${esc(d.receptor_rut)}</small></td>
                         <td>${clp(d.monto_total)}</td>
-                        <td>${d.nc_numero ? '#' + d.nc_numero : '-'}</td>
-                        <td><span class="status-badge status-${d.estado.toLowerCase()}">${d.estado_display}</span></td>
-                        <td>${d.solicitado_por}</td>
-                        <td>${d.fecha}</td>
+                        <td>${d.nc_numero ? '#' + esc(d.nc_numero) : '-'}</td>
+                        <td><span class="status-badge status-${esc(d.estado.toLowerCase())}">${esc(d.estado_display)}</span></td>
+                        <td>${esc(d.solicitado_por)}</td>
+                        <td>${esc(d.fecha)}</td>
                         <td class="text-end">${acciones}</td>
                     </tr>
                 `);
             });
+            // KPIs desde el backend: cubren TODO el universo filtrado, no solo
+            // la página visible (antes las 4 tarjetas mezclaban alcances).
             $('#stat-total').text(resp.total);
             $('#stat-pendientes').text(resp.pendientes);
-            $('#stat-nc-generadas').text(ncGeneradas);
-            $('#stat-monto-total').text(clp(montoTotal));
+            $('#stat-nc-generadas').text(resp.nc_generadas != null ? resp.nc_generadas : 0);
+            $('#stat-monto-total').text(clp(resp.monto_total_global || 0));
+            // Paginación
+            dgPaginaActual = resp.pagina_actual || 1;
+            const totalPag = resp.total_paginas || 1;
+            $('#dg-pag-info').text(`Página ${dgPaginaActual} de ${totalPag} — ${resp.total} solicitudes`);
+            $('#dg-pag-prev').prop('disabled', dgPaginaActual <= 1);
+            $('#dg-pag-next').prop('disabled', dgPaginaActual >= totalPag);
+        }).fail(function (xhr) {
+            $('#tbody-devoluciones').html(`<tr><td colspan="9" class="text-center text-danger py-4">${esc(errMsg(xhr, 'Error al cargar el listado'))}</td></tr>`);
         });
     }
 
@@ -922,12 +1008,12 @@
                     if (resp.success) { Swal.fire({ icon: 'success', title: 'Anulada', timer: 1400, showConfirmButton: false }); cargarDevoluciones(); }
                     else { Swal.fire({ icon: 'error', title: 'Error', text: resp.error }); }
                 },
-                error: function (xhr) { Swal.fire({ icon: 'error', title: 'Error', text: xhr.responseJSON?.error || 'Error de conexión' }); },
+                error: function (xhr) { Swal.fire({ icon: 'error', title: 'Error', text: errMsg(xhr) }); },
             });
         });
     }
 
-    // ===================== APROBACIÓN (solo admin) =====================
+    // ===================== APROBACIÓN =====================
     let aprActual = null;
     function abrirModalAprobacion(id) {
         if (!PUEDE_APROBAR) { return; }
@@ -936,31 +1022,33 @@
         $('#apr-resumen').html('Cargando...');
         $('#apr-observaciones').val('');
         $('#apr-metodo').val('EFECTIVO_CAJA');
-        const hoy = new Date().toISOString().slice(0, 10);
+        const hoy = fechaLocalISO();
         $('#apr-fecha').val(hoy).attr('max', hoy);
         new bootstrap.Modal(document.getElementById('modalAprobarDevolucion')).show();
 
         $.get(urlCon(URLS_DG.detalle, id), function (resp) {
-            if (!resp.success) { $('#apr-resumen').html(`<span class="text-danger">${resp.error}</span>`); return; }
+            if (!resp.success) { $('#apr-resumen').html(`<span class="text-danger">${esc(resp.error)}</span>`); return; }
             const d = resp.data;
             $('#apr-num-operacion').text(d.numero_operacion);
             let lineas = '';
             d.lineas.forEach(function (l) {
-                const detalle = l.modo === 'CANTIDAD' ? `${l.cantidad} u × (${clp(l.subtotal)})` : `monto parcial ${clp(l.subtotal)}`;
-                lineas += `<div>• ${l.descripcion} — ${detalle}${l.conflicto ? ' <span class="text-danger">⚠ disponibilidad cambió</span>' : ''}</div>`;
+                const detalle = l.modo === 'CANTIDAD'
+                    ? `${l.cantidad} u × ${clp(l.precio_unitario)} = ${clp(l.subtotal)}`
+                    : `monto parcial ${clp(l.subtotal)}`;
+                lineas += `<div>• ${esc(l.descripcion)} — ${detalle}${l.conflicto ? ' <span class="text-danger">⚠ disponibilidad cambió</span>' : ''}</div>`;
             });
             let metodoHtml = '';
             if (d.metodo_solicitado_display) {
-                metodoHtml = `<div class="mt-1"><strong>Método pedido por el cliente:</strong> ${d.metodo_solicitado_display}</div>`;
+                metodoHtml = `<div class="mt-1"><strong>Método pedido por el cliente:</strong> ${esc(d.metodo_solicitado_display)}</div>`;
                 if (d.transferencia) {
-                    metodoHtml += `<div class="small text-info">Banco ${d.transferencia.banco} · ${d.transferencia.tipo_cuenta} · N° ${d.transferencia.numero_cuenta} · Titular ${d.transferencia.titular_rut}</div>`;
+                    metodoHtml += `<div class="small text-info">Banco ${esc(d.transferencia.banco)} · ${esc(d.transferencia.tipo_cuenta)} · N° ${esc(d.transferencia.numero_cuenta)} · Titular ${esc(d.transferencia.titular_rut)}</div>`;
                 }
             }
             $('#apr-resumen').html(
-                `<div class="mb-1"><strong>Solicitante:</strong> ${d.solicitado_por} · ${d.fecha_solicitud}</div>` +
-                `<div class="mb-1"><strong>Documento:</strong> ${d.dte.tipo} #${d.dte.folio} (${d.dte.fecha}) — Total ${clp(d.dte.total)}</div>` +
-                `<div class="mb-1"><strong>Cliente:</strong> ${d.receptor.nombre} (${d.receptor.rut})</div>` +
-                `<div class="mb-1"><strong>Motivo:</strong> ${d.motivo}</div>` +
+                `<div class="mb-1"><strong>Solicitante:</strong> ${esc(d.solicitado_por)} · ${esc(d.fecha_solicitud)}</div>` +
+                `<div class="mb-1"><strong>Documento:</strong> ${esc(d.dte.tipo)} #${esc(d.dte.folio)} (${esc(d.dte.fecha)}) — Total ${clp(d.dte.total)}</div>` +
+                `<div class="mb-1"><strong>Cliente:</strong> ${esc(d.receptor.nombre)} (${esc(d.receptor.rut)})</div>` +
+                `<div class="mb-1"><strong>Motivo:</strong> ${esc(d.motivo)}</div>` +
                 `<hr class="my-1" style="border-color:#2a3045;">` + lineas +
                 `<div class="mt-1"><strong>Total NC:</strong> ${clp(d.monto_total)}</div>` +
                 metodoHtml +
@@ -970,7 +1058,7 @@
             if (d.metodo_solicitado) { $('#apr-metodo').val(d.metodo_solicitado); }
             aprActualizarImpacto();
         }).fail(function (xhr) {
-            $('#apr-resumen').html(`<span class="text-danger">${xhr.responseJSON?.error || 'Error al cargar'}</span>`);
+            $('#apr-resumen').html(`<span class="text-danger">${esc(errMsg(xhr, 'Error al cargar'))}</span>`);
         });
     }
 
@@ -979,17 +1067,23 @@
         const metodo = $('#apr-metodo').val();
         const afecta = metodo !== 'NO_AFECTA_CAJA';
         $('#apr-fecha-wrap').toggleClass('d-none', !afecta);
+        // Mientras se recalcula, el botón queda bloqueado: si el request falla,
+        // no debe quedar habilitado con el preview de otra combinación.
+        $('#apr-impacto').text('Calculando...');
+        $('#apr-btn-aprobar').prop('disabled', true);
         const params = { metodo: metodo };
         if (afecta) { params.fecha = $('#apr-fecha').val(); }
         $.get(urlCon(URLS_DG.impacto, aprActual), params, function (resp) {
-            if (!resp.success) { $('#apr-impacto').html(`<span class="text-danger">${resp.error}</span>`); return; }
+            if (!resp.success) { $('#apr-impacto').html(`<span class="text-danger">${esc(resp.error)}</span>`); return; }
             const im = resp.data;
-            let html = `<div>${im.descripcion}</div>`;
+            let html = `<div>${esc(im.descripcion)}</div>`;
             (im.advertencias || []).forEach(function (a) {
-                html += `<div class="alert alert-warning py-1 px-2 small mt-2 mb-0"><i class="ri-alert-line me-1"></i>${a}</div>`;
+                html += `<div class="alert alert-warning py-1 px-2 small mt-2 mb-0"><i class="ri-alert-line me-1"></i>${esc(a)}</div>`;
             });
             $('#apr-impacto').html(html);
             $('#apr-btn-aprobar').prop('disabled', !im.fecha_valida);
+        }).fail(function (xhr) {
+            $('#apr-impacto').html(`<span class="text-danger">${esc(errMsg(xhr, 'No se pudo calcular el impacto'))}</span>`);
         });
     }
 
@@ -1022,7 +1116,7 @@
                                   (warns.length
                                       ? `<div class="alert alert-warning text-start small mt-3 mb-0">` +
                                         `<strong>Revisa el TXT antes de subirlo a Acepta:</strong><ul class="mb-0 ps-3">` +
-                                        warns.map(w => `<li>${w}</li>`).join('') + `</ul></div>`
+                                        warns.map(w => `<li>${esc(w)}</li>`).join('') + `</ul></div>`
                                       : ''),
                         });
                         cargarDevoluciones();
@@ -1032,7 +1126,7 @@
                 },
                 error: function (xhr) {
                     $('#apr-btn-aprobar').prop('disabled', false);
-                    Swal.fire({ icon: 'error', title: 'Error', text: xhr.responseJSON?.error || 'Error de conexión' });
+                    Swal.fire({ icon: 'error', title: 'Error', text: errMsg(xhr) });
                 },
             });
         });
@@ -1058,13 +1152,14 @@
                         cargarDevoluciones();
                     } else { Swal.fire({ icon: 'error', title: 'Error', text: resp.error }); }
                 },
-                error: function (xhr) { Swal.fire({ icon: 'error', title: 'Error', text: xhr.responseJSON?.error || 'Error de conexión' }); },
+                error: function (xhr) { Swal.fire({ icon: 'error', title: 'Error', text: errMsg(xhr) }); },
             });
         });
     }
 
     // ===================== PUENTE DESDE REQUERIMIENTOS =====================
     function precargarDesdeRequerimiento() {
+        if (!PUEDE_CREAR) { return; }
         const params = new URLSearchParams(window.location.search);
         const folio = params.get('folio');
         if (!folio) { return; }

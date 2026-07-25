@@ -542,7 +542,15 @@ function _generarEscPosDevolucionGarantia(td) {
     } else {
         c.push('COMPROBANTE NO TRIBUTARIO' + _N);
         c.push('No v\xE1lido como nota de cr\xE9dito' + _N);
-        c.push('Sujeto a aprobaci\xF3n' + _N);
+        // La última línea depende del estado: una solicitud rechazada o
+        // anulada no puede imprimir "Sujeto a aprobación".
+        if (td.estado === 'RECHAZADA') {
+            c.push('SOLICITUD RECHAZADA - SIN VALOR' + _N);
+        } else if (td.estado === 'ANULADA') {
+            c.push('SOLICITUD ANULADA - SIN VALOR' + _N);
+        } else {
+            c.push('Sujeto a aprobaci\xF3n' + _N);
+        }
     }
     c.push(_sep('-'));
 
