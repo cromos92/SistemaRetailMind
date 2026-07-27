@@ -484,7 +484,7 @@
     <div class="nexo-kpi-card kpi-primary" id="kpi-card-1" style="display:none">
       <div class="nexo-kpi-icon icon-primary"><i class="ri-box-3-line"></i></div>
       <div class="nexo-kpi-body">
-        <div class="nexo-kpi-label">SKUs con Stock</div>
+        <div class="nexo-kpi-label" title="Cuenta combinaciones SKU-talla con stock, no artículos distintos">SKU-talla con Stock</div>
         <div class="nexo-kpi-value" id="kpi-skus">0</div>
       </div>
     </div>
@@ -498,7 +498,10 @@
     <div class="nexo-kpi-card kpi-warning" id="kpi-card-3" style="display:none">
       <div class="nexo-kpi-icon icon-warning"><i class="ri-money-dollar-circle-line"></i></div>
       <div class="nexo-kpi-body">
-        <div class="nexo-kpi-label">Valor Inventario</div>
+        <!-- Aquí se valoriza a costo + sobreprecio. En "Resumen de Existencias"
+             esa misma cifra se llama "precio interno" y "costo" es solo el
+             costo puro: rotularlo evita comparar peras con manzanas. -->
+        <div class="nexo-kpi-label" title="Valorizado a costo + sobreprecio (equivale al 'precio interno' del Resumen de Existencias, no al costo puro)">Valor Inv. (costo+sobrepr.)</div>
         <div class="nexo-kpi-value" id="kpi-valor">$0</div>
       </div>
     </div>
@@ -519,7 +522,7 @@
     <div class="nexo-kpi-card kpi-error" id="kpi-card-6" style="display:none">
       <div class="nexo-kpi-icon icon-error"><i class="ri-archive-2-line"></i></div>
       <div class="nexo-kpi-body">
-        <div class="nexo-kpi-label" title="Unidades en lotes con más de 180 días de antigüedad">Stock &gt;180 días</div>
+        <div class="nexo-kpi-label" title="Unidades en lotes con más de 180 días de antigüedad, dividido por el stock plano. Si hay descalce entre lotes y stock, este porcentaje es aproximado.">Stock &gt;180 días (aprox.)</div>
         <div class="nexo-kpi-value" id="kpi-viejo">—</div>
       </div>
     </div>
@@ -775,8 +778,13 @@ const COLS = [
   { key: 'color',         label: 'Color',          cls: '' },
   { key: 'genero',        label: 'Género',         cls: '' },
   { key: 'talla',         label: 'Talla',          cls: '' },
-  { key: 'stock_inicial', label: 'Stock Ini.',     cls: 'td-right' },
-  { key: 'stock',         label: 'Stock Act.',     cls: 'td-right' },
+  // Ojo: NO es un saldo inicial de período. Es todo lo que entró alguna vez a
+  // ese SKU (compras + traspasos + ajustes positivos + cambios), sin fecha de
+  // corte. Restarlo del stock actual NO da el consumo del período.
+  { key: 'stock_inicial', label: 'Recibido hist.', cls: 'td-right',
+    tip: 'Total histórico recibido de este SKU (compras + traspasos + ajustes), sin fecha de corte. NO es el saldo al inicio de un período: la diferencia con el stock actual incluye traspasos salientes, mermas y años de historia.' },
+  { key: 'stock',         label: 'Stock Act.',     cls: 'td-right',
+    tip: 'Stock actual de esta sucursal (campo plano Producto_Talla.stock).' },
   { key: 'costo',         label: 'Costo',          cls: 'td-right' },
   { key: 'sobreprecio',   label: 'Sobreprecio',    cls: 'td-right' },
   { key: 'precio_venta',  label: 'Precio Venta',   cls: 'td-right' },
@@ -786,7 +794,9 @@ function renderEncabezado() {
   let html = '<tr>';
   COLS.forEach(c => {
     const arrow = c.key === sortCol ? (sortDir === 1 ? '▲' : '▼') : '⇅';
-    html += `<th onclick="sortBy('${c.key}')">${c.label}<span class="th-sort-arrow">${arrow}</span></th>`;
+    const tip = c.tip ? ` title="${esc(c.tip)}"` : '';
+    const marca = c.tip ? ' <i class="ri-question-line"></i>' : '';
+    html += `<th onclick="sortBy('${c.key}')"${tip}>${c.label}${marca}<span class="th-sort-arrow">${arrow}</span></th>`;
   });
   html += '</tr>';
   document.getElementById('tabla-head').innerHTML = html;

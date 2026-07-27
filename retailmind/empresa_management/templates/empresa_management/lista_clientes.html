@@ -1,14 +1,25 @@
 {% load static %}
+{% load permisos_tags %}
 
 {% include 'layout/header.html' %}
 
 <!-- CSRF Token para AJAX -->
 {% csrf_token %}
 {% include 'layout/menu.html' %}
-{% include 'layout/footer.html' %}
+{% comment %} El footer cierra .main-content, #layout-wrapper y </body></html>. Estando aquí,
+   toda la pantalla quedaba renderizada después de </html> y el pie de página
+   («© AllConnected») aparecía por encima del contenido. Va al final, antes del JS
+   del módulo, que necesita el jQuery que trae el footer. {% endcomment %}
 
-<!-- SweetAlert2 -->
-<link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+<!-- ===== Permisos finos de la opción 'gestion_clientes' =====
+     El middleware sólo exige 'puede_ver' sobre la URL: sin esto, un rol de sólo
+     lectura veía los botones de crear/editar/eliminar/exportar y podía usarlos. -->
+{% tiene_permiso 'gestion_clientes' 'puede_crear' as puede_crear_cliente %}
+{% tiene_permiso 'gestion_clientes' 'puede_editar' as puede_editar_cliente %}
+{% tiene_permiso 'gestion_clientes' 'puede_eliminar' as puede_eliminar_cliente %}
+{% tiene_permiso 'gestion_clientes' 'puede_exportar' as puede_exportar_cliente %}
+
+<!-- SweetAlert2 (CSS local; el JS lo trae layout/footer.html) -->
 
 <style>
 /* ========== NEXO DESIGN SYSTEM VARIABLES ========== */
@@ -510,7 +521,8 @@
 }
 </style>
 
-<div class="main-content">
+{% comment %} menu.html ya abre <div class="main-content">; anidar otro duplicaba el
+   margin-left:250px del layout. Como el resto de los módulos, sólo .page-content. {% endcomment %}
     <div class="page-content">
         <div class="container-fluid">
             
@@ -528,12 +540,21 @@
                             </p>
                         </div>
                         <div class="d-flex gap-2">
+                            {% if puede_exportar_cliente %}
                             <button class="btn btn-nexo-success" onclick="exportarClientes()">
                                 <i class="ri-download-2-line me-1"></i>Exportar
                             </button>
+                            {% endif %}
+                            {% if puede_crear_cliente %}
                             <button class="btn btn-nexo-primary" onclick="abrirModalCrear()">
                                 <i class="ri-add-circle-line me-1"></i>Nuevo Cliente
                             </button>
+                            {% else %}
+                            <span class="badge bg-light text-dark border align-self-center"
+                                  title="Su rol no tiene permiso para crear clientes">
+                                <i class="ri-eye-line me-1"></i>Solo lectura
+                            </span>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -689,8 +710,6 @@
         <!-- container-fluid -->
     </div>
     <!-- page-content -->
-</div>
-<!-- main-content -->
 
 <!-- ========== MODAL CREAR/EDITAR CLIENTE ========== -->
 <div class="modal fade" id="modalCliente" tabindex="-1" aria-labelledby="modalClienteLabel" aria-hidden="true">
@@ -880,11 +899,36 @@
                 <p class="text-center" style="color: var(--nexo-gray-700);">
                     ¿Estás seguro de que deseas eliminar al cliente <strong id="nombreClienteEliminar"></strong>?
                 </p>
-                <p class="text-center small" style="color: var(--nexo-gray-500);">Esta acción no se puede deshacer.</p>
+                <!-- El borrado es FÍSICO y arrastra en cascada todo lo que cuelga del
+                     cliente. El usuario tiene que saber qué se lleva por delante. -->
+                <div class="alert alert-danger small mb-3">
+                    <strong><i class="ri-error-warning-line me-1"></i>Eliminar borra el registro definitivamente</strong>
+                    y con él, en cascada:
+                    <ul class="mb-2 mt-1">
+                        <li>su <strong>cuenta de puntos y el saldo acumulado</strong> del programa de fidelización;</li>
+                        <li>sus <strong>créditos de trabajador</strong> y vales canjeados;</li>
+                        <li>su cuenta de la app, dispositivos y referidos;</li>
+                        <li>la bitácora de cambios del propio cliente.</li>
+                    </ul>
+                    Sus boletas y facturas <em>no</em> se borran, pero quedan sin cliente asociado.
+                    <div class="mt-2">
+                        Si sólo quiere sacarlo de la operación, use
+                        <strong>Desactivar</strong> en lugar de Eliminar.
+                    </div>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="confirmoEliminarCliente"
+                           onchange="document.getElementById('btnConfirmarEliminarCliente').disabled = !this.checked;">
+                    <label class="form-check-label small" for="confirmoEliminarCliente">
+                        Entiendo que esta acción no se puede deshacer.
+                    </label>
+                </div>
             </div>
             <div class="modal-footer modal-footer-nexo">
                 <button type="button" class="btn btn-nexo-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn" style="background-color: var(--nexo-error); color: white;" onclick="confirmarEliminar()">
+                <button type="button" id="btnConfirmarEliminarCliente" disabled
+                        class="btn" style="background-color: var(--nexo-error); color: white;"
+                        onclick="confirmarEliminar()">
                     <i class="ri-delete-bin-line me-1"></i>Eliminar
                 </button>
             </div>
@@ -892,10 +936,20 @@
     </div>
 </div>
 
-<!-- ========== SCRIPTS ========== -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+{% comment %} El footer trae jQuery, Bootstrap y SweetAlert2 locales: va ANTES del JS del
+   módulo (mismo orden que el resto de los módulos del ERP). {% endcomment %}
+{% include 'layout/footer.html' %}
 
+<!-- ========== SCRIPTS ========== -->
 <script>
+// Permisos finos resueltos en servidor (rol + override de usuario + sucursal).
+const PERM_CLIENTE = {
+    crear:    {{ puede_crear_cliente|yesno:"true,false" }},
+    editar:   {{ puede_editar_cliente|yesno:"true,false" }},
+    eliminar: {{ puede_eliminar_cliente|yesno:"true,false" }},
+    exportar: {{ puede_exportar_cliente|yesno:"true,false" }}
+};
+
 // Variables globales
 let clientes = [];
 let clienteSeleccionado = null;
@@ -1032,12 +1086,19 @@ function actualizarTabla(clientes) {
                         <button class="btn btn-action btn-action-view" onclick="verDetalleCliente(${cliente.id})" title="Ver Detalle">
                             <i class="ri-eye-line"></i>
                         </button>
+                        ${PERM_CLIENTE.editar ? `
                         <button class="btn btn-action btn-action-edit" onclick="editarCliente(${cliente.id})" title="Editar">
                             <i class="ri-pencil-line"></i>
                         </button>
+                        <button class="btn btn-action btn-action-view"
+                                onclick="alternarEstadoCliente(${cliente.id}, ${cliente.activo ? 'true' : 'false'}, '${(cliente.nombre || '').replace(/'/g, "\\\\'")}')"
+                                title="${cliente.activo ? 'Desactivar cliente' : 'Activar cliente'}">
+                            <i class="${cliente.activo ? 'ri-toggle-fill' : 'ri-toggle-line'}"></i>
+                        </button>` : ''}
+                        ${PERM_CLIENTE.eliminar ? `
                         <button class="btn btn-action btn-action-delete" onclick="eliminarCliente(${cliente.id}, '${(cliente.nombre || '').replace(/'/g, "\\'")}')" title="Eliminar">
                             <i class="ri-delete-bin-line"></i>
-                        </button>
+                        </button>` : ''}
                     </div>
                 </td>
             </tr>
@@ -1304,7 +1365,18 @@ function guardarCliente() {
         mostrarErrores(errores);
         return;
     }
-    
+
+    // Guardia de permiso en el cliente: el backend manda, pero así el usuario ve
+    // el motivo en vez de un 403 mudo.
+    if (modoEdicion && !PERM_CLIENTE.editar) {
+        showErrorAlert('Sin permiso', 'Su rol no puede editar clientes.');
+        return;
+    }
+    if (!modoEdicion && !PERM_CLIENTE.crear) {
+        showErrorAlert('Sin permiso', 'Su rol no puede crear clientes.');
+        return;
+    }
+
     const url = modoEdicion ? '/empresa_management/editar_cliente/' : '/empresa_management/crear_cliente/';
     const method = modoEdicion ? 'PUT' : 'POST';
     
@@ -1361,9 +1433,57 @@ function guardarCliente() {
 }
 
 // Función para eliminar cliente
+// Activar / desactivar cliente.
+// El endpoint ya existía y deja bitácora en LogCliente, pero no estaba expuesto
+// en la pantalla: la única acción disponible era el borrado físico.
+function alternarEstadoCliente(clienteId, activo, nombre) {
+    if (!PERM_CLIENTE.editar) {
+        showErrorAlert('Sin permiso', 'Su rol no puede modificar clientes.');
+        return;
+    }
+    const accion = activo ? 'desactivar' : 'activar';
+    Swal.fire({
+        icon: 'question',
+        title: `¿${activo ? 'Desactivar' : 'Activar'} cliente?`,
+        text: `${nombre || 'Cliente'} quedará ${activo ? 'inactivo' : 'activo'}. Se registra en la bitácora del cliente.`,
+        showCancelButton: true,
+        confirmButtonText: `Sí, ${accion}`,
+        cancelButtonText: 'Cancelar'
+    }).then(function (res) {
+        if (!res.isConfirmed) return;
+        $.ajax({
+            url: `/empresa_management/activar_desactivar_cliente/${clienteId}/`,
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCSRFToken() },
+            success: function (response) {
+                if (response.success) {
+                    showSuccessAlert('Estado actualizado', response.message);
+                    cargarClientes();
+                    cargarMetricas();
+                } else {
+                    showErrorAlert('Error', response.error || response.message);
+                }
+            },
+            error: function (xhr) {
+                showErrorAlert('Error',
+                    xhr.status === 403
+                        ? 'No tiene permiso para cambiar el estado de clientes.'
+                        : 'Error de conexión al cambiar el estado del cliente');
+            }
+        });
+    });
+}
+
 function eliminarCliente(clienteId, nombre) {
+    if (!PERM_CLIENTE.eliminar) {
+        showErrorAlert('Sin permiso', 'Su rol no puede eliminar clientes.');
+        return;
+    }
     clienteSeleccionado = clienteId;
     $('#nombreClienteEliminar').text(nombre);
+    // Reiniciar el doble check en cada apertura del modal.
+    $('#confirmoEliminarCliente').prop('checked', false);
+    $('#btnConfirmarEliminarCliente').prop('disabled', true);
     $('#modalConfirmarEliminar').modal('show');
 }
 

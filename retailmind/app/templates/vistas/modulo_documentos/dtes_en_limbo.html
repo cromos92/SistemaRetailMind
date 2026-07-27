@@ -131,6 +131,46 @@
         border-radius: 8px;
         margin-top: 10px;
     }
+
+    /* Filtros rápidos de rango (estilo estándar de módulos) */
+    .quick-filter-btn {
+        padding: 5px 12px;
+        font-size: 0.75rem;
+        white-space: nowrap;
+        border-radius: 16px;
+        border: 1.5px solid var(--nexo-gray-300);
+        background: #fff;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-weight: 500;
+        color: var(--nexo-gray-700);
+    }
+
+    .quick-filter-btn:hover {
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+        border-color: transparent;
+        color: #fff;
+        transform: translateY(-1px);
+    }
+
+    .quick-filter-btn.active {
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+        border-color: transparent;
+        color: #fff;
+    }
+
+    .limbo-filtros-fecha input[type="date"] {
+        width: 150px;
+    }
+
+    .aviso-tope {
+        background: rgba(255, 176, 32, 0.12);
+        border-left: 4px solid var(--nexo-warning);
+        color: #8a5a00;
+        font-size: 12px;
+        padding: 8px 14px;
+        border-radius: 0;
+    }
 </style>
 
 <div class="page-content p-4">
@@ -147,22 +187,41 @@
     </div>
 
     <div class="limbo-card mb-3">
-        <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-            <h5>📋 Lista de DTEs</h5>
-            <div class="d-flex gap-2 align-items-center flex-wrap">
-                <select id="filtroEstado" class="form-select form-select-sm" style="width: auto;">
-                    <option value="">Todos los estados</option>
-                    <option value="RECHAZADO">Rechazados</option>
-                    <option value="RECEPCIONADO_PARCIAL">Parciales</option>
-                    <option value="RECEPCIONADO_SOBRANTE">Con sobrantes</option>
-                    <option value="EN_REGULARIZACION">En regularización</option>
-                    <option value="EMITIDO">Emitidos sin recepcionar</option>
-                </select>
-                <input type="number" id="filtroDiasMinimos" class="form-control form-control-sm"
-                       placeholder="Min. días" style="width: 110px;" min="0" />
-                <button class="btn btn-sm btn-outline-primary" id="btnRefrescar">🔄 Refrescar</button>
+        <div class="card-header">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <h5>📋 Lista de DTEs</h5>
+                <div class="d-flex gap-2 align-items-center flex-wrap">
+                    <select id="filtroEstado" class="form-select form-select-sm" style="width: auto;">
+                        <option value="">Todos los estados</option>
+                        <option value="RECHAZADO">Rechazados</option>
+                        <option value="RECEPCIONADO_PARCIAL">Parciales</option>
+                        <option value="RECEPCIONADO_SOBRANTE">Con sobrantes</option>
+                        <option value="EN_REGULARIZACION">En regularización</option>
+                        <option value="EMITIDO">Emitidos sin recepcionar</option>
+                    </select>
+                    <input type="number" id="filtroDiasMinimos" class="form-control form-control-sm"
+                           placeholder="Antigüedad" style="width: 120px;" min="0"
+                           title="Cuántos días debe llevar un DTE EMITIDO sin recepcionar para entrar al limbo (por defecto 7). No afecta a los rechazados/parciales." />
+                    <button class="btn btn-sm btn-outline-primary" id="btnRefrescar">🔄 Refrescar</button>
+                </div>
+            </div>
+
+            <!-- Rango de fechas de emisión: por defecto los últimos 90 días.
+                 Sin esto la pantalla mezclaba casos vivos con basura histórica
+                 (documentos de 2021-2022 que ya nadie va a resolver). -->
+            <div class="d-flex gap-2 align-items-center flex-wrap mt-2 limbo-filtros-fecha">
+                <span class="text-muted" style="font-size: 12px;">📅 Emitidos entre</span>
+                <input type="date" id="filtroFechaDesde" class="form-control form-control-sm" />
+                <span class="text-muted" style="font-size: 12px;">y</span>
+                <input type="date" id="filtroFechaHasta" class="form-control form-control-sm" />
+                <span class="text-muted ms-2" style="font-size: 12px;">Rápido:</span>
+                <button type="button" class="quick-filter-btn" data-rango-dias="30">30 días</button>
+                <button type="button" class="quick-filter-btn active" data-rango-dias="90">90 días</button>
+                <button type="button" class="quick-filter-btn" data-rango-dias="365">1 año</button>
+                <button type="button" class="quick-filter-btn" data-rango-dias="0">Todo el histórico</button>
             </div>
         </div>
+        <div id="avisoTope" class="aviso-tope d-none"></div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
@@ -171,6 +230,7 @@
                             <th>#</th>
                             <th>Tipo</th>
                             <th>Destino</th>
+                            <th>Emisión</th>
                             <th>Estado</th>
                             <th>Días</th>
                             <th>Problemas</th>
@@ -179,7 +239,7 @@
                         </tr>
                     </thead>
                     <tbody id="tablaLimbo">
-                        <tr><td colspan="8" class="text-center text-muted py-4">Cargando…</td></tr>
+                        <tr><td colspan="9" class="text-center text-muted py-4">Cargando…</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -233,6 +293,82 @@ function getCookie(name) {
 
 const CSRF = getCookie('csrftoken');
 
+// El endpoint devuelve como máximo 300 filas (ordenadas por fecha de emisión
+// descendente). Lo dejamos explícito para poder avisar cuando la lista viene
+// cortada en vez de mostrar un total que miente.
+const TOPE_SERVIDOR = 300;
+
+function aviso(icono, titulo, texto) {
+    if (window.Swal) {
+        return Swal.fire({ icon: icono, title: titulo, text: texto });
+    }
+    // Fallback defensivo si SweetAlert2 no cargó.
+    window.alert(`${titulo}\n\n${texto || ''}`);
+    return Promise.resolve();
+}
+
+function fechaISO(d) {
+    const off = d.getTimezoneOffset();
+    return new Date(d.getTime() - off * 60000).toISOString().split('T')[0];
+}
+
+function aplicarRangoDias(dias) {
+    const desde = document.getElementById('filtroFechaDesde');
+    const hasta = document.getElementById('filtroFechaHasta');
+    if (!dias || dias <= 0) {
+        desde.value = '';
+        hasta.value = '';
+        return;
+    }
+    const hoy = new Date();
+    const inicio = new Date();
+    inicio.setDate(hoy.getDate() - dias);
+    desde.value = fechaISO(inicio);
+    hasta.value = fechaISO(hoy);
+}
+
+// Filtra por fecha de emisión en el cliente: el endpoint todavía no acepta
+// rango de fechas, sólo `estado` y `dias_emision`.
+function filtrarPorFecha(items) {
+    const desde = document.getElementById('filtroFechaDesde').value;
+    const hasta = document.getElementById('filtroFechaHasta').value;
+    if (!desde && !hasta) return items;
+
+    return (items || []).filter(it => {
+        const f = it.fecha_emision; // 'YYYY-MM-DD' → comparación lexicográfica válida
+        if (!f) return false;
+        if (desde && f < desde) return false;
+        if (hasta && f > hasta) return false;
+        return true;
+    });
+}
+
+function actualizarAvisos(recibidos, mostrados) {
+    const box = document.getElementById('avisoTope');
+    const partes = [];
+
+    if (recibidos >= TOPE_SERVIDOR) {
+        partes.push(
+            `⚠️ El servidor entrega como máximo <strong>${TOPE_SERVIDOR}</strong> documentos ` +
+            `(los más recientes). Puede haber más DTEs en limbo fuera de esta lista: ` +
+            `acota por estado para verlos.`
+        );
+    }
+    if (mostrados < recibidos) {
+        partes.push(
+            `Se ocultaron <strong>${recibidos - mostrados}</strong> documentos fuera del rango de fechas.`
+        );
+    }
+
+    if (partes.length) {
+        box.innerHTML = partes.join(' ');
+        box.classList.remove('d-none');
+    } else {
+        box.innerHTML = '';
+        box.classList.add('d-none');
+    }
+}
+
 function cargarLimboInbox() {
     const estado = document.getElementById('filtroEstado').value;
     const diasMin = document.getElementById('filtroDiasMinimos').value;
@@ -240,20 +376,29 @@ function cargarLimboInbox() {
     if (estado) params.set('estado', estado);
     if (diasMin) params.set('dias_emision', diasMin);
 
+    document.getElementById('tablaLimbo').innerHTML =
+        '<tr><td colspan="9" class="text-center text-muted py-4">Cargando…</td></tr>';
+
     fetch(`/app/dte/obtener_limbo_emisor/?${params.toString()}`)
         .then(r => r.json())
         .then(data => {
             if (!data.success) {
                 document.getElementById('tablaLimbo').innerHTML =
-                    `<tr><td colspan="8" class="text-center text-danger py-4">Error: ${data.error || 'desconocido'}</td></tr>`;
+                    `<tr><td colspan="9" class="text-center text-danger py-4">Error: ${data.error || 'desconocido'}</td></tr>`;
                 return;
             }
-            renderTabla(data.items);
-            document.getElementById('contadorTotal').textContent = `${data.total} DTEs`;
+            const recibidos = (data.items || []).length;
+            const visibles = filtrarPorFecha(data.items);
+            renderTabla(visibles);
+            actualizarAvisos(recibidos, visibles.length);
+            document.getElementById('contadorTotal').textContent =
+                recibidos === visibles.length
+                    ? `${visibles.length} DTEs`
+                    : `${visibles.length} de ${recibidos} DTEs`;
         })
         .catch(err => {
             document.getElementById('tablaLimbo').innerHTML =
-                `<tr><td colspan="8" class="text-center text-danger py-4">Error: ${err}</td></tr>`;
+                `<tr><td colspan="9" class="text-center text-danger py-4">Error: ${err}</td></tr>`;
         });
 }
 
@@ -284,10 +429,20 @@ function chipsProblemas(p) {
     return chips.join('') || '<span class="text-muted small">—</span>';
 }
 
+function fechaCorta(iso) {
+    if (!iso) return '<span class="text-muted">—</span>';
+    const p = String(iso).split('-');
+    return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso;
+}
+
 function renderTabla(items) {
     const tbody = document.getElementById('tablaLimbo');
     if (!items || items.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">🎉 No tienes DTEs en limbo</td></tr>';
+        const hayRango = document.getElementById('filtroFechaDesde').value ||
+                         document.getElementById('filtroFechaHasta').value;
+        tbody.innerHTML = hayRango
+            ? '<tr><td colspan="9" class="text-center text-muted py-4">Sin DTEs en limbo dentro del rango de fechas elegido. Prueba con "Todo el histórico".</td></tr>'
+            : '<tr><td colspan="9" class="text-center text-muted py-4">🎉 No tienes DTEs en limbo</td></tr>';
         return;
     }
     tbody.innerHTML = items.map(it => {
@@ -299,6 +454,7 @@ function renderTabla(items) {
                 <td><strong>#${it.numero_documento}</strong>${pendNc}</td>
                 <td><small>${it.tipo_documento || '-'}</small></td>
                 <td>${it.destino_alias || '-'}</td>
+                <td><small class="text-nowrap">${fechaCorta(it.fecha_emision)}</small></td>
                 <td>${badgeEstado(it.estado_dte)}${it.motivo_rechazo ? `<br><small class="text-muted">${it.motivo_rechazo}</small>` : ''}</td>
                 <td>${badgeDias(it.dias_en_limbo)}</td>
                 <td>${chipsProblemas(it.resumen_problemas)}</td>
@@ -417,11 +573,11 @@ function enviarRehabilitar() {
         .then(data => {
             document.getElementById('btnEnviarAccion').disabled = false;
             if (data.success) {
-                alert(data.message || 'DTE rehabilitado correctamente');
                 bootstrap.Modal.getInstance(document.getElementById('modalResolver')).hide();
                 cargarLimboInbox();
+                aviso('success', 'DTE rehabilitado', data.message || 'DTE rehabilitado correctamente');
             } else {
-                alert(data.error || 'Error al rehabilitar');
+                aviso('error', 'No se pudo rehabilitar', data.error || 'Error al rehabilitar');
             }
         });
 }
@@ -500,11 +656,11 @@ function enviarCorregir() {
         .then(data => {
             document.getElementById('btnEnviarAccion').disabled = false;
             if (data.success) {
-                alert(data.message);
                 bootstrap.Modal.getInstance(document.getElementById('modalResolver')).hide();
                 cargarLimboInbox();
+                aviso('success', 'Corrección aplicada', data.message);
             } else {
-                alert(data.error || 'Error al corregir');
+                aviso('error', 'No se pudo corregir', data.error || 'Error al corregir');
             }
         });
 }
@@ -632,7 +788,7 @@ function setModoNc(modo) {
 function enviarNc() {
     const motivo = document.getElementById('ncMotivo').value.trim();
     if (!motivo) {
-        alert('Debes ingresar un motivo');
+        aviso('warning', 'Falta el motivo', 'Debes ingresar un motivo para la Nota de Crédito.');
         return;
     }
 
@@ -655,7 +811,7 @@ function enviarNc() {
     });
 
     if (ajustes.length === 0) {
-        alert('Selecciona al menos un producto a creditar');
+        aviso('warning', 'Sin líneas seleccionadas', 'Selecciona al menos un producto a creditar.');
         return;
     }
 
@@ -676,11 +832,11 @@ function enviarNc() {
         .then(data => {
             document.getElementById('btnEnviarAccion').disabled = false;
             if (data.success) {
-                alert(data.message);
                 bootstrap.Modal.getInstance(document.getElementById('modalResolver')).hide();
                 cargarLimboInbox();
+                aviso('success', 'Nota de Crédito emitida', data.message);
             } else {
-                alert(data.error || 'Error al emitir NC');
+                aviso('error', 'No se pudo emitir la NC', data.error || 'Error al emitir NC');
             }
         });
 }
@@ -691,6 +847,26 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('filtroEstado').addEventListener('change', cargarLimboInbox);
     document.getElementById('filtroDiasMinimos').addEventListener('change', cargarLimboInbox);
     document.getElementById('btnVolverAccion').addEventListener('click', renderPasoAccion);
+
+    // Rango de fechas: por defecto los últimos 90 días.
+    document.getElementById('filtroFechaDesde').addEventListener('change', () => {
+        document.querySelectorAll('.quick-filter-btn').forEach(b => b.classList.remove('active'));
+        cargarLimboInbox();
+    });
+    document.getElementById('filtroFechaHasta').addEventListener('change', () => {
+        document.querySelectorAll('.quick-filter-btn').forEach(b => b.classList.remove('active'));
+        cargarLimboInbox();
+    });
+    document.querySelectorAll('.quick-filter-btn[data-rango-dias]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.quick-filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            aplicarRangoDias(parseInt(btn.dataset.rangoDias, 10));
+            cargarLimboInbox();
+        });
+    });
+
+    aplicarRangoDias(90);
     cargarLimboInbox();
 });
 </script>

@@ -1,5 +1,29 @@
 # Plan — App móvil interna de staff ("NEXO Móvil")
 
+> **v0.3 (2026-07-25 noche, 2ª tanda)**: **código del hotel implementado de punta
+> a punta** y app **responsiva**.
+> - *Backend hotel* (`Sistema-Gestion-Hotelera-Django`, sin commit): modelo
+>   `CodigoAccesoStaff` + migración `0106` escrita a mano (**sin aplicar**) +
+>   `GET /api/v1/staff/codigo-acceso/actual/` restringido a Administrador/Maestro.
+>   Mismo contrato JSON que NEXO, así que la app lo pinta con la misma tarjeta.
+>   Su `validar_codigo()` **sí acepta acotar por usuario** — corrige de entrada el
+>   defecto de RetailMind donde cualquier código sirve para cualquier operación.
+> - *App*: tarjeta de código generalizada (`FuenteCodigo`) → NEXO y hotel usan el
+>   mismo widget; el del hotel aparece solo si está conectado.
+> - *Responsive*: `core/responsive.dart` (breakpoints + `ContenidoCentrado`),
+>   dígitos del código calculados por `LayoutBuilder`, KPIs en `Wrap`, textos con
+>   `ellipsis`, todas las orientaciones habilitadas y tope de escala de letra a
+>   1.4. **20 tests PASS**, incluidos 5 de layout en 320px → tablet apaisada.
+> - *AllConnected*: **bloqueado**, requiere autorización explícita (ver Anexo C.3).
+>
+> **v0.2 (2026-07-25 noche)**: app **rediseñada y multi-sistema**. Navegación de
+> 4 pestañas (Inicio · Sistemas · Stock · Cuenta), código de autorización con
+> cuenta regresiva real y "generar otro" (es de un solo uso), ajuste de stock
+> con entrada/salida + motivo en chips + cantidad con botones. **Hotel conectado**
+> (login por PIN al correo, sesión propia, KPIs del día) — ver Anexo C.
+> `flutter analyze` limpio, 13 tests PASS, APK compilado. 16 hallazgos de una
+> segunda revisión adversarial (23 agentes) aplicados.
+>
 > Fecha: 2026-07-25. Estado: **v0.1 IMPLEMENTADA** (2026-07-25 tarde) — proyecto
 > `DjangoProyects/appNexoStaff` creado (login staff + código autorización + ajuste
 > stock con escáner pendiente), `flutter analyze` limpio, tests PASS, APK debug
@@ -272,6 +296,99 @@ Reglas a respetar (las mismas de siempre):
 | Historial / multi-conversación del asistente + feedback | consulta | bajo | medio | `assistant/views.py:api_history`, `api_new_conversation`, `api_feedback` |
 | Panel antifraude cambios/devoluciones (dueño) | consulta | medio | medio | `services/fraud_detection.py:obtener_analisis_avanzado` (servicio puro) |
 | **Push al celular** (alerta CRÍTICA, DTE, precio por aprobar) | operación | alto | alto | Generadores ya existen (`evaluar_alertas_pendientes` cron, `signals.py`); falta canal FCM staff (1 migración) — convierte todo lo anterior de "entrar a mirar" a tiempo real |
+
+## Anexo C — Multi-sistema: hotel y AllConnected (2026-07-25)
+
+> Pedido del usuario: que el "código/login" también funcione en la app para el
+> **sistema de hotel** y **AllConnected**. Investigado con 3 agentes sobre los
+> tres backends. Conclusión corta: **el código dinámico de NEXO no sirve como
+> login** (ver C.1); el **hotel sí se puede conectar hoy** (ya implementado);
+> **AllConnected requiere trabajo de backend** antes de que cualquier app lo use.
+
+### C.1 El código dinámico NO es una credencial de login (importante)
+
+`CodigoAutorizacionDinamico` ([models/permisos.py:626](../retailmind/app/models/permisos.py))
+es un código de **autorización dentro del POS ya autenticado**, no de acceso:
+
+- **No tiene destinatario ni sistema**: sus campos son `codigo`, ventana horaria,
+  `usado`, `activo`, `tipo_codigo`, `generado_por`. No hay usuario destino, ni
+  empresa, ni sucursal, ni aplicación.
+- **Validación global**: `validar_codigo()` acepta *cualquier* código vigente de
+  *cualquier* supervisor, sin comprobar para qué operación es. Compartirlo entre
+  sistemas ampliaría la superficie de ataque sobre un espacio de solo 10⁶.
+- **Un solo uso**: el primer sistema que lo valide lo quema para los demás — el
+  POS se quedaría sin su código.
+
+Si alguna vez se quiere un "login por código" propio, el molde correcto ya existe
+en el mismo repo: `CodigoOTPCliente` (hash SHA256 en BD, expiración, intentos) +
+`RefreshTokenClienteApp` con rotación, de la app de fidelización.
+
+### C.2 Hotel (HotelInn) — **conectado en la app** ✅
+
+Backend vivo: `DjangoProyects/Sistema-Gestion-Hotelera-Django` (proyecto
+`vicentHotelSystem`; las otras carpetas `hotelwebapp*` están muertas o son
+clientes). Ya tiene **API móvil madura**: DRF + SimpleJWT, 49 rutas bajo
+`/api/v1/`, contrato OpenAPI en `/api/v1/docs/`.
+
+| Punto | Detalle |
+|---|---|
+| Login | **Passwordless**: `POST auth/login/ {email}` → PIN de 6 dígitos al correo (10 min) → `POST auth/verify-pin/ {email,pin}` → `{tokens:{access,refresh}, user, permisos, app_role}` |
+| Refresh | `POST auth/refresh/ {refresh}` → `{access, refresh}` (SimpleJWT, rota) |
+| Contenido | `GET staff/dashboard/` → ocupación, check-ins/outs del día, habitaciones sucias |
+| Identidad | **Separada de NEXO**: otra base de datos (cluster propio) y otro modelo de usuario (`auth.User` vs `users.Usuario`). No hay SSO — son dos sesiones distintas en la app |
+| Código dinámico | **No existe** en el hotel. Sus PIN son todos *push* (llegan por correo/WhatsApp), ninguno es consultable |
+
+**Implementado en la app**: tarjeta "Hotel" en la pestaña Sistemas → conectar con
+correo + PIN → sesión propia guardada aparte → KPIs del día. Cero cambios de backend.
+
+Si más adelante se quiere un código dinámico del hotel, falta: modelo emisor +
+`GET /api/v1/staff/codigo-autorizacion/actual/` + migración + aceptar ese código
+en el gate de check-in.
+
+### C.2.b Código del hotel — **implementado** (2026-07-25)
+
+Ya no hace falta esperar: se creó el emisor en el repo del hotel.
+
+| Pieza | Detalle |
+|---|---|
+| Modelo | `CodigoAccesoStaff` en `app/models.py` (tabla `codigo_acceso_staff`): 6 dígitos con `secrets`, ventana de 1 hora, un solo uso, ligado al usuario |
+| Migración | `app/migrations/0106_codigo_acceso_staff.py` — **escrita a mano y SIN aplicar** |
+| Endpoint | `GET /api/v1/staff/codigo-acceso/actual/` — `IsRealStaffUser` + superuser/Administrador/Maestro |
+| Contrato | Idéntico al de NEXO → la app reutiliza el mismo parser y la misma tarjeta |
+
+`validar_codigo(codigo, usuario=None)` permite acotar la validación al dueño del
+código; el gate de check-in del hotel **no se tocó** (queda como paso siguiente
+opcional: aceptar el código como tercer `auth_modo`).
+
+⚠️ La configuración local del repo del hotel apunta a la **BD de producción**:
+revisar `sqlmigrate` antes de aplicar la 0106.
+
+### C.3 AllConnected — bloqueado por backend ⛔
+
+`VicentAllEcommercesConected` es **100% web con sesión por cookie + CSRF**:
+
+- `djangorestframework` está en `requirements.txt` y hay un bloque
+  `REST_FRAMEWORK` en settings, pero **`rest_framework` no está en
+  `INSTALLED_APPS`** — configuración muerta, no hay ni un `@api_view` real.
+- **No hay `simplejwt` ni `corsheaders`**. Sus ~400 "endpoints api/" son FBV con
+  `JsonResponse` y `@login_required`.
+- Sí existe `EmailPin` (6 dígitos, hash SHA-256, TTL 5 min) y
+  `POST /api/auth/pin/verify/`, pero **crea sesión Django**, no devuelve tokens.
+- Con RetailMind se autentica por **API key estática compartida**
+  (`Authorization: Bearer {RETAILMIND_API_KEY}` saliente,
+  `X-AllConnected-Key` entrante) — sirve para máquinas, no como identidad de una
+  persona en la app.
+
+Para conectarlo haría falta: activar DRF, agregar `simplejwt` + `corsheaders`,
+publicar un login móvil (reutilizando `email_pin_service.verify_pin()`, que ya
+valida el PIN y devuelve el `user`) y, si se quiere código dinámico, un modelo
+nuevo. **Requiere aprobación**: son dependencias nuevas en otro repo.
+
+> ⚠️ **Hallazgo de seguridad al pasar** (AllConnected, no es de esta app):
+> `system/api_views.py:13970 pedidos_kpis_api` y `:13554 productos_sin_enlazar_api`
+> están montados públicamente **sin `@login_required`** (solo
+> `@require_http_methods(["GET"])`), y no hay middleware que fuerce login.
+> Conviene cerrarlos.
 
 ## Anexo B — Módulo "Verificador de Etiquetas" (pedido 2026-07-25)
 

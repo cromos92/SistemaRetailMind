@@ -7,16 +7,19 @@
 <div class="page-content">
     <div class="container-fluid">
 
-        <!-- Header -->
-        <div class="row mb-3">
-            <div class="col">
-                <h1 class="display-6 mb-1 fw-bold">
+        <!-- Header compacto (1366x768: el display-6 empujaba los KPI fuera de vista).
+             Se quitó "género" de la descripción: ese atributo no está poblado y su
+             columna se eliminó de la tabla. -->
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-2 mb-2">
+            <div>
+                <h4 class="mb-0 fw-bold lh-1">
                     <i class="ri-shopping-bag-line text-primary"></i> Productos Vendidos
-                </h1>
-                <p class="text-muted mb-0">
-                    Análisis de productos vendidos por sucursal con filtros por marca, categoría, sexo, género,
-                    temporada y rango de precio. Incluye unidades, monto, margen y heatmap.
-                </p>
+                </h4>
+                <small class="text-muted">
+                    Ranking por unidades, monto y margen · unidades netas de devoluciones ·
+                    montos con IVA · filtros por marca, categoría, género, especialidad,
+                    temporada y precio · heatmap por sucursal
+                </small>
             </div>
         </div>
 
@@ -150,6 +153,10 @@
             </div>
         </div>
 
+        <!-- Alcance de los indicadores (se puebla al consultar, con lo que
+             realmente informó el backend: stock_alcance y criterio_monto). -->
+        <div class="aviso-alcance mb-2" id="avisoAlcance" style="display:none"></div>
+
         <!-- KPIs -->
         <div class="row g-2 mb-3">
             <div class="col-6 col-md-3">
@@ -157,7 +164,7 @@
                     <div class="card-body py-3">
                         <div class="kpi-label"><i class="ri-shopping-bag-line text-primary"></i> Unidades</div>
                         <div class="kpi-main" id="kpiUnidades">0</div>
-                        <div class="kpi-sub" title="Vendido ÷ (vendido + stock actual) del universo filtrado · Cobertura = stock ÷ velocidad del período">Sell-through: <span id="kpiSellThrough">0%</span> · Cob: <span id="kpiCobertura">—</span> · Devol: <span id="kpiDevoluciones" title="Unidades devueltas por clientes (ya restadas del total)">0</span></div>
+                        <div class="kpi-sub" title="Sell-through: vendido ÷ (vendido + stock actual), ambos en el mismo alcance del reporte (la sucursal filtrada, o toda la cadena si no filtraste) · Cobertura: días para agotar ese stock a la velocidad de venta del período">Sell-through: <span id="kpiSellThrough">0%</span> · Cob: <span id="kpiCobertura">—</span> · Devol: <span id="kpiDevoluciones" title="Unidades devueltas por clientes (ya restadas del total)">0</span></div>
                     </div>
                 </div>
             </div>
@@ -266,19 +273,21 @@
                                                 <th>Descripción</th>
                                                 <th>Marca</th>
                                                 <th>Categoría</th>
-                                                <th>Género</th>
+                                                <!-- Antes había DOS columnas "Género": esta (atributo3,
+                                                     poblada) y otra sobre atributo4, que en este catálogo
+                                                     está vacío y salía "-" en todas las filas. Se eliminó. -->
                                                 <th>Género</th>
                                                 <th class="text-end" title="Unidades vendidas netas de devoluciones">Unidades</th>
                                                 <th class="text-center" title="Unidades devueltas por clientes en el período (ya restadas de Unidades)">Devol.</th>
-                                                <th class="text-end">Monto</th>
-                                                <th class="text-end">Margen $</th>
+                                                <th class="text-end" title="Monto vendido con IVA, neto de devoluciones">Monto</th>
+                                                <th class="text-end" title="Monto vendido con IVA menos el costo de las unidades vendidas">Margen $</th>
                                                 <th class="text-center">Margen %</th>
                                                 <th class="text-center">Docs</th>
                                                 <th class="text-center">Sucs.</th>
                                                 <th class="text-center">% Partic.</th>
-                                                <th class="text-end" title="Stock actual del producto en toda la cadena">Stock</th>
-                                                <th class="text-center" title="Vendido ÷ (vendido + stock actual)">Sell-Thr.</th>
-                                                <th class="text-center" title="Días para agotar el stock a la velocidad del período">Cob. (d)</th>
+                                                <th class="text-end" title="Stock actual del producto en el alcance del reporte: la sucursal filtrada, o toda la cadena si no hay filtro de sucursal.">Stock</th>
+                                                <th class="text-center" title="Vendido ÷ (vendido + stock actual). Numerador y denominador viven en el mismo alcance: si filtras por una tienda, el stock es el de esa tienda.">Sell-Thr.</th>
+                                                <th class="text-center" title="Días para agotar el stock actual a la velocidad de venta del período, en el mismo alcance del reporte.">Cob. (d)</th>
                                             </tr>
                                         </thead>
                                         <tbody></tbody>
@@ -474,6 +483,23 @@
 #tablaProductos td, #tablaMarcas td, #tablaCategorias td { font-size: .78rem; }
 #tablaProductos th { font-size: .75rem; white-space: nowrap; }
 
+/* Alcance de los indicadores: qué universo cubren las cifras. Ya no es una
+   advertencia (el stock y el monto se calculan bien), así que va en gris
+   informativo en vez del ámbar de alerta. */
+.aviso-alcance {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: .74rem;
+    line-height: 1.35;
+    color: #495057;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+.aviso-alcance i { font-size: 1rem; color: #4154f1; flex-shrink: 0; margin-top: 1px; }
+
 /* Heatmap cells */
 .heatmap-table { font-size: .75rem; }
 .heatmap-table th { background: #f8f9fa; text-align: center; padding: .4rem .3rem; font-weight: 600; white-space: nowrap; }
@@ -654,7 +680,49 @@
             `<i class="ri-calendar-line"></i> Periodo: <strong>${p.inicio}</strong> al <strong>${p.fin}</strong>`;
     }
 
+    // Alcance de los indicadores. Se arma con lo que el backend informa
+    // (`stock_alcance` y `criterio_monto`) y no con lo que esté elegido en el
+    // filtro: el usuario puede pedir una sucursal que no tiene permitida y
+    // quedar acotado a otra, y el texto debe describir lo que realmente se
+    // calculó.
+    function actualizarAvisoAlcance(k) {
+        const cont = document.getElementById('avisoAlcance');
+        if (!cont) return;
+        const avisos = [];
+
+        if ((k || {}).stock_alcance === 'sucursal') {
+            const suc = document.getElementById('filtroSucursal');
+            const nombre = (suc && suc.options[suc.selectedIndex])
+                ? suc.options[suc.selectedIndex].text : 'la sucursal activa';
+            avisos.push(
+                `<strong>Alcance: ${escapeHtml(nombre)}.</strong> Ventas, Stock, Sell-through y ` +
+                'Cobertura corresponden a esa sucursal: el stock del resto de la cadena no entra en el cálculo.'
+            );
+        } else {
+            avisos.push(
+                '<strong>Alcance: toda la cadena.</strong> Ventas, Stock, Sell-through y Cobertura ' +
+                'incluyen todas las sucursales y bodegas. Filtra por sucursal para ver el sell-through de una tienda.'
+            );
+        }
+
+        if ((k || {}).criterio_monto === 'CON_IVA') {
+            avisos.push(
+                '<strong>Montos con IVA.</strong> Las facturas que se guardan en neto se llevan a valor ' +
+                'con IVA usando el impuesto de su propio documento, para que se puedan comparar con boletas y tickets.'
+            );
+        }
+
+        avisos.push(
+            '<strong>Unidades y montos netos de devoluciones:</strong> lo que el cliente devolvió en el ' +
+            'período ya viene descontado (la columna <em>Devol.</em> muestra cuánto se descontó).'
+        );
+
+        cont.innerHTML = '<i class="ri-information-line"></i><div>' + avisos.join('<br>') + '</div>';
+        cont.style.display = 'flex';
+    }
+
     function renderKPIs(k) {
+        actualizarAvisoAlcance(k);
         document.getElementById('kpiUnidades').textContent = fmtNum(k.total_unidades);
         document.getElementById('kpiDevoluciones').textContent = fmtNum(k.total_devoluciones_unid || 0);
         document.getElementById('kpiMonto').textContent = fmtMoney(k.total_monto);
@@ -675,7 +743,7 @@
         document.getElementById('countProductosTotal').textContent = total || 0;
         const tb = document.querySelector('#tablaProductos tbody');
         if (!rows || !rows.length) {
-            tb.innerHTML = '<tr><td colspan="18" class="text-center text-muted py-4">Sin productos para los filtros seleccionados</td></tr>';
+            tb.innerHTML = '<tr><td colspan="17" class="text-center text-muted py-4">Sin productos para los filtros seleccionados</td></tr>';
             return;
         }
         tb.innerHTML = rows.map((r, i) => `
@@ -686,7 +754,6 @@
                 <td>${escapeHtml(r.marca)}</td>
                 <td>${escapeHtml(r.categoria)}</td>
                 <td>${escapeHtml(r.sexo)}</td>
-                <td>${escapeHtml(r.genero)}</td>
                 <td class="text-end fw-semibold" title="${(r.unidades_devueltas || 0) > 0 ? 'Bruto: ' + fmtNum(r.unidades_brutas) + ' − ' + fmtNum(r.unidades_devueltas) + ' devueltas' : ''}">${fmtNum(r.unidades)}</td>
                 <td class="text-center ${(r.unidades_devueltas || 0) > 0 ? 'text-danger' : 'text-muted'}">${(r.unidades_devueltas || 0) > 0 ? '−' + fmtNum(r.unidades_devueltas) : '—'}</td>
                 <td class="text-end">${fmtMoney(r.monto)}</td>

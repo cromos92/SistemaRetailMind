@@ -9,9 +9,37 @@ de incluirlo: productosProblemas (array), tabActual (string).
 
 {% csrf_token %}
 
+<style>
+    /* Los modales de regularización se usan en PC de 15" (1366x768): con
+       modal-dialog-scrollable el pie con el botón de confirmar queda siempre
+       visible en vez de caer bajo el pliegue. */
+    #modalRegularizar .modal-body,
+    #modalRegularizarDTE .modal-body { scrollbar-width: thin; }
+
+    .reg-leyenda-item {
+        border-left: 3px solid #dee2e6;
+        padding: 2px 0 2px 10px;
+        font-size: 12.5px;
+        line-height: 1.35;
+    }
+
+    .reg-leyenda-nc { border-left-color: #0ab39c; }
+    .reg-leyenda-cambio { border-left-color: #405189; }
+    .reg-leyenda-ajuste { border-left-color: #ffb020; }
+    .reg-leyenda-encontrada { border-left-color: #0dcaf0; }
+
+    @media (min-width: 1024px) and (max-width: 1440px) {
+        #modalRegularizarDTE .table th,
+        #modalRegularizarDTE .table td { font-size: 11.5px; padding: 5px 4px; }
+        #modalRegularizar .card-body { padding: 12px; }
+        #modalRegularizar .alert { padding: 8px 12px; }
+        #modalRegularizar .btn-group .btn { font-size: 12.5px; }
+    }
+</style>
+
 <!-- Modal Regularizar DTE Completo (NC masiva con 1 sola NC y N líneas) -->
 <div class="modal fade" id="modalRegularizarDTE" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <div>
@@ -44,11 +72,11 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                         <th>Producto</th>
                                         <th>SKU</th>
                                         <th class="text-center">Talla</th>
-                                        <th class="text-center">Esperado</th>
-                                        <th class="text-center">Recibido</th>
-                                        <th class="text-center">Faltante</th>
-                                        <th class="text-center">Dañado</th>
-                                        <th class="text-center">A Acreditar</th>
+                                        <th class="text-center" title="Unidades documentadas en el DTE">Esperado</th>
+                                        <th class="text-center" title="Unidades que sí ingresaron al stock del destino">Recibido</th>
+                                        <th class="text-center" title="Unidades que nunca llegaron">Faltante</th>
+                                        <th class="text-center" title="Unidades que llegaron en mal estado">Dañado</th>
+                                        <th class="text-center" title="Unidades que se acreditan en la NC y vuelven al stock del origen">A Acreditar</th>
                                         <th class="text-end">Precio Unit.</th>
                                         <th class="text-end">Subtotal</th>
                                     </tr>
@@ -87,13 +115,20 @@ de incluirlo: productosProblemas (array), tabActual (string).
                     <textarea id="motivoNCMasiva" class="form-control" rows="2" placeholder="Ej: Productos no llegaron completos al destino"></textarea>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="bi bi-x-circle me-1"></i>Cancelar
-                </button>
-                <button type="button" class="btn btn-success" id="btnProcesarDTE">
-                    <i class="bi bi-check-circle me-1"></i>Generar NC y Regularizar
-                </button>
+            <div class="modal-footer justify-content-between">
+                <small class="text-muted text-start">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Se emite <strong>una sola NC</strong> con todas las líneas seleccionadas y el stock acreditado
+                    vuelve a la bodega de origen.
+                </small>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle me-1"></i>Cancelar
+                    </button>
+                    <button type="button" class="btn btn-success" id="btnProcesarDTE">
+                        <i class="bi bi-check-circle me-1"></i>Generar NC y Regularizar
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -101,12 +136,15 @@ de incluirlo: productosProblemas (array), tabActual (string).
 
 <!-- Modal Regularizar Producto -->
 <div class="modal fade" id="modalRegularizar" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title">
-                    <i class="ri-settings-3-line me-2"></i> Regularizar Producto
-                </h5>
+                <div>
+                    <h5 class="modal-title mb-0">
+                        <i class="ri-settings-3-line me-2"></i> Regularizar Producto
+                    </h5>
+                    <small>Paso 4 del proceso: cerrar la diferencia detectada al recepcionar</small>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -145,7 +183,49 @@ de incluirlo: productosProblemas (array), tabActual (string).
 
                 <!-- Opciones de Regularización -->
                 <div class="mb-3" id="opcionesRegularizacion">
-                    <label class="form-label fw-bold">¿Qué solución solicitas?</label>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label fw-bold mb-1">¿Qué solución solicitas?</label>
+                        <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none"
+                                data-bs-toggle="collapse" data-bs-target="#leyendaOpcionesRegularizar">
+                            <i class="bi bi-question-circle me-1"></i>¿Qué hace cada opción?
+                        </button>
+                    </div>
+                    <div class="collapse mb-2" id="leyendaOpcionesRegularizar">
+                        <div class="card border-0" style="background:#f5f5f7;">
+                            <div class="card-body py-2">
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <div class="reg-leyenda-item reg-leyenda-nc">
+                                            <strong class="d-block">Nota de Crédito</strong>
+                                            Corrige el documento y devuelve el stock a la bodega de origen.
+                                            Solo aplica a facturas (las guías no llevan NC).
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="reg-leyenda-item reg-leyenda-cambio">
+                                            <strong class="d-block">Producto de cambio</strong>
+                                            El emisor despacha un reemplazo. Genera un documento nuevo que
+                                            tendrás que recepcionar igual que cualquier traspaso.
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="reg-leyenda-item reg-leyenda-ajuste">
+                                            <strong class="d-block">Ajuste interno (guías)</strong>
+                                            Sin documento tributario: la diferencia vuelve al stock del origen
+                                            y la línea se cierra.
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="reg-leyenda-item reg-leyenda-encontrada">
+                                            <strong class="d-block">Mercadería encontrada</strong>
+                                            Apareció después. Se ingresa a tu stock y la línea se cierra sin
+                                            afectar al origen.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="btn-group w-100" role="group" id="botonesRegularizacion">
                         <!-- Se llenará dinámicamente según el tipo de traspaso -->
                     </div>

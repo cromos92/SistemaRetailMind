@@ -264,18 +264,52 @@ def _get_session_sucursal(request):
 def _verificar_api_key(request):
     """
     Verifica que la solicitud tenga un API key válida.
-    Acepta header 'X-RetailMind-Key' o query param 'api_key'.
-    Compara contra la variable de entorno RETAILMIND_API_KEY.
+
+    Reglas (endurecidas 2026-07-26 — ver docs/SEGURIDAD_URGENTE_2026-07-25.md §4.2):
+
+    * **Falla cerrado**: si ``RETAILMIND_API_KEY`` no está configurada, se
+      RECHAZA. Antes devolvía ``True``, dejando abiertos endpoints
+      ``@csrf_exempt`` y sin login que crean tickets y queman folios del SII.
+    * **Solo por header** ``X-RetailMind-Key`` (que es lo que usa AllConnected).
+      El query param ``?api_key=`` queda desactivado porque la clave termina en
+      logs de acceso, proxies e historial. Si algún integrador legacy todavía la
+      manda así, se puede reactivar temporalmente con la variable de entorno
+      ``ECOMMERCE_API_KEY_ALLOW_QUERYSTRING=true`` (deja WARNING en el log).
+    * Comparación con ``hmac.compare_digest`` (tiempo constante).
     """
+    import hmac
+    import os
+
     from django.conf import settings
-    api_key_esperada = getattr(settings, 'RETAILMIND_API_KEY', None)
+
+    api_key_esperada = getattr(settings, 'RETAILMIND_API_KEY', None) or ''
     if not api_key_esperada:
-        return True  # Si no está configurada, no bloquear (compatibilidad)
-    api_key_recibida = (
-        request.headers.get('X-RetailMind-Key')
-        or request.GET.get('api_key', '')
-    )
-    return api_key_recibida == api_key_esperada
+        logger.error(
+            'RETAILMIND_API_KEY no está configurada: se rechaza la petición a %s. '
+            'Configurar la variable de entorno para habilitar la API de ecommerce.',
+            request.path,
+        )
+        return False
+
+    api_key_recibida = request.headers.get('X-RetailMind-Key') or ''
+
+    if not api_key_recibida:
+        permitir_qs = os.environ.get(
+            'ECOMMERCE_API_KEY_ALLOW_QUERYSTRING', ''
+        ).strip().lower() in ('1', 'true', 'yes', 'si', 'sí')
+        if permitir_qs:
+            api_key_recibida = request.GET.get('api_key', '') or ''
+            if api_key_recibida:
+                logger.warning(
+                    'API key recibida por query string en %s (modo compatibilidad). '
+                    'Migrar el integrador al header X-RetailMind-Key.',
+                    request.path,
+                )
+
+    if not api_key_recibida:
+        return False
+
+    return hmac.compare_digest(str(api_key_recibida), str(api_key_esperada))
 
 
 def _generar_numero_ticket_rm():
@@ -728,6 +762,230 @@ def traer_pedidos_allconnected(request):
 
 
 # ---------------------------------------------------------------------------
+# Scoping y filtros compartidos (listado, KPIs, paneles y export CSV)
+# ---------------------------------------------------------------------------
+
+def _scope_empresa_pedidos(qs, user):
+    """Acota un queryset de PedidoEcommerce a las empresas del usuario.
+
+    Los administradores (y quienes tienen el flag de "ver todas las sucursales")
+    ven todo. El resto ve los pedidos de **todas** sus empresas asignadas vía
+    ``EmpresaUser(status=True)``, más los que llegaron sin RUT (legacy).
+
+    Antes se resolvía con un ``EmpresaUser.objects.filter(user=user).first()``
+    sin ``status`` ni ``order_by``: para los 8 usuarios que tienen más de una
+    empresa asignada, la empresa elegida era arbitraria (podía incluso ser una
+    con ``status=False``), así que veían los pedidos de una sola de sus empresas
+    y no siempre la misma.
+    """
+    if getattr(user, 'rol', '') == 'administrador':
+        return qs
+    try:
+        from app.models import EmpresaUser, PermisoUsuario
+        if PermisoUsuario.usuario_ve_todas_sucursales(user):
+            return qs
+
+        ruts = [
+            r for r in EmpresaUser.objects.filter(user=user, status=True)
+            .values_list('empresa__rut', flat=True).distinct()
+            if r
+        ]
+        if ruts:
+            qs = qs.filter(
+                django_models.Q(rut_empresa__in=ruts)
+                | django_models.Q(rut_empresa='')
+            )
+        else:
+            logger.warning(
+                'Usuario %s no tiene ninguna empresa activa (EmpresaUser status=True): '
+                'no se pudo acotar el listado de pedidos ecommerce.', user,
+            )
+    except Exception:  # pragma: no cover - defensivo, no debe tumbar la pantalla
+        logger.exception('No se pudo aplicar el scope de empresa a pedidos ecommerce')
+    return qs
+
+
+def _scope_sucursal_pedidos(qs, request):
+    """Aplica el filtro de sucursal: explícita, por defecto la de sesión, o todas."""
+    sucursal_id = request.GET.get('sucursal_id', '')
+    ver_todas = request.GET.get('ver_todas', '')
+    if sucursal_id:
+        return qs.filter(sucursal_id=sucursal_id)
+    if not ver_todas:
+        session_suc = (
+            request.session.get('idSucursalActual')
+            or request.session.get('sucursalActual')
+        )
+        if session_suc:
+            return qs.filter(sucursal_id=session_suc)
+    return qs
+
+
+# Condición de "boleta emitida con la cabecera en cero": el DTE existe, pero el
+# header quedó con 0 unidades y/o $0 aunque las líneas sí tengan datos. Son las
+# boletas que salen del cuadre y que el SII recibe en 0 unidades.
+# Ver `python manage.py diagnostico_pedidos_cantidad` (solo lectura) y
+# docs/RESUMEN_AUDITORIA_ERP_2026-07-25.md.
+_Q_DTE_CABECERA_CERO = (
+    django_models.Q(dte__unidades_productos=0)
+    | django_models.Q(dte__unidades_productos__isnull=True)
+    | django_models.Q(dte__monto_con_iva=0)
+    | django_models.Q(dte__monto_con_iva__isnull=True)
+)
+
+
+def _filtrar_pedidos_dte_cero(qs):
+    """Pedidos FACTURADOS cuyo DTE quedó con unidades y/o monto en 0 en la cabecera."""
+    return qs.filter(estado='FACTURADO', dte__isnull=False).filter(_Q_DTE_CABECERA_CERO)
+
+
+def _parse_fecha_param(valor):
+    """'YYYY-MM-DD' → date, o None si viene vacío/ inválido."""
+    valor = (valor or '').strip()
+    if not valor:
+        return None
+    from datetime import datetime as _dt
+    try:
+        return _dt.strptime(valor, '%Y-%m-%d').date()
+    except ValueError:
+        return None
+
+
+def _aplicar_filtros_pedidos(qs, params):
+    """Filtros de negocio del listado (compartidos con el export CSV).
+
+    ``params`` es un ``QueryDict``/dict con: estado, canal, sub_estado, q,
+    desde, hasta (por ``fecha_recepcion``) y problema (``dte_cero``).
+    """
+    estado = params.get('estado', '')
+    if estado:
+        qs = qs.filter(estado=estado)
+
+    canal = params.get('canal', '')
+    if canal:
+        qs = qs.filter(canal_origen=canal)
+
+    sub_estado = params.get('sub_estado', '')
+    if sub_estado:
+        qs = qs.filter(sub_estado=sub_estado)
+
+    desde = _parse_fecha_param(params.get('desde', ''))
+    if desde:
+        qs = qs.filter(fecha_recepcion__date__gte=desde)
+    hasta = _parse_fecha_param(params.get('hasta', ''))
+    if hasta:
+        qs = qs.filter(fecha_recepcion__date__lte=hasta)
+
+    if params.get('problema', '') == 'dte_cero':
+        qs = _filtrar_pedidos_dte_cero(qs)
+
+    q = (params.get('q', '') or '').strip()
+    if q:
+        qs = qs.filter(
+            django_models.Q(numero_ticket_rm__icontains=q)
+            | django_models.Q(numero_pedido_canal__icontains=q)
+            | django_models.Q(numero_pedido_origen__icontains=q)
+            | django_models.Q(correlativo__icontains=q)
+            | django_models.Q(cliente_nombre__icontains=q)
+            | django_models.Q(cliente_documento__icontains=q)
+        )
+    return qs
+
+
+def _panel_estado_sincronizacion(qs_empresa):
+    """Estado de la sincronización con el hub (AllConnected), solo lectura.
+
+    Devuelve un dict con:
+      - ``configurado`` / ``host``: si el pull está habilitado y contra quién.
+      - ``canales``: una fila por canal con pedidos de 24 h / 7 d, último
+        recibido, pendientes y errores de las últimas 24 h.
+      - ``errores``: los pedidos con error de las últimas 24 h (máx. 15).
+      - ``total_errores_24h`` / ``recibidos_24h`` / ``ultimo_global``.
+
+    Cuesta 2 consultas agregadas sobre el mismo scope de empresa del listado.
+    """
+    from datetime import timedelta
+
+    from django.conf import settings
+    from django.db.models import Count, Max
+
+    ahora = timezone.now()
+    hace_24h = ahora - timedelta(hours=24)
+    hace_7d = ahora - timedelta(days=7)
+
+    base_url = (getattr(settings, 'ALLCONNECTED_API_BASE_URL', '') or '').strip()
+    host = ''
+    if base_url:
+        try:
+            from urllib.parse import urlparse
+            host = urlparse(base_url).netloc or base_url
+        except Exception:  # pragma: no cover
+            host = base_url
+
+    filas = list(
+        qs_empresa.values('canal_origen')
+        .annotate(
+            recibidos_24h=Count('id', filter=django_models.Q(fecha_recepcion__gte=hace_24h)),
+            recibidos_7d=Count('id', filter=django_models.Q(fecha_recepcion__gte=hace_7d)),
+            pendientes=Count('id', filter=django_models.Q(estado='PENDIENTE')),
+            errores_24h=Count(
+                'id',
+                filter=django_models.Q(estado='ERROR', fecha_recepcion__gte=hace_24h),
+            ),
+            ultimo=Max('fecha_recepcion'),
+        )
+        .order_by('canal_origen')
+    )
+
+    canales = []
+    for fila in filas:
+        ultimo = fila['ultimo']
+        horas = None
+        if ultimo:
+            horas = (ahora - ultimo).total_seconds() / 3600.0
+        if fila['errores_24h']:
+            estado_salud = 'error'
+        elif horas is None or horas > 48:
+            estado_salud = 'inactivo'
+        elif horas > 24:
+            estado_salud = 'atrasado'
+        else:
+            estado_salud = 'ok'
+        canales.append({
+            'canal': fila['canal_origen'],
+            'recibidos_24h': fila['recibidos_24h'],
+            'recibidos_7d': fila['recibidos_7d'],
+            'pendientes': fila['pendientes'],
+            'errores_24h': fila['errores_24h'],
+            'ultimo': ultimo,
+            'horas_desde_ultimo': round(horas, 1) if horas is not None else None,
+            'estado_salud': estado_salud,
+        })
+
+    errores = list(
+        qs_empresa.filter(fecha_recepcion__gte=hace_24h)
+        .filter(django_models.Q(estado='ERROR') | ~django_models.Q(error_detalle=''))
+        .only(
+            'id', 'numero_ticket_rm', 'numero_pedido_canal', 'canal_origen',
+            'estado', 'sub_estado', 'error_detalle', 'fecha_recepcion',
+        )
+        .order_by('-fecha_recepcion')[:15]
+    )
+
+    return {
+        'configurado': bool(base_url),
+        'host': host,
+        'canales': canales,
+        'errores': errores,
+        'total_errores_24h': sum(c['errores_24h'] for c in canales),
+        'recibidos_24h': sum(c['recibidos_24h'] for c in canales),
+        'ultimo_global': max(
+            (c['ultimo'] for c in canales if c['ultimo']), default=None,
+        ),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Vista de gestión — Operador lista y factura pedidos
 # ---------------------------------------------------------------------------
 
@@ -748,65 +1006,28 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
             return ['app/ecommerce/_pedidos_tabla.html']
         return [self.template_name]
 
+    def _scope_empresa(self, qs):
+        """Scope de empresa (sin sucursal). Lo usan los paneles transversales
+        (estado de sincronización y alerta de boletas en cero), que no deben
+        depender de la sucursal activa."""
+        return _scope_empresa_pedidos(qs, self.request.user)
+
     def _scope_empresa_sucursal(self, qs):
         """Aplica el scope de empresa del usuario + sucursal (sesión/explícita/'ver
         todas'). Compartido por el listado y por los KPIs (que cuentan sobre el
         mismo scope pero en todos los estados)."""
-        user = self.request.user
-        if getattr(user, 'rol', '') != 'administrador':
-            try:
-                from app.models import EmpresaUser
-                empresa_user = EmpresaUser.objects.filter(user=user).select_related('empresa__sucursales_app').first()
-                if empresa_user and empresa_user.empresa:
-                    rut_empresa_usuario = empresa_user.empresa.rut or ''
-                    if rut_empresa_usuario:
-                        qs = qs.filter(
-                            django_models.Q(rut_empresa=rut_empresa_usuario) | django_models.Q(rut_empresa='')
-                        )
-            except Exception:
-                pass
-
-        # Filtro de sucursal: explícito, por defecto sesión, o "todas"
-        sucursal_id = self.request.GET.get('sucursal_id', '')
-        ver_todas = self.request.GET.get('ver_todas', '')
-        if sucursal_id:
-            qs = qs.filter(sucursal_id=sucursal_id)
-        elif not ver_todas:
-            session_suc = (
-                self.request.session.get('idSucursalActual')
-                or self.request.session.get('sucursalActual')
-            )
-            if session_suc:
-                qs = qs.filter(sucursal_id=session_suc)
-        return qs
+        return _scope_sucursal_pedidos(self._scope_empresa(qs), self.request)
 
     def get_queryset(self):
         qs = PedidoEcommerce.objects.select_related('sucursal', 'ticket', 'ticket__sucursal', 'dte').order_by('-fecha_recepcion')
         qs = self._scope_empresa_sucursal(qs)
 
-        estado = self.request.GET.get('estado', 'PENDIENTE')
-        if estado:
-            qs = qs.filter(estado=estado)
-
-        canal = self.request.GET.get('canal', '')
-        if canal:
-            qs = qs.filter(canal_origen=canal)
-
-        sub_estado = self.request.GET.get('sub_estado', '')
-        if sub_estado:
-            qs = qs.filter(sub_estado=sub_estado)
-
-        q = self.request.GET.get('q', '').strip()
-        if q:
-            from django.db.models import Q
-            qs = qs.filter(
-                Q(numero_ticket_rm__icontains=q) |
-                Q(numero_pedido_canal__icontains=q) |
-                Q(correlativo__icontains=q) |
-                Q(cliente_nombre__icontains=q) |
-                Q(cliente_documento__icontains=q)
-            )
-        return qs
+        # `estado` conserva el default PENDIENTE del listado; el resto de los
+        # filtros son compartidos con el export CSV.
+        params = self.request.GET.copy()
+        if 'estado' not in self.request.GET:
+            params['estado'] = 'PENDIENTE'
+        return _aplicar_filtros_pedidos(qs, params)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -832,6 +1053,40 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
             context['kpi_facturados'] = agg['facturados'] or 0
             context['kpi_cancelados'] = agg['cancelados'] or 0
             context['kpi_monto_pendiente'] = agg['monto_pendiente'] or 0
+
+            # ── Panel: estado de la sincronización con AllConnected ──────────
+            # Solo lectura, sobre el scope de EMPRESA (no de sucursal): si el
+            # hub deja de mandar pedidos hay que verlo aunque el operador esté
+            # mirando una sola tienda.
+            qs_empresa = self._scope_empresa(PedidoEcommerce.objects.all())
+            try:
+                context['panel_sync'] = _panel_estado_sincronizacion(qs_empresa)
+            except Exception:  # pragma: no cover - el panel nunca tumba la pantalla
+                logger.exception('No se pudo construir el panel de sincronización ecommerce')
+                context['panel_sync'] = None
+
+            # ── Alerta: boletas emitidas con la cabecera en 0 ────────────────
+            # NO se corrige nada acá: se hacen visibles para que operaciones las
+            # revise (caso conocido de la auditoría 2026-07-25).
+            try:
+                # 1 sola consulta en el caso normal: se traen hasta TOPE filas y
+                # el total sale del len(). Solo si se llega al tope se paga un
+                # count() extra (la conexión es remota: cada query cuesta ~0,2 s).
+                TOPE_CERO = 200
+                qs_cero = (
+                    _filtrar_pedidos_dte_cero(qs_empresa)
+                    .select_related('dte', 'sucursal')
+                    .order_by('-fecha_facturacion', '-fecha_recepcion')
+                )
+                filas = list(qs_cero[:TOPE_CERO])
+                context['dte_cero_total'] = (
+                    len(filas) if len(filas) < TOPE_CERO else qs_cero.count()
+                )
+                context['dte_cero_pedidos'] = filas[:10]
+            except Exception:  # pragma: no cover
+                logger.exception('No se pudo calcular la alerta de boletas en cero')
+                context['dte_cero_total'] = 0
+                context['dte_cero_pedidos'] = []
         context['tipos_documento_choices'] = [
             ('BOLETA_ELECTRONICA', 'Boleta Electrónica'),
             ('BOLETA_PAPEL', 'Boleta Papel'),
@@ -853,6 +1108,22 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
         context['estado_filtro'] = self.request.GET.get('estado', 'PENDIENTE')
         context['canal_filtro'] = self.request.GET.get('canal', '')
         context['q'] = self.request.GET.get('q', '')
+        context['desde_filtro'] = self.request.GET.get('desde', '')
+        context['hasta_filtro'] = self.request.GET.get('hasta', '')
+        context['problema_filtro'] = self.request.GET.get('problema', '')
+
+        # ¿Hay algún filtro distinto del default? Lo usa el estado vacío de la
+        # tabla para distinguir "no hay nada" de "no hay nada CON ESTOS filtros".
+        context['filtros_activos'] = any([
+            context['canal_filtro'],
+            context['sub_estado_filtro'],
+            context['q'],
+            context['desde_filtro'],
+            context['hasta_filtro'],
+            context['problema_filtro'],
+            self.request.GET.get('sucursal_id', ''),
+            context['estado_filtro'] != 'PENDIENTE',
+        ])
 
         # Sucursal de sesión activa
         session_suc_id = str(
@@ -1909,6 +2180,14 @@ def descargar_txt_dte_ecommerce(request, dte_id):
     from django.http import HttpResponse
     from app.models import Dte
     from app.views_modulo_documentos import construir_datos_txt_desde_dte, generar_txt_dte_acepta
+
+    # Misma barrera mínima que el resto del módulo: la URL /app/ecommerce/dte/
+    # queda FUERA del mapa del middleware de permisos (que matchea por
+    # /app/ecommerce/pedidos/), así que sin esto bastaba estar logueado.
+    denegado = _verificar_permiso_ecommerce(request, 'puede_ver')
+    if denegado:
+        return denegado
+
     dte = get_object_or_404(
         Dte.objects.select_related('sucursal', 'emisor', 'receptor', 'vendedor'),
         id=dte_id,
@@ -1940,6 +2219,106 @@ def descargar_txt_dte_ecommerce(request, dte_id):
     except Exception as e:
         logger.error('Error regenerando TXT para DTE %s: %s', dte_id, e, exc_info=True)
         return HttpResponse(f'Error generando TXT: {e}', status=500, content_type='text/plain')
+
+
+@login_required
+def descargar_txts_zip_ecommerce(request):
+    """
+    GET /app/ecommerce/dte/txts-zip/?ids=1,2,3
+
+    Genera UN solo ZIP con los TXT Acepta de los DTEs indicados (mismo
+    generador canónico que la descarga individual). Motivo: la facturación
+    masiva disparaba una descarga por boleta y el navegador bloquea las
+    descargas automáticas después de la primera (permiso "Descargas
+    automáticas"), por lo que parte de los TXT nunca llegaba al disco del
+    operador ni, por tanto, a Acepta. Una descarga única no tiene ese problema.
+
+    Los DTEs que fallen al regenerar no rompen el ZIP: se listan en un
+    _ERRORES.txt dentro del archivo. BOLETA PAPEL se excluye (no genera TXT).
+    """
+    from django.http import HttpResponse
+    import io
+    import zipfile
+    from app.models import Dte
+    from app.views_modulo_documentos import construir_datos_txt_desde_dte, generar_txt_dte_acepta
+
+    denegado = _verificar_permiso_ecommerce(request, 'puede_ver')
+    if denegado:
+        return denegado
+
+    MAX_ZIP_DTES = 500
+    ids_raw = request.GET.get('ids', '')
+    try:
+        dte_ids = []
+        for trozo in ids_raw.split(','):
+            trozo = trozo.strip()
+            if not trozo:
+                continue
+            valor = int(trozo)
+            # Fuera del rango de BigAutoField: PostgreSQL lo rechazaría con un
+            # 500 no controlado en el id__in; mejor 400 igual que 'abc'.
+            if valor <= 0 or valor > 9223372036854775807:
+                raise ValueError(trozo)
+            dte_ids.append(valor)
+    except (ValueError, TypeError):
+        return HttpResponse('Parámetro ids inválido', status=400, content_type='text/plain')
+    if not dte_ids:
+        return HttpResponse('Indica al menos un DTE (?ids=1,2,3)', status=400, content_type='text/plain')
+
+    # Dedupe ANTES de la cota (ids repetidos no deben consumir cupo) y aviso
+    # explícito si se trunca: este endpoint existe para eliminar TXT perdidos
+    # en silencio, no puede reintroducirlos por la puerta de atrás.
+    dte_ids = list(dict.fromkeys(dte_ids))
+    omitidos = max(0, len(dte_ids) - MAX_ZIP_DTES)
+    dte_ids = dte_ids[:MAX_ZIP_DTES]
+
+    dtes = (
+        Dte.objects
+        .filter(id__in=dte_ids)
+        .exclude(tipo_documento='BOLETA PAPEL')
+        .select_related('sucursal', 'emisor', 'receptor', 'vendedor')
+    )
+
+    buffer = io.BytesIO()
+    errores = []
+    if omitidos:
+        logger.warning('ZIP TXT ecommerce: %s ids sobre la cota de %s — se omiten', omitidos, MAX_ZIP_DTES)
+        errores.append(
+            f'AVISO: se pidieron {len(dte_ids) + omitidos} DTEs pero este ZIP solo incluye '
+            f'los primeros {MAX_ZIP_DTES}. Los {omitidos} restantes NO están acá: '
+            f'descárgalos en otra tanda para no dejar boletas sin subir a Acepta.'
+        )
+    agregados = 0
+    nombres_usados = set()
+    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for dte in dtes:
+            try:
+                datos = construir_datos_txt_desde_dte(dte)
+                contenido = generar_txt_dte_acepta(datos)
+                nombre = f"{dte.tipo_documento.replace(' ', '_')}_{dte.numero_documento}.txt"
+                # Mismo folio en otra sucursal/tipo normalizado: desambiguar.
+                if nombre in nombres_usados:
+                    nombre = f"{dte.tipo_documento.replace(' ', '_')}_{dte.numero_documento}_id{dte.id}.txt"
+                nombres_usados.add(nombre)
+                zf.writestr(nombre, contenido)
+                agregados += 1
+            except Exception as e:
+                logger.error('ZIP TXT ecommerce: DTE %s falló: %s', dte.id, e, exc_info=True)
+                errores.append(f"DTE id={dte.id} folio={dte.numero_documento}: {e}")
+        if errores:
+            zf.writestr('_ERRORES.txt', '\n'.join(errores))
+
+    if agregados == 0:
+        return HttpResponse(
+            'Ningún TXT pudo generarse para los DTEs indicados.',
+            status=404 if not errores else 500,
+            content_type='text/plain',
+        )
+
+    nombre_zip = f"txt_acepta_{timezone.localdate():%Y%m%d}_{agregados}docs.zip"
+    response = HttpResponse(buffer.getvalue(), content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="{nombre_zip}"'
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -2439,27 +2818,12 @@ def exportar_pedidos_csv(request):
 
     qs = PedidoEcommerce.objects.select_related('sucursal', 'ticket', 'dte').order_by('-fecha_recepcion')
 
-    estado = request.GET.get('estado', '')
-    if estado:
-        qs = qs.filter(estado=estado)
-    canal = request.GET.get('canal', '')
-    if canal:
-        qs = qs.filter(canal_origen=canal)
-    sub_estado = request.GET.get('sub_estado', '')
-    if sub_estado:
-        qs = qs.filter(sub_estado=sub_estado)
-    sucursal_id = request.GET.get('sucursal_id', '')
-    if sucursal_id:
-        qs = qs.filter(sucursal_id=sucursal_id)
-    q = request.GET.get('q', '').strip()
-    if q:
-        from django.db.models import Q
-        qs = qs.filter(
-            Q(numero_ticket_rm__icontains=q) |
-            Q(numero_pedido_canal__icontains=q) |
-            Q(correlativo__icontains=q) |
-            Q(cliente_nombre__icontains=q)
-        )
+    # Mismo scope que el listado: empresa del usuario + sucursal (explícita,
+    # de sesión o "ver todas"). Antes el CSV NO acotaba por empresa y exportaba
+    # los pedidos de todo el holding.
+    qs = _scope_empresa_pedidos(qs, request.user)
+    qs = _scope_sucursal_pedidos(qs, request)
+    qs = _aplicar_filtros_pedidos(qs, request.GET)
 
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = 'attachment; filename="pedidos_ecommerce.csv"'
@@ -2470,6 +2834,9 @@ def exportar_pedidos_csv(request):
         'N Ticket RM', 'Folio Despacho', 'N Pedido Canal', 'Canal', 'Cliente', 'RUT/Doc',
         'Sucursal', 'Total', 'Estado', 'Sub-estado', 'Fecha Recepcion',
         'Fecha Facturacion', 'Ticket #', 'DTE #',
+        # Cabecera del DTE: permite detectar en Excel las boletas emitidas con
+        # unidades y/o monto en 0 (ver alerta del listado).
+        'DTE Unidades (cab.)', 'DTE Monto (cab.)',
     ])
 
     for p in qs[:5000]:
@@ -2488,6 +2855,8 @@ def exportar_pedidos_csv(request):
             p.fecha_facturacion.strftime('%d/%m/%Y %H:%M') if p.fecha_facturacion else '',
             p.ticket.correlativo if p.ticket else '',
             p.dte.numero_documento if p.dte else '',
+            p.dte.unidades_productos if p.dte else '',
+            int(p.dte.monto_con_iva or 0) if p.dte else '',
         ])
 
     return response

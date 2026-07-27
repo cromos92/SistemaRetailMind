@@ -25,7 +25,7 @@ from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.db import transaction, connection
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, PermissionDenied
 import threading
 from decimal import Decimal
 import csv
@@ -38,8 +38,11 @@ from .models import (
     LoteProducto, Movimientos_Producto, Sucursal, Empresa, EmpresaUser,
     TomaInventario, TomaInventarioDetalle, TomaInventarioLog, TareaAplicacionAjustes
 )
+from .utils_permisos import (
+    puede_ver_sucursal, obtener_empresas_usuario, obtener_sucursales_usuario
+)
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('app')
 
 # ==============================================================================
 # CONSTANTES Y CONFIGURACIÓN
@@ -48,6 +51,33 @@ logger = logging.getLogger(__name__)
 BATCH_SIZE = 500  # Tamaño de lote para operaciones masivas
 DIFERENCIA_RECONTEO_PORCENTAJE = 10  # % de diferencia para requerir reconteo
 DIFERENCIA_RECONTEO_UNIDADES = 5  # Unidades de diferencia para requerir reconteo
+
+# Estados en los que el inventario todavía se está contando
+ESTADOS_EN_PROCESO = ['BORRADOR', 'EN_CONTEO', 'CONTEO_FINALIZADO', 'EN_REVISION']
+
+
+def _inventario_del_usuario(request, inventario_id):
+    """
+    Recupera la toma verificando que pertenezca a una empresa/sucursal del usuario.
+
+    Sin esto cualquier usuario autenticado podía abrir (y aprobar) el inventario de
+    otra empresa simplemente cambiando el id en la URL.
+    """
+    inventario = get_object_or_404(
+        TomaInventario.objects.select_related('sucursal', 'empresa'), id=inventario_id
+    )
+    empresas_ids = set(obtener_empresas_usuario(request.user).values_list('id', flat=True))
+    if inventario.empresa_id not in empresas_ids:
+        return None
+    if not puede_ver_sucursal(request.user, inventario.sucursal_id):
+        return None
+    return inventario
+
+
+def _error_sin_acceso():
+    return JsonResponse(
+        {'success': False, 'error': 'No tiene acceso a este inventario'}, status=403
+    )
 
 
 # ==============================================================================
@@ -63,9 +93,12 @@ def gestion_inventarios(request):
 @login_required
 def detalle_inventario(request, inventario_id):
     """Vista de detalle de un inventario específico"""
-    inventario = get_object_or_404(TomaInventario, id=inventario_id)
+    inventario = _inventario_del_usuario(request, inventario_id)
+    if inventario is None:
+        raise PermissionDenied('No tiene acceso a este inventario')
     return render(request, 'vistas/modulo_existencias/detalle_inventario.html', {
-        'inventario': inventario
+        'inventario': inventario,
+        'puede_aplicar_ajustes': inventario.estado in ('APROBADO', 'APLICANDO'),
     })
 
 
@@ -82,14 +115,14 @@ def obtener_inventarios(request):
     """
     try:
         sucursal_id = request.session.get('idSucursalActual')
-        empresa_user = EmpresaUser.objects.filter(
-            user=request.user, 
-            active=True
-        ).select_related('empresa').first()
-        
-        if not empresa_user:
+
+        # Antes se filtraba por `EmpresaUser...first().empresa`: con multi-empresa eso
+        # tomaba UNA empresa al azar del usuario (un administrador tiene 1.699) y podía
+        # dejar fuera inventarios que sí le corresponden.
+        empresas_ids = list(obtener_empresas_usuario(request.user).values_list('id', flat=True))
+        if not empresas_ids:
             return JsonResponse({'success': False, 'error': 'Usuario sin empresa asignada'})
-        
+
         # Parámetros de paginación
         page = int(request.GET.get('page', 1))
         per_page = int(request.GET.get('per_page', 20))
@@ -100,16 +133,22 @@ def obtener_inventarios(request):
         fecha_desde = request.GET.get('fecha_desde')
         fecha_hasta = request.GET.get('fecha_hasta')
         search = request.GET.get('search', '').strip()
-        
+        grupo = request.GET.get('grupo', '').strip()  # EN_PROCESO | CON_DIFERENCIAS
+
         # Construir queryset optimizado
         queryset = TomaInventario.objects.select_related(
             'sucursal', 'empresa', 'creado_por', 'aprobado_por'
-        ).filter(empresa=empresa_user.empresa)
-        
-        # Filtrar por sucursal actual
-        if sucursal_id:
+        ).filter(empresa_id__in=empresas_ids)
+
+        # Filtrar por sucursal actual (respetando el acceso del usuario)
+        if sucursal_id and puede_ver_sucursal(request.user, sucursal_id):
             queryset = queryset.filter(sucursal_id=sucursal_id)
-        
+        else:
+            sucursales_ids = list(
+                obtener_sucursales_usuario(request.user).values_list('id', flat=True)
+            )
+            queryset = queryset.filter(sucursal_id__in=sucursales_ids)
+
         # Aplicar filtros
         if estado:
             queryset = queryset.filter(estado=estado)
@@ -128,16 +167,54 @@ def obtener_inventarios(request):
                 Q(numero_inventario__icontains=search) |
                 Q(nombre__icontains=search)
             )
-        
+
+        # Los tabs "En Proceso" y "Con Diferencias" antes solo cambiaban una variable
+        # de JS que nunca se enviaba: filtraban nada.
+        if grupo == 'EN_PROCESO':
+            queryset = queryset.filter(estado__in=ESTADOS_EN_PROCESO)
+        elif grupo == 'CON_DIFERENCIAS':
+            queryset = queryset.exclude(estado__in=['COMPLETADO', 'CANCELADO']).filter(
+                Q(total_diferencias_positivas__gt=0) | Q(total_diferencias_negativas__gt=0)
+            )
+
+        # Resumen sobre TODO el conjunto filtrado (antes los KPIs contaban solo la
+        # página visible: con 20 por página el total nunca podía pasar de 20).
+        base_resumen = queryset
+        resumen = {
+            'total': base_resumen.count(),
+            'en_proceso': base_resumen.filter(estado__in=ESTADOS_EN_PROCESO).count(),
+            'pendientes_aprobacion': base_resumen.filter(estado='PENDIENTE_APROBACION').count(),
+            'completados': base_resumen.filter(estado='COMPLETADO').count(),
+            'con_diferencias': base_resumen.exclude(estado__in=['COMPLETADO', 'CANCELADO']).filter(
+                Q(total_diferencias_positivas__gt=0) | Q(total_diferencias_negativas__gt=0)
+            ).count(),
+        }
+
         # Ordenar y paginar
         queryset = queryset.order_by('-created_at')
         paginator = Paginator(queryset, per_page)
         inventarios_page = paginator.get_page(page)
-        
+
+        # SKUs realmente contados (el campo total_productos_contados del modelo guarda
+        # UNIDADES, no líneas: mostrarlo contra total_productos_esperados comparaba
+        # peras con manzanas — en INV-6-20260115-001 decía "9.490 / 37.389 productos"
+        # cuando lo contado eran 4.301 SKUs).
+        skus_map = {
+            row['toma_inventario_id']: row
+            for row in TomaInventarioDetalle.objects
+            .filter(toma_inventario__in=list(inventarios_page.object_list), excluir_de_analisis=False)
+            .values('toma_inventario_id')
+            .annotate(lineas=Count('id'), contados=Count('id', filter=Q(contado=True)))
+        }
+
         # Serializar datos
         inventarios_data = []
         for inv in inventarios_page:
+            conteo = skus_map.get(inv.id) or {}
             inventarios_data.append({
+                'skus_contados': conteo.get('contados', 0),
+                'skus_esperados': conteo.get('lineas', inv.total_productos_esperados),
+                'unidades_contadas': inv.total_productos_contados,
                 'id': inv.id,
                 'numero_inventario': inv.numero_inventario,
                 'nombre': inv.nombre,
@@ -160,6 +237,7 @@ def obtener_inventarios(request):
         return JsonResponse({
             'success': True,
             'inventarios': inventarios_data,
+            'resumen': resumen,
             'pagination': {
                 'current_page': inventarios_page.number,
                 'total_pages': paginator.num_pages,
@@ -168,7 +246,7 @@ def obtener_inventarios(request):
                 'has_previous': inventarios_page.has_previous(),
             }
         })
-        
+
     except Exception as e:
         logger.error(f"Error al obtener inventarios: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
@@ -191,19 +269,24 @@ def obtener_filtros_disponibles(request):
             return JsonResponse({'success': False, 'error': 'Usuario sin empresa asignada'})
         
         sucursal_id = request.session.get('idSucursalActual')
-        
-        # Obtener marcas con productos (atributo1 es marca)
-        # Usamos subquery para obtener marcas que tienen productos con stock
+
+        # Marcas y categorías ACOTADAS a la sucursal activa y con stock: antes se
+        # ofrecían las de todo el holding, así que era fácil segmentar por una marca
+        # que no existe en la tienda y crear una toma vacía.
+        productos_suc = Producto.objects.all()
+        if sucursal_id:
+            productos_suc = productos_suc.filter(sucursal_id=sucursal_id)
+        productos_con_stock = productos_suc.filter(producto_talla__stock__gt=0)
+
         marcas = AtributoOpcion.objects.filter(
             atributo__nombre__icontains='marca',
-            productos_marca__isnull=False
+            productos_marca__in=productos_con_stock
         ).distinct().values('id', 'valor').order_by('valor')
-        
-        # Obtener categorías con productos
+
         categorias = Categoria.objects.filter(
-            categoria_productos__isnull=False
+            categoria_productos__in=productos_con_stock
         ).distinct().values('id', 'nombre').order_by('nombre')
-        
+
         # Obtener atributos disponibles (color, género, etc.)
         atributos = Productos_Atributos.objects.filter(
             opciones__isnull=False
@@ -260,22 +343,50 @@ def crear_inventario(request):
         
         if not nombre:
             return JsonResponse({'success': False, 'error': 'El nombre es requerido'})
-        
+
+        # Tipos declarados en el modelo pero sin lógica de segmentación implementada:
+        # si se aceptan, generan igual un inventario COMPLETO (335.000 líneas en EDEL)
+        # haciendo creer al usuario que contará solo una muestra.
+        if tipo_inventario in ('SELECTIVO', 'CICLICO', 'ALEATORIO'):
+            return JsonResponse({
+                'success': False,
+                'error': f'El tipo "{tipo_inventario}" todavía no está implementado. '
+                         f'Usa Por Marca, Por Categoría o Por Atributo para una toma parcial.'
+            })
+
+        segmentado = {
+            'POR_MARCA': 'marcas',
+            'POR_CATEGORIA': 'categorias',
+        }.get(tipo_inventario)
+        if segmentado and not filtros.get(segmentado):
+            return JsonResponse({
+                'success': False,
+                'error': 'Debe seleccionar al menos un valor de segmentación para este tipo de inventario'
+            })
+        if tipo_inventario == 'POR_ATRIBUTO' and not any((filtros.get('atributos') or {}).values()):
+            return JsonResponse({
+                'success': False,
+                'error': 'Debe seleccionar al menos un atributo para este tipo de inventario'
+            })
+
         # Obtener empresa y sucursal
         empresa_user = EmpresaUser.objects.filter(
-            user=request.user, 
+            user=request.user,
             active=True
         ).select_related('empresa', 'sucursal').first()
-        
+
         if not empresa_user:
             return JsonResponse({'success': False, 'error': 'Usuario sin empresa asignada'})
-        
+
         sucursal_id = request.session.get('idSucursalActual')
         if not sucursal_id:
             return JsonResponse({'success': False, 'error': 'Debe seleccionar una sucursal'})
-        
+
+        if not puede_ver_sucursal(request.user, sucursal_id):
+            return JsonResponse({'success': False, 'error': 'No tiene acceso a la sucursal activa'})
+
         sucursal = get_object_or_404(Sucursal, id=sucursal_id)
-        
+
         # Procesar fecha de corte
         if fecha_corte_str:
             from datetime import datetime
@@ -296,16 +407,23 @@ def crear_inventario(request):
             filtros_aplicados=filtros,
             fecha_corte=fecha_corte,
             estado='BORRADOR',
+            observaciones=(data.get('observaciones') or '').strip() or None,
             creado_por=request.user
         )
-        
+
         # Generar detalles de productos a inventariar
         total_productos = _generar_detalles_inventario(inventario, filtros, sucursal_id)
-        
+
+        if total_productos == 0:
+            # Sin líneas la toma es inútil y queda basura en el listado.
+            raise ValidationError(
+                'Los filtros seleccionados no arrojaron productos con stock en esta sucursal.'
+            )
+
         # Actualizar total esperado
         inventario.total_productos_esperados = total_productos
         inventario.save()
-        
+
         # Registrar log
         _registrar_log(
             inventario=inventario,
@@ -325,6 +443,8 @@ def crear_inventario(request):
         
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'})
+    except ValidationError as e:
+        return JsonResponse({'success': False, 'error': '; '.join(e.messages)})
     except Exception as e:
         logger.error(f"Error al crear inventario: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
@@ -349,16 +469,16 @@ def _generar_detalles_inventario(inventario, filtros, sucursal_id):
     categorias = filtros.get('categorias', [])
     atributos = filtros.get('atributos', {})
     productos_ids = filtros.get('productos', [])
-    
+
     if marcas:
         queryset = queryset.filter(producto__atributo1_id__in=marcas)
-    
+
     if categorias:
         queryset = queryset.filter(producto__categoria_id__in=categorias)
-    
+
     if productos_ids:
         queryset = queryset.filter(producto_id__in=productos_ids)
-    
+
     # Filtros de atributos específicos
     for attr_id, opciones in atributos.items():
         if opciones:
@@ -367,7 +487,13 @@ def _generar_detalles_inventario(inventario, filtros, sucursal_id):
                 queryset = queryset.filter(producto__atributo2_id__in=opciones)
             elif attr_id == 'genero':
                 queryset = queryset.filter(producto__atributo3_id__in=opciones)
-    
+
+    # "Solo productos con stock" evita generar decenas de miles de líneas en cero.
+    # En bodega EDEL hay 341.945 tallas y solo 275 con stock: sin este filtro la
+    # toma nace con 335.000 líneas imposibles de contar.
+    if filtros.get('solo_con_stock', True):
+        queryset = queryset.filter(stock__gt=0)
+
     # Procesar productos en lotes para reducir consultas N+1
     detalles = []
     batch = []
@@ -377,14 +503,18 @@ def _generar_detalles_inventario(inventario, filtros, sucursal_id):
             return
 
         ids = [pt.id for pt in batch_items]
-        stock_map = _obtener_stock_batch(ids, inventario.fecha_corte, sucursal_id)
+        # Movimientos ocurridos DESPUÉS del corte: el stock al corte se reconstruye
+        # restándolos del stock actual (ver _obtener_movimientos_desde_corte_batch).
+        posteriores_map = _obtener_movimientos_desde_corte_batch(ids, inventario.fecha_corte, sucursal_id)
         costo_map = _obtener_costo_promedio_batch(ids)
 
         for pt in batch_items:
-            # Calcular stock del sistema en la fecha de corte
-            stock_sistema = stock_map.get(pt.id)
-            if stock_sistema is None:
-                stock_sistema = pt.stock or 0
+            # Stock del sistema en la fecha de corte.
+            # OJO: la base SIEMPRE parte del stock plano (Producto_Talla.stock),
+            # que es el número que usa el resto del ERP (POS, reportes, ecommerce).
+            # Antes se usaba la suma del kardex y, como kardex y stock plano no
+            # cuadran en 126k SKUs, el ajuste dejaba el stock distinto de lo contado.
+            stock_sistema = (pt.stock or 0) - posteriores_map.get(pt.id, 0)
 
             # Calcular costo promedio FIFO
             costo_promedio = costo_map.get(pt.id)
@@ -429,27 +559,39 @@ def _generar_detalles_inventario(inventario, filtros, sucursal_id):
     return inventario.detalles.count()
 
 
-def _obtener_stock_batch(producto_talla_ids, fecha_corte, sucursal_id):
+def _fecha_hora_local(momento):
     """
-    Calcula stock por lote de productos en una fecha específica.
-    Evita N+1 consultando movimientos agregados.
+    Movimientos_Producto guarda `fecha`/`hora` en horario local (timezone.localdate()
+    y timezone.localtime()). Los DateTimeField llegan en UTC, así que comparar
+    `momento.date()` contra `Movimientos_Producto.fecha` corría el corte 3-4 horas
+    (todo lo vendido después de las 20:00 caía en el día siguiente).
     """
+    local = timezone.localtime(momento) if timezone.is_aware(momento) else momento
+    return local.date(), local.time()
+
+
+def _obtener_movimientos_desde_corte_batch(producto_talla_ids, fecha_corte, sucursal_id):
+    """
+    Suma neta de movimientos ocurridos DESPUÉS de la fecha de corte y hasta ahora.
+
+    Sirve para reconstruir el stock al corte: stock_al_corte = stock_actual - esta suma.
+    Así la base de comparación queda anclada al stock plano (el que ve el POS) y no
+    a la suma del kardex, que en producción difiere en 126.455 SKUs.
+    """
+    corte_date, corte_time = _fecha_hora_local(fecha_corte)
+
     movimientos = Movimientos_Producto.objects.filter(
-        ProductoTalla_id__in=producto_talla_ids,
-        fecha__lte=fecha_corte.date()
+        ProductoTalla_id__in=producto_talla_ids
     ).filter(
         Q(sucursal_destino_id=sucursal_id) | Q(sucursal_origen_id=sucursal_id)
+    ).filter(
+        Q(fecha__gt=corte_date) |
+        Q(fecha=corte_date, hora__gt=corte_time)
     ).values('ProductoTalla_id').annotate(
-        total_cantidad=Coalesce(Sum('cantidad'), 0),
-        total_movimientos=Count('id')
+        total_cantidad=Coalesce(Sum('cantidad'), 0)
     )
 
-    stock_map = {}
-    for mov in movimientos:
-        if mov['total_movimientos'] > 0:
-            stock_map[mov['ProductoTalla_id']] = mov['total_cantidad']
-
-    return stock_map
+    return {m['ProductoTalla_id']: m['total_cantidad'] for m in movimientos}
 
 
 def _obtener_costo_promedio_batch(producto_talla_ids):
@@ -486,10 +628,8 @@ def _obtener_movimientos_post_corte_batch(producto_talla_ids, fecha_corte, fecha
     Obtiene la suma neta de movimientos entre fecha de corte y fecha de conteo.
     Considera sucursal origen/destino y respeta fecha/hora.
     """
-    fecha_corte_date = fecha_corte.date()
-    fecha_corte_time = fecha_corte.time()
-    fecha_conteo_date = fecha_conteo.date()
-    fecha_conteo_time = fecha_conteo.time()
+    fecha_corte_date, fecha_corte_time = _fecha_hora_local(fecha_corte)
+    fecha_conteo_date, fecha_conteo_time = _fecha_hora_local(fecha_conteo)
 
     movimientos = Movimientos_Producto.objects.filter(
         ProductoTalla_id__in=producto_talla_ids
@@ -512,64 +652,11 @@ def _obtener_movimientos_post_corte_batch(producto_talla_ids, fecha_corte, fecha
     return movimientos_map
 
 
-def _calcular_stock_fecha_corte(producto_talla, fecha_corte, sucursal_id):
-    """
-    Calcula el stock de un producto en una fecha específica.
-    Considera movimientos hasta esa fecha.
-    """
-    # Calcular stock basado en movimientos hasta la fecha de corte
-    from django.db.models import Sum, Q
-    
-    # Obtener movimientos hasta la fecha de corte
-    movimientos = Movimientos_Producto.objects.filter(
-        ProductoTalla=producto_talla,
-        fecha__lte=fecha_corte.date()
-    ).filter(
-        Q(sucursal_destino_id=sucursal_id) | Q(sucursal_origen_id=sucursal_id)
-    )
-    
-    # Sumar ingresos y egresos
-    ingresos = movimientos.filter(
-        Q(sucursal_destino_id=sucursal_id),
-        tipo_movimiento='INGRESO'
-    ).aggregate(total=Sum('cantidad'))['total'] or 0
-    
-    egresos = movimientos.filter(
-        Q(sucursal_origen_id=sucursal_id),
-        tipo_movimiento='EGRESO'
-    ).aggregate(total=Sum('cantidad'))['total'] or 0
-    
-    stock_calculado = ingresos + egresos  # egresos son negativos
-    
-    # Si no hay movimientos, usar stock directo del producto
-    if not movimientos.exists():
-        stock_calculado = producto_talla.stock or 0
-    
-    return max(0, stock_calculado)
-
-
-def _calcular_costo_promedio_fifo(producto_talla):
-    """
-    Calcula el costo promedio ponderado FIFO de un producto.
-    """
-    lotes = LoteProducto.objects.filter(
-        producto_talla=producto_talla,
-        cantidad_disponible__gt=0,
-        activo=True
-    )
-    
-    total_valor = Decimal('0')
-    total_cantidad = 0
-    
-    for lote in lotes:
-        total_valor += lote.cantidad_disponible * lote.costo_unitario
-        total_cantidad += lote.cantidad_disponible
-    
-    if total_cantidad > 0:
-        return total_valor / total_cantidad
-    
-    # Fallback: usar costo del producto
-    return Decimal(producto_talla.producto.costo or 0)
+# NOTA: se eliminaron _calcular_stock_fecha_corte() y _calcular_costo_promedio_fifo().
+# Estaban muertas (nadie las llamaba) y la primera reconstruía el stock desde
+# tipo_movimiento='INGRESO'/'EGRESO', clasificación que en este proyecto no es
+# confiable (el default del modelo es 'INGRESO'). El stock al corte ahora se
+# calcula en _procesar_batch a partir del stock plano.
 
 
 # ==============================================================================
@@ -584,7 +671,9 @@ def obtener_productos_conteo(request, inventario_id):
     Optimizado para grandes volúmenes.
     """
     try:
-        inventario = get_object_or_404(TomaInventario, id=inventario_id)
+        inventario = _inventario_del_usuario(request, inventario_id)
+        if inventario is None:
+            return _error_sin_acceso()
         
         # Parámetros
         page = int(request.GET.get('page', 1))
@@ -592,6 +681,7 @@ def obtener_productos_conteo(request, inventario_id):
         estado_conteo = request.GET.get('estado_conteo')  # contado, pendiente, reconteo
         search = request.GET.get('search', '').strip()
         solo_diferencias = request.GET.get('solo_diferencias') == 'true'
+        signo = request.GET.get('signo', '')  # positiva | negativa | cero
         marca = request.GET.get('marca')
         categoria = request.GET.get('categoria')
         
@@ -613,13 +703,22 @@ def obtener_productos_conteo(request, inventario_id):
         
         if solo_diferencias:
             queryset = queryset.filter(contado=True).exclude(diferencia=0)
-        
+
+        # Permite que las tarjetas "Sobrantes"/"Faltantes"/"Coinciden" del detalle
+        # filtren la tabla en vez de ser sólo decorativas
+        if signo == 'positiva':
+            queryset = queryset.filter(contado=True, diferencia__gt=0)
+        elif signo == 'negativa':
+            queryset = queryset.filter(contado=True, diferencia__lt=0)
+        elif signo == 'cero':
+            queryset = queryset.filter(contado=True, diferencia=0)
+
         if marca:
             queryset = queryset.filter(marca_nombre__icontains=marca)
-        
+
         if categoria:
             queryset = queryset.filter(categoria_nombre__icontains=categoria)
-        
+
         # Ordenar
         queryset = queryset.order_by('producto_nombre', 'talla_nombre')
         
@@ -681,7 +780,9 @@ def registrar_conteo(request, inventario_id):
     Soporta conteo individual y masivo.
     """
     try:
-        inventario = get_object_or_404(TomaInventario, id=inventario_id)
+        inventario = _inventario_del_usuario(request, inventario_id)
+        if inventario is None:
+            return _error_sin_acceso()
         
         # Verificar estado
         if inventario.estado not in ['BORRADOR', 'EN_CONTEO']:
@@ -878,11 +979,21 @@ def importar_conteo_pistola(request, inventario_id):
     Importa conteos desde archivo de pistola (CSV/TXT/XLSX).
     Formato esperado: sku,cantidad (con o sin encabezados).
     """
-    inventario = get_object_or_404(TomaInventario, id=inventario_id)
+    inventario = _inventario_del_usuario(request, inventario_id)
+    if inventario is None:
+        return _error_sin_acceso()
 
     archivo = request.FILES.get('archivo')
     if not archivo:
         return JsonResponse({'success': False, 'error': 'Debe adjuntar un archivo'})
+
+    # Sin esta guarda se podían importar conteos sobre un inventario ya APROBADO o
+    # COMPLETADO, cambiando las diferencias después de la aprobación.
+    if inventario.estado not in ['BORRADOR', 'EN_CONTEO']:
+        return JsonResponse({
+            'success': False,
+            'error': f'El inventario está en estado {inventario.get_estado_display()} y ya no admite conteos'
+        })
 
     try:
         # Actualizar estado si es el primer conteo
@@ -978,7 +1089,17 @@ def actualizar_exclusion_detalle(request, inventario_id, detalle_id):
     """
     Marca un detalle como excluido/incluido del análisis.
     """
-    inventario = get_object_or_404(TomaInventario, id=inventario_id)
+    inventario = _inventario_del_usuario(request, inventario_id)
+    if inventario is None:
+        return _error_sin_acceso()
+    # Excluir/incluir después de aprobar cambia lo que se ajusta al stock
+    if inventario.estado not in ['BORRADOR', 'EN_CONTEO', 'CONTEO_FINALIZADO', 'EN_REVISION']:
+        return JsonResponse({
+            'success': False,
+            'error': f'El inventario está en estado {inventario.get_estado_display()}: '
+                     f'ya no se pueden cambiar exclusiones'
+        })
+
     try:
         data = json.loads(request.body)
         excluir = bool(data.get('excluir'))
@@ -1042,7 +1163,9 @@ def registrar_reconteo(request, inventario_id):
     Registrar reconteo de productos con diferencias significativas.
     """
     try:
-        inventario = get_object_or_404(TomaInventario, id=inventario_id)
+        inventario = _inventario_del_usuario(request, inventario_id)
+        if inventario is None:
+            return _error_sin_acceso()
         
         if inventario.estado not in ['EN_CONTEO', 'CONTEO_FINALIZADO', 'EN_REVISION']:
             return JsonResponse({
@@ -1118,7 +1241,9 @@ def obtener_analisis_inventario(request, inventario_id):
     Incluye métricas, tendencias y alertas.
     """
     try:
-        inventario = get_object_or_404(TomaInventario, id=inventario_id)
+        inventario = _inventario_del_usuario(request, inventario_id)
+        if inventario is None:
+            return _error_sin_acceso()
         
         # Obtener detalles contados (solo los considerados en análisis)
         detalles = inventario.detalles.filter(contado=True, excluir_de_analisis=False)
@@ -1182,7 +1307,24 @@ def obtener_analisis_inventario(request, inventario_id):
         # === INDICADORES DE PRECISIÓN ===
         total_contados = detalles.count()
         precision_inventario = (sin_diferencia.count() / total_contados * 100) if total_contados > 0 else 0
-        
+
+        # === UNIDADES (panel de comparación físico vs sistema) ===
+        detalles_analisis = inventario.detalles.filter(excluir_de_analisis=False)
+        unidades = detalles.aggregate(
+            fisicas=Coalesce(Sum('stock_fisico'), 0),
+            sistema=Coalesce(Sum('stock_sistema_ajustado'), 0),
+        )
+        total_lineas = detalles_analisis.count()
+        pendientes_contar = detalles_analisis.filter(contado=False).count()
+
+        # === SEGMENTOS (para los filtros del detalle) ===
+        segmentos_marcas = list(
+            detalles_analisis.values('marca_nombre').annotate(n=Count('id')).order_by('-n')[:40]
+        )
+        segmentos_categorias = list(
+            detalles_analisis.values('categoria_nombre').annotate(n=Count('id')).order_by('-n')[:40]
+        )
+
         # === RESUMEN FINANCIERO ===
         resumen_financiero = {
             'valor_inventario_sistema': float(inventario.valor_inventario_sistema),
@@ -1223,8 +1365,12 @@ def obtener_analisis_inventario(request, inventario_id):
         
         analisis = {
             'resumen': {
-                'total_esperados': inventario.total_productos_esperados,
-                'total_contados': inventario.total_productos_contados,
+                # OJO: total_contados son LÍNEAS/SKUs contados. Las unidades van aparte.
+                'total_esperados': total_lineas,
+                'total_contados': total_contados,
+                'pendientes_contar': pendientes_contar,
+                'unidades_fisicas': unidades['fisicas'] or 0,
+                'unidades_sistema': unidades['sistema'] or 0,
                 'progreso': float(inventario.progreso_conteo),
                 'excluidos': inventario.detalles.filter(excluir_de_analisis=True).count(),
                 'con_diferencia': diferencias_positivas.count() + diferencias_negativas.count(),
@@ -1258,11 +1404,30 @@ def obtener_analisis_inventario(request, inventario_id):
                 for a in analisis_marcas
             ],
             'alertas': alertas,
-            'puede_aprobar': inventario.puede_aprobar() or (
-                inventario.estado == 'EN_REVISION' and 
+            'segmentos': {
+                'marcas': [
+                    {'valor': s['marca_nombre'] or 'Sin marca', 'total': s['n']}
+                    for s in segmentos_marcas if s['marca_nombre']
+                ],
+                'categorias': [
+                    {'valor': s['categoria_nombre'] or 'Sin categoría', 'total': s['n']}
+                    for s in segmentos_categorias if s['categoria_nombre']
+                ],
+            },
+            'estado': inventario.estado,
+            'estado_display': inventario.get_estado_display(),
+            # puede_aprobar() del modelo compara unidades contra líneas; se sustituye por
+            # la condición real: nada pendiente de contar ni de recontar.
+            'puede_aprobar': (
+                inventario.estado == 'PENDIENTE_APROBACION' and
                 requieren_reconteo == 0 and
-                inventario.progreso_conteo >= 100
-            )
+                pendientes_contar == 0
+            ),
+            'puede_enviar_aprobacion': (
+                inventario.estado in ('CONTEO_FINALIZADO', 'EN_REVISION') and
+                requieren_reconteo == 0
+            ),
+            'puede_aplicar_ajustes': inventario.estado == 'APROBADO',
         }
         
         return JsonResponse({
@@ -1280,21 +1445,28 @@ def obtener_analisis_inventario(request, inventario_id):
 def exportar_inventario(request, inventario_id):
     """
     Exportar inventario a Excel.
+
+    Se genera en modo `write_only`: openpyxl va escribiendo las filas al vuelo
+    en vez de mantener todas las celdas en memoria. Las tomas 4 y 5 de
+    producción tienen 335.216 líneas cada una; con el Workbook normal esa
+    exportación mataba al worker antes de responder.
     """
     try:
         import openpyxl
+        from openpyxl.cell import WriteOnlyCell
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         from openpyxl.utils import get_column_letter
-        
-        inventario = get_object_or_404(TomaInventario, id=inventario_id)
-        
-        # Crear workbook
-        wb = openpyxl.Workbook()
-        
+
+        inventario = _inventario_del_usuario(request, inventario_id)
+        if inventario is None:
+            return _error_sin_acceso()
+
+        # Crear workbook en modo streaming (sin hoja activa por defecto)
+        wb = openpyxl.Workbook(write_only=True)
+
         # === HOJA DE RESUMEN ===
-        ws_resumen = wb.active
-        ws_resumen.title = "Resumen"
-        
+        ws_resumen = wb.create_sheet("Resumen")
+
         # Estilos
         header_font = Font(bold=True, color="FFFFFF")
         header_fill = PatternFill(start_color="4A90D9", end_color="4A90D9", fill_type="solid")
@@ -1326,17 +1498,30 @@ def exportar_inventario(request, inventario_id):
             'Ubicación', 'Observaciones', 'Excluido'
         ]
         
-        ws_detalle.append(headers)
-        
-        # Aplicar estilo a encabezados
-        for col_num, header in enumerate(headers, 1):
-            cell = ws_detalle.cell(row=1, column=col_num)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = Alignment(horizontal='center')
-        
-        # Agregar datos
-        for det in inventario.detalles.all().order_by('producto_nombre', 'talla_nombre'):
+        # Anchos de columna: en modo write_only hay que fijarlos ANTES de
+        # escribir filas, porque después la hoja ya no es direccionable.
+        for col_num in range(1, len(headers) + 1):
+            ws_detalle.column_dimensions[get_column_letter(col_num)].width = 15
+
+        # Encabezados con estilo: en write_only no se puede volver a la celda
+        # con ws.cell(row=1, ...), así que el estilo va en la propia celda.
+        celdas_encabezado = []
+        for header in headers:
+            celda = WriteOnlyCell(ws_detalle, value=header)
+            celda.font = header_font
+            celda.fill = header_fill
+            celda.alignment = Alignment(horizontal='center')
+            celdas_encabezado.append(celda)
+        ws_detalle.append(celdas_encabezado)
+
+        # Agregar datos. `.iterator(chunk_size=2000)` evita materializar los
+        # 335.216 detalles en una lista de Python.
+        detalles_qs = (
+            inventario.detalles.all()
+            .order_by('producto_nombre', 'talla_nombre', 'id')
+            .iterator(chunk_size=2000)
+        )
+        for det in detalles_qs:
             ws_detalle.append([
                 det.sku,
                 det.producto_nombre,
@@ -1357,20 +1542,19 @@ def exportar_inventario(request, inventario_id):
                 det.observaciones or '',
                 'Sí' if det.excluir_de_analisis else 'No'
             ])
-        
-        # Ajustar anchos de columna
-        for col_num in range(1, len(headers) + 1):
-            ws_detalle.column_dimensions[get_column_letter(col_num)].width = 15
-        
+
+        # (los anchos de columna ya se fijaron antes de escribir las filas:
+        #  en modo write_only no se pueden tocar después)
+
         # Preparar respuesta
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         response['Content-Disposition'] = f'attachment; filename="inventario_{inventario.numero_inventario}.xlsx"'
-        
+
         wb.save(response)
         return response
-        
+
     except Exception as e:
         logger.error(f"Error al exportar inventario: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
@@ -1387,7 +1571,9 @@ def exportar_diferencias_inventario(request, inventario_id):
         from openpyxl.styles import Font, PatternFill, Alignment
         from openpyxl.utils import get_column_letter
 
-        inventario = get_object_or_404(TomaInventario, id=inventario_id)
+        inventario = _inventario_del_usuario(request, inventario_id)
+        if inventario is None:
+            return _error_sin_acceso()
         detalles = inventario.detalles.filter(
             contado=True,
             excluir_de_analisis=False
@@ -1457,7 +1643,9 @@ def finalizar_conteo(request, inventario_id):
     Finalizar el conteo y pasar a revisión.
     """
     try:
-        inventario = get_object_or_404(TomaInventario, id=inventario_id)
+        inventario = _inventario_del_usuario(request, inventario_id)
+        if inventario is None:
+            return _error_sin_acceso()
         
         if inventario.estado not in ['EN_CONTEO']:
             return JsonResponse({
@@ -1465,13 +1653,17 @@ def finalizar_conteo(request, inventario_id):
                 'error': 'El inventario no está en estado de conteo'
             })
         
-        # Verificar que se hayan contado todos los productos
-        if inventario.total_productos_contados < inventario.total_productos_esperados:
+        # Verificar que se hayan contado todas las LÍNEAS (no unidades: el campo
+        # total_productos_contados del modelo acumula stock_fisico, así que una tienda
+        # con más unidades que SKUs podía cerrar un conteo a medias).
+        detalles_analisis = inventario.detalles.filter(excluir_de_analisis=False)
+        pendientes = detalles_analisis.filter(contado=False).count()
+        if pendientes > 0:
             return JsonResponse({
                 'success': False,
-                'error': f'Faltan {inventario.total_productos_esperados - inventario.total_productos_contados} productos por contar'
+                'error': f'Faltan {pendientes} productos por contar'
             })
-        
+
         # Verificar si hay reconteos pendientes
         reconteos_pendientes = inventario.detalles.filter(
             reconteo_requerido=True,
@@ -1515,7 +1707,9 @@ def enviar_aprobacion(request, inventario_id):
     Enviar inventario para aprobación.
     """
     try:
-        inventario = get_object_or_404(TomaInventario, id=inventario_id)
+        inventario = _inventario_del_usuario(request, inventario_id)
+        if inventario is None:
+            return _error_sin_acceso()
         
         if inventario.estado not in ['CONTEO_FINALIZADO', 'EN_REVISION']:
             return JsonResponse({
@@ -1563,7 +1757,9 @@ def aprobar_inventario(request, inventario_id):
     Aprobar inventario. Solo actualiza el estado, no aplica ajustes.
     """
     try:
-        inventario = get_object_or_404(TomaInventario, id=inventario_id)
+        inventario = _inventario_del_usuario(request, inventario_id)
+        if inventario is None:
+            return _error_sin_acceso()
         
         if inventario.estado != 'PENDIENTE_APROBACION':
             return JsonResponse({
@@ -1571,9 +1767,28 @@ def aprobar_inventario(request, inventario_id):
                 'error': 'El inventario no está pendiente de aprobación'
             })
         
+        # No se aprueba un conteo incompleto: si quedan líneas sin contar el ajuste
+        # posterior no toca ese stock y el inventario se cierra en falso.
+        pendientes = inventario.detalles.filter(excluir_de_analisis=False, contado=False).count()
+        if pendientes > 0:
+            return JsonResponse({
+                'success': False,
+                'error': f'No se puede aprobar: quedan {pendientes} productos sin contar. '
+                         f'Cuéntelos o exclúyalos del análisis.'
+            })
+
+        reconteos_pendientes = inventario.detalles.filter(
+            reconteo_requerido=True, stock_reconteo__isnull=True, excluir_de_analisis=False
+        ).count()
+        if reconteos_pendientes > 0:
+            return JsonResponse({
+                'success': False,
+                'error': f'No se puede aprobar: {reconteos_pendientes} productos esperan reconteo'
+            })
+
         data = json.loads(request.body) if request.body else {}
         observaciones = data.get('observaciones', '')
-        
+
         inventario.estado = 'APROBADO'
         inventario.aprobado_por = request.user
         inventario.fecha_aprobacion = timezone.now()
@@ -1607,7 +1822,9 @@ def rechazar_inventario(request, inventario_id):
     Rechazar inventario y devolverlo a conteo.
     """
     try:
-        inventario = get_object_or_404(TomaInventario, id=inventario_id)
+        inventario = _inventario_del_usuario(request, inventario_id)
+        if inventario is None:
+            return _error_sin_acceso()
         
         if inventario.estado != 'PENDIENTE_APROBACION':
             return JsonResponse({
@@ -1668,7 +1885,8 @@ def _ejecutar_ajustes_background(inventario_id, usuario_id):
         detalles_pendientes = list(
             inventario.detalles.filter(
                 contado=True,
-                ajuste_aplicado=False
+                ajuste_aplicado=False,
+                excluir_de_analisis=False  # lo excluido del análisis NO debe ajustar stock
             ).exclude(diferencia=0)
         )
 
@@ -1700,22 +1918,28 @@ def _ejecutar_ajustes_background(inventario_id, usuario_id):
                 tarea.procesados = i + 1
                 tarea.save(update_fields=['procesados'])
 
-        # Finalizar inventario
-        inventario.estado = 'COMPLETADO'
+        # El inventario solo se cierra si TODOS los ajustes entraron. Si alguno falló,
+        # queda en APROBADO para reintentar (el filtro ajuste_aplicado=False hace que
+        # el reintento sea idempotente) en vez de darse por completado a medias.
+        inventario.estado = 'COMPLETADO' if not errores else 'APROBADO'
         inventario.save()
 
         # Registrar log
         _registrar_log(
             inventario=inventario,
             tipo_accion='APLICACION_AJUSTES',
-            descripcion=f'{ajustes_aplicados} ajustes aplicados',
+            descripcion=(
+                f'{ajustes_aplicados} ajustes aplicados'
+                + (f', {len(errores)} con error (inventario queda en Aprobado para reintentar)'
+                   if errores else '')
+            ),
             usuario=usuario,
             datos={'ajustes_aplicados': ajustes_aplicados, 'errores': errores}
         )
 
-        tarea.procesados = len(detalles_pendientes)
+        tarea.procesados = ajustes_aplicados
         tarea.errores = errores
-        tarea.estado = 'COMPLETADO'
+        tarea.estado = 'COMPLETADO' if not errores else 'ERROR'
         tarea.finalizada_en = timezone.now()
         tarea.save(update_fields=['procesados', 'errores', 'estado', 'finalizada_en'])
 
@@ -1749,7 +1973,9 @@ def aplicar_ajustes_inventario(request, inventario_id):
     Solo debe ejecutarse después de la aprobación.
     """
     try:
-        inventario = get_object_or_404(TomaInventario, id=inventario_id)
+        inventario = _inventario_del_usuario(request, inventario_id)
+        if inventario is None:
+            return _error_sin_acceso()
 
         if inventario.estado not in ('APROBADO', 'APLICANDO'):
             return JsonResponse({
@@ -1833,68 +2059,94 @@ def estado_tarea_ajustes(request, inventario_id):
 
 def _aplicar_ajuste_individual(detalle, inventario, usuario):
     """
-    Aplica el ajuste de un producto individual.
-    Crea movimientos y actualiza lotes según corresponda.
+    Aplica el ajuste de un producto individual: kardex + stock plano + lotes FIFO.
 
-    Para SOBRANTES (diferencia > 0): crea lote FIFO + registra movimiento AJUSTE_INVENTARIO_ENTRADA.
-    Para FALTANTES (diferencia < 0): consumir_stock_fifo ya registra el movimiento y
-    descuenta el stock internamente, por lo que NO se llama a registrar_movimiento_producto
-    nuevamente (evita doble descuento).
+    SOBRANTE (diferencia > 0): lote FIFO nuevo al costo del corte + movimiento
+    AJUSTE_INVENTARIO_ENTRADA.
+    FALTANTE (diferencia < 0): movimiento AJUSTE_INVENTARIO_SALIDA; registrar_movimiento_producto
+    descuenta el stock plano y consume los lotes FIFO best-effort.
+
+    Cambios respecto de la versión anterior (todos por bugs reales):
+    - Antes el faltante iba por consumir_stock_fifo(), que LEVANTA ValidationError si no
+      hay lotes suficientes. La excepción se tragaba con un logger.warning y el detalle
+      igual quedaba `ajuste_aplicado=True`: el stock NO se corregía y la pantalla decía
+      "ajustes aplicados exitosamente". En la toma INV-6-20260115-001, 19 de 61 faltantes
+      (31%) caen en ese caso (16 sin lotes, 3 con lotes insuficientes).
+    - Además ese camino grababa concepto AJUSTE_NEGATIVO y sin referencia_externa, con lo
+      que el movimiento no se podía rastrear hasta la toma que lo originó.
+    - Se toma lock de fila sobre el Producto_Talla: el stock se actualiza con un
+      read-modify-write y el proceso corre en un thread en paralelo con las ventas del POS.
     """
     from .views import registrar_movimiento_producto
-    
+    from .views_modulo_productos import crear_lote_producto
+
     diferencia = detalle.diferencia
-    producto_talla = detalle.producto_talla
-    
     if diferencia == 0:
         return
-    
-    if diferencia > 0:
-        # SOBRANTE: Crear lote para los sobrantes, luego registrar movimiento de entrada
-        from .views_modulo_productos import crear_lote_producto
-        try:
-            crear_lote_producto(
+
+    referencia = inventario.numero_inventario
+    observaciones = f'Ajuste inventario {referencia}'
+
+    with transaction.atomic():
+        producto_talla = (
+            Producto_Talla.objects.select_for_update()
+            .select_related('producto')
+            .get(pk=detalle.producto_talla_id)
+        )
+
+        if diferencia > 0:
+            # El lote se crea primero: si falla, no se toca el stock y el detalle
+            # queda pendiente para reintentar.
+            lote = crear_lote_producto(
                 producto_talla=producto_talla,
                 cantidad=diferencia,
                 costo_unitario=detalle.costo_unitario_sistema,
                 sobreprecio_unitario=0,
                 precio_venta_unitario=detalle.precio_venta_sistema,
-                observaciones=f'Ajuste inventario {inventario.numero_inventario} - Sobrante'
+                observaciones=f'{observaciones} - Sobrante'
             )
-        except Exception as e:
-            logger.warning(f"No se pudo crear lote para {detalle.sku}: {str(e)}")
-        
-        # Registrar movimiento de entrada
-        try:
-            registrar_movimiento_producto(
+            movimiento = registrar_movimiento_producto(
                 producto_talla=producto_talla,
                 concepto='AJUSTE_INVENTARIO_ENTRADA',
                 cantidad=diferencia,
                 responsable=usuario,
                 sucursal_destino=inventario.sucursal,
-                observaciones=f'Ajuste inventario {inventario.numero_inventario}',
-                referencia_externa=inventario.numero_inventario
+                observaciones=f'{observaciones} - Sobrante',
+                referencia_externa=referencia,
+                crear_lote_fifo=False,  # el lote ya se creó arriba
             )
-        except Exception as e:
-            logger.warning(f"No se pudo registrar movimiento entrada para {detalle.sku}: {str(e)}")
-    else:
-        # FALTANTE: consumir_stock_fifo ya registra movimiento y descuenta stock internamente.
-        # No llamar a registrar_movimiento_producto después para evitar doble descuento.
-        from .views_modulo_productos import consumir_stock_fifo
-        try:
-            consumir_stock_fifo(
+            if lote is not None and movimiento is not None:
+                lote.movimiento = movimiento
+                lote.save(update_fields=['movimiento'])
+        else:
+            # Un ajuste no puede dejar el stock en negativo: si eso pasa la diferencia
+            # se calculó contra una base que ya no existe (o hubo ventas después del
+            # conteo). Se rechaza y queda listado como error para revisión manual en
+            # vez de dejar stock negativo circulando por el POS.
+            stock_resultante = (producto_talla.stock or 0) + diferencia
+            if stock_resultante < 0:
+                raise ValidationError(
+                    f'El ajuste dejaría el stock en {stock_resultante} '
+                    f'(actual {producto_talla.stock}, diferencia {diferencia}). '
+                    f'Recontar el SKU antes de aplicar.'
+                )
+
+            # Salida: actualiza stock plano SIEMPRE y consume lotes best-effort.
+            registrar_movimiento_producto(
                 producto_talla=producto_talla,
-                cantidad_requerida=abs(diferencia),
+                concepto='AJUSTE_INVENTARIO_SALIDA',
+                cantidad=-abs(diferencia),
                 responsable=usuario,
-                observaciones=f'Ajuste inventario {inventario.numero_inventario} - Faltante'
+                sucursal_origen=inventario.sucursal,
+                observaciones=f'{observaciones} - Faltante',
+                referencia_externa=referencia,
+                consumir_lotes=True,
             )
-        except Exception as e:
-            logger.warning(f"No se pudo consumir stock FIFO para {detalle.sku}: {str(e)}")
-    
-    # Marcar como aplicado
-    detalle.ajuste_aplicado = True
-    detalle.fecha_ajuste = timezone.now()
-    detalle.save()
+
+        # Marcar como aplicado solo si el ajuste efectivamente se registró
+        detalle.ajuste_aplicado = True
+        detalle.fecha_ajuste = timezone.now()
+        detalle.save(update_fields=['ajuste_aplicado', 'fecha_ajuste'])
 
 
 # ==============================================================================
@@ -1910,7 +2162,9 @@ def cancelar_inventario(request, inventario_id):
     Solo se puede cancelar si no se han aplicado ajustes.
     """
     try:
-        inventario = get_object_or_404(TomaInventario, id=inventario_id)
+        inventario = _inventario_del_usuario(request, inventario_id)
+        if inventario is None:
+            return _error_sin_acceso()
         
         if inventario.estado == 'COMPLETADO':
             return JsonResponse({
@@ -1978,7 +2232,9 @@ def obtener_historial_inventario(request, inventario_id):
     Obtener historial de cambios del inventario.
     """
     try:
-        inventario = get_object_or_404(TomaInventario, id=inventario_id)
+        inventario = _inventario_del_usuario(request, inventario_id)
+        if inventario is None:
+            return _error_sin_acceso()
         
         logs = inventario.logs.select_related('usuario').order_by('-created_at')
         

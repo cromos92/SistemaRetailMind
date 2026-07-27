@@ -29,6 +29,17 @@
     }
     .kpi-card { border-radius: 12px; border: none; transition: all .3s ease; }
     .kpi-card:hover { transform: translateY(-4px); box-shadow: 0 8px 25px rgba(0,0,0,.15); }
+    .kpi-card .kpi-valor { font-size: 22px; font-weight: 800; color:#405189; margin:0; line-height:1.1; }
+    .kpi-card .kpi-sub { font-size: 11px; color:#6c757d; margin:0; }
+    .kpi-card .kpi-detalle { font-size: 11px; font-weight:600; color:#495057; }
+    .resumen-flujo { background:#f8f9fa; border:1px solid rgba(64,81,137,.1); border-radius:12px;
+        padding:10px 14px; display:flex; flex-wrap:wrap; gap:18px; align-items:center; font-size:12px; }
+    .resumen-flujo b { color:#405189; }
+    .quick-filter-btn { background:white; border:1px solid rgba(64,81,137,.2); border-radius:20px;
+        padding:6px 14px; font-size:12px; font-weight:500; color:#405189; transition:all .2s ease; cursor:pointer; }
+    .quick-filter-btn:hover { background:#405189; color:white; }
+    .quick-filter-btn.activo { background:#405189; color:white; border-color:#405189; }
+    .filtro-label { font-size:11px; font-weight:600; color:#6c757d; margin-bottom:2px; display:block; }
     .gc-codigo { font-family: monospace; font-weight: 700; letter-spacing: 1px; }
     .badge-estado { font-size: 11px; padding: 4px 10px; border-radius: 12px; }
     .badge-tipo { font-size: 11px; padding: 4px 10px; border-radius: 12px; font-weight:600; }
@@ -50,6 +61,12 @@
     }
     .gc-preview .codigo { font-family: monospace; font-size:18px; letter-spacing:2px; font-weight:700; margin-top:8px; word-break:break-all; }
     .gc-preview .monto { font-size:30px; font-weight:800; }
+    /* En 1366x768 los controles del filtro deben caber sin scroll horizontal */
+    @media (min-width: 992px) and (max-width: 1500px) {
+        .pagination-controls .form-control, .pagination-controls .form-select { font-size:13px; padding:.35rem .5rem; }
+        .table { font-size: 13px; }
+        .kpi-card .kpi-valor { font-size: 19px; }
+    }
 </style>
 
 <div class="page-content">
@@ -60,7 +77,7 @@
                     <div class="module-header-icon"><i class="ri-gift-line"></i></div>
                     <div class="module-header-info">
                         <h5>Gift Cards</h5>
-                        <div class="module-header-status"><span class="status-dot"></span> Sistema Activo</div>
+                        <div class="module-header-status"><span class="status-dot"></span> Saldo emitido = deuda con clientes</div>
                     </div>
                 </div>
                 <div class="module-header-actions">
@@ -82,49 +99,79 @@
             </div>
 
             <div class="card-body">
-                <!-- KPIs -->
-                <div class="row mb-3" id="kpis-gc">
-                    <div class="col-md-3 col-6">
-                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg,#e3f2fd 0%,#bbdefb 100%); border-left:4px solid #299cdb;">
-                            <div class="card-body text-center py-2">
-                                <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-total">0</h4>
-                                <p class="text-muted mb-0 small">Emitidas</p>
-                            </div>
-                        </div>
+                <!-- Aviso de alcance: las gift cards NO se particionan por empresa -->
+                <div class="alert alert-info d-flex align-items-center py-2 mb-3" style="border-radius:12px; font-size:13px;">
+                    <i class="ri-global-line me-2" style="font-size:18px;"></i>
+                    <div>
+                        Las gift cards son <strong>globales de la cadena</strong>: se emiten y se canjean en
+                        cualquier empresa o sucursal. Esta pantalla muestra <strong>todas</strong>, sin filtro por empresa.
+                        La columna <em>Sucursal</em> indica solo dónde se emitió.
                     </div>
+                </div>
+
+                <!-- KPIs de PASIVO -->
+                <div class="row g-2 mb-2" id="kpis-gc">
                     <div class="col-md-3 col-6">
                         <div class="kpi-card card h-100" style="background: linear-gradient(135deg,#e8f5e9 0%,#c8e6c9 100%); border-left:4px solid #0ab39c;">
                             <div class="card-body text-center py-2">
-                                <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-activas">0</h4>
-                                <p class="text-muted mb-0 small">Activas</p>
+                                <p class="kpi-valor" id="kpi-deuda">$0</p>
+                                <p class="kpi-sub">Deuda vigente (canjeable hoy)</p>
+                                <span class="kpi-detalle" id="kpi-deuda-n">0 tarjetas</span>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-3 col-6">
                         <div class="kpi-card card h-100" style="background: linear-gradient(135deg,#fff8e1 0%,#ffecb3 100%); border-left:4px solid #ffbe0b;">
                             <div class="card-body text-center py-2">
-                                <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-circulante">$0</h4>
-                                <p class="text-muted mb-0 small">Saldo circulante</p>
+                                <p class="kpi-valor" id="kpi-porvencer">$0</p>
+                                <p class="kpi-sub">Vence en 30 días</p>
+                                <span class="kpi-detalle" id="kpi-porvencer-n">0 tarjetas</span>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-3 col-6">
-                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg,#fff3e0 0%,#ffe0b2 100%); border-left:4px solid #fb8c00;">
+                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg,#ffebee 0%,#ffcdd2 100%); border-left:4px solid #f06548; cursor:pointer;"
+                             onclick="aplicarChip('vencidas')" title="Ver tarjetas vencidas con saldo">
                             <div class="card-body text-center py-2">
-                                <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-emitido">$0</h4>
-                                <p class="text-muted mb-0 small">Monto emitido</p>
+                                <p class="kpi-valor" id="kpi-vencido">$0</p>
+                                <p class="kpi-sub">Vencidas CON saldo</p>
+                                <span class="kpi-detalle" id="kpi-vencido-n">0 tarjetas</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg,#eceff1 0%,#cfd8dc 100%); border-left:4px solid #495057; cursor:pointer;"
+                             onclick="aplicarChip('bloqueadas')" title="Ver tarjetas bloqueadas con saldo">
+                            <div class="card-body text-center py-2">
+                                <p class="kpi-valor" id="kpi-bloqueado">$0</p>
+                                <p class="kpi-sub">Bloqueadas con saldo</p>
+                                <span class="kpi-detalle" id="kpi-bloqueado-n">0 tarjetas</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
+                <!-- Flujo (desde el ledger) -->
+                <div class="resumen-flujo mb-3">
+                    <span>Tarjetas emitidas: <b id="fl-emitidas">0</b></span>
+                    <span>Cargado (emisión + recargas): <b id="fl-cargado">$0</b></span>
+                    <span>Canjeado en ventas: <b id="fl-consumido">$0</b></span>
+                    <span>Devuelto por anulación de venta: <b id="fl-reversado">$0</b></span>
+                    <span>Dado de baja (anuladas): <b id="fl-anulado">$0</b></span>
+                    <span>Saldo total en tarjetas: <b id="fl-saldo">$0</b></span>
+                    <span id="fl-filtro"></span>
+                    <span class="ms-auto" id="fl-cuadratura"></span>
+                </div>
+
                 <!-- Filtros -->
                 <div class="pagination-controls">
-                    <div class="row g-2 align-items-center">
-                        <div class="col-md-4">
-                            <input type="text" id="gc-busqueda" class="form-control" placeholder="Buscar por código, cliente, RUT o descripción...">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-3">
+                            <label class="filtro-label">Buscar</label>
+                            <input type="text" id="gc-busqueda" class="form-control" placeholder="Código, cliente, RUT o descripción...">
                         </div>
                         <div class="col-md-2">
+                            <label class="filtro-label">Estado registrado</label>
                             <select id="gc-estado" class="form-select">
                                 <option value="">Todos los estados</option>
                                 {% for val, label in estado_choices %}
@@ -133,6 +180,7 @@
                             </select>
                         </div>
                         <div class="col-md-2">
+                            <label class="filtro-label">Motivo</label>
                             <select id="gc-motivo" class="form-select">
                                 <option value="">Todos los motivos</option>
                                 {% for val, label in motivo_choices %}
@@ -141,16 +189,44 @@
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <input type="date" id="gc-desde" class="form-control" title="Emisión desde">
+                            <label class="filtro-label">Sucursal emisión</label>
+                            <select id="gc-sucursal" class="form-select">
+                                <option value="">Todas</option>
+                                {% for s in sucursales %}
+                                <option value="{{ s.id }}">{{ s.nombre }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
-                        <div class="col-md-2">
-                            <input type="date" id="gc-hasta" class="form-control" title="Emisión hasta">
+                        <div class="col-md-3">
+                            <div class="row g-1">
+                                <div class="col-6">
+                                    <label class="filtro-label">Emisión desde</label>
+                                    <input type="date" id="gc-desde" class="form-control">
+                                </div>
+                                <div class="col-6">
+                                    <label class="filtro-label">Emisión hasta</label>
+                                    <input type="date" id="gc-hasta" class="form-control">
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-12 mt-2 text-end">
-                            <button class="btn btn-primary" onclick="cargarGiftCards(1)">
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 mt-3 align-items-center">
+                        <button type="button" class="quick-filter-btn activo" data-chip="" onclick="aplicarChip('')">Todas</button>
+                        <button type="button" class="quick-filter-btn" data-chip="vigentes" onclick="aplicarChip('vigentes')">Vigentes (deuda)</button>
+                        <button type="button" class="quick-filter-btn" data-chip="por_vencer" onclick="aplicarChip('por_vencer')">Vencen en 30 días</button>
+                        <button type="button" class="quick-filter-btn" data-chip="vencidas" onclick="aplicarChip('vencidas')">Vencidas con saldo</button>
+                        <button type="button" class="quick-filter-btn" data-chip="bloqueadas" onclick="aplicarChip('bloqueadas')">Bloqueadas</button>
+                        <button type="button" class="quick-filter-btn" data-chip="con_saldo" onclick="aplicarChip('con_saldo')">Con saldo</button>
+                        <div class="ms-auto d-flex gap-2 align-items-center">
+                            <select id="gc-perpage" class="form-select form-select-sm" style="width:auto;" onchange="cargarGiftCards(1)">
+                                <option value="20">20 por página</option>
+                                <option value="50">50 por página</option>
+                                <option value="100">100 por página</option>
+                            </select>
+                            <button class="btn btn-primary btn-sm" onclick="cargarGiftCards(1)">
                                 <i class="ri-filter-line"></i> Filtrar
                             </button>
-                            <button class="btn btn-light" onclick="limpiarFiltrosGc()">
+                            <button class="btn btn-light btn-sm" onclick="limpiarFiltrosGc()">
                                 <i class="ri-refresh-line"></i> Limpiar
                             </button>
                         </div>
@@ -166,6 +242,7 @@
                                 <th>Tipo</th>
                                 <th>Motivo</th>
                                 <th>Cliente</th>
+                                <th class="text-end">Cargado</th>
                                 <th class="text-end">Saldo</th>
                                 <th>Estado</th>
                                 <th>Emisión</th>
@@ -174,8 +251,16 @@
                             </tr>
                         </thead>
                         <tbody id="gc-tbody">
-                            <tr><td colspan="9" class="text-center text-muted py-4">Cargando...</td></tr>
+                            <tr><td colspan="10" class="text-center text-muted py-4">Cargando...</td></tr>
                         </tbody>
+                        <tfoot class="table-light">
+                            <tr id="gc-tfoot" class="d-none">
+                                <th colspan="4" class="text-end">Total del filtro</th>
+                                <th class="text-end" id="tot-cargado"></th>
+                                <th class="text-end" id="tot-saldo"></th>
+                                <th colspan="4" class="small text-muted" id="tot-nota"></th>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
 
@@ -217,6 +302,7 @@
                         <div class="mb-3">
                             <label class="form-label fw-bold">Monto inicial <span class="text-danger">*</span></label>
                             <input type="number" id="em-monto" class="form-control form-control-lg" min="1" placeholder="$ 0" oninput="actualizarPreview()">
+                            <small class="text-muted">Este monto se convierte en <strong>deuda del negocio</strong> con el cliente.</small>
                         </div>
 
                         <!-- Código físico (solo FISICA) -->
@@ -245,8 +331,9 @@
 
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">Vencimiento (opcional)</label>
-                                <input type="date" id="em-vencimiento" class="form-control">
+                                <label class="form-label">Vencimiento</label>
+                                <input type="date" id="em-vencimiento" class="form-control" onchange="actualizarPreview()">
+                                <small class="text-muted" id="em-venc-hint">Si lo dejas vacío: 12 meses desde hoy.</small>
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">PIN (opcional)</label>
@@ -256,7 +343,7 @@
                         <div class="row">
                             <div class="col-md-5 mb-3">
                                 <label class="form-label">Motivo</label>
-                                <select id="em-motivo" class="form-select">
+                                <select id="em-motivo" class="form-select" onchange="onMotivoEmision()">
                                     {% for val, label in motivo_choices %}
                                     <option value="{{ val }}"{% if val == 'OTRO' %} selected{% endif %}>{{ label }}</option>
                                     {% endfor %}
@@ -266,6 +353,11 @@
                                 <label class="form-label">Descripción</label>
                                 <input type="text" id="em-descripcion" class="form-control" maxlength="255" placeholder="Ej: Regalo corporativo Empresa X">
                             </div>
+                        </div>
+                        <div class="alert alert-warning py-2 d-none" id="em-aviso-venta" style="font-size:12px;">
+                            <i class="ri-money-dollar-circle-line"></i>
+                            Motivo <strong>Venta</strong>: esta pantalla <u>no</u> registra el cobro en caja.
+                            Si el cliente está pagando la tarjeta, cóbrala en el POS; aquí solo se crea el saldo.
                         </div>
                         <div class="mb-1">
                             <label class="form-label">Observaciones</label>
@@ -278,6 +370,12 @@
                             <div class="mt-2" style="opacity:.8;">GIFT CARD <span id="pv-tipo">DIGITAL</span></div>
                             <div class="monto" id="pv-monto">$0</div>
                             <div class="codigo" id="pv-codigo">GC-••••-••••-••••</div>
+                            <div class="mt-2" style="opacity:.75; font-size:12px;" id="pv-vence">Vence: 12 meses</div>
+                        </div>
+                        <div class="small text-muted mt-3">
+                            <i class="ri-information-line"></i>
+                            Sirve en cualquier sucursal de la cadena. Queda registrada con tu usuario y
+                            con la sucursal activa; todo movimiento posterior queda en la trazabilidad.
                         </div>
                     </div>
                 </div>
@@ -297,23 +395,26 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header modal-header-nexo">
-                <h5 class="modal-title" id="modalGcTitulo">Consultar Gift Card</h5>
+                <h5 class="modal-title" id="modalGcTitulo">Gestionar Gift Card</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
                     <label class="form-label">Código (sistema o físico)</label>
-                    <input type="text" id="gc-codigo-input" class="form-control gc-codigo" placeholder="GC-XXXX-XXXX-XXXX">
+                    <div class="input-group">
+                        <input type="text" id="gc-codigo-input" class="form-control gc-codigo" placeholder="GC-XXXX-XXXX-XXXX">
+                        <button class="btn btn-primary" type="button" onclick="consultarSaldoGc()"><i class="ri-search-line"></i> Consultar</button>
+                    </div>
                 </div>
                 <div id="gc-resultado" class="d-none alert"></div>
                 <div id="gc-acciones-extra" class="d-none">
                     <div class="mb-3">
-                        <label class="form-label">Monto (recarga)</label>
+                        <label class="form-label">Monto a recargar</label>
                         <input type="number" id="gc-monto-input" class="form-control" min="1">
                     </div>
                 </div>
                 <div id="gc-editar-extra" class="d-none border-top pt-3">
-                    <label class="form-label fw-bold small text-muted">Editar descripción / motivo</label>
+                    <label class="form-label fw-bold small text-muted">Editar motivo / descripción / vencimiento</label>
                     <div class="row g-2">
                         <div class="col-md-5">
                             <select id="gc-edit-motivo" class="form-select form-select-sm">
@@ -325,13 +426,20 @@
                         <div class="col-md-7">
                             <input type="text" id="gc-edit-descripcion" class="form-control form-control-sm" maxlength="255" placeholder="Descripción">
                         </div>
+                        <div class="col-md-7">
+                            <label class="filtro-label">Vencimiento</label>
+                            <input type="date" id="gc-edit-vencimiento" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-5 d-flex align-items-end">
+                            <small class="text-muted">Extenderlo revive una tarjeta vencida.</small>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer flex-wrap">
-                <button class="btn btn-primary" onclick="consultarSaldoGc()"><i class="ri-search-line"></i> Consultar</button>
+                <a class="btn btn-outline-primary d-none" id="btn-detalle-gc" href="#"><i class="ri-eye-line"></i> Ver ledger</a>
                 <button class="btn btn-success d-none" id="btn-recargar-gc" onclick="recargarGc()">Recargar</button>
-                <button class="btn btn-info text-white d-none" id="btn-editar-gc" onclick="editarGc()">Guardar edición</button>
+                <button class="btn btn-info text-white d-none" id="btn-editar-gc" onclick="editarGc()">Guardar cambios</button>
                 <button class="btn btn-warning d-none" id="btn-bloquear-gc" onclick="bloquearGc()">Bloquear</button>
                 <button class="btn btn-secondary d-none" id="btn-desbloquear-gc" onclick="desbloquearGc()">Desbloquear</button>
                 <button class="btn btn-danger d-none" id="btn-anular-gc" onclick="anularGc()">Anular</button>
@@ -340,7 +448,13 @@
     </div>
 </div>
 
+{% include '../../layout/footer.html' %}
+
 <script>
+/* El JS del módulo va DESPUÉS del footer: el footer es quien trae jQuery,
+   bootstrap y SweetAlert2. Las funciones quedan en el ámbito global (este
+   script no abre closure), y además se exponen en `window` al final porque
+   se invocan desde onclick inline. */
 const URLS_GC = {
     listar: "{% url 'api_listar_giftcards' %}",
     reporte: "{% url 'api_reporte_giftcards' %}",
@@ -357,94 +471,171 @@ const URLS_GC = {
 const PUEDE_EMITIR = {% if user|puede_crear_en:'giftcards_emitir' %}true{% else %}false{% endif %};
 const PUEDE_ANULAR_GC = {% if user|puede_editar_en:'giftcards_emitir' %}true{% else %}false{% endif %};
 const MOTIVO_COLORES = {PROMOCION:'info', COMPENSACION:'warning', REGALO_CORP:'primary', VENTA:'success', OTRO:'secondary'};
+const ESTADO_COLORES = {ACTIVA:'success', AGOTADA:'secondary', ANULADA:'danger', VENCIDA:'warning', BLOQUEADA:'dark'};
+const MONTO_ALERTA_EMISION = 200000;   // sobre esto pedimos confirmación explícita
 let TIPO_GC = 'DIGITAL';
 let CLIENTE_ID = null;
+let CHIP_VIGENCIA = '';
 let modalEmitir = null, modalConsultar = null;
-function csrf() { return document.querySelector('[name=csrfmiddlewaretoken]').value; }
-function fmt(n) { return '$' + (n||0).toLocaleString('es-CL'); }
 
-/* ===== KPIs + Listado ===== */
-function cargarKpis() {
-    fetch(URLS_GC.reporte).then(r=>r.json()).then(d=>{
-        if (!d.success) return;
-        document.getElementById('kpi-total').textContent = d.total_emitidas;
-        document.getElementById('kpi-activas').textContent = d.activas;
-        document.getElementById('kpi-circulante').textContent = fmt(d.saldo_circulante);
-        document.getElementById('kpi-emitido').textContent = fmt(d.monto_total_emitido);
+function csrf() { return document.querySelector('[name=csrfmiddlewaretoken]').value; }
+function fmt(n) { return '$' + (Number(n) || 0).toLocaleString('es-CL'); }
+/* Escapa texto libre (descripción, cliente) antes de inyectarlo con innerHTML. */
+function esc(s) {
+    return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (c) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
     });
 }
 
+/* ===== KPIs ===== */
+function cargarKpis() {
+    const p = filtrosGcQuery();
+    // Los KPIs se calculan sobre EL MISMO universo filtrado que la tabla; si hay
+    // filtros activos se avisa para que nadie lea el número como si fuera global.
+    const filtrado = p.toString().length > 0;
+    document.getElementById('fl-filtro').innerHTML = filtrado
+        ? '<span class="badge bg-warning text-dark">KPIs del filtro aplicado, no del total</span>' : '';
+    fetch(`${URLS_GC.reporte}?${p.toString()}`).then(r=>r.json()).then(d=>{
+        if (!d.success) return;
+        document.getElementById('kpi-deuda').textContent = fmt(d.saldo_vigente);
+        document.getElementById('kpi-deuda-n').textContent = `${d.vigentes} tarjeta(s)`;
+        document.getElementById('kpi-porvencer').textContent = fmt(d.saldo_por_vencer_30);
+        document.getElementById('kpi-porvencer-n').textContent = `${d.por_vencer_30} tarjeta(s)`;
+        document.getElementById('kpi-vencido').textContent = fmt(d.saldo_vencido);
+        document.getElementById('kpi-vencido-n').textContent = `${d.vencidas_con_saldo} tarjeta(s)`;
+        document.getElementById('kpi-bloqueado').textContent = fmt(d.saldo_bloqueado);
+        document.getElementById('kpi-bloqueado-n').textContent = `${d.bloqueadas_con_saldo} tarjeta(s)`;
+
+        document.getElementById('fl-emitidas').textContent = d.total_emitidas;
+        document.getElementById('fl-cargado').textContent = fmt(d.total_cargado);
+        document.getElementById('fl-consumido').textContent = fmt(d.total_consumido);
+        document.getElementById('fl-reversado').textContent = fmt(d.total_reversado);
+        document.getElementById('fl-anulado').textContent = fmt(d.total_anulado);
+        document.getElementById('fl-saldo').textContent = fmt(d.saldo_total_tarjetas);
+        const cuad = document.getElementById('fl-cuadratura');
+        if (d.descuadres_ledger > 0) {
+            cuad.innerHTML = `<span class="badge bg-danger">${d.descuadres_ledger} tarjeta(s) descuadradas vs ledger</span>`;
+        } else {
+            cuad.innerHTML = '<span class="badge bg-success"><i class="ri-check-line"></i> Saldos cuadran con el ledger</span>';
+        }
+    });
+}
+
+/* ===== Filtros ===== */
 function filtrosGcQuery() {
-    const q = document.getElementById('gc-busqueda').value;
+    const p = new URLSearchParams();
+    const q = document.getElementById('gc-busqueda').value.trim();
     const estado = document.getElementById('gc-estado').value;
     const motivo = document.getElementById('gc-motivo').value;
+    const sucursal = document.getElementById('gc-sucursal').value;
     const desde = document.getElementById('gc-desde').value;
     const hasta = document.getElementById('gc-hasta').value;
-    const p = new URLSearchParams();
     if (q) p.set('q', q);
     if (estado) p.set('estado', estado);
     if (motivo) p.set('motivo', motivo);
+    if (sucursal) p.set('sucursal_id', sucursal);
     if (desde) p.set('desde', desde);
     if (hasta) p.set('hasta', hasta);
+    if (CHIP_VIGENCIA) p.set('vigencia', CHIP_VIGENCIA);
     return p;
 }
 
-function limpiarFiltrosGc() {
-    document.getElementById('gc-busqueda').value = '';
-    document.getElementById('gc-estado').value = '';
-    document.getElementById('gc-motivo').value = '';
-    document.getElementById('gc-desde').value = '';
-    document.getElementById('gc-hasta').value = '';
+function aplicarChip(chip) {
+    CHIP_VIGENCIA = chip || '';
+    document.querySelectorAll('.quick-filter-btn').forEach(b => {
+        b.classList.toggle('activo', (b.dataset.chip || '') === CHIP_VIGENCIA);
+    });
     cargarGiftCards(1);
 }
 
-function exportarGiftCards() {
-    const p = filtrosGcQuery();
-    window.location.href = `${URLS_GC.exportar}?${p.toString()}`;
+function limpiarFiltrosGc() {
+    ['gc-busqueda','gc-estado','gc-motivo','gc-sucursal','gc-desde','gc-hasta']
+        .forEach(id => { document.getElementById(id).value = ''; });
+    aplicarChip('');
 }
 
+function exportarGiftCards() {
+    window.location.href = `${URLS_GC.exportar}?${filtrosGcQuery().toString()}`;
+}
+
+/* ===== Listado ===== */
 function cargarGiftCards(page) {
     const p = filtrosGcQuery();
     p.set('page', page || 1);
+    p.set('per_page', document.getElementById('gc-perpage').value || 20);
+    const tbody = document.getElementById('gc-tbody');
     fetch(`${URLS_GC.listar}?${p.toString()}`).then(r=>r.json()).then(d=>{
-        const tbody = document.getElementById('gc-tbody');
-        if (!d.success || !d.items.length) {
-            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">Sin resultados</td></tr>';
-            document.getElementById('gc-info').textContent = '';
-            document.getElementById('gc-paginacion').innerHTML = '';
+        if (!d.success) {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger py-4">No se pudo cargar el listado.</td></tr>';
             return;
         }
-        const colores = {ACTIVA:'success', AGOTADA:'secondary', ANULADA:'danger', VENCIDA:'warning', BLOQUEADA:'dark'};
+        document.getElementById('gc-tfoot').classList.toggle('d-none', !d.items.length);
+        if (!d.items.length) {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">Sin resultados</td></tr>';
+            document.getElementById('gc-info').textContent = '';
+            document.getElementById('gc-paginacion').innerHTML = '';
+            cargarKpis();
+            return;
+        }
         tbody.innerHTML = d.items.map(gc => {
             const esFisica = gc.tipo_tarjeta === 'FISICA';
             const codigoMostrar = esFisica && gc.codigo_fisico ? gc.codigo_fisico : gc.codigo;
-            const desc = gc.descripcion ? `<div class="small text-muted">${gc.descripcion}</div>` : '';
+            const desc = gc.descripcion ? `<div class="small text-muted">${esc(gc.descripcion)}</div>` : '';
+            // Estado EFECTIVO: una tarjeta caducada sigue guardada como ACTIVA
+            // hasta que corra `expirar_giftcards`; no le mentimos al usuario.
+            const est = gc.estado_efectivo || gc.estado;
+            const mentira = est !== gc.estado
+                ? ` <i class="ri-error-warning-line text-danger" title="En base figura como ${esc(gc.estado_display)}"></i>` : '';
+            let vence = '—';
+            if (gc.fecha_vencimiento) {
+                const d0 = gc.dias_vencimiento;
+                const cls = d0 === null ? '' : (d0 < 0 ? 'text-danger fw-bold' : (d0 <= 30 ? 'text-warning fw-bold' : ''));
+                const txt = d0 === null ? '' : (d0 < 0 ? ` (hace ${Math.abs(d0)}d)` : ` (${d0}d)`);
+                vence = `<span class="${cls}">${esc(gc.fecha_vencimiento)}${txt}</span>`;
+            }
+            const suc = gc.sucursal_emision ? `<div class="small text-muted">${esc(gc.sucursal_emision)}</div>` : '';
             return `
             <tr>
-                <td><span class="gc-codigo">${codigoMostrar}</span>${desc}</td>
+                <td><span class="gc-codigo">${esc(codigoMostrar)}</span>${desc}</td>
                 <td><span class="badge-tipo ${esFisica?'fisica':'digital'}">${esFisica?'Física':'Digital'}</span></td>
-                <td><span class="badge bg-${MOTIVO_COLORES[gc.motivo]||'secondary'} badge-estado">${gc.motivo_display}</span></td>
-                <td>${gc.cliente || '<span class="text-muted">—</span>'}</td>
+                <td><span class="badge bg-${MOTIVO_COLORES[gc.motivo]||'secondary'} badge-estado">${esc(gc.motivo_display)}</span></td>
+                <td>${gc.cliente ? esc(gc.cliente) : '<span class="text-muted">—</span>'}</td>
+                <td class="text-end text-muted">${fmt(gc.cargado)}</td>
                 <td class="text-end fw-bold">${fmt(gc.saldo_actual)}</td>
-                <td><span class="badge bg-${colores[gc.estado]||'secondary'} badge-estado">${gc.estado_display}</span></td>
-                <td class="small">${gc.fecha_emision}</td>
-                <td class="small ${gc.vencida?'text-danger':''}">${gc.fecha_vencimiento||'—'}</td>
+                <td><span class="badge bg-${ESTADO_COLORES[est]||'secondary'} badge-estado">${esc(gc.estado_efectivo_display || gc.estado_display)}</span>${mentira}</td>
+                <td class="small">${esc(gc.fecha_emision)}${suc}</td>
+                <td class="small">${vence}</td>
                 <td class="text-center text-nowrap">
-                    <button class="btn btn-sm btn-outline-primary" title="Ver detalle" onclick="verDetalle(${gc.id})"><i class="ri-eye-line"></i></button>
-                    <button class="btn btn-sm btn-outline-secondary" title="Gestionar" onclick="abrirModalConsultar('${gc.codigo}')"><i class="ri-settings-3-line"></i></button>
+                    <button class="btn btn-sm btn-outline-primary" title="Ver ledger" onclick="verDetalle(${gc.id})"><i class="ri-eye-line"></i></button>
+                    <button class="btn btn-sm btn-outline-secondary" title="Gestionar" onclick="abrirModalConsultar('${esc(gc.codigo)}')"><i class="ri-settings-3-line"></i></button>
                 </td>
             </tr>`;
         }).join('');
+
+        const t = d.totales || {};
+        const sumCargado = d.items.reduce((a, x) => a + (x.cargado || 0), 0);
+        document.getElementById('tot-cargado').textContent = `${fmt(sumCargado)} (página)`;
+        document.getElementById('tot-saldo').textContent = fmt(t.saldo || 0);
+        document.getElementById('tot-nota').textContent =
+            `${t.tarjetas || 0} tarjeta(s) en el filtro · de ese saldo, ${fmt(t.saldo_vigente || 0)} es canjeable hoy`;
         document.getElementById('gc-info').textContent = `${d.total} gift cards · página ${d.page}/${d.num_pages}`;
         renderPaginacion(d.page, d.num_pages);
+        cargarKpis();
     });
 }
 
 function renderPaginacion(page, total) {
     const cont = document.getElementById('gc-paginacion');
     let html = '';
-    if (page > 1) html += `<button class="btn btn-sm btn-outline-secondary" onclick="cargarGiftCards(${page-1})">«</button>`;
-    if (page < total) html += `<button class="btn btn-sm btn-outline-secondary" onclick="cargarGiftCards(${page+1})">»</button>`;
+    if (total <= 1) { cont.innerHTML = ''; return; }
+    html += `<button class="btn btn-sm btn-outline-secondary" ${page<=1?'disabled':''} onclick="cargarGiftCards(1)">«</button>`;
+    html += `<button class="btn btn-sm btn-outline-secondary" ${page<=1?'disabled':''} onclick="cargarGiftCards(${page-1})">‹</button>`;
+    const ini = Math.max(1, page - 2), fin = Math.min(total, page + 2);
+    for (let i = ini; i <= fin; i++) {
+        html += `<button class="btn btn-sm ${i===page?'btn-primary':'btn-outline-secondary'}" onclick="cargarGiftCards(${i})">${i}</button>`;
+    }
+    html += `<button class="btn btn-sm btn-outline-secondary" ${page>=total?'disabled':''} onclick="cargarGiftCards(${page+1})">›</button>`;
+    html += `<button class="btn btn-sm btn-outline-secondary" ${page>=total?'disabled':''} onclick="cargarGiftCards(${total})">»</button>`;
     cont.innerHTML = html;
 }
 
@@ -453,21 +644,21 @@ function verDetalle(id) { window.location.href = `/app/giftcards/${id}/`; }
 /* ===== Emitir (modal) ===== */
 function abrirModalEmitir() {
     CLIENTE_ID = null;
-    document.getElementById('em-monto').value = '';
-    document.getElementById('em-codigo-fisico').value = '';
-    document.getElementById('em-rut').value = '';
-    document.getElementById('em-vencimiento').value = '';
-    document.getElementById('em-pin').value = '';
-    document.getElementById('em-obs').value = '';
+    ['em-monto','em-codigo-fisico','em-rut','em-vencimiento','em-pin','em-obs','em-descripcion','em-nuevo-nombre']
+        .forEach(id => { document.getElementById(id).value = ''; });
     document.getElementById('em-motivo').value = 'OTRO';
-    document.getElementById('em-descripcion').value = '';
     document.getElementById('em-cliente-nombre').textContent = '';
-    document.getElementById('em-nuevo-nombre').value = '';
     document.getElementById('grp-nuevo-cliente').classList.add('d-none');
+    document.getElementById('em-aviso-venta').classList.add('d-none');
     setTipoGc('DIGITAL');
     actualizarPreview();
     if (!modalEmitir) modalEmitir = new bootstrap.Modal(document.getElementById('modalEmitir'));
     modalEmitir.show();
+}
+
+function onMotivoEmision() {
+    const esVenta = document.getElementById('em-motivo').value === 'VENTA';
+    document.getElementById('em-aviso-venta').classList.toggle('d-none', !esVenta);
 }
 
 /* Al cambiar el RUT se invalida el cliente resuelto y se oculta el alta inline. */
@@ -502,6 +693,8 @@ function actualizarPreview() {
     } else {
         document.getElementById('pv-codigo').textContent = 'GC-••••-••••-••••';
     }
+    const v = document.getElementById('em-vencimiento').value;
+    document.getElementById('pv-vence').textContent = v ? `Vence: ${v}` : 'Vence: 12 meses desde hoy';
 }
 
 function buscarClienteGc() {
@@ -543,7 +736,19 @@ function emitirGc() {
     if (TIPO_GC === 'FISICA' && !codigoFisico) {
         Swal.fire('Atención', 'Ingresa el código impreso de la tarjeta física.', 'warning'); return;
     }
+    // Un cero de más en el monto es plata regalada: confirmación explícita.
+    if (monto >= MONTO_ALERTA_EMISION) {
+        Swal.fire({
+            icon: 'warning', title: 'Confirmar monto',
+            html: `Vas a emitir una gift card por <strong>${fmt(monto)}</strong>.<br>Ese monto queda como deuda del negocio.`,
+            showCancelButton: true, confirmButtonText: 'Sí, emitir', cancelButtonText: 'Revisar',
+        }).then(r => { if (r.isConfirmed) enviarEmision(monto, rut, codigoFisico); });
+        return;
+    }
+    enviarEmision(monto, rut, codigoFisico);
+}
 
+function enviarEmision(monto, rut, codigoFisico) {
     const payload = {
         tipo_tarjeta: TIPO_GC,
         monto,
@@ -564,16 +769,17 @@ function emitirGc() {
         btn.disabled = false;
         if (d.success) {
             if (modalEmitir) modalEmitir.hide();
-            const codSys = `<strong class="gc-codigo" style="font-size:18px;">${d.giftcard.codigo}</strong>`;
-            const codFis = d.giftcard.codigo_fisico ? `<br><small class="text-muted">Código físico: ${d.giftcard.codigo_fisico}</small>` : '';
-            const titular = d.giftcard.cliente ? `<br><small>Titular: ${d.giftcard.cliente}</small>` : '';
+            const codSys = `<strong class="gc-codigo" style="font-size:18px;">${esc(d.giftcard.codigo)}</strong>`;
+            const codFis = d.giftcard.codigo_fisico ? `<br><small class="text-muted">Código físico: ${esc(d.giftcard.codigo_fisico)}</small>` : '';
+            const titular = d.giftcard.cliente ? `<br><small>Titular: ${esc(d.giftcard.cliente)}</small>` : '';
+            const vence = d.giftcard.fecha_vencimiento ? `<br><small class="text-muted">Vence: ${esc(d.giftcard.fecha_vencimiento)}</small>` : '';
             Swal.fire({
                 icon:'success', title:'Gift Card emitida',
-                html:`${codSys}${codFis}${titular}<br>Saldo: ${fmt(d.giftcard.saldo_actual)}`,
+                html:`${codSys}${codFis}${titular}<br>Saldo: ${fmt(d.giftcard.saldo_actual)}${vence}`,
                 showCancelButton:true, confirmButtonText:'Ver detalle', cancelButtonText:'Seguir aquí',
             }).then(res=>{
                 if (res.isConfirmed) window.location.href = `/app/giftcards/${d.giftcard.id}/`;
-                else { cargarGiftCards(1); cargarKpis(); }
+                else { cargarGiftCards(1); }
             });
         } else {
             // Si el RUT no existe, mostrar el campo de nombre para crear el cliente al vuelo.
@@ -586,11 +792,11 @@ function emitirGc() {
     }).catch(()=>{ btn.disabled = false; Swal.fire('Error', 'No se pudo emitir la gift card.', 'error'); });
 }
 
-/* ===== Consultar / Recargar / Anular ===== */
+/* ===== Consultar / Recargar / Bloquear / Anular ===== */
 function ocultarAccionesGc() {
     document.getElementById('gc-acciones-extra').classList.add('d-none');
     document.getElementById('gc-editar-extra').classList.add('d-none');
-    ['btn-recargar-gc','btn-anular-gc','btn-editar-gc','btn-bloquear-gc','btn-desbloquear-gc']
+    ['btn-recargar-gc','btn-anular-gc','btn-editar-gc','btn-bloquear-gc','btn-desbloquear-gc','btn-detalle-gc']
         .forEach(id => document.getElementById(id).classList.add('d-none'));
 }
 
@@ -611,54 +817,78 @@ function consultarSaldoGc() {
         box.classList.remove('d-none');
         ocultarAccionesGc();
         if (!d.success) { box.className = 'alert alert-danger'; box.textContent = d.error; return; }
+        const est = d.estado_efectivo || d.estado;
+        const vencida = d.vencida || est === 'VENCIDA';
         box.className = d.valida ? 'alert alert-success' : 'alert alert-warning';
-        box.innerHTML = `<strong>${d.codigo}</strong>` +
-            (d.codigo_fisico ? ` <span class="badge-tipo fisica">Física</span>` : ` <span class="badge-tipo digital">Digital</span>`) +
-            `<br>Motivo: ${d.motivo_display}` + (d.descripcion ? ` — ${d.descripcion}` : '') +
-            `<br>Saldo: ${fmt(d.saldo_actual)}<br>Estado: ${d.estado_display}` +
-            (d.fecha_vencimiento ? `<br>Vence: ${d.fecha_vencimiento}` : '');
-        // Recarga (solo estados no terminales)
-        if (PUEDE_EMITIR && !['ANULADA'].includes(d.estado)) {
+        box.innerHTML =
+            `<strong class="gc-codigo">${esc(d.codigo)}</strong>` +
+            (d.codigo_fisico ? ` <span class="badge-tipo fisica">Física ${esc(d.codigo_fisico)}</span>` : ` <span class="badge-tipo digital">Digital</span>`) +
+            `<br>Saldo: <strong>${fmt(d.saldo_actual)}</strong> · Estado: <span class="badge bg-${ESTADO_COLORES[est]||'secondary'} badge-estado">${esc(est)}</span>` +
+            (est !== d.estado ? ` <small class="text-danger">(en base figura ${esc(d.estado_display)})</small>` : '') +
+            `<br>Motivo: ${esc(d.motivo_display)}` + (d.descripcion ? ` — ${esc(d.descripcion)}` : '') +
+            (d.cliente ? `<br>Titular: ${esc(d.cliente)}` : '<br>Sin titular') +
+            (d.fecha_emision ? `<br>Emitida: ${esc(d.fecha_emision)}${d.sucursal_emision ? ' · ' + esc(d.sucursal_emision) : ''}` : '') +
+            (d.fecha_vencimiento ? `<br>Vence: ${esc(d.fecha_vencimiento)}${vencida ? ' <span class="text-danger fw-bold">(VENCIDA)</span>' : ''}` : '<br>Sin vencimiento') +
+            (d.movimientos !== undefined ? `<br><small class="text-muted">${d.movimientos} movimiento(s) en el ledger</small>` : '');
+
+        if (d.id) {
+            const a = document.getElementById('btn-detalle-gc');
+            a.href = `/app/giftcards/${d.id}/`;
+            a.classList.remove('d-none');
+        }
+        // Recarga: nunca sobre anulada ni vencida (el saldo quedaría inutilizable).
+        if (PUEDE_EMITIR && d.estado !== 'ANULADA' && d.estado !== 'BLOQUEADA' && !vencida) {
             document.getElementById('gc-acciones-extra').classList.remove('d-none');
             document.getElementById('btn-recargar-gc').classList.remove('d-none');
         }
-        // Edición de motivo/descripción
-        if (PUEDE_ANULAR_GC) {
+        // Edición de motivo / descripción / vencimiento
+        if (PUEDE_ANULAR_GC && d.estado !== 'ANULADA') {
             document.getElementById('gc-editar-extra').classList.remove('d-none');
             document.getElementById('gc-edit-motivo').value = d.motivo || 'OTRO';
             document.getElementById('gc-edit-descripcion').value = d.descripcion || '';
+            document.getElementById('gc-edit-vencimiento').value = d.fecha_vencimiento || '';
             document.getElementById('btn-editar-gc').classList.remove('d-none');
         }
-        // Bloquear / Desbloquear
         if (PUEDE_ANULAR_GC) {
             if (['ACTIVA','AGOTADA'].includes(d.estado))
                 document.getElementById('btn-bloquear-gc').classList.remove('d-none');
             if (d.estado === 'BLOQUEADA')
                 document.getElementById('btn-desbloquear-gc').classList.remove('d-none');
+            // Anular sirve para dar de baja el pasivo en cualquier estado vivo.
+            if (d.estado !== 'ANULADA')
+                document.getElementById('btn-anular-gc').classList.remove('d-none');
         }
-        if (PUEDE_ANULAR_GC && d.estado === 'ACTIVA') document.getElementById('btn-anular-gc').classList.remove('d-none');
     });
 }
 
 function recargarGc() {
     const codigo = document.getElementById('gc-codigo-input').value.trim();
     const monto = parseInt(document.getElementById('gc-monto-input').value || 0);
-    if (!monto) { return; }
+    if (!monto || monto <= 0) { Swal.fire('Atención', 'Ingresa el monto a recargar.', 'warning'); return; }
     fetch(URLS_GC.recargar, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
         body: JSON.stringify({codigo, monto})}).then(r=>r.json()).then(d=>{
-        if (d.success) { Swal.fire('Recargada', 'Nuevo saldo: '+fmt(d.saldo_actual), 'success'); consultarSaldoGc(); cargarKpis(); cargarGiftCards(1); }
-        else Swal.fire('Error', d.error, 'error');
+        if (d.success) {
+            document.getElementById('gc-monto-input').value = '';
+            Swal.fire('Recargada', 'Nuevo saldo: '+fmt(d.saldo_actual), 'success');
+            consultarSaldoGc(); cargarGiftCards(1);
+        } else Swal.fire('Error', d.error, 'error');
     });
 }
 
 function anularGc() {
     const codigo = document.getElementById('gc-codigo-input').value.trim();
-    Swal.fire({title:'¿Anular gift card?', text:'Esta acción es irreversible.', icon:'warning',
-        showCancelButton:true, confirmButtonText:'Sí, anular'}).then(res=>{
+    Swal.fire({
+        title:'¿Anular gift card?',
+        html:'El saldo se lleva a <strong>$0</strong> y la tarjeta queda inutilizable. Es irreversible.',
+        icon:'warning', input:'text', inputLabel:'Motivo (obligatorio, queda en el ledger)',
+        inputPlaceholder:'Ej: emitida por error de monto',
+        inputValidator:(v)=> (!v || v.trim().length < 5) ? 'Escribe el motivo (mínimo 5 caracteres)' : undefined,
+        showCancelButton:true, confirmButtonText:'Sí, anular',
+    }).then(res=>{
         if (!res.isConfirmed) return;
         fetch(URLS_GC.anular, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
-            body: JSON.stringify({codigo})}).then(r=>r.json()).then(d=>{
-            if (d.success) { Swal.fire('Anulada', '', 'success'); consultarSaldoGc(); cargarGiftCards(1); cargarKpis(); }
+            body: JSON.stringify({codigo, motivo: (res.value || '').trim()})}).then(r=>r.json()).then(d=>{
+            if (d.success) { Swal.fire('Anulada', 'Queda registrada en la trazabilidad.', 'success'); consultarSaldoGc(); cargarGiftCards(1); }
             else Swal.fire('Error', d.error, 'error');
         });
     });
@@ -691,20 +921,40 @@ function editarGc() {
     const codigo = document.getElementById('gc-codigo-input').value.trim();
     const motivo = document.getElementById('gc-edit-motivo').value;
     const descripcion = document.getElementById('gc-edit-descripcion').value.trim();
+    const vencimiento = document.getElementById('gc-edit-vencimiento').value || null;
     fetch(URLS_GC.editar, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
-        body: JSON.stringify({codigo, motivo, descripcion})}).then(r=>r.json()).then(d=>{
-        if (d.success) { Swal.fire('Guardado', 'Descripción / motivo actualizados.', 'success'); cargarGiftCards(1); }
+        body: JSON.stringify({codigo, motivo, descripcion, fecha_vencimiento: vencimiento})}).then(r=>r.json()).then(d=>{
+        if (d.success) { Swal.fire('Guardado', 'Cambios registrados en la trazabilidad.', 'success'); consultarSaldoGc(); cargarGiftCards(1); }
         else Swal.fire('Error', d.error, 'error');
     });
 }
 
+/* Expuestas en window: se llaman desde onclick/onchange inline. */
+window.cargarGiftCards = cargarGiftCards;
+window.cargarKpis = cargarKpis;
+window.aplicarChip = aplicarChip;
+window.limpiarFiltrosGc = limpiarFiltrosGc;
+window.exportarGiftCards = exportarGiftCards;
+window.verDetalle = verDetalle;
+window.abrirModalEmitir = abrirModalEmitir;
+window.onMotivoEmision = onMotivoEmision;
+window.onRutInput = onRutInput;
+window.setTipoGc = setTipoGc;
+window.actualizarPreview = actualizarPreview;
+window.buscarClienteGc = buscarClienteGc;
+window.emitirGc = emitirGc;
+window.abrirModalConsultar = abrirModalConsultar;
+window.consultarSaldoGc = consultarSaldoGc;
+window.recargarGc = recargarGc;
+window.anularGc = anularGc;
+window.bloquearGc = bloquearGc;
+window.desbloquearGc = desbloquearGc;
+window.editarGc = editarGc;
+
 document.addEventListener('DOMContentLoaded', () => {
-    cargarKpis();
     cargarGiftCards(1);
     document.getElementById('gc-busqueda').addEventListener('keyup', e => { if (e.key==='Enter') cargarGiftCards(1); });
     // Auto-abrir el modal de emisión si se llegó desde el enlace antiguo (/emitir/).
-    if (new URLSearchParams(window.location.search).get('nueva') === '1') abrirModalEmitir();
+    if (new URLSearchParams(window.location.search).get('nueva') === '1' && PUEDE_EMITIR) abrirModalEmitir();
 });
 </script>
-
-{% include '../../layout/footer.html' %}

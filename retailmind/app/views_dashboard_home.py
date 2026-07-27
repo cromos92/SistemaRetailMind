@@ -332,8 +332,14 @@ def dashboard_home(request):
 
 def calcular_kpis_ventas(sucursal_id, hoy, inicio_semana, inicio_mes, mes_pasado_inicio, mes_pasado_fin):
     """Calcula KPIs de ventas"""
-    # Base queryset de tickets
-    tickets_base = Ticket.objects.filter(estado='PAGADO')
+    # Base queryset de tickets.
+    # Se excluyen los tickets de CAMBIO_DEVOLUCION: son la diferencia a cobrar
+    # de un cambio, no una venta nueva. Sumarlos inflaba ventas, ticket
+    # promedio y el Top de productos (el POS y el reporte de ventas ya los
+    # excluyen; el home era el único que los contaba).
+    tickets_base = Ticket.objects.filter(estado='PAGADO').exclude(
+        modulo_origen='CAMBIO_DEVOLUCION'
+    )
     if sucursal_id:
         tickets_base = tickets_base.filter(sucursal_id=sucursal_id)
     
@@ -806,7 +812,7 @@ def generar_alertas_criticas(stock_data, compras_data, requerimientos_data, oper
             'titulo': f"{stock_data['quiebres_rotantes']} quiebres de productos que rotan",
             'descripcion': 'SKUs vendidos en los últimos 30 días y hoy en cero — repón para no perder ventas',
             'accion': 'Ver quiebres',
-            'url': '/app/resumen-existencias/',
+            'url': '/app/reportes/resumen-existencias/',
             'prioridad': 1
         })
 
@@ -854,7 +860,7 @@ def generar_alertas_criticas(stock_data, compras_data, requerimientos_data, oper
             'titulo': f"{operaciones_data['cambios_pendientes']} cambios/devoluciones pendientes",
             'descripcion': 'Cambios y devoluciones que requieren acción',
             'accion': 'Ver cambios',
-            'url': '/app/cambios-devoluciones/',
+            'url': '/app/ventas/cambios-devoluciones/',
             'prioridad': 5
         })
 
@@ -924,6 +930,10 @@ def obtener_top_productos(sucursal_id, inicio_mes, hoy):
         idTicket__created_at__date__gte=inicio_mes,
         idTicket__created_at__date__lte=hoy,
         idTicket__estado='PAGADO'
+    ).exclude(
+        # Mismo criterio que calcular_kpis_ventas: la diferencia cobrada en un
+        # cambio no es venta de ese producto.
+        idTicket__modulo_origen='CAMBIO_DEVOLUCION'
     )
     
     if sucursal_id:

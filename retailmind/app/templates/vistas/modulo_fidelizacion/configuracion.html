@@ -1,4 +1,5 @@
 {% load static %}
+{% load humanize %}
 
 {% include '../../layout/header.html' %}
 {% include '../../layout/menu.html' %}
@@ -15,11 +16,14 @@
     .module-header-icon { width:48px; height:48px; background:rgba(255,255,255,.2); border-radius:12px;
         display:flex; align-items:center; justify-content:center; font-size:24px; }
     .module-header-info h5 { margin:0; font-size:18px; font-weight:600; color:white; }
+    .module-header-status { display:flex; align-items:center; gap:6px; font-size:13px; opacity:.9; margin-top:4px; }
+    .module-header-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .module-header-actions .btn { border-radius:10px; font-weight:500; }
     .tasa-box {
-        background: linear-gradient(135deg,#e8f5e9,#c8e6c9); border-radius:12px; padding:20px; text-align:center;
+        background: linear-gradient(135deg,#e8f5e9,#c8e6c9); border-radius:12px; padding:16px; text-align:center;
         border-left:4px solid #0ab39c;
     }
-    .tasa-num { font-size:42px; font-weight:800; color:#0ab39c; }
+    .tasa-num { font-size:38px; font-weight:800; color:#0ab39c; line-height:1.1; }
     .strategy-callout {
         background: linear-gradient(135deg,#e3f2fd,#bbdefb); border-left:4px solid #299cdb;
         border-radius:12px; padding:14px 16px; display:flex; justify-content:space-between;
@@ -33,6 +37,18 @@
     .sim-box h6 { color:#405189; font-weight:700; margin-bottom:12px; }
     .sim-table { font-size:12px; margin-bottom:0; }
     .sim-table th { color:#6c757d; font-weight:700; }
+    .section-box { border:1px solid rgba(64,81,137,.12); border-radius:12px; padding:16px;
+        box-shadow:0 2px 10px rgba(64,81,137,.06); margin-bottom:16px; }
+    .section-title { color:#405189; font-size:15px; font-weight:700; margin-bottom:12px;
+        display:flex; align-items:center; gap:6px; }
+    .impacto-box { border-radius:12px; padding:16px; border-left:4px solid #405189; background:#f8f9ff; }
+    .impacto-num { font-size:32px; font-weight:800; line-height:1.1; }
+    .escalera-row.actual { background:#fff8e1; font-weight:700; }
+    .legacy-note { background:#f8f9fa; border-left:3px solid #adb5bd; border-radius:8px;
+        padding:10px 12px; font-size:12px; color:#6c757d; }
+    .mini-kpi { border-radius:10px; padding:10px 12px; background:#f8f9fa; border-left:3px solid #405189; }
+    .mini-kpi .v { font-size:18px; font-weight:800; color:#405189; line-height:1.2; }
+    .mini-kpi .l { font-size:11px; color:#6c757d; }
 </style>
 
 <div class="page-content">
@@ -41,72 +57,106 @@
             <div class="module-header">
                 <div class="module-header-left">
                     <div class="module-header-icon"><i class="ri-settings-3-line"></i></div>
-                    <div class="module-header-info"><h5>Configuración del Programa de Puntos</h5></div>
+                    <div class="module-header-info">
+                        <h5>Configuración del Programa de Puntos</h5>
+                        <div class="module-header-status">
+                            Cartera actual: {{ cartera.elegibles_cuentas }} clientes elegibles ·
+                            pasivo elegible ${{ cartera.elegibles_valor_pesos|intcomma }}
+                        </div>
+                    </div>
                 </div>
                 <div class="module-header-actions">
+                    <a href="{% url 'reporte_fidelizacion_vista' %}" class="btn btn-light"><i class="ri-line-chart-line"></i> Reporte</a>
                     <a href="{% url 'modulo_fidelizacion' %}" class="btn btn-light"><i class="ri-arrow-left-line"></i> Volver</a>
                 </div>
             </div>
 
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-8">
+                    <div class="col-lg-7">
                         <div class="mb-3">
                             <label class="form-label">Nombre del programa</label>
                             <input type="text" id="cf-nombre" class="form-control" value="{{ programa.nombre|default:'Programa de Puntos' }}">
                         </div>
 
-                        <div class="strategy-callout mb-3">
-                            <div>
-                                <strong><i class="ri-exchange-dollar-line me-1"></i> Estrategia 1 punto = $1</strong>
-                                <div class="small text-muted">10 puntos por cada $1.000 mantiene 1% de retorno y hace que los puntos se lean como pesos.</div>
-                            </div>
-                            <button type="button" class="btn btn-primary btn-sm" onclick="aplicarEstrategiaPeso()">
-                                <i class="ri-magic-line"></i> Aplicar valores
-                            </button>
+                        <h6 class="fw-bold text-muted mt-2"><i class="ri-vip-crown-line me-1"></i> Acumulación por nivel (motor real)</h6>
+                        <div class="alert alert-info py-2 px-3 small mb-3">
+                            <i class="ri-information-line"></i> El cliente gana
+                            <strong>monto de la compra &times; tasa de su nivel</strong>. Estas tres tasas
+                            son las únicas que usa la caja para acumular puntos.
                         </div>
-
-                        <h6 class="fw-bold text-muted mt-4">Acumulación</h6>
                         <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Puntos otorgados</label>
-                                <input type="number" id="cf-puntos" class="form-control" min="1" value="{{ programa.puntos_por_monto|default:10 }}" oninput="calcularTasa()">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label"><span style="color:#5c6bc0; font-weight:700;">&#9679;</span> Tasa Plata (%)</label>
+                                <input type="number" id="cf-tasa-plata" class="form-control" step="0.01" min="0" value="{{ programa.tasa_plata|default:'3.00' }}" oninput="recalcular()">
+                                <div class="form-text">Todos los clientes por defecto.</div>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Por cada (pesos de compra)</label>
-                                <input type="number" id="cf-base" class="form-control" min="1" value="{{ programa.monto_base_acumulacion|default:1000 }}" oninput="calcularTasa()">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label"><span style="color:#f9a825; font-weight:700;">&#9679;</span> Tasa Oro (%)</label>
+                                <input type="number" id="cf-tasa-oro" class="form-control" step="0.01" min="0" value="{{ programa.tasa_oro|default:'4.00' }}" oninput="recalcular()">
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Redondeo</label>
-                                <select id="cf-redondeo" class="form-select" onchange="calcularTasa()">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label"><span style="color:#8e24aa; font-weight:700;">&#9679;</span> Tasa Platino (%)</label>
+                                <input type="number" id="cf-tasa-platino" class="form-control" step="0.01" min="0" value="{{ programa.tasa_platino|default:'5.00' }}" oninput="recalcular()">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Umbral Oro ($ gasto 12 meses)</label>
+                                <input type="number" id="cf-umbral-oro" class="form-control" min="0" value="{{ programa.umbral_oro|default:300000 }}">
+                                <div class="form-text">Gasto acumulado en 12 meses para subir a Oro.</div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Umbral Platino ($ gasto 12 meses)</label>
+                                <input type="number" id="cf-umbral-platino" class="form-control" min="0" value="{{ programa.umbral_platino|default:800000 }}">
+                                <div class="form-text">Gasto acumulado en 12 meses para subir a Platino.</div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Redondeo de puntos</label>
+                                <select id="cf-redondeo" class="form-select" onchange="recalcular()">
                                     {% for val, label in redondeo_choices %}
                                     <option value="{{ val }}" {% if programa.redondeo == val %}selected{% endif %}>{{ label }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Acumula sobre</label>
-                                <select id="cf-acumula" class="form-select" onchange="calcularTasa()">
-                                    {% for val, label in acumula_choices %}
-                                    <option value="{{ val }}" {% if programa.acumula_sobre == val %}selected{% endif %}>{{ label }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
                         </div>
 
-                        <h6 class="fw-bold text-muted mt-2">Canje</h6>
+                        <h6 class="fw-bold text-muted mt-2"><i class="ri-exchange-dollar-line me-1"></i> Canje</h6>
                         <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Valor de 1 punto (pesos)</label>
-                                <input type="number" id="cf-valor" class="form-control" min="0" value="{{ programa.valor_punto_en_pesos|default:1 }}" oninput="calcularTasa()">
+                                <input type="number" id="cf-valor" class="form-control" min="0" value="{{ programa.valor_punto_en_pesos|default:1 }}" oninput="recalcular()">
                             </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Mínimo de canje (puntos)</label>
-                                <input type="number" id="cf-minimo" class="form-control" min="0" value="{{ programa.minimo_canje_puntos|default:500 }}">
+                                <input type="number" id="cf-minimo" class="form-control" min="0" value="{{ programa.minimo_canje_puntos|default:500 }}" oninput="recalcular()">
+                                <div class="form-text">Bajo este saldo el cliente no puede canjear nada.</div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Incremento mínimo de canje (pts)</label>
+                                <input type="number" id="cf-incremento" class="form-control" min="0" value="{{ programa.incremento_canje|default:100 }}" oninput="recalcular()">
+                                <div class="form-text">El canje debe ser múltiplo de este valor (0 = sin restricción).</div>
                             </div>
                         </div>
 
-                        <h6 class="fw-bold text-muted mt-2">Vigencia y bonos</h6>
+                        <div id="impacto-minimo" class="impacto-box mb-3"></div>
+
+                        <div class="section-box">
+                            <div class="section-title"><i class="ri-bar-chart-horizontal-line"></i> ¿Qué pasaría con otros mínimos?</div>
+                            <p class="text-muted small mb-2">Clientes elegibles que HOY podrían canjear con cada mínimo, y a cuánta compra acumulada equivale ese mínimo con la tasa Plata que tienes escrita arriba.</p>
+                            <div class="table-responsive">
+                                <table class="table table-sm sim-table align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Mínimo</th><th class="text-end">Vale</th>
+                                            <th class="text-end">Compra equiv. (Plata)</th>
+                                            <th class="text-end">Clientes que llegan</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="escalera-tbody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <h6 class="fw-bold text-muted mt-2"><i class="ri-gift-line me-1"></i> Vigencia y bonos</h6>
                         <div class="row">
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">Vigencia de puntos (días)</label>
@@ -114,43 +164,51 @@
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">Puntos de bienvenida</label>
-                                <input type="number" id="cf-bienvenida" class="form-control" min="0" value="{{ programa.puntos_bienvenida|default:3000 }}">
+                                <input type="number" id="cf-bienvenida" class="form-control" min="0" value="{{ programa.puntos_bienvenida|default:3000 }}" oninput="recalcular()">
+                                <div class="form-text" id="hint-bienvenida"></div>
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">Bono cumpleaños (puntos)</label>
                                 <input type="number" id="cf-cumpleanos" class="form-control" min="0" value="{{ programa.puntos_cumpleanos|default:3000 }}">
                             </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Incremento mínimo de canje (pts)</label>
-                                <input type="number" id="cf-incremento" class="form-control" min="0" value="{{ programa.incremento_canje|default:100 }}">
-                                <div class="form-text">El canje debe ser múltiplo de este valor (0 = sin restricción).</div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Bono referido &mdash; quien invita (pts)</label>
+                                <input type="number" id="cf-ref-padrino" class="form-control" min="0" value="{{ programa.bono_referido_padrino|default:2000 }}">
+                                <div class="form-text">0 desactiva el programa de referidos.</div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Bono referido &mdash; el invitado (pts)</label>
+                                <input type="number" id="cf-ref-ahijado" class="form-control" min="0" value="{{ programa.bono_referido_ahijado|default:2000 }}">
                             </div>
                         </div>
 
-                        <h6 class="fw-bold text-muted mt-2"><i class="ri-vip-crown-line me-1"></i> Niveles de fidelización</h6>
-                        <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label"><span style="color:#5c6bc0; font-weight:700;">⬤</span> Tasa Plata (%)</label>
-                                <input type="number" id="cf-tasa-plata" class="form-control" step="0.01" min="0" value="{{ programa.tasa_plata|default:'3.00' }}">
-                                <div class="form-text">Todos los clientes por defecto.</div>
+                        <div class="section-box">
+                            <div class="section-title"><i class="ri-archive-line"></i> Parámetros heredados</div>
+                            <div class="legacy-note mb-3">
+                                <i class="ri-error-warning-line"></i>
+                                Vienen del esquema original (tasa plana "X puntos por cada $Y").
+                                <strong>El motor de acumulación ya no los usa</strong>: la caja calcula con las
+                                tasas por nivel de más arriba. Se conservan porque siguen guardados en el
+                                programa, pero cambiarlos NO altera lo que gana un cliente.
                             </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label"><span style="color:#f9a825; font-weight:700;">⬤</span> Tasa Oro (%)</label>
-                                <input type="number" id="cf-tasa-oro" class="form-control" step="0.01" min="0" value="{{ programa.tasa_oro|default:'4.00' }}">
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label"><span style="color:#8e24aa; font-weight:700;">⬤</span> Tasa Platino (%)</label>
-                                <input type="number" id="cf-tasa-platino" class="form-control" step="0.01" min="0" value="{{ programa.tasa_platino|default:'5.00' }}">
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Umbral Oro ($ gasto 12 meses)</label>
-                                <input type="number" id="cf-umbral-oro" class="form-control" min="0" value="{{ programa.umbral_oro|default:300000 }}">
-                                <div class="form-text">Gasto acumulado en últimos 12 meses para alcanzar nivel Oro.</div>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Umbral Platino ($ gasto 12 meses)</label>
-                                <input type="number" id="cf-umbral-platino" class="form-control" min="0" value="{{ programa.umbral_platino|default:800000 }}">
-                                <div class="form-text">Gasto acumulado en últimos 12 meses para alcanzar nivel Platino.</div>
+                            <div class="row">
+                                <div class="col-md-4 mb-2">
+                                    <label class="form-label small">Puntos otorgados <span class="badge bg-secondary-subtle text-secondary-emphasis">sin efecto</span></label>
+                                    <input type="number" id="cf-puntos" class="form-control form-control-sm" min="1" value="{{ programa.puntos_por_monto|default:10 }}">
+                                </div>
+                                <div class="col-md-4 mb-2">
+                                    <label class="form-label small">Por cada (pesos) <span class="badge bg-secondary-subtle text-secondary-emphasis">sin efecto</span></label>
+                                    <input type="number" id="cf-base" class="form-control form-control-sm" min="1" value="{{ programa.monto_base_acumulacion|default:1000 }}">
+                                </div>
+                                <div class="col-md-4 mb-2">
+                                    <label class="form-label small">Acumula sobre <span class="badge bg-secondary-subtle text-secondary-emphasis">sin efecto</span></label>
+                                    <select id="cf-acumula" class="form-select form-select-sm">
+                                        {% for val, label in acumula_choices %}
+                                        <option value="{{ val }}" {% if programa.acumula_sobre == val %}selected{% endif %}>{{ label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="form-text">La caja siempre acumula sobre el TOTAL del ticket.</div>
+                                </div>
                             </div>
                         </div>
 
@@ -159,15 +217,13 @@
                         </button>
                     </div>
 
-                    <div class="col-md-4">
+                    <div class="col-lg-5">
                         <div class="tasa-box">
-                            <div class="text-muted">Tasa de descuento efectiva</div>
-                            <div class="tasa-num" id="tasa-efectiva">{{ programa.tasa_descuento_efectiva|default:1 }}%</div>
-                            <small class="text-muted">% del valor de la venta que devuelves al cliente. Recomendado mantener ≤ 5%.</small>
+                            <div class="text-muted">Costo real del programa</div>
+                            <div class="tasa-num" id="tasa-efectiva">0%</div>
+                            <small class="text-muted">% de cada venta que devuelves en puntos al nivel más caro. Recomendado mantener &le; 5%.</small>
                             <hr>
-                            <div class="text-start small">
-                                <div id="ejemplo-acum">—</div>
-                            </div>
+                            <div class="text-start small" id="detalle-tasas"></div>
                             <div id="tasa-warning" class="alert mt-2 mb-0 py-2 px-2 small d-none"></div>
                         </div>
 
@@ -176,11 +232,59 @@
                             <div class="table-responsive">
                                 <table class="table table-sm sim-table align-middle">
                                     <thead>
-                                        <tr><th>Compra</th><th class="text-end">Puntos</th><th class="text-end">Valor</th></tr>
+                                        <tr>
+                                            <th>Compra</th>
+                                            <th class="text-end">Plata</th>
+                                            <th class="text-end">Oro</th>
+                                            <th class="text-end">Platino</th>
+                                        </tr>
                                     </thead>
                                     <tbody id="simulacion-tbody"></tbody>
                                 </table>
                             </div>
+                            <div class="text-muted" style="font-size:11px;">Puntos ganados y, debajo, su valor en pesos.</div>
+                        </div>
+
+                        <div class="sim-box mt-3">
+                            <h6><i class="ri-wallet-3-line me-1"></i> Pasivo de puntos hoy</h6>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <div class="mini-kpi">
+                                        <div class="v">${{ cartera.total_valor_pesos|intcomma }}</div>
+                                        <div class="l">Pasivo total ({{ cartera.total_puntos|intcomma }} pts)</div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="mini-kpi" style="border-left-color:#0ab39c;">
+                                        <div class="v" style="color:#0ab39c;">${{ cartera.elegibles_valor_pesos|intcomma }}</div>
+                                        <div class="l">Pasivo elegible ({{ cartera.elegibles_cuentas }} clientes)</div>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="mini-kpi" style="border-left-color:#f06548;">
+                                        <div class="v" style="color:#f06548;">${{ cartera.no_elegibles_valor_pesos|intcomma }}
+                                            <small class="text-muted" style="font-size:12px;">({{ cartera.no_elegibles_pct }}%)</small></div>
+                                        <div class="l">En {{ cartera.no_elegibles_cuentas }} cuenta(s) que hoy NO acumularían: RUT genérico, de empresa o inválido</div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% if cartera.por_motivo %}
+                            <ul class="mb-0 mt-2 ps-3" style="font-size:11px; color:#6c757d;">
+                                {% for m in cartera.por_motivo %}
+                                <li>{{ m.label }}: {{ m.cuentas }} cuenta(s), {{ m.puntos|intcomma }} pts</li>
+                                {% endfor %}
+                            </ul>
+                            {% endif %}
+                        </div>
+
+                        <div class="strategy-callout mt-3">
+                            <div>
+                                <strong><i class="ri-magic-line me-1"></i> Preset "1 punto = $1"</strong>
+                                <div class="small text-muted">Carga los valores de referencia (3%/4%/5%, mínimo 500 pts). Revisa el impacto antes de guardar.</div>
+                            </div>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="aplicarEstrategiaPeso()">
+                                Aplicar valores
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -190,11 +294,18 @@
     </div>
 </div>
 
+{% include '../../layout/footer.html' %}
+
 <script>
+/* Configuración del programa de puntos.
+   Va DESPUÉS del footer porque el footer trae jQuery y SweetAlert2.
+   Las funciones llamadas desde onclick/oninput inline se exponen en `window`. */
 const URL_GUARDAR = "{% url 'api_guardar_programa' %}";
+/* Saldos de las cuentas ELEGIBLES, ordenados de mayor a menor: permite
+   responder en vivo "cuántos clientes alcanzan este mínimo" sin ir al server. */
+const SALDOS_ELEGIBLES = {{ saldos_elegibles_json|safe }};
+const TOTAL_ELEGIBLES = SALDOS_ELEGIBLES.length;
 const ESTRATEGIA_PESO = {
-    puntos_por_monto: 10,
-    monto_base_acumulacion: 1000,
     valor_punto_en_pesos: 1,
     minimo_canje_puntos: 500,
     incremento_canje: 100,
@@ -202,7 +313,6 @@ const ESTRATEGIA_PESO = {
     puntos_bienvenida: 3000,
     puntos_cumpleanos: 3000,
     redondeo: 'FLOOR',
-    acumula_sobre: 'TOTAL',
     tasa_plata: 3.00,
     tasa_oro: 4.00,
     tasa_platino: 5.00,
@@ -210,13 +320,40 @@ const ESTRATEGIA_PESO = {
     umbral_platino: 800000,
 };
 const MONTOS_SIMULACION = [10000, 25000, 50000, 100000, 250000];
+const ESCALERA_MINIMOS = [500, 1000, 2000, 3000, 5000, 6000, 10000];
+
 function csrf() { return document.querySelector('[name=csrfmiddlewaretoken]').value; }
-function fmt(n) { return '$' + Math.round(n||0).toLocaleString('es-CL'); }
-function fmtPts(n) { return Math.round(n||0).toLocaleString('es-CL') + ' pts'; }
+function num(id) { return parseFloat(document.getElementById(id).value || 0) || 0; }
+function fmt(n) { return '$' + Math.round(n || 0).toLocaleString('es-CL'); }
+function fmtPts(n) { return Math.round(n || 0).toLocaleString('es-CL') + ' pts'; }
+
+/* Mismo cálculo que ProgramaFidelizacion.calcular_puntos_con_nivel:
+   puntos = monto * tasa% , con el redondeo configurado. */
+function puntosNivel(monto, tasa) {
+    const bruto = monto * tasa / 100;
+    const redondeo = document.getElementById('cf-redondeo').value;
+    if (redondeo === 'CEIL') return Math.ceil(bruto);
+    if (redondeo === 'ROUND') return Math.floor(bruto + 0.5);
+    return Math.floor(bruto);
+}
+
+/* Compra acumulada necesaria para juntar `puntos` a una tasa dada. */
+function compraParaPuntos(puntos, tasa) {
+    if (!tasa || tasa <= 0) return null;
+    return puntos * 100 / tasa;
+}
+
+/* Cuántos clientes elegibles tienen saldo >= minimo (array ya ordenado desc). */
+function clientesQueAlcanzan(minimo) {
+    if (!minimo || minimo <= 0) return TOTAL_ELEGIBLES;
+    let n = 0;
+    for (let i = 0; i < SALDOS_ELEGIBLES.length; i++) {
+        if (SALDOS_ELEGIBLES[i] >= minimo) { n++; } else { break; }
+    }
+    return n;
+}
 
 function aplicarEstrategiaPeso() {
-    document.getElementById('cf-puntos').value = ESTRATEGIA_PESO.puntos_por_monto;
-    document.getElementById('cf-base').value = ESTRATEGIA_PESO.monto_base_acumulacion;
     document.getElementById('cf-valor').value = ESTRATEGIA_PESO.valor_punto_en_pesos;
     document.getElementById('cf-minimo').value = ESTRATEGIA_PESO.minimo_canje_puntos;
     document.getElementById('cf-incremento').value = ESTRATEGIA_PESO.incremento_canje;
@@ -224,51 +361,177 @@ function aplicarEstrategiaPeso() {
     document.getElementById('cf-bienvenida').value = ESTRATEGIA_PESO.puntos_bienvenida;
     document.getElementById('cf-cumpleanos').value = ESTRATEGIA_PESO.puntos_cumpleanos;
     document.getElementById('cf-redondeo').value = ESTRATEGIA_PESO.redondeo;
-    document.getElementById('cf-acumula').value = ESTRATEGIA_PESO.acumula_sobre;
     document.getElementById('cf-tasa-plata').value = ESTRATEGIA_PESO.tasa_plata;
     document.getElementById('cf-tasa-oro').value = ESTRATEGIA_PESO.tasa_oro;
     document.getElementById('cf-tasa-platino').value = ESTRATEGIA_PESO.tasa_platino;
     document.getElementById('cf-umbral-oro').value = ESTRATEGIA_PESO.umbral_oro;
     document.getElementById('cf-umbral-platino').value = ESTRATEGIA_PESO.umbral_platino;
-    calcularTasa();
+    recalcular();
 }
 
-function puntosParaMonto(monto, puntos, base) {
-    const bruto = base > 0 ? (monto / base * puntos) : 0;
-    const redondeo = document.getElementById('cf-redondeo').value;
-    if (redondeo === 'CEIL') return Math.ceil(bruto);
-    if (redondeo === 'ROUND') return Math.floor(bruto + 0.5);
-    return Math.floor(bruto);
-}
-
-function calcularTasa() {
-    const puntos = parseFloat(document.getElementById('cf-puntos').value || 0);
-    const base = parseFloat(document.getElementById('cf-base').value || 1);
-    const valor = parseFloat(document.getElementById('cf-valor').value || 0);
-    const tasa = base > 0 ? (puntos * valor / base * 100) : 0;
+function pintarCosto(tPlata, tOro, tPlatino, valor) {
+    /* Pesos devueltos por cada $100 de venta = tasa% del nivel * valor del punto. */
+    const costo = (t) => t * valor;
+    const maxCosto = Math.max(costo(tPlata), costo(tOro), costo(tPlatino));
     const tasaEl = document.getElementById('tasa-efectiva');
-    tasaEl.textContent = tasa.toFixed(2) + '%';
-    // Escala de 3 niveles: ≤5% verde, >5% ámbar, >10% rojo.
-    tasaEl.style.color = tasa > 10 ? '#f06548' : (tasa > 5 ? '#f7b84b' : '#0ab39c');
+    tasaEl.textContent = maxCosto.toFixed(2) + '%';
+    tasaEl.style.color = maxCosto > 10 ? '#f06548' : (maxCosto > 5 ? '#f7b84b' : '#0ab39c');
+
+    document.getElementById('detalle-tasas').innerHTML = [
+        ['Plata', tPlata, '#5c6bc0'], ['Oro', tOro, '#f9a825'], ['Platino', tPlatino, '#8e24aa'],
+    ].map(function (fila) {
+        const nombre = fila[0], t = fila[1], color = fila[2];
+        return '<div class="d-flex justify-content-between">'
+            + '<span><span style="color:' + color + '; font-weight:700;">&#9679;</span> ' + nombre + '</span>'
+            + '<span>gana <strong>' + fmtPts(puntosNivel(10000, t)) + '</strong> en $10.000'
+            + ' &rarr; devuelves <strong>' + costo(t).toFixed(2) + '%</strong></span></div>';
+    }).join('');
+
     const warn = document.getElementById('tasa-warning');
-    if (tasa > 10) {
+    if (maxCosto > 10) {
         warn.className = 'alert alert-danger mt-2 mb-0 py-2 px-2 small';
-        warn.innerHTML = `<i class="ri-error-warning-line"></i> Tasa muy alta: devuelves <strong>${tasa.toFixed(1)}%</strong> de cada venta en puntos. Pedirá confirmación al guardar.`;
-    } else if (tasa > 5) {
+        warn.innerHTML = '<i class="ri-error-warning-line"></i> Tasa muy alta: devuelves <strong>'
+            + maxCosto.toFixed(1) + '%</strong> de cada venta en puntos al nivel más caro. Pedirá confirmación al guardar.';
+    } else if (maxCosto > 5) {
         warn.className = 'alert alert-warning mt-2 mb-0 py-2 px-2 small';
-        warn.innerHTML = `<i class="ri-alert-line"></i> Tasa sobre lo recomendado (>5%): devuelves <strong>${tasa.toFixed(1)}%</strong> en puntos.`;
+        warn.innerHTML = '<i class="ri-alert-line"></i> Tasa sobre lo recomendado (&gt;5%): devuelves <strong>'
+            + maxCosto.toFixed(1) + '%</strong> en puntos.';
     } else {
         warn.className = 'alert mt-2 mb-0 py-2 px-2 small d-none';
         warn.innerHTML = '';
     }
-    const ejemploPts = puntosParaMonto(10000, puntos, base);
-    document.getElementById('ejemplo-acum').innerHTML =
-        `En una compra de <strong>$10.000</strong> el cliente gana <strong>${fmtPts(ejemploPts)}</strong> ` +
-        `(equivalen a <strong>${fmt(ejemploPts*valor)}</strong>).`;
-    document.getElementById('simulacion-tbody').innerHTML = MONTOS_SIMULACION.map(monto => {
-        const pts = puntosParaMonto(monto, puntos, base);
-        return `<tr><td>${fmt(monto)}</td><td class="text-end fw-semibold">${fmtPts(pts)}</td><td class="text-end">${fmt(pts*valor)}</td></tr>`;
+}
+
+function pintarSimulacion(tPlata, tOro, tPlatino, valor) {
+    document.getElementById('simulacion-tbody').innerHTML = MONTOS_SIMULACION.map(function (monto) {
+        const celda = function (t) {
+            const p = puntosNivel(monto, t);
+            return '<td class="text-end">' + Math.round(p).toLocaleString('es-CL')
+                + '<br><small class="text-muted">' + fmt(p * valor) + '</small></td>';
+        };
+        return '<tr><td>' + fmt(monto) + '</td>' + celda(tPlata) + celda(tOro) + celda(tPlatino) + '</tr>';
     }).join('');
+}
+
+function pintarImpactoMinimo(minimo, incremento, tPlata, tOro, tPlatino, valor) {
+    const alcanzan = clientesQueAlcanzan(minimo);
+    const pct = TOTAL_ELEGIBLES ? (alcanzan / TOTAL_ELEGIBLES * 100) : 0;
+    const compraPlata = compraParaPuntos(minimo, tPlata);
+    const compraOro = compraParaPuntos(minimo, tOro);
+    const compraPlatino = compraParaPuntos(minimo, tPlatino);
+
+    let color = '#0ab39c';
+    let icono = 'ri-checkbox-circle-line';
+    let msg = 'El mínimo es alcanzable para la mayoría de tu cartera.';
+    if (alcanzan === 0) {
+        color = '#f06548'; icono = 'ri-close-circle-line';
+        msg = 'NADIE puede canjear con este mínimo. El programa acumula pasivo sin devolver nada.';
+    } else if (pct < 10) {
+        color = '#f06548'; icono = 'ri-error-warning-line';
+        msg = 'Menos del 10% de tus clientes puede canjear: es la causa típica de "muchos puntos y cero canjes".';
+    } else if (pct < 30) {
+        color = '#f7b84b'; icono = 'ri-alert-line';
+        msg = 'Solo una minoría puede canjear. Considera bajar el mínimo.';
+    }
+
+    const box = document.getElementById('impacto-minimo');
+    box.style.borderLeftColor = color;
+    box.style.background = pct < 10 ? '#fff5f5' : (pct < 30 ? '#fffbf0' : '#f2fbf9');
+    box.innerHTML =
+        '<div class="d-flex justify-content-between align-items-start flex-wrap gap-3">'
+        + '<div><div class="text-muted small">Con un mínimo de <strong>'
+        + Math.round(minimo).toLocaleString('es-CL') + ' puntos</strong>, hoy podrían canjear</div>'
+        + '<div class="impacto-num" style="color:' + color + ';">' + alcanzan
+        + ' <span style="font-size:16px; font-weight:600;">de ' + TOTAL_ELEGIBLES
+        + ' clientes (' + pct.toFixed(0) + '%)</span></div>'
+        + '<div class="small mt-1" style="color:' + color + ';"><i class="' + icono + '"></i> ' + msg + '</div></div>'
+        + '<div class="small text-end">'
+        + '<div class="text-muted">Ese mínimo vale <strong>' + fmt(minimo * valor) + '</strong> de descuento.</div>'
+        + '<div class="text-muted mt-1">Compra acumulada necesaria:</div>'
+        + '<div><span style="color:#5c6bc0;">&#9679;</span> Plata: <strong>' + (compraPlata === null ? '—' : fmt(compraPlata)) + '</strong></div>'
+        + '<div><span style="color:#f9a825;">&#9679;</span> Oro: <strong>' + (compraOro === null ? '—' : fmt(compraOro)) + '</strong></div>'
+        + '<div><span style="color:#8e24aa;">&#9679;</span> Platino: <strong>' + (compraPlatino === null ? '—' : fmt(compraPlatino)) + '</strong></div>'
+        + (incremento > 0 ? '<div class="text-muted mt-1">Canjes en múltiplos de ' + incremento + ' pts (' + fmt(incremento * valor) + ').</div>' : '')
+        + '</div></div>';
+
+    /* Escalera comparativa: incluye el mínimo tipeado aunque no esté en la lista. */
+    const minimos = ESCALERA_MINIMOS.slice();
+    if (minimo > 0 && minimos.indexOf(minimo) === -1) { minimos.push(minimo); }
+    minimos.sort(function (a, b) { return a - b; });
+    document.getElementById('escalera-tbody').innerHTML = minimos.map(function (m) {
+        const n = clientesQueAlcanzan(m);
+        const c = compraParaPuntos(m, tPlata);
+        const esActual = (m === minimo);
+        return '<tr class="escalera-row ' + (esActual ? 'actual' : '') + '">'
+            + '<td>' + m.toLocaleString('es-CL') + ' pts '
+            + (esActual ? '<span class="badge bg-warning text-dark">actual</span>' : '') + '</td>'
+            + '<td class="text-end">' + fmt(m * valor) + '</td>'
+            + '<td class="text-end">' + (c === null ? '—' : fmt(c)) + '</td>'
+            + '<td class="text-end fw-bold">' + n + ' <small class="text-muted">/ ' + TOTAL_ELEGIBLES + '</small></td>'
+            + '</tr>';
+    }).join('');
+
+    /* El bono de bienvenida se lee mejor contra el mínimo de canje. */
+    const bienvenida = num('cf-bienvenida');
+    const hint = document.getElementById('hint-bienvenida');
+    if (bienvenida > 0 && minimo > 0) {
+        hint.textContent = bienvenida >= minimo
+            ? 'Cubre el mínimo de canje por sí solo (' + fmt(bienvenida * valor) + ').'
+            : 'Cubre ' + (bienvenida / minimo * 100).toFixed(0) + '% del mínimo de canje.';
+    } else {
+        hint.textContent = bienvenida > 0 ? 'Vale ' + fmt(bienvenida * valor) + '.' : 'Sin bono de bienvenida.';
+    }
+}
+
+function recalcular() {
+    const tPlata = num('cf-tasa-plata');
+    const tOro = num('cf-tasa-oro');
+    const tPlatino = num('cf-tasa-platino');
+    const valor = num('cf-valor');
+    const minimo = num('cf-minimo');
+    const incremento = num('cf-incremento');
+    pintarCosto(tPlata, tOro, tPlatino, valor);
+    pintarSimulacion(tPlata, tOro, tPlatino, valor);
+    pintarImpactoMinimo(minimo, incremento, tPlata, tOro, tPlatino, valor);
+}
+
+function enviarConfiguracion(payload) {
+    document.getElementById('btn-guardar').disabled = true;
+    fetch(URL_GUARDAR, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
+        body: JSON.stringify(payload),
+    }).then(function (r) { return r.json(); }).then(function (d) {
+        document.getElementById('btn-guardar').disabled = false;
+        if (d.requiere_confirmacion) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Tasa muy alta',
+                text: d.warning || ('Costo real ' + d.tasa_real_maxima + '%. ¿Confirmas?'),
+                showCancelButton: true,
+                confirmButtonText: 'Sí, guardar igual',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#f06548',
+            }).then(function (res) { if (res.isConfirmed) { guardar(true); } });
+            return;
+        }
+        if (d.success) {
+            const resumen = 'Costo máximo por venta: <strong>' + d.tasa_real_maxima + '%</strong><br>'
+                + 'Clientes que alcanzan el mínimo de '
+                + Number(d.minimo_canje_puntos).toLocaleString('es-CL') + ' pts: <strong>'
+                + d.clientes_alcanzan_minimo + ' de ' + d.clientes_elegibles + '</strong>';
+            Swal.fire({
+                icon: d.warning ? 'warning' : 'success',
+                title: d.warning ? 'Guardado con aviso' : 'Guardado',
+                html: resumen + (d.warning ? '<br><br><small>' + d.warning + '</small>' : ''),
+            });
+        } else {
+            Swal.fire('Error', d.error || 'No se pudo guardar', 'error');
+        }
+    }).catch(function () {
+        document.getElementById('btn-guardar').disabled = false;
+        Swal.fire('Error', 'No se pudo guardar la configuración.', 'error');
+    });
 }
 
 function guardar(confirmarTasaAlta) {
@@ -282,6 +545,8 @@ function guardar(confirmarTasaAlta) {
         vigencia_dias: document.getElementById('cf-vigencia').value,
         puntos_bienvenida: document.getElementById('cf-bienvenida').value,
         puntos_cumpleanos: document.getElementById('cf-cumpleanos').value,
+        bono_referido_padrino: document.getElementById('cf-ref-padrino').value,
+        bono_referido_ahijado: document.getElementById('cf-ref-ahijado').value,
         redondeo: document.getElementById('cf-redondeo').value,
         acumula_sobre: document.getElementById('cf-acumula').value,
         tasa_plata: document.getElementById('cf-tasa-plata').value,
@@ -291,37 +556,31 @@ function guardar(confirmarTasaAlta) {
         umbral_platino: document.getElementById('cf-umbral-platino').value,
         confirmar_tasa_alta: confirmarTasaAlta ? 'true' : '',
     };
-    document.getElementById('btn-guardar').disabled = true;
-    fetch(URL_GUARDAR, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
-        body: JSON.stringify(payload)}).then(r=>r.json()).then(d=>{
-        document.getElementById('btn-guardar').disabled = false;
-        // Tasa sobre el tope duro: pedir confirmación y reenviar con el flag.
-        if (d.requiere_confirmacion) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Tasa muy alta',
-                text: d.warning || `Tasa efectiva ${d.tasa_descuento_efectiva}%. ¿Confirmas?`,
-                showCancelButton: true,
-                confirmButtonText: 'Sí, guardar igual',
-                cancelButtonText: 'Cancelar',
-                confirmButtonColor: '#f06548',
-            }).then(res => { if (res.isConfirmed) guardar(true); });
-            return;
-        }
-        if (d.success) {
-            if (d.warning) {
-                Swal.fire({ icon: 'warning', title: 'Guardado con aviso',
-                    html: `Tasa efectiva: <strong>${d.tasa_descuento_efectiva}%</strong><br><small>${d.warning}</small>` });
-            } else {
-                Swal.fire('Guardado', `Tasa efectiva: ${d.tasa_descuento_efectiva}%`, 'success');
-            }
-        } else {
-            Swal.fire('Error', d.error || 'No se pudo guardar', 'error');
-        }
-    });
+    const minimo = num('cf-minimo');
+    const alcanzan = clientesQueAlcanzan(minimo);
+
+    /* Confirmación previa cuando el mínimo deja fuera a casi toda la cartera:
+       ese es el error que dejó el programa con 787.000 puntos y cero canjes. */
+    if (!confirmarTasaAlta && TOTAL_ELEGIBLES > 0 && (alcanzan / TOTAL_ELEGIBLES) < 0.10) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Casi nadie podrá canjear',
+            html: 'Con un mínimo de <strong>' + Math.round(minimo).toLocaleString('es-CL')
+                + ' puntos</strong> solo <strong>' + alcanzan + ' de ' + TOTAL_ELEGIBLES
+                + '</strong> clientes podrían canjear hoy.<br><br>¿Guardar de todas formas?',
+            showCancelButton: true,
+            confirmButtonText: 'Guardar igual',
+            cancelButtonText: 'Revisar',
+            confirmButtonColor: '#f7b84b',
+        }).then(function (res) { if (res.isConfirmed) { enviarConfiguracion(payload); } });
+        return;
+    }
+    enviarConfiguracion(payload);
 }
 
-document.addEventListener('DOMContentLoaded', calcularTasa);
-</script>
+window.aplicarEstrategiaPeso = aplicarEstrategiaPeso;
+window.recalcular = recalcular;
+window.guardar = guardar;
 
-{% include '../../layout/footer.html' %}
+document.addEventListener('DOMContentLoaded', recalcular);
+</script>

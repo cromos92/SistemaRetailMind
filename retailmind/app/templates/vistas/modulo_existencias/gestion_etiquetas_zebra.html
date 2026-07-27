@@ -1002,7 +1002,7 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                             <h6 class="text-muted mb-3">Configuración de Impresión</h6>
                             <div class="mb-3">
                                 <label class="form-label small">Fecha de Impresión</label>
-                                <input type="date" id="fechaImpresion" class="form-control" value="{{ now|date:'Y-m-d' }}">
+                                <input type="date" id="fechaImpresion" class="form-control">
                             </div>
                             <div class="mb-3">
                                 <label class="form-label small">Sucursal (para etiqueta)</label>
@@ -1014,6 +1014,58 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== FILA 3: Últimas impresiones ===== -->
+    <div class="row g-3 mt-1">
+        <div class="col-12">
+            <div class="nexo-card">
+                <div class="nexo-card-header">
+                    <h5><i class="ri-history-line"></i> Últimas impresiones</h5>
+                </div>
+                <div class="nexo-card-body">
+                    {% if ultimas_impresiones %}
+                    <div class="table-responsive" style="max-height: 260px; overflow-y: auto;">
+                        <table class="nexo-table">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Origen</th>
+                                    <th>Documento</th>
+                                    <th>Sucursal</th>
+                                    <th>Usuario</th>
+                                    <th>Productos</th>
+                                    <th>Etiquetas</th>
+                                    <th>Observaciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for imp in ultimas_impresiones %}
+                                <tr>
+                                    <td>{{ imp.fecha_impresion|date:'d/m/Y H:i' }}</td>
+                                    <td><span class="nexo-badge nexo-badge-info">{{ imp.get_tipo_origen_display }}</span></td>
+                                    <td><strong>{{ imp.numero_documento|default:'—' }}</strong></td>
+                                    <td>{{ imp.sucursal.alias|default:'—' }}</td>
+                                    <td>{{ imp.usuario.get_full_name|default:imp.usuario.username|default:'Sistema' }}</td>
+                                    <td>{{ imp.total_productos }}</td>
+                                    <td><span class="nexo-badge nexo-badge-success">{{ imp.total_etiquetas }}</span></td>
+                                    <td style="max-width:320px;font-size:.78rem;color:var(--nexo-gray-700);">
+                                        {{ imp.observaciones|default:'' }}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0 text-center py-3">
+                        <i class="ri-inbox-line" style="font-size:1.6rem;"></i><br>
+                        Todavía no hay impresiones registradas en esta empresa.
+                    </p>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -1067,6 +1119,9 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                     </div>
                 </div>
 
+                <!-- Alertas de precio (sucursal destino / campaña de liquidación) -->
+                <div id="alertasPrecioContainer"></div>
+
                 <!-- Alertas historial -->
                 <div id="alertasContainer"></div>
 
@@ -1096,7 +1151,7 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                                 <th>Marca</th>
                                 <th>Talla</th>
                                 <th>Color</th>
-                                <th>Precio</th>
+                                <th title="Precio que se imprimirá en la etiqueta">Precio etiqueta</th>
                                 <th>Cant.</th>
                                 <th>Etiquetas</th>
                                 <th title="Etiquetas impresas anteriormente">Prev.</th>
@@ -1319,9 +1374,17 @@ async function buscarImpresora() {
 // Code128 con BY2: ancho = 70 + (22 × cantidad_caracteres)
 function calcularPosicionBarcode(sku, areaInicio, areaAncho) {
     const skuLen = String(sku).length || 7;
-    const barcodeWidth = 70 + (22 * skuLen);  // Ancho del código de barras en dots
+    const barcodeWidth = 70 + (anchoModuloBarcode(sku) * 11 * skuLen) / 2;
     const posX = areaInicio + Math.floor((areaAncho - barcodeWidth) / 2);
     return Math.max(areaInicio, posX);  // Asegurar que no sea menor al inicio
+}
+
+// Módulo (^BY) del Code128. Con BY2 un SKU de 12+ dígitos se sale del área
+// imprimible de la etiqueta (375 dots la izquierda, 354 la derecha) y el
+// código sale cortado: ilegible para el lector y para la app de auditoría.
+function anchoModuloBarcode(sku) {
+    const skuLen = String(sku ?? '').length || 7;
+    return skuLen >= 11 ? 1 : 2;
 }
 
 // Calcula la posición X para centrar el texto del SKU
@@ -1366,6 +1429,49 @@ function sanearZPL(texto) {
     return s.trim();
 }
 
+// Ancho promedio de un carácter de la fuente escalable A0 respecto a su alto.
+// 0.6 es conservador (dígitos y guiones son más angostos): mejor achicar o
+// truncar un carácter de más que arriesgar texto encimado.
+const RATIO_ANCHO_CHAR_A0 = 0.6;
+
+// Ajusta un texto a un ancho fijo en dots: primero achica la fuente (de a 2,
+// hasta fontMin, mismo criterio que obtenerFormatoPrecio) y si aún no cabe
+// TRUNCA. Necesario porque ^FB de 1 línea NO corta el texto sobrante: lo
+// re-imprime encima de la misma línea y la etiqueta sale como un manchón.
+function ajustarTextoZPL(texto, anchoDots, fontMax, fontMin) {
+    const s = String(texto || '');
+    const capacidad = (font) => Math.floor(anchoDots / (RATIO_ANCHO_CHAR_A0 * font));
+    let font = fontMax;
+    while (font - 2 >= fontMin && s.length > capacidad(font)) font -= 2;
+    return { texto: s.slice(0, capacidad(font)), font };
+}
+
+// Sanea todos los campos de una etiqueta y pre-calcula fuente/truncado de los
+// textos de largo variable. anchoDesc difiere entre etiqueta A (290) y B (269).
+function prepararEtiqueta(raw, anchoDesc) {
+    const e = {
+        sucursal: sanearZPL(raw.sucursal),
+        desc: sanearZPL(raw.desc),
+        marca: sanearZPL(raw.marca),
+        sku: sanearZPL(raw.sku),
+        art: sanearZPL(raw.art),
+        precio: sanearZPL(raw.precio),
+        factura: sanearZPL(raw.factura),
+        talla: sanearZPL(raw.talla),
+        color: sanearZPL(raw.color),
+        fecha: sanearZPL(raw.fecha)
+    };
+    e.fit = {
+        sucursal: ajustarTextoZPL(e.sucursal, 82, 24, 20),
+        desc: ajustarTextoZPL(e.desc, anchoDesc, 24, 18),
+        art: ajustarTextoZPL(e.art, 205, 28, 20),
+        factura: ajustarTextoZPL(e.factura, 100, 22, 18),
+        marca: ajustarTextoZPL(e.marca, 140, 22, 16),
+        color: ajustarTextoZPL(e.color, 140, 20, 16)
+    };
+    return e;
+}
+
 function generarZPL(etiquetas) {
     let zpl = '';
     
@@ -1381,31 +1487,9 @@ function generarZPL(etiquetas) {
         const e1Raw = etiquetas[i];      // Etiqueta A (izquierda)
         const e2Raw = etiquetas[i + 1];  // Etiqueta B (derecha)
 
-        // Saneamos TODOS los campos de texto antes de inyectarlos al ZPL
-        const e1 = e1Raw ? {
-            sucursal: sanearZPL(e1Raw.sucursal),
-            desc: sanearZPL(e1Raw.desc),
-            marca: sanearZPL(e1Raw.marca),
-            sku: sanearZPL(e1Raw.sku),
-            art: sanearZPL(e1Raw.art),
-            precio: sanearZPL(e1Raw.precio),
-            factura: sanearZPL(e1Raw.factura),
-            talla: sanearZPL(e1Raw.talla),
-            color: sanearZPL(e1Raw.color),
-            fecha: sanearZPL(e1Raw.fecha)
-        } : null;
-        const e2 = e2Raw ? {
-            sucursal: sanearZPL(e2Raw.sucursal),
-            desc: sanearZPL(e2Raw.desc),
-            marca: sanearZPL(e2Raw.marca),
-            sku: sanearZPL(e2Raw.sku),
-            art: sanearZPL(e2Raw.art),
-            precio: sanearZPL(e2Raw.precio),
-            factura: sanearZPL(e2Raw.factura),
-            talla: sanearZPL(e2Raw.talla),
-            color: sanearZPL(e2Raw.color),
-            fecha: sanearZPL(e2Raw.fecha)
-        } : null;
+        // Saneamos y ajustamos (fuente/truncado) TODOS los campos de texto
+        const e1 = e1Raw ? prepararEtiqueta(e1Raw, 290) : null;
+        const e2 = e2Raw ? prepararEtiqueta(e2Raw, 269) : null;
 
         const precioFmtA = obtenerFormatoPrecio(e1?.precio);
         const precioFmtB = e2 ? obtenerFormatoPrecio(e2?.precio) : null;
@@ -1422,27 +1506,30 @@ function generarZPL(etiquetas) {
         const textoSkuX_A = calcularPosicionTextoSku(e1.sku, AREA_A_INICIO, AREA_A_ANCHO, 16);
         
         // Línea 1: Sucursal + Descripción + Marca
-        zpl += `^FO25,${5 + OFFSET_Y}^A0N,24,24^FD${e1.sucursal}^FS\n`;
-        zpl += `^FO110,${5 + OFFSET_Y}^A0N,24,24^FB290,1,0,L^FD${e1.desc}^FS\n`;
+        zpl += `^FO25,${5 + OFFSET_Y}^A0N,${e1.fit.sucursal.font},${e1.fit.sucursal.font}^FD${e1.fit.sucursal.texto}^FS\n`;
+        zpl += `^FO110,${5 + OFFSET_Y}^A0N,${e1.fit.desc.font},${e1.fit.desc.font}^FB290,1,0,L^FD${e1.fit.desc.texto}^FS\n`;
         
-        // Línea 2: Código de barras CENTRADO dinámicamente
-        zpl += `^FO${barcodeX_A},${32 + OFFSET_Y}^BY2,3,75^BCN,75,N,N,N^FD${e1.sku}^FS\n`;
+        // Línea 2: Código de barras CENTRADO dinámicamente.
+        // Sin SKU no se emite ^BC: un ^FD vacío produce ZPL inválido.
+        if (e1.sku) {
+            zpl += `^FO${barcodeX_A},${32 + OFFSET_Y}^BY${anchoModuloBarcode(e1.sku)},3,75^BCN,75,N,N,N^FD${e1.sku}^FS\n`;
+        }
         // SKU centrado debajo del código de barras
         zpl += `^FO${textoSkuX_A},${112 + OFFSET_Y}^A0N,28,28^FD${e1.sku}^FS\n`;
         
         // Línea 3: Artículo + Precio
-        zpl += `^FO25,${145 + OFFSET_Y}^A0N,28,28^FB205,1,0,L^FD${e1.art}^FS\n`;
+        zpl += `^FO25,${145 + OFFSET_Y}^A0N,${e1.fit.art.font},${e1.fit.art.font}^FB205,1,0,L^FD${e1.fit.art.texto}^FS\n`;
         zpl += `^FO238,${precioFmtA.y + OFFSET_Y}^A0N,${precioFmtA.alto},${precioFmtA.ancho}^FB160,1,0,R^FD${e1.precio}^FS\n`;
         
         // Línea 4: G/F Factura + Talla + Color
         zpl += `^FO25,${180 + OFFSET_Y}^A0N,20,20^FDG/F^FS\n`;
-        zpl += `^FO62,${180 + OFFSET_Y}^A0N,22,22^FD${e1.factura}^FS\n`;
+        zpl += `^FO62,${180 + OFFSET_Y}^A0N,${e1.fit.factura.font},${e1.fit.factura.font}^FD${e1.fit.factura.texto}^FS\n`;
         zpl += `^FO165,${175 + OFFSET_Y}^A0N,36,36^FD${e1.talla}^FS\n`;
-        zpl += `^FO260,${180 + OFFSET_Y}^A0N,22,22^FB140,1,0,R^FD${e1.marca}^FS\n`;
+        zpl += `^FO260,${180 + OFFSET_Y}^A0N,${e1.fit.marca.font},${e1.fit.marca.font}^FB140,1,0,R^FD${e1.fit.marca.texto}^FS\n`;
         
         // Línea 5: Fecha
         zpl += `^FO25,${215 + OFFSET_Y}^A0N,20,20^FD${e1.fecha}^FS\n`;
-        zpl += `^FO260,${215 + OFFSET_Y}^A0N,20,20^FB140,1,0,R^FD${e1.color}^FS\n`;
+        zpl += `^FO260,${215 + OFFSET_Y}^A0N,${e1.fit.color.font},${e1.fit.color.font}^FB140,1,0,R^FD${e1.fit.color.texto}^FS\n`;
 
         // ========== ETIQUETA B - DERECHA ==========
         if (e2) {
@@ -1451,27 +1538,29 @@ function generarZPL(etiquetas) {
             const textoSkuX_B = calcularPosicionTextoSku(e2.sku, AREA_B_INICIO, AREA_B_ANCHO, 16);
             
             // Línea 1: Sucursal + Descripción + Marca
-            zpl += `^FO456,${5 + OFFSET_Y}^A0N,24,24^FD${e2.sucursal}^FS\n`;
-            zpl += `^FO541,${5 + OFFSET_Y}^A0N,24,24^FB269,1,0,L^FD${e2.desc}^FS\n`;
+            zpl += `^FO456,${5 + OFFSET_Y}^A0N,${e2.fit.sucursal.font},${e2.fit.sucursal.font}^FD${e2.fit.sucursal.texto}^FS\n`;
+            zpl += `^FO541,${5 + OFFSET_Y}^A0N,${e2.fit.desc.font},${e2.fit.desc.font}^FB269,1,0,L^FD${e2.fit.desc.texto}^FS\n`;
             
             // Línea 2: Código de barras CENTRADO dinámicamente
-            zpl += `^FO${barcodeX_B},${32 + OFFSET_Y}^BY2,3,75^BCN,75,N,N,N^FD${e2.sku}^FS\n`;
+            if (e2.sku) {
+                zpl += `^FO${barcodeX_B},${32 + OFFSET_Y}^BY${anchoModuloBarcode(e2.sku)},3,75^BCN,75,N,N,N^FD${e2.sku}^FS\n`;
+            }
             // SKU centrado debajo del código de barras
             zpl += `^FO${textoSkuX_B},${112 + OFFSET_Y}^A0N,28,28^FD${e2.sku}^FS\n`;
             
             // Línea 3: Artículo + Precio
-            zpl += `^FO456,${145 + OFFSET_Y}^A0N,28,28^FB205,1,0,L^FD${e2.art}^FS\n`;
+            zpl += `^FO456,${145 + OFFSET_Y}^A0N,${e2.fit.art.font},${e2.fit.art.font}^FB205,1,0,L^FD${e2.fit.art.texto}^FS\n`;
             zpl += `^FO650,${precioFmtB.y + OFFSET_Y}^A0N,${precioFmtB.alto},${precioFmtB.ancho}^FB160,1,0,R^FD${e2.precio}^FS\n`;
             
             // Línea 4: G/F Factura + Talla + Color
             zpl += `^FO456,${180 + OFFSET_Y}^A0N,20,20^FDG/F^FS\n`;
-            zpl += `^FO493,${180 + OFFSET_Y}^A0N,22,22^FD${e2.factura}^FS\n`;
+            zpl += `^FO493,${180 + OFFSET_Y}^A0N,${e2.fit.factura.font},${e2.fit.factura.font}^FD${e2.fit.factura.texto}^FS\n`;
             zpl += `^FO611,${175 + OFFSET_Y}^A0N,36,36^FD${e2.talla}^FS\n`;
-            zpl += `^FO670,${180 + OFFSET_Y}^A0N,22,22^FB140,1,0,R^FD${e2.marca}^FS\n`;
+            zpl += `^FO670,${180 + OFFSET_Y}^A0N,${e2.fit.marca.font},${e2.fit.marca.font}^FB140,1,0,R^FD${e2.fit.marca.texto}^FS\n`;
             
             // Línea 5: Fecha
             zpl += `^FO456,${215 + OFFSET_Y}^A0N,20,20^FD${e2.fecha}^FS\n`;
-            zpl += `^FO670,${215 + OFFSET_Y}^A0N,20,20^FB140,1,0,R^FD${e2.color}^FS\n`;
+            zpl += `^FO670,${215 + OFFSET_Y}^A0N,${e2.fit.color.font},${e2.fit.color.font}^FB140,1,0,R^FD${e2.fit.color.texto}^FS\n`;
         }
 
         zpl += '^XZ\n';
@@ -1585,14 +1674,24 @@ function renderizarDocumentos(documentos) {
 
 function actualizarPaginacion(pagination) {
     totalPaginas = pagination.total_pages;
-    document.getElementById('paginacionInfo').textContent = 
-        `Mostrando página ${pagination.current_page} de ${pagination.total_pages} (${pagination.total_items} documentos)`;
+
+    // El backend trae un máximo por tipo de documento: si hay más, se dice,
+    // en vez de informar el tope como si fuera el total.
+    let texto = `Mostrando página ${pagination.current_page} de ${pagination.total_pages} (${pagination.total_items} documentos)`;
+    if (pagination.truncado) {
+        texto += ` — hay ${pagination.total_real} en total con estos filtros; afina el rango de fechas para verlos todos`;
+    }
+    const info = document.getElementById('paginacionInfo');
+    info.textContent = texto;
+    info.style.color = pagination.truncado ? 'var(--nexo-warning)' : '';
+
     document.getElementById('btnPrevPage').disabled = !pagination.has_previous;
     document.getElementById('btnNextPage').disabled = !pagination.has_next;
 
     const badge = document.getElementById('docCount');
     if (badge) {
-        badge.textContent = pagination.total_items > 0 ? `${pagination.total_items} docs` : '';
+        badge.textContent = pagination.total_items > 0
+            ? `${pagination.total_items}${pagination.truncado ? '+' : ''} docs` : '';
     }
 }
 
@@ -1626,11 +1725,16 @@ function abrirModalImprimir(productos, contexto = null) {
     const titulo = contexto ? `— ${contexto.tipo_display || contexto.tipo} #${contexto.numero}` : '— SKU Manual';
     document.getElementById('modalDocTitulo').textContent = titulo;
 
-    // Sincronizar fecha y sucursal desde los campos del panel
+    // Sincronizar fecha y sucursal desde los campos del panel.
+    // En impresión manual (sin documento) manda la sucursal REAL del producto:
+    // si venías de abrir un DTE, el panel conserva la sucursal de ese documento
+    // y las etiquetas manuales salían rotuladas con la tienda equivocada.
     const fechaPanel = document.getElementById('fechaImpresion');
     const sucursalPanel = document.getElementById('sucursalEtiqueta');
     document.getElementById('modalFechaImpresion').value = fechaPanel?.value || new Date().toISOString().split('T')[0];
-    document.getElementById('modalSucursalEtiqueta').value = sucursalPanel?.value || '';
+    document.getElementById('modalSucursalEtiqueta').value = contexto
+        ? (sucursalPanel?.value || '')
+        : (modalProductos[0]?.sucursal || sucursalPanel?.value || '');
 
     renderizarModalProductos();
     actualizarModalResumen();
@@ -1677,9 +1781,12 @@ function renderizarModalProductos() {
     tbody.innerHTML = modalProductos.map((prod, idx) => `
         <tr class="sku-result-row" onclick="actualizarModalPreview(modalProductos[${idx}])">
             <td><code style="font-size:.82rem;">${prod.sku}</code></td>
-            <td title="${prod.descripcion || prod.articulo}">${(prod.articulo || '').substring(0, 18)}</td>
+            <td title="${escaparAtributo((prod.descripcion || prod.articulo) + (prod.sucursal ? ' — ' + prod.sucursal : ''))}">
+                ${(prod.articulo || '').substring(0, 18)}
+                ${prod.sucursal ? `<div style="font-size:.66rem;color:var(--nexo-gray-500);">${prod.sucursal}</div>` : ''}
+            </td>
             <td><strong>${prod.talla || '—'}</strong></td>
-            <td>$${formatearPrecio(prod.precio)}</td>
+            <td>${renderPrecioCelda(prod)}</td>
             <td>
                 <div class="quantity-stepper">
                     <button type="button" onclick="event.stopPropagation(); cambiarCantidadModal(${idx}, -1)">−</button>
@@ -1740,7 +1847,8 @@ function actualizarModalPreview(producto) {
     document.getElementById('mprevSucursal').textContent = sucursal.substring(0, 8);
     document.getElementById('mprevDesc').textContent = (producto.descripcion || producto.articulo || '').substring(0, 22);
     document.getElementById('mprevSku').textContent = producto.sku;
-    document.getElementById('mprevArt').textContent = (producto.articulo || '').substring(0, 14);
+    // 17 = tope real de impresión (ajustarTextoZPL con fuente mínima 20 en 205 dots)
+    document.getElementById('mprevArt').textContent = (producto.articulo || '').substring(0, 17);
     document.getElementById('mprevPrecio').textContent = '$' + formatearPrecio(producto.precio);
     document.getElementById('mprevFactura').textContent = producto.factura || modalContexto?.id || '';
     document.getElementById('mprevTalla').textContent = producto.talla || '';
@@ -1764,7 +1872,11 @@ function sincronizarSucursalModal() {
     if (panelSuc) panelSuc.value = val;
 }
 
-async function confirmarImpresionModal() {
+let impresionEnCurso = false;
+
+async function confirmarImpresionModal(confirmarDuplicado = false) {
+    if (impresionEnCurso) return;   // evita el doble POST por doble click
+
     if (!printerDevice) {
         Swal.fire({ icon: 'warning', title: 'Sin impresora', text: 'Conecta Zebra Browser Print e intenta de nuevo.', confirmButtonColor: '#0066FF' });
         return;
@@ -1776,10 +1888,32 @@ async function confirmarImpresionModal() {
         return;
     }
 
-        // Cerrar modal y mostrar loading
-        bootstrap.Modal.getInstance(document.getElementById('modalImprimir'))?.hide();
-        bootstrap.Modal.getInstance(document.getElementById('modalDocumento'))?.hide();
-        mostrarLoading('Generando etiquetas...');
+    // Aviso explícito si se va a imprimir precio de campaña (caduca al cerrarla)
+    const enCampana = seleccionados.filter(p => p.en_campana);
+    if (enCampana.length > 0 && !confirmarDuplicado) {
+        const fin = enCampana.find(p => p.campana_fin)?.campana_fin;
+        const res = await Swal.fire({
+            icon: 'warning',
+            title: 'Precio de campaña',
+            html: `<b>${enCampana.length}</b> producto(s) se imprimirán con el precio de liquidación vigente.` +
+                  (fin ? `<br>La campaña termina el <b>${fin}</b>.` : '') +
+                  `<br><small class="text-muted">Al cerrar la campaña el precio vuelve al de lista y estas etiquetas quedarán desactualizadas.</small>`,
+            showCancelButton: true,
+            confirmButtonText: 'Imprimir igual',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#0066FF'
+        });
+        if (!res.isConfirmed) return;
+    }
+
+    impresionEnCurso = true;
+    const btnConfirmar = document.getElementById('btnConfirmarImprimir');
+    if (btnConfirmar) btnConfirmar.disabled = true;
+
+    // Cerrar modal y mostrar loading
+    bootstrap.Modal.getInstance(document.getElementById('modalImprimir'))?.hide();
+    bootstrap.Modal.getInstance(document.getElementById('modalDocumento'))?.hide();
+    mostrarLoading('Generando etiquetas...');
 
     try {
         const fecha = document.getElementById('modalFechaImpresion').value
@@ -1802,11 +1936,31 @@ async function confirmarImpresionModal() {
                 numero_documento: modalContexto ? String(modalContexto.numero || '') : '',
                 sucursal: sucursal,
                 tipo_origen: modalContexto?.tipo || 'MANUAL',
-                documento_id: modalContexto?.id || null
+                documento_id: modalContexto?.id || null,
+                confirmar_duplicado: confirmarDuplicado
             })
         });
 
         const data = await response.json();
+
+        // El backend detectó una impresión reciente del mismo documento
+        if (!data.success && data.requiere_confirmacion) {
+            ocultarLoading();
+            impresionEnCurso = false;
+            if (btnConfirmar) btnConfirmar.disabled = false;
+            const res = await Swal.fire({
+                icon: 'question',
+                title: '¿Reimprimir?',
+                html: `${data.error}<br><small class="text-muted">Se gastarán ${seleccionados.reduce((s, p) => s + (p.cantidad_etiquetas ?? p.cantidad ?? 0), 0)} etiquetas más.</small>`,
+                showCancelButton: true,
+                confirmButtonText: 'Sí, reimprimir',
+                cancelButtonText: 'No',
+                confirmButtonColor: '#0066FF'
+            });
+            if (res.isConfirmed) await confirmarImpresionModal(true);
+            return;
+        }
+
         if (!data.success) throw new Error(data.error || 'Error al generar etiquetas');
 
         if (data.alertas?.length > 0) mostrarAlertas(data.alertas);
@@ -1852,6 +2006,10 @@ async function confirmarImpresionModal() {
     } catch (error) {
         ocultarLoading();
         Swal.fire({ icon: 'error', title: 'Error al imprimir', text: error.message });
+    } finally {
+        impresionEnCurso = false;
+        const btn = document.getElementById('btnConfirmarImprimir');
+        if (btn) btn.disabled = false;
     }
 }
 
@@ -1889,7 +2047,10 @@ async function buscarSkuRapido() {
 function agruparPorArticulo(productos) {
     const grupos = {};
     for (const prod of productos) {
-        const key = prod.articulo || prod.sku;
+        // El mismo artículo existe como fila distinta en cada sucursal y con
+        // su propio precio: agrupar solo por artículo mezclaba precios de
+        // bodegas distintas bajo un mismo encabezado.
+        const key = (prod.articulo || prod.sku) + (prod.sucursal ? ' · ' + prod.sucursal : '');
         if (!grupos[key]) {
             grupos[key] = {
                 articulo: prod.articulo,
@@ -1903,6 +2064,13 @@ function agruparPorArticulo(productos) {
         grupos[key].skus.push(prod);
     }
     return grupos;
+}
+
+function rangoPrecios(skus) {
+    const precios = skus.map(s => parseInt(s.precio) || 0);
+    const min = Math.min(...precios), max = Math.max(...precios);
+    return min === max ? `$${formatearPrecio(min)}`
+                       : `$${formatearPrecio(min)} – $${formatearPrecio(max)}`;
 }
 
 function renderizarArticulosAgrupados() {
@@ -1934,7 +2102,12 @@ function renderizarArticulosAgrupados() {
                 <td><code style="font-size:.8rem;">${s.sku}</code></td>
                 <td><strong>${s.talla || '—'}</strong></td>
                 <td>${s.color || '—'}</td>
-                <td>$${formatearPrecio(s.precio)}</td>
+                <td>${renderPrecioCelda(s)}</td>
+                <td title="Stock del SKU en ${escaparAtributo(s.sucursal || '')}">
+                    ${s.stock > 0
+                        ? `<span class="nexo-badge nexo-badge-success" style="font-size:.62rem;">${s.stock}</span>`
+                        : `<span class="nexo-badge" style="font-size:.62rem;background:rgba(150,150,150,.15);color:#666;">0</span>`}
+                </td>
                 <td onclick="event.stopPropagation()">
                     <div class="quantity-stepper">
                         <button type="button" onclick="ajustarCantArticuloSku('${artKey}', ${sIdx}, -1)">−</button>
@@ -1957,8 +2130,11 @@ function renderizarArticulosAgrupados() {
             <div class="articulo-group-header" onclick="toggleArticuloGroup('artGroup_${gIdx}')">
                 <div class="articulo-group-icon"><i class="ri-box-3-line"></i></div>
                 <div class="articulo-group-info">
-                    <div class="art-name">${artKey}</div>
-                    <div class="art-desc">${grupo.descripcion} ${grupo.marca ? '· ' + grupo.marca : ''} · $${formatearPrecio(grupo.precio)}</div>
+                    <div class="art-name">
+                        ${grupo.articulo || artKey}
+                        ${grupo.sucursal ? `<span class="nexo-badge nexo-badge-info ms-1" style="font-size:.62rem;">${grupo.sucursal}</span>` : ''}
+                    </div>
+                    <div class="art-desc">${grupo.descripcion} ${grupo.marca ? '· ' + grupo.marca : ''} · ${rangoPrecios(grupo.skus)}</div>
                 </div>
                 <div class="articulo-group-meta">
                     <span class="sku-count-badge">${skuCount} SKU${skuCount > 1 ? 's' : ''}</span>
@@ -1966,6 +2142,11 @@ function renderizarArticulosAgrupados() {
                     <button class="btn-imprimir-articulo" onclick="event.stopPropagation(); imprimirArticuloCompleto('${artKey}')" title="Imprimir todas las tallas/colores de este artículo">
                         <i class="ri-printer-fill"></i> Imprimir Todo
                     </button>` : ''}
+                    <button class="btn-imprimir-articulo" style="background:rgba(0,102,255,.1);color:#0052CC;"
+                        onclick="event.stopPropagation(); usarStockComoCantidad('${artKey}')"
+                        title="Poner en cada talla tantas etiquetas como unidades en stock">
+                        <i class="ri-stack-line"></i> Cant = stock
+                    </button>
                     <i class="ri-arrow-right-s-line chevron-icon"></i>
                 </div>
             </div>
@@ -1978,6 +2159,7 @@ function renderizarArticulosAgrupados() {
                                 <th>Talla</th>
                                 <th>Color</th>
                                 <th>Precio</th>
+                                <th title="Unidades en stock del SKU en esa sucursal">Stock</th>
                                 <th>Etiq.</th>
                                 <th></th>
                             </tr>
@@ -2000,6 +2182,30 @@ function ajustarCantArticuloSku(artKey, sIdx, delta) {
     if (el) el.value = Math.max(1, (parseInt(el.value) || 1) + delta);
 }
 
+// Caso de uso real: se etiqueta lo que hay en la sala. Pone en cada talla
+// tantas etiquetas como unidades tenga en stock esa sucursal.
+function usarStockComoCantidad(artKey) {
+    const grupo = articulosAgrupados[artKey];
+    if (!grupo) return;
+    let total = 0;
+    grupo.skus.forEach((s, sIdx) => {
+        const el = document.querySelector(`.sku-art-cantidad[data-art="${artKey}"][data-sidx="${sIdx}"]`);
+        const stock = Math.max(0, parseInt(s.stock) || 0);
+        if (el) el.value = stock;
+        total += stock;
+    });
+    const card = document.querySelector(`.articulo-group[data-art-key="${artKey}"]`);
+    if (card) card.classList.add('expanded');
+    Swal.fire({
+        icon: total > 0 ? 'success' : 'info',
+        title: total > 0 ? `${total} etiquetas` : 'Sin stock',
+        text: total > 0
+            ? 'Se ajustó la cantidad de cada talla a su stock en esa sucursal.'
+            : 'Este artículo no tiene unidades en stock en esa sucursal.',
+        timer: 2000, showConfirmButton: false
+    });
+}
+
 function getCantArticuloSku(artKey, sIdx) {
     const el = document.querySelector(`.sku-art-cantidad[data-art="${artKey}"][data-sidx="${sIdx}"]`);
     return parseInt(el?.value) || parseInt(document.getElementById('cantidadSkuRapida').value) || 1;
@@ -2011,7 +2217,7 @@ function imprimirSkuIndividual(artKey, sIdx) {
     const prod = { ...grupo.skus[sIdx] };
     prod.cantidad_etiquetas = getCantArticuloSku(artKey, sIdx);
     prod.seleccionado = true;
-    prod.sucursal = document.getElementById('sucursalEtiqueta')?.value || prod.sucursal || '';
+    prod.sucursal = prod.sucursal || document.getElementById('sucursalEtiqueta')?.value || '';
     abrirModalImprimir([prod], null);
 }
 
@@ -2019,12 +2225,16 @@ async function imprimirArticuloCompleto(artKey) {
     const grupo = articulosAgrupados[artKey];
     if (!grupo) return;
 
-    const sucursalId = document.getElementById('filtroSucursal').value || '';
+    // OJO: artKey es "ARTICULO · SUCURSAL" (la clave de agrupación). El
+    // endpoint espera el código de artículo puro y la sucursal por separado.
+    const articulo = grupo.articulo || artKey;
+    const sucursalId = String(grupo.skus[0]?.sucursal_id ||
+                              document.getElementById('filtroSucursal').value || '');
     const sucursal = document.getElementById('sucursalEtiqueta')?.value || grupo.sucursal || '';
     const cantDefault = parseInt(document.getElementById('cantidadSkuRapida').value) || 1;
 
     try {
-        const params = new URLSearchParams({ articulo: artKey, sucursal_id: sucursalId, fuente: obtenerFuenteActual() });
+        const params = new URLSearchParams({ articulo: articulo, sucursal_id: sucursalId, fuente: obtenerFuenteActual() });
         const response = await fetch(`/app/etiquetas/skus-articulo/?${params}`);
         const data = await response.json();
 
@@ -2033,7 +2243,7 @@ async function imprimirArticuloCompleto(artKey) {
                 ...p,
                 cantidad_etiquetas: cantDefault,
                 seleccionado: true,
-                sucursal: sucursal || p.sucursal
+                sucursal: p.sucursal || sucursal
             }));
             abrirModalImprimir(prods, null);
         } else {
@@ -2057,7 +2267,7 @@ function abrirModalDesdeSkuRapido(index) {
     const prod = { ...productosSkuRapido[index] };
     prod.cantidad_etiquetas = parseInt(document.getElementById('cantidadSkuRapida').value) || 1;
     prod.seleccionado = true;
-    prod.sucursal = document.getElementById('sucursalEtiqueta')?.value || prod.sucursal || '';
+    prod.sucursal = prod.sucursal || document.getElementById('sucursalEtiqueta')?.value || '';
     abrirModalImprimir([prod], null);
 }
 
@@ -2079,6 +2289,8 @@ async function seleccionarDocumento(tipo, id) {
             </td>
         </tr>`;
     document.getElementById('alertasContainer').innerHTML = '';
+    const contPrecio = document.getElementById('alertasPrecioContainer');
+    if (contPrecio) contPrecio.innerHTML = '';
     document.getElementById('btnImprimir').disabled = true;
 
     const modalDoc = new bootstrap.Modal(document.getElementById('modalDocumento'));
@@ -2106,12 +2318,13 @@ async function seleccionarDocumento(tipo, id) {
             document.getElementById('docSubtitulo').textContent =
                 `${data.documento.fecha || ''}${data.documento.proveedor ? ' · ' + data.documento.proveedor : ''}`;
 
-            // Actualizar sucursal para etiquetas
+            // Actualizar sucursal para etiquetas (destino real de la mercadería)
             document.getElementById('sucursalEtiqueta').value =
                 data.documento.sucursal_destino || data.productos[0]?.sucursal || '';
 
             renderizarProductos();
             actualizarEstadisticas();
+            mostrarAlertasPrecio(data.alertas_precio, data.documento);
 
             // Historial impresiones previas
             if (data.ya_impreso && data.impresiones_previas?.length > 0) {
@@ -2159,15 +2372,15 @@ function renderizarProductos() {
             onmouseenter="actualizarPreview(productosDocumento[${index}])"
             onclick="toggleProducto(${index})">
             <td onclick="event.stopPropagation()">
-                <input type="checkbox" class="producto-check" data-index="${index}" 
+                <input type="checkbox" class="producto-check" data-index="${index}"
                     ${prod.seleccionado ? 'checked' : ''} onchange="toggleProducto(${index})">
             </td>
             <td><code>${prod.sku}</code></td>
-            <td title="${prod.descripcion}">${prod.articulo.substring(0, 14)}</td>
-            <td>${prod.marca}</td>
-            <td><strong>${prod.talla}</strong></td>
-            <td>${prod.color}</td>
-            <td>$${formatearPrecio(prod.precio)}</td>
+            <td title="${escaparAtributo(prod.descripcion)}">${(prod.articulo || '').substring(0, 14)}</td>
+            <td>${prod.marca || ''}</td>
+            <td><strong>${prod.talla || ''}</strong></td>
+            <td>${prod.color || ''}</td>
+            <td>${renderPrecioCelda(prod)}</td>
             <td>${prod.cantidad}</td>
             <td onclick="event.stopPropagation()">
                 <input type="number" class="quantity-input etiquetas-input" data-index="${index}"
@@ -2188,6 +2401,128 @@ function renderizarProductos() {
     if (productosDocumento.length > 0) {
         actualizarPreview(productosDocumento[0]);
     }
+}
+
+// ========== PRECIO: DE DÓNDE SALE Y SI ES CONFIABLE ==========
+//
+// `Producto` es POR SUCURSAL: en un traspaso el DTE apunta al producto de la
+// bodega de ORIGEN, pero la etiqueta se pega a mercadería que se vende en la
+// sucursal DESTINO, donde el POS cobra otro precio. El backend ya resuelve el
+// precio del destino; acá se muestra de dónde salió para que nadie imprima a
+// ciegas.
+function escaparAtributo(txt) {
+    return String(txt ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderPrecioCelda(prod) {
+    const precio = `<strong>$${formatearPrecio(prod.precio)}</strong>`;
+    const estado = prod.estado_precio;
+
+    if (estado === 'CAMPANA') {
+        const lista = prod.precio_lista ? `$${formatearPrecio(prod.precio_lista)}` : '';
+        return `${precio}
+            <span class="nexo-badge nexo-badge-warning ms-1" style="font-size:.62rem;"
+                  title="${escaparAtributo('Precio de campaña "' + (prod.campana_nombre || '') + '"' +
+                          (prod.campana_fin ? ' (termina el ' + prod.campana_fin + ')' : '') +
+                          '. Precio de lista: ' + lista + '. Al cerrar la campaña esta etiqueta queda desactualizada.')}">
+                <i class="ri-price-tag-3-line"></i> CAMPAÑA
+            </span>
+            ${lista ? `<div style="font-size:.68rem;color:var(--nexo-gray-500);text-decoration:line-through;">${lista}</div>` : ''}`;
+    }
+    if (estado === 'DIVERGE') {
+        return `${precio}
+            <span class="nexo-badge nexo-badge-info ms-1" style="font-size:.62rem;"
+                  title="${escaparAtributo('Se imprime el precio de ' + (prod.sucursal_destino || 'destino') +
+                          ' ($' + formatearPrecio(prod.precio_destino) + '), que es el que cobra ese POS. ' +
+                          'En ' + (prod.sucursal_origen || 'origen') + ' el precio es $' + formatearPrecio(prod.precio_origen) + '.')}">
+                ${prod.sucursal_destino || 'destino'}
+            </span>
+            <div style="font-size:.68rem;color:var(--nexo-gray-500);">
+                ${prod.sucursal_origen || 'origen'}: $${formatearPrecio(prod.precio_origen)}
+            </div>`;
+    }
+    if (estado === 'SIN_DESTINO') {
+        return `${precio}
+            <span class="nexo-badge nexo-badge-warning ms-1" style="font-size:.62rem;"
+                  title="${escaparAtributo('El artículo todavía no existe en ' + (prod.sucursal_destino || 'la sucursal destino') +
+                          '. Se imprime el precio de ' + (prod.sucursal_origen || 'origen') + '; verifícalo antes de imprimir.')}">
+                <i class="ri-question-line"></i> sin precio en destino
+            </span>`;
+    }
+    if (estado === 'SKU_DISTINTO') {
+        return `${precio}
+            <span class="nexo-badge nexo-badge-warning ms-1" style="font-size:.62rem;"
+                  title="${escaparAtributo('El mismo artículo/talla tiene otro SKU en ' + (prod.sucursal_destino || 'destino') +
+                          ': ' + (prod.sku_destino || '') + '. Revisa cuál corresponde al código de barras.')}">
+                <i class="ri-alert-line"></i> SKU distinto
+            </span>`;
+    }
+    if (!prod.precio) {
+        return `<span class="nexo-badge nexo-badge-warning" style="font-size:.62rem;">
+                    <i class="ri-alert-line"></i> sin precio</span>`;
+    }
+    return precio;
+}
+
+function mostrarAlertasPrecio(alertas, documento) {
+    const cont = document.getElementById('alertasPrecioContainer');
+    if (!cont) return;
+    if (!alertas) { cont.innerHTML = ''; return; }
+
+    const bloques = [];
+    if (alertas.en_campana > 0) {
+        bloques.push(`
+            <div class="nexo-alert nexo-alert-warning">
+                <i class="ri-price-tag-3-line"></i>
+                <div><strong>${alertas.en_campana} producto(s) con campaña de liquidación vigente.</strong>
+                Se imprimirá el <u>precio con descuento</u> (es el que cobra el POS hoy).
+                Cuando la campaña cierre, el precio vuelve al de lista y estas etiquetas
+                quedarán desactualizadas: habrá que reimprimirlas.</div>
+            </div>`);
+    }
+    if (alertas.diverge > 0) {
+        bloques.push(`
+            <div class="nexo-alert nexo-alert-info">
+                <i class="ri-arrow-left-right-line"></i>
+                <div><strong>${alertas.diverge} producto(s) valen distinto en origen y destino.</strong>
+                Se imprime el precio de <strong>${escaparAtributo(documento?.sucursal_destino || 'la sucursal destino')}</strong>,
+                que es el que cobra el POS donde se venderá la mercadería
+                (origen: ${escaparAtributo(documento?.sucursal_origen || '-')}).</div>
+            </div>`);
+    }
+    if (alertas.sin_destino > 0) {
+        bloques.push(`
+            <div class="nexo-alert nexo-alert-warning">
+                <i class="ri-question-line"></i>
+                <div><strong>${alertas.sin_destino} producto(s) aún no existen en ${escaparAtributo(documento?.sucursal_destino || 'el destino')}.</strong>
+                Se usa el precio de la bodega de origen. Si la tienda maneja otro precio,
+                recepciona primero el documento y vuelve a imprimir.</div>
+            </div>`);
+    }
+    if (alertas.sku_distinto > 0) {
+        bloques.push(`
+            <div class="nexo-alert nexo-alert-error">
+                <i class="ri-barcode-line"></i>
+                <div><strong>${alertas.sku_distinto} producto(s) tienen otro SKU en la sucursal destino.</strong>
+                Revisa el código de barras antes de imprimir.</div>
+            </div>`);
+    }
+    if (alertas.sin_precio > 0) {
+        bloques.push(`
+            <div class="nexo-alert nexo-alert-error">
+                <i class="ri-money-dollar-circle-line"></i>
+                <div><strong>${alertas.sin_precio} producto(s) sin precio.</strong> Saldrían con $0.</div>
+            </div>`);
+    }
+    if (alertas.sin_sku > 0) {
+        bloques.push(`
+            <div class="nexo-alert nexo-alert-error">
+                <i class="ri-barcode-line"></i>
+                <div><strong>${alertas.sin_sku} producto(s) sin SKU:</strong> no generan código de barras.</div>
+            </div>`);
+    }
+    cont.innerHTML = bloques.join('');
 }
 
 function toggleProducto(index) {
@@ -2255,7 +2590,8 @@ function actualizarPreview(producto) {
     document.getElementById('prevDesc').textContent = (producto.descripcion || producto.articulo).substring(0, 28);
     document.getElementById('prevMarca').textContent = (producto.marca || '').substring(0, 10);
     document.getElementById('prevSku').textContent = producto.sku;
-    document.getElementById('prevArt').textContent = producto.articulo.substring(0, 14);
+    // 17 = tope real de impresión (ajustarTextoZPL con fuente mínima 20 en 205 dots)
+    document.getElementById('prevArt').textContent = producto.articulo.substring(0, 17);
     document.getElementById('prevPrecio').textContent = '$' + formatearPrecio(producto.precio);
     document.getElementById('prevFactura').textContent = producto.factura || documentoSeleccionado?.id || '';
     document.getElementById('prevTalla').textContent = producto.talla;

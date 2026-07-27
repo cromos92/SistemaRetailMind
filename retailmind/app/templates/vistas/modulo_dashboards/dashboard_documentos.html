@@ -40,10 +40,12 @@
 
 /* ===== Header ===== */
 .doc-header {
-    background: linear-gradient(135deg, #4361ee 0%, #7209b7 100%);
+    /* Gradiente canonico de modulo (#405189 -> #0ab39c), igual que el resto de
+       los tableros; antes inventaba un azul/violeta propio */
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
     color: #fff; border-radius: var(--doc-radius-lg); padding: 28px 32px; margin-bottom: 28px;
     display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;
-    box-shadow: 0 8px 32px rgba(67, 97, 238, 0.3);
+    box-shadow: 0 8px 32px rgba(64, 81, 137, 0.3);
     position: relative; overflow: hidden;
 }
 .doc-header::before {
@@ -316,6 +318,17 @@
     .doc-kpi-mini-value { font-size: 1rem; }
     .doc-chart-container { height: 230px; }
     .doc-chart-container-sm { height: 210px; }
+}
+
+/* Notebooks de tienda (1366x768): cabecera + KPIs sin scroll */
+@media (max-height: 820px) {
+    .page-content { padding: 60px 0 40px; }
+    .doc-header { padding: 14px 20px; margin-bottom: 14px; }
+    .doc-header h4 { font-size: 1.25rem; }
+    .doc-kpi-grid { gap: 12px; margin-bottom: 14px; }
+    .doc-kpi-card { padding: 14px 16px; }
+    .doc-kpi-top { margin-bottom: 8px; }
+    .doc-kpi-value { font-size: 1.4rem; }
 }
 </style>
 

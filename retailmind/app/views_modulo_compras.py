@@ -1466,11 +1466,19 @@ def verDiagnosticoCompras(request):
 def diagnostico_datos_compras(request):
     """API para diagnóstico de calidad de datos de compras"""
     try:
-        # Análisis de calidad de datos
-        total_compras = Compras.objects.count()
-        compras_sin_proveedor = Compras.objects.filter(empresa__isnull=True).count()
-        compras_sin_fecha = Compras.objects.filter(fecha_compra__isnull=True).count()
-        compras_sin_total = Compras.objects.filter(total__isnull=True).count()
+        # Análisis de calidad de datos.
+        # Los campos consultados antes (fecha_compra, total) NO existen en el
+        # modelo Compras: el FieldError quedaba tapado por el except genérico y
+        # la pantalla mostraba siempre un error. Se usan los campos reales y se
+        # cambia "sin total" por un chequeo que sí importa: órdenes sin líneas.
+        compras_activas = Compras.objects.exclude(estado='ELIMINADA')
+        total_compras = compras_activas.count()
+        compras_sin_proveedor = compras_activas.filter(empresa__isnull=True).count()
+        compras_sin_fecha = compras_activas.filter(fecha__isnull=True).count()
+        compras_sin_lineas = compras_activas.filter(
+            compras_producto__isnull=True
+        ).distinct().count()
+        compras_sin_total = compras_sin_lineas  # retrocompat con el template
         
         # DTEs con problemas
         dtes_sin_productos = Dte.objects.filter(

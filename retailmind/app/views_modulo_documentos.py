@@ -3457,7 +3457,7 @@ def construir_detalle_txt_desde_dte_productos(dte_productos, tipo_numerico, es_e
 
     detalle = []
     productos_agrupados = defaultdict(lambda: {
-        'tallas': [],
+        'tallas': [],          # tuplas (cantidad, talla, sku) por línea original
         'cantidad_total': 0,
         'precio': 0,
         'monto_total': 0,
@@ -3502,7 +3502,7 @@ def construir_detalle_txt_desde_dte_productos(dte_productos, tipo_numerico, es_e
         grupo = productos_agrupados[agrupacion_key]
 
         talla_nombre = str(producto_talla.talla) if getattr(producto_talla, 'talla', None) else 'U'
-        grupo['tallas'].append(f"{dte_producto.stock}:{talla_nombre}")
+        grupo['tallas'].append((dte_producto.stock, talla_nombre, getattr(producto_talla, 'sku', None)))
         grupo['cantidad_total'] += dte_producto.stock
         grupo['precio'] = precio_unitario
         grupo['monto_total'] += dte_producto.monto_item or (dte_producto.stock * dte_producto.precio)
@@ -3514,22 +3514,54 @@ def construir_detalle_txt_desde_dte_productos(dte_productos, tipo_numerico, es_e
         grupo['color'] = color
 
     for grupo in productos_agrupados.values():
-        tallas_str = ' '.join(grupo['tallas'])
+        # SKU en el TXT: el POS emite el SKU por línea (CdgItem + prefijo del
+        # NmbItem) y las boletas ecommerce lo perdían al agrupar por variante.
+        # Si el grupo tiene UN solo SKU (caso típico ecommerce), ese SKU es el
+        # código del ítem y el artículo pasa al nombre para no perderse; con
+        # varios SKUs, el código sigue siendo el artículo y cada tramo del
+        # desglose de tallas lleva su SKU entre paréntesis.
+        skus_grupo = list(dict.fromkeys(
+            str(sku) for _, _, sku in grupo['tallas'] if sku is not None
+        ))
+        descripcion_txt = ''
+        if len(skus_grupo) == 1:
+            codigo_txt = skus_grupo[0]
+            tallas_str = ' '.join(f"{cant}:{talla}" for cant, talla, _ in grupo['tallas'])
+            prefijo_articulo = limpiar_texto(grupo['articulo'] or '')
+        else:
+            codigo_txt = limpiar_texto(grupo['articulo'])
+            prefijo_articulo = ''
+            if skus_grupo and len(grupo['tallas']) <= 3:
+                tallas_str = ' '.join(
+                    f"{cant}:{talla}({sku})" if sku is not None else f"{cant}:{talla}"
+                    for cant, talla, sku in grupo['tallas']
+                )
+            else:
+                # Con 4+ tallas los "(sku)" inflan el NmbItem sobre los 80 chars
+                # del SII y el nombre impreso saldría cortado a mitad de un SKU:
+                # el desglose queda limpio y los SKUs van completos al DscItem.
+                tallas_str = ' '.join(f"{cant}:{talla}" for cant, talla, _ in grupo['tallas'])
+                if skus_grupo:
+                    descripcion_txt = 'SKUs: ' + ' '.join(skus_grupo)
+
         marca_limpia = limpiar_texto(grupo['marca'] or '')
         color_limpio = limpiar_texto(grupo['color'] or '')
         marca_color = f"{marca_limpia} {color_limpio}".strip() if marca_limpia or color_limpio else ''
-        nombre_final = f"{marca_color} {tallas_str}".strip() if marca_color else tallas_str
+        nombre_final = ' '.join(p for p in (prefijo_articulo, marca_color, tallas_str) if p)
 
         detalle.append({
             'nombre': limpiar_texto(nombre_final),
-            'descripcion': '',
+            'descripcion': descripcion_txt,
             'cantidad': grupo['cantidad_total'],
             'unidad': 'UN',
             'precio_unitario': grupo['precio'],
             'descuento_pct': grupo['descuento_pct'],
             'monto_descuento': grupo['descuento_monto_total'],
             'monto_item': grupo['monto_total'],
-            'codigo': limpiar_texto(grupo['articulo'])
+            'codigo': codigo_txt,
+            # El docstring promete IndExe=1 por línea cuando el doc es exento;
+            # las líneas de concepto ya lo hacían, las de producto no.
+            'indicador_exencion': 1 if es_exenta else '',
         })
 
     return detalle

@@ -231,6 +231,12 @@ def consumir(codigo, monto, *, ticket=None, pago_ticket=None, sucursal=None,
     # idempotencia preferente: por pago concreto
     if not idempotency_key and pago_ticket is not None:
         idempotency_key = f"consumo:{pago_ticket.id}"
+    # Respaldo por ticket+tarjeta cuando el llamador no pasa ni clave ni pago.
+    # Sin esto, dos llamadas seguidas descuentan dos veces (verificado: $10.000
+    # con dos consumos de $1.000 quedaba en $8.000 por separado, no idempotente).
+    # Es el mismo criterio que ya usa `reversar()` más abajo.
+    if not idempotency_key and ticket is not None:
+        idempotency_key = f"consumo_gc:{ticket.id}:{_normalizar_codigo(codigo)}"
 
     with transaction.atomic():
         # Si ya se procesó este consumo, no repetir.
@@ -264,17 +270,35 @@ def consumir(codigo, monto, *, ticket=None, pago_ticket=None, sucursal=None,
             gc.save(update_fields=['cliente', 'updated_at'])
 
         try:
-            mov = _registrar_movimiento(
-                gc, 'CONSUMO', -monto,
-                ticket=ticket, pago_ticket=pago_ticket, sucursal=sucursal,
-                usuario=usuario, idempotency_key=idempotency_key,
-                observaciones=f'Pago de venta (ticket {getattr(ticket, "correlativo", "")})',
-            )
+            # El INSERT va en un atomic() ANIDADO (savepoint) a propósito: si
+            # choca contra el índice único de idempotency_key, Postgres aborta
+            # la transacción y Django marca needs_rollback, de modo que el
+            # `filter()` del except reventaba con TransactionManagementError en
+            # vez de recuperar el movimiento. Con el savepoint, el error queda
+            # contenido y la transacción exterior (que tiene el lock de la
+            # tarjeta) sigue utilizable.
+            with transaction.atomic():
+                mov = _registrar_movimiento(
+                    gc, 'CONSUMO', -monto,
+                    ticket=ticket, pago_ticket=pago_ticket, sucursal=sucursal,
+                    usuario=usuario, idempotency_key=idempotency_key,
+                    observaciones=f'Pago de venta (ticket {getattr(ticket, "correlativo", "")})',
+                )
         except IntegrityError:
             # Carrera: otro proceso insertó el mismo idempotency_key. Recuperar.
+            # Sin clave no se puede identificar el movimiento del otro proceso
+            # (filtrar por NULL devolvería cualquier fila sin clave), así que
+            # el error se propaga tal cual.
+            if not idempotency_key:
+                raise
             mov = MovimientoGiftCard.objects.filter(idempotency_key=idempotency_key).first()
             if not mov:
                 raise
+            # El savepoint revirtió el saldo que _registrar_movimiento pudo
+            # haber dejado en memoria: releer para no devolver datos rancios.
+            gc.refresh_from_db()
+            logger.info("Consumo giftcard resuelto por carrera codigo=%s key=%s",
+                        codigo, idempotency_key)
     logger.info("GiftCard consumida codigo=%s monto=%s saldo=%s", gc.codigo, monto, gc.saldo_actual)
     return mov
 
@@ -288,8 +312,20 @@ def recargar(codigo, monto, *, sucursal=None, usuario=None, observaciones=''):
         gc = _resolver_giftcard(codigo, lock=True)
         if gc is None:
             raise GiftCardError('Gift card no encontrada.')
-        if gc.estado in ('ANULADA', 'BLOQUEADA'):
+        if gc.estado in ('ANULADA', 'BLOQUEADA', 'VENCIDA'):
             raise GiftCardError(f'No se puede recargar (estado: {gc.get_estado_display()}).')
+        # `consumir()` rechaza las tarjetas vencidas, así que recargar una cuya
+        # fecha ya pasó inyecta plata que nadie puede canjear (pasivo muerto).
+        # Se mira `esta_vencida` además del estado porque VENCIDA solo se
+        # persiste cuando corre `marcar_vencidas()`: una tarjeta puede estar
+        # ACTIVA en la columna y vencida en la fecha.
+        # La vista api_recargar_giftcard ya lo bloquea con un mensaje propio;
+        # esto es el respaldo para cualquier otro llamador (API desktop, etc.).
+        if gc.esta_vencida:
+            raise GiftCardError(
+                f'No se puede recargar: la gift card venció el {gc.fecha_vencimiento}. '
+                'Extiende primero el vencimiento.'
+            )
         mov = _registrar_movimiento(
             gc, 'CARGA', monto, sucursal=sucursal, usuario=usuario,
             observaciones=observaciones or 'Recarga manual',

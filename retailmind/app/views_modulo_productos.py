@@ -26,10 +26,13 @@ from .models import (
 
 # ========== GESTIÓN DE PRODUCTOS ==========
 
-@login_required
-def verGestionProducto(request):
-    """Vista principal para gestión de productos"""
-    return render(request, 'vistas/modulo_existencias/verGestionProductos.html')
+# NOTA 2026-07: aquí vivía una copia muerta de `verGestionProducto` que
+# renderizaba verGestionProductos.html SIN el contexto de atributos
+# (id_atributo_marca / color / genero / especialidad), de modo que quien
+# editara esta copia por error dejaba el modal "Crear Producto Manual" sin sus
+# select2. La versión viva y ruteada es `views.verGestionProducto`
+# (app/urls.py línea 516). De este módulo solo se importan `crear_lote_producto`
+# y `consumir_stock_fifo` (views_edicion_productos.py, views_gestion_inventarios.py).
 
 
 @require_GET

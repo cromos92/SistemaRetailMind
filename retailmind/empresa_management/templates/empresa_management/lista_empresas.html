@@ -3,7 +3,6 @@
 {% include 'layout/header.html' %}
 {% csrf_token %}
 {% include 'layout/menu.html' %}
-{% include 'layout/footer.html' %}
 
 <!-- NEXO Design System - Gestión de Empresas -->
 <style>
@@ -55,7 +54,7 @@
 .nexo-header-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
 
 /* ===== Stats Row ===== */
-.nexo-stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+.nexo-stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
 @media (max-width: 1200px) { .nexo-stats-row { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 576px) { .nexo-stats-row { grid-template-columns: 1fr; } }
 
@@ -145,6 +144,13 @@
 .nexo-company-name { font-weight: 600; color: var(--nexo-gray-900); }
 .nexo-company-fantasy { font-size: 0.75rem; color: var(--nexo-gray-500); }
 
+/* ===== Celdas compactas (pantallas de 15") ===== */
+.nexo-cell-main { color: var(--nexo-gray-700); }
+.nexo-cell-sub { font-size: 0.72rem; color: var(--nexo-gray-500); }
+.nexo-cell-trunc { display: block; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nexo-table tbody td { padding: 0.75rem 0.75rem; }
+.nexo-table thead th { padding: 0.75rem 0.75rem; }
+
 /* ===== Badges ===== */
 .nexo-badge {
     display: inline-flex; align-items: center; gap: 0.25rem;
@@ -172,6 +178,8 @@
 .nexo-action-btn.edit:hover { background: var(--nexo-primary); color: white; }
 .nexo-action-btn.delete { background: rgba(255, 77, 77, 0.1); color: var(--nexo-error); }
 .nexo-action-btn.delete:hover { background: var(--nexo-error); color: white; }
+.nexo-action-btn.toggle { background: rgba(255, 176, 32, 0.15); color: #996B00; }
+.nexo-action-btn.toggle:hover { background: var(--nexo-warning); color: white; }
 
 /* ===== Pagination ===== */
 .nexo-pagination { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; padding-top: 1rem; border-top: 1px solid var(--nexo-gray-300); margin-top: 1rem; }
@@ -280,34 +288,41 @@
                 </div>
             </div>
 
-            <!-- Stats Row -->
+            <!-- Stats Row (se recalculan con los filtros aplicados) -->
             <div class="nexo-stats-row">
                 <div class="nexo-stat-card">
                     <div class="nexo-stat-icon primary"><i class="ri-building-2-line"></i></div>
                     <div>
                         <div class="nexo-stat-value" id="totalEmpresas">0</div>
-                        <div class="nexo-stat-label">Total Empresas</div>
+                        <div class="nexo-stat-label" id="labelTotalEmpresas">Empresas</div>
                     </div>
                 </div>
                 <div class="nexo-stat-card">
                     <div class="nexo-stat-icon success"><i class="ri-checkbox-circle-line"></i></div>
                     <div>
                         <div class="nexo-stat-value" id="empresasActivas">0</div>
-                        <div class="nexo-stat-label">Empresas Activas</div>
+                        <div class="nexo-stat-label">Activas</div>
+                    </div>
+                </div>
+                <div class="nexo-stat-card">
+                    <div class="nexo-stat-icon warning"><i class="ri-close-circle-line"></i></div>
+                    <div>
+                        <div class="nexo-stat-value" id="empresasInactivas">0</div>
+                        <div class="nexo-stat-label">Inactivas</div>
+                    </div>
+                </div>
+                <div class="nexo-stat-card">
+                    <div class="nexo-stat-icon info"><i class="ri-truck-line"></i></div>
+                    <div>
+                        <div class="nexo-stat-value" id="totalProveedores">0</div>
+                        <div class="nexo-stat-label">Proveedores</div>
                     </div>
                 </div>
                 <div class="nexo-stat-card">
                     <div class="nexo-stat-icon info"><i class="ri-store-2-line"></i></div>
                     <div>
                         <div class="nexo-stat-value" id="totalSucursales">0</div>
-                        <div class="nexo-stat-label">Total Sucursales</div>
-                    </div>
-                </div>
-                <div class="nexo-stat-card">
-                    <div class="nexo-stat-icon warning"><i class="ri-contacts-line"></i></div>
-                    <div>
-                        <div class="nexo-stat-value" id="totalContactos">0</div>
-                        <div class="nexo-stat-label">Total Contactos</div>
+                        <div class="nexo-stat-label">Sucursales</div>
                     </div>
                 </div>
             </div>
@@ -317,7 +332,7 @@
                 <div class="nexo-filter-row">
                     <div class="nexo-filter-group search">
                         <div class="nexo-filter-label">Buscar</div>
-                        <input type="text" class="nexo-filter-input" id="filtroBusqueda" placeholder="Nombre, RUT o razón social...">
+                        <input type="text" class="nexo-filter-input" id="filtroBusqueda" placeholder="Nombre, RUT (con o sin puntos), razón social, giro o comuna...">
                     </div>
                     <div class="nexo-filter-group">
                         <div class="nexo-filter-label">Estado</div>
@@ -369,19 +384,21 @@
                         <table class="nexo-table" id="tablaEmpresas">
                             <thead>
                                 <tr>
-                                    <th style="width: 25%;">Empresa</th>
-                                    <th style="width: 12%;">RUT</th>
-                                    <th style="width: 18%;">Razón Social</th>
-                                    <th style="width: 10%;">Tipo</th>
-                                    <th style="width: 8%;">Sucursales</th>
-                                    <th style="width: 8%;">Contactos</th>
-                                    <th style="width: 8%;">Estado</th>
-                                    <th style="width: 11%; text-align: right;">Acciones</th>
+                                    <th style="width: 22%;">Empresa</th>
+                                    <th style="width: 10%;">RUT</th>
+                                    <th style="width: 8%;">Tipo</th>
+                                    <th style="width: 15%;">Giro</th>
+                                    <th style="width: 12%;">Ubicación</th>
+                                    <th style="width: 15%;">Contacto</th>
+                                    <th style="width: 6%;">Suc.</th>
+                                    <th style="width: 6%;">Estado</th>
+                                    <th style="width: 6%;">Creada</th>
+                                    <th style="width: 10%; text-align: right;">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr id="loadingRow">
-                                    <td colspan="8">
+                                    <td colspan="10">
                                         <div class="nexo-loading">
                                             <div class="nexo-spinner"></div>
                                             <div class="nexo-loading-text">Cargando empresas...</div>
@@ -613,11 +630,12 @@
                             <tr>
                                 <th>Alias</th>
                                 <th>Dirección</th>
+                                <th>Tipo</th>
                                 <th style="text-align: right;">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td colspan="3" class="text-center" style="padding: 2rem; color: var(--nexo-gray-500);"><i class="ri-loader-4-line"></i> Cargando...</td></tr>
+                            <tr><td colspan="4" class="text-center" style="padding: 2rem; color: var(--nexo-gray-500);"><i class="ri-loader-4-line"></i> Cargando...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -701,6 +719,8 @@
     </div>
 </div>
 
+{% include 'layout/footer.html' %}
+
 <script>
 // Variables globales
 let empresas = [];
@@ -717,8 +737,7 @@ let modoEdicionSucursal = false;
 $(document).ready(function() {
     console.log('🚀 Inicializando Gestión de Empresas NEXO...');
     cargarEmpresas();
-    cargarMetricas();
-    
+
     // Eventos de filtros
     $('#filtroBusqueda').on('keyup', debounce(aplicarFiltros, 400));
     $('#filtroEstado, #filtroTipo, #ordenarPor').on('change', aplicarFiltros);
@@ -727,6 +746,7 @@ $(document).ready(function() {
     window.abrirModalCrear = abrirModalCrear;
     window.editarEmpresa = editarEmpresa;
     window.eliminarEmpresa = eliminarEmpresa;
+    window.cambiarEstadoEmpresa = cambiarEstadoEmpresa;
     window.verDetalleEmpresa = verDetalleEmpresa;
     window.guardarEmpresa = guardarEmpresa;
     window.exportarEmpresas = exportarEmpresas;
@@ -770,10 +790,22 @@ function getCSRFToken() {
     return cookieValue;
 }
 
+// Parámetros actuales de la pantalla: los filtros SIEMPRE viajan al servidor,
+// también al paginar (antes cambiar de página perdía el filtro aplicado).
+function parametrosActuales(pagina) {
+    return new URLSearchParams({
+        page: pagina || paginaActual,
+        page_size: registrosPorPagina,
+        search: $('#filtroBusqueda').val() || '',
+        estado: $('#filtroEstado').val() || '',
+        tipo: $('#filtroTipo').val() || '',
+        ordenar: $('#ordenarPor').val() || 'nombre'
+    });
+}
+
 function cargarEmpresas() {
-    const params = new URLSearchParams({ page: paginaActual, page_size: registrosPorPagina });
     $.ajax({
-        url: `/empresa_management/lista_empresas/?${params}`,
+        url: `/empresa_management/lista_empresas/?${parametrosActuales()}`,
         method: 'GET',
         headers: { 'X-Requested-With': 'XMLHttpRequest' },
         success: function(response) {
@@ -781,8 +813,10 @@ function cargarEmpresas() {
                 empresas = response.empresas;
                 totalRegistros = response.total_registros;
                 totalPaginas = response.total_paginas;
+                paginaActual = response.pagina_actual || paginaActual;
                 actualizarTabla(empresas);
                 actualizarPaginacion();
+                actualizarResumen(response.resumen);
             } else {
                 showAlert('error', 'Error', response.error || 'Error al cargar empresas');
             }
@@ -791,63 +825,85 @@ function cargarEmpresas() {
     });
 }
 
-function cargarMetricas() {
-    $.ajax({
-        url: '/empresa_management/dashboard/',
-        method: 'GET',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        success: function(response) {
-            if (response.success && response.metricas) {
-                $('#totalEmpresas').text(response.metricas.total_empresas || 0);
-                $('#empresasActivas').text(response.metricas.empresas_activas || 0);
-                $('#totalSucursales').text(response.metricas.total_sucursales || 0);
-                $('#totalContactos').text(response.metricas.total_contactos || 0);
-            }
-        }
-    });
+function hayFiltrosAplicados() {
+    return !!($('#filtroBusqueda').val() || $('#filtroEstado').val() || $('#filtroTipo').val());
+}
+
+function actualizarResumen(resumen) {
+    if (!resumen) return;
+    $('#totalEmpresas').text(resumen.total || 0);
+    $('#empresasActivas').text(resumen.activas || 0);
+    $('#empresasInactivas').text(resumen.inactivas || 0);
+    $('#totalProveedores').text(resumen.proveedores || 0);
+    $('#totalSucursales').text(resumen.sucursales || 0);
+    $('#labelTotalEmpresas').text(hayFiltrosAplicados() ? 'Empresas (filtradas)' : 'Empresas');
+}
+
+function escapeHtml(valor) {
+    return $('<div>').text(valor == null ? '' : valor).html();
+}
+
+function escapeAttr(valor) {
+    return escapeHtml(valor).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
 }
 
 function actualizarTabla(empresas) {
     const tbody = $('#tablaEmpresas tbody');
     tbody.empty();
-    
+
     if (empresas.length === 0) {
-        tbody.html(`<tr><td colspan="8"><div class="nexo-empty-state"><div class="nexo-empty-icon"><i class="ri-building-line"></i></div><div class="nexo-empty-title">No se encontraron empresas</div><div class="nexo-empty-text">Intenta con otros filtros o crea una nueva empresa</div></div></td></tr>`);
+        tbody.html(`<tr><td colspan="10"><div class="nexo-empty-state"><div class="nexo-empty-icon"><i class="ri-building-line"></i></div><div class="nexo-empty-title">No se encontraron empresas</div><div class="nexo-empty-text">Intenta con otros filtros o crea una nueva empresa</div></div></td></tr>`);
         return;
     }
-    
+
     empresas.forEach(function(e) {
-        const initial = (e.razon_social || e.nombre || 'E').charAt(0).toUpperCase();
+        const nombreEmpresa = e.razon_social || e.nombre || 'Sin razón social';
+        const initial = nombreEmpresa.charAt(0).toUpperCase();
+        const ubicacion = [e.comuna, e.ciudad].filter(Boolean);
+        const correo = e.correoVendedor || e.correoAdministrador || '';
+        const intercambio = e.correoIntercambio
+            ? `<span class="nexo-cell-sub" title="Correo de intercambio DTE: ${escapeAttr(e.correoIntercambio)}"><i class="ri-exchange-line"></i> intercambio DTE</span>`
+            : '';
         const fila = `
             <tr>
                 <td>
                     <div class="nexo-company-cell">
-                        <div class="nexo-company-avatar">${initial}</div>
+                        <div class="nexo-company-avatar">${escapeHtml(initial)}</div>
                         <div>
-                            <div class="nexo-company-name">${e.razon_social || 'Sin razón social'}</div>
-                            <div class="nexo-company-fantasy">${e.nombre_fantasia || ''}</div>
+                            <div class="nexo-company-name">${escapeHtml(nombreEmpresa)}</div>
+                            <div class="nexo-company-fantasy">${escapeHtml(e.nombre_fantasia || '')}</div>
                         </div>
                     </div>
                 </td>
-                <td><code style="background: var(--nexo-gray-100); padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;">${e.rut || 'N/A'}</code></td>
-                <td style="color: var(--nexo-gray-700);">${e.razon_social || '-'}</td>
-                <td><span class="nexo-badge ${e.tipo === 'proveedor' ? 'nexo-badge-warning' : 'nexo-badge-info'}">${e.get_tipo_display || e.tipo}</span></td>
+                <td><code style="background: var(--nexo-gray-100); padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;">${escapeHtml(e.rut || 'N/A')}</code></td>
+                <td><span class="nexo-badge ${e.tipo === 'proveedor' ? 'nexo-badge-warning' : 'nexo-badge-info'}">${escapeHtml(e.get_tipo_display || e.tipo)}</span></td>
+                <td><span class="nexo-cell-trunc nexo-cell-main" title="${escapeAttr(e.giro_comercial || '')}">${escapeHtml(e.giro_comercial || '-')}</span></td>
+                <td>
+                    <div class="nexo-cell-main">${escapeHtml(ubicacion[0] || '-')}</div>
+                    <div class="nexo-cell-sub">${escapeHtml(ubicacion[1] || '')}</div>
+                </td>
+                <td>
+                    <div class="nexo-cell-trunc nexo-cell-main" title="${escapeAttr(correo)}">${escapeHtml(correo || '-')}</div>
+                    <div class="nexo-cell-sub">${escapeHtml(e.contacto1 || '')}</div>
+                    ${intercambio}
+                </td>
                 <td><span class="nexo-badge nexo-badge-primary">${e.num_sucursales || 0}</span></td>
-                <td><span class="nexo-badge nexo-badge-secondary">${e.num_contactos || 0}</span></td>
-                <td><span class="nexo-badge nexo-badge-success">${e.activo ? 'Activa' : 'Inactiva'}</span></td>
+                <td><span class="nexo-badge ${e.activo ? 'nexo-badge-success' : 'nexo-badge-secondary'}">${e.activo ? 'Activa' : 'Inactiva'}</span></td>
+                <td><span class="nexo-cell-sub" title="Última modificación: ${escapeAttr(e.fecha_actualizacion || 's/i')}">${escapeHtml(e.fecha_creacion || '-')}</span></td>
                 <td>
                     <div class="nexo-actions">
                         <button class="nexo-action-btn view" onclick="verDetalleEmpresa(${e.id})" title="Ver detalle"><i class="ri-eye-line"></i></button>
-                        <button class="nexo-action-btn branches" onclick="gestionarSucursales(${e.id}, '${(e.razon_social || '').replace(/'/g, "\\'")}')" title="Sucursales"><i class="ri-store-2-line"></i></button>
+                        <button class="nexo-action-btn branches" onclick="gestionarSucursales(${e.id}, '${escapeAttr(nombreEmpresa)}')" title="Sucursales"><i class="ri-store-2-line"></i></button>
                         <button class="nexo-action-btn edit" onclick="editarEmpresa(${e.id})" title="Editar"><i class="ri-edit-line"></i></button>
-                        <button class="nexo-action-btn delete" onclick="eliminarEmpresa(${e.id}, '${(e.razon_social || '').replace(/'/g, "\\'")}')" title="Eliminar"><i class="ri-delete-bin-line"></i></button>
+                        <button class="nexo-action-btn toggle" onclick="cambiarEstadoEmpresa(${e.id}, '${escapeAttr(nombreEmpresa)}', ${e.activo ? 'true' : 'false'})" title="${e.activo ? 'Desactivar' : 'Activar'}"><i class="${e.activo ? 'ri-toggle-fill' : 'ri-toggle-line'}"></i></button>
+                        <button class="nexo-action-btn delete" onclick="eliminarEmpresa(${e.id}, '${escapeAttr(nombreEmpresa)}')" title="Eliminar"><i class="ri-delete-bin-line"></i></button>
                     </div>
                 </td>
             </tr>
         `;
         tbody.append(fila);
     });
-    $('#contadorEmpresas').text(empresas.length + ' empresas');
+    $('#contadorEmpresas').text(totalRegistros + ' empresas');
 }
 
 function actualizarPaginacion() {
@@ -875,28 +931,8 @@ function cambiarRegistrosPorPagina() {
 }
 
 function aplicarFiltros() {
-    const params = new URLSearchParams({
-        page: 1, page_size: registrosPorPagina,
-        search: $('#filtroBusqueda').val(),
-        estado: $('#filtroEstado').val(),
-        tipo: $('#filtroTipo').val(),
-        ordenar: $('#ordenarPor').val()
-    });
-    $.ajax({
-        url: `/empresa_management/lista_empresas/?${params}`,
-        method: 'GET',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        success: function(response) {
-            if (response.success) {
-                empresas = response.empresas;
-                totalRegistros = response.total_registros;
-                totalPaginas = response.total_paginas;
-                paginaActual = 1;
-                actualizarTabla(empresas);
-                actualizarPaginacion();
-            }
-        }
-    });
+    paginaActual = 1;
+    cargarEmpresas();
 }
 
 function limpiarFiltros() {
@@ -978,22 +1014,25 @@ function guardarEmpresa() {
         headers: { 'X-CSRFToken': getCSRFToken() },
         success: function(response) {
             if (response.success) {
-                showAlert('success', modoEdicion ? 'Actualizada' : 'Creada', response.message);
+                const titulo = response.ya_existia ? 'Ya existía' : (modoEdicion ? 'Actualizada' : 'Creada');
+                showAlert(response.ya_existia ? 'info' : 'success', titulo, response.message);
                 $('#modalEmpresa').modal('hide');
                 cargarEmpresas();
-                cargarMetricas();
             } else {
                 mostrarErrores(response.errors || [response.error]);
             }
         },
-        error: function() { showAlert('error', 'Error', 'Error de conexión'); }
+        error: function(xhr) {
+            const msg = (xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.message)) || 'Error de conexión';
+            mostrarErrores([msg]);
+        }
     });
 }
 
 function eliminarEmpresa(id, nombre) {
     Swal.fire({
         title: '¿Eliminar empresa?',
-        html: `<p>Vas a eliminar <strong>${nombre}</strong></p><p style="color: var(--nexo-error); font-size: 0.85rem;"><i class="ri-error-warning-line"></i> Esta acción eliminará sucursales y contactos asociados</p>`,
+        html: `<p>Vas a eliminar <strong>${escapeHtml(nombre)}</strong></p><p style="color: var(--nexo-error); font-size: 0.85rem;"><i class="ri-error-warning-line"></i> Solo se puede eliminar si no tiene sucursales, DTE, compras ni cotizaciones asociadas. Si tiene historial, desactívala en vez de eliminarla.</p>`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#FF4D4D',
@@ -1011,13 +1050,53 @@ function eliminarEmpresa(id, nombre) {
                     if (response.success) {
                         showAlert('success', 'Eliminada', response.message);
                         cargarEmpresas();
-                        cargarMetricas();
                     } else {
                         showAlert('error', 'Error', response.error);
                     }
+                },
+                error: function(xhr) {
+                    const msg = (xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.message)) || 'No se pudo eliminar la empresa';
+                    showAlert('error', 'No se puede eliminar', msg);
                 }
             });
         }
+    });
+}
+
+function cambiarEstadoEmpresa(id, nombre, activaActualmente) {
+    const accion = activaActualmente ? 'desactivar' : 'activar';
+    Swal.fire({
+        title: `¿${accion.charAt(0).toUpperCase() + accion.slice(1)} empresa?`,
+        html: `<p>Vas a ${accion} <strong>${escapeHtml(nombre)}</strong></p>` +
+              (activaActualmente
+                ? '<p style="color: var(--nexo-gray-500); font-size: 0.85rem;">Las empresas inactivas siguen existiendo y conservan su historial: solo quedan marcadas como no vigentes.</p>'
+                : ''),
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: activaActualmente ? '#FFB020' : '#00D4AA',
+        cancelButtonColor: '#8A8A9A',
+        confirmButtonText: activaActualmente ? 'Desactivar' : 'Activar',
+        cancelButtonText: 'Cancelar',
+        reverseButtons: true
+    }).then((result) => {
+        if (!result.isConfirmed) return;
+        $.ajax({
+            url: `/empresa_management/activar_desactivar_empresa/${id}/`,
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCSRFToken() },
+            success: function(response) {
+                if (response.success) {
+                    showAlert('success', 'Estado actualizado', response.message);
+                    cargarEmpresas();
+                } else {
+                    showAlert('error', 'Error', response.message || response.error);
+                }
+            },
+            error: function(xhr) {
+                const msg = (xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.message)) || 'No se pudo cambiar el estado';
+                showAlert('error', 'Error', msg);
+            }
+        });
     });
 }
 
@@ -1164,8 +1243,6 @@ function procesarImportacion() {
                 
                 // Recargar lista de empresas
                 cargarEmpresas();
-                cargarMetricas();
-                
             } else {
                 Swal.fire({
                     icon: 'error',
@@ -1213,18 +1290,22 @@ function cargarSucursalesEmpresa(id) {
                 const tbody = $('#tablaSucursales tbody');
                 tbody.empty();
                 if (response.sucursales.length === 0) {
-                    tbody.html('<tr><td colspan="3" style="text-align: center; padding: 2rem; color: var(--nexo-gray-500);"><i class="ri-store-line"></i> No hay sucursales</td></tr>');
+                    tbody.html('<tr><td colspan="4" style="text-align: center; padding: 2rem; color: var(--nexo-gray-500);"><i class="ri-store-line"></i> No hay sucursales</td></tr>');
                     return;
                 }
                 response.sucursales.forEach(s => {
+                    const tipo = s.es_centro_distribucion
+                        ? '<span class="nexo-badge nexo-badge-warning">Centro distribución</span>'
+                        : `<span class="nexo-badge nexo-badge-secondary">${escapeHtml(s.tipo_sucursal || 'VENDEDORA')}</span>`;
                     tbody.append(`
                         <tr>
-                            <td><strong style="color: var(--nexo-gray-900);"><i class="ri-store-2-fill" style="color: var(--nexo-accent);"></i> ${s.alias}</strong></td>
-                            <td style="color: var(--nexo-gray-500);"><i class="ri-map-pin-line" style="color: var(--nexo-warning);"></i> ${s.direccion}</td>
+                            <td><strong style="color: var(--nexo-gray-900);"><i class="ri-store-2-fill" style="color: var(--nexo-accent);"></i> ${escapeHtml(s.alias)}</strong></td>
+                            <td style="color: var(--nexo-gray-500);"><i class="ri-map-pin-line" style="color: var(--nexo-warning);"></i> ${escapeHtml(s.direccion || '')}</td>
+                            <td>${tipo}</td>
                             <td>
                                 <div class="nexo-actions">
-                                    <button class="nexo-action-btn edit" onclick="editarSucursal(${s.id})" title="Editar"><i class="ri-edit-line"></i></button>
-                                    <button class="nexo-action-btn delete" onclick="eliminarSucursal(${s.id}, '${s.alias.replace(/'/g, "\\'")}')" title="Eliminar"><i class="ri-delete-bin-line"></i></button>
+                                    <button class="nexo-action-btn edit" onclick="editarSucursal(${s.id}, '${escapeAttr(s.alias)}', '${escapeAttr(s.direccion || '')}')" title="Editar"><i class="ri-edit-line"></i></button>
+                                    <button class="nexo-action-btn delete" onclick="eliminarSucursal(${s.id}, '${escapeAttr(s.alias)}')" title="Eliminar"><i class="ri-delete-bin-line"></i></button>
                                 </div>
                             </td>
                         </tr>
@@ -1245,10 +1326,14 @@ function abrirModalNuevaSucursal() {
     $('#modalSucursal').modal('show');
 }
 
-function editarSucursal(id) {
-    const fila = $(`button[onclick="editarSucursal(${id})"]`).closest('tr');
-    const alias = fila.find('td:first strong').text().trim();
-    const direccion = fila.find('td:nth-child(2)').text().trim();
+function editarSucursal(id, aliasSucursal, direccionSucursal) {
+    // Los datos llegan por parámetro (antes se raspaban del DOM y se rompían al
+    // cambiar columnas); se deja el fallback por compatibilidad.
+    const fila = $(`#tablaSucursales tbody tr`).filter(function() {
+        return $(this).find(`button[onclick^="editarSucursal(${id},"]`).length > 0;
+    });
+    const alias = aliasSucursal !== undefined ? aliasSucursal : fila.find('td:first strong').text().trim();
+    const direccion = direccionSucursal !== undefined ? direccionSucursal : fila.find('td:nth-child(2)').text().trim();
     modoEdicionSucursal = true;
     sucursalSeleccionada = id;
     $('#modalSucursalLabel').html('<i class="ri-edit-line"></i> Editar Sucursal');
@@ -1263,7 +1348,7 @@ function editarSucursal(id) {
 function eliminarSucursal(id, alias) {
     Swal.fire({
         title: '¿Eliminar sucursal?',
-        html: `<p>Vas a eliminar <strong>${alias}</strong></p>`,
+        html: `<p>Vas a eliminar <strong>${escapeHtml(alias)}</strong></p><p style="color: var(--nexo-error); font-size: 0.85rem;"><i class="ri-error-warning-line"></i> Solo se puede eliminar si no tiene productos/stock, ventas ni movimientos asociados.</p>`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#FF4D4D',
@@ -1282,10 +1367,13 @@ function eliminarSucursal(id, alias) {
                         showAlert('success', 'Eliminada', response.message);
                         cargarSucursalesEmpresa(empresaSeleccionadaSucursales);
                         cargarEmpresas();
-                        cargarMetricas();
                     } else {
                         showAlert('error', 'Error', response.error);
                     }
+                },
+                error: function(xhr) {
+                    const msg = (xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.message)) || 'No se pudo eliminar la sucursal';
+                    showAlert('error', 'No se puede eliminar', msg);
                 }
             });
         }
@@ -1324,15 +1412,20 @@ function guardarSucursal() {
                 $('#modalSucursal').modal('hide');
                 cargarSucursalesEmpresa(empresaSeleccionadaSucursales);
                 cargarEmpresas();
-                cargarMetricas();
             } else {
                 const lista = $('#listaErroresSucursal');
                 lista.empty();
-                lista.append(`<li>${response.error}</li>`);
+                lista.append(`<li>${escapeHtml(response.error)}</li>`);
                 $('#erroresSucursal').show();
             }
         },
-        error: function() { showAlert('error', 'Error', 'Error de conexión'); }
+        error: function(xhr) {
+            const msg = (xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.message)) || 'Error de conexión';
+            const lista = $('#listaErroresSucursal');
+            lista.empty();
+            lista.append(`<li>${escapeHtml(msg)}</li>`);
+            $('#erroresSucursal').show();
+        }
     });
 }
 

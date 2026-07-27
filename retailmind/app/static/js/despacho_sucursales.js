@@ -18,16 +18,16 @@
     let paginaProductosActual = 1;
     let totalPaginasProductos = 1;
     let filtrosProductos = { q: '', marca_id: '' };
-    let historialEstadoFiltro = '';
+    let historialFiltro = '';
     let historialPaginaActual = 1;
+    let historialDias = 90;
 
-    const ESTADO_BADGE = {
-        PENDIENTE: 'bg-warning',
-        APROBADO: 'bg-info',
-        EN_TRANSITO: 'bg-primary',
-        RECIBIDO: 'bg-success',
-        RECHAZADO: 'bg-danger',
-        ANULADO: 'bg-secondary',
+    // Situación de cada documento de traspaso (enviadas vs recibidas).
+    const SITUACION = {
+        RECIBIDO: { badge: 'bg-success', texto: 'Recibido' },
+        EN_TRANSITO: { badge: 'bg-warning text-dark', texto: 'En tránsito' },
+        SIN_RECIBIR: { badge: 'bg-danger', texto: 'Sin recibir' },
+        SOBRE_RECIBIDO: { badge: 'bg-dark', texto: 'Sobre-recibido' },
     };
 
     // ========== INIT ==========
@@ -94,37 +94,67 @@
     function cargarPendientes() {
         const container = document.getElementById('pendientesContainer');
         if (!container) return;
+        container.innerHTML = '<div class="text-center text-muted py-3">Cargando pendientes...</div>';
         fetch(CFG.urls.pendientes)
             .then((r) => r.json())
             .then((data) => {
-                if (!data.success || !data.pendientes_por_sucursal.length) {
-                    container.innerHTML = '<div class="text-center text-muted py-2">No hay pendientes de despacho</div>';
-                    actualizarKpiPendientes(0);
+                if (!data.success) {
+                    container.innerHTML = `<div class="text-center text-danger py-2">${escapeHtml(data.error || 'No se pudieron cargar los pendientes')}</div>`;
                     return;
                 }
-                let totalPendientes = 0;
-                let html = '';
-                data.pendientes_por_sucursal.forEach((suc) => {
-                    totalPendientes += suc.total_unidades;
-                    html += `<div class="mb-3">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="mb-0"><i class="ri-store-2-line me-1 text-primary"></i>${escapeHtml(suc.alias)}</h6>
-                            <span class="badge bg-warning">${suc.total_unidades} unidades</span>
-                        </div>
-                        <div class="table-responsive"><table class="table table-sm table-bordered mb-0">
-                            <thead class="table-light"><tr><th>SKU</th><th>Artículo</th><th>Talla</th><th class="text-end">Restante</th><th></th></tr></thead>
-                            <tbody>`;
+                const grupos = data.pendientes_por_sucursal || [];
+                actualizarKpiPendientes(data.total_unidades || 0);
+                setTextIfExists('badgePendientesLineas', `${data.total_lineas || 0} líneas`);
+                if (!grupos.length) {
+                    container.innerHTML = '<div class="text-center text-muted py-2">No hay pendientes de despacho</div>';
+                    return;
+                }
+                // Un acordeón por destino: en producción hay más de mil líneas
+                // abiertas y volcarlas todas de golpe hacía la tarjeta inusable.
+                let html = '<div class="accordion" id="accPendientes">';
+                grupos.forEach((suc, idx) => {
+                    const alerta = suc.dias_mas_antiguo >= 30;
+                    html += `<div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button ${idx === 0 ? '' : 'collapsed'} py-2" type="button"
+                                    data-bs-toggle="collapse" data-bs-target="#pend-${suc.sucursal_id}">
+                                <span class="flex-grow-1">
+                                    <i class="ri-store-2-line me-1 text-primary"></i>
+                                    <strong>${escapeHtml(suc.alias)}</strong>
+                                    <span class="badge bg-warning ms-2">${suc.total_unidades} uds</span>
+                                    <span class="badge bg-light text-dark ms-1">${suc.total_lineas} líneas</span>
+                                    <span class="badge ${alerta ? 'bg-danger' : 'bg-secondary'} ms-1"
+                                          title="Antigüedad del pendiente más viejo">${suc.dias_mas_antiguo} d</span>
+                                </span>
+                            </button>
+                        </h2>
+                        <div id="pend-${suc.sucursal_id}" class="accordion-collapse collapse ${idx === 0 ? 'show' : ''}" data-bs-parent="#accPendientes">
+                            <div class="accordion-body p-2">
+                                <div class="table-responsive" style="max-height:260px;overflow-y:auto;">
+                                <table class="table table-sm table-bordered mb-0">
+                                    <thead class="table-light sticky-top"><tr><th>SKU</th><th>Artículo</th><th>Talla</th><th class="text-end">Restante</th><th class="text-end">Días</th><th></th></tr></thead>
+                                    <tbody>`;
                     suc.items.forEach((item) => {
                         html += `<tr>
-                            <td><code>${escapeHtml(item.sku)}</code></td><td>${escapeHtml(item.articulo)}</td><td>${escapeHtml(item.talla)}</td>
+                            <td><code>${escapeHtml(item.sku)}</code></td>
+                            <td>${escapeHtml(item.articulo)}</td>
+                            <td>${escapeHtml(item.talla)}</td>
                             <td class="text-end fw-bold">${item.cantidad_restante}</td>
-                            <td class="text-center"><button type="button" class="btn btn-sm btn-outline-primary" onclick="DespachoSucursales.agregarPendienteAlCarrito('${escapeHtml(item.sku)}', ${suc.sucursal_id})"><i class="ri-add-line"></i></button></td>
+                            <td class="text-end ${item.dias >= 30 ? 'text-danger fw-bold' : 'text-muted'}">${item.dias}</td>
+                            <td class="text-center"><button type="button" class="btn btn-sm btn-outline-primary" onclick="DespachoSucursales.agregarPendienteAlCarrito('${escapeHtml(item.sku)}', ${suc.sucursal_id})" title="Buscar este SKU para agregarlo al carrito"><i class="ri-add-line"></i></button></td>
                         </tr>`;
                     });
-                    html += '</tbody></table></div></div>';
+                    html += '</tbody></table></div>';
+                    if (suc.truncado) {
+                        html += `<div class="small text-muted mt-1">Se muestran las ${data.items_por_sucursal} líneas más antiguas de ${suc.total_lineas}. Descárguelas emitiendo la guía de despacho al destino.</div>`;
+                    }
+                    html += '</div></div></div>';
                 });
+                html += '</div>';
                 container.innerHTML = html;
-                actualizarKpiPendientes(totalPendientes);
+            })
+            .catch(() => {
+                container.innerHTML = '<div class="text-center text-danger py-2">Error de conexión al cargar pendientes</div>';
             });
     }
 
@@ -389,11 +419,16 @@
 
         Swal.fire({
             title: `¿Enviar ${despachosMasivos.length} despacho(s)?`,
-            text: 'Se descontará el stock de inmediato de la sucursal actual.',
-            icon: 'question',
+            html: 'Se descontará el stock de inmediato de esta bodega.<br><br>'
+                + '<b class="text-danger">Este envío NO emite guía ni factura.</b><br>'
+                + 'Sin documento, el destino no puede recibir la mercadería y las unidades quedan '
+                + 'fuera del stock de las dos sucursales. Para un traspaso normal, cancele y use '
+                + '<b>Emitir guía</b>.',
+            icon: 'warning',
             showCancelButton: true,
-            confirmButtonText: 'Sí, enviar',
+            confirmButtonText: 'Entiendo, enviar igual',
             cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#f06548',
         }).then((result) => {
             if (!result.isConfirmed) return;
 
@@ -426,20 +461,23 @@
         });
     }
 
-    // ========== HISTORIAL DE DESPACHOS ==========
+    // ========== HISTORIAL REAL DE DESPACHOS (por documento de traspaso) ==========
     function cargarHistorial(pagina) {
         historialPaginaActual = pagina || 1;
-        const params = new URLSearchParams({ page: historialPaginaActual });
-        if (historialEstadoFiltro) params.set('estado', historialEstadoFiltro);
+        const params = new URLSearchParams({ page: historialPaginaActual, dias: historialDias });
+        if (historialFiltro) params.set('filtro', historialFiltro);
 
         fetch(`${CFG.urls.historial}?${params.toString()}`)
             .then((r) => r.json())
             .then((data) => {
-                if (!data.success) return;
+                if (!data.success) {
+                    const tbody = document.getElementById('tbodyHistorial');
+                    if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">${escapeHtml(data.error || 'No se pudo cargar el historial')}</td></tr>`;
+                    return;
+                }
                 renderTablaHistorial(data.despachos);
                 renderPaginacionHistorial(data.pagina_actual, data.total_paginas, data.total_despachos);
-                renderTabsHistorial(data.conteos_por_estado);
-                actualizarKpisHistorial(data.conteos_por_estado);
+                renderResumenHistorial(data.resumen, data.dias);
             });
     }
 
@@ -447,32 +485,56 @@
         const tbody = document.getElementById('tbodyHistorial');
         if (!tbody) return;
         if (!despachos.length) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Sin despachos registrados</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Sin despachos en el período seleccionado</td></tr>';
             return;
         }
         let html = '';
         despachos.forEach((d) => {
-            const badge = ESTADO_BADGE[d.estado] || 'bg-secondary';
-            html += `<tr>
-                <td>#${d.numero_traspaso}</td>
+            const sit = SITUACION[d.situacion] || { badge: 'bg-secondary', texto: d.situacion };
+            const alerta = d.situacion === 'SIN_RECIBIR';
+            const nc = d.devueltas_nc > 0
+                ? `<br><small class="text-muted">${d.devueltas_nc} devueltas por NC</small>` : '';
+            html += `<tr class="${alerta ? 'table-danger' : ''}">
+                <td><span class="fw-semibold">#${escapeHtml(d.numero_documento)}</span><br>
+                    <small class="text-muted">${escapeHtml(d.tipo_documento)}</small></td>
                 <td><i class="ri-store-2-line me-1 text-primary"></i>${escapeHtml(d.destino)}</td>
-                <td>${escapeHtml(d.fecha_solicitud)}</td>
-                <td class="text-end">${d.total_items}</td>
-                <td class="text-end">${d.total_unidades}</td>
-                <td><span class="badge ${badge}">${escapeHtml(d.estado_display)}</span></td>
-                <td>${escapeHtml(d.solicitante)}</td>
+                <td>${escapeHtml(d.fecha)}<br><small class="text-muted">hace ${d.dias} d</small></td>
+                <td class="text-end">${d.items}</td>
+                <td class="text-end">${d.enviadas}</td>
+                <td class="text-end">${d.recibidas}${nc}</td>
+                <td class="text-end fw-bold ${d.pendientes > 0 ? 'text-danger' : 'text-muted'}">${d.pendientes}</td>
+                <td><span class="badge ${sit.badge}">${sit.texto}</span></td>
             </tr>`;
         });
         tbody.innerHTML = html;
     }
 
-    function renderTabsHistorial(conteos) {
-        const total = Object.values(conteos || {}).reduce((a, b) => a + b, 0);
-        setTextIfExists('tab-count-total', total);
-        setTextIfExists('tab-count-pendiente', conteos.PENDIENTE || 0);
-        setTextIfExists('tab-count-en_transito', conteos.EN_TRANSITO || 0);
-        setTextIfExists('tab-count-recibido', conteos.RECIBIDO || 0);
-        setTextIfExists('tab-count-rechazado', (conteos.RECHAZADO || 0) + (conteos.ANULADO || 0));
+    function renderResumenHistorial(resumen, dias) {
+        if (!resumen) return;
+        setTextIfExists('tab-count-total', resumen.documentos);
+        setTextIfExists('tab-count-sin_recibir', resumen.docs_sin_recibir);
+        setTextIfExists('tab-count-en_transito', resumen.docs_en_transito);
+        setTextIfExists('tab-count-recibido', resumen.docs_recibidos);
+        setTextIfExists('tab-count-sobre_recibido', resumen.docs_sobre_recibidos || 0);
+
+        setTextIfExists('kpiDespachadas', resumen.unidades_enviadas);
+        setTextIfExists('kpiEnTransito', resumen.unidades_en_transito);
+        setTextIfExists('kpiSinRecibir', resumen.unidades_sin_recibir);
+        document.querySelectorAll('.kpi-dias').forEach((el) => { el.textContent = dias; });
+
+        const alerta = document.getElementById('alertaSinRecibir');
+        if (alerta) {
+            if (resumen.docs_sin_recibir > 0) {
+                alerta.style.setProperty('display', 'flex', 'important');
+                setTextIfExists('alertaSinRecibirTitulo',
+                    `${resumen.unidades_sin_recibir} unidades salieron de esta bodega y nadie las recibió.`);
+                setTextIfExists('alertaSinRecibirDetalle',
+                    `${resumen.docs_sin_recibir} documento(s) en los últimos ${dias} días. ` +
+                    'El stock ya se descontó acá y no entró en el destino: mientras nadie lo reciba, esas unidades no existen en el sistema.');
+            } else {
+                alerta.style.setProperty('display', 'none', 'important');
+            }
+        }
     }
 
     function setTextIfExists(id, value) {
@@ -480,10 +542,15 @@
         if (el) el.textContent = value;
     }
 
-    function filtrarHistorialPorEstado(estado, el) {
-        historialEstadoFiltro = estado;
+    function filtrarHistorial(filtro, el) {
+        historialFiltro = filtro;
         document.querySelectorAll('#tabsHistorial .nav-link').forEach((tab) => tab.classList.remove('active'));
         if (el) el.classList.add('active');
+        cargarHistorial(1);
+    }
+
+    function cambiarPeriodo(dias) {
+        historialDias = parseInt(dias, 10) || 90;
         cargarHistorial(1);
     }
 
@@ -508,13 +575,6 @@
     // ========== KPIs ==========
     function actualizarKpiPendientes(totalUnidades) {
         setTextIfExists('kpiPendientes', totalUnidades);
-    }
-
-    function actualizarKpisHistorial(conteos) {
-        const enTransito = conteos.EN_TRANSITO || 0;
-        const recibidos = conteos.RECIBIDO || 0;
-        setTextIfExists('kpiEnTransito', enTransito);
-        setTextIfExists('kpiRecibidos', recibidos);
     }
 
     // ========== UTILIDADES ==========
@@ -545,7 +605,8 @@
         quitarDespacho,
         enviarTodosDespachos,
         cargarPendientes,
-        filtrarHistorialPorEstado,
+        filtrarHistorial,
+        cambiarPeriodo,
         historialPaginaAnterior: historialPaginaAnteriorFn,
         historialPaginaSiguiente: historialPaginaSiguienteFn,
     };

@@ -4,13 +4,109 @@ Permite verificar permisos y filtrar menús en templates
 """
 from django import template
 from django.db.models import Q
-from app.models import PermisoRol, PermisoUsuario, OpcionMenu, ModuloSistema
+from app.models import (
+    ModuloSistema, OpcionMenu, PermisoRol, PermisoSucursal, PermisoUsuario,
+)
 from app.utils_permisos import puede_cambiar_sucursal as _puede_cambiar_sucursal
 
 register = template.Library()
 
 
-def _opciones_ids_usuario(user, modulo=None, padre=None, sucursal_id=None):
+class _PermisosDelRequest:
+    """Resuelve permisos de menú en memoria, con una sola carga por request.
+
+    Cada ítem del menú llamaba a `PermisoRol.tiene_permiso`, que repite 4
+    consultas (OpcionMenu + PermisoUsuario + PermisoRol + PermisoSucursal).
+    Con 69 ítems más los contadores por módulo, el menú costaba ~616 consultas
+    en CADA página del ERP.
+
+    La resolución replica exactamente el orden de `PermisoRol.tiene_permiso`:
+    override de usuario, permiso de rol y, por último, restricción de sucursal
+    (que para `puede_ver` se lee del flag `habilitado`).
+    """
+
+    def __init__(self, user, sucursal_id):
+        self.sucursal_id = sucursal_id
+
+        self._opciones = {
+            o['codigo']: o['id']
+            for o in OpcionMenu.objects.filter(activo=True).values('codigo', 'id')
+        }
+        campos = ('puede_ver', 'puede_crear', 'puede_editar', 'puede_eliminar',
+                  'puede_exportar', 'puede_aprobar')
+
+        self._por_rol = {
+            p['opcion_menu_id']: p
+            for p in PermisoRol.objects.filter(rol=getattr(user, 'rol', None))
+            .values('opcion_menu_id', *campos)
+        }
+        self._por_usuario = {
+            p['opcion_menu_id']: p
+            for p in PermisoUsuario.objects.filter(usuario=user)
+            .values('opcion_menu_id', *campos)
+        }
+        self._por_sucursal = {}
+        if sucursal_id:
+            self._por_sucursal = {
+                p['opcion_menu_id']: p
+                for p in PermisoSucursal.objects.filter(sucursal_id=sucursal_id)
+                .values('opcion_menu_id', 'habilitado', 'puede_crear',
+                        'puede_editar', 'puede_eliminar', 'puede_exportar',
+                        'puede_aprobar')
+            }
+
+    def _sucursal_permite(self, opcion_id, tipo):
+        if not self.sucursal_id:
+            return True
+        fila = self._por_sucursal.get(opcion_id)
+        if not fila:
+            return True
+        # Para `puede_ver`, la restricción de sucursal vive en `habilitado`.
+        clave = 'habilitado' if tipo == 'puede_ver' else tipo
+        valor = fila.get(clave, True)
+        return True if valor is None else bool(valor)
+
+    def resolver(self, codigo, tipo='puede_ver'):
+        opcion_id = self._opciones.get(codigo)
+        if opcion_id is None:
+            return False  # opción inexistente o inactiva
+
+        override = self._por_usuario.get(opcion_id)
+        if override is not None:
+            valor = override.get(tipo)
+            if valor is not None:
+                if not valor:
+                    return False
+                return self._sucursal_permite(opcion_id, tipo)
+
+        rol = self._por_rol.get(opcion_id)
+        if not (rol and rol.get(tipo)):
+            return False
+
+        return self._sucursal_permite(opcion_id, tipo)
+
+    def ids_visibles(self, opciones_ids):
+        """IDs, de los recibidos, que el usuario puede ver."""
+        por_id = {v: k for k, v in self._opciones.items()}
+        return {
+            oid for oid in opciones_ids
+            if oid in por_id and self.resolver(por_id[oid], 'puede_ver')
+        }
+
+
+def _permisos(request, user):
+    """Caché por request. Sin request no hay dónde colgarla: se resuelve sin ella."""
+    if request is None:
+        return None
+    sucursal_id = request.session.get('idSucursalActual') if hasattr(request, 'session') else None
+    cache = getattr(request, '_cache_permisos_menu', None)
+    if cache is None or cache.sucursal_id != sucursal_id:
+        cache = _PermisosDelRequest(user, sucursal_id)
+        request._cache_permisos_menu = cache
+    return cache
+
+
+def _opciones_ids_usuario(user, modulo=None, padre=None, sucursal_id=None, cache=None):
     """
     Helper: retorna IDs de OpcionMenu que un usuario puede ver,
     considerando PermisoUsuario overrides + PermisoRol.
@@ -26,6 +122,9 @@ def _opciones_ids_usuario(user, modulo=None, padre=None, sucursal_id=None):
     todas_opciones = OpcionMenu.objects.filter(filtro_opcion)
 
     if sucursal_id:
+        # Con caché se resuelve en memoria; sin ella, una consulta por opción.
+        if cache is not None:
+            return cache.ids_visibles(todas_opciones.values_list('id', flat=True))
         return {
             opcion.id
             for opcion in todas_opciones
@@ -70,15 +169,16 @@ def tiene_permiso(context, codigo_opcion, tipo_permiso='puede_ver'):
     request = context.get('request')
     if not request or not request.user.is_authenticated:
         return False
-    
-    # Obtener la sucursal actual de la sesión
-    sucursal_id = request.session.get('idSucursalActual')
-    
+
+    cache = _permisos(request, request.user)
+    if cache is not None:
+        return cache.resolver(codigo_opcion, tipo_permiso)
+
     return PermisoRol.tiene_permiso(
         request.user,
         codigo_opcion,
         tipo_permiso,
-        sucursal_id=sucursal_id
+        sucursal_id=request.session.get('idSucursalActual'),
     )
 
 
@@ -94,9 +194,15 @@ def puede_ver_opcion_tag(context, codigo_opcion):
     request = context.get('request')
     if not request or not request.user.is_authenticated:
         return False
-    
-    sucursal_id = request.session.get('idSucursalActual')
-    return PermisoRol.tiene_permiso(request.user, codigo_opcion, 'puede_ver', sucursal_id=sucursal_id)
+
+    cache = _permisos(request, request.user)
+    if cache is not None:
+        return cache.resolver(codigo_opcion, 'puede_ver')
+
+    return PermisoRol.tiene_permiso(
+        request.user, codigo_opcion, 'puede_ver',
+        sucursal_id=request.session.get('idSucursalActual'),
+    )
 
 
 @register.filter
@@ -232,7 +338,8 @@ def obtener_modulos_usuario(context):
     
     # Obtener módulos con al menos una opción visible (rol + usuario overrides + sucursal)
     sucursal_id = request.session.get('idSucursalActual') if request else None
-    opciones_ids = _opciones_ids_usuario(user, sucursal_id=sucursal_id)
+    opciones_ids = _opciones_ids_usuario(
+        user, sucursal_id=sucursal_id, cache=_permisos(request, user))
     modulos_ids = OpcionMenu.objects.filter(
         id__in=opciones_ids,
         modulo__activo=True
@@ -262,7 +369,9 @@ def obtener_opciones_modulo(context, modulo_codigo):
         modulo = ModuloSistema.objects.get(codigo=modulo_codigo, activo=True)
         
         sucursal_id = request.session.get('idSucursalActual') if request else None
-        opciones_ids = _opciones_ids_usuario(user, modulo=modulo, sucursal_id=sucursal_id)
+        opciones_ids = _opciones_ids_usuario(
+            user, modulo=modulo, sucursal_id=sucursal_id,
+            cache=_permisos(request, user))
         return OpcionMenu.objects.filter(
             id__in=opciones_ids,
             activo=True
@@ -383,6 +492,9 @@ def contar_opciones_disponibles(context, user, modulo_codigo):
         modulo = ModuloSistema.objects.get(codigo=modulo_codigo, activo=True)
         request = context.get('request')
         sucursal_id = request.session.get('idSucursalActual') if request else None
-        return len(_opciones_ids_usuario(user, modulo=modulo, sucursal_id=sucursal_id))
+        return len(_opciones_ids_usuario(
+            user, modulo=modulo, sucursal_id=sucursal_id,
+            cache=_permisos(request, user),
+        ))
     except ModuloSistema.DoesNotExist:
         return 0

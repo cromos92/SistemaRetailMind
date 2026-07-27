@@ -53,18 +53,24 @@
                 <!-- Tipo doc -->
                 <div class="col-auto">
                     <label for="filtroTipoDoc" class="form-label mb-1 small fw-semibold text-muted">Tipo Doc.</label>
+                    <!-- Se quitó "Boleta Manual" (value=BOLETA): filtraba
+                         tipo_documento='BOLETA', valor que no existe en el
+                         catálogo (los válidos son BOLETA ELECTRONICA / BOLETA
+                         PAPEL), así que devolvía siempre una lista vacía. -->
                     <select class="form-select form-select-sm" id="filtroTipoDoc" style="width:160px">
                         <option value="">Todos</option>
                         <option value="BOLETA_ELECTRONICA">Boleta Elect.</option>
                         <option value="BOLETA_PAPEL">Boleta Papel</option>
                         <option value="FACTURA_ELECTRONICA">Factura Elect.</option>
                         <option value="FACTURA_EXENTA">Factura Exenta</option>
-                        <option value="BOLETA">Boleta Manual</option>
                     </select>
                 </div>
                 <!-- Método pago -->
                 <div class="col-auto">
-                    <label for="filtroMetodoPago" class="form-label mb-1 small fw-semibold text-muted">Método Pago</label>
+                    <label for="filtroMetodoPago" class="form-label mb-1 small fw-semibold text-muted"
+                           title="Trae el documento completo si al menos una de sus formas de pago coincide; en ventas con pago mixto el total se atribuye entero a esa categoría.">
+                        Método Pago <i class="ri-question-line"></i>
+                    </label>
                     <select class="form-select form-select-sm" id="filtroMetodoPago" style="width:150px">
                         <option value="">Todos</option>
                         <option value="EFECTIVO">Efectivo</option>
@@ -152,15 +158,29 @@
             <div><div class="kpi-lbl">Descuentos</div><div class="kpi-val" id="kpiDescuentos">$0</div></div>
         </div>
         <div class="kpi-sep"></div>
-        <div class="kpi-item kpi-nc">
+        <div class="kpi-item kpi-nc" title="Este listado solo trae documentos de venta; las notas de crédito se emiten con otro tipo de transacción y NO entran aquí. Para la venta neta de devoluciones usa Reporte de Ventas o Comparativo.">
             <i class="ri-file-reduce-line kpi-ico"></i>
-            <div><div class="kpi-lbl">Notas de Crédito</div><div class="kpi-val" id="kpiNC">$0</div></div>
+            <div><div class="kpi-lbl">Notas de Crédito <i class="ri-question-line"></i></div><div class="kpi-val" id="kpiNC">$0</div></div>
         </div>
         <div class="kpi-sep kpi-sep-total"></div>
-        <div class="kpi-item kpi-total">
+        <!-- Rótulo honesto: el total es bruto menos descuentos. Las NC no se
+             restan porque no forman parte de este listado. -->
+        <div class="kpi-item kpi-total" title="Ventas brutas − descuentos. No descuenta notas de crédito.">
             <i class="ri-funds-line kpi-ico"></i>
-            <div><div class="kpi-lbl">TOTAL NETO</div><div class="kpi-val fw-bold" id="kpiTotal">$0</div></div>
+            <div><div class="kpi-lbl">TOTAL (bruto − dsctos.)</div><div class="kpi-val fw-bold" id="kpiTotal">$0</div></div>
         </div>
+    </div>
+
+    <!-- Alcance del listado: qué entra y qué no. Sin esto, el usuario cuadra
+         caja contra un total que incluye documentos anulados o rechazados. -->
+    <div class="alcance-nota no-print mb-3" id="alcanceNota">
+        <i class="ri-information-line"></i>
+        <span>
+            Incluye <strong>todos los documentos emitidos</strong> del período, también los
+            <strong>anulados, rechazados por el SII y descartados</strong>, y <strong>no</strong> incluye
+            notas de crédito. El total de abajo es <em>bruto − descuentos</em>.
+            Para venta neta de devoluciones usa <em>Reporte de Ventas</em>.
+        </span>
     </div>
 
     <!-- ── PANEL DE DIAGNÓSTICO (colapsable, para cuadrar con Ventas/Documentos) ── -->
@@ -244,7 +264,10 @@
                             <th>Pago</th>
                             <th>Cliente</th>
                             <th class="text-end">Total</th>
-                            <th class="text-end text-muted">Dscto.</th>
+                            <th class="text-end text-muted"
+                                title="Descuento del documento. En ventas con pago parcial registrado aquí también aparece el saldo no pagado.">
+                                Dscto. <i class="ri-question-line"></i>
+                            </th>
                             <th>Vendedor</th>
                             <th>Hora</th>
                             <th class="no-print">Voucher</th>
@@ -281,8 +304,8 @@
                     <div class="col-6 col-md-4 col-lg-3"><div class="resumen-item"><span>Crédito Trab.</span><strong id="totalCreditoTrabajador">$0</strong></div></div>
                     <div class="col-6 col-md-4 col-lg-3"><div class="resumen-item"><span>Otros</span><strong id="totalOtros">$0</strong></div></div>
                     <div class="col-6 col-md-4 col-lg-3"><div class="resumen-item resumen-descuento"><span>(-) Descuentos</span><strong id="totalDescuentos">$0</strong></div></div>
-                    <div class="col-6 col-md-4 col-lg-3"><div class="resumen-item resumen-nc"><span>(-) Notas de Crédito</span><strong id="totalNC">$0</strong></div></div>
-                    <div class="col-12 col-md-4 col-lg-6"><div class="resumen-item resumen-total"><span>TOTAL NETO</span><strong id="totalGlobal">$0</strong></div></div>
+                    <div class="col-6 col-md-4 col-lg-3"><div class="resumen-item resumen-nc" title="Siempre $0: las NC no forman parte de este listado"><span>(-) Notas de Crédito</span><strong id="totalNC">$0</strong></div></div>
+                    <div class="col-12 col-md-4 col-lg-6"><div class="resumen-item resumen-total"><span>TOTAL (bruto − dsctos.)</span><strong id="totalGlobal">$0</strong></div></div>
                 </div>
             </div>
         </div>
@@ -944,6 +967,21 @@ td{padding:2px;border-bottom:1px dotted #ccc}
 .btn-ticket-cambio i {
     font-size: 14px;
 }
+
+/* Nota de alcance: qué incluye y qué no incluye el listado */
+.alcance-nota {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 11.5px;
+    line-height: 1.35;
+    color: #6c5200;
+    background: rgba(255, 176, 32, .10);
+    border: 1px solid rgba(255, 176, 32, .55);
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+.alcance-nota i { font-size: 14px; color: #FFB020; flex-shrink: 0; margin-top: 1px; }
 
 /* KPI BAR - barra horizontal compacta */
 .kpi-bar {

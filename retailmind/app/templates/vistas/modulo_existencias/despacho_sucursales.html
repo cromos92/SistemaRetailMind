@@ -105,34 +105,46 @@
                 <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 4px solid #ffbe0b;" onclick="document.getElementById('panelPendientes').scrollIntoView({behavior:'smooth'})">
                     <div class="card-body text-center py-2">
                         <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiPendientes">0</h4>
-                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Unid. Pendientes</p>
+                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Unid. por despachar</p>
                     </div>
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid #299cdb;" onclick="DespachoSucursales.filtrarHistorialPorEstado('', document.getElementById('tab-total'))">
+                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid #299cdb;" onclick="DespachoSucursales.filtrarHistorial('', document.getElementById('tab-total'))">
                     <div class="card-body text-center py-2">
-                        <h4 class="mb-0 fw-bold" style="color: #405189;" id="tab-count-total">0</h4>
-                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Despachos Totales</p>
+                        <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiDespachadas">0</h4>
+                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Unid. despachadas (<span class="kpi-dias">90</span>d)</p>
                     </div>
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-left: 4px solid #fb8c00;" onclick="DespachoSucursales.filtrarHistorialPorEstado('EN_TRANSITO', document.getElementById('tab-en_transito'))">
+                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-left: 4px solid #fb8c00;" onclick="DespachoSucursales.filtrarHistorial('EN_TRANSITO', document.getElementById('tab-en_transito'))">
                     <div class="card-body text-center py-2">
                         <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiEnTransito">0</h4>
-                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">En Tránsito</p>
+                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Unid. en tránsito</p>
                     </div>
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 4px solid #0ab39c;" onclick="DespachoSucursales.filtrarHistorialPorEstado('RECIBIDO', document.getElementById('tab-recibido'))">
+                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fdecea 0%, #f9c9c4 100%); border-left: 4px solid #f06548;" onclick="DespachoSucursales.filtrarHistorial('SIN_RECIBIR', document.getElementById('tab-sin_recibir'))">
                     <div class="card-body text-center py-2">
-                        <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiRecibidos">0</h4>
-                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Recibidos</p>
+                        <h4 class="mb-0 fw-bold" style="color: #b42318;" id="kpiSinRecibir">0</h4>
+                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Unid. sin recibir</p>
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Alerta: mercadería despachada que nunca llegó -->
+        <div class="alert alert-danger d-flex align-items-start gap-2 py-2 px-3 mb-3" id="alertaSinRecibir" style="display:none !important;">
+            <i class="ri-alert-line fs-4 lh-1"></i>
+            <div class="flex-grow-1 small">
+                <strong id="alertaSinRecibirTitulo">Hay mercadería despachada que nunca se recibió.</strong>
+                <div class="text-muted" id="alertaSinRecibirDetalle"></div>
+            </div>
+            <button type="button" class="btn btn-sm btn-danger" onclick="DespachoSucursales.filtrarHistorial('SIN_RECIBIR', document.getElementById('tab-sin_recibir'))">
+                Ver documentos
+            </button>
         </div>
 
         <div class="row">
@@ -140,9 +152,17 @@
             <div class="col-lg-7">
                 <!-- Pendientes de Despacho -->
                 <div class="card" id="panelPendientes">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0"><i class="ri-time-line me-2 text-warning"></i>Pendientes de Despacho</h5>
-                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="DespachoSucursales.cargarPendientes()"><i class="ri-refresh-line"></i> Actualizar</button>
+                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <h5 class="card-title mb-0">
+                            <i class="ri-time-line me-2 text-warning"></i>Pendientes de Despacho
+                            <span class="badge bg-warning ms-1" id="badgePendientesLineas">0</span>
+                        </h5>
+                        <div class="d-flex gap-1">
+                            <a href="{% url 'emision_dte' %}" class="btn btn-sm btn-primary" title="Emitir la guía o factura de traspaso: es el flujo que descuenta estos pendientes y deja el documento para que el destino lo reciba">
+                                <i class="ri-file-paper-2-line"></i> Emitir guía
+                            </a>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="DespachoSucursales.cargarPendientes()"><i class="ri-refresh-line"></i></button>
+                        </div>
                     </div>
                     <div class="card-body" id="pendientesContainer">
                         <div class="text-center text-muted py-3">Cargando pendientes...</div>
@@ -249,6 +269,13 @@
                     </div>
                     <div class="card-body" id="despachosMasivosBody"></div>
                     <div class="card-footer">
+                        <div class="alert alert-warning py-2 px-2 small mb-2">
+                            <i class="ri-error-warning-line me-1"></i>
+                            Este envío descuenta el stock de la bodega <strong>sin emitir documento tributario</strong>.
+                            Sin guía ni factura, el destino no lo verá en Recepción de Documentos y no podrá ingresarlo.
+                            Para un traspaso normal use
+                            <a href="{% url 'emision_dte' %}" class="alert-link">Emitir guía</a>.
+                        </div>
                         <button type="button" class="btn btn-primary w-100 btn-lg" onclick="DespachoSucursales.enviarTodosDespachos()">
                             <i class="ri-send-plane-line me-2"></i> Enviar Todos los Despachos
                         </button>
@@ -257,39 +284,55 @@
             </div>
         </div>
 
-        <!-- Historial de Despachos Recientes -->
+        <!-- Historial real de despachos (reconstruido desde el kardex por DTE) -->
         <div class="card mt-3">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0"><i class="ri-history-line me-2 text-primary"></i>Historial de Despachos Recientes</h5>
-                <a href="/app/dashboard-despachos/" class="btn btn-sm btn-soft-primary">
-                    <i class="ri-bar-chart-line me-1"></i>Ver Dashboard Completo
-                </a>
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="card-title mb-0">
+                    <i class="ri-history-line me-2 text-primary"></i>Despachos enviados desde esta bodega
+                </h5>
+                <div class="d-flex align-items-center gap-2">
+                    <select id="selectDiasHistorial" class="form-select form-select-sm" style="width:auto;" onchange="DespachoSucursales.cambiarPeriodo(this.value)">
+                        <option value="30">Últimos 30 días</option>
+                        <option value="90" selected>Últimos 90 días</option>
+                        <option value="180">Últimos 180 días</option>
+                        <option value="365">Último año</option>
+                    </select>
+                    <a href="/app/dashboard-despachos/" class="btn btn-sm btn-soft-primary">
+                        <i class="ri-bar-chart-line me-1"></i>Dashboard
+                    </a>
+                </div>
             </div>
             <div class="card-body">
+                <p class="text-muted small mb-2">
+                    <i class="ri-information-line me-1"></i>
+                    Cada fila es un documento de traspaso (guía o factura entre sucursales). Se comparan las unidades
+                    que <strong>salieron</strong> de esta bodega contra las que el destino <strong>ingresó</strong> en
+                    Recepción de Documentos. Las devueltas por nota de crédito no se cuentan como faltantes.
+                </p>
                 <ul class="nav nav-tabs nav-tabs-custom nav-primary mb-3" id="tabsHistorial">
                     <li class="nav-item">
-                        <a class="nav-link active" id="tab-total" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorialPorEstado('', this)">
+                        <a class="nav-link active" id="tab-total" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorial('', this)">
                             Todos <span class="badge bg-secondary ms-1" id="tab-count-total">0</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" id="tab-pendiente" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorialPorEstado('PENDIENTE', this)">
-                            Pendiente <span class="badge bg-warning ms-1" id="tab-count-pendiente">0</span>
+                        <a class="nav-link" id="tab-sin_recibir" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorial('SIN_RECIBIR', this)">
+                            Sin recibir <span class="badge bg-danger ms-1" id="tab-count-sin_recibir">0</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" id="tab-en_transito" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorialPorEstado('EN_TRANSITO', this)">
-                            En Tránsito <span class="badge bg-primary ms-1" id="tab-count-en_transito">0</span>
+                        <a class="nav-link" id="tab-en_transito" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorial('EN_TRANSITO', this)">
+                            En tránsito <span class="badge bg-warning ms-1" id="tab-count-en_transito">0</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" id="tab-recibido" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorialPorEstado('RECIBIDO', this)">
-                            Recibido <span class="badge bg-success ms-1" id="tab-count-recibido">0</span>
+                        <a class="nav-link" id="tab-recibido" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorial('RECIBIDO', this)">
+                            Recibidos <span class="badge bg-success ms-1" id="tab-count-recibido">0</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" id="tab-rechazado" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorialPorEstado('RECHAZADO', this)">
-                            Rechazado/Anulado <span class="badge bg-danger ms-1" id="tab-count-rechazado">0</span>
+                        <a class="nav-link" id="tab-sobre_recibido" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorial('SOBRE_RECIBIDO', this)">
+                            Sobre-recibidos <span class="badge bg-dark ms-1" id="tab-count-sobre_recibido">0</span>
                         </a>
                     </li>
                 </ul>
@@ -298,17 +341,18 @@
                     <table class="table table-hover align-middle">
                         <thead class="table-light">
                             <tr>
-                                <th>N° Traspaso</th>
+                                <th>Documento</th>
                                 <th>Destino</th>
                                 <th>Fecha</th>
-                                <th class="text-end">Items</th>
-                                <th class="text-end">Unidades</th>
-                                <th>Estado</th>
-                                <th>Solicitante</th>
+                                <th class="text-end">Líneas</th>
+                                <th class="text-end">Enviadas</th>
+                                <th class="text-end">Recibidas</th>
+                                <th class="text-end">Sin recibir</th>
+                                <th>Situación</th>
                             </tr>
                         </thead>
                         <tbody id="tbodyHistorial">
-                            <tr><td colspan="7" class="text-center text-muted">Cargando historial...</td></tr>
+                            <tr><td colspan="8" class="text-center text-muted">Cargando historial...</td></tr>
                         </tbody>
                     </table>
                 </div>

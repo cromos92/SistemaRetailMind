@@ -565,6 +565,11 @@
                     Despachos a Tiendas
                 </h1>
                 <p>Qué se despachó a cada tienda en el período, por artículo y proveedor (traspasos de salida)</p>
+                <!-- Dos supuestos que el usuario no puede adivinar mirando la tabla. -->
+                <p style="font-size:.72rem; opacity:.75; margin-top:2px;">
+                    Cuenta traspasos de salida entre sucursales (también tienda→bodega, no solo CD→tienda) ·
+                    El “proveedor” se deduce de la última recepción de compra del artículo: es una aproximación
+                </p>
             </div>
             <div class="nexo-header-badge">
                 <i class="ri-store-3-line"></i>
@@ -599,11 +604,15 @@
             <div class="nexo-kpi-value" id="kpi-recibido">-</div>
             <div class="nexo-kpi-sub">unidades confirmadas</div>
         </div>
-        <div class="nexo-kpi-card kpi-warning">
+        <!-- "Recibido" son las entradas ocurridas DENTRO del rango, no las
+             entradas de estos despachos: en los bordes del período la tasa se
+             dispara o se hunde sin que haya pasado nada. Hay que rotularlo. -->
+        <div class="nexo-kpi-card kpi-warning"
+             title="Aproximada: compara las entradas registradas dentro del rango contra las salidas del rango. Un despacho de viernes recibido el lunes cae fuera y baja la tasa; entradas de despachos anteriores la suben por encima de 100%.">
             <div class="nexo-kpi-icon icon-warning"><i class="ri-pie-chart-2-line"></i></div>
-            <div class="nexo-kpi-label">Tasa de Recepción</div>
+            <div class="nexo-kpi-label">Tasa de Recepción (aprox.)</div>
             <div class="nexo-kpi-value" id="kpi-tasa">-</div>
-            <div class="nexo-kpi-sub">recibido / despachado</div>
+            <div class="nexo-kpi-sub">entradas del rango / despachado del rango</div>
         </div>
         <div class="nexo-kpi-card kpi-error">
             <div class="nexo-kpi-icon icon-error"><i class="ri-time-line"></i></div>
@@ -643,7 +652,12 @@
         </div>
 
         <div class="nexo-control-group control-search">
-            <label class="nexo-control-label"><i class="ri-search-line"></i> Buscar</label>
+            <!-- Este buscador filtra en el navegador sobre lo ya cargado (todo
+                 el período consultado), no vuelve al servidor. Decirlo evita
+                 que se interprete como "no existe" lo que está fuera del rango. -->
+            <label class="nexo-control-label" title="Filtra la tabla ya cargada (todo el rango consultado). Para buscar en otras fechas, cambia el período y presiona Buscar.">
+                <i class="ri-search-line"></i> Filtrar resultados cargados
+            </label>
             <input type="text" id="busqueda-articulo" class="nexo-input"
                    placeholder="Artículo, descripción o proveedor..." onkeyup="filtrarLocal()">
         </div>

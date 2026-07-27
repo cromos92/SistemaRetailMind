@@ -510,6 +510,10 @@
                     </button>
                 </div>
             </div>
+            <!-- La temporada vive en las órdenes de compra del centro de distribución.
+                 Si el contexto no las tiene, se avisa en vez de devolver el reporte sin filtrar. -->
+            <div class="alert alert-warning py-2 px-3 mt-3 mb-0 d-none" id="avisoTemporada" style="font-size:.82rem;"></div>
+            <div class="text-muted mt-2" id="rangoAplicado" style="font-size:.78rem;"></div>
         </div>
 
         <!-- KPIs Principales -->
@@ -576,7 +580,7 @@
                             <i class="ri-checkbox-circle-line"></i>
                         </div>
                         <div class="ms-3">
-                            <p class="kpi-title">Cumplimiento</p>
+                            <p class="kpi-title" title="Unidades recepcionadas sobre unidades esperadas del período. Mide entregas, no pagos.">Cumplimiento entregas</p>
                             <h3 class="kpi-value" id="kpiCumplimiento">0%</h3>
                             <span class="kpi-trend neutral" id="trendCumplimiento">
                                 <i class="ri-subtract-line"></i> --
@@ -586,7 +590,7 @@
                 </div>
             </div>
 
-            <!-- ROI Estimado -->
+            <!-- Markup teórico (precio sugerido de la OC vs costo) -->
             <div class="col-xl-2 col-md-4 col-sm-6">
                 <div class="kpi-card warning">
                     <div class="d-flex align-items-center">
@@ -594,7 +598,7 @@
                             <i class="ri-percent-line"></i>
                         </div>
                         <div class="ms-3">
-                            <p class="kpi-title">ROI Estimado</p>
+                            <p class="kpi-title" title="Precio sugerido de la orden de compra sobre el costo. Es teórico: no descuenta liquidaciones ni mide venta real.">Markup teórico</p>
                             <h3 class="kpi-value" id="kpiROI">0%</h3>
                             <span class="kpi-trend neutral" id="trendROI">
                                 <i class="ri-subtract-line"></i> --
@@ -633,7 +637,7 @@
                             <i class="ri-line-chart-line"></i>
                         </div>
                         <div class="ms-3 flex-grow-1">
-                            <p class="kpi-title">Valor Venta Esperado</p>
+                            <p class="kpi-title" title="Unidades compradas valorizadas al precio sugerido de la orden de compra.">Valor Venta a Precio Lista</p>
                             <h3 class="kpi-value" id="kpiValorVenta">$0</h3>
                         </div>
                     </div>
@@ -648,7 +652,7 @@
                             <i class="ri-funds-box-line"></i>
                         </div>
                         <div class="ms-3 flex-grow-1">
-                            <p class="kpi-title">Margen Bruto Esperado</p>
+                            <p class="kpi-title" title="Precio lista menos costo de las unidades compradas. Teórico: no considera descuentos ni venta efectiva.">Margen Teórico de Lista</p>
                             <h3 class="kpi-value" id="kpiMargenBruto">$0</h3>
                         </div>
                     </div>
@@ -678,7 +682,7 @@
                             <i class="ri-wallet-line"></i>
                         </div>
                         <div class="ms-3 flex-grow-1">
-                            <p class="kpi-title">Pendiente de Pago</p>
+                            <p class="kpi-title" title="Saldo real: monto del documento menos los pagos, abonos y notas de crédito registrados.">Pendiente de Pago (saldo)</p>
                             <h3 class="kpi-value" id="kpiPendientePago">$0</h3>
                         </div>
                     </div>
@@ -739,7 +743,7 @@
                                     <div class="col-lg-4">
                                         <div class="nexo-card mb-4">
                                             <div class="nexo-card-header">
-                                                <h5><i class="ri-pie-chart-line"></i> Distribución por Temporada</h5>
+                                                <h5><i class="ri-pie-chart-line"></i> Inversión por Trimestre</h5>
                                             </div>
                                             <div class="nexo-card-body">
                                                 <div class="chart-container">
@@ -784,7 +788,9 @@
                                     <div class="col-lg-6">
                                         <div class="nexo-card mb-4">
                                             <div class="nexo-card-header">
-                                                <h5><i class="ri-medal-line"></i> Ranking de Cumplimiento</h5>
+                                                <h5><i class="ri-medal-line"></i> Cumplimiento de Entregas
+                                                    <small class="text-muted d-block" style="font-size:.72rem;font-weight:400;">Unidades recepcionadas / unidades pedidas — peores primero (solo proveedores con orden de compra)</small>
+                                                </h5>
                                             </div>
                                             <div class="nexo-card-body">
                                                 <div class="chart-container">
@@ -810,8 +816,8 @@
                                                                 <th class="text-center">Compras</th>
                                                                 <th class="text-end">Inversión</th>
                                                                 <th class="text-center">Unidades</th>
-                                                                <th class="text-center">Cumplimiento</th>
-                                                                <th class="text-center">ROI</th>
+                                                                <th class="text-center" title="Unidades recepcionadas / unidades pedidas">Entregas</th>
+                                                                <th class="text-center" title="Precio sugerido de la orden sobre el costo (teórico)">Markup</th>
                                                                 <th class="text-center">Participación</th>
                                                             </tr>
                                                         </thead>
@@ -1006,6 +1012,19 @@
                                             </div>
                                         </div>
                                     </div>
+                                    <!-- Indicador de tesorería: antes se mostraba como
+                                         "cumplimiento del proveedor" en la pestaña Proveedores. -->
+                                    <div class="col-md-3">
+                                        <div class="insight-card">
+                                            <div class="insight-icon info">
+                                                <i class="ri-bank-card-fill"></i>
+                                            </div>
+                                            <div class="insight-content">
+                                                <h6 title="Documentos con saldo 0 sobre el total de documentos del período">% facturas pagadas</h6>
+                                                <p id="pctFacturasPagadas">0%</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                                 <!-- Tabla de Pagos Pendientes -->
                                 <div class="row">
@@ -1023,7 +1042,7 @@
                                                                 <th>Proveedor</th>
                                                                 <th>Fecha Emisión</th>
                                                                 <th>Vencimiento</th>
-                                                                <th class="text-end">Monto</th>
+                                                                <th class="text-end" title="Saldo = monto del documento menos pagos y abonos registrados">Saldo</th>
                                                                 <th class="text-center">Días</th>
                                                                 <th class="text-center">Estado</th>
                                                             </tr>
@@ -1416,6 +1435,7 @@ function cargarDatosReporte() {
         .then(data => {
             if (data.success) {
                 datosReporte = data;
+                mostrarFiltrosAplicados(data.filtros_aplicados || {});
                 actualizarKPIs(data.metricas);
                 renderizarGraficos(data);
                 renderizarTablas(data);
@@ -1432,6 +1452,22 @@ function cargarDatosReporte() {
         .finally(() => {
             mostrarLoading(false);
         });
+}
+
+// ========== Filtros realmente aplicados ==========
+function mostrarFiltrosAplicados(filtros) {
+    const rango = document.getElementById('rangoAplicado');
+    if (rango) {
+        rango.textContent = `Datos del ${filtros.desde || ''} al ${filtros.hasta || ''}`;
+    }
+    const aviso = document.getElementById('avisoTemporada');
+    if (!aviso) return;
+    if (filtros.temporada && !filtros.temporada_aplicada) {
+        aviso.textContent = 'El filtro de temporada no se pudo aplicar en este contexto: la temporada se registra en las órdenes de compra del centro de distribución. Los datos se muestran sin ese filtro.';
+        aviso.classList.remove('d-none');
+    } else {
+        aviso.classList.add('d-none');
+    }
 }
 
 // ========== Actualización de KPIs ==========
@@ -1740,8 +1776,12 @@ function renderizarGraficoCumplimientoProveedores(datos) {
     
     if (chartCumplimiento) { chartCumplimiento.destroy(); chartCumplimiento = null; }
     chartElement.innerHTML = '';
-    
+
     const top10 = datos.slice(0, 10);
+    if (!top10.length) {
+        chartElement.innerHTML = '<div class="text-center text-muted py-5">Sin órdenes de compra en el período: no hay unidades pedidas contra las cuales medir las entregas.</div>';
+        return;
+    }
     
     const options = {
         series: [{
@@ -1891,6 +1931,12 @@ function renderizarGraficoEstadoPagos(datos) {
     document.getElementById('montoPendientes').textContent = formatearMoneda(datos.pendientes || 0);
     document.getElementById('montoVencidos').textContent = formatearMoneda(datos.vencidos || 0);
     document.getElementById('montoVencenSemana').textContent = formatearMoneda(datos.vencen_semana || 0);
+
+    const pctPagadas = document.getElementById('pctFacturasPagadas');
+    if (pctPagadas) {
+        pctPagadas.textContent = (datos.pct_facturas_pagadas || 0) + '%';
+        pctPagadas.title = `${datos.facturas_pagadas || 0} de ${datos.documentos || 0} documentos con saldo 0`;
+    }
 }
 
 function renderizarGraficoVencimientos(datos) {
@@ -1968,9 +2014,16 @@ function renderizarTablaProveedores(datos) {
     tbody.innerHTML = '';
     
     datos.forEach(proveedor => {
-        const cumplimientoClass = proveedor.cumplimiento >= 90 ? 'success' : (proveedor.cumplimiento >= 70 ? 'warning' : 'error');
-        const roiClass = proveedor.roi >= 50 ? 'success' : (proveedor.roi >= 30 ? 'warning' : 'error');
-        
+        // Entregas: solo se muestra si hay orden de compra con la que comparar;
+        // si no, un "0%" o "100%" inventado hace ver mal a proveedores que solo
+        // facturan (sin orden registrada en el sistema).
+        const entregas = proveedor.cumplimiento_calculable
+            ? `<span class="badge-nexo ${proveedor.cumplimiento >= 90 ? 'success' : (proveedor.cumplimiento >= 70 ? 'warning' : 'error')}">${proveedor.cumplimiento}%</span>`
+            : '<span class="text-muted" title="Sin orden de compra registrada para comparar">s/d</span>';
+        const markup = (proveedor.markup > 0)
+            ? `<span class="badge-nexo ${proveedor.markup >= 100 ? 'success' : (proveedor.markup >= 60 ? 'warning' : 'error')}">${proveedor.markup}%</span>`
+            : '<span class="text-muted">s/d</span>';
+
         tbody.innerHTML += `
             <tr>
                 <td>
@@ -1980,12 +2033,8 @@ function renderizarTablaProveedores(datos) {
                 <td class="text-center">${formatearNumero(proveedor.total_compras)}</td>
                 <td class="text-end fw-semibold">${formatearMoneda(proveedor.inversion)}</td>
                 <td class="text-center">${formatearNumero(proveedor.unidades)}</td>
-                <td class="text-center">
-                    <span class="badge-nexo ${cumplimientoClass}">${proveedor.cumplimiento}%</span>
-                </td>
-                <td class="text-center">
-                    <span class="badge-nexo ${roiClass}">${proveedor.roi}%</span>
-                </td>
+                <td class="text-center">${entregas}</td>
+                <td class="text-center">${markup}</td>
                 <td class="text-center">
                     <div class="progress-nexo" style="width: 80px;">
                         <div class="progress-bar primary" style="width: ${proveedor.participacion}%"></div>
@@ -2060,7 +2109,7 @@ function renderizarTablaPagos(datos) {
                 <td>${pago.proveedor}</td>
                 <td>${pago.fecha_emision}</td>
                 <td>${pago.fecha_vencimiento}</td>
-                <td class="text-end fw-semibold">${formatearMoneda(pago.monto)}</td>
+                <td class="text-end fw-semibold" title="Documento: ${formatearMoneda(pago.monto)} — abonado: ${formatearMoneda(pago.pagado || 0)}">${formatearMoneda(pago.saldo != null ? pago.saldo : pago.monto)}</td>
                 <td class="text-center">${diasBadge}</td>
                 <td class="text-center">${estadoBadge}</td>
             </tr>

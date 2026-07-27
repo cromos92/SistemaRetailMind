@@ -73,6 +73,21 @@
     .kpi-icon.primary { background: linear-gradient(135deg, #405189, #0ab39c); }
     .kpi-icon.accent { background: var(--nexo-accent); }
     .kpi-icon.warning { background: var(--nexo-warning); }
+    .kpi-icon.error { background: var(--nexo-error); }
+
+    .badge-salud {
+        display: inline-block;
+        padding: 2px 9px;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .badge-salud.ok        { background: #e8f9f3; color: #008060; }
+    .badge-salud.atrasada  { background: #fff4e0; color: #8a5a00; }
+    .badge-salud.nunca     { background: var(--nexo-gray-100); color: var(--nexo-gray-700); }
+    .badge-salud.error     { background: #f9eaea; color: #a13030; }
+    .badge-salud.inactiva  { background: var(--nexo-gray-100); color: var(--nexo-gray-500); }
 
     .kpi-value { font-weight: 700; font-size: 1.25rem; color: var(--nexo-gray-900); line-height: 1; }
     .kpi-label { font-size: 0.75rem; color: var(--nexo-gray-500); text-transform: uppercase; letter-spacing: 0.5px; }
@@ -226,27 +241,46 @@
             <div class="kpi-card">
                 <div class="kpi-icon primary"><i class="ri-plug-line"></i></div>
                 <div>
-                    <div class="kpi-value">{{ credenciales.count }}</div>
+                    <div class="kpi-value">{{ kpi_total }}</div>
                     <div class="kpi-label">Integraciones</div>
                 </div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-icon accent"><i class="ri-checkbox-circle-line"></i></div>
                 <div>
-                    <div class="kpi-value">{{ credenciales|dictsortreversed:"activo"|first|default_if_none:"-" }}</div>
-                    <div class="kpi-label">Activas (de {{ credenciales.count }})</div>
+                    <div class="kpi-value">{{ kpi_activas }}</div>
+                    <div class="kpi-label">Activas (de {{ kpi_total }})</div>
                 </div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-icon warning"><i class="ri-image-2-line"></i></div>
                 <div>
-                    <div class="kpi-value" id="kpi-total-fotos">
-                        {% with total=0 %}{% for c in credenciales %}{{ total|add:c.total_fotos }}{% endfor %}{% endwith %}
-                    </div>
+                    <div class="kpi-value" id="kpi-total-fotos">{{ kpi_total_fotos }}</div>
                     <div class="kpi-label">Fotos sincronizadas</div>
                 </div>
             </div>
+            <div class="kpi-card">
+                <div class="kpi-icon {% if kpi_con_problema %}error{% else %}accent{% endif %}">
+                    <i class="ri-alarm-warning-line"></i>
+                </div>
+                <div>
+                    <div class="kpi-value">{{ kpi_con_problema }}</div>
+                    <div class="kpi-label">Sin sincronizar / con error</div>
+                </div>
+            </div>
         </div>
+
+        {% if kpi_con_problema %}
+        <div class="alert alert-warning d-flex align-items-start gap-2" role="alert" style="border-radius:10px;">
+            <i class="ri-error-warning-line" style="font-size:1.2rem;"></i>
+            <div>
+                <strong>{{ kpi_con_problema }} integración(es) activa(s) necesitan atención.</strong>
+                Nunca se sincronizaron, su última sincronización registró un error, o pasaron más de
+                {{ horas_sync_atrasada }} horas desde la última corrida. Usá el botón
+                <i class="ri-refresh-line"></i> <em>Sincronizar ahora</em> de la fila para reintentar.
+            </div>
+        </div>
+        {% endif %}
 
         <div class="integraciones-card">
             <div class="integraciones-card-header">
@@ -268,6 +302,7 @@
                         <th>Prioridad</th>
                         <th>Activo</th>
                         <th>Fotos</th>
+                        <th>Salud</th>
                         <th>Última sync</th>
                         <th style="text-align:right;">Acciones</th>
                     </tr>
@@ -288,6 +323,25 @@
                             {% endif %}
                         </td>
                         <td>{{ c.total_fotos }}</td>
+                        <td>
+                            {% if c.estado_sync == 'ok' %}
+                                <span class="badge-salud ok" title="Sincronizada hace {{ c.horas_sync }} h">
+                                    <i class="ri-checkbox-circle-fill"></i> Al día
+                                </span>
+                            {% elif c.estado_sync == 'atrasada' %}
+                                <span class="badge-salud atrasada" title="Última sincronización hace {{ c.horas_sync }} h">
+                                    <i class="ri-time-line"></i> Atrasada ({{ c.horas_sync }} h)
+                                </span>
+                            {% elif c.estado_sync == 'error' %}
+                                <span class="badge-salud error" title="{{ c.ultima_sync_resultado }}">
+                                    <i class="ri-error-warning-fill"></i> Con error
+                                </span>
+                            {% elif c.estado_sync == 'nunca' %}
+                                <span class="badge-salud nunca"><i class="ri-question-line"></i> Nunca</span>
+                            {% else %}
+                                <span class="badge-salud inactiva"><i class="ri-pause-circle-line"></i> Apagada</span>
+                            {% endif %}
+                        </td>
                         <td>
                             <div class="ultima-sync-info">
                                 {% if c.ultima_sync_at %}

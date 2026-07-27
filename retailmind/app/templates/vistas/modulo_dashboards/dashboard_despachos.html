@@ -19,10 +19,11 @@
 }
 .page-content { min-height: 100vh; padding: 70px 0 60px; background: var(--doc-gray-100); }
 .doc-header {
-    background: linear-gradient(135deg, #0ab39c 0%, #405189 100%);
+    /* Gradiente canonico de modulo (#405189 -> #0ab39c); estaba invertido */
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
     color: #fff; border-radius: var(--doc-radius-lg); padding: 28px 32px; margin-bottom: 28px;
     display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;
-    box-shadow: 0 8px 32px rgba(10,179,156,.3); position: relative; overflow: hidden;
+    box-shadow: 0 8px 32px rgba(64,81,137,.3); position: relative; overflow: hidden;
 }
 .doc-header::before { content:''; position:absolute; top:-50%; right:-20%; width:300px; height:300px; background:radial-gradient(circle,rgba(255,255,255,.08) 0%,transparent 70%); border-radius:50%; }
 .doc-header h4 { margin:0; font-weight:700; font-size:1.5rem; position:relative; z-index:1; color:#fff!important; }
@@ -114,6 +115,18 @@
 .doc-gran-btn.active { background:var(--doc-primary); color:#fff; border-color:var(--doc-primary); }
 .tbl-matriz-cell { text-align:center; padding:4px 6px; white-space:nowrap; }
 #tblMatriz th { position:sticky; top:0; background:var(--doc-primary); color:#fff; z-index:1; }
+
+/* Notebooks de tienda (1366x768): cabecera + KPIs sin scroll */
+@media (max-height: 820px) {
+    .page-content { padding:60px 0 40px; }
+    .doc-header { padding:14px 20px; margin-bottom:14px; }
+    .doc-header h4 { font-size:1.25rem; }
+    .doc-kpi-grid { gap:12px; margin-bottom:14px; }
+    .doc-kpi-card { padding:14px 16px; }
+    .doc-kpi-top { margin-bottom:8px; }
+    .doc-kpi-value { font-size:1.4rem; }
+    .doc-kpi-icon-box { width:38px; height:38px; font-size:1.1rem; }
+}
 </style>
 
 <div class="page-content">

@@ -27,6 +27,15 @@
     .rp-bar { height: 6px; border-radius: 3px; background: #e9ecef; overflow: hidden; min-width: 60px; }
     .rp-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
     .rp-loader { display: flex; align-items: center; justify-content: center; padding: 60px; }
+    /* Columnas PARCIALES: cubren sólo la venta que se pudo asignar a un
+       proveedor (ver el panel de cobertura de atribución). No son estimaciones:
+       son cifras exactas de un subconjunto de la venta. */
+    .rp-estimado { border-style: dashed; border-color: #f7b84b; background: #fffdf6; }
+    .rp-table thead th.rp-th-estimado { background: #5a5f7a; }
+    .rp-table thead th.rp-th-estimado::after { content: ''; }
+    /* Panel de cobertura: reutiliza rp-kpi-card + rp-bar, sin colores nuevos. */
+    .rp-cobertura { text-align: left; }
+    .rp-cobertura .rp-bar { height: 10px; }
 
     @media (max-width: 768px) {
         .rp-header .d-flex { flex-direction: column; gap: 0.5rem; }
@@ -108,12 +117,52 @@
                         <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value" id="kpiProveedores">-</div><div class="rp-kpi-label">Proveedores</div></div></div>
                         <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value" id="kpiComprados">-</div><div class="rp-kpi-label">Comprados</div></div></div>
                         <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value" id="kpiRecepcionados">-</div><div class="rp-kpi-label">Recepcionados</div></div></div>
-                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value" id="kpiVendidos">-</div><div class="rp-kpi-label">Vendidos Publico</div></div></div>
+                        <div class="col"><div class="rp-kpi-card rp-estimado" title="Sólo la venta asignada a un proveedor: ver el panel de cobertura de atribucion"><div class="rp-kpi-value" id="kpiVendidos">-</div><div class="rp-kpi-label">Vendidos Publico*</div></div></div>
                         <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value text-success" id="kpiPctRecep">-</div><div class="rp-kpi-label">% Recepcion</div></div></div>
-                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value text-info" id="kpiPctVenta">-</div><div class="rp-kpi-label">% Venta</div></div></div>
+                        <div class="col"><div class="rp-kpi-card rp-estimado" title="Sólo la venta asignada a un proveedor: ver el panel de cobertura de atribucion"><div class="rp-kpi-value text-info" id="kpiPctVenta">-</div><div class="rp-kpi-label">% Venta*</div></div></div>
                         <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value" id="kpiInversion">-</div><div class="rp-kpi-label">Inversion</div></div></div>
                         <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value text-warning" id="kpiNoInv">-</div><div class="rp-kpi-label">Concepto/Sin recep.</div></div></div>
-                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value text-success" id="kpiMargen">-</div><div class="rp-kpi-label">Margen</div></div></div>
+                        <div class="col"><div class="rp-kpi-card rp-estimado" title="Sólo la venta asignada a un proveedor: ver el panel de cobertura de atribucion"><div class="rp-kpi-value text-success" id="kpiMargen">-</div><div class="rp-kpi-label">Margen*</div></div></div>
+                    </div>
+
+                    <!-- Cobertura de atribución: qué parte de la venta del período
+                         alcanzó a quedar asignada a un proveedor. Sin este número la
+                         tabla se lee como si fuera toda la venta y no lo es. -->
+                    <div class="rp-kpi-card rp-cobertura mb-3" id="coberturaBox" style="display:none;">
+                        <div class="d-flex justify-content-between align-items-end flex-wrap gap-2 mb-2">
+                            <div>
+                                <div class="rp-kpi-label" style="margin-top:0;" id="coberturaLabel">Cobertura de atribución de la venta</div>
+                                <div class="small text-muted mt-1" id="coberturaDetalle"></div>
+                            </div>
+                            <div class="rp-kpi-value" id="coberturaPct">-</div>
+                        </div>
+                        <div class="rp-bar"><div class="rp-bar-fill" id="coberturaBar" style="width:0%;"></div></div>
+                    </div>
+
+                    <!-- Nota permanente de metodología. Describe la atribución REAL
+                         (orden de compra → recepción → producto); la antigua
+                         coincidencia de texto entre el nombre de la OC y el código de
+                         artículo ya no se usa. -->
+                    <div class="alert alert-light border py-2 small mb-2 d-flex align-items-start gap-2">
+                        <i class="bi bi-info-circle-fill text-primary"></i>
+                        <div>
+                            <strong>Cómo se asigna la venta a cada proveedor.</strong>
+                            Cada artículo vendido se asigna al proveedor que lo trajo, siguiendo la
+                            orden de compra y la recepción en bodega con la que entró. Si un artículo
+                            se compró a más de un proveedor, queda con el de la recepción más
+                            reciente: la misma venta nunca se cuenta dos veces, así que las filas de la
+                            tabla <u>sí</u> se pueden sumar.
+                            <br>
+                            Lo que se vendió sin una orden de compra que lo respalde en el período
+                            consultado <u>no se reparte</u> entre proveedores: queda fuera de la tabla y
+                            se informa arriba, en <em>Cobertura de atribución</em>. Por eso las columnas
+                            marcadas con <strong>*</strong> son parciales: son cifras exactas, pero sólo de
+                            la venta que se pudo asignar.
+                            <br>
+                            El filtro <strong>Sucursal</strong> aplica <u>solo a la venta</u>: comprados y
+                            recepcionados siguen siendo de toda la cadena, así que el % venta baja al
+                            filtrar por una tienda.
+                        </div>
                     </div>
 
                     <div class="alert alert-info py-2 small" id="metodologiaBox" style="display:none;"></div>
@@ -139,13 +188,13 @@
                                     <th style="min-width:180px;">Proveedor</th>
                                     <th class="text-center">Comprados</th>
                                     <th class="text-center">Recepcionados</th>
-                                    <th class="text-center">Vendidos</th>
+                                    <th class="text-center rp-th-estimado" title="PARCIAL: unidades vendidas de los artículos que este proveedor trajo, siguiendo la orden de compra y su recepción. Lo vendido sin orden de compra en el período no aparece aquí (ver Cobertura de atribución).">Vendidos*</th>
                                     <th class="text-center">% Recep.</th>
-                                    <th class="text-center">% Venta</th>
+                                    <th class="text-center rp-th-estimado" title="PARCIAL: vendidos sobre recepcionados. Con una Sucursal seleccionada se compara la venta de esa tienda contra la recepción de toda la cadena, así que baja.">% Venta*</th>
                                     <th class="text-end">Inversion</th>
                                     <th class="text-end">No inventariable</th>
-                                    <th class="text-end">Venta</th>
-                                    <th class="text-end">Margen</th>
+                                    <th class="text-end rp-th-estimado" title="PARCIAL: venta con IVA de los artículos asignados a este proveedor. Cada artículo pertenece a un solo proveedor, así que la columna es sumable.">Venta*</th>
+                                    <th class="text-end rp-th-estimado" title="PARCIAL: venta asignada menos el costo de la orden de compra prorrateado por las unidades vendidas (el costo real de cada venta no está registrado en el histórico). Es una aproximación del margen.">Margen*</th>
                                     <th class="text-center">Pend. recep.</th>
                                     <th class="text-center">Stock Disp.</th>
                                 </tr>
@@ -242,11 +291,30 @@ function cargarDatos() {
         $('#kpiInversion').text(fmtMoney(k.total_inversion));
         $('#kpiNoInv').text(fmtMoney(k.total_monto_no_inventariable || 0));
         $('#kpiMargen').text(fmtMoney(k.total_margen));
-        if ((k.total_documentos_no_inventariables || 0) > 0 || res.metodologia) {
-            $('#metodologiaBox').show().html(
-                `<strong>${k.total_documentos_no_inventariables || 0}</strong> documento(s) de compra sin detalle inventariable por <strong>${fmtMoney(k.total_monto_no_inventariable || 0)}</strong>. ` +
+        renderCobertura(k);
+
+        // Notas que dependen de los datos del período consultado.
+        const notas = [];
+        if ((k.total_documentos_no_inventariables || 0) > 0) {
+            notas.push(
+                `<strong>${k.total_documentos_no_inventariables}</strong> documento(s) de compra sin detalle de mercaderia por <strong>${fmtMoney(k.total_monto_no_inventariable || 0)}</strong>. ` +
                 'Se informan como compra por concepto/sin recepcion y no suman pares comprados, recepcionados ni vendidos.'
             );
+        }
+        if ((k.articulos_multiproveedor || 0) > 0) {
+            notas.push(
+                `<strong>${fmt(k.articulos_multiproveedor)}</strong> articulo(s) se compraron a mas de un proveedor. ` +
+                'Su venta no se duplica: queda asignada al proveedor de la recepcion mas reciente.'
+            );
+        }
+        if ((k.unidades_venta_por_nombre_oc || 0) > 0) {
+            notas.push(
+                `<strong>${fmt(k.unidades_venta_por_nombre_oc)}</strong> unidad(es) vendidas corresponden a lineas de orden de compra ` +
+                'todavia sin recepcionar: se asignaron por el codigo de articulo de la propia orden.'
+            );
+        }
+        if (notas.length) {
+            $('#metodologiaBox').show().html(notas.join('<br>'));
         } else {
             $('#metodologiaBox').hide().empty();
         }
@@ -263,7 +331,7 @@ function cargarDatos() {
                 const margenClass = p.margen >= 0 ? 'text-success' : 'text-danger';
 
                 tbody.append(`<tr>
-                    <td><strong>${p.proveedor_nombre}</strong><br><small class="text-muted">${p.proveedor_rut}</small></td>
+                    <td><strong>${p.proveedor_nombre}</strong><br><small class="text-muted">${p.proveedor_rut}${(p.articulos_atribuidos || 0) ? ` &middot; ${fmt(p.articulos_atribuidos)} art. asignados` : ''}</small></td>
                     <td class="text-center fw-bold">${fmt(p.pares_comprados)}</td>
                     <td class="text-center">${fmt(p.pares_recepcionados)}</td>
                     <td class="text-center fw-bold text-primary">${fmt(p.pares_vendidos)}</td>
@@ -286,6 +354,59 @@ function cargarDatos() {
         $('#rpLoader').hide();
         $('#tbodyRendimiento').html('<tr><td colspan="12" class="text-center text-danger py-4">Error de conexion</td></tr>');
     });
+}
+
+// Cobertura de atribución: qué parte de las unidades vendidas del período quedó
+// asignada a un proveedor. Es la clave para leer la tabla: con cobertura baja,
+// comparar proveedores entre sí sigue siendo válido, pero los totales de venta y
+// margen son sólo una fracción de la venta real del período.
+function renderCobertura(k) {
+    const atribuidas = k.total_vendidos || 0;
+    const sinAtribuir = k.unidades_venta_sin_atribuir || 0;
+    const totalVendido = atribuidas + sinAtribuir;
+    if (!totalVendido) {
+        $('#coberturaBox').hide();
+        return;
+    }
+    const pct = k.cobertura_atribucion_pct != null
+        ? k.cobertura_atribucion_pct
+        : Math.round(atribuidas / totalVendido * 1000) / 10;
+
+    // Con UN proveedor seleccionado el "resto" es simplemente la venta de los
+    // demas proveedores, no un problema de calidad del dato: el porcentaje se
+    // lee como participacion en la venta, no como cobertura.
+    const unProveedor = !!$('#filtroProveedor').val();
+
+    // Mismos cortes de color que las barras de % de la tabla.
+    const color = unProveedor ? '#405189'
+                : pct >= 80 ? '#0ab39c' : pct >= 50 ? '#f7b84b' : '#f06548';
+    $('#coberturaPct').text(pct + '%').css('color', color);
+    $('#coberturaBar').css({ width: Math.min(pct, 100) + '%', background: color });
+
+    if (unProveedor) {
+        $('#coberturaLabel').text('Participacion de este proveedor en la venta del periodo');
+        $('#coberturaDetalle').html(
+            `De <strong>${fmt(totalVendido)}</strong> unidades vendidas a publico en el periodo, ` +
+            `<strong>${fmt(atribuidas)}</strong> son de articulos que trajo este proveedor. ` +
+            'El resto corresponde a los demas proveedores y a lo vendido sin una orden de compra ' +
+            'que lo respalde. Quita el filtro de proveedor para ver la cobertura de atribucion del reporte completo.'
+        );
+        $('#coberturaBox').show();
+        return;
+    }
+
+    $('#coberturaLabel').text('Cobertura de atribución de la venta');
+    let detalle =
+        `De <strong>${fmt(totalVendido)}</strong> unidades vendidas a publico en el periodo, ` +
+        `<strong>${fmt(atribuidas)}</strong> se pudieron asignar a un proveedor y estan en la tabla. ` +
+        `Las otras <strong>${fmt(sinAtribuir)}</strong> (<strong>${fmtMoney(k.venta_sin_atribuir || 0)}</strong>) ` +
+        'no provienen de ninguna orden de compra del periodo consultado y quedan fuera.';
+    if (pct < 60) {
+        detalle += ' <strong class="text-danger">Ojo:</strong> las columnas de venta y margen cubren ' +
+                   'menos de dos tercios de lo vendido, no las leas como la venta total del periodo.';
+    }
+    $('#coberturaDetalle').html(detalle);
+    $('#coberturaBox').show();
 }
 
 function renderChart(data) {

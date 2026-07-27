@@ -1,4 +1,5 @@
 {% load static %}
+{% load permisos_tags %}
 {% include 'layout/header.html' %}
 {% include 'layout/menu.html' %}
 
@@ -535,12 +536,23 @@
                             <i class="ri-mail-line me-1"></i>
                             {{ usuario.email }}
                         </p>
-                        {% if empresa_user %}
+                        {# Se muestra la empresa/sucursal de la SESIÓN: es la que realmente
+                           determina el alcance de datos del sistema. `empresa_user` (flag
+                           active en BD) sólo se usa como respaldo si la sesión no la trae. #}
                         <p class="email mb-0 mt-1" style="opacity: 0.85;">
                             <i class="ri-building-line me-1"></i>
-                            {{ empresa_user.empresa.nombre }} - {{ empresa_user.sucursal.alias }}
+                            {{ request.session.nombreEmpresaActual|default:empresa_user.empresa.nombre|default:"Sin empresa" }}
+                            &middot;
+                            <i class="ri-store-3-line me-1"></i>
+                            {{ request.session.alias|default:empresa_user.sucursal.alias|default:"Sin sucursal" }}
+                            {% tiene_permiso 'cambiar_empresa' 'puede_ver' as puede_cambiar_sucursal %}
+                            {% if puede_cambiar_sucursal %}
+                            <a href="{% url 'cambiar_empresa' %}" class="ms-2"
+                               style="color: var(--nexo-white); text-decoration: underline; opacity: .9;">
+                                Cambiar
+                            </a>
+                            {% endif %}
                         </p>
-                        {% endif %}
                     </div>
                 </div>
                 <div class="col-auto d-none d-md-block">
@@ -551,7 +563,7 @@
                                     {{ sesiones|length }}
                                 </div>
                                 <div class="profile-stat-label" style="color: rgba(255,255,255,0.7);">
-                                    Sesiones Activas
+                                    Sesiones registradas
                                 </div>
                             </div>
                         </div>
@@ -589,8 +601,11 @@
                                 <div class="col-md-6">
                                     <div class="nexo-form-group">
                                         <label>Correo Electrónico</label>
-                                        <input type="email" class="nexo-form-control" name="email" 
+                                        <input type="email" class="nexo-form-control" name="email"
                                                value="{{ usuario.email }}" required>
+                                        <span class="nexo-form-hint">
+                                            A esta dirección se envían los enlaces de recuperación de contraseña.
+                                        </span>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -641,6 +656,12 @@
                     </div>
                     <div class="nexo-card-body">
                         {% if sesiones %}
+                            <div class="alert alert-warning py-2 px-3 mb-3" style="font-size: .8rem;">
+                                <i class="ri-information-line me-1"></i>
+                                Un registro se mantiene en la lista hasta que se cierra con el botón
+                                <strong>Cerrar</strong>: una sesión que caducó sola puede seguir apareciendo.
+                                Fíjate en la antigüedad de la última actividad.
+                            </div>
                             <div id="sesionesContainer">
                             {% for sesion in sesiones %}
                                 <div class="session-item {% if sesion.session_key == sesion_actual_key %}current{% endif %}" data-id="{{ sesion.id }}">
@@ -666,6 +687,10 @@
                                             <span class="mx-2">•</span>
                                             <i class="ri-time-line me-1"></i>
                                             Última actividad: {{ sesion.ultima_actividad|date:"d/m/Y H:i" }}
+                                            <span class="text-muted">(hace {{ sesion.ultima_actividad|timesince }})</span>
+                                            <span class="mx-2">•</span>
+                                            <i class="ri-login-circle-line me-1"></i>
+                                            Inicio: {{ sesion.fecha_inicio|date:"d/m/Y H:i" }}
                                         </p>
                                     </div>
                                     {% if sesion.session_key != sesion_actual_key %}
@@ -771,14 +796,32 @@
                         </div>
                         <div class="mb-3">
                             <small class="text-muted">Último acceso</small>
+                            {# `fecha_ultimo_acceso` no la puebla nadie (el login nunca llama a
+                               actualizar_ultimo_acceso), por eso se usa `last_login`, que Django
+                               sí escribe en cada inicio de sesión. #}
                             <p class="mb-0 fw-semibold">
-                                {% if usuario.fecha_ultimo_acceso %}
+                                {% if usuario.last_login %}
+                                    {{ usuario.last_login|date:"d/m/Y H:i" }}
+                                    <span class="text-muted fw-normal">(hace {{ usuario.last_login|timesince }})</span>
+                                {% elif usuario.fecha_ultimo_acceso %}
                                     {{ usuario.fecha_ultimo_acceso|date:"d/m/Y H:i" }}
                                 {% else %}
                                     No registrado
                                 {% endif %}
                             </p>
                         </div>
+                        <div class="mb-3">
+                            <small class="text-muted">Rol en el sistema</small>
+                            <p class="mb-0 fw-semibold">{{ usuario.get_rol_display }}</p>
+                        </div>
+                        {% if usuario.pin_autorizacion and usuario.pin_autorizacion_actualizado %}
+                        <div class="mb-3">
+                            <small class="text-muted">PIN de autorización</small>
+                            <p class="mb-0 fw-semibold">
+                                Actualizado el {{ usuario.pin_autorizacion_actualizado|date:"d/m/Y H:i" }}
+                            </p>
+                        </div>
+                        {% endif %}
                         <div>
                             <small class="text-muted">Estado de cuenta</small>
                             <p class="mb-0">

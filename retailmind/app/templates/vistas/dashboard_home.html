@@ -1,5 +1,6 @@
 {% load static %}
 {% load humanize %}
+{% load permisos_tags %}
 
 {% include 'layout/header.html' %}
 {% include 'layout/menu.html' %}
@@ -117,6 +118,35 @@
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
 .live-dot { width:7px; height:7px; background:var(--nexo-accent); border-radius:50%; animation:pulse 2s ease-in-out infinite; display:inline-block; }
 
+/* Chip "en vivo": lo unico que se refresca sin recalcular todo el tablero */
+.home-live { display:flex; align-items:center; gap:.45rem; background:var(--nexo-white); border:1px solid var(--nexo-gray-300); border-radius:var(--nexo-radius-md); padding:.35rem .7rem; font-size:.78rem; color:var(--nexo-gray-700); }
+.home-live b { color:var(--nexo-secondary); font-weight:700; }
+.home-live.is-stale { border-color:var(--nexo-warning); background:rgba(255,176,32,.12); color:#996B00; }
+.home-refresh[disabled] { opacity:.6; cursor:progress; }
+.home-refresh .ri-refresh-line.spinning { animation:spin 1s linear infinite; }
+@keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+.home-recalcular { background:none; border:none; color:var(--nexo-primary); font-size:.75rem; font-weight:600; cursor:pointer; padding:.2rem .35rem; }
+.home-recalcular:hover { text-decoration:underline; }
+.home-stock-live { font-size:.68rem; color:var(--nexo-gray-500); margin-top:.35rem; }
+
+/* Notebooks de tienda 1366x768: que las 4 tarjetas KPI y las alertas
+   entren sin scroll (antes la fila de Salud de Inventario las empujaba fuera) */
+@media (max-height: 820px) {
+    .home-dashboard { padding:.7rem; }
+    .home-header { margin-bottom:.7rem; padding-bottom:.5rem; }
+    .home-header h1 { font-size:1.2rem; }
+    .home-kpi-grid { gap:.6rem; margin-bottom:.7rem; }
+    .home-kpi { padding:.65rem .85rem; }
+    .home-kpi-val { font-size:1.25rem; }
+    .home-kpi-top { margin-bottom:.4rem; }
+    .home-kpi-icon { width:32px; height:32px; font-size:1rem; }
+    .home-kpi-footer { margin-top:.45rem; padding-top:.45rem; }
+    .home-section-title { margin-bottom:.5rem; }
+    .home-alert { padding:.55rem .8rem; margin-bottom:.4rem; }
+    .home-pending-grid { gap:.6rem; margin-bottom:.9rem; }
+    .home-pending-item { padding:.6rem .8rem; }
+}
+
 /* Additional Responsive */
 @media(max-width:768px){
     .home-header { flex-direction:column; gap:0.5rem; }
@@ -152,7 +182,13 @@
                 {{ sucursal_actual.alias }}
             </div>
             {% endif %}
-            <button class="home-refresh" onclick="location.reload()" id="refreshBtn">
+            <!-- En vivo: se refresca con las APIs ligeras, sin recalcular las ~45
+                 consultas del tablero completo -->
+            <div class="home-live" id="homeLive" title="Ventas de hoy consultadas en vivo; el resto del tablero es del ultimo calculo completo">
+                <span class="live-dot"></span>
+                <span id="homeLiveTexto">Consultando ventas de hoy…</span>
+            </div>
+            <button class="home-refresh" onclick="refrescarHome()" id="refreshBtn" title="Refresca solo ventas de hoy y alertas de stock">
                 <i class="ri-refresh-line"></i> Actualizar
             </button>
         </div>
@@ -172,7 +208,7 @@
             <div class="home-kpi-val">${{ ventas.hoy|floatformat:0|intcomma }}</div>
             <div class="home-kpi-label">Ventas Hoy</div>
             <div class="home-kpi-footer">
-                <div class="home-kpi-stat"><div class="home-kpi-sv">{{ ventas.tickets_hoy|intcomma }}</div><div class="home-kpi-sl">Tickets</div></div>
+                <div class="home-kpi-stat"><div class="home-kpi-sv" id="kpiTicketsHoy">{{ ventas.tickets_hoy|intcomma }}</div><div class="home-kpi-sl">Tickets</div></div>
                 <div class="home-kpi-stat"><div class="home-kpi-sv">{{ ventas.unidades_hoy|intcomma }}</div><div class="home-kpi-sl">Unidades</div></div>
                 <div class="home-kpi-stat"><div class="home-kpi-sv">${{ ventas.ticket_promedio|floatformat:0|intcomma }}</div><div class="home-kpi-sl">Promedio</div></div>
             </div>
@@ -189,6 +225,11 @@
                 <div class="home-kpi-stat"><div class="home-kpi-sv">{{ stock.skus_con_stock|intcomma }}</div><div class="home-kpi-sl">SKUs c/Stock</div></div>
                 <div class="home-kpi-stat"><div class="home-kpi-sv">{{ stock.total_unidades|intcomma }}</div><div class="home-kpi-sl">Unidades</div></div>
                 <div class="home-kpi-stat"><div class="home-kpi-sv">{{ stock.rotacion_mes }}%</div><div class="home-kpi-sl">Rotacion</div></div>
+            </div>
+            <div class="home-stock-live">
+                <i class="ri-pulse-line"></i>
+                Stock critico (1-5 u.): <b id="liveStockCritico">{{ stock.stock_critico|intcomma }}</b>
+                &middot; SKUs en cero: <b id="liveSinStock">{{ stock.sin_stock|intcomma }}</b>
             </div>
         </div>
 
@@ -559,7 +600,7 @@
                 {% endfor %}
             </div>
             <div class="home-panel-footer">
-                <a href="/app/resumen-existencias/" class="home-panel-link">Ver Existencias <i class="ri-arrow-right-line"></i></a>
+                <a href="{% url 'ver_resumen_existencias' %}" class="home-panel-link">Ver Existencias <i class="ri-arrow-right-line"></i></a>
             </div>
         </div>
 
@@ -610,19 +651,56 @@
     <div class="home-section-title">
         <i class="ri-compass-3-line text-primary"></i> Ir a Dashboards
     </div>
+    {% puede_ver_opcion_tag 'dashboard_ventas' as puede_dash_ventas %}
+    {% puede_ver_opcion_tag 'dashboard_productos' as puede_dash_productos %}
+    {% puede_ver_opcion_tag 'dashboard_compras_estrategico' as puede_dash_compras %}
+    {% puede_ver_opcion_tag 'dashboard_fifo' as puede_dash_fifo %}
+    {% puede_ver_opcion_tag 'dashboard_documentos' as puede_dash_documentos %}
+    {% puede_ver_opcion_tag 'dashboard_despachos' as puede_dash_despachos %}
+    {% puede_ver_opcion_tag 'dashboard_requerimientos' as puede_dash_requerimientos %}
     <div class="home-nav-row">
+        {% if puede_dash_ventas %}
         <a href="{% url 'dashboard_ventas_mejorado' %}" class="home-nav-btn">
             <div class="home-nav-icon" style="background:rgba(0,212,170,.15); color:var(--nexo-accent);"><i class="ri-line-chart-line"></i></div>
             <span class="home-nav-label">Dashboard Ventas</span>
         </a>
-        <a href="{% url 'dashboard_productos' %}" class="home-nav-btn">
+        {% endif %}
+        {% if puede_dash_productos %}
+        <a href="{% url 'dashboard_productos_mejorado' %}" class="home-nav-btn">
             <div class="home-nav-icon" style="background:rgba(139,92,246,.15); color:#8B5CF6;"><i class="ri-t-shirt-line"></i></div>
-            <span class="home-nav-label">Dashboard Productos</span>
+            <span class="home-nav-label">Dashboard Existencias</span>
         </a>
-        <a href="{% url 'dashboard_compras_estrategico' %}" class="home-nav-btn">
+        {% endif %}
+        {% if puede_dash_compras %}
+        <a href="{% url 'verDashboardComprasMejorado' %}" class="home-nav-btn">
             <div class="home-nav-icon" style="background:rgba(0,102,255,.15); color:var(--nexo-primary);"><i class="ri-shopping-bag-line"></i></div>
             <span class="home-nav-label">Dashboard Compras</span>
         </a>
+        {% endif %}
+        {% if puede_dash_fifo %}
+        <a href="{% url 'dashboard_fifo' %}" class="home-nav-btn">
+            <div class="home-nav-icon" style="background:rgba(255,176,32,.15); color:var(--nexo-warning);"><i class="ri-stack-line"></i></div>
+            <span class="home-nav-label">Dashboard FIFO / Lotes</span>
+        </a>
+        {% endif %}
+        {% if puede_dash_documentos %}
+        <a href="{% url 'dashboard_documentos' %}" class="home-nav-btn">
+            <div class="home-nav-icon" style="background:rgba(0,102,255,.15); color:var(--nexo-primary);"><i class="ri-file-list-3-line"></i></div>
+            <span class="home-nav-label">Dashboard Documentos</span>
+        </a>
+        {% endif %}
+        {% if puede_dash_despachos %}
+        <a href="{% url 'dashboard_despachos' %}" class="home-nav-btn">
+            <div class="home-nav-icon" style="background:rgba(0,212,170,.15); color:var(--nexo-accent);"><i class="ri-truck-line"></i></div>
+            <span class="home-nav-label">Dashboard Despachos</span>
+        </a>
+        {% endif %}
+        {% if puede_dash_requerimientos %}
+        <a href="{% url 'dashboard_requerimientos' %}" class="home-nav-btn">
+            <div class="home-nav-icon" style="background:rgba(255,77,77,.15); color:var(--nexo-error);"><i class="ri-customer-service-2-line"></i></div>
+            <span class="home-nav-label">Dashboard Requerimientos</span>
+        </a>
+        {% endif %}
     </div>
 
     <!-- ===== Acciones Rapidas ===== -->
@@ -695,3 +773,109 @@ function renderChartVentaGeneral(datos) {
 </script>
 
 {% include 'layout/footer.html' %}
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+// REFRESCO PARCIAL DEL CENTRO DE CONTROL
+// El boton "Actualizar" hacia location.reload(), es decir, recalculaba las ~45
+// consultas del tablero (varias sobre Producto_Talla, 100k+ filas) para ver si
+// entro una venta. Ahora consulta las dos APIs ligeras que ya existian y solo
+// recarga la pagina completa si el usuario lo pide, cuando algo cambio de verdad.
+// ═══════════════════════════════════════════════════════════════════════════════
+(function() {
+    var API_VENTAS = '/app/dashboard/api/ventas-tiempo-real/';
+    var API_STOCK  = '/app/dashboard/api/stock-alertas/';
+    var INTERVALO_MS = 180000;   // 3 min
+
+    var $chip = document.getElementById('homeLive');
+    var $txt  = document.getElementById('homeLiveTexto');
+    var $btn  = document.getElementById('refreshBtn');
+    // Linea base para detectar movimiento: se toma de la PRIMERA respuesta de la
+    // API, no del valor renderizado. La API cuenta los tickets de otra forma que
+    // el tablero (filtra por Ticket.fecha, que es auto_now, y no excluye los
+    // tickets de cambio), asi que comparar contra el render daria diferencias
+    // falsas. Comparando contra si misma, la variacion si es real.
+    var ticketsBase = null;
+
+    function money(n) { return '$' + Math.round(n || 0).toLocaleString('es-CL'); }
+    function num(n) { return (n || 0).toLocaleString('es-CL'); }
+    function horaAhora() {
+        var d = new Date();
+        return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    }
+
+    function pedir(url) {
+        return fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .catch(function() { return null; });
+    }
+
+    function pintarVentas(data) {
+        if (!data || !data.success) {
+            $txt.textContent = 'No se pudo consultar la venta de hoy';
+            return;
+        }
+        var partes = [];
+        if (data.ultima_venta && data.ultima_venta.hora) {
+            partes.push('Ultima venta <b>' + data.ultima_venta.hora + '</b> (' + money(data.ultima_venta.monto) + ')');
+        } else {
+            partes.push('Sin ventas registradas hoy');
+        }
+        partes.push('<span style="color:var(--nexo-gray-500);">al ' + horaAhora() + '</span>');
+        $txt.innerHTML = partes.join(' &middot; ');
+
+        // Si entraron ventas despues de abrir la pagina, el resto del tablero
+        // (montos, top productos, grafico) quedo viejo: se ofrece recalcular.
+        if (ticketsBase === null) { ticketsBase = data.tickets_hoy || 0; }
+        var nuevos = (data.tickets_hoy || 0) - ticketsBase;
+        var previo = document.getElementById('homeRecalcular');
+        if (previo) previo.remove();
+        if (nuevos > 0) {
+            $chip.classList.add('is-stale');
+            var b = document.createElement('button');
+            b.id = 'homeRecalcular';
+            b.className = 'home-recalcular';
+            b.innerHTML = '<i class="ri-refresh-line"></i> ' + nuevos + ' venta' + (nuevos === 1 ? '' : 's') + ' nueva' + (nuevos === 1 ? '' : 's') + ': recalcular tablero';
+            b.onclick = function() { location.reload(); };
+            $chip.parentNode.insertBefore(b, $btn);
+        } else {
+            $chip.classList.remove('is-stale');
+        }
+    }
+
+    function pintarStock(data) {
+        if (!data || !data.success) return;
+        var c = document.getElementById('liveStockCritico');
+        var s = document.getElementById('liveSinStock');
+        if (c) c.textContent = num(data.stock_critico);
+        if (s) s.textContent = num(data.sin_stock);
+    }
+
+    // silencioso = latido automatico: solo la consulta barata de ventas.
+    // El conteo de stock (varias cuentas sobre Producto_Talla) se pide unicamente
+    // cuando el usuario aprieta "Actualizar", para no cargar la base cada 3 min
+    // por cada usuario conectado.
+    window.refrescarHome = function(silencioso) {
+        var icono = $btn ? $btn.querySelector('i') : null;
+        if (!silencioso && $btn) { $btn.disabled = true; if (icono) icono.classList.add('spinning'); }
+        if (!silencioso && $txt) { $txt.textContent = 'Actualizando…'; }
+
+        var peticiones = silencioso
+            ? [pedir(API_VENTAS)]
+            : [pedir(API_VENTAS), pedir(API_STOCK)];
+
+        Promise.all(peticiones).then(function(res) {
+            pintarVentas(res[0]);
+            if (!silencioso) pintarStock(res[1]);
+            if ($btn) { $btn.disabled = false; if (icono) icono.classList.remove('spinning'); }
+        });
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        window.refrescarHome(true);
+        setInterval(function() {
+            if (!document.hidden) window.refrescarHome(true);   // no latir en pestañas ocultas
+        }, INTERVALO_MS);
+    });
+})();
+</script>

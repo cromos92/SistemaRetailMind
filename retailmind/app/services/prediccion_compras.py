@@ -849,16 +849,41 @@ def calcular_predicciones_demanda(temporada=None, anio=None):
                 round(semanas_activo / max(semanas_temp, 1), 2)
             )))
         else:
+            # Sin serie de ventas propia: se estima por similitud de grupo.
+            #
+            # OJO con las unidades. `velocidad_semanas_p50` es una DURACIÓN
+            # (semanas medianas que tarda el grupo en agotar su stock), no una
+            # tasa de venta. Multiplicarla por `semanas_temp` daba semanas²
+            # guardadas como unidades: cuanto MÁS LENTO rotaba históricamente
+            # el grupo, MÁS unidades recomendaba comprar — exactamente al
+            # revés. Con p50 de 798 semanas llegaba a pedir >1.000 u. de un
+            # artículo sin ventas.
+            #
+            # La conversión correcta es la misma que ya usa
+            # evaluar_alertas_velocidad: unidades/semana = stock_ref / p50.
             vel = _buscar_velocidad_historica(producto)
-            if vel:
-                demanda_corr = int(float(vel.velocidad_semanas_p50) * semanas_temp)
+            stock_ref = 0
+            if sit:
+                stock_ref = int(sit.stock_total_ingresado or sit.stock_inicial or 0)
+            if stock_ref <= 0:
+                stock_ref = max(0, sum(t.stock or 0 for t in producto.producto_talla.all()))
+
+            p50 = float(vel.velocidad_semanas_p50) if vel else 0.0
+            if vel and p50 > 0 and stock_ref > 0:
+                unidades_por_semana = stock_ref / p50
+                demanda_corr = int(unidades_por_semana * semanas_temp)
                 metodo = 'similitud'
                 confianza = Decimal('0.35')
                 articulos_usados = vel.total_articulos_base
             else:
-                demanda_corr = semanas_temp * 5
+                # Ni serie propia ni base para convertir el benchmark a
+                # unidades. Antes se inventaba `semanas_temp * 5` (40 u. para
+                # cualquier producto desconocido), que es la principal fuente
+                # de compras fantasma. Es preferible no recomendar nada.
+                demanda_corr = 0
                 metodo = 'similitud'
-                confianza = Decimal('0.15')
+                confianza = Decimal('0.05')
+                articulos_usados = vel.total_articulos_base if vel else 0
 
         abc_factor = _factor_seguridad_abc(producto, config)
         demanda_final = int(demanda_corr * float(abc_factor))

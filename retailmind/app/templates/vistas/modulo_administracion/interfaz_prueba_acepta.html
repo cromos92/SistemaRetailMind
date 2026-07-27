@@ -117,12 +117,31 @@
             <div class="header-section">
                 <h1><i class="fas fa-file-invoice"></i> Interfaz de Prueba - Generador TXT Acepta</h1>
                 <p class="mb-0">Genera archivos TXT para el sistema de facturación electrónica Acepta</p>
+                <a href="{% url 'verHome' %}" class="btn btn-light btn-sm mt-3">
+                    <i class="fas fa-arrow-left"></i> Volver al sistema
+                </a>
             </div>
 
             <!-- Alert de información -->
             <div class="form-section">
+                <div class="alert alert-warning">
+                    <i class="fas fa-triangle-exclamation"></i>
+                    <strong>Léelo antes de usar esta pantalla.</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>Esta herramienta <strong>sólo arma un archivo TXT y te lo descarga</strong>:
+                            no emite el documento, no lo envía al SII ni a Acepta, y
+                            <strong>no consume folios</strong> del sistema.</li>
+                        <li>Pero el archivo que descargas es un DTE válido. Si lo cargas en Acepta con
+                            un <strong>RUT emisor real</strong>, emitirás un documento tributario real
+                            a nombre de esa empresa.</li>
+                        <li>Los datos de ejemplo usan los <strong>RUT de prueba del SII</strong>
+                            (55.555.555-5 y 66.666.666-6). No los reemplaces por RUT productivos
+                            salvo que sepas exactamente qué folio estás usando: repetir un folio ya
+                            emitido genera un documento duplicado ante el SII.</li>
+                    </ul>
+                </div>
                 <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i> 
+                    <i class="fas fa-info-circle"></i>
                     <strong>Instrucciones:</strong> Selecciona el tipo de documento, completa los datos y genera el archivo TXT para Acepta.
                 </div>
 
@@ -859,16 +878,20 @@
         }
 
         function cargarEjemplo() {
-            // Cargar datos de ejemplo QUE FUNCIONAN CORRECTAMENTE ✅
-            document.getElementById('folio').value = '4578';  // ✅ FOLIO ACTUALIZADO
+            // Datos de ejemplo NEUTROS.
+            // OJO: aquí NO deben ir RUT ni folios productivos. Antes se precargaba el RUT
+            // de una empresa real del sistema junto a un folio que YA estaba emitido:
+            // cargar ese TXT en Acepta habría generado un DTE duplicado real.
+            // Se usan los RUT de prueba del SII y folio 1.
+            document.getElementById('folio').value = '1';
             document.getElementById('fecha_emision').valueAsDate = new Date();
-            document.getElementById('forma_pago').value = '1';  // ✅ Contado (sin fecha vencimiento)
-            
+            document.getElementById('forma_pago').value = '1';  // Contado (sin fecha vencimiento)
+
             // Activar campo de fecha vencimiento
             toggleFechaVencimiento();
-            
-            // Datos del EMISOR - RUT actualizado
-            document.getElementById('emisor_rut').value = '78.503.140-7';  // ✅ RUT EMISOR
+
+            // Datos del EMISOR - RUT de prueba SII
+            document.getElementById('emisor_rut').value = '55.555.555-5';
             document.getElementById('emisor_razon_social').value = 'EMPRESA DEMO LTDA';
             document.getElementById('emisor_giro').value = 'COMERCIO AL POR MENOR';
             document.getElementById('emisor_acteco').value = '521000';
@@ -877,8 +900,8 @@
             document.getElementById('emisor_ciudad').value = 'SANTIAGO';
             document.getElementById('emisor_telefono').value = '+56912345678';
             
-            // Datos del RECEPTOR - RUT actualizado
-            document.getElementById('receptor_rut').value = '18.312.585-0';  // ✅ RUT ACTUALIZADO
+            // Datos del RECEPTOR - RUT genérico de prueba SII
+            document.getElementById('receptor_rut').value = '66.666.666-6';
             document.getElementById('receptor_razon_social').value = 'CLIENTE EJEMPLO S.A.';
             document.getElementById('receptor_giro').value = 'COMERCIO';
             document.getElementById('receptor_direccion').value = 'CALLE COMERCIO 456';
@@ -931,18 +954,18 @@
             // Obtener fecha vencimiento para el mensaje
             const fechaVenc = document.getElementById('fecha_vencimiento').value;
             
-            alert('✅ Datos de ejemplo cargados correctamente\n\n' +
-                  'Folio: 4578\n' +
-                  'Emisor: 78.503.140-7 (EMPRESA DEMO LTDA)\n' +
-                  'Receptor: 18.312.585-0 (CLIENTE EJEMPLO S.A.)\n' +
+            alert('Datos de ejemplo cargados (RUT de prueba SII)\n\n' +
+                  'Folio: 1\n' +
+                  'Emisor: 55.555.555-5 (EMPRESA DEMO LTDA)\n' +
+                  'Receptor: 66.666.666-6 (CLIENTE EJEMPLO S.A.)\n' +
                   'Forma de Pago: CONTADO\n' +
                   'Productos: 2 ($190,375)\n' +
                   'Descuento Global: -$10,000\n' +
                   'Neto Final: $180,375\n' +
                   'IVA (19%): $34,271\n' +
                   'Total: $214,646\n' +
-                  'Referencia: OC-98765 ✅\n\n' +
-                  '¡Listo para generar el TXT!');
+                  'Referencia: OC-98765\n\n' +
+                  'Listo para generar el TXT (no se emite ningun documento).');
         }
 
         function limpiarFormulario() {

@@ -28,7 +28,8 @@
 
 /* Header principal del dashboard */
 .dashboard-header {
-    background: linear-gradient(135deg, #405189 0%, #20c997 100%);
+    /* Gradiente canonico de modulo (#405189 -> #0ab39c) */
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
     border-radius: 20px;
     padding: 28px 32px;
     margin-bottom: 24px;
@@ -467,6 +468,17 @@
         font-size: 1rem;
     }
 }
+
+/* Notebooks de tienda (1366x768): cabecera + filtros + primera fila de KPIs
+   sin scroll */
+@media (max-height: 820px) {
+    .dashboard-header { padding: 14px 20px; margin-bottom: 14px; border-radius: 14px; }
+    .dashboard-header h1 { font-size: 1.3rem; }
+    .dashboard-header p { font-size: .82rem; margin-top: 4px; }
+    .filter-section { padding: 12px 16px; margin-bottom: 14px; }
+    .kpi-card { padding: 14px; }
+    .section-header { margin-bottom: 10px; }
+}
 </style>
 
 <div class="page-content">
@@ -483,8 +495,9 @@
                     <p>Análisis integral del inventario, rotación y rendimiento de productos</p>
                 </div>
                 <div class="col-lg-4 text-end">
-                    <button class="btn btn-light me-2" onclick="exportarReporte()">
-                        <i class="bi bi-download me-1"></i>Exportar
+                    <button class="btn btn-light me-2" onclick="exportarReporte()"
+                            title="Pregunta si quieres el listado con los filtros aplicados o el catálogo completo">
+                        <i class="bi bi-download me-1"></i>Exportar…
                     </button>
                     <button class="btn btn-light" onclick="actualizarDashboard()">
                         <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
@@ -1566,8 +1579,49 @@ function actualizarDashboard() {
     cargarDashboard();
 }
 
+// El boton "Exportar" de la cabecera baja el CATALOGO COMPLETO, sin ninguno de
+// los filtros de la pantalla y sin distinguir empresa ni sucursal. Antes se
+// descargaba de golpe; ahora se dice que es y se ofrece primero la version
+// filtrada (misma que el boton Excel de la tabla).
 function exportarReporte() {
-    window.open('/app/exportar_dashboard_productos/', '_blank');
+    var filtros = [];
+    var cat = $('#filtroCategoria option:selected').text().trim();
+    var suc = $('#filtroSucursal option:selected').text().trim();
+    var est = $('#filtroEstadoStock option:selected').text().trim();
+    var per = $('#filtroPeriodo option:selected').text().trim();
+    if ($('#filtroCategoria').val()) filtros.push('Categoría: ' + cat);
+    if ($('#filtroSucursal').val()) filtros.push('Sucursal: ' + suc);
+    if ($('#filtroEstadoStock').val()) filtros.push('Estado stock: ' + est);
+    filtros.push('Período ventas: ' + per);
+
+    if (typeof Swal === 'undefined') { exportarTabla(); return; }
+
+    Swal.fire({
+        icon: 'question',
+        title: '¿Qué quieres exportar?',
+        html: '<div style="text-align:left;font-size:.9rem;">'
+            + '<p class="mb-2"><b>Con los filtros de la pantalla</b> (recomendado):</p>'
+            + '<ul class="mb-3" style="padding-left:1.1rem;">'
+            + filtros.map(function(f) { return '<li>' + f + '</li>'; }).join('')
+            + '</ul>'
+            + '<p class="mb-1" style="color:#b45309;"><b>Catálogo completo:</b> baja TODOS los SKU del sistema '
+            + '(todas las empresas y sucursales, con y sin stock), sin ningún filtro. '
+            + 'Es un archivo muy grande y no corresponde a lo que estás viendo.</p>'
+            + '</div>',
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: '<i class="bi bi-funnel"></i> Con filtros',
+        denyButtonText: '<i class="bi bi-database-down"></i> Catálogo completo',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#405189',
+        denyButtonColor: '#f7b84b'
+    }).then(function(r) {
+        if (r.isConfirmed) {
+            exportarTabla();
+        } else if (r.isDenied) {
+            window.open('/app/exportar_dashboard_productos/', '_blank');
+        }
+    });
 }
 
 function exportarTabla() {

@@ -993,7 +993,13 @@
         </div>
 
         <div class="nexo-control-group" id="grupo-categoria" style="display: block;">
-            <label for="filtro-categoria">Categoría:</label>
+            <!-- OJO: a diferencia de los otros reportes, aquí el filtro NO expande
+                 la rama v1.2: elegir un padre trae solo lo colgado literalmente
+                 de él. Se avisa para que un total bajo no se lea como "sin stock". -->
+            <label for="filtro-categoria">
+                Categoría:
+                <i class="ri-information-line" title="Este filtro NO incluye las subcategorías: al elegir una categoría padre verás solo los productos colgados directamente de ella. Para la rama completa usa el Reporte de Existencias."></i>
+            </label>
             <select id="filtro-categoria">
                 <option value="">Todas las categorías</option>
             </select>
@@ -1017,9 +1023,18 @@
         </button>
     </div>
 
+    <!-- En modo histórico solo las UNIDADES son reconstruidas a la fecha; los
+         importes se calculan con el costo y el precio de HOY. Decirlo aquí evita
+         que se use como cierre contable. -->
     <div id="alerta-historico" class="nexo-alert nexo-alert-warning" style="display: none;">
         <span class="nexo-alert-icon">⏰</span>
-        <span id="alerta-historico-texto">Mostrando inventario histórico al cierre del <strong id="fecha-historico"></strong> (incluye los movimientos de ese día)</span>
+        <span id="alerta-historico-texto">
+            Mostrando inventario histórico al cierre del <strong id="fecha-historico"></strong> (incluye los movimientos de ese día).
+            <br>
+            <strong>Solo las unidades son de esa fecha:</strong> los montos se valorizan con el costo y el precio
+            <u>de hoy</u>, así que no sirven para conciliar con contabilidad. Además, los ingresos migrados del
+            sistema antiguo pueden no revertirse, lo que deja el stock histórico algo alto.
+        </span>
     </div>
 
     <div id="alerta-exclusiones" class="nexo-alert nexo-alert-warning" style="display: none;">

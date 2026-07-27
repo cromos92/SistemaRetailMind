@@ -601,8 +601,8 @@
                                                 <i class="ri-shopping-cart-line me-1"></i> Productos del Ticket
                                             </h6>
                                             <div class="d-flex gap-1">
-                                                <button class="btn btn-sm btn-outline-warning" onclick="mostrarModalDescuentoGlobal()" title="Aplicar descuento distribuido a toda la venta (F12)">
-                                                    <i class="ri-price-tag-3-line me-1"></i> Dcto. Global <kbd style="font-size:0.55rem;opacity:0.7">F12</kbd>
+                                                <button class="btn btn-sm btn-outline-warning" onclick="mostrarModalDescuentoGlobal()" title="Aplicar descuento distribuido a toda la venta (Ctrl+D)">
+                                                    <i class="ri-price-tag-3-line me-1"></i> Dcto. Global <kbd style="font-size:0.55rem;opacity:0.7">Ctrl+D</kbd>
                                                 </button>
                                                 <button class="btn btn-sm btn-avanzado-pos" onclick="mostrarModalAgregarProducto()" title="Búsqueda avanzada con filtros (F3)">
                                                     <i class="ri-search-2-line me-1"></i> Avanzado
@@ -683,8 +683,8 @@
                                 </div>
                             </div>
 
-                            <!-- Panel Derecho: Resumen (sticky arriba) + Pagos -->
-                            <div class="col-md-4">
+                            <!-- Panel Derecho: Resumen (fijo arriba) + métodos (scroll) + Pagos (pie fijo) -->
+                            <div class="col-md-4 pos-checkout-col">
                                 <!-- ===== RESUMEN STICKY (encabezado fijo) ===== -->
                                 <div class="pos-resumen-sticky-wrapper">
                                     <div class="card shadow-sm pos-resumen-card">
@@ -740,6 +740,11 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- ===== ZONA CON SCROLL PROPIO (fidelización + vale + métodos) =====
+                                     Sólo esta zona se desplaza: el resumen queda arriba y la lista de
+                                     pagos abajo, siempre a la vista en pantallas de 15" (1366x768). -->
+                                <div class="pos-checkout-scroll">
 
                                 <!-- ===== TARJETA FIDELIZACIÓN (solo si hay cliente fidelizado) ===== -->
                                 <div id="empresaNoFidelizaAviso" class="alert alert-info py-2 small mb-0 mt-2" style="display:none;">
@@ -800,7 +805,7 @@
                                     </div>
                                     <div class="card-body p-2">
                                         <!-- Atajos rápidos -->
-                                        <div class="d-flex align-items-center gap-1 mb-2 px-1 flex-wrap" style="font-size:0.6rem;">
+                                        <div class="d-flex align-items-center gap-1 mb-2 px-1 flex-wrap pos-atajos-hint" style="font-size:0.6rem;">
                                             <i class="ri-keyboard-box-line text-muted"></i>
                                             <span class="text-muted">Atajos:</span>
                                             <kbd style="font-size:0.55rem">F4</kbd><span class="text-muted">Efectivo total</span>
@@ -812,7 +817,7 @@
 
                                         <!-- Pago rápido F4 (destacado arriba) -->
                                         <div class="mb-2">
-                                            <button class="btn btn-success w-100 fw-bold pos-pago-btn" onclick="pagoRapidoEfectivoTotal()" style="font-size:0.85rem; position:relative; min-height:54px;">
+                                            <button class="btn btn-success w-100 fw-bold pos-pago-btn" id="btnPagoRapidoEfectivo" onclick="pagoRapidoEfectivoTotal()" style="font-size:0.85rem; position:relative; min-height:54px;">
                                                 <kbd class="pos-kbd-badge" style="background:rgba(255,255,255,0.2); color:white; border-color:rgba(255,255,255,0.3);">F4</kbd>
                                                 <i class="ri-flashlight-line me-1"></i> PAGO RÁPIDO — Efectivo Total
                                             </button>
@@ -948,14 +953,24 @@
                                                 </div>
                                             </div>
                                         </div>
+                                    </div>
+                                </div>
 
-                                        <!-- Lista de pagos -->
-                                        <div class="mt-2">
-                                            <h6 class="fw-bold mb-1" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px;">Pagos Registrados</h6>
-                                            <div id="listaPagos">
-                                                <div class="text-center text-muted py-2 small">
-                                                    <i class="ri-wallet-line"></i> Sin pagos registrados
-                                                </div>
+                                </div><!-- /.pos-checkout-scroll -->
+
+                                <!-- ===== PAGOS REGISTRADOS — pie fijo del panel de cobro =====
+                                     Se saca de la tarjeta "Método de Pago" para que quede anclado
+                                     abajo y el cajero pueda verificar siempre lo cobrado. -->
+                                <div class="card shadow-sm mt-2 pos-checkout-pagos">
+                                    <div class="card-header bg-light py-1 px-2">
+                                        <h6 class="mb-0 fw-bold" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px;">
+                                            <i class="ri-list-check-2 me-1"></i> Pagos Registrados
+                                        </h6>
+                                    </div>
+                                    <div class="card-body p-2">
+                                        <div id="listaPagos">
+                                            <div class="text-center text-muted py-2 small">
+                                                <i class="ri-wallet-line"></i> Sin pagos registrados
                                             </div>
                                         </div>
                                     </div>
@@ -3460,6 +3475,111 @@
     .pos-pago-btn-sm { min-height: 46px; }
 }
 
+/* =========================================================
+   POS · Paso 3 — Panel de cobro acotado a la pantalla
+   ---------------------------------------------------------
+   El panel derecho se ancla bajo el topbar fijo (70px) y nunca
+   supera el alto del viewport. Dentro del panel:
+     · Resumen de venta (hero + Total/Pagado) -> arriba, fijo
+     · Fidelización + Vale + Métodos de pago  -> scroll propio
+     · Pagos Registrados                      -> pie, siempre visible
+   Así el cajero ve el total y lo cobrado sin scrollear la página.
+   ========================================================= */
+@media (min-width: 992px) {
+    #step3 .pos-checkout-col {
+        position: sticky;
+        top: 78px;                       /* 70px del topbar fijo + 8px de aire */
+        align-self: flex-start;          /* imprescindible: si estira, sticky no aplica */
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 88px);
+    }
+    #step3 .pos-checkout-col > .pos-resumen-sticky-wrapper,
+    #step3 .pos-checkout-col > .pos-checkout-pagos {
+        flex: 0 0 auto;
+        position: static;                /* ya no necesita sticky propio */
+    }
+    #step3 .pos-checkout-scroll {
+        flex: 1 1 auto;
+        min-height: 0;                   /* permite encoger dentro del flex */
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding-right: 5px;
+        margin-right: -5px;
+    }
+    #step3 .pos-checkout-scroll::-webkit-scrollbar { width: 7px; }
+    #step3 .pos-checkout-scroll::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.18);
+        border-radius: 4px;
+    }
+    #step3 .pos-checkout-pagos .card-body {
+        max-height: 26vh;
+        overflow-y: auto;
+    }
+}
+
+/* =========================================================
+   POS · Pantallas de 15" (1366×768) — alturas compactas
+   Regla dura: ningún botón de pago baja de 44px (uso táctil).
+   ========================================================= */
+@media (max-height: 800px) {
+    /* Resumen / hero */
+    #step3 .pos-resumen-card .card-body { padding: 6px !important; }
+    #step3 .pos-hero-saldo   { padding: 8px 10px 7px; }
+    #step3 .pos-hero-label   { font-size: 0.6rem; letter-spacing: 0.6px; }
+    #step3 .pos-hero-amount  { font-size: 1.5rem; margin-top: 2px; }
+    #step3 .pos-resumen-mini { gap: 2px 8px; }
+    #step3 .pos-resumen-mini-cell { font-size: 0.72rem; padding: 1px 0; }
+    #step3 .pos-mini-label   { font-size: 0.66rem; }
+    #step3 .pos-resumen-mini-cell strong { font-size: 0.78rem; }
+    #step3 .pos-cta-finalizar {
+        font-size: 0.9rem !important;
+        padding-top: 9px !important;
+        padding-bottom: 9px !important;
+    }
+
+    /* La fila de atajos es redundante: cada botón ya trae su tecla */
+    #step3 .pos-atajos-hint { display: none !important; }
+
+    /* Fidelización y vale de puntos más apretados */
+    #step3 #fidelCard .card-body,
+    #step3 #valeCanjeCard .card-body {
+        padding-top: 5px !important;
+        padding-bottom: 5px !important;
+    }
+
+    /* Encabezados de tarjeta del paso 3 */
+    #step3 .card-header { padding: 4px 8px !important; }
+
+    /* Botones de pago compactos — mínimo táctil 44-46px */
+    #step3 .pos-pago-btn-lg { min-height: 58px; }
+    #step3 .pos-pago-btn-md { min-height: 50px; }
+    #step3 .pos-pago-btn-sm { min-height: 46px; }
+    #step3 .pos-pago-btn-lg i { font-size: 1.3rem; }
+    #step3 .pos-pago-btn-md i { font-size: 1.15rem; }
+    #step3 .pos-pago-btn-sm i { font-size: 1rem; }
+    #step3 .pos-pago-btn-lg .label-principal { font-size: 0.78rem; }
+    #step3 .pos-pago-btn-md .label-principal { font-size: 0.72rem; }
+    #step3 .pos-pago-btn-sm .label-principal { font-size: 0.68rem; }
+    #step3 .pos-pago-btn-lg .label-sub,
+    #step3 .pos-pago-btn-md .label-sub { font-size: 0.55rem; }
+    #step3 .pos-pago-grupo-label { font-size: 0.58rem; margin: 0 2px 3px; }
+
+    /* El botón F4 trae min-height inline: hay que ganarle con !important */
+    #step3 #btnPagoRapidoEfectivo {
+        min-height: 46px !important;
+        font-size: 0.8rem !important;
+    }
+    #step3 .pos-pago-btn-orden {
+        min-height: 44px;
+        padding: 7px !important;
+        font-size: 0.74rem;
+    }
+
+    /* Pie de pagos: acotado para no comerse el scroll de los métodos */
+    #step3 .pos-checkout-pagos .card-body { max-height: 22vh; }
+}
+
 /* ============================================================
    MODAL AGREGAR PRODUCTO — Estilos completos
    ============================================================ */
@@ -4529,8 +4649,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Exponer función globalmente
+    // Exponer funciones globalmente: ambas se invocan desde onclick inline en las
+    // filas generadas del listado de tickets de cambio, y esos handlers se resuelven
+    // contra window (viven fuera del closure del DOMContentLoaded).
     window.eliminarTicketCambio = eliminarTicketCambio;
+    window.procesarTicketCambio = procesarTicketCambio;
 
     function actualizarKPIs(stats) {
         document.getElementById('ventasHoy').querySelector('.counter-value').textContent = formatearMoneda(stats.ventas_hoy || 0);
@@ -4583,7 +4706,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (ticket.estado === 'PAGADO') {
                 // Tickets pagados: solo reimprimir
                 botonesAccion = `
-                    <button class="btn btn-outline-info" onclick="imprimirTicket(${ticket.correlativo})" title="Reimprimir Ticket">
+                    <button class="btn btn-outline-info" onclick="reimprimirTicket(${ticket.correlativo})" title="Reimprimir Ticket">
                         <i class="ri-printer-line fs-5"></i>
                     </button>
                 `;
@@ -4819,8 +4942,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const msgEl = document.getElementById('valeCanjeMsg');
         msgEl.innerHTML = '<span class="text-muted"><i class="ri-loader-2-line"></i> Validando…</span>';
         const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
-        fetch(`/api/v1/desktop/canje/${encodeURIComponent(codigo)}/`, {
-            headers: { 'X-CSRFToken': csrf, 'Accept': 'application/json' }
+        // Endpoint de sesión web. Antes apuntaba a /api/v1/desktop/canje/, que
+        // exige el header X-Device-ID de un DispositivoAutorizado: un navegador
+        // no lo manda y en producción hay 0 dispositivos registrados, así que
+        // los 4 roles recibían 403 y NINGÚN vale se pudo validar jamás.
+        fetch(`/app/api/fidelizacion/vale/${encodeURIComponent(codigo)}/`, {
+            headers: { 'X-CSRFToken': csrf, 'Accept': 'application/json',
+                       'X-Requested-With': 'XMLHttpRequest' }
         })
         .then(r => r.json())
         .then(data => {
@@ -4834,7 +4962,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 actualizarResumenConVale();
             } else {
                 valeCanjeActual = null;
-                const motivo = data.error || (`Estado: ${data.estado || '?'}`);
+                // El fallback anterior era `Estado: ?`, que no le decía nada al
+                // cajero. Se traducen los estados a lenguaje de mostrador y se
+                // contempla `mensaje` (formato de los errores de permiso).
+                const ESTADOS_VALE = {
+                    'NO_EXISTE': 'Ese código de vale no existe.',
+                    'CANJEADO': 'Este vale ya fue canjeado.',
+                    'VENCIDO': 'Este vale está vencido.',
+                    'ANULADO': 'Este vale fue anulado.',
+                };
+                const motivo = (typeof data.error === 'string' && data.error)
+                    || data.mensaje
+                    || ESTADOS_VALE[data.estado]
+                    || (data.estado ? `El vale no se puede usar (${data.estado}).`
+                                    : 'No se pudo validar el vale.');
                 msgEl.innerHTML = `<span class="text-danger"><i class="ri-error-warning-line"></i> ${motivo}</span>`;
                 actualizarResumenConVale();
             }
@@ -4852,6 +4993,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (msg) msg.innerHTML = '';
         actualizarResumenConVale();
     }
+
+    // Los botones y el Enter del vale usan onclick/onkeydown inline, que se
+    // resuelven contra window. Como todo este JS vive dentro de un closure,
+    // sin esta exposición el canje de puntos lanzaba ReferenceError y el
+    // cajero no podía aplicar ningún vale.
+    window.validarVale = validarVale;
+    window.limpiarVale = limpiarVale;
 
     function actualizarResumenConVale() {
         // Refleja el descuento del vale en el resumen del paso 3.
@@ -5643,7 +5791,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (quickAddQty)   { quickAddQty.disabled = false; }
             if (quickAddBtn)   { quickAddBtn.disabled = false; }
             if (btnAvanzado)   { btnAvanzado.disabled = false; btnAvanzado.title = 'Búsqueda avanzada con filtros (F3)'; }
-            if (btnDctoGlobal) { btnDctoGlobal.disabled = false; btnDctoGlobal.title = 'Aplicar descuento distribuido a toda la venta (F12)'; }
+            if (btnDctoGlobal) { btnDctoGlobal.disabled = false; btnDctoGlobal.title = 'Aplicar descuento distribuido a toda la venta (Ctrl+D)'; }
         }
         // ──────────────────────────────────────────────────────────────────────
 
@@ -8448,6 +8596,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // === FUNCIONES DE FINALIZACIÓN ===
 
+    /**
+     * Devuelve el botón de finalizar a su estado utilizable.
+     *
+     * `finalizarVenta` deshabilita el botón y lo deja en "PROCESANDO..." apenas
+     * arranca, para evitar el doble clic. Todas las salidas tienen que pasar
+     * por acá: si alguna retorna sin rehabilitarlo, el cajero queda con la
+     * venta trabada y sin más salida que recargar la página.
+     */
+    function rehabilitarBotonesFinalizar() {
+        const btn = document.querySelector('.btn-success.btn-lg.w-100.py-4');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="ri-check-line"></i> FINALIZAR VENTA';
+        }
+        const btnSig = document.getElementById('btnSiguiente');
+        if (btnSig) btnSig.disabled = false;
+    }
+
     function finalizarVenta() {
         if (!ticketActual) {
             mostrarNotificacion('No hay ticket seleccionado', 'error');
@@ -8487,6 +8653,10 @@ document.addEventListener('DOMContentLoaded', function() {
             // Validar referencias si existen
             if (referencias.length > 0) {
                 if (!validarReferencias()) {
+                    // Antes se retornaba sin rehabilitar: el botón se quedaba
+                    // en "PROCESANDO..." y la venta no se podía completar ni
+                    // corrigiendo las referencias. Había que recargar.
+                    rehabilitarBotonesFinalizar();
                     return; // Detener si hay errores en las referencias
                 }
             }
@@ -10202,10 +10372,46 @@ body {
         });
     }
 
-    function imprimirTicket(correlativo) {
-        // Abrir ventana de impresión del ticket
-        const url = `/pos/ticket/${correlativo}/imprimir/`;
-        window.open(url, '_blank', 'width=800,height=600');
+    /**
+     * Reimpresión de un ticket ya pagado, desde el listado.
+     *
+     * Antes esto se llamaba `imprimirTicket(correlativo)` y hacía dos daños a
+     * la vez: abría `/pos/ticket/<correlativo>/imprimir/`, una ruta que NO
+     * existe (ventana en blanco con 404), y al declararse después pisaba a la
+     * `imprimirTicket()` real —la de QZ Tray/térmica— dejándola inalcanzable.
+     * O sea: si la impresora fallaba durante la venta, no había forma de
+     * reimprimir desde la caja.
+     *
+     * Ahora carga el ticket por su correlativo y delega en la impresión de
+     * verdad, que ya resuelve QZ Tray con respaldo al diálogo del navegador.
+     */
+    function reimprimirTicket(correlativo) {
+        const previo = ticketActual;
+        fetch(apiUrls.buscarTicket, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            },
+            body: JSON.stringify({ correlativo }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success || !data.ticket) {
+                mostrarNotificacion(data.error || `No se encontró el ticket #${correlativo}`, 'error');
+                return;
+            }
+            // `imprimirTicket()` imprime `ticketActual`; se restituye después
+            // para no dejar seleccionado un ticket que el cajero no abrió.
+            ticketActual = data.ticket;
+            return Promise.resolve(imprimirTicket()).finally(() => {
+                ticketActual = previo;
+            });
+        })
+        .catch(error => {
+            console.error('Error al reimprimir:', error);
+            mostrarNotificacion('Error al reimprimir el ticket', 'error');
+        });
     }
 
     // === FUNCIONES DE UTILIDAD ===
@@ -10263,6 +10469,9 @@ body {
             alert(mensaje);
         }
     }
+    // Se invoca desde onclick inline dentro del HTML que arma "Reportes de Ventas"
+    // (SweetAlert), y esos handlers se resuelven contra window -> exponer.
+    window.mostrarNotificacion = mostrarNotificacion;
 
     // === VALIDACIÓN RUT CHILENO ===
 
@@ -10745,7 +10954,13 @@ body {
     window.enviarPorEmail = function() { mostrarNotificacion('Funcionalidad en desarrollo', 'info'); };
     window.editarTicket = editarTicket;
     window.pagarTicket = pagarTicket;
+    // `imprimirTicket` ahora es la impresión térmica real (antes la pisaba una
+    // homónima que abría una URL inexistente). `reimprimirTicket` la usa el
+    // botón del listado por onclick inline, así que TIENE que estar en window:
+    // el JS de este archivo vive dentro de un closure.
     window.imprimirTicket = imprimirTicket;
+    window.reimprimirTicket = reimprimirTicket;
+    window.rehabilitarBotonesFinalizar = rehabilitarBotonesFinalizar;
     
     // Funciones de edición de productos
     window.mostrarModalAgregarProducto = mostrarModalAgregarProducto;
@@ -12467,8 +12682,11 @@ body {
                 return;
             }
 
-            // F12: Discount global (Step 3)
-            if (e.key === 'F12' && pasoActual === 3) {
+            // Ctrl+D / Cmd+D: Descuento global (Paso 3)
+            // Antes era F12, pero el navegador abre DevTools con F12 y no se puede
+            // prevenir: el atajo era inusable. Ctrl+D (marcador) sí es cancelable.
+            if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey &&
+                (e.key === 'd' || e.key === 'D') && pasoActual === 3) {
                 e.preventDefault();
                 mostrarModalDescuentoGlobal();
                 return;
@@ -12545,7 +12763,7 @@ if (typeof Transbank !== 'undefined' && Transbank.POS) {
                 <small class="text-muted fw-bold text-uppercase">Productos (Paso 3)</small>
                 <div class="d-flex justify-content-between py-1 border-bottom"><span>Foco barra búsqueda</span><kbd>F2</kbd></div>
                 <div class="d-flex justify-content-between py-1 border-bottom"><span>Búsqueda avanzada</span><kbd>F3</kbd></div>
-                <div class="d-flex justify-content-between py-1 border-bottom"><span>Descuento global</span><kbd>F12</kbd></div>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>Descuento global</span><kbd>Ctrl+D</kbd></div>
             </div>
             <div class="mb-2">
                 <small class="text-muted fw-bold text-uppercase">Pagos (Paso 3)</small>

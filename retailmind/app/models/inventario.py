@@ -10,6 +10,17 @@ from .ventas import (
 from .dte import Dte
 
 
+# === UMBRALES DE RECONTEO (toma de inventario) ===
+# El umbral estaba hardcodeado dentro de TomaInventarioDetalle.save() mientras
+# views_gestion_inventarios.py declaraba estas mismas constantes sin usarlas
+# nunca: dos fuentes de verdad para la misma regla. Se centralizan acá, que es
+# donde se aplica la marca, para que las vistas puedan importarlas
+# (`from app.models.inventario import DIFERENCIA_RECONTEO_UNIDADES`) en lugar de
+# redefinirlas.
+DIFERENCIA_RECONTEO_UNIDADES = 5   # diferencia absoluta en unidades
+DIFERENCIA_RECONTEO_PORCENTAJE = 10  # % sobre el stock del sistema
+
+
 def django_date_today():
     return timezone.localdate()
 
@@ -509,11 +520,16 @@ class TomaInventario(models.Model):
         detalles_analisis = detalles.filter(excluir_de_analisis=False)
         
         self.total_productos_esperados = detalles_analisis.count()
+        # `total_productos_contados` guardaba la SUMA DE UNIDADES contadas
+        # (Sum('stock_fisico')) mientras `total_productos_esperados` cuenta
+        # LÍNEAS. Todo el sistema comparaba los dos campos entre sí (aprobación,
+        # alertas, export): en INV-6-20260115-001 decía 9.490 "contados" de
+        # 37.389 esperados cuando lo contado eran 4.299 SKUs. Ahora ambos campos
+        # miden LÍNEAS, que es lo que dice su nombre; las unidades siguen
+        # disponibles en la property `total_unidades_contadas`.
         productos_contados = detalles_analisis.filter(contado=True).count()
-        self.total_productos_contados = detalles_analisis.filter(contado=True).aggregate(
-            total=Sum('stock_fisico')
-        )['total'] or 0
-        
+        self.total_productos_contados = productos_contados
+
         # Diferencias
         diferencias = detalles_analisis.filter(contado=True).aggregate(
             positivas=Sum(Case(
@@ -549,12 +565,41 @@ class TomaInventario(models.Model):
         
         self.save()
     
+    @property
+    def total_unidades_contadas(self):
+        """Unidades físicas contadas (lo que antes guardaba el campo
+        `total_productos_contados`).
+
+        Se calcula en vivo para no exigir una migración. OJO: dispara un
+        aggregate por instancia, así que en listados conviene anotar el
+        queryset en vez de leer la property fila por fila.
+        """
+        from django.db.models import Sum
+        return self.detalles.filter(
+            excluir_de_analisis=False, contado=True
+        ).aggregate(total=Sum('stock_fisico'))['total'] or 0
+
     def puede_aprobar(self):
-        """Verifica si el inventario puede ser aprobado"""
+        """¿El inventario está en condiciones de ser aprobado?
+
+        Antes exigía `total_productos_contados == total_productos_esperados`,
+        que comparaba UNIDADES contra LÍNEAS: daba verdadero o falso por
+        accidente (una tienda con más unidades que SKUs "aprobaba" a medio
+        contar, y una con menos nunca aprobaba). Ahora se pregunta lo que
+        realmente importa: que no quede nada por contar ni por recontar, con
+        el mismo criterio que usa la pantalla de análisis
+        (views_gestion_inventarios.py, `requieren_reconteo`).
+        """
         return (
             self.estado == 'PENDIENTE_APROBACION' and
-            self.progreso_conteo == 100 and
-            self.total_productos_contados == self.total_productos_esperados
+            not self.detalles.filter(
+                excluir_de_analisis=False, contado=False
+            ).exists() and
+            not self.detalles.filter(
+                excluir_de_analisis=False,
+                reconteo_requerido=True,
+                stock_reconteo__isnull=True,
+            ).exists()
         )
 
 
@@ -721,12 +766,29 @@ class TomaInventarioDetalle(models.Model):
         if self.contado:
             base_stock = self.stock_sistema_ajustado if self.stock_sistema_ajustado is not None else self.stock_sistema
             self.diferencia = self.stock_fisico - base_stock
-            
-            # Marcar para reconteo si diferencia > 10% o > 5 unidades
-            if abs(self.diferencia) > 5 or (base_stock > 0 and abs(self.diferencia) / base_stock > 0.1):
+
+            # Marcar para reconteo si la diferencia supera el umbral en unidades
+            # o en porcentaje (constantes del módulo, antes hardcodeadas acá).
+            supera_umbral = (
+                abs(self.diferencia) > DIFERENCIA_RECONTEO_UNIDADES or
+                (base_stock > 0 and
+                 abs(self.diferencia) * 100 / base_stock > DIFERENCIA_RECONTEO_PORCENTAJE)
+            )
+
+            if supera_umbral:
+                # `stock_reconteo is not None` = ya se recontó y el reconteo
+                # confirmó la diferencia: no se vuelve a pedir reconteo.
                 if not self.reconteo_requerido and self.stock_reconteo is None:
                     self.reconteo_requerido = True
-        
+            elif self.reconteo_requerido:
+                # La marca era una foto de un conteo anterior: si el conteo se
+                # corrigió y la diferencia ya no supera el umbral, el motivo del
+                # reconteo desapareció. Sin esto la marca sólo se limpiaba
+                # pasando por registrar_reconteo(): recontar desde la pantalla
+                # normal de conteo dejaba el detalle marcado para siempre y
+                # bloqueaba finalizar_conteo() y la aprobación de la toma.
+                self.reconteo_requerido = False
+
         super().save(*args, **kwargs)
     
     @property

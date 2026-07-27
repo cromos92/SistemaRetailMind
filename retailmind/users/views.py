@@ -211,10 +211,13 @@ def listar_usuarios(request):
         page_size = int(request.GET.get('page_size', 10))
         search = request.GET.get('search', '').strip()
         estado = request.GET.get('estado', '')
-        
+        rol_filtro = request.GET.get('rol', '').strip()
+        sucursal_filtro = request.GET.get('sucursal_id', '').strip()
+        acceso_filtro = request.GET.get('acceso', '').strip()
+
         # Query base
         usuarios = Usuario.objects.all()
-        
+
         # Aplicar filtros
         if search:
             usuarios = usuarios.filter(
@@ -225,32 +228,82 @@ def listar_usuarios(request):
                 Q(rut__icontains=search) |
                 Q(empresa__icontains=search)
             )
-        
+
         if estado == 'activo':
             usuarios = usuarios.filter(es_activo=True)
         elif estado == 'inactivo':
             usuarios = usuarios.filter(es_activo=False)
-        
+
+        # Filtro por rol
+        if rol_filtro:
+            usuarios = usuarios.filter(rol=rol_filtro)
+
+        # Filtro por sucursal asignada (asignación vigente y activa)
+        if sucursal_filtro:
+            if sucursal_filtro == 'sin_sucursal':
+                usuarios = usuarios.exclude(
+                    empresauser__status=True,
+                    empresauser__active=True,
+                    empresauser__sucursal__isnull=False,
+                )
+            else:
+                try:
+                    usuarios = usuarios.filter(
+                        empresauser__status=True,
+                        empresauser__active=True,
+                        empresauser__sucursal_id=int(sucursal_filtro),
+                    ).distinct()
+                except (TypeError, ValueError):
+                    pass
+
+        # Filtro por "nunca ingresó" / "ya ingresó"
+        # El acceso real lo registra Django en last_login; fecha_ultimo_acceso es
+        # un campo propio que en la práctica nadie actualiza (queda de respaldo).
+        if acceso_filtro == 'nunca':
+            usuarios = usuarios.filter(last_login__isnull=True, fecha_ultimo_acceso__isnull=True)
+        elif acceso_filtro == 'ingreso':
+            usuarios = usuarios.filter(
+                Q(last_login__isnull=False) | Q(fecha_ultimo_acceso__isnull=False)
+            )
+
         # Ordenar
         usuarios = usuarios.order_by('username')
-        
+
         # Paginación
         paginator = Paginator(usuarios, page_size)
         usuarios_page = paginator.get_page(page)
-        
+
+        # Asignación vigente de cada usuario de la página, en UNA sola consulta
+        # (antes era 1 consulta por usuario dentro del bucle).
+        ids_pagina = [u.id for u in usuarios_page]
+        asignaciones = {}
+        if ids_pagina:
+            for eu in EmpresaUser.objects.filter(
+                user_id__in=ids_pagina,
+                active=True
+            ).select_related('empresa', 'sucursal').order_by('id'):
+                asignaciones.setdefault(eu.user_id, eu)
+
         # Preparar datos para JSON
         usuarios_data = []
         for usuario in usuarios_page:
-            empresa_actual = EmpresaUser.objects.filter(
-                user=usuario,
-                active=True
-            ).select_related('empresa', 'sucursal').first()
+            empresa_actual = asignaciones.get(usuario.id)
             empresa_actual_nombre = None
             sucursal_actual_alias = None
+            sucursal_actual_id = None
             if empresa_actual:
-                empresa_actual_nombre = empresa_actual.empresa.nombre
+                empresa_actual_nombre = empresa_actual.empresa.nombre if empresa_actual.empresa else None
                 if empresa_actual.sucursal:
                     sucursal_actual_alias = empresa_actual.sucursal.alias
+                    sucursal_actual_id = empresa_actual.sucursal_id
+
+            # Último acceso REAL: Django lo escribe en last_login en cada login.
+            # fecha_ultimo_acceso queda como respaldo por si alguna vez se pobló.
+            ultimo_acceso_dt = usuario.last_login or usuario.fecha_ultimo_acceso
+            ultimo_acceso_txt = (
+                timezone.localtime(ultimo_acceso_dt).strftime('%d/%m/%Y %H:%M')
+                if ultimo_acceso_dt else 'Nunca'
+            )
 
             usuarios_data.append({
                 'id': usuario.id,
@@ -263,24 +316,35 @@ def listar_usuarios(request):
                 'empresa': usuario.empresa,
                 'empresa_actual': empresa_actual_nombre,
                 'sucursal_actual': sucursal_actual_alias,
+                'sucursal_actual_id': sucursal_actual_id,
                 'cargo': usuario.cargo,
                 'rol': usuario.rol,
                 'rol_display': usuario.get_rol_display(),
                 'es_activo': usuario.es_activo,
+                'is_active': usuario.is_active,
+                'requiere_2fa': usuario.requiere_2fa,
                 'fecha_creacion': usuario.fecha_creacion.strftime('%d/%m/%Y %H:%M'),
-                'fecha_ultimo_acceso': usuario.fecha_ultimo_acceso.strftime('%d/%m/%Y %H:%M') if usuario.fecha_ultimo_acceso else 'Nunca',
+                # Se mantiene la clave histórica para no romper consumidores viejos,
+                # pero ahora trae el dato correcto (last_login).
+                'fecha_ultimo_acceso': ultimo_acceso_txt,
+                'ultimo_acceso': ultimo_acceso_txt,
+                'ultimo_acceso_iso': ultimo_acceso_dt.isoformat() if ultimo_acceso_dt else None,
+                'nunca_ingreso': ultimo_acceso_dt is None,
                 'puede_crear_usuarios': usuario.puede_crear_usuarios,
                 'puede_editar_usuarios': usuario.puede_editar_usuarios,
                 'puede_eliminar_usuarios': usuario.puede_eliminar_usuarios,
                 'is_superuser': usuario.is_superuser,
                 'is_staff': usuario.is_staff
             })
-        
-        # Calcular métricas
+
+        # Calcular métricas (sobre el universo filtrado)
         total_usuarios = usuarios.count()
         usuarios_activos = usuarios.filter(es_activo=True).count()
         usuarios_inactivos = usuarios.filter(es_activo=False).count()
-        
+        usuarios_nunca_ingreso = usuarios.filter(
+            last_login__isnull=True, fecha_ultimo_acceso__isnull=True
+        ).count()
+
         return JsonResponse({
             'success': True,
             'usuarios': usuarios_data,
@@ -294,10 +358,11 @@ def listar_usuarios(request):
             'metricas': {
                 'total_usuarios': total_usuarios,
                 'usuarios_activos': usuarios_activos,
-                'usuarios_inactivos': usuarios_inactivos
+                'usuarios_inactivos': usuarios_inactivos,
+                'usuarios_nunca_ingreso': usuarios_nunca_ingreso
             }
         })
-        
+
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -349,6 +414,10 @@ def crear_usuario(request):
         if not rut_valor:
             rut_valor = None  # None permite múltiples usuarios sin RUT (unique=True ignora NULL)
         
+        # `es_activo` es el flag propio del ERP; `is_active` es el que consulta el
+        # login de Django. Deben nacer y moverse siempre juntos.
+        activo_inicial = bool(data.get('es_activo', True))
+
         usuario = Usuario.objects.create_user(
             username=username,
             email=email,
@@ -363,7 +432,8 @@ def crear_usuario(request):
             departamento=data.get('departamento', '').strip() or None,
             rol=data.get('rol', 'vendedor'),
             fecha_nacimiento=data.get('fecha_nacimiento') or None,
-            es_activo=data.get('es_activo', True),
+            es_activo=activo_inicial,
+            is_active=activo_inicial,
             requiere_2fa=data.get('requiere_2fa', False),
             puede_crear_usuarios=data.get('puede_crear_usuarios', False),
             puede_editar_usuarios=data.get('puede_editar_usuarios', False),
@@ -581,26 +651,57 @@ def toggle_estado_usuario(request, usuario_id):
             }, status=403)
         
         usuario = get_object_or_404(Usuario, id=usuario_id)
-        
+
         # No permitir desactivar al propio usuario
         if usuario.id == request.user.id:
             return JsonResponse({
                 'success': False,
                 'error': 'No puedes cambiar tu propio estado'
             }, status=400)
-        
-        # Cambiar estado
-        usuario.es_activo = not usuario.es_activo
-        usuario.save()
-        
+
+        nuevo_estado = not usuario.es_activo
+
+        # Red de seguridad: no dejar el sistema sin ningún administrador que
+        # pueda entrar (se comprueba sobre los dos flags, ver más abajo).
+        if not nuevo_estado and usuario.rol == 'administrador':
+            otros_admin = Usuario.objects.filter(
+                rol='administrador', es_activo=True, is_active=True
+            ).exclude(id=usuario.id).count()
+            if otros_admin == 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': (
+                        'No puedes desactivar al único administrador activo del sistema. '
+                        'Crea o activa otro administrador antes de desactivar a este.'
+                    )
+                }, status=400)
+
+        # Cambiar estado.
+        # IMPORTANTE: el login de Django autentica contra `is_active` (ModelBackend),
+        # no contra `es_activo`. Si solo se movía `es_activo`, desactivar a un usuario
+        # NO le impedía entrar. Ambos flags se mueven juntos.
+        usuario.es_activo = nuevo_estado
+        usuario.is_active = nuevo_estado
+        usuario.save(update_fields=['es_activo', 'is_active'])
+
         estado_texto = "activado" if usuario.es_activo else "desactivado"
-        
+        logger.info(
+            "Estado de usuario %s (id=%s) cambiado a %s por %s (id=%s)",
+            usuario.username, usuario.id, estado_texto,
+            request.user.username, request.user.id
+        )
+
         return JsonResponse({
             'success': True,
-            'message': f'Usuario {usuario.get_full_name()} {estado_texto} exitosamente',
-            'nuevo_estado': usuario.es_activo
+            'message': (
+                f'Usuario {usuario.get_full_name()} {estado_texto} exitosamente. '
+                + ('Ya puede iniciar sesión.' if nuevo_estado
+                   else 'No podrá volver a iniciar sesión y sus sesiones abiertas quedarán invalidadas.')
+            ),
+            'nuevo_estado': usuario.es_activo,
+            'is_active': usuario.is_active
         })
-        
+
     except Usuario.DoesNotExist:
         return JsonResponse({
             'success': False,
@@ -918,7 +1019,13 @@ def exportar_usuarios(request):
                 usuario.departamento or '',
                 'Activo' if usuario.es_activo else 'Inactivo',
                 usuario.fecha_creacion.strftime('%d/%m/%Y %H:%M'),
-                usuario.fecha_ultimo_acceso.strftime('%d/%m/%Y %H:%M') if usuario.fecha_ultimo_acceso else 'Nunca',
+                # Último acceso real = last_login de Django (fecha_ultimo_acceso
+                # queda como respaldo: en la práctica nadie lo actualiza).
+                (
+                    timezone.localtime(usuario.last_login or usuario.fecha_ultimo_acceso)
+                    .strftime('%d/%m/%Y %H:%M')
+                    if (usuario.last_login or usuario.fecha_ultimo_acceso) else 'Nunca'
+                ),
                 ', '.join(permisos)
             ])
         

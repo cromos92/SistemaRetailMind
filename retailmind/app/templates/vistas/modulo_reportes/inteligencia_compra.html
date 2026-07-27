@@ -104,6 +104,15 @@
                 <option value="todas">Todas las tiendas</option>
                 {% for t in tiendas %}<option value="{{ t.id }}">{{ t.alias }}</option>{% endfor %}
             </select>
+            <!-- Al elegir una tienda, el sell-through compara la venta de esa
+                 tienda contra el abastecimiento de TODA la empresa: se hunde sin
+                 que eso signifique nada. Hay que avisarlo donde se elige. -->
+            <small id="ic-aviso-tienda" style="display:none; color:#8a6d00; font-size:.72rem; line-height:1.25; margin-top:4px;">
+                <i class="ri-error-warning-line"></i>
+                Con una tienda seleccionada el <b>Sell-through anual</b> queda subestimado:
+                la venta es de la tienda pero el abastecimiento es de toda la empresa.
+                Para leer sell-through usa <b>Todas las tiendas</b>.
+            </small>
         </div>
         <button class="ic-btn" id="ic-analizar"><i class="ri-search-eye-line"></i> Analizar</button>
         <button class="ic-btn ghost" id="ic-print" style="display:none;"><i class="ri-printer-line"></i> Imprimir / PDF</button>
@@ -136,6 +145,15 @@ let icCharts = [];
 document.getElementById('ic-analizar').addEventListener('click', cargarInteligencia);
 document.getElementById('ic-print').addEventListener('click', () => window.print());
 document.getElementById('ic-marca').addEventListener('keydown', e => { if (e.key === 'Enter') cargarInteligencia(); });
+
+// Aviso del sell-through al acotar a una tienda (ver comentario en el markup).
+(function () {
+    const sel = document.getElementById('ic-sucursal');
+    const aviso = document.getElementById('ic-aviso-tienda');
+    const sync = () => { aviso.style.display = (sel.value && sel.value !== 'todas') ? 'block' : 'none'; };
+    sel.addEventListener('change', sync);
+    sync();
+})();
 
 // Selector de marca con buscador (Select2 viene del footer → inicializar al load).
 window.addEventListener('load', () => {
@@ -208,10 +226,10 @@ function render(d) {
 
     <div class="ic-kpis">
         <div class="ic-kpi"><div class="lbl">Valor inventario (costo)</div><div class="val" style="font-size:1.2rem;">${money(fn.inv_costo)}</div><div class="sub">${money(fn.inv_precio)} a precio</div></div>
-        <div class="ic-kpi"><div class="lbl">Margen bruto</div><div class="val">${fn.margen_pct != null ? fn.margen_pct + '%' : '—'}</div><div class="sub">${fn.margen_src || ''}</div></div>
+        <div class="ic-kpi" title="Calculado con el precio de venta y el costo de LISTA registrados en el movimiento, no con lo efectivamente cobrado ni el costo FIFO. Con descuentos o campañas activas queda sobreestimado."><div class="lbl">Margen bruto <i class="ri-error-warning-line" style="color:#FFB020"></i></div><div class="val">${fn.margen_pct != null ? fn.margen_pct + '%' : '—'}</div><div class="sub">a precio de lista</div></div>
         <div class="ic-kpi"><div class="lbl">Rotación</div><div class="val">${fn.rotacion != null ? fn.rotacion + 'x' : '—'}</div><div class="sub">vueltas/año</div></div>
         <div class="ic-kpi"><div class="lbl">Semanas de stock</div><div class="val">${fn.wos != null ? fn.wos : '—'}</div><div class="sub">WOS</div></div>
-        <div class="ic-kpi"><div class="lbl">GMROI</div><div class="val ${gmCls}">${fn.gmroi != null ? fn.gmroi : '—'}</div><div class="sub ${gmCls}">${fn.gmroi == null ? '' : (fn.gmroi >= 3 ? 'excelente' : (fn.gmroi >= 1 ? 'aceptable' : 'destruye capital'))}</div></div>
+        <div class="ic-kpi" title="Derivado del margen a precio de lista: úsalo para comparar entre marcas, no como rentabilidad real."><div class="lbl">GMROI <i class="ri-error-warning-line" style="color:#FFB020"></i></div><div class="val ${gmCls}">${fn.gmroi != null ? fn.gmroi : '—'}</div><div class="sub ${gmCls}">${fn.gmroi == null ? '' : (fn.gmroi >= 3 ? 'excelente' : (fn.gmroi >= 1 ? 'aceptable' : 'destruye capital'))}</div></div>
         <div class="ic-kpi"><div class="lbl">Dead stock 180d</div><div class="val ${sal.pct_dead180 >= 50 ? 'down' : ''}">${sal.pct_dead180 != null ? sal.pct_dead180 + '%' : '—'}</div><div class="sub">${fmt(sal.dead180_n)} SKUs</div></div>
     </div>
 

@@ -358,6 +358,86 @@
         height: 5px;
     }
 
+    /* ========== ALERTA DE FOLIOS POR AGOTARSE ==========
+       Umbrales: <20 folios = crítico (rojo), <100 = alerta (ámbar).
+       Antes no había ningún aviso y la tienda se enteraba al fallar la emisión. */
+    .table-nexo tbody tr.fila-folios-agotado {
+        background-color: rgba(255, 77, 77, 0.10);
+        box-shadow: inset 4px 0 0 0 var(--nexo-error);
+    }
+
+    .table-nexo tbody tr.fila-folios-critico {
+        background-color: rgba(255, 77, 77, 0.07);
+        box-shadow: inset 4px 0 0 0 var(--nexo-error);
+    }
+
+    .table-nexo tbody tr.fila-folios-alerta {
+        background-color: rgba(255, 176, 32, 0.09);
+        box-shadow: inset 4px 0 0 0 var(--nexo-warning);
+    }
+
+    .disponibles-cell {
+        min-width: 110px;
+    }
+
+    .disponibles-num {
+        font-size: 1rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.1;
+        display: block;
+    }
+
+    .disponibles-tag {
+        font-size: 0.625rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        margin-top: 2px;
+        white-space: nowrap;
+    }
+
+    .disponibles-tag.tag-critico,
+    .disponibles-tag.tag-agotado { color: var(--nexo-error); }
+    .disponibles-tag.tag-alerta { color: #996B00; }
+
+    /* Icono de metadatos (responsable / última actualización) en tooltip */
+    .meta-info-icon {
+        color: var(--nexo-gray-500);
+        font-size: 0.8125rem;
+        cursor: help;
+    }
+
+    .meta-info-icon:hover { color: var(--nexo-primary); }
+
+    /* Rango de folios: "4.810 → 4.816" */
+    .rango-folios {
+        font-variant-numeric: tabular-nums;
+        font-size: 0.8125rem;
+    }
+
+    .rango-folios .rango-actual {
+        font-weight: 700;
+        color: var(--nexo-gray-900);
+    }
+
+    .rango-folios .rango-flecha { color: var(--nexo-gray-500); margin: 0 2px; }
+    .rango-folios .rango-final { color: var(--nexo-gray-700); }
+
+    /* Tarjetas KPI clickeables (aplican el filtro de estado) */
+    .stats-card.kpi-card[role="button"] { cursor: pointer; }
+    .stats-card.kpi-card[role="button"]:focus-visible {
+        outline: 3px solid var(--nexo-primary);
+        outline-offset: 2px;
+    }
+
+    .stats-card .kpi-subnota {
+        font-size: 0.6875rem;
+        opacity: 0.95;
+        margin: 0;
+        white-space: nowrap;
+    }
+
     /* Botones de acción más compactos */
     .acciones-cell .btn-action {
         width: 28px;
@@ -676,10 +756,11 @@
                 </div>
             </div>
 
-            <!-- Estadísticas -->
+            <!-- Estadísticas (KPI cards: clic = aplica el filtro de estado) -->
             <div class="row mb-3 g-2">
                 <div class="col-md-3 col-sm-6">
-                    <div class="stats-card stats-card-primary">
+                    <div class="stats-card kpi-card stats-card-primary" role="button" tabindex="0"
+                         data-filtro-estado="" title="Ver todos los correlativos">
                         <i class="ri-file-text-line"></i>
                         <div class="stats-card-body">
                             <h3 id="totalCorrelativos">{{ total_correlativos }}</h3>
@@ -688,7 +769,8 @@
                     </div>
                 </div>
                 <div class="col-md-3 col-sm-6">
-                    <div class="stats-card stats-card-success">
+                    <div class="stats-card kpi-card stats-card-success" role="button" tabindex="0"
+                         data-filtro-estado="activo" title="Ver sólo los correlativos que todavía pueden emitir">
                         <i class="ri-play-circle-line"></i>
                         <div class="stats-card-body">
                             <h3 id="correlativosActivos">{{ correlativos_activos }}</h3>
@@ -697,16 +779,19 @@
                     </div>
                 </div>
                 <div class="col-md-3 col-sm-6">
-                    <div class="stats-card stats-card-warning">
+                    <div class="stats-card kpi-card stats-card-warning" role="button" tabindex="0"
+                         data-filtro-estado="proximo_agotarse" title="Ver los correlativos con 100 folios o menos">
                         <i class="ri-error-warning-line"></i>
                         <div class="stats-card-body">
                             <h3 id="correlativosProximosAgotar">{{ correlativos_proximos_agotar }}</h3>
-                            <p>Próximos a Agotar</p>
+                            <p>Próximos a Agotar (≤100)</p>
+                            <p class="kpi-subnota" id="kpiMenos20"></p>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-3 col-sm-6">
-                    <div class="stats-card stats-card-error">
+                    <div class="stats-card kpi-card stats-card-error" role="button" tabindex="0"
+                         data-filtro-estado="agotado" title="Ver los correlativos sin folios disponibles">
                         <i class="ri-close-circle-line"></i>
                         <div class="stats-card-body">
                             <h3 id="correlativosAgotados">{{ correlativos_agotados }}</h3>
@@ -720,11 +805,14 @@
             <div class="row">
                 <div class="col-12">
                     <div class="nexo-card">
-                        <div class="nexo-card-header">
+                        <div class="nexo-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <h5>
                                 <i class="ri-table-line"></i>
                                 Lista de Correlativos
                             </h5>
+                            <small style="opacity: 0.9;">
+                                <i class="ri-sort-asc me-1"></i>Ordenado por folios disponibles (lo crítico primero)
+                            </small>
                         </div>
                         <div class="card-body p-0">
                             <div class="table-responsive">
@@ -732,78 +820,66 @@
                                     <thead>
                                         <tr>
                                             <th>Sucursal</th>
-                                            <th>Dirección</th>
                                             <th>Tipo Documento</th>
-                                            <th class="text-end">Inicial</th>
-                                            <th class="text-end">Actual</th>
-                                            <th class="text-end">Final</th>
-                                            <th>Consumo</th>
-                                            <th>Responsable</th>
-                                            <th>Actualizado</th>
+                                            <th>Folios (actual → final)</th>
+                                            <th class="text-end">Disponibles</th>
                                             <th>Estado</th>
                                             <th class="text-center">Acciones</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {% for correlativo in correlativos %}
-                                        <tr data-correlativo-id="{{ correlativo.id }}">
+                                        {% for correlativo in correlativos|dictsort:"disponibles" %}
+                                        <tr data-correlativo-id="{{ correlativo.id }}"
+                                            data-disponibles="{{ correlativo.disponibles }}"
+                                            class="{% if correlativo.disponibles <= 0 %}fila-folios-agotado{% elif correlativo.disponibles < 20 %}fila-folios-critico{% elif correlativo.disponibles < 100 %}fila-folios-alerta{% endif %}">
                                             <td>
                                                 <div class="d-flex align-items-center gap-1">
                                                     <i class="ri-building-line text-nexo-primary"></i>
                                                     <span class="fw-semibold">{{ correlativo.sucursal.alias }}</span>
+                                                    <i class="ri-information-line meta-info-icon"
+                                                       data-bs-toggle="tooltip"
+                                                       title="Responsable: {{ correlativo.responsable|default:'—' }} · Actualizado: {% if correlativo.fecha_actualizacion %}{{ correlativo.fecha_actualizacion|date:'d/m/Y' }}{% else %}sin registro{% endif %}{% if correlativo.sucursal.direccion %} · {{ correlativo.sucursal.direccion }}{% endif %}"></i>
                                                 </div>
-                                            </td>
-                                            <td style="color: var(--nexo-gray-500); font-size: 0.75rem;">
-                                                {% if correlativo.sucursal.direccion %}
-                                                    <i class="ri-map-pin-line me-1"></i>{{ correlativo.sucursal.direccion }}
-                                                {% else %}
-                                                    —
-                                                {% endif %}
                                             </td>
                                             <td>
                                                 <span class="badge-nexo badge-nexo-info">{{ correlativo.tipo_dte }}</span>
                                             </td>
-                                            <td class="text-end text-nowrap" style="font-variant-numeric: tabular-nums; color: var(--nexo-gray-500);">
-                                                {{ correlativo.base_inicial }}
-                                            </td>
-                                            <td class="text-end text-nowrap" style="font-variant-numeric: tabular-nums;">
-                                                <strong class="text-nexo-primary">{{ correlativo.inicio }}</strong>
-                                            </td>
-                                            <td class="text-end text-nowrap" style="font-variant-numeric: tabular-nums; color: var(--nexo-gray-500);">
-                                                {{ correlativo.termino|default:"N/A" }}
-                                            </td>
                                             <td class="consumo-cell">
                                                 <div class="consumo-numeros">
-                                                    <strong>{{ correlativo.consumidos }} / {{ correlativo.total_rango }}</strong>
+                                                    <span class="rango-folios">
+                                                        <span class="rango-actual" data-num="{{ correlativo.inicio }}">{{ correlativo.inicio }}</span><span class="rango-flecha">→</span><span class="rango-final" data-num="{{ correlativo.termino }}">{{ correlativo.termino }}</span>
+                                                    </span>
                                                     <span class="{% if correlativo.porcentaje_consumo >= 90 %}text-nexo-error{% elif correlativo.porcentaje_consumo >= 70 %}text-nexo-warning{% else %}text-nexo-success{% endif %} fw-semibold">
                                                         {{ correlativo.porcentaje_consumo|floatformat:1 }}%
                                                     </span>
                                                 </div>
                                                 <div class="progress progress-nexo">
                                                     <div class="progress-bar {% if correlativo.porcentaje_consumo >= 90 %}progress-bar-error{% elif correlativo.porcentaje_consumo >= 70 %}progress-bar-warning{% else %}progress-bar-success{% endif %}"
-                                                         style="width: {{ correlativo.porcentaje_consumo }}%"></div>
+                                                         style="width: {{ correlativo.porcentaje_consumo|floatformat:'2u' }}%"></div>
                                                 </div>
                                                 <div class="consumo-meta">
-                                                    <span class="{% if correlativo.disponibles <= 100 %}text-nexo-error{% elif correlativo.disponibles <= 500 %}text-nexo-warning{% else %}text-nexo-success{% endif %}">
-                                                        {{ correlativo.disponibles }} disponibles
-                                                    </span>
+                                                    <span>Inicial <span data-num="{{ correlativo.base_inicial }}">{{ correlativo.base_inicial }}</span></span>
+                                                    <span><span data-num="{{ correlativo.consumidos }}">{{ correlativo.consumidos }}</span> / <span data-num="{{ correlativo.total_rango }}">{{ correlativo.total_rango }}</span> usados</span>
                                                 </div>
                                             </td>
-                                            <td class="text-nowrap" style="color: var(--nexo-gray-500); font-size: 0.75rem;">
-                                                {{ correlativo.responsable }}
-                                            </td>
-                                            <td class="text-nowrap" style="color: var(--nexo-gray-500); font-size: 0.75rem;">
-                                                {% if correlativo.fecha_actualizacion %}
-                                                    {{ correlativo.fecha_actualizacion|date:"d/m/y" }}
-                                                {% else %}
-                                                    —
+                                            <td class="text-end text-nowrap disponibles-cell" data-order="{{ correlativo.disponibles }}">
+                                                <span class="disponibles-num {% if correlativo.disponibles < 20 %}text-nexo-error{% elif correlativo.disponibles < 100 %}text-nexo-warning{% else %}text-nexo-success{% endif %}"
+                                                      data-num="{{ correlativo.disponibles }}">{{ correlativo.disponibles }}</span>
+                                                {% if correlativo.disponibles <= 0 %}
+                                                    <div class="disponibles-tag tag-agotado">Sin folios</div>
+                                                {% elif correlativo.disponibles < 20 %}
+                                                    <div class="disponibles-tag tag-critico">¡Pedir folios ya!</div>
+                                                {% elif correlativo.disponibles < 100 %}
+                                                    <div class="disponibles-tag tag-alerta">Pedir folios</div>
                                                 {% endif %}
                                             </td>
                                             <td>
-                                                {% if correlativo.estado == 'agotado' %}
+                                                {% if correlativo.disponibles <= 0 %}
                                                     <span class="badge-nexo badge-nexo-error">Agotado</span>
-                                                {% elif correlativo.estado == 'critico' %}
-                                                    <span class="badge-nexo badge-nexo-warning">Crítico</span>
+                                                {% elif correlativo.disponibles < 20 %}
+                                                    <span class="badge-nexo badge-nexo-error">Crítico</span>
+                                                {% elif correlativo.disponibles < 100 %}
+                                                    <span class="badge-nexo badge-nexo-warning">Por agotarse</span>
                                                 {% else %}
                                                     <span class="badge-nexo badge-nexo-success">Activo</span>
                                                 {% endif %}
@@ -839,7 +915,7 @@
                                         </tr>
                                         {% empty %}
                                         <tr>
-                                            <td colspan="11" class="text-center py-5">
+                                            <td colspan="6" class="text-center py-5">
                                                 <div class="empty-state">
                                                     <i class="ri-inbox-line d-block mb-3"></i>
                                                     <p>No hay correlativos registrados</p>
@@ -1100,9 +1176,60 @@
             return new bootstrap.Tooltip(tooltipTriggerEl);
         });
 
+        // Formato de miles chileno (4.810) y contador de críticos.
+        // OJO: ambos se ejecutan ANTES de inicializar DataTables, porque
+        // DataTables saca del DOM las filas de las páginas no visibles.
+        // El separador de miles del locale es-CL de Django es un espacio
+        // duro, no el punto, así que el formato se hace acá.
+        formatearNumerosTabla();
+        actualizarSubcontadorCriticos();
+
         // Verificar si hay datos válidos en la tabla
         initDataTable();
+
+        // KPI cards clickeables: aplican el filtro de estado correspondiente.
+        $('.stats-card.kpi-card[role="button"]').on('click', function() {
+            const estado = $(this).data('filtro-estado') || '';
+            $('#filtroEstado').val(estado);
+            aplicarFiltros();
+        }).on('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                $(this).trigger('click');
+            }
+        });
     });
+
+    // Aplica separador de miles chileno a todo elemento con data-num.
+    // Si esta función no corriera, el número queda igual pero sin separador
+    // (sigue siendo legible): es sólo presentación.
+    function formatearNumerosTabla() {
+        document.querySelectorAll('#tablaCorrelativos [data-num]').forEach(function(el) {
+            const n = Number(el.getAttribute('data-num'));
+            if (!isNaN(n)) el.textContent = n.toLocaleString('es-CL');
+        });
+    }
+
+    // Cuenta las filas con menos de 20 folios disponibles y lo muestra bajo el
+    // KPI "Próximos a Agotar". Se calcula sobre la lista mostrada (si hay un
+    // filtro activo, es el conteo de esa lista) y se rotula así explícitamente.
+    function actualizarSubcontadorCriticos() {
+        const $sub = $('#kpiMenos20');
+        if (!$sub.length) return;
+
+        let criticos = 0;
+        $('#tablaCorrelativos tbody tr[data-disponibles]').each(function() {
+            const d = parseInt($(this).attr('data-disponibles'), 10);
+            if (!isNaN(d) && d > 0 && d < 20) criticos += 1;
+        });
+
+        if (criticos > 0) {
+            $sub.html('<i class="ri-alarm-warning-line me-1"></i>' + criticos +
+                      ' con menos de 20 folios (en esta lista)');
+        } else {
+            $sub.text('');
+        }
+    }
 
     function initDataTable() {
         const tabla = $('#tablaCorrelativos');
@@ -1123,10 +1250,14 @@
                     url: 'https://cdn.datatables.net/plug-ins/1.13.4/i18n/es-ES.json'
                 },
                 pageLength: 25,
-                order: [[0, 'asc'], [2, 'asc']],
+                // Orden por defecto: folios DISPONIBLES ascendente, para que lo
+                // crítico (agotados y casi agotados) quede arriba sin buscarlo.
+                // La celda lleva data-order con el número, así ordena numérico.
+                order: [[3, 'asc'], [0, 'asc']],
                 columnDefs: [
-                    { orderable: false, targets: [10] }, // Columna de acciones no ordenable
-                    { className: 'text-center', targets: [10] }
+                    // Columna 2 (rango + barra) y 5 (acciones) no son ordenables
+                    { orderable: false, targets: [2, 5] },
+                    { className: 'text-center', targets: [5] }
                 ],
                 responsive: true,
                 autoWidth: false,

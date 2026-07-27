@@ -33,6 +33,92 @@ from .models import (
 logger = logging.getLogger('app')
 
 
+def _esta_vencida(cotizacion, hoy=None):
+    """¿La cotización ya pasó su fecha de validez?
+
+    `Cotizacion_Empresa.estado` SOLO pasa a VENCIDA dentro de `save()`, y una
+    cotización que nadie vuelve a guardar se queda en VIGENTE para siempre. En
+    producción eso deja cotizaciones "vigentes" con 156 días de vencidas, el
+    filtro "Vencida" sin resultados y el botón Facturar habilitado sobre
+    documentos que el backend después rechaza. Esta función es la vigencia real,
+    calculada por fecha y no por el campo guardado.
+    """
+    if cotizacion.facturada or cotizacion.estado in (
+        Cotizacion_Empresa.ESTADO_ANULADA, Cotizacion_Empresa.ESTADO_FACTURADA,
+    ):
+        return False
+    if not cotizacion.fecha_validez:
+        return False
+    return cotizacion.fecha_validez < (hoy or timezone.localdate())
+
+
+def _estado_efectivo(cotizacion, hoy=None):
+    """Estado que hay que MOSTRARLE al usuario (vigencia calculada por fecha)."""
+    if _esta_vencida(cotizacion, hoy):
+        return Cotizacion_Empresa.ESTADO_VENCIDA
+    return cotizacion.estado
+
+
+def _cuadratura_item(item):
+    """(pendientes, despachadas_post_factura) del ítem, en UNIDADES.
+
+    Espejo EXACTO en Python de
+    `Cotizacion_Empresa_Detalle.unidades_pendientes_despacho`:
+
+        pendientes = cantidad − cubiertas_al_facturar − despachadas_post_factura
+
+    Se calcula acá, y no llamando a la property, porque la property dispara un
+    aggregate por ítem (y el listado abría con cientos de round-trips contra la
+    base remota). Trabaja sobre `skus_asociados` ya prefetcheado y sobre
+    `producto_existente_id`, que es una columna del propio ítem: NO agrega ni
+    una sola consulta.
+
+    OJO: la versión anterior de este helper replicaba la fórmula VIEJA (si el
+    ítem no "nacía pendiente" devolvía 0 sin mirar cuántas unidades respaldaban
+    realmente los SKUs). Eso hacía que el listado y el detalle mostraran 0
+    pendientes mientras el modelo — que es quien gobierna `asignar_sku_post_factura`
+    y `validar_despacho_cotizacion` — veía saldo. Caso real: COT-202607-0001,
+    línea de 5 uds con 1 sola respaldada → listado 0, modelo 4.
+    """
+    cantidad = item.cantidad or 0
+    filas = list(item.skus_asociados.all())
+    post_factura = sum((s.cantidad or 0) for s in filas if s.asignado_post_factura)
+
+    if item.es_producto_pendiente or item.sku_asignado_post_factura:
+        # `nacio_pendiente`: se facturó sin SKU, no salió nada con el ticket.
+        cubiertas = 0
+    else:
+        previas = [s for s in filas if not s.asignado_post_factura]
+        if previas:
+            cubiertas = sum((s.cantidad or 0) for s in previas)
+        else:
+            # Enlace legacy (un solo SKU por línea, antes de que existiera
+            # Cotizacion_Empresa_Detalle_SKU): se asume cobertura total, igual
+            # que el modelo. Inventar pendientes sobre datos históricos
+            # reabriría despachos ya cerrados.
+            cubiertas = cantidad if item.producto_existente_id else 0
+
+    return max(0, cantidad - cubiertas - post_factura), post_factura
+
+
+def _cuadratura_despacho(cotizacion):
+    """(facturadas, pendientes, despachadas_post_factura) en UNIDADES.
+
+    Misma aritmética que las properties del modelo
+    (`unidades_facturadas` / `unidades_pendientes_despacho`), pero resuelta en
+    Python sobre los ítems ya prefetcheados (ver `_cuadratura_item`).
+    """
+    facturadas = 0
+    pendientes = 0
+    post_factura = 0
+    for item in cotizacion.items.all():
+        facturadas += item.cantidad or 0
+        pend_item, post_item = _cuadratura_item(item)
+        pendientes += pend_item
+        post_factura += post_item
+    return facturadas, pendientes, post_factura
+
+
 def _puede_validar_despacho(request):
     """¿El usuario puede dar el OK final al despacho de una cotización?
 
@@ -139,18 +225,20 @@ def evaluar_items_cotizacion(cotizacion, sucursal_id):
     ambos muestren exactamente los mismos números.
 
     Devuelve dict con:
-        total_items, items_con_sku, items_sin_sku, items_sin_stock, problemas_stock
+        total_items, items_con_sku, items_sin_sku, items_sin_stock,
+        problemas_stock, items_cobertura_parcial
     """
     total_items = 0
     items_con_sku = 0
     items_sin_sku = 0
     items_sin_stock = 0
+    items_cobertura_parcial = 0
     problemas_stock = []
 
     for item in cotizacion.items.all():
         total_items += 1
-        skus_asociados = item.skus_asociados.all()
-        tiene_sku = skus_asociados.exists() or item.producto_existente is not None
+        skus_asociados = list(item.skus_asociados.all())
+        tiene_sku = bool(skus_asociados) or item.producto_existente is not None
 
         if not tiene_sku:
             items_sin_sku += 1
@@ -158,18 +246,35 @@ def evaluar_items_cotizacion(cotizacion, sucursal_id):
 
         items_con_sku += 1
 
-        if skus_asociados.exists():
-            for sku_rel in skus_asociados:
+        if skus_asociados:
+            # Unidades del ítem realmente cubiertas por SKUs. Si no cubren la
+            # cantidad cotizada, `cargar_cotizacion_como_ticket` igual carga
+            # item.cantidad sobre el PRIMER SKU: el pre-flight tiene que
+            # validar ESO, no la cantidad declarada en la relación.
+            # Caso real en producción: COT-202607-0001 tenía 5 uds con un solo
+            # SKU en cantidad 1; se validó stock para 1 y el POS descontó 5.
+            cubiertas = sum(s.cantidad for s in skus_asociados)
+            cobertura_parcial = cubiertas != item.cantidad
+            if cobertura_parcial:
+                items_cobertura_parcial += 1
+
+            for idx, sku_rel in enumerate(skus_asociados):
                 if not sku_rel.producto_talla:
                     continue
+                requerido = sku_rel.cantidad
+                if cobertura_parcial:
+                    # El POS ignora los SKUs siguientes y le carga TODO al primero.
+                    requerido = item.cantidad if idx == 0 else 0
+                if requerido <= 0:
+                    continue
                 stock_actual = sku_rel.producto_talla.stock_sucursal(sucursal_id)
-                if stock_actual < sku_rel.cantidad:
+                if stock_actual < requerido:
                     items_sin_stock += 1
                     problemas_stock.append({
                         'sku': str(sku_rel.producto_talla.sku),
                         'descripcion': item.descripcion[:30],
                         'stock': stock_actual,
-                        'requerido': sku_rel.cantidad,
+                        'requerido': requerido,
                     })
         elif item.producto_existente:
             # Compatibilidad con el modelo anterior (sin Detalle_SKU)
@@ -188,8 +293,40 @@ def evaluar_items_cotizacion(cotizacion, sucursal_id):
         'items_con_sku': items_con_sku,
         'items_sin_sku': items_sin_sku,
         'items_sin_stock': items_sin_stock,
+        'items_cobertura_parcial': items_cobertura_parcial,
         'problemas_stock': problemas_stock,
     }
+
+
+def _validar_cobertura_skus(items_data):
+    """Un ítem se factura completo o no se factura: la suma de las cantidades de
+    sus SKUs tiene que ser exactamente su cantidad (o no tener SKUs y salir por
+    despacho diferido).
+
+    Sin esta regla se guardan ítems "a medias" (5 uds cotizadas, 1 asignada a
+    SKU) que el POS factura entero contra el primer SKU: sobreventa de stock que
+    nadie validó y despacho diferido que no se entera. Ya pasó en producción.
+
+    Devuelve un mensaje de error o None.
+    """
+    for idx, item_data in enumerate(items_data, start=1):
+        skus = item_data.get('skus') or []
+        if not skus:
+            continue  # ítem sin SKU: despacho diferido, es un flujo válido
+        try:
+            cantidad = int(item_data.get('cantidad') or 0)
+            asignada = sum(int(s.get('cantidad') or 0) for s in skus)
+        except (TypeError, ValueError):
+            return f'Ítem {idx}: cantidades inválidas'
+        if asignada != cantidad:
+            descripcion = (item_data.get('descripcion') or '')[:40]
+            return (
+                f'Ítem {idx} ("{descripcion}"): cotizas {cantidad} unidad(es) pero '
+                f'tienes {asignada} asignada(s) a SKU. Asigna las {cantidad} '
+                f'unidades, o quita los SKUs y déjalo como ítem pendiente '
+                f'(se facturará con despacho diferido).'
+            )
+    return None
 
 
 # ==================== APIs DE LISTADO Y CONSULTA ====================
@@ -219,19 +356,48 @@ def listar_cotizaciones(request):
                 'error': 'No hay sucursal seleccionada'
             })
         
+        hoy = timezone.localdate()
+
         # Construir query base
-        cotizaciones = Cotizacion_Empresa.objects.filter(sucursal_id=sucursal_id)
-        
+        cotizaciones = (
+            Cotizacion_Empresa.objects
+            .filter(sucursal_id=sucursal_id)
+            .select_related('cliente', 'vendedor', 'dte', 'despacho_validado_por')
+            # `producto` incluido a propósito: Producto_Talla.stock_sucursal()
+            # lo consulta para saber si el SKU es de esta sucursal, y sin el
+            # prefetch eso es una query por cada SKU de cada fila del listado.
+            .prefetch_related(
+                'items__skus_asociados__producto_talla__producto',
+                'items__producto_existente__producto',
+            )
+        )
+
         # Aplicar filtros
         if fecha_desde:
             cotizaciones = cotizaciones.filter(fecha_emision__gte=fecha_desde)
-        
+
         if fecha_hasta:
             cotizaciones = cotizaciones.filter(fecha_emision__lte=fecha_hasta)
-        
+
         if estado:
-            cotizaciones = cotizaciones.filter(estado=estado)
-        
+            # La vigencia se filtra por FECHA, no por el campo guardado: el
+            # estado solo se recalcula dentro de save(), así que hay
+            # cotizaciones VIGENTE en la base que llevan meses vencidas. Sin
+            # esto el filtro "Vencida" no devolvía nunca nada.
+            if estado == Cotizacion_Empresa.ESTADO_VIGENTE:
+                cotizaciones = cotizaciones.filter(
+                    estado=Cotizacion_Empresa.ESTADO_VIGENTE,
+                    fecha_validez__gte=hoy,
+                )
+            elif estado == Cotizacion_Empresa.ESTADO_VENCIDA:
+                cotizaciones = cotizaciones.filter(
+                    Q(estado=Cotizacion_Empresa.ESTADO_VENCIDA)
+                    | Q(estado=Cotizacion_Empresa.ESTADO_VIGENTE,
+                        fecha_validez__lt=hoy)
+                )
+            else:
+                cotizaciones = cotizaciones.filter(estado=estado)
+
         if cliente_id:
             cotizaciones = cotizaciones.filter(cliente_id=cliente_id)
         
@@ -247,17 +413,49 @@ def listar_cotizaciones(request):
         # Ordenar
         cotizaciones = cotizaciones.order_by('-fecha_emision', '-numero_cotizacion')
         
-        # Calcular estadísticas
+        # Calcular estadísticas.
+        # 1) "Vigentes" se cuenta por FECHA: antes contaba el campo `estado`,
+        #    así que una cotización vencida hace meses seguía sumando vigente.
+        # 2) Se agrega sobre una queryset SIN el join a items: al buscar texto
+        #    la consulta hace JOIN con `items` y un Sum('total') ahí suma el
+        #    total una vez por línea que calce (montos inflados).
+        # 3) Todo en UN solo aggregate: la base es remota y cada consulta
+        #    costaba ~250 ms; eran 6 viajes solo para la barra de KPIs.
+        _q_vigente = Q(estado=Cotizacion_Empresa.ESTADO_VIGENTE, fecha_validez__gte=hoy)
+        _q_vencida = (
+            Q(estado=Cotizacion_Empresa.ESTADO_VENCIDA)
+            | Q(estado=Cotizacion_Empresa.ESTADO_VIGENTE, fecha_validez__lt=hoy)
+        )
+        _base_stats = Cotizacion_Empresa.objects.filter(
+            pk__in=cotizaciones.values('pk')
+        )
+        # Los alias NO pueden llamarse `total`: chocan con el campo `total` del
+        # modelo y Django responde "Cannot compute Sum('total')".
+        _agg = _base_stats.aggregate(
+            n_total=Count('id'),
+            n_vigentes=Count('id', filter=_q_vigente),
+            n_vencidas=Count('id', filter=_q_vencida),
+            n_facturadas=Count('id', filter=Q(estado=Cotizacion_Empresa.ESTADO_FACTURADA)),
+            n_anuladas=Count('id', filter=Q(estado=Cotizacion_Empresa.ESTADO_ANULADA)),
+            m_total=Sum('total'),
+            m_vigente=Sum('total', filter=_q_vigente),
+            m_vencido=Sum('total', filter=_q_vencida),
+        )
         estadisticas = {
-            'total': cotizaciones.count(),
-            'vigentes': cotizaciones.filter(estado=Cotizacion_Empresa.ESTADO_VIGENTE).count(),
-            'monto_total': cotizaciones.aggregate(Sum('total'))['total__sum'] or 0,
-            'facturadas': cotizaciones.filter(estado=Cotizacion_Empresa.ESTADO_FACTURADA).count(),
-            'anuladas': cotizaciones.filter(estado=Cotizacion_Empresa.ESTADO_ANULADA).count(),
+            'total': _agg['n_total'] or 0,
+            'vigentes': _agg['n_vigentes'] or 0,
+            'vencidas': _agg['n_vencidas'] or 0,
+            # monto_total = todo lo listado (incluye anuladas y vencidas);
+            # monto_vigente = plata realmente viva. El frontend muestra ambos.
+            'monto_total': _agg['m_total'] or 0,
+            'monto_vigente': _agg['m_vigente'] or 0,
+            'monto_vencido': _agg['m_vencido'] or 0,
+            'facturadas': _agg['n_facturadas'] or 0,
+            'anuladas': _agg['n_anuladas'] or 0,
         }
-        
+
         # Paginación
-        total = cotizaciones.count()
+        total = estadisticas['total']
         inicio = (page - 1) * per_page
         fin = inicio + per_page
         cotizaciones_paginadas = cotizaciones[inicio:fin]
@@ -279,23 +477,37 @@ def listar_cotizaciones(request):
             # Solo puede facturar si:
             # - Tiene items
             # - NO está ya facturada
-            # - Está vigente
+            # - Está vigente DE VERDAD (por fecha, no por el campo guardado)
             # - (items_sin_sku se tolera: el usuario confirmará despacho diferido)
             esta_facturada = cot.facturada or cot.estado == Cotizacion_Empresa.ESTADO_FACTURADA
-            esta_vigente = cot.estado == Cotizacion_Empresa.ESTADO_VIGENTE
+            esta_vencida = _esta_vencida(cot, hoy)
+            estado_efectivo = _estado_efectivo(cot, hoy)
+            # OJO: `esta_vigente` miraba solo `cot.estado`, mientras que el
+            # backend de facturación usa la property `esta_vigente` del modelo
+            # (que sí mira la fecha). Resultado: el botón "Convertir a Factura"
+            # aparecía habilitado y al pulsarlo respondía "Solo se pueden
+            # facturar cotizaciones vigentes". Ahora ambos dicen lo mismo.
+            esta_vigente = (
+                cot.estado == Cotizacion_Empresa.ESTADO_VIGENTE and not esta_vencida
+            )
             puede_facturar = total_items > 0 and items_sin_stock == 0 and not esta_facturada and esta_vigente
-            
+
             # Motivo por el que no puede facturar
             motivo_no_facturar = None
             if esta_facturada:
                 motivo_no_facturar = f'Ya facturada: {cot.numero_factura or "Sin número"}'
+            elif esta_vencida:
+                motivo_no_facturar = (
+                    f'Vencida hace {abs(cot.dias_restantes)} día(s). '
+                    f'Edítela y renueve los días de validez para poder facturarla.'
+                )
             elif not esta_vigente:
                 motivo_no_facturar = f'Estado: {cot.get_estado_display()}'
             elif items_sin_stock > 0:
                 motivo_no_facturar = f'{items_sin_stock} producto(s) sin stock suficiente'
             elif items_sin_sku > 0:
                 motivo_no_facturar = f'{items_sin_sku} ítem(s) sin SKU (se facturará con despacho diferido)'
-            
+
             cotizaciones_data.append({
                 'id': cot.id,
                 'numero_cotizacion': cot.numero_cotizacion,
@@ -307,8 +519,21 @@ def listar_cotizaciones(request):
                 'vendedor_id': cot.vendedor_id,
                 'vendedor_nombre': cot.vendedor.nombre if cot.vendedor else 'Sin vendedor',
                 'estado': cot.estado,
+                # Estado que se debe MOSTRAR (VENCIDA calculada por fecha)
+                'estado_efectivo': estado_efectivo,
+                'esta_vencida': esta_vencida,
                 'facturada': esta_facturada,
                 'numero_factura': cot.numero_factura or '',
+                # Documento tributario real. Una facturada sin `dte` es una
+                # cotización "zombi": dice FACTURADA con un número que no
+                # respalda ningún DTE (caso real en producción).
+                'dte_id': cot.dte_id,
+                'documento': (
+                    f'{cot.dte.tipo_documento} #{cot.dte.numero_documento}'
+                    if cot.dte_id else ''
+                ),
+                'sin_dte_enlazado': bool(esta_facturada and not cot.dte_id),
+                'items_cobertura_parcial': _eval['items_cobertura_parcial'],
                 'monto_total': float(cot.total),
                 'total_items': total_items,
                 'items_con_sku': items_con_sku,
@@ -328,13 +553,17 @@ def listar_cotizaciones(request):
                         Cotizacion_Empresa.DESPACHO_PARCIAL,
                     )
                 ),
-                # Mismo filtro que Cotizacion_Empresa.actualizar_estado_despacho(),
-                # si no la grilla y el estado_despacho dan números distintos.
+                # Ítems con saldo por despachar, contados por UNIDADES (mismo
+                # criterio que Cotizacion_Empresa.actualizar_estado_despacho()):
+                # contarlos por el flag `es_producto_pendiente` dejaba fuera al
+                # ítem que sí tenía SKU pero cubría menos unidades que las
+                # facturadas. Se resuelve sobre los ítems ya prefetcheados (un
+                # .filter() aquí volvería a pegarle a la base por cada fila).
                 'items_pendientes_despacho': (
-                    cot.items.filter(
-                        es_producto_pendiente=True,
-                        sku_asignado_post_factura=False,
-                    ).count()
+                    sum(
+                        1 for it in cot.items.all()
+                        if _cuadratura_item(it)[0] > 0
+                    )
                     if esta_facturada else 0
                 ),
             })
@@ -343,9 +572,13 @@ def listar_cotizaciones(request):
             # Solo tiene sentido en facturadas; en el resto va en 0 para que
             # el frontend no pinte badges.
             if esta_facturada:
-                uds_facturadas = cot.unidades_facturadas
-                uds_pendientes = cot.unidades_pendientes_despacho
+                # ¿Hubo despachos DESPUÉS de facturar? Solo esos se pueden
+                # revertir; sirve para dejar accesible la corrección de un SKU
+                # mal despachado aunque ya no queden unidades pendientes.
+                uds_facturadas, uds_pendientes, uds_post_factura = _cuadratura_despacho(cot)
                 cotizaciones_data[-1].update({
+                    'unidades_despachadas_post_factura': uds_post_factura,
+                    'tiene_despachos_post_factura': uds_post_factura > 0,
                     'unidades_facturadas': uds_facturadas,
                     'unidades_despachadas': uds_facturadas - uds_pendientes,
                     'unidades_pendientes': uds_pendientes,
@@ -369,6 +602,8 @@ def listar_cotizaciones(request):
                     'unidades_facturadas': 0,
                     'unidades_despachadas': 0,
                     'unidades_pendientes': 0,
+                    'unidades_despachadas_post_factura': 0,
+                    'tiene_despachos_post_factura': False,
                     'despacho_validado': False,
                     'despacho_validado_por': '',
                     'puede_validar_despacho': False,
@@ -398,8 +633,13 @@ def detalle_cotizacion(request, cotizacion_id):
     API para obtener detalles completos de una cotización
     """
     try:
-        cotizacion = get_object_or_404(Cotizacion_Empresa, pk=cotizacion_id)
-        
+        cotizacion = get_object_or_404(
+            Cotizacion_Empresa.objects
+            .select_related('cliente', 'vendedor', 'dte')
+            .prefetch_related('items__skus_asociados__producto_talla__producto'),
+            pk=cotizacion_id,
+        )
+
         # Verificar que pertenece a la sucursal del usuario
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         if sucursal_id and cotizacion.sucursal_id != int(sucursal_id):
@@ -407,15 +647,26 @@ def detalle_cotizacion(request, cotizacion_id):
                 'success': False,
                 'error': 'No tiene permisos para ver esta cotización'
             }, status=403)
-        
+
         # Serializar items
         items_data = []
         logger.debug("Cargando detalle de cotizacion %s", cotizacion.numero_cotizacion)
-        
-        for item in cotizacion.items.all().order_by('numero_linea'):
+
+        # sorted() en Python sobre el prefetch: .order_by() dispararía una
+        # consulta nueva por ítem y tiraría el prefetch a la basura.
+        for item in sorted(cotizacion.items.all(), key=lambda i: i.numero_linea or 0):
+            # Relación ya prefetcheada
+            filas_sku = list(item.skus_asociados.all())
+            # Cuadratura del ítem por el MISMO helper que usa el listado (las
+            # properties del modelo hacen un aggregate por ítem: 2 round-trips
+            # extra por línea). Antes acá se repetía la fórmula vieja a mano y
+            # el modal "Asignar SKU" filtra por `unidades_pendientes > 0`: con
+            # 0 no ofrecía nada que despachar aunque el backend sí aceptaba el
+            # saldo.
+            uds_pendientes_item, uds_despachadas_item = _cuadratura_item(item)
             # Obtener TODOS los SKUs asociados del nuevo modelo
             skus_asociados = []
-            for sku_rel in item.skus_asociados.all():
+            for sku_rel in filas_sku:
                 if sku_rel.producto_talla:
                     pt = sku_rel.producto_talla
                     producto = pt.producto
@@ -497,10 +748,15 @@ def detalle_cotizacion(request, cotizacion_id):
                 'stock_disponible': item.stock_disponible,
                 'observaciones': item.observaciones or '',
                 # Cuadratura por unidades (despacho diferido parcial)
-                'unidades_despachadas': item.unidades_despachadas_post_factura,
-                'unidades_pendientes': item.unidades_pendientes_despacho,
+                'unidades_despachadas': uds_despachadas_item,
+                'unidades_pendientes': uds_pendientes_item,
+                # Unidades del ítem realmente cubiertas por SKUs: si no llegan a
+                # `cantidad`, al facturar el POS le carga todo al primer SKU.
+                'unidades_cubiertas_sku': sum(s.cantidad for s in filas_sku),
             })
         
+        _uds_fact, _uds_pend, _uds_post = _cuadratura_despacho(cotizacion)
+
         # Datos de la cotización
         cotizacion_data = {
             'id': cotizacion.id,
@@ -526,11 +782,21 @@ def detalle_cotizacion(request, cotizacion_id):
             'numero_factura': cotizacion.numero_factura or '',
             'items': items_data,
             'esta_vigente': cotizacion.esta_vigente,
+            'esta_vencida': _esta_vencida(cotizacion),
+            'estado_efectivo': _estado_efectivo(cotizacion),
             'dias_restantes': cotizacion.dias_restantes,
+            # Documento tributario real (una facturada sin DTE es una zombi)
+            'dte_id': cotizacion.dte_id,
+            'documento': (
+                f'{cotizacion.dte.tipo_documento} #{cotizacion.dte.numero_documento}'
+                if cotizacion.dte_id else ''
+            ),
+            'sin_dte_enlazado': bool(cotizacion.facturada and not cotizacion.dte_id),
             # Cuadratura por unidades + validación (solo aplica a facturadas)
             'estado_despacho': cotizacion.estado_despacho or '',
-            'unidades_facturadas': cotizacion.unidades_facturadas if cotizacion.facturada else 0,
-            'unidades_pendientes': cotizacion.unidades_pendientes_despacho if cotizacion.facturada else 0,
+            'unidades_facturadas': _uds_fact if cotizacion.facturada else 0,
+            'unidades_pendientes': _uds_pend if cotizacion.facturada else 0,
+            'unidades_despachadas_post_factura': _uds_post if cotizacion.facturada else 0,
             'despacho_validado': cotizacion.despacho_validado,
         }
         
@@ -593,6 +859,10 @@ def crear_cotizacion(request):
         fecha_validez = fecha_emision + timedelta(days=dias_validez)
 
         items_data = data.get('items', [])
+
+        error_cobertura = _validar_cobertura_skus(items_data)
+        if error_cobertura:
+            return JsonResponse({'success': False, 'error': error_cobertura})
 
         # Todo dentro de una transacción: si falla a mitad no queda una
         # cotización sin ítems (y el lock del correlativo vive hasta el commit).
@@ -704,19 +974,69 @@ def editar_cotizacion(request, cotizacion_id):
                 'error': 'No tiene permisos para editar esta cotización'
             }, status=403)
 
-        # Solo se pueden editar cotizaciones vigentes
-        if cotizacion.estado != Cotizacion_Empresa.ESTADO_VIGENTE:
+        # Se editan las vigentes y las VENCIDAS (para poder renovarles la
+        # validez). Antes solo VIGENTE, y como `save()` degrada sola a VENCIDA
+        # al pasar la fecha, editar una cotización vencida la dejaba VENCIDA y
+        # a partir de ahí era ineditable e infacturable para siempre: quedaba
+        # muerta sin más salida que anularla.
+        if cotizacion.facturada or cotizacion.estado in (
+            Cotizacion_Empresa.ESTADO_FACTURADA, Cotizacion_Empresa.ESTADO_ANULADA,
+        ):
             return JsonResponse({
                 'success': False,
-                'error': 'Solo se pueden editar cotizaciones vigentes'
+                'error': (
+                    'No se puede editar una cotización '
+                    f'{cotizacion.get_estado_display().lower()}'
+                )
             })
 
         logger.debug("Editando cotizacion %s", cotizacion.numero_cotizacion)
 
+        estaba_vencida = _esta_vencida(cotizacion)
+
         # Actualizar datos generales
         cotizacion.descripcion = data.get('descripcion', cotizacion.descripcion)
         cotizacion.observaciones = data.get('observaciones', cotizacion.observaciones)
-        
+
+        # Vigencia: el formulario SIEMPRE envía fecha_emision y dias_validez,
+        # pero acá se ignoraban en silencio. Se podía "renovar" una cotización
+        # vencida, ver el mensaje de éxito y que la fecha de validez no se
+        # moviera un día. Ahora se aplican y se recalcula fecha_validez.
+        fecha_emision_str = data.get('fecha_emision')
+        if fecha_emision_str:
+            try:
+                cotizacion.fecha_emision = datetime.strptime(
+                    fecha_emision_str, '%Y-%m-%d'
+                ).date()
+            except (TypeError, ValueError):
+                return JsonResponse({
+                    'success': False, 'error': 'Fecha de emisión inválida'
+                })
+        dias_validez_raw = data.get('dias_validez')
+        if dias_validez_raw not in (None, ''):
+            try:
+                dias_validez = int(dias_validez_raw)
+            except (TypeError, ValueError):
+                return JsonResponse({
+                    'success': False, 'error': 'Días de validez inválidos'
+                })
+            if dias_validez < 1:
+                return JsonResponse({
+                    'success': False, 'error': 'Los días de validez deben ser 1 o más'
+                })
+            cotizacion.dias_validez = dias_validez
+        cotizacion.fecha_validez = (
+            cotizacion.fecha_emision + timedelta(days=cotizacion.dias_validez)
+        )
+
+        # Si la nueva vigencia alcanza hasta hoy, la cotización revive.
+        # `save()` solo sabe degradar (VIGENTE→VENCIDA), nunca al revés.
+        renovada = False
+        if cotizacion.fecha_validez >= timezone.localdate():
+            if cotizacion.estado == Cotizacion_Empresa.ESTADO_VENCIDA or estaba_vencida:
+                renovada = True
+            cotizacion.estado = Cotizacion_Empresa.ESTADO_VIGENTE
+
         # Actualizar cliente si se envía
         cliente_id = data.get('cliente_id')
         if cliente_id:
@@ -733,6 +1053,10 @@ def editar_cotizacion(request, cotizacion_id):
         cotizacion.vendedor = vendedor
 
         items_data = data.get('items', [])
+
+        error_cobertura = _validar_cobertura_skus(items_data)
+        if error_cobertura:
+            return JsonResponse({'success': False, 'error': error_cobertura})
 
         # Atómico: el borrado + recreación de ítems no puede quedar a medias
         # (dejaría la cotización sin líneas y con totales viejos).
@@ -798,15 +1122,36 @@ def editar_cotizacion(request, cotizacion_id):
                 cotizacion=cotizacion,
                 usuario=request.user,
                 accion='MODIFICADA',
-                descripcion=f'Cotización modificada por {request.user.username}',
+                descripcion=(
+                    f'Cotización modificada por {request.user.username}'
+                    + (f'. Vigencia renovada hasta {cotizacion.fecha_validez} '
+                       f'({cotizacion.dias_validez} días desde '
+                       f'{cotizacion.fecha_emision}).' if renovada else '')
+                ),
+                datos_nuevos={
+                    'fecha_emision': cotizacion.fecha_emision.isoformat(),
+                    'fecha_validez': cotizacion.fecha_validez.isoformat(),
+                    'dias_validez': cotizacion.dias_validez,
+                    'renovada': renovada,
+                },
                 ip_address=get_client_ip(request)
             )
 
-        logger.info("Cotizacion actualizada exitosamente: numero=%s", cotizacion.numero_cotizacion)
+        logger.info(
+            "Cotizacion actualizada exitosamente: numero=%s renovada=%s validez=%s",
+            cotizacion.numero_cotizacion, renovada, cotizacion.fecha_validez,
+        )
 
         return JsonResponse({
             'success': True,
-            'message': 'Cotización actualizada exitosamente'
+            'message': (
+                'Cotización actualizada exitosamente'
+                + (f'. Vigencia renovada hasta el '
+                   f'{cotizacion.fecha_validez.strftime("%d/%m/%Y")}.'
+                   if renovada else '')
+            ),
+            'renovada': renovada,
+            'fecha_validez': cotizacion.fecha_validez.strftime('%Y-%m-%d'),
         })
 
     except Exception as e:
@@ -911,8 +1256,23 @@ def convertir_cotizacion_factura(request):
                 'error': 'No tiene permisos para convertir esta cotización'
             }, status=403)
 
-        # Verificar que está vigente
+        # Verificar que está vigente. El mensaje distingue el caso "venció"
+        # del caso "no está vigente", porque el vencimiento SÍ tiene salida:
+        # renovar los días de validez desde el botón Editar.
         if not cotizacion.esta_vigente:
+            if _esta_vencida(cotizacion):
+                return JsonResponse({
+                    'success': False,
+                    'error': (
+                        f'La cotización venció el '
+                        f'{cotizacion.fecha_validez.strftime("%d/%m/%Y")} '
+                        f'(hace {abs(cotizacion.dias_restantes)} días). '
+                        f'Edítela y renueve los días de validez para poder facturarla.'
+                    ),
+                    'error_tipo': 'VENCIDA',
+                    'fecha_validez': cotizacion.fecha_validez.strftime('%Y-%m-%d'),
+                    'dias_vencida': abs(cotizacion.dias_restantes),
+                })
             return JsonResponse({
                 'success': False,
                 'error': 'Solo se pueden facturar cotizaciones vigentes'
@@ -1056,42 +1416,88 @@ def cargar_cotizacion_como_ticket(request, cotizacion_id):
         items_sin_stock = []    # ítems CON SKU pero sin stock suficiente
         
         for item in cotizacion.items.all().order_by('numero_linea'):
-            # Intentar obtener el producto desde los SKUs asociados
-            sku_rel = item.skus_asociados.first()
-            
-            if sku_rel and sku_rel.producto_talla:
-                pt = sku_rel.producto_talla
-                producto = pt.producto
-                
-                # Verificar stock disponible en la sucursal actual
-                stock_actual = pt.stock_sucursal(sucursal_id)
-                cantidad_requerida = item.cantidad
-                
-                if stock_actual < cantidad_requerida:
-                    items_sin_stock.append({
-                        'descripcion': item.descripcion,
+            # SKUs asociados al ítem. Un ítem puede repartirse entre varios
+            # (ej. "Balón x5" = SKU A x4 + SKU B x1).
+            filas_sku = [s for s in item.skus_asociados.all() if s.producto_talla]
+
+            if filas_sku:
+                # Con UN solo SKU se mantiene el comportamiento histórico
+                # (la línea lleva la cantidad del ítem). Con VARIOS, cada SKU
+                # va en su propia línea con SU cantidad: antes se tomaba
+                # `skus_asociados.first()` y se le cargaban TODAS las unidades
+                # del ítem, así que el segundo SKU nunca salía de stock y el
+                # primero se descontaba de más.
+                multi = len(filas_sku) > 1
+                for sku_rel in filas_sku:
+                    pt = sku_rel.producto_talla
+                    producto = pt.producto
+                    cantidad_linea = sku_rel.cantidad if multi else item.cantidad
+                    if cantidad_linea <= 0:
+                        continue
+
+                    stock_actual = pt.stock_sucursal(sucursal_id)
+                    if stock_actual < cantidad_linea:
+                        items_sin_stock.append({
+                            'descripcion': item.descripcion,
+                            'sku': str(pt.sku),
+                            'stock_actual': stock_actual,
+                            'cantidad_requerida': cantidad_linea
+                        })
+
+                    productos.append({
                         'sku': str(pt.sku),
-                        'stock_actual': stock_actual,
-                        'cantidad_requerida': cantidad_requerida
+                        'producto_talla_id': pt.id,
+                        'articulo': producto.articulo if producto else item.descripcion,
+                        'descripcion': producto.descripcion if producto else '',
+                        'marca': producto.atributo1.valor if producto and producto.atributo1 else '',
+                        'talla': pt.talla or 'N/A',
+                        'cantidad': cantidad_linea,
+                        'precio': float(item.precio_unitario),
+                        'precio_unitario': float(item.precio_unitario),
+                        'subtotal': (
+                            float(item.precio_unitario) * cantidad_linea
+                            if multi else float(item.subtotal)
+                        ),
+                        'stock': stock_actual,
+                        'descuento_unitario': 0,
+                        'costo': float(producto.costo) if producto and producto.costo else 0,
+                        # Información adicional de cotización
+                        'cotizacion_item_id': item.id,
                     })
-                
-                productos.append({
-                    'sku': str(pt.sku),
-                    'producto_talla_id': pt.id,
-                    'articulo': producto.articulo if producto else item.descripcion,
-                    'descripcion': producto.descripcion if producto else '',
-                    'marca': producto.atributo1.valor if producto and producto.atributo1 else '',
-                    'talla': pt.talla or 'N/A',
-                    'cantidad': item.cantidad,
-                    'precio': float(item.precio_unitario),
-                    'precio_unitario': float(item.precio_unitario),
-                    'subtotal': float(item.subtotal),
-                    'stock': stock_actual,
-                    'descuento_unitario': 0,
-                    'costo': float(producto.costo) if producto and producto.costo else 0,
-                    # Información adicional de cotización
-                    'cotizacion_item_id': item.id,
-                })
+
+                # Datos antiguos: SKUs que no cubren toda la cantidad del ítem.
+                # Las unidades sin respaldo van como despacho diferido en vez de
+                # descontarse de un SKU que no las tiene.
+                cubiertas = sum(s.cantidad for s in filas_sku)
+                if multi and cubiertas < item.cantidad:
+                    faltantes = item.cantidad - cubiertas
+                    items_pendientes.append({
+                        'detalle_id': item.id,
+                        'descripcion': item.descripcion,
+                        'nombre_pendiente': item.nombre_producto_pendiente or item.descripcion,
+                        'sku_esperado': 'N/A',
+                        'cantidad': faltantes,
+                        'precio_unitario': float(item.precio_unitario),
+                        'subtotal': float(item.precio_unitario) * faltantes,
+                        'fecha_llegada_estimada': None,
+                    })
+                    productos.append({
+                        'sku': None,
+                        'producto_talla_id': None,
+                        'articulo': item.descripcion,
+                        'descripcion': item.nombre_producto_pendiente or item.descripcion,
+                        'marca': '',
+                        'talla': '',
+                        'cantidad': faltantes,
+                        'precio': float(item.precio_unitario),
+                        'precio_unitario': float(item.precio_unitario),
+                        'subtotal': float(item.precio_unitario) * faltantes,
+                        'stock': 0,
+                        'descuento_unitario': 0,
+                        'costo': 0,
+                        'cotizacion_item_id': item.id,
+                        'es_pendiente_despacho': True,
+                    })
             elif item.producto_existente:
                 # Compatibilidad con modelo anterior
                 pt = item.producto_existente

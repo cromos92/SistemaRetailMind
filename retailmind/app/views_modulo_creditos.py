@@ -15,8 +15,11 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import transaction
 import json
+import logging
 import re
 from decimal import Decimal
+
+logger = logging.getLogger('app')
 
 from .models import (
     CreditoTrabajador, PagoCreditoTrabajador, FirmaCreditoTrabajador,
@@ -109,6 +112,266 @@ def _usuario_puede_acceder_credito(request, credito):
         return True
     sucursal_actual_id = request.session.get('idSucursalActual')
     return str(credito.sucursal_id) == str(sucursal_actual_id)
+
+
+# ========== CARTERA POR COBRAR ==========
+#
+# Un `CreditoTrabajador` puede significar dos cosas OPUESTAS según su origen:
+#
+#  1) Créditos importados del sistema Laravel (`numero_credito` CP-INT-* /
+#     CP-EXT-*, motivo "Importado desde creditos_personal"): el monto es
+#     mercadería YA retirada, es decir DEUDA. Sus `pagos` legacy venían en 0.
+#  2) Créditos nativos del ERP (CR-AAAA-NNNN): el monto es un CUPO. La deuda
+#     nace recién cuando el beneficiario consume ese cupo en el POS, y ese
+#     consumo se guarda -confusamente- como `PagoCreditoTrabajador` con
+#     metodo_pago CREDITO_TRABAJADOR / CREDITO_EXTERNO.
+#
+# Por eso `saldo_pendiente` (= otorgado - monto_pagado) NO es la deuda:
+# en los nativos es el cupo que todavía NO se ha usado. La cartera se calcula
+# aquí de forma explícita para no sumar peras con manzanas.
+METODOS_CONSUMO_CREDITO = ('CREDITO_TRABAJADOR', 'CREDITO_EXTERNO')
+
+BUCKETS_ANTIGUEDAD = (
+    ('por_vencer', 'Por vencer'),
+    ('d1_30', '1 a 30 días'),
+    ('d31_60', '31 a 60 días'),
+    ('d61_90', '61 a 90 días'),
+    ('d91_180', '91 a 180 días'),
+    ('d181_365', '181 a 365 días'),
+    ('d365_mas', 'Más de 1 año'),
+)
+
+
+def _bucket_antiguedad(dias_vencido):
+    if dias_vencido <= 0:
+        return 'por_vencer'
+    if dias_vencido <= 30:
+        return 'd1_30'
+    if dias_vencido <= 60:
+        return 'd31_60'
+    if dias_vencido <= 90:
+        return 'd61_90'
+    if dias_vencido <= 180:
+        return 'd91_180'
+    if dias_vencido <= 365:
+        return 'd181_365'
+    return 'd365_mas'
+
+
+def _es_credito_legacy(numero_credito):
+    return bool(numero_credito) and numero_credito.upper().startswith('CP-')
+
+
+def _calcular_cartera_creditos(alcance_info):
+    """Fotografía de la cartera por cobrar AL DÍA DE HOY.
+
+    No aplica el filtro de fechas de la pantalla: una deuda de 2022 sigue
+    siendo deuda aunque el usuario esté mirando el mes en curso.
+    """
+    hoy = timezone.localdate()
+
+    creditos = CreditoTrabajador.objects.filter(
+        empresa_origen_id__in=alcance_info['empresa_ids'],
+        estado__in=['ACTIVO', 'APROBADO', 'PAGADO'],
+    )
+    if alcance_info['sucursal_ids']:
+        creditos = creditos.filter(sucursal_id__in=alcance_info['sucursal_ids'])
+
+    filas = list(creditos.values(
+        'id', 'numero_credito', 'estado', 'monto_aprobado', 'monto_solicitado',
+        'monto_pagado', 'fecha_vencimiento', 'fecha_solicitud',
+        'beneficiario_id', 'beneficiario__nombre', 'beneficiario__apellido',
+        'beneficiario__rut', 'sucursal__alias', 'empresa_origen__nombre',
+    ))
+    ids = [f['id'] for f in filas]
+
+    consumos = {}
+    abonos = {}
+    if ids:
+        for cid, metodo, total in (
+            PagoCreditoTrabajador.objects
+            .filter(credito_id__in=ids)
+            .values_list('credito_id', 'metodo_pago')
+            .annotate(total=Sum('monto_pago'))
+        ):
+            destino = consumos if metodo in METODOS_CONSUMO_CREDITO else abonos
+            destino[cid] = destino.get(cid, 0.0) + float(total or 0)
+
+    buckets = {clave: {'label': label, 'n': 0, 'monto': 0.0} for clave, label in BUCKETS_ANTIGUEDAD}
+    deudores = {}
+    total_deuda = 0.0
+    total_vencida = 0.0
+    total_por_vencer = 0.0
+    total_otorgado = 0.0
+    total_consumido = 0.0
+    total_abonado = 0.0
+    cupo_disponible = 0.0
+    deuda_legacy = 0.0
+    deuda_nativa = 0.0
+    n_legacy_con_consumo = 0
+    detalle_vencidos = []
+
+    for f in filas:
+        otorgado = float(f['monto_aprobado'] or f['monto_solicitado'] or 0)
+        consumo = consumos.get(f['id'], 0.0)
+        abono = abonos.get(f['id'], 0.0)
+        legacy = _es_credito_legacy(f['numero_credito'])
+
+        total_otorgado += otorgado
+        total_consumido += consumo
+        total_abonado += abono
+
+        if legacy:
+            # El monto importado ya es mercadería retirada.
+            deuda = otorgado - abono
+            if consumo > 0:
+                n_legacy_con_consumo += 1
+        else:
+            # Solo se debe lo efectivamente consumido del cupo.
+            deuda = consumo - abono
+            if f['estado'] in ('ACTIVO', 'APROBADO'):
+                cupo_disponible += max(otorgado - consumo, 0.0)
+
+        deuda = round(deuda, 2)
+        if deuda <= 0:
+            continue
+
+        dias_vencido = (hoy - f['fecha_vencimiento']).days if f['fecha_vencimiento'] else 0
+        clave = _bucket_antiguedad(dias_vencido)
+        buckets[clave]['n'] += 1
+        buckets[clave]['monto'] += deuda
+
+        total_deuda += deuda
+        if dias_vencido > 0:
+            total_vencida += deuda
+        else:
+            total_por_vencer += deuda
+
+        if legacy:
+            deuda_legacy += deuda
+        else:
+            deuda_nativa += deuda
+
+        nombre = f"{f['beneficiario__nombre'] or ''} {f['beneficiario__apellido'] or ''}".strip() or 'Sin asignar'
+        clave_deudor = f['beneficiario_id'] or f"s/{nombre}"
+        d = deudores.setdefault(clave_deudor, {
+            'beneficiario_id': f['beneficiario_id'],
+            'nombre': nombre,
+            'rut': f['beneficiario__rut'] or '',
+            'documentos': 0,
+            'deuda': 0.0,
+            'deuda_vencida': 0.0,
+            'dias_mora_max': 0,
+        })
+        d['documentos'] += 1
+        d['deuda'] += deuda
+        if dias_vencido > 0:
+            d['deuda_vencida'] += deuda
+            d['dias_mora_max'] = max(d['dias_mora_max'], dias_vencido)
+
+        if dias_vencido > 0:
+            detalle_vencidos.append({
+                'numero_credito': f['numero_credito'],
+                'beneficiario': nombre,
+                'rut': f['beneficiario__rut'] or '',
+                'sucursal': f['sucursal__alias'] or '',
+                'deuda': deuda,
+                'dias_vencido': dias_vencido,
+                'fecha_vencimiento': f['fecha_vencimiento'].strftime('%d/%m/%Y') if f['fecha_vencimiento'] else '',
+                'origen': 'Importado' if legacy else 'ERP',
+            })
+
+    top_deudores = sorted(deudores.values(), key=lambda x: x['deuda'], reverse=True)[:15]
+    detalle_vencidos.sort(key=lambda x: x['deuda'], reverse=True)
+
+    return {
+        'fecha_corte': hoy.strftime('%d/%m/%Y'),
+        'deuda_total': round(total_deuda, 2),
+        'deuda_vencida': round(total_vencida, 2),
+        'deuda_por_vencer': round(total_por_vencer, 2),
+        'porcentaje_vencido': round((total_vencida / total_deuda * 100), 1) if total_deuda else 0,
+        'deudores': len(deudores),
+        'documentos_con_deuda': sum(b['n'] for b in buckets.values()),
+        'deuda_importada': round(deuda_legacy, 2),
+        'deuda_erp': round(deuda_nativa, 2),
+        'cupo_otorgado': round(total_otorgado, 2),
+        'consumido_pos': round(total_consumido, 2),
+        'abonos_registrados': round(total_abonado, 2),
+        'cupo_disponible_sin_usar': round(cupo_disponible, 2),
+        'legacy_con_consumo_pos': n_legacy_con_consumo,
+        'antiguedad': [
+            {'clave': clave, 'label': buckets[clave]['label'],
+             'n': buckets[clave]['n'], 'monto': round(buckets[clave]['monto'], 2)}
+            for clave, _ in BUCKETS_ANTIGUEDAD
+        ],
+        'top_deudores': [
+            {**d, 'deuda': round(d['deuda'], 2), 'deuda_vencida': round(d['deuda_vencida'], 2)}
+            for d in top_deudores
+        ],
+        'vencidos': detalle_vencidos[:200],
+        'total_vencidos': len(detalle_vencidos),
+    }
+
+
+def _ventas_credito_sin_respaldo(alcance_info, dias=730):
+    """Ventas del POS cobradas con crédito que NO dejaron registro en el módulo.
+
+    El POS marca el pago del ticket como CREDITO_TRABAJADOR/CREDITO_EXTERNO y
+    recién DESPUÉS de cerrar la venta llama a `usar_credito_en_venta`. Si esa
+    segunda llamada falla (o el pago es un crédito externo escrito a mano, sin
+    `credito_id`), la venta queda cobrada contra un crédito que nunca se debitó
+    y la deuda no aparece en ninguna parte.
+    """
+    from .models import TicketDetallePago
+
+    from datetime import timedelta
+
+    desde = timezone.now() - timedelta(days=dias)
+    pagos_pos = (
+        TicketDetallePago.objects
+        .filter(metodo_pago__in=METODOS_CONSUMO_CREDITO, ticket__created_at__gte=desde)
+        .select_related('ticket', 'ticket__sucursal')
+    )
+    if alcance_info['sucursal_ids']:
+        pagos_pos = pagos_pos.filter(ticket__sucursal_id__in=alcance_info['sucursal_ids'])
+
+    registrados = set()
+    for numero, monto in (
+        PagoCreditoTrabajador.objects
+        .filter(created_at__gte=desde)
+        .values_list('credito__numero_credito', 'monto_pago')
+    ):
+        registrados.add((numero, float(monto)))
+
+    huerfanos = []
+    total = 0.0
+    cantidad = 0
+    for pago in pagos_pos.order_by('-ticket__created_at'):
+        notas = pago.notas or ''
+        match = re.search(r'(C[RP]-[A-Za-z0-9\-]+)', notas)
+        if match and (match.group(1), float(pago.monto)) in registrados:
+            continue
+        monto = float(pago.monto or 0)
+        total += monto
+        cantidad += 1
+        if len(huerfanos) < 50:
+            nombre = ''
+            if notas.strip().startswith('{'):
+                try:
+                    nombre = (json.loads(notas) or {}).get('nombre', '')
+                except (ValueError, TypeError):
+                    nombre = ''
+            huerfanos.append({
+                'fecha': pago.ticket.created_at.strftime('%d/%m/%Y'),
+                'metodo': pago.metodo_pago,
+                'monto': monto,
+                'ticket': pago.ticket_id,
+                'correlativo': pago.ticket.correlativo,
+                'sucursal': pago.ticket.sucursal.alias if pago.ticket.sucursal_id else '',
+                'cliente': nombre or (match.group(1) if match else ''),
+            })
+
+    return {'cantidad': cantidad, 'monto': round(total, 2), 'detalle': huerfanos}
 
 
 # ========== GESTIÓN DE CRÉDITOS ==========
@@ -289,7 +552,9 @@ def cargar_creditos_trabajadores(request):
         # Construir queryset base
         queryset = CreditoTrabajador.objects.filter(
             empresa_origen_id__in=alcance_info['empresa_ids']
-        ).select_related('beneficiario', 'empresa_origen', 'sucursal', 'autorizado_por', 'solicitado_por')
+        ).select_related(
+            'beneficiario', 'empresa_origen', 'sucursal', 'autorizado_por', 'solicitado_por'
+        ).prefetch_related('pagos__sucursal_cobro', 'pagos__registrado_por')
 
         if alcance_info['sucursal_ids']:
             queryset = queryset.filter(sucursal_id__in=alcance_info['sucursal_ids'])
@@ -307,9 +572,18 @@ def cargar_creditos_trabajadores(request):
         if fecha_fin:
             queryset = queryset.filter(fecha_solicitud__date__lte=fecha_fin)
         
-        if estado:
+        if estado == 'VENCIDO':
+            # Ningún proceso escribe estado='VENCIDO' en la BD (0 registros en
+            # producción), así que filtrar por el literal devolvía siempre vacío.
+            # "Vencido" es una condición calculada: activo/aprobado y con la
+            # fecha de vencimiento pasada.
+            queryset = queryset.filter(
+                estado__in=['ACTIVO', 'APROBADO'],
+                fecha_vencimiento__lt=timezone.localdate(),
+            )
+        elif estado:
             queryset = queryset.filter(estado=estado)
-        
+
         if trabajador_id:
             queryset = queryset.filter(beneficiario_id=trabajador_id)
         
@@ -366,7 +640,15 @@ def cargar_creditos_trabajadores(request):
             # sucursales), por eso se devuelven todos los usos ordenados
             # cronológicamente; el reporte luego los agrega.
             usos = []
-            for pago in credito.pagos.select_related('sucursal_cobro', 'registrado_por').order_by('fecha_pago', 'created_at'):
+            consumo_pos = 0.0
+            abonos_reales = 0.0
+            # Se usa la lista precargada (prefetch_related) en vez de volver a
+            # consultar por cada crédito: antes eran N queries por página.
+            for pago in sorted(credito.pagos.all(), key=lambda p: (p.fecha_pago, p.created_at)):
+                if pago.metodo_pago in METODOS_CONSUMO_CREDITO:
+                    consumo_pos += float(pago.monto_pago or 0)
+                else:
+                    abonos_reales += float(pago.monto_pago or 0)
                 # Intentar extraer número de boleta de la referencia o de las observaciones
                 numero_boleta = ''
                 if pago.referencia_pago:
@@ -389,8 +671,29 @@ def cargar_creditos_trabajadores(request):
 
             # Compatibilidad: último uso/pago registrado
             pago_info = usos[-1] if usos else None
-            
+
+            # Deuda real (ver comentario del bloque "CARTERA POR COBRAR"):
+            #  - importados de Laravel: el monto ya es mercadería retirada
+            #  - nativos del ERP: solo se debe lo consumido en el POS
+            es_legacy = _es_credito_legacy(credito.numero_credito)
+            otorgado = float(credito.monto_aprobado or credito.monto_solicitado or 0)
+            if es_legacy:
+                deuda = otorgado - abonos_reales
+            else:
+                deuda = consumo_pos - abonos_reales
+            if credito.estado in ('PENDIENTE', 'RECHAZADO'):
+                deuda = 0.0
+            deuda = round(max(deuda, 0.0), 2)
+            dias_vencido = (timezone.localdate() - credito.fecha_vencimiento).days if credito.fecha_vencimiento else 0
+
             creditos_data.append({
+                'es_legacy': es_legacy,
+                'origen_registro': 'Importado' if es_legacy else 'ERP',
+                'consumo_pos': round(consumo_pos, 2),
+                'abonos_reales': round(abonos_reales, 2),
+                'deuda': deuda,
+                'dias_vencido': dias_vencido if dias_vencido > 0 else 0,
+                'vencido_real': bool(deuda > 0 and dias_vencido > 0),
                 'id': credito.id,
                 'numero_credito': credito.numero_credito,
                 'trabajador': _serializar_beneficiario(credito),
@@ -477,7 +780,13 @@ def detalle_credito_trabajador(request, credito_id):
         
         # Obtener pagos del crédito
         pagos = []
+        consumo_pos = 0.0
+        abonos_reales = 0.0
         for pago in credito.pagos.select_related('sucursal_cobro', 'registrado_por').all():
+            if pago.metodo_pago in METODOS_CONSUMO_CREDITO:
+                consumo_pos += float(pago.monto_pago or 0)
+            else:
+                abonos_reales += float(pago.monto_pago or 0)
             pagos.append({
                 'id': pago.id,
                 'numero_pago': pago.numero_pago,
@@ -509,9 +818,20 @@ def detalle_credito_trabajador(request, credito_id):
                 'esta_completamente_firmado': firma.esta_completamente_firmado
             }
         
+        es_legacy = _es_credito_legacy(credito.numero_credito)
+        otorgado = float(credito.monto_aprobado or credito.monto_solicitado or 0)
+        deuda = (otorgado - abonos_reales) if es_legacy else (consumo_pos - abonos_reales)
+        if credito.estado in ('PENDIENTE', 'RECHAZADO'):
+            deuda = 0.0
+
         credito_data = {
             'id': credito.id,
             'numero_credito': credito.numero_credito,
+            'es_legacy': es_legacy,
+            'origen_registro': 'Importado' if es_legacy else 'ERP',
+            'consumo_pos': round(consumo_pos, 2),
+            'abonos_reales': round(abonos_reales, 2),
+            'deuda': round(max(deuda, 0.0), 2),
             'trabajador': _serializar_beneficiario(credito),
             'empresa_origen': {
                 'id': credito.empresa_origen.id,
@@ -859,31 +1179,62 @@ def registrar_pago_credito(request):
             }, status=403)
         
         # Verificar estado del crédito
-        if credito.estado not in ['ACTIVO', 'APROBADO']:
+        if credito.estado in ('PENDIENTE', 'RECHAZADO'):
             return JsonResponse({
                 'success': False,
-                'error': 'Solo se pueden registrar pagos en créditos activos o aprobados'
+                'error': 'No se pueden registrar cobros en créditos pendientes o rechazados'
             }, status=400)
-        
+
+        # Deuda real del crédito (ver bloque "CARTERA POR COBRAR").
+        # ANTES se validaba contra `saldo_pendiente`, que en los créditos
+        # nativos es el CUPO SIN USAR: por eso era imposible registrar la
+        # cobranza de un crédito ya consumido (estado PAGADO, saldo 0).
+        consumo_pos = Decimal('0')
+        abonos_reales = Decimal('0')
+        for metodo, total in (
+            credito.pagos.values_list('metodo_pago').annotate(t=Sum('monto_pago'))
+        ):
+            if metodo in METODOS_CONSUMO_CREDITO:
+                consumo_pos += Decimal(str(total or 0))
+            else:
+                abonos_reales += Decimal(str(total or 0))
+
+        otorgado = Decimal(str(credito.monto_aprobado or credito.monto_solicitado or 0))
+        if _es_credito_legacy(credito.numero_credito):
+            deuda = otorgado - abonos_reales
+        else:
+            deuda = consumo_pos - abonos_reales
+
+        if deuda <= 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'Este crédito no tiene deuda por cobrar (nada consumido o ya abonado por completo)'
+            }, status=400)
+
         # Validar monto
         try:
             monto_pago = Decimal(str(monto_pago))
             if monto_pago <= 0:
                 raise ValueError("El monto debe ser mayor a 0")
-            
-            # Verificar que no exceda el saldo pendiente
-            if monto_pago > credito.saldo_pendiente:
+
+            if monto_pago > deuda:
                 return JsonResponse({
                     'success': False,
-                    'error': f'El monto no puede exceder el saldo pendiente (${credito.saldo_pendiente:,})'
+                    'error': f'El monto no puede exceder la deuda del crédito (${deuda:,.0f})'
                 }, status=400)
-                
+
         except (ValueError, TypeError):
             return JsonResponse({
                 'success': False,
                 'error': 'Monto inválido'
             }, status=400)
-        
+
+        if metodo_pago in METODOS_CONSUMO_CREDITO:
+            return JsonResponse({
+                'success': False,
+                'error': 'Este formulario registra cobros; el consumo del crédito lo registra el POS'
+            }, status=400)
+
         # Obtener sucursal actual para el cobro
         sucursal_cobro_id = request.session.get('idSucursalActual')
         sucursal_cobro = None
@@ -910,10 +1261,11 @@ def registrar_pago_credito(request):
         
         return JsonResponse({
             'success': True,
-            'message': 'Pago registrado exitosamente',
+            'message': 'Cobro registrado exitosamente',
             'pago_id': pago.id,
             'numero_pago': pago.numero_pago,
             'nuevo_saldo': credito.saldo_pendiente,
+            'nueva_deuda': float(deuda - monto_pago),
             'estado_credito': credito.estado
         })
         
@@ -1410,29 +1762,47 @@ def reporte_creditos_trabajadores(request):
             total=Sum('monto_pagado')
         )['total'] or 0
         
-        # Estadísticas por estado
-        stats_por_estado = {}
-        for estado, display in ESTADO_CREDITO_CHOICES:
-            count = creditos.filter(estado=estado).count()
-            stats_por_estado[estado] = {
-                'count': count,
-                'display': display
-            }
-        
-        # Créditos vencidos
+        # Estadísticas por estado — una sola consulta agrupada en vez de una
+        # consulta COUNT por cada estado del choices.
+        conteo_estados = {
+            row['estado']: row['n']
+            for row in creditos.values('estado').annotate(n=Count('id'))
+        }
+        stats_por_estado = {
+            estado: {'count': conteo_estados.get(estado, 0), 'display': display}
+            for estado, display in ESTADO_CREDITO_CHOICES
+        }
+
+        # Créditos vencidos.
+        # Antes se iteraba el queryset completo instanciando modelos y se leía
+        # `credito.nombre_beneficiario`, que dispara una consulta por crédito
+        # (1.006 consultas contra la BD remota => ~4 minutos de respuesta).
+        # Ahora se filtra el vencimiento en SQL y se traen solo columnas planas.
+        hoy_local = timezone.localdate()
         creditos_vencidos = []
-        for credito in creditos.filter(estado__in=['ACTIVO', 'APROBADO']):
-            if credito.esta_vencido:
-                creditos_vencidos.append({
-                    'id': credito.id,
-                    'numero_credito': credito.numero_credito,
-                    'trabajador': credito.nombre_beneficiario,
-                    'monto_pendiente': credito.saldo_pendiente,
-                    'dias_vencido': abs(credito.dias_para_vencimiento),
-                    'fecha_vencimiento': credito.fecha_vencimiento.strftime('%d/%m/%Y')
-                })
-        
-        from django.db.models import Count
+        for f in creditos.filter(
+            estado__in=['ACTIVO', 'APROBADO'],
+            fecha_vencimiento__lt=hoy_local,
+        ).values(
+            'id', 'numero_credito', 'monto_aprobado', 'monto_solicitado',
+            'monto_pagado', 'fecha_vencimiento',
+            'beneficiario__nombre', 'beneficiario__apellido',
+        ):
+            saldo = float(f['monto_aprobado'] or f['monto_solicitado'] or 0) - float(f['monto_pagado'] or 0)
+            if saldo <= 0:
+                continue
+            nombre = f"{f['beneficiario__nombre'] or ''} {f['beneficiario__apellido'] or ''}".strip()
+            creditos_vencidos.append({
+                'id': f['id'],
+                'numero_credito': f['numero_credito'],
+                'trabajador': nombre or 'Sin asignar',
+                'monto_pendiente': saldo,
+                'dias_vencido': (hoy_local - f['fecha_vencimiento']).days,
+                'fecha_vencimiento': f['fecha_vencimiento'].strftime('%d/%m/%Y'),
+            })
+
+        # `Count` ya viene importado a nivel de módulo; el import local hacía
+        # que Python tratara el nombre como variable local en toda la función.
         top_beneficiarios = creditos.values(
             'beneficiario__nombre', 'beneficiario__apellido', 'beneficiario__id'
         ).annotate(
@@ -1448,6 +1818,10 @@ def reporte_creditos_trabajadores(request):
                 'total_monto_pagado': float(total_monto_pagado),
                 'saldo_pendiente_total': float(total_monto_aprobado - total_monto_pagado)
             },
+            # Cartera "al día de hoy": ignora el filtro de fechas de la pantalla
+            # a propósito (una deuda de 2022 sigue siendo deuda en julio 2026).
+            'cartera': _calcular_cartera_creditos(alcance_info),
+            'sin_respaldo': _ventas_credito_sin_respaldo(alcance_info),
             'estadisticas_por_estado': stats_por_estado,
             'creditos_vencidos': creditos_vencidos,
             'top_trabajadores': [
@@ -1845,12 +2219,50 @@ def usar_credito_en_venta(request):
         
         # Construir referencia de pago (número de boleta o ticket)
         referencia = numero_boleta or folio_documento or (f'TKT-{ticket_id}' if ticket_id else '')
-        
+
+        # Idempotencia: el POS llama a este endpoint DESPUÉS de cerrar la venta.
+        # Un reintento (doble click, reenvío del navegador, retry de red) volvía
+        # a descontar el mismo consumo dos veces. Si ya existe un uso idéntico
+        # (mismo crédito, misma referencia y mismo monto) se responde OK sin
+        # duplicar el débito.
+        if referencia:
+            existente = PagoCreditoTrabajador.objects.filter(
+                credito_id=credito.id,
+                referencia_pago=referencia,
+                monto_pago=monto_usado,
+            ).first()
+            if existente:
+                credito.refresh_from_db()
+                logger.warning(
+                    'usar_credito_en_venta: uso duplicado ignorado credito=%s ref=%s monto=%s',
+                    credito.numero_credito, referencia, monto_usado,
+                )
+                return JsonResponse({
+                    'success': True,
+                    'message': 'El uso del crédito ya estaba registrado',
+                    'nuevo_saldo': float(credito.saldo_pendiente),
+                    'estado_credito': credito.estado,
+                    'estado_display': credito.get_estado_display(),
+                    'pago_id': existente.id,
+                    'credito_pagado_completo': credito.estado == 'PAGADO',
+                    'duplicado': True,
+                })
+
         # Registrar el uso del crédito
         with transaction.atomic():
+            # Se bloquea la fila para que dos ventas simultáneas contra el mismo
+            # crédito no lean el mismo saldo y lo sobregiren.
+            credito = CreditoTrabajador.objects.select_for_update().get(id=credito.id)
+            if monto_usado > credito.saldo_pendiente:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Monto excede el saldo disponible (${credito.saldo_pendiente:,.0f})',
+                    'saldo_disponible': float(credito.saldo_pendiente)
+                }, status=400)
+
             # Actualizar monto pagado (usado)
             credito.monto_pagado += monto_usado
-            
+
             # Si se pagó todo, cambiar estado a PAGADO
             if credito.saldo_pendiente <= 0:
                 credito.estado = 'PAGADO'

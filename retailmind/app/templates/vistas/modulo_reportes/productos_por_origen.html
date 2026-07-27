@@ -335,13 +335,33 @@
         fetch('/app/api/reportes/productos-origen/?' + params.toString())
             .then(r => r.json())
             .then(render)
-            .catch(() => { $estado.textContent = 'Error al cargar datos'; });
+            .catch(() => {
+                $estado.textContent = 'Error al cargar datos';
+                // Sin esto la tabla se quedaba con el "Cargando…" para siempre
+                // y parecía que seguía trabajando.
+                mensajeTabla('ri-wifi-off-line', 'No se pudo conectar con el servidor',
+                             'Revisa tu conexión y vuelve a intentar.');
+            });
+    }
+
+    /* Estado de la tabla cuando no hay filas que mostrar (error o vacío). */
+    function mensajeTabla(icono, titulo, detalle) {
+        document.getElementById('origenBody').innerHTML = `
+            <tr><td colspan="6">
+                <div class="origen-loading" style="flex-direction:column;gap:4px;padding:28px 12px;text-align:center;">
+                    <i class="${icono}" style="font-size:1.6rem;opacity:.5;"></i>
+                    <div style="font-weight:600;color:#4A4A5A;">${titulo}</div>
+                    <div style="font-size:.78rem;color:#8A8A9A;">${detalle || ''}</div>
+                </div>
+            </td></tr>`;
     }
 
     /* ── Render principal ── */
     function render(data) {
         if (!data || !data.success) {
             $estado.textContent = 'Sin datos disponibles';
+            mensajeTabla('ri-inbox-line', 'Sin datos para este año / sucursal',
+                         (data && data.error) ? data.error : 'Prueba con otro año o quita el filtro de sucursal.');
             return;
         }
 

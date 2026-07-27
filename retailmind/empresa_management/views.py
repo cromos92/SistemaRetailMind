@@ -3,13 +3,13 @@ from django.http import JsonResponse, HttpResponse
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db.models import Q, Count, Sum, Value
+from django.db.models import Q, Count, Sum, Value, F
 from django.db.models.functions import Replace
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from urllib.parse import urlencode
 import json
 import csv
 import logging
@@ -21,6 +21,12 @@ from app.models import (
 
 logger = logging.getLogger('empresa_management')
 
+# Tamaños de página admitidos en el listado (evita que ?page_size=99999 traiga todo a memoria)
+PAGE_SIZE_DEFAULT = 25
+PAGE_SIZE_MIN = 10
+PAGE_SIZE_MAX = 200
+
+
 # Utilidad interna para sanitizar valores de campos CharField
 def _clean_char_field(value):
     if value is None:
@@ -30,68 +36,212 @@ def _clean_char_field(value):
     return str(value)
 
 
-# ========== VISTAS PARA EMPRESAS ==========
+def _parse_int(valor, defecto, minimo=None, maximo=None):
+    """Convierte a int de forma tolerante y acota el rango (evita 500 por querystring basura)."""
+    try:
+        numero = int(valor)
+    except (TypeError, ValueError):
+        return defecto
+    if minimo is not None and numero < minimo:
+        return minimo
+    if maximo is not None and numero > maximo:
+        return maximo
+    return numero
 
-@login_required
-def lista_empresas(request):
-    """Vista para listar empresas con filtros y paginación"""
-    
-    # Obtener parámetros de filtro
-    search = request.GET.get('search', '')
-    tipo_empresa = request.GET.get('tipo', '')  # Cambiar para coincidir con el JS
-    estado = request.GET.get('estado', '')  # Cambiar para coincidir con el JS
-    orden = request.GET.get('ordenar', 'nombre')  # Cambiar para coincidir con el JS
-    page_size = int(request.GET.get('page_size', 25))
-    
-    # Query base
+
+def _normalizar_rut(valor):
+    """Quita puntos, guiones y espacios para comparar RUTs escritos de cualquier forma."""
+    return (valor or '').replace('.', '').replace('-', '').replace(' ', '')
+
+
+def _empresa_es_tenant(empresa):
+    """True si la empresa tiene usuarios asociados (es una empresa del holding, no un tercero)."""
+    from app.models import EmpresaUser
+    return EmpresaUser.objects.filter(empresa=empresa, status=True).exists()
+
+
+def _usuario_puede_gestionar_empresa(usuario, empresa):
+    """
+    Scoping multi-empresa para operaciones de escritura.
+
+    Reglas (conservadoras, para no romper el mantenimiento de proveedores):
+    - Administradores y usuarios con visibilidad global: siempre pueden.
+    - Empresas del holding (con usuarios asociados via ``EmpresaUser.status=True``):
+      solo los usuarios asignados a esa empresa.
+    - Empresas de terceros (proveedores/clientes sin usuarios asociados): cualquier
+      usuario autenticado, igual que hasta ahora.
+    """
+    if empresa is None:
+        return False
+
+    from app.utils_permisos import obtener_empresas_usuario
+
+    if empresa.id in set(obtener_empresas_usuario(usuario).values_list('id', flat=True)):
+        return True
+
+    # Solo se bloquea si la empresa pertenece a otro "tenant" del holding.
+    return not _empresa_es_tenant(empresa)
+
+
+def _referencias_que_bloquean_eliminacion(empresa):
+    """
+    Relaciones con ``on_delete=CASCADE`` hacia Empresa que harían que un borrado
+    arrastre documentos tributarios o históricos. Devuelve etiquetas legibles.
+    """
+    from app.models import Dte, Compras, Cotizacion, EmpresaUser
+
+    bloqueos = []
+    if Dte.objects.filter(Q(emisor_id=empresa.id) | Q(receptor_id=empresa.id)).exists():
+        bloqueos.append('documentos tributarios (DTE) asociados')
+    if Compras.objects.filter(empresa_id=empresa.id).exists():
+        bloqueos.append('compras asociadas')
+    if Cotizacion.objects.filter(empresa_id=empresa.id).exists():
+        bloqueos.append('cotizaciones asociadas')
+    if EmpresaUser.objects.filter(empresa_id=empresa.id).exists():
+        bloqueos.append('usuarios asignados')
+    return bloqueos
+
+
+def _referencias_que_bloquean_eliminacion_sucursal(sucursal):
+    """
+    Relaciones con ``on_delete=CASCADE`` hacia Sucursal: borrarla arrastraría
+    productos/stock, ventas y kardex. Devuelve etiquetas legibles.
+    """
+    from app.models import Producto, Ticket, Movimientos_Producto, EmpresaUser
+
+    bloqueos = []
+    if Producto.objects.filter(sucursal_id=sucursal.id).exists():
+        bloqueos.append('productos/stock asociados')
+    if Ticket.objects.filter(sucursal_id=sucursal.id).exists():
+        bloqueos.append('ventas asociadas')
+    if Movimientos_Producto.objects.filter(
+        Q(sucursal_origen_id=sucursal.id) | Q(sucursal_destino_id=sucursal.id)
+    ).exists():
+        bloqueos.append('movimientos de inventario asociados')
+    if EmpresaUser.objects.filter(sucursal_id=sucursal.id).exists():
+        bloqueos.append('usuarios asignados')
+    return bloqueos
+
+
+def _respuesta_sin_permiso(usuario, empresa, accion):
+    logger.warning(
+        "Acceso denegado por scoping de empresa: usuario=%s, empresa_id=%s, accion=%s",
+        getattr(usuario, 'username', usuario), getattr(empresa, 'id', None), accion,
+    )
+    return JsonResponse({
+        'success': False,
+        'error': 'No tienes permisos sobre esta empresa.'
+    }, status=403)
+
+
+def _filtrar_empresas(request):
+    """
+    Aplica los filtros de la pantalla de empresas.
+
+    Devuelve siempre un queryset SIN evaluar (todo el filtrado y la paginación
+    ocurren en la base de datos: son 1.699 empresas, nunca se traen a memoria).
+    """
+    search = (request.GET.get('search') or '').strip()
+    tipo_empresa = (request.GET.get('tipo') or '').strip()
+    estado = (request.GET.get('estado') or '').strip()
+
     empresas = Empresa.objects.all()
-    
-    # Aplicar filtros
+
     if search:
-        empresas = empresas.filter(
+        filtro = (
             Q(nombre__icontains=search) |
             Q(rut__icontains=search) |
             Q(nombre_fantasia__icontains=search) |
             Q(razon_social__icontains=search) |
-            Q(giro__icontains=search)
+            Q(giro__icontains=search) |
+            Q(comuna__icontains=search) |
+            Q(ciudad__icontains=search)
         )
-    
+        termino_normalizado = _normalizar_rut(search)
+        if termino_normalizado:
+            # Permite buscar "76.123.456-7" aunque el RUT esté guardado sin puntos (y viceversa)
+            empresas = empresas.annotate(
+                rut_normalizado=Replace(
+                    Replace(
+                        Replace('rut', Value('.'), Value('')),
+                        Value('-'), Value('')
+                    ),
+                    Value(' '), Value('')
+                )
+            )
+            filtro |= Q(rut_normalizado__icontains=termino_normalizado)
+        empresas = empresas.filter(filtro)
+
     # Filtro por tipo (usando esProveedor)
     if tipo_empresa == 'proveedor':
         empresas = empresas.filter(esProveedor=True)
     elif tipo_empresa == 'cliente':
         empresas = empresas.filter(esProveedor=False)
-    
-    # El modelo app.Empresa no tiene campo activo, así que ignoramos este filtro por ahora
-    
-    # Aplicar ordenamiento
-    if orden == 'nombre':
-        empresas = empresas.order_by('nombre')
-    elif orden == 'rut':
-        empresas = empresas.order_by('rut')
+
+    # Filtro por estado (el modelo app.Empresa SÍ tiene campo `activo`)
+    if estado == 'activo':
+        empresas = empresas.filter(activo=True)
+    elif estado == 'inactivo':
+        empresas = empresas.filter(activo=False)
+
+    return empresas
+
+
+# ========== VISTAS PARA EMPRESAS ==========
+
+@login_required
+def lista_empresas(request):
+    """Vista para listar empresas con filtros y paginación (todo resuelto en la BD)"""
+
+    # Obtener parámetros de filtro
+    search = (request.GET.get('search') or '').strip()
+    tipo_empresa = (request.GET.get('tipo') or '').strip()
+    estado = (request.GET.get('estado') or '').strip()
+    orden = (request.GET.get('ordenar') or 'nombre').strip()
+    page_size = _parse_int(
+        request.GET.get('page_size'), PAGE_SIZE_DEFAULT, PAGE_SIZE_MIN, PAGE_SIZE_MAX
+    )
+
+    empresas = _filtrar_empresas(request)
+
+    # Resumen calculado sobre el conjunto FILTRADO (una sola query agregada)
+    resumen = empresas.aggregate(
+        total=Count('id', distinct=True),
+        activas=Count('id', filter=Q(activo=True), distinct=True),
+        inactivas=Count('id', filter=Q(activo=False), distinct=True),
+        proveedores=Count('id', filter=Q(esProveedor=True), distinct=True),
+        clientes=Count('id', filter=Q(esProveedor=False), distinct=True),
+    )
+    resumen['sucursales'] = Sucursal.objects.filter(
+        empresa_id__in=empresas.values('id')
+    ).count()
+
+    # Conteos por anotación: evita el N+1 de contar sucursales/contactos fila por fila
+    empresas = empresas.annotate(
+        num_sucursales=Count('sucursales_app', distinct=True),
+        num_contactos=Count('contactos_crm', distinct=True),
+    )
+
+    # Ordenamiento (siempre con desempate por id: sin orden estable la paginación repite filas)
+    if orden == 'rut':
+        empresas = empresas.order_by('rut', 'id')
     elif orden == 'fecha':
-        empresas = empresas.order_by('id')  # Usar ID como proxy de fecha de creación
+        empresas = empresas.order_by(F('created_at').desc(nulls_last=True), '-id')
     elif orden == 'sucursales':
-        empresas = empresas.annotate(num_sucursales=Count('sucursales_app')).order_by('-num_sucursales')
-    
+        empresas = empresas.order_by('-num_sucursales', 'nombre', 'id')
+    else:
+        orden = 'nombre'
+        empresas = empresas.order_by('nombre', 'id')
+
     # Paginación
     paginator = Paginator(empresas, page_size)
-    page_number = request.GET.get('page', 1)
+    page_number = _parse_int(request.GET.get('page'), 1, 1)
     page_obj = paginator.get_page(page_number)
-    
+
     # Si es una request AJAX, devolver JSON
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
         empresas_data = []
         for empresa in page_obj:
-            # Contar sucursales relacionadas
-            try:
-                num_sucursales = empresa.sucursales_app.count()
-            except:
-                num_sucursales = 0
-            
-            # Para contactos, usar 0 por ahora ya que no existe en app.models
-            num_contactos = 0
-            
             # Determinar tipo basado en esProveedor
             if empresa.esProveedor:
                 tipo_display = 'Proveedor'
@@ -99,7 +249,7 @@ def lista_empresas(request):
             else:
                 tipo_display = 'Cliente'
                 tipo = 'cliente'
-            
+
             empresas_data.append({
                 'id': empresa.id,
                 'rut': empresa.rut or '',
@@ -124,23 +274,25 @@ def lista_empresas(request):
                 'codigo_postal': empresa.codigo_postal or '',
                 'sitio_web': empresa.sitio_web or '',
                 'activo': empresa.activo,
-                'fecha_creacion': empresa.created_at.isoformat() if empresa.created_at else None,
-                'fecha_actualizacion': empresa.updated_at.isoformat() if empresa.updated_at else None,
-                'num_sucursales': num_sucursales,
-                'num_contactos': num_contactos,
+                'fecha_creacion': timezone.localtime(empresa.created_at).strftime('%d-%m-%Y') if empresa.created_at else '',
+                'fecha_actualizacion': timezone.localtime(empresa.updated_at).strftime('%d-%m-%Y %H:%M') if empresa.updated_at else '',
+                'num_sucursales': empresa.num_sucursales,
+                'num_contactos': empresa.num_contactos,
             })
-        
+
         return JsonResponse({
             'success': True,
             'empresas': empresas_data,
+            'resumen': resumen,
             'total_registros': paginator.count,
             'total_paginas': paginator.num_pages,
             'pagina_actual': page_obj.number,
         })
-    
+
     # Para requests normales, devolver el template
     context = {
         'page_obj': page_obj,
+        'resumen': resumen,
         'search': search,
         'tipo_empresa': tipo_empresa,
         'estado': estado,
@@ -150,7 +302,7 @@ def lista_empresas(request):
             ('proveedor', 'Proveedor'),
         ],
     }
-    
+
     return render(request, 'empresa_management/lista_empresas.html', context)
 
 
@@ -235,8 +387,8 @@ def buscar_empresa_ajax(request):
 def listar_sucursales(request, empresa_id):
     """Listar sucursales de una empresa específica"""
     empresa = get_object_or_404(Empresa, id=empresa_id)
-    sucursales = Sucursal.objects.filter(empresa=empresa)
-    
+    sucursales = Sucursal.objects.filter(empresa=empresa).order_by('alias')
+
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         sucursales_data = []
         for sucursal in sucursales:
@@ -244,10 +396,12 @@ def listar_sucursales(request, empresa_id):
                 'id': sucursal.id,
                 'alias': sucursal.alias,
                 'direccion': sucursal.direccion,
-                'empresa_id': sucursal.empresa.id,
-                'empresa_nombre': sucursal.empresa.nombre,
+                'tipo_sucursal': sucursal.tipo_sucursal or '',
+                'es_centro_distribucion': bool(sucursal.es_centro_distribucion),
+                'empresa_id': empresa.id,
+                'empresa_nombre': empresa.nombre,
             })
-        
+
         return JsonResponse({
             'success': True,
             'sucursales': sucursales_data,
@@ -257,21 +411,21 @@ def listar_sucursales(request, empresa_id):
                 'razon_social': empresa.razon_social,
             }
         })
-    
-    context = {
-        'empresa': empresa,
-        'sucursales': sucursales,
-    }
-    return render(request, 'empresa_management/sucursales_empresa.html', context)
+
+    # No existe plantilla 'sucursales_empresa.html': el detalle se gestiona en el modal
+    # del listado, así que una entrada directa por URL vuelve al listado filtrado.
+    return redirect('/empresa_management/lista_empresas/?' + urlencode({'search': empresa.rut or ''}))
 
 @login_required
-@csrf_exempt
 @require_http_methods(["POST"])
 def crear_sucursal(request, empresa_id):
     """Crear nueva sucursal para una empresa"""
     logger.debug("Inicio crear_sucursal: empresa_id=%s", empresa_id)
     try:
         empresa = get_object_or_404(Empresa, id=empresa_id)
+
+        if not _usuario_puede_gestionar_empresa(request.user, empresa):
+            return _respuesta_sin_permiso(request.user, empresa, 'crear_sucursal')
 
         logger.debug(
             "Solicitud crear_sucursal: empresa_id=%s, content_type=%s, body_bytes=%s",
@@ -352,12 +506,14 @@ def crear_sucursal(request, empresa_id):
         })
 
 @login_required
-@csrf_exempt
 @require_http_methods(["PUT"])
 def editar_sucursal(request, sucursal_id):
     """Editar una sucursal existente"""
     sucursal = get_object_or_404(Sucursal, id=sucursal_id)
-    
+
+    if not _usuario_puede_gestionar_empresa(request.user, sucursal.empresa):
+        return _respuesta_sin_permiso(request.user, sucursal.empresa, 'editar_sucursal')
+
     try:
         data = json.loads(request.body)
         
@@ -426,30 +582,6 @@ def editar_sucursal(request, sucursal_id):
         })
 
 @login_required
-@csrf_exempt
-@require_http_methods(["DELETE"])
-def eliminar_sucursal(request, sucursal_id):
-    """Eliminar una sucursal"""
-    sucursal = get_object_or_404(Sucursal, id=sucursal_id)
-    
-    try:
-        alias = sucursal.alias
-        empresa_nombre = sucursal.empresa.nombre
-        sucursal.delete()
-        
-        return JsonResponse({
-            'success': True,
-            'message': f'Sucursal "{alias}" de {empresa_nombre} eliminada exitosamente'
-        })
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'Error al eliminar sucursal: {str(e)}'
-        })
-
-@login_required
-@csrf_exempt
 @require_http_methods(["POST"])
 def crear_empresa(request):
     """Crear nueva empresa via AJAX"""
@@ -469,13 +601,60 @@ def crear_empresa(request):
                 'success': False,
                 'error': 'La razón social es obligatoria'
             }, status=400)
-        
+
+        # Anti-duplicados: si ya existe una ficha con ese RUT (con o sin puntos/guion)
+        # se devuelve la existente en vez de crear otra. Las fichas duplicadas por RUT
+        # rompen la búsqueda de receptor al facturar.
+        rut_normalizado = _normalizar_rut(data.get('rut'))
+        if rut_normalizado:
+            existente = Empresa.objects.annotate(
+                rut_normalizado=Replace(
+                    Replace(
+                        Replace('rut', Value('.'), Value('')),
+                        Value('-'), Value('')
+                    ),
+                    Value(' '), Value('')
+                )
+            ).filter(rut_normalizado__iexact=rut_normalizado).order_by('id').first()
+
+            if existente:
+                logger.info(
+                    "crear_empresa: RUT ya existente, se reutiliza ficha empresa_id=%s rut=%s",
+                    existente.id, existente.rut,
+                )
+                return JsonResponse({
+                    'success': True,
+                    'ya_existia': True,
+                    'message': (
+                        f'Ya existía una empresa con el RUT {existente.rut}: se usó la ficha '
+                        f'"{existente.razon_social or existente.nombre}" (ID {existente.id}).'
+                    ),
+                    'empresa': {
+                        'id': existente.id,
+                        'nombre': existente.nombre,
+                        'rut': existente.rut,
+                        'razon_social': existente.razon_social,
+                        'nombre_fantasia': existente.nombre_fantasia,
+                        'giro': existente.giro,
+                        'direccion': existente.direccion,
+                        'comuna': existente.comuna,
+                        'ciudad': existente.ciudad,
+                        'region': existente.region or '',
+                        'codigo_postal': existente.codigo_postal or '',
+                        'telefono': existente.contacto1 or '',
+                        'email': existente.correoVendedor or existente.correoAdministrador or '',
+                        'acteco': existente.acteco or '',
+                        'tipo_display': 'Proveedor' if existente.esProveedor else 'Cliente',
+                        'esProveedor': existente.esProveedor,
+                    }
+                })
+
         # Determinar si es proveedor basado en el tipo
         tipo = data.get('tipo', 'cliente')
         es_proveedor = tipo in ['proveedor', 'ambos']
 
         correo_vendedor = data.get('correoVendedor') or data.get('email')
-        
+
         # Crear empresa usando solo los campos que existen en app.models.Empresa
         empresa = Empresa(
             nombre=data.get('razon_social', ''),  # Usar razon_social como nombre
@@ -495,8 +674,10 @@ def crear_empresa(request):
             acteco=_clean_char_field(data.get('acteco')),
             contacto1=_clean_char_field(data.get('contacto1') or data.get('telefono')),
             contacto2=_clean_char_field(data.get('contacto2')),
+            created_by=request.user,
+            updated_by=request.user,
         )
-        
+
         empresa.save()
         
         # Determinar tipo para la respuesta
@@ -532,23 +713,25 @@ def crear_empresa(request):
         }, status=500)
 
 @login_required
-@csrf_exempt
 @require_http_methods(["PUT"])
 def editar_empresa(request):
     """Editar empresa existente via AJAX"""
-    
+
     try:
         data = json.loads(request.body)
         empresa_id = data.get('empresa_id')
-        
+
         if not empresa_id:
             return JsonResponse({
                 'success': False,
                 'error': 'ID de empresa requerido'
             }, status=400)
-        
+
         empresa = get_object_or_404(Empresa, id=empresa_id)
-        
+
+        if not _usuario_puede_gestionar_empresa(request.user, empresa):
+            return _respuesta_sin_permiso(request.user, empresa, 'editar_empresa')
+
         # Validaciones básicas
         if not data.get('rut'):
             return JsonResponse({
@@ -586,7 +769,8 @@ def editar_empresa(request):
         empresa.acteco = _clean_char_field(data.get('acteco'))
         empresa.contacto1 = _clean_char_field(data.get('contacto1') or data.get('telefono'))
         empresa.contacto2 = _clean_char_field(data.get('contacto2'))
-        
+        empresa.updated_by = request.user
+
         empresa.save()
         
         # Determinar tipo para la respuesta
@@ -618,23 +802,37 @@ def editar_empresa(request):
         }, status=500)
 
 @login_required
-@csrf_exempt
 @require_http_methods(["DELETE"])
 def eliminar_empresa(request, empresa_id):
     """Eliminar empresa via AJAX"""
-    
+
     try:
         empresa = get_object_or_404(Empresa, id=empresa_id)
-        
+
+        if not _usuario_puede_gestionar_empresa(request.user, empresa):
+            return _respuesta_sin_permiso(request.user, empresa, 'eliminar_empresa')
+
         # Verificar si tiene registros relacionados
         if empresa.sucursales_app.exists():
             return JsonResponse({
                 'success': False,
                 'error': 'No se puede eliminar la empresa porque tiene sucursales asociadas. Elimina las sucursales primero.'
             }, status=400)
-            
+
+        # Empresa está referenciada por Dte/Compras/Cotizacion con on_delete=CASCADE:
+        # borrarla arrastraría documentos tributarios. Se bloquea y se sugiere desactivar.
+        bloqueos = _referencias_que_bloquean_eliminacion(empresa)
+        if bloqueos:
+            return JsonResponse({
+                'success': False,
+                'error': (
+                    'No se puede eliminar: la empresa tiene ' + ', '.join(bloqueos) +
+                    '. Eliminarla borraría esos registros. Desactívala en vez de eliminarla.'
+                )
+            }, status=400)
+
         nombre_empresa = empresa.razon_social or empresa.nombre
-        
+
         # Eliminar la empresa (sin log ya que LogEmpresa no existe)
         empresa.delete()
         
@@ -650,14 +848,16 @@ def eliminar_empresa(request, empresa_id):
         }, status=500)
 
 @login_required
-@csrf_exempt
 @require_http_methods(["POST"])
 def activar_desactivar_empresa(request, empresa_id):
     """Activar o desactivar empresa via AJAX"""
-    
+
     try:
         empresa = get_object_or_404(Empresa, id=empresa_id)
-        
+
+        if not _usuario_puede_gestionar_empresa(request.user, empresa):
+            return _respuesta_sin_permiso(request.user, empresa, 'activar_desactivar_empresa')
+
         with transaction.atomic():
             empresa.activo = not empresa.activo
             empresa.updated_by = request.user
@@ -691,68 +891,38 @@ def activar_desactivar_empresa(request, empresa_id):
 
 @login_required
 def detalle_empresa(request, empresa_id):
-    """Vista detallada de empresa"""
-    
+    """
+    Detalle de empresa. No está ruteada en urls.py y no existe plantilla
+    'detalle_empresa.html': el detalle se muestra en el modal del listado.
+    Se mantiene como redirección para no dejar un 500 latente si se rutea.
+    """
     empresa = get_object_or_404(Empresa, id=empresa_id)
-    
-    # Obtener datos relacionados
-    sucursales = empresa.sucursales_app.all()
-    contactos = empresa.contactos_crm.all()
-    clientes = empresa.clientes_crm.all()
-    
-    # Obtener logs recientes
-    logs = empresa.logs_crm.all()[:10]
-    
-    context = {
-        'empresa': empresa,
-        'sucursales': sucursales,
-        'contactos': contactos,
-        'clientes': clientes,
-        'logs': logs,
-    }
-    
-    return render(request, 'empresa_management/detalle_empresa.html', context)
+    return redirect('/empresa_management/lista_empresas/?' + urlencode({'search': empresa.rut or ''}))
 
 @login_required
 def exportar_empresas(request):
-    """Exportar empresas a CSV"""
-    
-    # Obtener parámetros de filtro
-    search = request.GET.get('search', '')
-    tipo = request.GET.get('tipo', '')
-    
-    # Query base
-    empresas = Empresa.objects.all()
-    
-    # Aplicar filtros
-    if search:
-        empresas = empresas.filter(
-            Q(nombre__icontains=search) |
-            Q(rut__icontains=search) |
-            Q(nombre_fantasia__icontains=search) |
-            Q(razon_social__icontains=search)
-        )
-    
-    # Filtro por tipo (usando esProveedor)
-    if tipo == 'proveedor':
-        empresas = empresas.filter(esProveedor=True)
-    elif tipo == 'cliente':
-        empresas = empresas.filter(esProveedor=False)
-    
+    """Exportar empresas a CSV (mismos filtros que la pantalla, incluido Estado)"""
+
+    # Se reutiliza el mismo filtrado del listado para que el CSV cuadre con lo que se ve
+    empresas = _filtrar_empresas(request).annotate(
+        num_sucursales=Count('sucursales_app', distinct=True)
+    ).order_by('nombre', 'id').iterator()
+
     # Crear respuesta CSV
     response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
     response['Content-Disposition'] = f'attachment; filename="empresas_{timezone.localtime().strftime("%Y%m%d_%H%M%S")}.csv"'
-    
+
     writer = csv.writer(response)
-    
+
     # Encabezados (solo campos que existen en app.models.Empresa)
     writer.writerow([
         'ID', 'Nombre', 'RUT', 'Nombre Fantasía', 'Razón Social', 'Giro',
-        'Dirección', 'Comuna', 'Ciudad', 'Tipo', 'Código Acteco',
+        'Dirección', 'Comuna', 'Ciudad', 'Región', 'Tipo', 'Estado', 'Sucursales',
+        'Código Acteco',
         'Contacto 1', 'Contacto 2',
         'Correo Vendedor', 'Correo Intercambio', 'Correo Administrador'
     ])
-    
+
     # Datos
     for empresa in empresas:
         tipo_display = 'Proveedor' if empresa.esProveedor else 'Cliente'
@@ -766,7 +936,10 @@ def exportar_empresas(request):
             empresa.direccion or '',
             empresa.comuna or '',
             empresa.ciudad or '',
+            empresa.region or '',
             tipo_display,
+            'Activa' if empresa.activo else 'Inactiva',
+            empresa.num_sucursales,
             empresa.acteco or '',
             empresa.contacto1 or '',
             empresa.contacto2 or '',
@@ -832,7 +1005,6 @@ def exportar_empresas_con_sucursales(request):
 
 
 @login_required
-@csrf_exempt
 @require_http_methods(["POST"])
 def importar_empresas_con_sucursales(request):
     """Importar empresas con sucursales desde CSV"""
@@ -980,86 +1152,67 @@ def importar_empresas_con_sucursales(request):
 
 @login_required
 def dashboard_empresas(request):
-    """Dashboard con estadísticas de empresas"""
-    
-    # Estadísticas generales
-    total_empresas = Empresa.objects.count()
-    empresas_activas = total_empresas  # Asumir que todas están activas
-    empresas_inactivas = 0  # No hay campo activo en app.models
-    
-    # Contar sucursales y contactos totales
-    try:
-        total_sucursales = Sucursal.objects.count()
-    except:
-        total_sucursales = 0
-    
-    # No hay ContactoEmpresa en app.models
-    total_contactos = 0
-    
+    """Métricas globales de empresas (se consume por AJAX desde el listado)"""
+
+    # Estadísticas generales (el modelo SÍ tiene campo `activo`)
+    conteos = Empresa.objects.aggregate(
+        total=Count('id'),
+        activas=Count('id', filter=Q(activo=True)),
+        inactivas=Count('id', filter=Q(activo=False)),
+        proveedores=Count('id', filter=Q(esProveedor=True)),
+        clientes=Count('id', filter=Q(esProveedor=False)),
+    )
+    total_sucursales = Sucursal.objects.count()
+    total_contactos = ContactoEmpresa.objects.count()
+
     # Si es una request AJAX, devolver JSON
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
         return JsonResponse({
             'success': True,
             'metricas': {
-                'total_empresas': total_empresas,
-                'empresas_activas': empresas_activas,
-                'empresas_inactivas': empresas_inactivas,
+                'total_empresas': conteos['total'],
+                'empresas_activas': conteos['activas'],
+                'empresas_inactivas': conteos['inactivas'],
+                'proveedores': conteos['proveedores'],
+                'clientes': conteos['clientes'],
                 'total_sucursales': total_sucursales,
                 'total_contactos': total_contactos,
             }
         })
-    
-    # Por tipo de empresa
-    por_tipo = Empresa.objects.values('tipo_empresa').annotate(
-        count=Count('id')
-    ).order_by('tipo_empresa')
-    
-    # Empresas creadas en los últimos 30 días
-    fecha_limite = timezone.localdate() - timedelta(days=30)
-    empresas_recientes = Empresa.objects.filter(
-        created_at__date__gte=fecha_limite
-    ).count()
-    
-    # Top 5 empresas con más sucursales
-    top_empresas_sucursales = Empresa.objects.annotate(
-        num_sucursales=Count('sucursales_app')
-    ).filter(num_sucursales__gt=0).order_by('-num_sucursales')[:5]
-    
-    # Empresas sin contactos
-    empresas_sin_contactos = Empresa.objects.filter(
-        contactos_crm__isnull=True
-    ).count()
-    
-    context = {
-        'total_empresas': total_empresas,
-        'empresas_activas': empresas_activas,
-        'empresas_inactivas': empresas_inactivas,
-        'por_tipo': por_tipo,
-        'empresas_recientes': empresas_recientes,
-        'top_empresas_sucursales': top_empresas_sucursales,
-        'empresas_sin_contactos': empresas_sin_contactos,
-        'total_sucursales': total_sucursales,
-        'total_contactos': total_contactos,
-    }
-    
-    return render(request, 'empresa_management/dashboard_empresas.html', context)
+
+    # No existe plantilla 'dashboard_empresas.html': las métricas viven en el listado.
+    return redirect('empresa_management:lista_empresas')
 
 # ========== FUNCIÓN DUPLICADA ELIMINADA ==========
 # La función crear_sucursal ya está definida arriba en la línea 184
 
 @login_required
-@csrf_exempt
 @require_http_methods(["POST", "DELETE"])
 def eliminar_sucursal(request, sucursal_id):
     """Eliminar sucursal via AJAX"""
-    
+
     try:
         sucursal = get_object_or_404(Sucursal, id=sucursal_id)
-        
+
+        if not _usuario_puede_gestionar_empresa(request.user, sucursal.empresa):
+            return _respuesta_sin_permiso(request.user, sucursal.empresa, 'eliminar_sucursal')
+
+        # Sucursal está referenciada por Producto/Ticket/Movimientos con on_delete=CASCADE:
+        # borrarla arrastraría stock, ventas y kardex.
+        bloqueos = _referencias_que_bloquean_eliminacion_sucursal(sucursal)
+        if bloqueos:
+            return JsonResponse({
+                'success': False,
+                'error': (
+                    'No se puede eliminar la sucursal: tiene ' + ', '.join(bloqueos) +
+                    '. Eliminarla borraría esos registros.'
+                )
+            }, status=400)
+
         with transaction.atomic():
             alias_sucursal = sucursal.alias
             sucursal.delete()
-            
+
             return JsonResponse({
                 'success': True,
                 'message': f'Sucursal "{alias_sucursal}" eliminada exitosamente'
@@ -1074,15 +1227,18 @@ def eliminar_sucursal(request, sucursal_id):
 # ========== VISTAS PARA CONTACTOS ==========
 
 @login_required
-@csrf_exempt
 @require_http_methods(["POST"])
 def crear_contacto(request, empresa_id):
     """Crear nuevo contacto via AJAX"""
-    
+
     try:
         empresa = get_object_or_404(Empresa, id=empresa_id)
+
+        if not _usuario_puede_gestionar_empresa(request.user, empresa):
+            return _respuesta_sin_permiso(request.user, empresa, 'crear_contacto')
+
         data = json.loads(request.body)
-        
+
         with transaction.atomic():
             contacto = ContactoEmpresa(
                 empresa=empresa,
@@ -1124,14 +1280,16 @@ def crear_contacto(request, empresa_id):
         }, status=500)
 
 @login_required
-@csrf_exempt
 @require_http_methods(["POST"])
 def eliminar_contacto(request, contacto_id):
     """Eliminar contacto via AJAX"""
-    
+
     try:
         contacto = get_object_or_404(ContactoEmpresa, id=contacto_id)
-        
+
+        if not _usuario_puede_gestionar_empresa(request.user, contacto.empresa):
+            return _respuesta_sin_permiso(request.user, contacto.empresa, 'eliminar_contacto')
+
         with transaction.atomic():
             nombre_contacto = contacto.nombre
             contacto.delete()

@@ -103,6 +103,11 @@
                     <i class="bi bi-arrow-left-right"></i>
                   </button>
                   {% endif %}
+                  {% if p.estado == 'FACTURADO' and p.dte_id and p.dte.tipo_documento != 'BOLETA PAPEL' %}
+                  <a href="{% url 'descargar_txt_dte_ecommerce' dte_id=p.dte_id %}" class="btn btn-sm btn-outline-secondary" style="font-size:.68rem;padding:1px 6px;" title="Descargar TXT Acepta">
+                    <i class="bi bi-file-earmark-text"></i>
+                  </a>
+                  {% endif %}
                 </div>
               {% endif %}
             </td>
@@ -137,7 +142,32 @@
   </div>
 </div>
 {% else %}
-  <div class="alert alert-info">
-    <i class="bi bi-info-circle me-2"></i>No hay pedidos con los filtros seleccionados.
+  <div class="tabla-vacia">
+    {% if filtros_activos %}
+      <i class="bi bi-funnel"></i>
+      <div class="tv-title">Ningún pedido coincide con los filtros</div>
+      <div class="tv-sub">
+        Estado <strong>{{ estado_filtro|default:"todos" }}</strong>
+        {% if canal_filtro %} · canal <strong>{{ canal_filtro }}</strong>{% endif %}
+        {% if sub_estado_filtro %} · sub-estado <strong>{{ sub_estado_filtro }}</strong>{% endif %}
+        {% if desde_filtro or hasta_filtro %} · recepción <strong>{{ desde_filtro|default:"…" }} → {{ hasta_filtro|default:"…" }}</strong>{% endif %}
+        {% if problema_filtro == 'dte_cero' %} · solo boletas con cabecera en 0{% endif %}
+        {% if q %} · búsqueda “{{ q }}”{% endif %}
+        {% if not sucursal_filtro and not ver_todas and sucursal_sesion_obj %}
+          <br>Se está mirando solo <strong>{{ sucursal_sesion_obj.nombre|default:sucursal_sesion_obj.alias }}</strong>
+          — marcá <em>Ver todas las sucursales</em> para ampliar.
+        {% endif %}
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-secondary mt-3" onclick="limpiarFiltros()">
+        <i class="bi bi-arrow-counterclockwise me-1"></i>Limpiar filtros
+      </button>
+    {% else %}
+      <i class="bi bi-inbox"></i>
+      <div class="tv-title">No hay pedidos pendientes</div>
+      <div class="tv-sub">
+        Todo lo recibido desde los marketplaces ya está facturado o cancelado.<br>
+        Usá <strong>Traer pedidos</strong> (arriba a la derecha) para consultar al hub por un rango de fechas.
+      </div>
+    {% endif %}
   </div>
 {% endif %}

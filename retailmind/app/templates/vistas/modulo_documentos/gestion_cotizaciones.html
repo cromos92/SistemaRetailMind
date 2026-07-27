@@ -108,11 +108,21 @@
                 </div>
             </div>
             <div class="nexo-stat-divider"></div>
+            <div class="nexo-stat-pill" id="pillVencidas" style="cursor: pointer;"
+                 title="Cotizaciones que pasaron su fecha de validez. Clic para filtrarlas.">
+                <i class="ri-time-line" style="color: var(--nexo-error); font-size: 1.1rem;"></i>
+                <div>
+                    <div class="nexo-stat-pill-label">Vencidas</div>
+                    <div class="nexo-stat-pill-value" id="totalVencidas"><span class="counter-value">0</span></div>
+                </div>
+            </div>
+            <div class="nexo-stat-divider"></div>
             <div class="nexo-stat-pill">
                 <i class="ri-money-dollar-circle-line" style="color: var(--nexo-info); font-size: 1.1rem;"></i>
                 <div>
-                    <div class="nexo-stat-pill-label">Monto Total</div>
+                    <div class="nexo-stat-pill-label" id="montoTotalLabel">Monto Vigente</div>
                     <div class="nexo-stat-pill-value" id="montoTotal"><span class="counter-value">$0</span></div>
+                    <div style="font-size: 10px; color: var(--nexo-text-muted);" id="montoTotalDetalle"></div>
                 </div>
             </div>
             <div class="nexo-stat-divider"></div>
@@ -193,8 +203,9 @@
                         </div>
                     </div>
                     <div class="col-md-6 text-end">
-                        <button class="nexo-btn-success" onclick="exportarCotizaciones()">
-                            <i class="ri-file-excel-line"></i> Exportar Excel
+                        <button class="nexo-btn-success" onclick="exportarCotizaciones()"
+                                title="Descarga en CSV lo que estás viendo con los filtros aplicados (se abre en Excel)">
+                            <i class="ri-file-excel-line"></i> Exportar CSV
                         </button>
                         <button class="nexo-btn-info ms-2" onclick="actualizarListado()">
                             <i class="ri-refresh-line"></i> Actualizar
@@ -1743,16 +1754,40 @@ document.addEventListener('DOMContentLoaded', function() {
     // === FUNCIONES DE INICIALIZACIÓN ===
     
     function inicializarFechas() {
-        const hoy = new Date();
-        const hace30Dias = new Date();
-        hace30Dias.setDate(hoy.getDate() - 30);
-        
-        document.getElementById('fechaDesde').value = hace30Dias.toISOString().split('T')[0];
-        document.getElementById('fechaHasta').value = hoy.toISOString().split('T')[0];
-        document.getElementById('fechaEmisionCotizacion').value = hoy.toISOString().split('T')[0];
+        // El filtro de fechas arranca VACÍO a propósito. Antes venía fijado a
+        // los últimos 30 días: las cotizaciones vencidas, las que esperan
+        // despacho y las que quedaron a medias son justamente las viejas, así
+        // que la pantalla abría escondiendo todo el trabajo pendiente (y los
+        // KPI solo contaban el último mes). El listado está paginado.
+        document.getElementById('fechaDesde').value = '';
+        document.getElementById('fechaHasta').value = '';
+        document.getElementById('fechaEmisionCotizacion').value =
+            new Date().toISOString().split('T')[0];
     }
 
     function configurarEventos() {
+        // KPI "Vencidas" como filtro rápido: es la cola de trabajo real
+        // (cotizaciones que ya no se pueden facturar sin renovarles la validez).
+        const pillVencidas = document.getElementById('pillVencidas');
+        if (pillVencidas) {
+            pillVencidas.addEventListener('click', function() {
+                const sel = document.getElementById('estadoCotizacion');
+                sel.value = (sel.value === 'VENCIDA') ? '' : 'VENCIDA';
+                paginaActual = 1;
+                cargarCotizaciones();
+            });
+        }
+
+        // Relanzar la búsqueda al cambiar cualquier filtro (antes había que
+        // pulsar "Buscar" y era fácil quedarse mirando datos viejos).
+        ['estadoCotizacion', 'filtroCliente', 'fechaDesde', 'fechaHasta'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', function() {
+                paginaActual = 1;
+                cargarCotizaciones();
+            });
+        });
+
         // Búsqueda en tiempo real en listado de cotizaciones
         let timeout;
         document.getElementById('buscarTexto').addEventListener('input', function() {
@@ -2221,7 +2256,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         tbody.innerHTML = cotizacionesData.map(cot => {
-            const diasRestantes = calcularDiasRestantes(cot.fecha_validez);
+            // Se prefiere el cálculo del backend (fecha del servidor en
+            // America/Santiago); el del navegador depende del reloj del POS.
+            const diasRestantes = (typeof cot.dias_restantes === 'number')
+                ? cot.dias_restantes
+                : calcularDiasRestantes(cot.fecha_validez);
             const clasesDias = diasRestantes < 0 ? 'dias-restantes-alerta' : 
                               diasRestantes <= 7 ? 'dias-restantes-warning' : 'dias-restantes-ok';
             
@@ -2251,6 +2290,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 estadoItemsHtml = `
                     <div style="font-size: 10px; color: var(--nexo-error); margin-top: 2px;">
                         <i class="ri-alert-line"></i> ${cot.items_sin_stock} sin stock
+                    </div>`;
+            } else if (cot.items_cobertura_parcial > 0) {
+                // Ítems con SKU que NO cubren la cantidad cotizada: al facturar
+                // el POS le carga TODAS las unidades al primer SKU.
+                estadoItemsIcon = 'ri-error-warning-line';
+                estadoItemsColor = 'var(--nexo-error)';
+                estadoItemsTitle = `${cot.items_cobertura_parcial} ítem(s) con SKUs que no cubren la cantidad cotizada`;
+                estadoItemsHtml = `
+                    <div style="font-size: 10px; color: var(--nexo-error); margin-top: 2px;">
+                        <i class="ri-error-warning-line"></i> ${cot.items_cobertura_parcial} SKU incompleto
                     </div>`;
             } else if (cot.items_con_sku === cot.total_items && cot.total_items > 0) {
                 // Todo OK: todos tienen SKU y stock suficiente
@@ -2293,10 +2342,24 @@ document.addEventListener('DOMContentLoaded', function() {
                             <span class="nexo-badge nexo-badge-info">
                                 <i class="ri-checkbox-circle-fill"></i> FACTURADA
                             </span>
-                            ${cot.numero_factura ? `<div style="font-size: 10px; color: var(--nexo-text-muted); margin-top: 2px;">${cot.numero_factura}</div>` : ''}
+                            ${cot.documento
+                                ? `<div style="font-size: 10px; color: var(--nexo-text-muted); margin-top: 2px;">${cot.documento}</div>`
+                                : (cot.numero_factura ? `<div style="font-size: 10px; color: var(--nexo-text-muted); margin-top: 2px;">${cot.numero_factura}</div>` : '')}
+                            ${cot.sin_dte_enlazado ? `
+                                <div style="margin-top:3px;">
+                                    <span class="nexo-badge" style="background:rgba(255,77,77,.15);color:#CC2200;font-size:10px;"
+                                          title="Marcada como facturada pero NO tiene documento tributario enlazado en el sistema. Verifique en Gestión de DTE antes de despachar.">
+                                        <i class="ri-error-warning-fill"></i> Sin DTE enlazado
+                                    </span>
+                                </div>` : ''}
                             ${badgeCuadraturaDespacho(cot)}
                         ` : `
-                            <span class="${obtenerClaseEstado(cot.estado)}">${cot.estado}</span>
+                            <span class="${obtenerClaseEstado(cot.estado_efectivo || cot.estado)}">${cot.estado_efectivo || cot.estado}</span>
+                            ${cot.esta_vencida ? `
+                                <div style="font-size: 10px; color: var(--nexo-error); margin-top: 2px;"
+                                     title="${cot.motivo_no_facturar || ''}">
+                                    <i class="ri-time-line"></i> hace ${Math.abs(diasRestantes)} días
+                                </div>` : ''}
                         `}
                     </td>
                     <td>
@@ -2304,16 +2367,20 @@ document.addEventListener('DOMContentLoaded', function() {
                             <button class="btn btn-action" style="background-color: var(--nexo-primary); color: white; border-color: var(--nexo-primary);" onclick="verDetalle(${cot.id})" title="Ver Detalle">
                                 <i class="ri-eye-line"></i>
                             </button>
-                            ${cot.estado === 'VIGENTE' && !cot.facturada ? `
-                                <button class="btn btn-action" style="background-color: var(--nexo-success); color: white; border-color: var(--nexo-success);" onclick="editarCotizacion(${cot.id})" title="Editar">
+                            ${(cot.estado === 'VIGENTE' || cot.estado === 'VENCIDA') && !cot.facturada ? `
+                                <button class="btn btn-action" style="background-color: var(--nexo-success); color: white; border-color: var(--nexo-success);" onclick="editarCotizacion(${cot.id})" title="${cot.esta_vencida ? 'Editar / renovar vigencia' : 'Editar'}">
                                     <i class="ri-edit-line"></i>
                                 </button>
+                                ${cot.esta_vencida ? `
+                                <button class="btn btn-action" style="background-color: #FFB020; color: #1A1A2E; border-color: #FFB020;" onclick="renovarVigencia(${cot.id}, '${cot.numero_cotizacion}')" title="Renovar la vigencia para poder facturarla">
+                                    <i class="ri-refresh-line"></i>
+                                </button>` : ''}
                                 <button class="btn btn-action" style="background-color: var(--nexo-error); color: white; border-color: var(--nexo-error);" onclick="anularCotizacion(${cot.id})" title="Anular">
                                     <i class="ri-close-line"></i>
                                 </button>
                             ` : ''}
-                            ${cot.tiene_despacho_pendiente ? `
-                                <button class="btn btn-action" style="background-color:#FF8C00;color:white;border-color:#FF8C00;" onclick="abrirModalAsignarSku(${cot.id})" title="Asignar SKU a ítems pendientes de despacho">
+                            ${(cot.tiene_despacho_pendiente || (cot.tiene_despachos_post_factura && !cot.despacho_validado)) ? `
+                                <button class="btn btn-action" style="background-color:#FF8C00;color:white;border-color:#FF8C00;" onclick="abrirModalAsignarSku(${cot.id})" title="${cot.tiene_despacho_pendiente ? 'Asignar SKU a ítems pendientes de despacho' : 'Revisar o corregir los despachos ya realizados'}">
                                     <i class="ri-truck-line"></i>
                                 </button>
                             ` : ''}
@@ -2408,8 +2475,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function actualizarEstadisticas(stats) {
         document.getElementById('totalCotizaciones').querySelector('.counter-value').textContent = stats.total || 0;
+        // "Vigentes" ahora viene calculado por FECHA en el backend: antes
+        // contaba el campo `estado`, que nunca se recalcula, y sumaba como
+        // vigentes cotizaciones vencidas hace meses.
         document.getElementById('totalVigentes').querySelector('.counter-value').textContent = stats.vigentes || 0;
-        document.getElementById('montoTotal').querySelector('.counter-value').textContent = formatearMoneda(stats.monto_total || 0);
+        const elVencidas = document.getElementById('totalVencidas');
+        if (elVencidas) elVencidas.querySelector('.counter-value').textContent = stats.vencidas || 0;
+        // El monto que se destaca es el VIGENTE (plata que aún se puede
+        // facturar). El total de lo listado, que incluye anuladas y vencidas,
+        // va como detalle para que nadie lo confunda con pipeline real.
+        document.getElementById('montoTotal').querySelector('.counter-value').textContent =
+            formatearMoneda(stats.monto_vigente || 0);
+        const elDetalle = document.getElementById('montoTotalDetalle');
+        if (elDetalle) {
+            elDetalle.textContent =
+                `Listado: ${formatearMoneda(stats.monto_total || 0)} · Vencido: ${formatearMoneda(stats.monto_vencido || 0)}`;
+            elDetalle.title = 'El monto grande es solo el de cotizaciones vigentes. '
+                + 'El "Listado" suma todo lo que se está mostrando (incluye anuladas, vencidas y facturadas).';
+        }
         document.getElementById('totalFacturadas').querySelector('.counter-value').textContent = stats.facturadas || 0;
         const elAnuladas = document.getElementById('totalAnuladas');
         if (elAnuladas) elAnuladas.querySelector('.counter-value').textContent = stats.anuladas || 0;
@@ -3290,6 +3373,32 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // Un ítem se factura completo: los SKUs deben cubrir exactamente la
+        // cantidad cotizada. Antes esto era solo un aviso naranja ("Faltan N
+        // unidades por asignar") y se podía guardar igual; al facturar, el POS
+        // le carga TODAS las unidades al primer SKU y descuenta stock que nadie
+        // validó. Pasó en producción (5 uds cotizadas, 1 asignada, salieron 5).
+        const itemMalCubierto = items.findIndex(it =>
+            (it.skus || []).length > 0 &&
+            it.skus.reduce((s, k) => s + (parseInt(k.cantidad) || 0), 0) !== it.cantidad
+        );
+        if (itemMalCubierto !== -1) {
+            const it = items[itemMalCubierto];
+            const asignada = it.skus.reduce((s, k) => s + (parseInt(k.cantidad) || 0), 0);
+            Swal.fire({
+                icon: 'warning',
+                title: 'Cantidades sin cuadrar',
+                html: `<div class="text-start">
+                    <p class="mb-2">El ítem <strong>${itemMalCubierto + 1}</strong> ("${(it.descripcion || '').substring(0, 40)}") cotiza
+                    <strong>${it.cantidad}</strong> unidad(es) pero tiene <strong>${asignada}</strong> asignada(s) a SKU.</p>
+                    <p class="small text-muted mb-0">Asigna las ${it.cantidad} unidades entre los SKUs, o quita los SKUs
+                    para dejarlo como ítem pendiente (se facturará con despacho diferido y podrás asignar el stock después).</p>
+                </div>`,
+                confirmButtonText: 'Entendido',
+            });
+            return;
+        }
+
         const formData = {
             cliente_id: cliente,
             vendedor_id: vendedor,
@@ -3427,7 +3536,12 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     function mostrarDetalleCotizacion(cot) {
-        const diasRestantes = calcularDiasRestantes(cot.fecha_validez);
+        const diasRestantes = (typeof cot.dias_restantes === 'number')
+            ? cot.dias_restantes
+            : calcularDiasRestantes(cot.fecha_validez);
+        // Estado que se muestra: VENCIDA se calcula por fecha, no por el campo
+        // guardado (que solo se actualiza dentro de save()).
+        const estadoMostrado = cot.estado_efectivo || cot.estado;
 
         // ── Paleta por estado ──────────────────────────────────────────────
         const estadoPaleta = {
@@ -3436,7 +3550,7 @@ document.addEventListener('DOMContentLoaded', function() {
             'FACTURADA': { color: '#0052CC', bg: 'rgba(0,82,204,.1)',   badge: '#0066FF', icon: 'ri-file-list-3-line',      label: 'Facturada' },
             'ANULADA':   { color: '#555566', bg: 'rgba(85,85,102,.1)',  badge: '#8A8A9A', icon: 'ri-close-circle-fill',     label: 'Anulada'   },
         };
-        const ep = estadoPaleta[cot.estado] || estadoPaleta['VIGENTE'];
+        const ep = estadoPaleta[estadoMostrado] || estadoPaleta['VIGENTE'];
 
         // ── Actualizar título del modal ────────────────────────────────────
         document.getElementById('tituloDetalleCotizacion').innerHTML = `
@@ -3592,6 +3706,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
             <!-- ─── TABLA DE ÍTEMS ──────────────────────────────────────── -->
             <div style="overflow-y:auto;max-height:420px;background:#fff;">
+                ${cot.facturada ? `
+                <!-- Cuadratura de despacho: facturado vs realmente sacado de stock -->
+                <div style="padding:8px 12px;background:${(cot.unidades_pendientes||0) > 0 ? 'rgba(255,140,0,.1)' : 'rgba(34,197,94,.1)'};border-bottom:1px solid #EEF0F8;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                    <span style="font-size:12px;font-weight:600;color:${(cot.unidades_pendientes||0) > 0 ? '#B05A00' : '#16a34a'};">
+                        <i class="ri-truck-line me-1"></i>
+                        Despacho: ${(cot.unidades_facturadas||0) - (cot.unidades_pendientes||0)} de ${cot.unidades_facturadas||0} uds facturadas
+                        ${(cot.unidades_pendientes||0) > 0
+                            ? ` · <strong>${cot.unidades_pendientes} unidad(es) sin salir de stock</strong>`
+                            : (cot.despacho_validado ? ' · validado por administrador' : ' · falta el OK del administrador')}
+                    </span>
+                    <span style="font-size:11px;color:#6B7280;">
+                        ${cot.documento
+                            ? `<i class="ri-file-text-line me-1"></i>${cot.documento}`
+                            : `<span style="color:#CC2200;font-weight:600;"><i class="ri-error-warning-fill me-1"></i>Sin DTE enlazado${cot.numero_factura ? ` (dice "${cot.numero_factura}")` : ''}</span>`}
+                    </span>
+                </div>` : ''}
                 <!-- Cabecera tabla -->
                 <div style="display:grid;grid-template-columns:28px 1fr 52px 90px 70px 80px;gap:0;padding:7px 12px;background:#F0F4FF;border-bottom:2px solid #D0DBFF;position:sticky;top:0;z-index:2;">
                     <div style="font-size:10px;font-weight:700;color:#6B7280;text-transform:uppercase;">#</div>
@@ -3617,6 +3747,29 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div style="padding-right:8px;">
                             <div style="font-weight:600;color:#1A1A2E;font-size:13px;margin-bottom:3px;line-height:1.3;">${item.descripcion}</div>
                             <div style="line-height:1.6;">${renderSkus(item)}</div>
+                            ${cot.facturada ? `
+                                <div style="margin-top:4px;font-size:10px;">
+                                    ${(item.unidades_pendientes || 0) > 0
+                                        ? `<span style="background:rgba(255,140,0,.15);color:#B05A00;border-radius:4px;padding:1px 6px;font-weight:600;">
+                                             <i class="ri-truck-line"></i> Saldo por despachar: ${item.unidades_pendientes} de ${item.cantidad}
+                                             ${(item.unidades_despachadas || 0) > 0 ? ` (ya salieron ${item.unidades_despachadas})` : ''}
+                                           </span>`
+                                        : `<span style="background:rgba(34,197,94,.12);color:#16a34a;border-radius:4px;padding:1px 6px;font-weight:600;">
+                                             <i class="ri-checkbox-circle-line"></i> Despachado ${item.cantidad}/${item.cantidad}
+                                           </span>`}
+                                </div>` : `
+                                ${(() => {
+                                    const asignadas = (item.skus_asociados || []).reduce((s, k) => s + (k.cantidad || 0), 0);
+                                    if (!(item.skus_asociados || []).length || asignadas === item.cantidad) return '';
+                                    // Cobertura parcial: al facturar, el POS le carga TODAS
+                                    // las unidades al primer SKU (sobreventa silenciosa).
+                                    return `<div style="margin-top:4px;font-size:10px;">
+                                        <span style="background:rgba(255,77,77,.12);color:#CC2200;border-radius:4px;padding:1px 6px;font-weight:600;"
+                                              title="Al facturar, todas las unidades saldrían del primer SKU. Asigna las ${item.cantidad} unidades o deja el ítem sin SKU (despacho diferido).">
+                                            <i class="ri-error-warning-line"></i> SKUs cubren ${asignadas} de ${item.cantidad} uds
+                                        </span></div>`;
+                                })()}
+                            `}
                             ${item.observaciones ? `<div style="margin-top:4px;color:#9CA3AF;font-size:10px;"><i class="ri-sticky-note-line me-1"></i>${item.observaciones}</div>` : ''}
                         </div>
                         <!-- Cantidad -->
@@ -3666,11 +3819,26 @@ document.addEventListener('DOMContentLoaded', function() {
             btnFacturar.className = 'nexo-btn-secondary';
             btnFacturar.style.backgroundColor = 'var(--nexo-info)';
             btnFacturar.style.borderColor = 'var(--nexo-info)';
+            btnFacturar.style.color = '';
             btnFacturar.style.cursor = 'not-allowed';
+        } else if (cot.esta_vencida) {
+            // Vencida: el backend RECHAZA la facturación. Antes el botón salía
+            // habilitado (miraba solo estado==='VIGENTE') y al pulsarlo devolvía
+            // "Solo se pueden facturar cotizaciones vigentes" sin decir qué hacer.
+            btnFacturar.style.display = 'inline-block';
+            btnFacturar.disabled = false;
+            btnFacturar.style.cursor = 'pointer';
+            btnFacturar.innerHTML = `<i class="ri-refresh-line me-1"></i> Renovar vigencia`;
+            btnFacturar.title = `Venció el ${formatearFecha(cot.fecha_validez)}. Renueva la validez para poder facturarla.`;
+            btnFacturar.className = 'nexo-btn-warning';
+            btnFacturar.style.backgroundColor = '#FFB020';
+            btnFacturar.style.borderColor = '#FFB020';
+            btnFacturar.style.color = '#1A1A2E';
         } else if (cot.estado === 'VIGENTE') {
             btnFacturar.style.display = 'inline-block';
             btnFacturar.style.cursor = 'pointer';
-            
+            btnFacturar.style.color = '';
+
             // Actualizar estado del botón según SKU y stock
             if (cotizacionInfo) {
                 if (cotizacionInfo.items_sin_sku > 0) {
@@ -3736,7 +3904,17 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             return;
         }
-        
+
+        // Vencida: el botón pasó a ser "Renovar vigencia". Se cierra el detalle
+        // y se abre el diálogo de renovación (única salida real: el backend no
+        // factura cotizaciones fuera de validez).
+        if (cotizacionActual.esta_vencida) {
+            const modalDet = bootstrap.Modal.getInstance(document.getElementById('modalDetalleCotizacion'));
+            if (modalDet) modalDet.hide();
+            renovarVigencia(cotizacionActual.id, cotizacionActual.numero_cotizacion);
+            return;
+        }
+
         // Ítems sin SKU → ofrecer despacho diferido en lugar de bloquear
         if (cotizacionInfo && cotizacionInfo.items_sin_sku > 0) {
             Swal.fire({
@@ -3883,15 +4061,152 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(() => mostrarError('Error de conexión al facturar'));
     }
 
+    // Renovar la vigencia de una cotización vencida sin tener que rehacerla.
+    // Una cotización vencida no se puede facturar; hasta ahora tampoco había
+    // forma de extenderle la validez desde la pantalla (el formulario enviaba
+    // dias_validez pero el backend lo ignoraba), así que la única salida era
+    // anularla y volver a cotizar todo.
+    window.renovarVigencia = function(cotizacionId, numeroCotizacion) {
+        const cot = cotizacionesData.find(c => c.id === cotizacionId);
+        const necesitaVendedor = cot && !cot.vendedor_id;
+        const opcionesVendedor = vendedoresData.map(
+            v => `<option value="${v.id}">${v.nombre}</option>`
+        ).join('');
+
+        Swal.fire({
+            title: 'Renovar vigencia',
+            html: `
+                <div class="text-start">
+                    <p class="mb-2">Cotización <strong>${numeroCotizacion}</strong>${cot ? ` — ${cot.cliente_nombre}` : ''}.</p>
+                    <label class="form-label mb-1" style="font-size:13px;">Válida por (días desde hoy)</label>
+                    <input type="number" id="swalDiasRenovar" class="form-control" value="30" min="1" max="365">
+                    ${necesitaVendedor ? `
+                        <label class="form-label mb-1 mt-3" style="font-size:13px;">Vendedor <span style="color:#CC2200;">*</span></label>
+                        <select id="swalVendedorRenovar" class="form-select">
+                            <option value="">Seleccione vendedor...</option>
+                            ${opcionesVendedor}
+                        </select>
+                        <small class="text-muted">Esta cotización no tiene vendedor y sin él no se puede facturar.</small>
+                    ` : ''}
+                </div>`,
+            showCancelButton: true,
+            confirmButtonText: '<i class="ri-refresh-line"></i> Renovar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#FFB020',
+            preConfirm: () => {
+                const dias = parseInt(document.getElementById('swalDiasRenovar').value || '0');
+                if (!dias || dias < 1) {
+                    Swal.showValidationMessage('Indique un número de días válido');
+                    return false;
+                }
+                let vendedorId = cot ? cot.vendedor_id : null;
+                if (necesitaVendedor) {
+                    vendedorId = document.getElementById('swalVendedorRenovar').value;
+                    if (!vendedorId) {
+                        Swal.showValidationMessage('Debe seleccionar el vendedor');
+                        return false;
+                    }
+                }
+                return { dias, vendedorId };
+            },
+        }).then(result => {
+            if (!result.isConfirmed) return;
+            const { dias, vendedorId } = result.value;
+
+            // Se re-envían los ítems tal cual están: `editar_cotizacion`
+            // reconstruye las líneas y sin ellas la cotización quedaría vacía.
+            fetch(apiUrls.detalleCotizacion(cotizacionId))
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success) { mostrarError(data.error || 'No se pudo leer la cotización'); return; }
+                    const c = data.cotizacion;
+
+                    // dias_validez se cuenta desde la emisión: para que quede
+                    // válida N días desde HOY hay que sumar los ya transcurridos.
+                    const emision = new Date(c.fecha_emision + 'T00:00:00');
+                    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+                    const transcurridos = Math.max(
+                        0, Math.round((hoy - emision) / (1000 * 60 * 60 * 24))
+                    );
+
+                    const payload = {
+                        cliente_id: c.cliente_id,
+                        vendedor_id: vendedorId,
+                        fecha_emision: c.fecha_emision,
+                        dias_validez: transcurridos + dias,
+                        descripcion: c.descripcion || '',
+                        observaciones: c.observaciones || '',
+                        items: (c.items || []).map(it => ({
+                            descripcion: it.descripcion,
+                            cantidad: it.cantidad,
+                            precio_unitario: it.precio_unitario,
+                            observaciones: it.observaciones || '',
+                            skus: (it.skus_asociados || []).map(s => ({
+                                producto_talla_id: s.id,
+                                sku: s.sku,
+                                cantidad: s.cantidad,
+                                costo: s.costo,
+                            })),
+                        })),
+                    };
+
+                    return fetch(apiUrls.editarCotizacion(cotizacionId), {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        },
+                        body: JSON.stringify(payload),
+                    })
+                    .then(r => r.json())
+                    .then(res => {
+                        if (res.success) {
+                            mostrarExito(res.message || 'Vigencia renovada');
+                            cargarCotizaciones();
+                        } else {
+                            mostrarError(res.error || 'No se pudo renovar la vigencia');
+                        }
+                    });
+                })
+                .catch(err => {
+                    console.error('Error renovando vigencia:', err);
+                    mostrarError('Error de conexión al renovar la vigencia');
+                });
+        });
+    };
+
     window.anularCotizacion = function(cotizacionId) {
-        if (confirm('¿Está seguro de anular esta cotización?')) {
+        const cot = cotizacionesData.find(c => c.id === cotizacionId);
+        Swal.fire({
+            icon: 'warning',
+            title: 'Anular cotización',
+            html: `
+                <div class="text-start">
+                    <p class="mb-2">Se anulará la cotización <strong>${cot ? cot.numero_cotizacion : ''}</strong>${cot ? ` (${formatearMoneda(cot.monto_total)})` : ''}. Esta acción no se puede deshacer.</p>
+                    <label class="form-label mb-1" style="font-size:13px;">Motivo <span style="color:#CC2200;">*</span></label>
+                    <input type="text" id="swalMotivoAnular" class="form-control" placeholder="Ej: el cliente desistió">
+                </div>`,
+            showCancelButton: true,
+            confirmButtonText: 'Anular',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#CC2200',
+            preConfirm: () => {
+                const motivo = (document.getElementById('swalMotivoAnular').value || '').trim();
+                if (!motivo) {
+                    Swal.showValidationMessage('Indique el motivo de la anulación');
+                    return false;
+                }
+                return motivo;
+            },
+        }).then(result => {
+            if (!result.isConfirmed) return;
             fetch(apiUrls.anularCotizacion, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
                 },
-                body: JSON.stringify({ cotizacion_id: cotizacionId })
+                body: JSON.stringify({ cotizacion_id: cotizacionId, motivo: result.value })
             })
             .then(response => response.json())
             .then(data => {
@@ -3906,9 +4221,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Error:', error);
                 mostrarError('Error al anular cotización');
             });
-        }
+        });
     };
-    
+
     // Editar cotización existente
     window.editarCotizacion = function(cotizacionId) {
         // Cargar datos de la cotización
@@ -4230,9 +4545,70 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
+    // Exportación. El botón apuntaba a /api/cotizaciones/exportar/, una URL que
+    // NO existe (ni con el prefijo /app/): siempre abría un 404. Se genera el
+    // archivo en el navegador a partir del mismo endpoint del listado, así no
+    // hace falta un endpoint nuevo y lo exportado es exactamente lo filtrado.
     window.exportarCotizaciones = function() {
         const filtros = obtenerFiltros();
-        window.open('/api/cotizaciones/exportar/?' + new URLSearchParams(filtros));
+        filtros.page = 1;
+        filtros.per_page = 5000;
+
+        Swal.fire({
+            title: 'Generando archivo...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading(),
+        });
+
+        fetch(apiUrls.listarCotizaciones + '?' + new URLSearchParams(filtros))
+            .then(r => r.json())
+            .then(data => {
+                Swal.close();
+                if (!data.success) { mostrarError(data.error || 'No se pudo exportar'); return; }
+                const filas = data.cotizaciones || [];
+                if (!filas.length) { mostrarError('No hay cotizaciones que exportar con los filtros actuales'); return; }
+
+                const cab = [
+                    'N Cotizacion', 'Fecha Emision', 'Valida Hasta', 'Dias Restantes',
+                    'Estado', 'Cliente', 'RUT', 'Vendedor', 'Items', 'Items sin SKU',
+                    'Items sin stock', 'Monto Total', 'Documento', 'Uds facturadas',
+                    'Uds despachadas', 'Uds pendientes', 'Despacho validado',
+                ];
+                const esc = (v) => {
+                    const s = (v === null || v === undefined) ? '' : String(v);
+                    return '"' + s.replace(/"/g, '""').replace(/[\r\n]+/g, ' ') + '"';
+                };
+                const lineas = [cab.map(esc).join(';')];
+                filas.forEach(c => {
+                    lineas.push([
+                        c.numero_cotizacion, c.fecha_emision, c.fecha_validez, c.dias_restantes,
+                        c.estado_efectivo || c.estado, c.cliente_nombre, c.cliente_rut,
+                        c.vendedor_nombre, c.total_items, c.items_sin_sku, c.items_sin_stock,
+                        c.monto_total, c.documento || c.numero_factura || '',
+                        c.unidades_facturadas || 0, c.unidades_despachadas || 0,
+                        c.unidades_pendientes || 0, c.despacho_validado ? 'SI' : 'NO',
+                    ].map(esc).join(';'));
+                });
+
+                // BOM para que Excel en es-CL respete tildes y el ; como separador
+                const blob = new Blob(['﻿' + lineas.join('\r\n')], {
+                    type: 'text/csv;charset=utf-8;'
+                });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `cotizaciones_${new Date().toISOString().slice(0, 10)}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                mostrarExito(`${filas.length} cotización(es) exportadas`);
+            })
+            .catch(err => {
+                Swal.close();
+                console.error('Error exportando cotizaciones:', err);
+                mostrarError('Error al generar el archivo');
+            });
     };
 
     window.imprimirCotizacion = function() {
@@ -4895,8 +5271,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (cot) {
             infoEl.innerHTML = `
                 <i class="ri-truck-line me-1"></i>
-                Cotización <strong>${cot.numero_cotizacion}</strong> — Cliente: <strong>${cot.cliente_nombre}</strong><br>
+                Cotización <strong>${cot.numero_cotizacion}</strong> — Cliente: <strong>${cot.cliente_nombre}</strong>
+                ${cot.documento ? ` — <strong>${cot.documento}</strong>` : ''}<br>
                 <small>Asigna un SKU a cada ítem sin stock. Al confirmar se descuenta el inventario y queda registrado el movimiento.</small>
+                ${cot.sin_dte_enlazado ? `
+                    <div class="mt-2 p-2" style="background:rgba(255,77,77,.12);border-radius:6px;color:#8a1a00;">
+                        <i class="ri-error-warning-fill me-1"></i>
+                        <strong>Ojo:</strong> esta cotización figura facturada${cot.numero_factura ? ` como "${cot.numero_factura}"` : ''}
+                        pero <strong>no tiene documento tributario enlazado</strong>. Verifica en Gestión de DTE que la factura
+                        exista antes de despachar: si no existe, el stock saldría contra un documento que nadie emitió.
+                    </div>` : ''}
             `;
         }
 
@@ -4919,24 +5303,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!data.success) { container.innerHTML = `<div class="alert alert-danger">${data.error}</div>`; return; }
                 // Filtro por SALDO en unidades: un ítem despachado parcialmente
                 // sigue apareciendo con las unidades que le faltan.
-                const items = (data.cotizacion.items || []).filter(item =>
-                    (item.unidades_pendientes || 0) > 0
-                );
-                if (items.length === 0) {
+                const todos = data.cotizacion.items || [];
+                const items = todos.filter(item => (item.unidades_pendientes || 0) > 0);
+                // Ítems ya despachados post-factura: se listan para poder
+                // CORREGIR un SKU mal asignado (el endpoint de reversa existía
+                // pero no había ningún botón que lo llamara).
+                const despachados = todos.filter(item => (item.unidades_despachadas || 0) > 0);
+
+                if (items.length === 0 && despachados.length === 0) {
                     container.innerHTML = `
                         <div class="nexo-alert nexo-alert-success">
                             <i class="ri-checkbox-circle-line me-1"></i> Todos los ítems ya tienen SKU asignado. ¡Despacho completado!
                         </div>`;
                     return;
                 }
-                renderAsignarSkuItems(items, cotizacionId);
+                renderAsignarSkuItems(items, cotizacionId, despachados);
             })
             .catch(() => { container.innerHTML = `<div class="alert alert-danger">Error al cargar ítems</div>`; });
     };
 
-    function renderAsignarSkuItems(items, cotizacionId) {
+    function renderAsignarSkuItems(items, cotizacionId, despachados = []) {
         const container = document.getElementById('asignarSkuItemsContainer');
-        let html = `<p class="text-muted small mb-3"><i class="ri-information-line"></i> Busca el SKU correspondiente a cada ítem y confirma para descontar stock.</p>`;
+        let html = items.length
+            ? `<p class="text-muted small mb-3"><i class="ri-information-line"></i> Busca el SKU correspondiente a cada ítem y confirma para descontar stock.</p>`
+            : `<div class="nexo-alert nexo-alert-success mb-3"><i class="ri-checkbox-circle-line me-1"></i> No quedan unidades pendientes de despacho.</div>`;
         items.forEach((item, idx) => {
             const itemId = `sku-item-${item.id}`;
             const pendientes = item.unidades_pendientes || item.cantidad;
@@ -4985,8 +5375,90 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </div>`;
         });
+
+        if (despachados.length) {
+            html += `
+                <hr class="my-3">
+                <p class="text-muted small mb-2">
+                    <i class="ri-history-line"></i> Ítems ya despachados después de facturar.
+                    Si asignaste un SKU equivocado, revierte el despacho (reingresa el stock y deja el ítem pendiente otra vez).
+                </p>`;
+            despachados.forEach(item => {
+                const skus = (item.skus_asociados || []).map(s => `${s.sku} ×${s.cantidad}`).join(', ');
+                html += `
+                <div class="asignar-sku-item" style="border-left:3px solid #16a34a;">
+                    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                        <div>
+                            <strong style="font-size:13px;">${item.descripcion || 'Ítem'}</strong>
+                            <div class="text-muted" style="font-size:11px;">
+                                Despachadas ${item.unidades_despachadas} de ${item.cantidad}${skus ? ` · ${skus}` : ''}
+                            </div>
+                        </div>
+                        <button class="btn btn-sm" style="background:#CC2200;color:#fff;border:none;border-radius:6px;font-size:12px;"
+                                onclick="revertirDespachoItem(${item.id}, ${cotizacionId})"
+                                title="Revierte el despacho post-factura: reingresa el stock y deja el ítem pendiente">
+                            <i class="ri-arrow-go-back-line me-1"></i> Revertir despacho
+                        </button>
+                    </div>
+                </div>`;
+            });
+        }
+
         container.innerHTML = html;
     }
+
+    // Reversa de un despacho post-factura mal hecho. El endpoint ya existía
+    // (`revertir-sku-despachado`) pero ninguna pantalla lo llamaba: un SKU
+    // asignado por error no tenía forma de corregirse desde la interfaz.
+    // Solo administradores (lo valida el backend).
+    window.revertirDespachoItem = function(detalleId, cotizacionId) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Revertir despacho',
+            html: `
+                <div class="text-start">
+                    <p class="mb-2">Se reingresará el stock despachado y el ítem volverá a quedar <strong>pendiente de despacho</strong>.</p>
+                    <label class="form-label mb-1" style="font-size:13px;">Motivo <span style="color:#CC2200;">*</span></label>
+                    <input type="text" id="swalMotivoRevertir" class="form-control" placeholder="Ej: se despachó el SKU equivocado">
+                </div>`,
+            showCancelButton: true,
+            confirmButtonText: 'Revertir',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#CC2200',
+            preConfirm: () => {
+                const motivo = (document.getElementById('swalMotivoRevertir').value || '').trim();
+                if (!motivo) {
+                    Swal.showValidationMessage('Indique el motivo de la corrección');
+                    return false;
+                }
+                return motivo;
+            },
+        }).then(result => {
+            if (!result.isConfirmed) return;
+            fetch('/app/api/cotizaciones/revertir-sku-despachado/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                },
+                body: JSON.stringify({ detalle_id: detalleId, motivo: result.value }),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarExito(data.message || 'Despacho revertido');
+                    abrirModalAsignarSku(cotizacionId);
+                    cargarCotizaciones();
+                } else {
+                    mostrarError(data.error || 'No se pudo revertir el despacho');
+                }
+            })
+            .catch(err => {
+                console.error('Error revirtiendo despacho:', err);
+                mostrarError('Error de conexión al revertir el despacho');
+            });
+        });
+    };
 
     // Debounce para búsqueda en modal
     const _skuSearchTimers = {};

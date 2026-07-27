@@ -179,7 +179,8 @@
     .kpi-icon.bg-total { background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%); }
     .kpi-icon.bg-active { background: linear-gradient(135deg, var(--nexo-success) 0%, #00B090 100%); }
     .kpi-icon.bg-inactive { background: linear-gradient(135deg, var(--nexo-warning) 0%, #E69A00 100%); }
-    
+    .kpi-icon.bg-never { background: linear-gradient(135deg, var(--nexo-gray-500) 0%, var(--nexo-gray-700) 100%); }
+
     .kpi-content h4 {
         font-size: 28px;
         font-weight: 700;
@@ -195,6 +196,72 @@
         font-weight: 500;
     }
 
+    /* Barra de filtros */
+    .nexo-filters-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: flex-end;
+        padding: 14px 16px;
+        margin-bottom: 20px;
+        background: var(--nexo-gray-100);
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-lg);
+    }
+
+    .nexo-filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: 1 1 180px;
+        min-width: 160px;
+    }
+
+    .nexo-filter-group label {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--nexo-gray-500);
+        margin: 0;
+    }
+
+    .nexo-filter-group select {
+        height: 36px;
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        padding: 0 10px;
+        font-size: 13px;
+        color: var(--nexo-gray-700);
+        background: var(--nexo-white);
+    }
+
+    .nexo-filter-group select:focus {
+        outline: none;
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px var(--nexo-primary-light);
+    }
+
+    .nexo-filter-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-left: auto;
+    }
+
+    .nexo-filter-resumen {
+        font-size: 12px;
+        color: var(--nexo-gray-500);
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    /* Marca "Nunca ingresó" en la columna Último Acceso */
+    .acceso-nunca {
+        color: var(--nexo-error);
+        font-weight: 600;
+    }
+
     /* Tabla con estilos Nexo */
     .table-responsive {
         border-radius: var(--nexo-radius-lg);
@@ -207,7 +274,7 @@
     #tablaUsuarios {
         margin: 0;
         border-collapse: collapse;
-        min-width: 900px;
+        min-width: 1020px;
     }
     
     #tablaUsuarios thead,
@@ -873,6 +940,53 @@
                                     <p>Usuarios Inactivos</p>
                                 </div>
                             </div>
+                            <div class="kpi-card">
+                                <div class="kpi-icon bg-never">
+                                    <i class="ri-login-circle-line"></i>
+                                </div>
+                                <div class="kpi-content">
+                                    <h4 id="usuariosNuncaIngreso">0</h4>
+                                    <p>Nunca Ingresaron</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Filtros -->
+                        <div class="nexo-filters-bar">
+                            <div class="nexo-filter-group">
+                                <label for="filtroRol"><i class="ri-shield-user-line me-1"></i>Rol</label>
+                                <select id="filtroRol">
+                                    <option value="">Todos los roles</option>
+                                </select>
+                            </div>
+                            <div class="nexo-filter-group">
+                                <label for="filtroSucursal"><i class="ri-store-2-line me-1"></i>Sucursal</label>
+                                <select id="filtroSucursal">
+                                    <option value="">Todas las sucursales</option>
+                                </select>
+                            </div>
+                            <div class="nexo-filter-group">
+                                <label for="filtroEstado"><i class="ri-toggle-line me-1"></i>Estado</label>
+                                <select id="filtroEstado">
+                                    <option value="">Todos</option>
+                                    <option value="activo">Solo activos</option>
+                                    <option value="inactivo">Solo inactivos</option>
+                                </select>
+                            </div>
+                            <div class="nexo-filter-group">
+                                <label for="filtroAcceso"><i class="ri-time-line me-1"></i>Acceso</label>
+                                <select id="filtroAcceso">
+                                    <option value="">Todos</option>
+                                    <option value="nunca">Nunca ingresó</option>
+                                    <option value="ingreso">Ya ingresó</option>
+                                </select>
+                            </div>
+                            <div class="nexo-filter-actions">
+                                <span class="nexo-filter-resumen" id="resumenFiltros"></span>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="limpiarFiltrosUsuarios()">
+                                    <i class="ri-refresh-line me-1"></i>Limpiar
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Tabla de usuarios -->
@@ -885,6 +999,7 @@
                                         <th>Email</th>
                                         <th>Rol</th>
                                         <th>Empresa</th>
+                                        <th>Sucursal</th>
                                         <th>Estado</th>
                                         <th>Último Acceso</th>
                                         <th>Acciones</th>
@@ -1453,14 +1568,16 @@
 <script>
 let tablaUsuarios;
 
-// Configurar Toastr
-toastr.options = {
-    "closeButton": true,
-    "progressBar": true,
-    "positionClass": "toast-top-right",
-    "timeOut": "4000",
-    "extendedTimeOut": "2000"
-};
+// Configurar Toastr (viene de CDN: si no cargó, no debe matar el resto del script)
+if (typeof toastr !== 'undefined') {
+    toastr.options = {
+        "closeButton": true,
+        "progressBar": true,
+        "positionClass": "toast-top-right",
+        "timeOut": "4000",
+        "extendedTimeOut": "2000"
+    };
+}
 
 // Configurar CSRF token para AJAX
 function getCookie(name) {
@@ -1491,6 +1608,11 @@ $.ajaxSetup({
 
 $(document).ready(function() {
     cargarUsuarios();
+
+    // ========== FILTROS (rol / sucursal / estado / acceso) ==========
+    $('#filtroRol, #filtroSucursal, #filtroEstado, #filtroAcceso').on('change', function() {
+        aplicarFiltrosUsuarios();
+    });
 
     // ========== FIX Z-INDEX DROPDOWN SOBRE STICKY COLUMNS ==========
     $(document).on('show.bs.dropdown', '.dropdown-acciones', function() {
@@ -1557,6 +1679,16 @@ $(document).ready(function() {
     });
 });
 
+// ========== CACHE + FILTROS DE USUARIOS ==========
+// La vista entrega el listado completo (page_size=1000), así que los filtros
+// se aplican en el navegador: son instantáneos y no dependen de la paginación.
+let usuariosCache = [];
+
+function escaparHtml(valor) {
+    if (valor === null || valor === undefined) return '';
+    return $('<div>').text(valor).html();
+}
+
 function cargarUsuarios() {
     $.ajax({
         url: '{% url "users:listar_usuarios" %}',
@@ -1564,8 +1696,9 @@ function cargarUsuarios() {
         data: { page: 1, page_size: 1000 },
         success: function(response) {
             if (response.success) {
-                actualizarMetricas(response.metricas);
-                inicializarDataTable(response.usuarios);
+                usuariosCache = response.usuarios || [];
+                poblarFiltrosUsuarios(usuariosCache);
+                aplicarFiltrosUsuarios();
             } else {
                 mostrarError('Error al cargar usuarios: ' + response.error);
             }
@@ -1574,6 +1707,113 @@ function cargarUsuarios() {
             mostrarError('Error de conexión al cargar usuarios');
         }
     });
+}
+
+function poblarFiltrosUsuarios(usuarios) {
+    // --- Roles presentes en los datos ---
+    const selRol = $('#filtroRol');
+    const rolSeleccionado = selRol.val();
+    const roles = new Map();
+    usuarios.forEach(function(u) {
+        if (u.rol) roles.set(u.rol, u.rol_display || u.rol);
+    });
+    selRol.find('option').not(':first').remove();
+    Array.from(roles.entries())
+        .sort(function(a, b) { return String(a[1]).localeCompare(String(b[1])); })
+        .forEach(function(par) {
+            selRol.append($('<option>').attr('value', par[0]).text(par[1]));
+        });
+    if (rolSeleccionado && existeOpcion(selRol, rolSeleccionado)) {
+        selRol.val(rolSeleccionado);
+    }
+
+    // --- Sucursales presentes en los datos ---
+    const selSucursal = $('#filtroSucursal');
+    const sucursalSeleccionada = selSucursal.val();
+    const sucursales = new Set();
+    let haySinSucursal = false;
+    usuarios.forEach(function(u) {
+        if (u.sucursal_actual) {
+            sucursales.add(u.sucursal_actual);
+        } else {
+            haySinSucursal = true;
+        }
+    });
+    selSucursal.find('option').not(':first').remove();
+    Array.from(sucursales).sort(function(a, b) { return a.localeCompare(b); }).forEach(function(alias) {
+        selSucursal.append($('<option>').attr('value', alias).text(alias));
+    });
+    if (haySinSucursal) {
+        selSucursal.append($('<option>').attr('value', '__sin__').text('— Sin sucursal asignada —'));
+    }
+    if (sucursalSeleccionada && existeOpcion(selSucursal, sucursalSeleccionada)) {
+        selSucursal.val(sucursalSeleccionada);
+    }
+}
+
+function existeOpcion($select, valor) {
+    // Comparación por valor (no por selector) para tolerar alias con comillas
+    return $select.find('option').filter(function() {
+        return this.value === valor;
+    }).length > 0;
+}
+
+function usuarioNuncaIngreso(usuario) {
+    if (typeof usuario.nunca_ingreso === 'boolean') return usuario.nunca_ingreso;
+    const txt = usuario.ultimo_acceso || usuario.fecha_ultimo_acceso || '';
+    return !txt || txt === 'Nunca';
+}
+
+function aplicarFiltrosUsuarios() {
+    const rol = $('#filtroRol').val() || '';
+    const sucursal = $('#filtroSucursal').val() || '';
+    const estado = $('#filtroEstado').val() || '';
+    const acceso = $('#filtroAcceso').val() || '';
+
+    const filtrados = usuariosCache.filter(function(u) {
+        if (rol && u.rol !== rol) return false;
+
+        const aliasSucursal = u.sucursal_actual || '';
+        if (sucursal === '__sin__') {
+            if (aliasSucursal) return false;
+        } else if (sucursal && aliasSucursal !== sucursal) {
+            return false;
+        }
+
+        if (estado === 'activo' && !u.es_activo) return false;
+        if (estado === 'inactivo' && u.es_activo) return false;
+
+        const nunca = usuarioNuncaIngreso(u);
+        if (acceso === 'nunca' && !nunca) return false;
+        if (acceso === 'ingreso' && nunca) return false;
+
+        return true;
+    });
+
+    actualizarMetricas(calcularMetricasUsuarios(filtrados));
+    inicializarDataTable(filtrados);
+
+    const hayFiltro = !!(rol || sucursal || estado || acceso);
+    $('#resumenFiltros').text(
+        hayFiltro ? filtrados.length + ' de ' + usuariosCache.length + ' usuarios' : ''
+    );
+}
+
+function calcularMetricasUsuarios(lista) {
+    return {
+        total_usuarios: lista.length,
+        usuarios_activos: lista.filter(function(u) { return !!u.es_activo; }).length,
+        usuarios_inactivos: lista.filter(function(u) { return !u.es_activo; }).length,
+        usuarios_nunca_ingreso: lista.filter(usuarioNuncaIngreso).length
+    };
+}
+
+function limpiarFiltrosUsuarios() {
+    $('#filtroRol').val('');
+    $('#filtroSucursal').val('');
+    $('#filtroEstado').val('');
+    $('#filtroAcceso').val('');
+    aplicarFiltrosUsuarios();
 }
 
 function inicializarDataTable(usuarios) {
@@ -1587,9 +1827,17 @@ function inicializarDataTable(usuarios) {
         const statusIcon = usuario.es_activo ? 'ri-checkbox-circle-fill' : 'ri-close-circle-fill';
         const statusBadge = `<span class="user-status ${statusClass}"><i class="${statusIcon} me-1"></i>${statusText}</span>`;
         const rolBadge = `<span class="badge-rol rol-${usuario.rol}">${usuario.rol_display}</span>`;
-        const empresaSession = usuario.empresa_actual
-            ? `${usuario.empresa_actual}${usuario.sucursal_actual ? ' · ' + usuario.sucursal_actual : ''}`
-            : null;
+        const empresaTexto = usuario.empresa_actual || usuario.empresa || '';
+        const empresaCelda = empresaTexto
+            ? `<strong>${escaparHtml(empresaTexto)}</strong>`
+            : '<span class="text-muted">Sin asignar</span>';
+        const sucursalCelda = usuario.sucursal_actual
+            ? `<span class="badge-rol rol-cajero">${escaparHtml(usuario.sucursal_actual)}</span>`
+            : '<span class="text-muted">Sin sucursal</span>';
+        const nuncaIngreso = usuarioNuncaIngreso(usuario);
+        const accesoCelda = nuncaIngreso
+            ? '<span class="acceso-nunca"><i class="ri-error-warning-line me-1"></i>Nunca</span>'
+            : escaparHtml(usuario.ultimo_acceso || usuario.fecha_ultimo_acceso || '');
         const pinBadge = usuario.requiere_2fa
             ? '<span class="ms-2 text-success" title="PIN activo"><i class="ri-shield-check-line"></i></span>'
             : '';
@@ -1628,15 +1876,14 @@ function inicializarDataTable(usuarios) {
         `;
         
         return [
-            `<strong>${usuario.username}</strong>${pinBadge}`,
-            `${usuario.first_name} ${usuario.last_name}`,
-            `<a href="mailto:${usuario.email}" class="text-decoration-none">${usuario.email}</a>`,
+            `<strong>${escaparHtml(usuario.username)}</strong>${pinBadge}`,
+            escaparHtml(`${usuario.first_name || ''} ${usuario.last_name || ''}`.trim()),
+            `<a href="mailto:${escaparHtml(usuario.email)}" class="text-decoration-none">${escaparHtml(usuario.email)}</a>`,
             rolBadge,
-            empresaSession
-                ? `<strong>${empresaSession}</strong>`
-                : (usuario.empresa || '<span class="text-muted">Sin asignar</span>'),
+            empresaCelda,
+            sucursalCelda,
             statusBadge,
-            usuario.fecha_ultimo_acceso || '<span class="text-muted">Nunca</span>',
+            accesoCelda,
             acciones
         ];
     });
@@ -1654,8 +1901,10 @@ function inicializarDataTable(usuarios) {
         autoWidth: false,
         dom: '<"row mb-3"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip',
         columnDefs: [
-            { targets: [3, 5, 7], orderable: false },
-            { targets: 7, width: '130px', className: 'text-center' }
+            // 0 Usuario · 1 Nombre · 2 Email · 3 Rol · 4 Empresa
+            // 5 Sucursal · 6 Estado · 7 Último Acceso · 8 Acciones
+            { targets: [3, 6, 8], orderable: false },
+            { targets: 8, width: '130px', className: 'text-center' }
         ],
         drawCallback: function() {
             $('[title]').tooltip({ trigger: 'hover' });
@@ -1673,6 +1922,7 @@ function actualizarMetricas(metricas) {
     animarNumero('#totalUsuarios', metricas.total_usuarios);
     animarNumero('#usuariosActivos', metricas.usuarios_activos);
     animarNumero('#usuariosInactivos', metricas.usuarios_inactivos);
+    animarNumero('#usuariosNuncaIngreso', metricas.usuarios_nunca_ingreso || 0);
 }
 
 function animarNumero(selector, valor) {
@@ -2341,9 +2591,22 @@ function guardarEdicionUsuario() {
 }
 
 function toggleEstado(usuarioId) {
+    const usuario = usuariosCache.find(function(u) { return u.id === usuarioId; });
+    const seVaADesactivar = usuario ? !!usuario.es_activo : null;
+
+    let titulo = '¿Cambiar estado del usuario?';
+    let detalle = 'El usuario será activado o desactivado según su estado actual';
+    if (seVaADesactivar === true) {
+        titulo = '¿Desactivar a ' + escaparHtml(usuario.username) + '?';
+        detalle = 'No podrá volver a iniciar sesión y sus sesiones abiertas quedarán invalidadas.';
+    } else if (seVaADesactivar === false) {
+        titulo = '¿Activar a ' + escaparHtml(usuario.username) + '?';
+        detalle = 'Volverá a poder iniciar sesión con sus credenciales actuales.';
+    }
+
     Swal.fire({
-        title: '¿Cambiar estado del usuario?',
-        text: 'El usuario será activado o desactivado según su estado actual',
+        title: titulo,
+        text: detalle,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#FFB020',
@@ -2776,12 +3039,29 @@ function exportarUsuarios() {
     }, 500);
 }
 
+function _notificar(icono, mensaje) {
+    // Toastr viene de CDN; si no está disponible se usa SweetAlert2 (local).
+    if (typeof toastr !== 'undefined') {
+        (icono === 'error' ? toastr.error : toastr.success)(mensaje);
+        return;
+    }
+    Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: icono,
+        title: mensaje,
+        showConfirmButton: false,
+        timer: 4000,
+        timerProgressBar: true
+    });
+}
+
 function mostrarExito(mensaje) {
-    toastr.success(mensaje);
+    _notificar('success', mensaje);
 }
 
 function mostrarError(mensaje) {
-    toastr.error(mensaje);
+    _notificar('error', mensaje);
 }
 
 // ========== IMPORTAR USUARIOS ==========

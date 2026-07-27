@@ -187,7 +187,18 @@
         </div>
     </div>
 
-    <!-- ===== KPIs ===== -->
+    <!-- ===== KPIs =====
+         OJO: el backend (`listar_arqueos`) calcula estos indicadores SIEMPRE
+         sobre el MES EN CURSO, no sobre el rango de fechas del filtro. La
+         tabla de abajo sí respeta el filtro. Se rotula explícitamente para
+         que nadie lea "Cumplimiento 80%" creyendo que es del período
+         filtrado. -->
+    <div class="d-flex align-items-center gap-2 mb-1">
+        <span class="badge" style="background:var(--nexo-gray-200);color:var(--nexo-gray-700);font-weight:700;">
+            <i class="ri-calendar-check-line me-1"></i>Indicadores del mes en curso
+        </span>
+        <small class="text-muted" style="font-size:.72rem;">No dependen del rango de fechas del filtro; la tabla de abajo sí.</small>
+    </div>
     <div class="row g-2 mb-3" id="panelKpis">
         <div class="col-6 col-md-3 col-lg">
             <div class="kpi-card">
@@ -217,6 +228,12 @@
             <div class="kpi-card">
                 <div class="kpi-value" id="kpiCumplimiento" style="color:var(--nexo-primary);">0%</div>
                 <div class="kpi-label">Cumplimiento</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-lg">
+            <div class="kpi-card" title="Arqueos del rango filtrado cuyo efectivo contado coincide EXACTO con el teórico. Sobre 80% es la señal que el propio módulo de análisis de riesgo marca como copia del teórico en vez de conteo real.">
+                <div class="kpi-value" id="kpiExactos" style="color:var(--nexo-gray-700);">0%</div>
+                <div class="kpi-label">Cuadran al peso <i class="ri-information-line"></i></div>
             </div>
         </div>
         <div class="col-6 col-md-3 col-lg">
@@ -676,10 +693,35 @@ function cargarDatos() {
         .then(data => {
             if (!data.success) return;
             renderKpis(data.indicadores_mensuales || {});
+            renderExactos(data.arqueos || []);
             renderArqueos(data.arqueos || []);
         });
 
     cargarDepositosPend();
+}
+
+// Porcentaje de arqueos del rango filtrado que cuadran EXACTO ($0 de
+// diferencia). Se calcula en el cliente con los datos que ya vienen en la
+// respuesta (no requiere endpoint nuevo). Es el mismo indicador que usa
+// `AnalisisFraudeCaja._porcentaje_exactos`, cuyo umbral de alerta es 80%:
+// por encima de eso lo habitual es que se esté tipeando el teórico en vez
+// de contar la caja.
+function renderExactos(arqueos) {
+    const el = document.getElementById('kpiExactos');
+    if (!el) return;
+    const cerrados = arqueos.filter(a => a.estado !== 'ABIERTO');
+    if (!cerrados.length) {
+        el.textContent = '-';
+        el.style.color = 'var(--nexo-gray-700)';
+        el.parentElement.title = 'Sin arqueos cerrados en el rango filtrado.';
+        return;
+    }
+    const exactos = cerrados.filter(a => (parseInt(a.diferencia_efectivo || 0) === 0)).length;
+    const pct = Math.round(exactos / cerrados.length * 1000) / 10;
+    el.textContent = pct.toFixed(0) + '%';
+    el.style.color = pct > 80 ? 'var(--nexo-error)' : 'var(--nexo-gray-700)';
+    el.parentElement.title = exactos + ' de ' + cerrados.length + ' arqueos cerrados del rango cuadran exacto ($0). '
+        + (pct > 80 ? 'Sobre 80% el módulo de riesgo lo marca como posible copia del teórico.' : '');
 }
 
 function renderKpis(ind) {

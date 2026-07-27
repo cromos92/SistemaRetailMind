@@ -33,6 +33,52 @@
     .nexo-filter-shortcuts { gap: 4px; }
     .nexo-filter-shortcuts .btn { font-size: 0.72rem; padding: 4px 8px; }
 }
+
+/* ── Notebooks de tienda (1366x768): que el período + los KPIs entren sin scroll ── */
+@media (max-height: 820px) {
+    .nexo-dashboard-header { padding: 0.9rem 1.25rem; margin-bottom: 0.75rem; }
+    .nexo-dashboard-title { font-size: 1.35rem; margin-bottom: 0.15rem; }
+    .nexo-dashboard-subtitle { font-size: 0.78rem; }
+    .nexo-filter-section { padding: 0.85rem 1rem; margin-bottom: 0.85rem; }
+    .nexo-filter-shortcuts { margin-bottom: 0.6rem; padding-bottom: 0.6rem; }
+    .nexo-filter-shortcuts .btn { padding: 0.3rem 0.7rem; font-size: 0.75rem; }
+    .nexo-kpi-card { padding: 0.8rem 0.9rem; }
+    .nexo-kpi-value { font-size: 1.35rem; }
+    .nexo-section-header { margin-bottom: 0.6rem; }
+    .nexo-section-icon { width: 32px; height: 32px; font-size: 1rem; }
+}
+
+/* ── Resumen del filtro activo (período + alcance) ───────────────────────────── */
+.nexo-filtro-resumen {
+    display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+    margin-bottom: 0.85rem; padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--nexo-gray-100);
+}
+.fr-chip {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    padding: 0.3rem 0.7rem; border-radius: var(--nexo-radius-full);
+    font-size: 0.78rem; font-weight: 600; line-height: 1.2;
+}
+.fr-chip-periodo { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+.fr-chip-alcance { background: rgba(255, 176, 32, .15); color: #996B00; }
+.fr-chip-muted { background: var(--nexo-gray-100); color: var(--nexo-gray-700); font-weight: 500; }
+.fr-clear {
+    background: none; border: none; padding: 0.2rem 0.3rem;
+    color: var(--nexo-gray-500); font-size: 0.75rem; font-weight: 600; cursor: pointer;
+}
+.fr-clear:hover { color: var(--nexo-error); }
+
+/* ── Marcas de alcance de los filtros Categoría / Especialidad ───────────────── */
+.scope-badge {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    padding: 0.15rem 0.5rem; border-radius: var(--nexo-radius-full);
+    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .02em; white-space: nowrap;
+}
+.scope-badge-on { background: rgba(0, 212, 170, .15); color: #00806A; }
+.scope-badge-off { background: rgba(255, 176, 32, .18); color: #996B00; }
+.scope-off-card { box-shadow: inset 3px 0 0 0 var(--nexo-warning); }
+.nexo-scope-warning { margin-bottom: 1rem; }
 </style>
 
 <div class="page-content nexo-page">
@@ -94,7 +140,26 @@
                     <i class="bi bi-calendar4 me-1"></i>Este Año
                 </button>
             </div>
-            
+
+            <!-- Resumen de lo que se está mostrando: período real y alcance de los filtros -->
+            <div class="nexo-filtro-resumen" id="filtroResumen">
+                <span class="fr-chip fr-chip-periodo">
+                    <i class="bi bi-calendar-check"></i>
+                    <span id="chipPeriodoTexto">—</span>
+                </span>
+                <span class="fr-chip fr-chip-muted" id="chipComparativo" style="display:none;">
+                    <i class="bi bi-arrow-left-right"></i>
+                    <span id="chipComparativoTexto"></span>
+                </span>
+                <span class="fr-chip fr-chip-alcance" id="chipAlcance" style="display:none;">
+                    <i class="bi bi-funnel-fill"></i>
+                    <span id="chipAlcanceTexto"></span>
+                </span>
+                <button type="button" class="fr-clear" id="btnLimpiarCatEsp" style="display:none;" onclick="limpiarFiltroCatEsp()">
+                    <i class="bi bi-x-circle"></i> Quitar categoría / especialidad
+                </button>
+            </div>
+
             <div class="row g-3 align-items-end">
                 <div class="col-lg-2 col-md-4">
                     <label class="nexo-form-label">Fecha Inicio</label>
@@ -176,7 +241,22 @@
         <!-- ═══════════════════════════════════════════════════════════════════════════════
              KPIs PRINCIPALES - INDICADORES DE RETAIL
              ═══════════════════════════════════════════════════════════════════════════════ -->
-        <div class="nexo-section-header nexo-animate-fadein">
+        <!-- Aviso: hasta dónde llega el filtro de Categoría / Especialidad -->
+        <div class="nexo-alert nexo-alert-warning nexo-scope-warning" id="avisoAlcanceCatEsp" style="display:none;">
+            <div class="nexo-alert-icon"><i class="bi bi-funnel-fill"></i></div>
+            <div class="nexo-alert-content">
+                <h6 id="avisoAlcanceTitulo">El filtro de categoría / especialidad no acota todo el tablero</h6>
+                <p>
+                    <strong>Sí se acotan:</strong> Ventas por categoría, Ventas por especialidad, Top 10 Productos
+                    y el Mix por tienda (solo categoría).
+                    <strong>No se acotan</strong> —siguen mostrando el total del negocio—: los 8 KPIs principales,
+                    Evolución de ventas, Métodos de pago, Indicador de compra, Horas pico, Top vendedores,
+                    Cuadraturas e Indicadores avanzados. Cada bloque queda marcado con su etiqueta.
+                </p>
+            </div>
+        </div>
+
+        <div class="nexo-section-header nexo-animate-fadein" id="secKPIs">
             <div class="nexo-section-icon">
                 <i class="bi bi-speedometer2"></i>
             </div>
@@ -685,7 +765,7 @@
         <!-- ═══════════════════════════════════════════════════════════════════════════════
              INDICADORES AVANZADOS DE RETAIL (GMROI, Rotación)
              ═══════════════════════════════════════════════════════════════════════════════ -->
-        <div class="nexo-section-header mt-4 nexo-animate-fadein">
+        <div class="nexo-section-header mt-4 nexo-animate-fadein" id="secAvanzados">
             <div class="nexo-section-icon" style="background: var(--nexo-gradient-purple);">
                 <i class="bi bi-bar-chart-steps"></i>
             </div>
@@ -1176,8 +1256,8 @@
 
 {% include 'layout/footer.html' %}
 
-<!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Chart.js servido desde static (sin internet el dashboard igual dibuja) -->
+<script src="{% static 'libs/chart.js/chart.min.js' %}"></script>
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1287,22 +1367,43 @@ $(document).ready(function() {
 // GESTIÓN DE PERÍODOS Y FILTROS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Fecha local en formato YYYY-MM-DD.
+// NO usar toISOString(): devuelve la fecha en UTC y en Chile (UTC-4/-3) a partir
+// de las 20:00 "Hoy" se corría al día siguiente y el dashboard salía vacío justo
+// en el horario de cierre de tienda.
+function fechaISOLocal(d) {
+    return d.getFullYear() + '-' +
+           String(d.getMonth() + 1).padStart(2, '0') + '-' +
+           String(d.getDate()).padStart(2, '0');
+}
+
+// Etiqueta legible del atajo activo (lo que el usuario cree estar viendo)
+const PERIODO_LABELS = {
+    hoy: 'Hoy', ayer: 'Ayer', semana: 'Esta semana', mes: 'Este mes',
+    mes_anterior: 'Mes anterior', ultimos_30: 'Últimos 30 días', anio: 'Este año'
+};
+let periodoActivoLabel = 'Este mes';
+
 function aplicarPeriodo(periodo, btn) {
     // Actualizar botón activo
     $('.nexo-filter-shortcuts .btn').removeClass('active');
     $(btn).addClass('active');
-    
+    periodoActivoLabel = PERIODO_LABELS[periodo] || 'Rango personalizado';
+
     const hoy = new Date();
     let inicio, fin;
-    
+
     switch(periodo) {
         case 'hoy':
-            inicio = fin = new Date(hoy);
+            inicio = new Date(hoy);
+            fin = new Date(hoy);
             break;
         case 'ayer':
-            inicio = fin = new Date(hoy);
+            // OJO: antes inicio y fin eran el MISMO objeto Date y cada setDate
+            // restaba un día, así que "Ayer" mostraba anteayer.
+            inicio = new Date(hoy);
             inicio.setDate(inicio.getDate() - 1);
-            fin.setDate(fin.getDate() - 1);
+            fin = new Date(inicio);
             break;
         case 'semana':
             const diaSemana = hoy.getDay();
@@ -1332,15 +1433,15 @@ function aplicarPeriodo(periodo, btn) {
             fin = new Date();
     }
     
-    fechaInicio = inicio.toISOString().split('T')[0];
-    fechaFin = fin.toISOString().split('T')[0];
-    
+    fechaInicio = fechaISOLocal(inicio);
+    fechaFin = fechaISOLocal(fin);
+
     $('#filtroFechaInicio').val(fechaInicio);
     $('#filtroFechaFin').val(fechaFin);
-    
+
     // Calcular período comparativo
     calcularPeriodoComparativo();
-    
+
     cargarDashboard();
 }
 
@@ -1348,30 +1449,78 @@ function aplicarFiltros() {
     fechaInicio = $('#filtroFechaInicio').val();
     fechaFin = $('#filtroFechaFin').val();
     tipoComparacion = $('#filtroComparacion').val();
-    $('.nexo-filter-shortcuts .btn').removeClass('active');
-    
+
+    // Si las fechas ya no corresponden al atajo marcado, se apaga el atajo:
+    // el chip de arriba pasa a decir "Rango personalizado".
+    const $atajo = $('.nexo-filter-shortcuts .btn.active');
+    if ($atajo.length) {
+        const esperado = _rangoDeAtajo($atajo.data('periodo'));
+        if (!esperado || esperado.inicio !== fechaInicio || esperado.fin !== fechaFin) {
+            $('.nexo-filter-shortcuts .btn').removeClass('active');
+            periodoActivoLabel = 'Rango personalizado';
+        }
+    } else {
+        periodoActivoLabel = 'Rango personalizado';
+    }
+
     // Calcular período comparativo
     calcularPeriodoComparativo();
-    
+
     cargarDashboard();
+}
+
+// Devuelve el rango (local) que produciría un atajo, para saber si el usuario
+// se salió de él al editar las fechas a mano.
+function _rangoDeAtajo(periodo) {
+    if (!periodo) return null;
+    const hoy = new Date();
+    let inicio, fin;
+    switch (periodo) {
+        case 'hoy': inicio = new Date(hoy); fin = new Date(hoy); break;
+        case 'ayer':
+            inicio = new Date(hoy); inicio.setDate(inicio.getDate() - 1); fin = new Date(inicio); break;
+        case 'semana': {
+            const d = hoy.getDay();
+            inicio = new Date(hoy);
+            inicio.setDate(hoy.getDate() - d + (d === 0 ? -6 : 1));
+            fin = new Date(hoy);
+            break;
+        }
+        case 'mes': inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1); fin = new Date(hoy); break;
+        case 'mes_anterior':
+            inicio = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+            fin = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+            break;
+        case 'ultimos_30':
+            fin = new Date(hoy); inicio = new Date(hoy); inicio.setDate(inicio.getDate() - 30); break;
+        case 'anio': inicio = new Date(hoy.getFullYear(), 0, 1); fin = new Date(hoy); break;
+        default: return null;
+    }
+    return { inicio: fechaISOLocal(inicio), fin: fechaISOLocal(fin) };
 }
 
 function calcularPeriodoComparativo() {
     tipoComparacion = $('#filtroComparacion').val();
-    
+
     if (tipoComparacion === 'sin_comparacion') {
         fechaInicioComparativo = null;
         fechaFinComparativo = null;
-        $('#periodoComparacionInfo').hide();
+        // El período ACTUAL se sigue mostrando: lo que se oculta es sólo el "vs".
+        $('#periodoActualLabel').html(`<strong>Actual:</strong> ${formatearFecha(fechaInicio)} - ${formatearFecha(fechaFin)}`);
+        $('#periodoComparativoLabel').hide().prev('.mx-2').hide();
+        $('#periodoComparacionInfo').show();
+        actualizarChipPeriodo();
         return;
     }
-    
-    const inicio = new Date(fechaInicio);
-    const fin = new Date(fechaFin);
-    const diasPeriodo = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
-    
+
+    // Fechas parseadas como locales (con 'T00:00:00'); `new Date('2026-07-01')`
+    // se interpreta como UTC y en Chile retrocede un día.
+    const inicio = new Date(fechaInicio + 'T00:00:00');
+    const fin = new Date(fechaFin + 'T00:00:00');
+    const diasPeriodo = Math.round((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
+
     let inicioComp, finComp;
-    
+
     if (tipoComparacion === 'periodo_anterior') {
         // Período anterior de la misma duración
         finComp = new Date(inicio);
@@ -1385,14 +1534,38 @@ function calcularPeriodoComparativo() {
         finComp = new Date(fin);
         finComp.setFullYear(finComp.getFullYear() - 1);
     }
-    
-    fechaInicioComparativo = inicioComp.toISOString().split('T')[0];
-    fechaFinComparativo = finComp.toISOString().split('T')[0];
-    
+
+    fechaInicioComparativo = fechaISOLocal(inicioComp);
+    fechaFinComparativo = fechaISOLocal(finComp);
+
     // Actualizar labels de información
     $('#periodoActualLabel').html(`<strong>Actual:</strong> ${formatearFecha(fechaInicio)} - ${formatearFecha(fechaFin)}`);
-    $('#periodoComparativoLabel').html(`<strong>Comparativo:</strong> ${formatearFecha(fechaInicioComparativo)} - ${formatearFecha(fechaFinComparativo)}`);
+    $('#periodoComparativoLabel').html(`<strong>Comparativo:</strong> ${formatearFecha(fechaInicioComparativo)} - ${formatearFecha(fechaFinComparativo)}`).show()
+        .prev('.mx-2').show();
     $('#periodoComparacionInfo').show();
+    actualizarChipPeriodo();
+}
+
+// Chip superior: dice EXACTAMENTE qué período se está mostrando, con el nombre
+// del atajo, las fechas reales y cuántos días abarca.
+function actualizarChipPeriodo() {
+    if (!fechaInicio || !fechaFin) return;
+    const dias = calcularDias();
+    const rango = (fechaInicio === fechaFin)
+        ? formatearFecha(fechaInicio)
+        : `${formatearFecha(fechaInicio)} – ${formatearFecha(fechaFin)}`;
+    $('#chipPeriodoTexto').html(
+        `${periodoActivoLabel}: <span style="font-weight:500;">${rango}</span> · ${dias} ${dias === 1 ? 'día' : 'días'}`
+    );
+
+    if (tipoComparacion === 'sin_comparacion' || !fechaInicioComparativo) {
+        $('#chipComparativo').hide();
+    } else {
+        $('#chipComparativoTexto').text(
+            `vs ${formatearFecha(fechaInicioComparativo)} – ${formatearFecha(fechaFinComparativo)}`
+        );
+        $('#chipComparativo').show();
+    }
 }
 
 function formatearFecha(fechaStr) {
@@ -1447,7 +1620,19 @@ function cargarDashboard() {
     
     // Actualizar fecha
     $('#fechaActualizacion').text(new Date().toLocaleString('es-CL'));
-    
+
+    // Qué período y qué alcance se está mostrando (chips + marcas por bloque)
+    actualizarChipPeriodo();
+    actualizarAlcanceFiltros(params);
+
+    // Sin comparación no se pintan flechas de tendencia: antes seguían
+    // apareciendo con la variación que calculaba el backend por su cuenta.
+    if (tipoComparacion === 'sin_comparacion') {
+        $('.nexo-kpi-trend').hide();
+    } else {
+        $('.nexo-kpi-trend').show();
+    }
+
     // Si hay período comparativo, cargar primero esos datos
     if (tipoComparacion !== 'sin_comparacion' && fechaInicioComparativo && fechaFinComparativo) {
         const paramsComparativo = {
@@ -1466,6 +1651,83 @@ function cargarDashboard() {
         dashboardDataComparativo = {};
         cargarDatosPeriodoActual(params);
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ALCANCE REAL DE LOS FILTROS CATEGORÍA / ESPECIALIDAD
+// Sólo cuatro bloques del tablero los aplican de verdad. En vez de dejar que el
+// usuario lea el resto como si estuviera filtrado, cada bloque se marca con su
+// alcance: "filtrado" (verde) o "total del negocio" (ámbar).
+// ═══════════════════════════════════════════════════════════════════════════════
+const ALCANCE_BLOQUES = [
+    // sel: elemento dentro de la tarjeta · cat/esp: 'si' | 'no' | 'eje'
+    { sel: '#chartVentasCategoria',  cat: 'eje', esp: 'si' },
+    { sel: '#chartVentasEspecialidad', cat: 'si', esp: 'eje' },
+    { sel: '#tbodyProductos',        cat: 'si',  esp: 'si' },
+    { sel: '#chartMixTiendas',       cat: 'si',  esp: 'no' },
+    { sel: '#tablaIndicadorCompra',  cat: 'no',  esp: 'no' },
+    { sel: '#chartEvolucion',        cat: 'no',  esp: 'no' },
+    { sel: '#chartMetodosPago',      cat: 'no',  esp: 'no' },
+    { sel: '#chartPorHora',          cat: 'no',  esp: 'no' },
+    { sel: '#chartPorDia',           cat: 'no',  esp: 'no' },
+    { sel: '#tbodyVendedores',       cat: 'no',  esp: 'no' },
+    { sel: '#tbodyVentasTienda',     cat: 'no',  esp: 'no' },
+    { sel: '#cuadraturasOK',         cat: 'no',  esp: 'no' }
+];
+
+function actualizarAlcanceFiltros(params) {
+    const hayCat = !!(params.categoria_id);
+    const hayEsp = !!(params.especialidad_id);
+    const catTxt = $('#filtroCategoria option:selected').text().trim();
+    const espTxt = $('#filtroEspecialidad option:selected').text().trim();
+
+    // Limpiar marcas previas
+    $('.scope-badge').remove();
+    $('.scope-off-card').removeClass('scope-off-card');
+
+    if (!hayCat && !hayEsp) {
+        $('#chipAlcance').hide();
+        $('#btnLimpiarCatEsp').hide();
+        $('#avisoAlcanceCatEsp').hide();
+        return;
+    }
+
+    // Chip + aviso
+    const partes = [];
+    if (hayCat) partes.push('Categoría: ' + catTxt);
+    if (hayEsp) partes.push('Especialidad: ' + espTxt);
+    $('#chipAlcanceTexto').text(partes.join(' · '));
+    $('#chipAlcance').show();
+    $('#btnLimpiarCatEsp').show();
+    $('#avisoAlcanceCatEsp').show();
+
+    // Marca por bloque
+    ALCANCE_BLOQUES.forEach(function(b) {
+        const $card = $(b.sel).closest('.nexo-chart-card');
+        if (!$card.length) return;
+        const aplica = (hayCat && b.cat === 'si') || (hayEsp && b.esp === 'si');
+        const ignora = (hayCat && b.cat === 'no') || (hayEsp && b.esp === 'no');
+        let clase, texto;
+        if (aplica && !ignora) { clase = 'scope-badge-on';  texto = 'Filtrado'; }
+        else if (aplica && ignora) { clase = 'scope-badge-off'; texto = 'Filtrado en parte'; }
+        else if (ignora) { clase = 'scope-badge-off'; texto = 'Total del negocio'; }
+        else { return; }   // sólo cruces sobre su propio eje: no molestar
+        if (clase === 'scope-badge-off') $card.addClass('scope-off-card');
+        $card.find('.nexo-chart-header').first()
+             .append('<span class="scope-badge ' + clase + '">' + texto + '</span>');
+    });
+
+    // Los 8 KPIs y los indicadores avanzados no aceptan estos filtros:
+    // se marca la cabecera de sección, que está justo encima de la grilla.
+    $('#secKPIs, #secAvanzados').append(
+        '<span class="scope-badge scope-badge-off">Sin filtro de categoría / especialidad</span>'
+    );
+}
+
+function limpiarFiltroCatEsp() {
+    $('#filtroCategoria').val('');
+    $('#filtroEspecialidad').val('');
+    aplicarFiltros();
 }
 
 function cargarIndicadoresGlobalesComparativo(params) {
@@ -1565,6 +1827,9 @@ function cargarIndicadoresGlobales(params) {
             dashboardData.indicadores.crecimiento_cantidad = varTransacciones;
             dashboardData.indicadores.crecimiento_ticket = varTicket;
             
+            // UPT depende de las transacciones: recalcular al llegar este endpoint
+            refrescarUnidadesYUPT();
+
             // Gráfico de evolución
             if (response.evolucion_diaria) {
                 actualizarChartEvolucion(response.evolucion_diaria);
@@ -1845,18 +2110,28 @@ function cargarProductosMasVendidos(params) {
         if (response.success && response.productos) {
             dashboardData.productos = response.productos;
             actualizarTablaProductos(response.productos);
-            
-            const totalUnidades = response.productos.reduce((sum, p) => sum + (p.cantidad || 0), 0);
-            const transacciones = dashboardData.indicadores?.cantidad_ventas || 1;
-            const upt = totalUnidades / transacciones;
-            
-            $('#kpiUnidades').text(formatNumber(totalUnidades));
-            $('#kpiUnidadesDia').text(Math.round(totalUnidades / calcularDias()));
-            $('#kpiUPT').text(upt.toFixed(2));
-            
-            dashboardData.totalUnidades = totalUnidades;
+
+            // Las unidades del top-20 sólo alimentan la tabla; los KPIs
+            // "Unidades Vendidas" y "UPT" se calculan con el total del período
+            // (ver refrescarUnidadesYUPT).
+            dashboardData.unidadesTop = response.productos.reduce((sum, p) => sum + (p.cantidad || 0), 0);
         }
     });
+}
+
+// "Unidades Vendidas" y "UPT" se pintaban sumando SÓLO el top-20 de productos:
+// quedaban muy por debajo de la realidad. Ahora salen del total del período que
+// ya devuelve /api/ventas/indicadores-avanzados/ (Sum de todas las líneas).
+function refrescarUnidadesYUPT() {
+    const unidades = (dashboardData.avanzados || {}).unidades_vendidas;
+    if (unidades === undefined || unidades === null) return;
+    const transacciones = (dashboardData.indicadores || {}).cantidad_ventas || 0;
+
+    $('#kpiUnidades').text(formatNumber(unidades));
+    $('#kpiUnidadesDia').text(formatNumber(Math.round(unidades / calcularDias())));
+    $('#kpiUPT').text(transacciones > 0 ? (unidades / transacciones).toFixed(2) : '0.00');
+
+    dashboardData.totalUnidades = unidades;
 }
 
 function cargarTendencias(params) {
@@ -1906,7 +2181,8 @@ function cargarCambiosDevoluciones(params) {
     return $.get('/app/api/ventas/analisis-cambios/', params, function(response) {
         if (response.success) {
             dashboardData.cambios = response;
-            $('#cambiosPendientes').text(response.pendientes || 0);
+            // OJO: este endpoint NO devuelve 'pendientes' (el contador mostraba
+            // siempre 0). Se alimenta desde /estado-operacional/.
         }
     });
 }
@@ -1924,7 +2200,8 @@ function cargarIndicadoresAvanzados(params) {
             $('#kpiGMROI').text((response.gmroi || 0).toFixed(2));
             $('#kpiDescuento').text((response.descuento_promedio || 0).toFixed(1) + '%');
             $('#kpiDescuentoMonto').text(formatMoney(response.descuento_total_monto || 0) + ' total descontado');
-            
+
+            refrescarUnidadesYUPT();
             actualizarStatusKPIs();
         }
     });
@@ -1970,6 +2247,8 @@ function cargarEstadoOperacional(params) {
             const cd = response.cambios_devoluciones || {};
             $('#cambiosMontoTotal').text(formatMoney(cd.monto_total || 0));
             $('#cambiosPendientesAprobacion').text(formatNumber(cd.pendientes_aprobacion || 0));
+            // Panel de cuadraturas: mismo dato, que antes quedaba clavado en 0
+            $('#cambiosPendientes').text(formatNumber(cd.pendientes_aprobacion || 0));
             const totalCambios = (cd.por_estado || []).reduce((s, e) => s + (e.cantidad || 0), 0);
             $('#cambiosTotalPeriodo').text(formatNumber(totalCambios));
             const ticketsTotal = tickets.total || 1;
@@ -2780,7 +3059,47 @@ function exportarDashboard() {
         sucursal_id: $('#filtroSucursal').val() || '',
         vendedor_id: $('#filtroVendedor').val() || ''
     });
-    window.open(`/app/api/ventas/exportar-dashboard/?${params}`, '_blank');
+    const url = `/app/api/ventas/exportar-dashboard/?${params}`;
+
+    // El Excel NO usa todos los filtros de la pantalla: hay que decirlo ANTES de
+    // descargarlo, para que nadie mande a gerencia un archivo que no coincide
+    // con lo que estaba viendo.
+    const ignorados = [];
+    if ($('#filtroEmpresa').val()) ignorados.push('Empresa');
+    if ($('#filtroEstado').val()) ignorados.push('Estado (el archivo trae sólo PAGADO)');
+    if ($('#filtroCategoria').val()) ignorados.push('Categoría');
+    if ($('#filtroEspecialidad').val()) ignorados.push('Especialidad');
+
+    const sucTxt = $('#filtroSucursal option:selected').text().trim() || 'Todas';
+    const vendTxt = $('#filtroVendedor option:selected').text().trim() || 'Todos';
+
+    let html = '<div style="text-align:left;font-size:.9rem;">'
+        + '<p class="mb-2">Se va a generar un Excel con:</p>'
+        + '<ul class="mb-2" style="padding-left:1.1rem;">'
+        + `<li><b>Período:</b> ${formatearFecha(fechaInicio)} – ${formatearFecha(fechaFin)}</li>`
+        + `<li><b>Sucursal:</b> ${sucTxt}</li>`
+        + `<li><b>Vendedor:</b> ${vendTxt}</li>`
+        + '</ul>';
+    if (ignorados.length) {
+        html += '<p class="mb-1" style="color:#996B00;"><b>No se aplican a este archivo:</b> '
+             + ignorados.join(', ')
+             + '. Las cifras pueden no cuadrar con las de la pantalla.</p>';
+    }
+    html += '</div>';
+
+    if (typeof Swal === 'undefined') { window.open(url, '_blank'); return; }
+    Swal.fire({
+        icon: ignorados.length ? 'warning' : 'question',
+        title: 'Exportar dashboard a Excel',
+        html: html,
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-download"></i> Descargar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0066FF',
+        cancelButtonColor: '#8A8A9A'
+    }).then(function(r) {
+        if (r.isConfirmed) window.open(url, '_blank');
+    });
 }
 
 // ========== CONTROL DE FUGAS Y ANÁLISIS AVANZADO ==========

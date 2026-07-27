@@ -435,6 +435,131 @@
         background: rgba(0, 102, 255, 0.3) !important;
         border-color: rgba(0, 102, 255, 0.5) !important;
     }
+
+    /* ===== Buscador del menú =====
+       Filtra en el cliente las opciones ya renderizadas (no consulta al servidor). */
+    .menu-search-wrap {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        padding: 10px 8px 8px;
+        background: #1A1A2E;
+    }
+
+    .menu-search-box {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .menu-search-box > i.menu-search-icon {
+        position: absolute;
+        left: 10px;
+        font-size: 1rem;
+        color: #8A8A9A;
+        pointer-events: none;
+    }
+
+    #menu-search-input {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        color: #FFFFFF;
+        font-size: 0.85rem;
+        padding: 8px 30px 8px 32px;
+        outline: none;
+        transition: 150ms ease;
+    }
+
+    #menu-search-input::placeholder {
+        color: #8A8A9A;
+    }
+
+    #menu-search-input:focus {
+        border-color: #0066FF;
+        background: rgba(0, 102, 255, 0.12);
+    }
+
+    #menu-search-clear {
+        position: absolute;
+        right: 6px;
+        background: transparent;
+        border: none;
+        color: #8A8A9A;
+        font-size: 1rem;
+        line-height: 1;
+        padding: 4px;
+        cursor: pointer;
+        display: none;
+    }
+
+    #menu-search-clear:hover {
+        color: #FFFFFF;
+    }
+
+    #menu-search-empty {
+        display: none;
+        color: #8A8A9A;
+        font-size: 0.8rem;
+        padding: 12px 16px;
+    }
+
+    /* Mientras se filtra, los submenús coincidentes quedan abiertos */
+    body.menu-filtrando .menu-dropdown.menu-filtro-abierto {
+        display: block !important;
+        height: auto !important;
+    }
+
+    /* ===== Densidad para notebooks de 15" (1366x768) =====
+       Solo compacta espaciados: no cambia colores, ancho ni estructura. */
+    @media (max-height: 820px) {
+        .navbar-brand-box {
+            padding: 0.5rem 1rem !important;
+        }
+
+        .navbar-nav > .nav-item {
+            margin: 1px 8px;
+        }
+
+        .navbar-nav > .nav-item > .nav-link.menu-link {
+            padding: 8px 14px !important;
+            font-size: 0.86rem;
+        }
+
+        .navbar-nav > .nav-item > .nav-link.menu-link i {
+            font-size: 1.1rem;
+        }
+
+        .menu-title {
+            padding: 0.5rem 1rem 0.25rem !important;
+            margin-top: 0.25rem;
+        }
+
+        .menu-dropdown .nav-link {
+            padding: 7px 12px 7px 18px !important;
+            font-size: 0.82rem;
+        }
+
+        .menu-dropdown .menu-dropdown .nav-link {
+            padding: 6px 12px 6px 14px !important;
+        }
+
+        .menu-dropdown .menu-title {
+            padding: 8px 12px 4px 20px !important;
+        }
+
+        .menu-search-wrap {
+            padding: 8px 8px 6px;
+        }
+
+        /* El topbar mide 70px fijos; el tema reserva 70px + 1.5rem antes del
+           contenido. En 768px de alto eso son ~94px perdidos: se recorta el aire
+           sobrante sin tocar la altura del topbar (no se corta nada). */
+        .main-content .page-content {
+            padding-top: calc(70px + 0.75rem);
+        }
+    }
 </style>
 
 <div id="loadingOverlay" style="
@@ -1984,6 +2109,17 @@
 
                     <div id="two-column-menu">
                     </div>
+                    <!-- Buscador del menú: filtra en el cliente las opciones ya visibles -->
+                    <div class="menu-search-wrap">
+                        <div class="menu-search-box">
+                            <i class="ri-search-line menu-search-icon"></i>
+                            <input type="text" id="menu-search-input" placeholder="Buscar en el menú..."
+                                autocomplete="off" spellcheck="false" aria-label="Buscar opción del menú">
+                            <button type="button" id="menu-search-clear" title="Limpiar búsqueda"
+                                aria-label="Limpiar búsqueda">&times;</button>
+                        </div>
+                        <div id="menu-search-empty">Sin coincidencias</div>
+                    </div>
                     <ul class="navbar-nav" id="navbar-nav">
                         <!-- ========== MÓDULO DASHBOARD ========== -->
                         {% contar_opciones_disponibles user 'dashboard' as total_dashboard %}
@@ -2082,6 +2218,9 @@
                             </a>
                         </li>
                         {% elif total_ventas > 0 %}
+                        {# Guarda anti-menú-vacío: el módulo 'ventas' incluye permisos de acción
+                           (dte_editar_fecha, dte_editar_pago, ...) que no tienen pantalla propia. #}
+                        {% if permiso_ticket_venta or permiso_cambios_devoluciones or permiso_devolucion_garantia or permiso_pos_dashboard or permiso_gestion_documentos_ventas or permiso_cuadratura_caja or permiso_revision_arqueos or permiso_pos_transbank %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#moduloVentas" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="moduloVentas">
@@ -2149,6 +2288,7 @@
                             </div>
                         </li>
                         {% endif %}
+                        {% endif %}
                         <!-- ========== MÓDULO ECOMMERCE ========== -->
                         {% contar_opciones_disponibles user 'ecommerce' as total_ecommerce %}
                         {% if total_ecommerce > 0 %}
@@ -2182,6 +2322,10 @@
                         <!-- ========== MÓDULO DOCUMENTOS ========== -->
                         {% contar_opciones_disponibles user 'documentos' as total_documentos %}
                         {% if total_documentos > 0 %}
+                        {# Guarda anti-menú-vacío: el módulo 'documentos' incluye permisos de acción
+                           (dte_editar_folio, dte_descargar_txt, ...) que no tienen pantalla propia.
+                           Sin esto, un usuario con solo esos permisos abre un desplegable vacío. #}
+                        {% if permiso_emision_dte or permiso_gestion_dte or permiso_recepcion_dte or permiso_gestion_cotizaciones or permiso_gestion_correlativos or permiso_gestion_creditos %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#moduloDocumentos" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="moduloDocumentos">
@@ -2189,6 +2333,9 @@
                             </a>
                             <div class="menu-dropdown collapse" id="moduloDocumentos" style="">
                                 <ul class="nav nav-sm flex-column">
+                                    {% if permiso_emision_dte or permiso_gestion_dte or permiso_gestion_cotizaciones or permiso_gestion_correlativos %}
+                                    <li class="menu-title"><span>Emisión</span></li>
+                                    {% endif %}
                                     {% if permiso_emision_dte %}
                                     <li class="nav-item">
                                         <a href="{% url 'emision_dte' %}" class="nav-link" data-key="t-chartjs">
@@ -2208,13 +2355,6 @@
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if permiso_recepcion_dte %}
-                                    <li class="nav-item">
-                                        <a href="{% url 'recepcion_dte' %}" class="nav-link" data-key="t-recepcion-dte">
-                                            <i class="bi bi-box-arrow-in-down"></i> Recepción Documentos
-                                        </a>
-                                    </li>
-                                    {% endif %}
                                     {% if permiso_gestion_cotizaciones %}
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_cotizaciones' %}" class="nav-link" data-key="t-cotizaciones">
@@ -2229,7 +2369,38 @@
                                         </a>
                                     </li>
                                     {% endif %}
+                                    {% if permiso_recepcion_dte or permiso_gestion_documentos_ventas or permiso_dashboard_documentos %}
+                                    <li class="menu-title"><span>Recepción y seguimiento</span></li>
+                                    {% endif %}
+                                    {% if permiso_recepcion_dte %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'recepcion_dte' %}" class="nav-link" data-key="t-recepcion-dte">
+                                            <i class="bi bi-box-arrow-in-down"></i> Recepción Documentos
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{% url 'dtes_en_limbo' %}" class="nav-link" data-key="t-dtes-limbo"
+                                           title="Traspasos rechazados, parciales o sin recepcionar que esperan decisión del emisor">
+                                            <i class="ri-error-warning-line"></i> DTEs en Limbo
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if permiso_gestion_documentos_ventas %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'gestion_ventas_documentos' %}" class="nav-link" data-key="t-consulta-documentos-doc">
+                                            <i class="ri-file-search-line"></i> Consulta Documentos
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if permiso_dashboard_documentos %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'dashboard_documentos' %}" class="nav-link" data-key="t-dashboard-documentos-doc">
+                                            <i class="ri-pie-chart-line"></i> Dashboard Documentos
+                                        </a>
+                                    </li>
+                                    {% endif %}
                                     {% if permiso_gestion_creditos %}
+                                    <li class="menu-title"><span>Cobranza</span></li>
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_creditos_documentos' %}" class="nav-link" data-key="t-gestion-creditos">
                                             <i class="ri-bank-card-line"></i> Gestión Créditos
@@ -2239,6 +2410,7 @@
                                 </ul>
                             </div>
                         </li>
+                        {% endif %}
                         {% endif %}
                         <!-- ========== MÓDULO EXISTENCIAS ========== -->
                         {% contar_opciones_disponibles user 'existencias' as total_existencias %}
@@ -2486,7 +2658,9 @@
                         {% endif %}
                         <!-- ========== MÓDULO REPORTES ========== -->
                         {% contar_opciones_disponibles user 'reportes' as total_reportes %}
-                        {% if total_reportes > 0 %}
+                        {# Plan/Campañas de Liquidación viven en el módulo 'liquidacion' pero se muestran
+                           dentro de Reportes: sin este OR, quien solo tiene esos permisos no ve nada. #}
+                        {% if total_reportes > 0 or permiso_plan_liquidacion or permiso_campanas_liquidacion %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#moduloReportes" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="moduloReportes">
@@ -2741,6 +2915,130 @@
             <div class="sidebar-background "></div>
         </div>
         <!-- Left Sidebar End -->
+
+        <!-- Buscador del menú (JS puro, sin jQuery: este bloque se ejecuta antes del footer).
+             Los listeners van delegados en document porque app.js del tema reescribe el
+             innerHTML de .navbar-menu al inicializar el layout vertical. -->
+        <script>
+        (function () {
+            var CLASE_ABIERTO = 'menu-filtro-abierto';
+
+            var ACENTOS = { 'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ü': 'u', 'ñ': 'n' };
+
+            function normalizar(texto) {
+                return (texto || '').toString().toLowerCase()
+                    .replace(/[áéíóúüñ]/g, function (c) { return ACENTOS[c] || c; })
+                    .replace(/\s+/g, ' ').trim();
+            }
+
+            function nav() {
+                return document.getElementById('navbar-nav');
+            }
+
+            function abrirDropdown(dd, contenedor) {
+                if (!dd) return;
+                dd.classList.add('show', CLASE_ABIERTO);
+                var toggle = contenedor.querySelector('[href="#' + dd.id + '"]');
+                if (toggle) {
+                    toggle.classList.remove('collapsed');
+                    toggle.setAttribute('aria-expanded', 'true');
+                }
+            }
+
+            function mostrarConAncestros(li, contenedor) {
+                li.style.display = '';
+                var padre = li.parentElement ? li.parentElement.closest('li') : null;
+                while (padre && contenedor.contains(padre)) {
+                    padre.style.display = '';
+                    abrirDropdown(padre.querySelector(':scope > .menu-dropdown'), contenedor);
+                    padre = padre.parentElement ? padre.parentElement.closest('li') : null;
+                }
+            }
+
+            function limpiarFiltro() {
+                var contenedor = nav();
+                if (!contenedor) return;
+                document.body.classList.remove('menu-filtrando');
+                Array.prototype.forEach.call(contenedor.querySelectorAll('li'), function (li) {
+                    li.style.display = '';
+                });
+                Array.prototype.forEach.call(contenedor.querySelectorAll('.' + CLASE_ABIERTO), function (dd) {
+                    dd.classList.remove(CLASE_ABIERTO, 'show');
+                    var toggle = contenedor.querySelector('[href="#' + dd.id + '"]');
+                    if (toggle) {
+                        toggle.classList.add('collapsed');
+                        toggle.setAttribute('aria-expanded', 'false');
+                    }
+                });
+                var vacio = document.getElementById('menu-search-empty');
+                if (vacio) vacio.style.display = 'none';
+                var btn = document.getElementById('menu-search-clear');
+                if (btn) btn.style.display = 'none';
+            }
+
+            function aplicarFiltro(valor) {
+                var contenedor = nav();
+                if (!contenedor) return;
+                var termino = normalizar(valor);
+                var btn = document.getElementById('menu-search-clear');
+                if (btn) btn.style.display = termino ? 'block' : 'none';
+                if (!termino) { limpiarFiltro(); return; }
+
+                document.body.classList.add('menu-filtrando');
+                var encontrado = false;
+
+                // Punto de partida: todo oculto (los títulos de sección no se buscan)
+                Array.prototype.forEach.call(contenedor.querySelectorAll('li'), function (li) {
+                    li.style.display = 'none';
+                });
+
+                Array.prototype.forEach.call(contenedor.querySelectorAll('li'), function (li) {
+                    var enlace = li.querySelector(':scope > a.nav-link');
+                    if (!enlace) return;
+                    if (normalizar(enlace.textContent).indexOf(termino) === -1) return;
+
+                    encontrado = true;
+                    mostrarConAncestros(li, contenedor);
+
+                    // Si coincide el nombre de un módulo, se muestra completo
+                    var propio = li.querySelector(':scope > .menu-dropdown');
+                    if (propio) {
+                        abrirDropdown(propio, contenedor);
+                        Array.prototype.forEach.call(propio.querySelectorAll('li'), function (hijo) {
+                            hijo.style.display = '';
+                            abrirDropdown(hijo.querySelector(':scope > .menu-dropdown'), contenedor);
+                        });
+                    }
+                });
+
+                var vacio = document.getElementById('menu-search-empty');
+                if (vacio) vacio.style.display = encontrado ? 'none' : 'block';
+            }
+
+            document.addEventListener('input', function (e) {
+                if (e.target && e.target.id === 'menu-search-input') {
+                    aplicarFiltro(e.target.value);
+                }
+            });
+
+            document.addEventListener('click', function (e) {
+                if (!e.target || !e.target.closest) return;
+                if (e.target.closest('#menu-search-clear')) {
+                    var input = document.getElementById('menu-search-input');
+                    if (input) { input.value = ''; input.focus(); }
+                    limpiarFiltro();
+                }
+            });
+
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && e.target && e.target.id === 'menu-search-input') {
+                    e.target.value = '';
+                    limpiarFiltro();
+                }
+            });
+        })();
+        </script>
+
         <!-- Vertical Overlay-->
         <div class="vertical-overlay "></div>
 

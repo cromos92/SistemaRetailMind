@@ -32,6 +32,19 @@
     .nivel-PLATA { background:#e8eaf6; color:#5c6bc0; }
     .nivel-ORO   { background:#fff8e1; color:#f9a825; }
     .nivel-PLATINO { background:#f3e5f5; color:#8e24aa; }
+    /* Chip de tipo de cliente (colores servidos por la vista, sin paleta nueva) */
+    .tipo-badge { font-size:11px; font-weight:700; padding:3px 10px; border-radius:12px;
+        display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
+    .quick-filter-btn { background:white; border:1px solid rgba(64,81,137,.2); border-radius:20px;
+        padding:6px 14px; font-size:12px; font-weight:500; color:#405189; transition:all .2s ease; cursor:pointer; }
+    .quick-filter-btn:hover { background:#405189; color:white; transform:translateY(-2px);
+        box-shadow:0 4px 12px rgba(64,81,137,.3); }
+    .quick-filter-btn.activo { background:#405189; color:white; border-color:#405189; }
+    .filtro-label { font-size:11px; font-weight:600; color:#6c757d; margin-bottom:2px; display:block; }
+    /* En 1366x768 los controles del filtro deben caber en una sola fila */
+    @media (min-width: 992px) and (max-width: 1500px) {
+        .pagination-controls .form-control, .pagination-controls .form-select { font-size:13px; padding:.35rem .5rem; }
+    }
 </style>
 
 <div class="page-content">
@@ -112,13 +125,57 @@
                 </div>
 
                 <div class="pagination-controls">
-                    <div class="row g-2 align-items-center">
-                        <div class="col-md-10">
-                            <input type="text" id="fid-busqueda" class="form-control" placeholder="Buscar por nombre, RUT o empresa...">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-12 col-lg-3">
+                            <label class="filtro-label" for="fid-busqueda">Buscar</label>
+                            <input type="text" id="fid-busqueda" class="form-control" placeholder="Nombre, RUT o empresa...">
                         </div>
-                        <div class="col-md-2">
-                            <button class="btn btn-primary w-100" onclick="cargarCuentas(1)"><i class="ri-filter-line"></i> Buscar</button>
+                        <div class="col-6 col-lg-2">
+                            <label class="filtro-label" for="fid-tipo">Tipo de cliente</label>
+                            <select id="fid-tipo" class="form-select">
+                                <option value="">Todos</option>
+                                {% for t in tipos_cliente %}
+                                <option value="{{ t.valor }}">{{ t.label }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
+                        <div class="col-6 col-lg-2">
+                            <label class="filtro-label" for="fid-puntos">Puntos</label>
+                            <select id="fid-puntos" class="form-select">
+                                <option value="">Todos</option>
+                                <option value="con">Con puntos</option>
+                                <option value="sin">Sin puntos</option>
+                            </select>
+                        </div>
+                        <div class="col-4 col-lg-1">
+                            <label class="filtro-label" for="fid-saldo-min">Saldo mín.</label>
+                            <input type="number" id="fid-saldo-min" class="form-control" min="0" placeholder="0">
+                        </div>
+                        <div class="col-4 col-lg-1">
+                            <label class="filtro-label" for="fid-saldo-max">Saldo máx.</label>
+                            <input type="number" id="fid-saldo-max" class="form-control" min="0" placeholder="—">
+                        </div>
+                        <div class="col-4 col-lg-2">
+                            <label class="filtro-label" for="fid-orden">Ordenar por</label>
+                            <select id="fid-orden" class="form-select">
+                                <option value="">Nombre (A-Z)</option>
+                                <option value="saldo_desc">Más puntos</option>
+                                <option value="saldo_asc">Menos puntos</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-lg-1">
+                            <button class="btn btn-primary w-100" onclick="cargarCuentas(1)" title="Aplicar filtros">
+                                <i class="ri-filter-line"></i> <span class="d-lg-none">Buscar</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 mt-2" id="fid-chips">
+                        <button type="button" class="quick-filter-btn activo" data-chip="todos">Todos</button>
+                        <button type="button" class="quick-filter-btn" data-chip="con">Con puntos</button>
+                        <button type="button" class="quick-filter-btn" data-chip="sin">Sin puntos</button>
+                        <button type="button" class="quick-filter-btn" data-chip="oro">Oro y Platino</button>
+                        <button type="button" class="quick-filter-btn" data-chip="canjeable">Saldo canjeable</button>
+                        <span class="ms-auto align-self-center small text-muted" id="fid-filtros-activos"></span>
                     </div>
                 </div>
 
@@ -126,14 +183,15 @@
                     <table class="table table-hover align-middle">
                         <thead class="table-light">
                             <tr>
-                                <th>Cliente</th><th>RUT</th><th>Empresa</th>
+                                <th>Cliente</th><th>RUT</th>
+                                <th>Tipo</th><th>Empresa</th>
                                 <th class="text-center">Nivel</th>
                                 <th class="text-end">Puntos</th><th class="text-end">Valor</th>
                                 <th class="text-center">Ficha</th>
                             </tr>
                         </thead>
                         <tbody id="fid-tbody">
-                            <tr><td colspan="6" class="text-center text-muted py-4">Cargando...</td></tr>
+                            <tr><td colspan="8" class="text-center text-muted py-4">Cargando...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -215,13 +273,21 @@
     </div>
 </div>
 
+{% include '../../layout/footer.html' %}
+
+<!-- JS del módulo: SIEMPRE después del footer (el footer es quien carga jQuery
+     y los plugins; ponerlo antes rompe la página con "$ is not defined"). -->
 <script>
 const URLS_FID = {
     listar: "{% url 'api_listar_cuentas' %}",
     reporte: "{% url 'api_reporte_fidelizacion' %}",
     registrar: "{% url 'api_registrar_cliente' %}",
 };
+const MINIMO_CANJE = {{ programa.minimo_canje_puntos|default:0 }};
 let modalRegistro = null;
+// Niveles seleccionados por los chips rápidos (el resto de filtros vive en los
+// controles). Todo se manda al backend: NADA se filtra en el navegador.
+let filtroNivel = '';
 function csrf() { return document.querySelector('[name=csrfmiddlewaretoken]').value; }
 function fmt(n) { return '$' + (n||0).toLocaleString('es-CL'); }
 
@@ -239,22 +305,68 @@ function cargarKpis() {
     });
 }
 
+function esc(t) {
+    return String(t == null ? '' : t).replace(/[&<>"']/g, s => (
+        {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]
+    ));
+}
+
+/* Arma los parámetros del listado. Todos los filtros se resuelven en el
+   servidor (`api_listar_cuentas`), por eso el total y la paginación siempre
+   corresponden al universo filtrado. */
+function paramsFiltros(page) {
+    const p = new URLSearchParams();
+    p.set('page', page || 1);
+    const q = document.getElementById('fid-busqueda').value.trim();
+    if (q) p.set('q', q);
+    const tipo = document.getElementById('fid-tipo').value;
+    if (tipo) p.set('tipo_cliente', tipo);
+    const puntos = document.getElementById('fid-puntos').value;
+    if (puntos) p.set('puntos', puntos);
+    const smin = document.getElementById('fid-saldo-min').value.trim();
+    if (smin !== '') p.set('saldo_min', smin);
+    const smax = document.getElementById('fid-saldo-max').value.trim();
+    if (smax !== '') p.set('saldo_max', smax);
+    const orden = document.getElementById('fid-orden').value;
+    if (orden) p.set('orden', orden);
+    if (filtroNivel) p.set('nivel', filtroNivel);
+    return p;
+}
+
+function resumenFiltros(p) {
+    const partes = [];
+    if (p.get('tipo_cliente')) {
+        const sel = document.getElementById('fid-tipo');
+        partes.push(sel.options[sel.selectedIndex].text);
+    }
+    if (p.get('puntos') === 'con') partes.push('con puntos');
+    if (p.get('puntos') === 'sin') partes.push('sin puntos');
+    if (p.get('nivel')) partes.push('nivel ' + p.get('nivel').replace(',', ' / '));
+    if (p.get('saldo_min')) partes.push('saldo ≥ ' + p.get('saldo_min'));
+    if (p.get('saldo_max')) partes.push('saldo ≤ ' + p.get('saldo_max'));
+    document.getElementById('fid-filtros-activos').textContent =
+        partes.length ? 'Filtros: ' + partes.join(' · ') : '';
+}
+
 function cargarCuentas(page) {
-    const q = document.getElementById('fid-busqueda').value;
-    fetch(`${URLS_FID.listar}?q=${encodeURIComponent(q)}&page=${page||1}`).then(r=>r.json()).then(d=>{
-        const tbody = document.getElementById('fid-tbody');
+    const p = paramsFiltros(page);
+    resumenFiltros(p);
+    const tbody = document.getElementById('fid-tbody');
+    fetch(`${URLS_FID.listar}?${p.toString()}`).then(r=>r.json()).then(d=>{
         if (!d.success || !d.items.length) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Sin resultados</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Sin resultados</td></tr>';
             document.getElementById('fid-info').textContent = '';
             document.getElementById('fid-paginacion').innerHTML = '';
             return;
         }
         tbody.innerHTML = d.items.map(c => `
             <tr>
-                <td>${c.cliente}</td>
-                <td class="small">${c.rut || '—'}</td>
-                <td>${c.empresa ? `<span class="badge-empresa">${c.empresa}</span>` : '<span class="text-muted">—</span>'}</td>
-                <td class="text-center"><span class="nivel-badge nivel-${c.nivel||'PLATA'}">${c.nivel||'PLATA'}</span></td>
+                <td>${esc(c.cliente)}</td>
+                <td class="small">${esc(c.rut) || '—'}</td>
+                <td><span class="tipo-badge" style="background:${esc(c.tipo_cliente_bg)};color:${esc(c.tipo_cliente_color)}">
+                    <i class="${esc(c.tipo_cliente_icono)}"></i>${esc(c.tipo_cliente_display)}</span></td>
+                <td>${c.empresa ? `<span class="badge-empresa">${esc(c.empresa)}</span>` : '<span class="text-muted">—</span>'}</td>
+                <td class="text-center"><span class="nivel-badge nivel-${esc(c.nivel||'PLATA')}">${esc(c.nivel||'PLATA')}</span></td>
                 <td class="text-end pts-badge">${(c.saldo_puntos||0).toLocaleString('es-CL')}</td>
                 <td class="text-end">${fmt(c.valor_pesos)}</td>
                 <td class="text-center">
@@ -266,7 +378,24 @@ function cargarCuentas(page) {
         if (d.page > 1) html += `<button class="btn btn-sm btn-outline-secondary" onclick="cargarCuentas(${d.page-1})">«</button>`;
         if (d.page < d.num_pages) html += `<button class="btn btn-sm btn-outline-secondary" onclick="cargarCuentas(${d.page+1})">»</button>`;
         document.getElementById('fid-paginacion').innerHTML = html;
+    }).catch(()=>{
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">No se pudo cargar el listado.</td></tr>';
     });
+}
+
+/* Chips rápidos: solo preconfiguran los controles y recargan desde el server. */
+function aplicarChip(chip, boton) {
+    document.querySelectorAll('#fid-chips .quick-filter-btn')
+        .forEach(b => b.classList.toggle('activo', b === boton));
+    const puntos = document.getElementById('fid-puntos');
+    const smin = document.getElementById('fid-saldo-min');
+    filtroNivel = '';
+    if (chip === 'todos') { puntos.value = ''; smin.value = ''; }
+    else if (chip === 'con') { puntos.value = 'con'; smin.value = ''; }
+    else if (chip === 'sin') { puntos.value = 'sin'; smin.value = ''; }
+    else if (chip === 'oro') { puntos.value = ''; smin.value = ''; filtroNivel = 'ORO,PLATINO'; }
+    else if (chip === 'canjeable') { puntos.value = ''; smin.value = MINIMO_CANJE || 1; }
+    cargarCuentas(1);
 }
 
 /* ===== Modal registro ===== */
@@ -365,13 +494,26 @@ function registrarCliente() {
     }).catch(()=>{ btn.disabled = false; Swal.fire('Error', 'No se pudo registrar el cliente.', 'error'); });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function inicializarFidelizacion() {
     cargarKpis();
     cargarCuentas(1);
     document.getElementById('fid-busqueda').addEventListener('keyup', e => { if (e.key==='Enter') cargarCuentas(1); });
+    ['fid-tipo','fid-puntos','fid-orden'].forEach(id => {
+        document.getElementById(id).addEventListener('change', () => cargarCuentas(1));
+    });
+    ['fid-saldo-min','fid-saldo-max'].forEach(id => {
+        document.getElementById(id).addEventListener('keyup', e => { if (e.key==='Enter') cargarCuentas(1); });
+    });
+    document.querySelectorAll('#fid-chips .quick-filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => aplicarChip(btn.dataset.chip, btn));
+    });
     // Auto-abrir el modal si se llegó desde el enlace antiguo (/registrar-cliente/).
     if (new URLSearchParams(window.location.search).get('nuevo') === '1') abrirModalRegistro();
-});
-</script>
+}
 
-{% include '../../layout/footer.html' %}
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', inicializarFidelizacion);
+} else {
+    inicializarFidelizacion();
+}
+</script>

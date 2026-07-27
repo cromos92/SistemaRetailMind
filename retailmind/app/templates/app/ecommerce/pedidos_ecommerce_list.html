@@ -131,6 +131,45 @@
 /* ── toggle ver todas ── */
 .toggle-todas{font-size:.78rem;display:inline-flex;align-items:center;gap:4px;cursor:pointer;}
 .toggle-todas input{width:14px;height:14px;accent-color:#3b82f6;cursor:pointer;}
+
+/* ── panel estado de sincronización ── */
+.sync-panel{border:1px solid #e2e8f0;border-radius:12px;background:#fff;margin-bottom:14px;overflow:hidden;}
+.sync-panel.tiene-alerta{border-color:#fdba74;}
+.sync-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 14px;background:linear-gradient(135deg,#f8f9fa 0%,#eef1f6 100%);cursor:pointer;}
+.sync-head .sync-title{font-size:.78rem;font-weight:700;text-transform:uppercase;color:#405189;letter-spacing:.03em;}
+.sync-head .sync-resumen{font-size:.76rem;color:#475569;}
+.sync-body{padding:12px 14px;border-top:1px solid #eef1f6;}
+.sync-body.oculto{display:none;}
+.sync-pill{font-size:.68rem;font-weight:700;padding:2px 9px;border-radius:12px;white-space:nowrap;}
+.sync-pill.ok{background:#dcfce7;color:#166534;}
+.sync-pill.atrasado{background:#fef3c7;color:#92400e;}
+.sync-pill.inactivo{background:#f1f5f9;color:#475569;}
+.sync-pill.error{background:#fee2e2;color:#991b1b;}
+.sync-tbl{width:100%;border-collapse:collapse;font-size:.78rem;}
+.sync-tbl th{text-align:left;font-size:.66rem;text-transform:uppercase;letter-spacing:.04em;color:#64748b;padding:5px 8px;border-bottom:1px solid #e2e8f0;white-space:nowrap;}
+.sync-tbl td{padding:5px 8px;border-bottom:1px solid #f1f5f9;color:#1e293b;white-space:nowrap;}
+.sync-err{font-size:.74rem;border-left:3px solid #ef4444;background:#fff5f5;border-radius:0 6px 6px 0;padding:5px 9px;margin-top:5px;}
+.sync-err .sync-err-msg{color:#b91c1c;word-break:break-word;}
+
+/* ── alerta de boletas con cabecera en 0 ── */
+.alerta-cero{border:1px solid #fdba74;background:#fff7ed;border-radius:12px;padding:11px 14px;margin-bottom:14px;}
+.alerta-cero .ac-title{font-weight:700;color:#9a3412;font-size:.88rem;}
+.alerta-cero .ac-sub{font-size:.76rem;color:#7c2d12;}
+.alerta-cero .ac-tbl{width:100%;border-collapse:collapse;font-size:.76rem;margin-top:8px;}
+.alerta-cero .ac-tbl th{text-align:left;font-size:.65rem;text-transform:uppercase;color:#9a3412;padding:4px 7px;border-bottom:1px solid #fed7aa;white-space:nowrap;}
+.alerta-cero .ac-tbl td{padding:4px 7px;border-bottom:1px solid #ffedd5;white-space:nowrap;}
+.alerta-cero .ac-cero{color:#b91c1c;font-weight:700;}
+
+/* ── estado vacío de la tabla ── */
+.tabla-vacia{text-align:center;padding:38px 16px;color:#64748b;background:#fff;border:1px dashed #cbd5e1;border-radius:12px;}
+.tabla-vacia i{font-size:2.4rem;color:#cbd5e1;display:block;margin-bottom:8px;}
+.tabla-vacia .tv-title{font-weight:700;color:#334155;font-size:.95rem;}
+.tabla-vacia .tv-sub{font-size:.8rem;margin-top:4px;}
+
+/* ── pantallas de 15" (1366x768): que el panel no coma la tabla ── */
+@media (max-height:800px){
+  .sync-body{max-height:230px;overflow-y:auto;}
+}
 </style>
 
 <div class="page-content">
@@ -216,6 +255,185 @@
         </div>
       </div>
 
+      <!-- ═══════════════════════════════════════════════════════
+           ESTADO DE SINCRONIZACIÓN CON EL HUB (AllConnected)
+           Solo lectura. Se abre solo si hay errores o canales caídos.
+           ═══════════════════════════════════════════════════════ -->
+      {% if panel_sync %}
+      <div class="sync-panel {% if panel_sync.total_errores_24h %}tiene-alerta{% endif %}">
+        <div class="sync-head" onclick="toggleSyncPanel()" title="Ver/ocultar el estado de la sincronización">
+          <i class="bi bi-arrows-repeat" style="color:#405189;"></i>
+          <span class="sync-title">Estado de sincronización</span>
+          {% if panel_sync.configurado %}
+            <span class="sync-pill ok" title="Pull configurado contra {{ panel_sync.host }}">
+              <i class="bi bi-plug-fill me-1"></i>{{ panel_sync.host|default:"conectado" }}
+            </span>
+          {% else %}
+            <span class="sync-pill inactivo" title="ALLCONNECTED_API_BASE_URL sin configurar: solo llegan pedidos por push">
+              <i class="bi bi-plug me-1"></i>Solo push (sin pull configurado)
+            </span>
+          {% endif %}
+          <span class="sync-resumen">
+            {{ panel_sync.recibidos_24h }} pedido(s) en 24 h ·
+            {% if panel_sync.ultimo_global %}último {{ panel_sync.ultimo_global|date:"d/m H:i" }}{% else %}sin recepciones registradas{% endif %}
+          </span>
+          {% if panel_sync.total_errores_24h %}
+            <span class="sync-pill error"><i class="bi bi-exclamation-octagon-fill me-1"></i>{{ panel_sync.total_errores_24h }} error(es) en 24 h</span>
+          {% endif %}
+          <span class="ms-auto" style="font-size:.75rem;color:#64748b;">
+            <i class="bi {% if panel_sync.total_errores_24h %}bi-chevron-up{% else %}bi-chevron-down{% endif %}" id="sync-chevron"></i>
+          </span>
+        </div>
+        <div class="sync-body {% if not panel_sync.total_errores_24h %}oculto{% endif %}" id="sync-body">
+          {% if panel_sync.canales %}
+          <div class="table-responsive">
+            <table class="sync-tbl">
+              <thead>
+                <tr>
+                  <th>Canal</th>
+                  <th>Estado</th>
+                  <th class="text-end">24 h</th>
+                  <th class="text-end">7 días</th>
+                  <th class="text-end">Pendientes</th>
+                  <th class="text-end">Errores 24 h</th>
+                  <th>Último pedido recibido</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for c in panel_sync.canales %}
+                <tr>
+                  <td><span class="canal-b canal-{{ c.canal|lower }}">{{ c.canal }}</span></td>
+                  <td>
+                    {% if c.estado_salud == 'ok' %}<span class="sync-pill ok">Al día</span>
+                    {% elif c.estado_salud == 'atrasado' %}<span class="sync-pill atrasado">Sin datos &gt;24 h</span>
+                    {% elif c.estado_salud == 'inactivo' %}<span class="sync-pill inactivo">Sin datos &gt;48 h</span>
+                    {% else %}<span class="sync-pill error">Con errores</span>{% endif %}
+                  </td>
+                  <td class="text-end">{{ c.recibidos_24h }}</td>
+                  <td class="text-end">{{ c.recibidos_7d }}</td>
+                  <td class="text-end">{{ c.pendientes }}</td>
+                  <td class="text-end">{% if c.errores_24h %}<strong style="color:#b91c1c;">{{ c.errores_24h }}</strong>{% else %}0{% endif %}</td>
+                  <td>
+                    {% if c.ultimo %}
+                      {{ c.ultimo|date:"d/m/Y H:i" }}
+                      <span class="text-muted">(hace {{ c.horas_desde_ultimo }} h)</span>
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+            <div class="text-muted" style="font-size:.8rem;">
+              <i class="bi bi-inbox me-1"></i>Todavía no llegó ningún pedido para tu empresa. Usá
+              <strong>Traer pedidos</strong> con un rango de fechas para consultar al hub.
+            </div>
+          {% endif %}
+
+          {% if panel_sync.errores %}
+            <div style="margin-top:10px;">
+              <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#b91c1c;letter-spacing:.03em;">
+                <i class="bi bi-bug-fill me-1"></i>Errores de las últimas 24 h
+              </div>
+              {% for e in panel_sync.errores %}
+                <div class="sync-err">
+                  <a href="{% url 'pedido_ecommerce_detalle' pedido_id=e.id %}" class="fw-bold text-decoration-none">
+                    {{ e.numero_ticket_rm }}
+                  </a>
+                  <span class="text-muted">· {{ e.canal_origen }} #{{ e.numero_pedido_canal }} · {{ e.fecha_recepcion|date:"d/m H:i" }}</span>
+                  <div class="sync-err-msg">{{ e.error_detalle|default:e.get_sub_estado_display|truncatechars:220 }}</div>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          <div class="d-flex gap-2 align-items-center flex-wrap" style="margin-top:10px;">
+            <button class="btn btn-sm btn-outline-primary" style="font-size:.75rem;" onclick="traerPedidos()">
+              <i class="bi bi-arrow-clockwise me-1"></i>Reintentar sincronización
+            </button>
+            <span class="text-muted" style="font-size:.72rem;">
+              Reusa el rango de fechas del encabezado. Los pedidos ya recibidos no se duplican (la ingesta es idempotente).
+            </span>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- ═══════════════════════════════════════════════════════
+           ALERTA: boletas emitidas con la cabecera en 0
+           Solo visibilidad — esta pantalla NO corrige datos.
+           ═══════════════════════════════════════════════════════ -->
+      {% if dte_cero_total %}
+      <div class="alerta-cero">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+          <div>
+            <div class="ac-title">
+              <i class="bi bi-exclamation-triangle-fill me-1"></i>
+              {{ dte_cero_total }} boleta(s) emitida(s) con la cabecera en 0
+            </div>
+            <div class="ac-sub">
+              El DTE quedó con <strong>unidades</strong> y/o <strong>monto</strong> en 0 en la cabecera aunque las
+              líneas sí tengan datos: el SII las recibe en 0 unidades y quedan fuera de la cuadratura.
+              Hay que corregirlas a mano — desde acá <strong>solo se listan</strong>.
+            </div>
+          </div>
+          <div class="d-flex gap-1 flex-wrap">
+            <button class="btn btn-sm btn-outline-danger" style="font-size:.75rem;" onclick="filtrarProblemaDteCero()">
+              <i class="bi bi-funnel me-1"></i>Ver las {{ dte_cero_total }} en la tabla
+            </button>
+          </div>
+        </div>
+        {% if dte_cero_pedidos %}
+        <div class="table-responsive">
+          <table class="ac-tbl">
+            <thead>
+              <tr>
+                <th>N° Pedido</th>
+                <th>Canal</th>
+                <th>Sucursal</th>
+                <th>DTE</th>
+                <th class="text-end">Uds. cab.</th>
+                <th class="text-end">Monto cab.</th>
+                <th class="text-end">Total pedido</th>
+                <th>Facturado</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in dte_cero_pedidos %}
+              <tr>
+                <td><span class="ticket-rm-badge">{{ p.numero_pedido_origen|default:p.numero_ticket_rm }}</span></td>
+                <td><span class="canal-b canal-{{ p.canal_origen|lower }}">{{ p.canal_origen }}</span></td>
+                <td>{{ p.sucursal.nombre|default:p.sucursal.alias }}</td>
+                <td>{{ p.dte.tipo_documento }} #{{ p.dte.numero_documento }}</td>
+                <td class="text-end {% if not p.dte.unidades_productos %}ac-cero{% endif %}">{{ p.dte.unidades_productos|default_if_none:"—" }}</td>
+                <td class="text-end {% if not p.dte.monto_con_iva %}ac-cero{% endif %}">${{ p.dte.monto_con_iva|floatformat:0 }}</td>
+                <td class="text-end">${{ p.total|floatformat:0 }}</td>
+                <td>{{ p.fecha_facturacion|date:"d/m/Y H:i"|default:"—" }}</td>
+                <td>
+                  <a href="{% url 'pedido_ecommerce_detalle' pedido_id=p.id %}" class="btn btn-sm btn-outline-secondary" style="font-size:.68rem;padding:1px 7px;">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if dte_cero_total > dte_cero_pedidos|length %}
+          <div class="ac-sub mt-1">
+            Mostrando las {{ dte_cero_pedidos|length }} más recientes de {{ dte_cero_total }}.
+            El detalle completo sale con
+            <code>python manage.py diagnostico_pedidos_cantidad --solo-facturados</code> (solo lectura).
+          </div>
+        {% endif %}
+        {% endif %}
+      </div>
+      {% endif %}
+
       <!-- filtros -->
       <div class="pagination-controls">
         <div class="qf-row">
@@ -227,7 +445,8 @@
         </div>
         <form class="row g-2 align-items-end" id="form-filtros" onsubmit="return false;">
           <input type="hidden" name="estado" value="{{ estado_filtro }}">
-          <div class="col-md-2">
+          <input type="hidden" name="problema" id="filtro-problema" value="{{ problema_filtro }}">
+          <div class="col-md-2 col-6">
             <label class="filtro-label">Canal</label>
             <select name="canal" class="form-select form-select-sm">
               <option value="">Todos</option>
@@ -236,7 +455,7 @@
               {% endfor %}
             </select>
           </div>
-          <div class="col-md-2">
+          <div class="col-md-2 col-6">
             <label class="filtro-label">Sub-estado</label>
             <select name="sub_estado" class="form-select form-select-sm">
               <option value="">Todos</option>
@@ -245,7 +464,7 @@
               {% endfor %}
             </select>
           </div>
-          <div class="col-md-3">
+          <div class="col-md-2 col-6">
             <label class="filtro-label">Sucursal</label>
             <select name="sucursal_id" class="form-select form-select-sm" id="filtro-sucursal">
               <option value="" {% if sucursal_filtro == '' and not ver_todas %}selected{% endif %}>Mi sucursal</option>
@@ -258,21 +477,34 @@
               Ver todas las sucursales
             </label>
           </div>
-          <div class="col-md-3">
+          <div class="col-md-3 col-12">
+            <label class="filtro-label">Recepción (desde → hasta)</label>
+            <div class="d-flex align-items-center gap-1">
+              <input type="date" name="desde" class="form-control form-control-sm" value="{{ desde_filtro }}" title="Fecha de recepción desde">
+              <span class="text-muted">→</span>
+              <input type="date" name="hasta" class="form-control form-control-sm" value="{{ hasta_filtro }}" title="Fecha de recepción hasta">
+            </div>
+          </div>
+          <div class="col-md-3 col-12">
             <label class="filtro-label">Buscar</label>
             <div class="input-group input-group-sm">
               <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
-              <input type="text" name="q" class="form-control" placeholder="N° RM, pedido, cliente..." value="{{ q }}">
+              <input type="text" name="q" class="form-control" placeholder="N° RM, pedido, folio, cliente..." value="{{ q }}">
             </div>
           </div>
-          <div class="col-md-2 d-flex gap-1 align-self-end flex-wrap">
+          <div class="col-12 d-flex gap-1 flex-wrap align-items-center">
             <button type="button" class="btn btn-sm text-white" style="background:#405189;" onclick="aplicarFiltros(1)"><i class="bi bi-funnel me-1"></i>Filtrar</button>
-            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limpiarFiltros()" title="Limpiar filtros"><i class="bi bi-arrow-counterclockwise"></i></button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limpiarFiltros()" title="Limpiar todos los filtros"><i class="bi bi-arrow-counterclockwise me-1"></i>Limpiar</button>
             <a id="btn-export-csv" data-base="{% url 'exportar_pedidos_csv' %}"
-               href="{% url 'exportar_pedidos_csv' %}?estado={{ estado_filtro }}&canal={{ canal_filtro }}&sub_estado={{ sub_estado_filtro }}&sucursal_id={{ sucursal_filtro }}&q={{ q }}"
-               class="btn btn-outline-success btn-sm" title="Exportar CSV">
-              <i class="bi bi-file-earmark-spreadsheet"></i>
+               href="{% url 'exportar_pedidos_csv' %}?estado={{ estado_filtro }}&canal={{ canal_filtro }}&sub_estado={{ sub_estado_filtro }}&sucursal_id={{ sucursal_filtro }}&q={{ q }}{% if ver_todas %}&ver_todas=1{% endif %}"
+               class="btn btn-outline-success btn-sm" title="Exportar a CSV lo que estás viendo">
+              <i class="bi bi-file-earmark-spreadsheet me-1"></i>CSV
             </a>
+            <span id="badge-problema" class="badge bg-danger-subtle text-danger border border-danger-subtle"
+                  style="font-size:.72rem;padding:5px 10px;{% if problema_filtro != 'dte_cero' %}display:none;{% endif %}">
+              <i class="bi bi-exclamation-triangle-fill me-1"></i>Solo boletas con cabecera en 0
+              <a href="#" onclick="quitarFiltroProblema();return false;" class="ms-1 text-danger fw-bold" title="Quitar este filtro">&times;</a>
+            </span>
           </div>
         </form>
       </div>
@@ -319,12 +551,12 @@
 <!-- ═══════════════════════════════════════════════════════
      MODAL DE CONFIRMACIÓN
      ═══════════════════════════════════════════════════════ -->
-<div class="modal fade" id="modal-confirmar" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="modal-confirmar" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow">
       <div class="modal-header" style="background:#1d4ed8;color:#fff;">
         <h5 class="modal-title"><i class="bi bi-receipt me-2"></i>Confirmar Facturación Masiva</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        <button type="button" id="btn-conf-close" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <p class="mb-2">Estás a punto de crear <strong id="conf-n">0</strong> Ticket(s) + DTE(s) automáticamente.</p>
@@ -337,9 +569,21 @@
           <i class="bi bi-exclamation-triangle me-1"></i>
           Esta acción creará documentos tributarios. Asegúrate de tener correlativos configurados para la sucursal.
         </div>
+        <div id="conf-progreso" class="mt-3" style="display:none;">
+          <div class="d-flex justify-content-between mb-1" style="font-size:.78rem;">
+            <span class="fw-bold text-primary" id="conf-progreso-txt">Facturando…</span>
+            <span class="text-muted" id="conf-progreso-pct"></span>
+          </div>
+          <div class="progress" style="height:8px;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" id="conf-progreso-bar" style="width:0%;"></div>
+          </div>
+          <div class="text-muted mt-1" style="font-size:.72rem;">
+            El lote se procesa en tandas — no cierres esta ventana.
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-outline-secondary btn-sm" id="btn-conf-cancelar" data-bs-dismiss="modal">Cancelar</button>
         <button class="btn btn-primary btn-sm fw-bold" id="btn-conf-ok" onclick="ejecutarFacturacionMasiva()">
           <span id="conf-spinner" class="spinner-border spinner-sm me-1" style="display:none;"></span>
           <i class="bi bi-check-lg me-1" id="conf-icon"></i>Confirmar y Facturar
@@ -364,6 +608,9 @@
         <div id="res-lista"></div>
       </div>
       <div class="modal-footer d-flex gap-2">
+        <a class="btn btn-outline-primary btn-sm" id="btn-zip-txt" style="display:none;" href="#">
+          <i class="bi bi-file-zip me-1"></i>Descargar TXT (ZIP)
+        </a>
         <button class="btn btn-outline-secondary btn-sm" id="btn-imprimir-todos" style="display:none;" onclick="imprimirTodosResultados()">
           <i class="bi bi-printer me-1"></i>Imprimir todos
         </button>
@@ -526,11 +773,12 @@ function traerPedidos(){
 let _pagina = 1;
 let _debounceFiltro = null;
 const URL_LISTA = "{% url 'pedidos_ecommerce_list' %}";
+const ZIP_TXT_URL = "{% url 'descargar_txts_zip_ecommerce' %}";
 
 function construirParams(page){
   const f = document.getElementById('form-filtros');
   const params = new URLSearchParams();
-  ['estado','canal','sub_estado','sucursal_id','q'].forEach(name => {
+  ['estado','canal','sub_estado','sucursal_id','q','desde','hasta','problema'].forEach(name => {
     const el = f.elements[name];
     if(el && el.value !== '') params.set(name, el.value);
   });
@@ -547,8 +795,11 @@ function actualizarExportCsv(params){
   a.href = a.dataset.base + (p.toString() ? '?' + p.toString() : '');
 }
 
+let _reqSeq = 0;   // descarta respuestas AJAX fuera de orden (debounce vs pill vs auto-refresh)
+
 function aplicarFiltros(page, silencioso){
   _pagina = page || 1;
+  const miSeq = ++_reqSeq;
   const params = construirParams(_pagina);
   actualizarExportCsv(params);
   const cont = document.getElementById('tabla-container');
@@ -556,12 +807,15 @@ function aplicarFiltros(page, silencioso){
   fetch(URL_LISTA + '?' + params.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
     .then(r => r.text())
     .then(html => {
+      if(miSeq !== _reqSeq) return;   // llegó tarde: una request más nueva manda
       cont.innerHTML = html;
       cont.style.opacity = ''; cont.style.pointerEvents = '';
       formatMiles(cont);
+      reaplicarSeleccion();   // el re-render borra los checks del DOM; la verdad vive en _seleccion
       actualizarContador();
     })
     .catch(e => {
+      if(miSeq !== _reqSeq) return;
       cont.style.opacity = ''; cont.style.pointerEvents = '';
       if(!silencioso) console.error('Error al filtrar pedidos:', e);
     });
@@ -574,9 +828,56 @@ function limpiarFiltros(){
   f.elements['sub_estado'].value = '';
   f.elements['sucursal_id'].value = '';
   f.elements['q'].value = '';
+  f.elements['desde'].value = '';
+  f.elements['hasta'].value = '';
+  f.elements['problema'].value = '';
+  const badge = document.getElementById('badge-problema');
+  if(badge) badge.style.display = 'none';
   if(f.elements['ver_todas']) f.elements['ver_todas'].checked = false;
-  document.querySelectorAll('.quick-filter-btn[data-estado]').forEach(b => b.classList.toggle('active', b.dataset.estado === 'PENDIENTE'));
+  marcarPill('PENDIENTE');
   aplicarFiltros(1);
+}
+
+/* Marca visualmente la pill de estado que corresponde (el parcial AJAX no las
+   re-renderiza: viven en la página completa). */
+function marcarPill(valor){
+  document.querySelectorAll('.quick-filter-btn[data-estado]')
+    .forEach(b => b.classList.toggle('active', b.dataset.estado === valor));
+}
+
+/* ── Alerta de boletas con la cabecera en 0 ────────────────────────────────
+   Filtra la tabla a esos pedidos. Son siempre FACTURADOS, así que el estado
+   se fuerza para que el filtro por defecto (PENDIENTE) no los esconda.
+   ───────────────────────────────────────────────────────────────────────── */
+function filtrarProblemaDteCero(){
+  const f = document.getElementById('form-filtros');
+  f.elements['problema'].value = 'dte_cero';
+  f.elements['estado'].value = 'FACTURADO';
+  f.elements['sub_estado'].value = '';
+  f.elements['q'].value = '';
+  if(f.elements['ver_todas']) f.elements['ver_todas'].checked = true;  // el problema es transversal
+  marcarPill('FACTURADO');
+  const badge = document.getElementById('badge-problema');
+  if(badge) badge.style.display = 'inline-block';
+  aplicarFiltros(1);
+  document.getElementById('tabla-container').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function quitarFiltroProblema(){
+  const f = document.getElementById('form-filtros');
+  f.elements['problema'].value = '';
+  const badge = document.getElementById('badge-problema');
+  if(badge) badge.style.display = 'none';
+  aplicarFiltros(1);
+}
+
+/* ── Panel de estado de sincronización (colapsable) ── */
+function toggleSyncPanel(){
+  const body = document.getElementById('sync-body');
+  const chev = document.getElementById('sync-chevron');
+  if(!body) return;
+  const oculto = body.classList.toggle('oculto');
+  if(chev) chev.className = oculto ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
 }
 
 // Disparadores: selects → al cambiar; búsqueda → con debounce de 400ms
@@ -602,11 +903,28 @@ function limpiarFiltros(){
   pills.forEach(btn => btn.addEventListener('click', function(){
     const f = document.getElementById('form-filtros');
     if(f && f.elements['estado']) f.elements['estado'].value = this.dataset.estado;
+    // Cambiar de estado a mano cancela el filtro de "boletas en 0" (que solo
+    // tiene sentido sobre FACTURADO): si no, la tabla queda vacía sin motivo.
+    if(f && f.elements['problema'] && f.elements['problema'].value){
+      f.elements['problema'].value = '';
+      const badge = document.getElementById('badge-problema');
+      if(badge) badge.style.display = 'none';
+    }
     pills.forEach(b => b.classList.remove('active'));
     this.classList.add('active');
     aplicarFiltros(1);
   }));
 })();
+
+/* ── Escape HTML: todo dato dinámico que se interpole en innerHTML pasa por
+   acá. r.cliente viene del nombre que el COMPRADOR escribió en el marketplace
+   (tercero no confiable) y r.error puede arrastrar datos del pedido — sin
+   escape era XSS almacenado ejecutándose en la sesión del operador. ── */
+function esc(v){
+  return String(v ?? '').replace(/[&<>"']/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+  ));
+}
 
 /* ── Separador de miles (formato chileno: $1.234.567) ── */
 function formatMiles(root){
@@ -620,13 +938,59 @@ function formatMiles(root){
 /* ─────────────────────────────────────────────────────
    Selección de checkboxes — delegada en #tabla-container
    para sobrevivir al reemplazo de la tabla por AJAX.
+
+   La verdad de la selección vive en _seleccion (Set de IDs)
+   + _montoPorId, NO en el DOM: cualquier re-render AJAX
+   (paginación, filtros, auto-refresh, post-"Traer pedidos")
+   reemplaza el HTML y borraba los checks — el operador creía
+   tener N marcados y el modal facturaba menos. Ahora la
+   selección sobrevive a los re-renders y cruza páginas.
    ───────────────────────────────────────────────────── */
 const getCbAll = () => document.getElementById('cb-all');
 const getCbs = () => document.querySelectorAll('.cb-pedido-row:not(:disabled)');
 const tablaContainer = document.getElementById('tabla-container');
 
+const _seleccion = new Set();      // IDs de pedidos marcados (cruza páginas)
+const _montoPorId = new Map();     // ID → monto de la fila (para el total)
+
+function _montoDeFila(cb){
+  const el = cb.closest('tr')?.querySelector('.fmt-miles');
+  return el ? (parseInt(el.dataset.val, 10) || 0) : 0;
+}
+
+function _setSeleccion(cb, on){
+  const id = parseInt(cb.value, 10);
+  if(isNaN(id)) return;
+  if(on){ _seleccion.add(id); _montoPorId.set(id, _montoDeFila(cb)); }
+  else  { _seleccion.delete(id); _montoPorId.delete(id); }
+  cb.checked = on;
+  const tr = cb.closest('tr');
+  if(tr) tr.classList.toggle('row-selected', on);
+}
+
+/* Re-aplica el estado de _seleccion sobre los checkboxes de la página
+   recién renderizada. Además poda de la selección los pedidos que ya no
+   son seleccionables: la fila está presente en esta página pero SIN
+   checkbox habilitado — o sea dejó de ser PENDIENTE (facturado/cancelado
+   por otro operador; esas filas no renderizan checkbox) o quedó sin stock
+   (checkbox disabled). Los ids de otras páginas no se tocan. */
+function reaplicarSeleccion(){
+  document.querySelectorAll('tr[data-pedido-id]').forEach(tr => {
+    const id = parseInt(tr.dataset.pedidoId, 10);
+    if(!_seleccion.has(id)) return;
+    const cb = tr.querySelector('.cb-pedido-row');
+    if(!cb || cb.disabled){ _seleccion.delete(id); _montoPorId.delete(id); }
+  });
+  getCbs().forEach(cb => {
+    const on = _seleccion.has(parseInt(cb.value, 10));
+    cb.checked = on;
+    const tr = cb.closest('tr');
+    if(tr) tr.classList.toggle('row-selected', on);
+  });
+}
+
 function actualizarContador(){
-  const n = document.querySelectorAll('.cb-pedido-row:not(:disabled):checked').length;
+  const n = _seleccion.size;
   document.getElementById('bb-count').textContent = n;
   document.getElementById('sel-n').textContent = n;
   const bar = document.getElementById('bulk-bar');
@@ -635,20 +999,20 @@ function actualizarContador(){
   else     { bar.classList.remove('visible'); hdr.style.display='none'; }
   const cbAll = getCbAll();
   if(cbAll){
-    const total = getCbs().length;
-    cbAll.indeterminate = n > 0 && n < total;
-    cbAll.checked = n === total && total > 0;
+    const cbs = [...getCbs()];
+    const enPagina = cbs.filter(cb => _seleccion.has(parseInt(cb.value, 10))).length;
+    cbAll.indeterminate = enPagina > 0 && enPagina < cbs.length;
+    cbAll.checked = cbs.length > 0 && enPagina === cbs.length;
   }
   actualizarMontoTotal();
 }
 
 tablaContainer.addEventListener('change', function(e){
   if(e.target.id === 'cb-all'){
-    getCbs().forEach(cb => cb.checked = e.target.checked);
+    getCbs().forEach(cb => _setSeleccion(cb, e.target.checked));
     actualizarContador();
   } else if(e.target.classList.contains('cb-pedido-row')){
-    const tr = e.target.closest('tr');
-    if(tr) tr.classList.toggle('row-selected', e.target.checked);
+    _setSeleccion(e.target, e.target.checked);
     actualizarContador();
   }
 });
@@ -660,6 +1024,8 @@ tablaContainer.addEventListener('click', function(e){
 });
 
 function deseleccionarTodo(){
+  _seleccion.clear();
+  _montoPorId.clear();
   getCbs().forEach(cb => { cb.checked = false; const tr = cb.closest('tr'); if(tr) tr.classList.remove('row-selected'); });
   const cbAll = getCbAll();
   if(cbAll){ cbAll.checked = false; cbAll.indeterminate = false; }
@@ -670,7 +1036,7 @@ function deseleccionarTodo(){
    Facturación masiva
    ───────────────────────────────────────────────────── */
 function getSeleccionados(){
-  return [...document.querySelectorAll('.cb-pedido-row:not(:disabled):checked')].map(cb => parseInt(cb.value));
+  return [..._seleccion];
 }
 
 function confirmarFacturacionMasiva(){
@@ -686,43 +1052,116 @@ function confirmarFacturacionMasiva(){
   modal.show();
 }
 
-function ejecutarFacturacionMasiva(){
+/* Tamaño de tanda: el backend procesa el lote completo en UNA request
+   síncrona y gunicorn corre con timeout de 60s — un lote grande moría a
+   mitad de camino (parte facturado, sin modal de resultados y sin TXT).
+   En tandas chicas cada request queda muy por debajo del timeout. */
+const LOTE_FACTURACION = 8;
+let _facturacionEnCurso = false;
+
+async function ejecutarFacturacionMasiva(){
+  if(_facturacionEnCurso) return;
   const ids = getSeleccionados();
+  if(!ids.length) return;
   const tipoDocEl = document.querySelector('input[name="bb-tipo-doc"]:checked');
   const tipoDoc = tipoDocEl ? tipoDocEl.value : 'BOLETA_ELECTRONICA';
 
-  // UI: loading
+  // UI: loading + progreso por tandas (el modal ya es static/no-keyboard;
+  // se deshabilita también la X del header durante la corrida)
+  _facturacionEnCurso = true;
   document.getElementById('btn-conf-ok').disabled = true;
+  document.getElementById('btn-conf-cancelar').disabled = true;
+  document.getElementById('btn-conf-close').disabled = true;
   document.getElementById('conf-spinner').style.display = '';
   document.getElementById('conf-icon').style.display = 'none';
+  const prog = document.getElementById('conf-progreso');
+  const progTxt = document.getElementById('conf-progreso-txt');
+  const progPct = document.getElementById('conf-progreso-pct');
+  const progBar = document.getElementById('conf-progreso-bar');
+  if(prog) prog.style.display = '';
 
   const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  const agregado = { total: ids.length, exitosos: 0, fallidos: 0, resultados: [] };
 
-  fetch("{% url 'facturar_ecommerce_masivo' %}", {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': csrfToken,
-    },
-    body: JSON.stringify({
-      pedido_ids: ids,
-      tipo_documento: tipoDoc,
-    })
-  })
-  .then(r => r.json())
-  .then(data => {
-    bootstrap.Modal.getInstance(document.getElementById('modal-confirmar')).hide();
-    mostrarResultados(data);
-  })
-  .catch(err => {
-    bootstrap.Modal.getInstance(document.getElementById('modal-confirmar')).hide();
-    alert('Error de conexión: ' + err);
-  })
-  .finally(() => {
-    document.getElementById('btn-conf-ok').disabled = false;
-    document.getElementById('conf-spinner').style.display = 'none';
-    document.getElementById('conf-icon').style.display = '';
+  for(let i = 0; i < ids.length; i += LOTE_FACTURACION){
+    const lote = ids.slice(i, i + LOTE_FACTURACION);
+    const hechos = Math.min(i + lote.length, ids.length);
+    if(progTxt) progTxt.textContent = `Facturando ${hechos} de ${ids.length}…`;
+    if(progPct) progPct.textContent = Math.round(hechos / ids.length * 100) + '%';
+    if(progBar) progBar.style.width = Math.round(hechos / ids.length * 100) + '%';
+    try {
+      const resp = await fetch("{% url 'facturar_ecommerce_masivo' %}", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify({
+          pedido_ids: lote,
+          tipo_documento: tipoDoc,
+        })
+      });
+      let data = null;
+      try { data = await resp.json(); } catch(_e){ data = null; }
+
+      // Respuesta de error de request completa (403 sin permiso, 400 sin
+      // sucursal de sesión / vendedor 1000 / body inválido): viene como JSON
+      // {ok:false, error} SIN resultados. Antes se sumaba 0/0 y el modal
+      // salía VERDE sin mostrar el motivo. Se marca la tanda como fallida
+      // con el error real y, como es un error global que se repetiría en
+      // todas las tandas, se aborta el resto del lote.
+      if(!resp.ok || !data || (data.ok === false && !Array.isArray(data.resultados))){
+        const msg = (data && data.error) ? data.error : `Error HTTP ${resp.status}`;
+        agregado.fallidos += lote.length;
+        lote.forEach(id => agregado.resultados.push({ pedido_id: id, ok: false, error: msg }));
+        if(resp.status === 400 || resp.status === 403 || resp.status === 405){
+          const restantes = ids.slice(i + LOTE_FACTURACION);
+          agregado.fallidos += restantes.length;
+          restantes.forEach(id => agregado.resultados.push({
+            pedido_id: id, ok: false,
+            error: 'No procesado — lote abortado por: ' + msg,
+          }));
+          break;
+        }
+        continue;
+      }
+
+      agregado.exitosos += data.exitosos || 0;
+      agregado.fallidos += data.fallidos || 0;
+      agregado.resultados.push(...(data.resultados || []));
+    } catch(err){
+      // La tanda falló completa (red/timeout): se reporta y se sigue con la
+      // siguiente — así un tropiezo no esconde el resultado del resto.
+      agregado.fallidos += lote.length;
+      lote.forEach(id => agregado.resultados.push({
+        pedido_id: id, ok: false,
+        error: 'Error de conexión en esta tanda (verifica si quedó facturado antes de reintentar): ' + err,
+      }));
+    }
+  }
+  agregado.ok = agregado.fallidos === 0;
+
+  // Salen de la selección: los facturados OK y los que ya no son facturables
+  // (ya facturado/cancelado por otro operador) — si quedaran marcados, cada
+  // reintento los reenviaría a fallar para siempre.
+  agregado.resultados.forEach(r => {
+    if(r.ok || /ya facturado\/cancelado/.test(r.error || '')){
+      _seleccion.delete(r.pedido_id);
+      _montoPorId.delete(r.pedido_id);
+    }
   });
+
+  _facturacionEnCurso = false;
+  document.getElementById('btn-conf-ok').disabled = false;
+  document.getElementById('btn-conf-cancelar').disabled = false;
+  document.getElementById('btn-conf-close').disabled = false;
+  document.getElementById('conf-spinner').style.display = 'none';
+  document.getElementById('conf-icon').style.display = '';
+  if(prog){ prog.style.display = 'none'; }
+  if(progBar) progBar.style.width = '0%';
+
+  bootstrap.Modal.getInstance(document.getElementById('modal-confirmar'))?.hide();
+  mostrarResultados(agregado);
 }
 
 let _resultadosExitosos = [];
@@ -754,27 +1193,79 @@ function mostrarResultados(data){
   `;
 
   let html = '';
+
+  /* Descarga de TXT: UNA sola descarga. Con varias boletas, el loop antiguo
+     disparaba N descargas y el navegador bloquea las descargas automáticas
+     después de la primera (permiso "Descargas automáticas") — los TXT
+     "perdidos" nunca llegaban a Acepta. Ahora: 1 boleta → TXT directo;
+     2 o más → un ZIP con todos (endpoint canónico). Sobre 300 se trocea en
+     varios ZIP con un botón cada uno (cada click es un gesto del usuario →
+     sin bloqueo, y el querystring no revienta el límite del server). */
+  const conTxt = (data.resultados || []).filter(r => r.ok && r.dte_id && r.archivo_txt && r.archivo_txt.contenido);
+  const dteIdsTxt = conTxt.map(r => parseInt(r.dte_id, 10)).filter(Number.isFinite);
+  const ZIP_CHUNK = 300;
+  const zipUrls = [];
+  for(let i = 0; i < dteIdsTxt.length; i += ZIP_CHUNK){
+    zipUrls.push(ZIP_TXT_URL + '?ids=' + dteIdsTxt.slice(i, i + ZIP_CHUNK).join(','));
+  }
   let txtsDescargados = 0;
+  let botonesZipMultiple = '';
+  if(conTxt.length === 1){
+    try {
+      const r = conTxt[0];
+      const blob = new Blob([r.archivo_txt.contenido], { type: 'text/plain;charset=utf-8' });
+      const link = document.createElement('a');
+      const blobUrl = window.URL.createObjectURL(blob);
+      link.href = blobUrl;
+      link.download = r.archivo_txt.nombre_archivo;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      // Revocar al tiro podía abortar una descarga que aún no partía.
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 30000);
+      txtsDescargados = 1;
+    } catch(e){ console.error('Error descargando TXT:', e); }
+  } else if(zipUrls.length === 1){
+    try {
+      // target=_blank: si el server responde un error (texto plano, sin
+      // Content-Disposition) se abre en otra pestaña en vez de navegar
+      // esta página y perder el modal de resultados.
+      const link = document.createElement('a');
+      link.href = zipUrls[0];
+      link.target = '_blank';
+      link.rel = 'noopener';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      txtsDescargados = conTxt.length;
+    } catch(e){ console.error('Error descargando ZIP de TXT:', e); }
+  } else if(zipUrls.length > 1){
+    // Sin auto-descarga: un botón por tramo (cada click = gesto del usuario).
+    botonesZipMultiple = zipUrls.map((u, idx) => {
+      const desde = idx * ZIP_CHUNK + 1;
+      const hasta = Math.min((idx + 1) * ZIP_CHUNK, dteIdsTxt.length);
+      return `<a class="btn btn-sm btn-outline-primary me-1 mb-1" target="_blank" rel="noopener" href="${u}">
+                <i class="bi bi-file-zip me-1"></i>ZIP ${idx + 1} (${desde}–${hasta})
+              </a>`;
+    }).join('');
+  }
+  // Botón manual de respaldo en el footer (por si la descarga automática no partió)
+  const btnZip = document.getElementById('btn-zip-txt');
+  if(btnZip){
+    if(zipUrls.length === 1 && conTxt.length > 0){
+      btnZip.href = zipUrls[0]; btnZip.target = '_blank'; btnZip.style.display = '';
+    } else {
+      btnZip.style.display = 'none';
+    }
+  }
 
   for(const r of data.resultados){
+    // TODO dato del pedido pasa por esc(): r.cliente lo escribe el comprador
+    // del marketplace y r.error puede arrastrar datos del pedido (XSS).
+    const dteIdNum = parseInt(r.dte_id, 10);
     if(r.ok){
-      // Auto-descargar TXT si viene en la respuesta
-      if(r.archivo_txt && r.archivo_txt.contenido){
-        try {
-          const blob = new Blob([r.archivo_txt.contenido], { type: 'text/plain;charset=utf-8' });
-          const link = document.createElement('a');
-          link.href = window.URL.createObjectURL(blob);
-          link.download = r.archivo_txt.nombre_archivo;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(link.href);
-          txtsDescargados++;
-        } catch(e){ console.error('Error descargando TXT:', e); }
-      }
-
-      const btnTxt = r.dte_id
-        ? `<a href="/app/ecommerce/dte/${r.dte_id}/txt/" target="_blank" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:.7rem;" title="Descargar TXT Acepta">
+      const btnTxt = Number.isFinite(dteIdNum)
+        ? `<a href="/app/ecommerce/dte/${dteIdNum}/txt/" target="_blank" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:.7rem;" title="Descargar TXT Acepta">
              <i class="bi bi-file-earmark-text"></i> TXT
            </a>`
         : '';
@@ -784,45 +1275,64 @@ function mostrarResultados(data){
         <div class="flex-grow-1">
           <div class="d-flex justify-content-between align-items-center">
             <div>
-              <span style="font-weight:600;">${r.numero_ticket_rm}</span>
-              <span class="text-muted ms-1">— ${r.cliente || ''}</span>
+              <span style="font-weight:600;">${esc(r.numero_ticket_rm)}</span>
+              <span class="text-muted ms-1">— ${esc(r.cliente)}</span>
             </div>
             ${btnTxt}
           </div>
           <div style="font-size:.75rem;color:#475569;">
-            Ticket #${r.ticket_correlativo} · ${r.dte_tipo || 'DTE'} #${r.dte_numero} (id ${r.dte_id})
+            Ticket #${esc(r.ticket_correlativo)} · ${esc(r.dte_tipo || 'DTE')} #${esc(r.dte_numero)} (id ${Number.isFinite(dteIdNum) ? dteIdNum : '?'})
           </div>
-          ${(!r.archivo_txt && r.txt_error) ? `<div style="font-size:.72rem;color:#c2410c;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:4px 8px;margin-top:4px;"><i class="bi bi-exclamation-triangle-fill me-1"></i><strong>TXT no generado:</strong> ${r.txt_error} — la boleta sí se emitió; usa el botón <strong>TXT</strong> para reintentar la descarga.</div>` : ''}
+          ${(!r.archivo_txt && r.txt_error) ? `<div style="font-size:.72rem;color:#c2410c;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:4px 8px;margin-top:4px;"><i class="bi bi-exclamation-triangle-fill me-1"></i><strong>TXT no generado:</strong> ${esc(r.txt_error)} — la boleta sí se emitió; usa el botón <strong>TXT</strong> para reintentar la descarga.</div>` : ''}
         </div>
       </div>`;
     } else {
       html += `<div class="r-row d-flex align-items-start gap-2 py-2">
         <i class="bi bi-x-circle-fill r-err mt-1"></i>
         <div>
-          <div style="font-weight:600;">${r.numero_ticket_rm || 'Pedido #'+r.pedido_id} <span class="text-muted">— ${r.cliente || ''}</span></div>
-          <div style="font-size:.75rem;color:#dc2626;">${r.error}</div>
+          <div style="font-weight:600;">${esc(r.numero_ticket_rm) || 'Pedido #' + (parseInt(r.pedido_id, 10) || '?')} <span class="text-muted">— ${esc(r.cliente)}</span></div>
+          <div style="font-size:.75rem;color:#dc2626;">${esc(r.error)}</div>
         </div>
       </div>`;
     }
   }
 
   if(txtsDescargados > 0){
+    const detalleDescarga = txtsDescargados === 1
+      ? '1 archivo TXT descargado automáticamente.'
+      : `${txtsDescargados} TXT descargados en UN solo ZIP (descarga única — el navegador no bloquea nada).`;
     summary.innerHTML += `
       <div class="col-12 mt-2">
         <div class="alert alert-info py-2 mb-0" style="font-size:.78rem;">
           <i class="bi bi-file-earmark-arrow-down me-1"></i>
-          ${txtsDescargados} archivo(s) TXT descargado(s) automáticamente.
-          Si no iniciaron la descarga, usa el botón <strong>TXT</strong> de cada fila.
+          ${detalleDescarga}
+          Si no inició la descarga, usa el botón <strong>Descargar TXT (ZIP)</strong> abajo o el botón <strong>TXT</strong> de cada fila.
+        </div>
+      </div>`;
+  } else if(botonesZipMultiple){
+    summary.innerHTML += `
+      <div class="col-12 mt-2">
+        <div class="alert alert-warning py-2 mb-0" style="font-size:.78rem;">
+          <i class="bi bi-file-earmark-zip me-1"></i>
+          Son <strong>${dteIdsTxt.length}</strong> TXT — por el tamaño del lote se dividen en
+          <strong>${zipUrls.length}</strong> ZIP. Descarga TODOS (un click cada uno) para no dejar
+          boletas sin subir a Acepta:<br>${botonesZipMultiple}
         </div>
       </div>`;
   }
 
   lista.innerHTML = html;
 
-  // Mostrar botón de impresión masiva si hay exitosos y QZ Tray habilitado
+  // Mostrar botón de impresión masiva si hay exitosos y QZ Tray habilitado.
+  // Siempre se resetea label/estado: si quedaba "5/5 impresos" de una corrida
+  // anterior (o visible con 0 exitosos nuevos) era un botón muerto y confuso.
   const btnImprimir = document.getElementById('btn-imprimir-todos');
+  btnImprimir.disabled = false;
+  btnImprimir.innerHTML = '<i class="bi bi-printer me-1"></i>Imprimir todos';
   if (_resultadosExitosos.length > 0 && typeof imprimirConQZ !== 'undefined' && QZ_CONFIG.habilitado) {
     btnImprimir.style.display = '';
+  } else {
+    btnImprimir.style.display = 'none';
   }
 
   new bootstrap.Modal(document.getElementById('modal-resultados')).show();
@@ -864,11 +1374,7 @@ async function imprimirTodosResultados() {
    ───────────────────────────────────────────────────── */
 function actualizarMontoTotal(){
   let total = 0;
-  document.querySelectorAll('.cb-pedido-row:not(:disabled):checked').forEach(cb => {
-    const tr = cb.closest('tr');
-    const el = tr.querySelector('.fmt-miles');
-    if(el) total += parseInt(el.dataset.val, 10) || 0;
-  });
+  _montoPorId.forEach(v => { total += v; });
   const montoEl = document.getElementById('bb-total-monto');
   const valEl = document.getElementById('bb-monto-val');
   if(total > 0){
@@ -1004,9 +1510,8 @@ function ejecutarReasignacion(){
    selección activa o un modal abierto (para no molestar).
    ───────────────────────────────────────────────────── */
 setInterval(function() {
-  const seleccionados = document.querySelectorAll('.cb-pedido-row:not(:disabled):checked').length;
   const modalAbierto = document.querySelector('.modal.show');
-  if (seleccionados === 0 && !modalAbierto) {
+  if (_seleccion.size === 0 && !modalAbierto) {
     aplicarFiltros(_pagina, true);
   }
 }, 60000);
@@ -1020,11 +1525,17 @@ document.addEventListener('keydown', function(e){
     e.preventDefault();
     const cbAll = getCbAll();
     if(cbAll) cbAll.checked = true;
-    getCbs().forEach(cb => cb.checked = true);
+    getCbs().forEach(cb => _setSeleccion(cb, true));
     actualizarContador();
   }
-  // Escape: deseleccionar
+  // Escape: deseleccionar — pero NO si el usuario está en un input (lo usa
+  // para "limpiar" el campo por hábito), hay un modal abierto (Bootstrap ya
+  // maneja ese Escape) o hay una facturación por tandas corriendo: borrar la
+  // selección multi-página a mitad del proceso dejaba los fallidos sin marca
+  // para reintentar.
   if(e.key === 'Escape'){
+    if(e.target.closest('input,select,textarea')) return;
+    if(_facturacionEnCurso || document.querySelector('.modal.show')) return;
     deseleccionarTodo();
   }
 });

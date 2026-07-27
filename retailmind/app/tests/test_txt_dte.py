@@ -282,6 +282,105 @@ class TestAgrupacionDetalleDteExistente(TestCase):
         self.assertIn('AZUL 1:XL', detalle[2]['nombre'])
 
 
+class TestSkuEnDetalleTxt(TestCase):
+    """El TXT canónico lleva el SKU del producto (paridad con el POS).
+
+    Regresión ecommerce: al facturar pedidos, el TXT se regenera con el
+    generador canónico, que agrupaba por variante y PERDÍA el SKU de
+    Producto_Talla — las boletas de internet salían sin SKU. Regla:
+    grupo con UN solo SKU → el SKU es el código del ítem y el artículo
+    pasa al nombre; varios SKUs → código = artículo y cada tramo del
+    desglose de tallas lleva su SKU entre paréntesis.
+    """
+
+    def _dp(self, articulo='ZAP01', marca='ACME', color='AZUL', costo=5000,
+            talla='42', sku=784512, stock=1, precio=10000):
+        producto = SimpleNamespace(
+            articulo=articulo,
+            costo=costo,
+            atributo1=SimpleNamespace(valor=marca),
+            atributo2=SimpleNamespace(valor=color),
+        )
+        producto_talla = SimpleNamespace(producto=producto, talla=talla, sku=sku)
+        return SimpleNamespace(
+            productoTalla=producto_talla,
+            descripcion='',
+            costo=costo,
+            precio=precio,
+            precio_unitario=precio,
+            descuento_pct=0,
+            descuento_monto=0,
+            monto_item=stock * precio,
+            stock=stock,
+        )
+
+    def test_grupo_con_un_sku_usa_sku_como_codigo(self):
+        detalle = construir_detalle_txt_desde_dte_productos(
+            [self._dp(sku=784512, talla='42', stock=2)], tipo_numerico=39)
+
+        self.assertEqual(len(detalle), 1)
+        self.assertEqual(detalle[0]['codigo'], '784512')
+        # El artículo no se pierde: pasa al nombre.
+        self.assertIn('ZAP01', detalle[0]['nombre'])
+        self.assertIn('2:42', detalle[0]['nombre'])
+
+    def test_grupo_multi_sku_anota_sku_por_talla(self):
+        detalle = construir_detalle_txt_desde_dte_productos([
+            self._dp(sku=784512, talla='42', stock=2),
+            self._dp(sku=784513, talla='43', stock=1),
+        ], tipo_numerico=39)
+
+        self.assertEqual(len(detalle), 1, 'misma variante → una sola línea')
+        self.assertEqual(detalle[0]['codigo'], 'ZAP01')
+        self.assertIn('2:42(784512)', detalle[0]['nombre'])
+        self.assertIn('1:43(784513)', detalle[0]['nombre'])
+
+    def test_grupo_con_muchas_tallas_manda_skus_a_descripcion(self):
+        """Con 4+ tallas los '(sku)' inflarían el NmbItem sobre los 80 chars del
+        SII: el nombre queda con el desglose limpio y los SKUs van al DscItem."""
+        detalle = construir_detalle_txt_desde_dte_productos([
+            self._dp(sku=784510 + i, talla=str(39 + i), stock=1) for i in range(5)
+        ], tipo_numerico=39)
+
+        self.assertEqual(len(detalle), 1)
+        self.assertEqual(detalle[0]['codigo'], 'ZAP01')
+        self.assertNotIn('(', detalle[0]['nombre'])
+        self.assertIn('1:39', detalle[0]['nombre'])
+        self.assertTrue(detalle[0]['descripcion'].startswith('SKUs: '))
+        for i in range(5):
+            self.assertIn(str(784510 + i), detalle[0]['descripcion'])
+
+    def test_sin_atributo_sku_mantiene_comportamiento_previo(self):
+        producto = SimpleNamespace(
+            articulo='POLERA', costo=5000,
+            atributo1=SimpleNamespace(valor='ACME'),
+            atributo2=SimpleNamespace(valor='ROJO'),
+        )
+        pt = SimpleNamespace(producto=producto, talla='M')  # sin atributo .sku
+        dp = SimpleNamespace(
+            productoTalla=pt, descripcion='', costo=5000,
+            precio=10000, precio_unitario=10000, descuento_pct=0,
+            descuento_monto=0, monto_item=10000, stock=1,
+        )
+        detalle = construir_detalle_txt_desde_dte_productos([dp], tipo_numerico=39)
+
+        self.assertEqual(detalle[0]['codigo'], 'POLERA')
+        self.assertNotIn('(', detalle[0]['nombre'])
+
+    def test_boleta_txt_lleva_sku_en_codigo_y_nombre(self):
+        datos = _datos_boleta_base()
+        datos['detalle'] = construir_detalle_txt_desde_dte_productos(
+            [self._dp(sku=784512, talla='42', stock=1)], tipo_numerico=39)
+
+        txt = generar_txt_boleta_acepta(datos)
+        lineas_prod = [l for l in txt.split('\n') if l.startswith('INT1|')]
+        self.assertEqual(len(lineas_prod), 1)
+        campos = lineas_prod[0].split('|')
+        self.assertEqual(campos[1], '784512', 'CdgItem debe ser el SKU')
+        self.assertTrue(campos[3].startswith('784512 '),
+                        'NmbItem debe partir con el SKU (paridad con POS)')
+
+
 class TestBoletaSinCamposDescuento(TestCase):
     """Boleta: detalle NO tiene campos de descuento por ítem."""
 

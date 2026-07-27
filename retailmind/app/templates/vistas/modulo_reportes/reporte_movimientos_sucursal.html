@@ -703,6 +703,12 @@
                     Stock Inicial vs Restante por Sucursal
                 </h1>
                 <p>Compara cuánto recibió cada sucursal y cuánto queda actualmente</p>
+                <!-- Advertencias de lectura: la resta no cierra y el restante es de hoy. -->
+                <p style="font-size:.72rem; opacity:.75; margin-top:2px;">
+                    “Restante” es el stock de <b>hoy</b>, aunque filtres fechas ·
+                    Recibido − Vendido ≠ Restante: faltan mermas, ajustes y devoluciones ·
+                    “Vendido” es bruto (no descuenta devoluciones ni anulaciones)
+                </p>
             </div>
             <div class="nexo-header-badge">
                 <i class="ri-store-3-line"></i>
@@ -728,9 +734,12 @@
             <div class="nexo-kpi-label">Despachado (Traspasos)</div>
             <div class="nexo-kpi-value" id="kpi-despachado">-</div>
         </div>
-        <div class="nexo-kpi-card kpi-warning">
+        <!-- El "restante" es SIEMPRE el stock de hoy: el filtro de fechas solo
+             afecta a los movimientos (recibido / despachado / vendido). -->
+        <div class="nexo-kpi-card kpi-warning"
+             title="Stock actual de hoy. El filtro de fechas NO se aplica a esta columna: no es el saldo al final del período.">
             <div class="nexo-kpi-icon icon-warning"><i class="ri-archive-line"></i></div>
-            <div class="nexo-kpi-label">Stock Restante</div>
+            <div class="nexo-kpi-label">Stock Restante (hoy)</div>
             <div class="nexo-kpi-value" id="kpi-restante">-</div>
         </div>
         <div class="nexo-kpi-card kpi-error">
@@ -763,12 +772,18 @@
         </div>
 
         <div class="nexo-control-group" style="min-width: 130px;">
-            <label class="nexo-control-label"><i class="ri-calendar-line"></i> Desde</label>
+            <label class="nexo-control-label"
+                   title="Las fechas filtran solo los movimientos (recibido, despachado, vendido). La columna Restante siempre muestra el stock de hoy.">
+                <i class="ri-calendar-line"></i> Desde <i class="ri-question-line"></i>
+            </label>
             <input type="date" id="filtro-fecha-desde" class="nexo-input">
         </div>
 
         <div class="nexo-control-group" style="min-width: 130px;">
-            <label class="nexo-control-label"><i class="ri-calendar-check-line"></i> Hasta</label>
+            <label class="nexo-control-label"
+                   title="Las fechas filtran solo los movimientos (recibido, despachado, vendido). La columna Restante siempre muestra el stock de hoy.">
+                <i class="ri-calendar-check-line"></i> Hasta <i class="ri-question-line"></i>
+            </label>
             <input type="date" id="filtro-fecha-hasta" class="nexo-input">
         </div>
 
@@ -780,7 +795,7 @@
                 <option value="500" selected>500</option>
                 <option value="1000">1000</option>
                 <option value="2000">2000</option>
-                <option value="">Sin limite</option>
+                <option value="" title="Sin filtros puede tardar mucho o cortar la conexión">Sin limite (lento)</option>
             </select>
         </div>
 

@@ -109,6 +109,16 @@
     font-weight: 700; color: #405189; font-size: .8rem;
     border-top: 2px solid #d8dce8 !important; padding: .45rem .75rem !important;
 }
+/* Fila de saldo de apertura (lo anterior al rango consultado) */
+.tm-apertura-row td {
+    background: #fbfcfe !important; font-style: italic; color: #5a5a6a;
+    border-bottom: 1px dashed #d8dce8 !important;
+}
+/* Fila de totales del conjunto filtrado */
+.tm-total-row td {
+    background: #f3f6f9 !important; font-weight: 700; color: #405189;
+    border-top: 2px solid #d8dce8 !important;
+}
 /* Saldo como chip; negativo en rojo */
 .tm-saldo {
     display: inline-block; min-width: 44px; text-align: center;
@@ -312,6 +322,7 @@
                                     <i class="ri-information-line me-1 text-primary"></i>
                                     El <strong>saldo</strong> es acumulado por cada combinación de <strong>bodega + talla</strong> (cada SKU lleva su propia cuenta). Filtre por bodega y talla para leer una serie limpia.
                                 </div>
+                                <div id="kardexAvisos"></div>
                                 <div class="table-responsive">
                                     <table class="table table-hover align-middle mb-0" id="tablaMovimientos">
                                         <thead class="table-light">
@@ -319,7 +330,7 @@
                                                 <th>Fecha</th><th>Hora</th><th>Bodega</th><th>Talla</th>
                                                 <th>Tipo</th><th>Concepto</th>
                                                 <th class="text-end">Entrada</th><th class="text-end">Salida</th>
-                                                <th class="text-end">Saldo</th>
+                                                <th class="text-end" title="Saldo acumulado real de la serie (bodega · talla) después de ese movimiento">Saldo serie</th>
                                                 <th class="text-end">Costo</th><th class="text-end">Precio</th>
                                                 <th>Origen → Destino</th><th>Responsable</th><th>Referencia</th>
                                             </tr>
@@ -345,6 +356,9 @@
 const CSRF_TOKEN = '{{ csrf_token }}';
 const SUCURSAL_ACTUAL_ID = {{ sucursal_id|default:"null" }};
 let movimientosData = [];
+let movimientosFiltrados = [];      // lo que se está viendo (y lo que se exporta)
+let aperturasData = [];             // saldo previo por serie cuando hay filtro "Desde"
+let rangoConsultado = { desde: '', hasta: '' };
 let ayudaTimer = null;
 let ayudaAbortController = null;
 
@@ -381,6 +395,8 @@ function buscarMovimientos() {
             return;
         }
         movimientosData = data.movimientos;
+        aperturasData = data.aperturas || [];
+        rangoConsultado = data.rango || { desde: desde, hasta: hasta };
         renderProducto(data.producto, data.resumen);
         renderKpis(data.producto, data.resumen);
         renderDistribucion(data.distribucion, data.sucursal_actual_id);
@@ -392,7 +408,9 @@ function buscarMovimientos() {
     }).catch(e => {
         document.getElementById('tmLoader').style.display = 'none';
         document.getElementById('tmInicial').style.display = '';
-        alert('Error de red: ' + e.message);
+        if (window.Swal) {
+            Swal.fire({ icon: 'error', title: 'Error de red', text: e.message, confirmButtonColor: '#405189' });
+        }
     });
 }
 
@@ -566,10 +584,56 @@ function tipoLabel(m) {
     return m.tipo_movimiento;
 }
 
+/* Saldo de apertura por serie: lo que había ANTES del rango consultado.
+   Sin esto el kardex arrancaba en 0 y no cuadraba nunca con el stock. */
+function claveSerie(bodegaId, talla) { return String(bodegaId) + '·' + String(talla); }
+
+function mapaAperturas() {
+    const mapa = {};
+    aperturasData.forEach(a => { mapa[claveSerie(a.bodega_id, a.talla)] = a; });
+    return mapa;
+}
+
+function filaApertura(a, colspanIzq) {
+    return `<tr class="tm-apertura-row">
+        <td colspan="${colspanIzq}" class="text-end small">
+            <i class="ri-history-line me-1"></i>Saldo de apertura al ${escapeHtml(rangoConsultado.desde || '')}
+            <span class="text-muted">(movimientos anteriores al rango)</span>
+        </td>
+        <td class="text-end"><span class="tm-saldo ${a.saldo < 0 ? 'neg' : ''}">${a.saldo}</span></td>
+        <td colspan="5"></td>
+    </tr>`;
+}
+
+/* Avisos del kardex: apertura y filtros que rompen la continuidad de la serie. */
+function renderAvisosKardex(movimientos) {
+    const caja = document.getElementById('kardexAvisos');
+    if (!caja) return;
+    let html = '';
+    const totalApertura = aperturasData.reduce((s, a) => s + Number(a.saldo || 0), 0);
+    if (aperturasData.length) {
+        html += `<div class="alert alert-light border small mb-3 py-2"><i class="ri-history-line me-1 text-primary"></i>
+            El rango parte desde <strong>${escapeHtml(rangoConsultado.desde)}</strong>: cada serie arranca con su
+            <strong>saldo de apertura</strong> (total ${fmtNum(totalApertura)} u acumuladas antes de esa fecha), no en cero.</div>`;
+    }
+    if (document.getElementById('filtroTipo').value) {
+        html += `<div class="alert alert-warning small mb-3 py-2"><i class="ri-alert-line me-1"></i>
+            Hay un <strong>filtro por tipo</strong> activo: las filas visibles no son consecutivas.
+            La columna <strong>Saldo serie</strong> sigue siendo el saldo real después de ese movimiento,
+            por eso no calza con la suma de las filas mostradas. Quite el filtro de tipo para leer la serie completa.</div>`;
+    }
+    caja.innerHTML = html;
+}
+
 function renderTabla(movimientos) {
     const tbody = document.getElementById('tbodyMovimientos');
     const agrupar = document.getElementById('chkAgrupar').checked;
-    document.getElementById('kardexContador').textContent = `${movimientos.length} movimiento(s)`;
+    movimientosFiltrados = movimientos;   // lo que se exporta
+    renderAvisosKardex(movimientos);
+    const entradas = movimientos.filter(m => m.cantidad > 0).reduce((s, m) => s + m.cantidad, 0);
+    const salidas = movimientos.filter(m => m.cantidad < 0).reduce((s, m) => s + Math.abs(m.cantidad), 0);
+    document.getElementById('kardexContador').textContent =
+        `${movimientos.length} movimiento(s) · +${fmtNum(entradas)} / −${fmtNum(salidas)}`;
     if (!movimientos.length) {
         tbody.innerHTML = '<tr><td colspan="14" class="tm-empty"><i class="ri-inbox-line"></i>Sin movimientos con estos filtros</td></tr>';
         return;
@@ -586,8 +650,24 @@ function renderTabla(movimientos) {
             (a.id - b.id));
     }
 
+    const aperturas = mapaAperturas();
     let html = '';
     let serieActual = null;
+
+    // Sin agrupar no hay encabezado de serie donde colgar la apertura: se
+    // muestran todas juntas arriba, antes del primer movimiento del rango.
+    if (!agrupar && aperturasData.length) {
+        const seriesVisibles = new Set(lista.map(m => claveSerie(m.bodega_id, m.talla)));
+        aperturasData.filter(a => seriesVisibles.has(claveSerie(a.bodega_id, a.talla))).forEach(a => {
+            html += `<tr class="tm-apertura-row">
+                <td colspan="8" class="text-end small">
+                    <i class="ri-history-line me-1"></i>Apertura ${escapeHtml(a.bodega)} · Talla ${escapeHtml(a.talla)}
+                    <span class="text-muted">(antes de ${escapeHtml(rangoConsultado.desde || '')})</span>
+                </td>
+                <td class="text-end"><span class="tm-saldo ${a.saldo < 0 ? 'neg' : ''}">${a.saldo}</span></td>
+                <td colspan="5"></td></tr>`;
+        });
+    }
     lista.forEach(m => {
         const serie = m.bodega + '·' + m.talla;
         if (agrupar && serie !== serieActual) {
@@ -597,6 +677,8 @@ function renderTabla(movimientos) {
                 <span class="mx-1">·</span> Talla <span>${escapeHtml(m.talla)}</span>
                 <span class="ms-2 fw-normal text-muted">SKU ${escapeHtml(m.sku)}</span>
             </td></tr>`;
+            const ap = aperturas[claveSerie(m.bodega_id, m.talla)];
+            if (ap) html += filaApertura(ap, 8);
         }
         const entrada = m.cantidad > 0 ? `<span class="text-success fw-bold">+${m.cantidad}</span>` : '';
         const salida = m.cantidad < 0 ? `<span class="text-danger fw-bold">−${Math.abs(m.cantidad)}</span>` : '';
@@ -620,24 +702,71 @@ function renderTabla(movimientos) {
             <td class="small">${escapeHtml(ref)}</td>
         </tr>`;
     });
+
+    // Totales del conjunto que se está viendo (con los filtros aplicados).
+    html += `<tr class="tm-total-row">
+        <td colspan="6" class="text-end">Total de lo mostrado (${movimientos.length} mov.)</td>
+        <td class="text-end text-success">+${fmtNum(entradas)}</td>
+        <td class="text-end text-danger">−${fmtNum(salidas)}</td>
+        <td class="text-end">${fmtNum(entradas - salidas)}</td>
+        <td colspan="5"></td>
+    </tr>`;
+
     tbody.innerHTML = html;
 }
 
 /* ================= Exportar CSV ================= */
+function csvCampo(valor) {
+    // Todo entre comillas: conceptos y observaciones traen comas y rompían las columnas.
+    return '"' + String(valor ?? '').replace(/"/g, '""') + '"';
+}
+
 function exportarExcel() {
-    if (!movimientosData.length) return;
-    let csv = 'Fecha,Hora,Bodega,Talla,SKU,Tipo,Concepto,Cantidad,Saldo,Costo,Precio,Origen,Destino,Responsable,Referencia\n';
-    movimientosData.forEach(m => {
-        const ref = m.dte_folio ? `DTE #${m.dte_folio}` : m.ticket_correlativo ? `Ticket #${m.ticket_correlativo}` : (m.referencia || '');
-        csv += [m.fecha, m.hora, m.bodega, m.talla, m.sku, m.tipo_movimiento, m.concepto_display,
-                m.cantidad, m.saldo, m.costo, m.precio, m.sucursal_origen, m.sucursal_destino,
-                m.responsable, `"${ref}"`].join(',') + '\n';
+    // Exporta EXACTAMENTE lo que se está viendo (antes exportaba todo, ignorando
+    // los filtros de bodega/talla/tipo, y el archivo no calzaba con la pantalla).
+    const filas = movimientosFiltrados.length ? movimientosFiltrados : movimientosData;
+    if (!filas.length) {
+        if (window.Swal) Swal.fire({ icon: 'info', title: 'Nada que exportar', text: 'No hay movimientos con los filtros aplicados.', confirmButtonColor: '#405189' });
+        return;
+    }
+
+    const fb = document.getElementById('filtroBodega');
+    const ft = document.getElementById('filtroTalla').value;
+    const fTipo = document.getElementById('filtroTipo').value;
+    const bodegaTexto = fb.value ? fb.options[fb.selectedIndex].text : 'Todas';
+    const articulo = document.getElementById('pArticulo').textContent || 'producto';
+
+    let csv = '';
+    csv += [csvCampo('Artículo'), csvCampo(articulo)].join(',') + '\n';
+    csv += [csvCampo('Rango'), csvCampo(`${rangoConsultado.desde || 'inicio'} a ${rangoConsultado.hasta || 'hoy'}`)].join(',') + '\n';
+    csv += [csvCampo('Filtros'), csvCampo(`Bodega: ${bodegaTexto} | Talla: ${ft || 'Todas'} | Tipo: ${fTipo || 'Todos'}`)].join(',') + '\n';
+    csv += [csvCampo('Movimientos exportados'), csvCampo(filas.length)].join(',') + '\n\n';
+
+    csv += ['Fecha','Hora','Bodega','Talla','SKU','Tipo','Concepto','Cantidad','Saldo serie','Costo','Precio','Origen','Destino','Responsable','Referencia']
+        .map(csvCampo).join(',') + '\n';
+
+    // Saldos de apertura de las series presentes en lo exportado.
+    const seriesVisibles = new Set(filas.map(m => claveSerie(m.bodega_id, m.talla)));
+    aperturasData.filter(a => seriesVisibles.has(claveSerie(a.bodega_id, a.talla))).forEach(a => {
+        csv += [rangoConsultado.desde || '', '', a.bodega, a.talla, a.sku, 'APERTURA',
+                'Saldo de apertura (anterior al rango)', '', a.saldo, '', '', '', '', '', '']
+            .map(csvCampo).join(',') + '\n';
     });
+
+    filas.forEach(m => {
+        const ref = m.dte_folio ? `DTE #${m.dte_folio}` : m.ticket_correlativo ? `Ticket #${m.ticket_correlativo}` : (m.referencia || '');
+        csv += [m.fecha, m.hora, m.bodega, m.talla, m.sku, (m.es_traspaso ? 'TRASPASO' : m.tipo_movimiento),
+                m.concepto_display, m.cantidad, m.saldo, m.costo, m.precio,
+                m.sucursal_origen, m.sucursal_destino, m.responsable, ref]
+            .map(csvCampo).join(',') + '\n';
+    });
+
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `tarjeta_movimiento_${document.getElementById('pArticulo').textContent || 'producto'}.csv`;
+    a.download = `tarjeta_movimiento_${articulo}.csv`;
     a.click();
+    URL.revokeObjectURL(a.href);
 }
 
 /* ================= Eventos ================= */

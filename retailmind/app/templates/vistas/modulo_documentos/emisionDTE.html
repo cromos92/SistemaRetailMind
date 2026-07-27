@@ -854,14 +854,42 @@
     }
 }
 
-/* ===== POS LAYOUT — Pantalla 15" (optimizado) ===== */
+/* ===== POS LAYOUT — Pantalla 15" (optimizado) =====
+   El panel derecho es una columna flex: el contenido (resumen + carrito +
+   observaciones + totales) scrollea en su propio contenedor y el pie
+   (Emitir Documento + navegación) queda SIEMPRE visible. Antes, en 1366x768,
+   el botón de emitir caía bajo el pliegue. */
 .pos-right-panel {
     position: sticky;
     top: 60px;
     max-height: calc(100vh - 80px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Zona scrolleable del panel derecho */
+.pos-right-panel-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 2px;
     scrollbar-width: thin;
     scrollbar-color: var(--nexo-gray-300) transparent;
+}
+
+/* Pie fijo del panel: acción principal + navegación, sobre fondo sólido */
+.pos-right-panel-footer {
+    flex: 0 0 auto;
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    background: var(--nexo-white);
+    border-top: 1px solid var(--nexo-gray-300);
+    padding-top: 0.5rem;
+    padding-bottom: 3px;   /* deja respirar la sombra del botón de emitir */
+    margin-top: 0.25rem;
 }
 
 .pos-products-table {
@@ -871,24 +899,50 @@
     scrollbar-width: thin;
 }
 
+/* Carrito del panel derecho: elástico, cede alto al pie fijo */
 .pos-cart-table {
-    max-height: calc(100vh - 560px);
+    max-height: clamp(140px, 22vh, 320px);
     min-height: 80px;
     overflow-y: auto;
     scrollbar-width: thin;
 }
 
-.pos-right-panel::-webkit-scrollbar,
+.pos-right-panel-scroll::-webkit-scrollbar,
 .pos-products-table::-webkit-scrollbar,
 .pos-cart-table::-webkit-scrollbar {
     width: 5px;
 }
 
-.pos-right-panel::-webkit-scrollbar-thumb,
+.pos-right-panel-scroll::-webkit-scrollbar-thumb,
 .pos-products-table::-webkit-scrollbar-thumb,
 .pos-cart-table::-webkit-scrollbar-thumb {
     background: var(--nexo-gray-300);
     border-radius: 10px;
+}
+
+/* Pantallas de tienda de 15" (1366x768): comprimir el panel derecho para que
+   Totales + Emitir + navegación entren sin scroll */
+@media (min-width: 992px) and (max-height: 800px) {
+    .pos-right-panel {
+        top: 56px;
+        max-height: calc(100vh - 66px);
+    }
+    .pos-right-panel .card {
+        margin-bottom: 0.375rem !important;
+    }
+    .pos-right-panel .card-body:not(.p-0) {
+        padding-top: 0.35rem !important;
+        padding-bottom: 0.35rem !important;
+    }
+    .pos-cart-table {
+        max-height: clamp(120px, 18vh, 220px);
+    }
+    #observacionesFinales {
+        min-height: 38px;
+    }
+    .pos-products-table {
+        max-height: calc(100vh - 300px);
+    }
 }
 
 /* Step-1: Method selectors más compactos en pantalla POS */
@@ -913,8 +967,20 @@
 @media (max-width: 991px) {
     .pos-right-panel {
         position: static;
+        display: block;
         max-height: none;
-        overflow-y: visible;
+        overflow: visible;
+    }
+    .pos-right-panel-scroll {
+        overflow: visible;
+        max-height: none;
+        padding-right: 0;
+    }
+    .pos-right-panel-footer {
+        position: static;
+        border-top: none;
+        padding-top: 0;
+        margin-top: 0;
     }
     .pos-products-table {
         max-height: 400px;
@@ -981,11 +1047,9 @@
                             <div class="step-number">2</div>
                             <div class="step-label">Productos</div>
                         </div>
-                        <div class="step-line" style="min-width: 40px; margin-top: -15px;"></div>
-                        <div class="step" data-step="3">
-                            <div class="step-number">3</div>
-                            <div class="step-label">Emisión</div>
-                        </div>
+                        {# El paso 3 se fusionó con el 2 (la emisión ocurre en
+                           el mismo panel). Mostrarlo dejaba un número clickeable
+                           que no hacía nada y contradecía el "Paso 2 de 2". #}
                     </div>
                 </div>
             </div>
@@ -1473,6 +1537,9 @@
                 <div class="col-lg-4 col-12">
                     <div class="pos-right-panel">
 
+                      <!-- Zona scrolleable: resumen + carrito + observaciones + totales -->
+                      <div class="pos-right-panel-scroll">
+
                         <!-- Resumen de configuración compacto -->
                         <div class="card mb-2" style="border: 1px solid var(--nexo-gray-300);">
                             <div class="card-body py-2 px-3">
@@ -1500,7 +1567,7 @@
                                 <h6 class="mb-0 small fw-semibold" style="color:#fff;"><i class="ri-shopping-cart-2-line me-1" style="color:#00D4AA;"></i>Carrito</h6>
                                 <span class="badge rounded-pill" id="carritoCount" style="background:#00D4AA; color:#1A1A2E; font-weight:700;">0</span>
                             </div>
-                            <div class="card-body p-0" style="max-height: 320px; overflow-y: auto;">
+                            <div class="card-body p-0 pos-cart-table">
                                 <div id="resumenProductosBody" style="padding: 0;">
                                     <div class="text-center text-muted py-4 small carrito-empty">
                                         <i class="ri-shopping-cart-line" style="font-size:2rem; color:#ccc;"></i>
@@ -1546,6 +1613,11 @@
                             </div>
                         </div>
 
+                      </div><!-- /pos-right-panel-scroll -->
+
+                      <!-- Pie fijo del panel: acción principal + navegación -->
+                      <div class="pos-right-panel-footer">
+
                         <!-- Botón principal de emisión -->
                         <button id="btnGenerarOperacion" type="button" class="btn w-100 py-2 mb-2"
                                 style="background: linear-gradient(135deg, var(--nexo-accent) 0%, #00b894 100%); color: white; border: none; border-radius: var(--nexo-radius-md); font-weight: 600; font-size: 0.95rem; box-shadow: 0 4px 14px rgba(0, 212, 170, 0.35); transition: all 0.3s ease;">
@@ -1568,6 +1640,8 @@
                                 <i class="bi bi-eye me-1"></i>Preview
                             </button>
                         </div>
+
+                      </div><!-- /pos-right-panel-footer -->
 
                     </div><!-- /pos-right-panel -->
                 </div><!-- /col-lg-4 -->
@@ -2191,7 +2265,13 @@ function initializeEventListeners() {
     $('#btnGenerarOperacion').on('click', emitirDTE);
 
     // Modal de tallas - botones manejados por initializeModalButtons()
-    
+    // Al cerrarse (haya agregado tallas o no) el foco vuelve al buscador con el
+    // texto seleccionado, para poder disparar el siguiente código de barras.
+    $('#modalTallas, #modalPendientesDespacho').on('hidden.bs.modal', function() {
+        enfocarBuscadorProductos();
+    });
+
+
     // Receptor change
     $('#receptorSelect').on('change', function() {
         validateStep1();
@@ -3344,6 +3424,30 @@ function loadCategorias() {
     });
 }
 
+/**
+ * Devuelve el foco al buscador de productos y selecciona su contenido.
+ *
+ * Pensado para el flujo con pistola de código de barras: al agregar una talla
+ * al carrito el foco se perdía y había que volver al buscador con el mouse.
+ * Con el contenido seleccionado, el siguiente disparo lo reemplaza directo.
+ */
+function enfocarBuscadorProductos(delay) {
+    setTimeout(function() {
+        const input = document.getElementById('searchProduct');
+        // offsetParent === null ⇒ el paso 2 no está visible
+        if (!input || input.offsetParent === null) return;
+        // No robar el foco si quedó otro modal abierto encima
+        if (document.querySelector('.modal.show')) return;
+        try {
+            input.focus({ preventScroll: true });
+        } catch (e) {
+            input.focus();
+        }
+        if (typeof input.select === 'function') input.select();
+    }, typeof delay === 'number' ? delay : 250);
+}
+window.enfocarBuscadorProductos = enfocarBuscadorProductos;
+
 function searchProducts() {
     const search = $('#searchProduct').val().trim();
     const marca = $('#filterMarca').val();
@@ -4262,8 +4366,12 @@ function addTallasToDetalle(tallas, productOverride = null) {
             icon: 'success',
             title: `Tallas ${actionText}`,
             text: `Se ${actionText} ${tallasAgregadas} talla${tallasAgregadas > 1 ? 's' : ''} al detalle`,
-            timer: 2000,
-            showConfirmButton: false
+            timer: 1200,
+            showConfirmButton: false,
+            returnFocus: false
+        }).then(function() {
+            // El aviso no debe quedarse con el foco: vuelve al buscador
+            enfocarBuscadorProductos(0);
         });
     } else if (tallasConStockInsuficiente > 0) {
         // No se agregó ninguna talla por falta de stock

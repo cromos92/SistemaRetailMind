@@ -1115,6 +1115,154 @@
     border-left: 4px solid #ffc107 !important;
 }
 
+/* ==================== KPI CARDS (mismo diseño que gestionDteCompras) ==================== */
+.kpi-card {
+    border-radius: 10px;
+    border: none;
+    transition: all 0.2s ease;
+    overflow: hidden;
+    cursor: pointer;
+}
+.kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+}
+.kpi-card .card-body {
+    padding: 10px 14px;
+}
+.kpi-card .kpi-icon {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+}
+.kpi-card .kpi-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.1;
+    margin: 0;
+}
+.kpi-card .kpi-label {
+    font-size: 0.68rem;
+    color: #6c757d;
+    font-weight: 500;
+    line-height: 1.2;
+    margin: 0;
+}
+.kpi-card .kpi-amount {
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.2;
+    margin: 0;
+}
+.kpi-card.kpi-activo {
+    outline: 2px solid #405189;
+    outline-offset: -2px;
+}
+
+/* ==================== CHIPS DE FILTRO ACTIVO ==================== */
+.filtros-activos-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+.filtro-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fff;
+    border: 1px solid rgba(64, 81, 137, 0.25);
+    border-radius: 20px;
+    padding: 3px 6px 3px 12px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #405189;
+    line-height: 1.4;
+}
+.filtro-chip .chip-valor {
+    font-weight: 700;
+}
+.filtro-chip .chip-quitar {
+    border: none;
+    background: rgba(64, 81, 137, 0.1);
+    color: #405189;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.filtro-chip .chip-quitar:hover {
+    background: #f06548;
+    color: #fff;
+}
+.filtro-chip.chip-conflicto {
+    border-color: #f06548;
+    color: #b42318;
+    background: #ffebee;
+}
+.aviso-filtros-incompatibles {
+    font-size: 0.74rem;
+    border-radius: 10px;
+    padding: 6px 12px;
+    background: #fff3e0;
+    border-left: 3px solid #fb8c00;
+    color: #92400e;
+}
+
+/* Fila de la compra recién creada / recién tocada */
+@keyframes flashFilaNueva {
+    0%   { background: #d1fae5; }
+    100% { background: transparent; }
+}
+tr.fila-recien-creada > td {
+    animation: flashFilaNueva 2.4s ease-out;
+}
+
+/* Acción primaria visible en cada fila (el siguiente paso del flujo) */
+.btn-accion-primaria {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 20px;
+    white-space: nowrap;
+    border: none;
+    color: #fff;
+    transition: all 0.15s ease;
+}
+.btn-accion-primaria:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+    color: #fff;
+}
+.btn-accion-primaria.ap-recepcionar { background: linear-gradient(135deg, #f7b84b, #e9a13b); color: #3d2f00; }
+.btn-accion-primaria.ap-crear-productos { background: linear-gradient(135deg, #0ab39c, #099885); }
+.btn-accion-primaria.ap-cargar { background: linear-gradient(135deg, #405189, #364574); }
+.btn-accion-primaria.ap-listo { background: #e9ecef; color: #6c757d; }
+
+/* En móvil la columna Acciones mide 40px: solo cabe el dropdown */
+@media (max-width: 767.98px) {
+    .btn-accion-primaria { display: none !important; }
+}
+
+/* En pantallas de 15" (1366x768) hay que ahorrar altura */
+@media (max-width: 1400px) {
+    .card-body { padding: 16px; }
+    .pagination-controls { padding: 10px 12px; margin-bottom: 10px; }
+    .kpi-card .card-body { padding: 7px 10px; }
+    .kpi-card .kpi-value { font-size: 1rem; }
+}
+
 </style>
 
 <!-- Loader con estilo del proyecto -->
@@ -1456,9 +1604,12 @@
                                 <span class="input-group-text bg-light border-end-0">
                                     <i class="ri-calendar-line text-muted"></i>
                                 </span>
-                                <input type="number" name="anioSeleccionado" id="anioSeleccionado" 
-                                       class="form-control border-start-0 ps-0"
-                                       placeholder="Año" min="2000" max="2100">
+                                <!-- Antes era un input numérico libre: en el sistema solo hay
+                                     compras desde 2025, así que se ofrecen los años que existen
+                                     (más "Otro año…" como escape para datos antiguos). -->
+                                <select name="anioSeleccionado" id="anioSeleccionado"
+                                        class="form-select border-start-0 ps-1"
+                                        title="Año de la compra"></select>
                             </div>
                             <button type="button" class="btn btn-primary btn-sm" id="btnBusquedaCompra">
                                 <i class="ri-search-line me-1"></i> Filtrar
@@ -1565,6 +1716,100 @@
             </div>
 
             <div class="card-body">
+
+                <!-- ========== KPIs DEL AÑO (se calculan sobre el año + búsqueda + sucursal) ========== -->
+                <div class="row g-2 mb-3" id="kpisCompras">
+                    <div class="col-xl-3 col-md-6 col-6">
+                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 3px solid #299cdb;"
+                             data-kpi-estado="" title="Ver todas las órdenes del año">
+                            <div class="card-body d-flex align-items-center gap-2">
+                                <div class="kpi-icon text-white" style="background: linear-gradient(135deg, #299cdb, #1976d2);">
+                                    <i class="bi bi-cart-check"></i>
+                                </div>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <div class="d-flex align-items-baseline gap-2">
+                                        <span class="kpi-value" id="kpiOrdenes" style="color: #405189;">–</span>
+                                        <span class="kpi-label">Órdenes del año</span>
+                                    </div>
+                                    <p class="kpi-amount" id="kpiOrdenesDetalle" style="color: #299cdb;">&nbsp;</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6 col-6">
+                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 3px solid #0ab39c;"
+                             data-kpi-estado="" title="Inversión total comprometida en las órdenes del año (suma de las órdenes listadas)">
+                            <div class="card-body d-flex align-items-center gap-2">
+                                <div class="kpi-icon text-white" style="background: linear-gradient(135deg, #0ab39c, #099885);">
+                                    <i class="bi bi-currency-dollar"></i>
+                                </div>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <div class="d-flex align-items-baseline gap-2">
+                                        <span class="kpi-value" id="kpiInversion" style="color: #0ab39c;">–</span>
+                                        <span class="kpi-label">Inversión</span>
+                                    </div>
+                                    <p class="kpi-amount" id="kpiInversionDetalle" style="color: #0ab39c;">&nbsp;</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6 col-6">
+                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 3px solid #ffbe0b;"
+                             data-kpi-estado="pendiente" title="Órdenes sin ninguna unidad recepcionada — clic para filtrarlas">
+                            <div class="card-body d-flex align-items-center gap-2">
+                                <div class="kpi-icon text-white" style="background: linear-gradient(135deg, #ffbe0b, #f0a500);">
+                                    <i class="bi bi-box-seam"></i>
+                                </div>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <div class="d-flex align-items-baseline gap-2">
+                                        <span class="kpi-value" id="kpiSinRecepcionar" style="color: #405189;">–</span>
+                                        <span class="kpi-label">Sin recepcionar</span>
+                                    </div>
+                                    <p class="kpi-amount" id="kpiSinRecepcionarDetalle" style="color: #f06548;">&nbsp;</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6 col-6">
+                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-left: 3px solid #fb8c00;"
+                             data-kpi-estado="por_crear" title="Órdenes con mercadería recepcionada que todavía no se convirtió en producto — clic para filtrarlas">
+                            <div class="card-body d-flex align-items-center gap-2">
+                                <div class="kpi-icon text-white" style="background: linear-gradient(135deg, #fb8c00, #f57c00);">
+                                    <i class="bi bi-archive"></i>
+                                </div>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <div class="d-flex align-items-baseline gap-2">
+                                        <span class="kpi-value" id="kpiPorCrear" style="color: #fb8c00;">–</span>
+                                        <span class="kpi-label">Con productos por crear</span>
+                                    </div>
+                                    <p class="kpi-amount" id="kpiPorCrearDetalle" style="color: #fb8c00;">&nbsp;</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== CHIPS DE FILTRO ACTIVO ========== -->
+                <div class="filtros-activos-bar d-none" id="barraFiltrosActivos">
+                    <span class="text-muted" style="font-size:.72rem;">
+                        <i class="bi bi-funnel-fill me-1"></i>Filtros activos:
+                    </span>
+                    <span id="chipsFiltros" class="d-inline-flex flex-wrap gap-1"></span>
+                    <button type="button" class="btn btn-sm btn-outline-danger ms-1" id="btnQuitarFiltros"
+                            style="font-size:.7rem;padding:2px 10px;border-radius:20px;">
+                        <i class="bi bi-x-circle me-1"></i>Quitar filtros
+                    </button>
+                </div>
+
+                <!-- Aviso de combinación de filtros que nunca puede dar resultados -->
+                <div class="aviso-filtros-incompatibles d-none mb-2" id="avisoFiltrosIncompatibles">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                    <strong>Sin recepcionar</strong> y <strong>una sucursal</strong> son excluyentes: la sucursal
+                    se conoce recién cuando llega la mercadería, así que una compra sin recepcionar nunca tiene sucursal.
+                    <a href="#" id="linkQuitarSucursal" class="fw-semibold">Quitar la sucursal</a> o
+                    <a href="#" id="linkQuitarEstado" class="fw-semibold">quitar el estado</a>.
+                </div>
+
                 <!-- Controles de búsqueda y paginación modernos -->
                 <div class="pagination-controls">
                     <div class="row align-items-center g-3">
@@ -1609,7 +1854,7 @@
                             <div class="d-flex justify-content-md-end align-items-center gap-2 flex-wrap">
                                 <span class="text-muted small me-2">
                                     <i class="bi bi-list-ul me-1"></i>
-                                    <span id="totalRegistros">0 registros</span>
+                                    <span id="totalRegistros">Cargando…</span>
                                 </span>
                                 <div class="btn-group shadow-sm" role="group">
                                     <button type="button" class="btn btn-outline-primary pagination-btn" id="btnPrevPageCompras">
@@ -1968,7 +2213,10 @@
                                             <label for="edit_empresa" class="form-label fw-semibold" style="color: #405189;">
                                                 <i class="bi bi-shop me-1"></i>Empresa Proveedora
                                             </label>
-                                            <select class="form-select" id="edit_empresa" name="empresa" required style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                            <!-- select2 (igual que el modal Crear): con 86 proveedores
+                                                 el <select> nativo era inusable. Lo inicializa
+                                                 initSelect2() en el evento shown.bs.modal. -->
+                                            <select class="form-select select2" id="edit_empresa" name="empresa" required style="border-radius: 10px; border: 2px solid #e9ecef;">
                                                 <option value="" disabled>Seleccione una empresa</option>
                                                 {% for empresa in empresas %}
                                                 <option value="{{ empresa.id }}">{{ empresa.nombre }} - {{ empresa.rut }}</option>
@@ -2239,7 +2487,10 @@
                                             <i class="bi bi-x"></i>
                                         </button>
                                     </div>
-                                    <span class="badge bg-light text-dark flex-shrink-0" id="totalRegistros">0 registros</span>
+                                    <!-- OJO: este id era "totalRegistros", el mismo del contador
+                                         del listado. El duplicado dejaba el contador del listado
+                                         congelado en "0 registros". -->
+                                    <span class="badge bg-light text-dark flex-shrink-0" id="totalRegistrosCSV">0 registros</span>
                                 </div>
                                 <div class="card-body p-0">
                                     <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
@@ -3703,6 +3954,54 @@ function hideGlobalLoader() {
 
 // Permisos del usuario
 const PUEDE_ELIMINAR_COMPRA = {{ puede_eliminar_compra|yesno:"true,false" }};
+
+// ==================== SELECTOR DE AÑO ====================
+// La primera compra registrada en el sistema es de 2025; antes el año era un
+// input numérico libre y se podía pedir cualquier año (siempre vacío).
+// Se ofrecen los años que existen, del actual hacia atrás, más un escape
+// "Otro año…" por si algún día se cargan compras más antiguas.
+const ANIO_MIN_COMPRAS = 2025;
+(function poblarSelectorAnios() {
+    const $sel = $('#anioSeleccionado');
+    if (!$sel.length) return;
+    const actual = new Date().getFullYear();
+    const desde = Math.min(ANIO_MIN_COMPRAS, actual);
+    let html = '';
+    for (let a = actual; a >= desde; a--) {
+        html += `<option value="${a}">${a}</option>`;
+    }
+    html += '<option value="__otro__">Otro año…</option>';
+    $sel.html(html).val(actual);
+})();
+
+// "Otro año…" abre un prompt y agrega el año elegido al selector.
+$(document).on('change', '#anioSeleccionado', function () {
+    const $sel = $(this);
+    if ($sel.val() !== '__otro__') {
+        $('#btnBusquedaCompra').trigger('click');
+        return;
+    }
+    Swal.fire({
+        title: 'Buscar otro año',
+        input: 'number',
+        inputLabel: 'Año (ej: 2024)',
+        inputValue: ANIO_MIN_COMPRAS - 1,
+        showCancelButton: true,
+        confirmButtonText: 'Buscar',
+        cancelButtonText: 'Cancelar'
+    }).then(function (res) {
+        const anio = parseInt(res.value, 10);
+        if (!res.isConfirmed || !anio || anio < 2000 || anio > 2100) {
+            $sel.val(new Date().getFullYear());
+            return;
+        }
+        if (!$sel.find(`option[value="${anio}"]`).length) {
+            $(`<option value="${anio}">${anio}</option>`).insertBefore($sel.find('option[value="__otro__"]'));
+        }
+        $sel.val(anio);
+        $('#btnBusquedaCompra').trigger('click');
+    });
+});
 
 // Sucursales disponibles para asignación masiva en Recepción y referencia
 // al importar el formato de compras (columna "Sucursal" opcional).
@@ -7182,7 +7481,7 @@ $('#btnCargarCSV').on('click', function() {
             $('#totalPares').text(totalPares.toLocaleString());
             $('#totalCosto').text(`$${totalCosto.toLocaleString()}`);
             $('#totalVenta').text(`$${totalVenta.toLocaleString()}`);
-            $('#totalRegistros').text(`${totalProductosUnicos} productos (${registrosValidos} filas)`);
+            $('#totalRegistrosCSV').text(`${totalProductosUnicos} productos (${registrosValidos} filas)`);
 
             // ========== RESUMEN POR SUCURSAL ==========
             // Cuenta productos y unidades detectadas por sucursal, marcando
@@ -7417,7 +7716,7 @@ function resetCSVUpload() {
     $('#totalPares').text('0');
     $('#totalCosto').text('$0');
     $('#totalVenta').text('$0');
-    $('#totalRegistros').text('0 registros');
+    $('#totalRegistrosCSV').text('0 registros');
     // Limpiar alertas de duplicados y errores
     $('#csvPreviewSection .alert').remove();
     // Limpiar filtro de búsqueda
@@ -7432,7 +7731,7 @@ function aplicarFiltroPrevioCSV() {
     const $rows = $('#tablaCSVPreview tbody tr');
     if (!q) {
         $rows.show();
-        $('#totalRegistros').text(`${$rows.length} productos`);
+        $('#totalRegistrosCSV').text(`${$rows.length} productos`);
         return;
     }
     let visible = 0;
@@ -7445,7 +7744,7 @@ function aplicarFiltroPrevioCSV() {
         $(this).toggle(match);
         if (match) visible++;
     });
-    $('#totalRegistros').text(`${visible} de ${$rows.length} productos`);
+    $('#totalRegistrosCSV').text(`${visible} de ${$rows.length} productos`);
 }
 $(document).on('input', '#filtroPreviewCSV', aplicarFiltroPrevioCSV);
 $(document).on('click', '#btnLimpiarFiltroCSV', function () {
@@ -7509,35 +7808,65 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                 return;
             }
 
+            // Datos que hay que capturar ANTES del reset() del formulario para
+            // poder dejar la compra recién creada a la vista y ofrecer el paso 2.
+            const nombreNuevaCompra = ($('#nombre').val() || '').trim();
+            const anioNuevaCompra = ($('#fecha_compra').val() || '').substring(0, 4);
+            const empresaNuevaCompra = $('#empresa').val() || '';
+            const proveedorNuevaCompra = ($('#empresa option:selected').text() || '').split(' - ')[0].trim();
+
             // Usar las funciones exportadas del módulo GestionCompras
             GestionCompras.ajaxPost(url, data, function (response) {
                 if (response.success) {
                     const esHistorica = !!response.es_historica;
                     const nuevaCompraId = response.compra_id;
-                    GestionCompras.showSuccess(response.message || 'Compra creada correctamente');
                     $('#modalCrearCompra').modal('hide');
                     form[0].reset();
 
-                    // Recargar las compras del año seleccionado en el input
-                    const anioSeleccionado = $('#anioSeleccionado').val() || new Date().getFullYear();
-                    cargarComprasPorAnio(anioSeleccionado, currentPageCompras, currentSearchCompras);
-
-                    // Si es histórica abrimos el modal de carga CSV con la nueva
-                    // compra para que el usuario pueda cargar productos y luego
-                    // vincularlos retroactivamente.
-                    if (esHistorica && nuevaCompraId) {
-                        setTimeout(function() {
-                            const modalCsv = $('#modalImportarCSV');
-                            modalCsv.data('compraId', nuevaCompraId);
-                            modalCsv.find('[name="compra_id"]').val(nuevaCompraId);
-                            Swal.fire({
-                                icon: 'info',
-                                title: 'Compra histórica creada',
-                                html: 'Ahora carga los productos por CSV o manualmente. Al terminar usa <strong>Vincular Productos Existentes</strong> para asociarlos al catálogo.',
-                                confirmButtonText: 'Entendido',
-                            });
-                        }, 200);
+                    // La grilla no tiene un orden garantizado, así que para que la
+                    // compra recién creada quede SIEMPRE a la vista se filtra por su
+                    // nombre (queda el chip "Búsqueda" con su botón para quitarlo) y
+                    // se resalta la fila.
+                    if (anioNuevaCompra && $('#anioSeleccionado option[value="' + anioNuevaCompra + '"]').length) {
+                        $('#anioSeleccionado').val(anioNuevaCompra);
                     }
+                    $('#filtroEstadoCompras').val('');
+                    $('#filtroSucursalCompras').val('');
+                    $('#searchCompras').val(nombreNuevaCompra);
+                    _compraIdAResaltar = nuevaCompraId || null;
+                    const anioSeleccionado = $('#anioSeleccionado').val() || new Date().getFullYear();
+                    cargarComprasPorAnio(anioSeleccionado, 1, nombreNuevaCompra);
+
+                    // Paso 2 del flujo: cargar los productos. Antes había que
+                    // adivinarlo desde el dropdown de la fila.
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Compra creada',
+                        html: `<div style="font-size:.9rem;">
+                                   <strong>${$('<div>').text(nombreNuevaCompra).html()}</strong> quedó registrada.<br>
+                                   <span class="text-muted">Paso 2 de 4: cargar los productos de la compra.</span>
+                                   ${esHistorica ? '<div class="mt-2 text-muted" style="font-size:.8rem;">Es una compra <strong>histórica</strong>: al terminar usa <strong>Vincular Productos</strong> para asociarla al catálogo.</div>' : ''}
+                               </div>`,
+                        showDenyButton: true,
+                        showCancelButton: true,
+                        confirmButtonText: '<i class="bi bi-upload me-1"></i> Cargar Excel/CSV',
+                        denyButtonText: '<i class="bi bi-plus-lg me-1"></i> Producto manual',
+                        cancelButtonText: 'Después',
+                        confirmButtonColor: '#405189',
+                        denyButtonColor: '#0ab39c',
+                        reverseButtons: true
+                    }).then(function (res) {
+                        if (!nuevaCompraId) return;
+                        if (res.isConfirmed) {
+                            abrirModalConDatos('#modalImportarCSV', { id: nuevaCompraId });
+                        } else if (res.isDenied) {
+                            abrirModalConDatos('#modalProductoManual', {
+                                id: nuevaCompraId,
+                                'empresa-id': empresaNuevaCompra,
+                                'proveedor-nombre': proveedorNuevaCompra
+                            });
+                        }
+                    });
                 } else {
                     GestionCompras.showError(response.error || 'No se pudo crear la compra');
                 }
@@ -7579,7 +7908,9 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                     return;
                 }
                 const c = r.compra;
-                $('#edit_empresa').val(c.empresa_id || '');
+                // .trigger('change') es obligatorio: con select2 el valor se
+                // setea en el <select> oculto y la UI no se entera sin el evento.
+                $('#edit_empresa').val(c.empresa_id || '').trigger('change');
                 $('#edit_nombre').val(c.nombre || '');
                 $('#edit_tipo').val(c.tipo || 'inicial');
                 $('#edit_fecha').val(c.fecha || '');
@@ -7685,6 +8016,11 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
         const sucursalFiltroId = $('#filtroSucursalCompras').val() || '';
         const estadoFiltro = $('#filtroEstadoCompras').val() || '';
 
+        // Chips de filtro activo + aviso de combinaciones imposibles y KPIs del año.
+        currentSearchCompras = search;
+        actualizarFiltrosVisibles(anio, search, sucursalFiltroId, estadoFiltro);
+        cargarKpisCompras(anio, search, sucursalFiltroId);
+
         $.ajax({
             url: '{% url "obtener_compras" %}',
             method: 'GET',
@@ -7713,9 +8049,25 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                     $('#pageInfoCompras').text(`Página ${response.pagination.page} de ${response.pagination.total_pages}`);
                     $('#btnPrevPageCompras').prop('disabled', !response.pagination.has_previous);
                     $('#btnNextPageCompras').prop('disabled', !response.pagination.has_next);
-                    
+
+                    // Contador real de resultados (antes quedaba congelado en
+                    // "0 registros" por el id duplicado con la vista previa CSV).
+                    const totalCount = response.pagination.total_count || 0;
+                    if (totalCount === 0) {
+                        $('#totalRegistros').text('0 órdenes');
+                    } else {
+                        const desde = (response.pagination.page - 1) * response.pagination.page_size + 1;
+                        const hasta = Math.min(desde + response.compras.length - 1, totalCount);
+                        $('#totalRegistros').text(`${desde}–${hasta} de ${totalCount} ${totalCount === 1 ? 'orden' : 'órdenes'}`);
+                    }
+
                     if (response.compras.length === 0) {
-                        tbody.append('<tr><td colspan="7" class="text-center text-muted">No hay compras para el año ' + anio + (search ? ' con la búsqueda "' + search + '"' : '') + '</td></tr>');
+                        tbody.append(
+                            '<tr><td colspan="7" class="text-center text-muted py-4">' +
+                            construirMensajeVacio(anio, search, sucursalFiltroId, estadoFiltro) +
+                            '</td></tr>'
+                        );
+                        _compraIdAResaltar = null;
                     } else {
                         // Mostrar información de rendimiento
                         console.log(`✅ Compras cargadas en ${loadTime}s - ${response.compras.length} de ${response.pagination.total_count} compras encontradas`);
@@ -7745,8 +8097,40 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                             const historicaBadge = compra.es_historica
                                 ? `<span class="badge ms-2" style="background:#7c3aed;color:#fff;font-size:.62rem;" title="Compra histórica: solo para trazabilidad y reportes; no toca stock"><i class="bi bi-clock-history me-1"></i>Histórica</span>`
                                 : '';
+
+                            // ===== Acción primaria visible =====
+                            // El siguiente paso del flujo (crear → cargar → recepcionar → crear
+                            // productos) es deducible del estado, así que se muestra como botón
+                            // en vez de esconderlo entre 8 opciones del dropdown.
+                            let accionPrimaria;
+                            if (compra.unidades === 0) {
+                                accionPrimaria = `<a href="#" class="btn-accion-primaria ap-cargar text-decoration-none"
+                                        data-bs-toggle="modal" data-bs-target="#modalImportarCSV" data-id="${compra.id}"
+                                        title="Esta compra todavía no tiene productos cargados">
+                                        <i class="bi bi-upload me-1"></i>Cargar productos</a>`;
+                            } else if (compra.recepcionado < compra.unidades && !compra.es_historica) {
+                                const faltan = compra.unidades - compra.recepcionado;
+                                accionPrimaria = `<a href="#" class="btn-accion-primaria ap-recepcionar text-decoration-none gestionar-compra"
+                                        data-id="${compra.id}" title="Faltan ${faltan.toLocaleString()} unidades por recepcionar">
+                                        <i class="bi bi-box-seam me-1"></i>Recepcionar</a>`;
+                            } else if ((compra.pendientes_crear || 0) > 0) {
+                                accionPrimaria = `<a href="/app/verGestionProducto/" class="btn-accion-primaria ap-crear-productos text-decoration-none"
+                                        title="${compra.pendientes_crear} recepción(es) esperando convertirse en producto">
+                                        <i class="bi bi-archive me-1"></i>Crear productos</a>`;
+                            } else if (compra.recepcionado > 0) {
+                                accionPrimaria = `<a href="#" class="btn-accion-primaria ap-listo text-decoration-none editar-recepcion-compra"
+                                        data-id="${compra.id}" data-nombre="${(compra.nombre||'').replace(/"/g,'&quot;')}"
+                                        title="Compra completa: revisar o corregir lo recepcionado">
+                                        <i class="bi bi-check2-all me-1"></i>Ver recepción</a>`;
+                            } else {
+                                accionPrimaria = `<a href="#" class="btn-accion-primaria ap-cargar text-decoration-none vincular-retroactivo"
+                                        data-id="${compra.id}" data-nombre="${(compra.nombre||'').replace(/"/g,'&quot;')}"
+                                        title="Compra histórica: vincular productos ya existentes">
+                                        <i class="bi bi-link-45deg me-1"></i>Vincular</a>`;
+                            }
+
                             const fila = `
-<tr${compra.es_historica ? ' class="row-historica"' : ''}>
+<tr data-compra-id="${compra.id}"${compra.es_historica ? ' class="row-historica"' : ''}>
     <td class="text-nowrap col-hide-sm text-muted" style="font-size:.72rem;">#${compra.id}</td>
     <td class="td-proveedor">${resaltarBusquedaCompras(compra.proveedor ?? '-', search)}</td>
     <td class="td-nombre">
@@ -7789,6 +8173,8 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
         </div>
     </td>
     <td class="td-actions text-center">
+        <div class="d-flex align-items-center justify-content-center gap-1 flex-nowrap">
+        ${accionPrimaria}
         <div class="dropdown">
             <button class="btn btn-sm btn-acciones d-inline-flex align-items-center gap-1"
                     type="button"
@@ -7816,14 +8202,28 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                     <li><a class="dropdown-item text-danger eliminar-compra" href="#" data-id="${compra.id}" data-nombre="${(compra.nombre||'').replace(/"/g,'&quot;')}"><i class="bi bi-trash me-2"></i>Eliminar Compra</a></li>` : ''}
             </ul>
         </div>
+        </div>
     </td>
 </tr>`;
                             tbody.append(fila);
                         });
                         
-                        // Mostrar notificación de éxito con tiempo de carga
-                        if (loadTime > 2) {
-                            showInfo(`Compras cargadas en ${loadTime}s - ${response.compras.length} de ${response.pagination.total_count} compras encontradas`);
+                        // Resaltar la compra recién creada para que no haya que buscarla
+                        if (_compraIdAResaltar) {
+                            const $filaNueva = tbody.find('tr[data-compra-id="' + _compraIdAResaltar + '"]');
+                            if ($filaNueva.length) {
+                                $filaNueva.addClass('fila-recien-creada');
+                                try { $filaNueva[0].scrollIntoView({ block: 'center' }); } catch (e) {}
+                            }
+                            _compraIdAResaltar = null;
+                        }
+
+                        // Aviso de carga lenta. No lo mostramos si ya hay un Swal
+                        // abierto (p. ej. el "Compra creada / paso 2"), porque lo
+                        // pisaría y el usuario perdería el siguiente paso.
+                        if (loadTime > 2 && !(window.Swal && Swal.isVisible && Swal.isVisible())) {
+                            // showInfo vive dentro del módulo: llamarlo suelto tiraba ReferenceError
+                            GestionCompras.showInfo(`Compras cargadas en ${loadTime}s - ${response.compras.length} de ${response.pagination.total_count} compras encontradas`);
                         }
                     }
                 } else {
@@ -7841,6 +8241,251 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
             }
         });
     }
+
+    /* ==========================================================================
+       FILTROS VISIBLES: chips, "Quitar filtros", aviso de combinación imposible
+       y mensaje de vacío que dice de verdad por qué no hay resultados.
+       ========================================================================== */
+
+    // Id de la compra que hay que resaltar en la próxima carga de la grilla.
+    let _compraIdAResaltar = null;
+
+    // Los modales de este módulo leen sus datos de `event.relatedTarget`
+    // (data-id, data-empresa-id, …). Para abrirlos por código se dispara un
+    // trigger temporal con esos data-* en vez de duplicar la lógica.
+    function abrirModalConDatos(selectorModal, datos) {
+        const $trigger = $('<button type="button" class="d-none"></button>')
+            .attr('data-bs-toggle', 'modal')
+            .attr('data-bs-target', selectorModal);
+        Object.keys(datos || {}).forEach(function (k) {
+            $trigger.attr('data-' + k, datos[k]);
+        });
+        $trigger.appendTo('body').trigger('click');
+        setTimeout(function () { $trigger.remove(); }, 1500);
+    }
+
+    const ETIQUETAS_ESTADO_COMPRAS = {
+        'pendiente':  'Sin recepcionar',
+        'parcial':    'Recepción parcial',
+        'por_crear':  'Con productos por crear',
+        'completado': 'Completadas'
+    };
+
+    function etiquetaSucursalCompras(sucursalId) {
+        if (!sucursalId) return '';
+        const $opt = $('#filtroSucursalCompras option[value="' + sucursalId + '"]');
+        return $opt.length ? $opt.text() : ('Sucursal ' + sucursalId);
+    }
+
+    // "Sin recepcionar" + una sucursal nunca puede devolver filas: la sucursal
+    // sale de las recepciones, así que una compra sin recepcionar no tiene.
+    function filtrosSonIncompatibles(estado, sucursalId) {
+        return estado === 'pendiente' && !!sucursalId;
+    }
+
+    function chipFiltro(icono, etiqueta, valor, tipo, conflicto) {
+        return `<span class="filtro-chip${conflicto ? ' chip-conflicto' : ''}">
+            <i class="bi ${icono}"></i>${etiqueta}: <span class="chip-valor">${valor}</span>
+            <button type="button" class="chip-quitar" data-chip="${tipo}" title="Quitar este filtro">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </span>`;
+    }
+
+    function actualizarFiltrosVisibles(anio, search, sucursalId, estado) {
+        const incompatibles = filtrosSonIncompatibles(estado, sucursalId);
+        const hayFiltros = !!(search || sucursalId || estado);
+        let chips = '';
+
+        if (hayFiltros) {
+            chips += `<span class="filtro-chip"><i class="bi bi-calendar-range"></i>Año: <span class="chip-valor">${anio}</span></span>`;
+        }
+        if (search) {
+            chips += chipFiltro('bi-search', 'Búsqueda', `“${$('<div>').text(search).html()}”`, 'search', false);
+        }
+        if (estado) {
+            chips += chipFiltro('bi-funnel-fill', 'Estado', ETIQUETAS_ESTADO_COMPRAS[estado] || estado, 'estado', incompatibles);
+        }
+        if (sucursalId) {
+            chips += chipFiltro('bi-geo-alt-fill', 'Sucursal', etiquetaSucursalCompras(sucursalId), 'sucursal', incompatibles);
+        }
+
+        $('#chipsFiltros').html(chips);
+        $('#barraFiltrosActivos').toggleClass('d-none', !hayFiltros);
+        $('#avisoFiltrosIncompatibles').toggleClass('d-none', !incompatibles);
+
+        // Resaltar la KPI card que corresponde al estado filtrado
+        $('#kpisCompras .kpi-card').removeClass('kpi-activo');
+        if (estado) {
+            $(`#kpisCompras .kpi-card[data-kpi-estado="${estado}"]`).addClass('kpi-activo');
+        }
+    }
+
+    function construirMensajeVacio(anio, search, sucursalId, estado) {
+        const partes = [`año <strong>${anio}</strong>`];
+        if (search)      partes.push(`búsqueda <strong>“${$('<div>').text(search).html()}”</strong>`);
+        if (estado)      partes.push(`estado <strong>${ETIQUETAS_ESTADO_COMPRAS[estado] || estado}</strong>`);
+        if (sucursalId)  partes.push(`sucursal <strong>${etiquetaSucursalCompras(sucursalId)}</strong>`);
+
+        let html = `<div class="py-2">
+            <i class="bi bi-inbox d-block mb-2" style="font-size:2rem;color:#d1d1d9;"></i>
+            <div class="mb-1">No hay compras con ${partes.join(' + ')}.</div>`;
+
+        if (filtrosSonIncompatibles(estado, sucursalId)) {
+            html += `<div class="text-danger" style="font-size:.78rem;">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                Esta combinación <strong>nunca</strong> devuelve resultados: la sucursal se conoce
+                al recepcionar, y "Sin recepcionar" son justamente las que todavía no llegaron.
+            </div>`;
+        }
+        if (search || estado || sucursalId) {
+            html += `<button type="button" class="btn btn-sm btn-outline-primary mt-2" id="btnQuitarFiltrosVacio"
+                        style="font-size:.75rem;border-radius:20px;">
+                        <i class="bi bi-x-circle me-1"></i>Quitar filtros
+                     </button>`;
+        }
+        html += '</div>';
+        return html;
+    }
+
+    // Limpia búsqueda + estado + sucursal (el año se mantiene) y recarga.
+    function limpiarFiltrosCompras(quitar) {
+        const anio = $('#anioSeleccionado').val() || new Date().getFullYear();
+        if (!quitar || quitar === 'search')    { $('#searchCompras').val(''); currentSearchCompras = ''; }
+        if (!quitar || quitar === 'estado')    { $('#filtroEstadoCompras').val(''); }
+        if (!quitar || quitar === 'sucursal')  { $('#filtroSucursalCompras').val(''); }
+        cargarComprasPorAnio(anio, 1, currentSearchCompras || '');
+    }
+
+    $(document).on('click', '#btnQuitarFiltros, #btnQuitarFiltrosVacio', function (e) {
+        e.preventDefault();
+        limpiarFiltrosCompras(null);
+    });
+    $(document).on('click', '.filtro-chip .chip-quitar', function (e) {
+        e.preventDefault();
+        limpiarFiltrosCompras($(this).data('chip'));
+    });
+    $(document).on('click', '#linkQuitarSucursal', function (e) {
+        e.preventDefault();
+        limpiarFiltrosCompras('sucursal');
+    });
+    $(document).on('click', '#linkQuitarEstado', function (e) {
+        e.preventDefault();
+        limpiarFiltrosCompras('estado');
+    });
+
+    /* ==========================================================================
+       KPIs DEL AÑO
+       Se calculan con el MISMO endpoint del listado pidiendo páginas grandes
+       (el sistema tiene ~50-90 compras por año, así que basta una llamada).
+       El estado NO entra en el cálculo: los KPIs describen el universo del año
+       y sirven de acceso directo para filtrarlo.
+       ========================================================================== */
+    let _kpiClaveActual = null;
+    let _kpiReqId = 0;
+
+    function fmtMonedaKpi(n) {
+        return '$' + Math.round(n || 0).toLocaleString('es-CL');
+    }
+
+    function pintarKpisCompras(filas, totalCount, truncado) {
+        let inversion = 0, unidades = 0, recepcionado = 0;
+        let sinRecepcionar = 0, unidadesSinRecepcionar = 0;
+        let porCrear = 0, recepPorCrear = 0;
+
+        filas.forEach(function (c) {
+            inversion    += (c.costo_total || 0);
+            unidades     += (c.unidades || 0);
+            recepcionado += (c.recepcionado || 0);
+            if ((c.recepcionado || 0) === 0) {
+                sinRecepcionar++;
+                unidadesSinRecepcionar += (c.unidades || 0);
+            }
+            if ((c.pendientes_crear || 0) > 0) {
+                porCrear++;
+                recepPorCrear += (c.pendientes_crear || 0);
+            }
+        });
+
+        const avance = unidades > 0 ? Math.round((recepcionado / unidades) * 100) : 0;
+        const sufijo = truncado ? ' (parcial)' : '';
+
+        $('#kpiOrdenes').text((totalCount || filas.length).toLocaleString('es-CL'));
+        $('#kpiOrdenesDetalle').text(`${unidades.toLocaleString('es-CL')} uds. pedidas${sufijo}`);
+
+        $('#kpiInversion').text(fmtMonedaKpi(inversion));
+        $('#kpiInversionDetalle').text(`${avance}% recepcionado${sufijo}`);
+
+        $('#kpiSinRecepcionar').text(sinRecepcionar.toLocaleString('es-CL'));
+        $('#kpiSinRecepcionarDetalle').text(
+            sinRecepcionar ? `${unidadesSinRecepcionar.toLocaleString('es-CL')} uds. sin llegar` : 'todo recepcionado'
+        );
+
+        $('#kpiPorCrear').text(porCrear.toLocaleString('es-CL'));
+        $('#kpiPorCrearDetalle').text(
+            porCrear ? `${recepPorCrear.toLocaleString('es-CL')} recepciones pendientes` : 'nada pendiente'
+        );
+    }
+
+    function pintarKpisErrorCompras() {
+        $('#kpiOrdenes, #kpiInversion, #kpiSinRecepcionar, #kpiPorCrear').text('–');
+        $('#kpiOrdenesDetalle, #kpiInversionDetalle, #kpiSinRecepcionarDetalle, #kpiPorCrearDetalle')
+            .text('sin datos');
+    }
+
+    function cargarKpisCompras(anio, search, sucursalId) {
+        const clave = [anio, search || '', sucursalId || ''].join('|');
+        if (clave === _kpiClaveActual) return;   // sólo cambió la página o el estado
+        _kpiClaveActual = clave;
+        const reqId = ++_kpiReqId;
+
+        $('#kpiOrdenes, #kpiInversion, #kpiSinRecepcionar, #kpiPorCrear').text('…');
+        $('#kpiOrdenesDetalle, #kpiInversionDetalle, #kpiSinRecepcionarDetalle, #kpiPorCrearDetalle').html('&nbsp;');
+
+        const MAX_PAGINAS = 5;
+        const PAGE_SIZE = 100;
+        const acumulado = [];
+
+        function pedirPagina(page) {
+            $.ajax({
+                url: '{% url "obtener_compras" %}',
+                method: 'GET',
+                data: {
+                    anio: anio,
+                    page: page,
+                    page_size: PAGE_SIZE,
+                    search: search || '',
+                    sucursal_id: sucursalId || '',
+                    estado_filtro: ''
+                },
+                success: function (r) {
+                    if (reqId !== _kpiReqId) return;          // llegó tarde, ya hay otro filtro
+                    if (!r || !r.success) { pintarKpisErrorCompras(); return; }
+                    Array.prototype.push.apply(acumulado, r.compras || []);
+                    const quedan = r.pagination && r.pagination.has_next;
+                    if (quedan && page < MAX_PAGINAS) {
+                        pedirPagina(page + 1);
+                    } else {
+                        pintarKpisCompras(acumulado, r.pagination ? r.pagination.total_count : acumulado.length, !!quedan);
+                    }
+                },
+                error: function () {
+                    if (reqId !== _kpiReqId) return;
+                    pintarKpisErrorCompras();
+                }
+            });
+        }
+        pedirPagina(1);
+    }
+
+    // Clic en una KPI card = aplicar (o quitar) ese filtro de estado
+    $(document).on('click', '#kpisCompras .kpi-card', function () {
+        const estado = $(this).data('kpi-estado') || '';
+        const actual = $('#filtroEstadoCompras').val() || '';
+        $('#filtroEstadoCompras').val(estado === actual ? '' : estado);
+        const anio = $('#anioSeleccionado').val() || new Date().getFullYear();
+        cargarComprasPorAnio(anio, 1, currentSearchCompras || '');
+    });
 
     // Función para resaltar términos de búsqueda en tabla principal
     function resaltarBusquedaCompras(texto, busqueda) {

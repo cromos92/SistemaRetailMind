@@ -722,7 +722,13 @@
                             </div>
                             <div>
                                 <strong>Acceso restringido</strong>
-                                <p class="mb-0">Solo los usuarios con rol <strong>Administrador</strong> pueden cambiar de sucursal. Tu rol actual es: <strong>{{ rol_usuario|default:"vendedor"|title }}</strong></p>
+                                <p class="mb-0">
+                                    Tu perfil no tiene habilitada la opción <strong>Cambiar Empresa/Sucursal</strong>,
+                                    así que sólo puedes ver el centro de trabajo que tienes asignado.
+                                    Tu rol actual es <strong>{{ rol_usuario|default:"vendedor"|title }}</strong>;
+                                    un administrador puede habilitártela desde
+                                    <em>Permisos &rsaquo; Gestión de Permisos</em>.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -757,15 +763,30 @@
             <!-- Available Locations -->
             <div class="row">
                 <div class="col-12">
-                    <div class="nexo-section-title">
-                        <i class="ri-grid-fill"></i>
-                        Sucursales Disponibles
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-3">
+                        <div class="nexo-section-title mb-0">
+                            <i class="ri-grid-fill"></i>
+                            Sucursales Disponibles
+                        </div>
+                        {% if total_sucursales > 5 %}
+                        <div style="min-width: 260px;">
+                            <div class="position-relative">
+                                <i class="ri-search-line position-absolute"
+                                   style="left: .75rem; top: 50%; transform: translateY(-50%); color: var(--nexo-text-muted);"></i>
+                                <input type="text" id="filtroSucursal" class="form-control"
+                                       style="padding-left: 2.25rem;"
+                                       placeholder="Buscar empresa o sucursal..."
+                                       autocomplete="off">
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
-                    
+
                     <div class="nexo-sucursal-grid">
                         {% for empresa_id, data in empresas_data.items %}
                             {% for sucursal_data in data.sucursales %}
                             <div class="nexo-sucursal-card {% if sucursal_data.is_current %}is-current{% endif %}{% if not puede_cambiar_sucursal %} readonly{% endif %}"
+                                 data-busqueda="{{ data.empresa.nombre|lower }} {{ sucursal_data.sucursal.alias|lower }} {{ sucursal_data.sucursal.direccion|default:''|lower }}"
                                  {% if not sucursal_data.is_current and puede_cambiar_sucursal %}
                                  data-empresa-user-id="{{ sucursal_data.empresa_user.id }}"
                                  data-empresa-nombre="{{ data.empresa.nombre }}"
@@ -792,6 +813,12 @@
                                     </div>
                                     
                                     <div class="nexo-sucursal-info">
+                                        {% if sucursal_data.sucursal.es_centro_distribucion %}
+                                        <div class="nexo-info-item">
+                                            <i class="ri-truck-line"></i>
+                                            <span>Centro de distribución (bodega)</span>
+                                        </div>
+                                        {% endif %}
                                         {% if sucursal_data.sucursal.direccion %}
                                         <div class="nexo-info-item">
                                             <i class="ri-map-pin-line"></i>
@@ -917,6 +944,9 @@ function cambiarSucursal(card) {
                         <i class="ri-store-3-fill" style="color: #00D4AA;"></i> ${sucursalAlias}
                     </div>
                 </div>
+                <div style="margin-top:.75rem; font-size:.8rem; color:#996B00; background:rgba(255,176,32,.15); padding:.5rem .625rem; border-radius:8px; text-align:left;">
+                    <i class="ri-alert-line"></i> Se cerrará tu sesión en los demás dispositivos.
+                </div>
                </div>`
             : `<div style="text-align: left; padding: 1rem 0;">
                 <p style="margin-bottom: 0.5rem; color: #4A4A5A;">Vas a cambiar a:</p>
@@ -927,6 +957,11 @@ function cambiarSucursal(card) {
                     <div style="color: #00D4AA;">
                         <i class="ri-store-3-line"></i> ${sucursalAlias}
                     </div>
+                </div>
+                <div style="margin-top:.75rem; font-size:.85rem; color:#996B00; background:rgba(255,176,32,.15); padding:.625rem .75rem; border-radius:8px;">
+                    <i class="ri-alert-line"></i>
+                    Todo lo que veas después (ventas, stock, caja, reportes) quedará acotado a esa sucursal
+                    y <strong>se cerrará tu sesión en los demás dispositivos</strong>.
                 </div>
                </div>`,
         icon: 'question',
@@ -1052,6 +1087,20 @@ function resetCards() {
         c.style.opacity = '';
     });
 }
+
+// Filtro de sucursales (sólo se renderiza cuando hay más de 5)
+(function () {
+    var input = document.getElementById('filtroSucursal');
+    if (!input) { return; }
+    var tarjetas = Array.prototype.slice.call(document.querySelectorAll('.nexo-sucursal-card'));
+    input.addEventListener('input', function () {
+        var q = (input.value || '').trim().toLowerCase();
+        tarjetas.forEach(function (card) {
+            var texto = card.dataset.busqueda || '';
+            card.style.display = (!q || texto.indexOf(q) !== -1) ? '' : 'none';
+        });
+    });
+})();
 
 // Open modal on page load if requested
 {% if abrir_modal %}

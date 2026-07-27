@@ -63,6 +63,76 @@ def requiere_permiso(codigo_opcion, tipo_permiso='puede_ver', redirigir_a='bienv
     return decorator
 
 
+def requiere_alguno_de_los_permisos(*opciones, redirigir_a='bienvenida'):
+    """
+    Autoriza si el usuario cumple AL MENOS UNA de las opciones indicadas.
+
+    Existe para los endpoints que sirven a más de un flujo, donde exigir el
+    permiso del módulo completo deja fuera a quien sólo necesita la capacidad
+    puntual. Caso que lo motivó: la caja consulta la ficha del cliente por RUT
+    al cobrar; exigir 'fidelizacion_cuentas' (que además abre el listado de
+    TODOS los clientes) dejaba a los vendedores con 403 en el cobro, aunque sí
+    tienen permiso sobre 'ticket_venta'. Con esto el acceso queda atado a la
+    capacidad —operar la caja— y no a poder navegar el maestro de clientes.
+
+    Args:
+        *opciones: códigos de opción, o tuplas (codigo_opcion, tipo_permiso).
+                   Un código suelto se interpreta como (codigo, 'puede_ver').
+        redirigir_a (str): URL a la que redirigir si no cumple ninguna.
+
+    Uso:
+        @requiere_alguno_de_los_permisos('fidelizacion_cuentas', 'ticket_venta')
+        def api_consultar_saldo_puntos(request):
+            ...
+
+        @requiere_alguno_de_los_permisos(
+            ('fidelizacion_cuentas', 'puede_ver'), ('pos_dashboard', 'puede_crear'))
+        def otra_vista(request):
+            ...
+    """
+    normalizadas = [
+        (op, 'puede_ver') if isinstance(op, str) else (op[0], op[1])
+        for op in opciones
+    ]
+
+    def decorator(view_func):
+        @wraps(view_func)
+        @login_required
+        def _wrapped_view(request, *args, **kwargs):
+            sucursal_id = request.session.get('idSucursalActual')
+
+            tiene_permiso = any(
+                PermisoRol.tiene_permiso(
+                    usuario=request.user,
+                    codigo_opcion=codigo,
+                    tipo_permiso=tipo,
+                    sucursal_id=sucursal_id,
+                )
+                for codigo, tipo in normalizadas
+            )
+
+            if not tiene_permiso:
+                requeridos = ' o '.join(f'{c}.{t}' for c, t in normalizadas)
+                if (request.headers.get('x-requested-with') == 'XMLHttpRequest'
+                        or request.content_type == 'application/json'):
+                    return JsonResponse({
+                        'error': True,
+                        'mensaje': f'No tienes permiso para realizar esta acción. '
+                                   f'Se requiere alguno de: {requeridos}'
+                    }, status=403)
+                messages.error(
+                    request,
+                    '⚠️ No tienes permiso para acceder a esta funcionalidad. '
+                    'Contacta al administrador si crees que deberías tener acceso.'
+                )
+                return redirect(redirigir_a)
+
+            return view_func(request, *args, **kwargs)
+
+        return _wrapped_view
+    return decorator
+
+
 def requiere_rol(*roles_permitidos):
     """
     Decorador simple para verificar que el usuario tenga uno de los roles especificados

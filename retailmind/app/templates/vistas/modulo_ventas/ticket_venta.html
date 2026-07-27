@@ -1208,6 +1208,29 @@ div[style*="border: 1px solid #000"] {
     font-size: 1.05rem !important;
     font-weight: 700 !important;
 }
+/* Reimpresión del último ticket: acción secundaria, nunca compite con Imprimir */
+.pos-reprint-btn {
+    height: 54px !important;
+    font-size: 0.9rem !important;
+    font-weight: 700 !important;
+    white-space: nowrap;
+}
+.pos-reprint-btn .pos-reprint-num { font-weight: 800; }
+
+/* Chip de tipo de cliente (colores los manda el backend, no se inventan aquí) */
+.pos-cliente-tipo {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    vertical-align: middle;
+}
+.pos-cliente-tipo i { font-size: 0.72rem; }
 
 /* Vendedores: compactos en pantallas POS */
 @media screen and (max-width: 1440px) {
@@ -1239,6 +1262,7 @@ div[style*="border: 1px solid #000"] {
     .pos-table-wrapper { max-height: calc(100vh - 260px); min-height: 180px; }
     .pos-bottom-bar .card-body { padding: 6px 12px !important; }
     .pos-print-btn { height: 46px !important; }
+    .pos-reprint-btn { height: 46px !important; font-size: 0.82rem !important; }
 }
 
 /* Stack vertical en pantallas muy pequeñas */
@@ -1485,10 +1509,18 @@ div[style*="border: 1px solid #000"] {
                                     title="Ver stock en otra sucursal">
                                 <i class="ri-store-2-line me-1"></i>Otra Sucursal
                             </button>
+                            <!-- Contingencia de impresora: tras crear el ticket la vista
+                                 vuelve aquí, así que la reimpresión tiene que estar en
+                                 esta pantalla y no solo en la barra de totales. -->
+                            <button type="button" class="btn btn-outline-secondary d-none" id="btnReimprimirTicketVendedores"
+                                    title="Reimprimir el último ticket emitido en este equipo (F7). No crea un ticket nuevo.">
+                                <i class="ri-restart-line me-1"></i>Reimprimir <span class="pos-reprint-num"></span>
+                            </button>
                         </div>
                         <div class="vendedores-kbd-hint">
                             <kbd>Enter</kbd> para confirmar código &nbsp;·&nbsp;
                             <kbd>↑</kbd><kbd>↓</kbd> para navegar tarjetas &nbsp;·&nbsp;
+                            <kbd>F7</kbd> reimprime el último ticket &nbsp;·&nbsp;
                             Clic en la tarjeta para seleccionar directamente
                         </div>
                     </div>
@@ -1539,7 +1571,7 @@ div[style*="border: 1px solid #000"] {
                                 <h6 class="card-title mb-0" style="font-size:0.85rem;white-space:nowrap;">
                                     <i class="ri-list-check text-primary me-2"></i>Productos del Ticket
                                 </h6>
-                                <div class="pos-shortcuts-bar" title="Enter=agrega · F3=busca · F2=bolsa · Esc=limpia">
+                                <div class="pos-shortcuts-bar" title="Enter=agrega · F3=busca · F2=bolsa · Esc=limpia · F7=reimprime el último ticket">
                                     <span class="pos-shortcut-item"><kbd>↵</kbd><span class="pos-shortcut-text">agrega</span></span>
                                     <span class="pos-shortcut-item"><kbd>F3</kbd><span class="pos-shortcut-text">busca</span></span>
                                     <span class="pos-shortcut-item"><kbd>F2</kbd><span class="pos-shortcut-text">bolsa</span></span>
@@ -1680,7 +1712,12 @@ div[style*="border: 1px solid #000"] {
                                 <div>
                                     <h6 class="mb-0" style="font-size:0.85rem;font-weight:700;">Cliente
                                         <span class="badge ms-1" style="background:linear-gradient(135deg,#0066FF,#00D4AA);font-size:0.6rem;">FIDELIZACIÓN</span>
+                                        <!-- Tipo de cliente: lo resuelve la ficha rápida por RUT
+                                             (api_consultar_saldo_puntos); color/icono vienen del backend. -->
+                                        <span class="pos-cliente-tipo ms-1 d-none" id="posClienteTipo" title=""></span>
                                         <span class="nexo-badge nexo-badge-success ms-1 d-none" id="posClientePuntos" title=""></span>
+                                        <span class="nexo-badge ms-1 d-none" id="posClienteGiftcards" title=""
+                                              style="background:#fff8e1;color:#f9a825;"></span>
                                     </h6>
                                     <small class="text-muted" id="posClienteResumen" style="font-size:0.7rem;">
                                         Ingresa el RUT del cliente para sumar puntos
@@ -1803,6 +1840,13 @@ div[style*="border: 1px solid #000"] {
                                     <i class="ri-shopping-cart-line me-1"></i>0
                                 </span>
                             </div>
+
+                            <!-- Reimpresión de contingencia: sale del ticket guardado en este
+                                 equipo, no crea ni cobra nada. Oculto mientras no haya uno. -->
+                            <button type="button" class="btn btn-outline-secondary pos-reprint-btn d-none" id="btnReimprimirTicket"
+                                    title="Reimprimir el último ticket emitido en este equipo (F7). No crea un ticket nuevo.">
+                                <i class="ri-restart-line me-1"></i><span class="d-none d-xxl-inline">Reimprimir </span><span class="pos-reprint-num"></span>
+                            </button>
 
                             <button type="button" class="btn btn-success pos-print-btn" id="btnImprimirTicket">
                                 <i class="ri-printer-fill me-2"></i>Imprimir Ticket
@@ -2958,6 +3002,14 @@ $(document).ready(function() {
             $('#btnModoRapido').click();
         }
 
+        // F7 → reimprimir el último ticket emitido (contingencia de impresora).
+        // Disponible también en la pantalla de vendedores: si la térmica falló,
+        // la vista ya se reseteó y el cajero necesita el comprobante igual.
+        if (e.key === 'F7') {
+            e.preventDefault();
+            reimprimirUltimoTicket();
+        }
+
         // Escape → limpiar formulario y volver al SKU
         if (e.key === 'Escape' && $('#seccionCrearTicket').is(':visible')) {
             const $foco = $(document.activeElement);
@@ -3798,6 +3850,42 @@ $(document).ready(function() {
         if (ok && tkNormRut(v) !== tkUltimoRutBuscado) tkBuscarClientePorRut(false);
     }
 
+    // Chip de TIPO DE CLIENTE. El color, el icono y la etiqueta los manda el
+    // backend (TIPO_CLIENTE_ESTILOS en views_modulo_fidelizacion), así que el POS
+    // y las pantallas de fidelización pintan exactamente el mismo chip y aquí no
+    // se inventa ninguna paleta. Si el endpoint no trae tipo, el chip no aparece.
+    function tkPintarTipoCliente(d) {
+        const chip = document.getElementById('posClienteTipo');
+        if (!chip) return;
+        const etiqueta = (d && d.tipo_cliente_display) || '';
+        if (!etiqueta) { chip.classList.add('d-none'); chip.textContent = ''; return; }
+        chip.innerHTML = `<i class="${d.tipo_cliente_icono || 'ri-user-line'}"></i>${etiqueta}`;
+        chip.style.background = d.tipo_cliente_bg || '#eef2ff';
+        chip.style.color = d.tipo_cliente_color || '#405189';
+        chip.title = `Tipo de cliente: ${etiqueta}`;
+        chip.classList.remove('d-none');
+    }
+
+    // Gift cards vigentes: el cajero necesita saber ANTES de cobrar que el cliente
+    // trae saldo en tarjeta. Viene en la misma respuesta, no cuesta otra llamada.
+    function tkPintarGiftcards(d) {
+        const chip = document.getElementById('posClienteGiftcards');
+        if (!chip) return;
+        const cant = (d && d.giftcards_cantidad) || 0;
+        if (!cant) { chip.classList.add('d-none'); chip.textContent = ''; return; }
+        const saldo = (d.giftcards_saldo_total || 0).toLocaleString('es-CL');
+        chip.textContent = `🎁 ${cant} gift card${cant > 1 ? 's' : ''} · $${saldo}`;
+        chip.title = 'Gift cards vigentes del cliente — se cobran en la caja del POS';
+        chip.classList.remove('d-none');
+    }
+
+    function tkLimpiarChipsCliente() {
+        ['posClienteTipo', 'posClienteGiftcards'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { el.classList.add('d-none'); el.textContent = ''; }
+        });
+    }
+
     // Saldo de puntos en el header (endpoint aparte; best-effort, no bloquea).
     // Solo se pinta si el RUT resolvió a un cliente real del CRM (d.cliente).
     function tkConsultarSaldo(rut) {
@@ -3811,6 +3899,14 @@ $(document).ready(function() {
                 window._fidSaldoCliente = (d && d.success && d.cliente)
                     ? Object.assign({}, d, { _rut: tkNormRut(rut) })
                     : null;
+                // Tipo de cliente y gift cards: se pintan aunque el cliente no
+                // tenga puntos todavía (identificarlo ya es información útil).
+                if (d && d.success && d.cliente) {
+                    tkPintarTipoCliente(d);
+                    tkPintarGiftcards(d);
+                } else {
+                    tkLimpiarChipsCliente();
+                }
                 const badge = document.getElementById('posClientePuntos');
                 if (!badge) return;
                 if (d && d.success && d.cliente) {
@@ -3840,6 +3936,7 @@ $(document).ready(function() {
             .catch(() => {
                 window._fidSaldoCliente = null;
                 document.getElementById('posClientePuntos')?.classList.add('d-none');
+                tkLimpiarChipsCliente();
             });
     }
 
@@ -3916,6 +4013,7 @@ $(document).ready(function() {
         tkSetCamposBloqueados(true);
         window._fidSaldoCliente = null;
         document.getElementById('posClientePuntos')?.classList.add('d-none');
+        tkLimpiarChipsCliente();
         const hint = document.getElementById('tkClienteHint');
         if (hint) hint.textContent = 'Completa un RUT válido para habilitar los datos. Se guardan al cobrar.';
         actualizarResumenCliente();
@@ -3947,6 +4045,7 @@ $(document).ready(function() {
                 if (_tkEsEmpresa) {
                     window._fidSaldoCliente = null;
                     document.getElementById('posClientePuntos')?.classList.add('d-none');
+                    tkLimpiarChipsCliente();
                     const hint = document.getElementById('tkClienteHint');
                     if (hint) hint.textContent = 'RUT de empresa — no acumula puntos de fidelización.';
                 }
@@ -3972,6 +4071,7 @@ $(document).ready(function() {
                     // ticket imprimiría "Ya tienes $X" de otra persona.
                     window._fidSaldoCliente = null;
                     document.getElementById('posClientePuntos')?.classList.add('d-none');
+                    tkLimpiarChipsCliente();
                     const hint = document.getElementById('tkClienteHint');
                     if (hint && !_tkEsEmpresa) hint.textContent = 'Cliente nuevo: escribe el Nombre para crear su ficha.';
                     actualizarResumenCliente();   // muestra los chips: todo "falta"
@@ -4057,7 +4157,11 @@ $(document).ready(function() {
         tkValidarCelular, tkValidarEmail, tkValidarFecha,
         tkFormatearRut, tkNormRut, tkOnInputRut, tkOnBlurRut,
         tkConsultarSaldo, tkSetCamposBloqueados, tkActualizarCompletitud,
-        tkEsRutEmpresa,
+        tkEsRutEmpresa, tkPintarTipoCliente, tkPintarGiftcards,
+        tkLimpiarChipsCliente,
+        // Reimpresión de contingencia: expuesta para poder dispararla desde la
+        // consola o desde un futuro botón fuera de este closure.
+        reimprimirUltimoTicket,
     });
 
     // Arranque: el panel inicia con los datos del cliente bloqueados hasta que se
@@ -4207,6 +4311,9 @@ $(document).ready(function() {
 
                     if (response.ticket_data) {
                         response.ticket_data.fidelizacion = _fidParaTicket;
+                        // Guardar ANTES de imprimir: si la impresora falla, el
+                        // botón "Reimprimir" ya tiene con qué recuperarlo.
+                        recordarUltimoTicket(response.ticket_data);
                         imprimirTicketTermico(response.ticket_data);
                     } else if (response.ticket_html) {
                         const ventanaImpresion = window.open('', '_blank', 'width=300,height=600');
@@ -4250,6 +4357,87 @@ $(document).ready(function() {
             $('#codigoVendedor').focus();
         }, 100);
     }
+
+    // ===================== REIMPRESIÓN DE CONTINGENCIA =====================
+    // El ticket se imprime UNA sola vez, justo después de crearlo, y la vista se
+    // resetea. Si la térmica estaba apagada, sin papel o QZ Tray caído, antes no
+    // quedaba forma de recuperarlo desde el POS. Ahora el último ticket emitido
+    // en este equipo queda guardado en localStorage (mismos datos que se
+    // imprimieron) y se puede volver a sacar sin crear NADA nuevo: no toca el
+    // correlativo, no cobra, no mueve stock. Es una copia del comprobante.
+    const LS_KEY_ULTIMO_TICKET = `pos_ultimo_ticket_${SUCURSAL_ID_ACCESOS}`;
+    let ultimoTicketImpreso = null;
+
+    function tkNumeroTicket(td) {
+        return (td && (td.correlativo || td.ticket_id)) || '';
+    }
+
+    function actualizarBotonReimprimir() {
+        const $btns = $('#btnReimprimirTicket, #btnReimprimirTicketVendedores');
+        if (!$btns.length) return;
+        const num = tkNumeroTicket(ultimoTicketImpreso);
+        if (!num) { $btns.addClass('d-none'); return; }
+        $btns.removeClass('d-none').find('.pos-reprint-num').text('#' + num);
+    }
+
+    // Guarda el último ticket emitido. Es best-effort: si localStorage está lleno
+    // o bloqueado, la reimpresión sigue disponible en memoria hasta el refresh.
+    function recordarUltimoTicket(ticketData) {
+        if (!ticketData) return;
+        ultimoTicketImpreso = ticketData;
+        try {
+            localStorage.setItem(LS_KEY_ULTIMO_TICKET, JSON.stringify(ticketData));
+        } catch (e) {
+            console.warn('No se pudo guardar el último ticket para reimpresión:', e);
+        }
+        actualizarBotonReimprimir();
+    }
+
+    function cargarUltimoTicketGuardado() {
+        try {
+            const crudo = localStorage.getItem(LS_KEY_ULTIMO_TICKET);
+            if (crudo) ultimoTicketImpreso = JSON.parse(crudo);
+        } catch (e) {
+            ultimoTicketImpreso = null;
+        }
+        actualizarBotonReimprimir();
+    }
+
+    // Reimprime el último ticket. Marca la copia con `reimpresion` para que salga
+    // rotulada COPIA y nadie la confunda con una venta nueva.
+    function reimprimirUltimoTicket() {
+        if (!ultimoTicketImpreso) {
+            Swal.fire({
+                icon: 'info',
+                title: 'No hay ticket para reimprimir',
+                text: 'Aún no se ha emitido un ticket en este equipo.',
+                confirmButtonText: 'Entendido',
+            });
+            return;
+        }
+        const num = tkNumeroTicket(ultimoTicketImpreso);
+        const totales = ultimoTicketImpreso.totales || {};
+        const total = parseInt(totales.total || ultimoTicketImpreso.total || 0, 10) || 0;
+        Swal.fire({
+            icon: 'question',
+            title: `¿Reimprimir ticket #${num}?`,
+            html: `<div style="font-size:.9rem;">Total <strong>$${total.toLocaleString('es-CL')}</strong></div>` +
+                  '<div style="margin-top:8px;font-size:.78rem;color:#94a3b8;">' +
+                  'Sale marcado como <strong>COPIA</strong>. No crea un ticket nuevo, no cobra y no mueve stock.</div>',
+            showCancelButton: true,
+            confirmButtonText: '<i class="ri-printer-fill"></i> Sí, reimprimir',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#0066FF',
+        }).then((r) => {
+            if (!r.isConfirmed) return;
+            // Copia superficial: no se persiste la marca de reimpresión.
+            const copia = Object.assign({}, ultimoTicketImpreso, { reimpresion: true });
+            imprimirTicketTermico(copia);
+        });
+    }
+
+    $('#btnReimprimirTicket, #btnReimprimirTicketVendedores').on('click', reimprimirUltimoTicket);
+    cargarUltimoTicketGuardado();
 
     // Función para imprimir en impresora térmica
     /**
@@ -4660,6 +4848,7 @@ body {
 <!-- TIPO Y NÚMERO DE TICKET -->
 <div style="text-align:center;font-size:12px;font-weight:700;letter-spacing:1px;margin-bottom:2px;">TICKET DE VENTA</div>
 <div class="ticket-num">N&#xB0;&nbsp;${ticketData.correlativo || ticketData.ticket_id || '------'}</div>
+${ticketData.reimpresion ? `<div style="text-align:center;font-size:11px;font-weight:900;letter-spacing:2px;border:1px dashed #000;padding:2px 0;margin-top:2px;">** COPIA - REIMPRESION **</div>` : ''}
 
 <hr class="sep sep-d">
 
@@ -4975,6 +5164,12 @@ function generarEscPos(ticketData) {
     c.push('TICKET DE VENTA' + _LF);
     c.push('N\xB0 ' + numT + _LF);
     c.push(ESCPOS.DOUBLE_SIZE_OFF, ESCPOS.BOLD_OFF);
+    // Copia de contingencia: se rotula para que no se confunda con una venta nueva.
+    if (ticketData.reimpresion) {
+        c.push(ESCPOS.BOLD_ON);
+        c.push('** COPIA - REIMPRESION **' + _LF);
+        c.push(ESCPOS.BOLD_OFF);
+    }
     c.push(sep('-'));
 
     // ── Datos del ticket — infoRow garantiza que el valor no se corte ──

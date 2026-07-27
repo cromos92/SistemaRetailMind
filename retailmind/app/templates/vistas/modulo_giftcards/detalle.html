@@ -1,5 +1,6 @@
 {% load static %}
 {% load math_filters %}
+{% load humanize %}
 
 {% include '../../layout/header.html' %}
 {% include '../../layout/menu.html' %}
@@ -18,6 +19,9 @@
     .module-header-info h5 { margin:0; font-size:18px; font-weight:600; color:white; }
     .gc-codigo { font-family: monospace; font-weight:700; letter-spacing:2px; }
     .saldo-grande { font-size:40px; font-weight:800; color:#0ab39c; }
+    .flujo-box { background:#f8f9fa; border:1px solid rgba(64,81,137,.1); border-radius:12px; padding:12px 16px; }
+    .flujo-box .fl-item { font-size:12px; color:#6c757d; }
+    .flujo-box .fl-val { font-size:16px; font-weight:700; color:#405189; }
 </style>
 
 <div class="page-content">
@@ -26,23 +30,58 @@
             <div class="module-header">
                 <div class="module-header-left">
                     <div class="module-header-icon"><i class="ri-gift-line"></i></div>
-                    <div class="module-header-info"><h5 class="gc-codigo">{{ giftcard.codigo }}</h5></div>
+                    <div class="module-header-info">
+                        <h5 class="gc-codigo">{{ giftcard.codigo }}</h5>
+                        <div class="small" style="opacity:.9;">
+                            {{ giftcard.get_tipo_tarjeta_display }}
+                            {% if giftcard.codigo_fisico %} · impreso {{ giftcard.codigo_fisico }}{% endif %}
+                        </div>
+                    </div>
                 </div>
                 <div class="module-header-actions">
+                    <a href="{% url 'trazabilidad_giftcards' %}?q={{ giftcard.codigo }}" class="btn btn-light">
+                        <i class="ri-route-line"></i> Trazabilidad
+                    </a>
                     <a href="{% url 'modulo_giftcards' %}" class="btn btn-light"><i class="ri-arrow-left-line"></i> Volver</a>
                 </div>
             </div>
 
             <div class="card-body">
+                {% if estado_efectivo == 'VENCIDA' and giftcard.saldo_actual > 0 %}
+                <div class="alert alert-danger py-2" style="border-radius:12px;">
+                    <i class="ri-alarm-warning-line"></i>
+                    <strong>Vencida el {{ giftcard.fecha_vencimiento }}</strong> con
+                    ${{ giftcard.saldo_actual|floatformat:0|intcomma }} de saldo: el cliente ya no la puede canjear.
+                    {% if giftcard.estado != 'VENCIDA' %}
+                    En la base todavía figura como <em>{{ giftcard.get_estado_display }}</em>
+                    (el estado se actualiza cuando corre <code>expirar_giftcards</code>).
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% if descuadrada %}
+                <div class="alert alert-danger py-2" style="border-radius:12px;">
+                    <i class="ri-error-warning-line"></i>
+                    <strong>Descuadre:</strong> el saldo guardado (${{ giftcard.saldo_actual|floatformat:0|intcomma }})
+                    no coincide con la suma del ledger (${{ saldo_ledger|floatformat:0|intcomma }}). Revisar antes de operar.
+                </div>
+                {% endif %}
+
                 <div class="row mb-4">
                     <div class="col-md-4 text-center border-end">
                         <p class="text-muted mb-1">Saldo actual</p>
-                        <div class="saldo-grande">${{ giftcard.saldo_actual|default:0 }}</div>
-                        <span class="badge bg-secondary mt-2">{{ giftcard.get_estado_display }}</span>
+                        <div class="saldo-grande">${{ giftcard.saldo_actual|default:0|floatformat:0|intcomma }}</div>
+                        <span class="badge {% if estado_efectivo == 'ACTIVA' %}bg-success{% elif estado_efectivo == 'VENCIDA' %}bg-warning{% elif estado_efectivo == 'ANULADA' %}bg-danger{% elif estado_efectivo == 'BLOQUEADA' %}bg-dark{% else %}bg-secondary{% endif %} mt-2">
+                            {{ estado_efectivo_display }}
+                        </span>
+                        {% if dias_vencimiento is not None %}
+                        <div class="small text-muted mt-2">
+                            {% if dias_vencimiento < 0 %}Venció hace {{ dias_vencimiento|mul:-1|floatformat:0 }} día(s){% else %}Quedan {{ dias_vencimiento }} día(s){% endif %}
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="col-md-8">
                         <div class="row">
-                            <div class="col-6 mb-2"><small class="text-muted">Monto inicial</small><div class="fw-bold">${{ giftcard.saldo_inicial }}</div></div>
+                            <div class="col-6 mb-2"><small class="text-muted">Monto inicial</small><div class="fw-bold">${{ giftcard.saldo_inicial|floatformat:0|intcomma }}</div></div>
                             <div class="col-6 mb-2"><small class="text-muted">Tipo</small><div class="fw-bold">{{ giftcard.get_tipo_tarjeta_display }}</div></div>
                             <div class="col-6 mb-2"><small class="text-muted">Motivo</small><div class="fw-bold">{{ giftcard.get_motivo_display }}</div></div>
                             <div class="col-6 mb-2"><small class="text-muted">Descripción</small><div class="fw-bold">{{ giftcard.descripcion|default:"—" }}</div></div>
@@ -53,11 +92,41 @@
                             <div class="col-6 mb-2"><small class="text-muted">Emisión</small><div>{{ giftcard.fecha_emision|date:"Y-m-d H:i" }}</div></div>
                             <div class="col-6 mb-2"><small class="text-muted">Vencimiento</small><div>{{ giftcard.fecha_vencimiento|default:"Sin vencimiento" }}</div></div>
                             <div class="col-6 mb-2"><small class="text-muted">Sucursal emisión</small><div>{{ giftcard.sucursal_emision|default:"—" }}</div></div>
+                            <div class="col-6 mb-2"><small class="text-muted">Emitida por</small><div>{{ giftcard.created_by|default:"—" }}</div></div>
+                            {% if giftcard.observaciones %}
+                            <div class="col-12 mb-2"><small class="text-muted">Observaciones</small><div>{{ giftcard.observaciones }}</div></div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
 
-                <h6 class="fw-bold mb-3"><i class="ri-history-line"></i> Historial de movimientos</h6>
+                <!-- Resumen económico calculado desde el ledger -->
+                <div class="flujo-box mb-4">
+                    <div class="row text-center">
+                        <div class="col">
+                            <div class="fl-item">Cargado (emisión + recargas)</div>
+                            <div class="fl-val">${{ cargado|floatformat:0|intcomma }}</div>
+                        </div>
+                        <div class="col">
+                            <div class="fl-item">Canjeado en ventas</div>
+                            <div class="fl-val">${{ consumido|floatformat:0|intcomma }}</div>
+                        </div>
+                        <div class="col">
+                            <div class="fl-item">Devuelto (venta anulada)</div>
+                            <div class="fl-val">${{ reversado|floatformat:0|intcomma }}</div>
+                        </div>
+                        <div class="col">
+                            <div class="fl-item">Dado de baja</div>
+                            <div class="fl-val">${{ anulado|floatformat:0|intcomma }}</div>
+                        </div>
+                        <div class="col">
+                            <div class="fl-item">Saldo según ledger</div>
+                            <div class="fl-val {% if descuadrada %}text-danger{% endif %}">${{ saldo_ledger|floatformat:0|intcomma }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <h6 class="fw-bold mb-3"><i class="ri-history-line"></i> Historial de movimientos ({{ movimientos|length }})</h6>
                 <div class="table-responsive">
                     <table class="table table-sm table-hover">
                         <thead class="table-light">
@@ -72,8 +141,8 @@
                             <tr>
                                 <td class="small">{{ m.fecha|date:"Y-m-d H:i" }}</td>
                                 <td><span class="badge bg-light text-dark">{{ m.get_tipo_display }}</span></td>
-                                <td class="text-end fw-bold {% if m.monto < 0 %}text-danger{% else %}text-success{% endif %}">${{ m.monto }}</td>
-                                <td class="text-end">${{ m.saldo_resultante }}</td>
+                                <td class="text-end fw-bold {% if m.monto < 0 %}text-danger{% elif m.monto > 0 %}text-success{% else %}text-muted{% endif %}">${{ m.monto|floatformat:0|intcomma }}</td>
+                                <td class="text-end">${{ m.saldo_resultante|floatformat:0|intcomma }}</td>
                                 <td>{% if m.ticket %}#{{ m.ticket.correlativo }}{% else %}—{% endif %}</td>
                                 <td class="small">{{ m.usuario|default:"—" }}</td>
                                 <td class="small">{{ m.sucursal.nombre|default:"—" }}</td>
@@ -85,6 +154,11 @@
                         </tbody>
                     </table>
                 </div>
+                <p class="small text-muted mb-0">
+                    <i class="ri-information-line"></i>
+                    El ledger es inmutable: cada emisión, recarga, canje, reversa, bloqueo o anulación
+                    agrega una fila con el usuario responsable. Nunca se edita ni se borra.
+                </p>
             </div>
         </div>
     </div>

@@ -176,6 +176,9 @@
         color: #888;
         white-space: nowrap;
     }
+    .articulo-ac-item .ac-stock-ok { color: #0ab39c; font-weight: 600; }
+    .articulo-ac-item .ac-stock-cero { color: #b0b0b0; }
+    .articulo-ac-item .ac-fecha { color: #999; font-weight: 400; margin-left: 2px; }
     .articulo-ac-item .ac-copiar-btn {
         display: none;
         align-items: center;
@@ -2280,58 +2283,66 @@
                     </div>
                 </div>
             </div>
-            <!-- Stock Total -->
+            <!-- Unidades recepcionadas (SOLO la pagina visible) -->
             <div class="col-md-2 col-6">
-                <div class="kpi-card card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 3px solid #299cdb;">
+                <div class="kpi-card card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 3px solid #299cdb;"
+                     data-bs-toggle="tooltip" data-bs-placement="bottom"
+                     title="Unidades recepcionadas de las filas visibles en esta página. NO es el stock de bodega ni el total del filtro.">
                     <div class="card-body d-flex align-items-center gap-2">
                         <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #299cdb 0%, #1e7ab8 100%);">
                             <i class="bi bi-boxes text-white" style="font-size:13px;"></i>
                         </div>
                         <div class="min-w-0">
                             <div class="fw-bold lh-1" id="totalStock" style="color:#299cdb; font-size:1.05rem;">0</div>
-                            <div class="text-muted lh-1" style="font-size:0.68rem;">Stock Total</div>
+                            <div class="text-muted lh-1" style="font-size:0.68rem;">Uds. recepcionadas <span class="badge bg-light text-secondary border" style="font-size:.55rem; padding:1px 4px;">página</span></div>
                         </div>
                     </div>
                 </div>
             </div>
-            <!-- Valor Total -->
+            <!-- Costo recepcionado (SOLO la pagina visible) -->
             <div class="col-md-2 col-6">
-                <div class="kpi-card card" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 3px solid #ffbe0b;">
+                <div class="kpi-card card" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 3px solid #ffbe0b;"
+                     data-bs-toggle="tooltip" data-bs-placement="bottom"
+                     title="Costo de compra x unidades recepcionadas, sumado SOLO sobre las filas visibles en esta página.">
                     <div class="card-body d-flex align-items-center gap-2">
                         <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%);">
                             <i class="bi bi-currency-dollar text-white" style="font-size:13px;"></i>
                         </div>
                         <div class="min-w-0">
                             <div class="fw-bold lh-1 text-truncate" id="valorTotal" style="color:#f0a500; font-size:0.9rem;">$0</div>
-                            <div class="text-muted lh-1" style="font-size:0.68rem;">Valor Total</div>
+                            <div class="text-muted lh-1" style="font-size:0.68rem;">Costo recep. <span class="badge bg-light text-secondary border" style="font-size:.55rem; padding:1px 4px;">página</span></div>
                         </div>
                     </div>
                 </div>
             </div>
-            <!-- Valor FIFO -->
+            <!-- Valor FIFO (sucursal activa, universo completo) -->
             <div class="col-md-2 col-6">
-                <div class="kpi-card card" style="background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%); border-left: 3px solid #e91e63;">
+                <div class="kpi-card card" style="background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%); border-left: 3px solid #e91e63;"
+                     data-bs-toggle="tooltip" data-bs-placement="bottom"
+                     title="Valorización FIFO de los lotes activos de la SUCURSAL ACTIVA (todo el inventario, no solo esta página). La diferencia compara el valor de lotes contra stock x costo del producto.">
                     <div class="card-body d-flex align-items-center gap-2">
                         <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #e91e63 0%, #c2185b 100%);">
                             <i class="bi bi-graph-up text-white" style="font-size:13px;"></i>
                         </div>
                         <div class="min-w-0">
                             <div class="fw-bold lh-1 text-truncate" id="valorFIFO" style="color:#e91e63; font-size:0.9rem;">$0</div>
-                            <div class="text-muted lh-1" style="font-size:0.68rem;">Valor Lotes (FIFO) <span id="diferenciaFIFO"></span></div>
+                            <div class="text-muted lh-1" style="font-size:0.68rem;">Lotes FIFO · sucursal <span id="diferenciaFIFO"></span></div>
                         </div>
                     </div>
                 </div>
             </div>
-            <!-- Total Productos -->
+            <!-- Total de filas del filtro activo (universo, no la pagina) -->
             <div class="col-md-2 col-6">
-                <div class="kpi-card card" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border-left: 3px solid #9c27b0;">
+                <div class="kpi-card card" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border-left: 3px solid #9c27b0;"
+                     data-bs-toggle="tooltip" data-bs-placement="bottom"
+                     title="Total de líneas de compra que cumplen el filtro y la pestaña activa (todas las páginas).">
                     <div class="card-body d-flex align-items-center gap-2">
                         <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);">
                             <i class="bi bi-box-seam text-white" style="font-size:13px;"></i>
                         </div>
                         <div class="min-w-0">
                             <div class="fw-bold lh-1" id="totalProductos" style="color:#9c27b0; font-size:1.05rem;">0</div>
-                            <div class="text-muted lh-1" style="font-size:0.68rem;">Total Productos</div>
+                            <div class="text-muted lh-1" style="font-size:0.68rem;">Total del filtro</div>
                         </div>
                     </div>
                 </div>
@@ -2412,9 +2423,11 @@
                         <div class="row g-3">
                             <div class="col-md-2">
                                 <label class="form-label small">
-                                    <i class="bi bi-box me-1"></i>Artículo
+                                    <i class="bi bi-box me-1"></i>Código de artículo
+                                    <i class="bi bi-info-circle text-muted" data-bs-toggle="tooltip" data-bs-placement="top"
+                                       title="Busca SOLO en el código de la línea de compra (el que va sobre la descripción). No busca dentro de la descripción del modelo."></i>
                                 </label>
-                                <input type="text" class="form-control" id="filtroArticulo" placeholder="Código o descripción (Ej: ZAP-001, ADIDAS...)">
+                                <input type="text" class="form-control" id="filtroArticulo" placeholder="Solo código (Ej: 009283608)">
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label small">
@@ -2507,8 +2520,9 @@
                                 <th class="text-center" style="width:100px;">
                                     <i class="bi bi-currency-dollar me-1"></i>Costo
                                 </th>
-                                <th class="text-center" style="width:140px;">
-                                    <i class="bi bi-boxes me-1"></i>Stock
+                                <th class="text-center" style="width:140px;" data-bs-toggle="tooltip" data-bs-placement="top"
+                                    title="Unidades RECEPCIONADAS de esta línea de compra. No es el stock actual de bodega: para eso usa Edición Productos o el reporte de existencias.">
+                                    <i class="bi bi-boxes me-1"></i>Uds. recep.
                                 </th>
                                 <th class="text-center" style="width:70px;" data-bs-toggle="tooltip" data-bs-placement="top" title="Valor FIFO de lotes recepcionados">
                                     <i class="bi bi-layers me-1"></i>Lotes
@@ -3285,6 +3299,10 @@
                                         <div class="d-flex gap-2 align-items-center flex-wrap">
                                             <button type="button" class="btn btn-outline-primary btn-sm" id="btnAgregarTallaManual">
                                                 <i class="bi bi-plus-circle me-1"></i>Agregar Talla
+                                            </button>
+                                            <button type="button" class="btn btn-outline-success btn-sm d-none" id="btnCompletarDesdeGuia"
+                                                    title="Agrega las tallas de la guía que faltan en la tabla. Solo se crearán las que dejes con stock > 0">
+                                                <i class="bi bi-magic me-1"></i>Completar desde guía
                                             </button>
                                             <div class="d-flex gap-1 align-items-center px-2 py-1" style="background:#eef3ff;border:1px solid #cdd9ff;border-radius:8px;">
                                                 <span class="text-primary fw-semibold" style="font-size:.72rem;white-space:nowrap;"><i class="bi bi-magic me-1"></i>Rango rápido</span>
@@ -4065,7 +4083,12 @@
                                 <i class="bi bi-box-seam text-white fs-3"></i>
                             </div>
                             <h6 class="text-muted fw-semibold">Busca productos para comenzar</h6>
-                            <p class="text-muted small mb-0">Escribe un nombre, SKU, marca o color y presiona Buscar</p>
+                            <p class="text-muted small mb-1">Busca en código, descripción, marca, color, género y SKU.</p>
+                            <p class="text-muted mb-0" style="font-size:.76rem; max-width:520px; margin:0 auto;">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Si escribes solo números, el buscador devuelve tanto los códigos de
+                                artículo que los contienen como los SKU: acota con bodega, categoría o talla.
+                            </p>
                         </div>
                     </div>
                     
@@ -4825,15 +4848,30 @@ function showError(msg) {
                     totalRecords = response.pagination.total_records || 0;
                     currentPage = response.pagination.current_page || 1;
                     actualizarControlesPaginacion();
+                } else {
+                    totalRecords = data.length;
+                    totalPages = 1;
                 }
-                
+
+                // El total del filtro SIEMPRE sale de pagination.total_records
+                // (universo completo). Antes se calculaba sumando las filas de
+                // la página, así que en la pestaña "Creados" se leía 25 cuando
+                // el filtro tenía 856 líneas.
+                $('#totalProductos').text(totalRecords.toLocaleString());
+                $('#resumenTotal').text(totalRecords.toLocaleString());
+                $('#contadorProductos').text(
+                    `${totalRecords.toLocaleString()} líneas · mostrando ${data.length}`);
+
+                // Pendientes / Creados / badges: conteos del universo filtrado.
+                cargarConteoTabs(extraParams);
+
                 // Ocultar estado de carga
                 $('#estadoCarga').hide();
-                
+
                 if (data.length === 0) {
                     $('#mensajeSinDatos').show();
                     $('#tablaCrearProductos').hide();
-                    actualizarIndicadores(0, 0, 0, 0, 0, 0, 0);
+                    actualizarIndicadores(0, 0, 0, 0, 0);
                     return;
                 }
 
@@ -5058,14 +5096,9 @@ function showError(msg) {
                 const promedioPrecio = precios.length > 0 ? precios.reduce((a, b) => a + b, 0) / precios.length : 0;
                 const promedioMargen = promedioCosto > 0 ? ((promedioPrecio - promedioCosto) / promedioCosto * 100) : 0;
                 
-                // Actualizar indicadores
-                actualizarIndicadores(totalPendientes, totalCreados, totalStock, valorTotal, promedioCosto, promedioPrecio, promedioMargen);
-                
-                // Actualizar contador de productos
-                $('#contadorProductos').text(`${data.length} productos`);
-
-                // Actualizar badges de tabs
-                actualizarBadgesTabs(totalPendientes, totalCreados, data.length);
+                // Indicadores de PÁGINA (uds. recepcionadas y costo recepcionado).
+                // Las tarjetas están etiquetadas "página" precisamente por esto.
+                actualizarIndicadores(totalStock, valorTotal, promedioCosto, promedioPrecio, promedioMargen);
 
                 // Actualizar última actualización
                 $('#ultimaActualizacion').text(new Date().toLocaleTimeString());
@@ -5088,33 +5121,24 @@ function showError(msg) {
             });
         }
         
-        // Función para actualizar indicadores
-        function actualizarIndicadores(pendientes, creados, stock, valor, costoProm, precioProm, margenProm) {
-            // Actualizar cards principales
-            $('#totalPendientes').text(pendientes.toLocaleString());
-            $('#totalCreados').text(creados.toLocaleString());
-            $('#totalStock').text(stock.toLocaleString());
-            $('#valorTotal').text('$' + valor.toLocaleString());
-            
-            // Actualizar total de productos (nuevo indicador)
-            const total = pendientes + creados;
-            $('#totalProductos').text(total.toLocaleString());
-            
+        // Indicadores calculados SOLO con las filas de la página visible.
+        // Pendientes / Creados / Total ya NO se calculan aquí: se piden al
+        // backend con los mismos filtros (cargarConteoTabs) y se leen de
+        // pagination.total_records, porque sumar la página daba cifras falsas.
+        function actualizarIndicadores(stock, valor, costoProm, precioProm, margenProm) {
+            $('#totalStock').text((stock || 0).toLocaleString());
+            $('#valorTotal').text('$' + (valor || 0).toLocaleString());
+
             // Actualizar promedios (si existen los elementos)
             if ($('#promedioCosto').length) {
-                $('#promedioCosto').text('$' + costoProm.toLocaleString(undefined, {maximumFractionDigits: 0}));
+                $('#promedioCosto').text('$' + Number(costoProm || 0).toLocaleString(undefined, {maximumFractionDigits: 0}));
             }
             if ($('#promedioPrecio').length) {
-                $('#promedioPrecio').text('$' + precioProm.toLocaleString(undefined, {maximumFractionDigits: 0}));
+                $('#promedioPrecio').text('$' + Number(precioProm || 0).toLocaleString(undefined, {maximumFractionDigits: 0}));
             }
             if ($('#promedioMargen').length) {
-                $('#promedioMargen').text(margenProm.toFixed(1) + '%');
+                $('#promedioMargen').text(Number(margenProm || 0).toFixed(1) + '%');
             }
-            
-            // Actualizar resumen final
-            $('#resumenTotal').text(total.toLocaleString());
-            $('#resumenPendientes').text(pendientes.toLocaleString());
-            $('#resumenCreados').text(creados.toLocaleString());
         }
     
      $(document).on('click', '.abrir-crear-producto', function () {
@@ -5183,10 +5207,11 @@ function showError(msg) {
             $('#filtroEstado').val('').closest('.col-md-2').hide();
         }
 
-        // Cargar datos iniciales
+        // Cargar datos iniciales.
+        // cargarProductosParaCrear ya dispara cargarConteoTabs con los filtros
+        // activos: llamarlo también aquí duplicaba 3 requests en cada arranque.
         const anioActual = new Date().getFullYear();
         cargarProductosParaCrear(anioActual);
-        cargarConteoTabs();
         actualizarMetricasFIFO();
         cargarAlertaBannerPrecios();
         
@@ -8512,36 +8537,39 @@ $(document).ready(function() {
 
 // ========== FUNCIONES DE TABS ==========
 
-function actualizarBadgesTabs(pendientes, creados, total) {
-    // Cuando estamos en un tab filtrado, solo podemos actualizar el badge del tab actual
-    if (tabActivo === 'pendientes') {
-        $('#badgePendientes').text(total);
-    } else if (tabActivo === 'creados') {
-        $('#badgeCreados').text(total);
-    } else {
-        // Tab "todos": podemos calcular ambos
-        $('#badgePendientes').text(pendientes);
-        $('#badgeCreados').text(creados);
-        $('#badgeTodos').text(total);
-    }
-}
-
-function cargarConteoTabs() {
-    // Carga rápida de conteos para todos los tabs sin afectar la tabla
+// Conteos por estado del UNIVERSO filtrado (no de la página).
+// Alimenta los badges de los tabs, las tarjetas Por Despachar / Creados y el
+// resumen inferior. Respeta los filtros activos: antes solo filtraba por año,
+// así que al filtrar por marca o factura los badges seguían mostrando el
+// total del año y las tarjetas sumaban únicamente las 25 filas visibles.
+function cargarConteoTabs(extraParams) {
     const anioActual = new Date().getFullYear();
-    $.get('/app/productos_para_crear/', { anio: anioActual, estado: 'no_creado', page_size: 1 }, function(response) {
+    const base = Object.assign(
+        {},
+        (typeof obtenerFiltrosActivosDOM === 'function' ? obtenerFiltrosActivosDOM() : {}),
+        extraParams || {}
+    );
+    // `estado` lo fija cada llamada; page/page_size no aplican a un conteo.
+    delete base.estado;
+    delete base.page;
+    delete base.page_size;
+    base.anio = base.anio || anioActual;
+    base.page_size = 1;
+
+    const pinta = function(params, ids) {
+        $.get('/app/productos_para_crear/', params, function(response) {
+            const n = (response && response.pagination) ? (response.pagination.total_records || 0) : 0;
+            ids.forEach(function(id) { $(id).text(n.toLocaleString()); });
+        });
+    };
+
+    pinta(Object.assign({}, base, { estado: 'no_creado' }),
+          ['#badgePendientes', '#totalPendientes', '#resumenPendientes']);
+    pinta(Object.assign({}, base, { estado: 'creado' }),
+          ['#badgeCreados', '#totalCreados', '#resumenCreados']);
+    $.get('/app/productos_para_crear/', base, function(response) {
         if (response.pagination) {
-            $('#badgePendientes').text(response.pagination.total_records);
-        }
-    });
-    $.get('/app/productos_para_crear/', { anio: anioActual, estado: 'creado', page_size: 1 }, function(response) {
-        if (response.pagination) {
-            $('#badgeCreados').text(response.pagination.total_records);
-        }
-    });
-    $.get('/app/productos_para_crear/', { anio: anioActual, page_size: 1 }, function(response) {
-        if (response.pagination) {
-            $('#badgeTodos').text(response.pagination.total_records);
+            $('#badgeTodos').text((response.pagination.total_records || 0).toLocaleString());
         }
     });
 }
@@ -8615,8 +8643,8 @@ function limpiarFiltros() {
     $('#filtroEstado').val('');
     $('#filtroFactura').val('');
     const anioActual = new Date().getFullYear();
+    // cargarProductosParaCrear ya refresca los conteos (cargarConteoTabs).
     cargarProductosParaCrear(anioActual);
-    cargarConteoTabs();
 }
 
 // Función para exportar datos
@@ -9429,8 +9457,7 @@ $('#formCrearProductoDesdeRecepcion').off('submit').on('submit', function(e) {
                     cerrarModal('modalCrearProductoDesdeRecepcion');
                     // Refrescar la tabla de productos listos para crear
                     const anioActual = new Date().getFullYear();
-                    cargarProductosParaCrear(anioActual);
-                    cargarConteoTabs();
+                    cargarProductosParaCrear(anioActual);  // ya refresca los conteos
                     cargarAlertaBannerPrecios();
                 } else {
                     showErrorAlert('Error', res.error || 'No se pudo crear el producto.');
@@ -9673,6 +9700,9 @@ function abrirModalCrearProductoManual() {
     $('#formCrearProductoManual')[0].reset();
     if (window.NexoManualPicker) NexoManualPicker.reset();  // categoría + especialidades v1.2
     $('#tablaTallasManual tbody').empty();
+    // El flag de "Completar desde guía" es por-producto: no debe arrastrarse
+    // a la siguiente creación (reset() no borra hidden inputs agregados)
+    $('#formCrearProductoManual input[name="omitir_tallas_sin_stock"]').remove();
     
     // ✅ Limpiar campo hidden del DTE
     $('#hiddenDteManual').val('');
@@ -10678,6 +10708,9 @@ $('#selectGuiaTallaManual').on('change', function() {
     // Toggle visual del modo "Sin guía" (talla única 00) en manual
     aplicarModoSinGuiaManual(guiaId === 'SIN_GUIA');
 
+    // "Completar desde guía" solo tiene sentido con una guía real elegida
+    $('#btnCompletarDesdeGuia').toggleClass('d-none', !guiaId || guiaId === 'SIN_GUIA');
+
     if (!guiaId || guiaId === 'SIN_GUIA') {
         // Limpiar info de equivalencias
         $('#tablaTallasManual tbody tr').each(function() {
@@ -10763,6 +10796,116 @@ $('#selectGuiaTallaManual').on('change', function() {
         } else {
             // Producto EXISTENTE: sus tallas reales no se pisan, solo equivalencias
             actualizarEquivalenciasTallasManual(res.tallas, tipoTalla);
+        }
+    });
+});
+
+// ========== COMPLETAR TALLAS DESDE LA GUÍA ==========
+// Caso típico: el producto ya existe con parte de la curva (1 y 2) y llega
+// una talla intermedia (1.5). En vez de tipearla con "Agregar Talla", este
+// botón agrega de una vez TODAS las tallas de la guía que falten (stock 0);
+// el usuario pone stock solo a lo que llegó y al crear se omiten las filas
+// de guía que queden en 0 (filtro en el submit + flag omitir_tallas_sin_stock
+// en el backend).
+
+// Valor numérico de una talla ('7,5' → 7.5) o null si no es numérica
+function claveNumTalla(v) {
+    const n = parseFloat(String(v ?? '').replace(',', '.'));
+    return isNaN(n) ? null : n;
+}
+
+// Forma canónica para comparar tallas: '7,5' ≡ '7.5' ≡ '07.5'; texto en mayúscula
+function canonTalla(v) {
+    const s = String(v || '').trim().toUpperCase();
+    const n = claveNumTalla(s);
+    return n !== null ? String(n) : s;
+}
+
+// Reordena las filas de la tabla por talla (numéricas primero) y reasigna el
+// tabindex de los stocks para que Tab siga el orden visual
+function reordenarTablaTallasManual() {
+    const $tbody = $('#tablaTallasManual tbody');
+    const filas = $tbody.children('tr').get();
+    filas.sort(function(a, b) {
+        const va = $(a).find('input[name="talla[]"]').val();
+        const vb = $(b).find('input[name="talla[]"]').val();
+        const na = claveNumTalla(va), nb = claveNumTalla(vb);
+        if (na !== null && nb !== null) return na - nb;
+        if (na !== null) return -1;
+        if (nb !== null) return 1;
+        return String(va || '').localeCompare(String(vb || ''));
+    });
+    $tbody.append(filas);
+    $tbody.children('tr').each(function(i) {
+        $(this).find('.stock-input').attr('tabindex', 100 + i);
+    });
+}
+
+$('#btnCompletarDesdeGuia').on('click', function() {
+    const guiaId = $('#selectGuiaTallaManual').val();
+    if (!guiaId || guiaId === 'SIN_GUIA') return;
+    const tipoTalla = $('#modalCrearProductoManual select[name="tipo_talla"]').val() || 'CL';
+    const tipoKey = tipoTalla.toLowerCase();
+
+    $.get(`/app/guia_talla_detalle/${guiaId}/`, function(res) {
+        if (!res || !res.tallas || !res.tallas.length) return;
+
+        // Tallas ya presentes (existentes del producto o tipeadas)
+        const enTabla = new Set();
+        $('#tablaTallasManual tbody tr').each(function() {
+            const v = $(this).find('input[name="talla[]"]').val();
+            if (String(v || '').trim() !== '') enTabla.add(canonTalla(v));
+        });
+
+        let agregadas = 0;
+        res.tallas.forEach(function(t) {
+            const tallaNorm = (t[tipoKey] || t.cl || t.us || t.eu || t.uk || '').toString().trim();
+            if (!tallaNorm || enTabla.has(canonTalla(tallaNorm))) return;
+            enTabla.add(canonTalla(tallaNorm));
+            const fila = `
+                <tr class="talla-de-guia">
+                    <td><input type="text" name="talla[]" class="form-control form-control-sm" value="${tallaNorm}" style="font-size:.92rem;"></td>
+                    <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center" value="0" min="0" style="font-size:.92rem;font-weight:600;"></td>
+                    <td><input type="text" name="sku[]" class="form-control form-control-sm sku-manual bg-light" readonly placeholder="Se generará..." tabindex="-1" style="font-size:.92rem;"></td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-danger btnEliminarTallaManual" title="Eliminar" tabindex="-1">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </td>
+                </tr>`;
+            $('#tablaTallasManual tbody').append(fila);
+            agregadas++;
+        });
+
+        if (!agregadas) {
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: 'La tabla ya tiene todas las tallas de la guía',
+                    duration: 2500, gravity: 'bottom', position: 'right',
+                    style: { background: '#405189', borderRadius: '8px', fontSize: '.82rem' },
+                }).showToast();
+            }
+            return;
+        }
+
+        reordenarTablaTallasManual();
+
+        // Solo se crearán las tallas de guía que queden con stock > 0
+        if (!$('#formCrearProductoManual input[name="omitir_tallas_sin_stock"]').length) {
+            $('#formCrearProductoManual').append('<input type="hidden" name="omitir_tallas_sin_stock" value="true">');
+        }
+
+        actualizarResumenTallasManual();
+        generarTodosLosSkusManual();
+        actualizarEquivalenciasTallasManual(res.tallas, tipoTalla);
+        $('#tablaTallasManual tbody tr.talla-de-guia .stock-input').first().focus().select();
+
+        if (typeof Toastify !== 'undefined') {
+            Toastify({
+                text: `+ ${agregadas} talla(s) de la guía — pon stock solo a lo que llegó`,
+                duration: 3500, gravity: 'bottom', position: 'right',
+                style: { background: '#0ab39c', borderRadius: '8px', fontSize: '.82rem' },
+            }).showToast();
         }
     });
 });
@@ -11175,10 +11318,6 @@ function _ecSeccionExistente(r) {
     const tallas = [...(r.tallas_existentes || [])].sort((a, b) =>
         (parseFloat(String(a.talla).replace(',', '.')) || 0) - (parseFloat(String(b.talla).replace(',', '.')) || 0));
     const stockTotal = tallas.reduce((s, t) => s + (t.stock || 0), 0);
-    const filas = tallas.map(t =>
-        `<tr><td class="fw-semibold">${t.talla}</td>
-             <td><span class="badge bg-success">${t.sku}</span></td>
-             <td class="text-end">${(t.stock || 0).toLocaleString('es-CL')}</td></tr>`).join('');
 
     const dup = r.hay_duplicados
         ? `<div class="alert alert-danger py-1 px-2 mb-2" style="font-size:.74rem;">
@@ -11204,12 +11343,9 @@ function _ecSeccionExistente(r) {
         <div class="alert alert-success py-1 px-2 mb-2" style="font-size:.76rem;">
             <i class="bi bi-check-circle-fill me-1"></i>Las tallas ya se cargaron abajo en <b>Tallas y Stock</b> con sus SKUs reales — escribe solo las <b>cantidades a sumar</b>. No se crea un producto nuevo.
         </div>
-        <div class="table-responsive" style="max-height:150px;overflow-y:auto;">
-            <table class="table table-sm table-bordered mb-1">
-                <thead class="table-light"><tr><th>Talla</th><th>SKU existente</th><th class="text-end">Stock actual</th></tr></thead>
-                <tbody>${filas}</tbody>
-                <tfoot><tr class="table-light"><td colspan="2" class="text-end fw-semibold">Total actual</td><td class="text-end fw-bold">${stockTotal.toLocaleString('es-CL')}</td></tr></tfoot>
-            </table>
+        <div class="d-flex align-items-center gap-2 flex-wrap mb-1" style="font-size:.78rem;">
+            <span><i class="bi bi-box-seam me-1"></i>Stock actual: <b>${stockTotal.toLocaleString('es-CL')}</b> uds en ${tallas.length} talla(s)</span>
+            <span class="text-muted" style="font-size:.7rem;">— el detalle por talla está abajo, junto a cada campo de cantidad</span>
         </div>
         <div class="d-flex align-items-center gap-2 flex-wrap mt-1">
             <span style="font-size:.78rem;">Precio actual: <b>$${(p.precioventa || 0).toLocaleString('es-CL')}</b> · Costo: $${(p.costo || 0).toLocaleString('es-CL')}</span>
@@ -11491,6 +11627,7 @@ function verificarProductoExistenteManual() {
                                     <input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center fw-bold"
                                            value="${stockPre}" min="0" tabindex="${tabIdx}"
                                            style="max-width: 80px;" placeholder="0">
+                                    <small class="text-muted d-block" style="font-size:.66rem;" title="Stock actual de esta talla — lo que escribas arriba se SUMA">hay ${(t.stock ?? 0).toLocaleString('es-CL')}</small>
                                 </td>
                                 <td>
                                     <span class="badge bg-success px-2 py-1" title="SKU: ${t.sku}">${t.sku}</span>
@@ -11720,6 +11857,17 @@ $(document).on('click', '#btnCopiarDatosProducto', function() {
                     .html(`<i class="bi bi-info-circle me-1"></i><strong>${data.total}</strong> producto(s) encontrados — haz clic en uno para copiar sus datos al formulario.`);
 
                 data.resultados.forEach(function(p) {
+                    // Señales anti-duplicado: fichas exactas repetidas (rojo),
+                    // otras variantes del mismo código (amarillo) y la fecha de
+                    // creación para distinguir la ficha vigente de la vieja
+                    // (caso real: mismo código creado 2 veces con otro color,
+                    // con años de diferencia).
+                    const badgeDup = p.fichas_duplicadas
+                        ? `<span class="badge bg-danger" title="Este código+color tiene ${p.fichas_duplicadas + 1} fichas duplicadas en la bodega — el stock mostrado es el total y se sumará a la primera. Considera fusionarlas.">${p.fichas_duplicadas + 1} fichas</span>`
+                        : '';
+                    const badgeVar = (p.variantes || 1) > 1
+                        ? `<span class="badge bg-warning text-dark" title="Este código existe con ${p.variantes} combinaciones de atributos (colores, etc.). Revisa la fecha de creación y elige la ficha vigente — si es el mismo producto creado 2 veces por error, NO crees otra.">${p.variantes} variantes</span>`
+                        : '';
                     const item = $(`
                         <div class="articulo-ac-item" data-producto='${JSON.stringify(p).replace(/'/g, "&#39;")}'
                              title="Clic para copiar datos de ${p.articulo}">
@@ -11728,9 +11876,13 @@ $(document).on('click', '#btnCopiarDatosProducto', function() {
                                 <span class="badge bg-secondary">${p.marca}</span>
                                 <span class="badge bg-info text-dark">${p.color}</span>
                                 <span class="badge bg-light text-dark border">${p.categoria}</span>
+                                ${badgeDup}${badgeVar}
                             </span>
                             <span class="ac-precio">$${p.precio.toLocaleString('es-CL')}</span>
-                            <span class="ac-stock">${p.stock} uds · ${p.tallas || '-'}</span>
+                            <span class="ac-stock ${p.stock > 0 ? 'ac-stock-ok' : 'ac-stock-cero'}">
+                                ${p.stock > 0 ? `<i class="bi bi-box-seam"></i> ${p.stock} uds` : 'sin stock'}
+                                · ${p.tallas || '-'}${p.creado ? `<span class="ac-fecha" title="Fecha de creación de la ficha">· ${p.creado}</span>` : ''}
+                            </span>
                             <span class="btn btn-sm btn-outline-success ac-copiar-btn">
                                 <i class="bi bi-copy"></i> Copiar
                             </span>
@@ -12851,8 +13003,18 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
 
     console.log('🔍 Valor final DTE hidden:', $('#hiddenDteManual').val());
     
+    // Filas agregadas con "Completar desde guía" que quedaron en 0 NO se
+    // envían: el usuario solo quiere crear lo que llegó. Se deshabilitan (un
+    // input disabled no se serializa) y se re-habilitan apenas se arma el
+    // payload, para no perder la tabla si el envío falla.
+    const $filasGuiaSinStock = $('#tablaTallasManual tbody tr.talla-de-guia').filter(function() {
+        return (parseInt($(this).find('input[name="stock[]"]').val()) || 0) <= 0;
+    });
+    $filasGuiaSinStock.find('input').prop('disabled', true);
+
     // En modo "Sin guía" normalizamos a guia_talla vacío antes de enviar.
     let formDataArr = $('#formCrearProductoManual').serializeArray();
+    $filasGuiaSinStock.find('input').prop('disabled', false);
     if ($('#selectGuiaTallaManual').val() === 'SIN_GUIA') {
         formDataArr = formDataArr.map(f => f.name === 'guia_talla' ? { name: 'guia_talla', value: '' } : f);
     }
@@ -12950,8 +13112,7 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
                 }
                 // Refrescar la tabla de productos
                 const anioActual = new Date().getFullYear();
-                cargarProductosParaCrear(anioActual);
-                cargarConteoTabs();
+                cargarProductosParaCrear(anioActual);  // ya refresca los conteos
                 cargarAlertaBannerPrecios();
             } else if (res.producto_existente) {
                 // Mostrar modal de producto existente
@@ -13238,8 +13399,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
 
                 // Refrescar la tabla de productos
                 const anioActual = new Date().getFullYear();
-                cargarProductosParaCrear(anioActual);
-                cargarConteoTabs();
+                cargarProductosParaCrear(anioActual);  // ya refresca los conteos
             } else {
                 showErrorAlert('Error', res.error || 'No se pudo actualizar el producto.');
                 btn.prop('disabled', false).html('<i class="bi bi-arrow-repeat me-1"></i>Actualizar Producto Existente');
@@ -14546,6 +14706,9 @@ $('#btnConfirmarActualizacion').on('click', function() {
         $.ajax({
             url: '/app/reporte_fifo_general/',
             type: 'GET',
+            // El detalle se acota; los totales que devuelve el endpoint siguen
+            // siendo del universo completo (ver `detalle_truncado`).
+            data: { limite: 500 },
             success: function(response) {
                 if (response.success) {
                     mostrarDashboardFIFO(response);
@@ -14561,14 +14724,25 @@ $('#btnConfirmarActualizacion').on('click', function() {
     
     // Función para mostrar dashboard FIFO
     function mostrarDashboardFIFO(data) {
-        const reporte = data.reporte;
-        const valorTotal = data.valor_total_inventario;
-        
-        // Calcular estadísticas
-        const productosConDiferencia = reporte.filter(p => p.diferencia_valor !== 0);
-        const diferenciaTotal = reporte.reduce((sum, p) => sum + p.diferencia_valor, 0);
-        
+        const reporte = data.reporte || [];
+        const valorTotal = data.valor_total_inventario || 0;
+
+        // Los totales vienen del backend calculados sobre TODO el inventario de
+        // la sucursal. No se recalculan desde `reporte` porque ese detalle
+        // puede venir acotado (limite) y daría cifras cortas.
+        const productosConDiferencia = Number(data.productos_con_diferencia || 0);
+        const diferenciaTotal = Number(data.diferencia_total || 0);
+        const avisoTruncado = data.detalle_truncado
+            ? `<div class="alert alert-info py-2 px-3 mb-3" style="font-size:.85rem;">
+                   <i class="bi bi-info-circle me-1"></i>
+                   Se listan las primeras <strong>${reporte.length.toLocaleString()}</strong> de
+                   <strong>${Number(data.total_productos || 0).toLocaleString()}</strong> tallas con lotes.
+                   Los totales de arriba sí consideran el inventario completo.
+               </div>`
+            : '';
+
         const contentHTML = `
+            ${avisoTruncado}
             <!-- Resumen General -->
             <div class="row mb-4">
                 <div class="col-md-3">
@@ -14590,7 +14764,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
                 <div class="col-md-3">
                     <div class="card border-warning">
                         <div class="card-body text-center">
-                            <h4 class="text-warning">${productosConDiferencia.length}</h4>
+                            <h4 class="text-warning">${productosConDiferencia.toLocaleString()}</h4>
                             <small class="text-muted">Con Diferencias</small>
                         </div>
                     </div>
@@ -14660,18 +14834,22 @@ $('#btnConfirmarActualizacion').on('click', function() {
         `).show();
     }
     
-    // Función para actualizar métricas FIFO en el dashboard principal
+    // Función para actualizar métricas FIFO en el dashboard principal.
+    // Pide `limite=1`: el endpoint calcula los totales sobre el universo
+    // completo igualmente, así que traerse el detalle entero (54 KB / miles de
+    // filas) solo para sumar dos números era gasto puro.
     function actualizarMetricasFIFO() {
         $.ajax({
             url: '/app/reporte_fifo_general/',
             type: 'GET',
+            data: { limite: 1 },
             success: function(response) {
                 if (response.success) {
-                    const valorTotalFIFO = response.valor_total_inventario;
-                    const diferenciaTotal = response.reporte.reduce((sum, p) => sum + p.diferencia_valor, 0);
-                    
+                    const valorTotalFIFO = response.valor_total_inventario || 0;
+                    const diferenciaTotal = Number(response.diferencia_total || 0);
+
                     $('#valorFIFO').text('$' + valorTotalFIFO.toLocaleString());
-                    
+
                     if (diferenciaTotal !== 0) {
                         const clase = diferenciaTotal > 0 ? 'text-success' : 'text-danger';
                         const icono = diferenciaTotal > 0 ? '↗' : '↘';
@@ -15839,6 +16017,12 @@ $('#btnConfirmarActualizacion').on('click', function() {
                 if (response.results) {
                     // Convertir resultados de Producto_Talla a Productos agrupados
                     const productosAgrupados = agruparProductosTallas(response.results);
+                    // El endpoint devuelve como mucho 50 SKU (página 1) y aquí se
+                    // agrupan por producto. Si hay más páginas, el stock y las
+                    // tallas de las filas mostradas están INCOMPLETOS: hay que
+                    // avisarlo, no presentarlos como el total del producto.
+                    window._busqEdicionTruncada = !!(response.pagination && response.pagination.more);
+                    window._busqEdicionSkus = response.results.length;
                     mostrarResultadosProductos(productosAgrupados, filtro);
                     // Actualizar contador en panel de acciones masivas
                     if (sucursalId !== 'todas') {
@@ -16585,9 +16769,8 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     // Refrescar la búsqueda y los totales de pendientes
                     if (typeof buscarProductosParaEditar === 'function') buscarProductosParaEditar();
                     if (typeof cargarProductosParaCrear === 'function') {
-                        cargarProductosParaCrear(new Date().getFullYear());
+                        cargarProductosParaCrear(new Date().getFullYear());  // ya refresca los conteos
                     }
-                    if (typeof cargarConteoTabs === 'function') cargarConteoTabs();
                 },
                 error: function(xhr) {
                     const msg = xhr.responseJSON?.error || 'Error al conectar con el servidor.';
@@ -16619,8 +16802,24 @@ $('#btnConfirmarActualizacion').on('click', function() {
             productosFiltrados = productos.filter(p => p.stock_total > 0 && p.stock_total < 5);
         }
 
+        // Aviso de resultado truncado: el backend entrega como mucho 50 SKU y
+        // esta vista los agrupa por producto, así que con más de una página el
+        // "Stock", las "Tallas" y las "Bodegas" de cada fila son PARCIALES.
+        const avisoTruncado = window._busqEdicionTruncada ? `
+            <div class="alert alert-warning py-2 px-3 mb-2 d-flex align-items-start gap-2" style="font-size:.82rem;">
+                <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+                <div>
+                    <strong>Resultado parcial.</strong>
+                    Hay más coincidencias de las que se muestran: solo se leyeron los primeros
+                    <strong>${window._busqEdicionSkus || 50} SKU</strong>.
+                    Las columnas <em>Stock</em>, <em>Tallas</em> y <em>Bodega</em> de estas filas
+                    pueden estar incompletas. Afina la búsqueda (bodega, categoría, talla o un
+                    término más específico) antes de tomar decisiones con estos números.
+                </div>
+            </div>` : '';
+
         // Contador superior
-        let html = `
+        let html = avisoTruncado + `
             <div class="d-flex align-items-center justify-content-between mb-2">
                 <div class="d-flex align-items-center gap-2">
                     <span class="fw-bold" style="font-size:.88rem;">${productosFiltrados.length} producto${productosFiltrados.length !== 1 ? 's' : ''}</span>

@@ -4,13 +4,15 @@ mismo emisor tributario (RUT). Para el SII, el número de folio debe ser único
 por (emisor, tipo de documento). Dos DTE con el mismo (emisor, tipo, número)
 = folio reusado (problema tributario / de dinero).
 
-Caso conocido: PAO4 reusó 368 folios de boleta electrónica que PAO3 ya había
-emitido bajo el MISMO RUT 78503140-7 (empresa_id=1319). Este comando lo
-cuantifica y encuentra CUALQUIER otro solapamiento re-ejecutable.
+Motivo por el que existe: en esta instalación dos sucursales que comparten RUT
+reemitieron, a escala de cientos de documentos, folios de boleta electrónica que
+la otra ya había consumido. Cada ficha de `Empresa` corre su propio correlativo
+y el SII no ve esas fichas: ve un solo RUT. Este comando cuantifica ese caso y
+encuentra cualquier otro solapamiento, y es re-ejecutable.
 
 Distingue lo peligroso: **cross-sucursal** = el mismo folio aparece en 2+
-sucursales del mismo RUT (la firma del caso PAO); vs mismo-sucursal (suele ser
-dato duplicado / reintento).
+sucursales del mismo RUT (la firma del caso descrito arriba); vs mismo-sucursal
+(suele ser dato duplicado / reintento).
 
 Modo SOLO LECTURA (resumen + Excel). No modifica nada. La re-foliación es una
 decisión tributaria que NO automatiza este comando.

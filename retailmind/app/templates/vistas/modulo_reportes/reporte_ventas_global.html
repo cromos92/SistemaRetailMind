@@ -125,7 +125,10 @@
 </div>
 </div>
 
+{% include '../../layout/footer.html' %}
+
 <script>
+// El JS va DESPUÉS del footer: ahí se cargan jQuery, SweetAlert2 y ApexCharts.
 const fmt = n => Math.abs(n).toLocaleString('es-CL');
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -174,7 +177,12 @@ function renderPeriodo(p) {
         `<i class="ri-calendar-line me-1"></i>Periodo: ${p.inicio} al ${p.fin} — Comparando con: ${p.inicio_anterior} al ${p.fin_anterior}`;
 }
 
-function varBadge(v) {
+// Sin base comparable el backend devuelve 100%: una sucursal que no operó el
+// período anterior aparecía "+100%" y encabezaba el ranking de crecimiento.
+function varBadge(v, anterior) {
+    if (anterior !== undefined && !anterior) {
+        return `<span class="var-badge var-neutral" title="El período anterior no tuvo ventas: no hay base de comparación">sin base</span>`;
+    }
     if (v > 0) return `<span class="var-badge var-up"><i class="ri-arrow-up-s-line"></i>${v}%</span>`;
     if (v < 0) return `<span class="var-badge var-down"><i class="ri-arrow-down-s-line"></i>${v}%</span>`;
     return `<span class="var-badge var-neutral">0%</span>`;
@@ -202,7 +210,7 @@ function renderEmpresas(empresas) {
                             ${e.documentos} docs | ${e.participacion}%
                         </div>
                     </div>
-                    ${varBadge(e.variacion)}
+                    ${varBadge(e.variacion, e.ventas_anterior)}
                     <small class="text-muted" style="font-size:.7rem">Ant: $${fmt(e.ventas_anterior)}</small>
                     <i class="ri-arrow-down-s-line" id="arrow-${i}"></i>
                 </div>
@@ -224,7 +232,7 @@ function renderEmpresas(empresas) {
                                 <td class="text-center">${s.documentos}</td>
                                 <td class="text-end">$${fmt(s.ticket_promedio)}</td>
                                 <td class="text-end text-muted">$${fmt(s.ventas_anterior)}</td>
-                                <td class="text-center">${varBadge(s.variacion)}</td>
+                                <td class="text-center">${varBadge(s.variacion, s.ventas_anterior)}</td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -269,5 +277,3 @@ function renderChart(empresas) {
     new ApexCharts(el, opts).render();
 }
 </script>
-
-{% include '../../layout/footer.html' %}

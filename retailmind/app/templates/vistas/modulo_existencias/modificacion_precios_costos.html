@@ -191,22 +191,61 @@
 <script>
 const CSRF_TOKEN = '{{ csrf_token }}';
 let productosMasivos = [];
+let productosBuscados = [];   // resultados de la última búsqueda (por índice)
+
+/* toastr NO está cargado en este proyecto: los avisos van por SweetAlert2,
+   que sí viene en el footer. */
+function avisar(mensaje, icono, titulo) {
+    if (window.Swal) {
+        Swal.fire({
+            icon: icono || 'info',
+            title: titulo || 'Precios y costos',
+            text: mensaje,
+            confirmButtonColor: '#405189',
+        });
+    } else {
+        console.warn(mensaje);
+    }
+}
+
+async function confirmar(mensaje) {
+    if (!window.Swal) return false;
+    const r = await Swal.fire({
+        icon: 'question',
+        title: '¿Confirmar?',
+        text: mensaje,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, aplicar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#405189',
+    });
+    return r.isConfirmed;
+}
+
+function escapeHtml(valor) {
+    return String(valor ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
 
 async function buscarProductos() {
     const q = document.getElementById('inputBuscar').value.trim();
-    if (q.length < 2) { alert('Ingrese al menos 2 caracteres'); return; }
+    if (q.length < 2) { avisar('Ingrese al menos 2 caracteres para buscar.', 'info'); return; }
     const resp = await fetch(`/app/api/precios-costos/buscar/?q=${encodeURIComponent(q)}`);
     const data = await resp.json();
     const tbody = document.getElementById('tbodyProductos');
-    if (!data.success || !data.productos.length) {
+    productosBuscados = (data.success && data.productos) ? data.productos : [];
+    if (!productosBuscados.length) {
         tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Sin resultados</td></tr>';
         return;
     }
-    tbody.innerHTML = data.productos.map(p => {
+    // Se pasa el ÍNDICE, no el JSON del producto: incrustar JSON.stringify en un
+    // atributo onclick rompía la fila en cuanto la descripción traía comillas.
+    tbody.innerHTML = productosBuscados.map((p, idx) => {
         const margenClass = p.margen_porcentaje >= 50 ? 'text-success' : p.margen_porcentaje >= 30 ? 'text-info' : 'text-danger';
-        return `<tr style="cursor:pointer;" onclick='seleccionarProducto(${JSON.stringify(p)})'>
-            <td><strong>${p.articulo}</strong><br><small class="text-muted">${p.descripcion}</small></td>
-            <td>${p.marca}</td>
+        return `<tr style="cursor:pointer;" onclick="seleccionarProductoPorIndice(${idx})">
+            <td><strong>${escapeHtml(p.articulo)}</strong><br><small class="text-muted">${escapeHtml(p.descripcion)}</small></td>
+            <td>${escapeHtml(p.marca)}</td>
             <td class="text-end">$${Number(p.costo).toLocaleString('es-CL')}</td>
             <td class="text-end">$${Number(p.sobreprecio).toLocaleString('es-CL')}</td>
             <td class="text-end fw-bold">$${Number(p.precio_venta).toLocaleString('es-CL')}</td>
@@ -214,6 +253,11 @@ async function buscarProductos() {
             <td><button class="btn btn-sm btn-primary"><i class="ri-edit-line"></i></button></td>
         </tr>`;
     }).join('');
+}
+
+function seleccionarProductoPorIndice(idx) {
+    const p = productosBuscados[idx];
+    if (p) seleccionarProducto(p);
 }
 
 function seleccionarProducto(p) {
@@ -252,7 +296,7 @@ async function guardarCambios() {
     const id = document.getElementById('editProductoId').value;
     if (!id) return;
     const motivo = document.getElementById('editMotivo').value;
-    if (!motivo) { alert('Ingrese un motivo para el cambio'); return; }
+    if (!motivo) { avisar('Ingrese un motivo para el cambio.', 'warning'); return; }
     const payload = {
         producto_id: parseInt(id),
         costo: parseInt(document.getElementById('editCostoNuevo').value),
@@ -268,17 +312,19 @@ async function guardarCambios() {
     });
     const data = await resp.json();
     if (data.success) {
-        alert(data.mensaje + '\n' + (data.cambios || []).join('\n'));
+        // SweetAlert2 no respeta los saltos de línea en `text`: se unen con separador.
+        const detalle = (data.cambios || []).join(' · ');
+        avisar(detalle ? `${data.mensaje} ${detalle}` : data.mensaje, 'success', 'Cambios aplicados');
         buscarProductos();
     } else {
-        alert('Error: ' + data.error);
+        avisar(data.error || 'No se pudo aplicar el cambio.', 'error', 'Error');
     }
 }
 
 function agregarAMasivo() {
     const id = parseInt(document.getElementById('editProductoId').value);
     if (!id) return;
-    if (productosMasivos.find(p => p.producto_id === id)) { alert('Ya está en la lista masiva'); return; }
+    if (productosMasivos.find(p => p.producto_id === id)) { avisar('Ese producto ya está en la lista masiva.', 'info'); return; }
     productosMasivos.push({
         producto_id: id,
         articulo: document.getElementById('editArticulo').textContent,
@@ -307,8 +353,8 @@ function renderMasivos() {
 async function aplicarCambiosMasivos() {
     if (!productosMasivos.length) return;
     const motivo = document.getElementById('inputMotivoMasivo').value;
-    if (!motivo) { alert('Ingrese un motivo para los cambios masivos'); return; }
-    if (!confirm(`¿Aplicar cambios a ${productosMasivos.length} productos?`)) return;
+    if (!motivo) { avisar('Ingrese un motivo para los cambios masivos.', 'warning'); return; }
+    if (!(await confirmar(`Se aplicarán los cambios a ${productosMasivos.length} producto(s).`))) return;
     const resp = await fetch('/app/api/precios-costos/modificar-masivo/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
@@ -316,12 +362,12 @@ async function aplicarCambiosMasivos() {
     });
     const data = await resp.json();
     if (data.success) {
-        alert(data.mensaje);
+        avisar(data.mensaje, 'success', 'Cambios masivos aplicados');
         productosMasivos = [];
         renderMasivos();
         buscarProductos();
     } else {
-        alert('Error: ' + data.error);
+        avisar(data.error || 'No se pudieron aplicar los cambios.', 'error', 'Error');
     }
 }
 

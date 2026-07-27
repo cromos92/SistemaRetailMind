@@ -448,6 +448,20 @@
                 </div>
             </div>
 
+            <!-- ========== FRESCURA DEL BATCH ========== -->
+            <div id="frescuraBar" style="display:none;border-radius:12px;padding:14px 20px;margin-bottom:20px;font-size:.85rem;">
+                <div style="display:flex;align-items:flex-start;gap:12px;">
+                    <i id="frescuraIcono" class="ri-time-line" style="font-size:1.5rem;flex-shrink:0;line-height:1.2;"></i>
+                    <div style="flex:1;min-width:0;">
+                        <div id="frescuraTitulo" style="font-weight:800;margin-bottom:3px;"></div>
+                        <div id="frescuraTexto" style="line-height:1.5;"></div>
+                        <div id="frescuraComando" style="display:none;margin-top:8px;">
+                            <code style="display:inline-block;background:rgba(0,0,0,.07);padding:5px 12px;border-radius:6px;font-size:.8rem;font-weight:600;"></code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- ========== KPIs ========== -->
             <div class="kpi-grid" id="kpiGrid">
                 <div class="kpi-card kpi-danger">
@@ -1103,19 +1117,69 @@ async function cargarSugerencias() {
         el.innerHTML = '<div class="empty-state"><i class="ri-inbox-line"></i>Sin sugerencias pendientes.<br><small style="opacity:.7">Se generan cuando la demanda predicha supera stock actual + en transito.</small></div>';
         return;
     }
-    let html = `<table class="nexo-table"><thead><tr>
+    // Contraste contra la realidad: cuantas de estas lineas piden comprar algo
+    // que el SKU no ha vendido en todo un año.
+    const sinVentaAnio = d.sugerencias.filter(s => (s.ventas_365d || 0) === 0).length;
+    const yaCubiertas  = d.sugerencias.filter(s => (s.a_pedir_hoy || 0) === 0).length;
+
+    let aviso = '';
+    if (sinVentaAnio > 0 || yaCubiertas > 0) {
+        const partes = [];
+        if (sinVentaAnio > 0) partes.push(`<strong>${sinVentaAnio}</strong> de ${d.sugerencias.length} lineas piden comprar un SKU <strong>sin ninguna venta en 365 dias</strong>`);
+        if (yaCubiertas > 0)  partes.push(`<strong>${yaCubiertas}</strong> ya estan cubiertas con el stock de hoy`);
+        aviso = `<div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:10px;padding:11px 16px;margin-bottom:14px;font-size:.82rem;color:#78350F;">
+            <i class="ri-alert-line me-1"></i>Revisa antes de aprobar: ${partes.join(' y ')}.
+            Las columnas <strong>Ventas 90d / 365d</strong> y <strong>Cobertura</strong> son el dato real de produccion, no la prediccion.
+        </div>`;
+    }
+
+    let html = aviso + `<table class="nexo-table"><thead><tr>
         <th style="width:30px"><input type="checkbox" id="chkAll" onchange="toggleAll(this)"></th>
-        <th>SKU</th><th>Articulo</th><th>Talle</th><th>Marca</th>
-        <th>Stock</th><th>Transito</th><th>A Pedir</th><th>Origen</th>
-        <th>Confianza</th></tr></thead><tbody>`;
+        <th>SKU</th><th>Articulo</th><th>Talle</th><th>Marca</th><th>Sucursal</th>
+        <th title="Stock del dia en que corrio el batch">Stock batch</th>
+        <th title="Stock real de hoy">Stock hoy</th>
+        <th title="Unidades en ordenes de compra ACTIVAS hoy">Transito</th>
+        <th title="Unidades vendidas en los ultimos 90 dias">Ventas 90d</th>
+        <th title="Unidades vendidas en los ultimos 365 dias">Ventas 365d</th>
+        <th title="Dias que dura el stock actual al ritmo de los ultimos 90 dias">Cobertura</th>
+        <th title="Lo que pedia el batch">A pedir</th>
+        <th title="Recalculado contra stock y transito de hoy">A pedir hoy</th>
+        <th>Fundamento</th></tr></thead><tbody>`;
+
     d.sugerencias.forEach(s => {
-        html += `<tr class="sug-row" data-search="${esc((s.sku||'')+' '+(s.articulo||'')+' '+(s.marca||''))}">
+        const v365 = s.ventas_365d || 0;
+        const v90  = s.ventas_90d || 0;
+        const muerto = v365 === 0;
+        const cob = s.cobertura_dias;
+
+        // Cobertura: verde <90d, ambar 90-180d, rojo >180d (sobre-stock).
+        let cobHtml;
+        if (cob === null || cob === undefined) {
+            cobHtml = v90 === 0
+                ? '<span style="color:#DC2626;font-weight:700;" title="Sin ventas en 90 dias: no hay ritmo con el que calcular cobertura">sin rotacion</span>'
+                : '—';
+        } else {
+            const c = cob > 180 ? '#DC2626' : (cob > 90 ? '#D97706' : '#059669');
+            cobHtml = `<span style="color:${c};font-weight:700;">${cob.toLocaleString('es-CL')} d</span>`;
+        }
+
+        const fundamento = `${esc(s.metodo || s.origen || '—')} · ${(s.confianza*100).toFixed(0)}% conf.`;
+        const rowStyle = muerto ? ' style="background:#FEF2F2;"' : '';
+
+        html += `<tr class="sug-row"${rowStyle} data-search="${esc((s.sku||'')+' '+(s.articulo||'')+' '+(s.marca||''))}">
             <td><input type="checkbox" class="chk-sug" value="${s.id}" onclick="event.stopPropagation()"></td>
-            <td><code>${esc(s.sku)}</code></td><td><strong>${esc(s.articulo)}</strong></td><td>${esc(s.talle)}</td><td>${esc(s.marca)}</td>
-            <td>${s.stock_actual}</td><td>${s.en_transito}</td>
-            <td><strong style="color:var(--nexo-primary)">${s.a_pedir}</strong></td>
-            <td><span class="badge-urg badge-MEDIA">${esc(s.origen)}</span></td>
-            <td>${(s.confianza*100).toFixed(0)}%</td></tr>`;
+            <td><code>${esc(s.sku)}</code></td>
+            <td><strong style="cursor:pointer;color:var(--nexo-primary);" onclick="verProducto(${s.producto_id})">${esc(s.articulo)}</strong></td>
+            <td>${esc(s.talle)}</td><td>${esc(s.marca)}</td><td>${esc(s.sucursal)}</td>
+            <td style="color:var(--nexo-gray-500);">${s.stock_actual}</td>
+            <td><strong>${s.stock_hoy}</strong></td>
+            <td>${s.en_transito_hoy}</td>
+            <td>${v90}</td>
+            <td>${muerto ? '<span style="color:#DC2626;font-weight:700;" title="Sin ventas en 365 dias">0</span>' : v365}</td>
+            <td>${cobHtml}</td>
+            <td style="color:var(--nexo-gray-500);">${s.a_pedir}</td>
+            <td><strong style="color:${s.a_pedir_hoy > 0 ? 'var(--nexo-primary)' : 'var(--nexo-gray-400)'}">${s.a_pedir_hoy}</strong></td>
+            <td style="font-size:.75rem;color:var(--nexo-gray-500);">${fundamento}</td></tr>`;
     });
     el.innerHTML = html + '</tbody></table>';
     filtrarSugerencias();
@@ -1170,11 +1234,90 @@ async function cargarClasificacion() {
 async function cargarTodo() {
     try { await Promise.all([cargarResumen(), cargarUrgente(), cargarSugerencias(), cargarClasificacion()]); }
     catch(e) { console.error('Error cargando datos:', e); }
-    document.getElementById('lastUpdate').innerHTML = '<i class="ri-check-line me-1"></i>Datos cargados ' + new Date().toLocaleTimeString();
+}
+
+// ── FRESCURA DEL BATCH ────────────────────────────────────────
+// La pantalla no calcula nada: muestra el resultado del ultimo
+// `calcular_predicciones`. Si ese batch es viejo, TODO lo de abajo es viejo.
+let META_PREDICCION = null;
+
+function fmtFecha(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d)) return iso.substring(0, 10);
+    return d.toLocaleDateString('es-CL', { day:'2-digit', month:'short', year:'numeric' })
+         + ' ' + d.toLocaleTimeString('es-CL', { hour:'2-digit', minute:'2-digit' });
+}
+
+function renderFrescura(meta) {
+    if (!meta) return;
+    META_PREDICCION = meta;
+
+    const bar   = document.getElementById('frescuraBar');
+    const icono = document.getElementById('frescuraIcono');
+    const tit   = document.getElementById('frescuraTitulo');
+    const txt   = document.getElementById('frescuraTexto');
+    const cmdWrap = document.getElementById('frescuraComando');
+
+    const dias = meta.dias_desde_calculo;
+    const temp = meta.temporada_predicha
+        ? `<strong>${esc(meta.temporada_predicha)} ${esc(String(meta.anio_predicho || ''))}</strong>`
+        : 'sin temporada registrada';
+
+    let bg, borde, color, titulo, cuerpo, ic, mostrarCmd = true;
+
+    if (meta.estado === 'sin_datos') {
+        bg='#F5F5F7'; borde='#D1D1D9'; color='#4A4A5A'; ic='ri-database-2-line';
+        titulo = 'No hay ninguna predicción calculada';
+        cuerpo = 'Las tablas del motor predictivo estan vacias. Nada de lo que se muestra abajo es una recomendacion de compra.';
+    } else if (meta.estado === 'ok') {
+        bg='#F0FDF4'; borde='#86EFAC'; color='#14532D'; ic='ri-checkbox-circle-line'; mostrarCmd=false;
+        titulo = `Prediccion al dia — calculada el ${fmtFecha(meta.ultimo_calculo)}`;
+        cuerpo = `Horizonte predicho: temporada ${temp}.`;
+    } else if (meta.estado === 'atrasado') {
+        bg='#FFFBEB'; borde='#FCD34D'; color='#78350F'; ic='ri-time-line';
+        titulo = `Prediccion con ${dias} dias de atraso — calculada el ${fmtFecha(meta.ultimo_calculo)}`;
+        cuerpo = `Stock, ventas y transito cambiaron desde entonces. Horizonte predicho: temporada ${temp}. Vuelve a correr el batch antes de emitir ordenes de compra.`;
+    } else {
+        bg='#FEF2F2'; borde='#FCA5A5'; color='#7F1D1D'; ic='ri-error-warning-line';
+        const meses = Math.floor(dias / 30);
+        titulo = `DATOS CADUCOS — la prediccion se calculo hace ${dias} dias (${fmtFecha(meta.ultimo_calculo)})`;
+        cuerpo = `Todo lo que ves abajo (alertas, sugerencias, plan de compra, clasificacion ABC) es la foto de hace `
+               + `${meses >= 1 ? meses + ' mes(es)' : dias + ' dias'}, no la situacion actual. `
+               + `El horizonte predicho es la temporada ${temp}. `
+               + `<strong>No emitas ordenes de compra con estos numeros sin volver a correr el batch.</strong>`;
+    }
+
+    if (meta.pendientes_reevaluacion > 0) {
+        cuerpo += `<br><span style="opacity:.85">Hay <strong>${meta.pendientes_reevaluacion.toLocaleString()}</strong> productos marcados para reevaluar que nadie ha procesado.</span>`;
+    }
+
+    bar.style.background = bg;
+    bar.style.border = '1px solid ' + borde;
+    bar.style.color = color;
+    icono.className = ic;
+    tit.textContent = titulo;
+    txt.innerHTML = cuerpo;
+
+    if (mostrarCmd && meta.comando) {
+        cmdWrap.style.display = 'block';
+        cmdWrap.querySelector('code').textContent = meta.comando;
+    } else {
+        cmdWrap.style.display = 'none';
+    }
+    bar.style.display = 'block';
+
+    const lu = document.getElementById('lastUpdate');
+    if (lu) {
+        lu.innerHTML = '<i class="ri-time-line me-1"></i>Prediccion calculada: '
+            + esc(fmtFecha(meta.ultimo_calculo))
+            + (dias !== null && dias > 0 ? ` (hace ${dias} d)` : '');
+    }
 }
 
 async function cargarResumen() {
     const d = await fetchJSON('/app/api/prediccion/resumen/');
+    renderFrescura(d.meta);
     document.getElementById('kpiCriticas').textContent   = (d.alertas.total_criticas||0).toLocaleString();
     document.getElementById('kpiVelocidad').textContent  = (d.alertas.velocidad_total||0).toLocaleString();
     document.getElementById('kpiQuiebre').textContent    = (d.alertas.quiebre_total||0).toLocaleString();
@@ -1623,19 +1766,41 @@ async function verProducto(id) {
 }
 
 // ── RECALCULAR ────────────────────────────────────────────────
-async function recalcular() {
-    const btn = document.getElementById('btnRecalcular');
-    btn.classList.add('loading');
-    btn.innerHTML = '<i class="ri-loader-4-line"></i> Calculando...';
-    try {
-        await fetchJSON('/app/api/prediccion/recalcular/', { method:'POST' });
-        toast('Pipeline completado. Recarga para ver nuevos datos.', 'success');
-        cargarTodo();
-    } catch (e) {
-        toast('Error al recalcular: ' + e.message, 'error');
-    } finally {
-        btn.classList.remove('loading');
-        btn.innerHTML = '<i class="ri-refresh-line"></i> Recalcular';
+// El recalculo NO corre desde el navegador: son cientos de miles de queries y
+// cada etapa borra su tabla antes de repoblarla, asi que un timeout a mitad de
+// camino deja el motor sin datos. El boton ahora explica como correr el batch.
+function recalcular() {
+    const cmd = (META_PREDICCION && META_PREDICCION.comando) || 'python manage.py calcular_predicciones';
+    const body = document.getElementById('modalConfigBody');
+    document.getElementById('modalConfig').classList.add('show');
+    body.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+            <h5 style="margin:0;font-weight:800;color:var(--nexo-gray-900);">Recalcular predicciones</h5>
+            <button onclick="document.getElementById('modalConfig').classList.remove('show')" style="border:none;background:var(--nexo-gray-100);width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:1.2rem;display:flex;align-items:center;justify-content:center;">&times;</button>
+        </div>
+        <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:10px;padding:14px 16px;font-size:.85rem;color:#78350F;line-height:1.55;">
+            El pipeline recorre unos <strong>15.000 productos</strong> y <strong>49.000 predicciones</strong> consultando la base fila por fila.
+            Tarda decenas de minutos y no cabe en un request web: el worker muere antes de terminar y,
+            como cada etapa <strong>borra su tabla antes de repoblarla</strong>, un corte a mitad de camino
+            deja el motor predictivo vacio. Por eso se ejecuta como tarea batch.
+        </div>
+        <p style="margin:18px 0 6px;font-size:.85rem;font-weight:700;color:var(--nexo-gray-700);">Comando a ejecutar en el servidor:</p>
+        <code id="cmdRecalculo" style="display:block;background:var(--nexo-gray-900);color:#7DD3FC;padding:12px 16px;border-radius:8px;font-size:.85rem;">${esc(cmd)}</code>
+        <div style="margin-top:14px;text-align:right;">
+            <button class="nexo-btn nexo-btn-accent" onclick="copiarComandoRecalculo()"><i class="ri-file-copy-line"></i> Copiar comando</button>
+        </div>`;
+}
+
+function copiarComandoRecalculo() {
+    const cmd = document.getElementById('cmdRecalculo');
+    if (!cmd) return;
+    const texto = cmd.textContent;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(texto)
+            .then(() => toast('Comando copiado', 'success'))
+            .catch(() => toast('No se pudo copiar: ' + texto, 'warning'));
+    } else {
+        toast('Copia manual: ' + texto, 'info');
     }
 }
 

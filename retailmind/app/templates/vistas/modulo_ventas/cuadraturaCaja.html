@@ -908,6 +908,9 @@
                                                            oninput="validarMontoExpress(this)">
                                                 </div>
                                                 <small class="text-muted" style="font-size:.75rem;">Ingrese el total de efectivo contado en caja</small>
+                                                <div id="avisoConteoCalcado" class="alert alert-warning py-1 px-2 mt-2 mb-0" style="display:none;font-size:.75rem;">
+                                                    <i class="ri-alert-line me-1"></i>Coincide <strong>exactamente</strong> con lo que esperaba el sistema. Confirme que es un conteo real de la caja.
+                                                </div>
                                             </div>
                                             <div class="col-md-6">
                                                 <div class="resultado-arqueo text-center">
@@ -1383,6 +1386,19 @@
                                     <small class="text-white d-block" style="font-size:.68rem;text-transform:uppercase;opacity:.8;">VENTA TOTAL</small>
                                     <div class="h3 mb-0 text-white fw-bold font-monospace" id="ventatotal">$0</div>
                                     <small class="text-white d-block" style="font-size:.65rem;opacity:.7;">Tarjetas + Efectivo/Otros + Internet</small>
+                                </div>
+
+                                <!-- Control de consistencia: el VENTA TOTAL de arriba se arma sumando
+                                     MEDIOS DE PAGO; el que se guarda en el arqueo se arma sumando
+                                     DOCUMENTOS (tickets + boletas + facturas - NC). Si un ticket queda
+                                     PAGADO sin detalle de pago, el documento suma y ningún medio lo
+                                     recibe: esa plata desaparecía en silencio. Aquí se hace visible. -->
+                                <div id="alertaDescuadreMedios" class="alert alert-warning py-2 px-2 mb-0" style="display:none;font-size:.72rem;">
+                                    <div class="fw-bold mb-1"><i class="ri-error-warning-line me-1"></i>Venta sin medio de pago asignado</div>
+                                    <div class="d-flex justify-content-between"><span>Total por documentos</span><span class="font-monospace" id="vt_documentos">$0</span></div>
+                                    <div class="d-flex justify-content-between"><span>Total por medios de pago</span><span class="font-monospace" id="vt_medios">$0</span></div>
+                                    <div class="d-flex justify-content-between fw-bold border-top mt-1 pt-1"><span>Sin asignar</span><span class="font-monospace" id="vt_gap">$0</span></div>
+                                    <div class="text-muted mt-1" style="font-size:.68rem;">Revise en "Ver transacciones del día" los tickets pagados sin forma de pago registrada.</div>
                                 </div>
 
                                 <!-- IDs legacy ocultos para compatibilidad JS existente -->
@@ -1943,6 +1959,15 @@
 let arqueoActual = null;
 let paginaActual = 1;
 let pasoArqueoActual = 1;
+// Efectivo teórico del día como NÚMERO. Antes se releía desde el DOM
+// (`$('#efectivoTeorico').text()`), lo que rompía dos casos reales:
+//   1) conteo ciego (cajero/vendedor): el DOM dice '***' → parseInt daba 0
+//      y el wizard mostraba "Sobrante = todo lo contado" y exigía
+//      observaciones obligatorias por una diferencia inexistente.
+//   2) teórico negativo (NC en efectivo > ventas del día): el replace de
+//      no-dígitos se comía el signo y lo volvía positivo.
+let efectivoTeoricoNum = 0;
+let modoCiegoActivo = false;
 const esAdministrador = {{ es_administrador|yesno:"true,false" }};
 const esSupervisor    = {{ es_supervisor|yesno:"true,false" }};
 const esCajero        = {{ es_cajero|yesno:"true,false" }};
@@ -2602,14 +2627,17 @@ function abrirModalArqueo() {
 
     if (arqueoActual.cuadratura) {
         cargarResumenVentas(arqueoActual.cuadratura);
+        efectivoTeoricoNum = Number(arqueoActual.cuadratura.total_efectivo) || 0;
         if (arqueoActual.cuadratura.modo_conteo_ciego) {
             $('#efectivoTeorico').text('***').css('color', 'var(--nexo-gray-400)');
             $('#efectivoTeoricoExpress').text('***').css('color', 'var(--nexo-gray-400)');
             window._modoCiegoCuadratura = true;
+            modoCiegoActivo = true;
         } else {
             $('#efectivoTeorico').text('$' + formatearNumero(arqueoActual.cuadratura.total_efectivo));
             $('#efectivoTeoricoExpress').text('$' + formatearNumero(arqueoActual.cuadratura.total_efectivo));
             window._modoCiegoCuadratura = false;
+            modoCiegoActivo = false;
         }
         $('#debitoTeoricoExpress').text('$' + formatearNumero(arqueoActual.cuadratura.total_tarjeta_debito||0));
         $('#creditoTeoricoExpress').text('$' + formatearNumero(arqueoActual.cuadratura.total_tarjeta_credito||0));
@@ -2627,6 +2655,8 @@ function abrirModalArqueo() {
         }
     } else if (arqueoActual.arqueo) {
         cargarResumenVentasArqueo(arqueoActual.arqueo);
+        efectivoTeoricoNum = Number(arqueoActual.arqueo.totales_teoricos.efectivo) || 0;
+        modoCiegoActivo = false;
         $('#efectivoTeorico').text('$' + formatearNumero(arqueoActual.arqueo.totales_teoricos.efectivo));
         $('#efectivoTeoricoExpress').text('$' + formatearNumero(arqueoActual.arqueo.totales_teoricos.efectivo));
         const tbk = arqueoActual.arqueo.totales_teoricos.transbank || {};
@@ -2755,6 +2785,18 @@ function calcularDiferenciasTransbank() {
 }
 
 function cargarDatosArqueoExistente(arqueo) {
+    // Mantener sincronizado el teórico numérico: esta función también se
+    // invoca fuera de `abrirModalArqueo` (p.ej. tras "Recalcular teóricos"),
+    // y si quedaba el valor viejo la diferencia mostrada era la anterior.
+    if (arqueo && arqueo.totales_teoricos && arqueo.totales_teoricos.efectivo !== undefined) {
+        efectivoTeoricoNum = Number(arqueo.totales_teoricos.efectivo) || 0;
+        // El texto sólo se repinta si el rol no está en conteo ciego, para no
+        // revelar el teórico a un cajero al reabrir un arqueo existente.
+        if (!modoCiegoActivo) {
+            $('#efectivoTeorico').text('$' + formatearNumero(efectivoTeoricoNum)).css('color', '');
+            $('#efectivoTeoricoExpress').text('$' + formatearNumero(efectivoTeoricoNum)).css('color', '');
+        }
+    }
     $('#billetes_20000').val(arqueo.conteo_fisico.billetes['20000']);
     $('#billetes_10000').val(arqueo.conteo_fisico.billetes['10000']);
     $('#billetes_5000').val(arqueo.conteo_fisico.billetes['5000']);
@@ -2949,13 +2991,33 @@ function calcularTotalExpressFisico() {
 
 function actualizarResultadoEfectivo(totalFisico) {
     $('#efectivoFisico').text('$' + formatearNumero(totalFisico));
-    const teo = parseInt($('#efectivoTeorico').text().replace(/[^0-9]/g,''))||0;
+    // Conteo ciego: el teórico está oculto ('***'). No se puede mostrar la
+    // diferencia sin revelarlo, y antes se calculaba contra 0 → el wizard
+    // anunciaba un "Sobrante" igual a TODO lo contado y bloqueaba el cierre
+    // pidiendo observaciones. Ahora se informa que la diferencia la calcula
+    // el servidor al cerrar y se deja la observación disponible (opcional).
+    if (modoCiegoActivo) {
+        $('#diferencia')
+            .removeClass('diferencia-exacta diferencia-positiva diferencia-negativa')
+            .addClass('diferencia-exacta')
+            .text('Se calcula al cerrar');
+        $('#porcentajeDiferencia').text('Conteo ciego activo');
+        $('#observacionesDiferenciaDiv').show();
+        $('#observacionesDiferencia').attr('required', false).removeClass('border-danger');
+        $('#avisoConteoCalcado').hide();
+        return;
+    }
+    const teo = efectivoTeoricoNum;
     const dif = totalFisico - teo;
-    let cls = 'diferencia-exacta', txt = '$0', alertCls = 'alert-exacto resultadoDifExacto';
-    if (dif>0) { cls='diferencia-positiva'; txt='+$'+formatearNumero(dif); alertCls='alert-diferencia resultadoDifPositivo'; }
-    else if (dif<0) { cls='diferencia-negativa'; txt='-$'+formatearNumero(Math.abs(dif)); alertCls='alert-diferencia resultadoDifNegativo'; }
+    let cls = 'diferencia-exacta', txt = '$0';
+    if (dif>0) { cls='diferencia-positiva'; txt='+$'+formatearNumero(dif); }
+    else if (dif<0) { cls='diferencia-negativa'; txt='-$'+formatearNumero(Math.abs(dif)); }
     $('#diferencia').removeClass('diferencia-exacta diferencia-positiva diferencia-negativa').addClass(cls).text(txt);
     if (teo>0) $('#porcentajeDiferencia').text(`(${(Math.abs(dif)/teo*100).toFixed(2)}% del teórico)`); else $('#porcentajeDiferencia').text('');
+    // Aviso pasivo anti-calco: cuadrar al peso exacto contra el teórico es
+    // posible, pero cuando pasa siempre suele significar que se tipeó el
+    // valor que el sistema esperaba en vez de contar la caja.
+    if (dif===0 && teo>0) $('#avisoConteoCalcado').show(); else $('#avisoConteoCalcado').hide();
     if (Math.abs(dif)>500) { $('#observacionesDiferenciaDiv').show(); $('#observacionesDiferencia').attr('required',true).addClass('border-danger'); }
     else if (dif!==0) { $('#observacionesDiferenciaDiv').show(); $('#observacionesDiferencia').attr('required',false).removeClass('border-danger'); }
     else { $('#observacionesDiferenciaDiv').hide(); $('#observacionesDiferencia').attr('required',false).removeClass('border-danger'); }
@@ -2982,20 +3044,35 @@ function guardarConteo() {
 async function cerrarArqueo() {
     if (!arqueoActual) { mostrarError('No hay arqueo activo'); return; }
     const modoExpress = $('#modoExpress').is(':checked');
-    const teo = parseInt($('#efectivoTeorico').text().replace(/[^0-9]/g,''))||0;
+    const teo = efectivoTeoricoNum;
     let fis = 0;
     if (modoExpress) { fis = parseInt($('#montoTotalExpress').val())||0; }
     else { ['billetes_20000','billetes_10000','billetes_5000','billetes_2000','billetes_1000','monedas_500','monedas_100','monedas_50','monedas_10','monedas_5','monedas_1'].reduce((s,k,i,a)=>{ const valors=[20000,10000,5000,2000,1000,500,100,50,10,5,1]; fis+=(parseInt($('#'+k).val())||0)*valors[i]; return s; }, 0); }
     const dif = Math.abs(fis - teo);
+    // Aviso (no bloqueante) si se declara un cierre Transbank sin número de
+    // lote: sin lote el comprobante del POS físico no es rastreable y la
+    // "diferencia Transbank" deja de ser auditable.
+    const tbkFisico = (parseInt($('#cierreDebitoExpress').val())||0) + (parseInt($('#cierreCreditoExpress').val())||0);
+    const sinLote = tbkFisico > 0 && !($('#numeroLoteExpress').val()||'').trim();
+    const avisoLote = sinLote
+        ? '<div class="alert alert-warning py-2 mt-2 mb-0" style="font-size:.85rem;"><i class="ri-alert-line me-1"></i>Cierre Transbank sin <strong>número de lote</strong>. Regístrelo para poder auditar el comprobante del POS.</div>'
+        : '';
+    // La validación de observaciones usa la diferencia REAL (antes se
+    // calculaba contra un teórico leído del DOM, que en conteo ciego valía
+    // 0 y disparaba el bloqueo en todos los arqueos de cajeros).
     if (dif>500 && !$('#observacionesDiferencia').val().trim()) { mostrarError('Debe agregar observaciones para diferencias mayores a $500'); cambiarPasoArqueo(4); $('#observacionesDiferencia').focus(); return; }
     if (dif>500 && $('#observacionesDiferencia').val().trim().length<10) { mostrarError('Las observaciones deben tener mínimo 10 caracteres'); return; }
     const res = await Swal.fire({
-        title: dif===0 ? '¡Arqueo Perfecto!' : 'Arqueo con Diferencias',
-        html: dif===0 ? `<div class="text-center"><span style="font-size:3rem;">🎉</span><p class="mt-2 mb-0">El arqueo cuadra perfectamente.</p></div>`
+        title: modoCiegoActivo ? 'Cerrar Arqueo' : (dif===0 ? 'Arqueo sin diferencias' : 'Arqueo con Diferencias'),
+        html: modoCiegoActivo
+            ? `<div class="text-start"><p class="mb-2">Se cerrará el arqueo con un efectivo contado de <strong>$${formatearNumero(fis)}</strong>.</p>
+               <p class="text-muted mb-0" style="font-size:.85rem;">La diferencia contra el teórico la calcula el sistema al cerrar.</p>${avisoLote}</div>`
+            : (dif===0 ? `<div class="text-center"><p class="mt-2 mb-2">El efectivo contado coincide exactamente con el teórico.</p>
+               <div class="alert alert-info py-2 mb-0 text-start" style="font-size:.85rem;"><i class="ri-information-line me-1"></i>Confirme que el monto sale de un <strong>conteo físico real</strong> y no del valor que mostraba el sistema.</div>${avisoLote}</div>`
             : `<div class="text-start"><div class="alert ${fis>teo?'alert-success':'alert-danger'} mb-2"><strong>${fis>teo?'Sobrante':'Faltante'}:</strong> $${formatearNumero(dif)}</div>
-               <table class="table table-sm mb-0"><tr><td>Teórico:</td><td class="text-end fw-bold">$${formatearNumero(teo)}</td></tr><tr><td>Físico:</td><td class="text-end fw-bold">$${formatearNumero(fis)}</td></tr></table></div>`,
-        icon: dif===0 ? 'success' : 'warning', showCancelButton:true,
-        confirmButtonColor: dif===0 ? '#00D4AA' : '#FFB020', cancelButtonColor:'#8A8A9A',
+               <table class="table table-sm mb-0"><tr><td>Teórico:</td><td class="text-end fw-bold">$${formatearNumero(teo)}</td></tr><tr><td>Físico:</td><td class="text-end fw-bold">$${formatearNumero(fis)}</td></tr></table>${avisoLote}</div>`),
+        icon: modoCiegoActivo ? 'question' : (dif===0 ? 'success' : 'warning'), showCancelButton:true,
+        confirmButtonColor: (!modoCiegoActivo && dif===0) ? '#00D4AA' : '#FFB020', cancelButtonColor:'#8A8A9A',
         confirmButtonText:'<i class="ri-check-double-line me-1"></i>Cerrar Arqueo', cancelButtonText:'Cancelar', reverseButtons:true
     });
     if (!res.isConfirmed) return;
@@ -3268,14 +3345,141 @@ function aplicarModoSoloLectura(soloLectura, estado) {
 
 function imprimirArqueoId(id) { mostrarInfo('Función de impresión en desarrollo para arqueo #'+id); }
 
+// ========== CORRECCIÓN DE ARQUEOS EXPRESS ==========
+// El endpoint /app/api/arqueo/corregir-express/ cambió de contrato: antes
+// corregía en masa TODOS los arqueos descuadrados de la sucursal escribiendo el
+// teórico como si fuera el conteo real (o sea, daba la caja por cuadrada sin
+// que nadie hubiese contado el dinero). Hoy corrige UN arqueo y exige
+// `arqueo_id` + `monto_real`, así que este flujo tiene dos pasos:
+//   1) llamada sonda sin datos -> el backend responde 400 con `candidatos`;
+//   2) el usuario elige el arqueo y escribe el monto realmente contado.
+// La sonda NO escribe nada en la base (el backend retorna antes de tocar datos).
 function corregirArqueosExpress() {
-    if (!confirm('¿Corregir arqueos Express mal guardados? Esta acción no se puede deshacer.')) return;
     mostrarLoading(true);
-    $.ajax({ url:'/app/api/arqueo/corregir-express/', method:'POST', headers:{'X-CSRFToken':getCookie('csrftoken'),'Content-Type':'application/json'}, data:JSON.stringify({}),
-        success:function(r){ mostrarLoading(false); if(r.success){mostrarExito(`Se corrigieron ${r.arqueos_corregidos} arqueos`);cargarArqueos();}else mostrarError('Error: '+r.error); },
-        error:function(xhr){mostrarLoading(false);mostrarError('Error: '+xhr.responseText);}
+    $.ajax({
+        url: '/app/api/arqueo/corregir-express/',
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+        data: JSON.stringify({}),
+        // `complete` en vez de success/error: la sonda responde HTTP 400 a
+        // propósito (falta arqueo_id) y jQuery la manda al handler de error.
+        complete: function(xhr) {
+            mostrarLoading(false);
+            const r = xhr.responseJSON;
+            if (!r) {
+                mostrarError('No se pudo consultar los arqueos Express (HTTP ' + xhr.status + ').');
+                return;
+            }
+            if (xhr.status === 403) {
+                mostrarError(r.error || 'No tiene permisos para usar la corrección Express.');
+                return;
+            }
+            if (!Array.isArray(r.candidatos)) {
+                mostrarError(r.error || 'No se pudo consultar los arqueos Express.');
+                return;
+            }
+            if (r.candidatos.length === 0) {
+                mostrarInfo('No hay arqueos Express pendientes de regularizar en esta sucursal. Todos los arqueos tienen su conteo de efectivo guardado.');
+                return;
+            }
+            elegirArqueoExpressACorregir(r.candidatos);
+        }
     });
 }
+
+// Pide al usuario QUÉ arqueo corregir y CUÁNTO efectivo había realmente en la
+// caja. Nunca se propone el teórico como monto: ese era justamente el bug del
+// contrato anterior.
+function elegirArqueoExpressACorregir(candidatos) {
+    const opciones = candidatos.map(c => {
+        const esperado = (parseInt(c.total_efectivo_teorico || 0)) + (parseInt(c.fondo_fijo || 0));
+        const fechaTxt = new Date(c.fecha + 'T12:00:00').toLocaleDateString('es-CL');
+        return `<option value="${c.id}" data-esperado="${esperado}">${fechaTxt} — ${c.estado} — esperado ${fmCLP(esperado)}</option>`;
+    }).join('');
+
+    Swal.fire({
+        title: 'Regularizar arqueo Express',
+        width: 620,
+        html: `<div class="text-start">
+                <div class="alert alert-warning mb-3" style="font-size:.85rem;">
+                    <i class="ri-alert-line me-2"></i>Estos arqueos quedaron <strong>sin conteo de efectivo guardado</strong>.
+                    Ingrese el dinero <strong>realmente contado</strong> en la caja: el sistema calcula la diferencia contra el teórico.
+                </div>
+                <label class="form-label fw-bold">Arqueo a corregir (${candidatos.length} pendiente(s)):</label>
+                <select id="selArqueoExpress" class="form-select mb-3">${opciones}</select>
+                <label class="form-label fw-bold">Efectivo realmente contado:</label>
+                <input type="number" id="montoRealExpress" class="form-control form-control-lg text-center" min="0" step="1" placeholder="0">
+                <div id="previewDifExpress" class="mt-2 small text-muted"></div>
+               </div>`,
+        showCancelButton: true,
+        confirmButtonText: '<i class="ri-save-line me-1"></i>Guardar conteo',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0066FF',
+        didOpen: () => {
+            const sel = document.getElementById('selArqueoExpress');
+            const inp = document.getElementById('montoRealExpress');
+            const actualizarPreview = () => {
+                const esperado = parseInt(sel.options[sel.selectedIndex].dataset.esperado || 0);
+                const prev = document.getElementById('previewDifExpress');
+                if (inp.value === '' || isNaN(parseInt(inp.value))) {
+                    prev.innerHTML = `Esperado en caja: <strong>${fmCLP(esperado)}</strong>`;
+                    return;
+                }
+                const dif = parseInt(inp.value) - esperado;
+                const etiqueta = dif === 0 ? 'Cuadra exacto' : (dif > 0 ? 'Sobrante' : 'Faltante');
+                const color = dif === 0 ? 'var(--nexo-success)' : 'var(--nexo-error)';
+                prev.innerHTML = `Esperado en caja: <strong>${fmCLP(esperado)}</strong> · `
+                    + `<span style="color:${color};">${etiqueta}: <strong>${fmCLP(Math.abs(dif))}</strong></span>`;
+            };
+            sel.addEventListener('change', actualizarPreview);
+            inp.addEventListener('input', actualizarPreview);
+            actualizarPreview();
+        },
+        preConfirm: () => {
+            const arqueoId = parseInt(document.getElementById('selArqueoExpress').value);
+            const montoTxt = document.getElementById('montoRealExpress').value;
+            if (!arqueoId) { Swal.showValidationMessage('Seleccione un arqueo'); return false; }
+            if (montoTxt === '' || isNaN(parseInt(montoTxt))) {
+                Swal.showValidationMessage('Ingrese el monto contado (0 si la caja estaba vacía)');
+                return false;
+            }
+            const monto = parseInt(montoTxt);
+            if (monto < 0) { Swal.showValidationMessage('El monto no puede ser negativo'); return false; }
+            return { arqueo_id: arqueoId, monto_real: monto };
+        }
+    }).then(res => {
+        if (res.isConfirmed && res.value) {
+            enviarCorreccionArqueoExpress(res.value.arqueo_id, res.value.monto_real);
+        }
+    });
+}
+
+function enviarCorreccionArqueoExpress(arqueoId, montoReal) {
+    mostrarLoading(true);
+    $.ajax({
+        url: '/app/api/arqueo/corregir-express/',
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+        data: JSON.stringify({ arqueo_id: arqueoId, monto_real: montoReal }),
+        complete: function(xhr) {
+            mostrarLoading(false);
+            const r = xhr.responseJSON;
+            if (r && r.success) {
+                mostrarExito(r.message || `Arqueo #${arqueoId} corregido con el monto contado.`);
+                cargarArqueos();
+                verificarEstadoHoy();
+                return;
+            }
+            mostrarError((r && r.error) || ('No se pudo corregir el arqueo (HTTP ' + xhr.status + ').'));
+        }
+    });
+}
+
+// El botón "Corregir Express" llama por onclick inline y el JS puede quedar en
+// un closure: exponer explícitamente evita el ReferenceError.
+window.corregirArqueosExpress = corregirArqueosExpress;
+window.elegirArqueoExpressACorregir = elegirArqueoExpressACorregir;
+window.enviarCorreccionArqueoExpress = enviarCorreccionArqueoExpress;
 
 // ========== RESUMEN DE CAJA ==========
 // Fecha "hoy" en Chile (America/Santiago) en formato YYYY-MM-DD. `toISOString()`
@@ -3303,6 +3507,7 @@ function limpiarCamposCuadratura() {
      'ventatotal','totalefectivo','totaltbk','totalcomercial','totalinternet',
      'sum_tarjetas','sum_efectivo','sum_internet'].forEach(c => $(`#${c}`).text('$0'));
     ['cantBoletaElectronica','cantBoletaPapel','cantFactura','cantFacturaExenta','cantNotasCredito'].forEach(c => $(`#${c}`).text('0'));
+    $('#alertaDescuadreMedios').hide();
 }
 
 function buscarCuadratura() {
@@ -3332,11 +3537,14 @@ function cargarDatosCuadratura(c) {
     // Anti-fraude: ocultar SOLO los teóricos del modal de Arqueo hasta el conteo.
     // En el Resumen de Caja mostramos el efectivo real para evitar el mensaje
     // "Pendiente de conteo", que confundía al operador.
+    efectivoTeoricoNum = Number(c.total_efectivo) || 0;
     if (c.modo_conteo_ciego) {
         $('#efectivoTeorico, #efectivoTeoricoExpress').text('***').css('color', 'var(--nexo-gray-400)');
         window._modoCiegoCuadratura = true;
+        modoCiegoActivo = true;
     } else {
         window._modoCiegoCuadratura = false;
+        modoCiegoActivo = false;
     }
     $('#nota_credito').text(fmCLP(c.total_notas_credito||0));
     $('#nc_efectivo').text(fmCLP(c.total_nc_efectivo||0));
@@ -3387,6 +3595,23 @@ function cargarDatosCuadratura(c) {
     $('#sum_efectivo').text(fmCLP(sumEfectivo));
     $('#sum_internet').text(fmCLP(sumInternet));
     $('#ventatotal').text(fmCLP(sumTotal));
+
+    // Control de consistencia documentos vs medios de pago.
+    // `c.venta_total` = tickets + boletas + facturas + facturas exentas - NC
+    // (es el valor que se congela en `venta_total_teorica` del arqueo).
+    // `sumTotal` = suma de los medios de pago. Cuando difieren hay plata
+    // registrada como venta que no quedó imputada a ningún medio (caso real:
+    // tickets PAGADOS sin filas en TicketDetallePago).
+    const vtDocumentos = _n(c.venta_total);
+    const gapMedios = vtDocumentos - sumTotal;
+    if (Math.abs(gapMedios) >= 1) {
+        $('#vt_documentos').text(fmCLP(vtDocumentos));
+        $('#vt_medios').text(fmCLP(sumTotal));
+        $('#vt_gap').text((gapMedios < 0 ? '-' : '') + fmCLP(Math.abs(gapMedios)));
+        $('#alertaDescuadreMedios').show();
+    } else {
+        $('#alertaDescuadreMedios').hide();
+    }
 
     // Legacy hidden spans (usados por imprimirResumenTermica)
     $('#totalefectivo').text(fmCLP(c.total_efectivo||0));

@@ -791,13 +791,14 @@
     
     /* ===== ESTILOS MEJORADOS PARA VERIFICACIÓN ===== */
     
-    /* Guía rápida de verificación */
-    #guiaVerificacion {
+    /* Guía rápida de verificación (el contenido vive plegado dentro de
+       #guiaVerificacionBody; el contenedor externo es solo el disparador) */
+    #guiaVerificacionBody .alert {
         background: linear-gradient(135deg, var(--nexo-primary-light) 0%, rgba(0, 102, 255, 0.05) 100%);
         border: 1px solid rgba(0, 102, 255, 0.2);
         border-radius: var(--nexo-radius-lg);
     }
-    
+
     #guiaVerificacion .badge {
         font-size: 10px;
         padding: 2px 6px;
@@ -1128,6 +1129,137 @@
         .recepcion-table { font-size: 0.7rem; }
         .recepcion-table th, .recepcion-table td { padding: 0.35rem; }
     }
+
+    /* ============================================== */
+    /* GUÍA DE PROCESO (pasos + ayuda contextual)     */
+    /* ============================================== */
+    .proceso-steps {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+    }
+
+    .proceso-step {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        flex: 1 1 0;
+        min-width: 160px;
+        padding: 7px 10px;
+        border-radius: var(--nexo-radius-md);
+        background: rgba(255, 255, 255, 0.14);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        color: var(--nexo-white);
+        line-height: 1.25;
+    }
+
+    .proceso-step .paso-num {
+        flex: 0 0 auto;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--nexo-white);
+        color: var(--nexo-primary-dark);
+        font-size: 11px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .proceso-step strong {
+        display: block;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--nexo-white);
+    }
+
+    .proceso-step span.paso-detalle {
+        display: block;
+        font-size: 11px;
+        opacity: 0.85;
+    }
+
+    .ayuda-item {
+        border-left: 3px solid var(--nexo-gray-300);
+        padding: 2px 0 2px 10px;
+        font-size: 12.5px;
+        line-height: 1.35;
+    }
+
+    .ayuda-item.ayuda-ok { border-left-color: var(--nexo-accent); }
+    .ayuda-item.ayuda-falta { border-left-color: var(--nexo-warning); }
+    .ayuda-item.ayuda-sobra { border-left-color: var(--nexo-info); }
+    .ayuda-item.ayuda-rechazo { border-left-color: var(--nexo-error); }
+
+    /* Antigüedad de la mercadería en tránsito */
+    .transito-chip {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 1px 8px;
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .transito-ok { background: rgba(0, 212, 170, 0.15); color: #0a7f68; }
+    .transito-warn { background: rgba(255, 176, 32, 0.20); color: #8a5c00; }
+    .transito-alert { background: rgba(255, 77, 77, 0.16); color: #b02a2a; }
+
+    /* Barra de impacto en el modal de verificación */
+    .impacto-bar {
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        background: var(--nexo-gray-100);
+        padding: 8px 10px;
+    }
+
+    .impacto-bar .impacto-valor {
+        font-size: 20px;
+        font-weight: 700;
+        line-height: 1.1;
+    }
+
+    .impacto-bar .impacto-label {
+        font-size: 11px;
+        color: var(--nexo-gray-700);
+        display: block;
+        line-height: 1.2;
+    }
+
+    .impacto-bar .impacto-col + .impacto-col {
+        border-left: 1px solid var(--nexo-gray-300);
+    }
+
+    /* ============================================== */
+    /* AJUSTES 15" (1366x768) — que entre sin scroll  */
+    /* ============================================== */
+    @media (min-width: 1024px) and (max-width: 1440px) {
+        .recepcion-header { padding: 12px 16px; margin-bottom: 14px; }
+        .recepcion-header h4 { font-size: 17px; }
+        .proceso-step { min-width: 132px; padding: 5px 8px; }
+        .proceso-step strong { font-size: 11.5px; }
+        .proceso-step span.paso-detalle { font-size: 10.5px; }
+
+        #indicadoresCompactosRecepcion .fw-bold { font-size: 15px; }
+        #indicadoresCompactosRecepcion small { font-size: 10.5px; }
+
+        /* Tabla de regularizaciones: 9 columnas deben caber sin scroll lateral */
+        #panelRegularizaciones .table th,
+        #panelRegularizaciones .table td {
+            font-size: 11.5px;
+            padding: 6px 5px;
+            vertical-align: middle;
+        }
+
+        #panelRegularizaciones .btn-group-sm > .btn { font-size: 11px; padding: 3px 6px; }
+        #panelRegularizaciones .badge { font-size: 10px; }
+
+        /* Lista del modal: deja aire para la barra de impacto y el footer */
+        #listaProductosRecepcion { max-height: 34vh !important; }
+        .impacto-bar .impacto-valor { font-size: 17px; }
+    }
 </style>
 
 <!-- Loader con estilo del proyecto -->
@@ -1157,19 +1289,103 @@
 <div class="page-content">
     <div class="container-fluid">
         <div class="recepcion-header">
-            <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <div>
                     <h4 class="mb-1 text-white"><i class="bi bi-box-arrow-in-down me-2"></i>Recepción de Documentos Internos</h4>
                     <p class="mb-0 text-white opacity-75">Recibe, revisa y regulariza traspasos internos desde una sola pantalla</p>
                 </div>
-                <div class="text-end">
-                    <small class="opacity-75">
-                        <i class="bi bi-building me-1"></i>Sucursal actual: <strong id="infoSucursalDestino">-</strong>
-                    </small>
-                    <br>
-                    <small class="opacity-75">
-                        <i class="bi bi-person-circle me-1"></i>Usuario: {{ user.username }}
-                    </small>
+                <div class="text-end d-flex align-items-center gap-3">
+                    <div>
+                        <small class="opacity-75">
+                            <i class="bi bi-building me-1"></i>Recepcionas en: <strong id="infoSucursalDestino">-</strong>
+                        </small>
+                        <br>
+                        <small class="opacity-75">
+                            <i class="bi bi-person-circle me-1"></i>Usuario: {{ user.username }}
+                        </small>
+                    </div>
+                    <button type="button" class="btn btn-light btn-sm fw-semibold" id="btnToggleAyudaProceso"
+                            title="Ver qué hace cada paso y cómo afecta el stock">
+                        <i class="bi bi-question-circle me-1"></i>¿Cómo funciona?
+                    </button>
+                </div>
+            </div>
+
+            <!-- Guía de proceso: en qué paso estoy y qué pasa después -->
+            <div class="proceso-steps" id="procesoSteps">
+                <div class="proceso-step">
+                    <span class="paso-num">1</span>
+                    <div>
+                        <strong>Llega la mercadería</strong>
+                        <span class="paso-detalle">El origen ya descontó su stock. El documento queda <em>en tránsito</em>.</span>
+                    </div>
+                </div>
+                <div class="proceso-step">
+                    <span class="paso-num">2</span>
+                    <div>
+                        <strong>Verificas talla a talla</strong>
+                        <span class="paso-detalle">Comparas lo pedido contra lo que realmente llegó.</span>
+                    </div>
+                </div>
+                <div class="proceso-step">
+                    <span class="paso-num">3</span>
+                    <div>
+                        <strong>Confirmas la recepción</strong>
+                        <span class="paso-detalle">Solo lo recibido entra al stock de <strong id="pasoSucursalDestino">tu sucursal</strong>.</span>
+                    </div>
+                </div>
+                <div class="proceso-step">
+                    <span class="paso-num">4</span>
+                    <div>
+                        <strong>Resuelves diferencias</strong>
+                        <span class="paso-detalle">Faltantes, dañados y sobrantes se resuelven en <em>Por resolver</em>.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel plegable "¿Cómo funciona?": qué implica cada decisión -->
+        <div class="collapse mb-3" id="ayudaProcesoPanel">
+            <div class="card" style="border:none;box-shadow:var(--nexo-shadow-md);">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h6 class="mb-0"><i class="bi bi-lightbulb-fill text-warning me-2"></i>Qué pasa con el stock según lo que marques</h6>
+                        <button type="button" class="btn-close btn-sm" id="btnCerrarAyudaProceso" aria-label="Cerrar"></button>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <div class="ayuda-item ayuda-ok">
+                                <strong class="d-block">Recibido (OK)</strong>
+                                Entra al stock de tu sucursal al confirmar. Es lo único que suma inventario.
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="ayuda-item ayuda-falta">
+                                <strong class="d-block">Faltante o dañado</strong>
+                                No entra al stock. En <strong>guías</strong> vuelve automáticamente al origen y la línea se cierra.
+                                En <strong>facturas</strong> queda en <em>Por resolver</em> hasta emitir la Nota de Crédito.
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="ayuda-item ayuda-sobra">
+                                <strong class="d-block">Sobrante</strong>
+                                Llegó más de lo documentado. <strong>No entra al stock</strong>: queda pendiente de decisión
+                                de bodega en <em>Por resolver → Sobrantes</em>.
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="ayuda-item ayuda-rechazo">
+                                <strong class="d-block">Rechazar recepción</strong>
+                                No mueve stock. El documento vuelve al emisor, que decide si lo rehabilita o lo anula.
+                                Úsalo solo si no llegó nada o el despacho no corresponde.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Mientras un documento no se recepciona, la mercadería ya salió del origen y <strong>no está en el stock de nadie</strong>:
+                        revisa periódicamente los pendientes antiguos con el botón <strong>«Todo lo pendiente»</strong>.
+                    </div>
                 </div>
             </div>
         </div>
@@ -1179,9 +1395,11 @@
                 <span id="badgeDevolucionesPendientes" class="d-none"></span>
                 <div class="row g-2" id="indicadoresCompactosRecepcion">
                     <div class="col-6 col-md-2">
-                        <div class="text-center p-2 rounded" style="background:rgba(255,176,32,.12);">
+                        <div class="text-center p-2 rounded" id="kpiCardEnTransito" role="button" tabindex="0"
+                             title="Documentos despachados que aún no se recepcionan. Click para verlos todos, sin filtro de fecha."
+                             style="background:rgba(255,176,32,.12);cursor:pointer;">
                             <div class="fw-bold" id="kpiPendientesCompacto">0</div>
-                            <small class="text-muted">Pendientes</small>
+                            <small class="text-muted">En tránsito</small>
                         </div>
                     </div>
                     <div class="col-6 col-md-2">
@@ -1229,6 +1447,22 @@
             <button type="button" class="btn btn-danger" id="btnBannerVerRechazados">
                 <i class="bi bi-eye me-1"></i>Ver y Decidir
             </button>
+        </div>
+
+        <!-- Mercadería en tránsito: despachada, nunca recepcionada -->
+        <div class="alert alert-warning d-none mb-3 d-flex justify-content-between align-items-center gap-2" id="bannerEnTransito" role="alert">
+            <div>
+                <i class="bi bi-truck me-2"></i>
+                <strong>Mercadería en tránsito sin recepcionar:</strong>
+                <span id="bannerTransitoTexto">-</span>
+                <br>
+                <small>Ya salió del stock del origen y todavía no entra al tuyo. Revisa si llegó físicamente y recepciónala, o rechaza el documento.</small>
+            </div>
+            <div class="d-flex gap-2 flex-shrink-0">
+                <button type="button" class="btn btn-warning btn-sm" id="btnBannerTodoPendiente">
+                    <i class="bi bi-list-check me-1"></i>Ver todo lo pendiente
+                </button>
+            </div>
         </div>
 
         <div class="row">
@@ -1297,12 +1531,18 @@
                                         <i class="bi bi-calendar2-check-fill fs-4"></i>
                                         <div>
                                             <div><strong>Referencia rápida:</strong> Hoy es <span id="textoFechaHoy">-</span></div>
-                                            <small class="text-muted">Usa los accesos rápidos para ajustar el rango de búsqueda.</small>
+                                            <small class="text-muted">El listado está filtrado por el rango de fechas de abajo: los despachos antiguos no aparecen hasta que quites el filtro.</small>
                                         </div>
                                         <div class="acciones-rapidas ms-auto d-flex align-items-center gap-2 flex-wrap">
                                             <button type="button" class="btn btn-link text-primary fw-semibold" id="btnRangoMesActual">Mes actual</button>
                                             <span class="text-muted">|</span>
                                             <button type="button" class="btn btn-link text-primary fw-semibold" id="btnSoloHoy">Solo hoy</button>
+                                            {% if puede_recepcionar_dte or puede_ajustar_emitidos %}
+                                            <button type="button" class="btn btn-warning btn-sm fw-semibold" id="btnTodoPendiente"
+                                                    title="Quita el filtro de fechas y muestra TODOS los documentos pendientes de recepcionar, por antiguos que sean">
+                                                <i class="bi bi-truck me-1"></i>Todo lo pendiente
+                                            </button>
+                                            {% endif %}
                                         </div>
                                     </div>
                                 </div>
@@ -1318,7 +1558,7 @@
                                         <option value="RECHAZADO">Rechazados</option>
                                         <option value="CANCELADO">Cancelados</option>
                                     </select>
-                                    <small class="text-muted">Para "En regularización" usa la vista <strong>Por regularizar</strong>.</small>
+                                    <small class="text-muted">Las diferencias por resolver están en la pestaña <strong>Por resolver</strong>.</small>
                                 </div>
                                 <div class="col-md-2">
                                     <label for="filterTipoDocumento" class="form-label">Tipo doc.</label>
@@ -1342,8 +1582,14 @@
                         <div id="panelRegularizaciones" style="display:none;">
                             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                                 <div>
-                                    <h6 class="mb-1"><i class="bi bi-tools text-warning me-1"></i>Recepciones por regularizar</h6>
-                                    <small class="text-muted">Faltantes, sobrantes, rechazos y productos en regularización.</small>
+                                    <h6 class="mb-1">
+                                        <i class="bi bi-tools text-warning me-1"></i>Recepciones por regularizar
+                                        <button type="button" class="btn btn-link btn-sm p-0 ms-2 text-decoration-none"
+                                                data-bs-toggle="collapse" data-bs-target="#leyendaRegularizar">
+                                            <i class="bi bi-question-circle me-1"></i>¿Qué significa cada estado?
+                                        </button>
+                                    </h6>
+                                    <small class="text-muted">Diferencias detectadas al recepcionar que todavía no se cierran: faltantes, dañados, sobrantes y rechazos.</small>
                                     {% if puede_ver_todos_dte %}
                                     <div class="small text-muted mt-1">
                                         <i class="bi bi-info-circle me-1"></i>
@@ -1379,7 +1625,7 @@
                                         </button>
                                     </div>
                                     <input type="hidden" id="regularizarTabFiltro" value="pendiente">
-                                    <input type="search" id="regularizarBusqueda" class="form-control form-control-sm" placeholder="SKU, producto o DTE" style="width:220px;">
+                                    <input type="search" id="regularizarBusqueda" class="form-control form-control-sm" placeholder="SKU, código de artículo o Nº de DTE" title="Busca por SKU exacto o parcial, código de artículo o número de documento. No busca por descripción." style="width:240px;">
                                     <button type="button" class="btn btn-warning btn-sm" id="btnBuscarRegularizaciones">
                                         <i class="bi bi-search me-1"></i>Buscar
                                     </button>
@@ -1390,6 +1636,55 @@
                                     {% endif %}
                                 </div>
                             </div>
+                            <div class="collapse mb-3" id="leyendaRegularizar">
+                                <div class="card border-0" style="background:var(--nexo-gray-100);">
+                                    <div class="card-body py-3">
+                                        <div class="row g-3">
+                                            <div class="col-md-4">
+                                                <div class="ayuda-item ayuda-falta">
+                                                    <strong class="d-block">Pendientes</strong>
+                                                    Diferencias recién detectadas. Nadie ha hecho nada todavía: hay que decidir
+                                                    (Nota de Crédito, producto de cambio o ajuste interno).
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="ayuda-item ayuda-sobra">
+                                                    <strong class="d-block">En regularización</strong>
+                                                    Ya se pidió o emitió la solución (NC o solicitud al emisor) y está en curso.
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="ayuda-item ayuda-sobra">
+                                                    <strong class="d-block">Sobrantes</strong>
+                                                    Llegó más de lo documentado. <strong>Ese excedente no está en tu stock</strong>
+                                                    hasta que bodega decida si se ingresa o se devuelve.
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="ayuda-item ayuda-ok">
+                                                    <strong class="d-block">Regularizados</strong>
+                                                    Cerrados. Incluye las guías cuyo faltante volvió automáticamente al origen.
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="ayuda-item ayuda-rechazo">
+                                                    <strong class="d-block">Rechazados</strong>
+                                                    El destino no aceptó el documento. El stock sigue descontado en el origen
+                                                    hasta que el emisor rehabilite o anule.
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="ayuda-item">
+                                                    <strong class="d-block">Columnas de la tabla</strong>
+                                                    <em>Esperado</em> es lo que venía en el documento, <em>Recibido</em> lo que entró
+                                                    al stock y <em>Faltante</em> lo que nunca llegó.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="table-responsive">
                                 <table class="table table-hover align-middle">
                                     <thead>
@@ -1397,10 +1692,10 @@
                                             <th>DTE</th>
                                             <th>Origen</th>
                                             <th>Producto</th>
-                                            <th class="text-center">Esperado</th>
-                                            <th class="text-center">Recibido</th>
-                                            <th class="text-center">Faltante</th>
-                                            <th class="text-center">Sobrante</th>
+                                            <th class="text-center" title="Unidades documentadas en el DTE">Esperado</th>
+                                            <th class="text-center" title="Unidades que sí ingresaron al stock del destino">Recibido</th>
+                                            <th class="text-center" title="Unidades que nunca llegaron (no están en el stock de nadie)">Faltante</th>
+                                            <th class="text-center" title="Unidades que llegaron de más y aún no ingresan al stock">Sobrante</th>
                                             <th>Estado</th>
                                             <th class="text-end">Acciones</th>
                                         </tr>
@@ -1480,13 +1775,13 @@
                                 <thead>
                                     <tr>
                                         <th>Documento</th>
-                                        <th>Mi rol</th>
+                                        <th class="text-center" title="Si tu sucursal envió o recibe este documento">Mi rol</th>
                                         <th>Origen &rarr; Destino</th>
-                                        <th>Fecha Emisión</th>
-                                        <th>Items</th>
-                                        <th>Cantidad Total</th>
-                                        <th>Estado</th>
-                                        <th>Acciones</th>
+                                        <th title="Fecha del despacho y cuánto lleva la mercadería en tránsito">Emisión / antigüedad</th>
+                                        <th title="Unidades por talla documentadas en el DTE">Tallas del documento</th>
+                                        <th class="text-center">Unidades</th>
+                                        <th class="text-center">Estado</th>
+                                        <th class="text-center">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody id="recepcionesBody">
@@ -1505,7 +1800,13 @@
 
                         <div class="d-flex justify-content-between align-items-center mt-3" id="paginationContainer" style="display: none;">
                             <button class="btn btn-outline-secondary btn-sm" id="btnPrev"><i class="bi bi-chevron-left"></i> Anterior</button>
-                            <span class="mx-3" id="pageInfo">Página 1 de 1</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="mx-1" id="pageInfo">Página 1 de 1</span>
+                                <button class="btn btn-outline-warning btn-sm" id="btnIrMasAntiguos"
+                                        title="El listado viene del más nuevo al más antiguo: salta a la última página para ver los despachos más viejos sin recepcionar">
+                                    <i class="bi bi-hourglass-bottom me-1"></i>Ver los más antiguos
+                                </button>
+                            </div>
                             <button class="btn btn-outline-secondary btn-sm" id="btnNext">Siguiente <i class="bi bi-chevron-right"></i></button>
                         </div>
                     </div>
@@ -1568,14 +1869,16 @@
                 </div>
 
                 <div class="card mb-3">
-                    <div class="card-header">
+                    <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="mb-0"><i class="bi bi-info-circle me-2 text-primary"></i>Cómo funciona</h6>
+                        <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" id="btnAyudaProcesoLateral">Ver detalle</button>
                     </div>
                     <div class="card-body">
                         <ul class="list-unstyled mb-0">
-                            <li class="mb-2"><i class="bi bi-check-circle-fill me-2" style="color: var(--nexo-accent);"></i>Solo ves documentos internos con destino a tu sucursal.</li>
-                            <li class="mb-2"><i class="bi bi-check-circle-fill me-2" style="color: var(--nexo-accent);"></i>Revisa el detalle antes de confirmar la recepción.</li>
-                            <li><i class="bi bi-check-circle-fill me-2" style="color: var(--nexo-accent);"></i>Al confirmar, el stock se incrementa automáticamente y el movimiento queda completado.</li>
+                            <li class="mb-2"><i class="bi bi-check-circle-fill me-2" style="color: var(--nexo-accent);"></i>Ves los traspasos donde tu sucursal es <strong>origen o destino</strong>: la columna <em>Mi rol</em> te dice cuál eres.</li>
+                            <li class="mb-2"><i class="bi bi-check-circle-fill me-2" style="color: var(--nexo-accent);"></i>Verifica talla a talla antes de confirmar: lo que escribas en <strong>Recibido</strong> es lo que entra al stock.</li>
+                            <li class="mb-2"><i class="bi bi-check-circle-fill me-2" style="color: var(--nexo-accent);"></i>Al confirmar, el stock de <strong id="ayudaSucursalDestino">tu sucursal</strong> sube solo por lo recibido; el movimiento queda completado.</li>
+                            <li><i class="bi bi-exclamation-triangle-fill me-2" style="color: var(--nexo-warning);"></i>Faltantes y sobrantes <strong>no suman stock</strong>: se resuelven en la pestaña <em>Por resolver</em>.</li>
                         </ul>
                     </div>
                 </div>
@@ -1778,12 +2081,12 @@
                     <small class="text-muted">Progreso de verificación</small>
                     <small class="fw-bold text-primary" id="textoProgresoVerif">0 / 0 productos</small>
                 </div>
-                <div class="progress mb-3" style="height:6px;border-radius:3px;">
+                <div class="progress mb-2" style="height:6px;border-radius:3px;">
                     <div id="barraProgresoVerif" class="progress-bar bg-success" role="progressbar" aria-label="Progreso de verificación" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="width:0%;transition:width 0.3s ease;"></div>
                 </div>
 
                 <!-- Banner: ajuste previo del emisor -->
-                <div id="bannerAjustePrevio" class="alert alert-warning d-none mb-3" style="border-left: 4px solid #e69a00;">
+                <div id="bannerAjustePrevio" class="alert alert-warning d-none mb-2 py-2" style="border-left: 4px solid #e69a00;">
                     <div class="d-flex align-items-start">
                         <i class="bi bi-exclamation-triangle-fill fs-4 me-2 text-warning"></i>
                         <div class="flex-grow-1">
@@ -1794,26 +2097,60 @@
                 </div>
 
                 <!-- Info del Documento y Búsqueda -->
-                <div class="row mb-3">
-                    <div class="col-md-6">
+                <div class="row mb-2 g-2">
+                    <div class="col-md-7">
                         <div class="card bg-light">
                             <div class="card-body py-2">
-                                <div class="row">
+                                <div class="row g-1">
                                     <div class="col-6"><small class="text-muted">Tipo:</small> <strong id="detalleTipo">-</strong></div>
                                     <div class="col-6"><small class="text-muted">Emisor:</small> <strong id="detalleEmisor">-</strong></div>
-                                    <div class="col-6"><small class="text-muted">Origen:</small> <strong id="detalleOrigen">-</strong></div>
                                     <div class="col-6"><small class="text-muted">Fecha:</small> <strong id="detalleFechaEmision">-</strong></div>
+                                    <div class="col-6"><small class="text-muted">Antigüedad:</small> <span id="detalleAntiguedad">-</span></div>
+                                    <div class="col-12">
+                                        <small class="text-muted">Flujo:</small>
+                                        <strong id="detalleOrigen">-</strong>
+                                        <i class="bi bi-arrow-right text-muted mx-1"></i>
+                                        <strong class="text-primary" id="detalleDestino">-</strong>
+                                        <small class="text-muted">(el stock entra aquí)</small>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-5">
                         <div class="input-group">
                             <span class="input-group-text"><i class="bi bi-search"></i></span>
                             <input type="text" id="buscarProductoModal" class="form-control" placeholder="Buscar por SKU, descripción, artículo, color, marca...">
                             <button class="btn btn-outline-secondary" type="button" id="btnLimpiarBusqueda">
                                 <i class="bi bi-x"></i>
                             </button>
+                        </div>
+                        <div class="small mt-2" id="detalleNotaTipoDoc"></div>
+                    </div>
+                </div>
+
+                <!-- Impacto de lo marcado: qué entra al stock y qué no -->
+                <div class="impacto-bar mb-2">
+                    <div class="row text-center g-0 align-items-center">
+                        <div class="col impacto-col">
+                            <div class="impacto-valor text-success" id="impactoIngresa">0</div>
+                            <span class="impacto-label">Entra al stock de <strong id="impactoDestino">tu sucursal</strong></span>
+                        </div>
+                        <div class="col impacto-col">
+                            <div class="impacto-valor text-secondary" id="impactoNoIngresa">0</div>
+                            <span class="impacto-label">No llega (faltante/dañado)</span>
+                        </div>
+                        <div class="col impacto-col">
+                            <div class="impacto-valor text-info" id="impactoSobrante">0</div>
+                            <span class="impacto-label">Sobrante — no entra al stock</span>
+                        </div>
+                        <div class="col impacto-col">
+                            <div class="impacto-valor text-dark" id="impactoEsperado">0</div>
+                            <span class="impacto-label">Pedido en el documento</span>
+                        </div>
+                        <div class="col impacto-col">
+                            <div class="impacto-valor" id="impactoLineasProblema">0</div>
+                            <span class="impacto-label">Líneas con diferencia</span>
                         </div>
                     </div>
                 </div>
@@ -1830,19 +2167,19 @@
                     </div>
                 </div>
 
-                <!-- Panel de Guía Rápida -->
-                <div class="alert alert-info mb-3 py-2" id="guiaVerificacion">
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-lightbulb-fill me-2 fs-5"></i>
-                        <div class="flex-grow-1">
-                            <strong>¿Cómo verificar?</strong>
-                            <span class="text-muted ms-2">
-                                <span class="badge bg-success me-1">1</span>Si todo llegó bien → <strong>Marcar todos OK</strong> |
-                                <span class="badge bg-warning text-dark me-1">2</span>Si hay problemas → <strong>Desmarca</strong> productos y ajusta cantidad en <strong>"Recibido"</strong> |
-                                <span class="badge bg-primary me-1">3</span>Usa <strong>⚠️</strong> o <strong>Obs. Masiva</strong> para agregar observaciones a productos desmarcados
-                            </span>
+                <!-- Panel de Guía Rápida (plegable: en 15" el espacio vertical es escaso) -->
+                <div class="mb-2" id="guiaVerificacion">
+                    <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none"
+                            data-bs-toggle="collapse" data-bs-target="#guiaVerificacionBody" aria-expanded="false">
+                        <i class="bi bi-lightbulb-fill text-warning me-1"></i>¿Cómo verificar esta recepción?
+                    </button>
+                    <div class="collapse" id="guiaVerificacionBody">
+                        <div class="alert alert-info py-2 mt-2 mb-0 small">
+                            <div><span class="badge bg-success me-1">1</span> Si llegó todo tal cual el documento → <strong>Marcar todos OK</strong> y confirma.</div>
+                            <div><span class="badge bg-warning text-dark me-1">2</span> Si algo no llegó o llegó dañado → <strong>desmarca</strong> la línea y escribe en <strong>«Recibido»</strong> solo las unidades buenas. La diferencia queda como faltante y <strong>no entra al stock</strong>.</div>
+                            <div><span class="badge bg-info me-1">3</span> Si llegó de más → botón <strong>⚠️</strong> de la línea y carga el <strong>sobrante</strong>: no ingresa al stock, queda para que bodega decida.</div>
+                            <div><span class="badge bg-primary me-1">4</span> Toda línea desmarcada necesita <strong>observación</strong> (botón ⚠️ o <strong>Obs. Masiva</strong>); si falta, el botón de confirmar queda bloqueado.</div>
                         </div>
-                        <button type="button" class="btn-close btn-close-sm" onclick="$('#guiaVerificacion').slideUp(200)"></button>
                     </div>
                 </div>
 
@@ -1905,53 +2242,41 @@
                                 <th style="width: 110px;">SKU</th>
                                 <th>Producto / Detalle</th>
                                 <th style="width: 70px;">Talla</th>
-                                <th style="width: 90px;" class="text-center">Esperado</th>
-                                <th style="width: 90px;" class="text-center">Recibido</th>
+                                <th style="width: 80px;" class="text-center" title="Unidades documentadas en el DTE">Esperado</th>
+                                <th style="width: 90px;" class="text-center" title="Unidades que realmente llegaron en buen estado: esto es lo que entra al stock">Recibido</th>
+                                <th style="width: 70px;" class="text-center" title="Esperado menos Recibido: unidades que NO entran al stock">Falta</th>
                                 <th style="width: 90px;">Estado</th>
                                 <th style="width: 44px;"></th>
                             </tr>
                         </thead>
                         <tbody id="productosVerificacionBody">
                             <tr>
-                                <td colspan="8" class="text-center text-muted py-4">Cargando productos...</td>
+                                <td colspan="9" class="text-center text-muted py-4">Cargando productos...</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
 
-                <!-- Resumen en Tiempo Real -->
-                <div class="mt-3">
-                    <div class="card border-success">
-                        <div class="card-body py-2">
-                            <div class="row text-center">
-                                <div class="col">
-                                    <div class="fw-bold text-success" id="resumenOK">0</div>
-                                    <small class="text-muted">OK</small>
-                                </div>
-                                <div class="col">
-                                    <div class="fw-bold text-warning" id="resumenParcial">0</div>
-                                    <small class="text-muted">Con Problemas</small>
-                                </div>
-                                <div class="col">
-                                    <div class="fw-bold text-secondary" id="resumenFaltante">0</div>
-                                    <small class="text-muted">Faltantes</small>
-                                </div>
-                                <div class="col">
-                                    <div class="fw-bold text-info" id="resumenSobrante">0</div>
-                                    <small class="text-muted">Sobrantes</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <!-- Resumen en Tiempo Real: ahora se muestra arriba en la barra de impacto.
+                     Estos contadores se mantienen ocultos porque el resto del JS los actualiza. -->
+                <div class="d-none">
+                    <span id="resumenOK">0</span>
+                    <span id="resumenParcial">0</span>
+                    <span id="resumenFaltante">0</span>
+                    <span id="resumenSobrante">0</span>
                 </div>
 
                 <!-- Observaciones Generales -->
-                <div class="mt-3">
-                    <label class="form-label fw-bold">Observaciones Generales</label>
+                <div class="mt-2">
+                    <label class="form-label fw-bold mb-1">Observaciones Generales <small class="text-muted fw-normal">(opcional, queda en el historial del documento)</small></label>
                     <textarea id="observacionesGenerales" class="form-control" rows="2" placeholder="Comentarios adicionales sobre la recepción..."></textarea>
                 </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer justify-content-between">
+                <small class="text-muted text-start" id="footerHintRecepcion">
+                    <i class="bi bi-info-circle me-1"></i>Al confirmar entran al stock <strong id="footerHintUnidades">0</strong> unidades.
+                </small>
+                <div class="d-flex gap-2 flex-wrap justify-content-end">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                     <i class="bi bi-x-circle me-1"></i>Cancelar
                 </button>
@@ -1964,6 +2289,7 @@
                 <button type="button" class="btn btn-success" id="btnConfirmarRecepcion">
                     <i class="bi bi-check-circle me-1"></i>Confirmar Recepción Completa
                 </button>
+                </div>
             </div>
         </div>
     </div>
@@ -1971,7 +2297,7 @@
 
 <!-- Modal para detallar problemas de un producto -->
 <div class="modal fade" id="modalDetalleProblema" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-warning">
                 <h6 class="modal-title text-white">
@@ -2031,6 +2357,7 @@
                         <span id="resumenFaltanteRow"><strong>Faltante:</strong> <span id="problemaCantidadFaltanteCalc">0</span></span>
                         <span id="resumenSobranteRow" style="display:none;"> | <strong class="text-info">Sobrante:</strong> +<span id="problemaCantidadSobranteCalc">0</span></span>
                         <br><strong>Estado:</strong> <span id="problemaEstadoCalc">-</span>
+                        <br><strong>Qué pasa al confirmar:</strong> <span id="problemaImpactoTexto">-</span>
                     </small>
                 </div>
 
@@ -2521,32 +2848,8 @@ $(document).ready(function() {
     modalDetalle = new bootstrap.Modal(document.getElementById('modalDetalleDocumento'));
     modalProblema = new bootstrap.Modal(document.getElementById('modalDetalleProblema'));
 
-    $('#btnRefresh').on('click', () => {
-        paginaActual = 1;
-        paginaActualRegularizar = 1;
-        if (window.modoVista === 'regularizar') {
-            cargarRegularizaciones();
-        } else if (window.modoVista === 'recepcionados') {
-            cargarRecepcionados();
-        } else if (window.modoVista === 'emitidos') {
-            cargarEmitidos();
-        } else {
-            cargarRecepciones(true);
-        }
-    });
-    $('#filterEstadoDte, #filterTipoDocumento, #filterFechaInicio, #filterFechaFin').on('change', () => {
-        paginaActual = 1;
-        paginaActualRegularizar = 1;
-        if (window.modoVista === 'regularizar') {
-            cargarRegularizaciones();
-        } else if (window.modoVista === 'recepcionados') {
-            cargarRecepcionados();
-        } else if (window.modoVista === 'emitidos') {
-            cargarEmitidos();
-        } else {
-            cargarRecepciones();
-        }
-    });
+    $('#btnRefresh').on('click', () => recargarVistaActiva(true));
+    $('#filterEstadoDte, #filterTipoDocumento, #filterFechaInicio, #filterFechaFin').on('change', () => recargarVistaActiva());
     $('#btnPrev').on('click', () => cambiarPagina(-1));
     $('#btnNext').on('click', () => cambiarPagina(1));
     $('#btnPrevRegularizar').on('click', () => cambiarPaginaRegularizar(-1));
@@ -2556,6 +2859,42 @@ $(document).ready(function() {
     $('#btnRechazarRecepcion').on('click', rechazarRecepcion);
     $('#btnRangoMesActual').on('click', aplicarRangoMesActual);
     $('#btnSoloHoy').on('click', aplicarRangoHoy);
+    $('#btnTodoPendiente, #btnBannerTodoPendiente').on('click', mostrarTodoPendiente);
+    $('#kpiCardEnTransito').on('click keypress', function(e) {
+        if (e.type === 'keypress' && e.key !== 'Enter' && e.key !== ' ') return;
+        mostrarTodoPendiente();
+    });
+    $('#btnIrMasAntiguos').on('click', () => {
+        if (totalPaginas <= 1) return;
+        paginaActual = totalPaginas;
+        if (window.modoVista === 'recepcionados') cargarRecepcionados();
+        else if (window.modoVista === 'emitidos') cargarEmitidos();
+        else cargarRecepciones();
+    });
+
+    // Panel plegable "¿Cómo funciona?" (recuerda la preferencia del usuario)
+    const ayudaProcesoEl = document.getElementById('ayudaProcesoPanel');
+    const ayudaProceso = ayudaProcesoEl ? new bootstrap.Collapse(ayudaProcesoEl, { toggle: false }) : null;
+    if (ayudaProceso && localStorage.getItem('recepcionAyudaAbierta') === '1') {
+        ayudaProceso.show();
+    }
+    $('#btnToggleAyudaProceso, #btnAyudaProcesoLateral').on('click', function() {
+        if (!ayudaProceso) return;
+        const abierto = ayudaProcesoEl.classList.contains('show');
+        if (abierto) {
+            ayudaProceso.hide();
+            localStorage.setItem('recepcionAyudaAbierta', '0');
+        } else {
+            ayudaProceso.show();
+            localStorage.setItem('recepcionAyudaAbierta', '1');
+            ayudaProcesoEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    });
+    $('#btnCerrarAyudaProceso').on('click', function() {
+        if (!ayudaProceso) return;
+        ayudaProceso.hide();
+        localStorage.setItem('recepcionAyudaAbierta', '0');
+    });
     $('.vista-unificada-btn').on('click', function() {
         cambiarVistaUnificada($(this).data('vista'));
     });
@@ -2716,12 +3055,32 @@ function inicializarReferenciaFechas() {
     actualizarTextoFechaHoy(hoy);
 }
 
+// Recarga el panel que está visible en este momento. Antes los accesos
+// rápidos de fecha llamaban siempre a cargarRecepciones(), así que en las
+// vistas "Por resolver" / "Emitidos" / "Recepcionados" el filtro se aplicaba
+// visualmente pero la tabla no se refrescaba.
+function recargarVistaActiva(forzar = false) {
+    paginaActual = 1;
+    paginaActualRegularizar = 1;
+    if (window.modoVista === 'regularizar') {
+        cargarRegularizaciones();
+    } else if (window.modoVista === 'recepcionados') {
+        cargarRecepcionados();
+    } else if (window.modoVista === 'emitidos') {
+        cargarEmitidos();
+    } else if (window.modoVista === 'mis_regularizaciones') {
+        cargarMisRegularizaciones();
+    } else {
+        cargarRecepciones(forzar);
+    }
+}
+
 function aplicarRangoMesActual() {
     const hoy = new Date();
     const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
     $('#filterFechaInicio').val(formatoISO(primerDiaMes));
     $('#filterFechaFin').val(formatoISO(hoy));
-    cargarRecepciones(true);
+    recargarVistaActiva(true);
 }
 
 function aplicarRangoHoy() {
@@ -2729,11 +3088,67 @@ function aplicarRangoHoy() {
     const fechaISO = formatoISO(hoy);
     $('#filterFechaInicio').val(fechaISO);
     $('#filterFechaFin').val(fechaISO);
-    cargarRecepciones(true);
+    recargarVistaActiva(true);
 }
 
+// Quita el filtro de fechas y deja solo lo pendiente de recepcionar: es la
+// única forma de ver la mercadería despachada hace meses que nunca se recibió.
+function mostrarTodoPendiente() {
+    if (!PUEDE_RECEPCIONAR_DTE && !PUEDE_AJUSTAR_EMITIDOS) {
+        Swal.fire('Sin permiso', 'Tu perfil no tiene habilitada la vista de documentos pendientes de recepcionar.', 'info');
+        return;
+    }
+    $('#filterFechaInicio').val('');
+    $('#filterFechaFin').val('');
+    if (PUEDE_RECEPCIONAR_DTE) {
+        $('#filterEstadoDte').val('EMITIDO');
+    }
+    if (window.modoVista === 'regularizar' || window.modoVista === 'mis_regularizaciones') {
+        cambiarVistaUnificada('recibidos');
+    } else {
+        window.modoVista = 'recibidos';
+        window.modoEmitidos = false;
+        $('.vista-unificada-btn').removeClass('active');
+        $('.vista-unificada-btn[data-vista="recibidos"]').addClass('active');
+        $('#panelRegularizaciones').hide();
+        $('#panelMisRegularizaciones').hide();
+        $('#panelRecepciones').show();
+        $('.filter-section').show();
+        $('#filterEstadoDte').closest('.col-md-3').show();
+        paginaActual = 1;
+        cargarRecepciones();
+    }
+    $('#tituloSeccionDocumentos').text('Mercadería en tránsito (sin filtro de fecha)');
+    $('#subtituloSeccionDocumentos').text('Todos los traspasos despachados que todavía no se recepcionan, sin importar su antigüedad');
+}
+
+// Fecha local en formato YYYY-MM-DD. toISOString() convierte a UTC y en
+// Chile (UTC-3/-4) devolvía el día siguiente después de las 20:00/21:00.
 function formatoISO(fecha) {
-    return fecha.toISOString().split('T')[0];
+    const y = fecha.getFullYear();
+    const m = String(fecha.getMonth() + 1).padStart(2, '0');
+    const d = String(fecha.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+// Días transcurridos desde una fecha (calendario local, sin decimales).
+function diasDesde(fechaStr) {
+    if (!fechaStr) return null;
+    const f = new Date(fechaStr);
+    if (isNaN(f.getTime())) return null;
+    const hoy = new Date();
+    const a = new Date(f.getFullYear(), f.getMonth(), f.getDate());
+    const b = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    return Math.max(0, Math.round((b - a) / 86400000));
+}
+
+// Chip de antigüedad para mercadería que salió del origen y aún no se recibe.
+function chipTransito(dias) {
+    if (dias === null) return '';
+    const clase = dias > 15 ? 'transito-alert' : dias > 7 ? 'transito-warn' : 'transito-ok';
+    const texto = dias === 0 ? 'hoy' : (dias === 1 ? 'hace 1 día' : `hace ${dias} días`);
+    return `<span class="transito-chip ${clase}" title="Días desde que la mercadería salió del origen sin ser recepcionada">
+        <i class="bi bi-truck me-1"></i>${texto}</span>`;
 }
 
 function actualizarTextoFechaHoy(fecha) {
@@ -2748,6 +3163,9 @@ function cargarInfoSucursal() {
             if (data && data.alias) {
                 sucursalDestinoInfo = data;
                 $('#infoSucursalDestino').text(data.alias);
+                // El nombre de la sucursal se repite en la guía de pasos y en
+                // la barra de impacto para que quede claro DÓNDE entra el stock.
+                $('#pasoSucursalDestino, #ayudaSucursalDestino, #impactoDestino').text(data.alias);
             }
         })
         .fail(() => {
@@ -3144,6 +3562,16 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
         const fecha = prod.dte_fecha ? new Date(prod.dte_fecha).toLocaleDateString('es-CL') : '-';
         const yaRegularizado = ['REGULARIZADO', 'RECEPCIONADO_OK'].includes(String(prod.estado || '').toUpperCase());
 
+        // Antigüedad de la diferencia: cuánto lleva abierta sin resolverse.
+        const diasAbierto = yaRegularizado ? null : diasDesde(prod.dte_fecha);
+        let chipAbierto = '';
+        if (diasAbierto !== null) {
+            const claseAbierto = diasAbierto > 15 ? 'transito-alert' : diasAbierto > 7 ? 'transito-warn' : 'transito-ok';
+            const textoAbierto = diasAbierto === 0 ? 'abierta hoy' : (diasAbierto === 1 ? 'abierta hace 1 día' : `abierta hace ${diasAbierto} días`);
+            chipAbierto = `<br><span class="transito-chip ${claseAbierto}" title="Días desde la emisión del documento con la diferencia sin resolver">
+                <i class="bi bi-hourglass-split me-1"></i>${textoAbierto}</span>`;
+        }
+
         // Mini-resumen de NC asociada (si el backend lo envía)
         const ncInfo = prod.nc_numero
             ? `<br><small class="text-success"><i class="bi bi-receipt-cutoff me-1"></i>NC #${prod.nc_numero}${prod.nc_id ? ` <a href="/app/dte/${prod.nc_id}/txt-acepta/" class="ms-1" title="Descargar TXT Acepta"><i class="bi bi-download"></i></a>` : ''}</small>`
@@ -3207,7 +3635,7 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
             <tr>
                 <td>
                     <strong>${_escapeHtmlDte(prod.tipo_documento || 'DTE')} #${_escapeHtmlDte(prod.dte_numero)}</strong>
-                    <br><small class="text-muted">${fecha}</small>
+                    <br><small class="text-muted">${fecha}</small>${chipAbierto}
                 </td>
                 <td>
                     <strong>${_escapeHtmlDte(prod.sucursal_origen || '-')}</strong>${rolBadge}
@@ -3423,6 +3851,10 @@ function renderTablaRecepciones() {
         return;
     }
 
+    // Mercadería en tránsito visible en esta página: ya salió del origen y
+    // todavía no entra al stock del destino.
+    const docsEnTransito = [];
+
     recepcionesData.forEach(doc => {
         const badgeTipo = doc.tipo_documento === 'FACTURA ELECTRONICA'
             ? '<span class="badge bg-primary">Factura</span>'
@@ -3435,14 +3867,19 @@ function renderTablaRecepciones() {
             : '<span class="text-muted">Sin detalle</span>';
 
         // Calcular días desde emisión
-        const diasDesdeEmision = Math.floor((new Date() - new Date(doc.fecha_emision)) / (1000 * 60 * 60 * 24));
+        const diasDesdeEmision = diasDesde(doc.fecha_emision) ?? 0;
         const diasClass = diasDesdeEmision > 7 ? 'text-danger fw-bold' : diasDesdeEmision > 3 ? 'text-warning fw-bold' : 'text-muted';
 
         const ESTADO_CONFIG = {
             'EMITIDO': {
-                badge: '<span class="badge badge-pendiente"><i class="bi bi-hourglass-split me-1"></i>Pendiente</span>',
+                badge: '<span class="badge badge-pendiente"><i class="bi bi-hourglass-split me-1"></i>En tránsito</span>',
                 rowClass: '',
-                indicador: `<small class="${diasClass}">${diasDesdeEmision}d</small>`,
+                indicador: chipTransito(diasDesdeEmision),
+            },
+            'ACEPTADO': {
+                badge: '<span class="badge badge-pendiente"><i class="bi bi-hourglass-split me-1"></i>En tránsito</span>',
+                rowClass: '',
+                indicador: chipTransito(diasDesdeEmision),
             },
             'RECEPCIONADO_COMPLETO': {
                 badge: '<span class="badge badge-recepcionado"><i class="bi bi-check-circle-fill me-1"></i>Recepcionado</span>',
@@ -3478,6 +3915,14 @@ function renderTablaRecepciones() {
 
         const estado = doc.estado_dte || 'EMITIDO';
         const config = ESTADO_CONFIG[estado] || ESTADO_CONFIG['EMITIDO'];
+
+        if ((estado === 'EMITIDO' || estado === 'ACEPTADO') && !doc.fecha_recepcion) {
+            docsEnTransito.push({
+                numero: doc.numero_documento,
+                dias: diasDesdeEmision,
+                unidades: doc.total_unidades || 0,
+            });
+        }
 
         // Rol de la sucursal actual respecto a este DTE (origen|destino|ambos|otro).
         // 'otro' aplica solo en vista global cuando el DTE no toca mi sucursal.
@@ -3598,6 +4043,32 @@ function renderTablaRecepciones() {
             </tr>
         `);
     });
+
+    actualizarBannerTransito(docsEnTransito);
+}
+
+// Aviso de mercadería despachada que nadie recibió. Se calcula sobre los
+// documentos que trae la página actual: por eso el botón del banner quita el
+// filtro de fechas, que es lo que esconde los despachos antiguos.
+function actualizarBannerTransito(docs) {
+    const $banner = $('#bannerEnTransito');
+    if (!docs || !docs.length) {
+        $banner.addClass('d-none');
+        return;
+    }
+    const antiguos = docs.filter(d => d.dias > 7);
+    if (!antiguos.length) {
+        $banner.addClass('d-none');
+        return;
+    }
+    const unidades = antiguos.reduce((s, d) => s + (Number(d.unidades) || 0), 0);
+    const masAntiguo = antiguos.reduce((a, b) => (b.dias > a.dias ? b : a));
+    $('#bannerTransitoTexto').html(
+        `<strong>${antiguos.length}</strong> documento(s) con más de 7 días sin recepcionar en esta vista ` +
+        `(<strong>${unidades}</strong> unidades). El más antiguo es el Nº ${masAntiguo.numero}, ` +
+        `despachado hace <strong>${masAntiguo.dias} días</strong>.`
+    );
+    $banner.removeClass('d-none');
 }
 
 function actualizarResumen(resumen) {
@@ -3680,7 +4151,7 @@ $(document).on('click', '.estado-indicator', function() {
     $('#filterEstadoDte').closest('.col-md-3').show();
     $('#filterTipoDocumento').closest('.col-md-2').show();
     $('#tituloSeccionDocumentos').text('Documentos de Traspaso');
-    $('#subtituloSeccionDocumentos').text('Muestra documentos internos pendientes y recepcionados dirigidos a tu sucursal');
+    $('#subtituloSeccionDocumentos').text('Documentos donde mi sucursal es origen o destino, filtrables por estado');
     $('#filterEstadoDte').val(estado === undefined ? '' : estado);
     paginaActual = 1;
     cargarRecepciones();
@@ -3694,6 +4165,9 @@ function actualizarPaginacion() {
     $('#paginationContainer').show();
     $('#btnPrev').prop('disabled', paginaActual <= 1);
     $('#btnNext').prop('disabled', paginaActual >= totalPaginas);
+    // El listado viene ordenado del más nuevo al más antiguo: el atajo salta
+    // a la última página, donde están los despachos que llevan más tiempo.
+    $('#btnIrMasAntiguos').prop('disabled', paginaActual >= totalPaginas);
     $('#pageInfo').text(`Página ${paginaActual} de ${totalPaginas}`);
 }
 
@@ -3740,7 +4214,25 @@ function llenarDetalleDocumento(doc) {
         : '<span class="badge bg-info text-dark">Guía</span>');
     $('#detalleEmisor').text(doc.emisor || '-');
     $('#detalleOrigen').text(doc.sucursal_origen || '-');
+    $('#detalleDestino').text(doc.sucursal_destino || (sucursalDestinoInfo ? sucursalDestinoInfo.alias : '-'));
+    $('#impactoDestino').text(doc.sucursal_destino || (sucursalDestinoInfo ? sucursalDestinoInfo.alias : 'tu sucursal'));
     $('#detalleFechaEmision').text(new Date(doc.fecha_emision).toLocaleDateString('es-CL'));
+
+    // Antigüedad del despacho: cuánto lleva la mercadería fuera de bodega.
+    const diasDoc = diasDesde(doc.fecha_emision);
+    $('#detalleAntiguedad').html(diasDoc === null ? '-' : chipTransito(diasDoc));
+
+    // Qué implica el tipo de documento cuando hay faltantes.
+    const esGuia = doc.tipo_documento !== 'FACTURA ELECTRONICA';
+    $('#detalleNotaTipoDoc').html(esGuia
+        ? `<span class="text-muted"><i class="bi bi-info-circle me-1"></i>
+           <strong>Guía:</strong> lo que marques como faltante o dañado vuelve automáticamente al stock de
+           <strong>${doc.sucursal_origen || 'la bodega origen'}</strong> y la línea queda cerrada. El sobrante sí queda pendiente.</span>`
+        : `<span class="text-muted"><i class="bi bi-info-circle me-1"></i>
+           <strong>Factura:</strong> lo que marques como faltante o dañado queda en <em>Por resolver</em> hasta que se emita la Nota de Crédito.</span>`);
+
+    // La guía de verificación arranca plegada: en 15" el alto es escaso.
+    $('#guiaVerificacionBody').removeClass('show');
 
     // Banner de ajuste previo del emisor
     const ajustes = Array.isArray(doc.ajustes_previos) ? doc.ajustes_previos : [];
@@ -3770,7 +4262,7 @@ function llenarDetalleDocumento(doc) {
     $('#observacionesGenerales').val('');
     
     if (!doc.detalle || !doc.detalle.length) {
-        $('#productosVerificacionBody').html('<tr><td colspan="8" class="text-center text-muted">Sin productos</td></tr>');
+        $('#productosVerificacionBody').html('<tr><td colspan="9" class="text-center text-muted">Sin productos</td></tr>');
         return;
     }
     
@@ -3861,7 +4353,19 @@ function renderizarProductosVerificacion() {
         const colorMostrar = prod.color || '-';
         const marcaMostrar = prod.marca || '-';
         const tallaMostrar = prod.talla || 'N/A';
-        
+
+        // Diferencia por línea: lo pedido que NO va a entrar al stock, más el
+        // sobrante que llegó de más (tampoco entra).
+        const faltanLinea = Math.max(0, (prod.cantidad_esperada || 0) - (prod.cantidad_recepcionada || 0));
+        const sobraLinea = prod.cantidad_sobrante || 0;
+        let diferenciaHtml = '<span class="text-muted">—</span>';
+        if (faltanLinea > 0 || sobraLinea > 0) {
+            const partes = [];
+            if (faltanLinea > 0) partes.push(`<span class="badge bg-warning text-dark" title="Unidades que no entran al stock">-${faltanLinea}</span>`);
+            if (sobraLinea > 0) partes.push(`<span class="badge bg-info text-dark" title="Unidades de más: no entran al stock, quedan por resolver">+${sobraLinea}</span>`);
+            diferenciaHtml = partes.join(' ');
+        }
+
         tbody.append(`
             <tr class="${rowClass}" data-index="${index}">
                 <td class="text-center">
@@ -3881,6 +4385,7 @@ function renderizarProductosVerificacion() {
                            min="0" max="${prod.cantidad_esperada}" style="width: 80px;"
                            ${prod.marcado_ok ? 'disabled' : ''}>
                 </td>
+                <td class="text-center">${diferenciaHtml}</td>
                 <td>${estadoBadge}</td>
                 <td class="text-center">
                     ${alertaObservaciones}
@@ -3894,7 +4399,7 @@ function renderizarProductosVerificacion() {
     });
     
     if (tbody.children().length === 0) {
-        tbody.html('<tr><td colspan="8" class="text-center text-muted">No se encontraron productos</td></tr>');
+        tbody.html('<tr><td colspan="9" class="text-center text-muted">No se encontraron productos</td></tr>');
     }
     
     // Bind events
@@ -4244,26 +4749,27 @@ function limpiarBusqueda() {
 }
 
 function actualizarResumenVerificacion() {
-    let ok = 0, faltante = 0, sobrante = 0;
+    let ok = 0, faltante = 0, sobrante = 0, esperadoTotal = 0;
     let verificados = 0;
     let productosSinObservaciones = 0;
-    
+
     productosVerificacion.forEach(prod => {
         if (prod.marcado_ok) verificados++;
-        
+
         if (!prod.marcado_ok && (!prod.observaciones || prod.observaciones.trim() === '')) {
             productosSinObservaciones++;
         }
-        
+
         const recepcionada = prod.cantidad_recepcionada || 0;
         const esperada = prod.cantidad_esperada || 0;
         const cantSobrante = prod.cantidad_sobrante || 0;
         const cantFaltante = Math.max(0, esperada - recepcionada);
         const cantBuena = Math.min(recepcionada, esperada);
-        
+
         ok += cantBuena;
         faltante += cantFaltante;
         sobrante += cantSobrante;
+        esperadoTotal += esperada;
     });
 
     const lineasConProblema = productosVerificacion.filter(p => p.estado !== 'RECEPCIONADO_OK').length;
@@ -4273,6 +4779,22 @@ function actualizarResumenVerificacion() {
     $('#resumenFaltante').text(faltante);
     if ($('#resumenSobrante').length) $('#resumenSobrante').text(sobrante);
     $('#contadorProductos').text(`${verificados} de ${productosVerificacion.length}`);
+
+    // Barra de impacto: qué se va a mover realmente al confirmar.
+    $('#impactoIngresa').text(ok);
+    $('#impactoNoIngresa').text(faltante);
+    $('#impactoSobrante').text(sobrante);
+    $('#impactoEsperado').text(esperadoTotal);
+    $('#impactoLineasProblema')
+        .text(lineasConProblema)
+        .removeClass('text-success text-warning')
+        .addClass(lineasConProblema > 0 ? 'text-warning' : 'text-success');
+    $('#footerHintUnidades').text(ok);
+    $('#footerHintRecepcion').html(
+        `<i class="bi bi-info-circle me-1"></i>Al confirmar entran al stock <strong>${ok}</strong> de <strong>${esperadoTotal}</strong> unidades` +
+        (faltante > 0 ? ` · <span class="text-warning fw-semibold">${faltante} no llegan</span>` : '') +
+        (sobrante > 0 ? ` · <span class="text-info fw-semibold">${sobrante} sobrante(s) quedan por resolver</span>` : '')
+    );
     
     // Actualizar barra de progreso
     const total = productosVerificacion.length;
@@ -4408,6 +4930,21 @@ function calcularFaltanteAutomatico() {
     $('#problemaEstado').val(estado);
     $('#problemaEstadoCalc').html(estadoTexto);
 
+    // Consecuencia concreta de lo tipeado, en unidades y en stock.
+    const esGuiaDoc = documentoSeleccionado && documentoSeleccionado.tipo_documento !== 'FACTURA ELECTRONICA';
+    const origenDoc = documentoSeleccionado ? (documentoSeleccionado.sucursal_origen || 'la bodega origen') : 'la bodega origen';
+    const impacto = [];
+    impacto.push(`<strong class="text-success">${recepcionada}</strong> unidad(es) entran a tu stock`);
+    if (faltante > 0) {
+        impacto.push(esGuiaDoc
+            ? `<strong class="text-warning">${faltante}</strong> vuelven automáticamente a <strong>${origenDoc}</strong> (guía)`
+            : `<strong class="text-warning">${faltante}</strong> quedan pendientes de Nota de Crédito`);
+    }
+    if (sobrante > 0) {
+        impacto.push(`<strong class="text-info">${sobrante}</strong> sobrante(s) NO entran al stock: quedan por resolver`);
+    }
+    $('#problemaImpactoTexto').html(impacto.join(' · '));
+
     $('#resumenAutocalculo').removeClass('alert-secondary alert-success alert-warning alert-info')
                            .addClass(
                                estado === 'RECEPCIONADO_OK' ? 'alert-success' :
@@ -4522,51 +5059,116 @@ function confirmarRecepcion() {
         }
     }
     
+    // Resumen previo: qué entra al stock, qué se devuelve y qué queda abierto.
+    const esGuiaDoc = documentoSeleccionado.tipo_documento !== 'FACTURA ELECTRONICA';
+    const destinoDoc = documentoSeleccionado.sucursal_destino
+        || (sucursalDestinoInfo ? sucursalDestinoInfo.alias : 'tu sucursal');
+    const origenDoc = documentoSeleccionado.sucursal_origen || 'la bodega origen';
+
+    const totalEsperado = productosVerificacion.reduce((s, p) => s + (p.cantidad_esperada || 0), 0);
+    const totalIngresa = productosVerificacion.reduce((s, p) => s + Math.min(p.cantidad_recepcionada || 0, p.cantidad_esperada || 0), 0);
+    const totalNoIngresa = productosVerificacion.reduce((s, p) => s + Math.max(0, (p.cantidad_esperada || 0) - (p.cantidad_recepcionada || 0)), 0);
+    const totalSobrante = productosVerificacion.reduce((s, p) => s + (p.cantidad_sobrante || 0), 0);
+
+    // Detalle línea a línea de lo que NO cuadra (talla incluida).
+    const lineasConDiferencia = productosVerificacion.filter(p => {
+        const falta = Math.max(0, (p.cantidad_esperada || 0) - (p.cantidad_recepcionada || 0));
+        return falta > 0 || (p.cantidad_sobrante || 0) > 0;
+    });
+
+    const filasDetalle = lineasConDiferencia.map(p => {
+        const falta = Math.max(0, (p.cantidad_esperada || 0) - (p.cantidad_recepcionada || 0));
+        const sobra = p.cantidad_sobrante || 0;
+        return `<tr>
+            <td class="text-start"><small>${p.descripcion || p.sku || '-'}</small><br><small class="text-muted">${p.sku || ''}</small></td>
+            <td class="text-center"><span class="badge bg-secondary">${p.talla || '-'}</span></td>
+            <td class="text-center">${p.cantidad_esperada || 0}</td>
+            <td class="text-center text-success fw-bold">${Math.min(p.cantidad_recepcionada || 0, p.cantidad_esperada || 0)}</td>
+            <td class="text-center ${falta > 0 ? 'text-warning fw-bold' : 'text-muted'}">${falta || '—'}</td>
+            <td class="text-center ${sobra > 0 ? 'text-info fw-bold' : 'text-muted'}">${sobra || '—'}</td>
+        </tr>`;
+    }).join('');
+
+    const tablaDetalle = lineasConDiferencia.length ? `
+        <div class="mt-2" style="max-height:190px;overflow:auto;">
+            <table class="table table-sm table-bordered mb-0" style="font-size:12px;">
+                <thead class="table-light">
+                    <tr>
+                        <th class="text-start">Producto</th>
+                        <th class="text-center">Talla</th>
+                        <th class="text-center">Pedido</th>
+                        <th class="text-center">Recibido</th>
+                        <th class="text-center">Falta</th>
+                        <th class="text-center">Sobra</th>
+                    </tr>
+                </thead>
+                <tbody>${filasDetalle}</tbody>
+            </table>
+        </div>` : '';
+
+    const bloqueTotales = `
+        <div class="row text-center g-2 mb-2">
+            <div class="col">
+                <div class="border rounded py-2">
+                    <div class="fw-bold text-success" style="font-size:20px;">${totalIngresa}</div>
+                    <small class="text-muted">Entran al stock de<br><strong>${destinoDoc}</strong></small>
+                </div>
+            </div>
+            <div class="col">
+                <div class="border rounded py-2">
+                    <div class="fw-bold text-warning" style="font-size:20px;">${totalNoIngresa}</div>
+                    <small class="text-muted">${esGuiaDoc ? `Vuelven a<br><strong>${origenDoc}</strong>` : 'Quedan por<br>Nota de Crédito'}</small>
+                </div>
+            </div>
+            <div class="col">
+                <div class="border rounded py-2">
+                    <div class="fw-bold text-info" style="font-size:20px;">${totalSobrante}</div>
+                    <small class="text-muted">Sobrantes: no entran,<br>quedan por resolver</small>
+                </div>
+            </div>
+            <div class="col">
+                <div class="border rounded py-2">
+                    <div class="fw-bold" style="font-size:20px;">${totalEsperado}</div>
+                    <small class="text-muted">Pedido en<br>el documento</small>
+                </div>
+            </div>
+        </div>`;
+
     // Si hay productos desmarcados con observaciones, procesarlos
     if (hayProductosDesmarcados) {
-        const parciales = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_PARCIAL').length;
-        const faltantes = productosDesmarcados.filter(p => p.estado === 'FALTANTE').length;
-        const sobrantes = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_SOBRANTE' || (p.cantidad_sobrante && p.cantidad_sobrante > 0)).length;
+        const notaDestino = esGuiaDoc
+            ? `<div class="alert alert-warning mb-0 py-2 text-start small">
+                   <i class="bi bi-arrow-return-left me-1"></i>
+                   Es una <strong>guía</strong>: las <strong>${totalNoIngresa}</strong> unidades faltantes o dañadas
+                   se devuelven automáticamente al stock de <strong>${origenDoc}</strong> y esas líneas quedan cerradas.
+                   ${totalSobrante > 0 ? `El sobrante (<strong>${totalSobrante}</strong>) sí queda pendiente en <em>Por resolver</em>.` : ''}
+               </div>`
+            : `<div class="alert alert-warning mb-0 py-2 text-start small">
+                   <i class="bi bi-file-earmark-text me-1"></i>
+                   Es una <strong>factura</strong>: las <strong>${totalNoIngresa}</strong> unidades faltantes o dañadas
+                   quedan en <em>Por resolver</em> hasta que se emita la Nota de Crédito. El stock del origen no se devuelve solo.
+               </div>`;
 
-        let detalleProblemas = '';
-        if (faltantes > 0) detalleProblemas += `<li>${faltantes} faltante(s) completo(s)</li>`;
-        if (parciales > 0) detalleProblemas += `<li>${parciales} parcial(es)</li>`;
-        if (sobrantes > 0) detalleProblemas += `<li class="text-info">${sobrantes} con sobrantes (pendientes de decisión por bodega)</li>`;
-        
-        const totalOK = productosMarcadosOK.reduce((sum, p) => sum + p.cantidad_recepcionada, 0);
-        const totalBuenasDesmarcados = productosDesmarcados.reduce((sum, p) => sum + p.cantidad_recepcionada, 0);
-        const totalNoIngresa = productosDesmarcados.reduce((sum, p) => sum + p.cantidad_faltante, 0);
-        
         Swal.fire({
-            title: '⚠️ Recepción con Productos Desmarcados',
+            title: 'Revisa antes de confirmar',
             html: `
                 <div class="text-start">
-                    <p>Se detectaron <strong>${productosDesmarcados.length}</strong> producto(s) desmarcados con problemas:</p>
-                    <ul class="mb-2">
-                        ${detalleProblemas}
-                    </ul>
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
-                        <strong>📦 ¿Qué stock se actualizará?</strong>
-                        <ul class="mt-2 mb-0">
-                            <li>✅ <strong>${totalOK}</strong> unidades de productos marcados OK</li>
-                            ${totalBuenasDesmarcados > 0 ? `<li>⚠️ <strong>${totalBuenasDesmarcados}</strong> unidades parciales (recibidas en buen estado)</li>` : ''}
-                            <li>❌ <strong>${totalNoIngresa}</strong> unidades NO se agregarán al stock (faltantes)</li>
-                        </ul>
-                    </div>
-                    <div class="alert alert-warning mb-0">
-                        <i class="bi bi-exclamation-triangle me-2"></i>
-                        <strong>Importante:</strong> Solo se actualizará el stock con las unidades que realmente llegaron en buen estado. 
-                        Los productos con problemas quedarán registrados para seguimiento y regularización.
-                    </div>
+                    <p class="mb-2">
+                        Documento <strong>Nº ${documentoSeleccionado.numero_documento}</strong> ·
+                        ${origenDoc} <i class="bi bi-arrow-right"></i> <strong>${destinoDoc}</strong> ·
+                        <strong>${lineasConDiferencia.length}</strong> línea(s) con diferencia.
+                    </p>
+                    ${bloqueTotales}
+                    ${tablaDetalle}
+                    <div class="mt-2">${notaDestino}</div>
                 </div>
             `,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Sí, recepcionar con estas cantidades',
-            cancelButtonText: '<i class="bi bi-x-circle me-1"></i>Cancelar',
+            cancelButtonText: '<i class="bi bi-x-circle me-1"></i>Revisar de nuevo',
             confirmButtonColor: '#ffc107',
-            width: '700px'
+            width: '760px'
         }).then(result => {
             if (result.isConfirmed) {
                 // Recepcionar TODO con las cantidades ingresadas por el usuario
@@ -4575,24 +5177,28 @@ function confirmarRecepcion() {
         });
     } else {
         // No hay productos desmarcados, recepción normal completa
-        const totalUnidadesOK = productosMarcadosOK.reduce((sum, p) => sum + p.cantidad_recepcionada, 0);
         Swal.fire({
-            title: '✅ Confirmar Recepción Completa',
+            title: 'Confirmar recepción completa',
             html: `
                 <div class="text-start">
-                    <p>Vas a recepcionar <strong>${totalUnidadesOK}</strong> unidades (<strong>${productosMarcadosOK.length}</strong> líneas de producto) en perfecto estado.</p>
-                    <div class="alert alert-success">
-                        <i class="bi bi-check-circle-fill me-2"></i>
-                        Todos los productos están marcados como <strong>OK</strong>
+                    <p class="mb-2">
+                        Documento <strong>Nº ${documentoSeleccionado.numero_documento}</strong> ·
+                        ${origenDoc} <i class="bi bi-arrow-right"></i> <strong>${destinoDoc}</strong>
+                    </p>
+                    ${bloqueTotales}
+                    <div class="alert alert-success mb-0 py-2 small">
+                        <i class="bi bi-check-circle-fill me-1"></i>
+                        Las <strong>${productosMarcadosOK.length}</strong> líneas están marcadas OK:
+                        entran <strong>${totalIngresa}</strong> unidades al stock de <strong>${destinoDoc}</strong>.
                     </div>
-                    <p class="text-muted mb-0">El stock se incrementará automáticamente en tu sucursal.</p>
                 </div>
             `,
             icon: 'success',
             showCancelButton: true,
             confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Sí, confirmar recepción',
             cancelButtonText: 'Cancelar',
-            confirmButtonColor: '#28a745'
+            confirmButtonColor: '#28a745',
+            width: '700px'
         }).then(result => {
             if (!result.isConfirmed) return;
             procesarRecepcion(true);  // true = incluir todos (que están OK)
@@ -5786,7 +6392,7 @@ function cambiarModoVista(nuevoModoEmitidos, modo) {
     } else {
         $('#btnModoRecibidos').addClass('active');
         $('#tituloSeccionDocumentos').text('Documentos de Traspaso');
-        $('#subtituloSeccionDocumentos').text('Muestra documentos internos pendientes y recepcionados dirigidos a tu sucursal');
+        $('#subtituloSeccionDocumentos').text('Documentos donde mi sucursal es origen o destino, filtrables por estado');
         $('#filterEstadoDte').closest('.col-md-3').show();
         paginaActual = 1;
         cargarRecepciones();

@@ -112,7 +112,11 @@ def venta_fideliza(ticket, *, tipo_documento=None, cotizacion=None):
     rut = (getattr(ticket, 'cliente_rut', '') or '').strip()
     if not rut:
         return False, 'venta sin RUT de cliente'
-    if rut in RUT_FICTICIOS:
+    # Comparación NORMALIZADA (sin puntos/guion/espacios): `RUT_FICTICIOS` está
+    # escrito en un solo formato, pero el RUT del ticket llega como lo tecleó la
+    # caja. Con comparación literal, "66.666.666-6" se colaba como cliente real
+    # y el consumidor final acumulaba puntos.
+    if normalizar_rut(rut) in {normalizar_rut(r) for r in RUT_FICTICIOS}:
         return False, 'RUT genérico de consumidor final'
 
     from app.models.base import validar_rut_chileno as _validar_rut

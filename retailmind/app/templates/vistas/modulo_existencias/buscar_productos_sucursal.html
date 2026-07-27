@@ -692,6 +692,12 @@ kbd.sc {
 }
 .modal-tallas-wrap tbody tr:hover { background: var(--np-primary-lt); }
 .modal-tallas-wrap tbody tr.sin-stock { background: rgba(255,77,77,.04); }
+
+/* Matriz talla × sucursal ("¿lo tienen en otra tienda?") */
+#mtBody tr.sin-stock { background: rgba(26,26,46,.03); }
+#mtBody tr:last-child { background: var(--np-primary-lt); }
+#mtBody td, #mtHead th { padding: .4rem .55rem; font-size: .8125rem; }
+#mtBody .cls-esp, #mtBody .cls-cat { margin-left: .25rem; }
 .talla-big { font-weight: 700; font-size: 1rem; color: var(--np-gray-900); }
 .sku-mono {
     font-family: 'SF Mono','Consolas',monospace;
@@ -1094,10 +1100,65 @@ kbd.sc {
     </div>
 </div>
 
+<!-- ===== MODAL: STOCK DEL ARTÍCULO EN TODAS LAS SUCURSALES ===== -->
+<div class="modal fade nexo-modal" id="modalOtrasTiendas" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-shop"></i>
+                    ¿Lo tienen en otra tienda?
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-prod-card mb-2">
+                    <h4 class="modal-prod-name" id="mtArticulo">-</h4>
+                    <p class="modal-prod-desc mb-0" id="mtDetalle">-</p>
+                </div>
+                <div id="mtLoading" class="pos-loading" style="display:none;">
+                    <div class="pos-spinner"></div>
+                    <p style="color:var(--np-gray-500);font-size:.875rem;margin:0;">Consultando todas las sucursales...</p>
+                </div>
+                <div id="mtVacio" class="pos-empty" style="display:none;">
+                    <i class="bi bi-inbox pos-empty-icon"></i>
+                    <h6>Sin stock de este artículo en ninguna sucursal</h6>
+                </div>
+                <div class="table-responsive" id="mtTablaWrap" style="display:none;max-height:52vh;overflow:auto;">
+                    <table class="pos-table" style="min-width:auto;">
+                        <thead><tr id="mtHead"></tr></thead>
+                        <tbody id="mtBody"></tbody>
+                    </table>
+                </div>
+                <p class="text-muted mt-2 mb-0" style="font-size:.75rem;">
+                    <i class="bi bi-info-circle"></i>
+                    El stock es el de cada bodega en este momento. No descuenta las unidades que ya salieron
+                    en un traspaso y que la sucursal destino todavía no ha recibido. Confirme por teléfono antes de prometer.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="pos-btn pos-btn-outline" data-bs-dismiss="modal"
+                        style="min-height:38px;padding:0 1rem;">
+                    <i class="bi bi-x-lg"></i>
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 /* ============================================================
    Búsqueda de Productos — POS optimizado
    ============================================================ */
+/* Metadatos de sucursal para el comparador entre tiendas: qué bodegas son
+   centro de distribución (no venden a público) y cuál es la sucursal activa. */
+window.SUCURSALES_META = {
+    {% for sucursal in sucursales %}'{{ sucursal.alias|escapejs }}': { cd: {% if sucursal.es_centro_distribucion %}true{% else %}false{% endif %}, id: {{ sucursal.id }} }{% if not forloop.last %},
+    {% endif %}{% endfor %}
+};
+window.SUCURSAL_ACTUAL_ID = {{ sucursal_actual_id|default:"null" }};
+
 $(document).ready(function () {
 
     let paginaActual  = 1;
@@ -1269,6 +1330,24 @@ $(document).ready(function () {
         }
         if ($('#solo_con_stock').is(':checked')) params.append('solo_con_stock', 'on');
 
+        // Sin ningún criterio la consulta recorre el catálogo completo (más de
+        // 130.000 productos) y devuelve un listado inútil de miles de páginas.
+        const hayCriterio = params.has('search') || params.has('sucursal_id') ||
+            params.has('atributo1_id') || params.has('atributo2_id') || params.has('atributo3_id') ||
+            params.has('categoria_id') || params.has('especialidad_id') ||
+            $('.pos-chip.active').length > 0;
+        if (!hayCriterio) {
+            setEstadoInicial();
+            Swal.fire({
+                icon: 'info',
+                title: 'Indique qué busca',
+                text: 'Escriba un artículo, SKU o descripción, o elija al menos un filtro (sucursal, marca, categoría…).',
+                confirmButtonColor: '#0066FF'
+            });
+            $('#search_input').focus();
+            return;
+        }
+
         // Chips inteligentes (botones, no van en el FormData)
         $('.pos-chip.active').each(function () {
             const flag = $(this).data('flag');
@@ -1409,11 +1488,18 @@ $(document).ready(function () {
                         <span class="suc-badge" title="${escHtml(p.sucursal)}">${escHtml(p.sucursal)}</span>
                     </td>
                     <td class="tc-act">
-                        <button type="button" class="btn-detalle btn-ver-tallas"
-                                data-producto="${dataAttr}" title="Ver tallas y stock">
-                            <i class="bi bi-rulers"></i>
-                            Tallas
-                        </button>
+                        <div class="d-flex flex-column gap-1 align-items-stretch">
+                            <button type="button" class="btn-detalle btn-ver-tallas"
+                                    data-producto="${dataAttr}" title="Ver tallas y stock">
+                                <i class="bi bi-rulers"></i>
+                                Tallas
+                            </button>
+                            <button type="button" class="btn-detalle btn-otras-tiendas"
+                                    data-producto="${dataAttr}" title="Ver el stock de este artículo en todas las sucursales">
+                                <i class="bi bi-shop"></i>
+                                Tiendas
+                            </button>
+                        </div>
                     </td>
                 </tr>
             `);
@@ -1516,6 +1602,126 @@ $(document).ready(function () {
 
         const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalDetalleTallas'));
         modal.show();
+    }
+
+    /* ---------- ¿Lo tienen en otra tienda? (matriz talla × sucursal) ---------- */
+    $(document).on('click', '.btn-otras-tiendas', function () {
+        abrirMatrizSucursales(JSON.parse($(this).attr('data-producto')));
+    });
+
+    function ordenarTallas(tallas) {
+        // Las tallas chilenas vienen como '7,5' / '38' / 'XL': primero las
+        // numéricas en orden, después el resto alfabético.
+        const num = (t) => {
+            const v = parseFloat(String(t).replace(',', '.'));
+            return isNaN(v) ? null : v;
+        };
+        return tallas.slice().sort((a, b) => {
+            const na = num(a), nb = num(b);
+            if (na !== null && nb !== null) return na - nb;
+            if (na !== null) return -1;
+            if (nb !== null) return 1;
+            return String(a).localeCompare(String(b));
+        });
+    }
+
+    function abrirMatrizSucursales(p) {
+        $('#mtArticulo').text(p.articulo);
+        $('#mtDetalle').text([p.descripcion, p.marca, p.color].filter(Boolean).join(' · '));
+        $('#mtLoading').show();
+        $('#mtTablaWrap').hide();
+        $('#mtVacio').hide();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalOtrasTiendas')).show();
+
+        $.ajax({
+            url: '{% url "obtener_productos_sucursal" %}',
+            type: 'GET',
+            data: { search: p.articulo, page_size: 100, page: 1 },
+            success: function (resp) {
+                $('#mtLoading').hide();
+                if (!resp.success) { $('#mtVacio').show(); return; }
+                // Mismo artículo = mismo código + marca + color: dos productos con
+                // el mismo código pero otra marca/color son artículos distintos.
+                const iguales = (resp.productos || []).filter(function (q) {
+                    return String(q.articulo).toUpperCase() === String(p.articulo).toUpperCase()
+                        && String(q.marca || '') === String(p.marca || '')
+                        && String(q.color || '') === String(p.color || '');
+                });
+                renderMatriz(iguales);
+            },
+            error: function () {
+                $('#mtLoading').hide();
+                $('#mtVacio').show();
+            }
+        });
+    }
+
+    function renderMatriz(productos) {
+        if (!productos.length) { $('#mtVacio').show(); return; }
+
+        const meta = window.SUCURSALES_META || {};
+        const tallasSet = {};
+        const filas = [];
+
+        productos.forEach(function (q) {
+            const porTalla = {};
+            (q.tallas_stock || []).forEach(function (t) {
+                // Un mismo producto puede tener la talla repetida en varias
+                // filas de Producto_Talla: hay que sumarlas, no pisarlas.
+                porTalla[t.talla] = (porTalla[t.talla] || 0) + (t.stock || 0);
+                tallasSet[t.talla] = true;
+            });
+            filas.push({
+                sucursal: q.sucursal,
+                sucursal_id: q.sucursal_id,
+                total: q.stock_total || 0,
+                porTalla: porTalla,
+                cd: !!(meta[q.sucursal] && meta[q.sucursal].cd)
+            });
+        });
+
+        const tallas = ordenarTallas(Object.keys(tallasSet));
+        // Tiendas primero (las que venden a público), bodegas al final; dentro,
+        // las que más stock tienen.
+        filas.sort(function (a, b) {
+            if (a.cd !== b.cd) return a.cd ? 1 : -1;
+            return b.total - a.total;
+        });
+
+        let head = '<th style="text-align:left;">Sucursal</th>';
+        tallas.forEach(function (t) { head += `<th style="text-align:center;">${escHtml(t)}</th>`; });
+        head += '<th style="text-align:center;">Total</th>';
+        $('#mtHead').html(head);
+
+        let body = '';
+        const totalPorTalla = {};
+        filas.forEach(function (f) {
+            const actual = window.SUCURSAL_ACTUAL_ID && String(f.sucursal_id) === String(window.SUCURSAL_ACTUAL_ID);
+            let fila = `<td style="text-align:left;white-space:nowrap;">
+                    <span class="suc-badge">${escHtml(f.sucursal)}</span>
+                    ${f.cd ? '<span class="cls-esp" title="Centro de distribución: no vende a público">bodega</span>' : ''}
+                    ${actual ? '<span class="cls-cat">aquí</span>' : ''}
+                </td>`;
+            tallas.forEach(function (t) {
+                const n = f.porTalla[t] || 0;
+                totalPorTalla[t] = (totalPorTalla[t] || 0) + n;
+                fila += `<td style="text-align:center;"><span class="stock-badge ${n === 0 ? 'sb-bajo' : (n < 5 ? 'sb-medio' : 'sb-alto')}">${n}</span></td>`;
+            });
+            fila += `<td style="text-align:center;"><strong>${f.total}</strong></td>`;
+            body += `<tr class="${f.total === 0 ? 'sin-stock' : ''}">${fila}</tr>`;
+        });
+
+        let pie = '<td style="text-align:left;"><strong>Total</strong></td>';
+        let granTotal = 0;
+        tallas.forEach(function (t) {
+            granTotal += (totalPorTalla[t] || 0);
+            pie += `<td style="text-align:center;"><strong>${totalPorTalla[t] || 0}</strong></td>`;
+        });
+        pie += `<td style="text-align:center;"><strong>${granTotal}</strong></td>`;
+        body += `<tr>${pie}</tr>`;
+
+        $('#mtBody').html(body);
+        $('#mtTablaWrap').show();
     }
 
     /* ---------- Utilidades de escape ---------- */

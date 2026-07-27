@@ -19,7 +19,7 @@ from django.db.models import (
     Q, F, Sum, Count, Case, When, Value, CharField, IntegerField,
     DecimalField, Prefetch, Subquery, OuterRef,
 )
-from django.db.models.functions import Coalesce, TruncDate
+from django.db.models.functions import Abs, Coalesce, TruncDate
 from django.utils import timezone
 from django.core.paginator import Paginator
 
@@ -31,6 +31,42 @@ from .models import (
 )
 
 logger = logging.getLogger('app')
+
+
+# =====================================================
+# 0. ALCANCE POR EMPRESA (scoping)
+# =====================================================
+#
+# Varios endpoints de este módulo reciben un identificador del cliente (sku,
+# producto_id, producto_talla_id, sucursal_destino_id) y lo resolvían contra
+# TODA la base: con solo cambiar el número se veía o se movía mercadería de
+# otra empresa. El alcance real de un usuario son las sucursales de las
+# empresas donde tiene un EmpresaUser vigente (status=True); nunca lo que
+# venga en la request ni lo que haya quedado en la sesión.
+
+
+def _sucursales_usuario(request):
+    """
+    IDs de sucursal a los que el usuario tiene acceso (todas las de sus
+    empresas con EmpresaUser.status=True). Se cachea por request porque
+    varios endpoints lo consultan más de una vez.
+    """
+    cache = getattr(request, '_suc_ids_usuario_cache', None)
+    if cache is not None:
+        return cache
+
+    empresa_ids = EmpresaUser.objects.filter(
+        user=request.user, status=True
+    ).values_list('empresa_id', flat=True)
+    suc_ids = list(
+        Sucursal.objects.filter(empresa_id__in=empresa_ids).values_list('id', flat=True)
+    )
+    request._suc_ids_usuario_cache = suc_ids
+    return suc_ids
+
+
+def _sin_acceso(mensaje='No tienes acceso a este dato: pertenece a otra empresa.'):
+    return JsonResponse({'success': False, 'error': mensaje}, status=403)
 
 
 # =====================================================
@@ -66,14 +102,50 @@ def _es_traspaso(concepto):
     return concepto.startswith('TRASPASO') or concepto == 'REGULARIZACION_TRASPASO'
 
 
-def _empresa_ids_producto(producto):
-    """IDs de sucursal de la empresa dueña del producto (para acotar la búsqueda)."""
+def _delta_kardex(movimiento):
+    """
+    Unidades con las que un movimiento afecta el saldo de su serie.
+
+    Es la MISMA regla que usa la tarjeta de movimiento: INGRESO/DEVOLUCION
+    suman, EGRESO/PERDIDA restan y el resto respeta el signo con que se guardó
+    la cantidad. Se aísla en una función para que el saldo acumulado se calcule
+    igual en trazabilidad, en la tarjeta y en las agregaciones SQL.
+    """
+    cantidad = movimiento.cantidad or 0
+    if movimiento.tipo_movimiento in _TIPOS_ENTRADA:
+        return abs(cantidad)
+    if movimiento.tipo_movimiento in _TIPOS_SALIDA:
+        return -abs(cantidad)
+    return cantidad
+
+
+# Versión SQL de `_delta_kardex`, para sumar saldos sin traer las filas.
+DELTA_KARDEX_SQL = Case(
+    When(tipo_movimiento__in=_TIPOS_ENTRADA, then=Abs('cantidad')),
+    When(tipo_movimiento__in=_TIPOS_SALIDA, then=Abs('cantidad') * Value(-1)),
+    default=F('cantidad'),
+    output_field=IntegerField(),
+)
+
+
+def _empresa_ids_producto(producto, suc_ids_permitidos=None):
+    """
+    IDs de sucursal de la empresa dueña del producto (para acotar la búsqueda).
+
+    Si se pasa `suc_ids_permitidos`, el resultado se intersecta con el alcance
+    del usuario: un artículo puede existir en varias empresas del holding y
+    solo deben verse las bodegas a las que el usuario tiene acceso.
+    """
     empresa_id = producto.sucursal.empresa_id if producto.sucursal else None
     if empresa_id is None:
-        return None, [producto.sucursal_id] if producto.sucursal_id else []
-    sucursal_ids = list(
-        Sucursal.objects.filter(empresa_id=empresa_id).values_list('id', flat=True)
-    )
+        sucursal_ids = [producto.sucursal_id] if producto.sucursal_id else []
+    else:
+        sucursal_ids = list(
+            Sucursal.objects.filter(empresa_id=empresa_id).values_list('id', flat=True)
+        )
+    if suc_ids_permitidos is not None:
+        permitidos = set(suc_ids_permitidos)
+        sucursal_ids = [s for s in sucursal_ids if s in permitidos]
     return empresa_id, sucursal_ids
 
 
@@ -100,27 +172,35 @@ def api_tarjeta_movimiento(request):
     if not sku:
         return JsonResponse({'success': False, 'error': 'Debe ingresar un SKU o código de artículo.'}, status=400)
 
-    # 1) Resolver el artículo (código) a partir del SKU o del código directo.
-    pt_ref = None
-    if sku.isdigit():
-        pt_ref = (
-            Producto_Talla.objects
-            .select_related('producto', 'producto__sucursal')
-            .filter(sku=int(sku))
-            .first()
-        )
+    suc_ids_usuario = _sucursales_usuario(request)
+    if not suc_ids_usuario:
+        return _sin_acceso('Tu usuario no tiene empresas asignadas.')
+
+    # 1) Resolver el artículo (código) a partir del SKU o del código directo,
+    #    SIEMPRE dentro de las bodegas del usuario. Sin este filtro bastaba
+    #    conocer un SKU ajeno para leer el kardex completo de otra empresa.
+    def _buscar_pt(suc_ids):
+        qs = Producto_Talla.objects.select_related('producto', 'producto__sucursal')
+        if suc_ids is not None:
+            qs = qs.filter(producto__sucursal_id__in=suc_ids)
+        pt = qs.filter(sku=int(sku)).first() if sku.isdigit() else None
+        if pt is None:
+            pt = qs.filter(producto__articulo__iexact=sku).first()
+        return pt
+
+    pt_ref = _buscar_pt(suc_ids_usuario)
     if pt_ref is None:
-        pt_ref = (
-            Producto_Talla.objects
-            .select_related('producto', 'producto__sucursal')
-            .filter(producto__articulo__iexact=sku)
-            .first()
-        )
-    if pt_ref is None:
+        # Distinguir "no existe" de "existe pero es de otra empresa".
+        if _buscar_pt(None) is not None:
+            logger.warning(
+                "Tarjeta de movimiento denegada: %s pidió el SKU/código «%s» fuera de su alcance",
+                request.user.username, sku,
+            )
+            return _sin_acceso('Ese SKU pertenece a una empresa a la que no tienes acceso.')
         return JsonResponse({'success': False, 'error': f'SKU o código «{sku}» no encontrado.'}, status=404)
 
     articulo = pt_ref.producto.articulo
-    empresa_id, sucursal_ids = _empresa_ids_producto(pt_ref.producto)
+    empresa_id, sucursal_ids = _empresa_ids_producto(pt_ref.producto, suc_ids_usuario)
 
     # 2) Todas las variantes (talla × sucursal) de este artículo en la empresa.
     productos_talla = list(
@@ -150,11 +230,47 @@ def api_tarjeta_movimiento(request):
 
     movimientos = list(movimientos_qs.order_by('fecha', 'hora', 'id'))
 
+    # 3.b) SALDO DE APERTURA por serie (bodega·talla).
+    #      Con filtro "Desde" el kardex arrancaba en 0: lo anterior al rango
+    #      existe, solo que no se mostraba, así que el saldo final nunca cuadraba
+    #      con el stock. Se suma en SQL todo lo anterior a la fecha inicial y esa
+    #      cifra es el punto de partida de cada serie.
+    saldos_por_serie = {}
+    aperturas = []
+    if fecha_desde:
+        alias_por_sucursal = {
+            pt.producto.sucursal_id: (pt.producto.sucursal.alias if pt.producto.sucursal else '-')
+            for pt in productos_talla
+        }
+        sku_por_serie = {
+            (pt.producto.sucursal_id, pt.talla): str(pt.sku) for pt in productos_talla
+        }
+        previos = (
+            Movimientos_Producto.objects
+            .filter(ProductoTalla_id__in=pt_ids, fecha__lt=fecha_desde)
+            .values('ProductoTalla__producto__sucursal_id', 'ProductoTalla__talla')
+            .annotate(saldo=Sum(DELTA_KARDEX_SQL))
+            .order_by()
+        )
+        for fila in previos:
+            suc_id = fila['ProductoTalla__producto__sucursal_id']
+            talla_prev = fila['ProductoTalla__talla']
+            saldo_previo = fila['saldo'] or 0
+            serie_prev = (suc_id, talla_prev)
+            saldos_por_serie[serie_prev] = saldo_previo
+            aperturas.append({
+                'bodega_id': suc_id,
+                'bodega': alias_por_sucursal.get(suc_id, '-'),
+                'talla': talla_prev,
+                'sku': sku_por_serie.get(serie_prev, ''),
+                'saldo': saldo_previo,
+            })
+        aperturas.sort(key=lambda a: (a['bodega'], a['talla']))
+
     # 4) Kardex por serie (bodega dueña del SKU + talla) con saldo correcto.
     #    Cada Producto_Talla vive en UNA sucursal (producto.sucursal): esa es la
     #    "bodega" del saldo. En un TRASPASO, el movimiento con cantidad negativa
     #    es una salida de esa bodega; el positivo, una entrada.
-    saldos_por_serie = {}
     movimientos_data = []
     for m in movimientos:
         pt = m.ProductoTalla
@@ -163,14 +279,7 @@ def api_tarjeta_movimiento(request):
         talla = pt.talla
         serie = (pt.producto.sucursal_id, talla)
 
-        cant = m.cantidad
-        if m.tipo_movimiento in _TIPOS_ENTRADA:
-            delta = abs(cant)
-        elif m.tipo_movimiento in _TIPOS_SALIDA:
-            delta = -abs(cant)
-        else:
-            # TRASPASO / AJUSTE / otros: respetar el signo con que se guardó.
-            delta = cant
+        delta = _delta_kardex(m)
         saldos_por_serie[serie] = saldos_por_serie.get(serie, 0) + delta
 
         es_entrada = delta > 0
@@ -291,6 +400,9 @@ def api_tarjeta_movimiento(request):
         for m in movimientos_data if m['es_traspaso']
     })
 
+    saldo_apertura_total = sum(a['saldo'] for a in aperturas)
+    saldo_final_total = sum(saldos_por_serie.values())
+
     resumen = {
         'total_movimientos': len(movimientos_data),
         'total_entradas': total_entradas,
@@ -298,6 +410,8 @@ def api_tarjeta_movimiento(request):
         'total_vendido': total_vendido,
         'traspasos': traspasos_count,
         'stock_actual': stock_total,
+        'saldo_apertura': saldo_apertura_total,
+        'saldo_final': saldo_final_total,
         'primer_movimiento': movimientos_data[0]['fecha'] if movimientos_data else '-',
         'ultimo_movimiento': movimientos_data[-1]['fecha'] if movimientos_data else '-',
     }
@@ -306,10 +420,12 @@ def api_tarjeta_movimiento(request):
         'success': True,
         'producto': producto_info,
         'movimientos': movimientos_data,
+        'aperturas': aperturas,
         'distribucion': distribucion_list,
         'timeline': timeline,
         'timeline_omitidos': timeline_omitidos,
         'resumen': resumen,
+        'rango': {'desde': fecha_desde or '', 'hasta': fecha_hasta or ''},
         'filtros': {
             'tallas': tallas_disponibles,
             'bodegas': bodegas_disponibles,
@@ -434,6 +550,10 @@ def api_buscar_productos_tarjeta_movimiento(request):
     if len(q) < 2:
         return JsonResponse({'success': True, 'productos': []})
 
+    suc_ids_usuario = _sucursales_usuario(request)
+    if not suc_ids_usuario:
+        return JsonResponse({'success': True, 'productos': []})
+
     filtro = (
         Q(producto__articulo__icontains=q) |
         Q(producto__descripcion__icontains=q)
@@ -443,6 +563,7 @@ def api_buscar_productos_tarjeta_movimiento(request):
 
     productos_talla = (
         Producto_Talla.objects
+        .filter(producto__sucursal_id__in=suc_ids_usuario)
         .filter(filtro)
         .select_related('producto', 'producto__atributo1', 'producto__sucursal')
         .order_by('producto__articulo', 'talla')[:60]
@@ -502,8 +623,11 @@ def api_obtener_sucursales_despacho(request):
     empresa_id = request.session.get('idEmpresaActual')
     sucursal_actual = request.session.get('idSucursalActual')
 
+    # La empresa activa viene de la sesión: se acota igual al alcance real del
+    # usuario para no listar bodegas de una empresa que ya no tiene asignada.
     sucursales = Sucursal.objects.filter(
         empresa_id=empresa_id,
+        id__in=_sucursales_usuario(request),
     ).exclude(id=sucursal_actual).values('id', 'alias', 'direccion', 'ciudad')
 
     return JsonResponse({
@@ -528,6 +652,7 @@ def _serializar_producto_despacho(pt):
 
 
 _DESPACHO_LIMITE_TRAER_TODO = 2000
+_PENDIENTES_ITEMS_POR_SUCURSAL = 25
 
 
 @login_required
@@ -542,7 +667,7 @@ def api_productos_disponibles_despacho(request):
     marca_id = request.GET.get('marca_id') or None
     categoria_id = request.GET.get('categoria_id') or None
     traer_todo = request.GET.get('traer_todo') == '1'
-    page_num = int(request.GET.get('page', 1))
+    page_num = _entero(request.GET.get('page'), 1, 1)
 
     productos_qs = Producto_Talla.objects.filter(
         producto__sucursal_id=sucursal_id,
@@ -617,44 +742,78 @@ def api_marcas_disponibles_despacho(request):
 @login_required
 @require_GET
 def api_pendientes_despacho_sucursal(request):
-    """Devuelve pendientes de despacho agrupados por sucursal destino."""
-    sucursal_id = request.session.get('idSucursalActual')
+    """
+    Pendientes de despacho (mercadería comprada para otra sucursal que sigue en
+    la bodega) agrupados por sucursal destino.
 
+    Se devuelve como máximo `_PENDIENTES_ITEMS_POR_SUCURSAL` líneas por destino
+    —hay más de mil abiertas en producción y volcarlas todas en la tarjeta
+    dejaba la pantalla inservible—, ordenadas de la más antigua a la más nueva,
+    que es el orden en que hay que despacharlas.
+    """
+    sucursal_id = request.session.get('idSucursalActual')
+    if not sucursal_id or sucursal_id not in _sucursales_usuario(request):
+        return _sin_acceso('Tu sucursal activa no pertenece a una empresa habilitada para ti.')
+
+    hoy = timezone.localdate()
     pendientes = PendienteDespacho.objects.filter(
         sucursal_origen_id=sucursal_id,
         estado__in=['PENDIENTE', 'PARCIAL'],
     ).select_related(
         'producto_talla', 'producto_talla__producto',
         'producto_talla__producto__atributo1',
-        'sucursal_destino',
-    ).order_by('sucursal_destino__alias', 'producto_talla__producto__articulo')
+        'sucursal_destino', 'dte_origen',
+    ).order_by('created_at')
 
     por_sucursal = {}
+    total_unidades = 0
+    total_lineas = 0
     for p in pendientes:
-        suc_alias = p.sucursal_destino.alias
-        if suc_alias not in por_sucursal:
-            por_sucursal[suc_alias] = {
+        suc_alias = p.sucursal_destino.alias if p.sucursal_destino_id else '—'
+        grupo = por_sucursal.get(suc_alias)
+        if grupo is None:
+            grupo = por_sucursal[suc_alias] = {
                 'sucursal_id': p.sucursal_destino_id,
                 'alias': suc_alias,
                 'items': [],
                 'total_unidades': 0,
+                'total_lineas': 0,
+                'dias_mas_antiguo': 0,
+                'truncado': False,
             }
         restante = p.cantidad_restante
-        por_sucursal[suc_alias]['items'].append({
-            'pendiente_id': p.id,
-            'sku': str(p.producto_talla.sku),
-            'articulo': p.producto_talla.producto.articulo,
-            'talla': p.producto_talla.talla,
-            'cantidad_total': p.cantidad,
-            'cantidad_despachada': p.cantidad_despachada,
-            'cantidad_restante': restante,
-            'marca': p.producto_talla.producto.atributo1.valor if p.producto_talla.producto.atributo1 else '-',
-        })
-        por_sucursal[suc_alias]['total_unidades'] += restante
+        dias = (hoy - timezone.localtime(p.created_at).date()).days if p.created_at else 0
+
+        if len(grupo['items']) < _PENDIENTES_ITEMS_POR_SUCURSAL:
+            grupo['items'].append({
+                'pendiente_id': p.id,
+                'sku': str(p.producto_talla.sku),
+                'articulo': p.producto_talla.producto.articulo,
+                'talla': p.producto_talla.talla,
+                'cantidad_total': p.cantidad,
+                'cantidad_despachada': p.cantidad_despachada,
+                'cantidad_restante': restante,
+                'dias': dias,
+                'documento': (str(p.dte_origen.numero_documento) if p.dte_origen_id else ''),
+                'marca': p.producto_talla.producto.atributo1.valor if p.producto_talla.producto.atributo1 else '-',
+            })
+        else:
+            grupo['truncado'] = True
+
+        grupo['total_unidades'] += restante
+        grupo['total_lineas'] += 1
+        grupo['dias_mas_antiguo'] = max(grupo['dias_mas_antiguo'], dias)
+        total_unidades += restante
+        total_lineas += 1
+
+    grupos = sorted(por_sucursal.values(), key=lambda g: -g['total_unidades'])
 
     return JsonResponse({
         'success': True,
-        'pendientes_por_sucursal': list(por_sucursal.values()),
+        'pendientes_por_sucursal': grupos,
+        'total_unidades': total_unidades,
+        'total_lineas': total_lineas,
+        'items_por_sucursal': _PENDIENTES_ITEMS_POR_SUCURSAL,
     })
 
 
@@ -677,6 +836,13 @@ def api_crear_despacho_masivo(request):
     if not despachos:
         return JsonResponse({'success': False, 'error': 'No hay despachos a procesar.'}, status=400)
 
+    # El origen sale de la sesión, pero el destino y los SKUs llegan en el body:
+    # hay que validarlos contra las bodegas del usuario o se podría mover
+    # mercadería de/hacia otra empresa.
+    suc_ids_usuario = _sucursales_usuario(request)
+    if sucursal_origen_id not in suc_ids_usuario:
+        return _sin_acceso('Tu sucursal activa no pertenece a una empresa habilitada para ti.')
+
     sucursal_origen = get_object_or_404(Sucursal, id=sucursal_origen_id)
     usuario = request.user
     traspasos_creados = []
@@ -688,6 +854,15 @@ def api_crear_despacho_masivo(request):
                 items = despacho.get('items', [])
                 if not items or not suc_destino_id:
                     continue
+
+                try:
+                    suc_destino_id = int(suc_destino_id)
+                except (TypeError, ValueError):
+                    raise ValueError(f'Sucursal destino inválida: {suc_destino_id!r}.')
+                if suc_destino_id not in suc_ids_usuario:
+                    raise PermissionError(
+                        f'La sucursal destino {suc_destino_id} no pertenece a tus empresas.'
+                    )
 
                 sucursal_destino = get_object_or_404(Sucursal, id=suc_destino_id)
 
@@ -711,6 +886,15 @@ def api_crear_despacho_masivo(request):
                         continue
 
                     pt = get_object_or_404(Producto_Talla, id=pt_id)
+
+                    # El SKU debe vivir en la bodega desde la que se despacha:
+                    # si no, se estaría descontando stock de otra sucursal
+                    # (potencialmente de otra empresa) con un id arbitrario.
+                    if pt.producto.sucursal_id != sucursal_origen.id:
+                        raise PermissionError(
+                            f'El SKU {pt.sku} no pertenece a la bodega de origen '
+                            f'{sucursal_origen.alias}.'
+                        )
 
                     if pt.stock < cantidad:
                         raise ValueError(
@@ -763,6 +947,11 @@ def api_crear_despacho_masivo(request):
                     'items': len(items),
                 })
 
+    except PermissionError as e:
+        logger.warning(
+            "Despacho masivo denegado a %s: %s", request.user.username, e
+        )
+        return _sin_acceso(str(e))
     except ValueError as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
@@ -775,19 +964,213 @@ def api_crear_despacho_masivo(request):
 
 _ESTADOS_TRASPASO_VALIDOS = {'PENDIENTE', 'APROBADO', 'EN_TRANSITO', 'RECIBIDO', 'RECHAZADO', 'ANULADO'}
 
+# Días que se consideran "tránsito normal" antes de marcar un despacho como
+# no recibido. Por encima de este umbral la mercadería salió de la bodega,
+# ya no está en el stock del origen y nadie la ingresó en el destino.
+_DIAS_TRANSITO_NORMAL = 3
+_HISTORIAL_DIAS_DEFAULT = 90
+_HISTORIAL_DIAS_MAX = 365
+_HISTORIAL_MAX_DOCUMENTOS = 1500
+
+
+def _entero(valor, default, minimo=None, maximo=None):
+    """int() tolerante: la query string es entrada del usuario, no debe dar 500."""
+    try:
+        n = int(valor)
+    except (TypeError, ValueError):
+        return default
+    if minimo is not None and n < minimo:
+        return minimo
+    if maximo is not None and n > maximo:
+        return maximo
+    return n
+
+
+def _historial_despachos_reales(request, sucursal_id):
+    """
+    Historial REAL de despachos a sucursales, reconstruido desde el kardex.
+
+    El circuito que se usa a diario no crea filas en `Traspaso`: se emite un
+    DTE (guía o factura) desde la bodega origen — que escribe TRASPASO_SALIDA
+    por cada SKU — y el destino lo ingresa desde Recepción de Documentos, que
+    escribe TRASPASO_ENTRADA contra el MISMO dte. Por eso el historial se
+    agrupa por DTE y no por Traspaso.
+
+    Unidades pendientes = enviadas − recibidas − devueltas por NC.
+    (Una NC sobre el documento devuelve físicamente la diferencia al origen
+    con concepto DEVOLUCION_NC: si no se descuenta, el panel alertaría por
+    faltantes que ya se resolvieron.)
+    """
+    from django.db.models import Min as _Min
+    from .models import Dte
+    from .constants_kardex import CONCEPTOS_TRASPASO_ENTRADA
+
+    dias = _entero(request.GET.get('dias'), _HISTORIAL_DIAS_DEFAULT, 1, _HISTORIAL_DIAS_MAX)
+    filtro = (request.GET.get('filtro') or '').strip().upper()
+    page_num = _entero(request.GET.get('page'), 1, 1)
+    hoy = timezone.localdate()
+    desde = hoy - timedelta(days=dias)
+
+    # 1) Qué documentos entran en la ventana. 2) Sus totales completos.
+    #    El corte por fecha se aplica SOLO para elegir los documentos: un mismo
+    #    DTE tiene movimientos repartidos en varios días (se despacha por
+    #    partes) y sumar únicamente los que caen dentro de la ventana daba
+    #    "enviadas" mutiladas — llegaba a mostrar más recibidas que enviadas.
+    dte_ids = list(
+        Movimientos_Producto.objects
+        .filter(concepto='TRASPASO_SALIDA', dte__isnull=False,
+                sucursal_origen_id=sucursal_id, fecha__gte=desde)
+        .order_by().values_list('dte_id', flat=True).distinct()[:_HISTORIAL_MAX_DOCUMENTOS]
+    )
+
+    salidas = list(
+        Movimientos_Producto.objects
+        .filter(concepto='TRASPASO_SALIDA', dte_id__in=dte_ids,
+                sucursal_origen_id=sucursal_id)
+        .values('dte_id', 'sucursal_destino_id', 'sucursal_destino__alias',
+                'dte__tipo_documento', 'dte__numero_documento', 'dte__estado_dte')
+        .annotate(enviadas=Sum(Abs('cantidad')), items=Count('id'), fecha_salida=_Min('fecha'))
+        .order_by('-fecha_salida')
+    )
+
+    recibidas_por_dte = dict(
+        Movimientos_Producto.objects
+        .filter(concepto__in=CONCEPTOS_TRASPASO_ENTRADA, dte_id__in=dte_ids)
+        .values_list('dte_id').annotate(u=Sum(Abs('cantidad'))).order_by()
+    )
+
+    # Notas de crédito emitidas contra esos documentos: sus movimientos
+    # reingresan la mercadería al origen, así que cierran la diferencia.
+    nc_de_original = dict(
+        Dte.objects.filter(documento_afectado_id__in=dte_ids)
+        .values_list('id', 'documento_afectado_id')
+    )
+    devueltas_por_dte = {}
+    if nc_de_original:
+        for fila in (Movimientos_Producto.objects
+                     .filter(dte_id__in=list(nc_de_original.keys()),
+                             tipo_movimiento__in=_TIPOS_ENTRADA)
+                     .values('dte_id').annotate(u=Sum(Abs('cantidad'))).order_by()):
+            original = nc_de_original.get(fila['dte_id'])
+            if original:
+                devueltas_por_dte[original] = devueltas_por_dte.get(original, 0) + (fila['u'] or 0)
+
+    datos = []
+    resumen = {
+        'documentos': 0, 'unidades_enviadas': 0, 'unidades_recibidas': 0,
+        'unidades_pendientes': 0, 'docs_sin_recibir': 0, 'unidades_sin_recibir': 0,
+        'docs_en_transito': 0, 'unidades_en_transito': 0, 'docs_recibidos': 0,
+        'docs_sobre_recibidos': 0, 'unidades_sobre_recibidas': 0,
+    }
+
+    for s in salidas:
+        enviadas = s['enviadas'] or 0
+        recibidas = recibidas_por_dte.get(s['dte_id'], 0) or 0
+        devueltas = devueltas_por_dte.get(s['dte_id'], 0) or 0
+        pendientes = max(0, enviadas - recibidas - devueltas)
+        fecha_salida = s['fecha_salida']
+        dias_transcurridos = (hoy - fecha_salida).days if fecha_salida else 0
+
+        if recibidas > enviadas:
+            # El destino ingresó más unidades de las que salieron de la bodega:
+            # no es un pendiente, es una descuadratura que hay que revisar.
+            situacion = 'SOBRE_RECIBIDO'
+        elif pendientes <= 0:
+            situacion = 'RECIBIDO'
+        elif dias_transcurridos <= _DIAS_TRANSITO_NORMAL:
+            situacion = 'EN_TRANSITO'
+        else:
+            situacion = 'SIN_RECIBIR'
+
+        resumen['documentos'] += 1
+        resumen['unidades_enviadas'] += enviadas
+        resumen['unidades_recibidas'] += recibidas
+        resumen['unidades_pendientes'] += pendientes
+        if situacion == 'SIN_RECIBIR':
+            resumen['docs_sin_recibir'] += 1
+            resumen['unidades_sin_recibir'] += pendientes
+        elif situacion == 'EN_TRANSITO':
+            resumen['docs_en_transito'] += 1
+            resumen['unidades_en_transito'] += pendientes
+        elif situacion == 'SOBRE_RECIBIDO':
+            resumen['docs_sobre_recibidos'] += 1
+            resumen['unidades_sobre_recibidas'] += (recibidas - enviadas)
+        else:
+            resumen['docs_recibidos'] += 1
+
+        datos.append({
+            'dte_id': s['dte_id'],
+            'tipo_documento': s['dte__tipo_documento'] or '',
+            'numero_documento': s['dte__numero_documento'],
+            'destino': s['sucursal_destino__alias'] or '—',
+            'fecha': fecha_salida.strftime('%d/%m/%Y') if fecha_salida else '',
+            'dias': dias_transcurridos,
+            'items': s['items'],
+            'enviadas': enviadas,
+            'recibidas': recibidas,
+            'devueltas_nc': devueltas,
+            'pendientes': pendientes,
+            'estado_dte': s['dte__estado_dte'] or '',
+            'situacion': situacion,
+        })
+
+    if filtro in ('SIN_RECIBIR', 'EN_TRANSITO', 'RECIBIDO', 'SOBRE_RECIBIDO'):
+        datos_filtrados = [d for d in datos if d['situacion'] == filtro]
+    elif filtro == 'PENDIENTE':  # todo lo que salió y aún no está completo
+        datos_filtrados = [d for d in datos if d['pendientes'] > 0]
+    else:
+        datos_filtrados = datos
+
+    # Lo que no llegó primero: es lo que hay que perseguir.
+    if filtro in ('', 'PENDIENTE', 'SIN_RECIBIR'):
+        datos_filtrados = sorted(
+            datos_filtrados,
+            key=lambda d: (0 if d['situacion'] == 'SIN_RECIBIR' else 1, -d['pendientes'], -d['dias']),
+        )
+
+    paginator = Paginator(datos_filtrados, 20)
+    page = paginator.get_page(page_num)
+
+    return JsonResponse({
+        'success': True,
+        'modo': 'dte',
+        'dias': dias,
+        'umbral_transito': _DIAS_TRANSITO_NORMAL,
+        'despachos': list(page),
+        'resumen': resumen,
+        'pagina_actual': page.number,
+        'total_paginas': paginator.num_pages,
+        'total_despachos': paginator.count,
+        'truncado': len(salidas) >= _HISTORIAL_MAX_DOCUMENTOS,
+    })
+
 
 @login_required
 @require_GET
 def api_historial_despachos(request):
     """
-    Historial de despachos (Traspaso) creados desde la sucursal actual como origen.
-    Parámetros: estado, fecha_desde, fecha_hasta, page.
+    Historial de despachos desde la sucursal actual.
+
+    - `vista=dte` (por defecto): despachos reales reconstruidos desde el kardex
+      (DTE de traspaso), con unidades enviadas / recibidas / pendientes.
+    - `vista=traspaso`: filas del modelo `Traspaso` (flujo interno del botón
+      "Enviar despachos" de esta pantalla).
+    Parámetros vista=traspaso: estado, fecha_desde, fecha_hasta, page.
     """
     sucursal_id = request.session.get('idSucursalActual')
+
+    # El id de sucursal viene de la sesión, pero igual se acota al alcance real
+    # del usuario: si cambió de empresa, no debe seguir viendo la bodega vieja.
+    if not sucursal_id or sucursal_id not in _sucursales_usuario(request):
+        return _sin_acceso('Tu sucursal activa no pertenece a una empresa habilitada para ti.')
+
+    if (request.GET.get('vista') or 'dte').lower() != 'traspaso':
+        return _historial_despachos_reales(request, sucursal_id)
+
     estado = request.GET.get('estado', '').strip().upper()
     fecha_desde = request.GET.get('fecha_desde', '')
     fecha_hasta = request.GET.get('fecha_hasta', '')
-    page_num = int(request.GET.get('page', 1))
+    page_num = _entero(request.GET.get('page'), 1, 1)
 
     traspasos_qs = Traspaso.objects.filter(
         sucursal_origen_id=sucursal_id,
@@ -828,6 +1211,7 @@ def api_historial_despachos(request):
 
     return JsonResponse({
         'success': True,
+        'modo': 'traspaso',
         'despachos': datos,
         'pagina_actual': page.number,
         'total_paginas': paginator.num_pages,
@@ -847,6 +1231,98 @@ def trazabilidad_producto(request):
     return render(request, 'vistas/modulo_existencias/trazabilidad_producto.html')
 
 
+# Topes de la trazabilidad. El corte se INFORMA al frontend (antes se cortaba en
+# silencio y la pantalla daba a entender que el producto no tenía más historia).
+_TRAZA_MAX_MOVIMIENTOS = 200
+_TRAZA_MAX_TRASPASOS = 100
+_TRAZA_MAX_TIMELINE = 100
+
+
+def _traspasos_producto_talla(producto_talla, limite=_TRAZA_MAX_TRASPASOS):
+    """
+    Traspasos de un SKU, con la fuente de la que salieron.
+
+    `Traspaso_Detalle` está VACÍA en producción (los despachos históricos nunca
+    la poblaron), así que leerla sola hacía que la pestaña saliera siempre vacía
+    y pareciera que el producto jamás se movió entre bodegas. Si no hay filas
+    formales, se reconstruyen los traspasos desde los movimientos reales
+    (conceptos TRASPASO_* / REGULARIZACION_TRASPASO), que son el dato que sí
+    existe. La respuesta indica qué fuente se usó para poder decirlo en pantalla.
+
+    Devuelve (filas, meta) con filas normalizadas para una sola tabla.
+    """
+    bodega_id = producto_talla.producto.sucursal_id
+
+    detalles = list(
+        Traspaso_Detalle.objects
+        .filter(producto_talla=producto_talla)
+        .select_related('traspaso', 'traspaso__sucursal_origen', 'traspaso__sucursal_destino')
+        .order_by('-traspaso__fecha_solicitud')[:limite]
+    )
+    if detalles:
+        total = Traspaso_Detalle.objects.filter(producto_talla=producto_talla).count()
+        filas = []
+        for td in detalles:
+            t = td.traspaso
+            filas.append({
+                'numero': t.numero_traspaso,
+                'fecha': t.fecha_solicitud.strftime('%d/%m/%Y') if t.fecha_solicitud else '',
+                'hora': '',
+                'origen': t.sucursal_origen.alias if t.sucursal_origen else '-',
+                'destino': t.sucursal_destino.alias if t.sucursal_destino else '-',
+                'sentido': 'SALIDA' if t.sucursal_origen_id == bodega_id else 'ENTRADA',
+                'estado': t.estado,
+                'cantidad_solicitada': td.cantidad_solicitada,
+                'cantidad_recibida': td.cantidad_recibida,
+                'costo': td.costo,
+                'precio_venta': td.precio_venta,
+                'referencia': '',
+            })
+        return filas, {
+            'fuente': 'traspaso_detalle',
+            'total': total,
+            'mostrados': len(filas),
+            'omitidos': max(total - len(filas), 0),
+        }
+
+    movimientos_qs = (
+        Movimientos_Producto.objects
+        .filter(ProductoTalla=producto_talla)
+        .filter(Q(concepto__startswith='TRASPASO') | Q(concepto='REGULARIZACION_TRASPASO'))
+    )
+    total = movimientos_qs.count()
+    movimientos = list(
+        movimientos_qs
+        .select_related('sucursal_origen', 'sucursal_destino')
+        .order_by('-fecha', '-hora', '-id')[:limite]
+    )
+
+    filas = []
+    for m in movimientos:
+        delta = _delta_kardex(m)
+        filas.append({
+            'numero': '—',
+            'fecha': m.fecha.strftime('%d/%m/%Y') if m.fecha else '',
+            'hora': m.hora.strftime('%H:%M') if m.hora else '',
+            'origen': m.sucursal_origen.alias if m.sucursal_origen else '-',
+            'destino': m.sucursal_destino.alias if m.sucursal_destino else '-',
+            'sentido': 'ENTRADA' if delta > 0 else 'SALIDA',
+            'estado': m.estado,
+            'cantidad_solicitada': abs(delta),
+            'cantidad_recibida': None,
+            'costo': m.costo,
+            'precio_venta': m.precio,
+            'referencia': m.observaciones or m.referencia_externa or '',
+        })
+
+    return filas, {
+        'fuente': 'movimientos',
+        'total': total,
+        'mostrados': len(filas),
+        'omitidos': max(total - len(filas), 0),
+    }
+
+
 @login_required
 @require_GET
 def api_trazabilidad_producto(request):
@@ -859,16 +1335,28 @@ def api_trazabilidad_producto(request):
     if not sku:
         return JsonResponse({'success': False, 'error': 'Debe ingresar un SKU.'}, status=400)
 
+    suc_ids_usuario = _sucursales_usuario(request)
+    if not suc_ids_usuario:
+        return _sin_acceso('Tu usuario no tiene empresas asignadas.')
+
     # OJO: `sku` NO es único en la BD (dato legacy: hay SKUs repetidos). Antes
     # se usaba .get(sku=) y reventaba con MultipleObjectsReturned → la
     # trazabilidad no se mostraba. Se resuelve tolerando duplicados: se prefiere
     # la talla de la sucursal activa y se avisa que el SKU está duplicado.
+    # El filtro por bodegas del usuario evita además leer la trazabilidad
+    # (costos, precios, lotes) de un SKU de otra empresa.
     _qs_pt = Producto_Talla.objects.select_related(
         'producto', 'producto__atributo1', 'producto__atributo2',
         'producto__categoria', 'producto__sucursal',
-    ).filter(sku=sku)
+    ).filter(sku=sku, producto__sucursal_id__in=suc_ids_usuario)
     _n_sku = _qs_pt.count()
     if _n_sku == 0:
+        if Producto_Talla.objects.filter(sku=sku).exists():
+            logger.warning(
+                "Trazabilidad denegada: %s pidió el SKU %s fuera de su alcance",
+                request.user.username, sku,
+            )
+            return _sin_acceso('Ese SKU pertenece a una empresa a la que no tienes acceso.')
         return JsonResponse({'success': False, 'error': f'SKU {sku} no encontrado.'}, status=404)
     producto_talla = None
     if _n_sku > 1:
@@ -899,12 +1387,33 @@ def api_trazabilidad_producto(request):
         'sku_ocurrencias': _n_sku,
     }
 
-    # --- Movimientos ---
-    movimientos = Movimientos_Producto.objects.filter(
-        ProductoTalla=producto_talla,
-    ).select_related(
-        'sucursal_origen', 'sucursal_destino', 'dte', 'ticket',
-    ).order_by('-fecha', '-hora')[:200]
+    # --- Movimientos (kardex del SKU, con saldo acumulado) ---
+    #
+    # La trazabilidad es de UN Producto_Talla, o sea de UNA serie
+    # (bodega dueña · talla): el saldo acumulado se lee directo, sin agrupar.
+    # Se muestran los últimos `_TRAZA_MAX_MOVIMIENTOS`, pero el saldo NO puede
+    # arrancar en 0 o no cuadraría nunca con el stock: se calcula en SQL el
+    # saldo de toda la historia y se descuenta lo mostrado para obtener el
+    # saldo de apertura de la ventana.
+    movimientos_qs = Movimientos_Producto.objects.filter(ProductoTalla=producto_talla)
+    total_movimientos = movimientos_qs.count()
+    saldo_final = movimientos_qs.aggregate(t=Sum(DELTA_KARDEX_SQL))['t'] or 0
+
+    movimientos = list(
+        movimientos_qs.select_related(
+            'sucursal_origen', 'sucursal_destino', 'dte', 'ticket',
+        ).order_by('-fecha', '-hora', '-id')[:_TRAZA_MAX_MOVIMIENTOS]
+    )
+
+    deltas = {m.id: _delta_kardex(m) for m in movimientos}
+    saldo_apertura = saldo_final - sum(deltas.values())
+
+    # Recorrido cronológico ascendente para acumular (la lista viene descendente).
+    saldos = {}
+    saldo_corriente = saldo_apertura
+    for m in reversed(movimientos):
+        saldo_corriente += deltas[m.id]
+        saldos[m.id] = saldo_corriente
 
     movimientos_data = [{
         'id': m.id,
@@ -912,7 +1421,10 @@ def api_trazabilidad_producto(request):
         'hora': m.hora.strftime('%H:%M') if m.hora else '',
         'tipo': m.tipo_movimiento,
         'concepto': m.get_concepto_display(),
-        'cantidad': m.cantidad,
+        'concepto_codigo': m.concepto,
+        'es_traspaso': _es_traspaso(m.concepto),
+        'cantidad': deltas[m.id],
+        'saldo': saldos[m.id],
         'costo': m.costo,
         'precio': m.precio,
         'origen': m.sucursal_origen.alias if m.sucursal_origen else '-',
@@ -927,6 +1439,20 @@ def api_trazabilidad_producto(request):
         'referencia': m.referencia_externa or '',
         'estado': m.estado,
     } for m in movimientos]
+
+    stock_actual = producto_talla.stock or 0
+    movimientos_meta = {
+        'total': total_movimientos,
+        'mostrados': len(movimientos_data),
+        'omitidos': max(total_movimientos - len(movimientos_data), 0),
+        'truncado': total_movimientos > len(movimientos_data),
+        'limite': _TRAZA_MAX_MOVIMIENTOS,
+        'saldo_apertura': saldo_apertura,
+        'saldo_final': saldo_final,
+        'stock_actual': stock_actual,
+        'diferencia': stock_actual - saldo_final,
+        'cuadra': stock_actual == saldo_final,
+    }
 
     # --- Lotes FIFO ---
     lotes = LoteProducto.objects.filter(
@@ -947,23 +1473,7 @@ def api_trazabilidad_producto(request):
     } for l in lotes]
 
     # --- Traspasos ---
-    traspasos_detalle = Traspaso_Detalle.objects.filter(
-        producto_talla=producto_talla,
-    ).select_related(
-        'traspaso', 'traspaso__sucursal_origen', 'traspaso__sucursal_destino',
-    ).order_by('-traspaso__fecha_solicitud')[:50]
-
-    traspasos_data = [{
-        'numero': td.traspaso.numero_traspaso,
-        'fecha': td.traspaso.fecha_solicitud.strftime('%d/%m/%Y') if td.traspaso.fecha_solicitud else '',
-        'origen': td.traspaso.sucursal_origen.alias,
-        'destino': td.traspaso.sucursal_destino.alias,
-        'estado': td.traspaso.estado,
-        'cantidad_solicitada': td.cantidad_solicitada,
-        'cantidad_recibida': td.cantidad_recibida,
-        'costo': td.costo,
-        'precio_venta': td.precio_venta,
-    } for td in traspasos_detalle]
+    traspasos_data, traspasos_meta = _traspasos_producto_talla(producto_talla)
 
     # --- Cambios de precio ---
     historial_precios = HistorialCambioPrecio.objects.filter(
@@ -1008,17 +1518,21 @@ def api_trazabilidad_producto(request):
             'detalle': f"Cantidad: {m['cantidad']} | {m['origen']} → {m['destino']}",
             'responsable': m['responsable'],
         })
-    for t in traspasos_data:
-        timeline.append({
-            'fecha': t['fecha'],
-            'hora': '00:00',
-            'tipo': 'traspaso',
-            'icono': 'ri-truck-line',
-            'color': '#FFC107',
-            'titulo': f"Traspaso #{t['numero']} ({t['estado']})",
-            'detalle': f"{t['origen']} → {t['destino']} | Cant: {t['cantidad_solicitada']}",
-            'responsable': '',
-        })
+    # Los traspasos reconstruidos desde movimientos YA están en la timeline
+    # (son movimientos): solo se agregan aparte cuando vienen de la tabla formal
+    # Traspaso_Detalle, o se verían duplicados.
+    if traspasos_meta['fuente'] == 'traspaso_detalle':
+        for t in traspasos_data:
+            timeline.append({
+                'fecha': t['fecha'],
+                'hora': t.get('hora') or '00:00',
+                'tipo': 'traspaso',
+                'icono': 'ri-truck-line',
+                'color': '#FFC107',
+                'titulo': f"Traspaso #{t['numero']} ({t['estado']})",
+                'detalle': f"{t['origen']} → {t['destino']} | Cant: {t['cantidad_solicitada']}",
+                'responsable': '',
+            })
     for p in precios_data:
         timeline.append({
             'fecha': p['fecha'].split(' ')[0] if p['fecha'] else '',
@@ -1031,17 +1545,34 @@ def api_trazabilidad_producto(request):
             'responsable': p.get('usuario', ''),
         })
 
-    timeline.sort(key=lambda x: x.get('fecha', ''), reverse=True)
+    # Las fechas de la timeline son strings 'dd/mm/YYYY': ordenarlas como texto
+    # agrupaba por DÍA (30/01/2024 quedaba antes que 05/12/2026) y el corte
+    # posterior descartaba eventos arbitrarios. Se ordena por fecha real.
+    def _clave_orden(evento):
+        from datetime import datetime as _dt
+        fecha = (evento.get('fecha') or '').strip()
+        hora = (evento.get('hora') or '00:00').strip()
+        for formato in ('%d/%m/%Y %H:%M', '%d/%m/%Y'):
+            try:
+                return _dt.strptime(f"{fecha} {hora}".strip(), formato)
+            except ValueError:
+                continue
+        return _dt.min  # sin fecha reconocible: al final del listado
+
+    timeline.sort(key=_clave_orden, reverse=True)
 
     return JsonResponse({
         'success': True,
         'producto': producto_info,
         'movimientos': movimientos_data,
+        'movimientos_meta': movimientos_meta,
         'lotes': lotes_data,
         'traspasos': traspasos_data,
+        'traspasos_meta': traspasos_meta,
         'historial_precios': precios_data,
         'pendientes_despacho': pendientes_data,
-        'timeline': timeline[:100],
+        'timeline': timeline[:_TRAZA_MAX_TIMELINE],
+        'timeline_total': len(timeline),
     })
 
 
@@ -1132,7 +1663,15 @@ def api_modificar_precio_costo(request):
     if not producto_id:
         return JsonResponse({'success': False, 'error': 'Producto no especificado.'}, status=400)
 
+    suc_ids_usuario = _sucursales_usuario(request)
     producto = get_object_or_404(Producto, id=producto_id)
+    if producto.sucursal_id not in suc_ids_usuario:
+        logger.warning(
+            "Cambio de precio denegado a %s: producto %s de bodega ajena",
+            request.user.username, producto.id,
+        )
+        return _sin_acceso('No tienes acceso a la bodega de este producto.')
+
     usuario = request.user
     cambios = []
 
@@ -1163,9 +1702,12 @@ def api_modificar_precio_costo(request):
                 producto.save()
 
                 if aplicar_todas:
+                    # "Todas las sucursales" = todas las del usuario, no las de
+                    # la BD completa (el mismo artículo existe en otras empresas).
                     productos_mismos = Producto.objects.filter(
                         articulo=producto.articulo,
                         atributo1=producto.atributo1,
+                        sucursal_id__in=suc_ids_usuario,
                     ).exclude(id=producto.id)
 
                     count_actualizados = 0
@@ -1214,12 +1756,15 @@ def api_modificar_precios_masivo(request):
         return JsonResponse({'success': False, 'error': 'No hay productos a modificar.'}, status=400)
 
     resultados = {'exitosos': 0, 'errores': []}
+    suc_ids_usuario = _sucursales_usuario(request)
 
     try:
         with transaction.atomic():
             for item in productos_data:
                 try:
-                    producto = Producto.objects.get(id=item.get('producto_id'))
+                    producto = Producto.objects.get(
+                        id=item.get('producto_id'), sucursal_id__in=suc_ids_usuario
+                    )
                     nuevo_costo = item.get('costo')
                     nuevo_sobreprecio = item.get('sobreprecio')
                     nuevo_precio = item.get('precio_venta')
@@ -1240,7 +1785,11 @@ def api_modificar_precios_masivo(request):
                     resultados['exitosos'] += 1
 
                 except Producto.DoesNotExist:
-                    resultados['errores'].append(f"Producto ID {item.get('producto_id')} no encontrado")
+                    # Incluye los productos de bodegas fuera del alcance del
+                    # usuario: no se distinguen para no filtrar su existencia.
+                    resultados['errores'].append(
+                        f"Producto ID {item.get('producto_id')} no encontrado o fuera de tu alcance"
+                    )
                 except Exception as e:
                     resultados['errores'].append(f"Error en producto {item.get('producto_id')}: {str(e)}")
 

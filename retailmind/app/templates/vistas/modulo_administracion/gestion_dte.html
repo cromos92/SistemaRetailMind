@@ -106,6 +106,70 @@
     box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
 }
 
+/* ========== FILTROS RÁPIDOS (CHIPS) ========== */
+.nexo-quick-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    margin: -8px 0 16px 0;
+}
+
+.nexo-quick-filters .qf-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+}
+
+.nexo-quick-filters .qf-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--nexo-gray-500);
+    margin-right: 2px;
+}
+
+.nexo-quick-filters .qf-sep {
+    width: 1px;
+    height: 20px;
+    background: var(--nexo-gray-300);
+    margin: 0 4px;
+}
+
+.quick-filter-btn {
+    padding: 4px 11px;
+    font-size: 0.72rem;
+    white-space: nowrap;
+    border-radius: 16px;
+    border: 1.5px solid var(--nexo-gray-300);
+    background: #fff;
+    cursor: pointer;
+    transition: var(--nexo-transition-fast);
+    font-weight: 500;
+    color: var(--nexo-gray-700);
+    line-height: 1.5;
+}
+
+.quick-filter-btn:hover {
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+    border-color: transparent;
+    color: #fff;
+}
+
+.quick-filter-btn.active {
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+    border-color: transparent;
+    color: #fff;
+}
+
+.qf-nota {
+    font-size: 0.7rem;
+    color: var(--nexo-gray-500);
+    margin: -10px 0 16px 0;
+}
+
 /* ========== SEARCH & PAGINATION ========== */
 .nexo-controls {
     display: flex;
@@ -617,9 +681,15 @@
                     Gestión de DTEs (Ventas)
                     <span class="header-badge" id="sucursalActual">Cargando...</span>
                 </h5>
-                <button class="nexo-btn nexo-btn-success" onclick="window.location.href='/app/emisionDTE/'">
-                    <i class="bi bi-plus-circle me-2"></i>Emitir Nuevo DTE
-                </button>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="button" class="nexo-btn nexo-btn-primary" id="btnExportarExcelDTE"
+                            title="Exporta los documentos del filtro actual a un archivo Excel">
+                        <i class="bi bi-file-earmark-excel me-2"></i>Exportar Excel
+                    </button>
+                    <button class="nexo-btn nexo-btn-success" onclick="window.location.href='/app/emisionDTE/'">
+                        <i class="bi bi-plus-circle me-2"></i>Emitir Nuevo DTE
+                    </button>
+                </div>
             </div>
 
             <div class="nexo-card-body">
@@ -645,6 +715,51 @@
                         </div>
                     </div>
                 </form>
+
+                <!-- Filtros rápidos (chips).
+                     El endpoint `cargar-dte-ventas` no acepta parámetros
+                     separados de tipo/estado/estado de pago, pero su parámetro
+                     `search` ya busca con icontains sobre tipo_documento,
+                     estado_dte y estado_pago. Por eso el chip escribe su
+                     término en el buscador: el filtro es del SERVIDOR (totales
+                     y paginación correctos), no un filtrado de la página. Como
+                     `search` es un único término, los chips son excluyentes
+                     entre sí y con el texto libre. -->
+                <div class="nexo-quick-filters">
+                    <div class="qf-group">
+                        <span class="qf-label">Documento</span>
+                        <button type="button" class="quick-filter-btn" data-chip="FACTURA ELECTRONICA">Facturas</button>
+                        <button type="button" class="quick-filter-btn" data-chip="BOLETA ELECTRONICA">Boletas</button>
+                        <button type="button" class="quick-filter-btn" data-chip="NOTA DE CREDITO">Notas de crédito</button>
+                        <button type="button" class="quick-filter-btn" data-chip="FACTURA EXENTA">Exentas</button>
+                        <button type="button" class="quick-filter-btn" data-chip="GUIA">Guías</button>
+                    </div>
+                    <span class="qf-sep"></span>
+                    <div class="qf-group">
+                        <span class="qf-label">Estado DTE</span>
+                        <button type="button" class="quick-filter-btn" data-chip="EMITIDO">Emitidos</button>
+                        <button type="button" class="quick-filter-btn" data-chip="ANULADO">Anulados</button>
+                        <button type="button" class="quick-filter-btn" data-chip="RECHAZADO">Rechazados</button>
+                    </div>
+                    <span class="qf-sep"></span>
+                    <div class="qf-group">
+                        <span class="qf-label">Pago</span>
+                        <button type="button" class="quick-filter-btn" data-chip="PAGADO">Pagados</button>
+                        <button type="button" class="quick-filter-btn" data-chip="PENDIENTE">Pendientes</button>
+                        <button type="button" class="quick-filter-btn" data-chip="VENCIDO">Vencidos</button>
+                    </div>
+                    <span class="qf-sep"></span>
+                    <button type="button" class="quick-filter-btn" id="chipTodos" data-chip="">
+                        <i class="bi bi-x-circle me-1"></i>Quitar filtro
+                    </button>
+                </div>
+                <div class="qf-nota">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Los chips usan el mismo buscador, así que sólo puede haber uno activo a la vez
+                    (y reemplazan lo que hayas escrito). El rango de fechas sí se combina con ellos.
+                    Como la búsqueda es de texto, un término corto puede traer algún documento extra
+                    si esa palabra aparece en el nombre del cliente o en la descripción de un producto.
+                </div>
 
                 <!-- Controles de búsqueda y paginación -->
                 <div class="nexo-controls">
@@ -1890,6 +2005,7 @@
 
     $('#btnSearchDTE').on('click', function() {
         const search = $('#searchDTE').val().trim();
+        sincronizarChips(search);
         currentSearchDTE = search;
         currentPageDTE = 1;
         cargarDTEs(1, search);
@@ -1899,6 +2015,29 @@
         if (e.which === 13) {
             $('#btnSearchDTE').click();
         }
+    });
+
+    // ---------- Filtros rápidos (chips) ----------
+    // Marca como activo el chip cuyo término coincide con la búsqueda vigente.
+    function sincronizarChips(search) {
+        const s = (search || '').trim().toUpperCase();
+        $('.quick-filter-btn').removeClass('active');
+        if (!s) return;
+        $('.quick-filter-btn').each(function() {
+            if (($(this).data('chip') || '').toString().toUpperCase() === s) {
+                $(this).addClass('active');
+            }
+        });
+    }
+
+    $('.quick-filter-btn').on('click', function() {
+        const yaActivo = $(this).hasClass('active');
+        const termino = yaActivo ? '' : ($(this).data('chip') || '').toString();
+        $('#searchDTE').val(termino);
+        sincronizarChips(termino);
+        currentSearchDTE = termino;
+        currentPageDTE = 1;
+        cargarDTEs(1, termino);
     });
 
     let cargandoDTEs = false;
@@ -2140,6 +2279,164 @@
             }
         });
     }
+
+    // ==========================================================
+    // EXPORTAR A EXCEL
+    // ==========================================================
+    // Reutiliza el mismo endpoint del listado (mismo rango de fechas y mismo
+    // término de búsqueda / chip activo), pidiendo páginas grandes en serie.
+    // No existe endpoint de exportación para esta pantalla, así que el archivo
+    // se arma en el navegador con SheetJS (ya viene en el footer); si no está
+    // disponible cae a CSV con BOM, que Excel abre igual.
+    // Tope deliberadamente conservador: el endpoint hace ~5 consultas por
+    // documento (pagos, NC asociadas, ajustes, ecommerce), así que exportar
+    // mucho más castigaría la base. Si el usuario necesita más, acota fechas.
+    const EXPORT_PAGE_SIZE = 100;
+    const EXPORT_MAX_FILAS = 1000;
+
+    const COLUMNAS_EXPORT = [
+        ['N° Documento',    d => d.numero_documento || ''],
+        ['Tipo Documento',  d => d.tipo_documento || ''],
+        ['Fecha Emisión',   d => d.fecha_emision || ''],
+        ['Fecha Vto.',      d => d.fecha_vencimiento || ''],
+        ['Cliente',         d => d.receptor_nombre || ''],
+        ['RUT',             d => d.receptor_rut || ''],
+        ['Vendedor',        d => d.vendedor || ''],
+        ['Responsable',     d => d.responsable || ''],
+        ['Monto Neto',      d => Number(d.monto_neto || 0)],
+        ['Descuento',       d => Number(d.descuento || 0)],
+        ['Monto con IVA',   d => Number(d.monto_con_iva || 0)],
+        ['Pagado',          d => Number(d.total_pagos || 0)],
+        ['Notas de Crédito',d => Number(d.notas_credito || 0)],
+        ['Saldo Pendiente', d => Number(d.saldo_pendiente || 0)],
+        ['Estado DTE',      d => d.estado_dte || ''],
+        ['Estado Pago',     d => d.estado_pago || ''],
+        ['Unidades',        d => Number(d.unidades_productos || 0)],
+        ['Doc. Referenciado', d => d.documento_afectado_numero ? '#' + d.documento_afectado_numero : ''],
+    ];
+
+    function pedirPaginaDTE(page, pageSize) {
+        return $.ajax({
+            url: '/app/documentos/api/cargar-dte-ventas/',
+            method: 'POST',
+            contentType: 'application/json',
+            timeout: 120000,
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({
+                fecha_inicio: $('#fechaInicio').val(),
+                fecha_fin: $('#fechaFin').val(),
+                page: page,
+                page_size: pageSize,
+                search: currentSearchDTE || ''
+            })
+        });
+    }
+
+    function descargarCSV(nombre, encabezados, filas) {
+        const escapar = v => {
+            const s = (v === null || v === undefined) ? '' : String(v);
+            return '"' + s.replace(/"/g, '""') + '"';
+        };
+        const contenido = [encabezados, ...filas]
+            .map(f => f.map(escapar).join(';'))
+            .join('\r\n');
+        // BOM para que Excel respete los acentos.
+        const blob = new Blob(['﻿' + contenido], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nombre + '.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    async function exportarDTEsExcel() {
+        if (cargandoDTEs) return;
+
+        const totalDisponible = paginationInfoDTE ? (paginationInfoDTE.total_count || 0) : 0;
+        if (!totalDisponible) {
+            Swal.fire('Sin datos', 'No hay documentos que exportar con los filtros actuales.', 'info');
+            return;
+        }
+
+        const aExportar = Math.min(totalDisponible, EXPORT_MAX_FILAS);
+        const paginas = Math.ceil(aExportar / EXPORT_PAGE_SIZE);
+        const filtroTxt = currentSearchDTE
+            ? `<br>Filtro de búsqueda: <strong>${_esc(currentSearchDTE)}</strong>`
+            : '';
+        const avisoTope = totalDisponible > EXPORT_MAX_FILAS
+            ? `<br><span style="color:#B36A00;">Se exportarán sólo los primeros ${EXPORT_MAX_FILAS.toLocaleString('es-CL')} de ${totalDisponible.toLocaleString('es-CL')}. Acota el rango de fechas para exportar el resto.</span>`
+            : '';
+
+        const confirmacion = await Swal.fire({
+            title: 'Exportar a Excel',
+            html: `Se exportarán <strong>${aExportar.toLocaleString('es-CL')}</strong> documentos ` +
+                  `del ${_esc($('#fechaInicio').val() || '—')} al ${_esc($('#fechaFin').val() || '—')}.` +
+                  filtroTxt + avisoTope +
+                  `<br><br><small class="text-muted">Se consultan ${paginas} página(s); puede demorar.</small>`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Exportar',
+            cancelButtonText: 'Cancelar'
+        });
+        if (!confirmacion.isConfirmed) return;
+
+        Swal.fire({
+            title: 'Generando archivo…',
+            html: '<span id="expProgreso">0</span> de ' + aExportar.toLocaleString('es-CL') + ' documentos',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        const docs = [];
+        try {
+            for (let p = 1; p <= paginas; p++) {
+                const data = await pedirPaginaDTE(p, EXPORT_PAGE_SIZE);
+                if (!data || !data.success) {
+                    throw new Error((data && data.error) || 'El servidor devolvió un error.');
+                }
+                docs.push(...(data.items || []));
+                const prog = document.getElementById('expProgreso');
+                if (prog) prog.textContent = Math.min(docs.length, aExportar).toLocaleString('es-CL');
+                if (docs.length >= aExportar || !data.pagination || !data.pagination.has_next) break;
+            }
+        } catch (err) {
+            Swal.fire('Error al exportar', String((err && err.message) || err), 'error');
+            return;
+        }
+
+        const filas = docs.slice(0, aExportar).map(d => COLUMNAS_EXPORT.map(c => c[1](d)));
+        const encabezados = COLUMNAS_EXPORT.map(c => c[0]);
+        const nombre = 'DTEs_' + ($('#fechaInicio').val() || 'inicio') + '_a_' + ($('#fechaFin').val() || 'fin');
+
+        try {
+            if (window.XLSX && XLSX.utils && XLSX.writeFile) {
+                const ws = XLSX.utils.aoa_to_sheet([encabezados, ...filas]);
+                ws['!cols'] = encabezados.map((h, i) => ({ wch: i === 4 ? 34 : Math.max(12, h.length + 2) }));
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'DTEs');
+                XLSX.writeFile(wb, nombre + '.xlsx');
+            } else {
+                descargarCSV(nombre, encabezados, filas);
+            }
+        } catch (err) {
+            console.error('Fallo XLSX, se exporta CSV:', err);
+            descargarCSV(nombre, encabezados, filas);
+        }
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Archivo generado',
+            text: `${filas.length.toLocaleString('es-CL')} documentos exportados.`,
+            timer: 2500,
+            showConfirmButton: false
+        });
+    }
+
+    $('#btnExportarExcelDTE').on('click', exportarDTEsExcel);
 
     function calcularPorcentajeDescuento(descuento, montoConIVA) {
         if (!montoConIVA || montoConIVA <= 0) return 0;
@@ -2594,6 +2891,108 @@
         document.getElementById('editNcCrearClienteAlert').classList.add('d-none');
     }
 
+    // ================================================================
+    // Guardado del folio con manejo de advertencias (HTTP 409)
+    // ================================================================
+    // El backend distingue DOS situaciones que NO son lo mismo:
+    //
+    //   * 400 + colisiones  -> BLOQUEANTE. El folio ya está emitido bajo el
+    //     mismo RUT + tipo. No se ofrece "continuar": eso generaría dos
+    //     documentos con el mismo número ante el SII.
+    //   * 409 + requiere_confirmacion -> ADVERTENCIA. Informativa (rango del
+    //     correlativo, folio por sobre el siguiente a emitir, o simplemente que
+    //     la sucursal no tiene correlativo configurado para ese tipo, que es el
+    //     caso más común). Se le muestra al operador y, si confirma, se
+    //     reintenta con confirmar_advertencias=true.
+    //
+    // Antes el front no enviaba confirmar_advertencias ni miraba el 409: toda
+    // respuesta no-OK caía en el mismo Swal de error y el operador se quedaba
+    // sin ninguna forma de completar la corrección.
+    async function _postEditarFolioDte(dteId, nuevoFolio, motivo, confirmar) {
+        const payload = {
+            dte_id: dteId,
+            nuevo_folio: nuevoFolio,
+            motivo: motivo
+        };
+        if (confirmar) payload.confirmar_advertencias = true;
+
+        const resp = await fetch('/app/documentos/editar-folio-dte/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(payload)
+        });
+        const data = await resp.json().catch(() => ({}));
+        return { ok: resp.ok, status: resp.status, data };
+    }
+
+    // Devuelve { ok, data, cancelado, error }
+    async function guardarFolioDteConConfirmacion(dteId, nuevoFolio, motivo) {
+        let r = await _postEditarFolioDte(dteId, nuevoFolio, motivo, false);
+
+        if (r.status === 409 && r.data && r.data.requiere_confirmacion) {
+            const advertencias = r.data.advertencias || [];
+            const confirmacion = await Swal.fire({
+                icon: 'warning',
+                title: 'Revise antes de continuar',
+                html: `
+                    <div class="text-start">
+                        <p class="small mb-2">
+                            El folio <strong>#${_esc(String(nuevoFolio))}</strong> está
+                            <strong>libre</strong> (no choca con ningún documento emitido),
+                            pero hay observaciones:
+                        </p>
+                        <ul class="text-start small ps-3 mb-2">
+                            ${advertencias.map(a => `<li>${_esc(a)}</li>`).join('')}
+                        </ul>
+                        <p class="small text-muted mb-0">
+                            Puede continuar: el cambio quedará registrado en la bitácora
+                            junto con estas observaciones.
+                        </p>
+                    </div>`,
+                width: '560px',
+                showCancelButton: true,
+                confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Continuar y guardar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#f0ad4e',
+                cancelButtonColor: '#6c757d',
+                reverseButtons: true,
+                focusCancel: true
+            });
+
+            if (!confirmacion.isConfirmed) {
+                return { ok: false, cancelado: true, data: r.data };
+            }
+
+            // Reabrir el "guardando..." que el diálogo de confirmación reemplazó
+            Swal.fire({
+                title: 'Guardando cambios...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            r = await _postEditarFolioDte(dteId, nuevoFolio, motivo, true);
+        }
+
+        if (r.ok && r.data && r.data.success) {
+            return { ok: true, data: r.data };
+        }
+
+        // Error real. Si vienen colisiones se listan: son la información que el
+        // operador necesita para elegir otro folio.
+        const d = r.data || {};
+        let msg = d.error || `Error ${r.status}`;
+        if (Array.isArray(d.colisiones) && d.colisiones.length) {
+            const detalle = d.colisiones.slice(0, 5).map(c =>
+                `DTE #${c.dte_id} — ${c.sucursal || 's/suc'} — ${c.fecha_emision || 's/fecha'}`
+            ).join('; ');
+            msg += ` [Ya lo usan: ${detalle}]`;
+        }
+        return { ok: false, cancelado: false, error: msg, data: d };
+    }
+
     // Función para editar folio + cliente de NC
     async function editarFolioNC(dteId, folioActual, tipoDocumento, tieneReceptor, receptorNombre, receptorRut) {
         // Inicializar state con el receptor actual; el bloque de cliente
@@ -2783,32 +3182,42 @@
 
         const errores = [];
         const exitos = [];
+        // Ni éxito ni error: cosas que el operador decidió (p. ej. cancelar el
+        // cambio de folio tras leer las advertencias).
+        const avisos = [];
 
         try {
             // 1) Editar folio (si cambió). Es el que tiene auditoría con motivo.
             if (formValues.folioCambio) {
-                const resp = await fetch('/app/documentos/editar-folio-dte/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify({
-                        dte_id: dteId,
-                        nuevo_folio: formValues.nuevo_folio,
-                        motivo: formValues.motivo
-                    })
-                });
-                const data = await resp.json();
-                if (!resp.ok || !data.success) {
-                    errores.push(`Folio: ${data.error || `Error ${resp.status}`}`);
-                } else {
+                const r = await guardarFolioDteConConfirmacion(
+                    dteId, formValues.nuevo_folio, formValues.motivo
+                );
+                if (r.ok) {
+                    const data = r.data;
                     exitos.push(
                         `Folio: #${data.folio_anterior} → #${data.folio_nuevo}` +
                         (data.referencias_actualizadas
                             ? ` (${data.referencias_actualizadas} referencias actualizadas)`
+                            : '') +
+                        (data.advertencias_confirmadas
+                            ? ' — con observaciones confirmadas'
                             : '')
                     );
+                } else if (r.cancelado) {
+                    // El operador vio las advertencias y decidió no seguir: no es
+                    // un fallo del sistema, así que no se pinta como error.
+                    avisos.push('Folio: cambio cancelado por el usuario tras revisar las observaciones');
+                    if (formValues.clienteCambio) {
+                        // El diálogo de confirmación se comió el "guardando...";
+                        // queda el cambio de cliente por aplicar, hay que reponerlo.
+                        Swal.fire({
+                            title: 'Guardando cambios...',
+                            allowOutsideClick: false,
+                            didOpen: () => Swal.showLoading()
+                        });
+                    }
+                } else {
+                    errores.push(`Folio: ${r.error}`);
                 }
             }
 
@@ -2835,13 +3244,27 @@
                 }
             }
 
-            if (errores.length === 0) {
+            const avisosHTML = avisos.length
+                ? '<p class="mb-1 fw-bold text-warning mt-2">Sin aplicar:</p>' +
+                  '<ul class="text-start mb-0 ps-3">' +
+                  avisos.map(a => `<li>${a}</li>`).join('') + '</ul>'
+                : '';
+
+            if (errores.length === 0 && exitos.length === 0) {
+                // Solo hubo cancelaciones: no es éxito ni error.
+                await Swal.fire({
+                    icon: 'info',
+                    title: 'No se aplicaron cambios',
+                    html: `<div class="text-start">${avisosHTML || '<p class="mb-0">No hubo cambios que guardar.</p>'}</div>`,
+                    confirmButtonColor: '#0066FF'
+                });
+            } else if (errores.length === 0) {
                 await Swal.fire({
                     icon: 'success',
                     title: 'Cambios guardados',
-                    html: '<ul class="text-start mb-0 ps-3">' +
+                    html: '<div class="text-start"><ul class="mb-0 ps-3">' +
                           exitos.map(e => `<li>${e}</li>`).join('') +
-                          '</ul>',
+                          '</ul>' + avisosHTML + '</div>',
                     confirmButtonColor: '#0066FF'
                 });
             } else if (exitos.length === 0) {
@@ -2880,6 +3303,12 @@
             });
         }
     }
+
+    // `editarFolioNC` se invoca desde un onclick inline de la tabla de DTEs.
+    // El bloque no está dentro de un closure hoy, pero se expone explícitamente
+    // para que siga funcionando si alguna vez se envuelve (ya pasó en otros
+    // módulos: el onclick reventaba con ReferenceError).
+    window.editarFolioNC = editarFolioNC;
 
     // ✅ Función para descargar TXT de Acepta (solo Admin)
     async function descargarTXTAcepta(dteId, tipoDocumento, numeroDocumento) {

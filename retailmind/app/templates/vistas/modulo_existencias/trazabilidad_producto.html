@@ -4,11 +4,59 @@
 {% include '../../layout/menu.html' %}
 
 <style>
+    /* ===== Header de módulo (mismo patrón que el resto de Existencias) ===== */
+    .module-header {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        color: white;
+        padding: 16px 24px;
+        border-radius: 16px 16px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .module-header-left { display: flex; align-items: center; gap: 14px; }
+    .module-header-icon {
+        width: 48px; height: 48px;
+        background: rgba(255,255,255,0.2);
+        border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 24px;
+    }
+    .module-header-info h5 { margin: 0; font-size: 18px; font-weight: 600; color: white; }
+    .module-header-status { display: flex; align-items: center; gap: 6px; font-size: 13px; opacity: 0.9; margin-top: 4px; }
+    .status-dot { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .module-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .kpi-card { border-radius: 12px; border: none; transition: all 0.3s ease; overflow: hidden; }
+    .kpi-card:hover { transform: translateY(-4px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
+    .kpi-card .card-body { padding: 12px 16px; }
+
+    .traza-card { border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(64, 81, 137, 0.08); border: none; }
+
+    /* Timeline */
     .timeline-item { position: relative; padding-left: 40px; margin-bottom: 1.5rem; }
     .timeline-item::before { content: ''; position: absolute; left: 15px; top: 28px; bottom: -24px; width: 2px; background: #e9ecef; }
     .timeline-item:last-child::before { display: none; }
     .timeline-icon { position: absolute; left: 4px; top: 4px; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; color: white; z-index: 1; }
     .tab-pane .table { margin-bottom: 0; }
+
+    /* Kardex */
+    .traza-saldo {
+        display: inline-block; min-width: 46px; text-align: center;
+        background: #eef1f8; color: #1A1A2E; font-weight: 700;
+        border-radius: 6px; padding: .1rem .45rem;
+    }
+    .traza-saldo.neg { background: #fdecec; color: #e14b4b; }
+    .traza-apertura td { background: #f8f9fa !important; font-style: italic; color: #495057; border-top: 2px solid #dee2e6 !important; }
+    #tbodyMovimientos tr td { vertical-align: middle; }
+
+    @media (max-width: 768px) {
+        .module-header { padding: 12px 16px; border-radius: 12px 12px 0 0; }
+        .module-header-icon { width: 40px; height: 40px; font-size: 20px; }
+    }
 </style>
 
 <div class="page-content">
@@ -24,6 +72,30 @@
                             <li class="breadcrumb-item">Existencias</li>
                             <li class="breadcrumb-item active">Trazabilidad</li>
                         </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="traza-card card mb-3">
+                    <div class="module-header">
+                        <div class="module-header-left">
+                            <div class="module-header-icon"><i class="ri-route-line"></i></div>
+                            <div class="module-header-info">
+                                <h5>Trazabilidad de Producto</h5>
+                                <div class="module-header-status">
+                                    <span class="status-dot"></span>
+                                    Kardex, lotes FIFO, traspasos y precios de un SKU
+                                </div>
+                            </div>
+                        </div>
+                        <div class="module-header-actions">
+                            <a href="/app/tarjeta-movimiento/" class="btn btn-light btn-sm">
+                                <i class="ri-table-line me-1"></i>Tarjeta de Movimiento (todas las bodegas)
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -100,6 +172,42 @@
                     </div>
                 </div>
 
+                <!-- KPIs: stock vs kardex -->
+                <div class="row g-2 mb-3">
+                    <div class="col-6 col-md-3">
+                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid #299cdb;">
+                            <div class="card-body text-center py-2">
+                                <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiStock">0</h4>
+                                <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Stock actual (sistema)</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 4px solid #0ab39c;">
+                            <div class="card-body text-center py-2">
+                                <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiSaldoKardex">0</h4>
+                                <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Saldo según kardex</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="kpi-card card h-100" id="kpiCardDiferencia" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-left: 4px solid #adb5bd;">
+                            <div class="card-body text-center py-2">
+                                <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiDiferencia">0</h4>
+                                <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;" id="kpiDiferenciaLabel">Diferencia stock − kardex</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 4px solid #ffbe0b;">
+                            <div class="card-body text-center py-2">
+                                <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiMovimientos">0</h4>
+                                <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Movimientos históricos</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Tabs -->
                 <div class="row">
                     <div class="col-12">
@@ -118,13 +226,15 @@
                                 <div class="tab-content">
                                     <!-- Timeline -->
                                     <div class="tab-pane active" id="tabTimeline">
+                                        <div id="avisoTimeline"></div>
                                         <div id="timelineContainer" style="max-height: 600px; overflow-y: auto;"></div>
                                     </div>
                                     <!-- Movimientos -->
                                     <div class="tab-pane" id="tabMovimientos">
+                                        <div id="avisoMovimientos"></div>
                                         <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
                                             <table class="table table-hover table-sm table-striped"><thead class="table-light sticky-top"><tr>
-                                                <th>Fecha</th><th>Hora</th><th>Tipo</th><th>Concepto</th><th class="text-end">Cantidad</th><th class="text-end">Costo</th><th>Origen</th><th>Destino</th><th>Responsable</th><th>Ref</th><th>Estado</th>
+                                                <th>Fecha</th><th>Hora</th><th>Tipo</th><th>Concepto</th><th class="text-end">Cantidad</th><th class="text-end">Saldo</th><th class="text-end">Costo</th><th>Origen</th><th>Destino</th><th>Responsable</th><th>Ref</th><th>Estado</th>
                                             </tr></thead><tbody id="tbodyMovimientos"></tbody></table>
                                         </div>
                                     </div>
@@ -138,9 +248,10 @@
                                     </div>
                                     <!-- Traspasos -->
                                     <div class="tab-pane" id="tabTraspasos">
+                                        <div id="avisoTraspasos"></div>
                                         <div class="table-responsive">
                                             <table class="table table-hover table-sm"><thead class="table-light"><tr>
-                                                <th>#</th><th>Fecha</th><th>Origen</th><th>Destino</th><th>Estado</th><th class="text-end">Solicitada</th><th class="text-end">Recibida</th><th class="text-end">Costo</th>
+                                                <th>#</th><th>Fecha</th><th>Sentido</th><th>Origen</th><th>Destino</th><th>Estado</th><th class="text-end">Cantidad</th><th class="text-end">Recibida</th><th class="text-end">Costo</th><th>Referencia</th>
                                             </tr></thead><tbody id="tbodyTraspasos"></tbody></table>
                                         </div>
                                     </div>
@@ -173,26 +284,50 @@
 {% include '../../layout/footer.html' %}
 
 <script>
+/* El JS va DESPUÉS del footer: es el include que trae jQuery y SweetAlert2. */
+
+function escapeHtml(valor) {
+    return String(valor ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+
+function fmtNum(v) { return Number(v || 0).toLocaleString('es-CL'); }
+function fmtMoneda(v) { return '$' + Number(v || 0).toLocaleString('es-CL'); }
+
+function avisar(mensaje, icono) {
+    if (window.Swal) {
+        Swal.fire({ icon: icono || 'warning', title: 'Trazabilidad', text: mensaje, confirmButtonColor: '#405189' });
+    } else {
+        console.warn(mensaje);
+    }
+}
+
 function buscarTrazabilidad() {
     const sku = document.getElementById('inputSku').value.trim();
-    if (!sku) { alert('Ingrese un SKU'); return; }
+    if (!sku) { avisar('Ingrese un SKU para consultar la trazabilidad.', 'info'); return; }
     fetch(`/app/api/trazabilidad-producto/?sku=${encodeURIComponent(sku)}`)
         .then(r => r.json()).then(data => {
-            if (!data.success) { alert(data.error); return; }
+            if (!data.success) { avisar(data.error || 'No se pudo obtener la trazabilidad.', 'error'); return; }
+            const meta = data.movimientos_meta || {};
+            const metaTraspasos = data.traspasos_meta || {};
             renderProductoInfo(data.producto);
-            renderTimeline(data.timeline);
-            renderMovimientos(data.movimientos);
+            renderKpis(data.producto, meta);
+            renderTimeline(data.timeline, data.timeline_total);
+            renderMovimientos(data.movimientos, meta);
             renderLotes(data.lotes);
-            renderTraspasos(data.traspasos);
+            renderTraspasos(data.traspasos, metaTraspasos);
             renderPrecios(data.historial_precios);
             renderPendientes(data.pendientes_despacho);
-            document.getElementById('badgeMov').textContent = data.movimientos.length;
+            document.getElementById('badgeMov').textContent =
+                meta.truncado ? `${meta.mostrados}/${fmtNum(meta.total)}` : fmtNum(data.movimientos.length);
             document.getElementById('badgeLotes').textContent = data.lotes.length;
-            document.getElementById('badgeTraspasos').textContent = data.traspasos.length;
+            document.getElementById('badgeTraspasos').textContent =
+                (metaTraspasos.omitidos > 0) ? `${metaTraspasos.mostrados}/${fmtNum(metaTraspasos.total)}` : data.traspasos.length;
             document.getElementById('badgePrecios').textContent = data.historial_precios.length;
             document.getElementById('badgePendientes').textContent = data.pendientes_despacho.length;
             document.getElementById('contenidoTrazabilidad').style.display = '';
-        }).catch(e => alert('Error: ' + e.message));
+        }).catch(e => avisar('Error de red: ' + e.message, 'error'));
 }
 
 function renderProductoInfo(p) {
@@ -202,9 +337,9 @@ function renderProductoInfo(p) {
     document.getElementById('pMarca').textContent = p.marca;
     document.getElementById('pCategoria').textContent = p.categoria;
     document.getElementById('pStock').textContent = p.stock_actual;
-    document.getElementById('pCosto').textContent = '$' + Number(p.costo).toLocaleString('es-CL');
-    document.getElementById('pSobreprecio').textContent = '$' + Number(p.sobreprecio).toLocaleString('es-CL');
-    document.getElementById('pPrecio').textContent = '$' + Number(p.precio_venta).toLocaleString('es-CL');
+    document.getElementById('pCosto').textContent = fmtMoneda(p.costo);
+    document.getElementById('pSobreprecio').textContent = fmtMoneda(p.sobreprecio);
+    document.getElementById('pPrecio').textContent = fmtMoneda(p.precio_venta);
     document.getElementById('pSucursal').textContent = p.sucursal;
     document.getElementById('pFechaCreacion').textContent = p.fecha_creacion;
 
@@ -220,83 +355,202 @@ function renderProductoInfo(p) {
             cont.prepend(aviso);
         }
         aviso.innerHTML = `<i class="ri-error-warning-line fs-5"></i>
-            <div><strong>SKU duplicado:</strong> este código existe en <b>${p.sku_ocurrencias}</b> productos/tallas.
-            Se muestra la trazabilidad del de la sucursal activa (<b>${p.sucursal}</b>). Conviene depurar el SKU duplicado.</div>`;
+            <div><strong>SKU duplicado:</strong> este código existe en <b>${escapeHtml(p.sku_ocurrencias)}</b> productos/tallas.
+            Se muestra la trazabilidad del de la sucursal activa (<b>${escapeHtml(p.sucursal)}</b>). Conviene depurar el SKU duplicado.</div>`;
     } else if (aviso) {
         aviso.remove();
     }
 }
 
-function renderTimeline(items) {
+/* KPIs: contraste explícito entre el stock que muestra el sistema y el saldo
+   que resulta de sumar TODO el kardex del SKU. */
+function renderKpis(p, meta) {
+    document.getElementById('kpiStock').textContent = fmtNum(meta.stock_actual != null ? meta.stock_actual : p.stock_actual);
+    document.getElementById('kpiSaldoKardex').textContent = fmtNum(meta.saldo_final);
+    document.getElementById('kpiMovimientos').textContent = fmtNum(meta.total);
+
+    const dif = Number(meta.diferencia || 0);
+    const card = document.getElementById('kpiCardDiferencia');
+    const valor = document.getElementById('kpiDiferencia');
+    const label = document.getElementById('kpiDiferenciaLabel');
+    valor.textContent = (dif > 0 ? '+' : '') + fmtNum(dif);
+    if (meta.cuadra) {
+        card.style.background = 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)';
+        card.style.borderLeft = '4px solid #0ab39c';
+        label.textContent = 'Kardex cuadra con el stock';
+    } else {
+        card.style.background = 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)';
+        card.style.borderLeft = '4px solid #f06548';
+        label.textContent = 'Diferencia stock − kardex';
+    }
+}
+
+function renderTimeline(items, total) {
     const container = document.getElementById('timelineContainer');
-    if (!items.length) { container.innerHTML = '<div class="text-center text-muted py-4">Sin eventos</div>'; return; }
+    const avisoBox = document.getElementById('avisoTimeline');
+    const omitidos = Math.max((total || 0) - (items ? items.length : 0), 0);
+    avisoBox.innerHTML = omitidos > 0
+        ? `<div class="alert alert-light border small py-2"><i class="ri-history-line me-1 text-primary"></i>
+           Se muestran los <strong>${fmtNum(items.length)}</strong> eventos más recientes de <strong>${fmtNum(total)}</strong>.
+           Los <strong>${fmtNum(omitidos)}</strong> restantes están en la pestaña <strong>Movimientos</strong>.</div>`
+        : '';
+    if (!items || !items.length) { container.innerHTML = '<div class="text-center text-muted py-4">Sin eventos</div>'; return; }
     let html = '';
     items.forEach(t => {
         html += `<div class="timeline-item">
-            <div class="timeline-icon" style="background:${t.color};"><i class="${t.icono}" style="font-size:11px;"></i></div>
+            <div class="timeline-icon" style="background:${escapeHtml(t.color)};"><i class="${escapeHtml(t.icono)}" style="font-size:11px;"></i></div>
             <div class="card card-body p-2 mb-0">
                 <div class="d-flex justify-content-between">
-                    <strong>${t.titulo}</strong>
-                    <small class="text-muted">${t.fecha} ${t.hora || ''}</small>
+                    <strong>${escapeHtml(t.titulo)}</strong>
+                    <small class="text-muted">${escapeHtml(t.fecha)} ${escapeHtml(t.hora || '')}</small>
                 </div>
-                <small>${t.detalle}</small>
-                ${t.responsable ? `<small class="text-muted">Por: ${t.responsable}</small>` : ''}
+                <small>${escapeHtml(t.detalle)}</small>
+                ${t.responsable ? `<small class="text-muted">Por: ${escapeHtml(t.responsable)}</small>` : ''}
             </div>
         </div>`;
     });
     container.innerHTML = html;
 }
 
-function renderMovimientos(items) {
+/* Movimientos: kardex del SKU con SALDO ACUMULADO.
+   El saldo no arranca en 0 aunque la lista esté truncada: el backend calcula el
+   saldo de apertura sumando en la base todo lo anterior a la ventana mostrada. */
+function renderMovimientos(items, meta) {
     const tbody = document.getElementById('tbodyMovimientos');
-    tbody.innerHTML = items.map(m => {
-        const badge = m.tipo === 'INGRESO' ? 'success' : m.tipo === 'EGRESO' ? 'danger' : 'info';
-        const ref = m.dte_folio ? `DTE #${m.dte_folio}` : m.ticket_correlativo ? `T #${m.ticket_correlativo}` : m.referencia || '-';
-        return `<tr><td>${m.fecha}</td><td>${m.hora}</td><td><span class="badge bg-${badge}-subtle text-${badge}">${m.tipo}</span></td>
-            <td>${m.concepto}</td><td class="text-end ${m.cantidad > 0 ? 'text-success' : 'text-danger'} fw-bold">${m.cantidad > 0 ? '+' : ''}${m.cantidad}</td>
-            <td class="text-end">$${Number(m.costo).toLocaleString('es-CL')}</td>
-            <td>${m.origen}</td><td>${m.destino}</td><td>${m.responsable}</td><td>${ref}</td>
-            <td><span class="badge bg-${m.estado === 'COMPLETADO' ? 'success' : 'warning'}-subtle">${m.estado}</span></td></tr>`;
+    const avisoBox = document.getElementById('avisoMovimientos');
+
+    let avisos = '';
+    if (meta.truncado) {
+        avisos += `<div class="alert alert-warning small py-2"><i class="ri-alert-line me-1"></i>
+            Este SKU tiene <strong>${fmtNum(meta.total)}</strong> movimientos: se muestran los
+            <strong>${fmtNum(meta.mostrados)}</strong> más recientes (los <strong>${fmtNum(meta.omitidos)}</strong>
+            anteriores están resumidos en la fila <em>Saldo de apertura</em> al final de la tabla).</div>`;
+    }
+    if (!meta.cuadra) {
+        avisos += `<div class="alert alert-danger small py-2"><i class="ri-error-warning-line me-1"></i>
+            <strong>El kardex no cuadra con el stock:</strong> sumando todos los movimientos el saldo es
+            <strong>${fmtNum(meta.saldo_final)}</strong>, pero el stock registrado es
+            <strong>${fmtNum(meta.stock_actual)}</strong> (diferencia ${meta.diferencia > 0 ? '+' : ''}${fmtNum(meta.diferencia)} u).</div>`;
+    }
+    avisoBox.innerHTML = avisos;
+
+    if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-4">Sin movimientos registrados</td></tr>';
+        return;
+    }
+
+    let html = items.map(m => {
+        const badge = m.es_traspaso ? 'warning' : m.tipo === 'INGRESO' ? 'success' : m.tipo === 'EGRESO' ? 'danger' : 'info';
+        const etiquetaTipo = m.es_traspaso ? 'TRASPASO' : m.tipo;
+        const ref = m.dte_folio ? `DTE #${m.dte_folio}` : m.ticket_correlativo ? `T #${m.ticket_correlativo}` : (m.referencia || '-');
+        return `<tr title="${escapeHtml(m.observaciones || '')}">
+            <td class="text-nowrap">${escapeHtml(m.fecha)}</td><td>${escapeHtml(m.hora)}</td>
+            <td><span class="badge bg-${badge}-subtle text-${badge}">${escapeHtml(etiquetaTipo)}</span></td>
+            <td class="small">${escapeHtml(m.concepto)}</td>
+            <td class="text-end ${m.cantidad > 0 ? 'text-success' : 'text-danger'} fw-bold">${m.cantidad > 0 ? '+' : ''}${m.cantidad}</td>
+            <td class="text-end"><span class="traza-saldo ${m.saldo < 0 ? 'neg' : ''}">${m.saldo}</span></td>
+            <td class="text-end">${fmtMoneda(m.costo)}</td>
+            <td>${escapeHtml(m.origen)}</td><td>${escapeHtml(m.destino)}</td>
+            <td class="small">${escapeHtml(m.responsable)}</td><td class="small">${escapeHtml(ref)}</td>
+            <td><span class="badge bg-${m.estado === 'COMPLETADO' ? 'success' : 'warning'}-subtle text-dark">${escapeHtml(m.estado)}</span></td></tr>`;
     }).join('');
+
+    // La tabla va de lo más nuevo a lo más viejo: la apertura cierra el listado.
+    html += `<tr class="traza-apertura">
+        <td colspan="5" class="text-end fw-semibold">
+            ${meta.truncado
+                ? `Saldo de apertura (acumulado de ${fmtNum(meta.omitidos)} movimiento(s) anteriores no mostrados)`
+                : 'Saldo de apertura (sin movimientos previos)'}
+        </td>
+        <td class="text-end"><span class="traza-saldo ${meta.saldo_apertura < 0 ? 'neg' : ''}">${meta.saldo_apertura}</span></td>
+        <td colspan="6"></td></tr>`;
+
+    tbody.innerHTML = html;
 }
 
 function renderLotes(items) {
     const tbody = document.getElementById('tbodyLotes');
+    if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Este SKU no tiene lotes FIFO registrados</td></tr>';
+        return;
+    }
     tbody.innerHTML = items.map(l => {
         const estado = l.agotado ? '<span class="badge bg-danger">Agotado</span>' : l.activo ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Inactivo</span>';
-        return `<tr><td>${l.fecha_ingreso}</td><td>${l.numero_lote}</td>
+        return `<tr><td>${escapeHtml(l.fecha_ingreso)}</td><td>${escapeHtml(l.numero_lote)}</td>
             <td class="text-end">${l.cantidad_inicial}</td><td class="text-end fw-bold">${l.cantidad_disponible}</td>
-            <td class="text-end">$${Number(l.costo_unitario).toLocaleString('es-CL')}</td>
-            <td class="text-end">$${Number(l.precio_venta).toLocaleString('es-CL')}</td>
+            <td class="text-end">${fmtMoneda(l.costo_unitario)}</td>
+            <td class="text-end">${fmtMoneda(l.precio_venta)}</td>
             <td><div class="progress" style="height:18px;"><div class="progress-bar" style="width:${l.porcentaje_consumido}%;">${l.porcentaje_consumido}%</div></div></td>
             <td>${estado}</td></tr>`;
     }).join('');
 }
 
-function renderTraspasos(items) {
+/* Traspasos: la tabla formal Traspaso_Detalle está vacía en producción, así que
+   cuando no hay filas se reconstruyen desde los movimientos reales. Se dice de
+   dónde salió el dato en vez de mostrar una pestaña vacía y engañosa. */
+function renderTraspasos(items, meta) {
     const tbody = document.getElementById('tbodyTraspasos');
+    const avisoBox = document.getElementById('avisoTraspasos');
+
+    let aviso = '';
+    if (meta.fuente === 'movimientos' && items.length) {
+        aviso = `<div class="alert alert-info small py-2"><i class="ri-information-line me-1"></i>
+            Reconstruido desde los <strong>movimientos de stock</strong> del SKU (conceptos de traspaso).
+            La tabla de traspasos formales no tiene registros para este producto, por eso no hay número
+            de traspaso ni cantidad recibida por separado.</div>`;
+    } else if (meta.fuente === 'movimientos' && !items.length) {
+        aviso = `<div class="alert alert-light border small py-2"><i class="ri-information-line me-1 text-primary"></i>
+            Este SKU no registra movimientos de traspaso entre bodegas. Recuerde que cada bodega tiene su
+            propio SKU: los traspasos de este artículo pueden estar en el SKU de otra sucursal
+            (véalos todos en <a href="/app/tarjeta-movimiento/">Tarjeta de Movimiento</a>).</div>`;
+    }
+    if (meta.omitidos > 0) {
+        aviso += `<div class="alert alert-warning small py-2"><i class="ri-alert-line me-1"></i>
+            Mostrando ${fmtNum(meta.mostrados)} de ${fmtNum(meta.total)} traspasos.</div>`;
+    }
+    avisoBox.innerHTML = aviso;
+
+    if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">Sin traspasos para este SKU</td></tr>';
+        return;
+    }
     tbody.innerHTML = items.map(t => {
-        const badge = {PENDIENTE:'warning',APROBADO:'info',EN_TRANSITO:'primary',RECIBIDO:'success',RECHAZADO:'danger',ANULADO:'secondary'}[t.estado] || 'secondary';
-        return `<tr><td>${t.numero}</td><td>${t.fecha}</td><td>${t.origen}</td><td>${t.destino}</td>
-            <td><span class="badge bg-${badge}">${t.estado}</span></td>
-            <td class="text-end">${t.cantidad_solicitada}</td><td class="text-end">${t.cantidad_recibida || '-'}</td>
-            <td class="text-end">$${Number(t.costo).toLocaleString('es-CL')}</td></tr>`;
+        const badge = {PENDIENTE:'warning',APROBADO:'info',EN_TRANSITO:'primary',RECIBIDO:'success',RECHAZADO:'danger',ANULADO:'secondary',COMPLETADO:'success'}[t.estado] || 'secondary';
+        const sentido = t.sentido === 'ENTRADA'
+            ? '<span class="badge bg-success-subtle text-success">Entrada</span>'
+            : '<span class="badge bg-danger-subtle text-danger">Salida</span>';
+        return `<tr><td>${escapeHtml(t.numero)}</td><td class="text-nowrap">${escapeHtml(t.fecha)} ${escapeHtml(t.hora || '')}</td>
+            <td>${sentido}</td>
+            <td>${escapeHtml(t.origen)}</td><td>${escapeHtml(t.destino)}</td>
+            <td><span class="badge bg-${badge}">${escapeHtml(t.estado)}</span></td>
+            <td class="text-end fw-bold">${t.cantidad_solicitada}</td>
+            <td class="text-end">${t.cantidad_recibida != null ? t.cantidad_recibida : '—'}</td>
+            <td class="text-end">${fmtMoneda(t.costo)}</td>
+            <td class="small">${escapeHtml(t.referencia || '')}</td></tr>`;
     }).join('');
 }
 
 function renderPrecios(items) {
     const tbody = document.getElementById('tbodyPrecios');
-    tbody.innerHTML = items.map(p => `<tr><td>${p.fecha}</td><td>${p.tipo}</td>
-        <td class="text-end">$${Number(p.valor_anterior).toLocaleString('es-CL')}</td>
-        <td class="text-end fw-bold">$${Number(p.valor_nuevo).toLocaleString('es-CL')}</td>
-        <td>${p.usuario}</td><td>${p.motivo || '-'}</td></tr>`).join('');
+    if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Sin cambios de precio registrados</td></tr>';
+        return;
+    }
+    tbody.innerHTML = items.map(p => `<tr><td>${escapeHtml(p.fecha)}</td><td>${escapeHtml(p.tipo)}</td>
+        <td class="text-end">${fmtMoneda(p.valor_anterior)}</td>
+        <td class="text-end fw-bold">${fmtMoneda(p.valor_nuevo)}</td>
+        <td>${escapeHtml(p.usuario)}</td><td class="small">${escapeHtml(p.motivo || '-')}</td></tr>`).join('');
 }
 
 function renderPendientes(items) {
     const tbody = document.getElementById('tbodyPendientes');
-    tbody.innerHTML = items.map(p => `<tr><td>${p.fecha}</td><td>${p.origen}</td><td>${p.destino}</td>
+    if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Sin pendientes de despacho</td></tr>';
+        return;
+    }
+    tbody.innerHTML = items.map(p => `<tr><td>${escapeHtml(p.fecha)}</td><td>${escapeHtml(p.origen)}</td><td>${escapeHtml(p.destino)}</td>
         <td class="text-end">${p.cantidad}</td><td class="text-end">${p.despachada}</td>
-        <td class="text-end fw-bold">${p.restante}</td><td>${p.estado}</td></tr>`).join('');
+        <td class="text-end fw-bold">${p.restante}</td><td>${escapeHtml(p.estado)}</td></tr>`).join('');
 }
 
 document.getElementById('inputSku').addEventListener('keydown', e => { if (e.key === 'Enter') buscarTrazabilidad(); });

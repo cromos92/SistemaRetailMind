@@ -247,6 +247,15 @@
         flex-shrink: 0;
     }
     .btn-remove-row:hover { background: #e74c3c; color: white; }
+    .drag-talla-handle {
+        width: 22px; flex-shrink: 0;
+        cursor: grab; color: #bbb;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1rem;
+    }
+    .drag-talla-handle:active { cursor: grabbing; }
+    .talla-input-row:hover .drag-talla-handle { color: #667eea; }
+    .talla-row-ghost { opacity: 0.45; background: #f0f2ff; }
     .view-toggle { display: flex; gap: 4px; }
     .view-toggle button {
         padding: 6px 12px;
@@ -440,8 +449,14 @@
                     </button>
                 </div>
 
+                <div class="text-muted" style="font-size:0.75rem;margin-bottom:6px;">
+                    <i class="ri-drag-move-2-line"></i>
+                    Arrastra las filas para reordenar: el orden visual es el que se guarda y el que verá el vendedor.
+                </div>
+
                 <div style="overflow-x: auto;">
                     <div class="talla-input-row" style="margin-bottom: 8px;">
+                        <div style="width:22px;flex-shrink:0;"></div>
                         <div style="flex:1;text-align:center;font-weight:700;font-size:0.75rem;color:#888;">CL</div>
                         <div style="flex:1;text-align:center;font-weight:700;font-size:0.75rem;color:#888;">US</div>
                         <div style="flex:1;text-align:center;font-weight:700;font-size:0.75rem;color:#888;">EU</div>
@@ -455,10 +470,15 @@
                     </div>
                 </div>
 
-                <div class="mt-3">
+                <div class="mt-3 d-flex gap-2 flex-wrap">
                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="agregarRangoTallas()">
                         <i class="ri-magic-line me-1"></i> Generar rango rápido
                     </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="ordenarFilasPorCL()"
+                            title="Ordena las filas de menor a mayor por talla CL">
+                        <i class="ri-sort-asc me-1"></i> Ordenar por CL
+                    </button>
+                    <span id="avisoGuiaEnUso" class="ms-auto small" style="display:none;color:#e67e22;align-self:center;"></span>
                 </div>
             </div>
             <div class="modal-footer">
@@ -506,6 +526,9 @@
 </div>
 
 {% include 'layout/footer.html' %}
+
+<!-- SortableJS: reordenar las filas de tallas dentro del modal de guía -->
+<script src="{% static 'libs/sortablejs/Sortable.min.js' %}"></script>
 
 <script>
 const ID_ATRIBUTO_MARCA = {{ id_atributo_marca }};
@@ -563,23 +586,45 @@ function cargarGuias() {
     });
 }
 
+// Snapshot de la primera carga (sin filtros). El endpoint filtra `guias` por
+// marca/búsqueda pero NO filtra `marcas_sin_guia`: mezclarlos hacía que la
+// barra de cobertura dijera "3% (1 de 30 marcas)" apenas se filtraba por una
+// marca. Los indicadores globales se congelan del snapshot y lo filtrado se
+// rotula como tal.
+let statsGlobales = null;
+
+function hayFiltroActivo() {
+    return !!(document.getElementById('inputBuscar').value.trim() ||
+              document.getElementById('selectFiltroMarca').value);
+}
+
 function renderStats(data) {
     const guias = data.guias || [];
     const sinGuia = (data.marcas_sin_guia || []).length;
-    document.getElementById('statTotal').textContent = guias.length;
     const marcasConGuia = new Set(guias.map(g => g.marca_id)).size;
-    document.getElementById('statMarcas').textContent = marcasConGuia;
-    document.getElementById('statSinGuia').textContent = sinGuia;
     const totalProd = guias.reduce((sum, g) => sum + (g.total_productos || 0), 0);
-    document.getElementById('statProductos').textContent = totalProd;
+    const filtrado = hayFiltroActivo();
+
+    if (!filtrado) {
+        statsGlobales = { guias: guias.length, marcasConGuia, sinGuia, totalProd };
+    }
+    const base = statsGlobales || { guias: guias.length, marcasConGuia, sinGuia, totalProd };
+
+    document.getElementById('statTotal').textContent =
+        filtrado ? `${guias.length} / ${base.guias}` : guias.length;
+    document.getElementById('statMarcas').textContent = base.marcasConGuia;
+    document.getElementById('statSinGuia').textContent = base.sinGuia;
+    document.getElementById('statProductos').textContent =
+        filtrado ? `${totalProd} / ${base.totalProd}` : totalProd;
 
     const tag = document.getElementById('statSinGuiaTag');
-    tag.style.display = sinGuia > 0 ? 'inline-block' : 'none';
+    tag.style.display = base.sinGuia > 0 ? 'inline-block' : 'none';
 
-    const totalMarcas = marcasConGuia + sinGuia;
-    const pct = totalMarcas > 0 ? Math.round((marcasConGuia / totalMarcas) * 100) : 100;
+    const totalMarcas = base.marcasConGuia + base.sinGuia;
+    const pct = totalMarcas > 0 ? Math.round((base.marcasConGuia / totalMarcas) * 100) : 100;
     document.getElementById('barraCobertura').style.width = pct + '%';
-    document.getElementById('textCobertura').textContent = `Cobertura: ${pct}% (${marcasConGuia} de ${totalMarcas} marcas)`;
+    document.getElementById('textCobertura').textContent =
+        `Cobertura: ${pct}% (${base.marcasConGuia} de ${totalMarcas} marcas con productos)`;
 }
 
 function renderMarcasSinGuia(marcas) {
@@ -597,7 +642,7 @@ function renderMarcasSinGuia(marcas) {
 
     select.innerHTML = '<option value="">Seleccionar marca pendiente...</option>';
     marcas.forEach(m => {
-        select.innerHTML += `<option value="${m.id}" data-nombre="${m.nombre}">${m.nombre}</option>`;
+        select.innerHTML += `<option value="${m.id}" data-nombre="${escaparAtr(m.nombre)}">${escaparAtr(m.nombre)}</option>`;
     });
 
     select.onchange = function() {
@@ -659,7 +704,7 @@ function renderGuiaCard(g) {
     if (g.tallas && g.tallas.length) {
         tallasPreview = g.tallas.map(t => {
             const val = t.cl || t.us || t.eu || '-';
-            return `<span class="talla-badge">${val}</span>`;
+            return `<span class="talla-badge">${escaparAtr(val)}</span>`;
         }).join('');
     }
 
@@ -670,24 +715,26 @@ function renderGuiaCard(g) {
             <tbody>`;
         g.tallas.forEach(t => {
             tallasTable += `<tr>
-                <td>${t.cl || '-'}</td><td>${t.us || '-'}</td><td>${t.eu || '-'}</td>
-                <td>${t.uk || '-'}</td><td>${t.br || '-'}</td><td>${t.cm || '-'}</td>
+                <td>${escaparAtr(t.cl || '-')}</td><td>${escaparAtr(t.us || '-')}</td><td>${escaparAtr(t.eu || '-')}</td>
+                <td>${escaparAtr(t.uk || '-')}</td><td>${escaparAtr(t.br || '-')}</td><td>${escaparAtr(t.cm || '-')}</td>
             </tr>`;
         });
         tallasTable += '</tbody></table>';
     }
 
+    const enUso = (g.total_productos || 0) > 0;
+
     return `<div class="guia-card ${claseExpand}">
         <div class="guia-header">
             <div>
                 <div class="guia-title">
-                    ${g.nombre}
-                    <span class="guia-marca ms-2">${g.marca_nombre}</span>
+                    ${escaparAtr(g.nombre)}
+                    <span class="guia-marca ms-2">${escaparAtr(g.marca_nombre)}</span>
                 </div>
                 <div class="guia-meta">
                     ${g.tallas ? g.tallas.length : 0} tallas
-                    &middot; ${g.total_productos || 0} producto${g.total_productos !== 1 ? 's' : ''}
-                    &middot; Creada: ${g.fecha_creacion || '-'}
+                    &middot; <strong>${g.total_productos || 0}</strong> producto${g.total_productos !== 1 ? 's' : ''}
+                    &middot; Creada: ${escaparAtr(g.fecha_creacion || '-')}
                 </div>
             </div>
             <div class="btn-actions">
@@ -700,7 +747,8 @@ function renderGuiaCard(g) {
                 <button class="btn-action btn-edit" onclick="editarGuia(${g.id})" title="Editar">
                     <i class="ri-pencil-line"></i>
                 </button>
-                <button class="btn-action btn-delete" onclick="eliminarGuia(${g.id}, '${g.nombre.replace(/'/g, "\\'")}')" title="Eliminar">
+                <button class="btn-action btn-delete" onclick="eliminarGuia(${g.id})"
+                        title="${enUso ? 'Eliminar (la usan ' + g.total_productos + ' productos)' : 'Eliminar'}">
                     <i class="ri-delete-bin-line"></i>
                 </button>
             </div>
@@ -726,6 +774,7 @@ function cambiarVista(tipo) {
 }
 
 function abrirModalCrear() {
+    mostrarAvisoGuiaEnUso(null);
     document.getElementById('guiaEditId').value = '';
     document.getElementById('selectMarcaGuia').value = '';
     document.getElementById('inputNombreGuia').value = '';
@@ -748,16 +797,57 @@ function agregarFilaTalla(datos) {
     const row = document.createElement('div');
     row.className = 'talla-input-row';
     row.innerHTML = `
-        <input type="text" placeholder="-" class="talla-cl" value="${(datos && datos.cl) || ''}">
-        <input type="text" placeholder="-" class="talla-us" value="${(datos && datos.us) || ''}">
-        <input type="text" placeholder="-" class="talla-eu" value="${(datos && datos.eu) || ''}">
-        <input type="text" placeholder="-" class="talla-uk" value="${(datos && datos.uk) || ''}">
-        <input type="text" placeholder="-" class="talla-br" value="${(datos && datos.br) || ''}">
-        <input type="text" placeholder="-" class="talla-cm" value="${(datos && datos.cm) || ''}">
+        <span class="drag-talla-handle" title="Arrastrar para reordenar"><i class="ri-draggable"></i></span>
+        <input type="text" placeholder="-" class="talla-cl" value="${escaparAtr((datos && datos.cl) || '')}">
+        <input type="text" placeholder="-" class="talla-us" value="${escaparAtr((datos && datos.us) || '')}">
+        <input type="text" placeholder="-" class="talla-eu" value="${escaparAtr((datos && datos.eu) || '')}">
+        <input type="text" placeholder="-" class="talla-uk" value="${escaparAtr((datos && datos.uk) || '')}">
+        <input type="text" placeholder="-" class="talla-br" value="${escaparAtr((datos && datos.br) || '')}">
+        <input type="text" placeholder="-" class="talla-cm" value="${escaparAtr((datos && datos.cm) || '')}">
         <button type="button" class="btn-remove-row" onclick="this.parentElement.remove()"><i class="ri-close-line"></i></button>
     `;
     container.appendChild(row);
     if (!datos) row.querySelector('.talla-cl').focus();
+    activarDragTallas();
+}
+
+// El backend guarda GuiaTallaItem.orden por índice de fila, así que el orden
+// visual ES el orden persistido. Mismo comportamiento que el modal de guía de
+// "Gestión de Productos", para que las dos pantallas no se contradigan.
+let _sortableTallas = null;
+function activarDragTallas() {
+    const cont = document.getElementById('tallasInputContainer');
+    if (!cont || _sortableTallas || !window.Sortable) return;
+    _sortableTallas = Sortable.create(cont, {
+        handle: '.drag-talla-handle',
+        animation: 150,
+        ghostClass: 'talla-row-ghost'
+    });
+}
+
+function ordenarFilasPorCL() {
+    const cont = document.getElementById('tallasInputContainer');
+    const filas = Array.from(cont.querySelectorAll('.talla-input-row'));
+    if (filas.length < 2) return;
+    const num = (txt) => {
+        const v = parseFloat(String(txt || '').replace(',', '.').replace(/[^0-9.\-]/g, ''));
+        return isNaN(v) ? Number.POSITIVE_INFINITY : v;
+    };
+    filas.sort((a, b) => {
+        const va = num(a.querySelector('.talla-cl').value);
+        const vb = num(b.querySelector('.talla-cl').value);
+        if (va === vb) {
+            return String(a.querySelector('.talla-cl').value)
+                .localeCompare(String(b.querySelector('.talla-cl').value), 'es', { numeric: true });
+        }
+        return va - vb;
+    });
+    filas.forEach(f => cont.appendChild(f));
+}
+
+function escaparAtr(txt) {
+    return String(txt ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function agregarRangoTallas() {
@@ -841,10 +931,26 @@ function guardarGuia() {
     });
 }
 
+function mostrarAvisoGuiaEnUso(id) {
+    const el = document.getElementById('avisoGuiaEnUso');
+    if (!el) return;
+    const guia = guiasData.find(g => g.id === id);
+    const n = guia ? (guia.total_productos || 0) : 0;
+    if (n > 0) {
+        el.style.display = 'inline';
+        el.innerHTML = `<i class="ri-alert-line"></i> La usan <b>${n}</b> producto${n !== 1 ? 's' : ''}: ` +
+                       `los cambios se reflejan en todos.`;
+    } else {
+        el.style.display = 'none';
+        el.innerHTML = '';
+    }
+}
+
 function editarGuia(id) {
     fetch(`/app/guia_talla_detalle/${id}/`)
     .then(r => r.json())
     .then(data => {
+        mostrarAvisoGuiaEnUso(id);
         document.getElementById('guiaEditId').value = id;
         document.getElementById('selectMarcaGuia').value = data.marca;
         document.getElementById('inputNombreGuia').value = data.nombre;
@@ -860,6 +966,7 @@ function editarGuia(id) {
 function duplicarGuia(id) {
     const guia = guiasData.find(g => g.id === id);
     if (!guia) return;
+    mostrarAvisoGuiaEnUso(null);
     document.getElementById('guiaEditId').value = '';
     document.getElementById('selectMarcaGuia').value = guia.marca_id;
     document.getElementById('inputNombreGuia').value = guia.nombre + ' (copia)';
@@ -869,14 +976,31 @@ function duplicarGuia(id) {
     new bootstrap.Modal(document.getElementById('modalCrearGuia')).show();
 }
 
-function eliminarGuia(id, nombre) {
+function eliminarGuia(id) {
+    // El borrado es CASCADE sobre los items y deja en NULL el `guia_talla` de
+    // todos los productos que la usan. Antes se confirmaba sin decir a cuántos
+    // productos afectaba: una guía con decenas de productos se borraba de un
+    // clic sin saberlo.
+    const guia = guiasData.find(g => g.id === id) || {};
+    const nombre = escaparAtr(guia.nombre || '');
+    const usados = guia.total_productos || 0;
+
+    const advertencia = usados > 0
+        ? `<div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:8px;padding:10px;margin-top:10px;text-align:left;">
+             <b>${usados} producto${usados !== 1 ? 's' : ''}</b> ${usados !== 1 ? 'usan' : 'usa'} esta guía.
+             Al eliminarla ${usados !== 1 ? 'quedarán' : 'quedará'} <b>sin guía de talla</b>.
+             <br><small class="text-muted">Las tallas ya creadas y el stock no se tocan.</small>
+           </div>`
+        : '<br><small class="text-muted">Ningún producto la está usando.</small>';
+
     Swal.fire({
         title: 'Eliminar guía',
-        html: `¿Estás seguro de eliminar la guía <b>${nombre}</b>?<br><small class="text-muted">Esta acción no se puede deshacer.</small>`,
+        html: `¿Eliminar la guía <b>${nombre}</b>?${advertencia}
+               <br><small class="text-muted">Esta acción no se puede deshacer.</small>`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#e74c3c',
-        confirmButtonText: 'Sí, eliminar',
+        confirmButtonText: usados > 0 ? `Sí, eliminar (${usados} productos)` : 'Sí, eliminar',
         cancelButtonText: 'Cancelar'
     }).then(result => {
         if (result.isConfirmed) {

@@ -598,14 +598,45 @@ class Cotizacion_Empresa_Detalle(models.Model):
         )
 
     @property
+    def unidades_cubiertas_al_facturar(self):
+        """Unidades que sí tenían SKU al facturar (salieron con el ticket).
+
+        Se mide sobre las filas de `skus_asociados` NO marcadas como
+        post-factura, que es lo único que respalda una salida de stock junto
+        con la factura.
+
+        Compatibilidad: un ítem con `producto_existente` pero SIN ninguna fila
+        de SKU es el enlace viejo (un solo SKU por línea, antes de que existiera
+        Cotizacion_Empresa_Detalle_SKU). En ese caso se asume cobertura total,
+        que es lo que asumía el código anterior: inventar unidades pendientes
+        sobre datos históricos reabriría despachos ya cerrados.
+        """
+        if self.nacio_pendiente:
+            # Nació sin SKU: por definición no salió nada con el ticket.
+            return 0
+        filas = [s for s in self.skus_asociados.all() if not s.asignado_post_factura]
+        if not filas:
+            return self.cantidad if self.producto_existente_id else 0
+        return sum(s.cantidad or 0 for s in filas)
+
+    @property
     def unidades_pendientes_despacho(self):
         """Unidades facturadas sin salida de stock todavía.
 
-        Un ítem que tenía SKU al facturar salió completo con el ticket → 0.
-        Un ítem que nació pendiente debe lo facturado menos lo ya despachado."""
-        if not self.nacio_pendiente:
-            return 0
-        return max(0, self.cantidad - self.unidades_despachadas_post_factura)
+        Antes: si el ítem no nació pendiente devolvía 0 sin mirar CUÁNTAS
+        unidades respaldaban realmente los SKUs. Un ítem de 5 unidades cuyos
+        SKUs sólo cubrían 1 daba 0 pendientes y las 4 restantes quedaban
+        invisibles para el despacho diferido y para la cuadratura (caso real en
+        producción: COT-202607-0001, línea de 5 uds con 1 sola respaldada).
+
+        Ahora: facturado − cubierto al facturar − despachado post-factura.
+        """
+        return max(
+            0,
+            self.cantidad
+            - self.unidades_cubiertas_al_facturar
+            - self.unidades_despachadas_post_factura
+        )
 
 
 class Cotizacion_Empresa_Detalle_SKU(models.Model):

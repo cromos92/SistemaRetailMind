@@ -1,6 +1,8 @@
 """
 Vistas para el módulo de gestión de permisos
 """
+import logging
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -18,6 +20,8 @@ from .utils_permisos import (
 from decimal import Decimal, InvalidOperation
 from datetime import datetime
 from django.utils import timezone
+
+logger = logging.getLogger('app')
 import json
 
 
@@ -587,6 +591,12 @@ def obtener_permisos_sucursal(request):
                     'puede_editar': permiso.puede_editar if permiso else True,
                     'puede_eliminar': permiso.puede_eliminar if permiso else False,
                     'puede_exportar': permiso.puede_exportar if permiso else True,
+                    # Sin fila de sucursal no hay restricción, así que el estado
+                    # real es "puede". El campo del modelo nace en False y la
+                    # pantalla nunca lo enviaba: bastaba un "Guardar" para dejar
+                    # a la sucursal sin poder aprobar nada (caso NICK1, que
+                    # quedó sin poder regularizar recepciones de DTE).
+                    'puede_aprobar': permiso.puede_aprobar if permiso else True,
                 },
                 'notas': permiso.notas if permiso else ''
             }
@@ -689,6 +699,10 @@ def guardar_permisos_sucursal(request):
             permiso.puede_editar = permisos_valores.get('puede_editar', True)
             permiso.puede_eliminar = permisos_valores.get('puede_eliminar', False)
             permiso.puede_exportar = permisos_valores.get('puede_exportar', True)
+            # Default True como sus hermanos: el modelo lo declara False y, al
+            # no enviarse nunca desde la pantalla, cada guardado dejaba la
+            # sucursal sin permiso de aprobar sin que nadie lo pidiera.
+            permiso.puede_aprobar = permisos_valores.get('puede_aprobar', True)
             permiso.notas = notas
             
             permiso.save()
@@ -831,21 +845,31 @@ def aplicar_plantilla_tipo_sucursal(request):
         
         # Definir plantillas de permisos por tipo de sucursal
         # Códigos de opciones que se restringen según el tipo
+        #
+        # ⚠️ Estos códigos DEBEN existir y estar activos en OpcionMenu. Un código
+        # inventado no lanza error: el bucle de abajo lo salta y la función
+        # responde igualmente "plantilla aplicada". Como además se empieza
+        # habilitando TODO, una plantilla con códigos malos deja a la sucursal
+        # con MÁS acceso del que tenía, informando éxito.
+        # Pasó de verdad: 9 de 15 códigos no existían ('compras_gestion' en vez
+        # de 'gestion_compras', 'ventas_documentos' en vez de
+        # 'gestion_documentos_ventas', etc.), así que la plantilla VENDEDORA
+        # nunca llegó a bloquear compras ni productos. Ahora los códigos que no
+        # resuelven se devuelven en la respuesta para que no vuelva a pasar.
         PLANTILLAS = {
             'VENDEDORA': {
-                # Sucursal vendedora: NO puede crear productos ni hacer compras
+                # Sucursal vendedora: NO puede comprar ni recepcionar mercadería.
+                # Crear/importar productos no son opciones de menú propias: son
+                # acciones dentro de 'gestion_producto', por eso se controlan
+                # dejándola en solo lectura (puede_crear=False) y no aquí.
                 'deshabilitar': [
-                    'compras_gestion',
-                    'compras_dte',
-                    'compras_importacion',
-                    'productos_crear',
-                    'productos_importar',
+                    'gestion_compras',
+                    'gestion_dte_compras',
                     'recepcion_dte',
-                    'regularizar_recepciones',
                 ],
                 'solo_lectura': [
-                    'productos_gestion',
-                    'dashboard_compras',
+                    'gestion_producto',
+                    'dashboard_compras_estrategico',
                 ],
             },
             'CENTRO_DISTRIBUCION': {
@@ -854,7 +878,7 @@ def aplicar_plantilla_tipo_sucursal(request):
                     'pos_dashboard',
                     'ticket_venta',
                     'cuadratura_caja',
-                    'ventas_documentos',
+                    'gestion_documentos_ventas',
                     'cambios_devoluciones',
                 ],
                 'solo_lectura': [
@@ -876,7 +900,30 @@ def aplicar_plantilla_tipo_sucursal(request):
             }, status=400)
         
         permisos_actualizados = 0
-        
+        codigos_no_resueltos = []
+
+        # Se valida ANTES de tocar nada: como el primer paso habilita todas las
+        # opciones, abortar a mitad de camino dejaría la sucursal abierta.
+        for codigo in plantilla.get('deshabilitar', []) + plantilla.get('solo_lectura', []):
+            if not OpcionMenu.objects.filter(codigo=codigo, activo=True).exists():
+                codigos_no_resueltos.append(codigo)
+
+        if codigos_no_resueltos:
+            logger.error(
+                'Plantilla de permisos "%s" con códigos inexistentes o inactivos: %s. '
+                'No se aplicó nada.', tipo_plantilla, ', '.join(codigos_no_resueltos)
+            )
+            return JsonResponse({
+                'error': True,
+                'mensaje': (
+                    f'La plantilla "{tipo_plantilla}" está mal definida y NO se aplicó: '
+                    f'{len(codigos_no_resueltos)} opción(es) no existen o están inactivas '
+                    f'({", ".join(codigos_no_resueltos)}). Aplicarla habría dejado la '
+                    f'sucursal con más acceso del que tiene ahora.'
+                ),
+                'codigos_no_resueltos': codigos_no_resueltos,
+            }, status=409)
+
         # Primero, habilitar todas las opciones
         PermisoSucursal.objects.filter(sucursal=sucursal).update(
             habilitado=True,

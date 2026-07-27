@@ -1155,9 +1155,9 @@
                                 <option value="COMPLETO">Inventario Completo</option>
                                 <option value="POR_MARCA">Por Marca</option>
                                 <option value="POR_CATEGORIA">Por Categoría/Departamento</option>
-                                <option value="POR_ATRIBUTO">Por Atributo</option>
-                                <option value="SELECTIVO">Selectivo</option>
-                                <option value="CICLICO">Cíclico (ABC)</option>
+                                <option value="POR_ATRIBUTO">Por Atributo (color / género)</option>
+                                <option value="SELECTIVO" disabled>Selectivo (no disponible)</option>
+                                <option value="CICLICO" disabled>Cíclico ABC (no disponible)</option>
                             </select>
                         </div>
                         <div class="col-md-6">
@@ -1168,6 +1168,20 @@
                         <div class="col-md-6">
                             <label class="form-label">Observaciones</label>
                             <textarea class="form-control" id="observacionesInventario" rows="2" placeholder="Observaciones adicionales..."></textarea>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="soloConStock" checked>
+                                <label class="form-check-label" for="soloConStock">
+                                    <strong>Contar solo productos con stock en el sistema</strong>
+                                </label>
+                            </div>
+                            <small class="text-muted">
+                                Recomendado. Sin este filtro la toma incluye todas las tallas históricas de la
+                                sucursal (por ejemplo en EDEL: 341.945 líneas para 275 SKUs con stock).
+                                Los sobrantes de productos en cero se registran igual con la carga de pistola,
+                                pero deben agregarse aparte.
+                            </small>
                         </div>
                     </div>
                     
@@ -1239,6 +1253,7 @@ let perPage = 20;
 let inventarioActual = null;
 let filtrosDisponibles = null;
 let currentTabFilter = ''; // Filtro especial de tabs
+let inventariosCargados = []; // Última página recibida (para exportar diferencias)
 
 // === FUNCIONES DE CARGA ===
 
@@ -1250,7 +1265,9 @@ function cargarInventarios(page = 1) {
         estado: $('#filtroEstado').val() || '',
         tipo: $('#filtroTipo').val() || '',
         fecha_desde: $('#filtroFechaDesde').val() || '',
-        fecha_hasta: $('#filtroFechaHasta').val() || ''
+        fecha_hasta: $('#filtroFechaHasta').val() || '',
+        // Los tabs "En Proceso" / "Con Diferencias" ahora sí viajan al backend
+        grupo: (currentTabFilter === 'EN_PROCESO' || currentTabFilter === 'CON_DIFERENCIAS') ? currentTabFilter : ''
     });
     
     $('#tbodyInventarios').html(`
@@ -1268,9 +1285,10 @@ function cargarInventarios(page = 1) {
             return;
         }
         
+        inventariosCargados = response.inventarios || [];
         const tbody = $('#tbodyInventarios');
         tbody.empty();
-        
+
         if (response.inventarios.length === 0) {
             tbody.html(`
                 <tr><td colspan="8">
@@ -1295,6 +1313,11 @@ function cargarInventarios(page = 1) {
                     accionPrincipal = `
                         <button class="nexo-btn nexo-btn-sm nexo-btn-primary" onclick="event.stopPropagation(); verDetalleInventario(${inv.id}, true)" title="Cargar Pistola">
                             <i class="bi bi-upc-scan"></i> Cargar
+                        </button>`;
+                } else if (inv.estado === 'CONTEO_FINALIZADO' || inv.estado === 'EN_REVISION') {
+                    accionPrincipal = `
+                        <button class="nexo-btn nexo-btn-sm nexo-btn-warning" onclick="event.stopPropagation(); enviarAprobacion(${inv.id})" title="Enviar a aprobación">
+                            <i class="bi bi-send"></i> Enviar
                         </button>`;
                 } else if (inv.estado === 'PENDIENTE_APROBACION') {
                     accionPrincipal = `
@@ -1336,7 +1359,7 @@ function cargarInventarios(page = 1) {
                                 </div>
                                 <span class="progress-text">${inv.progreso_conteo}%</span>
                             </div>
-                            <small class="text-muted">${inv.total_productos_contados}/${inv.total_productos_esperados} productos</small>
+                            <small class="text-muted">${formatNumber(inv.skus_contados)}/${formatNumber(inv.skus_esperados)} SKUs · ${formatNumber(inv.unidades_contadas)} u. contadas</small>
                         </td>
                         <td class="text-center">
                             ${inv.total_diferencias_positivas > 0 ? 
@@ -1372,16 +1395,14 @@ function cargarInventarios(page = 1) {
         // Actualizar paginación
         const pagination = response.pagination;
         $('#pageInfo').text(`Página ${pagination.current_page} de ${pagination.total_pages}`);
-        $('#paginacionInfo').text(response.inventarios.length);
+        $('#paginacionInfo').text(`${response.inventarios.length} de ${pagination.total_items}`);
         $('#btnPrevPage').toggleClass('disabled', !pagination.has_previous);
         $('#btnNextPage').toggleClass('disabled', !pagination.has_next);
         currentPage = pagination.current_page;
-        
-        // Actualizar KPIs y tabs
-        actualizarKPIs(response.inventarios);
-        actualizarTabs(response.inventarios);
+
+        // KPIs y tabs desde el resumen del servidor (antes contaban solo la página)
+        actualizarResumen(response.resumen || {});
         actualizarAlertaDiferencias(response.inventarios);
-        actualizarQuickActionBadges(response.inventarios);
     }).fail(function() {
         Swal.fire('Error', 'No se pudieron cargar los inventarios', 'error');
     });
@@ -1402,65 +1423,27 @@ function getBadgeClass(estado) {
     return clases[estado] || 'nexo-badge-borrador';
 }
 
-function formatearDiferencias(positivas, negativas) {
-    let html = '';
-    if (positivas > 0) {
-        html += `<span class="diferencia-positiva">+${positivas}</span> `;
-    }
-    if (negativas > 0) {
-        html += `<span class="diferencia-negativa">-${negativas}</span>`;
-    }
-    if (!positivas && !negativas) {
-        html = '<span class="text-muted">-</span>';
-    }
-    return html;
-}
+function actualizarResumen(resumen) {
+    // El servidor cuenta sobre TODO el conjunto filtrado, no sobre la página actual
+    const total = resumen.total || 0;
+    const enProceso = resumen.en_proceso || 0;
+    const pendientes = resumen.pendientes_aprobacion || 0;
+    const completados = resumen.completados || 0;
+    const conDiferencias = resumen.con_diferencias || 0;
 
-function getAccionesRapidas(inv) {
-    if (inv.estado === 'PENDIENTE_APROBACION') {
-        return `<button class="nexo-btn nexo-btn-sm nexo-btn-success ms-1" onclick="event.stopPropagation(); aprobarInventario(${inv.id})" title="Aprobar">
-            <i class="bi bi-check-lg"></i>
-        </button>`;
-    }
-    if (inv.estado === 'APROBADO') {
-        return `<button class="nexo-btn nexo-btn-sm nexo-btn-warning ms-1" onclick="event.stopPropagation(); aplicarAjustes(${inv.id})" title="Aplicar Ajustes">
-            <i class="bi bi-arrow-right-circle"></i>
-        </button>`;
-    }
-    if (inv.estado === 'APLICANDO') {
-        return `<button class="nexo-btn nexo-btn-sm nexo-btn-warning ms-1" onclick="event.stopPropagation(); _mostrarProgresoAjustes(${inv.id})" title="Ver progreso">
-            <i class="bi bi-hourglass-split"></i>
-        </button>`;
-    }
-    return '';
-}
-
-function actualizarKPIs(inventarios) {
-    // Actualización de KPIs basada en la lista
-    const total = inventarios.length;
-    const enProceso = inventarios.filter(i => ['BORRADOR', 'EN_CONTEO', 'EN_REVISION', 'CONTEO_FINALIZADO'].includes(i.estado)).length;
-    const completados = inventarios.filter(i => i.estado === 'COMPLETADO').length;
-    const pendientes = inventarios.filter(i => i.estado === 'PENDIENTE_APROBACION').length;
-    
     $('#kpiTotalInventarios').text(total);
     $('#kpiEnProceso').text(enProceso);
     $('#kpiCompletados').text(completados);
     $('#kpiPendientesAprobacion').text(pendientes);
-}
 
-function actualizarTabs(inventarios) {
-    // Actualizar contadores de tabs
-    const todos = inventarios.length;
-    const enProceso = inventarios.filter(i => ['BORRADOR', 'EN_CONTEO', 'EN_REVISION', 'CONTEO_FINALIZADO'].includes(i.estado)).length;
-    const pendientes = inventarios.filter(i => i.estado === 'PENDIENTE_APROBACION').length;
-    const conDiferencias = inventarios.filter(i => (i.total_diferencias_positivas > 0 || i.total_diferencias_negativas > 0) && i.estado !== 'COMPLETADO').length;
-    const completados = inventarios.filter(i => i.estado === 'COMPLETADO').length;
-    
-    $('#tabTodos').text(todos);
+    $('#tabTodos').text(total);
     $('#tabEnProceso').text(enProceso);
     $('#tabPendientes').text(pendientes);
     $('#tabDiferencias').text(conDiferencias);
     $('#tabCompletados').text(completados);
+
+    if (enProceso > 0) { $('#badgeEnProceso').text(enProceso).show(); } else { $('#badgeEnProceso').hide(); }
+    if (pendientes > 0) { $('#badgePendientes').text(pendientes).show(); } else { $('#badgePendientes').hide(); }
 }
 
 function actualizarAlertaDiferencias(inventarios) {
@@ -1479,24 +1462,6 @@ function actualizarAlertaDiferencias(inventarios) {
         $('#alertaDiferencias').show();
     } else {
         $('#alertaDiferencias').hide();
-    }
-}
-
-function actualizarQuickActionBadges(inventarios) {
-    // Actualizar badges de acciones rápidas
-    const enProceso = inventarios.filter(i => ['BORRADOR', 'EN_CONTEO'].includes(i.estado)).length;
-    const pendientes = inventarios.filter(i => i.estado === 'PENDIENTE_APROBACION').length;
-    
-    if (enProceso > 0) {
-        $('#badgeEnProceso').text(enProceso).show();
-    } else {
-        $('#badgeEnProceso').hide();
-    }
-    
-    if (pendientes > 0) {
-        $('#badgePendientes').text(pendientes).show();
-    } else {
-        $('#badgePendientes').hide();
     }
 }
 
@@ -1539,56 +1504,46 @@ function filtrarPorTabEstado(estado) {
     cargarInventarios(1);
 }
 
-function irAInventarioEnProceso() {
-    // Buscar el primer inventario en proceso y navegar a él
-    filtrarPorTab($('.inventory-tab[data-filter="EN_PROCESO"]'), 'EN_PROCESO');
-}
-
-function verInventariosPendientesAprobacion() {
-    // Filtrar por pendientes de aprobación
-    filtrarPorTab($('.inventory-tab[data-filter="PENDIENTE_APROBACION"]'), 'PENDIENTE_APROBACION');
-}
-
 function exportarDiferenciasInventario(inventarioId) {
     window.open(`/app/gestion-inventarios/api/exportar-diferencias/${inventarioId}/`, '_blank');
 }
 
+// Antes este botón abría un menú de 3 opciones que NO exportaban nada (mostraban un
+// toast "Exportación en proceso" y terminaban en un TODO). Ahora lista los inventarios
+// con diferencias del listado actual y exporta el que se elija con el endpoint real.
 function exportarTodasDiferencias() {
-    // Mostrar opciones de exportación
-    Swal.fire({
-        title: 'Exportar Diferencias',
-        html: `
-            <p>Seleccione qué diferencias exportar:</p>
-            <div class="d-flex flex-column gap-2 mt-3">
-                <button class="btn btn-outline-primary" onclick="exportarDiferenciasConFiltro('todos')">
-                    <i class="bi bi-file-earmark-excel me-2"></i> Todos los inventarios con diferencias
-                </button>
-                <button class="btn btn-outline-warning" onclick="exportarDiferenciasConFiltro('pendientes')">
-                    <i class="bi bi-hourglass-split me-2"></i> Solo pendientes de aprobación
-                </button>
-                <button class="btn btn-outline-info" onclick="exportarDiferenciasConFiltro('en_proceso')">
-                    <i class="bi bi-clock-history me-2"></i> Solo en proceso
-                </button>
-            </div>
-        `,
-        showConfirmButton: false,
-        showCancelButton: true,
-        cancelButtonText: 'Cancelar'
-    });
-}
+    const candidatos = (inventariosCargados || []).filter(i =>
+        i.total_diferencias_positivas > 0 || i.total_diferencias_negativas > 0
+    );
 
-function exportarDiferenciasConFiltro(filtro) {
-    Swal.close();
-    // Por ahora redirigir a exportación general
-    // TODO: Implementar endpoint que consolide diferencias de múltiples inventarios
-    Swal.fire({
-        icon: 'info',
-        title: 'Exportación en proceso',
-        text: 'Se exportarán las diferencias según el filtro seleccionado.',
-        timer: 2000,
-        showConfirmButton: false
+    if (candidatos.length === 0) {
+        Swal.fire('Sin diferencias', 'Ningún inventario del listado actual tiene diferencias registradas.', 'info');
+        return;
+    }
+
+    if (candidatos.length === 1) {
+        exportarDiferenciasInventario(candidatos[0].id);
+        return;
+    }
+
+    const opciones = {};
+    candidatos.forEach(i => {
+        opciones[i.id] = `${i.numero_inventario} — ${i.nombre} (+${i.total_diferencias_positivas} / -${i.total_diferencias_negativas})`;
     });
-    // window.open(`/app/gestion-inventarios/api/exportar-diferencias-consolidado/?filtro=${filtro}`, '_blank');
+
+    Swal.fire({
+        title: 'Exportar diferencias',
+        input: 'select',
+        inputOptions: opciones,
+        inputPlaceholder: 'Seleccione un inventario',
+        showCancelButton: true,
+        confirmButtonText: 'Exportar a Excel',
+        cancelButtonText: 'Cancelar'
+    }).then(result => {
+        if (result.isConfirmed && result.value) {
+            exportarDiferenciasInventario(result.value);
+        }
+    });
 }
 
 // === MODAL NUEVO INVENTARIO ===
@@ -1629,8 +1584,32 @@ function cargarFiltrosDisponibles() {
                 selectCategorias.append(`<option value="${c.id}">${c.nombre}</option>`);
             });
             
+            // Atributos (color / género): el contenedor existía pero nunca se llenaba,
+            // así que "Por Atributo" mostraba una caja vacía y terminaba creando un
+            // inventario completo.
+            const cont = $('#contenedorAtributos');
+            cont.empty();
+            const soportados = { 'color': 'color', 'genero': 'genero', 'género': 'genero' };
+            (response.filtros.atributos || []).forEach(attr => {
+                const clave = soportados[(attr.nombre || '').toLowerCase()];
+                if (!clave) return; // el backend solo sabe segmentar por color y género
+                const selectId = `selectAttr_${clave}`;
+                cont.append(`
+                    <div class="mb-3">
+                        <label class="form-label">${attr.nombre}</label>
+                        <select class="form-select select-atributo" id="${selectId}" data-clave="${clave}" multiple></select>
+                    </div>
+                `);
+                const sel = $(`#${selectId}`);
+                (attr.opciones || []).forEach(o => sel.append(`<option value="${o.id}">${o.valor}</option>`));
+            });
+
+            if (cont.children().length === 0) {
+                cont.html('<div class="text-muted small">No hay atributos segmentables disponibles (solo color y género).</div>');
+            }
+
             // Inicializar Select2
-            $('#selectMarcas, #selectCategorias').select2({
+            $('#selectMarcas, #selectCategorias, .select-atributo').select2({
                 theme: 'bootstrap-5',
                 placeholder: 'Seleccionar...',
                 allowClear: true,
@@ -1666,13 +1645,33 @@ function crearInventario() {
     }
     
     // Construir filtros
-    const filtros = {};
+    const filtros = { solo_con_stock: $('#soloConStock').is(':checked') };
     if (tipo === 'POR_MARCA') {
         filtros.marcas = $('#selectMarcas').val() || [];
+        if (filtros.marcas.length === 0) {
+            Swal.fire('Falta segmentación', 'Seleccione al menos una marca', 'warning');
+            return;
+        }
     } else if (tipo === 'POR_CATEGORIA') {
         filtros.categorias = $('#selectCategorias').val() || [];
+        if (filtros.categorias.length === 0) {
+            Swal.fire('Falta segmentación', 'Seleccione al menos una categoría', 'warning');
+            return;
+        }
+    } else if (tipo === 'POR_ATRIBUTO') {
+        filtros.atributos = {};
+        $('.select-atributo').each(function() {
+            const valores = $(this).val() || [];
+            if (valores.length) {
+                filtros.atributos[$(this).data('clave')] = valores;
+            }
+        });
+        if (Object.keys(filtros.atributos).length === 0) {
+            Swal.fire('Falta segmentación', 'Seleccione al menos un valor de color o género', 'warning');
+            return;
+        }
     }
-    
+
     const datos = {
         nombre: nombre,
         tipo_inventario: tipo,
@@ -1757,8 +1756,9 @@ function verAnalisis(inventarioId) {
                 <div class="col-md-4">
                     <div class="analysis-section">
                         <div class="analysis-title"><i class="bi bi-bar-chart"></i> Resumen de Conteo</div>
-                        <p><strong>Total esperados:</strong> ${analisis.resumen.total_esperados}</p>
-                        <p><strong>Total contados:</strong> ${analisis.resumen.total_contados}</p>
+                        <p><strong>SKUs a contar:</strong> ${formatNumber(analisis.resumen.total_esperados)}</p>
+                        <p><strong>SKUs contados:</strong> ${formatNumber(analisis.resumen.total_contados)}</p>
+                        <p><strong>Unidades contadas:</strong> ${formatNumber(analisis.resumen.unidades_fisicas)} <span class="text-muted">(sistema: ${formatNumber(analisis.resumen.unidades_sistema)})</span></p>
                         <p><strong>Progreso:</strong> ${analisis.resumen.progreso}%</p>
                         <p><strong>Precisión:</strong> ${analisis.resumen.precision_inventario}%</p>
                     </div>
@@ -1838,6 +1838,14 @@ function verAnalisis(inventarioId) {
             </button>
         `;
         
+        if (analisis.puede_enviar_aprobacion) {
+            footerHtml += `
+                <button type="button" class="nexo-btn nexo-btn-warning" onclick="enviarAprobacion(${inventarioId})">
+                    <i class="bi bi-send me-1"></i> Enviar a Aprobación
+                </button>
+            `;
+        }
+
         if (analisis.puede_aprobar) {
             footerHtml += `
                 <button type="button" class="nexo-btn nexo-btn-success" onclick="aprobarInventario(${inventarioId})">
@@ -1845,7 +1853,15 @@ function verAnalisis(inventarioId) {
                 </button>
             `;
         }
-        
+
+        if (analisis.puede_aplicar_ajustes) {
+            footerHtml += `
+                <button type="button" class="nexo-btn nexo-btn-warning" onclick="aplicarAjustes(${inventarioId})">
+                    <i class="bi bi-arrow-right-circle me-1"></i> Aplicar Ajustes al Stock
+                </button>
+            `;
+        }
+
         $('#footerAnalisis').html(footerHtml);
         
         new bootstrap.Modal(document.getElementById('modalAnalisis')).show();
@@ -1891,12 +1907,45 @@ function aprobarInventario(inventarioId) {
     });
 }
 
+// Enviar a aprobación (el endpoint existía y ninguna pantalla lo llamaba: el
+// inventario quedaba atascado en "Conteo Finalizado" sin forma de avanzar)
+function enviarAprobacion(inventarioId) {
+    Swal.fire({
+        title: '¿Enviar a aprobación?',
+        text: 'El inventario quedará pendiente de aprobación y ya no admitirá cambios de conteo.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, enviar',
+        cancelButtonText: 'Cancelar'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        $.ajax({
+            url: `/app/gestion-inventarios/api/enviar-aprobacion/${inventarioId}/`,
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                if (response.success) {
+                    Swal.fire('Enviado', response.message, 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('modalAnalisis'))?.hide();
+                    cargarInventarios(currentPage);
+                } else {
+                    Swal.fire('Error', response.error, 'error');
+                }
+            },
+            error: function() {
+                Swal.fire('Error', 'No se pudo enviar a aprobación', 'error');
+            }
+        });
+    });
+}
+
 function aplicarAjustes(inventarioId) {
     Swal.fire({
         title: '¿Aplicar Ajustes de Inventario?',
         html: `<p class="text-danger"><strong>¡ATENCIÓN!</strong></p>
                <p>Esta acción modificará el stock real del sistema según las diferencias encontradas.</p>
-               <p>Se crearán movimientos de ajuste para cada diferencia detectada.</p>
+               <p>Se crearán movimientos de kardex (AJUSTE_INVENTARIO_ENTRADA / SALIDA) y se
+                  ajustarán los lotes FIFO para cada diferencia.</p>
                <p><strong>Esta acción no se puede deshacer.</strong></p>`,
         icon: 'warning',
         showCancelButton: true,
@@ -2037,21 +2086,32 @@ function getCookie(name) {
 
 function limpiarFiltros() {
     $('#filtroSearch, #filtroEstado, #filtroTipo, #filtroFechaDesde, #filtroFechaHasta').val('');
+    currentTabFilter = '';
+    $('.inventory-tab').removeClass('active');
+    $('.inventory-tab[data-filter=""]').addClass('active');
     cargarInventarios(1);
 }
 
 // === EVENTOS ===
 
 $(document).ready(function() {
-    setDefaultMonthFilters();
+    // NO se filtra por mes en blanco: una toma de inventario dura semanas y las
+    // fechas de corte suelen ser de meses anteriores. El filtro por defecto dejaba
+    // la pantalla en "No hay inventarios registrados" habiendo inventarios abiertos,
+    // y el usuario terminaba creando duplicados.
     cargarInventarios();
-    
+
     // Eventos de filtros
     $('#filtroSearch').on('input', debounce(function() {
         cargarInventarios(1);
     }, 500));
-    
+
     $('#filtroEstado, #filtroTipo, #filtroFechaDesde, #filtroFechaHasta').on('change', function() {
+        if (this.id === 'filtroEstado') {
+            currentTabFilter = '';
+            $('.inventory-tab').removeClass('active');
+            $('.inventory-tab[data-filter=""]').addClass('active');
+        }
         cargarInventarios(1);
     });
     
@@ -2068,22 +2128,6 @@ $(document).ready(function() {
         }
     });
 });
-
-function setDefaultMonthFilters() {
-    const today = new Date();
-    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-
-    const toDateInput = (date) => {
-        const yyyy = date.getFullYear();
-        const mm = String(date.getMonth() + 1).padStart(2, '0');
-        const dd = String(date.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
-    };
-
-    $('#filtroFechaDesde').val(toDateInput(firstDay));
-    $('#filtroFechaHasta').val(toDateInput(lastDay));
-}
 
 function debounce(func, wait) {
     let timeout;

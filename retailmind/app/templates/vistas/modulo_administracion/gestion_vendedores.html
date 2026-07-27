@@ -1,11 +1,24 @@
 {% load static %}
+{% load permisos_tags %}
 
 {% include 'layout/header.html' %}
 
 <!-- CSRF Token para AJAX -->
 {% csrf_token %}
 {% include 'layout/menu.html' %}
-{% include 'layout/footer.html' %}
+{% comment %} El footer cierra .main-content, #layout-wrapper y </body></html>. Incluirlo aquí
+   dejaba TODA la pantalla renderizada después de </html> y el pie de página
+   («© AllConnected») por encima del contenido. Va al final, justo antes del JS
+   del módulo — que necesita el jQuery que trae el footer. {% endcomment %}
+
+<!-- ===== Permisos finos de la opción 'gestion_vendedores' =====
+     El middleware sólo exige 'puede_ver' para la URL, así que sin esto un rol
+     con permiso de lectura veía (y podía usar) los botones de crear/editar/
+     eliminar/exportar. La comisión de un vendedor es dinero. -->
+{% tiene_permiso 'gestion_vendedores' 'puede_crear' as puede_crear_vendedor %}
+{% tiene_permiso 'gestion_vendedores' 'puede_editar' as puede_editar_vendedor %}
+{% tiene_permiso 'gestion_vendedores' 'puede_eliminar' as puede_eliminar_vendedor %}
+{% tiene_permiso 'gestion_vendedores' 'puede_exportar' as puede_exportar_vendedor %}
 
 <style>
 /* ========== NEXO DESIGN SYSTEM - Gestión Vendedores ========== */
@@ -738,7 +751,9 @@
 }
 </style>
 
-<div class="main-content">
+{% comment %} menu.html ya abre <div class="main-content">; abrir otro anidado duplicaba el
+   margin-left:250px del layout. Igual que el resto de los módulos, aquí sólo va
+   .page-content. {% endcomment %}
     <div class="page-content">
         <div class="container-fluid">
             
@@ -753,14 +768,22 @@
                         <p class="nexo-page-subtitle">Administra tu equipo de ventas y sus comisiones</p>
                     </div>
                     <div class="d-flex gap-2">
+                        {% if puede_exportar_vendedor %}
                         <button class="nexo-btn nexo-btn-outline" onclick="exportarVendedores()">
                             <i class="bi bi-download"></i>
                             Exportar
                         </button>
+                        {% endif %}
+                        {% if puede_crear_vendedor %}
                         <button class="nexo-btn nexo-btn-primary" onclick="abrirModalCrear()">
                             <i class="bi bi-plus-circle"></i>
                             Nuevo Vendedor
                         </button>
+                        {% else %}
+                        <span class="nexo-badge secondary" title="Su rol no tiene permiso para crear vendedores">
+                            <i class="bi bi-eye"></i> Solo lectura
+                        </span>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -812,16 +835,18 @@
                     </div>
                 </div>
 
-                <!-- Ventas del Mes -->
+                <!-- Sin sucursal asignada
+                     (antes aquí había «Ventas del Mes», que el backend devolvía
+                     siempre en 0: era un KPI decorativo, no un dato). -->
                 <div class="col-xl-3 col-md-6 mb-3">
                     <div class="nexo-stat-card">
                         <div class="d-flex justify-content-between align-items-start">
                             <div>
-                                <div class="stat-value" id="ventasMes" style="color: var(--nexo-warning);">0</div>
-                                <div class="stat-label">Ventas del Mes</div>
+                                <div class="stat-value" id="sinSucursal" style="color: var(--nexo-warning);">0</div>
+                                <div class="stat-label">Sin sucursal asignada</div>
                             </div>
                             <div class="stat-icon warning">
-                                <i class="bi bi-cart-check-fill"></i>
+                                <i class="bi bi-shop-window"></i>
                             </div>
                         </div>
                     </div>
@@ -856,7 +881,7 @@
             <!-- ========== FILTROS ========== -->
             <div class="nexo-filter-section">
                 <div class="row g-3">
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <label class="form-label">Buscar</label>
                         <input type="text" class="form-control" id="filtroBusqueda" placeholder="Nombre, RUT o código...">
                     </div>
@@ -877,18 +902,32 @@
                             <option value="alta">Alta (&gt;10%)</option>
                         </select>
                     </div>
+                    <!-- El endpoint devuelve los vendedores de TODAS las empresas del
+                         holding. Sin este filtro, quien opera una empresa veía y podía
+                         editar los vendedores (y las comisiones) de la otra. Arranca
+                         en la empresa activa de la sesión. -->
+                    <div class="col-md-2">
+                        <label class="form-label">Empresa</label>
+                        <select class="form-select" id="filtroEmpresa" onchange="aplicarFiltros()">
+                            <option value="">Todas</option>
+                            {% for e in empresas %}
+                            <option value="{{ e.id }}"
+                                {% if e.id|stringformat:"s" == request.session.idEmpresaActual|stringformat:"s" %}selected{% endif %}>
+                                {{ e.nombre }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
                     <div class="col-md-2">
                         <label class="form-label">Ordenar por</label>
                         <select class="form-select" id="ordenarPor">
                             <option value="nombre">Nombre</option>
                             <option value="comision">Comisión</option>
                             <option value="fecha">Fecha</option>
-                            <option value="ventas">Ventas</option>
                         </select>
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label">&nbsp;</label>
-                        <div class="d-flex gap-2">
+                    <div class="col-md-12">
+                        <div class="d-flex gap-2 justify-content-end">
                             <button class="nexo-btn nexo-btn-primary" onclick="aplicarFiltros()">
                                 <i class="bi bi-search"></i>
                                 Filtrar
@@ -949,8 +988,6 @@
         <!-- container-fluid -->
     </div>
     <!-- page-content -->
-</div>
-<!-- main-content -->
 
 <!-- ========== MODAL CREAR/EDITAR VENDEDOR ========== -->
 <div class="modal fade nexo-modal" id="modalVendedor" tabindex="-1" aria-labelledby="modalVendedorLabel" aria-hidden="true">
@@ -1099,12 +1136,20 @@
     </div>
 </div>
 
-<!-- Select2 CSS & JS -->
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+{% comment %} El footer trae jQuery, Bootstrap, SweetAlert2 y Select2: va ANTES del JS del
+   módulo (mismo orden que devolucion_garantia.html / gestionCompras.html). {% endcomment %}
+{% include 'layout/footer.html' %}
 
 <!-- ========== SCRIPTS ========== -->
 <script>
+// Permisos finos resueltos en servidor (rol + override de usuario + sucursal).
+const PERM_VENDEDOR = {
+    crear:    {{ puede_crear_vendedor|yesno:"true,false" }},
+    editar:   {{ puede_editar_vendedor|yesno:"true,false" }},
+    eliminar: {{ puede_eliminar_vendedor|yesno:"true,false" }},
+    exportar: {{ puede_exportar_vendedor|yesno:"true,false" }}
+};
+
 // Variables globales
 let vendedores = [];
 let vendedorSeleccionado = null;
@@ -1112,6 +1157,7 @@ let modoEdicion = false;
 let codigoValido = false;
 let validandoCodigo = false;
 let tabActual = 'todos'; // Tab actual: 'todos', 'con-sucursal', 'sin-sucursal'
+let comisionConfirmada = false; // el cambio de comisión exige confirmación explícita
 
 // Inicializar cuando jQuery esté disponible
 $(document).ready(function() {
@@ -1354,10 +1400,14 @@ function cargarVendedores() {
 
 // Función para actualizar contadores de tabs
 function actualizarContadoresTabs() {
-    const total = vendedores.length;
-    const conSucursal = vendedores.filter(v => v.sucursales && v.sucursales.length > 0).length;
-    const sinSucursal = vendedores.filter(v => !v.sucursales || v.sucursales.length === 0).length;
-    
+    // Los contadores deben respetar el filtro de empresa, si no dicen una cosa
+    // y la tabla muestra otra.
+    const empresaId = $('#filtroEmpresa').val();
+    const base = vendedores.filter(v => !empresaId || String(v.empresa_id || '') === String(empresaId));
+    const total = base.length;
+    const conSucursal = base.filter(v => v.sucursales && v.sucursales.length > 0).length;
+    const sinSucursal = base.filter(v => !v.sucursales || v.sucursales.length === 0).length;
+
     $('#countTodos').text(total);
     $('#countConSucursal').text(conSucursal);
     $('#countSinSucursal').text(sinSucursal);
@@ -1499,12 +1549,17 @@ function actualizarTabla(listaVendedores) {
                     </td>
                     <td>
                         <div class="d-flex gap-2">
+                            ${PERM_VENDEDOR.editar ? `
                             <button class="nexo-btn-action" onclick="editarVendedor(${vendedor.id})" title="Editar">
                                 <i class="bi bi-pencil"></i>
-                            </button>
+                            </button>` : ''}
+                            ${PERM_VENDEDOR.eliminar ? `
                             <button class="nexo-btn-action danger" onclick="eliminarVendedor(${vendedor.id}, '${nombreEscapado.replace(/'/g, "\\'")}')" title="Eliminar">
                                 <i class="bi bi-trash"></i>
-                            </button>
+                            </button>` : ''}
+                            ${(!PERM_VENDEDOR.editar && !PERM_VENDEDOR.eliminar)
+                                ? '<span class="text-muted" style="font-size:0.75rem;" title="Su rol no tiene permiso para modificar vendedores">—</span>'
+                                : ''}
                         </div>
                     </td>
                 </tr>
@@ -1536,11 +1591,33 @@ function mostrarTablaVacia() {
 }
 
 // Función para actualizar métricas
+// Los KPIs se calculan sobre la lista realmente recibida. El backend devolvía
+// `vendedores_activos = total` (contaba todos como activos, ignorando el campo
+// `activo`) y `ventas_mes = 0` fijo; ambos se mostraban como si fueran datos.
 function actualizarMetricas(metricas) {
-    $('#totalVendedores').text(metricas.total_vendedores || 0);
-    $('#vendedoresActivos').text(metricas.vendedores_activos || 0);
-    $('#comisionPromedio').text((metricas.comision_promedio || 0) + '%');
-    $('#ventasMes').text(metricas.ventas_mes || 0);
+    metricas = metricas || {};
+    const empresaId = $('#filtroEmpresa').val();
+    const lista = (Array.isArray(vendedores) ? vendedores : []).filter(function (v) {
+        return !empresaId || String(v.empresa_id || '') === String(empresaId);
+    });
+
+    $('#totalVendedores').text(lista.length || metricas.total_vendedores || 0);
+
+    const activos = lista.filter(v => v.activo !== false).length;
+    $('#vendedoresActivos').text(activos);
+
+    // Promedio de comisión sobre los vendedores listados (2 decimales).
+    let promedio = 0;
+    if (lista.length) {
+        const suma = lista.reduce((acc, v) => acc + (parseFloat(v.comision) || 0), 0);
+        promedio = Math.round((suma / lista.length) * 100) / 100;
+    } else {
+        promedio = metricas.comision_promedio || 0;
+    }
+    $('#comisionPromedio').text(promedio + '%');
+
+    const sinSucursal = lista.filter(v => !v.sucursales || v.sucursales.length === 0).length;
+    $('#sinSucursal').text(sinSucursal);
 }
 
 // Función para abrir modal de creación
@@ -1707,7 +1784,52 @@ function guardarVendedor() {
         mostrarErroresFormulario(errores);
         return;
     }
-    
+
+    // Guardia de permiso en el cliente (el backend es el que manda, pero así el
+    // usuario ve el motivo en vez de un 403 mudo).
+    if (modoEdicion && !PERM_VENDEDOR.editar) {
+        mostrarError('Sin permiso', 'Su rol no puede editar vendedores.');
+        return;
+    }
+    if (!modoEdicion && !PERM_VENDEDOR.crear) {
+        mostrarError('Sin permiso', 'Su rol no puede crear vendedores.');
+        return;
+    }
+
+    // La comisión es dinero: un cambio nunca debe pasar inadvertido.
+    // No existe bitácora de cambios de comisión en el modelo Vendedor, así que
+    // al menos exigimos confirmación explícita del valor anterior y el nuevo.
+    if (modoEdicion && vendedorSeleccionado && !comisionConfirmada) {
+        const anterior = parseFloat(vendedorSeleccionado.comision) || 0;
+        const nueva = parseFloat(data.comision) || 0;
+        if (anterior !== nueva) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Está cambiando una comisión',
+                html: `
+                    <p class="mb-2">${escapeHtml(vendedorSeleccionado.nombre || '')}</p>
+                    <div style="font-size:1.25rem;font-weight:700;">
+                        ${anterior}% <i class="bi bi-arrow-right mx-2"></i>
+                        <span style="color:#0066FF;">${nueva}%</span>
+                    </div>
+                    <p class="small text-muted mt-2 mb-0">
+                        La comisión afecta la liquidación del vendedor. Confirme el nuevo valor.
+                    </p>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Sí, cambiar la comisión',
+                cancelButtonText: 'Cancelar'
+            }).then(function (res) {
+                if (res.isConfirmed) {
+                    comisionConfirmada = true;
+                    guardarVendedor();
+                    comisionConfirmada = false;
+                }
+            });
+            return;
+        }
+    }
+
     const url = modoEdicion ? '/app/editar_vendedor/' : '/app/crear_vendedor/';
     const method = modoEdicion ? 'PUT' : 'POST';
     
@@ -1822,10 +1944,14 @@ function aplicarFiltros() {
     const estado = $('#filtroEstado').val();
     const comision = $('#filtroComision').val();
     const ordenar = $('#ordenarPor').val();
-    
+    const empresaId = $('#filtroEmpresa').val();
+
     console.log('🔍 Aplicando filtros - Tab:', tabActual, 'Búsqueda:', busqueda, 'Estado:', estado, 'Total vendedores:', vendedores.length);
-    
+
     let vendedoresFiltrados = vendedores.filter(function(vendedor) {
+        // Filtro por empresa (el backend entrega todas las empresas del holding)
+        if (empresaId && String(vendedor.empresa_id || '') !== String(empresaId)) return false;
+
         // Filtro por TAB (sucursal asignada)
         if (tabActual === 'con-sucursal') {
             if (!vendedor.sucursales || vendedor.sucursales.length === 0) return false;
@@ -1881,6 +2007,8 @@ function aplicarFiltros() {
     });
     
     actualizarTabla(vendedoresFiltrados);
+    actualizarContadoresTabs();
+    actualizarMetricas();
 }
 
 // Función para limpiar filtros
@@ -1889,7 +2017,8 @@ function limpiarFiltros() {
     $('#filtroEstado').val('');
     $('#filtroComision').val('');
     $('#ordenarPor').val('nombre');
-    
+    $('#filtroEmpresa').val('');
+
     // NO resetear el tab, solo los filtros dentro del tab actual
     aplicarFiltros();
 }

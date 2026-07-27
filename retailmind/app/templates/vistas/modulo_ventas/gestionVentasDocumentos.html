@@ -270,6 +270,13 @@
                     <input type="text" class="form-control form-control-sm" id="editarBoletaPapelDescripcion" readonly>
                 </div>
 
+                <!-- Barra de contexto: datos que el operador necesita para no      -->
+                <!-- editar a ciegas (estado real del DTE, ticket vinculado, total). -->
+                <div class="d-flex flex-wrap gap-2 mb-2" id="editarDteContexto" style="font-size:11px;"></div>
+
+                <!-- Aviso de riesgo tributario: se rellena por JS según el estado. -->
+                <div class="alert alert-danger py-2 px-2 mb-2 d-none" id="editarDteAvisoSii" style="font-size:12px;"></div>
+
                 <!-- Cambio de tipo de DTE (solo para pares compatibles y estado PENDIENTE) -->
                 <div class="mb-2 d-none" data-campo="tipo_documento" id="grupoEditarTipoDte">
                     <label class="form-label mb-1">
@@ -294,13 +301,22 @@
                         </label>
                         <input type="number" min="1" step="1" class="form-control form-control-sm"
                                id="editarBoletaPapelNumero" placeholder="Ej: 12345">
+                        <small class="text-muted d-block mt-1" style="font-size:11px;">
+                            Cambiar el folio <strong>no mueve el correlativo</strong> del talonario:
+                            el número que digites puede quedar fuera del rango del CAF.
+                        </small>
                     </div>
                     <div class="col-md-6" data-campo="fecha">
                         <label class="form-label mb-1">
                             Fecha de emisión
                             <i class="ri-lock-line text-muted d-none" data-lock-icon="fecha" title="Sin permiso"></i>
                         </label>
-                        <input type="date" class="form-control form-control-sm" id="editarBoletaPapelFecha">
+                        <!-- max = hoy (America/Santiago): un DTE no puede emitirse a futuro -->
+                        <input type="date" class="form-control form-control-sm" id="editarBoletaPapelFecha"
+                               max="{{ fecha_hoy_str }}">
+                        <small class="text-muted d-block mt-1" style="font-size:11px;" id="editarDteFechaHint">
+                            Mover la fecha cambia el día de la venta en cuadratura y reportes.
+                        </small>
                     </div>
                 </div>
 
@@ -2044,6 +2060,79 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Snapshot del DTE tal como estaba al abrir el modal. Se usa para
+    // calcular el diff real al guardar (antes se enviaban siempre fecha y
+    // pagos aunque no hubiese cambiado nada, lo que disparaba la
+    // re-sincronización de pagos del ticket en el backend sin necesidad).
+    let dteEdicionOriginal = null;
+
+    function firmaPagosEdicion() {
+        const filas = [];
+        document.querySelectorAll('#tbodyPagosEditar tr[data-pago-id]').forEach(tr => {
+            const pagoId = parseInt(tr.getAttribute('data-pago-id'), 10);
+            if (!pagoId) return;
+            const metodo = (tr.querySelector('.pago-metodo')?.value || '').toUpperCase();
+            const monto = parseInt(tr.querySelector('.pago-monto')?.value || 0, 10) || 0;
+            const detalleTr = document.querySelector(
+                `tr.pago-detalle-internet[data-pago-detalle-id="${pagoId}"]`
+            );
+            const plataforma = (detalleTr?.querySelector('.pago-plataforma')?.value || '').trim();
+            const voucher = (detalleTr?.querySelector('.pago-voucher')?.value || '').trim();
+            filas.push(`${pagoId}|${metodo}|${monto}|${plataforma}|${voucher}`);
+        });
+        return filas.join(';');
+    }
+
+    // Pinta la barra de contexto y el aviso tributario del modal de edición.
+    function pintarContextoEdicionDte(doc) {
+        const cont = document.getElementById('editarDteContexto');
+        const aviso = document.getElementById('editarDteAvisoSii');
+        const estadoReal = (doc.estado_dte || doc.estado || '').toUpperCase();
+
+        if (cont) {
+            const chips = [];
+            chips.push(
+                `<span class="badge bg-light text-dark border">Estado DTE: <strong>${estadoReal || 'N/D'}</strong></span>`
+            );
+            chips.push(
+                doc.ticket_correlativo
+                    ? `<span class="badge bg-light text-dark border">Ticket vinculado: <strong>#${doc.ticket_correlativo}</strong></span>`
+                    : '<span class="badge bg-light text-dark border">Sin ticket vinculado</span>'
+            );
+            chips.push(
+                `<span class="badge bg-light text-dark border">Total: <strong>${formatearMoneda(doc.total || 0)}</strong></span>`
+            );
+            if (doc.es_manual) {
+                chips.push('<span class="badge bg-warning text-dark">DTE manual</span>');
+            }
+            cont.innerHTML = chips.join('');
+        }
+
+        if (aviso) {
+            const esElectronico = (doc.tipo || '').indexOf('ELECTRONICA') !== -1
+                               || (doc.tipo || '') === 'FACTURA EXENTA';
+            if (estadoReal === 'ACEPTADO') {
+                aviso.classList.remove('d-none');
+                aviso.innerHTML = '<i class="ri-error-warning-fill me-1"></i>'
+                    + '<strong>Documento ACEPTADO por el SII.</strong> '
+                    + 'Editar folio, fecha o tipo deja el sistema distinto de lo declarado. '
+                    + 'La corrección tributaria correcta es una Nota de Crédito, no una edición.';
+            } else if (esElectronico) {
+                aviso.classList.remove('d-none');
+                aviso.classList.remove('alert-danger');
+                aviso.classList.add('alert-warning');
+                aviso.innerHTML = '<i class="ri-alert-line me-1"></i>'
+                    + 'Documento tributario electrónico ya emitido: cualquier cambio de '
+                    + 'folio, fecha o tipo debe cuadrar con lo informado al SII.';
+            } else {
+                aviso.classList.add('d-none');
+                aviso.classList.remove('alert-warning');
+                aviso.classList.add('alert-danger');
+                aviso.innerHTML = '';
+            }
+        }
+    }
+
     window.abrirEditarBoletaPapel = function(documentoId) {
         const doc = documentosData.find(d => d.id === documentoId);
         if (!doc) {
@@ -2096,6 +2185,21 @@ document.addEventListener('DOMContentLoaded', function() {
         pintarTablaPagosEditar(doc.pagos_raw || doc.metodos_pago || [], doc.tipo);
         aplicarPermisosFormularioEdicion(doc.tipo);
         configurarSelectorTipoDte(doc.tipo, doc.estado);
+        pintarContextoEdicionDte(doc);
+
+        // Snapshot para el diff al guardar (después de pintar los pagos,
+        // para que la firma refleje exactamente lo que se cargó).
+        dteEdicionOriginal = {
+            id: doc.id,
+            tipo: doc.tipo || '',
+            estado_dte: (doc.estado_dte || doc.estado || '').toUpperCase(),
+            numero: doc.numero != null ? String(doc.numero) : '',
+            fecha: formatearFechaParaInput(doc.fecha) || '',
+            vendedor: doc.vendedor_id != null ? String(doc.vendedor_id) : '',
+            vendedor_nombre: doc.vendedor_nombre || '',
+            pagos: firmaPagosEdicion(),
+            total: parseInt(doc.total || 0, 10),
+        };
 
         // Conectar el listener del selector de tipo (una sola vez).
         const selectTipo = document.getElementById('editarBoletaPapelTipoSelect');
@@ -2126,6 +2230,15 @@ document.addEventListener('DOMContentLoaded', function() {
             payload.tipo_documento = tipoSeleccionado;
         }
 
+        // Lista legible de cambios (para la confirmación previa).
+        const cambios = [];
+        const original = dteEdicionOriginal || {};
+        if (cambiaTipo) {
+            cambios.push(`Tipo: <strong>${labelTipoDocumento(tipoDte)}</strong> → `
+                + `<strong>${labelTipoDocumento(tipoSeleccionado)}</strong> `
+                + '(folio nuevo del correlativo destino; el actual queda saltado)');
+        }
+
         // Si cambia el tipo, el folio se reasigna automáticamente
         // (backend: obtener_siguiente_correlativo del tipo destino), así
         // que NO enviamos numero_documento desde acá.
@@ -2135,7 +2248,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 mostrarError('Ingrese un número de documento válido');
                 return;
             }
-            payload.numero_documento = parseInt(numero, 10);
+            // Sólo se envía si efectivamente cambió: así un guardado de otro
+            // campo no reescribe el folio ni toca el vínculo con el ticket.
+            if (String(parseInt(numero, 10)) !== String(original.numero || '')) {
+                payload.numero_documento = parseInt(numero, 10);
+                cambios.push(`N° documento: <strong>${original.numero || 's/n'}</strong> → `
+                    + `<strong>${parseInt(numero, 10)}</strong>`);
+            }
         }
 
         if (puedeEditarCampoEnTipo('fecha', tipoDte)) {
@@ -2144,7 +2263,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 mostrarError('Ingrese una fecha válida');
                 return;
             }
-            payload.fecha_emision = fecha;
+            const hoyStr = '{{ fecha_hoy_str }}';
+            if (hoyStr && fecha > hoyStr) {
+                mostrarError('La fecha de emisión no puede ser futura');
+                return;
+            }
+            if (fecha !== (original.fecha || '')) {
+                payload.fecha_emision = fecha;
+                const mesAntes = (original.fecha || '').slice(0, 7);
+                const mesDespues = fecha.slice(0, 7);
+                cambios.push(`Fecha de emisión: <strong>${formatearFecha(original.fecha)}</strong> → `
+                    + `<strong>${formatearFecha(fecha)}</strong>`
+                    + (mesAntes && mesAntes !== mesDespues
+                        ? ' <span class="text-danger">(cambia de PERÍODO TRIBUTARIO — afecta el F29 de ambos meses)</span>'
+                        : ''));
+            }
         }
 
         // Cambio de VENDEDOR: sólo si el rol tiene permiso y el valor
@@ -2162,6 +2295,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 payload.vendedor_id = vid;
+                const textoVendedor = selectVendedor.options[selectVendedor.selectedIndex]
+                    ? selectVendedor.options[selectVendedor.selectedIndex].text
+                    : vid;
+                cambios.push(`Vendedor: <strong>${original.vendedor_nombre || 'sin vendedor'}</strong> → `
+                    + `<strong>${textoVendedor}</strong>`);
             }
         }
 
@@ -2204,8 +2342,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 mostrarError(errorPago);
                 return;
             }
-            if (pagos.length > 0) {
+            // Sólo se envían los pagos si realmente cambiaron: cada envío de
+            // `pagos` reescribe los Dte_Detalle_Pago y re-sincroniza los del
+            // ticket, así que no conviene mandarlos "por si acaso".
+            if (pagos.length > 0 && firmaPagosEdicion() !== (original.pagos || '')) {
                 payload.pagos = pagos;
+                const sumaPagos = pagos.reduce((acc, p) => acc + (p.monto || 0), 0);
+                cambios.push('Pagos del documento modificados '
+                    + `(suma ${formatearMoneda(sumaPagos)} sobre un total de `
+                    + `${formatearMoneda(original.total || 0)})`);
             }
         }
 
@@ -2216,10 +2361,100 @@ document.addEventListener('DOMContentLoaded', function() {
                        || ('tipo_documento' in payload)
                        || ('vendedor_id' in payload);
         if (!tieneCampo) {
-            mostrarError('No tienes permisos para editar ningún campo de este DTE');
+            const algoEditable = ['numero_documento', 'fecha', 'pago', 'vendedor']
+                .some(c => puedeEditarCampoEnTipo(c, tipoDte));
+            if (!algoEditable) {
+                mostrarError('No tienes permisos para editar ningún campo de este DTE');
+            } else {
+                mostrarInfoEdicionDte('No modificaste ningún dato del documento.');
+            }
             return;
         }
 
+        // Se cierra el modal ANTES de abrir la confirmación: Bootstrap
+        // atrapa el foco dentro del modal y el textarea del Swal quedaría
+        // inutilizable. Si el usuario cancela, se vuelve a abrir con los
+        // valores intactos (el DOM del modal no se reinicia al ocultarse).
+        const modalEl = document.getElementById('modalEditarBoletaPapel');
+        const instModal = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
+        if (instModal) instModal.hide();
+
+        confirmarEdicionDte(cambios, original).then(motivo => {
+            if (motivo === null) {
+                if (modalEl) {
+                    (bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl)).show();
+                }
+                return;
+            }
+            payload.motivo = motivo;
+            enviarEdicionDte(payload);
+        });
+    };
+
+    // Confirmación previa obligatoria: muestra el diff exacto y exige un
+    // motivo. Se trata de documentos tributarios ya emitidos, así que el
+    // guardado no puede ser un clic silencioso.
+    // Devuelve una promesa con el motivo, o `null` si el usuario cancela.
+    function confirmarEdicionDte(cambios, original) {
+        if (typeof Swal === 'undefined') {
+            // Sin SweetAlert2 no hay forma de pedir el motivo: se aborta
+            // antes que dejar pasar una edición sin justificación.
+            mostrarError('No se puede confirmar la edición (SweetAlert2 no disponible)');
+            return Promise.resolve(null);
+        }
+
+        const esAceptado = (original.estado_dte || '') === 'ACEPTADO';
+        const listaCambios = cambios.length
+            ? '<ul class="mb-2 ps-3">' + cambios.map(c => `<li>${c}</li>`).join('') + '</ul>'
+            : '<p class="mb-2 text-muted">Sin diferencias detectadas en el formulario.</p>';
+
+        return Swal.fire({
+            icon: 'warning',
+            title: 'Confirmar edición del documento',
+            width: 640,
+            html: `
+                <div class="text-start" style="font-size:13px;">
+                    ${esAceptado ? '<div class="alert alert-danger py-2 px-2 mb-2" style="font-size:12px;">'
+                        + '<strong>DTE ACEPTADO por el SII.</strong> Lo que cambies aquí no se '
+                        + 'informa al SII: el sistema quedará distinto de lo declarado.</div>' : ''}
+                    <p class="mb-1"><strong>Se van a aplicar estos cambios:</strong></p>
+                    ${listaCambios}
+                    <p class="text-muted mb-1" style="font-size:11.5px;">
+                        El cambio no regenera el TXT ya enviado ni actualiza las referencias
+                        de notas de crédito asociadas.
+                    </p>
+                    <label class="form-label mb-1 mt-2" for="editarDteMotivo">
+                        Motivo del cambio <span class="text-danger">*</span>
+                    </label>
+                    <textarea id="editarDteMotivo" class="form-control form-control-sm" rows="2"
+                              maxlength="300" placeholder="Ej: folio digitado mal al emitir, corrige boleta 12345"></textarea>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Sí, aplicar cambios',
+            cancelButtonText: 'Cancelar',
+            focusCancel: true,
+            confirmButtonColor: esAceptado ? '#FF4D4D' : '#0066FF',
+            preConfirm: () => {
+                const motivo = (document.getElementById('editarDteMotivo')?.value || '').trim();
+                if (motivo.length < 5) {
+                    Swal.showValidationMessage('Escribe un motivo (mínimo 5 caracteres)');
+                    return false;
+                }
+                return motivo;
+            },
+        }).then(result => (result.isConfirmed ? result.value : null));
+    }
+
+    function mostrarInfoEdicionDte(mensaje) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon: 'info', title: 'Sin cambios', text: mensaje });
+        } else {
+            alert(mensaje);
+        }
+    }
+
+    function enviarEdicionDte(payload) {
         if (typeof Swal !== 'undefined') {
             Swal.fire({ title: 'Guardando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
         }
@@ -2239,7 +2474,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 const modalEl = document.getElementById('modalEditarBoletaPapel');
                 const inst = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
                 if (inst) inst.hide();
-                mostrarExito('Documento actualizado correctamente');
+                const doc = data.documento || {};
+                const detalle = [];
+                if (doc.tipo_cambiado) {
+                    detalle.push(`nuevo folio ${doc.numero_documento} (${doc.tipo_documento})`);
+                }
+                if (doc.arqueos_afectados && doc.arqueos_afectados.length) {
+                    detalle.push(`${doc.arqueos_afectados.length} arqueo(s) cerrado(s) afectado(s)`);
+                }
+                if (doc.ticket_pagos_resync_modo === 'rebuild') {
+                    detalle.push('pagos del ticket reconstruidos desde el DTE');
+                }
+                mostrarExito('Documento actualizado correctamente'
+                    + (detalle.length ? ` · ${detalle.join(' · ')}` : ''));
                 cargarDocumentos();
             } else {
                 mostrarError(data.error || 'No se pudo actualizar el documento');
@@ -2249,7 +2496,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error editar DTE:', err);
             mostrarError('Error al actualizar el documento');
         });
-    };
+    }
 
     // === ELIMINACIÓN DE DOCUMENTO (soft delete + devolución de stock) ===
     //

@@ -7,16 +7,15 @@
 <div class="page-content">
     <div class="container-fluid">
 
-        <!-- Header -->
-        <div class="row mb-3">
-            <div class="col">
-                <h1 class="display-6 mb-1 fw-bold">
+        <!-- Header compacto (1366x768: el display-6 empujaba los KPI fuera de vista) -->
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-2 mb-2">
+            <div>
+                <h4 class="mb-0 fw-bold lh-1">
                     <i class="ri-bar-chart-2-line text-primary"></i> Comparativo de Ventas
-                </h1>
-                <p class="text-muted mb-0">
-                    Comparación entre el periodo actual y el periodo anterior equivalente.
-                    Incluye separación de ventas Internet (E-commerce) vs Presencial y ranking de vendedores.
-                </p>
+                </h4>
+                <small class="text-muted">
+                    Periodo actual vs periodo anterior equivalente · Internet vs Presencial · ranking de vendedores
+                </small>
             </div>
         </div>
 
@@ -97,7 +96,9 @@
             <div class="col-6 col-md-3">
                 <div class="card kpi-card border-0 shadow-sm h-100">
                     <div class="card-body py-3">
-                        <div class="kpi-label"><i class="ri-money-dollar-circle-line text-primary"></i> Ventas Netas</div>
+                        <div class="kpi-label"><i class="ri-money-dollar-circle-line text-primary"></i>
+                            <span id="kpiVentasLabel">Ventas Netas</span>
+                        </div>
                         <div class="kpi-main" id="kpiVentasActual">$0</div>
                         <div class="kpi-sub">Anterior: <span id="kpiVentasAnterior">$0</span></div>
                         <div class="kpi-var" id="kpiVentasVar"></div>
@@ -135,7 +136,8 @@
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="card kpi-card border-0 shadow-sm h-100">
+                <div class="card kpi-card border-0 shadow-sm h-100" id="kpiCardDevolucion"
+                     title="Las notas de crédito no están entrando al cálculo de este reporte; mientras eso no se corrija, la tasa se muestra como 'n/d' en vez de 0%.">
                     <div class="card-body py-3">
                         <div class="kpi-label"><i class="ri-arrow-go-back-line text-danger"></i> Tasa Devolución</div>
                         <div class="kpi-main" id="kpiDevActual">0%</div>
@@ -384,6 +386,10 @@
 .var-up { color: #0e8a55; }
 .var-down { color: #c0274b; }
 .var-neutral { color: #6c757d; }
+/* KPI cuyo dato no está disponible: se muestra apagado y rayado para que no
+   se lea como un 0 real. */
+.kpi-sin-dato { background: repeating-linear-gradient(45deg, #fafafa, #fafafa 8px, #f1f1f4 8px, #f1f1f4 16px); }
+.kpi-sin-dato .kpi-main { font-size: 1.15rem; }
 .badge-var-up { background: #d4edda; color: #155724; padding: 2px 8px; border-radius: 4px; font-size: .72rem; font-weight: 600; }
 .badge-var-down { background: #f8d7da; color: #721c24; padding: 2px 8px; border-radius: 4px; font-size: .72rem; font-weight: 600; }
 .badge-var-neutral { background: #e2e3e5; color: #383d41; padding: 2px 8px; border-radius: 4px; font-size: .72rem; font-weight: 600; }
@@ -619,13 +625,39 @@
         document.getElementById('kpiDocsAnterior').textContent = fmtNum(k.documentos_anterior);
         document.getElementById('kpiDocsVar').innerHTML = textVar(k.variacion_documentos_pct);
 
-        document.getElementById('kpiDevActual').textContent = fmtPct(k.tasa_devolucion_actual);
-        document.getElementById('kpiDevAnterior').textContent = fmtPct(k.tasa_devolucion_anterior);
-        // Delta de tasa: menos devoluciones es bueno → invertimos el color
-        const d = k.delta_tasa_devolucion_pp;
-        if (d > 0) document.getElementById('kpiDevVar').innerHTML = `<span class="var-down"><i class="ri-arrow-up-s-line"></i>${d} pp</span>`;
-        else if (d < 0) document.getElementById('kpiDevVar').innerHTML = `<span class="var-up"><i class="ri-arrow-down-s-line"></i>${d} pp</span>`;
-        else document.getElementById('kpiDevVar').innerHTML = `<span class="var-neutral">0 pp</span>`;
+        // Tasa de devolución: mientras el backend no arregle el queryset de
+        // notas de crédito (se piden con tipo_transaccion de VENTA y las NC se
+        // emiten con DEVOLUCION/ANULACION), el valor llega SIEMPRE en 0. Un
+        // "0,0%" pintado como dato real es peor que decir que no hay dato.
+        const devSinDato = !k.tasa_devolucion_actual && !k.tasa_devolucion_anterior;
+        const cardDev = document.getElementById('kpiCardDevolucion');
+        if (devSinDato) {
+            document.getElementById('kpiDevActual').innerHTML = '<span class="text-muted">n/d</span>';
+            document.getElementById('kpiDevAnterior').textContent = 'n/d';
+            document.getElementById('kpiDevVar').innerHTML =
+                '<span class="var-neutral">sin dato</span>';
+            if (cardDev) cardDev.classList.add('kpi-sin-dato');
+            // Si no hay devoluciones restadas, "netas" == brutas: hay que decirlo.
+            const lbl = document.getElementById('kpiVentasLabel');
+            if (lbl) {
+                lbl.textContent = 'Ventas Brutas';
+                lbl.parentElement.setAttribute(
+                    'title',
+                    'No se están restando notas de crédito en este reporte, así que el total es bruto.'
+                );
+            }
+        } else {
+            document.getElementById('kpiDevActual').textContent = fmtPct(k.tasa_devolucion_actual);
+            document.getElementById('kpiDevAnterior').textContent = fmtPct(k.tasa_devolucion_anterior);
+            if (cardDev) cardDev.classList.remove('kpi-sin-dato');
+            const lbl = document.getElementById('kpiVentasLabel');
+            if (lbl) lbl.textContent = 'Ventas Netas';
+            // Delta de tasa: menos devoluciones es bueno → invertimos el color
+            const d = k.delta_tasa_devolucion_pp;
+            if (d > 0) document.getElementById('kpiDevVar').innerHTML = `<span class="var-down"><i class="ri-arrow-up-s-line"></i>${d} pp</span>`;
+            else if (d < 0) document.getElementById('kpiDevVar').innerHTML = `<span class="var-up"><i class="ri-arrow-down-s-line"></i>${d} pp</span>`;
+            else document.getElementById('kpiDevVar').innerHTML = `<span class="var-neutral">0 pp</span>`;
+        }
 
         document.getElementById('kpiUnidadesActual').textContent = fmtNum(k.unidades_actual);
         document.getElementById('kpiUnidadesAnterior').textContent = fmtNum(k.unidades_anterior);

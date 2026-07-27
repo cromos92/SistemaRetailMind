@@ -4298,6 +4298,55 @@ def registrar_pagos_ticket(request, correlativo):
 
     ticket.save()
 
+    # ── Pre-validación de stock de TODO el ticket ────────────────────────────
+    # Va ANTES de consumir el vale de puntos y la gift card a propósito: es la
+    # única de las tres operaciones que puede abortar el cobro, y no consume
+    # nada. Cuando estaba después, un ticket sin stock devolvía 400 y dejaba el
+    # ticket en PENDIENTE, pero el vale ya estaba canjeado y el saldo de la
+    # gift card ya descontado (esta vista corre sin `transaction.atomic` global
+    # a propósito, así que no hay rollback que lo deshaga): el cliente perdía
+    # sus puntos y su gift card por una venta que nunca se cobró.
+    #
+    # El bucle de descuento de más abajo valida y consume talla por talla: si
+    # el tercer producto no tenía stock, los dos primeros YA habían consumido
+    # sus lotes FIFO. Validar el ticket completo primero convierte ese caso en
+    # "no se tocó nada" en vez de "se consumió a medias".
+    if ticket_se_pago and ticket.modulo_origen != 'CAMBIO_DEVOLUCION':
+        faltantes = []
+        for tp in ticket.ticket_productos.all():
+            if tp.ProductoTalla is None:
+                continue
+            disponible = tp.ProductoTalla.stock_sucursal(ticket.sucursal_id)
+            if disponible < tp.stock:
+                faltantes.append({
+                    'sku': str(tp.ProductoTalla.sku),
+                    'stock_disponible': disponible,
+                    'stock_requerido': tp.stock,
+                })
+
+        if faltantes:
+            primero = faltantes[0]
+            logger.warning(
+                "Cobro abortado antes de tocar stock/vales ticket=%s faltantes=%s",
+                ticket.correlativo, faltantes,
+            )
+            ticket.estado = 'PENDIENTE'
+            ticket.save()
+            detalle = ', '.join(
+                f"SKU {f['sku']} (disp. {f['stock_disponible']}, req. {f['stock_requerido']})"
+                for f in faltantes
+            )
+            return JsonResponse({
+                'success': False,
+                'error': f'Stock insuficiente en {len(faltantes)} producto(s): {detalle}',
+                'error_tipo': 'STOCK_INSUFICIENTE',
+                'sku': primero['sku'],
+                'stock_disponible': primero['stock_disponible'],
+                'stock_requerido': primero['stock_requerido'],
+                'faltantes': faltantes,
+            }, status=400)
+    # ─────────────────────────────────────────────────────────────────────────
+
     # ===== GIFT CARD: descontar saldo por cada pago con método GIFTCARD =====
     # Se procesa con su propia transacción + lock (el servicio lo maneja) y es
     # idempotente por pago, así que un reintento del POS no descuenta dos veces.
@@ -4353,6 +4402,12 @@ def registrar_pagos_ticket(request, correlativo):
     
     if ticket_se_pago and ticket.modulo_origen != 'CAMBIO_DEVOLUCION':
         logger.debug("Iniciando descuento de stock ticket=%s", ticket.correlativo)
+
+        # La pre-validación de stock del ticket completo ya corrió más arriba
+        # (antes de consumir vale de puntos / gift card). Las verificaciones
+        # por talla de este bucle se conservan como red de seguridad ante una
+        # venta concurrente que se lleve el stock en el intertanto.
+
         for tp in ticket.ticket_productos.all():
             # Saltar ítems sin ProductoTalla (pendientes de despacho)
             if tp.ProductoTalla is None:
@@ -5265,6 +5320,16 @@ def listar_documentos_ventas(request):
                 if key not in ticket_map_by_folio:
                     ticket_map_by_folio[key] = tk
 
+        # Batch-lookup: DTEs de la página con nota de crédito vigente que los
+        # referencia. El modal de edición necesita avisarlo antes de dejar
+        # tocar el folio (el backend además lo bloquea).
+        dtes_con_nc = set(
+            Dte.objects
+            .filter(documento_afectado_id__in=pk_pagina, es_nota_credito=True)
+            .exclude(estado_dte='ANULADO')
+            .values_list('documento_afectado_id', flat=True)
+        ) if pk_pagina else set()
+
         for dte in dtes_pagina:
             productos = []
             subtotal_bruto = 0
@@ -5366,6 +5431,11 @@ def listar_documentos_ventas(request):
                     ticket_map_by_folio[dte.numero_documento].correlativo
                     if dte.numero_documento in ticket_map_by_folio else None
                 ),
+                'ticket_id': (
+                    ticket_map_by_folio[dte.numero_documento].id
+                    if dte.numero_documento in ticket_map_by_folio else None
+                ),
+                'tiene_nc': dte.id in dtes_con_nc,
                 'observaciones': getattr(dte, 'referencias', '') or '',
                 'es_manual': bool(getattr(dte, 'es_manual', False)),
             })
@@ -6396,6 +6466,81 @@ def eliminar_documento_venta(request):
         })
 
 
+# Mapa `Dte.tipo_documento` -> `Ticket.tipo_dte` (choices del modelo Ticket).
+# Se usa para (a) resolver el ticket vinculado sin ambigüedad y (b) propagar
+# el cambio de tipo al ticket. Sin esto, la búsqueda del ticket sólo miraba
+# sucursal + folio, y hay 6 pares (sucursal, folio_dte) con más de un ticket
+# en producción: `.first()` sin `order_by` podía tomar cualquiera de ellos.
+_TIPO_DTE_A_TIPO_TICKET = {
+    'BOLETA ELECTRONICA': 'BOLETA_ELECTRONICA',
+    'BOLETA PAPEL': 'BOLETA',
+    'FACTURA ELECTRONICA': 'FACTURA_ELECTRONICA',
+    'FACTURA EXENTA': 'FACTURA_EXENTA',
+}
+
+
+def _validar_folio_destino_dte(dte, tipo_destino, folio):
+    """Valida que `folio` esté libre para el RUT del emisor + `tipo_destino`.
+
+    Devuelve `(ok, mensaje_error, advertencias)`.
+
+    El chequeo que había antes filtraba por **sucursal**, y ése es su punto
+    ciego: dos sucursales que operan bajo el mismo RUT pueden emitir el mismo
+    folio del mismo tipo de documento sin que la validación lo note. El SII
+    asigna los folios por RUT + tipo de documento (CAF), no por sucursal, así
+    que la unicidad hay que buscarla sobre todas las fichas de `Empresa` que
+    comparten el RUT del emisor.
+    """
+    from .utils_folio_dte import validar_folio_dte, empresas_con_mismo_rut
+
+    tipo_actual = (dte.tipo_documento or '').upper().strip()
+    tipo_destino = (tipo_destino or '').upper().strip()
+
+    if tipo_destino == tipo_actual:
+        # Mismo tipo: el helper además compara contra el rango del
+        # `Correlativo` de la sucursal y devuelve advertencias informativas.
+        resultado = validar_folio_dte(dte, folio)
+        return (
+            resultado['ok'],
+            ' '.join(resultado['errores']),
+            resultado['advertencias'],
+        )
+
+    emisor_ids = empresas_con_mismo_rut(getattr(dte, 'emisor', None))
+    qs = (
+        Dte.objects
+        .filter(
+            tipo_documento=tipo_destino,
+            numero_documento=folio,
+            descartado=False,
+        )
+        .exclude(id=dte.id)
+        .select_related('sucursal')
+    )
+    # Sin emisor conocido no se puede razonar por RUT: se conserva el
+    # criterio antiguo (misma sucursal) para no dejar el folio sin chequeo.
+    qs = (
+        qs.filter(emisor_id__in=emisor_ids) if emisor_ids
+        else qs.filter(sucursal_id=dte.sucursal_id)
+    )
+    choques = list(qs[:5])
+    if not choques:
+        return True, '', []
+
+    detalle = '; '.join(
+        'DTE #{id} ({suc}, {fec})'.format(
+            id=o.id,
+            suc=(getattr(o.sucursal, 'alias', '') or 'SIN SUCURSAL'),
+            fec=o.fecha_emision.strftime('%Y-%m-%d') if o.fecha_emision else '?',
+        )
+        for o in choques
+    )
+    return False, (
+        f'El folio {folio} ya está emitido para {tipo_destino} bajo el RUT '
+        f'{getattr(dte.emisor, "rut", "?")}: {detalle}'
+    ), []
+
+
 @login_required
 @require_POST
 def editar_dte_boleta_papel(request):
@@ -6463,6 +6608,21 @@ def editar_dte_boleta_papel(request):
                 'error': 'No se enviaron campos para editar'
             })
 
+        # Motivo declarado por el usuario. El modal ya lo exige (mínimo 5
+        # caracteres, ver `confirmarEdicionDte` en gestionVentasDocumentos.html)
+        # pero el endpoint nunca lo leía: cambiar folio, fecha o tipo de un
+        # documento tributario no dejaba ningún rastro
+        # (`HistorialCambioFolioDte` tiene 0 filas en producción).
+        motivo = str(data.get('motivo') or '').strip()
+        if (tiene_numero or tiene_fecha or tiene_tipo) and len(motivo) < 5:
+            return JsonResponse({
+                'success': False,
+                'error': (
+                    'Debe indicar un motivo (mínimo 5 caracteres) para editar '
+                    'el folio, la fecha o el tipo de un documento tributario'
+                )
+            }, status=400)
+
         # Parse / validaciones básicas antes de tocar DB.
         nuevo_numero = None
         if tiene_numero:
@@ -6490,6 +6650,15 @@ def editar_dte_boleta_papel(request):
                 return JsonResponse({
                     'success': False,
                     'error': 'Fecha inválida. Formato esperado YYYY-MM-DD'
+                })
+            # Una fecha de emisión futura descuadra la caja del día (el
+            # ticket se reimputa a `fecha_emision`) y no tiene sentido
+            # tributario. Hoy hay 0 casos en producción: la guarda no
+            # invalida nada existente.
+            if fecha_parsed > timezone.localdate():
+                return JsonResponse({
+                    'success': False,
+                    'error': 'La fecha de emisión no puede ser futura'
                 })
 
         nuevo_tipo = None
@@ -6599,18 +6768,70 @@ def editar_dte_boleta_papel(request):
         sucursal_id_sesion = get_sucursal_id(request)
 
         with transaction.atomic():
-            dte = Dte.objects.select_for_update().filter(id=documento_id).first()
+            # Scoping: el endpoint recibía sólo `documento_id` y cargaba
+            # CUALQUIER Dte por id (IDOR). Se acota al mismo universo que
+            # muestra el listado de esta pantalla (`listar_documentos_ventas`):
+            # ventas no descartadas de la sucursal activa.
+            # Ojo: NO agregar `select_related` de FKs nullables aquí —
+            # PostgreSQL rechaza `FOR UPDATE` sobre el lado nullable de un
+            # OUTER JOIN ("FOR UPDATE cannot be applied to the nullable side
+            # of an outer join") y el endpoint completo devuelve error.
+            dte = (
+                Dte.objects
+                .select_for_update()
+                .filter(
+                    id=documento_id,
+                    tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
+                    descartado=False,
+                )
+                .first()
+            )
             if not dte:
                 return JsonResponse({
                     'success': False,
                     'error': 'Documento no encontrado'
                 })
 
+            if (
+                sucursal_id_sesion
+                and dte.sucursal_id
+                and str(dte.sucursal_id) != str(sucursal_id_sesion)
+            ):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'El documento no pertenece a la sucursal activa'
+                }, status=403)
+
             if dte.estado_dte == 'ANULADO':
                 return JsonResponse({
                     'success': False,
                     'error': 'No se puede editar un documento anulado'
                 })
+
+            # Guarda tributaria: si el documento ya tiene una nota de crédito
+            # vigente que lo referencia, cambiarle el folio o el tipo rompe esa
+            # referencia (la NC guarda el folio en su JSON `referencias` y en
+            # `motivo_nc`, y su TXT ya se envió al SII). En producción hay 452
+            # documentos en esta situación. La fecha, el vendedor y los pagos
+            # sí se pueden seguir corrigiendo.
+            if tiene_numero or tiene_tipo:
+                ncs_vigentes = list(
+                    Dte.objects
+                    .filter(documento_afectado_id=dte.id, es_nota_credito=True)
+                    .exclude(estado_dte='ANULADO')
+                    .values_list('numero_documento', flat=True)[:5]
+                )
+                if ncs_vigentes:
+                    detalle_nc = ', '.join(str(n) for n in ncs_vigentes)
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            'No se puede cambiar el folio ni el tipo: el '
+                            f'documento tiene nota(s) de crédito asociada(s) '
+                            f'({detalle_nc}) que lo referencian. Anule primero '
+                            'la NC o corrija por la vía tributaria.'
+                        )
+                    }, status=409)
 
             # El tipo de DTE debe ser uno de los reconocidos por la matriz
             # de permisos (si no, no hay forma de autorizar el cambio).
@@ -6622,18 +6843,29 @@ def editar_dte_boleta_papel(request):
 
             # Validar permisos campo + tipo para cada cambio solicitado.
             #
-            # El rol `administrador` salta la matriz de permisos
-            # granulares (mismo bypass que se usa en `crear_dte_manual`
-            # y `eliminar_documento_venta`). Esto deja el sistema
-            # operativo aunque alguna migración de permisos granulares
-            # (0140 / 0151) no se haya aplicado todavía.
+            # El rol `administrador` salta la matriz de permisos granulares
+            # SÓLO en los campos sin efecto tributario (`pago` y `vendedor`),
+            # que es donde el bypass hacía falta cuando las migraciones de
+            # permisos (0140 / 0151) no estaban aplicadas.
+            #
+            # Para `numero_documento` y `fecha` se exige el permiso real: son
+            # los campos que alteran la identidad del documento ante el SII y
+            # el frontend ya los habilita/deshabilita con ese mismo permiso
+            # (`puede_editar_numero_dte` / `puede_editar_fecha_dte` en el
+            # contexto de `gestion_ventas_documentos`), de modo que el bypass
+            # sólo servía para saltarse la matriz por POST directo.
+            # Verificado en producción: los 8 administradores activos tienen
+            # `puede_editar=True` en `dte_editar_numero`, `dte_editar_fecha` y
+            # los 4 `dte_editar_tipo_*`, sin PermisoSucursal ni PermisoUsuario
+            # que los recorte, así que el cambio es transparente hoy.
+            CAMPOS_CON_BYPASS_ADMIN = {'pago', 'vendedor'}
             errores_permiso = []
             es_admin_request = (
                 getattr(request.user, 'rol', '') == 'administrador'
             )
 
             def _check(campo):
-                if es_admin_request:
+                if es_admin_request and campo in CAMPOS_CON_BYPASS_ADMIN:
                     return
                 if not puede_editar_campo_dte(
                     request.user, campo, dte.tipo_documento,
@@ -6724,23 +6956,20 @@ def editar_dte_boleta_papel(request):
                         }, status=403)
                     cambiar_tipo = True
 
-            # Validación de número duplicado en la misma sucursal + tipo.
-            # Si también cambia el tipo, la validación se pospone a cuando
-            # ya se asignó el folio del nuevo tipo (más abajo).
+            # Validación de folio duplicado por RUT emisor + tipo (NO por
+            # sucursal: ver `_validar_folio_destino_dte`). Si también cambia
+            # el tipo, la validación se pospone a cuando ya se asignó el folio
+            # del nuevo tipo (más abajo).
+            advertencias_folio = []
             if tiene_numero and not cambiar_tipo and nuevo_numero != dte.numero_documento:
-                existe_duplicado = Dte.objects.filter(
-                    sucursal_id=dte.sucursal_id,
-                    tipo_documento=dte.tipo_documento,
-                    numero_documento=nuevo_numero,
-                ).exclude(id=dte.id).exists()
-                if existe_duplicado:
+                ok_folio, error_folio, advertencias_folio = _validar_folio_destino_dte(
+                    dte, dte.tipo_documento, nuevo_numero
+                )
+                if not ok_folio:
                     return JsonResponse({
                         'success': False,
-                        'error': (
-                            f'Ya existe otro {dte.tipo_documento} con el '
-                            f'número {nuevo_numero} en esta sucursal'
-                        )
-                    })
+                        'error': error_folio
+                    }, status=400)
 
             # Validación específica de pagos:
             #  - Los ids enviados deben pertenecer al DTE.
@@ -6823,15 +7052,34 @@ def editar_dte_boleta_papel(request):
             # El match es por sucursal + folio_dte (numero original). Si no
             # existe ticket asociado (ej: DTE emitido directo sin ticket
             # previo), ticket_vinculado queda en None y no se propaga nada.
-            ticket_vinculado = (
+            #
+            # La búsqueda era `filter(...).first()` sin `order_by` y sin
+            # tipo: en producción hay 6 pares (sucursal, folio_dte) con más de
+            # un ticket, y el motor podía devolver cualquiera de ellos (mismo
+            # patrón que provocó el bug de la comuna equivocada al facturar).
+            # Ahora se prefiere el ticket del tipo equivalente y, a igualdad de
+            # condiciones, el de menor id.
+            _tipo_ticket_esperado = _TIPO_DTE_A_TIPO_TICKET.get(
+                (dte.tipo_documento or '').upper().strip()
+            )
+            _tickets_qs = (
                 Ticket.objects
                 .select_for_update()
                 .filter(
                     sucursal_id=dte.sucursal_id,
                     folio_dte=dte.numero_documento,
                 )
-                .first()
+                .order_by('id')
             )
+            ticket_vinculado = None
+            if _tipo_ticket_esperado:
+                ticket_vinculado = _tickets_qs.filter(
+                    tipo_dte=_tipo_ticket_esperado
+                ).first()
+            if ticket_vinculado is None:
+                # Fallback al comportamiento histórico (tickets migrados sin
+                # `tipo_dte` coherente), pero ya determinístico por id.
+                ticket_vinculado = _tickets_qs.first()
 
             update_fields = []
 
@@ -6841,19 +7089,14 @@ def editar_dte_boleta_papel(request):
             # usamos ese (validando duplicado contra el nuevo tipo).
             if cambiar_tipo:
                 if tiene_numero:
-                    existe_dup_destino = Dte.objects.filter(
-                        sucursal_id=dte.sucursal_id,
-                        tipo_documento=nuevo_tipo,
-                        numero_documento=nuevo_numero,
-                    ).exclude(id=dte.id).exists()
-                    if existe_dup_destino:
+                    ok_folio, error_folio, advertencias_folio = (
+                        _validar_folio_destino_dte(dte, nuevo_tipo, nuevo_numero)
+                    )
+                    if not ok_folio:
                         return JsonResponse({
                             'success': False,
-                            'error': (
-                                f'Ya existe otro {nuevo_tipo} con el '
-                                f'número {nuevo_numero} en esta sucursal'
-                            )
-                        })
+                            'error': error_folio
+                        }, status=400)
                     numero_asignado = nuevo_numero
                 else:
                     try:
@@ -6868,6 +7111,23 @@ def editar_dte_boleta_papel(request):
                                 f'{nuevo_tipo}: {exc}'
                             )
                         })
+                    # El correlativo puede venir desfasado (rangos redefinidos,
+                    # documentos cargados a mano, folios reusados entre fichas
+                    # del mismo RUT). Sin este chequeo el cambio de tipo podía
+                    # generar un duplicado silencioso de folio, que es un
+                    # problema tributario y no sólo de datos.
+                    ok_folio, error_folio, advertencias_folio = (
+                        _validar_folio_destino_dte(dte, nuevo_tipo, numero_asignado)
+                    )
+                    if not ok_folio:
+                        return JsonResponse({
+                            'success': False,
+                            'error': (
+                                f'El correlativo de {nuevo_tipo} entregó el folio '
+                                f'{numero_asignado}, que ya está ocupado. '
+                                f'{error_folio}'
+                            )
+                        }, status=409)
 
                 dte.tipo_documento = nuevo_tipo
                 dte.numero_documento = numero_asignado
@@ -6884,6 +7144,9 @@ def editar_dte_boleta_papel(request):
                     dte.fecha_vencimiento = fecha_parsed
                     update_fields.append('fecha_vencimiento')
 
+            # Snapshot del vendedor previo para la auditoría (cambiar el
+            # vendedor mueve la comisión de una persona a otra).
+            vendedor_anterior = dte.vendedor
             if cambiar_vendedor and vendedor_obj is not None:
                 dte.vendedor = vendedor_obj
                 update_fields.append('vendedor')
@@ -6911,6 +7174,14 @@ def editar_dte_boleta_papel(request):
                 ticket_fields = {'fecha': dte.fecha_emision}
                 if cambiar_tipo or tiene_numero:
                     ticket_fields['folio_dte'] = dte.numero_documento
+                if cambiar_tipo:
+                    # El ticket también guarda el tipo de documento; si no se
+                    # propaga, queda apuntando al tipo viejo (bug latente:
+                    # hoy 0 casos porque el cambio de tipo aún no se ha usado).
+                    ticket_fields['tipo_dte'] = _TIPO_DTE_A_TIPO_TICKET.get(
+                        (dte.tipo_documento or '').upper().strip(),
+                        ticket_vinculado.tipo_dte,
+                    )
                 Ticket.objects.filter(pk=ticket_vinculado.pk).update(
                     **ticket_fields
                 )
@@ -6975,10 +7246,19 @@ def editar_dte_boleta_papel(request):
                         ])
                         ticket_pagos_sincronizados += 1
                     ticket_pagos_resync_modo = 'update'
-                elif hay_drift:
+                elif hay_drift and tiene_pagos:
                     # Cantidad de pagos distinta: reconstruimos los del
                     # ticket a partir del DTE preservando plataforma y
                     # voucher (clave para VENTA_INTERNET y tarjetas).
+                    #
+                    # Sólo se reconstruye cuando el usuario editó los pagos
+                    # explícitamente. Antes corría en CUALQUIER guardado (por
+                    # ejemplo, al corregir sólo el vendedor) y borraba filas de
+                    # `TicketDetallePago` cuyo id es la clave de idempotencia
+                    # del consumo de gift cards (`consumo:{id}`) y del resto de
+                    # los hooks de cobro. En producción hay 34 documentos con
+                    # distinta cantidad de pagos que caían aquí sin que nadie
+                    # lo pidiera.
                     TicketDetallePago.objects.filter(
                         ticket_id=ticket_vinculado.pk
                     ).delete()
@@ -6992,6 +7272,17 @@ def editar_dte_boleta_papel(request):
                         )
                         ticket_pagos_sincronizados += 1
                     ticket_pagos_resync_modo = 'rebuild'
+                elif hay_drift:
+                    # Drift de cantidad detectado pero el usuario no editó los
+                    # pagos: no se toca nada y se informa en la respuesta.
+                    ticket_pagos_resync_modo = 'skipped_drift'
+                    logger.warning(
+                        '[DTE-EDIT] Drift de cantidad de pagos no reconciliado '
+                        'DTE #%s (%s pagos) vs Ticket #%s (%s pagos): se omite '
+                        'la reconstrucción porque no se editaron los pagos.',
+                        dte.id, len(dte_pagos_actuales),
+                        ticket_vinculado.pk, len(ticket_pagos_actuales),
+                    )
                 else:
                     ticket_pagos_resync_modo = 'none'
 
@@ -7034,9 +7325,108 @@ def editar_dte_boleta_papel(request):
                         'estado': arq.estado,
                     })
 
+            # ================= AUDITORÍA =================
+            # Hasta ahora este endpoint cambiaba folio, fecha, tipo, vendedor
+            # y pagos de documentos tributarios ya emitidos sin dejar ningún
+            # registro: no se podía saber quién editó qué ni por qué.
+            from .utils_folio_dte import (
+                registrar_cambio_folio_dte,
+                registrar_cambio_vendedor_dte,
+                reemplazar_folio_en_texto,
+            )
+
+            folio_cambio_real = (
+                numero_anterior is not None
+                and numero_anterior != dte.numero_documento
+            )
+
+            movimientos_actualizados = 0
+            if folio_cambio_real:
+                # Las observaciones del kardex citan el folio del documento.
+                # Se reemplaza SOLO el token completo: un `str.replace()` a
+                # secas corrompe el texto cuando el folio es corto (el folio 1
+                # convierte '10400190076' en un número inventado).
+                for mov in Movimientos_Producto.objects.filter(dte=dte).exclude(
+                    observaciones__isnull=True
+                ).exclude(observaciones=''):
+                    obs_nueva = reemplazar_folio_en_texto(
+                        mov.observaciones, numero_anterior, dte.numero_documento
+                    )
+                    if obs_nueva != mov.observaciones:
+                        mov.observaciones = obs_nueva
+                        mov.save(update_fields=['observaciones'])
+                        movimientos_actualizados += 1
+
+                registrar_cambio_folio_dte(
+                    dte, numero_anterior, dte.numero_documento,
+                    motivo=(
+                        f'{motivo} [editar_dte_boleta_papel'
+                        + (f'; tipo {tipo_anterior} -> {dte.tipo_documento}'
+                           if cambiar_tipo else '')
+                        + (f'; estado SII {dte.estado_dte}'
+                           if dte.estado_dte == 'ACEPTADO' else '')
+                        + f'; movimientos actualizados: {movimientos_actualizados}]'
+                    ),
+                    request=request,
+                )
+
+            if cambiar_vendedor and vendedor_obj is not None:
+                registrar_cambio_vendedor_dte(
+                    dte, vendedor_anterior, vendedor_obj,
+                    request=request, motivo=motivo,
+                )
+
+            # Nota: se usa '->' y no la flecha unicode porque el handler de
+            # consola en Windows (cp1252) no puede codificarla y ensucia el
+            # log con un UnicodeEncodeError por cada edición.
+            cambios_log = []
+            if folio_cambio_real:
+                cambios_log.append(
+                    f'folio {numero_anterior} -> {dte.numero_documento}'
+                )
+            if cambiar_tipo:
+                cambios_log.append(f'tipo {tipo_anterior} -> {dte.tipo_documento}')
+            if tiene_fecha and fecha_anterior != dte.fecha_emision:
+                cambios_log.append(
+                    f'fecha {fecha_anterior} -> {dte.fecha_emision}'
+                )
+            if pagos_actualizar:
+                cambios_log.append(f'{len(pagos_actualizar)} pago(s)')
+            if cambiar_vendedor:
+                cambios_log.append('vendedor')
+            if cambios_log:
+                logger.info(
+                    '[DTE-EDIT] %s #%s (id=%s, sucursal=%s, estado=%s) editado '
+                    'por %s: %s | motivo: %s',
+                    dte.tipo_documento, dte.numero_documento, dte.id,
+                    dte.sucursal_id, dte.estado_dte,
+                    getattr(request.user, 'username', '?'),
+                    '; '.join(cambios_log), motivo or '(sin motivo)',
+                )
+
+            # El documento ya declarado al SII se puede seguir corrigiendo
+            # (el modal lo advierte en rojo), pero queda avisado en la
+            # respuesta y registrado en la auditoría de arriba.
+            advertencias_respuesta = list(advertencias_folio or [])
+            if dte.estado_dte == 'ACEPTADO' and (
+                tiene_numero or tiene_fecha or tiene_tipo
+            ):
+                advertencias_respuesta.append(
+                    'El documento está ACEPTADO por el SII: el cambio NO se '
+                    'informa al organismo y el sistema queda distinto de lo '
+                    'declarado.'
+                )
+            if ticket_pagos_resync_modo == 'skipped_drift':
+                advertencias_respuesta.append(
+                    'Los pagos del ticket vinculado tienen una cantidad '
+                    'distinta a los del DTE. No se tocaron: edite los pagos '
+                    'desde este modal si quiere reconciliarlos.'
+                )
+
         return JsonResponse({
             'success': True,
             'message': 'Documento actualizado correctamente',
+            'advertencias': advertencias_respuesta,
             'documento': {
                 'id': dte.id,
                 'tipo_documento': dte.tipo_documento,
@@ -7060,6 +7450,7 @@ def editar_dte_boleta_papel(request):
                 'ticket_pagos_sincronizados': ticket_pagos_sincronizados,
                 'ticket_pagos_resync_modo': ticket_pagos_resync_modo,
                 'arqueos_afectados': arqueos_afectados_info,
+                'movimientos_actualizados': movimientos_actualizados,
             }
         })
 
@@ -10888,10 +11279,11 @@ def listar_arqueos(request):
             arqueos_sin_revision=Count(
                 'id', filter=~Q(estado__in=['ABIERTO', 'REVISADO'])
             ),
-            total_diferencia_efectivo=Sum(
-                F('total_efectivo_fisico') - F('total_efectivo_teorico'),
-                output_field=IntegerField(),
-            ),
+            # Se lee la diferencia ya calculada en vez de recalcular
+            # físico - teórico: `ArqueoCaja.save()` descuenta además el
+            # `fondo_fijo_snapshot`, así que ambas fórmulas divergen apenas
+            # una sucursal configure fondo fijo (hoy todas están en 0).
+            total_diferencia_efectivo=Sum('diferencia_efectivo'),
             total_diferencia_transbank=Sum(
                 F('cierre_pos_fisico') - F('total_transbank_teorico'),
                 output_field=IntegerField(),
@@ -11107,7 +11499,23 @@ def listar_arqueos(request):
 @login_required
 @require_POST
 def corregir_arqueos_express(request):
-    """Corregir arqueos que fueron guardados incorrectamente en modo Express"""
+    """Corrige UN arqueo express mal guardado con el monto realmente contado.
+
+    Antes este endpoint recorría todos los arqueos descuadrados de la sucursal
+    y les escribía `total_efectivo_fisico = total_efectivo_teorico` con
+    `diferencia_efectivo = 0`: o sea, daba por cuadrada la caja sin que nadie
+    hubiese contado el dinero. Sobre la base actual eso son 34 arqueos en 6
+    sucursales que habrían quedado falseados de un clic, borrando faltantes y
+    sobrantes reales.
+
+    Ahora:
+
+    * Con `arqueo_id` + `monto_real` corrige ese arqueo y sólo ese, con el
+      monto que declara el operador, recalculando la diferencia igual que
+      `ArqueoCaja.save()` y dejando una `ObservacionArqueo` con la traza.
+    * Sin esos datos NO escribe nada: devuelve la lista de candidatos para que
+      se corrijan uno por uno.
+    """
     try:
         rol_usuario = getattr(request.user, 'rol', None)
         if rol_usuario != 'administrador':
@@ -11116,16 +11524,20 @@ def corregir_arqueos_express(request):
                 'error': 'Solo el Administrador puede usar la corrección express.'
             }, status=403)
 
-        data = json.loads(request.body)
+        # El front hace una primera llamada "sonda" (sin datos) para pedir la
+        # lista de candidatos; toleramos body vacío para no responder un error
+        # de JSON cuando lo único que falta son los datos de la corrección.
+        data = json.loads(request.body or b'{}')
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        
+
         if not sucursal_id:
             return JsonResponse({
                 'success': False,
                 'error': 'No hay sucursal seleccionada'
             })
-        
-        # Buscar arqueos problemáticos (donde todas las denominaciones son 0 pero hay diferencia)
+
+        # Arqueos candidatos: todas las denominaciones en 0, físico en 0 y un
+        # teórico distinto de 0 (síntoma del conteo express que no se guardó).
         arqueos_problematicos = ArqueoCaja.objects.filter(
             sucursal_id=sucursal_id,
             billetes_20000=0,
@@ -11143,31 +11555,109 @@ def corregir_arqueos_express(request):
         ).exclude(
             total_efectivo_teorico=0  # Excluir casos donde realmente no había ventas
         )
-        
-        corregidos = 0
-        for arqueo in arqueos_problematicos:
-            # Si el efectivo físico es 0 pero el teórico no, probablemente fue un arqueo Express mal guardado
-            if arqueo.total_efectivo_fisico == 0 and arqueo.total_efectivo_teorico > 0:
-                # Asumir que fue un arqueo Express donde el físico debería ser igual al teórico
-                ArqueoCaja.objects.filter(id=arqueo.id).update(
-                    total_efectivo_fisico=arqueo.total_efectivo_teorico,
-                    diferencia_efectivo=0
+
+        arqueo_id = data.get('arqueo_id')
+        monto_real_raw = data.get('monto_real')
+
+        if not arqueo_id or monto_real_raw is None:
+            candidatos = [
+                {
+                    'id': a.id,
+                    'fecha': a.fecha_arqueo.strftime('%Y-%m-%d'),
+                    'estado': a.estado,
+                    'total_efectivo_teorico': a.total_efectivo_teorico,
+                    # El fondo fijo entra en la diferencia (ver `ArqueoCaja.save`):
+                    # el front lo necesita para mostrar cuánto se esperaba en caja.
+                    'fondo_fijo': a.fondo_fijo_snapshot or 0,
+                }
+                for a in arqueos_problematicos.order_by('-fecha_arqueo')[:100]
+            ]
+            if candidatos:
+                mensaje = (
+                    f'Se encontraron {len(candidatos)} arqueo(s) sin conteo '
+                    'guardado. La corrección masiva quedó desactivada porque '
+                    'daba la caja por cuadrada sin contar el dinero: corrija '
+                    'cada arqueo indicando el monto realmente contado '
+                    '(arqueo_id + monto_real).'
                 )
-                corregidos += 1
-                log_accion_caja(request, 'CORREGIR_EXPRESS', arqueo)
-                logger.info(
-                    "Arqueo express corregido: arqueo_id=%s, efectivo_fisico_anterior=%s, efectivo_fisico_nuevo=%s",
-                    arqueo.id,
-                    0,
-                    arqueo.total_efectivo_teorico,
+            else:
+                mensaje = (
+                    'No hay arqueos Express pendientes de regularizar en esta '
+                    'sucursal.'
                 )
-        
+            return JsonResponse({
+                'success': False,
+                'arqueos_corregidos': 0,
+                'candidatos': candidatos,
+                'error': mensaje
+            }, status=400)
+
+        try:
+            monto_real = int(monto_real_raw)
+        except (TypeError, ValueError):
+            return JsonResponse({
+                'success': False,
+                'error': 'monto_real inválido: debe ser un entero'
+            }, status=400)
+        if monto_real < 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'monto_real no puede ser negativo'
+            }, status=400)
+
+        arqueo = arqueos_problematicos.filter(id=arqueo_id).first()
+        if not arqueo:
+            return JsonResponse({
+                'success': False,
+                'error': (
+                    'El arqueo no existe en esta sucursal o no corresponde a '
+                    'un conteo express sin guardar.'
+                )
+            }, status=404)
+
+        diferencia = monto_real - (
+            arqueo.total_efectivo_teorico + (arqueo.fondo_fijo_snapshot or 0)
+        )
+        with transaction.atomic():
+            ArqueoCaja.objects.filter(id=arqueo.id).update(
+                total_efectivo_fisico=monto_real,
+                diferencia_efectivo=diferencia,
+                modo_conteo='EXPRESS',
+                requiere_revision_express=True,
+                timestamp_conteo_fisico=timezone.now(),
+            )
+            ObservacionArqueo.objects.create(
+                arqueo=arqueo,
+                usuario=request.user,
+                tipo='SISTEMA',
+                texto=(
+                    'Conteo express regularizado manualmente: efectivo físico '
+                    f'${monto_real:,} (teórico ${arqueo.total_efectivo_teorico:,}, '
+                    f'diferencia ${diferencia:,}).'
+                ).replace(',', '.'),
+                visible_para_cajera=True,
+            )
+        log_accion_caja(request, 'CORREGIR_EXPRESS', arqueo)
+        logger.info(
+            'Arqueo express regularizado: arqueo_id=%s, monto_real=%s, '
+            'teorico=%s, diferencia=%s, usuario=%s',
+            arqueo.id, monto_real, arqueo.total_efectivo_teorico, diferencia,
+            getattr(request.user, 'username', '?'),
+        )
+
         return JsonResponse({
             'success': True,
-            'message': f'Se corrigieron {corregidos} arqueos',
-            'arqueos_corregidos': corregidos
+            'message': (
+                f'Arqueo #{arqueo.id} corregido con el monto contado.'
+            ),
+            'arqueos_corregidos': 1,
+            'arqueo': {
+                'id': arqueo.id,
+                'total_efectivo_fisico': monto_real,
+                'diferencia_efectivo': diferencia,
+            }
         })
-        
+
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
@@ -11397,7 +11887,15 @@ def guardar_conteo_fisico(request):
             
             # Establecer el total físico directamente
             arqueo.total_efectivo_fisico = monto_total
-            arqueo.diferencia_efectivo = monto_total - arqueo.total_efectivo_teorico
+            # Misma fórmula que `ArqueoCaja.save()` (models/caja.py): el fondo
+            # fijo de caja chica es parte del efectivo que debería estar en el
+            # cajón. Sin sumarlo, el modo express reportaba una diferencia
+            # distinta a la del modo detallado para el mismo conteo. Hoy los
+            # 624 arqueos tienen `fondo_fijo_snapshot = 0`, así que el cambio
+            # no altera ningún dato existente.
+            arqueo.diferencia_efectivo = monto_total - (
+                arqueo.total_efectivo_teorico + (arqueo.fondo_fijo_snapshot or 0)
+            )
             
             logger.debug(
                 "Conteo de arqueo %s en modo express: total_fisico=%s, diferencia=%s",
@@ -11482,7 +11980,15 @@ def guardar_conteo_fisico(request):
                 numero_lote_pos=numero_lote,
                 diferencia_debito=diferencia_debito,
                 diferencia_credito=diferencia_credito,
-                diferencia_transbank=diferencia_transbank
+                diferencia_transbank=diferencia_transbank,
+                # Estos tres se asignaban en memoria más arriba y se perdían:
+                # el `.update()` no los incluía. Por eso en producción los 624
+                # arqueos quedaron con `modo_conteo='DETALLADO'` y sólo 3 con
+                # `timestamp_conteo_fisico`, dejando muertos los indicadores
+                # `uso_express_pct` y `anomalias_timing` de AnalisisFraudeCaja.
+                timestamp_conteo_fisico=arqueo.timestamp_conteo_fisico,
+                modo_conteo=arqueo.modo_conteo,
+                requiere_revision_express=arqueo.requiere_revision_express,
             )
             logger.info(
                 "Conteo guardado en modo express: arqueo_id=%s, total_fisico=%s, diferencia=%s",
@@ -11548,14 +12054,21 @@ def cerrar_arqueo(request):
     try:
         data = json.loads(request.body)
         arqueo_id = data.get('arqueo_id')
-        
+
         if not arqueo_id:
             return JsonResponse({
                 'success': False,
                 'error': 'ID de arqueo requerido'
             })
-        
-        arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id)
+
+        # Scoping por sucursal activa (mismo patrón que `guardar_conteo_fisico`).
+        # Antes se cargaba el arqueo sólo por id: cualquier usuario autenticado
+        # podía cerrar el arqueo de otra sucursal mandando su id por POST.
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        arqueos_qs = ArqueoCaja.objects.all()
+        if sucursal_id:
+            arqueos_qs = arqueos_qs.filter(sucursal_id=sucursal_id)
+        arqueo = get_object_or_404(arqueos_qs, id=arqueo_id)
         
         # Verificar que el usuario puede cerrar este arqueo
         if arqueo.estado not in ['ABIERTO', 'CON_DIFERENCIAS']:
@@ -13695,6 +14208,13 @@ def obtener_transacciones_pos(request):
                 'es_exitosa': transaccion.es_exitosa,
                 'puede_anular': transaccion.puede_anular,
                 'error_detalle': transaccion.error_detalle or '',
+                # `numero_operacion` es el dato que aparece en el voucher y en
+                # el cierre de lote del POS; `observaciones` es hoy el único
+                # lugar donde queda el correlativo del ticket
+                # ('Ticket POS: TKT184117') cuando la FK `ticket` viene nula.
+                # Sin ellos la conciliación manual obliga a abrir otra pantalla.
+                'numero_operacion': transaccion.numero_operacion or '',
+                'observaciones': transaccion.observaciones or '',
             })
         
         return JsonResponse({
@@ -17321,11 +17841,16 @@ def dashboard_ventas_mejorado(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('ind_globales', timeout=60)
+@cache_ventas_json('ind_globales_v2', timeout=60)
 def obtener_indicadores_globales_ventas(request):
     """
     API para obtener indicadores globales de ventas
     Incluye: ventas totales, ticket promedio, cantidad ventas, crecimiento
+
+    Base de cálculo (compartida con el resto del dashboard vía
+    `_tickets_venta_periodo`): created_at, estado PAGADO por defecto y sin
+    tickets de cambio/devolución. La evolución diaria agrupa por la MISMA fecha
+    que los totales, así el gráfico cuadra con la tarjeta.
     """
     try:
         # Obtener parámetros de filtro
@@ -17352,15 +17877,9 @@ def obtener_indicadores_globales_ventas(request):
                 }, status=400)
         
         def build_queryset(f_inicio, f_fin):
-            # created_at = fecha real de venta (Ticket.fecha es auto_now)
-            qs = Ticket.objects.filter(
-                created_at__date__gte=f_inicio, created_at__date__lte=f_fin
-            )
-            if estado:
-                qs = qs.filter(estado=estado)
-            else:
-                qs = qs.filter(estado='PAGADO')
-            qs = _scope_suc_emp(qs, request, sucursal_id)
+            # created_at = fecha real de venta (Ticket.fecha es auto_now) y sin
+            # tickets de cambio/devolución: helper único del dashboard.
+            qs = _tickets_venta_periodo(request, f_inicio, f_fin, sucursal_id=sucursal_id)
             if vendedor_id:
                 qs = qs.filter(vendedor_id=vendedor_id)
             if metodo_pago:
@@ -17437,22 +17956,38 @@ def obtener_indicadores_globales_ventas(request):
         ventas_con_boleta = agg['ventas_con_boleta'] or 0
         tickets_offline = agg['tickets_offline'] or 0
 
-        # Evolución diaria de ventas — un solo values+annotate y fill en memoria
-        evolucion_diaria = queryset.values('fecha').annotate(
+        # Evolución diaria de ventas — un solo values+annotate y fill en memoria.
+        # Agrupa por TruncDate('created_at'), la MISMA fecha con la que se calculó
+        # "Ventas Totales": antes agrupaba por `fecha` (auto_now), así que el
+        # gráfico no sumaba lo mismo que la tarjeta y además inyectaba días fuera
+        # del rango pedido (jun-2026: 2 días fantasma, incluido 2020-01-01).
+        evolucion_diaria = queryset.annotate(dia=TruncDate('created_at')).values('dia').annotate(
             total=Sum('total'),
             cantidad=Count('id'),
-        ).order_by('fecha')
+        ).order_by('dia')
 
         todas_fechas = {}
         fecha_actual = fecha_inicio
         while fecha_actual <= fecha_fin:
             todas_fechas[fecha_actual] = {'total': 0, 'cantidad': 0}
             fecha_actual += timedelta(days=1)
+        fuera_de_rango = 0
         for item in evolucion_diaria:
-            todas_fechas[item['fecha']] = {
+            dia = item['dia']
+            if dia is None or dia not in todas_fechas:
+                # No se inventa un punto en el gráfico: se descarta y se deja
+                # traza (sólo puede ocurrir con datos corruptos de fecha).
+                fuera_de_rango += 1
+                continue
+            todas_fechas[dia] = {
                 'total': float(item['total'] or 0),
                 'cantidad': item['cantidad'],
             }
+        if fuera_de_rango:
+            logger.warning(
+                'Dashboard ventas: %s días fuera del rango %s..%s descartados de la evolución diaria',
+                fuera_de_rango, fecha_inicio, fecha_fin,
+            )
         evolucion_data = [
             {
                 'fecha': fecha.strftime('%d/%m'),
@@ -17493,45 +18028,32 @@ def obtener_indicadores_globales_ventas(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('ventas_vendedor', timeout=60)
+@cache_ventas_json('ventas_vendedor_v2', timeout=60)
 def obtener_ventas_por_vendedor(request):
     """
     API para obtener ventas por vendedor con métricas individuales
     Incluye: ranking, comisiones, participación
+
+    Usa la MISMA base que la tarjeta "Ventas Totales" (`_tickets_venta_periodo`):
+    antes filtraba por `Ticket.fecha` (auto_now) y sin default de estado, así que
+    incluía ANULADO/PENDIENTE y la tabla nunca cuadraba con el KPI.
     """
     try:
         # Obtener parámetros de filtro
-        fecha_inicio = request.GET.get('fecha_inicio')
-        fecha_fin = request.GET.get('fecha_fin')
         sucursal_id = request.GET.get('sucursal_id')
-        estado = request.GET.get('estado', '')  # Vacío por defecto
-        
+
         # Validar fechas
-        if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.localdate()
-            fecha_inicio = fecha_fin - timedelta(days=30)
-        else:
-            try:
-                fecha_inicio = timezone.datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
-                fecha_fin = timezone.datetime.strptime(fecha_fin, '%Y-%m-%d').date()
-            except ValueError:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Formato de fecha inválido'
-                }, status=400)
-        
-        # Construir queryset
-        queryset = Ticket.objects.filter(
-            fecha__gte=fecha_inicio,
-            fecha__lte=fecha_fin
-        )
-        
-        # Solo aplicar filtro de estado si tiene valor
-        if estado:
-            queryset = queryset.filter(estado=estado)
-        
-        queryset = _scope_suc_emp(queryset, request, sucursal_id)
-        
+        try:
+            fecha_inicio, fecha_fin = _rango_periodo(request)
+        except ValueError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Formato de fecha inválido'
+            }, status=400)
+
+        queryset = _tickets_venta_periodo(
+            request, fecha_inicio, fecha_fin, sucursal_id=sucursal_id)
+
         # Calcular total general para participación
         total_general = queryset.aggregate(total=Sum('total'))['total'] or 0
         
@@ -17666,41 +18188,28 @@ def obtener_sucursales_dashboard(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('ventas_sucursal', timeout=60)
+@cache_ventas_json('ventas_sucursal_v2', timeout=60)
 def obtener_ventas_por_sucursal(request):
     """
-    API para obtener análisis comparativo de ventas por sucursal
+    API para obtener análisis comparativo de ventas por sucursal.
+
+    Misma base de venta que el resto del dashboard (created_at, PAGADO por
+    defecto, sin cambios/devoluciones). NO aplica el filtro de sucursal a
+    propósito: esta sección compara tiendas entre sí (igual que mix-por-sucursal).
     """
     try:
-        # Obtener parámetros de filtro
-        fecha_inicio = request.GET.get('fecha_inicio')
-        fecha_fin = request.GET.get('fecha_fin')
-        estado = request.GET.get('estado', '')  # Vacío por defecto
-        
         # Validar fechas
-        if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.localdate()
-            fecha_inicio = fecha_fin - timedelta(days=30)
-        else:
-            try:
-                fecha_inicio = timezone.datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
-                fecha_fin = timezone.datetime.strptime(fecha_fin, '%Y-%m-%d').date()
-            except ValueError:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Formato de fecha inválido'
-                }, status=400)
-        
-        # Construir queryset
-        queryset = Ticket.objects.filter(
-            fecha__gte=fecha_inicio,
-            fecha__lte=fecha_fin
-        )
-        
-        # Solo aplicar filtro de estado si tiene valor
-        if estado:
-            queryset = queryset.filter(estado=estado)
-        
+        try:
+            fecha_inicio, fecha_fin = _rango_periodo(request)
+        except ValueError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Formato de fecha inválido'
+            }, status=400)
+
+        queryset = _tickets_venta_periodo(
+            request, fecha_inicio, fecha_fin, aplicar_scope=False)
+
         # Consultar ventas por sucursal
         ventas_sucursal = queryset.values(
             'sucursal__id',
@@ -17738,44 +18247,29 @@ def obtener_ventas_por_sucursal(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('ventas_metodo_pago', timeout=60)
+@cache_ventas_json('ventas_metodo_pago_v2', timeout=60)
 def obtener_ventas_por_metodo_pago(request):
     """
-    API para obtener distribución de ventas por método de pago
+    API para obtener distribución de ventas por método de pago.
+    Misma base de venta que la tarjeta "Ventas Totales" (created_at, PAGADO por
+    defecto, sin cambios/devoluciones).
     """
     try:
         # Obtener parámetros de filtro
-        fecha_inicio = request.GET.get('fecha_inicio')
-        fecha_fin = request.GET.get('fecha_fin')
         sucursal_id = request.GET.get('sucursal_id')
-        estado = request.GET.get('estado', '')  # Vacío por defecto
-        
+
         # Validar fechas
-        if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.localdate()
-            fecha_inicio = fecha_fin - timedelta(days=30)
-        else:
-            try:
-                fecha_inicio = timezone.datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
-                fecha_fin = timezone.datetime.strptime(fecha_fin, '%Y-%m-%d').date()
-            except ValueError:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Formato de fecha inválido'
-                }, status=400)
-        
-        # Construir queryset
-        queryset = Ticket.objects.filter(
-            fecha__gte=fecha_inicio,
-            fecha__lte=fecha_fin
-        )
-        
-        # Solo aplicar filtro de estado si tiene valor
-        if estado:
-            queryset = queryset.filter(estado=estado)
-        
-        queryset = _scope_suc_emp(queryset, request, sucursal_id)
-        
+        try:
+            fecha_inicio, fecha_fin = _rango_periodo(request)
+        except ValueError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Formato de fecha inválido'
+            }, status=400)
+
+        queryset = _tickets_venta_periodo(
+            request, fecha_inicio, fecha_fin, sucursal_id=sucursal_id)
+
         # Obtener IDs de tickets que cumplen con los filtros
         ticket_ids = queryset.values_list('id', flat=True)
         
@@ -17826,7 +18320,7 @@ def obtener_ventas_por_metodo_pago(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('analisis_cambios', timeout=120)
+@cache_ventas_json('analisis_cambios_v2', timeout=120)
 def obtener_analisis_cambios_devoluciones(request):
     """
     API para obtener análisis de cambios y devoluciones
@@ -17860,15 +18354,12 @@ def obtener_analisis_cambios_devoluciones(request):
             total=Sum('monto_original')
         )['total'] or 0
         
-        # Total de ventas para calcular ratio
-        ventas_total = Ticket.objects.filter(
-            fecha__gte=fecha_inicio,
-            fecha__lte=fecha_fin,
-            estado='PAGADO'
-        )
-        
-        ventas_total = _scope_suc_emp(ventas_total, request, sucursal_id)
-        
+        # Total de ventas para calcular ratio — mismo denominador que la tarjeta
+        # "Transacciones" (created_at, PAGADO, sin tickets de cambio/devolución;
+        # contarlos inflaba el denominador y bajaba artificialmente el ratio).
+        ventas_total = _tickets_venta_periodo(
+            request, fecha_inicio, fecha_fin, sucursal_id=sucursal_id)
+
         cantidad_ventas = ventas_total.count()
         ratio = (total_cambios / cantidad_ventas * 100) if cantidad_ventas > 0 else 0
         
@@ -18385,21 +18876,19 @@ def obtener_estado_cuadraturas(request):
         con_diferencias = 0
         
         for arqueo in queryset:
-            # Calcular diferencia en efectivo
-            total_conteo = (
-                (arqueo.billetes_20000 * 20000) +
-                (arqueo.billetes_10000 * 10000) +
-                (arqueo.billetes_5000 * 5000) +
-                (arqueo.billetes_2000 * 2000) +
-                (arqueo.billetes_1000 * 1000) +
-                (arqueo.monedas_500 * 500) +
-                (arqueo.monedas_100 * 100) +
-                (arqueo.monedas_50 * 50) +
-                (arqueo.monedas_10 * 10)
+            # `total_efectivo_fisico` es el único valor correcto: lo calcula
+            # `ArqueoCaja.save()` a partir de las denominaciones en el modo
+            # detallado y lo escribe directo en el modo express (donde todas
+            # las denominaciones quedan en 0). Rehacer la suma aquí, además,
+            # se olvidaba de las monedas de $5 y de $1.
+            total_conteo = arqueo.total_efectivo_fisico or 0
+
+            # Misma fórmula que el modelo: el fondo fijo de caja chica es
+            # parte del efectivo esperado en el cajón.
+            diferencia = total_conteo - (
+                arqueo.total_efectivo_teorico + (arqueo.fondo_fijo_snapshot or 0)
             )
-            
-            diferencia = total_conteo - arqueo.total_efectivo_teorico
-            
+
             cuadraturas_con_datos.append({
                 'id': arqueo.id,
                 'fecha': arqueo.fecha_arqueo,
@@ -18438,7 +18927,7 @@ def obtener_estado_cuadraturas(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('prod_mas_vendidos_v2', timeout=120)
+@cache_ventas_json('prod_mas_vendidos_v3', timeout=120)
 def obtener_productos_mas_vendidos(request):
     """Top de productos vendidos agrupado por MODELO (articulo), enriquecido con
     marca / categoría Padre › Hija / género / especialidad(es).
@@ -18535,7 +19024,14 @@ def obtener_productos_mas_vendidos(request):
         return JsonResponse({
             'success': True,
             'productos': productos_data,
-            'total_productos': len(productos_data)
+            'total_productos': len(productos_data),
+            # Universo COMPLETO del período (no el top-N): "Unidades Vendidas" y
+            # el UPT se pintaban sumando sólo el top-20 (jun-2026: 438 de 5.638
+            # unidades reales, 92% por debajo). Se exponen aquí para que ninguna
+            # pantalla vuelva a derivarlos de la tabla.
+            'unidades_periodo': int(sum(a['cantidad_vendida'] or 0 for a in agg)),
+            'total_periodo': total_general,
+            'modelos_periodo': len(agg),
         })
 
     except Exception as e:
@@ -18581,15 +19077,57 @@ def _scope_suc_emp(qs, request, sucursal_id=None, campo_empresa='sucursal__empre
     return qs
 
 
-def _tickets_pagados_periodo(request):
-    """Helper: queryset de Ticket del período (fecha/sucursal/empresa/estado) para
-    los dashboards de ventas por categoría/especialidad. created_at = fecha real."""
-    fecha_inicio, fecha_fin = _rango_periodo(request)
-    estado = request.GET.get('estado', '')
+# Tickets que NO son venta nueva: la "venta" de un CAMBIO_DEVOLUCION es sólo la
+# diferencia cobrada en un cambio. El POS, el reporte de ventas y el dashboard
+# home ya los excluyen; los endpoints de este dashboard eran los únicos que los
+# sumaban (jun-2026: $551.300 en 154 tickets, +$1.286 de ticket promedio falso).
+MODULO_ORIGEN_NO_VENTA = 'CAMBIO_DEVOLUCION'
+
+# Los montos de Ticket/Ticket_Productos son BRUTOS (con IVA); costo_fifo es NETO.
+# Para comparar peras con peras el margen se calcula sobre ingreso neto.
+IVA_FACTOR = 1.19
+
+
+def _tickets_venta_periodo(request, fecha_inicio=None, fecha_fin=None,
+                           aplicar_estado=True, excluir_cambios=True,
+                           aplicar_scope=True, sucursal_id=None):
+    """Fuente ÚNICA de verdad de "qué tickets son la venta del período" para todo
+    el dashboard de ventas. Antes cada endpoint la construía a mano y ninguno
+    coincidía con el de al lado.
+
+    Reglas (todas deliberadas, ver docs/PLAN_DASHBOARDS_2026-07-25.md):
+      · Fecha  → `created_at` (fecha real de la venta). `Ticket.fecha` es
+        `auto_now`: se reescribe en cada save (reimpresión, cambio de estado,
+        generación de DTE, sync desktop), así que filtrar por él mide "tickets
+        tocados en el rango", no vendidos.
+      · Estado → el del filtro; si viene vacío, PAGADO (mismo default que ya
+        usaban indicadores-globales y tendencias, ahora en todos).
+      · Excluye `modulo_origen='CAMBIO_DEVOLUCION'` (no es venta nueva).
+      · Scope de sucursal/empresa vía `_scope_suc_emp`.
+
+    `aplicar_estado=False` (panel operacional) mantiene todos los estados;
+    `excluir_cambios=False` conserva los cambios cuando el desglose los necesita;
+    `aplicar_scope=False` para las vistas que comparan tiendas entre sí.
+    """
+    if fecha_inicio is None or fecha_fin is None:
+        fecha_inicio, fecha_fin = _rango_periodo(request)
     tickets = Ticket.objects.filter(
         created_at__date__gte=fecha_inicio, created_at__date__lte=fecha_fin)
-    tickets = tickets.filter(estado=estado) if estado else tickets.filter(estado='PAGADO')
-    return _scope_suc_emp(tickets, request)
+    if aplicar_estado:
+        estado = request.GET.get('estado', '')
+        tickets = tickets.filter(estado=estado) if estado else tickets.filter(estado='PAGADO')
+    if excluir_cambios:
+        tickets = tickets.exclude(modulo_origen=MODULO_ORIGEN_NO_VENTA)
+    if aplicar_scope:
+        tickets = _scope_suc_emp(tickets, request, sucursal_id)
+    return tickets
+
+
+def _tickets_pagados_periodo(request):
+    """Alias histórico (charts v1.2 / indicador de compra). Delega en
+    `_tickets_venta_periodo` para que hereden el mismo criterio de fecha,
+    estado y exclusión de cambios/devoluciones."""
+    return _tickets_venta_periodo(request)
 
 
 @require_GET
@@ -18778,7 +19316,7 @@ def obtener_indicador_compra_categoria(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('mix_sucursal', timeout=120, vary_on_session=True)
+@cache_ventas_json('mix_sucursal_v2', timeout=120, vary_on_session=True)
 def obtener_mix_por_sucursal(request):
     """Comparativo ENTRE tiendas (siempre todas las visibles del usuario, sin
     centros de distribución). IGNORA a propósito sucursal_id y vendedor_id: la
@@ -18820,9 +19358,13 @@ def obtener_mix_por_sucursal(request):
         estado = request.GET.get('estado') or 'PAGADO'  # mezclar ANULADO distorsiona el mix
 
         def _tickets(fi, ff):
+            # Sin tickets de CAMBIO_DEVOLUCION: la diferencia cobrada en un
+            # cambio no es venta de la tienda (mismo criterio que el resto del
+            # dashboard, el POS y el reporte de ventas).
             return Ticket.objects.filter(
                 created_at__date__gte=fi, created_at__date__lte=ff,
-                estado=estado, sucursal_id__in=suc_ids)
+                estado=estado, sucursal_id__in=suc_ids,
+            ).exclude(modulo_origen=MODULO_ORIGEN_NO_VENTA)
 
         # ── Totales por tienda (período actual) ──
         tot_map = {r['sucursal_id']: r for r in
@@ -18927,72 +19469,73 @@ def obtener_mix_por_sucursal(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('tendencias_ventas', timeout=120)
+@cache_ventas_json('tendencias_ventas_v2', timeout=120)
 def obtener_tendencias_ventas(request):
     """
     API para obtener tendencias de ventas
-    Incluye: ventas por hora, día de la semana, evolución temporal
+    Incluye: ventas por hora y por día de la semana.
+
+    Dos correcciones respecto de la versión anterior:
+      · Usaba `Ticket.hora` y `Ticket.fecha`, ambos `auto_now`: la "hora pico"
+        era la hora del último guardado, no la de la venta. Ahora sale de
+        `created_at` (ExtractHour/ExtractIsoWeekDay, convertido por la BD a
+        America/Santiago).
+      · Iteraba en Python TODOS los tickets del período (dos veces). Ahora son
+        dos agregados en la base de datos.
     """
+    from django.db.models.functions import ExtractHour, ExtractIsoWeekDay
+
     try:
-        # Obtener parámetros de filtro
-        fecha_inicio = request.GET.get('fecha_inicio')
-        fecha_fin = request.GET.get('fecha_fin')
         sucursal_id = request.GET.get('sucursal_id')
-        estado = request.GET.get('estado', '')  # Vacío por defecto
-        
+
         # Validar fechas
-        if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.localdate()
-            fecha_inicio = fecha_fin - timedelta(days=30)
-        else:
-            try:
-                fecha_inicio = timezone.datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
-                fecha_fin = timezone.datetime.strptime(fecha_fin, '%Y-%m-%d').date()
-            except ValueError:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Formato de fecha inválido'
-                }, status=400)
-        
-        # Construir queryset base
-        queryset = Ticket.objects.filter(
-            fecha__gte=fecha_inicio,
-            fecha__lte=fecha_fin
-        )
-        
-        # Solo aplicar filtro de estado si tiene valor, por defecto mostrar solo PAGADO
-        if estado:
-            queryset = queryset.filter(estado=estado)
-        else:
-            queryset = queryset.filter(estado='PAGADO')  # Por defecto solo PAGADO para tendencias
-        
-        queryset = _scope_suc_emp(queryset, request, sucursal_id)
-        
-        # Ventas por hora del día
-        ventas_por_hora = [0] * 24
-        for ticket in queryset:
-            if ticket.hora:
-                hora = ticket.hora.hour
-                ventas_por_hora[hora] += ticket.total
-        
+        try:
+            fecha_inicio, fecha_fin = _rango_periodo(request)
+        except ValueError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Formato de fecha inválido'
+            }, status=400)
+
+        queryset = _tickets_venta_periodo(
+            request, fecha_inicio, fecha_fin, sucursal_id=sucursal_id)
+
+        # Ventas por hora del día (0-23) — un solo GROUP BY
+        ventas_por_hora = [0.0] * 24
+        cantidad_por_hora = [0] * 24
+        for fila in (queryset.annotate(h=ExtractHour('created_at'))
+                     .values('h').annotate(total=Sum('total'), cantidad=Count('id'))
+                     .order_by('h')):
+            h = fila['h']
+            if h is None or not (0 <= h <= 23):
+                continue
+            ventas_por_hora[h] = float(fila['total'] or 0)
+            cantidad_por_hora[h] = fila['cantidad']
+
         por_hora_data = [
-            {'hora': i, 'total': float(ventas_por_hora[i])}
+            {'hora': i, 'total': ventas_por_hora[i], 'cantidad': cantidad_por_hora[i]}
             for i in range(24)
         ]
-        
-        # Ventas por día de la semana (0=Lunes, 6=Domingo)
-        ventas_por_dia = [0] * 7
-        for ticket in queryset:
-            dia_semana = ticket.fecha.weekday()
-            ventas_por_dia[dia_semana] += ticket.total
-        
+
+        # Ventas por día de la semana (0=Lunes … 6=Domingo, igual que antes).
+        # ExtractIsoWeekDay devuelve 1=Lunes … 7=Domingo.
+        ventas_por_dia = [0.0] * 7
+        for fila in (queryset.annotate(d=ExtractIsoWeekDay('created_at'))
+                     .values('d').annotate(total=Sum('total'))
+                     .order_by('d')):
+            d = fila['d']
+            if d is None or not (1 <= d <= 7):
+                continue
+            ventas_por_dia[d - 1] = float(fila['total'] or 0)
+
         return JsonResponse({
             'success': True,
             'por_hora': por_hora_data,
-            'por_dia_semana': [float(x) for x in ventas_por_dia]
+            'por_dia_semana': ventas_por_dia
         })
-        
+
     except Exception as e:
+        logger.error('Error al obtener tendencias de ventas: %s', e)
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener tendencias de ventas: {str(e)}'
@@ -19001,56 +19544,91 @@ def obtener_tendencias_ventas(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('ind_avanzados', timeout=120)
+@cache_ventas_json('ind_avanzados_v2', timeout=120)
 def obtener_indicadores_avanzados_ventas(request):
     """
     API para obtener indicadores avanzados de retail con datos reales.
     Calcula: Margen Bruto (FIFO), Sell-Through Rate, Rotacion, Dias de Stock,
     GMROI, Descuento Promedio, Costo de Ventas real.
+
+    BASE DEL MARGEN (elegida y documentada, antes estaba mezclada):
+      · Ingreso = Sum('subtotal') / 1.19 → NETO de IVA y YA con los descuentos
+        aplicados. Antes era Σ(stock × precio): precio BRUTO (con IVA) y sin
+        restar `descuento_unitario`, contra un costo FIFO que es NETO. El margen
+        salía inflado ~19 puntos por el IVA más lo que sobraba por los descuentos.
+      · Costo = Σ(stock × costo_fifo) SOLO sobre las líneas con costo_fifo > 0.
+        Una línea sin costo FIFO no aporta "100% de margen": queda fuera del
+        cálculo y se refleja en `cobertura_costeo_pct`.
+      · Si NO hay ninguna línea costeada, el margen NO se inventa: `margen_bruto`,
+        `margen_pct` y `gmroi` vuelven en null con `margen_calculable=false` y
+        `margen_nota` explicando por qué.
+    Universo de líneas: excluye productos con `excluir_de_analitica` (mismo
+    criterio que los charts v1.2, el top de productos y el indicador de compra),
+    por lo que `ingresos` puede quedar levemente por debajo de "Ventas Totales".
     """
     try:
-        fecha_inicio = request.GET.get('fecha_inicio')
-        fecha_fin = request.GET.get('fecha_fin')
         sucursal_id = request.GET.get('sucursal_id')
-        estado = request.GET.get('estado', '')
 
-        if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.localdate()
-            fecha_inicio = fecha_fin - timedelta(days=30)
-        else:
-            fecha_inicio = timezone.datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
-            fecha_fin = timezone.datetime.strptime(fecha_fin, '%Y-%m-%d').date()
+        try:
+            fecha_inicio, fecha_fin = _rango_periodo(request)
+        except ValueError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Formato de fecha inválido'
+            }, status=400)
 
-        tickets_qs = Ticket.objects.filter(
-            fecha__gte=fecha_inicio,
-            fecha__lte=fecha_fin
-        )
-        if estado:
-            tickets_qs = tickets_qs.filter(estado=estado)
-        else:
-            tickets_qs = tickets_qs.filter(estado='PAGADO')
-        tickets_qs = _scope_suc_emp(tickets_qs, request, sucursal_id)
+        tickets_qs = _tickets_venta_periodo(
+            request, fecha_inicio, fecha_fin, sucursal_id=sucursal_id)
 
         ticket_ids = tickets_qs.values_list('id', flat=True)
+        # Denominador del UPT: transacciones del MISMO universo que las unidades.
+        cantidad_tickets = tickets_qs.count()
 
-        lineas = Ticket_Productos.objects.filter(idTicket_id__in=ticket_ids)
+        lineas = (Ticket_Productos.objects
+                  .filter(idTicket_id__in=ticket_ids)
+                  .exclude(ProductoTalla__producto__excluir_de_analitica=True))
 
+        costeada = Q(costo_fifo__gt=0)
         agg = lineas.aggregate(
-            ingresos=Sum(ExpressionWrapper(F('stock') * F('precio'), output_field=DecimalField())),
-            costo_ventas=Sum(ExpressionWrapper(F('stock') * F('costo_fifo'), output_field=DecimalField())),
+            ingresos_brutos=Sum('subtotal'),
+            ingresos_brutos_costeados=Sum('subtotal', filter=costeada),
+            costo_ventas=Sum(
+                ExpressionWrapper(F('stock') * F('costo_fifo'), output_field=DecimalField()),
+                filter=costeada),
             unidades_vendidas=Sum('stock'),
+            unidades_costeadas=Sum('stock', filter=costeada),
             descuento_prom=Avg('porcentaje_descuento'),
             descuento_total_monto=Sum(ExpressionWrapper(F('stock') * F('descuento_unitario'), output_field=DecimalField())),
         )
 
-        ingresos = float(agg['ingresos'] or 0)
+        ingresos = float(agg['ingresos_brutos'] or 0) / IVA_FACTOR
+        ingresos_costeados = float(agg['ingresos_brutos_costeados'] or 0) / IVA_FACTOR
         costo_ventas = float(agg['costo_ventas'] or 0)
         unidades_vendidas = int(agg['unidades_vendidas'] or 0)
+        unidades_costeadas = int(agg['unidades_costeadas'] or 0)
         descuento_promedio = float(agg['descuento_prom'] or 0)
         descuento_total_monto = float(agg['descuento_total_monto'] or 0)
 
-        margen_bruto = ingresos - costo_ventas
-        margen_pct = (margen_bruto / ingresos * 100) if ingresos > 0 else 0
+        cobertura_costeo = (unidades_costeadas / unidades_vendidas * 100) if unidades_vendidas > 0 else 0.0
+        margen_calculable = unidades_costeadas > 0 and ingresos_costeados > 0
+        if margen_calculable:
+            margen_bruto = ingresos_costeados - costo_ventas
+            margen_pct = margen_bruto / ingresos_costeados * 100
+            margen_nota = (
+                'Margen neto de IVA sobre las líneas con costo FIFO '
+                f'({cobertura_costeo:.1f}% de las unidades del período).'
+            )
+        else:
+            margen_bruto = None
+            margen_pct = None
+            margen_nota = (
+                'No calculable: ninguna línea vendida del período tiene costo FIFO '
+                '(costo_fifo = 0). Antes esto se mostraba como 100% de margen.'
+            )
+            logger.warning(
+                'Dashboard ventas: margen no calculable %s..%s (0 de %s unidades con costo FIFO)',
+                fecha_inicio, fecha_fin, unidades_vendidas,
+            )
 
         stock_filter = {}
         if sucursal_id:
@@ -19080,27 +19658,47 @@ def obtener_indicadores_avanzados_ventas(request):
             rotacion_periodo = 0
             rotacion_anualizada = 0
 
-        inventario_costo_est = stock_total_unidades * (costo_ventas / unidades_vendidas) if unidades_vendidas > 0 else 0
-        gmroi = (margen_bruto / inventario_costo_est) if inventario_costo_est > 0 else 0
+        # GMROI = margen bruto / inversión en inventario, valorizado con el costo
+        # unitario de lo efectivamente costeado. Si el margen no es calculable el
+        # GMROI tampoco lo es (antes devolvía 0, que se leía como "malísimo").
+        if margen_calculable and unidades_costeadas > 0:
+            inventario_costo_est = stock_total_unidades * (costo_ventas / unidades_costeadas)
+            gmroi = (margen_bruto / inventario_costo_est) if inventario_costo_est > 0 else None
+        else:
+            inventario_costo_est = 0
+            gmroi = None
 
         return JsonResponse({
             'success': True,
-            'ingresos': ingresos,
+            'ingresos': ingresos,                       # neto de IVA, con descuentos
+            'ingresos_costeados': ingresos_costeados,   # base real del margen
             'costo_ventas': costo_ventas,
             'margen_bruto': margen_bruto,
-            'margen_pct': round(margen_pct, 2),
+            'margen_pct': round(margen_pct, 2) if margen_pct is not None else None,
+            'margen_calculable': margen_calculable,
+            'margen_nota': margen_nota,
+            'cobertura_costeo_pct': round(cobertura_costeo, 1),
             'unidades_vendidas': unidades_vendidas,
+            'unidades_costeadas': unidades_costeadas,
+            'unidades_sin_costo': unidades_vendidas - unidades_costeadas,
+            'upt': round(unidades_vendidas / cantidad_tickets, 2) if cantidad_tickets else 0,
+            'cantidad_tickets': cantidad_tickets,
             'stock_actual': stock_total_unidades,
             'sell_through': round(sell_through, 2),
             'rotacion_periodo': round(rotacion_periodo, 2),
             'rotacion_anualizada': round(rotacion_anualizada, 2),
             'dias_stock': round(dias_stock, 1),
-            'gmroi': round(gmroi, 2),
+            'gmroi': round(gmroi, 2) if gmroi is not None else None,
             'descuento_promedio': round(descuento_promedio, 2),
             'descuento_total_monto': descuento_total_monto,
+            'base_calculo': (
+                'created_at · estado PAGADO por defecto · sin CAMBIO_DEVOLUCION · '
+                'sin productos excluidos de analítica · ingreso neto de IVA'
+            ),
         })
 
     except Exception as e:
+        logger.error('Error al obtener indicadores avanzados: %s', e)
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener indicadores avanzados: {str(e)}'
@@ -19109,30 +19707,32 @@ def obtener_indicadores_avanzados_ventas(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('estado_operacional', timeout=60)
+@cache_ventas_json('estado_operacional_v2', timeout=60)
 def obtener_estado_operacional_ventas(request):
     """
     API para obtener el estado operacional completo del modulo de ventas.
     Cubre: tickets por estado, ventas por modulo, POS, cambios/devoluciones,
     depositos, DTEs pendientes, regularizaciones.
+
+    Panel de OPERACIÓN, no de venta: conserva a propósito todos los estados y
+    todos los `modulo_origen` (incluido CAMBIO_DEVOLUCION, que es justamente una
+    de las filas del desglose). Lo único que cambia es la fecha: `created_at` en
+    vez de `Ticket.fecha` (auto_now).
     """
     try:
-        fecha_inicio = request.GET.get('fecha_inicio')
-        fecha_fin = request.GET.get('fecha_fin')
         sucursal_id = request.GET.get('sucursal_id')
 
-        if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.localdate()
-            fecha_inicio = fecha_fin - timedelta(days=30)
-        else:
-            fecha_inicio = timezone.datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
-            fecha_fin = timezone.datetime.strptime(fecha_fin, '%Y-%m-%d').date()
+        try:
+            fecha_inicio, fecha_fin = _rango_periodo(request)
+        except ValueError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Formato de fecha inválido'
+            }, status=400)
 
-        tickets_qs = Ticket.objects.filter(
-            fecha__gte=fecha_inicio,
-            fecha__lte=fecha_fin
-        )
-        tickets_qs = _scope_suc_emp(tickets_qs, request, sucursal_id)
+        tickets_qs = _tickets_venta_periodo(
+            request, fecha_inicio, fecha_fin,
+            aplicar_estado=False, excluir_cambios=False, sucursal_id=sucursal_id)
 
         # --- Tickets por estado ---
         tickets_por_estado = list(
@@ -19312,26 +19912,32 @@ def obtener_estado_operacional_ventas(request):
 def exportar_dashboard_ventas_excel(request):
     """
     API para exportar dashboard de ventas a Excel
-    Incluye todas las métricas e indicadores
+    Incluye todas las métricas e indicadores.
+
+    Consume la MISMA base que la pantalla (`_tickets_venta_periodo`): antes
+    filtraba por `Ticket.fecha` (auto_now), forzaba estado PAGADO ignorando el
+    filtro, no aplicaba empresa_id, contaba los tickets de cambio/devolución y
+    valorizaba los productos con stock × precio mientras la tabla en pantalla usa
+    Sum('subtotal'). El archivo que se mandaba a gerencia contradecía al
+    dashboard del que salía.
     """
     try:
         from openpyxl import Workbook
         from openpyxl.styles import Font, PatternFill, Alignment
         from openpyxl.utils import get_column_letter
-        
+
         # Obtener parámetros de filtro
-        fecha_inicio = request.GET.get('fecha_inicio')
-        fecha_fin = request.GET.get('fecha_fin')
         sucursal_id = request.GET.get('sucursal_id')
-        
+
         # Validar fechas
-        if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.localdate()
-            fecha_inicio = fecha_fin - timedelta(days=30)
-        else:
-            fecha_inicio = timezone.datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
-            fecha_fin = timezone.datetime.strptime(fecha_fin, '%Y-%m-%d').date()
-        
+        try:
+            fecha_inicio, fecha_fin = _rango_periodo(request)
+        except ValueError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Formato de fecha inválido. Use YYYY-MM-DD'
+            }, status=400)
+
         # Crear workbook
         wb = Workbook()
         
@@ -19348,31 +19954,30 @@ def exportar_dashboard_ventas_excel(request):
         ws1['A1'].font = title_font
         ws1['A2'] = f"Período: {fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}"
         
-        # Obtener datos de indicadores globales
-        queryset = Ticket.objects.filter(
-            fecha__gte=fecha_inicio,
-            fecha__lte=fecha_fin,
-            estado='PAGADO'
-        )
-        
-        if sucursal_id:
-            queryset = queryset.filter(sucursal_id=sucursal_id)
-        
+        # Obtener datos de indicadores globales — misma base que la pantalla
+        queryset = _tickets_venta_periodo(
+            request, fecha_inicio, fecha_fin, sucursal_id=sucursal_id)
+
         ventas_totales = queryset.aggregate(total=Sum('total'))['total'] or 0
         cantidad_ventas = queryset.count()
         ticket_promedio = ventas_totales / cantidad_ventas if cantidad_ventas > 0 else 0
-        
+
         ws1['A4'] = "INDICADORES PRINCIPALES"
         ws1['A4'].font = header_font
         ws1['A4'].fill = header_fill
-        
+
         ws1['A5'] = "Ventas Totales"
         ws1['B5'] = f"${ventas_totales:,.0f}"
         ws1['A6'] = "Cantidad de Ventas"
         ws1['B6'] = cantidad_ventas
         ws1['A7'] = "Ticket Promedio"
         ws1['B7'] = f"${ticket_promedio:,.0f}"
-        
+        ws1['A8'] = "Base de cálculo"
+        ws1['B8'] = (
+            f"Fecha de venta (created_at) · estado "
+            f"{request.GET.get('estado') or 'PAGADO'} · sin cambios/devoluciones"
+        )
+
         # ===== HOJA 2: VENTAS POR VENDEDOR =====
         ws2 = wb.create_sheet("Ventas por Vendedor")
         
@@ -19423,23 +20028,23 @@ def exportar_dashboard_ventas_excel(request):
             cell.fill = header_fill
         
         ticket_ids = queryset.values_list('id', flat=True)
-        
-        productos_vendidos = Ticket_Productos.objects.filter(
+
+        # Sum('subtotal') = ingreso real tras descuentos, igual que la tabla en
+        # pantalla (antes stock × precio, que ignora `descuento_unitario`), y sin
+        # los productos marcados como excluidos de analítica.
+        productos_vendidos = list(Ticket_Productos.objects.filter(
             idTicket_id__in=ticket_ids
+        ).exclude(
+            ProductoTalla__producto__excluir_de_analitica=True
         ).values(
             'ProductoTalla__sku',
             'ProductoTalla__producto__articulo',
             'ProductoTalla__producto__categoria__nombre'
         ).annotate(
             cantidad_vendida=Sum('stock'),
-            total_ventas=Sum(
-                ExpressionWrapper(
-                    F('stock') * F('precio'),
-                    output_field=DecimalField()
-                )
-            )
-        ).order_by('-cantidad_vendida')[:50]
-        
+            total_ventas=Sum('subtotal')
+        ).order_by('-cantidad_vendida')[:50])
+
         total_productos = sum(float(p['total_ventas'] or 0) for p in productos_vendidos)
         
         row = 2

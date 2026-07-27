@@ -21,6 +21,15 @@
     .nivel-PLATA   { background:#e8eaf6; color:#5c6bc0; }
     .nivel-ORO     { background:#fff8e1; color:#f9a825; }
     .nivel-PLATINO { background:#f3e5f5; color:#8e24aa; }
+    /* Chip de tipo de cliente: color e icono los define la vista (paleta del módulo) */
+    .tipo-badge-lg { font-size:14px; font-weight:700; padding:6px 16px; border-radius:16px;
+        display:inline-flex; align-items:center; gap:6px; }
+    .tipo-badge-header { font-size:12px; font-weight:700; padding:4px 12px; border-radius:14px;
+        background:rgba(255,255,255,.22); color:#fff; display:inline-flex; align-items:center; gap:5px; }
+    .gc-card { border:1px solid #e9ebec; border-radius:12px; padding:10px 14px; display:flex;
+        align-items:center; gap:12px; background:#f8f9fa; }
+    .gc-card .gc-monto { font-size:18px; font-weight:800; color:#0ab39c; }
+    .gc-card .gc-codigo { font-family:monospace; font-size:13px; font-weight:600; color:#405189; }
 </style>
 
 <div class="page-content">
@@ -29,7 +38,15 @@
             <div class="module-header">
                 <div class="module-header-left">
                     <div class="module-header-icon"><i class="ri-user-star-line"></i></div>
-                    <div class="module-header-info"><h5>{{ cliente.nombre_completo }}</h5></div>
+                    <div class="module-header-info">
+                        <h5>{{ cliente.nombre_completo }}</h5>
+                        <div class="mt-1">
+                            <span class="tipo-badge-header" title="Tipo de cliente">
+                                <i class="{{ tipo_info.tipo_cliente_icono }}"></i>{{ tipo_info.tipo_cliente_display }}
+                            </span>
+                            {% if cliente.rut %}<span class="ms-2 small opacity-75">{{ cliente.rut }}</span>{% endif %}
+                        </div>
+                    </div>
                 </div>
                 <div class="module-header-actions">
                     <a href="{% url 'modulo_fidelizacion' %}" class="btn btn-light"><i class="ri-arrow-left-line"></i> Volver</a>
@@ -58,6 +75,18 @@
                         {% endif %}
                     </div>
                     <div class="col-md-8">
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                            <span class="tipo-badge-lg"
+                                  style="background:{{ tipo_info.tipo_cliente_bg }}; color:{{ tipo_info.tipo_cliente_color }}">
+                                <i class="{{ tipo_info.tipo_cliente_icono }}"></i>{{ tipo_info.tipo_cliente_display }}
+                            </span>
+                            {% if giftcards %}
+                            <span class="badge badge-soft-success fs-6">
+                                <i class="ri-gift-2-line"></i>
+                                {{ giftcards|length }} gift card{{ giftcards|pluralize }} · ${{ giftcards_saldo_total|floatformat:0 }}
+                            </span>
+                            {% endif %}
+                        </div>
                         <div class="row">
                             <div class="col-6 mb-2"><small class="text-muted">RUT</small><div class="fw-bold">{{ cliente.rut|default:"—" }}</div></div>
                             <div class="col-6 mb-2"><small class="text-muted">Email</small><div>{{ cliente.email|default:"—" }}</div></div>
@@ -78,6 +107,30 @@
                             {% endif %}
                         </div>
                     </div>
+                </div>
+
+                <h6 class="fw-bold mb-3">
+                    <i class="ri-gift-2-line"></i> Gift cards vigentes
+                    {% if giftcards %}<span class="text-muted fw-normal small">· utilizables hoy en cualquier sucursal</span>{% endif %}
+                </h6>
+                <div class="row g-2 mb-4">
+                    {% for gc in giftcards %}
+                    <div class="col-md-4">
+                        <div class="gc-card">
+                            <i class="ri-gift-2-line fs-3 text-success"></i>
+                            <div class="flex-grow-1">
+                                <div class="gc-codigo">{{ gc.codigo }}</div>
+                                <div class="gc-monto">${{ gc.saldo_actual|floatformat:0 }}</div>
+                                <div class="small text-muted">
+                                    {{ gc.motivo_display }}
+                                    {% if gc.fecha_vencimiento %}· vence {{ gc.fecha_vencimiento }}{% else %}· sin vencimiento{% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="col-12"><p class="text-muted mb-0">Sin gift cards vigentes.</p></div>
+                    {% endfor %}
                 </div>
 
                 <h6 class="fw-bold mb-3"><i class="ri-calendar-2-line"></i> Puntos por mes (últimos 12 meses)</h6>
@@ -149,17 +202,23 @@
                     <input type="number" id="aj-puntos" class="form-control" placeholder="Ej: 100 o -50">
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">Motivo</label>
-                    <textarea id="aj-obs" class="form-control" rows="2"></textarea>
+                    <label class="form-label">Motivo <span class="text-danger">*</span></label>
+                    <textarea id="aj-obs" class="form-control" rows="2"
+                              placeholder="Queda registrado en el historial junto a tu usuario."></textarea>
+                    <div class="form-text">Obligatorio: es la única traza de por qué se movieron los puntos.</div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-primary" onclick="guardarAjuste()">Aplicar</button>
+                <button class="btn btn-primary" id="aj-btn" onclick="guardarAjuste()">Aplicar</button>
             </div>
         </div>
     </div>
 </div>
 
+{% include '../../layout/footer.html' %}
+
+<!-- JS del módulo: SIEMPRE después del footer (el footer es quien carga jQuery
+     y los plugins; ponerlo antes rompe la página con "$ is not defined"). -->
 <script>
 const CLIENTE_ID = {{ cliente.id }};
 const URL_AJUSTE = "{% url 'api_ajuste_manual_puntos' %}";
@@ -188,14 +247,20 @@ function otorgarCumpleanos() {
 
 function guardarAjuste() {
     const puntos = parseInt(document.getElementById('aj-puntos').value || 0);
+    const obs = document.getElementById('aj-obs').value.trim();
     if (!puntos) { Swal.fire('Atención', 'Indica una cantidad distinta de 0.', 'warning'); return; }
+    // El motivo es la única traza del ajuste: no se envía sin él.
+    if (!obs) { Swal.fire('Falta el motivo', 'Escribe por qué se ajustan los puntos.', 'warning'); return; }
+    const btn = document.getElementById('aj-btn');
+    // Deshabilitar evita el doble clic: el ajuste no es idempotente y un
+    // segundo envío crearía DOS movimientos de puntos.
+    if (btn.disabled) return;
+    btn.disabled = true;
     fetch(URL_AJUSTE, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
-        body: JSON.stringify({cliente_id: CLIENTE_ID, puntos, observaciones: document.getElementById('aj-obs').value})})
+        body: JSON.stringify({cliente_id: CLIENTE_ID, puntos, observaciones: obs})})
         .then(r=>r.json()).then(d=>{
         if (d.success) { Swal.fire('Aplicado', 'Nuevo saldo: '+d.saldo_total, 'success').then(()=>location.reload()); }
-        else Swal.fire('Error', d.error, 'error');
-    });
+        else { btn.disabled = false; Swal.fire('Error', d.error, 'error'); }
+    }).catch(()=>{ btn.disabled = false; Swal.fire('Error', 'No se pudo conectar.', 'error'); });
 }
 </script>
-
-{% include '../../layout/footer.html' %}

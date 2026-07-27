@@ -173,6 +173,60 @@
     }
     .tbk-tech-body ul { margin: 2px 0; padding-left: 16px; }
     .tbk-tech-body li { margin-bottom: 1px; }
+
+    /* ── Cuadratura terminal vs sistema ── */
+    .tbk-cuadra {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
+    .tbk-cuadra-box {
+        border: 1px solid #e3e3ea;
+        border-radius: 6px;
+        padding: 6px 8px;
+        background: #fbfbfd;
+    }
+    .tbk-cuadra-box .lbl {
+        font-size: 0.66rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #8A8A9A;
+        font-weight: 700;
+    }
+    .tbk-cuadra-box .val {
+        font-size: 0.98rem;
+        font-weight: 700;
+        color: #1A1A2E;
+        line-height: 1.2;
+    }
+    .tbk-cuadra-box .sub {
+        font-size: 0.68rem;
+        color: #6c757d;
+    }
+    .tbk-diff {
+        margin-top: 6px;
+        border-radius: 6px;
+        padding: 5px 8px;
+        font-size: 0.72rem;
+        font-weight: 600;
+    }
+    .tbk-diff-ok   { background: #e6faf5; color: #087f5b; border: 1px solid #b2f0e0; }
+    .tbk-diff-bad  { background: #fff1f1; color: #a4161a; border: 1px solid #ffc9c9; }
+    .tbk-diff-wait { background: #f4f4f7; color: #6c757d; border: 1px solid #e3e3ea; }
+
+    #tabla_registro_sistema {
+        font-size: 0.7rem;
+    }
+    #tabla_registro_sistema th,
+    #tabla_registro_sistema td {
+        padding: 3px 5px;
+        white-space: nowrap;
+    }
+    .tbk-registro-scroll {
+        max-height: 210px;
+        overflow-y: auto;
+        overflow-x: auto;
+    }
 </style>
 
 <!-- Header compacto -->
@@ -186,6 +240,14 @@
         <span class="tbk-badge tbk-badge-success">
             <i class="bi bi-usb-symbol"></i> Puerto: <span id="puerto">-</span>
         </span>
+        {% if config_guardada %}
+        <span class="tbk-badge" style="background:rgba(255,255,255,.15);color:#fff;"
+              title="Última conexión registrada en el sistema para esta sucursal. No refleja el estado en vivo del terminal: para eso use «Verificar (POLL)».">
+            <i class="bi bi-clock-history"></i>
+            Último registro: {{ config_guardada.puerto_conexion }} ·
+            {{ config_guardada.ultima_conexion|date:"d/m/Y H:i" }}
+        </span>
+        {% endif %}
     </div>
 </div>
 
@@ -265,8 +327,67 @@
         </div>
     </div>
 
-    <!-- Col 3: Info Técnica colapsable -->
+    <!-- Col 3: Cuadratura terminal ↔ sistema + Info técnica -->
     <div class="col-md-5">
+
+        <!-- Registro en el sistema + cuadratura contra el terminal -->
+        <div class="tbk-card">
+            <h6 class="d-flex align-items-center justify-content-between">
+                <span><i class="bi bi-journal-check"></i> Cuadratura del día · Terminal ↔ Sistema</span>
+                <span>
+                    <input type="date" id="fecha_registro" class="form-control-sm-pos"
+                           style="width:130px;display:inline-block;height:24px;font-size:0.7rem;"
+                           onchange="cargarRegistroSistema()">
+                    <button type="button" class="btn btn-sm btn-light border ms-1 py-0 px-1"
+                            onclick="cargarRegistroSistema()" title="Recargar el registro del sistema">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </span>
+            </h6>
+            <hr>
+
+            <div class="tbk-cuadra">
+                <div class="tbk-cuadra-box">
+                    <div class="lbl"><i class="bi bi-pc-display"></i> Terminal (POS)</div>
+                    <div class="val" id="cuadra_pos_total">—</div>
+                    <div class="sub" id="cuadra_pos_count">Ejecute «Totales del Día»</div>
+                </div>
+                <div class="tbk-cuadra-box">
+                    <div class="lbl"><i class="bi bi-database"></i> Sistema (BD)</div>
+                    <div class="val" id="cuadra_sis_total">—</div>
+                    <div class="sub" id="cuadra_sis_count">Cargando…</div>
+                </div>
+            </div>
+
+            <div class="tbk-diff tbk-diff-wait" id="cuadra_diff">
+                <i class="bi bi-hourglass-split"></i>
+                Ejecute «Totales del Día» para comparar lo que cobró el terminal con lo que quedó registrado en el sistema.
+            </div>
+
+            <div class="tbk-registro-scroll mt-2">
+                <table class="table table-sm table-bordered mb-0 align-middle" id="tabla_registro_sistema">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Hora</th>
+                            <th class="text-end">Monto</th>
+                            <th>Tarjeta</th>
+                            <th>Autoriz.</th>
+                            <th>Ticket</th>
+                            <th>Cajero</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td colspan="6" class="text-center text-muted">Cargando…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="mb-0 mt-1" style="font-size:0.66rem;color:#8A8A9A;">
+                <i class="bi bi-info-circle"></i>
+                El sistema sólo guarda las transacciones <strong>aprobadas</strong>. Una venta que el
+                terminal cobró pero que no alcanzó a registrarse aparece aquí como diferencia.
+            </p>
+        </div>
+
         <div class="tbk-card">
             <h6>
                 <i class="bi bi-info-circle"></i> Información Técnica
@@ -313,7 +434,10 @@
 <!-- Scripts -->
 <script src="{% static 'js/transbank-webserial.js' %}"></script>
 <script src="{% static 'js/transbank-helpers.js' %}"></script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<!-- SweetAlert2 local: la caja opera en tiendas con internet intermitente y este
+     módulo depende de Swal para TODOS sus diálogos (incluido el aviso de POS no
+     conectado). Cargarlo desde CDN dejaba la pantalla muda si el CDN no responde. -->
+<script src="{% static 'libs/sweetalert2/sweetalert2.min.js' %}"></script>
 
 <script>
 // ==================== INFO TÉCNICA TOGGLE ====================
@@ -326,6 +450,162 @@ function toggleTechInfo(el) {
         body.style.display = 'none';
         el.textContent = '[mostrar]';
     }
+}
+
+// ==================== CUADRATURA TERMINAL ↔ SISTEMA ====================
+// El terminal cobra, pero quien deja constancia en la BD es el navegador
+// (POST /app/pos/transbank/venta/). Si esa llamada falla —o el cajero cierra la
+// pestaña antes— el dinero quedó cobrado y sin registro. Este panel deja esa
+// diferencia a la vista en la misma pantalla, sin tener que ir a otro módulo.
+
+const registroSistema = {
+    count: 0,
+    total: 0,
+    truncado: false,
+};
+const totalesTerminal = {
+    consultado: false,
+    count: 0,
+    total: 0,
+};
+
+function fmtCLP(valor) {
+    const n = Number(valor) || 0;
+    return '$' + n.toLocaleString('es-CL');
+}
+
+function fechaHoyLocal() {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+async function cargarRegistroSistema() {
+    const input = document.getElementById('fecha_registro');
+    const fecha = (input && input.value) ? input.value : fechaHoyLocal();
+    if (input && !input.value) input.value = fecha;
+
+    const tbody = document.querySelector('#tabla_registro_sistema tbody');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Cargando…</td></tr>';
+    }
+
+    try {
+        // El endpoint pagina; recorremos hasta 4 páginas de 200 (800 transacciones
+        // por sucursal/día es muy superior a cualquier jornada real).
+        let pagina = 1;
+        let totalPaginas = 1;
+        const filas = [];
+        let totalItems = 0;
+
+        while (pagina <= totalPaginas && pagina <= 4) {
+            const url = `/app/pos/transacciones/?fecha_desde=${encodeURIComponent(fecha)}`
+                      + `&fecha_hasta=${encodeURIComponent(fecha)}&per_page=200&page=${pagina}`;
+            const resp = await fetch(url, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const json = await resp.json();
+            if (!json.success) throw new Error(json.error || 'Respuesta sin éxito');
+
+            (json.transacciones || []).forEach(t => filas.push(t));
+            totalPaginas = (json.pagination && json.pagination.total_pages) || 1;
+            totalItems = (json.pagination && json.pagination.total_items) || filas.length;
+            pagina += 1;
+        }
+
+        const aprobadas = filas.filter(t => t.estado === 'APROBADA');
+        registroSistema.count = aprobadas.length;
+        registroSistema.total = aprobadas.reduce((acc, t) => acc + (Number(t.monto) || 0), 0);
+        registroSistema.truncado = totalItems > filas.length;
+
+        pintarRegistroSistema(filas);
+        actualizarCuadratura();
+    } catch (error) {
+        console.error('Error cargando registro del sistema:', error);
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">
+                No se pudo leer el registro del sistema (${(error && error.message) || 'error'})
+            </td></tr>`;
+        }
+        const sisTotal = document.getElementById('cuadra_sis_total');
+        const sisCount = document.getElementById('cuadra_sis_count');
+        if (sisTotal) sisTotal.textContent = '—';
+        if (sisCount) sisCount.textContent = 'Error al consultar';
+    }
+}
+
+function pintarRegistroSistema(filas) {
+    const tbody = document.querySelector('#tabla_registro_sistema tbody');
+    if (!tbody) return;
+
+    if (!filas.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Sin transacciones registradas en esa fecha</td></tr>';
+    } else {
+        tbody.innerHTML = filas.map(t => {
+            const hora = (t.fecha_inicio || '').split(' ')[1] || t.fecha_inicio || '';
+            const tarjeta = [t.nombre_tarjeta, t.ultimos_4_digitos ? '••' + t.ultimos_4_digitos : '']
+                .filter(Boolean).join(' ');
+            const ticket = t.ticket_correlativo
+                ? `<span class="badge bg-light text-dark border">${escapeTxt(String(t.ticket_correlativo))}</span>`
+                : '<span class="text-danger" title="Esta transacción no quedó asociada a ningún ticket de venta">sin ticket</span>';
+            const rechazada = t.estado !== 'APROBADA'
+                ? ' <span class="badge bg-danger">' + escapeTxt(t.estado_display || t.estado) + '</span>'
+                : '';
+            return `<tr>
+                <td>${escapeTxt(hora)}${rechazada}</td>
+                <td class="text-end">${fmtCLP(t.monto)}</td>
+                <td>${escapeTxt(tarjeta)}</td>
+                <td>${escapeTxt(t.codigo_autorizacion || '—')}</td>
+                <td>${ticket}</td>
+                <td>${escapeTxt(t.usuario_operador || '—')}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    const sisTotal = document.getElementById('cuadra_sis_total');
+    const sisCount = document.getElementById('cuadra_sis_count');
+    if (sisTotal) sisTotal.textContent = fmtCLP(registroSistema.total);
+    if (sisCount) {
+        sisCount.textContent = `${registroSistema.count} transacción(es) aprobada(s)`
+            + (registroSistema.truncado ? ' · listado truncado' : '');
+    }
+}
+
+function escapeTxt(valor) {
+    return String(valor === null || valor === undefined ? '' : valor)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function actualizarCuadratura() {
+    const caja = document.getElementById('cuadra_diff');
+    if (!caja) return;
+
+    if (!totalesTerminal.consultado) {
+        caja.className = 'tbk-diff tbk-diff-wait';
+        caja.innerHTML = '<i class="bi bi-hourglass-split"></i> '
+            + 'Ejecute «Totales del Día» para comparar lo que cobró el terminal con lo registrado en el sistema.';
+        return;
+    }
+
+    const difMonto = totalesTerminal.total - registroSistema.total;
+    const difCount = totalesTerminal.count - registroSistema.count;
+
+    if (difMonto === 0 && difCount === 0) {
+        caja.className = 'tbk-diff tbk-diff-ok';
+        caja.innerHTML = '<i class="bi bi-check-circle-fill"></i> '
+            + `Cuadra: ${registroSistema.count} transacción(es) por ${fmtCLP(registroSistema.total)}.`;
+        return;
+    }
+
+    caja.className = 'tbk-diff tbk-diff-bad';
+    const signo = difMonto > 0 ? 'de más en el terminal' : 'de más en el sistema';
+    caja.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> '
+        + `Descuadre: ${Math.abs(difCount)} transacción(es) y ${fmtCLP(Math.abs(difMonto))} ${signo}.`
+        + '<br><span class="fw-normal">Revise el listado y el voucher del terminal antes de cerrar el día.</span>';
 }
 
 // ==================== FUNCIONES POS ====================
@@ -528,13 +808,36 @@ async function consultarTotales() {
         marcarPasoCierreCompletado('totales');
         const txCount = Number.isFinite(resultado.txCount) ? resultado.txCount : 0;
         const txTotal = Number.isFinite(resultado.txTotal) ? resultado.txTotal : 0;
+
+        // Cuadratura contra lo que quedó registrado en el sistema.
+        totalesTerminal.consultado = true;
+        totalesTerminal.count = txCount;
+        totalesTerminal.total = txTotal;
+        const posTotal = document.getElementById('cuadra_pos_total');
+        const posCount = document.getElementById('cuadra_pos_count');
+        if (posTotal) posTotal.textContent = fmtCLP(txTotal);
+        if (posCount) posCount.textContent = `${txCount} transacción(es) en el terminal`;
+        await cargarRegistroSistema();
+
+        const difMonto = txTotal - registroSistema.total;
+        const difCount = txCount - registroSistema.count;
+        const cuadra = (difMonto === 0 && difCount === 0);
+        const bloqueCuadratura = cuadra
+            ? '<hr><p class="text-success mb-0"><i class="bi bi-check-circle-fill"></i> '
+              + 'Coincide con lo registrado en el sistema.</p>'
+            : '<hr><p class="text-danger mb-1"><i class="bi bi-exclamation-triangle-fill"></i> '
+              + '<strong>No coincide con el sistema</strong></p>'
+              + `<div class="small">Sistema: ${registroSistema.count} tx · ${fmtCLP(registroSistema.total)}<br>`
+              + `Diferencia: ${difCount} tx · ${fmtCLP(difMonto)}</div>`;
+
         Swal.fire({
-            icon: 'info',
+            icon: cuadra ? 'success' : 'warning',
             title: 'Totales del Día',
             html: `
                 <div class="text-start">
                     <strong>Transacciones:</strong> ${txCount}<br>
-                    <strong>Total:</strong> $${txTotal.toLocaleString()}
+                    <strong>Total:</strong> ${fmtCLP(txTotal)}
+                    ${bloqueCuadratura}
                 </div>
             `
         });
@@ -548,10 +851,22 @@ async function cerrarDia() {
     try {
         if (!validarPrerequisitosCierreDia()) return;
 
+        // Si el terminal y el sistema no cuadran, el cierre es el último momento
+        // para detectarlo: después el POS ya no devuelve el detalle del día.
+        const difMonto = totalesTerminal.total - registroSistema.total;
+        const difCount = totalesTerminal.count - registroSistema.count;
+        const avisoDescuadre = (totalesTerminal.consultado && (difMonto !== 0 || difCount !== 0))
+            ? '<div class="alert alert-danger text-start small mb-0 mt-2">'
+              + '<i class="bi bi-exclamation-triangle-fill"></i> <strong>Atención:</strong> '
+              + `el terminal registra ${totalesTerminal.count} tx por ${fmtCLP(totalesTerminal.total)} `
+              + `y el sistema ${registroSistema.count} tx por ${fmtCLP(registroSistema.total)} `
+              + `(diferencia ${fmtCLP(Math.abs(difMonto))}).</div>`
+            : '';
+
         const confirm = await Swal.fire({
             icon: 'warning',
             title: '¿Cerrar día?',
-            text: 'Esta operación cerrará las transacciones del día',
+            html: '<p class="mb-0">Esta operación cerrará las transacciones del día</p>' + avisoDescuadre,
             showCancelButton: true,
             confirmButtonText: 'Sí, cerrar',
             cancelButtonText: 'Cancelar'
@@ -843,7 +1158,23 @@ async function procesarVentaPrueba() {
                 await guardarTransaccionPOS(resultado, null);
             } catch (e) {
                 console.error('Error guardando transacción:', e);
+                // El terminal COBRÓ pero el sistema no pudo dejar constancia:
+                // el cajero tiene que saberlo en el momento, no al cerrar el día.
+                await Swal.fire({
+                    icon: 'error',
+                    title: 'Cobrado en el terminal, NO registrado',
+                    html: `
+                        <p class="text-start mb-2">El pago se aprobó en el POS, pero el sistema
+                        <strong>no pudo guardar la transacción</strong>.</p>
+                        <pre class="small text-danger text-start mb-2" style="white-space:pre-wrap;">${escapeTxt((e && e.message) || e)}</pre>
+                        <p class="text-start small mb-0">Anote el código de autorización
+                        <strong>${escapeTxt(resultado.authorizationCode || 's/d')}</strong>
+                        por ${fmtCLP(resultado.amount)} y déjelo registrado manualmente al cuadrar la caja.</p>
+                    `,
+                    confirmButtonText: 'Entendido'
+                });
             }
+            cargarRegistroSistema();
         }
     } catch (error) {
         console.error('Error en venta:', error);
@@ -896,6 +1227,10 @@ function agregarLogTransaccion(resultado, montoEnviado) {
 }
 
 window.addEventListener('load', function () {
+    const inputFecha = document.getElementById('fecha_registro');
+    if (inputFecha && !inputFecha.value) inputFecha.value = fechaHoyLocal();
+    cargarRegistroSistema();
+
     if (!('serial' in navigator)) {
         Swal.fire({
             icon: 'error',

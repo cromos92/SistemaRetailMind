@@ -14,6 +14,50 @@ from . import views_fusion_duplicados
 from . import views_ecommerce
 from . import views_cron
 from . import views_modulo_campanas_liquidacion
+from .decorators import requiere_permiso
+
+
+def _permiso_inventarios(tipo_permiso, vista):
+    """
+    Envuelve una vista de Gestión de Inventarios con el permiso fino que le
+    corresponde.
+
+    Las vistas de `views_gestion_inventarios.py` solo llevan `@login_required`
+    y el middleware de permisos únicamente comprueba `puede_ver`. Resultado:
+    cualquier usuario que pudiera abrir la pantalla podía además crear la toma,
+    registrar conteos, aprobarla y aplicar los ajustes — y aplicar ajustes
+    MUEVE STOCK y escribe kardex. Se envuelve aquí (y no en el módulo de
+    vistas) para dejar el control de acceso declarado junto a la ruta.
+
+    OJO — `PermisoRol.tiene_permiso` resuelve TRES capas, no solo el rol:
+
+      1. PermisoUsuario  (override por usuario; si el campo no es None manda él)
+      2. PermisoRol      (el permiso del rol)
+      3. PermisoSucursal (restricción de la sucursal activa en sesión,
+                          `request.session['idSucursalActual']`)
+
+    Las tres son AND: basta que la SUCURSAL diga False para que el permiso se
+    caiga aunque el rol lo tenga en True. Documentar solo la capa 2 fue lo que
+    dejó pasar el error que se corrige más abajo.
+
+    Permisos vigentes en producción para la opción 'gestion_inventarios':
+
+    - Capa 2 (rol): administrador ver/crear/editar/eliminar/exportar/aprobar =
+      True; super_admin ver/crear/editar = True y aprobar = False (sin usuarios
+      activos con ese rol); jefe_local, cajero, vendedor y administracion todo
+      en False, así que nunca llegan a estos endpoints.
+    - Capa 3 (sucursal): la única sucursal con filas de PermisoSucursal es
+      NICK1 (id=6), con 49 filas — entre ellas 'gestion_inventarios', que tiene
+      habilitado/crear/editar/exportar = True pero eliminar y aprobar = False.
+
+    De ahí la elección de permisos de las rutas: en TODA la tabla
+    PermisoSucursal de producción no existe ni una sola fila con
+    puede_aprobar=True (0 de 49), de modo que exigir 'puede_aprobar' equivale a
+    un 403 permanente para cualquiera —administradores incluidos— en cuanto la
+    sucursal activa tenga fila. 'puede_editar', en cambio, sí es un control
+    real y administrable por sucursal (está en False en 2 de las 49 filas).
+    """
+    return requiere_permiso('gestion_inventarios', tipo_permiso)(vista)
 from .views_modulo_ventas import (
     # Funciones POS Dashboard
     pos_dashboard,
@@ -375,6 +419,8 @@ from .views_modulo_fidelizacion import (
     api_registrar_cliente,
     api_reporte_fidelizacion,
     api_bono_cumpleanos,
+    api_generar_vale_canje,
+    api_validar_vale_canje,
 )
 from .views_permisos import (
     # Gestión de permisos por rol
@@ -456,6 +502,7 @@ from .views_prediccion_compras import (
 from django.urls import path
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
+from django.views.generic import RedirectView
 
 urlpatterns = [
         
@@ -474,7 +521,13 @@ urlpatterns = [
      path('cambiar-password/', views.cambiar_password_obligatorio, name='cambiar_password_obligatorio'),
      #Modulo Compras
      path('verGestionCompras/', views.verGestionCompras, name='verGestionCompras'),
-     path('dashboard_compras_estrategico/', views_modulo_compras.dashboard_compras_estrategico, name='dashboard_compras_estrategico'),
+     # 'dashboard_compras_estrategico' se eliminó (2026-07-25): devolvía JSON
+     # crudo y el botón del Dashboard Home apuntaba ahí, así que el usuario
+     # veía un volcado de datos en el navegador. Su contenido es un subconjunto
+     # del Dashboard de Compras Mejorado, que es adonde apunta ahora.
+     path('dashboard_compras_estrategico/', RedirectView.as_view(
+         pattern_name='verDashboardComprasMejorado', permanent=False,
+     ), name='dashboard_compras_estrategico'),
          path('exportar_dashboard_compras/', views_modulo_compras.exportar_dashboard_compras, name='exportar_dashboard_compras'),
     path('verDashboardCompras/', views_modulo_compras.verDashboardCompras, name='verDashboardCompras'),
     path('verDashboardComprasMejorado/', views_modulo_compras.verDashboardComprasMejorado, name='verDashboardComprasMejorado'),
@@ -1071,8 +1124,12 @@ urlpatterns = [
     path('api/actualizar-email-cliente/', actualizar_email_cliente, name='actualizar_email_cliente'),
 
     # ========== DASHBOARD DE VENTAS ==========
-    # Vista principal del dashboard (ahora usa el mejorado)
-    path('ventas/dashboard/', dashboard_ventas, name='dashboard_ventas'),
+    # `dashboard_ventas` renderizaba el MISMO template que el mejorado pero sin
+    # el contexto de categorías v1.2, así que los filtros salían vacíos. Se
+    # mantiene la ruta como redirección para no romper enlaces guardados.
+    path('ventas/dashboard/', RedirectView.as_view(
+        pattern_name='dashboard_ventas_mejorado', permanent=False,
+    ), name='dashboard_ventas'),
     path('ventas/dashboard-mejorado/', dashboard_ventas_mejorado, name='dashboard_ventas_mejorado'),
     
     # APIs de indicadores y métricas
@@ -1395,6 +1452,12 @@ urlpatterns = [
     path('api/fidelizacion/registrar-cliente/', api_registrar_cliente, name='api_registrar_cliente'),
     path('api/fidelizacion/reporte/', api_reporte_fidelizacion, name='api_reporte_fidelizacion'),
     path('api/fidelizacion/bono-cumpleanos/', api_bono_cumpleanos, name='api_bono_cumpleanos'),
+    # Vales de canje EN CAJA (sesión web). El único emisor era la app móvil del
+    # cliente, que tiene 0 instalaciones, y el validador que llamaba el POS
+    # exigía header X-Device-ID: por eso el programa lleva 787.000 puntos
+    # repartidos y CERO canjes. Estas dos rutas cierran ambos cortes.
+    path('api/fidelizacion/vale/generar/', api_generar_vale_canje, name='api_generar_vale_canje'),
+    path('api/fidelizacion/vale/<str:codigo>/', api_validar_vale_canje, name='api_validar_vale_canje'),
 
     # ========== MÓDULO DE GESTIÓN DE PERMISOS ==========
     # Vista principal de gestión de permisos
@@ -1451,16 +1514,16 @@ urlpatterns = [
     path('gestion-inventarios/api/inventarios/', views_gestion_inventarios.obtener_inventarios, name='api_obtener_inventarios'),
     path('gestion-inventarios/api/filtros/', views_gestion_inventarios.obtener_filtros_disponibles, name='api_filtros_inventarios'),
     
-    # APIs de creación
-    path('gestion-inventarios/api/crear/', views_gestion_inventarios.crear_inventario, name='api_crear_inventario'),
-    
-    # APIs de conteo
+    # APIs de creación (requiere puede_crear)
+    path('gestion-inventarios/api/crear/', _permiso_inventarios('puede_crear', views_gestion_inventarios.crear_inventario), name='api_crear_inventario'),
+
+    # APIs de conteo (escriben el conteo físico: requieren puede_editar)
     path('gestion-inventarios/api/productos-conteo/<int:inventario_id>/', views_gestion_inventarios.obtener_productos_conteo, name='api_productos_conteo'),
-    path('gestion-inventarios/api/registrar-conteo/<int:inventario_id>/', views_gestion_inventarios.registrar_conteo, name='api_registrar_conteo'),
-    path('gestion-inventarios/api/registrar-reconteo/<int:inventario_id>/', views_gestion_inventarios.registrar_reconteo, name='api_registrar_reconteo'),
-    path('gestion-inventarios/api/importar-conteo/<int:inventario_id>/', views_gestion_inventarios.importar_conteo_pistola, name='api_importar_conteo_pistola'),
-    path('gestion-inventarios/api/importar-conteo/preview/<int:inventario_id>/', views_gestion_inventarios.preview_conteo_pistola, name='api_preview_conteo_pistola'),
-    path('gestion-inventarios/api/excluir-detalle/<int:inventario_id>/<int:detalle_id>/', views_gestion_inventarios.actualizar_exclusion_detalle, name='api_excluir_detalle_inventario'),
+    path('gestion-inventarios/api/registrar-conteo/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.registrar_conteo), name='api_registrar_conteo'),
+    path('gestion-inventarios/api/registrar-reconteo/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.registrar_reconteo), name='api_registrar_reconteo'),
+    path('gestion-inventarios/api/importar-conteo/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.importar_conteo_pistola), name='api_importar_conteo_pistola'),
+    path('gestion-inventarios/api/importar-conteo/preview/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.preview_conteo_pistola), name='api_preview_conteo_pistola'),
+    path('gestion-inventarios/api/excluir-detalle/<int:inventario_id>/<int:detalle_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.actualizar_exclusion_detalle), name='api_excluir_detalle_inventario'),
     
     # APIs de análisis
     path('gestion-inventarios/api/analisis/<int:inventario_id>/', views_gestion_inventarios.obtener_analisis_inventario, name='api_analisis_inventario'),
@@ -1469,17 +1532,34 @@ urlpatterns = [
     path('gestion-inventarios/api/historial/<int:inventario_id>/', views_gestion_inventarios.obtener_historial_inventario, name='api_historial_inventario'),
     
     # APIs de flujo de aprobación
-    path('gestion-inventarios/api/finalizar-conteo/<int:inventario_id>/', views_gestion_inventarios.finalizar_conteo, name='api_finalizar_conteo'),
-    path('gestion-inventarios/api/enviar-aprobacion/<int:inventario_id>/', views_gestion_inventarios.enviar_aprobacion, name='api_enviar_aprobacion'),
-    path('gestion-inventarios/api/aprobar/<int:inventario_id>/', views_gestion_inventarios.aprobar_inventario, name='api_aprobar_inventario'),
-    path('gestion-inventarios/api/rechazar/<int:inventario_id>/', views_gestion_inventarios.rechazar_inventario, name='api_rechazar_inventario'),
-    
-    # APIs de aplicación de ajustes
-    path('gestion-inventarios/api/aplicar-ajustes/<int:inventario_id>/', views_gestion_inventarios.aplicar_ajustes_inventario, name='api_aplicar_ajustes'),
+    # finalizar/enviar-aprobación cierran el conteo -> puede_editar.
+    #
+    # aprobar/rechazar son la firma que habilita el ajuste. Se exige
+    # 'puede_editar' y NO 'puede_aprobar': en producción no hay una sola fila
+    # de PermisoSucursal con puede_aprobar=True (0 de 49, todas de NICK1), así
+    # que 'puede_aprobar' dejaba en 403 a los 8 administradores de esa sucursal
+    # y mataba el módulo entero ahí — sin poder aprobar, el inventario nunca
+    # llega a APROBADO y los ajustes tampoco se pueden aplicar. Ver el
+    # docstring de _permiso_inventarios (capa 3: sucursal).
+    path('gestion-inventarios/api/finalizar-conteo/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.finalizar_conteo), name='api_finalizar_conteo'),
+    path('gestion-inventarios/api/enviar-aprobacion/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.enviar_aprobacion), name='api_enviar_aprobacion'),
+    path('gestion-inventarios/api/aprobar/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.aprobar_inventario), name='api_aprobar_inventario'),
+    path('gestion-inventarios/api/rechazar/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.rechazar_inventario), name='api_rechazar_inventario'),
+
+    # APIs de aplicación de ajustes: esta es la que MUEVE STOCK y escribe
+    # kardex. Sigue exigiendo el mismo permiso que la aprobación, y el control
+    # fuerte NO se apoya solo en el permiso sino en la máquina de estados de la
+    # vista: aplicar_ajustes_inventario solo corre si el inventario está en
+    # APROBADO/APLICANDO, y aprobar_inventario solo pasa desde
+    # PENDIENTE_APROBACION con 0 líneas sin contar y 0 reconteos pendientes,
+    # dejando traza en aprobado_por + LogInventario. Con eso el módulo no queda
+    # abierto: quien solo tiene ver/exportar en su sucursal no puede aplicar.
+    path('gestion-inventarios/api/aplicar-ajustes/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.aplicar_ajustes_inventario), name='api_aplicar_ajustes'),
     path('gestion-inventarios/api/estado-ajustes/<int:inventario_id>/', views_gestion_inventarios.estado_tarea_ajustes, name='api_estado_tarea_ajustes'),
-    
-    # APIs de cancelación
-    path('gestion-inventarios/api/cancelar/<int:inventario_id>/', views_gestion_inventarios.cancelar_inventario, name='api_cancelar_inventario'),
+
+    # APIs de cancelación: quien puede crear/editar la toma puede abandonarla
+    # (no borra datos, solo deja el inventario en CANCELADO).
+    path('gestion-inventarios/api/cancelar/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.cancelar_inventario), name='api_cancelar_inventario'),
 
     # ========== MÓDULO DE IMPRESIÓN DE ETIQUETAS ZEBRA ==========
     # Vista principal
@@ -1552,5 +1632,6 @@ urlpatterns = [
     path('ecommerce/pedidos/exportar-csv/', views_ecommerce.exportar_pedidos_csv, name='exportar_pedidos_csv'),
     path('ecommerce/dashboard-asignacion/', views_ecommerce.ecommerce_dashboard_asignacion, name='ecommerce_dashboard_asignacion'),
     path('ecommerce/dte/<int:dte_id>/txt/', views_ecommerce.descargar_txt_dte_ecommerce, name='descargar_txt_dte_ecommerce'),
+    path('ecommerce/dte/txts-zip/', views_ecommerce.descargar_txts_zip_ecommerce, name='descargar_txts_zip_ecommerce'),
 
 ]

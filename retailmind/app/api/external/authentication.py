@@ -8,6 +8,8 @@ Soporta dos esquemas (ambos son equivalentes):
 La clave se configura en .env → RETAILMIND_API_KEY.
 """
 
+import hmac
+
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 
@@ -29,8 +31,10 @@ def _extract_key(request) -> str:
 class ApiKeyAuthentication(BaseAuthentication):
     def authenticate(self, request):
         key = _extract_key(request)
-        expected = getattr(settings, 'RETAILMIND_API_KEY', '')
-        if key and expected and key == expected:
+        expected = getattr(settings, 'RETAILMIND_API_KEY', '') or ''
+        # Falla cerrado (sin clave configurada no autentica a nadie) y compara
+        # en tiempo constante para no filtrar la clave por timing.
+        if key and expected and hmac.compare_digest(str(key), str(expected)):
             return (AnonymousUser(), key)
         return None
 

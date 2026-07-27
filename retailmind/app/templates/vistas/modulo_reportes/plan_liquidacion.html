@@ -94,6 +94,18 @@
             </div>
         </div>
 
+        <!-- Elegir una bodega/CD deja todo el reporte en ceros (las ventas se
+             miden solo en tiendas vendedoras). Sin este aviso parece que la
+             bodega no tiene capital inmovilizado. -->
+        <div id="pl-aviso-cd" style="display:none; margin:0 0 12px 0; padding:10px 14px; border-radius:8px;
+             background:rgba(255,176,32,.12); border:1px solid #FFB020; color:#7a5200; font-size:.82rem;">
+            <i class="ri-error-warning-line"></i>
+            <b>Seleccionaste una bodega / centro de distribución.</b>
+            Las ventas, la rotación, la cobertura y el GMROI se miden solo en tiendas vendedoras,
+            así que en este alcance salen en cero y la acción sugerida será siempre “Traspasar”.
+            Para decidir qué sacar de bodega, mira el stock y su antigüedad, no los indicadores de rotación.
+        </div>
+
         <div id="pl-loading" class="pl-loading"><div class="spinner-border text-primary"></div><p style="margin-top:12px;">Calculando capital inmovilizado…</p></div>
         <div id="pl-results" style="display:none;"></div>
 
@@ -224,7 +236,7 @@ function cargarPlan() {
 function poblarFiltros(op) {
     const suc = document.getElementById('f-sucursal');
     op.sucursales.forEach(s => { suc.insertAdjacentHTML('beforeend',
-        `<option value="${s.id}">${esc(s.alias)}${s.es_cd ? ' (CD)' : ''}</option>`); });
+        `<option value="${s.id}" data-cd="${s.es_cd ? '1' : '0'}">${esc(s.alias)}${s.es_cd ? ' (CD)' : ''}</option>`); });
     const mar = document.getElementById('f-marca');
     op.marcas.forEach(m => { mar.insertAdjacentHTML('beforeend', `<option value="${m.id}">${esc(m.valor)}</option>`); });
     const cat = document.getElementById('f-categoria');
@@ -234,8 +246,17 @@ function poblarFiltros(op) {
     op.especialidades.forEach(e2 => { espSel.insertAdjacentHTML('beforeend', `<option value="${e2.id}">${esc(e2.valor)}</option>`); });
 }
 
+function avisoBodegaSeleccionada() {
+    const sel = document.getElementById('f-sucursal');
+    const op = sel.options[sel.selectedIndex];
+    const esCD = !!(op && op.dataset && op.dataset.cd === '1');
+    const box = document.getElementById('pl-aviso-cd');
+    if (box) box.style.display = esCD ? 'block' : 'none';
+}
+
 function cambiarFiltro() {
     PL_F.sucursal_id = document.getElementById('f-sucursal').value;
+    avisoBodegaSeleccionada();
     PL_F.marca_id = document.getElementById('f-marca').value;
     PL_F.categoria_id = document.getElementById('f-categoria').value;
     PL_F.especialidad_id = document.getElementById('f-especialidad').value;
@@ -309,7 +330,7 @@ function renderPlan(d) {
                     ${cd ? '<th onclick="sortBy(\'stock_cd\')">Stock CD</th>' : ''}
                     <th onclick="sortBy('valor_costo')">Valor $ costo</th>
                     ${cd ? '<th onclick="sortBy(\'valor_cd\')">Valor $ CD</th>' : ''}
-                    <th onclick="sortBy('gmroi')">GMROI</th>
+                    <th onclick="sortBy('gmroi')" title="Calculado con precio de venta y costo de LISTA del kardex, no con lo efectivamente cobrado ni el costo FIFO. Sirve para ordenar/comparar, no como rentabilidad real.">GMROI*</th>
                     <th onclick="sortBy('rotacion')">Rotación</th>
                     <th onclick="sortBy('cobertura')">Cob. (m)</th>
                     <th onclick="sortBy('dead_costo')">Inmovil. $</th>
@@ -319,7 +340,17 @@ function renderPlan(d) {
                 <tbody id="pl-tbody"></tbody>
             </table>
         </div>
-        <div class="pl-note" style="margin-top:8px;">Click en una fila filtra el reporte y el detalle por esa dimensión. Ventas, rotación y GMROI consideran SOLO tiendas vendedoras; el stock CD se muestra aparte.</div>
+        <div class="pl-note" style="margin-top:8px;">
+            Click en una fila filtra el reporte y el detalle por esa dimensión. Ventas, rotación y GMROI consideran SOLO tiendas vendedoras; el stock CD se muestra aparte.
+            <br>
+            <span style="color:#8a6d00;">
+                <i class="ri-error-warning-line"></i>
+                <b>*GMROI y margen son a precio y costo de lista</b> (así se graban en el kardex):
+                no descuentan campañas ni usan el costo FIFO, así que quedan optimistas.
+                Las ventas también son <b>brutas</b>: no se restan devoluciones ni notas de crédito,
+                de modo que rotación y cobertura salen algo mejor de lo real.
+            </span>
+        </div>
     </div>`;
     document.getElementById('pl-results').innerHTML = html;
     renderTable();

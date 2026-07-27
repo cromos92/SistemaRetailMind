@@ -19,7 +19,7 @@ Uso (ejemplos):
         --sucursal PAO4 --tipo "BOLETA ELECTRONICA" \
         --folio-desde 355001 --folio-hasta 355001
 
-    # El bloque de folios reusados por PAO4 (355001-355368) en un ZIP
+    # Un bloque de folios acotado, empaquetado en un ZIP
     python manage.py generar_txt_acepta_batch \
         --sucursal PAO4 --folio-desde 355001 --folio-hasta 355368 --zip
 
@@ -47,9 +47,12 @@ logger = logging.getLogger('app')
 # generar_txt_desde_dte_existente rechaza 'BOLETA PAPEL').
 TIPOS_SIN_TXT = {'BOLETA PAPEL'}
 
-# Rango del error conocido: PAO4 reusó folios que PAO3 ya emitió bajo el mismo
-# RUT (78503140-7). Se usa solo para destacar en el resumen, no filtra nada.
-BLOQUE_ERROR_PAO4 = (355001, 355368)
+# Rango de folios afectados por el incidente de reemisión conocido de esta
+# instalación: dos sucursales que comparten RUT emitieron el mismo bloque de
+# boletas, porque cada ficha de `Empresa` corre su propio correlativo y el SII
+# solo ve el RUT. Se usa para DESTACARLO en el resumen; no filtra nada.
+# Configurable por si aparece otro bloque.
+BLOQUE_FOLIOS_REEMITIDOS = (355001, 355368)
 
 
 class Command(BaseCommand):
@@ -435,7 +438,7 @@ class Command(BaseCommand):
         con_error = 0
         errores = []
         en_bloque_error = 0
-        lo, hi = BLOQUE_ERROR_PAO4
+        lo, hi = BLOQUE_FOLIOS_REEMITIDOS
 
         zipf = None
         if not self.dry_run:
@@ -550,7 +553,7 @@ class Command(BaseCommand):
                 ))
 
         if en_bloque_error:
-            lo, hi = BLOQUE_ERROR_PAO4
+            lo, hi = BLOQUE_FOLIOS_REEMITIDOS
             self.stdout.write('')
             self.stdout.write(self.style.WARNING(
                 f'  [!] {en_bloque_error} de estos DTEs caen en el bloque de '

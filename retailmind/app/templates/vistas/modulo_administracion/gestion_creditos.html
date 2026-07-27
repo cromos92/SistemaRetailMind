@@ -663,6 +663,46 @@
     .nexo-info-box { padding: 1rem; }
 }
 
+/* ===== CARTERA POR COBRAR ===== */
+.cartera-kpi {
+    background: var(--nexo-bg-primary);
+    border: 1px solid var(--nexo-border-light);
+    border-left: 4px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 0.75rem 0.875rem;
+    height: 100%;
+}
+.cartera-kpi.is-deuda   { border-left-color: var(--nexo-primary); }
+.cartera-kpi.is-vencida { border-left-color: var(--nexo-error); }
+.cartera-kpi.is-vigente { border-left-color: var(--nexo-success); }
+.cartera-kpi.is-cupo    { border-left-color: var(--nexo-warning); }
+.cartera-kpi .lbl {
+    font-size: 0.688rem; text-transform: uppercase; letter-spacing: .3px;
+    color: var(--nexo-text-muted); font-weight: 600; margin: 0;
+}
+.cartera-kpi .val { font-size: 1.35rem; font-weight: 700; color: var(--nexo-text-primary); line-height: 1.2; }
+.cartera-kpi .val.rojo { color: var(--nexo-error); }
+.cartera-kpi .sub { font-size: 0.72rem; color: var(--nexo-text-muted); }
+.tabla-antiguedad { width: 100%; font-size: 0.78rem; }
+.tabla-antiguedad th {
+    font-size: 0.688rem; text-transform: uppercase; color: var(--nexo-text-muted);
+    font-weight: 600; border-bottom: 1px solid var(--nexo-border-light); padding: 0.35rem 0.4rem;
+}
+.tabla-antiguedad td { padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--nexo-gray-100); }
+.tabla-antiguedad tr.mora td { color: var(--nexo-error); }
+.antiguedad-bar { height: 6px; border-radius: 3px; background: var(--nexo-gray-100); overflow: hidden; min-width: 60px; }
+.antiguedad-bar span { display: block; height: 100%; background: var(--nexo-error); }
+.antiguedad-bar.ok span { background: var(--nexo-success); }
+.cartera-nota {
+    font-size: 0.72rem; color: var(--nexo-text-muted);
+    background: var(--nexo-gray-100); border-radius: var(--nexo-radius-sm);
+    padding: 0.5rem 0.65rem; margin-top: 0.5rem;
+}
+.alerta-sin-respaldo {
+    border: 1px solid var(--nexo-error); background: rgba(255, 77, 77, 0.07);
+    border-radius: var(--nexo-radius-md); padding: 0.65rem 0.85rem; font-size: 0.8rem;
+}
+
 /* ========== RESPONSIVE - Small Mobile ========== */
 @media (max-width: 576px) {
     .creditos-kpi-grid { grid-template-columns: 1fr !important; }
@@ -704,6 +744,119 @@
             </div>
         </div>
 
+        <!-- ============================================================
+             CARTERA POR COBRAR — foto al día de hoy.
+             NO depende del filtro de fechas de más abajo: una deuda de 2022
+             sigue siendo deuda hoy. Es lo primero que necesita ver quien entra.
+             ============================================================ -->
+        <div class="nexo-card mb-4">
+            <div class="card-header nexo-card-header">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h5 class="nexo-card-title mb-0">
+                            <i class="ri-hand-coin-line" style="color: var(--nexo-primary);"></i>
+                            Cartera por cobrar
+                            <small class="ms-2" style="color: var(--nexo-text-muted); font-weight: 400;">
+                                al <span id="cartera-fecha-corte">-</span> · no depende del filtro de fechas
+                            </small>
+                        </h5>
+                    </div>
+                    <div class="col-auto">
+                        <button type="button" class="nexo-btn-error" id="btn-ver-vencidos">
+                            <i class="ri-alarm-warning-line"></i> Ver vencidos
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="cartera-loading" class="text-center py-3">
+                    <div class="spinner-border spinner-border-sm nexo-spinner" role="status"></div>
+                    <span class="ms-2" style="color: var(--nexo-text-muted);">Calculando cartera...</span>
+                </div>
+
+                <div id="cartera-contenido" style="display: none;">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-3 col-6">
+                            <div class="cartera-kpi is-deuda">
+                                <p class="lbl">Deuda total por cobrar</p>
+                                <div class="val" id="cartera-deuda-total">$0</div>
+                                <div class="sub"><span id="cartera-deudores">0</span> deudores · <span id="cartera-documentos">0</span> documentos</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="cartera-kpi is-vencida">
+                                <p class="lbl">Vencida</p>
+                                <div class="val rojo" id="cartera-deuda-vencida">$0</div>
+                                <div class="sub"><span id="cartera-pct-vencido">0</span>% de la cartera · <span id="cartera-n-vencidos">0</span> documentos</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="cartera-kpi is-vigente">
+                                <p class="lbl">Vigente (por vencer)</p>
+                                <div class="val" id="cartera-por-vencer">$0</div>
+                                <div class="sub">Aún dentro de plazo</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="cartera-kpi is-cupo">
+                                <p class="lbl">Cupo aprobado sin usar</p>
+                                <div class="val" id="cartera-cupo-disponible">$0</div>
+                                <div class="sub">Compromiso futuro, todavía no es deuda</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-lg-6">
+                            <h6 class="mb-2" style="font-size: 0.8rem; color: var(--nexo-text-secondary); font-weight: 600;">
+                                <i class="ri-time-line"></i> Antigüedad de la deuda
+                            </h6>
+                            <table class="tabla-antiguedad">
+                                <thead>
+                                    <tr>
+                                        <th>Tramo</th>
+                                        <th class="text-end">Docs</th>
+                                        <th class="text-end">Monto</th>
+                                        <th style="width: 28%;">%</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cartera-antiguedad"></tbody>
+                            </table>
+                        </div>
+                        <div class="col-lg-6">
+                            <h6 class="mb-2" style="font-size: 0.8rem; color: var(--nexo-text-secondary); font-weight: 600;">
+                                <i class="ri-user-star-line"></i> Deudores con mayor saldo
+                            </h6>
+                            <div style="max-height: 230px; overflow-y: auto;">
+                                <table class="tabla-antiguedad">
+                                    <thead>
+                                        <tr>
+                                            <th>Beneficiario</th>
+                                            <th class="text-end">Docs</th>
+                                            <th class="text-end">Deuda</th>
+                                            <th class="text-end">Mora</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="cartera-top-deudores"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="cartera-alerta-sin-respaldo" class="alerta-sin-respaldo mt-3" style="display: none;"></div>
+
+                    <div class="cartera-nota">
+                        <strong>Cómo se calcula:</strong>
+                        en los créditos creados en este ERP (CR-…) la deuda es lo efectivamente
+                        <em>consumido en el POS</em>, no el cupo aprobado;
+                        en los créditos importados del sistema anterior (CP-INT / CP-EXT) el monto ya es mercadería
+                        retirada, así que la deuda es el monto completo menos los abonos registrados.
+                        <span id="cartera-desglose"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Estadísticas Rápidas - NEXO Style -->
         <div class="row g-3 mb-4">
             <div class="col-md-3">
@@ -716,7 +869,7 @@
                         </div>
                         </div>
                             <div class="flex-grow-1 ms-3">
-                                <p class="nexo-stat-label">Total Créditos</p>
+                                <p class="nexo-stat-label">Créditos emitidos <span id="etiqueta-periodo-1">(período)</span></p>
                                 <h4 class="nexo-stat-value" id="total-creditos">0</h4>
                                 <span class="nexo-stat-subtext" style="color: var(--nexo-success);" id="creditos-activos">0 activos</span>
                     </div>
@@ -734,7 +887,7 @@
                         </div>
                         </div>
                             <div class="flex-grow-1 ms-3">
-                                <p class="nexo-stat-label">Monto Total Aprobado</p>
+                                <p class="nexo-stat-label">Cupo aprobado (período)</p>
                                 <h4 class="nexo-stat-value" id="monto-aprobado">$0</h4>
                                 <span class="nexo-stat-subtext" style="color: var(--nexo-info);" id="total-monto-solicitado">$0 solicitado</span>
                     </div>
@@ -752,9 +905,9 @@
                         </div>
                         </div>
                             <div class="flex-grow-1 ms-3">
-                                <p class="nexo-stat-label">Monto Pagado</p>
+                                <p class="nexo-stat-label" title="El POS registra el consumo del crédito como si fuera un 'pago'. Es mercadería retirada, no dinero recibido.">Consumido en POS (período)</p>
                                 <h4 class="nexo-stat-value" id="monto-pagado">$0</h4>
-                                <span class="nexo-stat-subtext" style="color: var(--nexo-warning);" id="saldo-pendiente">$0 pendiente</span>
+                                <span class="nexo-stat-subtext" style="color: var(--nexo-warning);" id="saldo-pendiente">$0 cupo sin usar</span>
                     </div>
                 </div>
             </div>
@@ -770,7 +923,7 @@
                         </div>
                             </div>
                             <div class="flex-grow-1 ms-3">
-                                <p class="nexo-stat-label">Créditos Vencidos</p>
+                                <p class="nexo-stat-label">Vencidos (del período)</p>
                                 <h4 class="nexo-stat-value" style="color: var(--nexo-error);" id="creditos-vencidos">0</h4>
                                 <span class="nexo-stat-subtext" style="color: var(--nexo-error);" id="monto-vencido">$0</span>
                         </div>
@@ -885,7 +1038,7 @@
             </div>
 
         <!-- Lista de Créditos - NEXO Style -->
-        <div class="nexo-card">
+        <div class="nexo-card" id="tarjeta-lista-creditos">
             <div class="card-header nexo-card-header">
                 <div class="row align-items-center">
                     <div class="col">
@@ -1222,9 +1375,11 @@
                     <input type="hidden" id="pago-credito-id">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="nexo-form-label">Monto del Pago <span style="color: var(--nexo-error);">*</span></label>
+                            <label class="nexo-form-label">Monto del Cobro <span style="color: var(--nexo-error);">*</span></label>
                             <input type="number" class="form-control nexo-input" id="pago-monto" min="1" step="1" required>
-                            <small style="color: var(--nexo-text-muted);">Saldo pendiente: $<span id="pago-saldo-pendiente">0</span></small>
+                            <small style="color: var(--nexo-text-muted);">
+                                Crédito <span id="pago-credito-numero"></span> · Deuda por cobrar: $<span id="pago-deuda">0</span>
+                            </small>
                         </div>
                         <div class="col-md-6">
                             <label class="nexo-form-label">Fecha del Pago <span style="color: var(--nexo-error);">*</span></label>
@@ -1573,6 +1728,29 @@ $(document).ready(function() {
     $('#btn-limpiar').click(function() {
         limpiarFiltros();
     });
+
+    // Atajo: mostrar toda la cartera vencida (sin filtro de fechas)
+    $('#btn-ver-vencidos').click(function() {
+        limpiarCampoFecha('#fecha-inicio');
+        limpiarCampoFecha('#fecha-fin');
+        $('#filtro-estado').val('VENCIDO');
+        currentPage = 1;
+        loadCreditos();
+        loadEstadisticas();
+        const destino = $('#tarjeta-lista-creditos');
+        if (destino.length) {
+            $('html, body').animate({ scrollTop: destino.offset().top - 80 }, 300);
+        }
+    });
+
+    // flatpickr guarda su propio estado: limpiar solo el value del input no basta
+    function limpiarCampoFecha(selector) {
+        const el = $(selector)[0];
+        if (el && el._flatpickr) {
+            el._flatpickr.clear();
+        }
+        $(selector).val('');
+    }
     
     $('#btn-exportar').click(function() {
         exportarCreditos();
@@ -2170,19 +2348,113 @@ $(document).ready(function() {
                     $('#monto-aprobado').text(formatCurrency(resumen.total_monto_aprobado));
                     $('#total-monto-solicitado').text(`${formatCurrency(resumen.total_monto_solicitado)} solicitado`);
                     $('#monto-pagado').text(formatCurrency(resumen.total_monto_pagado));
-                    $('#saldo-pendiente').text(`${formatCurrency(resumen.saldo_pendiente_total)} pendiente`);
+                    $('#saldo-pendiente').text(`${formatCurrency(resumen.saldo_pendiente_total)} cupo sin usar`);
                     $('#creditos-vencidos').text(response.reporte.creditos_vencidos.length);
-                    
+
                     let montoVencido = 0;
                     response.reporte.creditos_vencidos.forEach(function(credito) {
                         montoVencido += credito.monto_pendiente;
                     });
                     $('#monto-vencido').text(formatCurrency(montoVencido));
+
+                    renderCartera(response.reporte.cartera, response.reporte.sin_respaldo);
                 }
             })
             .fail(function() {
                 console.error('Error al cargar estadísticas');
+                $('#cartera-loading').html('<span style="color: var(--nexo-error);">No se pudo calcular la cartera</span>');
             });
+    }
+
+    // ============ CARTERA POR COBRAR ============
+    // Se alimenta del mismo endpoint de estadísticas, pero el backend la calcula
+    // sobre TODO el universo de créditos (ignora el filtro de fechas).
+    function renderCartera(cartera, sinRespaldo) {
+        if (!cartera) return;
+
+        $('#cartera-fecha-corte').text(cartera.fecha_corte || '-');
+        $('#cartera-deuda-total').text(formatCurrency(cartera.deuda_total));
+        $('#cartera-deudores').text(cartera.deudores);
+        $('#cartera-documentos').text(cartera.documentos_con_deuda);
+        $('#cartera-deuda-vencida').text(formatCurrency(cartera.deuda_vencida));
+        $('#cartera-pct-vencido').text(cartera.porcentaje_vencido);
+        $('#cartera-n-vencidos').text(cartera.total_vencidos);
+        $('#cartera-por-vencer').text(formatCurrency(cartera.deuda_por_vencer));
+        $('#cartera-cupo-disponible').text(formatCurrency(cartera.cupo_disponible_sin_usar));
+
+        const total = cartera.deuda_total || 1;
+        let filas = '';
+        (cartera.antiguedad || []).forEach(function(b) {
+            const pct = Math.round((b.monto / total) * 1000) / 10;
+            const esMora = b.clave !== 'por_vencer';
+            filas += `
+                <tr class="${esMora && b.monto > 0 ? 'mora' : ''}">
+                    <td>${b.label}</td>
+                    <td class="text-end">${b.n}</td>
+                    <td class="text-end fw-semibold">${formatCurrency(b.monto)}</td>
+                    <td>
+                        <div class="antiguedad-bar ${esMora ? '' : 'ok'}" title="${pct}%">
+                            <span style="width: ${Math.min(pct, 100)}%;"></span>
+                        </div>
+                    </td>
+                </tr>`;
+        });
+        $('#cartera-antiguedad').html(filas || '<tr><td colspan="4" class="text-muted">Sin deuda registrada</td></tr>');
+
+        let deudores = '';
+        (cartera.top_deudores || []).forEach(function(d) {
+            deudores += `
+                <tr>
+                    <td>
+                        <div class="fw-semibold">${escapeHtml(d.nombre)}</div>
+                        <div style="color: var(--nexo-text-muted); font-size: 0.7rem;">${escapeHtml(d.rut || 's/RUT')}</div>
+                    </td>
+                    <td class="text-end">${d.documentos}</td>
+                    <td class="text-end fw-semibold">${formatCurrency(d.deuda)}</td>
+                    <td class="text-end" style="color: ${d.dias_mora_max > 0 ? 'var(--nexo-error)' : 'var(--nexo-text-muted)'};">
+                        ${d.dias_mora_max > 0 ? d.dias_mora_max + 'd' : '-'}
+                    </td>
+                </tr>`;
+        });
+        $('#cartera-top-deudores').html(deudores || '<tr><td colspan="4" class="text-muted">Sin deudores</td></tr>');
+
+        let desglose = ` Hoy: ${formatCurrency(cartera.deuda_importada)} vienen de créditos importados y `
+            + `${formatCurrency(cartera.deuda_erp)} de consumo en el POS. `
+            + `Abonos/pagos registrados en el módulo: ${formatCurrency(cartera.abonos_registrados)}.`;
+        if (cartera.abonos_registrados === 0 && cartera.deuda_total > 0) {
+            desglose += ' <strong style="color: var(--nexo-error);">Nunca se ha registrado un abono: la cobranza no se está anotando aquí.</strong>';
+        }
+        $('#cartera-desglose').html(desglose);
+
+        const alerta = $('#cartera-alerta-sin-respaldo');
+        if (sinRespaldo && sinRespaldo.cantidad > 0) {
+            let detalle = (sinRespaldo.detalle || []).slice(0, 8).map(function(v) {
+                return `<li>${v.fecha} · ${v.sucursal} · boleta/ticket ${v.correlativo} · ${escapeHtml(v.cliente || v.metodo)} · <strong>${formatCurrency(v.monto)}</strong></li>`;
+            }).join('');
+            alerta.html(`
+                <div style="color: var(--nexo-error); font-weight: 600;">
+                    <i class="ri-error-warning-line"></i>
+                    ${sinRespaldo.cantidad} venta(s) cobradas con crédito por ${formatCurrency(sinRespaldo.monto)} NO tienen crédito asociado en este módulo
+                </div>
+                <div style="color: var(--nexo-text-secondary); margin-top: 0.25rem;">
+                    El POS aceptó el pago como crédito pero no se descontó ningún cupo, así que esa deuda no aparece en la cartera de arriba.
+                </div>
+                <ul style="margin: 0.4rem 0 0 1rem; padding: 0;">${detalle}</ul>
+            `);
+            alerta.show();
+        } else {
+            alerta.hide();
+        }
+
+        $('#cartera-loading').hide();
+        $('#cartera-contenido').show();
+    }
+
+    function escapeHtml(text) {
+        if (text === null || text === undefined) return '';
+        return String(text)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     }
     
     function loadCreditos() {
@@ -2251,9 +2523,11 @@ $(document).ready(function() {
                                 <th>Beneficiario</th>
                                 <th>Sucursal</th>
                                 <th>Fecha</th>
-                                <th>Monto</th>
-                                <th>Pagado</th>
-                                <th>Saldo</th>
+                                <th>Vencimiento</th>
+                                <th class="text-end">Cupo / Monto</th>
+                                <th class="text-end" title="Consumido en el POS con este crédito">Consumido</th>
+                                <th class="text-end" title="Cupo aprobado que aún no se usa (NO es deuda)">Cupo sin usar</th>
+                                <th class="text-end" title="Lo que realmente se debe hoy">Deuda</th>
                                 <th>Estado</th>
                                 <th class="text-end">Acciones</th>
                             </tr>
@@ -2292,10 +2566,22 @@ $(document).ready(function() {
                     <div>${credito.fecha_solicitud}</div>
                     <div class="text-muted small">${fechaMes}</div>
                 </td>
-                <td>${formatCurrency(montoBase)}</td>
-                <td>${formatCurrency(credito.monto_pagado)}</td>
-                <td>${formatCurrency(credito.saldo_pendiente)}</td>
-                <td><span class="nexo-badge nexo-badge-${estadoClass}">${credito.estado_display}</span></td>
+                <td>
+                    <div>${credito.fecha_vencimiento || '-'}</div>
+                    ${credito.dias_vencido > 0
+                        ? `<div class="small" style="color: var(--nexo-error); font-weight: 600;">Vencido hace ${credito.dias_vencido} d</div>`
+                        : `<div class="text-muted small">Vigente</div>`}
+                </td>
+                <td class="text-end">${formatCurrency(montoBase)}</td>
+                <td class="text-end">${formatCurrency(credito.consumo_pos !== undefined ? credito.consumo_pos : credito.monto_pagado)}</td>
+                <td class="text-end text-muted">${formatCurrency(Math.max(credito.saldo_pendiente, 0))}</td>
+                <td class="text-end fw-semibold" style="color: ${credito.deuda > 0 ? 'var(--nexo-error)' : 'var(--nexo-text-muted)'};">
+                    ${formatCurrency(credito.deuda !== undefined ? credito.deuda : 0)}
+                </td>
+                <td>
+                    <span class="nexo-badge nexo-badge-${estadoClass}">${credito.estado_display}</span>
+                    ${credito.es_legacy ? '<div class="text-muted small" title="Importado del sistema anterior: el monto ya es mercadería retirada">Importado</div>' : ''}
+                </td>
                 <td class="text-end">
                     <div class="dropdown">
                         <button class="btn btn-light btn-sm" type="button" data-bs-toggle="dropdown" style="border-radius: var(--nexo-radius-md);">
@@ -2327,9 +2613,9 @@ $(document).ready(function() {
                                     <i class="ri-play-line me-2"></i>Activar
                                 </a></li>
                             ` : ''}
-                            ${(credito.estado === 'ACTIVO' || credito.estado === 'APROBADO') && credito.saldo_pendiente > 0 ? `
+                            ${credito.deuda > 0 ? `
                                 <li><a class="dropdown-item text-warning" href="#" onclick="registrarPagoModal(${credito.id})">
-                                    <i class="ri-money-dollar-circle-line me-2"></i>Registrar Pago
+                                    <i class="ri-money-dollar-circle-line me-2"></i>Registrar Cobro
                                 </a></li>
                             ` : ''}
                         </ul>
@@ -2500,11 +2786,18 @@ $(document).ready(function() {
     window.registrarPagoModal = function(creditoId) {
         const credito = creditosData.find(c => c.id === creditoId);
         if (!credito) return;
-        
-        $('#pago-credito-id').val(creditoId);
-        $('#pago-saldo-pendiente').text(formatNumber(credito.saldo_pendiente));
-        $('#pago-monto').attr('max', credito.saldo_pendiente);
+
+        // OJO: el reset() va PRIMERO. El input oculto #pago-credito-id vive
+        // dentro de #form-pago y no tiene atributo value, así que un reset()
+        // posterior lo dejaba vacío y el registro de cobro fallaba siempre
+        // con "Crédito, monto y fecha de pago son requeridos".
         $('#form-pago')[0].reset();
+
+        const deuda = credito.deuda !== undefined ? credito.deuda : credito.saldo_pendiente;
+        $('#pago-credito-id').val(creditoId);
+        $('#pago-deuda').text(formatNumber(deuda));
+        $('#pago-monto').attr('max', deuda);
+        $('#pago-credito-numero').text(credito.numero_credito || '');
         $('#pago-fecha').val(new Date().toLocaleDateString('es-CL'));
         $('#modal-pago').modal('show');
     };
@@ -2956,7 +3249,7 @@ $(document).ready(function() {
             return;
         }
 
-        // Reporte resumido (8 columnas)
+        // Reporte resumido + columnas de cobranza
         const headers = [
             'N° Crédito',
             'Beneficiario',
@@ -2965,7 +3258,15 @@ $(document).ready(function() {
             'Monto Usado',
             'Mes Solicitud',
             'Sucursal Uso Ticket',
-            'Número Boleta'
+            'Número Boleta',
+            'Cupo Aprobado',
+            'Consumido POS',
+            'Abonos',
+            'Deuda',
+            'Vencimiento',
+            'Días Vencido',
+            'Estado',
+            'Origen'
         ];
 
         // Crear contenido CSV con BOM para UTF-8
@@ -3001,7 +3302,15 @@ $(document).ready(function() {
                 c.monto_pagado || 0,
                 formatMonthLabel(c.fecha_solicitud),
                 sucursalUso,
-                numeroBoleta
+                numeroBoleta,
+                c.monto_aprobado || c.monto_solicitado || 0,
+                c.consumo_pos !== undefined ? c.consumo_pos : 0,
+                c.abonos_reales !== undefined ? c.abonos_reales : 0,
+                c.deuda !== undefined ? c.deuda : 0,
+                c.fecha_vencimiento || '',
+                c.dias_vencido || 0,
+                c.estado_display || '',
+                c.origen_registro || ''
             ];
             // Escapar comillas y wrap en comillas si hay punto y coma
             csvRows.push(row.map(field => {
@@ -3095,7 +3404,9 @@ $(document).ready(function() {
         const totalCreditos = creditos.length;
         const totalMontoAprobado = creditos.reduce((sum, c) => sum + (c.monto_aprobado || 0), 0);
         const totalMontoPagado = creditos.reduce((sum, c) => sum + c.monto_pagado, 0);
-        const totalSaldoPendiente = creditos.reduce((sum, c) => sum + c.saldo_pendiente, 0);
+        // "Deuda", no "saldo": en los créditos del ERP el saldo es el cupo que
+        // todavía no se usó, que no se le debe a nadie.
+        const totalSaldoPendiente = creditos.reduce((sum, c) => sum + (c.deuda !== undefined ? c.deuda : 0), 0);
         
         // Por estado
         const porEstado = {};
@@ -3136,20 +3447,20 @@ $(document).ready(function() {
                 </div>
                 <div class="col-md-3">
                     <div class="p-3 rounded" style="background: var(--nexo-bg-secondary);">
-                        <p class="mb-1" style="color: var(--nexo-text-muted); font-size: 12px; text-transform: uppercase;">Monto Aprobado</p>
+                        <p class="mb-1" style="color: var(--nexo-text-muted); font-size: 12px; text-transform: uppercase;">Cupo Aprobado</p>
                         <h4 style="color: var(--nexo-success); font-weight: 700;">${formatCurrency(totalMontoAprobado)}</h4>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="p-3 rounded" style="background: var(--nexo-bg-secondary);">
-                        <p class="mb-1" style="color: var(--nexo-text-muted); font-size: 12px; text-transform: uppercase;">Monto Pagado</p>
+                        <p class="mb-1" style="color: var(--nexo-text-muted); font-size: 12px; text-transform: uppercase;">Consumido en POS</p>
                         <h4 style="color: var(--nexo-info); font-weight: 700;">${formatCurrency(totalMontoPagado)}</h4>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="p-3 rounded" style="background: var(--nexo-bg-secondary);">
-                        <p class="mb-1" style="color: var(--nexo-text-muted); font-size: 12px; text-transform: uppercase;">Saldo Pendiente</p>
-                        <h4 style="color: var(--nexo-warning); font-weight: 700;">${formatCurrency(totalSaldoPendiente)}</h4>
+                        <p class="mb-1" style="color: var(--nexo-text-muted); font-size: 12px; text-transform: uppercase;">Deuda por cobrar</p>
+                        <h4 style="color: var(--nexo-error); font-weight: 700;">${formatCurrency(totalSaldoPendiente)}</h4>
                     </div>
                 </div>
             </div>
@@ -3221,7 +3532,7 @@ $(document).ready(function() {
                                 <tr>
                                     <th style="font-size: 11px; color: var(--nexo-error);">Número</th>
                                     <th style="font-size: 11px; color: var(--nexo-error);">Beneficiario</th>
-                                    <th style="font-size: 11px; color: var(--nexo-error);">Saldo</th>
+                                    <th style="font-size: 11px; color: var(--nexo-error);">Deuda</th>
                                     <th style="font-size: 11px; color: var(--nexo-error);">Vencimiento</th>
                                     <th style="font-size: 11px; color: var(--nexo-error);">Días</th>
                                 </tr>
@@ -3231,7 +3542,7 @@ $(document).ready(function() {
                                     <tr>
                                         <td style="color: var(--nexo-primary); font-weight: 500;">${c.numero_credito}</td>
                                         <td>${c.trabajador.nombre}</td>
-                                        <td style="color: var(--nexo-error); font-weight: 500;">${formatCurrency(c.saldo_pendiente)}</td>
+                                        <td style="color: var(--nexo-error); font-weight: 500;">${formatCurrency(c.deuda !== undefined ? c.deuda : 0)}</td>
                                         <td>${c.fecha_vencimiento}</td>
                                         <td><span class="nexo-badge nexo-badge-error">${Math.abs(c.dias_para_vencimiento)} días</span></td>
                                     </tr>
@@ -3366,12 +3677,14 @@ $(document).ready(function() {
                                 <span class="nexo-badge nexo-badge-${credito.estado.toLowerCase()} mt-2">${credito.estado_display}</span>
                             </div>
                             <div class="col-md-4 text-center border-end">
-                                <p class="mb-1" style="color: var(--nexo-text-muted); font-size: 12px;">MONTO APROBADO</p>
+                                <p class="mb-1" style="color: var(--nexo-text-muted); font-size: 12px;">CUPO APROBADO</p>
                                 <h3 style="color: var(--nexo-success); font-weight: 700; margin: 0;">${formatCurrency(credito.monto_aprobado || credito.monto_solicitado)}</h3>
+                                <small style="color: var(--nexo-text-muted);">Consumido: ${formatCurrency(credito.consumo_pos || 0)} · Sin usar: ${formatCurrency(Math.max(credito.saldo_pendiente, 0))}</small>
                             </div>
                             <div class="col-md-4 text-center">
-                                <p class="mb-1" style="color: var(--nexo-text-muted); font-size: 12px;">SALDO PENDIENTE</p>
-                                <h3 style="color: var(--nexo-error); font-weight: 700; margin: 0;">${formatCurrency(credito.saldo_pendiente)}</h3>
+                                <p class="mb-1" style="color: var(--nexo-text-muted); font-size: 12px;">DEUDA POR COBRAR</p>
+                                <h3 style="color: var(--nexo-error); font-weight: 700; margin: 0;">${formatCurrency(credito.deuda !== undefined ? credito.deuda : 0)}</h3>
+                                <small style="color: var(--nexo-text-muted);">Abonos: ${formatCurrency(credito.abonos_reales || 0)}${credito.es_legacy ? ' · Importado' : ''}</small>
                             </div>
                         </div>
                         <div class="mt-3">
@@ -3523,10 +3836,10 @@ $(document).ready(function() {
             `;
         }
         
-        if ((credito.estado === 'ACTIVO' || credito.estado === 'APROBADO') && credito.saldo_pendiente > 0) {
+        if (credito.deuda > 0) {
             footerHtml += `
                 <button type="button" class="nexo-btn-success" onclick="$('#modal-detalle-credito').modal('hide'); registrarPagoModal(${credito.id});">
-                    <i class="ri-money-dollar-circle-line me-1"></i> Registrar Pago
+                    <i class="ri-money-dollar-circle-line me-1"></i> Registrar Cobro
                 </button>
             `;
         }

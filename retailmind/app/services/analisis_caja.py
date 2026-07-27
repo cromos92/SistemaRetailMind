@@ -3,7 +3,11 @@ Servicio de detección de patrones sospechosos en arqueos de caja.
 Solo visible para supervisores (administrador/administración).
 """
 from datetime import timedelta, date
-from django.db.models import Count, Sum, Avg, Q
+from django.db.models import (
+    Count, Sum, Avg, Q, F, Case, When, Value,
+    IntegerField, DateTimeField, ExpressionWrapper,
+)
+from django.db.models.functions import Mod
 from django.utils import timezone
 
 
@@ -31,17 +35,24 @@ class AnalisisFraudeCaja:
                 'indicadores': {},
             }
 
+        # Los 6 indicadores se calculan UNA sola vez y se reutilizan para el
+        # nivel de riesgo. Antes `_evaluar_riesgo(qs, total)` los recalculaba
+        # todos desde cero: el análisis costaba exactamente el doble de
+        # consultas (medido: 70 queries / 16,2 s para un cajero con 107
+        # arqueos contra producción).
+        indicadores = {
+            'porcentaje_exactos': self._porcentaje_exactos(qs, total),
+            'faltante_acumulado': self._faltante_acumulado(qs),
+            'anomalias_timing': self._anomalias_timing(qs, total),
+            'uso_express_pct': self._porcentaje_express(qs, total),
+            'numeros_redondos_pct': self._numeros_redondos(qs, total),
+            'deposito_vs_teorico': self._deposito_vs_teorico(qs),
+        }
+
         return {
             'total_arqueos': total,
-            'indicadores': {
-                'porcentaje_exactos': self._porcentaje_exactos(qs, total),
-                'faltante_acumulado': self._faltante_acumulado(qs),
-                'anomalias_timing': self._anomalias_timing(qs, total),
-                'uso_express_pct': self._porcentaje_express(qs, total),
-                'numeros_redondos_pct': self._numeros_redondos(qs, total),
-                'deposito_vs_teorico': self._deposito_vs_teorico(qs),
-            },
-            'nivel_riesgo': self._evaluar_riesgo(qs, total),
+            'indicadores': indicadores,
+            'nivel_riesgo': self._evaluar_riesgo(indicadores),
         }
 
     def analizar_sucursal(self, sucursal_id, meses=3):
@@ -106,12 +117,18 @@ class AnalisisFraudeCaja:
 
     def _anomalias_timing(self, qs, total):
         """Conteos guardados en menos de 2 minutos desde la creación del arqueo."""
-        rapidos = 0
-        for a in qs.filter(timestamp_conteo_fisico__isnull=False):
-            if a.timestamp_conteo_fisico and a.fecha_creacion:
-                delta = (a.timestamp_conteo_fisico - a.fecha_creacion).total_seconds()
-                if delta < 120:  # Menos de 2 minutos
-                    rapidos += 1
+        # Se resuelve en la base (timestamp < fecha_creacion + 120 s) en vez de
+        # traer los arqueos y restar en Python: mismo criterio, incluidos los
+        # deltas negativos, pero con una sola consulta de conteo.
+        rapidos = qs.filter(
+            timestamp_conteo_fisico__isnull=False,
+            fecha_creacion__isnull=False,
+        ).annotate(
+            _limite_rapido=ExpressionWrapper(
+                F('fecha_creacion') + timedelta(seconds=120),
+                output_field=DateTimeField(),
+            )
+        ).filter(timestamp_conteo_fisico__lt=F('_limite_rapido')).count()
         pct = round(rapidos / total * 100, 1) if total > 0 else 0
         return {
             'valor': pct,
@@ -133,10 +150,14 @@ class AnalisisFraudeCaja:
 
     def _numeros_redondos(self, qs, total):
         """Conteos físicos que terminan en 000 (sospechoso si es muy frecuente)."""
-        redondos = 0
-        for a in qs.filter(total_efectivo_fisico__gt=0):
-            if a.total_efectivo_fisico % 1000 == 0:
-                redondos += 1
+        # El módulo lo hace el motor (MOD(total_efectivo_fisico, 1000) = 0):
+        # antes se traían todos los arqueos con efectivo solo para contarlos.
+        redondos = qs.filter(total_efectivo_fisico__gt=0).annotate(
+            _resto_mil=Mod(
+                F('total_efectivo_fisico'),
+                Value(1000, output_field=IntegerField()),
+            )
+        ).filter(_resto_mil=0).count()
         pct = round(redondos / total * 100, 1) if total > 0 else 0
         return {
             'valor': pct,
@@ -147,11 +168,53 @@ class AnalisisFraudeCaja:
 
     def _deposito_vs_teorico(self, qs):
         """Diferencia acumulada entre lo depositado y lo teórico."""
-        total_depositado = 0
-        total_teorico = 0
-        for a in qs:
-            total_depositado += a.total_depositado_verificado
-            total_teorico += a.total_efectivo_teorico
+        # Antes esto recorría TODOS los arqueos leyendo la property
+        # `total_depositado_verificado`, que para los arqueos sin caché
+        # denormalizada dispara una consulta a DepositoBancario por fila (N+1)
+        # y era la causa de que el análisis no terminara. Aquí se resuelve con
+        # dos agregaciones, respetando exactamente la misma fórmula.
+        # OJO: el teórico NO se toca, se suma tal cual está persistido.
+        total_teorico = qs.aggregate(t=Sum('total_efectivo_teorico'))['t'] or 0
+
+        # Rama con caché: réplica literal de la property, o sea
+        #   total = cache_total_dep_verificado or 0
+        #   if total == 0 and cache_depositos_confirmados and cache_total_depositos:
+        #       total = cache_total_depositos
+        valor_cacheado = Case(
+            When(
+                Q(cache_total_dep_verificado__isnull=False)
+                & ~Q(cache_total_dep_verificado=0),
+                then=F('cache_total_dep_verificado'),
+            ),
+            When(
+                Q(cache_depositos_confirmados__gt=0)
+                & Q(cache_total_depositos__gt=0),
+                then=F('cache_total_depositos'),
+            ),
+            default=Value(0),
+            output_field=IntegerField(),
+        )
+        total_depositado = qs.filter(
+            cache_depositos_actualizado__isnull=False
+        ).aggregate(t=Sum(valor_cacheado))['t'] or 0
+
+        # Arqueos sin caché: una sola consulta agrupada sobre DepositoBancario
+        # en lugar de una por arqueo.
+        ids_sin_cache = list(
+            qs.filter(cache_depositos_actualizado__isnull=True)
+            .values_list('id', flat=True)
+        )
+        if ids_sin_cache:
+            from app.models.caja import DepositoBancario
+            monto_verificado = Case(
+                When(monto_confirmado__gt=0, then=F('monto_confirmado')),
+                default=F('monto'),
+                output_field=IntegerField(),
+            )
+            total_depositado += DepositoBancario.objects.filter(
+                arqueo_id__in=ids_sin_cache, verificado=True
+            ).aggregate(t=Sum(monto_verificado))['t'] or 0
+
         diferencia = total_depositado - total_teorico
         pct = round(total_depositado / total_teorico * 100, 1) if total_teorico > 0 else 0
         return {
@@ -163,19 +226,17 @@ class AnalisisFraudeCaja:
             'descripcion': f'Depositado ${total_depositado:,} de ${total_teorico:,} teórico ({pct}%)',
         }
 
-    def _evaluar_riesgo(self, qs, total):
-        """Evalúa el nivel de riesgo global: BAJO, MEDIO, ALTO."""
+    def _evaluar_riesgo(self, indicadores):
+        """
+        Evalúa el nivel de riesgo global: BAJO, MEDIO, ALTO.
+
+        Recibe el dict de indicadores YA calculado por `analizar_cajero`; antes
+        recibía el queryset y recalculaba los seis desde cero, duplicando el
+        costo del análisis sin cambiar el resultado.
+        """
         alertas = 0
-        indicadores = {
-            'exactos': self._porcentaje_exactos(qs, total),
-            'faltante': self._faltante_acumulado(qs),
-            'timing': self._anomalias_timing(qs, total),
-            'express': self._porcentaje_express(qs, total),
-            'redondos': self._numeros_redondos(qs, total),
-            'deposito': self._deposito_vs_teorico(qs),
-        }
-        for ind in indicadores.values():
-            if ind.get('alerta'):
+        for ind in (indicadores or {}).values():
+            if isinstance(ind, dict) and ind.get('alerta'):
                 alertas += 1
 
         if alertas >= 3:

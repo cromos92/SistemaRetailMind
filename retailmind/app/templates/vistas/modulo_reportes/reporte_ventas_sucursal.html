@@ -7,25 +7,35 @@
 <div class="page-content">
     <div class="container-fluid">
         
-        <!-- Header -->
-        <div class="row mb-4">
-            <div class="col">
-                <h1 class="display-5 mb-2 fw-bold">
+        <!-- Header compacto: en pantallas de 1366x768 el título display-5 más la
+             nota metodológica empujaban los KPI fuera de la primera vista. -->
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-2 mb-2">
+            <div>
+                <h4 class="mb-0 fw-bold lh-1">
                     <i class="ri-bar-chart-box-line text-primary"></i> Reporte de Ventas
-                </h1>
-                <p class="text-muted mb-0 fs-5">Análisis mensual de ventas por vendedor y sucursal</p>
+                </h4>
+                <small class="text-muted">Ventas por vendedor y sucursal — facturación histórica</small>
             </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse"
+                    data-bs-target="#notaMetodologica" aria-expanded="false">
+                <i class="ri-information-line"></i> ¿Por qué no cuadra con caja?
+            </button>
         </div>
 
         <!-- Nota metodológica: por qué este total puede diferir de cuadratura -->
-        <div class="alert alert-light border d-flex align-items-start gap-2 py-2 px-3 mb-3" style="font-size:.8rem">
-            <i class="ri-information-line text-primary fs-6 mt-1"></i>
-            <div>
-                <strong>Facturación histórica, no caja:</strong> este reporte cuenta todo lo emitido
-                (incluye DTEs luego <em>anulados</em> y facturas fuera del POS, tipo VENTA) y resta
-                <em>todas</em> las Notas de Crédito el día en que se emitieron. La <em>cuadratura de caja</em>
-                excluye anulados y facturas fuera de mesón, por eso ambos totales pueden diferir por diseño.
-                Usa el botón <em>"Diagnóstico vs cuadratura"</em> para ver la conciliación DTE por DTE.
+        <div class="collapse" id="notaMetodologica">
+            <div class="alert alert-light border d-flex align-items-start gap-2 py-2 px-3 mb-3" style="font-size:.8rem">
+                <i class="ri-information-line text-primary fs-6 mt-1"></i>
+                <div>
+                    <strong>Facturación histórica, no caja:</strong> este reporte cuenta todo lo emitido
+                    (incluye DTEs luego <em>anulados</em> y facturas fuera del POS, tipo VENTA) y resta
+                    <em>todas</em> las Notas de Crédito el día en que se emitieron. La <em>cuadratura de caja</em>
+                    excluye anulados y facturas fuera de mesón, por eso ambos totales pueden diferir por diseño.
+                    Usa el botón <em>"Diagnóstico vs cuadratura"</em> para ver la conciliación DTE por DTE.
+                    <br>
+                    <strong>Ojo:</strong> las ventas por ticket POS que no generaron documento no entran aquí,
+                    pero sí en <em>Comparativo de Ventas</em>; por eso ambos reportes pueden diferir.
+                </div>
             </div>
         </div>
 
@@ -115,10 +125,19 @@
                                 </div>
                             </div>
                             <div class="flex-grow-1 ms-3">
-                                <p class="text-uppercase fw-medium text-muted text-truncate fs-6">Total Ventas</p>
+                                <p class="text-uppercase fw-medium text-muted text-truncate fs-6 mb-0"
+                                   title="Facturación total del filtro (todas las sucursales incluidas), venta neta de notas de crédito">
+                                    Total Facturado (neto)
+                                </p>
                                 <h3 class="fs-3 fw-bold mb-0" id="totalVentas">
                                     <span class="counter-value">$0</span>
                                 </h3>
+                                <!-- Dos definiciones distintas convivían en el mismo número.
+                                     Ahora se muestran las dos, cada una rotulada. -->
+                                <small class="text-muted d-block" style="font-size:.72rem"
+                                       title="Suma de los documentos que sí tienen vendedor asignado. La diferencia con el total son documentos sin vendedor.">
+                                    Atribuido a vendedores: <span id="kpiAtribuidoVendedor">$0</span>
+                                </small>
                             </div>
                         </div>
                     </div>
@@ -319,9 +338,19 @@
                                     <div class="col-lg-6 mb-4">
                                         <div class="card border shadow-sm">
                                             <div class="card-header bg-light">
-                                                <h5 class="card-title mb-0">
+                                                <h5 class="card-title mb-1">
                                                     <i class="ri-line-chart-fill text-warning"></i> Comparativa Mensual
                                                 </h5>
+                                                <!-- Este gráfico NO obedece el período elegido: el
+                                                     endpoint devuelve siempre los últimos 180 días y
+                                                     excluye anulados y ventas tipo VENTA, que la tabla
+                                                     de al lado sí incluye. Decirlo evita leer la
+                                                     diferencia como una caída de ventas. -->
+                                                <small class="text-muted d-block" style="font-size:.72rem">
+                                                    Últimos 6 meses (fijo, no sigue el período filtrado) ·
+                                                    solo venta de público, sin documentos anulados ·
+                                                    el mes más antiguo puede salir parcial
+                                                </small>
                                             </div>
                                             <div class="card-body">
                                                 <div id="chartComparativaSucursales" style="min-height: 350px;"></div>
@@ -803,16 +832,19 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 console.log('Datos de vendedores recibidos:', data);
                 if (data.success) {
-                    // Actualizar KPIs
-                    document.getElementById('totalVentas').innerHTML = 
-                        `<span class="counter-value">$${formatearNumero(data.kpis.total_ventas)}</span>`;
-                    document.getElementById('totalDocumentos').innerHTML = 
-                        `<span class="counter-value">${data.kpis.total_documentos}</span>`;
-                    document.getElementById('ticketPromedio').innerHTML = 
-                        `<span class="counter-value">$${formatearNumero(data.kpis.ticket_promedio)}</span>`;
-                    document.getElementById('topVendedor').innerHTML = 
+                    // OJO: esta respuesta NO escribe los KPI de la cabecera.
+                    // Antes lo hacían las dos cargas en paralelo (vendedores y
+                    // sucursales) con definiciones distintas —vendedores excluye
+                    // los DTE sin vendedor asignado—, así que el total mostrado
+                    // dependía de cuál fetch respondía último y el mismo filtro
+                    // podía dar dos cifras en dos refrescos seguidos.
+                    // Fuente única de la cabecera: ventas-por-sucursal.
+                    // Aquí solo se pinta lo atribuido a vendedores.
+                    document.getElementById('topVendedor').innerHTML =
                         `<span>${data.kpis.top_vendedor}</span>`;
-                    
+                    document.getElementById('kpiAtribuidoVendedor').textContent =
+                        '$' + formatearNumero(data.kpis.total_ventas);
+
                     // Llenar tabla
                     llenarTablaVendedores(data.vendedores, data.kpis.total_ventas, data.kpis.total_documentos);
                     
@@ -869,7 +901,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     llenarTablaSucursales(data.sucursales);
                     crearGraficosSucursales(data.sucursales);
                     
-                    // SIEMPRE actualizar KPIs desde datos de sucursales cuando hay datos
+                    // Fuente ÚNICA de los KPI de cabecera: la suma por sucursal,
+                    // que es la que cuadra con la facturación total del período.
                     const totalVentasSuc = data.sucursales.reduce((sum, s) => sum + s.ventas, 0);
                     const totalDocsSuc = data.sucursales.reduce((sum, s) => sum + s.documentos, 0);
                     const ticketPromedioSuc = totalDocsSuc > 0 ? totalVentasSuc / totalDocsSuc : 0;
@@ -882,12 +915,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.getElementById('ticketPromedio').innerHTML = 
                         `<span class="counter-value">$${formatearNumero(ticketPromedioSuc)}</span>`;
                     
-                    // Top vendedor desde sucursales (si hay)
-                    if (data.sucursales.length === 1) {
-                        document.getElementById('topVendedor').innerHTML = 
-                            `<span>${data.sucursales[0].nombre}</span>`;
-                    }
-                    
+                    // (Se quitó el pisado del KPI "Top Vendedor" con el nombre de
+                    //  la sucursal cuando solo había una: mostraba una sucursal
+                    //  bajo el rótulo "Top Vendedor".)
+
                     console.log('✓ Datos de sucursales cargados correctamente');
                     console.log(`✓ KPIs actualizados: Ventas=$${formatearNumero(totalVentasSuc)}, Docs=${totalDocsSuc}`);
                 } else if (data.success && (!data.sucursales || data.sucursales.length === 0)) {
@@ -897,6 +928,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.getElementById('totalVentas').innerHTML = '<span class="counter-value">$0</span>';
                     document.getElementById('totalDocumentos').innerHTML = '<span class="counter-value">0</span>';
                     document.getElementById('ticketPromedio').innerHTML = '<span class="counter-value">$0</span>';
+                    document.getElementById('kpiAtribuidoVendedor').textContent = '$0';
                 } else {
                     console.error('Error en respuesta:', data.error);
                 }

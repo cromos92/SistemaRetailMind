@@ -1,4 +1,7 @@
 {% load static %}
+{% load permisos_tags %}
+
+{% tiene_permiso 'revisar_cambios_precios' 'puede_aprobar' as puede_aprobar_precios %}
 
 {% include 'layout/header.html' %}
 {% include 'layout/menu.html' %}
@@ -1284,9 +1287,9 @@
                     </select>
                 </div>
                 <div class="col-lg-2 col-md-3">
-                    <label class="form-label">Sucursal</label>
-                    <select id="filterSucursal" class="form-select" onchange="cargarCambios()">
-                        <option value="">Todas</option>
+                    <label class="form-label" title="El listado siempre está acotado a una sucursal: sin selección explícita se usa la sucursal de tu sesión.">Sucursal</label>
+                    <select id="filterSucursal" class="form-select" onchange="paginaActual = 1; cargarCambios(); cargarIndicadores();">
+                        <option value="">Mi sucursal (sesión)</option>
                     </select>
                 </div>
                 <div class="col-lg-2 col-md-3">
@@ -1378,6 +1381,12 @@
                     <strong id="countSeleccionados">0</strong> seleccionados
                     <button class="btn btn-sm btn-secondary ms-3" id="btnDescartarSeleccionados" onclick="descartarSeleccionados()" style="display: none;">
                         <i class="ri-archive-line me-1"></i> Descartar
+                    </button>
+                    <button class="btn btn-sm btn-success ms-2" id="btnAprobarSeleccionados" onclick="accionEnLote('aprobar')" style="display: none;">
+                        <i class="ri-check-double-line me-1"></i> Aprobar
+                    </button>
+                    <button class="btn btn-sm btn-danger ms-2" id="btnRechazarSeleccionados" onclick="accionEnLote('rechazar')" style="display: none;">
+                        <i class="ri-close-circle-line me-1"></i> Rechazar
                     </button>
                 </div>
                 <div class="d-flex align-items-center gap-2">
@@ -1492,6 +1501,25 @@
             <div id="kpisAuditoriaContent">
                 <div class="aud-empty"><i class="ri-bar-chart-2-line"></i><p>Calculando KPIs...</p></div>
             </div>
+
+            <!-- Divergencia de precio entre sucursales: el mismo artículo con
+                 distinto precio en distintas tiendas. Se calcula bajo demanda
+                 porque recorre todo el catálogo (varios segundos). -->
+            <div class="alerta-seccion" style="margin-top: 28px;">
+                <h4>
+                    <i class="ri-scales-3-line" style="color: var(--nexo-primary);"></i>
+                    Mismo artículo con distinto precio entre sucursales
+                </h4>
+                <p style="font-size:12px;color:var(--nexo-gray-500);margin:0 0 10px 0;">
+                    Los cambios hechos directamente en una tienda (o desde la app móvil) no se
+                    propagan al resto: esta revisión recorre el catálogo completo y cuenta cuántos
+                    artículos quedaron con precios distintos. Puede tardar unos segundos.
+                </p>
+                <button type="button" class="btn-auditoria-aplicar" id="btnDivergencias" onclick="cargarDivergenciasPrecios()">
+                    <i class="ri-search-eye-line"></i> Revisar divergencias
+                </button>
+                <div id="divergenciasContent" style="margin-top: 14px;"></div>
+            </div>
         </div><!-- /#paneAlertas -->
     </div>
 </div>
@@ -1502,6 +1530,10 @@
 let paginaActual = 1;
 let totalPaginas = 1;
 let cambiosActuales = [];
+
+// Permisos resueltos en servidor (rol + sucursal). El botón de aprobar mueve
+// precios reales; sin este permiso no se dibuja.
+const PUEDE_APROBAR = {% if puede_aprobar_precios %}true{% else %}false{% endif %};
 
 // ==================== HUB DE PRECIOS: pestañas + auditoría ====================
 let paginaRegistroActual = 1;
@@ -1796,6 +1828,69 @@ function renderizarAlertasAuditoria(alertas) {
     return html;
 }
 
+// ----- Divergencia de precios entre sucursales (bajo demanda) -----
+let divergenciasCargando = false;
+
+async function cargarDivergenciasPrecios() {
+    if (divergenciasCargando) return;
+    divergenciasCargando = true;
+
+    const btn = document.getElementById('btnDivergencias');
+    const cont = document.getElementById('divergenciasContent');
+    btn.disabled = true;
+    cont.innerHTML = `<div class="aud-empty" style="padding:24px;"><i class="ri-loader-4-line"></i><p>Recorriendo el catálogo...</p></div>`;
+
+    try {
+        const response = await fetch('/app/gestion-precios/resumen-discrepancias/');
+        const data = await response.json();
+
+        if (!data.success) {
+            cont.innerHTML = `<div class="aud-empty" style="padding:24px;"><i class="ri-error-warning-line" style="color: var(--nexo-error);"></i><p>${escaparHtml(data.error || 'No se pudo calcular')}</p></div>`;
+            return;
+        }
+
+        const total = data.total_discrepancias || 0;
+        const criticos = data.criticos || 0;
+        const maxima = data.variacion_maxima || 0;
+
+        if (total === 0) {
+            cont.innerHTML = `<div class="alerta-card"><span><i class="ri-checkbox-circle-line" style="color: var(--nexo-accent);"></i>
+                              Todos los artículos comparten el mismo precio en todas las sucursales.</span></div>`;
+            return;
+        }
+
+        cont.innerHTML = `
+            <div class="kpi-cards-grid">
+                <div class="kpi-card-aud ${total > 0 ? 'alerta' : ''}">
+                    <div class="valor">${total.toLocaleString('es-CL')}</div>
+                    <div class="etiqueta">Artículos con precio distinto</div>
+                </div>
+                <div class="kpi-card-aud ${criticos > 0 ? 'alerta' : ''}">
+                    <div class="valor">${criticos.toLocaleString('es-CL')}</div>
+                    <div class="etiqueta">Diferencia &gt; 10%</div>
+                </div>
+                <div class="kpi-card-aud">
+                    <div class="valor">${Number(maxima).toFixed(1)}%</div>
+                    <div class="etiqueta">Diferencia máxima</div>
+                </div>
+            </div>
+            <div class="alerta-card">
+                <span style="font-size:12px;">
+                    Cada uno de estos artículos se vende a distinto precio según la tienda.
+                    Para igualarlos usa <b>Edición Rápida</b> (sincroniza al guardar) sobre el
+                    artículo correspondiente.
+                </span>
+            </div>
+        `;
+    } catch (e) {
+        console.error('Error cargando divergencias:', e);
+        cont.innerHTML = `<div class="aud-empty" style="padding:24px;"><i class="ri-wifi-off-line" style="color: var(--nexo-error);"></i><p>Error de conexión</p></div>`;
+    } finally {
+        divergenciasCargando = false;
+        btn.disabled = false;
+    }
+}
+
 // Inicializar
 document.addEventListener('DOMContentLoaded', async function() {
     cargarSucursales();
@@ -1818,8 +1913,13 @@ document.addEventListener('DOMContentLoaded', async function() {
         marcarNotificacionLeidaPorCambio(parseInt(cambioDestacado));
     }
 
-    // Auto-refresh cada 60 segundos
+    // Auto-refresh cada 60 segundos.
+    // NO refrescar si el usuario tiene filas marcadas o un diálogo abierto:
+    // el re-render borra la selección y el trabajo en lote se pierde a medias.
     setInterval(() => {
+        if (document.querySelector('.check-cambio:checked')) return;
+        if (typeof Swal !== 'undefined' && Swal.isVisible && Swal.isVisible()) return;
+        if (document.hidden) return;
         cargarIndicadores();
         cargarCambios();
     }, 60000);
@@ -1867,13 +1967,17 @@ async function marcarNotificacionLeidaPorCambio(cambioId) {
 }
 
 // Cargar indicadores de resumen
+// Las tarjetas usan la MISMA sucursal que la tabla: si no van con sucursal_id el
+// backend cae a la sucursal de la sesión y las cifras dejan de cuadrar con la lista.
 async function cargarIndicadores() {
     try {
+        const suc = document.getElementById('filterSucursal').value;
+        const sufijoSuc = suc ? `&sucursal_id=${encodeURIComponent(suc)}` : '';
         // Activos (APLICADO) + descartados
-        const r1 = await fetch('/app/gestion-precios/listar-cambios/?estado=APLICADO&per_page=1');
+        const r1 = await fetch(`/app/gestion-precios/listar-cambios/?estado=APLICADO&per_page=1${sufijoSuc}`);
         const d1 = await r1.json();
         // Pendientes de aprobación (estado PENDIENTE)
-        const r2 = await fetch('/app/gestion-precios/listar-cambios/?estado=PENDIENTE&per_page=1');
+        const r2 = await fetch(`/app/gestion-precios/listar-cambios/?estado=PENDIENTE&per_page=1${sufijoSuc}`);
         const d2 = await r2.json();
         
         if (d1.success && d1.resumen) {
@@ -2115,7 +2219,20 @@ function renderizarCambios(cambios) {
     
     if (cambios.length === 0) {
         container.style.display = 'none';
-        document.getElementById('emptyState').style.display = 'block';
+        const vacio = document.getElementById('emptyState');
+        // Mensaje honesto: "0 esperan aprobación" casi siempre significa que el
+        // flujo de aprobación está apagado, no que esté todo al día.
+        if (document.getElementById('filterTipoCambio').value === 'PENDIENTE_APROBACION') {
+            vacio.querySelector('h3').textContent = 'Ningún cambio espera aprobación';
+            vacio.querySelector('p').innerHTML =
+                'Los cambios de precio entre sucursales se aplican solos y llegan aquí ya sincronizados.<br>' +
+                'Solo quedan “esperando aprobación” si el parámetro global ' +
+                '<code>UMBRAL_DIVERGENCIA_PRECIO_PCT</code> está configurado con un valor mayor a 0.';
+        } else {
+            vacio.querySelector('h3').textContent = 'No hay cambios';
+            vacio.querySelector('p').textContent = 'No se encontraron registros con los filtros seleccionados.';
+        }
+        vacio.style.display = 'block';
         document.getElementById('paginationControls').style.display = 'none';
         return;
     }
@@ -2177,13 +2294,26 @@ function renderizarCambios(cambios) {
         if (esDescartado) {
             acciones = `<span class="text-muted small"><i class="ri-eye-line"></i> Archivado</span>`;
         } else if (estadoReal === 'PENDIENTE') {
-            acciones = `<span class="text-muted small" title="Gestionar desde Gestión de Precios"><i class="ri-time-line"></i> Pendiente</span>`;
+            // Aprobar aplica el precio de verdad (endpoint /aprobar-cambio/).
+            // Sin permiso `puede_aprobar` no se ofrece el botón.
+            acciones = PUEDE_APROBAR
+                ? `<button class="btn-accion btn-aprobar" onclick="aprobarCambio(${cambio.id})" title="Aprobar y aplicar el precio">
+                        <i class="ri-check-line"></i>
+                   </button>
+                   <button class="btn-accion btn-rechazar ms-1" onclick="rechazarCambio(${cambio.id})" title="Rechazar (no aplica el precio)">
+                        <i class="ri-close-line"></i>
+                   </button>`
+                : `<span class="text-muted small" title="Requiere permiso de aprobación"><i class="ri-lock-line"></i> Sin permiso</span>`;
         } else {
             acciones = `<button class="btn-accion btn-eliminar" onclick="descartarCambio(${cambio.id})" title="Descartar (archivar)">
                             <i class="ri-archive-line"></i>
                        </button>`;
         }
         
+        // Antigüedad real del registro (el backend solo manda dias_pendiente,
+        // que vale 0 para los APLICADO y no sirve para medir el backlog)
+        const antiguedad = diasDesde(cambio.fecha_creacion);
+
         // Estilo visual según estado
         if (esDescartado) {
             tr.style.opacity = '0.6';
@@ -2198,13 +2328,13 @@ function renderizarCambios(cambios) {
                 ${esDescartado ? '<span class="text-muted">-</span>' : `<input type="checkbox" class="form-check-input check-cambio" value="${cambio.id}" onchange="actualizarSeleccion()">`}
             </td>
             <td class="col-producto">
-                <div class="producto-nombre">${cambio.producto}</div>
-                <div class="producto-tallas">${cambio.marca ? '<strong>' + cambio.marca + '</strong> · ' : ''}${cambio.tallas_preview || cambio.tallas_count + ' tallas'}</div>
+                <div class="producto-nombre">${escaparHtml(cambio.producto)}</div>
+                <div class="producto-tallas">${cambio.marca ? '<strong>' + escaparHtml(cambio.marca) + '</strong> · ' : ''}${escaparHtml(cambio.tallas_preview || (cambio.tallas_count + ' tallas'))}</div>
             </td>
-            <td><strong>${cambio.sucursal}</strong></td>
-            <td class="text-center" title="${cambio.stock_detalle || ''}">
+            <td><strong>${escaparHtml(cambio.sucursal)}</strong></td>
+            <td class="text-center" title="${escaparHtml(cambio.stock_detalle || '')}">
                 <div style="font-weight: 600;">${cambio.stock_producto != null ? cambio.stock_producto : '—'}</div>
-                ${cambio.talla ? `<small class="text-muted">T.${cambio.talla}: ${cambio.stock_talla}</small>` : ''}
+                ${cambio.talla ? `<small class="text-muted">T.${escaparHtml(cambio.talla)}: ${cambio.stock_talla}</small>` : ''}
             </td>
             <td>${tipoBadge}</td>
             <td class="text-end precio-cell precio-anterior">${formatearMoneda(cambio.precio_anterior)}</td>
@@ -2215,7 +2345,11 @@ function renderizarCambios(cambios) {
                 </span>
             </td>
             <td class="text-center">${estadoBadge}</td>
-            <td class="fecha-cell">${cambio.fecha_creacion}${esDescartado && cambio.fecha_descarte ? `<br><small class="text-muted">Desc: ${cambio.fecha_descarte}</small>` : ''}</td>
+            <td class="fecha-cell" title="${escaparHtml(cambio.motivo || 'Sin motivo registrado')}">
+                ${cambio.fecha_creacion}
+                <br><small class="text-muted"><i class="ri-user-line"></i> ${escaparHtml(cambio.creado_por || 'Sistema')}${antiguedad >= 30 && !esDescartado ? ` · <span style="color:var(--nexo-warning);font-weight:600;" title="Sin revisar hace ${antiguedad} días">${antiguedad} d</span>` : ''}</small>
+                ${esDescartado && cambio.fecha_descarte ? `<br><small class="text-muted">Desc: ${cambio.fecha_descarte}${cambio.descartado_por ? ' · ' + escaparHtml(cambio.descartado_por) : ''}</small>` : ''}
+            </td>
             <td class="text-center">${acciones}</td>
         `;
         
@@ -2244,15 +2378,39 @@ function toggleSelectAll() {
 
 // Actualizar contador de seleccionados
 function actualizarSeleccion() {
-    const seleccionados = document.querySelectorAll('.check-cambio:checked').length;
+    const ids = idsSeleccionados();
+    const seleccionados = ids.length;
     document.getElementById('countSeleccionados').textContent = seleccionados;
-    
+
+    // ¿Todo lo marcado está PENDIENTE? Solo entonces tiene sentido aprobar/rechazar
+    const soloPendientes = seleccionados > 0 && ids.every(id => {
+        const c = cambioPorId(id);
+        return c && c.estado === 'PENDIENTE';
+    });
+    const hayAplicados = ids.some(id => {
+        const c = cambioPorId(id);
+        return c && c.estado !== 'PENDIENTE';
+    });
+
     const btnDescartar = document.getElementById('btnDescartarSeleccionados');
-    if (seleccionados > 0) {
+    const btnAprobar = document.getElementById('btnAprobarSeleccionados');
+    const btnRechazar = document.getElementById('btnRechazarSeleccionados');
+
+    if (seleccionados > 0 && hayAplicados) {
         btnDescartar.style.display = 'inline-flex';
         btnDescartar.innerHTML = `<i class="ri-archive-line me-1"></i> Descartar (${seleccionados})`;
     } else {
         btnDescartar.style.display = 'none';
+    }
+
+    if (soloPendientes && PUEDE_APROBAR) {
+        btnAprobar.style.display = 'inline-flex';
+        btnRechazar.style.display = 'inline-flex';
+        btnAprobar.innerHTML = `<i class="ri-check-double-line me-1"></i> Aprobar (${seleccionados})`;
+        btnRechazar.innerHTML = `<i class="ri-close-circle-line me-1"></i> Rechazar (${seleccionados})`;
+    } else {
+        btnAprobar.style.display = 'none';
+        btnRechazar.style.display = 'none';
     }
 }
 
@@ -2355,11 +2513,176 @@ async function descartarSeleccionados() {
     }
 }
 
-// Función auxiliar - ya no se necesitan las funciones de aprobar/rechazar/revisar
+// ==================== APROBAR / RECHAZAR (solo filas PENDIENTE) ====================
+// El endpoint /aprobar-cambio/ SÍ aplica el precio: escribe Producto.precioventa
+// y los lotes vivos de TODAS las tallas del producto en esa sucursal.
+
+function cambioPorId(id) {
+    return (cambiosActuales || []).find(c => c.id === id) || null;
+}
+
+async function aprobarCambio(cambioId) {
+    const c = cambioPorId(cambioId);
+    const detalle = c
+        ? `<div style="text-align:left;font-size:13px;line-height:1.7;">
+             <b>${escaparHtml(c.producto)}</b> · ${escaparHtml(c.sucursal)}<br>
+             Precio: <span style="text-decoration:line-through;color:#8A8A9A;">${formatearMoneda(c.precio_anterior)}</span>
+             → <b>${formatearMoneda(c.precio_nuevo)}</b> (${c.porcentaje_cambio > 0 ? '+' : ''}${Number(c.porcentaje_cambio).toFixed(1)}%)<br>
+             Se aplicará a las <b>${c.tallas_count || 0} tallas</b> del producto en esa sucursal.
+           </div>`
+        : '';
+
+    const res = await Swal.fire({
+        icon: 'warning',
+        title: '¿Aprobar y aplicar este precio?',
+        html: detalle + `<div style="margin-top:12px;font-size:12px;color:#8A8A9A;">
+                El precio queda vigente de inmediato en el POS. Si alguien lo modificó
+                después de crearse esta alerta, ese valor se sobrescribe.</div>`,
+        input: 'text',
+        inputLabel: 'Observación (opcional)',
+        inputAttributes: { maxlength: 200 },
+        showCancelButton: true,
+        confirmButtonText: 'Sí, aplicar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#00D4AA'
+    });
+    if (!res.isConfirmed) return;
+
+    const r = await postCambio('/app/gestion-precios/aprobar-cambio/', {
+        cambio_id: cambioId,
+        observaciones: res.value || ''
+    });
+
+    if (r.success) {
+        Swal.fire({ icon: 'success', title: 'Precio aplicado', text: r.message || '', timer: 1800, showConfirmButton: false });
+        cargarCambios();
+        cargarIndicadores();
+    } else {
+        Swal.fire({ icon: 'error', title: 'No se pudo aprobar', text: r.error || 'Error desconocido' });
+    }
+}
+
+async function rechazarCambio(cambioId) {
+    const c = cambioPorId(cambioId);
+    const res = await Swal.fire({
+        icon: 'question',
+        title: '¿Rechazar este cambio?',
+        html: c ? `<div style="font-size:13px;">${escaparHtml(c.producto)} · ${escaparHtml(c.sucursal)}<br>
+                   El precio <b>NO</b> se aplicará.</div>` : 'El precio no se aplicará.',
+        input: 'text',
+        inputLabel: 'Motivo del rechazo',
+        inputPlaceholder: 'Por qué no corresponde aplicarlo',
+        inputAttributes: { maxlength: 200 },
+        showCancelButton: true,
+        confirmButtonText: 'Rechazar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#FF4D4D'
+    });
+    if (!res.isConfirmed) return;
+
+    const r = await postCambio('/app/gestion-precios/rechazar-cambio/', {
+        cambio_id: cambioId,
+        observaciones: res.value || 'Cambio rechazado'
+    });
+
+    if (r.success) {
+        Swal.fire({ icon: 'success', title: 'Cambio rechazado', timer: 1500, showConfirmButton: false });
+        cargarCambios();
+        cargarIndicadores();
+    } else {
+        Swal.fire({ icon: 'error', title: 'No se pudo rechazar', text: r.error || 'Error desconocido' });
+    }
+}
+
+// Aprobación / rechazo en lote: los endpoints son de a uno, así que se
+// encadenan secuencialmente (evita 50 escrituras concurrentes sobre precios)
+async function accionEnLote(accion) {
+    const ids = idsSeleccionados();
+    if (ids.length === 0) return;
+
+    const esAprobar = accion === 'aprobar';
+    const res = await Swal.fire({
+        icon: 'warning',
+        title: esAprobar ? `¿Aplicar ${ids.length} cambio(s) de precio?` : `¿Rechazar ${ids.length} cambio(s)?`,
+        text: esAprobar
+            ? 'Cada precio quedará vigente de inmediato en el POS.'
+            : 'Ninguno de los precios se aplicará.',
+        input: 'text',
+        inputLabel: esAprobar ? 'Observación (opcional)' : 'Motivo del rechazo',
+        inputAttributes: { maxlength: 200 },
+        showCancelButton: true,
+        confirmButtonText: esAprobar ? 'Sí, aplicar todos' : 'Sí, rechazar todos',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: esAprobar ? '#00D4AA' : '#FF4D4D'
+    });
+    if (!res.isConfirmed) return;
+
+    const url = esAprobar ? '/app/gestion-precios/aprobar-cambio/' : '/app/gestion-precios/rechazar-cambio/';
+    const observaciones = res.value || (esAprobar ? '' : 'Cambio rechazado');
+
+    Swal.fire({ title: 'Procesando...', html: '<b id="loteProgreso">0</b> de ' + ids.length,
+                allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    let ok = 0;
+    const errores = [];
+    for (let i = 0; i < ids.length; i++) {
+        const r = await postCambio(url, { cambio_id: ids[i], observaciones: observaciones });
+        if (r.success) { ok++; } else { errores.push(`#${ids[i]}: ${r.error || 'error'}`); }
+        const el = document.getElementById('loteProgreso');
+        if (el) el.textContent = String(i + 1);
+    }
+
+    Swal.fire({
+        icon: errores.length ? 'warning' : 'success',
+        title: `${ok} de ${ids.length} procesados`,
+        html: errores.length
+            ? `<div style="text-align:left;font-size:12px;max-height:180px;overflow:auto;">${errores.map(escaparHtml).join('<br>')}</div>`
+            : ''
+    });
+    cargarCambios();
+    cargarIndicadores();
+}
+
+function idsSeleccionados() {
+    return Array.from(document.querySelectorAll('.check-cambio:checked')).map(cb => parseInt(cb.value, 10));
+}
+
+async function postCambio(url, payload) {
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            return { success: false, error: `HTTP ${response.status} — ¿tienes permiso para esta acción?` };
+        }
+        return await response.json();
+    } catch (e) {
+        console.error('Error en', url, e);
+        return { success: false, error: 'Error de conexión' };
+    }
+}
 
 // Utilidades
 function formatearMoneda(valor) {
     return '$' + Number(valor).toLocaleString('es-CL');
+}
+
+// Escapa texto que viene de la BD antes de meterlo en innerHTML
+function escaparHtml(texto) {
+    const div = document.createElement('div');
+    div.textContent = texto == null ? '' : String(texto);
+    return div.innerHTML;
+}
+
+// Días transcurridos desde una fecha 'dd/mm/aaaa HH:MM' (formato del backend)
+function diasDesde(fechaStr) {
+    if (!fechaStr) return 0;
+    const m = String(fechaStr).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (!m) return 0;
+    const fecha = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+    return Math.max(0, Math.floor((Date.now() - fecha.getTime()) / 86400000));
 }
 
 function mostrarCargando(mostrar) {
@@ -2401,9 +2724,15 @@ function getCookie(name) {
 }
 
 // Atajos de teclado - R para refrescar
+// Se ignora si hay foco en un campo, si hay un diálogo abierto o si hay filas
+// marcadas (refrescar borraría la selección en medio de un trabajo en lote).
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'r' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT') {
-        cargarCambios();
-    }
+    if (e.key !== 'r' || e.ctrlKey || e.metaKey || e.altKey) return;
+    const tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (document.activeElement && document.activeElement.isContentEditable) return;
+    if (typeof Swal !== 'undefined' && Swal.isVisible && Swal.isVisible()) return;
+    if (document.querySelector('.check-cambio:checked')) return;
+    cargarCambios();
 });
 </script>

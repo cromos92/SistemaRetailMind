@@ -24,6 +24,7 @@
     .kpi-card { border-radius:12px; border:none; transition:all .3s ease; }
     .kpi-card:hover { transform: translateY(-4px); box-shadow:0 8px 25px rgba(0,0,0,.15); }
     .kpi-icon { width:36px; height:36px; border-radius:10px; margin:0 auto 6px; display:flex; align-items:center; justify-content:center; color:white; }
+    .kpi-sub { font-size:11px; color:#6c757d; }
     .section-box { border:1px solid rgba(64,81,137,.12); border-radius:12px; padding:16px; box-shadow:0 2px 10px rgba(64,81,137,.06); margin-bottom:16px; }
     .section-title { color:#405189; font-size:15px; font-weight:700; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
     .badge-risk { font-size:11px; border-radius:12px; padding:4px 10px; font-weight:700; }
@@ -31,6 +32,11 @@
     .badge-risk.media { background:#fff3e0; color:#fb8c00; }
     .table-sm td, .table-sm th { vertical-align:middle; }
     .empty-row { color:#8a8a9a; text-align:center; padding:22px !important; }
+    .cuadratura { border-radius:10px; padding:10px 14px; font-size:13px; display:flex;
+        align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+    .cuadratura.ok { background:#e8f5e9; color:#0a7c6d; border-left:4px solid #0ab39c; }
+    .cuadratura.mal { background:#ffebee; color:#b02a17; border-left:4px solid #f06548; }
+    .salud-box { border-radius:12px; padding:14px 16px; background:#f8f9ff; border-left:4px solid #405189; }
 </style>
 
 <div class="page-content">
@@ -42,7 +48,7 @@
                     <div class="module-header-info">
                         <h5>Reporte de Puntos</h5>
                         <div class="module-header-status"><span class="status-dot"></span>
-                            {% if programa %}{{ programa.nombre }} · 1 punto = ${{ programa.valor_punto_en_pesos }}{% else %}Sin programa activo{% endif %}
+                            {% if programa %}{{ programa.nombre }} · 1 punto = ${{ programa.valor_punto_en_pesos }} · mínimo de canje {{ programa.minimo_canje_puntos }} pts{% else %}Sin programa activo{% endif %}
                         </div>
                     </div>
                 </div>
@@ -59,23 +65,34 @@
                             <label class="form-label small text-muted">Desde</label>
                             <input type="date" id="rp-desde" class="form-control">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label class="form-label small text-muted">Hasta</label>
                             <input type="date" id="rp-hasta" class="form-control">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label class="form-label small text-muted">Vencen en</label>
                             <select id="rp-vencen" class="form-select">
                                 <option value="30">30 días</option>
                                 <option value="60">60 días</option>
                                 <option value="90">90 días</option>
+                                <option value="180">180 días</option>
+                                <option value="365">365 días</option>
                             </select>
                         </div>
                         <div class="col-md-3">
+                            <label class="form-label small text-muted">Pasivo mostrado</label>
+                            <div class="form-check form-switch mt-1">
+                                <input class="form-check-input" type="checkbox" id="rp-solo-elegibles" checked onchange="repintarPasivo()">
+                                <label class="form-check-label small" for="rp-solo-elegibles">Excluir cuentas no elegibles</label>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
                             <button class="btn btn-primary w-100" onclick="cargarReporte()"><i class="ri-refresh-line"></i> Actualizar</button>
                         </div>
                     </div>
                 </div>
+
+                <div id="cuadratura-box" class="cuadratura ok d-none"></div>
 
                 <div class="row mb-3">
                     <div class="col-xl col-md-4 col-6 mb-2">
@@ -83,8 +100,31 @@
                             <div class="card-body text-center py-2">
                                 <div class="kpi-icon" style="background:linear-gradient(135deg,#0ab39c,#099885);"><i class="ri-wallet-3-line"></i></div>
                                 <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-circulantes">0</h4>
-                                <p class="text-muted mb-0 small">Puntos circulantes</p>
+                                <p class="text-muted mb-0 small" id="kpi-circulantes-label">Puntos circulantes</p>
                                 <h6 class="mb-0 mt-1 fw-bold" style="color:#0ab39c;" id="kpi-pasivo">$0</h6>
+                                <div class="kpi-sub" id="kpi-pasivo-sub">&nbsp;</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl col-md-4 col-6 mb-2">
+                        <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#fdeaea,#f8d0cb); border-left:4px solid #f06548;">
+                            <div class="card-body text-center py-2">
+                                <div class="kpi-icon" style="background:linear-gradient(135deg,#f06548,#d9534f);"><i class="ri-filter-off-line"></i></div>
+                                <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-noeleg">0</h4>
+                                <p class="text-muted mb-0 small">Puntos no elegibles</p>
+                                <h6 class="mb-0 mt-1 fw-bold" style="color:#f06548;" id="kpi-noeleg-valor">$0</h6>
+                                <div class="kpi-sub" id="kpi-noeleg-sub">&nbsp;</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl col-md-4 col-6 mb-2">
+                        <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#ede7f6,#d1c4e9); border-left:4px solid #8e24aa;">
+                            <div class="card-body text-center py-2">
+                                <div class="kpi-icon" style="background:linear-gradient(135deg,#8e24aa,#6a1b9a);"><i class="ri-percent-line"></i></div>
+                                <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-tasa-canje">0%</h4>
+                                <p class="text-muted mb-0 small">Tasa de canje (histórica)</p>
+                                <h6 class="mb-0 mt-1 fw-bold" style="color:#8e24aa;" id="kpi-tasa-canje-valor">$0</h6>
+                                <div class="kpi-sub" id="kpi-tasa-canje-sub">&nbsp;</div>
                             </div>
                         </div>
                     </div>
@@ -95,6 +135,7 @@
                                 <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-emitidos">0</h4>
                                 <p class="text-muted mb-0 small">Emitidos período</p>
                                 <h6 class="mb-0 mt-1 fw-bold" style="color:#299cdb;" id="kpi-emitidos-valor">$0</h6>
+                                <div class="kpi-sub" id="kpi-emitidos-sub">&nbsp;</div>
                             </div>
                         </div>
                     </div>
@@ -105,6 +146,7 @@
                                 <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-canjeados">0</h4>
                                 <p class="text-muted mb-0 small">Canjeados período</p>
                                 <h6 class="mb-0 mt-1 fw-bold" style="color:#fb8c00;" id="kpi-canjeados-valor">$0</h6>
+                                <div class="kpi-sub" id="kpi-canjeados-sub">&nbsp;</div>
                             </div>
                         </div>
                     </div>
@@ -115,29 +157,33 @@
                                 <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-vencer">0</h4>
                                 <p class="text-muted mb-0 small">Por vencer</p>
                                 <h6 class="mb-0 mt-1 fw-bold" style="color:#996B00;" id="kpi-vencer-valor">$0</h6>
+                                <div class="kpi-sub" id="kpi-vencer-sub">&nbsp;</div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-xl col-md-4 col-12 mb-2">
+                    <div class="col-xl col-md-4 col-6 mb-2">
                         <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#ffebee,#ffcdd2); border-left:4px solid #f06548;">
                             <div class="card-body text-center py-2">
                                 <div class="kpi-icon" style="background:linear-gradient(135deg,#f06548,#d9534f);"><i class="ri-shield-check-line"></i></div>
                                 <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-alertas">0</h4>
                                 <p class="text-muted mb-0 small">Alertas concentración</p>
                                 <h6 class="mb-0 mt-1 fw-bold" style="color:#f06548;" id="kpi-expirados">Expirados $0</h6>
+                                <div class="kpi-sub">&nbsp;</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
+                <div class="salud-box mb-3" id="salud-programa"></div>
+
                 <div class="section-box mb-3">
-                    <div class="section-title"><i class="ri-vip-crown-line"></i> Distribución por nivel</div>
+                    <div class="section-title"><i class="ri-vip-crown-line"></i> Distribución por nivel <span class="text-muted fw-normal" style="font-size:12px;">(% = tasa de acumulación configurada hoy)</span></div>
                     <div class="row g-2" id="niveles-row">
                         <div class="col-md-4">
                             <div class="card h-100" style="border-left:4px solid #5c6bc0; background:#f8f9ff;">
                                 <div class="card-body py-2 text-center">
                                     <h5 class="mb-0 fw-bold" style="color:#5c6bc0;" id="niv-plata-qty">0</h5>
-                                    <small class="text-muted">Plata · 3%</small>
+                                    <small class="text-muted" id="niv-plata-label">Plata</small>
                                     <div class="fw-semibold small" id="niv-plata-pts">0 pts</div>
                                 </div>
                             </div>
@@ -146,7 +192,7 @@
                             <div class="card h-100" style="border-left:4px solid #f9a825; background:#fffdf0;">
                                 <div class="card-body py-2 text-center">
                                     <h5 class="mb-0 fw-bold" style="color:#f9a825;" id="niv-oro-qty">0</h5>
-                                    <small class="text-muted">Oro · 4%</small>
+                                    <small class="text-muted" id="niv-oro-label">Oro</small>
                                     <div class="fw-semibold small" id="niv-oro-pts">0 pts</div>
                                 </div>
                             </div>
@@ -155,11 +201,24 @@
                             <div class="card h-100" style="border-left:4px solid #8e24aa; background:#fdf4ff;">
                                 <div class="card-body py-2 text-center">
                                     <h5 class="mb-0 fw-bold" style="color:#8e24aa;" id="niv-platino-qty">0</h5>
-                                    <small class="text-muted">Platino · 5%</small>
+                                    <small class="text-muted" id="niv-platino-label">Platino</small>
                                     <div class="fw-semibold small" id="niv-platino-pts">0 pts</div>
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <div class="section-box mb-3">
+                    <div class="section-title"><i class="ri-filter-off-line"></i> Cuentas excluidas del pasivo</div>
+                    <p class="text-muted small mb-2">Saldos que quedaron vivos en cuentas a las que hoy una compra ya NO acumularía puntos (mismo criterio que usa la caja: RUT genérico, RUT de empresa o RUT inválido). Inflan el pasivo sin ser una deuda real con un cliente.</p>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead class="table-light">
+                                <tr><th>Cliente</th><th>RUT</th><th>Motivo</th><th class="text-end">Puntos</th><th class="text-end">Valor</th></tr>
+                            </thead>
+                            <tbody id="tb-no-elegibles"></tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -221,7 +280,8 @@
                             <thead class="table-light">
                                 <tr>
                                     <th>Riesgo</th><th>Cajera/usuario</th><th>Cuenta cliente</th>
-                                    <th class="text-end">Tickets</th><th class="text-end">% usuario</th>
+                                    <th class="text-end">Tickets</th><th class="text-end">Días</th>
+                                    <th class="text-end">% usuario</th>
                                     <th class="text-end">Puntos</th><th class="text-end">Venta</th><th>Período</th>
                                 </tr>
                             </thead>
@@ -247,13 +307,27 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% include '../../layout/footer.html' %}
+
 <script>
+/* Reporte de fidelización.
+   Va DESPUÉS del footer: de ahí salen jQuery, SweetAlert2 y Chart.js
+   (`libs/chart.js/chart.min.js`, servido local — no se usa CDN porque los POS
+   de tienda no siempre tienen internet).
+   Las funciones llamadas desde onclick inline se exponen en `window`. */
 const URL_REPORTE = "{% url 'api_reporte_fidelizacion' %}";
-function fmt(n) { return '$' + Math.round(n||0).toLocaleString('es-CL'); }
-function pts(n) { return Math.round(n||0).toLocaleString('es-CL'); }
+let ULTIMO_REPORTE = null;
+
+function fmt(n) { return '$' + Math.round(n || 0).toLocaleString('es-CL'); }
+function pts(n) { return Math.round(n || 0).toLocaleString('es-CL'); }
 function htmlEscape(v) {
-    return String(v ?? '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+    return String(v === null || v === undefined ? '' : v)
+        .replace(/[&<>"']/g, function (s) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s];
+        });
+}
+function emptyRow(cols, text) {
+    return '<tr><td colspan="' + cols + '" class="empty-row">' + text + '</td></tr>';
 }
 function setDefaultDates() {
     const hoy = new Date();
@@ -263,33 +337,110 @@ function setDefaultDates() {
     document.getElementById('rp-hasta').value = hoy.toISOString().slice(0, 10);
     document.getElementById('rp-mes-ranking').value = hoy.toISOString().slice(0, 7);
 }
+
 let chartTendencia = null;
 function actualizarChartTendencia(tendencia) {
     const canvas = document.getElementById('chart-tendencia-mensual');
-    if (!canvas || typeof Chart === 'undefined') return;
-    const labels = tendencia.map(t => t.mes);
+    if (!canvas || typeof Chart === 'undefined') { return; }
+    const labels = tendencia.map(function (t) { return t.mes; });
     if (chartTendencia) { chartTendencia.destroy(); }
     chartTendencia = new Chart(canvas.getContext('2d'), {
         type: 'line',
         data: {
-            labels,
+            labels: labels,
             datasets: [
-                { label: 'Ganados', data: tendencia.map(t => t.puntos_ganados), borderColor: '#0ab39c', backgroundColor: 'rgba(10,179,156,.1)', fill: true, tension: .3 },
-                { label: 'Canjeados', data: tendencia.map(t => t.puntos_canjeados), borderColor: '#fb8c00', backgroundColor: 'rgba(251,140,0,.1)', fill: true, tension: .3 },
-                { label: 'Expirados', data: tendencia.map(t => t.puntos_expirados), borderColor: '#f06548', backgroundColor: 'rgba(240,101,72,.1)', fill: true, tension: .3 },
+                { label: 'Ganados', data: tendencia.map(function (t) { return t.puntos_ganados; }), borderColor: '#0ab39c', backgroundColor: 'rgba(10,179,156,.1)', fill: true, tension: .3 },
+                { label: 'Canjeados', data: tendencia.map(function (t) { return t.puntos_canjeados; }), borderColor: '#fb8c00', backgroundColor: 'rgba(251,140,0,.1)', fill: true, tension: .3 },
+                { label: 'Expirados', data: tendencia.map(function (t) { return t.puntos_expirados; }), borderColor: '#f06548', backgroundColor: 'rgba(240,101,72,.1)', fill: true, tension: .3 },
             ],
         },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
     });
 }
+
 const TIPO_SENAL_LABEL = {
     MULTI_SUCURSAL: 'Multi-sucursal',
     RUT_GENERICO: 'RUT genérico',
     CANJE_INMEDIATO: 'Canje inmediato',
 };
-function emptyRow(cols, text) {
-    return `<tr><td colspan="${cols}" class="empty-row">${text}</td></tr>`;
+
+/* La tarjeta de pasivo puede mostrar el saldo depurado (por defecto) o el
+   bruto. Se separa del render general para poder alternar sin recargar. */
+function repintarPasivo() {
+    if (!ULTIMO_REPORTE) { return; }
+    const r = ULTIMO_REPORTE.resumen || ULTIMO_REPORTE;
+    const soloElegibles = document.getElementById('rp-solo-elegibles').checked;
+    const puntos = soloElegibles ? r.puntos_circulantes_elegibles : r.puntos_circulantes;
+    const pesos = soloElegibles ? r.pasivo_elegible_pesos : r.pasivo_estimado_pesos;
+    const clientes = soloElegibles ? r.clientes_elegibles : r.total_clientes;
+    document.getElementById('kpi-circulantes').textContent = pts(puntos);
+    document.getElementById('kpi-pasivo').textContent = fmt(pesos);
+    document.getElementById('kpi-circulantes-label').textContent =
+        soloElegibles ? 'Puntos vivos (depurado)' : 'Puntos vivos (bruto)';
+    document.getElementById('kpi-pasivo-sub').textContent =
+        pts(clientes) + ' cuentas · ' + (soloElegibles ? 'sin cuentas no elegibles' : 'incluye cuentas no elegibles');
 }
+
+function pintarSaludPrograma(r, prog) {
+    const emitidos = r.puntos_emitidos_historico || 0;
+    const canjeados = r.puntos_canjeados_historico || 0;
+    const tasa = r.tasa_canje_pct || 0;
+    const alcanzan = r.clientes_alcanzan_minimo_elegibles || 0;
+    const elegibles = r.clientes_elegibles || 0;
+    const minimo = r.minimo_canje_puntos || 0;
+    const pctAlcanzan = elegibles ? (alcanzan / elegibles * 100) : 0;
+
+    const problemas = [];
+    if (emitidos > 0 && canjeados === 0) {
+        problemas.push('Se han emitido <strong>' + pts(emitidos) + ' puntos</strong> ('
+            + fmt(emitidos * (prog.valor_punto || 0)) + ') y <strong>ningún</strong> canje: '
+            + 'el programa es hoy solo un pasivo.');
+    }
+    if (elegibles > 0 && pctAlcanzan < 10) {
+        problemas.push('Con el mínimo de <strong>' + pts(minimo) + ' pts</strong> solo <strong>'
+            + alcanzan + ' de ' + elegibles + '</strong> clientes puede canjear ('
+            + pctAlcanzan.toFixed(0) + '%). Equivale a una compra acumulada de <strong>'
+            + fmt(prog.tasa_plata ? (minimo * 100 / prog.tasa_plata) : 0) + '</strong> en nivel Plata.');
+    }
+    if (r.puntos_vencidos_sin_expirar > 0) {
+        problemas.push('Hay <strong>' + pts(r.puntos_vencidos_sin_expirar) + ' puntos</strong> con fecha de '
+            + 'expiración ya pasada que siguen sumando en el saldo: falta correr la expiración.');
+    }
+
+    const box = document.getElementById('salud-programa');
+    if (!problemas.length) {
+        box.style.borderLeftColor = '#0ab39c';
+        box.style.background = '#f2fbf9';
+        box.innerHTML = '<i class="ri-checkbox-circle-line" style="color:#0ab39c;"></i> '
+            + '<strong>Programa saludable.</strong> Tasa de canje ' + tasa.toFixed(2) + '% · '
+            + alcanzan + ' de ' + elegibles + ' clientes pueden canjear.';
+        return;
+    }
+    box.style.borderLeftColor = '#f06548';
+    box.style.background = '#fff5f5';
+    box.innerHTML = '<div class="fw-bold mb-1" style="color:#f06548;">'
+        + '<i class="ri-error-warning-line"></i> Salud del programa</div><ul class="mb-0 ps-3 small">'
+        + problemas.map(function (p) { return '<li>' + p + '</li>'; }).join('') + '</ul>'
+        + '<div class="small mt-1"><a href="{% url "configurar_programa_vista" %}">Ajustar parámetros del programa &rarr;</a></div>';
+}
+
+function pintarCuadratura(r) {
+    const box = document.getElementById('cuadratura-box');
+    box.classList.remove('d-none');
+    if (r.cuadra_ledger) {
+        box.className = 'cuadratura ok';
+        box.innerHTML = '<i class="ri-check-double-line"></i> <strong>Cuadratura OK.</strong> '
+            + 'El saldo cacheado de las cuentas (' + pts(r.puntos_circulantes) + ' pts) coincide '
+            + 'exactamente con la suma del ledger de movimientos.';
+    } else {
+        box.className = 'cuadratura mal';
+        box.innerHTML = '<i class="ri-error-warning-line"></i> <strong>DESCUADRE de '
+            + pts(r.descuadre_ledger) + ' pts.</strong> Saldo cacheado ' + pts(r.puntos_circulantes)
+            + ' pts vs ledger ' + pts(r.saldo_ledger) + ' pts. Las cifras de esta pantalla no son '
+            + 'confiables hasta reconciliar.';
+    }
+}
+
 function cargarReporte() {
     const params = new URLSearchParams({
         desde: document.getElementById('rp-desde').value,
@@ -297,90 +448,145 @@ function cargarReporte() {
         vencen_en: document.getElementById('rp-vencen').value,
         mes: document.getElementById('rp-mes-ranking').value,
     });
-    fetch(`${URL_REPORTE}?${params.toString()}`).then(r => r.json()).then(d => {
+    fetch(URL_REPORTE + '?' + params.toString()).then(function (r) { return r.json(); }).then(function (d) {
         if (!d.success) { Swal.fire('Error', d.error || 'No se pudo cargar el reporte', 'error'); return; }
+        ULTIMO_REPORTE = d;
         const r = d.resumen || d;
-        document.getElementById('kpi-circulantes').textContent = pts(r.puntos_circulantes);
-        document.getElementById('kpi-pasivo').textContent = fmt(r.pasivo_estimado_pesos);
+        const prog = d.programa || {};
+
+        repintarPasivo();
+        pintarCuadratura(r);
+        pintarSaludPrograma(r, prog);
+
+        document.getElementById('kpi-noeleg').textContent = pts(r.puntos_no_elegibles);
+        document.getElementById('kpi-noeleg-valor').textContent = fmt(r.pasivo_no_elegible_pesos);
+        document.getElementById('kpi-noeleg-sub').textContent =
+            (r.cuentas_no_elegibles || 0) + ' cuenta(s) · ' + (r.pct_no_elegible || 0) + '% del pasivo';
+
+        document.getElementById('kpi-tasa-canje').textContent = (r.tasa_canje_pct || 0).toFixed(2) + '%';
+        document.getElementById('kpi-tasa-canje-valor').textContent = fmt(r.valor_canjeado_historico);
+        document.getElementById('kpi-tasa-canje-sub').textContent =
+            pts(r.puntos_canjeados_historico) + ' canjeados de ' + pts(r.puntos_emitidos_historico) + ' emitidos';
+
         document.getElementById('kpi-emitidos').textContent = pts(r.puntos_emitidos_periodo);
         document.getElementById('kpi-emitidos-valor').textContent = fmt(r.valor_emitido_periodo);
+        document.getElementById('kpi-emitidos-sub').textContent =
+            'compras ' + pts(r.puntos_acumulados_periodo) + ' · bienvenida ' + pts(r.puntos_bienvenida_periodo)
+            + (r.puntos_otros_emitidos_periodo ? ' · otros ' + pts(r.puntos_otros_emitidos_periodo) : '');
+
         document.getElementById('kpi-canjeados').textContent = pts(r.puntos_canjeados_periodo);
         document.getElementById('kpi-canjeados-valor').textContent = fmt(r.valor_canjeado_periodo);
+        document.getElementById('kpi-canjeados-sub').textContent =
+            'mínimo de canje: ' + pts(r.minimo_canje_puntos) + ' pts';
+
         document.getElementById('kpi-vencer').textContent = pts(r.puntos_por_vencer);
         document.getElementById('kpi-vencer-valor').textContent = fmt(r.valor_por_vencer);
-        document.getElementById('kpi-alertas').textContent = pts(r.alertas_concentracion);
-        document.getElementById('kpi-expirados').textContent = `Expirados ${fmt(r.valor_expirado_periodo)}`;
+        document.getElementById('kpi-vencer-sub').textContent = r.proximo_vencimiento
+            ? 'primer vencimiento: ' + r.proximo_vencimiento
+            : 'sin lotes con vencimiento';
 
+        document.getElementById('kpi-alertas').textContent = pts(r.alertas_concentracion);
+        document.getElementById('kpi-expirados').textContent = 'Expirados ' + fmt(r.valor_expirado_periodo);
+
+        /* Los % de los niveles salen del programa vigente: antes estaban
+           escritos a mano en el HTML (3/4/5) y mentían cuando se cambiaban. */
         const niv = d.desglose_niveles || {};
-        const nivData = (key) => niv[key] || {cantidad:0, puntos:0};
-        document.getElementById('niv-plata-qty').textContent   = (nivData('PLATA').cantidad||0).toLocaleString('es-CL');
+        const nivData = function (key) { return niv[key] || {cantidad: 0, puntos: 0}; };
+        const tasaTxt = function (t) {
+            return (t === null || t === undefined) ? '' : ' · ' + Number(t).toFixed(2) + '%';
+        };
+        document.getElementById('niv-plata-label').textContent = 'Plata' + tasaTxt(prog.tasa_plata);
+        document.getElementById('niv-oro-label').textContent = 'Oro' + tasaTxt(prog.tasa_oro);
+        document.getElementById('niv-platino-label').textContent = 'Platino' + tasaTxt(prog.tasa_platino);
+        document.getElementById('niv-plata-qty').textContent   = (nivData('PLATA').cantidad || 0).toLocaleString('es-CL');
         document.getElementById('niv-plata-pts').textContent   = pts(nivData('PLATA').puntos) + ' pts';
-        document.getElementById('niv-oro-qty').textContent     = (nivData('ORO').cantidad||0).toLocaleString('es-CL');
+        document.getElementById('niv-oro-qty').textContent     = (nivData('ORO').cantidad || 0).toLocaleString('es-CL');
         document.getElementById('niv-oro-pts').textContent     = pts(nivData('ORO').puntos) + ' pts';
-        document.getElementById('niv-platino-qty').textContent = (nivData('PLATINO').cantidad||0).toLocaleString('es-CL');
+        document.getElementById('niv-platino-qty').textContent = (nivData('PLATINO').cantidad || 0).toLocaleString('es-CL');
         document.getElementById('niv-platino-pts').textContent = pts(nivData('PLATINO').puntos) + ' pts';
 
+        const noEleg = (d.cartera_no_elegible || {}).detalle || [];
+        document.getElementById('tb-no-elegibles').innerHTML = noEleg.length ? noEleg.map(function (i) {
+            return '<tr>'
+                + '<td><a href="/app/fidelizacion/cliente/' + i.cliente_id + '/">' + htmlEscape(i.cliente) + '</a></td>'
+                + '<td>' + htmlEscape(i.rut || '—') + '</td>'
+                + '<td><span class="badge bg-danger-subtle text-danger">' + htmlEscape(i.motivo_label) + '</span></td>'
+                + '<td class="text-end fw-bold">' + pts(i.puntos) + '</td>'
+                + '<td class="text-end">' + fmt(i.valor_pesos) + '</td></tr>';
+        }).join('') : emptyRow(5, 'Todas las cuentas con saldo son elegibles.');
+
         const vencen = d.puntos_por_vencer || [];
-        document.getElementById('tb-vencer').innerHTML = vencen.length ? vencen.map(i => `
-            <tr>
-                <td><a href="/app/fidelizacion/cliente/${i.cliente_id}/">${htmlEscape(i.cliente)}</a></td>
-                <td>${htmlEscape(i.rut || '—')}</td>
-                <td>${htmlEscape(i.proximo_vencimiento)}</td>
-                <td class="text-end fw-bold text-warning">${pts(i.puntos)}</td>
-                <td class="text-end">${fmt(i.valor_pesos)}</td>
-            </tr>`).join('') : emptyRow(5, 'Sin puntos por vencer en el rango.');
+        document.getElementById('tb-vencer').innerHTML = vencen.length ? vencen.map(function (i) {
+            return '<tr>'
+                + '<td><a href="/app/fidelizacion/cliente/' + i.cliente_id + '/">' + htmlEscape(i.cliente) + '</a></td>'
+                + '<td>' + htmlEscape(i.rut || '—') + '</td>'
+                + '<td>' + htmlEscape(i.proximo_vencimiento) + '</td>'
+                + '<td class="text-end fw-bold text-warning">' + pts(i.puntos) + '</td>'
+                + '<td class="text-end">' + fmt(i.valor_pesos) + '</td></tr>';
+        }).join('') : emptyRow(5, 'Sin puntos por vencer en el rango'
+            + (r.proximo_vencimiento ? ' (el primer vencimiento es el ' + htmlEscape(r.proximo_vencimiento) + ').' : '.'));
 
         const canjes = d.canjes_recientes || [];
-        document.getElementById('tb-canjes').innerHTML = canjes.length ? canjes.map(i => `
-            <tr>
-                <td class="small">${htmlEscape(i.fecha)}</td>
-                <td><a href="/app/fidelizacion/cliente/${i.cliente_id}/">${htmlEscape(i.cliente)}</a></td>
-                <td class="text-end fw-bold text-danger">${pts(i.puntos)}</td>
-                <td class="text-end">${fmt(i.valor_pesos)}</td>
-                <td class="small">${htmlEscape(i.usuario || '—')}</td>
-            </tr>`).join('') : emptyRow(5, 'Sin canjes en el período.');
+        document.getElementById('tb-canjes').innerHTML = canjes.length ? canjes.map(function (i) {
+            return '<tr>'
+                + '<td class="small">' + htmlEscape(i.fecha) + '</td>'
+                + '<td><a href="/app/fidelizacion/cliente/' + i.cliente_id + '/">' + htmlEscape(i.cliente) + '</a></td>'
+                + '<td class="text-end fw-bold text-danger">' + pts(i.puntos) + '</td>'
+                + '<td class="text-end">' + fmt(i.valor_pesos) + '</td>'
+                + '<td class="small">' + htmlEscape(i.usuario || '—') + '</td></tr>';
+        }).join('') : emptyRow(5, 'Sin canjes en el período.');
 
         const alertas = d.alertas_concentracion || [];
-        document.getElementById('tb-alertas').innerHTML = alertas.length ? alertas.map(i => `
-            <tr>
-                <td><span class="badge-risk ${String(i.severidad).toLowerCase()}">${htmlEscape(i.severidad)}</span></td>
-                <td>${htmlEscape(i.usuario)}</td>
-                <td><a href="/app/fidelizacion/cliente/${i.cliente_id}/">${htmlEscape(i.cliente)}</a><br><small class="text-muted">${htmlEscape(i.rut || '')}</small></td>
-                <td class="text-end fw-bold">${pts(i.tickets)} / ${pts(i.tickets_usuario)}</td>
-                <td class="text-end">${Number(i.participacion || 0).toFixed(1)}%</td>
-                <td class="text-end text-success fw-bold">${pts(i.puntos)}</td>
-                <td class="text-end">${fmt(i.venta_total)}</td>
-                <td class="small">${htmlEscape(i.primer_mov)} a ${htmlEscape(i.ultimo_mov)}</td>
-            </tr>`).join('') : emptyRow(8, 'Sin concentraciones sospechosas.');
+        document.getElementById('tb-alertas').innerHTML = alertas.length ? alertas.map(function (i) {
+            return '<tr>'
+                + '<td><span class="badge-risk ' + String(i.severidad).toLowerCase() + '">' + htmlEscape(i.severidad) + '</span></td>'
+                + '<td>' + htmlEscape(i.usuario) + '</td>'
+                + '<td><a href="/app/fidelizacion/cliente/' + i.cliente_id + '/">' + htmlEscape(i.cliente) + '</a>'
+                + (i.no_elegible ? ' <span class="badge bg-danger-subtle text-danger">' + htmlEscape(i.motivo_no_elegible) + '</span>' : '')
+                + '<br><small class="text-muted">' + htmlEscape(i.rut || '') + '</small></td>'
+                + '<td class="text-end fw-bold">' + pts(i.tickets) + ' / ' + pts(i.tickets_usuario) + '</td>'
+                + '<td class="text-end">' + pts(i.dias) + '</td>'
+                + '<td class="text-end">' + Number(i.participacion || 0).toFixed(1) + '%</td>'
+                + '<td class="text-end text-success fw-bold">' + pts(i.puntos) + '</td>'
+                + '<td class="text-end">' + fmt(i.venta_total) + '</td>'
+                + '<td class="small">' + htmlEscape(i.primer_mov) + ' a ' + htmlEscape(i.ultimo_mov) + '</td></tr>';
+        }).join('') : emptyRow(9, 'Sin concentraciones sospechosas.');
 
         actualizarChartTendencia(d.tendencia_mensual || []);
 
         const ranking = d.ranking_mes || [];
-        document.getElementById('tb-ranking-mes').innerHTML = ranking.length ? ranking.map((i, idx) => `
-            <tr>
-                <td>${idx + 1}</td>
-                <td><a href="/app/fidelizacion/cliente/${i.cliente_id}/">${htmlEscape(i.cliente)}</a></td>
-                <td>${htmlEscape(i.rut || '—')}</td>
-                <td class="text-end fw-bold text-success">${pts(i.puntos_ganados)}</td>
-                <td class="text-end">${fmt(i.valor_pesos)}</td>
-            </tr>`).join('') : emptyRow(5, 'Sin acumulación de puntos en el mes seleccionado.');
+        document.getElementById('tb-ranking-mes').innerHTML = ranking.length ? ranking.map(function (i, idx) {
+            return '<tr' + (i.no_elegible ? ' class="table-warning"' : '') + '><td>' + (idx + 1) + '</td>'
+                + '<td><a href="/app/fidelizacion/cliente/' + i.cliente_id + '/">' + htmlEscape(i.cliente) + '</a>'
+                + (i.no_elegible ? ' <span class="badge bg-danger-subtle text-danger">' + htmlEscape(i.motivo_no_elegible) + '</span>' : '')
+                + '</td>'
+                + '<td>' + htmlEscape(i.rut || '—') + '</td>'
+                + '<td class="text-end fw-bold text-success">' + pts(i.puntos_ganados) + '</td>'
+                + '<td class="text-end">' + fmt(i.valor_pesos) + '</td></tr>';
+        }).join('') : emptyRow(5, 'Sin acumulación de puntos en el mes seleccionado.');
 
         const senalesRut = d.senales_rut_sospechoso || [];
-        document.getElementById('tb-rut-sospechoso').innerHTML = senalesRut.length ? senalesRut.map(i => `
-            <tr>
-                <td><span class="badge-risk ${String(i.severidad).toLowerCase()}">${htmlEscape(i.severidad)}</span></td>
-                <td><span class="badge bg-secondary-subtle text-secondary-emphasis">${htmlEscape(TIPO_SENAL_LABEL[i.tipo] || i.tipo)}</span></td>
-                <td>${i.cliente_id ? `<a href="/app/fidelizacion/cliente/${i.cliente_id}/">${htmlEscape(i.cliente)}</a>` : htmlEscape(i.cliente)}</td>
-                <td>${htmlEscape(i.rut || '—')}</td>
-                <td class="small">${htmlEscape(i.detalle)}</td>
-            </tr>`).join('') : emptyRow(5, 'Sin señales de RUT sospechoso en el período.');
-    }).catch(() => Swal.fire('Error', 'No se pudo cargar el reporte.', 'error'));
+        document.getElementById('tb-rut-sospechoso').innerHTML = senalesRut.length ? senalesRut.map(function (i) {
+            return '<tr>'
+                + '<td><span class="badge-risk ' + String(i.severidad).toLowerCase() + '">' + htmlEscape(i.severidad) + '</span></td>'
+                + '<td><span class="badge bg-secondary-subtle text-secondary-emphasis">'
+                + htmlEscape(TIPO_SENAL_LABEL[i.tipo] || i.tipo) + '</span></td>'
+                + '<td>' + (i.cliente_id
+                    ? '<a href="/app/fidelizacion/cliente/' + i.cliente_id + '/">' + htmlEscape(i.cliente) + '</a>'
+                    : htmlEscape(i.cliente)) + '</td>'
+                + '<td>' + htmlEscape(i.rut || '—') + '</td>'
+                + '<td class="small">' + htmlEscape(i.detalle) + '</td></tr>';
+        }).join('') : emptyRow(5, 'Sin señales de RUT sospechoso en el período.');
+    }).catch(function () { Swal.fire('Error', 'No se pudo cargar el reporte.', 'error'); });
 }
-document.addEventListener('DOMContentLoaded', () => {
+
+window.cargarReporte = cargarReporte;
+window.repintarPasivo = repintarPasivo;
+
+document.addEventListener('DOMContentLoaded', function () {
     setDefaultDates();
     cargarReporte();
     document.getElementById('rp-mes-ranking').addEventListener('change', cargarReporte);
+    document.getElementById('rp-vencen').addEventListener('change', cargarReporte);
 });
 </script>
-
-{% include '../../layout/footer.html' %}

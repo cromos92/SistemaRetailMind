@@ -29,11 +29,20 @@ from .models.predicciones import (
     AlertaQuiebreTalle,
     StockInicialTemporada,
 )
-from .services.prediccion_compras import ejecutar_pipeline_completo
 
 logger = logging.getLogger('app')
 
 TIPOS_SUCURSAL_VENTA = ['VENDEDORA', 'MIXTA']
+
+CONCEPTOS_VENTA_ANALITICA = [
+    'VENTA_PUBLICO', 'VENTA_MAYORISTA', 'VENTA_DIRECTA', 'VENTA_TICKET',
+]
+
+# A partir de cuántos días el resultado del batch deja de ser accionable.
+DIAS_FRESCURA_OK = 3
+DIAS_FRESCURA_ALERTA = 14
+
+COMANDO_RECALCULO = 'python manage.py calcular_predicciones'
 
 
 def _decimal_to_float(obj):
@@ -58,6 +67,148 @@ def _get_sucursal_context(request):
         return None, True
     es_cd = suc.es_centro_distribucion or suc.tipo_sucursal == 'CENTRO_DISTRIBUCION'
     return suc, es_cd
+
+
+def _prediccion_meta_frescura():
+    """
+    Antigüedad REAL del último batch de predicción.
+
+    La pantalla mostraba la hora del navegador ("Datos cargados 15:48"), lo que
+    hacía pasar por actual un resultado calculado meses atrás. Aquí se devuelve
+    la fecha de generación efectiva de cada tabla del pipeline para que la UI
+    pueda advertirlo.
+    """
+    from django.db.models import Max as _Max
+
+    fuentes = [
+        ('clasificacion', ClasificacionABC, 'fecha_calculo'),
+        ('velocidades', VelocidadHistorica, 'fecha_calculo'),
+        ('curvas_talle', CurvaTalles, 'fecha_calculo'),
+        ('predicciones', PrediccionDemanda, 'fecha_generacion'),
+        ('sugerencias', SugerenciaCompra, 'fecha_generacion'),
+        ('alertas_velocidad', AlertaVelocidad, 'fecha_deteccion'),
+        ('alertas_quiebre', AlertaQuiebreTalle, 'fecha_deteccion'),
+    ]
+
+    detalle = {}
+    ultima = None
+    for clave, modelo, campo in fuentes:
+        valor = modelo.objects.aggregate(m=_Max(campo))['m']
+        detalle[clave] = valor.isoformat() if valor else None
+        if valor and (ultima is None or valor > ultima):
+            ultima = valor
+
+    ahora = timezone.now()
+    dias = int((ahora - ultima).total_seconds() // 86400) if ultima else None
+
+    if dias is None:
+        estado = 'sin_datos'
+    elif dias <= DIAS_FRESCURA_OK:
+        estado = 'ok'
+    elif dias <= DIAS_FRESCURA_ALERTA:
+        estado = 'atrasado'
+    else:
+        estado = 'caducado'
+
+    # Temporada/año sobre el que realmente se predijo (no el de hoy).
+    temporada_row = PrediccionDemanda.objects.values('temporada', 'anio').annotate(
+        n=Count('id')).order_by('-n').first()
+
+    pendientes = 0
+    try:
+        from .models.predicciones import PendienteReevaluacion
+        pendientes = PendienteReevaluacion.objects.filter(procesado=False).count()
+    except Exception:
+        logger.exception("No se pudo contar PendienteReevaluacion")
+
+    return {
+        'ultimo_calculo': ultima.isoformat() if ultima else None,
+        'dias_desde_calculo': dias,
+        'estado': estado,
+        'detalle': detalle,
+        'temporada_predicha': temporada_row['temporada'] if temporada_row else None,
+        'anio_predicho': temporada_row['anio'] if temporada_row else None,
+        'pendientes_reevaluacion': pendientes,
+        'comando': COMANDO_RECALCULO,
+        'umbral_alerta_dias': DIAS_FRESCURA_ALERTA,
+    }
+
+
+def _evidencia_ventas_por_talla(talla_ids):
+    """
+    Ventas reales por Producto_Talla en 90 / 365 días, en 2 queries (sin N+1).
+
+    Sirve para que el comprador pueda contrastar la recomendación del modelo
+    contra lo que el SKU efectivamente vendió.
+    """
+    from django.db.models.functions import Abs as AbsFunc
+    from .models.inventario import Movimientos_Producto
+    from datetime import timedelta
+
+    talla_ids = list(talla_ids)
+    if not talla_ids:
+        return {}, {}
+
+    hoy = timezone.localdate()
+
+    def _agg(dias):
+        rows = (
+            Movimientos_Producto.objects
+            .filter(
+                ProductoTalla_id__in=talla_ids,
+                concepto__in=CONCEPTOS_VENTA_ANALITICA,
+                fecha__gte=hoy - timedelta(days=dias),
+            )
+            .values('ProductoTalla_id')
+            .annotate(u=Sum(AbsFunc(F('cantidad'))))
+            .values_list('ProductoTalla_id', 'u')
+        )
+        return {pk: int(u or 0) for pk, u in rows}
+
+    return _agg(90), _agg(365)
+
+
+def _datos_historicos_ventas(suc, es_cd):
+    """
+    Barra informativa "N movimientos de venta disponibles".
+
+    Son 3 agregaciones sobre toda la tabla de movimientos unida a producto y
+    sucursal. Es dato de contexto que casi no cambia, así que se cachea: sin
+    caché costaba la mayor parte del tiempo de carga del dashboard.
+    """
+    from django.core.cache import cache
+    from django.db.models import Min, Max
+    from django.db.models.functions import ExtractYear
+    from .models.inventario import Movimientos_Producto
+
+    clave = 'pred:datos_historicos:%s' % ('agg' if (es_cd or not suc) else suc.id)
+    cacheado = cache.get(clave)
+    if cacheado is not None:
+        return cacheado
+
+    q_mov_suc = _q_sucursal_productos(suc, es_cd, prefix='ProductoTalla__producto__')
+    ventas_qs = Movimientos_Producto.objects.filter(
+        q_mov_suc, concepto__in=CONCEPTOS_VENTA_ANALITICA,
+    )
+    stats = ventas_qs.aggregate(
+        total=Count('id'), fecha_min=Min('fecha'), fecha_max=Max('fecha'),
+    )
+    migradas = ventas_qs.filter(referencia_externa__startswith='MIG:').count()
+    por_anio = list(
+        ventas_qs.annotate(yr=ExtractYear('fecha'))
+        .values('yr').annotate(n=Count('id')).order_by('yr')
+    )
+
+    datos = {
+        'ventas_totales': stats['total'] or 0,
+        'ventas_migradas': migradas,
+        'ventas_nuevas': (stats['total'] or 0) - migradas,
+        'fecha_min': stats['fecha_min'].isoformat() if stats['fecha_min'] else None,
+        'fecha_max': stats['fecha_max'].isoformat() if stats['fecha_max'] else None,
+        'por_anio': {str(r['yr']): r['n'] for r in por_anio if r['yr']},
+    }
+    cache.set(clave, datos, 60 * 30)
+    return datos
 
 
 def _q_sucursal_productos(suc, es_cd, prefix=''):
@@ -95,8 +246,13 @@ def api_prediccion_resumen(request):
     q_prod = _q_sucursal_productos(suc, es_cd, prefix='articulo__')
     q_prod_sug = _q_sucursal_productos(suc, es_cd, prefix='articulo_talle__producto__')
 
-    alertas_vel = AlertaVelocidad.objects.filter(q_prod, resuelta=False)
-    alertas_quiebre = AlertaQuiebreTalle.objects.filter(q_prod, resuelta=False)
+    # `excluir_de_analitica` se aplica también aquí para que los KPI de arriba
+    # cuadren con las listas de las pestañas (antes los KPI contaban productos
+    # que las tablas de detalle sí filtraban).
+    alertas_vel = AlertaVelocidad.objects.filter(
+        q_prod, resuelta=False, articulo__excluir_de_analitica=False)
+    alertas_quiebre = AlertaQuiebreTalle.objects.filter(
+        q_prod, resuelta=False, articulo__excluir_de_analitica=False)
     sugerencias = SugerenciaCompra.objects.filter(
         q_prod_sug, aprobada=False,
         articulo_talle__producto__excluir_de_analitica=False,
@@ -105,15 +261,38 @@ def api_prediccion_resumen(request):
         'articulo_talle__producto__categoria',
         'articulo_talle__producto__atributo1',
     )
+    sugerencias = list(sugerencias)
+
+    # Proveedor por artículo en UNA query. Antes se hacía un
+    # Compras_Producto.objects.filter(nombre=...) por cada sugerencia: con 190
+    # líneas eran 190 viajes a la base y el dashboard tardaba ~100 s en cargar.
+    nombres_articulo = {
+        s.articulo_talle.producto.articulo
+        for s in sugerencias
+        if (s.unidades_a_pedir or 0) > 0
+    }
+    proveedor_por_articulo = {}
+    if nombres_articulo:
+        for cp in (
+            Compras_Producto.objects
+            .filter(nombre__in=nombres_articulo)
+            .select_related('compras__empresa')
+            .order_by('fecha')  # ascendente: la última iteración deja la más reciente
+            .only('nombre', 'fecha', 'compras__empresa__id', 'compras__empresa__nombre')
+        ):
+            empresa = cp.compras.empresa if cp.compras_id else None
+            if empresa:
+                proveedor_por_articulo[cp.nombre] = empresa
 
     vel_criticas = alertas_vel.filter(urgencia='CRITICA').count()
     vel_altas = alertas_vel.filter(urgencia='ALTA').count()
     quiebre_criticas = alertas_quiebre.filter(urgencia='CRITICA').count()
     quiebre_altas = alertas_quiebre.filter(urgencia='ALTA').count()
 
-    total_a_pedir = sugerencias.aggregate(
-        total=Sum('unidades_a_pedir'))['total'] or 0
-    total_sugerencias = sugerencias.count()
+    # `sugerencias` ya está materializada en memoria: se agrega en Python para
+    # no repetir la consulta.
+    total_a_pedir = sum((s.unidades_a_pedir or 0) for s in sugerencias)
+    total_sugerencias = len(sugerencias)
 
     plan_proveedores = {}
     plan_origenes = {}
@@ -135,10 +314,7 @@ def api_prediccion_resumen(request):
         if sugerencia.origen in {'alerta_velocidad', 'alerta_quiebre'}:
             sugerencias_urgentes += 1
 
-        proveedor = Compras_Producto.objects.filter(
-            nombre=producto.articulo,
-        ).select_related('compras__empresa').order_by('-fecha').first()
-        empresa = proveedor.compras.empresa if proveedor else None
+        empresa = proveedor_por_articulo.get(producto.articulo)
         proveedor_id = empresa.id if empresa else None
         proveedor_nombre = empresa.nombre if empresa else 'Sin proveedor asignado'
         bucket = plan_proveedores.setdefault(proveedor_id or 'sin-proveedor', {
@@ -175,29 +351,10 @@ def api_prediccion_resumen(request):
     ).values('clasificacion_xyz').annotate(
         count=Count('id')).order_by('clasificacion_xyz')
 
-    from .models.inventario import Movimientos_Producto
-    from django.db.models import Min, Max
-    from django.db.models.functions import ExtractYear
-
-    q_mov_suc = _q_sucursal_productos(suc, es_cd, prefix='ProductoTalla__producto__')
-    ventas_conceptos = ['VENTA_PUBLICO', 'VENTA_MAYORISTA', 'VENTA_DIRECTA', 'VENTA_TICKET']
-    ventas_qs = Movimientos_Producto.objects.filter(
-        q_mov_suc, concepto__in=ventas_conceptos,
-    )
-    ventas_stats = ventas_qs.aggregate(
-        total=Count('id'),
-        fecha_min=Min('fecha'),
-        fecha_max=Max('fecha'),
-    )
-    ventas_migradas = ventas_qs.filter(referencia_externa__startswith='MIG:').count()
-    ventas_nuevas = (ventas_stats['total'] or 0) - ventas_migradas
-
-    ventas_por_anio = list(
-        ventas_qs.annotate(yr=ExtractYear('fecha'))
-        .values('yr').annotate(n=Count('id')).order_by('yr')
-    )
+    datos_historicos = _datos_historicos_ventas(suc, es_cd)
 
     return JsonResponse({
+        'meta': _prediccion_meta_frescura(),
         'alertas': {
             'velocidad_critica': vel_criticas,
             'velocidad_alta': vel_altas,
@@ -219,14 +376,7 @@ def api_prediccion_resumen(request):
         },
         'clasificacion_abc': {d['clasificacion_abc']: d['count'] for d in abc_dist},
         'clasificacion_xyz': {d['clasificacion_xyz']: d['count'] for d in xyz_dist},
-        'datos_historicos': {
-            'ventas_totales': ventas_stats['total'] or 0,
-            'ventas_migradas': ventas_migradas,
-            'ventas_nuevas': ventas_nuevas,
-            'fecha_min': ventas_stats['fecha_min'].isoformat() if ventas_stats['fecha_min'] else None,
-            'fecha_max': ventas_stats['fecha_max'].isoformat() if ventas_stats['fecha_max'] else None,
-            'por_anio': {str(r['yr']): r['n'] for r in ventas_por_anio if r['yr']},
-        },
+        'datos_historicos': datos_historicos,
     })
 
 
@@ -281,34 +431,82 @@ def api_prediccion_sugerencias(request):
     if origen:
         filtro &= Q(origen=origen)
 
-    sugerencias = SugerenciaCompra.objects.filter(filtro).select_related(
-        'articulo_talle', 'articulo_talle__producto',
-        'articulo_talle__producto__atributo1',
-        'articulo_talle__producto__categoria',
-        'prediccion',
-    ).order_by('-unidades_a_pedir')[:300]
+    sugerencias = list(
+        SugerenciaCompra.objects.filter(filtro).select_related(
+            'articulo_talle', 'articulo_talle__producto',
+            'articulo_talle__producto__atributo1',
+            'articulo_talle__producto__categoria',
+            'articulo_talle__producto__sucursal',
+            'prediccion',
+        ).order_by('-unidades_a_pedir')[:300]
+    )
+
+    # ── Evidencia real para poder auditar cada recomendación ──────
+    # El registro guarda stock_actual/en_transito del día en que corrió el
+    # batch. Si el batch es viejo esos números mienten, así que se recalculan
+    # contra el stock y las compras vigentes de HOY.
+    talla_ids = [s.articulo_talle_id for s in sugerencias]
+    ventas_90, ventas_365 = _evidencia_ventas_por_talla(talla_ids)
+
+    transito_hoy = {}
+    if talla_ids:
+        filas_transito = (
+            Compras_Producto_Talla.objects
+            .filter(
+                compra_producto__compras__estado='ACTIVA',
+                producto_talla_id__in=talla_ids,
+            )
+            .values('producto_talla_id')
+            .annotate(t=Sum(F('stock') - F('unidades_recibidas')))
+            .values_list('producto_talla_id', 't')
+        )
+        transito_hoy = {pk: max(0, int(t or 0)) for pk, t in filas_transito}
 
     data = []
     for s in sugerencias:
         pt = s.articulo_talle
         prod = pt.producto
+        stock_hoy = max(0, pt.stock or 0)
+        transito = transito_hoy.get(pt.id, 0)
+        a_pedir_hoy = max(0, (s.unidades_sugeridas or 0) - stock_hoy - transito)
+
+        v90 = ventas_90.get(pt.id, 0)
+        v365 = ventas_365.get(pt.id, 0)
+        # Cobertura = cuántos días dura el stock actual al ritmo de los
+        # últimos 90 días. Sin ventas no hay cobertura finita.
+        cobertura = None
+        if v90 > 0:
+            cobertura = round(stock_hoy / (v90 / 90.0), 1)
+
         data.append({
             'id': s.id,
             'sku': pt.sku,
+            'producto_id': prod.id,
             'articulo': prod.articulo,
             'talle': pt.talla,
             'marca': prod.atributo1.valor if prod.atributo1 else '',
             'categoria': prod.categoria.nombre if prod.categoria else '',
+            'sucursal': prod.sucursal.alias if prod.sucursal_id else '',
             'unidades_sugeridas': s.unidades_sugeridas,
             'stock_actual': s.stock_actual,
+            'stock_hoy': stock_hoy,
             'en_transito': s.unidades_en_transito,
+            'en_transito_hoy': transito,
             'a_pedir': s.unidades_a_pedir,
+            'a_pedir_hoy': a_pedir_hoy,
+            'ventas_90d': v90,
+            'ventas_365d': v365,
+            'cobertura_dias': cobertura,
             'origen': s.origen,
+            'metodo': s.prediccion.metodo_usado if s.prediccion else '',
             'confianza': float(s.prediccion.confianza) if s.prediccion else 0,
             'fecha': s.fecha_generacion.strftime('%Y-%m-%d'),
         })
 
-    return JsonResponse({'sugerencias': data})
+    return JsonResponse({
+        'meta': _prediccion_meta_frescura(),
+        'sugerencias': data,
+    })
 
 
 # ──────────────────────────────────────────────────────────────
@@ -374,6 +572,10 @@ def api_prediccion_alertas_quiebre(request):
     q_suc = _q_sucursal_productos(suc, es_cd, prefix='articulo__')
     alertas = AlertaQuiebreTalle.objects.filter(
         q_suc, resuelta=False,
+        # Mismo criterio que alertas de velocidad y sugerencias: los productos
+        # marcados como fuera de analítica (bolsas, servicios, etc.) no deben
+        # generar alertas de quiebre.
+        articulo__excluir_de_analitica=False,
     ).select_related(
         'articulo', 'articulo__atributo1', 'articulo__categoria',
     ).order_by('-porcentaje_demanda_sin_cubrir')[:200]
@@ -598,16 +800,33 @@ def api_prediccion_aprobar_sugerencia(request):
 @login_required
 @require_POST
 def api_prediccion_recalcular(request):
-    try:
-        body = json.loads(request.body) if request.body else {}
-        resultados = ejecutar_pipeline_completo(
-            temporada=body.get('temporada'),
-            anio=body.get('anio'),
-        )
-        return JsonResponse({'resultados': resultados})
-    except Exception as e:
-        logger.exception("Error al recalcular predicciones")
-        return JsonResponse({'error': str(e)}, status=500)
+    """
+    El pipeline recorre ~15.000 productos y ~49.000 predicciones haciendo
+    consultas por fila: son cientos de miles de queries y decenas de minutos.
+    Ejecutarlo dentro de un request HTTP garantiza timeout del worker, y como
+    cada etapa hace `.delete()` de la tabla ANTES del `bulk_create`, un corte a
+    mitad de camino deja las tablas de predicción vacías.
+
+    Por eso el endpoint ya no ejecuta nada: devuelve el comando a correr.
+    El cálculo es un batch (cron), no una acción de pantalla.
+    """
+    logger.warning(
+        "Recalculo de predicciones solicitado desde la web por %s — bloqueado, "
+        "debe correrse como comando batch", request.user.username,
+    )
+    return JsonResponse({
+        'error': (
+            'El recálculo no puede ejecutarse desde el navegador: recorre miles '
+            'de productos y tarda decenas de minutos. Córrelo como tarea batch.'
+        ),
+        'comando': COMANDO_RECALCULO,
+        'detalle': (
+            'Ejecuta el comando en el servidor (o prográmalo en el cron diario). '
+            'Mientras no se ejecute, esta pantalla sigue mostrando el resultado '
+            'del último batch.'
+        ),
+        'meta': _prediccion_meta_frescura(),
+    }, status=409)
 
 
 # ──────────────────────────────────────────────────────────────

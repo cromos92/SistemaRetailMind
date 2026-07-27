@@ -558,6 +558,56 @@
 .nexo-btn-outline:hover { background: var(--nexo-gray-100); }
 .nexo-btn-sm { padding: 6px 12px; font-size: 0.8rem; }
 
+/* Barra de escaneo (POS 1366x768: alto contenido, sin scroll extra) */
+.scan-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    background: var(--nexo-primary-light);
+    border: 1px solid rgba(0, 102, 255, 0.25);
+    border-radius: var(--nexo-radius-md);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+}
+
+.scan-input-wrap {
+    position: relative;
+    flex: 1 1 320px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.scan-input-wrap i {
+    font-size: 1.25rem;
+    color: var(--nexo-primary);
+}
+
+.scan-input-wrap input {
+    font-size: 1rem;
+    font-weight: 600;
+    border: 2px solid var(--nexo-primary);
+    border-radius: var(--nexo-radius-sm);
+    min-height: 44px;
+}
+
+.scan-qty { width: 130px; }
+.scan-qty input { min-height: 38px; text-align: center; font-weight: 600; }
+
+.scan-feedback {
+    flex: 1 1 100%;
+    font-size: 0.85rem;
+    font-weight: 600;
+    min-height: 20px;
+}
+
+.scan-feedback.ok { color: #00997d; }
+.scan-feedback.err { color: var(--nexo-error); }
+
+.modo-ciego .col-stock-sistema,
+.modo-ciego .col-diferencia { display: none; }
+
 /* Acciones flotantes */
 .floating-actions {
     position: fixed;
@@ -791,7 +841,7 @@
                         <i class="bi bi-building"></i> Filtrar por Departamento
                     </div>
                     <div class="segment-chips" id="chipsDepartamentos">
-                        <div class="segment-chip active" data-filter="" onclick="filtrarPorDepartamento(this, '')">
+                        <div class="segment-chip active" data-filter="">
                             <i class="bi bi-grid-3x3-gap"></i> Todos
                             <span class="chip-count" id="countTodosDept">0</span>
                         </div>
@@ -803,7 +853,7 @@
                         <i class="bi bi-tag"></i> Filtrar por Marca
                     </div>
                     <div class="segment-chips" id="chipsMarcas">
-                        <div class="segment-chip active" data-filter="" onclick="filtrarPorMarca(this, '')">
+                        <div class="segment-chip active" data-filter="">
                             <i class="bi bi-grid-3x3-gap"></i> Todas
                             <span class="chip-count" id="countTodasMarcas">0</span>
                         </div>
@@ -830,6 +880,27 @@
                 </div>
             </div>
             <div class="nexo-card-body">
+                <!-- Escáner: el lector teclea el SKU y manda Enter -->
+                <div class="scan-bar">
+                    <div class="scan-input-wrap">
+                        <i class="bi bi-upc-scan"></i>
+                        <input type="text" id="inputEscaner" class="form-control"
+                               placeholder="Escanee o escriba el SKU y presione Enter"
+                               autocomplete="off" autofocus>
+                    </div>
+                    <div class="scan-qty">
+                        <label class="form-label small mb-0">Suma por lectura</label>
+                        <input type="number" id="cantidadPorLectura" class="form-control" value="1" min="1" step="1">
+                    </div>
+                    <div class="form-check form-switch ms-2">
+                        <input class="form-check-input" type="checkbox" id="modoCiego">
+                        <label class="form-check-label small" for="modoCiego" title="Oculta el stock del sistema para no inducir el conteo">
+                            Conteo ciego
+                        </label>
+                    </div>
+                    <div id="scanFeedback" class="scan-feedback"></div>
+                </div>
+
                 <!-- Filtros rápidos -->
                 <div class="nexo-filters">
                     <div class="row g-2 align-items-center">
@@ -882,9 +953,9 @@
                                 <th>Producto</th>
                                 <th>Talla</th>
                                 <th>Marca</th>
-                                <th style="width: 80px;">Stock Sist.</th>
+                                <th style="width: 80px;" class="col-stock-sistema" title="Stock del sistema al momento del conteo (corte + movimientos posteriores)">Stock Sist.</th>
                                 <th style="width: 100px;">Conteo</th>
-                                <th style="width: 80px;">Diferencia</th>
+                                <th style="width: 80px;" class="col-diferencia">Diferencia</th>
                                 <th style="width: 80px;">Estado</th>
                                 <th style="width: 120px;">Acciones</th>
                             </tr>
@@ -921,8 +992,14 @@
     <button class="nexo-btn nexo-btn-warning" onclick="guardarConteos()" id="btnGuardar" style="display: none;">
         <i class="bi bi-save"></i> Guardar Conteos
     </button>
-    <button class="nexo-btn nexo-btn-success" onclick="finalizarConteo()" id="btnFinalizar">
+    <button class="nexo-btn nexo-btn-success" onclick="finalizarConteo()" id="btnFinalizar" style="display: none;">
         <i class="bi bi-check-circle"></i> Finalizar Conteo
+    </button>
+    <button class="nexo-btn nexo-btn-warning" onclick="enviarAprobacionDesdeDetalle()" id="btnEnviarAprobacion" style="display: none;">
+        <i class="bi bi-send"></i> Enviar a Aprobación
+    </button>
+    <button class="nexo-btn nexo-btn-warning" onclick="aplicarAjustesDesdeDetalle()" id="btnAplicarAjustes" style="display: none;">
+        <i class="bi bi-arrow-right-circle"></i> Aplicar Ajustes al Stock
     </button>
 </div>
 
@@ -992,6 +1069,14 @@ const inventarioId = {{ inventario.id }};
 let currentPage = 1;
 let perPage = 50;
 let conteosPendientes = {}; // {detalle_id: stock_fisico}
+let estadoInventario = '{{ inventario.estado }}';
+let segmentosCargados = false;
+let signoDiferencia = ''; // positiva | negativa | cero (tarjetas del dashboard)
+let productosCache = {}; // {detalle_id: producto} de la página actual
+
+function formatNumber(num) {
+    return new Intl.NumberFormat('es-CL').format(Math.round(num || 0));
+}
 
 // === CARGA DE DATOS ===
 
@@ -1003,7 +1088,8 @@ function cargarProductos(page = 1) {
         estado_conteo: $('#filtroEstadoConteo').val() || '',
         marca: $('#filtroMarca').val() || '',
         categoria: $('#filtroCategoria').val() || '',
-        solo_diferencias: $('#filtroDiferencias').is(':checked')
+        solo_diferencias: $('#filtroDiferencias').is(':checked'),
+        signo: signoDiferencia
     });
     
     $.get(`/app/gestion-inventarios/api/productos-conteo/${inventarioId}/?${params}`, function(response) {
@@ -1012,9 +1098,12 @@ function cargarProductos(page = 1) {
             return;
         }
         
+        productosCache = {};
+        (response.productos || []).forEach(p => { productosCache[p.id] = p; });
+
         const tbody = $('#tbodyConteo');
         tbody.empty();
-        
+
         if (response.productos.length === 0) {
             tbody.html(`
                 <tr>
@@ -1043,23 +1132,23 @@ function cargarProductos(page = 1) {
                 
                 const excluidoClass = p.excluido ? 'row-excluido' : '';
                 tbody.append(`
-                    <tr class="${rowClass} ${excluidoClass}" data-id="${p.id}">
+                    <tr class="${rowClass} ${excluidoClass}" data-id="${p.id}" data-sku="${p.sku}">
                         <td><code>${p.sku}</code></td>
                         <td><strong>${p.producto_nombre}</strong></td>
                         <td>${p.talla_nombre || '-'}</td>
                         <td><small>${p.marca_nombre || '-'}</small></td>
-                        <td class="text-center fw-bold">${p.stock_sistema}</td>
+                        <td class="text-center fw-bold col-stock-sistema">${p.stock_sistema_ajustado}</td>
                         <td>
-                            <input type="number" 
-                                   class="input-conteo ${inputClass}" 
-                                   data-id="${p.id}" 
-                                   data-stock-sistema="${p.stock_sistema}"
+                            <input type="number"
+                                   class="input-conteo ${inputClass}"
+                                   data-id="${p.id}"
+                                   data-stock-sistema="${p.stock_sistema_ajustado}"
                                    value="${p.contado ? p.stock_fisico : ''}"
                                    placeholder="0"
                                    min="0"
                                    onchange="registrarConteo(this)">
                         </td>
-                        <td class="text-center">${diferenciaHtml}</td>
+                        <td class="text-center col-diferencia">${diferenciaHtml}</td>
                         <td class="text-center">${p.excluido ? '<span class="badge bg-dark">Excluido</span>' : estadoHtml}</td>
                         <td>
                             <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="verDetalleProducto(${p.id})" title="Ver detalle">
@@ -1083,7 +1172,7 @@ function cargarProductos(page = 1) {
         const pagination = response.pagination;
         currentPage = pagination.current_page;
         $('#pageInfo').text(`Página ${pagination.current_page} de ${pagination.total_pages}`);
-        $('#paginacionInfo').text(response.productos.length);
+        $('#paginacionInfo').text(`${response.productos.length} de ${formatNumber(pagination.total_items)}`);
         $('#btnPrevPage').toggleClass('disabled', !pagination.has_previous);
         $('#btnNextPage').toggleClass('disabled', !pagination.has_next);
         
@@ -1092,23 +1181,119 @@ function cargarProductos(page = 1) {
     });
 }
 
+// Antes esta función escribía en #statTotal, #statContados, #statPendientes,
+// #statSobrantes y #statFaltantes: NINGUNO de esos ids existe en la página. El panel
+// "Conteo Físico vs Stock Sistema" y las 4 tarjetas de diferencias se quedaban en 0
+// para siempre. Ahora se llenan los ids reales.
 function actualizarEstadisticas() {
     $.get(`/app/gestion-inventarios/api/analisis/${inventarioId}/`, function(response) {
-        if (response.success) {
-            const r = response.analisis.resumen;
-            const f = response.analisis.resumen_financiero;
-            
-            $('#statTotal').text(r.total_esperados);
-            $('#statContados').text(r.total_contados);
-            $('#statPendientes').text(r.total_esperados - r.total_contados);
-            $('#statSobrantes').text(r.sobrantes);
-            $('#statFaltantes').text(r.faltantes);
-            
-            // Actualizar progreso
-            $('#progresoTexto').text(`${r.progreso}%`);
-            $('#progresoBar').css('width', `${r.progreso}%`);
-        }
+        if (!response.success) return;
+        const a = response.analisis;
+        const r = a.resumen;
+
+        $('#totalPistola').text(formatNumber(r.unidades_fisicas));
+        $('#totalSistema').text(formatNumber(r.unidades_sistema));
+
+        $('#cardSobrantes').text(formatNumber(r.sobrantes));
+        $('#cardFaltantes').text(formatNumber(r.faltantes));
+        $('#cardCoinciden').text(formatNumber(r.sin_diferencia));
+        $('#cardPendientes').text(formatNumber(r.pendientes_contar));
+
+        $('#progresoTexto').text(`${r.progreso}% · ${formatNumber(r.total_contados)} de ${formatNumber(r.total_esperados)} SKUs`);
+        $('#progresoBar').css('width', `${r.progreso}%`);
+
+        estadoInventario = a.estado || estadoInventario;
+        actualizarPasosYAcciones(a);
+        poblarSegmentos(a.segmentos || {});
     });
+}
+
+// Marca el paso del proceso y muestra solo las acciones válidas para el estado actual
+function actualizarPasosYAcciones(analisis) {
+    const orden = {
+        'BORRADOR': 1, 'EN_CONTEO': 2, 'CONTEO_FINALIZADO': 3, 'EN_REVISION': 3,
+        'PENDIENTE_APROBACION': 5, 'APROBADO': 5, 'APLICANDO': 5, 'COMPLETADO': 5,
+        'CANCELADO': 0
+    };
+    const actual = orden[estadoInventario] || 1;
+    for (let i = 1; i <= 5; i++) {
+        const el = $(`#step${i}`);
+        el.removeClass('active completed');
+        if (i < actual) el.addClass('completed');
+        else if (i === actual) el.addClass('active');
+    }
+
+    const enConteo = ['BORRADOR', 'EN_CONTEO'].includes(estadoInventario);
+    $('#btnFinalizar').toggle(enConteo);
+    $('#btnGuardar').toggle(enConteo && Object.keys(conteosPendientes).length > 0);
+    $('#btnEnviarAprobacion').toggle(!!analisis.puede_enviar_aprobacion);
+    $('#btnAplicarAjustes').toggle(!!analisis.puede_aplicar_ajustes);
+    $('#inputEscaner').prop('disabled', !enConteo);
+}
+
+// Llena los selects y los chips de segmentación (antes se quedaban con la opción
+// "Todas" y nunca se poblaban, así que los filtros por marca/departamento no servían)
+function poblarSegmentos(segmentos) {
+    if (segmentosCargados) return;
+    segmentosCargados = true;
+
+    const marcas = segmentos.marcas || [];
+    const categorias = segmentos.categorias || [];
+
+    const selMarca = $('#filtroMarca');
+    marcas.forEach(m => selMarca.append(`<option value="${m.valor}">${m.valor} (${m.total})</option>`));
+
+    const selCat = $('#filtroCategoria');
+    categorias.forEach(c => selCat.append(`<option value="${c.valor}">${c.valor} (${c.total})</option>`));
+
+    const chipsDept = $('#chipsDepartamentos');
+    categorias.slice(0, 12).forEach(c => {
+        chipsDept.append(`<div class="segment-chip" data-filter="${c.valor}">
+            ${c.valor} <span class="chip-count">${c.total}</span></div>`);
+    });
+
+    const chipsMarca = $('#chipsMarcas');
+    marcas.slice(0, 12).forEach(m => {
+        chipsMarca.append(`<div class="segment-chip" data-filter="${m.valor}">
+            ${m.valor} <span class="chip-count">${m.total}</span></div>`);
+    });
+
+    $('#countTodosDept').text(categorias.reduce((s, c) => s + c.total, 0));
+    $('#countTodasMarcas').text(marcas.reduce((s, m) => s + m.total, 0));
+}
+
+// === FILTROS QUE ANTES LANZABAN ReferenceError ===
+// Los onclick inline llamaban a filtrarPorTipoDiferencia / filtrarPorDepartamento /
+// filtrarPorMarca, funciones que no existían en ninguna parte del archivo.
+function filtrarPorTipoDiferencia(tipo) {
+    $('#filtroEstadoConteo').val('');
+    $('#filtroDiferencias').prop('checked', false);
+
+    if (tipo === 'sobrantes' || tipo === 'faltantes') {
+        $('#filtroDiferencias').prop('checked', true);
+        signoDiferencia = (tipo === 'sobrantes') ? 'positiva' : 'negativa';
+    } else if (tipo === 'coinciden') {
+        signoDiferencia = 'cero';
+        $('#filtroEstadoConteo').val('contado');
+    } else { // pendientes
+        signoDiferencia = '';
+        $('#filtroEstadoConteo').val('pendiente');
+    }
+    cargarProductos(1);
+}
+
+function filtrarPorDepartamento(element, valor) {
+    $('#chipsDepartamentos .segment-chip').removeClass('active');
+    $(element).addClass('active');
+    $('#filtroCategoria').val(valor);
+    cargarProductos(1);
+}
+
+function filtrarPorMarca(element, valor) {
+    $('#chipsMarcas .segment-chip').removeClass('active');
+    $(element).addClass('active');
+    $('#filtroMarca').val(valor);
+    cargarProductos(1);
 }
 
 // === CONTEO ===
@@ -1275,12 +1460,75 @@ function finalizarConteo() {
     });
 }
 
+// Antes esto decía "Funcionalidad en desarrollo". Ahora muestra la trazabilidad del
+// conteo (que ya venía en la respuesta del API y no se usaba) y permite anotar la
+// ubicación física y observaciones sin salir de la pantalla.
 function verDetalleProducto(detalleId) {
-    // Mostrar modal con información detallada del producto
+    const p = productosCache[detalleId];
+    if (!p) {
+        Swal.fire('Error', 'No se encontró el detalle en la página actual', 'error');
+        return;
+    }
+
+    const fila = (etiqueta, valor) =>
+        `<tr><td class="text-muted text-start">${etiqueta}</td><td class="text-end fw-bold">${valor}</td></tr>`;
+
     Swal.fire({
-        title: 'Detalle del Producto',
-        text: 'Funcionalidad en desarrollo',
-        icon: 'info'
+        title: `${p.sku} · ${p.producto_nombre}`,
+        width: 640,
+        html: `
+            <table class="table table-sm mb-3">
+                ${fila('Talla / Marca', `${p.talla_nombre || '-'} · ${p.marca_nombre || '-'}`)}
+                ${fila('Categoría', p.categoria_nombre || '-')}
+                ${fila('Stock sistema a la fecha de corte', formatNumber(p.stock_sistema))}
+                ${fila('Movimientos posteriores al corte', (p.stock_movimientos_post_corte > 0 ? '+' : '') + formatNumber(p.stock_movimientos_post_corte))}
+                ${fila('Stock sistema comparado', formatNumber(p.stock_sistema_ajustado))}
+                ${fila('Conteo físico', p.contado ? formatNumber(p.stock_fisico) : 'sin contar')}
+                ${fila('Diferencia', p.contado ? `${p.diferencia > 0 ? '+' : ''}${formatNumber(p.diferencia)} u. (${p.porcentaje_diferencia}%)` : '-')}
+                ${fila('Valor de la diferencia', '$' + formatNumber(p.valor_diferencia))}
+                ${fila('Costo unitario (FIFO al corte)', '$' + formatNumber(p.costo_unitario))}
+                ${fila('Fecha de conteo', p.fecha_conteo || '-')}
+                ${fila('Reconteo', p.reconteo_requerido ? 'Requerido' : (p.stock_reconteo !== null ? `Hecho: ${p.stock_reconteo}` : 'No'))}
+            </table>
+            <div class="text-start">
+                <label class="form-label small mb-1">Ubicación (pasillo / estante)</label>
+                <input id="detUbicacion" class="form-control mb-2" value="${(p.ubicacion || '').replace(/"/g, '&quot;')}" ${p.contado ? '' : 'disabled'}>
+                <label class="form-label small mb-1">Observaciones</label>
+                <textarea id="detObs" class="form-control" rows="2" ${p.contado ? '' : 'disabled'}>${p.observaciones || ''}</textarea>
+                ${p.contado ? '' : '<div class="text-muted small mt-2">Registre primero el conteo para poder anotar ubicación y observaciones.</div>'}
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: p.contado ? 'Guardar anotaciones' : 'Cerrar',
+        cancelButtonText: 'Cerrar',
+        showConfirmButton: p.contado,
+        preConfirm: () => ({
+            ubicacion: document.getElementById('detUbicacion').value,
+            observaciones: document.getElementById('detObs').value
+        })
+    }).then(result => {
+        if (!result.isConfirmed || !p.contado) return;
+        $.ajax({
+            url: `/app/gestion-inventarios/api/registrar-conteo/${inventarioId}/`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                conteos: [{
+                    detalle_id: detalleId,
+                    stock_fisico: p.stock_fisico,
+                    ubicacion: result.value.ubicacion,
+                    observaciones: result.value.observaciones
+                }]
+            }),
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                if (response.success) {
+                    cargarProductos(currentPage);
+                } else {
+                    Swal.fire('Error', response.error, 'error');
+                }
+            }
+        });
     });
 }
 
@@ -1477,7 +1725,99 @@ function getCookie(name) {
 function limpiarFiltros() {
     $('#filtroSearch, #filtroEstadoConteo, #filtroMarca, #filtroCategoria').val('');
     $('#filtroDiferencias').prop('checked', false);
+    signoDiferencia = '';
+    $('.segment-chip').removeClass('active');
+    $('.segment-chip[data-filter=""]').addClass('active');
     cargarProductos(1);
+}
+
+// === ESCÁNER ===
+// El lector de códigos escribe el SKU y manda Enter. Si el SKU está en la toma se
+// suma la cantidad configurada y se guarda de inmediato: contar con el lector en la
+// mano no debe exigir mouse ni buscar la fila en la tabla.
+function procesarEscaneo(sku) {
+    sku = (sku || '').trim();
+    if (!sku) return;
+
+    const paso = parseInt($('#cantidadPorLectura').val()) || 1;
+    const fila = $(`#tbodyConteo tr[data-sku="${sku}"]`);
+
+    if (fila.length) {
+        const input = fila.find('.input-conteo');
+        const actual = parseInt(input.val()) || 0;
+        input.val(actual + paso);
+        registrarConteo(input[0]);
+        fila.get(0).scrollIntoView({ block: 'center' });
+        mostrarFeedbackEscaneo(`${sku}: ${actual + paso} u. (sin guardar)`, true);
+        return;
+    }
+
+    // Fuera de la página actual: se consulta al backend y se guarda directo
+    $.get(`/app/gestion-inventarios/api/productos-conteo/${inventarioId}/?search=${encodeURIComponent(sku)}&per_page=5`, function(resp) {
+        if (!resp.success || !resp.productos.length) {
+            mostrarFeedbackEscaneo(`SKU ${sku} no pertenece a esta toma de inventario`, false);
+            return;
+        }
+        const exacto = resp.productos.find(p => String(p.sku) === sku) || resp.productos[0];
+        const nuevo = (exacto.contado ? exacto.stock_fisico : 0) + paso;
+        guardarConteoDirecto(exacto.id, nuevo, `${sku} · ${exacto.producto_nombre}`);
+    }).fail(function() {
+        mostrarFeedbackEscaneo('No se pudo consultar el SKU', false);
+    });
+}
+
+function guardarConteoDirecto(detalleId, cantidad, etiqueta) {
+    $.ajax({
+        url: `/app/gestion-inventarios/api/registrar-conteo/${inventarioId}/`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ conteos: [{ detalle_id: detalleId, stock_fisico: cantidad }] }),
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        success: function(response) {
+            if (response.success) {
+                mostrarFeedbackEscaneo(`${etiqueta}: ${cantidad} u. guardado`, true);
+                actualizarEstadisticas();
+            } else {
+                mostrarFeedbackEscaneo(response.error, false);
+            }
+        },
+        error: function() {
+            mostrarFeedbackEscaneo('No se pudo guardar el conteo', false);
+        }
+    });
+}
+
+function mostrarFeedbackEscaneo(mensaje, ok) {
+    $('#scanFeedback')
+        .removeClass('ok err')
+        .addClass(ok ? 'ok' : 'err')
+        .html(`<i class="bi bi-${ok ? 'check-circle' : 'exclamation-triangle'}"></i> ${mensaje}`);
+}
+
+function enviarAprobacionDesdeDetalle() {
+    Swal.fire({
+        title: '¿Enviar a aprobación?',
+        text: 'El inventario quedará pendiente de aprobación.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, enviar',
+        cancelButtonText: 'Cancelar'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        $.ajax({
+            url: `/app/gestion-inventarios/api/enviar-aprobacion/${inventarioId}/`,
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                if (response.success) {
+                    Swal.fire('Enviado', response.message, 'success').then(() => window.location.reload());
+                } else {
+                    Swal.fire('Error', response.error, 'error');
+                }
+            },
+            error: function() { Swal.fire('Error', 'No se pudo enviar a aprobación', 'error'); }
+        });
+    });
 }
 
 // === EVENTOS ===
@@ -1516,14 +1856,48 @@ $(document).ready(function() {
         }
     });
     
-    // Keyboard navigation
+    // Keyboard navigation: Enter avanza, Shift+Enter retrocede y al llegar al final
+    // se devuelve el foco al escáner (contar sin soltar el lector)
     $(document).on('keydown', '.input-conteo', function(e) {
-        if (e.key === 'Enter') {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        $(this).trigger('change');
+        const fila = $(this).closest('tr');
+        const objetivo = e.shiftKey ? fila.prev('tr') : fila.next('tr');
+        if (objetivo.length) {
+            objetivo.find('.input-conteo').focus().select();
+        } else {
+            $('#inputEscaner').focus();
+        }
+    });
+
+    // Escáner
+    $('#inputEscaner').on('keydown', function(e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const sku = this.value;
+        this.value = '';
+        procesarEscaneo(sku);
+    });
+
+    // Chips de segmentación (se crean dinámicamente)
+    $('#chipsDepartamentos').on('click', '.segment-chip', function() {
+        filtrarPorDepartamento(this, $(this).data('filter') || '');
+    });
+    $('#chipsMarcas').on('click', '.segment-chip', function() {
+        filtrarPorMarca(this, $(this).data('filter') || '');
+    });
+
+    // Conteo ciego: oculta stock del sistema y diferencia mientras se cuenta
+    $('#modoCiego').on('change', function() {
+        $('#tablaConteo').toggleClass('modo-ciego', this.checked);
+    });
+
+    // Aviso de conteos sin guardar
+    window.addEventListener('beforeunload', function(e) {
+        if (Object.keys(conteosPendientes).length > 0) {
             e.preventDefault();
-            const nextRow = $(this).closest('tr').next('tr');
-            if (nextRow.length) {
-                nextRow.find('.input-conteo').focus().select();
-            }
+            e.returnValue = '';
         }
     });
 });

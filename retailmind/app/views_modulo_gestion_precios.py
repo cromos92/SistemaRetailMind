@@ -20,10 +20,42 @@ from .models import (
     Producto, Producto_Talla, LoteProducto, Categoria, AtributoOpcion,
     Sucursal, Movimientos_Producto, Ticket_Productos, Ticket,
     CambioPrecioPendiente, NotificacionCambioPrecio, HistorialCambioPrecio,
-    ParametroGlobal, EmpresaUser
+    ParametroGlobal, EmpresaUser, PermisoRol
 )
+from .utils_permisos import usuario_puede_ver_todas_sucursales
 
 logger = logging.getLogger('app')
+
+
+# ========== ALCANCE Y PERMISOS DE LA BANDEJA DE ALERTAS ==========
+
+def _sucursales_visibles_usuario(usuario):
+    """
+    Ids de sucursal que el usuario tiene asignadas (EmpresaUser activo).
+    Se usa solo para acotar el modo 'todas las sucursales'; los usuarios que
+    pueden ver todo el holding no pasan por aquí.
+    """
+    return list(
+        EmpresaUser.objects.filter(user=usuario, status=True)
+        .exclude(sucursal_id__isnull=True)
+        .values_list('sucursal_id', flat=True)
+        .distinct()
+    )
+
+
+def _puede_aprobar_cambios_precio(usuario):
+    """
+    Permiso para aprobar/rechazar una alerta de precio.
+
+    OJO — se consulta a nivel de ROL, deliberadamente SIN pasar `sucursal_id`.
+    En producción `PermisoSucursal.puede_aprobar` tiene default False y la
+    sucursal NICK1 arrastra 49 filas con puede_aprobar=False (sembradas en
+    ene-2026); pasar la sucursal de la sesión devolvería 403 a TODOS los roles
+    ahí, administrador incluido, y dejaría la bandeja igual de decorativa que
+    hoy pero además rota. La matriz por rol (PermisoRol) sí está bien poblada:
+    administrador/administracion/jefe_local/cajero aprueban, vendedor no.
+    """
+    return PermisoRol.tiene_permiso(usuario, 'revisar_cambios_precios', 'puede_aprobar')
 
 
 # ========== VISTAS PRINCIPALES ==========
@@ -2140,13 +2172,42 @@ def obtener_indicadores_precios_pendientes(request):
         })
 
 
+def _ambito_sucursales_cambios(request):
+    """
+    Resuelve a qué sucursales se acota la bandeja de alertas.
+
+    Antes el vacío y el valor 'todas' eran indistinguibles: ambos caían a la
+    sucursal de la sesión, así que "Todas las sucursales" era un filtro
+    imposible de expresar. Ahora:
+
+      - 'todas' explícito  -> sin filtro de sucursal única.
+      - vacío / ausente    -> sucursal de la sesión (comportamiento histórico,
+                              del que dependen los KPIs de la pantalla).
+
+    'todas' NO significa "todo el sistema" para cualquiera: si el usuario no
+    puede ver todas las sucursales se acota a las que tiene asignadas, para no
+    abrir una fuga de precios de otras tiendas por querystring.
+
+    Retorna (sucursal_id, sucursales_permitidas). `sucursales_permitidas` es
+    None salvo que haga falta acotar la lista en modo 'todas'.
+    """
+    sucursal_param = (request.GET.get('sucursal_id') or '').strip()
+
+    if sucursal_param.lower() == 'todas':
+        if usuario_puede_ver_todas_sucursales(request.user):
+            return None, None
+        return None, _sucursales_visibles_usuario(request.user)
+
+    return sucursal_param or request.session.get('idSucursalActual'), None
+
+
 def _filtrar_cambios_precios(request):
     """
     Construye el queryset de CambioPrecioPendiente según los filtros GET.
     Compartido por listar_cambios_pendientes y exportar_cambios_precios_excel.
-    Retorna (queryset ordenado, sucursal_id).
+    Retorna (queryset ordenado, sucursal_id, sucursales_permitidas).
     """
-    sucursal_id = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
+    sucursal_id, sucursales_permitidas = _ambito_sucursales_cambios(request)
     estado = request.GET.get('estado')
     prioridad = request.GET.get('prioridad')
     tipo_cambio = request.GET.get('tipo_cambio')
@@ -2176,6 +2237,8 @@ def _filtrar_cambios_precios(request):
     # Filtros
     if sucursal_id:
         queryset = queryset.filter(sucursal_id=sucursal_id)
+    elif sucursales_permitidas is not None:
+        queryset = queryset.filter(sucursal_id__in=sucursales_permitidas)
 
     if estado:
         queryset = queryset.filter(estado=estado)
@@ -2207,7 +2270,7 @@ def _filtrar_cambios_precios(request):
         fecha_fin = datetime.strptime(fecha_hasta, '%Y-%m-%d')
         queryset = queryset.filter(fecha_creacion__date__lte=fecha_fin.date())
 
-    return queryset.order_by('-fecha_creacion'), sucursal_id
+    return queryset.order_by('-fecha_creacion'), sucursal_id, sucursales_permitidas
 
 
 def _stock_info_producto(producto):
@@ -2234,13 +2297,18 @@ def listar_cambios_pendientes(request):
         page = int(request.GET.get('page', 1))
         per_page = int(request.GET.get('per_page', 20))
 
-        queryset, sucursal_id = _filtrar_cambios_precios(request)
+        queryset, sucursal_id, sucursales_permitidas = _filtrar_cambios_precios(request)
 
-        # Obtener resumen de contadores
+        # Obtener resumen de contadores.
+        # Debe respetar el MISMO alcance que la lista: si no, con
+        # sucursal_id='todas' las tarjetas contaban todo el sistema mientras la
+        # tabla mostraba solo las sucursales del usuario.
         base_queryset = CambioPrecioPendiente.objects.all()
         if sucursal_id:
             base_queryset = base_queryset.filter(sucursal_id=sucursal_id)
-        
+        elif sucursales_permitidas is not None:
+            base_queryset = base_queryset.filter(sucursal_id__in=sucursales_permitidas)
+
         # Contadores de activos (no descartados)
         activos = base_queryset.filter(descartado=False)
         resumen = {
@@ -2278,6 +2346,14 @@ def listar_cambios_pendientes(request):
                 'sucursal': cambio.sucursal.alias,
                 'precio_anterior': float(cambio.precio_anterior),
                 'precio_nuevo': float(cambio.precio_nuevo),
+                # Precio que tiene HOY el producto. La alerta guarda el par
+                # "anterior → nuevo" del momento en que se creó; si después
+                # alguien volvió a mover el precio, la fila muestra un cambio
+                # que ya no corresponde (23 de las 559 alertas activas en
+                # producción). Con este dato el front puede marcarla como
+                # "ya no vigente" en vez de invitar a aplicar un precio viejo.
+                'precio_vigente': int(producto.precioventa or 0),
+                'vigente': int(producto.precioventa or 0) == int(cambio.precio_nuevo),
                 'diferencia': float(cambio.diferencia),
                 'porcentaje_cambio': float(cambio.porcentaje_cambio),
                 'tipo_cambio': cambio.get_tipo_cambio_display(),
@@ -2335,7 +2411,7 @@ def exportar_cambios_precios_excel(request):
         from openpyxl.styles import Font, PatternFill, Alignment
         from openpyxl.utils import get_column_letter
 
-        queryset, sucursal_id = _filtrar_cambios_precios(request)
+        queryset, sucursal_id, _sucursales_permitidas = _filtrar_cambios_precios(request)
 
         wb = openpyxl.Workbook()
         ws = wb.active
@@ -2427,25 +2503,54 @@ def eliminar_cambios_aplicados(request):
                 'error': 'No se especificaron cambios a descartar'
             })
         
+        # El update venía sin acotar: bastaba postear una lista de ids para
+        # archivar alertas de cualquier sucursal del holding. Se acota a las
+        # sucursales que el usuario tiene asignadas; quien puede ver todas
+        # (administrador o flag puede_ver_todas_sucursales) no se toca, porque
+        # varios administradores NO tienen EmpresaUser en las 13 sucursales y
+        # filtrarlos por ahí les rompería el descarte.
+        cambios_qs = CambioPrecioPendiente.objects.filter(id__in=cambio_ids)
+        if not usuario_puede_ver_todas_sucursales(request.user):
+            cambios_qs = cambios_qs.filter(
+                sucursal_id__in=_sucursales_visibles_usuario(request.user)
+            )
+
+        # Se resuelven los ids realmente alcanzables ANTES del update, para que
+        # las notificaciones se marquen leídas exactamente sobre esos y no
+        # sobre la lista cruda que llegó del cliente.
+        ids_alcanzables = list(cambios_qs.values_list('id', flat=True))
+        fuera_de_alcance = len(set(cambio_ids)) - len(ids_alcanzables)
+
         # Marcar como descartados (NO eliminar)
         descartados = CambioPrecioPendiente.objects.filter(
-            id__in=cambio_ids
+            id__in=ids_alcanzables
         ).update(
             descartado=True,
             fecha_descarte=timezone.now(),
             descartado_por=request.user
         )
-        
+
         # Marcar las notificaciones como leídas
         NotificacionCambioPrecio.objects.filter(
-            cambio_precio_id__in=cambio_ids,
+            cambio_precio_id__in=ids_alcanzables,
             leida=False
         ).update(leida=True, fecha_lectura=timezone.now())
-        
+
+        if fuera_de_alcance > 0:
+            logger.warning(
+                "eliminar_cambios_aplicados: %s id(s) fuera del alcance del usuario %s",
+                fuera_de_alcance, request.user.username,
+            )
+
+        mensaje = f'{descartados} registro(s) descartados correctamente'
+        if fuera_de_alcance > 0:
+            mensaje += f' ({fuera_de_alcance} omitidos: fuera de tus sucursales)'
+
         return JsonResponse({
             'success': True,
             'eliminados': descartados,  # Mantener nombre para compatibilidad JS
-            'message': f'{descartados} registro(s) descartados correctamente'
+            'omitidos': fuera_de_alcance,
+            'message': mensaje
         })
         
     except Exception as e:
@@ -2526,40 +2631,111 @@ def aprobar_cambio_precio(request):
         data = json.loads(request.body)
         cambio_id = data.get('cambio_id')
         observaciones = data.get('observaciones', '')
-        
+
+        # Control de permiso explícito: el middleware de permisos no cubre
+        # estas URLs (la clave del mapa apunta a una ruta inexistente) y, aun
+        # arreglándolo, solo comprobaría `puede_ver`. Aprobar mueve el precio
+        # de venta: exige `puede_aprobar`.
+        if not _puede_aprobar_cambios_precio(request.user):
+            return JsonResponse({
+                'success': False,
+                'error': 'No tienes permiso para aprobar cambios de precio'
+            }, status=403)
+
         cambio = CambioPrecioPendiente.objects.select_related('producto_talla__producto').get(id=cambio_id)
-        
+
         if cambio.estado not in ['PENDIENTE', 'REVISADO']:
             return JsonResponse({
                 'success': False,
                 'error': 'Solo se pueden aprobar cambios pendientes o revisados'
             })
-        
+
+        # Relectura CON LOCK del producto: entre proponer y aprobar el precio
+        # pudo moverse por otra vía (edición rápida, campaña, sincronización).
+        # El código anterior escribía `precio_nuevo` a ciegas y pisaba en
+        # silencio un precio más reciente. En producción 23 de las 559 alertas
+        # activas ya no coinciden con el precio vigente del producto.
+        producto = Producto.objects.select_for_update().get(
+            pk=cambio.producto_talla.producto_id
+        )
+        precio_vigente = int(producto.precioventa or 0)
+        precio_nuevo = int(cambio.precio_nuevo)
+        precio_referencia = int(cambio.precio_anterior or 0)
+
+        if precio_vigente != precio_referencia and not data.get('confirmar_pisar_precio'):
+            return JsonResponse({
+                'success': False,
+                'requiere_confirmacion': True,
+                'error': (
+                    f'El precio del producto ya no es el de la alerta: hoy está en '
+                    f'${precio_vigente:,} y la alerta se creó desde ${precio_referencia:,}. '
+                    f'Confirma si de todas formas quieres dejarlo en ${precio_nuevo:,}.'
+                ),
+                'precio_vigente': precio_vigente,
+                'precio_referencia': precio_referencia,
+                'precio_nuevo': precio_nuevo,
+            }, status=409)
+
         # Aprobar
         cambio.estado = 'APROBADO'
         cambio.aprobado_por = request.user
         cambio.fecha_aprobacion = timezone.now()
         cambio.observaciones_aprobacion = observaciones
-        
+
         # Aplicar el cambio al producto principal
-        producto = cambio.producto_talla.producto
-        producto.precioventa = cambio.precio_nuevo
+        producto.precioventa = precio_nuevo
         producto.save()
-        
+
         # Actualizar lotes activos de TODAS las tallas del producto
         lotes_actualizados = LoteProducto.objects.filter(
             producto_talla__producto=producto,
             cantidad_disponible__gt=0,
             activo=True
-        ).update(precio_venta_unitario=cambio.precio_nuevo)
-        
+        ).update(precio_venta_unitario=precio_nuevo)
+
         # Contar tallas afectadas
         tallas_afectadas = producto.producto_talla.count()
-        
+
+        # Auditoría: aprobar un precio NO dejaba ninguna fila en
+        # HistorialCambioPrecio, que es justamente la pantalla donde se audita
+        # quién movió qué precio. Se registra el salto real (desde el precio
+        # que estaba vigente, no desde el que la alerta creía).
+        if precio_vigente != precio_nuevo:
+            diferencia = precio_nuevo - precio_vigente
+            porcentaje = round((diferencia / precio_vigente * 100), 2) if precio_vigente else 0
+            motivo_hist = f'Aprobación de alerta de precio #{cambio.id}'
+            if precio_vigente != precio_referencia:
+                motivo_hist += (
+                    f' (la alerta se creó desde ${precio_referencia:,}; '
+                    f'el precio vigente al aprobar era ${precio_vigente:,})'
+                )
+            if observaciones:
+                motivo_hist += f' — {observaciones}'
+            HistorialCambioPrecio.objects.create(
+                producto=producto,
+                precio_anterior=precio_vigente,
+                precio_nuevo=precio_nuevo,
+                diferencia=diferencia,
+                porcentaje_cambio=porcentaje,
+                tipo_cambio='APROBACION',
+                motivo=motivo_hist,
+                usuario=request.user,
+                ip_address=request.META.get('REMOTE_ADDR'),
+                tallas_afectadas=tallas_afectadas,
+                lotes_afectados=lotes_actualizados,
+            )
+
         cambio.estado = 'APLICADO'
         cambio.fecha_aplicacion = timezone.now()
         cambio.save()
-        
+
+        logger.info(
+            "Alerta de precio aprobada: cambio_id=%s producto_id=%s sucursal=%s "
+            "precio_vigente=%s precio_nuevo=%s usuario=%s tallas=%s lotes=%s",
+            cambio.id, producto.id, cambio.sucursal_id, precio_vigente,
+            precio_nuevo, request.user.username, tallas_afectadas, lotes_actualizados,
+        )
+
         # Notificar al creador (evitando duplicados)
         if cambio.creado_por and cambio.creado_por != request.user:
             existe = NotificacionCambioPrecio.objects.filter(
@@ -2580,7 +2756,9 @@ def aprobar_cambio_precio(request):
             'success': True,
             'message': f'Cambio aprobado y aplicado a {tallas_afectadas} tallas',
             'tallas_afectadas': tallas_afectadas,
-            'lotes_actualizados': lotes_actualizados
+            'lotes_actualizados': lotes_actualizados,
+            'precio_anterior_real': precio_vigente,
+            'precio_aplicado': precio_nuevo
         })
         
     except CambioPrecioPendiente.DoesNotExist:
@@ -2606,9 +2784,17 @@ def rechazar_cambio_precio(request):
         data = json.loads(request.body)
         cambio_id = data.get('cambio_id')
         observaciones = data.get('observaciones', 'Cambio rechazado')
-        
+
+        # Mismo permiso que aprobar: rechazar cierra la alerta y descarta un
+        # cambio de precio propuesto, no es una acción de solo lectura.
+        if not _puede_aprobar_cambios_precio(request.user):
+            return JsonResponse({
+                'success': False,
+                'error': 'No tienes permiso para rechazar cambios de precio'
+            }, status=403)
+
         cambio = CambioPrecioPendiente.objects.select_related('producto_talla__producto').get(id=cambio_id)
-        
+
         if cambio.estado not in ['PENDIENTE', 'REVISADO']:
             return JsonResponse({
                 'success': False,
@@ -3048,12 +3234,28 @@ def regularizar_precio_sucursales(request):
                     activo=True
                 ).update(precio_venta_unitario=int(precio_nuevo))
                 
-                # Registrar en historial
-                if precio_anterior != int(precio_nuevo):
+                # Registrar en historial.
+                # OJO: `diferencia` y `porcentaje_cambio` son NOT NULL sin
+                # default en HistorialCambioPrecio; omitirlos hacía que este
+                # create lanzara IntegrityError SIEMPRE que hubiera algo que
+                # regularizar. Como todo corre dentro del transaction.atomic(),
+                # la regularización completa se revertía y el endpoint
+                # respondía success:False. Se confirma en producción: 0 filas
+                # con tipo_cambio='REGULARIZACION' sobre 2.728 del historial.
+                precio_anterior_int = int(precio_anterior or 0)
+                precio_nuevo_int = int(precio_nuevo)
+                if precio_anterior_int != precio_nuevo_int:
+                    _diferencia = precio_nuevo_int - precio_anterior_int
+                    _porcentaje = (
+                        round((_diferencia / precio_anterior_int * 100), 2)
+                        if precio_anterior_int else 0
+                    )
                     HistorialCambioPrecio.objects.create(
                         producto=producto,
-                        precio_anterior=precio_anterior,
-                        precio_nuevo=int(precio_nuevo),
+                        precio_anterior=precio_anterior_int,
+                        precio_nuevo=precio_nuevo_int,
+                        diferencia=_diferencia,
+                        porcentaje_cambio=_porcentaje,
                         tipo_cambio='REGULARIZACION',
                         motivo=motivo,
                         usuario=request.user,

@@ -53,7 +53,7 @@
     .nexo-header {
         background: var(--nexo-secondary);
         color: var(--nexo-white);
-        padding: 32px 40px;
+        padding: 18px 40px;
         position: relative;
         overflow: hidden;
     }
@@ -104,11 +104,14 @@
     }
 
     /* ========== KPI DASHBOARD ========== */
+    /* 8 tarjetas en una sola fila: en 1366x768 (PC de tienda) entran justas y
+       dejan la tabla visible sin scroll. auto-fit evita la fila huérfana que
+       producía `repeat(6, 1fr)` con 8 KPIs. */
     .nexo-kpi-dashboard {
         display: grid;
-        grid-template-columns: repeat(6, 1fr);
-        gap: 12px;
-        padding: 14px 40px;
+        grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+        gap: 10px;
+        padding: 10px 40px;
         background: var(--nexo-white);
         border-bottom: 1px solid var(--nexo-gray-300);
     }
@@ -117,10 +120,36 @@
         background: var(--nexo-white);
         border: 1px solid var(--nexo-gray-300);
         border-radius: var(--nexo-radius-md);
-        padding: 12px 14px;
+        padding: 8px 10px;
         position: relative;
         transition: var(--nexo-transition-fast);
         overflow: hidden;
+    }
+
+    /* El icono ocupaba una línea completa; a 768px de alto es espacio caro. */
+    .nexo-kpi-card .nexo-kpi-icon { display: none; }
+
+    /* ===== AVISO DE LISTA TRUNCADA ===== */
+    .nexo-truncado-banner {
+        margin: 12px 40px 0 40px;
+        padding: 10px 14px;
+        border-radius: var(--nexo-radius-md);
+        background: rgba(255, 176, 32, 0.12);
+        border: 1px solid var(--nexo-warning);
+        color: #7a5200;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.82rem;
+    }
+
+    .nexo-truncado-banner i { font-size: 1.15rem; color: var(--nexo-warning); }
+    .nexo-truncado-banner strong { color: #6b4700; }
+
+    .nexo-alcance-nota {
+        margin: 8px 40px 0 40px;
+        font-size: 0.75rem;
+        color: var(--nexo-gray-500);
     }
 
     .nexo-kpi-card:hover {
@@ -932,18 +961,16 @@
     }
 
     /* ========== RESPONSIVE ========== */
-    @media (max-width: 1400px) {
-        .nexo-kpi-dashboard {
-            grid-template-columns: repeat(3, 1fr);
-        }
-    }
-
     @media (max-width: 1200px) {
         .nexo-header,
         .nexo-kpi-dashboard,
         .nexo-controls,
         .nexo-quick-filters,
-        .nexo-content {
+        .nexo-content,
+        .nexo-truncado-banner,
+        .nexo-alcance-nota {
+            margin-left: 0;
+            margin-right: 0;
             padding-left: 24px;
             padding-right: 24px;
         }
@@ -1128,11 +1155,16 @@
         </div>
 
         <div class="nexo-control-group">
-            <label class="nexo-control-label">Buscar Marca</label>
-            <input type="text" 
-                   id="search-marca" 
-                   class="nexo-input" 
-                   placeholder="Escribe para filtrar marcas..."
+            <!-- OJO: esto NO filtra el inventario, solo acota el desplegable
+                 de la derecha. El rótulo anterior ("Buscar Marca") hacía
+                 creer que era un filtro de datos. -->
+            <label class="nexo-control-label" title="Solo acota las opciones del desplegable de marcas">
+                Encontrar marca en la lista <span style="text-transform:none;font-weight:400;color:var(--nexo-gray-500)">(no filtra los datos)</span>
+            </label>
+            <input type="text"
+                   id="search-marca"
+                   class="nexo-input"
+                   placeholder="Escribe para acotar el desplegable..."
                    oninput="filtrarMarcas()">
         </div>
 
@@ -1178,6 +1210,29 @@
                 <strong>Tip:</strong> Usa los filtros de <strong>Marca</strong> o <strong>Departamento</strong> para búsquedas más rápidas, o escribe en <strong>Buscar Artículo</strong> (mín. 3 caracteres).
             </p>
         </div>
+    </div>
+
+    <!-- ========== AVISO: LA LISTA VIENE CORTADA ========== -->
+    <!-- El backend limita la cantidad de ARTÍCULOS devueltos y publica
+         truncado / articulos_mostrados / articulos_disponibles. Sin este aviso
+         el usuario lee un inventario parcial creyendo que es el total (los KPI
+         y la fila de totales se calculan solo sobre lo mostrado). -->
+    <div class="nexo-truncado-banner" id="aviso-truncado" style="display:none;">
+        <i class="ri-scissors-cut-line"></i>
+        <div>
+            <strong>Lista incompleta:</strong>
+            se muestran <strong id="trunc-mostrados">0</strong> de
+            <strong id="trunc-disponibles">0</strong> artículos que cumplen el filtro.
+            Los KPI de arriba, los totales y el Excel corresponden
+            <u>solo a lo mostrado</u>, no al inventario completo.
+            Acota por marca, departamento o búsqueda para ver el universo entero.
+        </div>
+    </div>
+
+    <!-- Alcance de los KPI: qué universo se está mirando realmente -->
+    <div class="nexo-alcance-nota" id="alcance-nota" style="display:none;">
+        <i class="ri-information-line"></i>
+        <span id="alcance-texto"></span>
     </div>
 
     <!-- ========== QUICK FILTERS ========== -->
@@ -1232,6 +1287,7 @@
 
 <script>
 let datosCompletos = [];
+let ultimoTruncado = false;   // la última respuesta vino cortada por el límite
 let todasLasMarcas = [];
 let sucursalesDisponibles = [];
 let filtroActivo = 'todos';
@@ -1525,15 +1581,17 @@ async function cargarReporte(forzarSinFiltro = false) {
     
     // Validar filtros (pero permitir sin filtro con confirmación)
     if (!tieneFiltroValido() && !forzarSinFiltro) {
-        // Preguntar si quiere cargar sin filtro
-        const confirmar = confirm(
-            '⚠️ No has seleccionado ningún filtro.\n\n' +
-            'Se cargarán todos los productos de tu sucursal.\n' +
-            'Esto puede tomar unos segundos.\n\n' +
-            '¿Deseas continuar?'
-        );
-        
-        if (!confirmar) return;
+        const r = await Swal.fire({
+            icon: 'warning',
+            title: 'Sin filtros seleccionados',
+            html: 'Se cargarán productos de tu sucursal, pero <strong>solo los primeros 500 artículos</strong>' +
+                  ' (el resto queda fuera y los totales serán parciales).<br>' +
+                  'Filtrar por marca o departamento entrega el universo completo.',
+            showCancelButton: true,
+            confirmButtonText: 'Cargar de todos modos',
+            cancelButtonText: 'Elegir un filtro',
+        });
+        if (!r.isConfirmed) return;
     }
     
     mostrarAlertaFiltro(false);
@@ -1579,6 +1637,7 @@ async function cargarReporte(forzarSinFiltro = false) {
             datosCompletos = data.datos;
             sucursalesDisponibles = data.sucursales || [];
 
+            actualizarAvisoTruncado(data);
             actualizarKPIs(data.datos);
             // KPIs de salud (server-side, sobre el universo filtrado)
             const salud = data.salud || {};
@@ -1596,6 +1655,7 @@ async function cargarReporte(forzarSinFiltro = false) {
                 console.log('📊 Reporte cargado:', data.debug);
             }
         } else if (data.requiere_filtro) {
+            ocultarAvisoAlcance();
             mostrarAlertaFiltro(true);
             document.getElementById('contenedor-tabla').style.display = 'none';
             document.getElementById('estado-mensaje').style.display = 'block';
@@ -1607,6 +1667,7 @@ async function cargarReporte(forzarSinFiltro = false) {
                 </div>
             `;
         } else {
+            ocultarAvisoAlcance();
             document.getElementById('contenedor-tabla').style.display = 'none';
             document.getElementById('estado-mensaje').style.display = 'block';
             document.getElementById('estado-mensaje').innerHTML = `
@@ -1619,6 +1680,7 @@ async function cargarReporte(forzarSinFiltro = false) {
         }
     } catch (error) {
         mostrarLoading(false);
+        ocultarAvisoAlcance();
         console.error('Error:', error);
         document.getElementById('contenedor-tabla').style.display = 'none';
         document.getElementById('estado-mensaje').style.display = 'block';
@@ -1630,6 +1692,53 @@ async function cargarReporte(forzarSinFiltro = false) {
             </div>
         `;
     }
+}
+
+// ========== AVISO DE LISTA TRUNCADA / ALCANCE ==========
+// El backend informa `truncado`, `articulos_mostrados` y `articulos_disponibles`.
+// Si la lista viene cortada hay que decirlo en pantalla: los KPI, los totales de
+// la tabla y el Excel se calculan sobre lo que llegó, no sobre el universo.
+function actualizarAvisoTruncado(data) {
+    const banner = document.getElementById('aviso-truncado');
+    const mostrados = data.articulos_mostrados;
+    const disponibles = data.articulos_disponibles;
+    ultimoTruncado = !!data.truncado;
+
+    if (banner) {
+        if (data.truncado) {
+            document.getElementById('trunc-mostrados').textContent =
+                formatearNumero(mostrados);
+            document.getElementById('trunc-disponibles').textContent =
+                formatearNumero(disponibles);
+            banner.style.display = 'flex';
+        } else {
+            banner.style.display = 'none';
+        }
+    }
+
+    // Nota de alcance: sucursales incluidas + cantidad de artículos.
+    const nota = document.getElementById('alcance-nota');
+    const texto = document.getElementById('alcance-texto');
+    if (nota && texto) {
+        const sucs = (data.sucursales || []).map(s => s.alias);
+        const ambito = sucs.length === 0 ? 'sin sucursales'
+                     : sucs.length === 1 ? `sucursal ${sucs[0]}`
+                     : `${sucs.length} sucursales (${sucs.slice(0, 4).join(', ')}${sucs.length > 4 ? ', …' : ''})`;
+        const cuantos = (disponibles != null && !data.truncado)
+            ? `${formatearNumero(disponibles)} artículos`
+            : `${formatearNumero(mostrados || (data.datos || []).length)} artículos mostrados`;
+        texto.textContent = `Indicadores calculados sobre ${cuantos} · ${ambito}. ` +
+            'Solo se incluyen artículos con stock.';
+        nota.style.display = 'block';
+    }
+}
+
+function ocultarAvisoAlcance() {
+    ultimoTruncado = false;
+    const banner = document.getElementById('aviso-truncado');
+    const nota = document.getElementById('alcance-nota');
+    if (banner) banner.style.display = 'none';
+    if (nota) nota.style.display = 'none';
 }
 
 // ========== ACTUALIZAR KPIs ==========
@@ -1732,10 +1841,29 @@ function formatearNumero(num) {
 // ========== EXPORTAR EXCEL ==========
 async function exportarExcel() {
     if (!tieneFiltroValido()) {
-        alert('⚠️ Selecciona al menos un filtro antes de exportar');
+        Swal.fire({
+            icon: 'warning',
+            title: 'Falta un filtro',
+            text: 'Selecciona marca, departamento o escribe una búsqueda antes de exportar.',
+        });
         return;
     }
-    
+
+    // El Excel reusa la misma API: si la pantalla vino cortada, el archivo
+    // también lo estará. Mejor decirlo antes que entregar un inventario parcial.
+    if (ultimoTruncado) {
+        const r = await Swal.fire({
+            icon: 'warning',
+            title: 'El Excel también vendrá incompleto',
+            html: 'La consulta actual superó el límite de artículos.<br>' +
+                  'El archivo contendrá <strong>solo los artículos que ves en pantalla</strong>.',
+            showCancelButton: true,
+            confirmButtonText: 'Exportar igual',
+            cancelButtonText: 'Volver y afinar el filtro',
+        });
+        if (!r.isConfirmed) return;
+    }
+
     try {
         const marcaId = document.getElementById('filtro-marca').value;
         const deptId = document.getElementById('filtro-departamento').value;
@@ -1757,7 +1885,7 @@ async function exportarExcel() {
         window.location.href = url;
     } catch (error) {
         console.error('Error al exportar:', error);
-        alert('Error al exportar a Excel');
+        Swal.fire({ icon: 'error', title: 'Error al exportar', text: 'No se pudo generar el Excel.' });
     }
 }
 
@@ -1770,6 +1898,7 @@ function limpiarFiltros() {
     document.getElementById('filtro-sucursal').value = '';
     filtrarMarcas();
     mostrarAlertaFiltro(true);
+    ocultarAvisoAlcance();
     datosCompletos = [];
     document.getElementById('btn-exportar').disabled = true;
     

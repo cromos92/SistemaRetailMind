@@ -1884,6 +1884,92 @@
         color: #dc2626;
     }
 
+    /* ========== IMPACTO DE LA OPERACIÓN (stock / caja / DTE) ==========
+       Panel de una sola mirada que responde las tres preguntas que el cajero
+       no podía contestar antes de confirmar: qué pasa con el inventario, qué
+       pasa con la plata y qué documento se emite (o no). */
+    .impacto-cambio {
+        border: 1px solid #e9ecef;
+        border-left: 3px solid var(--nexo-primary, #0066FF);
+        border-radius: var(--nexo-radius-md, 6px);
+        background: #f8fafc;
+        padding: 0.35rem 0.55rem;
+        margin-bottom: 0.5rem;
+    }
+    .impacto-cambio .impacto-titulo {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        color: var(--nexo-primary, #0066FF);
+        margin-bottom: 0.3rem;
+    }
+    .impacto-cambio .impacto-nota {
+        margin-left: auto;
+        font-size: 0.62rem;
+        font-weight: 600;
+        text-transform: none;
+        letter-spacing: 0;
+        color: #94a3b8;
+    }
+    .impacto-cambio .impacto-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.4rem;
+    }
+    .impacto-cambio .impacto-item {
+        background: #fff;
+        border: 1px solid #e9ecef;
+        border-radius: 4px;
+        padding: 0.25rem 0.45rem;
+        min-width: 0;
+    }
+    .impacto-cambio .impacto-lbl {
+        display: block;
+        font-size: 0.6rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        color: #64748b;
+        line-height: 1.3;
+    }
+    .impacto-cambio .impacto-txt {
+        display: block;
+        font-size: 0.74rem;
+        line-height: 1.3;
+        color: #1e293b;
+    }
+    .impacto-cambio .impacto-txt strong { font-weight: 800; }
+    .impacto-cambio .impacto-item.cobro   { border-color: #f5c2c7; background: #fff5f5; }
+    .impacto-cambio .impacto-item.devuelve{ border-color: #b6d4fe; background: #f2f8ff; }
+    .impacto-cambio .impacto-item.neutro  { border-color: #cfe8dd; background: #f4fbf8; }
+    .impacto-cambio .impacto-alerta {
+        display: block;
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: #b45309;
+        line-height: 1.25;
+        margin-top: 1px;
+    }
+
+    /* Nota del paso 3 del asistente: crear la solicitud NO mueve nada. */
+    .aviso-solicitud-inerte {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.72rem;
+        color: #475569;
+        background: #f1f5f9;
+        border: 1px dashed #cbd5e1;
+        border-radius: 4px;
+        padding: 0.25rem 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .aviso-solicitud-inerte i { color: var(--nexo-primary, #0066FF); }
+
     /* ========== MEDIA QUERY POS 15" (1024x768 / 1366x768) ========== */
     @media screen and (max-height: 800px) {
         /* ── Page Level ── */
@@ -1996,6 +2082,20 @@
         #modalAprobarCambio .modal-header { padding: 0.35rem 0.75rem; }
         #modalAprobarCambio .modal-body { padding: 0.5rem 0.75rem; }
         #modalAprobarCambio .modal-footer { padding: 0.35rem 0.75rem; }
+        /* Las tablas de productos ceden alto para que el panel de impacto entre
+           sin empujar el bloque de autorizaciones fuera de la pantalla. */
+        #modalAprobarCambio .table-responsive { max-height: 118px !important; }
+
+        /* ── Impacto ── */
+        .impacto-cambio { padding: 0.25rem 0.45rem; margin-bottom: 0.35rem; }
+        .impacto-cambio .impacto-titulo { font-size: 0.66rem; margin-bottom: 0.2rem; }
+        .impacto-cambio .impacto-nota { font-size: 0.58rem; }
+        .impacto-cambio .impacto-grid { gap: 0.3rem; }
+        .impacto-cambio .impacto-item { padding: 0.2rem 0.35rem; }
+        .impacto-cambio .impacto-lbl { font-size: 0.55rem; }
+        .impacto-cambio .impacto-txt { font-size: 0.68rem; }
+        .impacto-cambio .impacto-alerta { font-size: 0.62rem; }
+        .aviso-solicitud-inerte { font-size: 0.66rem; padding: 0.2rem 0.45rem; margin-bottom: 0.35rem; }
 
         /* ── Paginación ── */
         .pagination-sm .page-link { padding: 0.2rem 0.5rem; font-size: 0.75rem; }
@@ -2894,6 +2994,15 @@
                         </div>
                     </div>
 
+                    <!-- Crear la solicitud no ejecuta nada: `crear_cambio_devolucion`
+                         no toca inventario, caja ni DTE. Todo eso ocurre recién en la
+                         autorización. Decirlo evita el "¿ya se descontó el stock?". -->
+                    <div class="aviso-solicitud-inerte">
+                        <i class="ri-information-line"></i>
+                        <span>Crear la solicitud <strong>no mueve stock, ni caja, ni emite documentos</strong>.
+                        Todo eso ocurre cuando un autorizador la aprueba y ejecuta.</span>
+                    </div>
+
                     <div id="resumen-productos-container">
                         <!-- Populated by generarResumenProductos() -->
                     </div>
@@ -3335,12 +3444,31 @@
                     </div>
                 </div>
 
-                <!-- Info: diferencia se cobra en POS -->
-                <div id="info-diferencia-pos" class="d-flex align-items-center gap-1 rounded px-2 py-1 mb-0" style="display:none; background:#e7f3ff; border:1px solid #b6d4fe; font-size:.8rem;">
-                    <i class="ri-information-line text-primary"></i>
-                    <span>Diferencia de <strong id="pago-diferencia-monto-display">$0</strong> — cobro desde <strong>POS Dashboard</strong> (ticket pendiente de pago)</span>
+                <!-- Qué pasa al autorizar: stock, caja y documento SII.
+                     Reemplaza el aviso anterior, que sólo hablaba del cobro cuando la
+                     diferencia era positiva y dejaba fuera los otros dos efectos. -->
+                <div class="impacto-cambio" id="impacto-aprobacion">
+                    <div class="impacto-titulo">
+                        <i class="ri-flashlight-fill"></i>
+                        Al autorizar ocurre de inmediato
+                        <span class="impacto-nota">solo se deshace con <strong>Revertir</strong></span>
+                    </div>
+                    <div class="impacto-grid">
+                        <div class="impacto-item" id="impacto-stock">
+                            <span class="impacto-lbl"><i class="ri-archive-2-line"></i> Stock</span>
+                            <span class="impacto-txt">Calculando…</span>
+                        </div>
+                        <div class="impacto-item" id="impacto-caja">
+                            <span class="impacto-lbl"><i class="ri-cash-line"></i> Caja</span>
+                            <span class="impacto-txt">Calculando…</span>
+                        </div>
+                        <div class="impacto-item" id="impacto-dte">
+                            <span class="impacto-lbl"><i class="ri-file-text-line"></i> Documento SII</span>
+                            <span class="impacto-txt">Calculando…</span>
+                        </div>
+                    </div>
                 </div>
-                
+
                 <input type="hidden" id="vendedor-id-validado">
             </div>
             <div class="modal-footer py-2 px-3">
@@ -6762,7 +6890,11 @@ function enviarSolicitudCambio(datos) {
                             '<p class="text-info">Cambio sin diferencia</p>'
                         }
                         <hr>
-                        <p class="small text-muted">La solicitud requiere aprobación antes de completarse</p>
+                        <p class="small text-muted mb-1">La solicitud requiere aprobación antes de completarse.</p>
+                        <p class="small text-muted mb-0">
+                            Todavía <strong>no se movió stock</strong>, <strong>no se cobró ni devolvió dinero</strong>
+                            y <strong>no se emitió ningún documento</strong>.
+                        </p>
                     `,
                     confirmButtonText: 'Entendido'
                 });
@@ -7374,13 +7506,10 @@ function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
         $('#aprobar-diferencia').text('$0').removeClass('text-danger').addClass('text-success');
     }
 
-    if (diferencia > 0) {
-        $('#info-diferencia-pos').show();
-        $('#pago-diferencia-monto-display').text('$' + formatearNumero(diferencia));
-    } else {
-        $('#info-diferencia-pos').hide();
-    }
-    
+    // Impacto preliminar con lo que ya sabemos; se recalcula con el detalle real
+    // apenas responde /cambio-detalle/.
+    pintarImpactoAprobacion({ tipo_operacion: tipo }, [], diferencia);
+
     $('#textarea-observaciones-aprobacion').val('');
     $('#input-codigo-vendedor-aprobacion').val('').prop('readonly', false);
     $('#vendedor-id-validado').val('');
@@ -7545,6 +7674,10 @@ function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
                     cambioActual.monto_nuevo = totalNuevos;
                 }
 
+                // Impacto real: unidades que entran/salen, plata y documento SII.
+                cambioActual.tipo_operacion = cambio.tipo_operacion || cambioActual.tipo_operacion;
+                pintarImpactoAprobacion(cambio, productos, diferenciaReal);
+
                 // Pre-fill vendedor from original sale
                 const ticketOriginal = cambio.ticket_original;
                 if (ticketOriginal && ticketOriginal.vendedor_id) {
@@ -7587,6 +7720,90 @@ function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
 
 function aprobarCambio(cambioId) {
     aprobarCambioConDatos(cambioId, 'CAMBIO', 0, 0);
+}
+
+/**
+ * Pinta el panel "qué pasa al autorizar" del modal de aprobación.
+ *
+ * Refleja literalmente lo que hace `aprobar_cambio_generar_ticket`, que ejecuta
+ * TODO en una sola transacción:
+ *
+ *  STOCK  · las unidades devueltas APTAS entran al inventario de la sucursal
+ *           (CAMBIO_PRODUCTO_ENTRADA); las NO APTAS solo quedan en kardex y no
+ *           suman stock; las unidades entregadas salen por FIFO
+ *           (CAMBIO_PRODUCTO_SALIDA).
+ *  CAJA   · no se cobra ni se paga aquí: se genera un ticket. Diferencia > 0 →
+ *           ticket PENDIENTE de cobro; < 0 → ticket PENDIENTE de devolución;
+ *           = 0 → ticket PAGADO y el cambio queda COMPLETADO.
+ *  SII    · autorizar NO emite ningún DTE. La Nota de Crédito es un paso aparte
+ *           y solo existe para devoluciones (total o parcial).
+ *
+ * @param {object} cambio      Cabecera del cambio (tipo_operacion, nc_generada…).
+ * @param {Array}  productos   Detalles del cambio (/cambio-detalle/).
+ * @param {number} diferencia  Diferencia de monto ya calculada (nuevos - devueltos).
+ */
+function pintarImpactoAprobacion(cambio, productos, diferencia) {
+    const $stock = $('#impacto-stock');
+    const $caja  = $('#impacto-caja');
+    const $dte   = $('#impacto-dte');
+    if (!$stock.length) return;
+
+    const detalles = Array.isArray(productos) ? productos : [];
+    const tipo = String((cambio && cambio.tipo_operacion) || '').toUpperCase();
+    const esDevolucion = tipo.indexOf('DEVOLUCION') === 0;
+
+    // ── STOCK ──
+    let entran = 0, noAptas = 0, salen = 0;
+    detalles.forEach(function (d) {
+        const cantDev = parseInt(d.cantidad_cambio || 0, 10) || 0;
+        if (d.producto_original && cantDev > 0) {
+            if (d.apto_para_venta === false) { noAptas += cantDev; } else { entran += cantDev; }
+        }
+        if (d.producto_nuevo) {
+            salen += parseInt(d.cantidad_nueva || 0, 10) || 0;
+        }
+    });
+
+    const partesStock = [];
+    if (entran > 0) partesStock.push(`Entran <strong>${entran}</strong> u.`);
+    if (salen  > 0) partesStock.push(`Salen <strong>${salen}</strong> u. (FIFO)`);
+    let htmlStock = `<span class="impacto-lbl"><i class="ri-archive-2-line"></i> Stock</span>`;
+    htmlStock += `<span class="impacto-txt">${
+        partesStock.length ? partesStock.join(' · ') : 'Sin movimiento de inventario'
+    }</span>`;
+    if (noAptas > 0) {
+        htmlStock += `<span class="impacto-alerta"><i class="ri-alert-line"></i> ${noAptas} u. NO APTAS: quedan en kardex y NO suman stock</span>`;
+    }
+    $stock.html(htmlStock);
+
+    // ── CAJA ──
+    const dif = Number(diferencia) || 0;
+    const monto = '$' + formatearNumero(Math.abs(dif));
+    let htmlCaja = `<span class="impacto-lbl"><i class="ri-cash-line"></i> Caja</span>`;
+    $caja.removeClass('cobro devuelve neutro');
+    if (dif > 0) {
+        $caja.addClass('cobro');
+        htmlCaja += `<span class="impacto-txt">Ticket <strong>pendiente de COBRO</strong> por <strong>${monto}</strong>. Se cobra en el POS; hasta entonces queda “Ejecutado - Cobro Pendiente”.</span>`;
+    } else if (dif < 0) {
+        $caja.addClass('devuelve');
+        htmlCaja += `<span class="impacto-txt">Ticket <strong>pendiente de DEVOLUCIÓN</strong> por <strong>${monto}</strong>. Se paga al cliente desde el POS.</span>`;
+    } else {
+        $caja.addClass('neutro');
+        htmlCaja += `<span class="impacto-txt">Sin diferencia: no entra ni sale dinero. El cambio queda <strong>Completado</strong>.</span>`;
+    }
+    $caja.html(htmlCaja);
+
+    // ── DOCUMENTO SII ──
+    let htmlDte = `<span class="impacto-lbl"><i class="ri-file-text-line"></i> Documento SII</span>`;
+    if (cambio && cambio.nc_generada) {
+        const numNc = (cambio.nota_credito && cambio.nota_credito.numero) || '';
+        htmlDte += `<span class="impacto-txt">Ya tiene <strong>Nota de Crédito${numNc ? ' N° ' + numNc : ''}</strong> emitida.</span>`;
+    } else if (esDevolucion) {
+        htmlDte += `<span class="impacto-txt">No se emite DTE al autorizar. La <strong>Nota de Crédito</strong> es un paso aparte (botón <em>Generar NC</em>).</span>`;
+    } else {
+        htmlDte += `<span class="impacto-txt">No se emite ningún DTE: los <strong>cambios no generan Nota de Crédito</strong>.</span>`;
+    }
+    $dte.html(htmlDte);
 }
 
 // Variables para controlar las validaciones
@@ -7867,6 +8084,15 @@ function confirmarAprobacionYGenerarTicket() {
                                 <p class="small text-muted">Debe procesar la devolución en el POS para completar</p>`;
                         } else {
                             mensajeDiferencia = `<p class="text-success fw-bold fs-6"><i class="ri-check-double-line"></i> Sin diferencia - Cambio completado</p>`;
+                        }
+
+                        // La NC NO se emite al autorizar: es un paso aparte y solo
+                        // aplica a devoluciones. Sin este recordatorio la devolución
+                        // queda ejecutada pero sin documento tributario.
+                        const _tipoOp = String((cambioActual && cambioActual.tipo_operacion) || '').toUpperCase();
+                        if (_tipoOp.indexOf('DEVOLUCION') === 0) {
+                            mensajeDiferencia += `<p class="small text-muted mb-0"><i class="ri-file-text-line"></i>
+                                No se emitió ningún DTE. Si corresponde <strong>Nota de Crédito</strong>, genérala con el botón <em>Generar NC</em>.</p>`;
                         }
 
                         Swal.fire({

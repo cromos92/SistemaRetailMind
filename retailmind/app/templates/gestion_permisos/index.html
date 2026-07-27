@@ -1853,6 +1853,29 @@
 </div>
 
 <script>
+// `toastr` nunca se cargó en el proyecto, pero quedaron 11 llamadas repartidas
+// por esta pantalla: cada una lanzaba ReferenceError y cortaba la función a
+// medias, dejando al usuario sin ningún aviso. Se redirigen a SweetAlert2,
+// que sí está disponible aquí.
+if (typeof window.toastr === 'undefined') {
+    const _aviso = (icon) => (mensaje, titulo) => Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: icon,
+        title: titulo || mensaje,
+        text: titulo ? mensaje : undefined,
+        showConfirmButton: false,
+        timer: 3200,
+        timerProgressBar: true,
+    });
+    window.toastr = {
+        success: _aviso('success'),
+        error: _aviso('error'),
+        warning: _aviso('warning'),
+        info: _aviso('info'),
+    };
+}
+
 let rolActual = null;
 let permisosModificados = {};
 let usuariosRolActual = [];
@@ -2928,12 +2951,21 @@ function renderizarOpcionSucursal(opcion, esSubopcion) {
                     <label for="suc-eliminar-${opcion.id}">Eliminar</label>
                 </div>
                 <div class="permiso-item ${permisos.puede_exportar ? 'active' : ''}">
-                    <input type="checkbox" class="permiso-check-suc" 
+                    <input type="checkbox" class="permiso-check-suc"
                            id="suc-exportar-${opcion.id}"
-                           data-opcion-id="${opcion.id}" 
+                           data-opcion-id="${opcion.id}"
                            data-permiso="puede_exportar"
                            ${permisos.puede_exportar ? 'checked' : ''}>
                     <label for="suc-exportar-${opcion.id}">Exportar</label>
+                </div>
+                <div class="permiso-item ${permisos.puede_aprobar ? 'active' : ''}"
+                     title="Sin esta marca, en esta sucursal nadie puede aprobar (regularizar recepciones, aprobar devoluciones, etc.), ni siquiera el administrador">
+                    <input type="checkbox" class="permiso-check-suc"
+                           id="suc-aprobar-${opcion.id}"
+                           data-opcion-id="${opcion.id}"
+                           data-permiso="puede_aprobar"
+                           ${permisos.puede_aprobar ? 'checked' : ''}>
+                    <label for="suc-aprobar-${opcion.id}">Aprobar</label>
                 </div>
             </div>
         </div>
