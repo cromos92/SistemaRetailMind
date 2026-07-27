@@ -24,14 +24,23 @@
 .filter-section { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .filter-section input {
     padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,.3);
-    background: rgba(255,255,255,.15); color: #fff; font-size: .875rem;
+    background: rgba(255,255,255,.15); color: #fff; font-size: .875rem; color-scheme: dark;
 }
 .filter-section input::placeholder { color: rgba(255,255,255,.6); }
+.filter-section input::-webkit-calendar-picker-indicator { filter: invert(1); }
 .btn-filter {
     padding: 8px 20px; border-radius: 8px; border: none;
     background: rgba(255,255,255,.25); color: #fff; cursor: pointer; font-weight: 500;
 }
 .btn-filter:hover { background: rgba(255,255,255,.4); }
+.range-shortcuts { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+.range-btn {
+    background: #fff; border: 1px solid rgba(64,81,137,.2); border-radius: 20px;
+    padding: 6px 16px; font-size: .78rem; font-weight: 500; color: var(--rm-primary);
+    cursor: pointer; transition: all .2s ease;
+}
+.range-btn:hover { background: var(--rm-primary); color: #fff; }
+.range-btn.active { background: var(--rm-primary); color: #fff; box-shadow: 0 4px 12px rgba(64,81,137,.3); }
 .kpi-grid {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 16px; margin-bottom: 24px;
@@ -52,19 +61,62 @@
 .kpi-icon { font-size: 2rem; opacity: .15; position: absolute; top: 14px; right: 14px; }
 .kpi-value { font-size: 1.6rem; font-weight: 700; color: #495057; margin-bottom: 4px; }
 .kpi-label { font-size: .8rem; color: #878a99; text-transform: uppercase; letter-spacing: .5px; }
+.kpi-hint { font-size: .7rem; color: #adb5bd; margin-top: 2px; }
 .chart-card {
     background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
     margin-bottom: 24px; overflow: hidden;
 }
-.chart-header { padding: 16px 20px; border-bottom: 1px solid #e9ebec; }
+.chart-header { padding: 16px 20px; border-bottom: 1px solid #e9ebec; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .chart-header h6 { margin: 0; font-weight: 600; color: #495057; }
+.chart-header small { color: #878a99; font-size: .75rem; }
 .chart-body { padding: 20px; }
 .chart-container { position: relative; height: 320px; }
 .chart-container-sm { position: relative; height: 260px; }
+.chart-empty {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    flex-direction: column; gap: 6px; color: #adb5bd; font-size: .82rem; text-align: center;
+}
+.chart-empty i { font-size: 1.8rem; opacity: .5; }
 .alert-badge {
     display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px;
     border-radius: 20px; font-size: .8rem; font-weight: 500; background: #fff3cd; color: #856404;
+    text-decoration: none; margin-right: 8px; margin-bottom: 6px;
 }
+.alert-badge:hover { background: #ffe69c; color: #6c5000; }
+.alert-badge.badge-danger-soft { background: #fde8e4; color: #b42318; }
+.alert-badge.badge-danger-soft:hover { background: #fbd5cd; color: #8f1d13; }
+
+/* Estado de carga / error */
+#dashError {
+    display: none; background: #fde8e4; color: #b42318; border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 20px; font-size: .875rem;
+}
+.is-loading { opacity: .45; transition: opacity .2s; }
+
+/* Tabla de requerimientos que requieren atencion */
+.tbl-req { width: 100%; border-collapse: separate; border-spacing: 0; }
+.tbl-req th {
+    font-size: .72rem; text-transform: uppercase; color: #878a99; font-weight: 600;
+    padding: 10px 12px; border-bottom: 2px solid #e9ebec; white-space: nowrap;
+}
+.tbl-req td { padding: 10px 12px; border-bottom: 1px solid #f1f2f4; font-size: .82rem; vertical-align: middle; }
+.tbl-req tbody tr:hover { background: #f8f9fa; }
+.tbl-req .req-num { font-weight: 600; color: var(--rm-primary); text-decoration: none; }
+.tbl-req .req-num:hover { text-decoration: underline; }
+.dias-pill {
+    display: inline-block; padding: 3px 10px; border-radius: 12px;
+    font-size: .72rem; font-weight: 600; white-space: nowrap;
+}
+.dias-NORMAL { background: #e8f5e9; color: #0a7d6f; }
+.dias-MEDIA { background: #fff8e1; color: #8a6300; }
+.dias-ALTA { background: #fff3e0; color: #b45309; }
+.dias-CRITICA { background: #fde8e4; color: #b42318; }
+.badge-estado {
+    display: inline-block; padding: 3px 10px; border-radius: 12px;
+    font-size: .7rem; font-weight: 500; background: #eef0f5; color: #495057; white-space: nowrap;
+}
+.badge-sin-enviar { background: #fde8e4; color: #b42318; font-size: .68rem; padding: 2px 8px; border-radius: 10px; }
+.tabla-vacia { text-align: center; color: #878a99; padding: 30px 12px; font-size: .85rem; }
 
 /* Dashboard responsive */
 @media (max-width: 992px) {
@@ -73,7 +125,7 @@
 }
 
 @media (max-width: 768px) {
-    .dashboard-header { flex-direction: column; gap: 0.5rem; padding: 18px 22px; }
+    .dashboard-header { flex-direction: column; gap: 0.5rem; padding: 18px 22px; align-items: flex-start; }
     .filter-section { width: 100%; }
     .filter-section input { flex: 1; min-width: 0; }
     .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
@@ -82,12 +134,13 @@
     .chart-container { height: 260px; }
     .chart-container-sm { height: 220px; }
     .chart-header h6 { font-size: 0.85rem; }
+    .tabla-scroll { overflow-x: auto; }
 }
 
 @media (max-width: 576px) {
     .dashboard-header { padding: 14px 16px; border-radius: 10px; }
     .dashboard-header h4 { font-size: 1.1rem; }
-    .filter-section { flex-direction: column; gap: 8px; }
+    .filter-section { flex-direction: column; gap: 8px; width: 100%; }
     .filter-section input, .btn-filter { width: 100%; text-align: center; }
     .kpi-grid { grid-template-columns: 1fr; }
     .kpi-card { padding: 14px; }
@@ -98,103 +151,215 @@
 }
 </style>
 
-<div class="main-content">
-    <div class="page-content">
-        <div class="container-fluid">
+<div class="page-content">
+    <div class="container-fluid">
 
-            <div class="dashboard-header">
-                <div>
-                    <h4><i class="ri-customer-service-2-line me-2"></i>Dashboard Requerimientos</h4>
-                    <small>Garantías, devoluciones y gestión con proveedores</small>
-                </div>
-                <div class="filter-section">
-                    <input type="date" id="fechaInicio">
-                    <input type="date" id="fechaFin">
-                    <button class="btn-filter" onclick="cargarDatos()"><i class="ri-refresh-line me-1"></i>Actualizar</button>
-                </div>
+        <div class="dashboard-header">
+            <div>
+                <h4><i class="ri-customer-service-2-line me-2"></i>Dashboard Requerimientos</h4>
+                <small>Garantías, devoluciones y gestión con proveedores</small>
             </div>
-
-            <div id="alertaZone" style="margin-bottom:16px;"></div>
-
-            <div class="kpi-grid">
-                <div class="kpi-card kpi-primary">
-                    <i class="ri-list-check kpi-icon"></i>
-                    <div class="kpi-value" id="kpiTotal">--</div>
-                    <div class="kpi-label">Total Requerimientos</div>
-                </div>
-                <div class="kpi-card kpi-warning">
-                    <i class="ri-time-line kpi-icon"></i>
-                    <div class="kpi-value" id="kpiPendientes">--</div>
-                    <div class="kpi-label">Pendientes</div>
-                </div>
-                <div class="kpi-card kpi-info">
-                    <i class="ri-mail-send-line kpi-icon"></i>
-                    <div class="kpi-value" id="kpiEsperando">--</div>
-                    <div class="kpi-label">Esperando Respuesta</div>
-                </div>
-                <div class="kpi-card kpi-success">
-                    <i class="ri-checkbox-circle-line kpi-icon"></i>
-                    <div class="kpi-value" id="kpiAprobados">--</div>
-                    <div class="kpi-label">Aprobados</div>
-                </div>
-                <div class="kpi-card kpi-danger">
-                    <i class="ri-close-circle-line kpi-icon"></i>
-                    <div class="kpi-value" id="kpiRechazados">--</div>
-                    <div class="kpi-label">Rechazados</div>
-                </div>
-                <div class="kpi-card kpi-teal">
-                    <i class="ri-timer-line kpi-icon"></i>
-                    <div class="kpi-value" id="kpiTiempo">--</div>
-                    <div class="kpi-label">Tiempo Prom. (días)</div>
-                </div>
+            <div class="filter-section">
+                <input type="date" id="fechaInicio">
+                <input type="date" id="fechaFin">
+                <button class="btn-filter" onclick="cargarDatos()"><i class="ri-refresh-line me-1"></i>Actualizar</button>
             </div>
-
-            <div class="row">
-                <div class="col-lg-5">
-                    <div class="chart-card">
-                        <div class="chart-header"><h6>Distribución por Estado</h6></div>
-                        <div class="chart-body"><div class="chart-container-sm"><canvas id="chartEstado"></canvas></div></div>
-                    </div>
-                </div>
-                <div class="col-lg-7">
-                    <div class="chart-card">
-                        <div class="chart-header"><h6>Evolución Mensual</h6></div>
-                        <div class="chart-body"><div class="chart-container-sm"><canvas id="chartEvolucion"></canvas></div></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col-lg-6">
-                    <div class="chart-card">
-                        <div class="chart-header"><h6>Por Tipo de Requerimiento</h6></div>
-                        <div class="chart-body"><div class="chart-container-sm"><canvas id="chartTipo"></canvas></div></div>
-                    </div>
-                </div>
-                <div class="col-lg-6">
-                    <div class="chart-card">
-                        <div class="chart-header"><h6>Por Prioridad</h6></div>
-                        <div class="chart-body"><div class="chart-container-sm"><canvas id="chartPrioridad"></canvas></div></div>
-                    </div>
-                </div>
-            </div>
-
         </div>
+
+        <div class="range-shortcuts">
+            <button class="range-btn" data-dias="30" onclick="aplicarRango(30, this)">30 días</button>
+            <button class="range-btn active" data-dias="90" onclick="aplicarRango(90, this)">90 días</button>
+            <button class="range-btn" data-dias="180" onclick="aplicarRango(180, this)">6 meses</button>
+            <button class="range-btn" data-dias="365" onclick="aplicarRango(365, this)">1 año</button>
+            <button class="range-btn" data-dias="0" onclick="aplicarRango(0, this)">Todo</button>
+        </div>
+
+        <div id="dashError"></div>
+        <div id="alertaZone" style="margin-bottom:16px;"></div>
+
+        <div class="kpi-grid" id="kpiGrid">
+            <div class="kpi-card kpi-primary">
+                <i class="ri-list-check kpi-icon"></i>
+                <div class="kpi-value" id="kpiTotal">--</div>
+                <div class="kpi-label">Total del período</div>
+            </div>
+            <div class="kpi-card kpi-warning">
+                <i class="ri-folder-open-line kpi-icon"></i>
+                <div class="kpi-value" id="kpiAbiertos">--</div>
+                <div class="kpi-label">Abiertos hoy</div>
+                <div class="kpi-hint">Sin cerrar, de cualquier fecha</div>
+            </div>
+            <div class="kpi-card kpi-info">
+                <i class="ri-mail-send-line kpi-icon"></i>
+                <div class="kpi-value" id="kpiEsperando">--</div>
+                <div class="kpi-label">Esperando proveedor</div>
+            </div>
+            <div class="kpi-card kpi-danger">
+                <i class="ri-alarm-warning-line kpi-icon"></i>
+                <div class="kpi-value" id="kpiSinRespuesta">--</div>
+                <div class="kpi-label">Sin respuesta +7d</div>
+            </div>
+            <div class="kpi-card kpi-success">
+                <i class="ri-checkbox-circle-line kpi-icon"></i>
+                <div class="kpi-value" id="kpiTasa">--</div>
+                <div class="kpi-label">Tasa de aprobación</div>
+                <div class="kpi-hint" id="kpiTasaDetalle">&nbsp;</div>
+            </div>
+            <div class="kpi-card kpi-teal">
+                <i class="ri-timer-line kpi-icon"></i>
+                <div class="kpi-value" id="kpiTiempo">--</div>
+                <div class="kpi-label">Días prom. resolución</div>
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <div class="chart-header">
+                <h6><i class="ri-error-warning-line me-1"></i>Requieren atención</h6>
+                <small>Abiertos de cualquier fecha, del más antiguo al más nuevo</small>
+            </div>
+            <div class="chart-body">
+                <div class="tabla-scroll">
+                    <table class="tbl-req">
+                        <thead>
+                            <tr>
+                                <th>N° Requerimiento</th>
+                                <th>Tipo</th>
+                                <th>Producto</th>
+                                <th>Sucursal</th>
+                                <th>Proveedor</th>
+                                <th>Estado</th>
+                                <th>Antigüedad</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaCriticos">
+                            <tr><td colspan="7" class="tabla-vacia">Cargando…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-5">
+                <div class="chart-card">
+                    <div class="chart-header"><h6>Distribución por Estado</h6></div>
+                    <div class="chart-body"><div class="chart-container-sm">
+                        <canvas id="chartEstado"></canvas>
+                        <div class="chart-empty" id="emptyEstado"><i class="ri-inbox-line"></i><span>Sin requerimientos en el período</span></div>
+                    </div></div>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="chart-card">
+                    <div class="chart-header"><h6>Evolución Mensual</h6></div>
+                    <div class="chart-body"><div class="chart-container-sm">
+                        <canvas id="chartEvolucion"></canvas>
+                        <div class="chart-empty" id="emptyEvolucion"><i class="ri-inbox-line"></i><span>Sin requerimientos en el período</span></div>
+                    </div></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="chart-card">
+                    <div class="chart-header"><h6>Por Tipo de Requerimiento</h6></div>
+                    <div class="chart-body"><div class="chart-container-sm">
+                        <canvas id="chartTipo"></canvas>
+                        <div class="chart-empty" id="emptyTipo"><i class="ri-inbox-line"></i><span>Sin requerimientos en el período</span></div>
+                    </div></div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h6>Antigüedad de lo abierto</h6>
+                        <small>Días desde que se creó</small>
+                    </div>
+                    <div class="chart-body"><div class="chart-container-sm">
+                        <canvas id="chartAging"></canvas>
+                        <div class="chart-empty" id="emptyAging"><i class="ri-checkbox-circle-line"></i><span>No hay requerimientos abiertos</span></div>
+                    </div></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="chart-card">
+                    <div class="chart-header"><h6>Por Sucursal</h6></div>
+                    <div class="chart-body"><div class="chart-container-sm">
+                        <canvas id="chartSucursal"></canvas>
+                        <div class="chart-empty" id="emptySucursal"><i class="ri-inbox-line"></i><span>Sin requerimientos en el período</span></div>
+                    </div></div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h6>Top Proveedores</h6>
+                        <small>Por cantidad de requerimientos</small>
+                    </div>
+                    <div class="chart-body"><div class="chart-container-sm">
+                        <canvas id="chartProveedor"></canvas>
+                        <div class="chart-empty" id="emptyProveedor"><i class="ri-inbox-line"></i><span>Sin requerimientos con proveedor asignado</span></div>
+                    </div></div>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
 
 {% include 'layout/footer.html' %}
 
 <script>
+/* Este bloque va DESPUES del include del footer: de ahi salen jQuery y
+   Chart.js (libs/chart.js/chart.min.js). Moverlo mas arriba rompe el
+   dashboard con "$ is not defined". */
 let charts = {};
 const colores = ['#405189','#0ab39c','#f7b84b','#f06548','#299cdb','#6559cc','#02a8b5','#e83e8c'];
-const estadoColores = { PENDIENTE:'#f7b84b', ESPERANDO_RESPUESTA:'#299cdb', APROBADO:'#0ab39c', RECHAZADO:'#f06548', CANCELADO:'#adb5bd' };
+const estadoColores = {
+    PENDIENTE: '#f7b84b',
+    EN_REVISION: '#299cdb',
+    ESPERANDO_RESPUESTA: '#6559cc',
+    APROBADO: '#0ab39c',
+    RECHAZADO: '#f06548',
+    EN_PROCESO: '#02a8b5',
+    COMPLETADO: '#0a7d6f',
+    CANCELADO: '#adb5bd',
+};
+const agingColores = { NORMAL: '#0ab39c', MEDIA: '#f7b84b', ALTA: '#fb8c00', CRITICA: '#f06548' };
+const agingLabels = { NORMAL: 'Menos de 3 días', MEDIA: '3 a 7 días', ALTA: '7 a 14 días', CRITICA: 'Más de 14 días' };
 
-function initDates() {
+function fmtFecha(d) {
+    // toISOString() convierte a UTC y en Chile puede devolver el dia anterior.
+    const mes = String(d.getMonth() + 1).padStart(2, '0');
+    const dia = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + mes + '-' + dia;
+}
+
+function aplicarRango(dias, btn) {
+    document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+
     const hoy = new Date();
-    const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    document.getElementById('fechaInicio').value = inicio.toISOString().split('T')[0];
-    document.getElementById('fechaFin').value = hoy.toISOString().split('T')[0];
+    let inicio;
+    if (dias === 0) {
+        inicio = new Date(2020, 0, 1);   // "Todo": antes del primer requerimiento
+    } else {
+        inicio = new Date();
+        inicio.setDate(hoy.getDate() - dias);
+    }
+    document.getElementById('fechaInicio').value = fmtFecha(inicio);
+    document.getElementById('fechaFin').value = fmtFecha(hoy);
+    cargarDatos();
+}
+
+function mostrarError(msg) {
+    const box = document.getElementById('dashError');
+    box.innerHTML = '<i class="ri-error-warning-line me-1"></i>' + msg;
+    box.style.display = 'block';
 }
 
 function cargarDatos() {
@@ -202,71 +367,205 @@ function cargarDatos() {
         fecha_inicio: document.getElementById('fechaInicio').value,
         fecha_fin: document.getElementById('fechaFin').value,
     });
-    $.get('/app/api/dashboard-requerimientos/datos/?' + params, function(r) {
-        if (!r.success) return;
-        const k = r.kpis;
-        $('#kpiTotal').text(k.total);
-        $('#kpiPendientes').text(k.pendientes);
-        $('#kpiEsperando').text(k.esperando_respuesta);
-        $('#kpiAprobados').text(k.aprobados);
-        $('#kpiRechazados').text(k.rechazados);
-        $('#kpiTiempo').text(k.tiempo_promedio_dias);
-        if (k.sin_respuesta_7d > 0) {
-            $('#alertaZone').html('<div class="alert-badge"><i class="ri-alarm-warning-line"></i> ' + k.sin_respuesta_7d + ' requerimiento(s) sin respuesta de proveedor hace más de 7 días</div>');
-        } else {
-            $('#alertaZone').empty();
-        }
-        renderCharts(r);
+
+    document.getElementById('dashError').style.display = 'none';
+    document.getElementById('kpiGrid').classList.add('is-loading');
+
+    $.get('/app/api/dashboard-requerimientos/datos/?' + params)
+        .done(function(r) {
+            if (!r || !r.success) {
+                mostrarError((r && r.error) || 'El servidor no devolvió datos válidos.');
+                return;
+            }
+            pintarKpis(r.kpis);
+            pintarCriticos(r.criticos || []);
+            renderCharts(r);
+        })
+        .fail(function(xhr) {
+            // Antes fallaba en silencio y los KPIs se quedaban en "--" para siempre.
+            let msg = 'No se pudieron cargar los datos (HTTP ' + xhr.status + ').';
+            if (xhr.status === 403) msg = 'No tienes permiso para ver estos datos.';
+            if (xhr.status === 0) msg = 'Sin conexión con el servidor.';
+            mostrarError(msg + ' Intenta actualizar o revisa el rango de fechas.');
+        })
+        .always(function() {
+            document.getElementById('kpiGrid').classList.remove('is-loading');
+        });
+}
+
+function pintarKpis(k) {
+    $('#kpiTotal').text(k.total);
+    $('#kpiAbiertos').text(k.abiertos);
+    $('#kpiEsperando').text(k.esperando_respuesta);
+    $('#kpiSinRespuesta').text(k.sin_respuesta_7d);
+    $('#kpiTasa').text(k.tasa_aprobacion + '%');
+    $('#kpiTiempo').text(k.tiempo_promedio_dias);
+
+    const conDecision = k.aprobados + k.rechazados + k.parciales;
+    $('#kpiTasaDetalle').text(
+        conDecision
+            ? k.aprobados + ' aprobados / ' + k.rechazados + ' rechazados'
+            : 'Sin respuestas de proveedor aún'
+    );
+
+    const avisos = [];
+    if (k.sin_respuesta_7d > 0) {
+        avisos.push(
+            '<a class="alert-badge badge-danger-soft" href="/app/requerimientos/gestionar/">' +
+            '<i class="ri-alarm-warning-line"></i> ' + k.sin_respuesta_7d +
+            ' sin respuesta del proveedor hace más de 7 días</a>'
+        );
+    }
+    if (k.sin_enviar > 0) {
+        avisos.push(
+            '<a class="alert-badge" href="/app/requerimientos/gestionar/">' +
+            '<i class="ri-mail-close-line"></i> ' + k.sin_enviar +
+            ' abiertos que nunca se enviaron al proveedor</a>'
+        );
+    }
+    $('#alertaZone').html(avisos.join(''));
+}
+
+function pintarCriticos(items) {
+    const tbody = document.getElementById('tablaCriticos');
+    if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="tabla-vacia">' +
+            '<i class="ri-checkbox-circle-line me-1"></i>No hay requerimientos abiertos. Todo al día.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = items.map(function(r) {
+        const sinEnviar = r.enviado ? '' : ' <span class="badge-sin-enviar">sin enviar</span>';
+        return '<tr>' +
+            '<td><a class="req-num" href="/app/requerimientos/' + r.id + '/">' + esc(r.numero) + '</a>' + sinEnviar + '</td>' +
+            '<td>' + esc(r.tipo) + '</td>' +
+            '<td>' + esc(r.producto) + '</td>' +
+            '<td>' + esc(r.sucursal) + '</td>' +
+            '<td>' + esc(r.proveedor) + '</td>' +
+            '<td><span class="badge-estado">' + esc(r.estado_label) + '</span></td>' +
+            '<td><span class="dias-pill dias-' + r.nivel + '">' + r.dias + ' días</span></td>' +
+            '</tr>';
+    }).join('');
+}
+
+function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
 }
 
-function renderCharts(data) {
-    Object.values(charts).forEach(c => c.destroy());
+// Dibuja el grafico solo si hay datos; si no, muestra el placeholder y deja
+// el canvas en blanco en vez de un recuadro vacio sin explicacion.
+function dibujar(clave, canvasId, emptyId, hayDatos, config) {
+    const empty = document.getElementById(emptyId);
+    const canvas = document.getElementById(canvasId);
+    if (charts[clave]) { charts[clave].destroy(); delete charts[clave]; }
+    if (!hayDatos) {
+        canvas.style.display = 'none';
+        empty.style.display = 'flex';
+        return;
+    }
+    canvas.style.display = 'block';
+    empty.style.display = 'none';
+    charts[clave] = new Chart(canvas, config);
+}
 
-    const est = data.por_estado;
-    charts.estado = new Chart(document.getElementById('chartEstado'), {
+function renderCharts(data) {
+    if (typeof Chart === 'undefined') {
+        mostrarError('No se pudo cargar la librería de gráficos (Chart.js).');
+        return;
+    }
+
+    const opcionesBarra = {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+    };
+
+    const est = data.por_estado || [];
+    dibujar('estado', 'chartEstado', 'emptyEstado', est.length, {
         type: 'doughnut',
         data: {
-            labels: est.map(e => e.estado),
+            labels: est.map(e => e.label),
             datasets: [{ data: est.map(e => e.cantidad), backgroundColor: est.map(e => estadoColores[e.estado] || '#adb5bd') }]
         },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
     });
 
-    charts.evolucion = new Chart(document.getElementById('chartEvolucion'), {
+    const evo = data.evolucion || [];
+    dibujar('evolucion', 'chartEvolucion', 'emptyEvolucion', evo.length, {
         type: 'line',
         data: {
-            labels: data.evolucion.map(e => e.mes),
+            labels: evo.map(e => e.mes),
             datasets: [{
                 label: 'Requerimientos',
-                data: data.evolucion.map(e => e.cantidad),
+                data: evo.map(e => e.cantidad),
                 borderColor: '#6559cc',
                 backgroundColor: 'rgba(101,89,204,.1)',
                 fill: true, tension: .4,
             }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        options: opcionesBarra
     });
 
-    charts.tipo = new Chart(document.getElementById('chartTipo'), {
+    const tipos = data.por_tipo || [];
+    dibujar('tipo', 'chartTipo', 'emptyTipo', tipos.length, {
         type: 'bar',
         data: {
-            labels: data.por_tipo.map(t => t.tipo),
-            datasets: [{ label: 'Cantidad', data: data.por_tipo.map(t => t.cantidad), backgroundColor: colores, borderRadius: 6 }]
+            labels: tipos.map(t => t.label),
+            datasets: [{ label: 'Cantidad', data: tipos.map(t => t.cantidad), backgroundColor: colores, borderRadius: 6 }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        options: opcionesBarra
     });
 
-    const prioridadColores = { BAJA:'#0ab39c', MEDIA:'#f7b84b', ALTA:'#f06548', URGENTE:'#dc3545' };
-    charts.prioridad = new Chart(document.getElementById('chartPrioridad'), {
+    const aging = data.aging || {};
+    const ordenAging = ['NORMAL', 'MEDIA', 'ALTA', 'CRITICA'];
+    const totalAging = ordenAging.reduce((s, n) => s + (aging[n] || 0), 0);
+    dibujar('aging', 'chartAging', 'emptyAging', totalAging > 0, {
         type: 'bar',
         data: {
-            labels: data.por_prioridad.map(p => p.prioridad),
-            datasets: [{ label: 'Cantidad', data: data.por_prioridad.map(p => p.cantidad), backgroundColor: data.por_prioridad.map(p => prioridadColores[p.prioridad] || '#adb5bd'), borderRadius: 6 }]
+            labels: ordenAging.map(n => agingLabels[n]),
+            datasets: [{
+                label: 'Abiertos',
+                data: ordenAging.map(n => aging[n] || 0),
+                backgroundColor: ordenAging.map(n => agingColores[n]),
+                borderRadius: 6,
+            }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        options: opcionesBarra
+    });
+
+    const sucs = data.por_sucursal || [];
+    dibujar('sucursal', 'chartSucursal', 'emptySucursal', sucs.length, {
+        type: 'bar',
+        data: {
+            labels: sucs.map(s => s['sucursal__alias'] || 'Sin sucursal'),
+            datasets: [{ label: 'Cantidad', data: sucs.map(s => s.cantidad), backgroundColor: '#405189', borderRadius: 6 }]
+        },
+        options: {
+            indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+        }
+    });
+
+    const provs = data.top_proveedores || [];
+    dibujar('proveedor', 'chartProveedor', 'emptyProveedor', provs.length, {
+        type: 'bar',
+        data: {
+            labels: provs.map(p => p['proveedor__nombre'] || 'Sin proveedor'),
+            datasets: [{ label: 'Cantidad', data: provs.map(p => p.cantidad), backgroundColor: '#0ab39c', borderRadius: 6 }]
+        },
+        options: {
+            indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+        }
     });
 }
 
-$(function() { initDates(); cargarDatos(); });
+$(function() {
+    // Arranca en 90 dias: con el mes en curso el dashboard salia en blanco
+    // apenas no hubiera requerimientos creados este mes.
+    aplicarRango(90, document.querySelector('.range-btn[data-dias="90"]'));
+});
 </script>

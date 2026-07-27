@@ -176,6 +176,37 @@ class TestOmitirTallasSinStock(BaseModalManual):
         self.assertFalse(data['success'])
         self.assertFalse(Producto.objects.filter(articulo='F35543').exists())
 
+    def test_actualiza_costo_sobreprecio_y_venta_del_producto_local(self):
+        # Regresión: el modal enviaba el submit SIN `actualizar_precios` porque
+        # el hidden vivía dentro del panel de estado, que se re-renderiza al
+        # serializar → el producto existente conservaba SIEMPRE sus precios
+        # originales. Con el flag, los tres valores deben quedar actualizados.
+        producto, _ = self._crear_producto(tallas=[('1', 4717001, 5)])
+        Producto.objects.filter(id=producto.id).update(
+            costo=9000, sobreprecio=1000, precioventa=15990)
+
+        resp = self._post(['1'], ['2'], actualizar_precios='true')
+        self.assertTrue(resp.json()['success'], resp.json())
+
+        producto.refresh_from_db()
+        self.assertEqual(int(producto.costo), 11330)       # costo
+        self.assertEqual(int(producto.sobreprecio), 1473)  # precio interno
+        self.assertEqual(int(producto.precioventa), 21990)  # precio venta
+        self.assertEqual(int(producto.precioSugerido), 21990)
+
+    def test_sin_flag_conserva_los_precios_del_producto(self):
+        # Contraparte: sin el flag (el usuario no tocó precios) NO se pisan.
+        producto, _ = self._crear_producto(tallas=[('1', 4718001, 5)])
+        Producto.objects.filter(id=producto.id).update(
+            costo=9000, sobreprecio=1000, precioventa=15990)
+
+        resp = self._post(['1'], ['2'])
+        self.assertTrue(resp.json()['success'], resp.json())
+
+        producto.refresh_from_db()
+        self.assertEqual(int(producto.costo), 9000)
+        self.assertEqual(int(producto.precioventa), 15990)
+
     def test_sincroniza_costo_en_otras_bodegas_aunque_venta_no_cambie(self):
         # Ficha del mismo código+marca+color en OTRA bodega con la MISMA venta
         # pero costo/sobreprecio distintos: el gate viejo (que solo comparaba

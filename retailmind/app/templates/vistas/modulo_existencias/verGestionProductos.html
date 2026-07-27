@@ -3242,6 +3242,13 @@
                                         <label class="form-label">Precio Sugerido (Compra) <span class="badge bg-light text-muted border" style="font-size:.6rem;">desde la OC</span></label>
                                         <input type="number" name="precio_sugerido" class="form-control" readonly style="background:#e9ecef;" placeholder="—">
                                     </div>
+                                    <!-- Flag "el usuario modificó los precios" (lo fija
+                                         actualizarComparePrecioManual). DEBE vivir acá, en una zona
+                                         ESTABLE del form: mientras estuvo dentro de #estadoCodigoManual,
+                                         cada re-render del panel lo destruía y el submit se enviaba SIN
+                                         actualizar_precios, así que el backend nunca actualizaba
+                                         costo/sobreprecio/precio de venta del producto existente. -->
+                                    <input type="hidden" name="actualizar_precios" id="hiddenActualizarPreciosManual" value="false">
                                 </div>
                             </div>
 
@@ -11405,7 +11412,6 @@ function _ecSeccionExistente(r) {
             <span id="comparePrecioManual"></span>
         </div>
         <div id="avisoPreciosManual" class="mt-1"></div>
-        <input type="hidden" name="actualizar_precios" id="hiddenActualizarPreciosManual" value="false">
         ${variantes}`;
 }
 
@@ -13156,7 +13162,14 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
         $('#hiddenDteManual').val(dteVal);
     }
 
+    // Mismo motivo que el DTE: el trigger loop de arriba dispara el 'change' de
+    // marca, que re-verifica el producto y re-renderiza el panel de estado. Se
+    // recalcula el flag de precios ACÁ, contra los valores finales del
+    // formulario, para que el backend reciba actualizar_precios correcto.
+    actualizarComparePrecioManual();
+
     console.log('🔍 Valor final DTE hidden:', $('#hiddenDteManual').val());
+    console.log('🔍 actualizar_precios a enviar:', $('#hiddenActualizarPreciosManual').val());
     
     // Filas agregadas con "Completar desde guía" que quedaron en 0 NO se
     // envían: el usuario solo quiere crear lo que llegó. Se deshabilitan (un

@@ -3218,7 +3218,12 @@ def calcular_evolucion_mensual_mejorado(anio, temporada='', proveedor_id=''):
 def calcular_pareto_proveedores_mejorado(compras_query, compras_ids):
     """Calcula el análisis Pareto (80/20) de proveedores.
 
-    Una sola query agrupada por proveedor (antes: 2 queries POR proveedor)."""
+    Una sola query agrupada por proveedor (antes: 2 queries POR proveedor).
+
+    Devuelve TODOS los proveedores con inversión > 0, no un top-N: el frontend
+    calcula el % acumulado sobre la lista recibida, así que truncarla hacía que
+    el badge "N proveedores = 80%" se midiera contra el subtotal del top-15 y
+    exagerara la concentración. El gráfico ya recorta a 8 barras por su cuenta."""
 
     rows = (Compras_Producto_Talla.objects
             .filter(compra_producto__compras__in=compras_ids)
@@ -3229,7 +3234,7 @@ def calcular_pareto_proveedores_mejorado(compras_query, compras_ids):
     return [{
         'proveedor': r['compra_producto__compras__empresa__nombre'] or 'Sin nombre',
         'inversion': float(r['inversion']),
-    } for r in rows if r['inversion'] and r['inversion'] > 0][:15]
+    } for r in rows if r['inversion'] and r['inversion'] > 0]
 
 
 def calcular_comparativa_anual_mejorado(anio, temporada='', proveedor_id=''):
@@ -3482,7 +3487,11 @@ def calcular_cumplimiento_proveedores_mejorado(compras_query, compras_ids):
             'recibidas': recibidas,
         })
 
-    resultado.sort(key=lambda x: x['cumplimiento'], reverse=True)
+    # PEORES primero. Ordenaba descendente y cortaba en 12: con 33 de 34
+    # proveedores en 100% el gráfico mostraba doce 100% y el único incumplidor
+    # jamás aparecía — y la alerta "proveedores bajo 70%" se evaluaba sobre esa
+    # lista truncada de los mejores, así que no podía dispararse nunca.
+    resultado.sort(key=lambda x: x['cumplimiento'])
     return resultado[:12]
 
 
@@ -3747,36 +3756,50 @@ def calcular_metricas_distribucion(anio, compras_ids):
     Calcula métricas de distribución desde el centro de compras hacia sucursales vendedoras.
     Analiza el flujo: Compras → Recepciones → Despachos → Ventas
     """
-    from .models import Movimientos_Producto, Traspaso, Traspaso_Detalle, Ticket, Ticket_Productos
-    
+    from .models import Movimientos_Producto, Traspaso_Detalle, Producto_Talla
+
     # Unidades compradas (recepcionadas de proveedores)
     unidades_compradas = Productos_Recepcionados.objects.filter(
         compra_producto_talla__compra_producto__compras__in=compras_ids
     ).aggregate(total=Sum('stockArribado'))['total'] or 0
-    
-    # Unidades despachadas a otras sucursales (traspasos salida)
+
+    # Unidades despachadas DESDE un centro de distribución (pierna de salida).
+    # Dos correcciones: (1) `cantidad` es NEGATIVA en los egresos, así que el
+    # Sum daba -26.011 y el max() de más abajo lo dejaba en 0 — el KPI
+    # "Unidades Despachadas" mostraba cero desde siempre; (2) sin filtrar el
+    # origen se contaban también los traspasos tienda↔tienda, que no son
+    # despachos del centro de compras.
+    es_cd = (models.Q(sucursal_origen__es_centro_distribucion=True) |
+             models.Q(sucursal_origen__tipo_sucursal='CENTRO_DISTRIBUCION'))
     unidades_despachadas = Movimientos_Producto.objects.filter(
+        es_cd,
         fecha__year=anio,
         concepto='TRASPASO_SALIDA',
-        estado='COMPLETADO'
-    ).aggregate(total=Sum('cantidad'))['total'] or 0
-    
-    # También contar desde Traspasos completados
-    traspasos_despachados = Traspaso_Detalle.objects.filter(
-        traspaso__fecha_solicitud__year=anio,
-        traspaso__estado__in=['EN_TRANSITO', 'RECIBIDO']
-    ).aggregate(total=Sum('cantidad_enviada'))['total'] or 0
-    
-    unidades_despachadas = max(unidades_despachadas, traspasos_despachados)
-    
-    # Stock en centro de distribución (comprado - despachado)
-    stock_centro = max(0, unidades_compradas - unidades_despachadas)
-    
-    # Eficiencia de distribución
+        estado='COMPLETADO',
+    ).aggregate(total=Sum(Abs(F('cantidad'))))['total'] or 0
+
+    # Fallback a Traspasos si el kardex no tiene la pierna de salida
+    if not unidades_despachadas:
+        unidades_despachadas = Traspaso_Detalle.objects.filter(
+            traspaso__fecha_solicitud__year=anio,
+            traspaso__estado__in=['EN_TRANSITO', 'RECIBIDO']
+        ).aggregate(total=Sum('cantidad_enviada'))['total'] or 0
+
+    # Stock REAL hoy en los centros de distribución. Antes se estimaba como
+    # (comprado - despachado) del año, que no es un stock: ignora el inventario
+    # de años anteriores y daba negativo apenas se despachaba lo acumulado.
+    stock_centro = Producto_Talla.objects.filter(
+        models.Q(producto__sucursal__es_centro_distribucion=True) |
+        models.Q(producto__sucursal__tipo_sucursal='CENTRO_DISTRIBUCION'),
+        stock__gt=0,
+    ).aggregate(total=Sum('stock'))['total'] or 0
+
+    # OJO de lectura: compara el flujo de salida del año contra las compras del
+    # año, así que puede superar el 100% cuando se despacha stock comprado antes.
     eficiencia = 0
     if unidades_compradas > 0:
         eficiencia = round((unidades_despachadas / unidades_compradas) * 100, 1)
-    
+
     return {
         'unidades_compradas': int(unidades_compradas),
         'unidades_despachadas': int(unidades_despachadas),
@@ -4082,18 +4105,16 @@ def calcular_comparativa_costos_cd_vs_sucursales(anio):
     
     Muestra el incremento de costo por pasar por el CD.
     """
-    from .models import Movimientos_Producto, Sucursal, LoteProducto
-    
-    # Sucursales CD (con fallback si no existe el campo nuevo)
-    try:
-        sucursales_cd = Sucursal.objects.filter(
-            models.Q(es_centro_distribucion=True) | 
-            models.Q(tipo_sucursal='CENTRO_DISTRIBUCION') |
-            models.Q(empresa__esProveedor=True)
-        )
-    except:
-        sucursales_cd = Sucursal.objects.filter(empresa__esProveedor=True)
-    sucursales_cd_ids = list(sucursales_cd.values_list('id', flat=True))
+    from .models import Sucursal, LoteProducto
+
+    # Sucursales CD. NO se incluye `empresa__esProveedor=True`: las 13
+    # sucursales cuelgan de empresas marcadas como proveedoras, así que ese OR
+    # clasificaba TODO como centro de distribución, dejaba 0 sucursales
+    # vendedoras y esta comparativa salía vacía siempre.
+    sucursales_cd_ids = list(Sucursal.objects.filter(
+        models.Q(es_centro_distribucion=True) |
+        models.Q(tipo_sucursal='CENTRO_DISTRIBUCION')
+    ).values_list('id', flat=True))
     
     # Sucursales vendedoras (no son CD)
     sucursales_vendedoras = list(
@@ -4156,16 +4177,13 @@ def calcular_rentabilidad_por_tipo_sucursal(anio):
         'sucursales_vendedoras': []
     }
 
-    # Sucursales CD (con fallback si no existe el campo nuevo)
-    try:
-        sucursales_cd = list(Sucursal.objects.filter(
-            models.Q(es_centro_distribucion=True) |
-            models.Q(tipo_sucursal='CENTRO_DISTRIBUCION') |
-            models.Q(empresa__esProveedor=True)
-        ).select_related('empresa'))
-    except Exception:
-        sucursales_cd = list(Sucursal.objects.filter(
-            empresa__esProveedor=True).select_related('empresa'))
+    # Sucursales CD — mismo criterio que calcular_comparativa_costos_cd_vs_sucursales:
+    # sin `empresa__esProveedor`, que clasificaba las 13 sucursales como CD y
+    # dejaba la tabla de vendedoras vacía.
+    sucursales_cd = list(Sucursal.objects.filter(
+        models.Q(es_centro_distribucion=True) |
+        models.Q(tipo_sucursal='CENTRO_DISTRIBUCION')
+    ).select_related('empresa'))
 
     sucursales_cd_ids = [s.id for s in sucursales_cd]
 
@@ -4237,9 +4255,13 @@ def calcular_rentabilidad_por_tipo_sucursal(anio):
     for suc_vend in sucursales_vendedoras:
         total_ventas = ventas_map.get(suc_vend.id, 0.0)
         costo_ventas = costo_map.get(suc_vend.id, 0.0)
-        margen_bruto = total_ventas - costo_ventas
+        # Sin costo FIFO no hay margen: `costo_fifo` viene en 0 en todas las
+        # líneas de venta, y restar cero daba "100% de rentabilidad" en cada
+        # sucursal. Se marca como sin dato en vez de publicar un margen falso.
+        costo_disponible = costo_ventas > 0
+        margen_bruto = (total_ventas - costo_ventas) if costo_disponible else 0
         rentabilidad_vend = 0
-        if total_ventas > 0:
+        if costo_disponible and total_ventas > 0:
             rentabilidad_vend = round((margen_bruto / total_ventas) * 100, 2)
 
         resultado['sucursales_vendedoras'].append({
@@ -4248,6 +4270,7 @@ def calcular_rentabilidad_por_tipo_sucursal(anio):
             'empresa': suc_vend.empresa.nombre if suc_vend.empresa else '-',
             'ventas_total': total_ventas,
             'costo_ventas': costo_ventas,
+            'costo_disponible': costo_disponible,
             'margen_bruto': margen_bruto,
             'rentabilidad_pct': rentabilidad_vend
         })

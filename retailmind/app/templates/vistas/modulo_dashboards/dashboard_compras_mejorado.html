@@ -902,7 +902,7 @@
                     <div class="kpi-icon"><i class="bi bi-truck"></i></div>
                     <div class="kpi-value" id="kpiUnidadesDespachadas">0</div>
                     <div class="kpi-label">Unidades Despachadas</div>
-                    <small class="text-muted">Enviadas a sucursales</small>
+                    <small class="text-muted">Salidas desde centros de distribución</small>
                 </div>
 
                 <!-- Stock en CD -->
@@ -910,14 +910,15 @@
                     <div class="kpi-icon"><i class="bi bi-house-door"></i></div>
                     <div class="kpi-value" id="kpiStockCD">0</div>
                     <div class="kpi-label">Stock en Centro Dist.</div>
-                    <small class="text-muted">Pendiente de despachar</small>
+                    <small class="text-muted">Unidades en bodega hoy</small>
                 </div>
 
-                <!-- Eficiencia de Distribución -->
+                <!-- Despachado vs comprado en el año -->
                 <div class="kpi-card kpi-success">
                     <div class="kpi-icon"><i class="bi bi-speedometer2"></i></div>
                     <div class="kpi-value" id="kpiEficienciaDistribucion">0%</div>
-                    <div class="kpi-label">Eficiencia Distribución</div>
+                    <div class="kpi-label">Despachado vs Comprado</div>
+                    <small class="text-muted">Puede superar 100%: se despacha stock de años anteriores</small>
                     <div class="progress-enhanced mt-2">
                         <div class="progress-bar-enhanced progress-bar-success" id="progressDistribucion" style="width: 0%"></div>
                     </div>
@@ -1269,6 +1270,7 @@
 // Variables globales
 let dashboardData = {};
 let charts = {};
+let peticionEnCurso = null;   // XHR del dashboard en vuelo (para poder abortarlo)
 
 // Colores consistentes
 const COLORS = {
@@ -1335,12 +1337,20 @@ function cargarDatosDashboard() {
         proveedor: $('#filtroProveedor').val()
     };
     
-    $.ajax({
+    // Cancela la petición en curso: cambiar de filtro rápido dejaba varias
+    // corriendo y el loader se cerraba/abría según cuál terminara última.
+    if (peticionEnCurso) {
+        peticionEnCurso.abort();
+    }
+
+    peticionEnCurso = $.ajax({
         url: '/app/dashboard_compras_mejorado_api/',
         method: 'GET',
         data: params,
+        // Sin timeout el spinner quedaba girando indefinidamente cuando el
+        // backend tardaba más que el proxy: el usuario veía "pegado cargando".
+        timeout: 60000,
         success: function(data) {
-            console.log('📊 Datos recibidos:', data);
             dashboardData = data;
             actualizarKPIs(data);
             actualizarGraficos(data);
@@ -1351,13 +1361,19 @@ function cargarDatosDashboard() {
             hideLoader();
         },
         error: function(xhr, status, error) {
-            console.error('❌ Error:', error);
+            if (status === 'abort') return;   // lo canceló un filtro nuevo
+            console.error('Error dashboard compras:', status, error);
             hideLoader();
             Swal.fire({
                 icon: 'error',
-                title: 'Error al cargar datos',
-                text: 'No se pudieron cargar los datos del dashboard. Por favor, intente nuevamente.'
+                title: status === 'timeout' ? 'La consulta tardó demasiado' : 'Error al cargar datos',
+                text: status === 'timeout'
+                    ? 'El servidor no respondió en 60 segundos. Pruebe filtrando por un proveedor o un período más corto.'
+                    : 'No se pudieron cargar los datos del dashboard. Por favor, intente nuevamente.'
             });
+        },
+        complete: function() {
+            peticionEnCurso = null;
         }
     });
 }
@@ -2169,16 +2185,21 @@ function actualizarTablaRentabilidadVendedoras(datos) {
     }
     
     datos.forEach(suc => {
-        const rentClass = suc.rentabilidad_pct >= 25 ? 'text-success' : 
-                         suc.rentabilidad_pct >= 15 ? 'text-warning' : 'text-danger';
-        
+        // Sin costo FIFO cargado no se publica margen: restar costo 0 daba
+        // "100% de rentabilidad" en todas las sucursales.
+        const sinCosto = !suc.costo_disponible;
+        const rentClass = sinCosto ? 'text-muted'
+            : suc.rentabilidad_pct >= 25 ? 'text-success'
+            : suc.rentabilidad_pct >= 15 ? 'text-warning' : 'text-danger';
+        const titleSD = 'title="Las líneas de venta no tienen costo FIFO registrado, por eso no se puede calcular el margen"';
+
         tbody.append(`
             <tr>
                 <td class="fw-semibold">${suc.sucursal || 'Sin nombre'}</td>
                 <td class="text-end fw-bold">${formatMoney(suc.ventas_total || 0)}</td>
-                <td class="text-end">${formatMoney(suc.costo_ventas || 0)}</td>
-                <td class="text-end text-success">${formatMoney(suc.margen_bruto || 0)}</td>
-                <td class="text-center fw-bold ${rentClass}">${suc.rentabilidad_pct || 0}%</td>
+                <td class="text-end ${sinCosto ? 'text-muted' : ''}" ${sinCosto ? titleSD : ''}>${sinCosto ? 's/d' : formatMoney(suc.costo_ventas || 0)}</td>
+                <td class="text-end ${sinCosto ? 'text-muted' : 'text-success'}" ${sinCosto ? titleSD : ''}>${sinCosto ? 's/d' : formatMoney(suc.margen_bruto || 0)}</td>
+                <td class="text-center fw-bold ${rentClass}" ${sinCosto ? titleSD : ''}>${sinCosto ? 's/d' : (suc.rentabilidad_pct || 0) + '%'}</td>
             </tr>
         `);
     });
@@ -2301,11 +2322,15 @@ function actualizarTablaSucursalesDestino(datos) {
         const rotacionClass = rotacion >= 80 ? 'progress-bar-success' : 
                               rotacion >= 50 ? 'progress-bar-warning' : 'progress-bar-danger';
         
-        // Calcular margen
-        const margen = suc.ventas_monto > 0 && suc.costo > 0 ? 
-            (((suc.ventas_monto - suc.costo) / suc.ventas_monto) * 100).toFixed(1) : 0;
-        const margenClass = margen >= 30 ? 'text-success' : margen >= 15 ? 'text-warning' : 'text-danger';
-        
+        // Margen: sin costo FIFO en las líneas de venta no hay dato. Antes
+        // pintaba "0%" en rojo, que se lee como "vende a costo" en vez de
+        // "no tengo el costo".
+        const sinCosto = !(suc.ventas_monto > 0 && suc.costo > 0);
+        const margen = sinCosto ? null :
+            (((suc.ventas_monto - suc.costo) / suc.ventas_monto) * 100).toFixed(1);
+        const margenClass = sinCosto ? 'text-muted'
+            : margen >= 30 ? 'text-success' : margen >= 15 ? 'text-warning' : 'text-danger';
+
         tbody.append(`
             <tr>
                 <td class="fw-semibold">${suc.sucursal || 'Sin nombre'}</td>
@@ -2321,7 +2346,7 @@ function actualizarTablaSucursalesDestino(datos) {
                     </div>
                 </td>
                 <td class="text-end fw-bold">${formatMoney(suc.ventas_monto || 0)}</td>
-                <td class="text-end fw-bold ${margenClass}">${margen}%</td>
+                <td class="text-end fw-bold ${margenClass}"${sinCosto ? ' title="Las líneas de venta no tienen costo FIFO registrado"' : ''}>${sinCosto ? 's/d' : margen + '%'}</td>
             </tr>
         `);
     });

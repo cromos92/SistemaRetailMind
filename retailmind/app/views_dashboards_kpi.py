@@ -306,108 +306,230 @@ def dashboard_requerimientos(request):
     return render(request, 'vistas/modulo_dashboards/dashboard_requerimientos.html')
 
 
+# Un requerimiento sigue pidiendo gestion mientras no se cierre. APROBADO
+# tambien cuenta: el proveedor ya respondio pero todavia falta completarlo.
+ESTADOS_REQ_ABIERTOS = [
+    'PENDIENTE', 'EN_REVISION', 'ESPERANDO_RESPUESTA', 'EN_PROCESO', 'APROBADO',
+]
+ESTADOS_REQ_CERRADOS = ['COMPLETADO', 'RECHAZADO', 'CANCELADO']
+
+
 @login_required
 @require_GET
 def api_dashboard_requerimientos(request):
-    suc_id, emp_id = _get_sucursal_empresa(request)
-    inicio, fin = _parse_date_range(request)
+    try:
+        suc_id, emp_id = _get_sucursal_empresa(request)
+        inicio, fin = _parse_date_range(request)
 
-    base_qs = Requerimiento.objects.all()
-    if suc_id:
-        base_qs = base_qs.filter(sucursal_id=suc_id)
-    elif emp_id:
-        from .models import Sucursal
-        sucursales_emp = Sucursal.objects.filter(empresa_id=emp_id).values_list('id', flat=True)
-        base_qs = base_qs.filter(sucursal_id__in=sucursales_emp)
+        base_qs = Requerimiento.objects.all()
+        if suc_id:
+            base_qs = base_qs.filter(sucursal_id=suc_id)
+        elif emp_id:
+            sucursales_emp = Sucursal.objects.filter(
+                empresa_id=emp_id
+            ).values_list('id', flat=True)
+            base_qs = base_qs.filter(sucursal_id__in=sucursales_emp)
 
-    periodo_qs = base_qs.filter(fecha_creacion__date__range=[inicio, fin])
+        periodo_qs = base_qs.filter(fecha_creacion__date__range=[inicio, fin])
 
-    total = periodo_qs.count()
+        # Etiquetas legibles tomadas de los choices del modelo: el dashboard
+        # mostraba los codigos crudos ("ESPERANDO_RESPUESTA", "PRODUCTO_FALLADO").
+        lbl_estado = dict(Requerimiento._meta.get_field('estado').choices)
+        lbl_tipo = dict(Requerimiento._meta.get_field('tipo').choices)
+        lbl_prioridad = dict(Requerimiento._meta.get_field('prioridad').choices)
 
-    por_estado = {}
-    for row in periodo_qs.values('estado').annotate(c=Count('id')):
-        por_estado[row['estado']] = row['c']
+        total = periodo_qs.count()
 
-    por_tipo = list(
-        periodo_qs.values('tipo')
-        .annotate(cantidad=Count('id'))
-        .order_by('-cantidad')
-    )
+        conteo_estado = {
+            row['estado']: row['c']
+            for row in periodo_qs.values('estado').annotate(c=Count('id'))
+        }
 
-    por_prioridad = list(
-        periodo_qs.values('prioridad')
-        .annotate(cantidad=Count('id'))
-        .order_by('-cantidad')
-    )
+        # Se listan los 8 estados del modelo, no solo los 5 que conocia el
+        # dashboard: EN_REVISION, EN_PROCESO y COMPLETADO caian en un gris
+        # anonimo y COMPLETADO es justamente el desenlace normal del flujo.
+        por_estado = [
+            {
+                'estado': codigo,
+                'label': lbl_estado.get(codigo, codigo),
+                'cantidad': conteo_estado.get(codigo, 0),
+            }
+            for codigo in list(lbl_estado.keys())
+            if conteo_estado.get(codigo, 0) > 0
+        ]
 
-    resueltos = periodo_qs.filter(
-        estado__in=['APROBADO', 'RECHAZADO'],
-        fecha_resolucion__isnull=False,
-    )
-    from django.db.models import ExpressionWrapper, DurationField
-    tiempos = resueltos.annotate(
-        duracion=ExpressionWrapper(
-            F('fecha_resolucion') - F('fecha_creacion'),
-            output_field=DurationField()
+        por_tipo = [
+            {
+                'tipo': row['tipo'],
+                'label': lbl_tipo.get(row['tipo'], row['tipo']),
+                'cantidad': row['cantidad'],
+            }
+            for row in periodo_qs.values('tipo')
+            .annotate(cantidad=Count('id'))
+            .order_by('-cantidad')
+        ]
+
+        por_prioridad = [
+            {
+                'prioridad': row['prioridad'],
+                'label': lbl_prioridad.get(row['prioridad'], row['prioridad']),
+                'cantidad': row['cantidad'],
+            }
+            for row in periodo_qs.values('prioridad')
+            .annotate(cantidad=Count('id'))
+            .order_by('-cantidad')
+        ]
+
+        # El resultado con el proveedor se lee de decision_proveedor, no del
+        # estado: al completar el requerimiento el estado pasa a COMPLETADO y
+        # contar por estado hacia desaparecer los aprobados del periodo.
+        aprobados = periodo_qs.filter(decision_proveedor='APROBADO').count()
+        rechazados = periodo_qs.filter(decision_proveedor='RECHAZADO').count()
+        parciales = periodo_qs.filter(decision_proveedor='PARCIAL').count()
+        con_decision = aprobados + rechazados + parciales
+        tasa_aprobacion = (
+            round((aprobados + parciales) * 100.0 / con_decision, 1)
+            if con_decision else 0
         )
-    )
-    avg_days = 0
-    if tiempos.exists():
-        total_seconds = sum(
-            (t.duracion.total_seconds() for t in tiempos if t.duracion), start=0.0
+
+        # Tiempo de resolucion: antes se filtraba por estado APROBADO/RECHAZADO,
+        # asi que los COMPLETADO (el cierre real) quedaban fuera del promedio.
+        from django.db.models import ExpressionWrapper, DurationField
+        duracion_media = periodo_qs.filter(
+            fecha_resolucion__isnull=False
+        ).aggregate(
+            promedio=Avg(
+                ExpressionWrapper(
+                    F('fecha_resolucion') - F('fecha_creacion'),
+                    output_field=DurationField(),
+                )
+            )
+        )['promedio']
+        avg_days = (
+            round(duracion_media.total_seconds() / 86400, 1)
+            if duracion_media else 0
         )
-        avg_days = round(total_seconds / tiempos.count() / 86400, 1)
 
-    evolucion = list(
-        periodo_qs.annotate(mes=TruncMonth('fecha_creacion'))
-        .values('mes')
-        .annotate(cantidad=Count('id'))
-        .order_by('mes')
-    )
-    for e in evolucion:
-        e['mes'] = e['mes'].strftime('%Y-%m') if e['mes'] else ''
+        evolucion = list(
+            periodo_qs.annotate(mes=TruncMonth('fecha_creacion'))
+            .values('mes')
+            .annotate(cantidad=Count('id'))
+            .order_by('mes')
+        )
+        for e in evolucion:
+            e['mes'] = e['mes'].strftime('%Y-%m') if e['mes'] else ''
 
-    esperando = base_qs.filter(estado='ESPERANDO_RESPUESTA')
-    sin_respuesta_7d = esperando.filter(
-        fecha_envio_proveedor__lte=timezone.now() - timedelta(days=7),
-        fecha_respuesta_proveedor__isnull=True,
-    ).count()
+        # --- Estado operativo vivo (sin filtro de fecha) --------------------
+        # Un requerimiento abierto hace 3 meses sigue abierto hoy; acotarlo al
+        # periodo lo escondia justo cuando mas urgia.
+        ahora = timezone.now()
+        abiertos_qs = base_qs.filter(estado__in=ESTADOS_REQ_ABIERTOS)
+        abiertos = abiertos_qs.count()
 
-    por_sucursal = list(
-        periodo_qs.values('sucursal__alias')
-        .annotate(cantidad=Count('id'))
-        .order_by('-cantidad')
-    )
+        sin_respuesta_7d = base_qs.filter(
+            estado='ESPERANDO_RESPUESTA',
+            fecha_envio_proveedor__lte=ahora - timedelta(days=7),
+            fecha_respuesta_proveedor__isnull=True,
+        ).count()
 
-    top_proveedores = list(
-        periodo_qs.filter(proveedor__isnull=False)
-        .values('proveedor__nombre')
-        .annotate(cantidad=Count('id'))
-        .order_by('-cantidad')[:10]
-    )
+        # Abiertos que nunca se enviaron al proveedor: el hoyo mas caro del
+        # flujo, porque no hay nadie esperando del otro lado.
+        sin_enviar = abiertos_qs.filter(correo_enviado_proveedor=False).count()
 
-    return JsonResponse({
-        'success': True,
-        'kpis': {
-            'total': total,
-            'pendientes': por_estado.get('PENDIENTE', 0),
-            'esperando_respuesta': por_estado.get('ESPERANDO_RESPUESTA', 0),
-            'aprobados': por_estado.get('APROBADO', 0),
-            'rechazados': por_estado.get('RECHAZADO', 0),
-            'cancelados': por_estado.get('CANCELADO', 0),
-            'tiempo_promedio_dias': avg_days,
-            'sin_respuesta_7d': sin_respuesta_7d,
-        },
-        'por_estado': [
-            {'estado': k, 'cantidad': v} for k, v in por_estado.items()
-        ],
-        'por_tipo': por_tipo,
-        'por_prioridad': por_prioridad,
-        'evolucion': evolucion,
-        'por_sucursal': por_sucursal,
-        'top_proveedores': top_proveedores,
-        'periodo': {'inicio': str(inicio), 'fin': str(fin)},
-    })
+        # Antiguedad de lo abierto, en la misma escala que
+        # Requerimiento.nivel_urgencia. Se agrega en la base: recorrer todos los
+        # abiertos en Python cargaba una instancia por fila solo para contarlas.
+        corte_3d = ahora - timedelta(days=3)
+        corte_7d = ahora - timedelta(days=7)
+        corte_14d = ahora - timedelta(days=14)
+        aging = abiertos_qs.aggregate(
+            NORMAL=Count('id', filter=Q(fecha_creacion__gt=corte_3d)),
+            MEDIA=Count('id', filter=Q(
+                fecha_creacion__lte=corte_3d, fecha_creacion__gt=corte_7d)),
+            ALTA=Count('id', filter=Q(
+                fecha_creacion__lte=corte_7d, fecha_creacion__gt=corte_14d)),
+            CRITICA=Count('id', filter=Q(fecha_creacion__lte=corte_14d)),
+        )
+
+        def _nivel(fecha):
+            if fecha > corte_3d:
+                return 'NORMAL'
+            if fecha > corte_7d:
+                return 'MEDIA'
+            if fecha > corte_14d:
+                return 'ALTA'
+            return 'CRITICA'
+
+        criticos = [
+            {
+                'id': req.id,
+                'numero': req.numero_requerimiento,
+                'tipo': lbl_tipo.get(req.tipo, req.tipo),
+                'estado': req.estado,
+                'estado_label': lbl_estado.get(req.estado, req.estado),
+                'prioridad': req.prioridad,
+                'sucursal': req.sucursal.alias if req.sucursal else '',
+                'proveedor': req.proveedor.nombre if req.proveedor else 'Sin proveedor',
+                'producto': req.nombre_producto,
+                'dias': (ahora - req.fecha_creacion).days,
+                'nivel': _nivel(req.fecha_creacion),
+                'enviado': req.correo_enviado_proveedor,
+            }
+            for req in abiertos_qs.select_related('sucursal', 'proveedor')
+            .order_by('fecha_creacion')[:15]
+        ]
+
+        por_sucursal = list(
+            periodo_qs.values('sucursal__alias')
+            .annotate(cantidad=Count('id'))
+            .order_by('-cantidad')
+        )
+
+        top_proveedores = list(
+            periodo_qs.filter(proveedor__isnull=False)
+            .values('proveedor__nombre')
+            .annotate(cantidad=Count('id'))
+            .order_by('-cantidad')[:10]
+        )
+
+        return JsonResponse({
+            'success': True,
+            'kpis': {
+                'total': total,
+                'abiertos': abiertos,
+                'pendientes': conteo_estado.get('PENDIENTE', 0),
+                'en_revision': conteo_estado.get('EN_REVISION', 0),
+                'esperando_respuesta': conteo_estado.get('ESPERANDO_RESPUESTA', 0),
+                'en_proceso': conteo_estado.get('EN_PROCESO', 0),
+                'completados': conteo_estado.get('COMPLETADO', 0),
+                'cancelados': conteo_estado.get('CANCELADO', 0),
+                'aprobados': aprobados,
+                'rechazados': rechazados,
+                'parciales': parciales,
+                'tasa_aprobacion': tasa_aprobacion,
+                'tiempo_promedio_dias': avg_days,
+                'sin_respuesta_7d': sin_respuesta_7d,
+                'sin_enviar': sin_enviar,
+            },
+            'por_estado': por_estado,
+            'por_tipo': por_tipo,
+            'por_prioridad': por_prioridad,
+            'evolucion': evolucion,
+            'aging': aging,
+            'criticos': criticos,
+            'por_sucursal': por_sucursal,
+            'top_proveedores': top_proveedores,
+            'periodo': {'inicio': str(inicio), 'fin': str(fin)},
+        })
+
+    except Exception as e:
+        # Sin esto, un fallo devolvia HTML de error y el dashboard se quedaba
+        # mudo con los KPIs en "--" y sin ninguna pista de que paso.
+        logger.exception('Error en api_dashboard_requerimientos: %s', e)
+        return JsonResponse(
+            {'success': False, 'error': 'No se pudieron cargar los datos del dashboard.'},
+            status=500,
+        )
 
 
 # ==================== DESPACHOS / RECEPCIONES ====================
