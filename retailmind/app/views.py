@@ -18993,16 +18993,52 @@ def verificar_producto_existente(request):
             except Categoria.DoesNotExist:
                 pass
 
-    # Buscar producto con los filtros exactos (en la sucursal activa)
-    producto = Producto.objects.filter(**filtros).select_related('sucursal', 'atributo1', 'atributo2', 'atributo3', 'categoria').first()
+    # Buscar producto con los filtros exactos (en la sucursal activa).
+    # ordenar_por_reciente es OBLIGATORIO: sin ORDER BY el motor devolvía una
+    # ficha distinta según el orden físico de la tabla, así que el panel podía
+    # mostrar los SKUs de una ficha mientras la creación escribía en la otra.
+    from .utils_producto_match import ordenar_por_reciente
+    _qs_identidad = ordenar_por_reciente(
+        Producto.objects.filter(**filtros)
+        .select_related('sucursal', 'atributo1', 'atributo2', 'atributo3', 'categoria'))
+    _fichas_identidad = list(_qs_identidad)
+    producto = _fichas_identidad[0] if _fichas_identidad else None
 
     # Detectar duplicados en la sucursal activa (mismo artículo + atributos)
     hay_duplicados = False
     total_duplicados = 0
+    fichas_duplicadas = []
     if producto and articulo:
-        total_duplicados = Producto.objects.filter(**filtros).count()
+        total_duplicados = len(_fichas_identidad)
         hay_duplicados = total_duplicados > 1
-    
+        if hay_duplicados:
+            # Detalle de CADA ficha (tallas, SKUs y stock) para que el modal
+            # pueda avisar de forma bloqueante en cuál va a caer el stock.
+            _aggs_dup = {r['producto_id']: r for r in
+                         Producto_Talla.objects.filter(producto_id__in=[f.id for f in _fichas_identidad])
+                         .values('producto_id').annotate(s=Sum('stock'), n=Count('id'))}
+            _skus_dup = {}
+            for _pt in Producto_Talla.objects.filter(
+                    producto_id__in=[f.id for f in _fichas_identidad]).order_by('talla'):
+                _skus_dup.setdefault(_pt.producto_id, []).append(str(_pt.sku))
+            for _i, _f in enumerate(_fichas_identidad):
+                _a = _aggs_dup.get(_f.id, {})
+                fichas_duplicadas.append({
+                    'producto_id': _f.id,
+                    'es_destino': _i == 0,  # la más reciente: ahí caerá el stock
+                    'descripcion': _f.descripcion or '',
+                    'categoria': _f.categoria.nombre if _f.categoria else '-',
+                    'precioventa': int(_f.precioventa or 0),
+                    'n_tallas': (_a.get('n') or 0),
+                    'stock_total': (_a.get('s') or 0),
+                    'skus': _skus_dup.get(_f.id, [])[:12],
+                    'fecha_creacion': _f.fecha_creacion.strftime('%d/%m/%Y') if _f.fecha_creacion else '—',
+                })
+            logger.warning(
+                "Codigo con fichas DUPLICADAS en la sucursal: articulo=%s sucursal_id=%s fichas=%s destino=%s",
+                articulo, sucursal_id, [f.id for f in _fichas_identidad], producto.id,
+            )
+
     # ========== BÚSQUEDA FLEXIBLE SI NO ENCUENTRA EXACTO ==========
     if not producto and articulo:
         # Obtener valores de atributos para comparación case-insensitive
@@ -19360,6 +19396,7 @@ def verificar_producto_existente(request):
             'edel_producto': _build_edel_producto_ref(articulo, producto),
             'hay_duplicados': hay_duplicados,
             'total_duplicados': total_duplicados,
+            'fichas_duplicadas': fichas_duplicadas,
             'bodegas_codigo': bodegas_codigo,
         })
     else:
@@ -19657,12 +19694,22 @@ def crear_producto_desde_recepcion(request):
     # espacios ni acentos) + marca + color + género + categoría + sucursal.
     # Antes comparaba el articulo como texto exacto y un tipeo distinto creaba
     # un producto duplicado con SKUs nuevos (bug reportado en recepción).
-    from .utils_producto_match import buscar_producto_por_identidad
-    producto_existente = buscar_producto_por_identidad(
+    # Desde el fix de determinismo esta función devuelve SIEMPRE la ficha más
+    # reciente del grupo, así que dos recepciones seguidas ya no caen en fichas
+    # distintas. Este flujo no tiene confirmación bloqueante (sí la tiene el
+    # modal Crear Manual), pero deja rastro en el log para poder auditarlo.
+    from .utils_producto_match import fichas_por_identidad
+    _fichas = fichas_por_identidad(
         articulo, atributo1_normalizado, atributo2_normalizado,
         atributo3_normalizado, categoria, sucursal.id,
     )
-    
+    producto_existente = _fichas[0] if _fichas else None
+    if len(_fichas) > 1:
+        logger.warning(
+            "Recepcion sobre codigo con fichas DUPLICADAS: articulo=%s sucursal=%s fichas=%s destino=%s",
+            articulo, sucursal.alias, [f.id for f in _fichas], producto_existente.id,
+        )
+
     # Si no encuentra, buscar con atributos case-insensitive por valor
     if not producto_existente:
         # Nota: `Q` ya está importado a nivel de módulo (línea 46). Evitamos
@@ -21048,10 +21095,21 @@ def obtener_productos(request):
         productos = productos.filter(talla__iexact=talla_filtro)
     total_count = productos.count()
     offset = (page - 1) * page_size
-    # Desempate por 'id': (articulo, talla) NO es única (un mismo artículo/talla
-    # existe en varias bodegas), así que sin un tercer criterio estable el motor
-    # puede devolver el mismo registro en dos páginas u omitirlo.
-    productos = list(productos.order_by('producto__articulo', 'talla', 'id')[offset:offset+page_size])
+    # Orden del listado. Por defecto 'reciente': lo último creado arriba, que es
+    # lo que se quiere justo después de cargar una recepción. 'alfabetico'
+    # mantiene el orden histórico por código.
+    # Desempate por 'id' en ambos: (articulo, talla) NO es única (un mismo
+    # artículo/talla existe en varias bodegas), así que sin un tercer criterio
+    # estable el motor puede devolver el mismo registro en dos páginas u omitirlo.
+    # fecha_creacion es nullable en fichas legacy → nulls_last para que no se
+    # tomen la primera página.
+    orden = request.GET.get('orden', 'reciente')
+    if orden == 'alfabetico':
+        criterio = ('producto__articulo', 'talla', 'id')
+    else:
+        criterio = (F('producto__fecha_creacion').desc(nulls_last=True),
+                    F('producto_id').desc(), 'talla', 'id')
+    productos = list(productos.order_by(*criterio)[offset:offset+page_size])
 
     # Especialidades v1.2 de los productos de ESTA página en UNA sola query
     # (evita N+1). Map producto_id -> [valores de especialidad].
@@ -21529,12 +21587,67 @@ def crear_producto_manual(request):
         # ni acentos) + marca + color + género + categoría + sucursal. Antes se
         # comparaba el articulo como texto exacto y un tipeo distinto ("ZAP-001"
         # vs "zap-001 ") creaba un producto duplicado con SKUs nuevos.
-        from .utils_producto_match import buscar_producto_por_identidad
-        producto_existente = buscar_producto_por_identidad(
+        from .utils_producto_match import fichas_por_identidad
+        fichas_identidad = fichas_por_identidad(
             articulo, atributo1_obj.id, atributo2_obj.id, atributo3_obj.id,
             categoria.id, sucursal.id,
         )
-        
+        # La ficha destino por defecto es la MÁS RECIENTE (primer elemento del
+        # orden canónico). Si el modal mandó explícitamente en cuál escribir
+        # (`producto_id_destino`, el mismo id que mostró el panel), se respeta
+        # siempre que pertenezca a este grupo de identidad: así lo que se ve en
+        # pantalla y lo que se escribe en la BD no pueden divergir.
+        producto_existente = fichas_identidad[0] if fichas_identidad else None
+        producto_id_destino = (request.POST.get('producto_id_destino') or '').strip()
+        if producto_id_destino:
+            _elegida = next((f for f in fichas_identidad
+                             if str(f.id) == producto_id_destino), None)
+            if _elegida is not None:
+                producto_existente = _elegida
+            else:
+                logger.warning(
+                    "producto_id_destino=%s no pertenece a la identidad %s en sucursal %s; se usa la ficha mas reciente",
+                    producto_id_destino, articulo, sucursal.id,
+                )
+
+        # ========== ALERTA BLOQUEANTE POR FICHAS DUPLICADAS ==========
+        # En producción hay códigos con 2+ fichas idénticas heredadas de la
+        # migración Laravel. Escribir stock sin avisar partía el histórico del
+        # artículo entre fichas (caso F35542 en EDEL). No se crea NADA hasta que
+        # el usuario confirme en cuál ficha quiere el stock.
+        if len(fichas_identidad) > 1 and request.POST.get('confirmar_duplicado') != 'true':
+            _aggs_dup = {r['producto_id']: r for r in
+                         Producto_Talla.objects.filter(producto_id__in=[f.id for f in fichas_identidad])
+                         .values('producto_id').annotate(s=Sum('stock'), n=Count('id'))}
+            detalle_fichas = []
+            for _f in fichas_identidad:
+                _a = _aggs_dup.get(_f.id, {})
+                detalle_fichas.append({
+                    'producto_id': _f.id,
+                    'es_destino': _f.id == producto_existente.id,
+                    'descripcion': _f.descripcion or '',
+                    'n_tallas': (_a.get('n') or 0),
+                    'stock_total': (_a.get('s') or 0),
+                    'skus': [str(s) for s in Producto_Talla.objects.filter(producto=_f)
+                             .order_by('talla').values_list('sku', flat=True)[:12]],
+                    'fecha_creacion': _f.fecha_creacion.strftime('%d/%m/%Y') if _f.fecha_creacion else '—',
+                })
+            logger.warning(
+                "Creacion manual BLOQUEADA por fichas duplicadas: articulo=%s sucursal=%s fichas=%s",
+                articulo, sucursal.alias, [f.id for f in fichas_identidad],
+            )
+            return JsonResponse({
+                'success': False,
+                'requiere_confirmacion_duplicado': True,
+                'articulo': articulo,
+                'sucursal': sucursal.alias,
+                'total_fichas': len(fichas_identidad),
+                'producto_id_destino': producto_existente.id,
+                'fichas_duplicadas': detalle_fichas,
+                'error': (f'El código {articulo} tiene {len(fichas_identidad)} fichas duplicadas '
+                          f'en {sucursal.alias}. Confirma en cuál debe entrar el stock.'),
+            })
+
         producto_actualizado = False
         precios_cambiaron = False
         precio_anterior = 0

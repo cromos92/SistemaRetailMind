@@ -3249,6 +3249,12 @@
                                          actualizar_precios, así que el backend nunca actualizaba
                                          costo/sobreprecio/precio de venta del producto existente. -->
                                     <input type="hidden" name="actualizar_precios" id="hiddenActualizarPreciosManual" value="false">
+                                    <!-- Fichas duplicadas: en qué ficha debe entrar el stock y si el
+                                         usuario ya confirmó esa elección. Van acá (zona ESTABLE del
+                                         form) por el mismo motivo que actualizar_precios: dentro de
+                                         #estadoCodigoManual cada re-render del panel los destruye. -->
+                                    <input type="hidden" name="producto_id_destino" id="hiddenProductoDestinoManual" value="">
+                                    <input type="hidden" name="confirmar_duplicado" id="hiddenConfirmarDuplicadoManual" value="false">
                                 </div>
                             </div>
 
@@ -3972,6 +3978,14 @@
                         <div class="d-flex align-items-center gap-2 me-2">
                             <i class="bi bi-rulers text-muted"></i>
                             <input type="text" class="form-control form-control-sm border-0 bg-light fw-semibold" id="filtroTallaEditar" placeholder="Talla (ej: 40)" style="width:110px; border-radius:8px;">
+                        </div>
+                        <!-- Orden del listado: por defecto lo último creado arriba -->
+                        <div class="d-flex align-items-center gap-2 me-2">
+                            <i class="bi bi-sort-down text-muted"></i>
+                            <select class="form-select form-select-sm border-0 bg-light fw-semibold" id="filtroOrdenEditar" style="min-width:150px; border-radius:8px;" title="Orden del listado">
+                                <option value="reciente" selected>Más recientes</option>
+                                <option value="alfabetico">Código A-Z</option>
+                            </select>
                         </div>
                         <!-- Pill: solo productos SIN especialidad (para completarlos) -->
                         <button type="button" class="btn btn-sm rounded-pill px-3 btn-toggle-sinesp" id="btnFiltroSinEsp" style="font-size:.78rem;" title="Mostrar solo productos sin especialidad">
@@ -11592,9 +11606,22 @@ function _ecSeccionExistente(r) {
         (parseFloat(String(a.talla).replace(',', '.')) || 0) - (parseFloat(String(b.talla).replace(',', '.')) || 0));
     const stockTotal = tallas.reduce((s, t) => s + (t.stock || 0), 0);
 
+    // Fichas duplicadas: se listan TODAS (la más reciente primero, que es la
+    // que recibirá el stock) para que se vea con qué SKUs se va a trabajar.
+    // Al crear, además, sale una confirmación bloqueante.
+    const dupFichas = (r.fichas_duplicadas || []).map(f => `
+        <div class="d-flex gap-1 align-items-start mt-1" style="font-size:.72rem;">
+            <span class="badge ${f.es_destino ? 'bg-danger' : 'bg-secondary'}">#${f.producto_id}</span>
+            <span>${f.es_destino ? '<b>aquí entrará el stock</b> · ' : ''}creada ${f.fecha_creacion} ·
+                  ${f.n_tallas} talla(s) · ${Number(f.stock_total || 0).toLocaleString('es-CL')} uds
+                  <br><span class="text-muted">SKUs: ${(f.skus || []).join(', ') || '—'}</span></span>
+        </div>`).join('');
     const dup = r.hay_duplicados
         ? `<div class="alert alert-danger py-1 px-2 mb-2" style="font-size:.74rem;">
-             <i class="bi bi-exclamation-octagon-fill me-1"></i>Ojo: hay <b>${r.total_duplicados}</b> fichas duplicadas de este producto en esta bodega. El stock se sumará a la primera — considera fusionarlas en Fusión de Duplicados.
+             <i class="bi bi-exclamation-octagon-fill me-1"></i>Ojo: este producto tiene <b>${r.total_duplicados}</b> fichas duplicadas en esta bodega.
+             Al crear te pediremos confirmar en cuál va el stock — lo correcto es
+             <a href="/app/existencias/fusion-duplicados/" target="_blank" class="fw-semibold">fusionarlas</a> y dejar una sola.
+             ${dupFichas}
            </div>` : '';
 
     // Otras variantes del mismo código en ESTA bodega (distintas al match)
@@ -11679,8 +11706,10 @@ function _ecSeccionBodegas(r, estado) {
     const bodegas = r.bodegas_codigo || [];
     if (!bodegas.length) return '';
     const abierta = (estado === 'otras');
+    // La bodega actual arriba; el resto conserva el orden del backend, que ya
+    // viene por ficha más recientemente creada (Array.sort es estable).
     const filas = bodegas.slice()
-        .sort((a, b) => ((b.es_sucursal_actual ? 1 : 0) - (a.es_sucursal_actual ? 1 : 0)) || ((b.stock_total || 0) - (a.stock_total || 0)))
+        .sort((a, b) => ((b.es_sucursal_actual ? 1 : 0) - (a.es_sucursal_actual ? 1 : 0)))
         .map(b => `
         <tr class="${b.es_sucursal_actual ? 'table-primary' : ''}">
             <td class="fw-semibold">${b.sucursal}${b.es_sucursal_actual ? ' <i class="bi bi-geo-alt-fill text-primary" title="Bodega actual"></i>' : ''}</td>
@@ -13900,6 +13929,19 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
     // formulario, para que el backend reciba actualizar_precios correcto.
     actualizarComparePrecioManual();
 
+    // Confirmación de ficha duplicada: sólo viaja si fue dada para ESTA misma
+    // identidad (código+marca+color+género+categoría). Se resuelve acá, después
+    // del trigger loop, porque ese loop re-renderiza el panel y cualquier estado
+    // que dependiera del DOM del panel ya estaría destruido.
+    const _confDup = window._duplicadoConfirmadoManual;
+    if (_confDup && _confDup.clave === claveIdentidadManual()) {
+        $('#hiddenProductoDestinoManual').val(_confDup.producto_id || '');
+        $('#hiddenConfirmarDuplicadoManual').val('true');
+    } else {
+        $('#hiddenProductoDestinoManual').val('');
+        $('#hiddenConfirmarDuplicadoManual').val('false');
+    }
+
     console.log('🔍 Valor final DTE hidden:', $('#hiddenDteManual').val());
     console.log('🔍 actualizar_precios a enviar:', $('#hiddenActualizarPreciosManual').val());
     
@@ -14021,6 +14063,12 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
                     cargarProductosParaCrear(anioActual);  // ya refresca los conteos
                 }
                 cargarAlertaBannerPrecios();
+            } else if (res.requiere_confirmacion_duplicado) {
+                // 🚨 El código tiene 2+ fichas idénticas en esta bodega. El
+                // backend NO escribió nada: hay que elegir en cuál va el stock.
+                // El modo "Crear y seguir" se restaura porque el bloque de
+                // arriba ya lo apagó y este intento no llegó a crear nada.
+                confirmarFichaDuplicadaManual(res, modal, $btnSubmit, seguirCreando);
             } else if (res.producto_existente) {
                 // Mostrar modal de producto existente
                 mostrarModalProductoExistente(res);
@@ -14035,6 +14083,84 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
         complete: function() {
             // ========== RESTAURAR BOTÓN ==========
             $btnSubmit.prop('disabled', false).html(textoOriginal);
+        }
+    });
+}
+
+// Clave de IDENTIDAD del formulario manual (mismo criterio que el backend:
+// código normalizado + marca + color + género + categoría). Sirve para que la
+// confirmación de "ficha duplicada" no se herede a otro producto.
+function claveIdentidadManual() {
+    const $f = $('#formCrearProductoManual');
+    const v = (sel) => ($f.find(sel).val() || '').toString().trim();
+    return [
+        v('input[name="articulo"]').toUpperCase(),
+        v('select[name="atributo1"]'), v('select[name="atributo2"]'),
+        v('select[name="atributo3"]'), v('[name="categoria"]'),
+    ].join('|');
+}
+
+// 🚨 ALERTA BLOQUEANTE: el código tiene 2+ fichas duplicadas en esta bodega.
+// El backend rechazó la creación sin escribir nada; acá el usuario elige en qué
+// ficha entra el stock (o se va a fusionarlas primero). La elección viaja en
+// #hiddenProductoDestinoManual y el backend la respeta sólo si el id pertenece
+// al mismo grupo de identidad, así panel y BD no pueden divergir.
+function confirmarFichaDuplicadaManual(res, modal, $btnSubmit, seguirCreando) {
+    const fichas = res.fichas_duplicadas || [];
+    const filas = fichas.map(function(f) {
+        const skus = (f.skus || []).join(', ') || '—';
+        return `
+        <label class="d-flex gap-2 align-items-start border rounded p-2 mb-2 text-start"
+               style="cursor:pointer;${f.es_destino ? 'border-color:#0ab39c;background:#f0fdfa;' : ''}">
+            <input type="radio" name="fichaDuplicadaManual" value="${f.producto_id}" ${f.es_destino ? 'checked' : ''} class="mt-1">
+            <span style="font-size:.8rem;line-height:1.35;">
+                <b>Ficha #${f.producto_id}</b>
+                ${f.es_destino ? '<span class="badge bg-success ms-1" style="font-size:.62rem;">sugerida (más reciente)</span>' : ''}
+                <br><span class="text-muted">Creada ${f.fecha_creacion} · ${f.n_tallas} talla(s) · stock ${Number(f.stock_total || 0).toLocaleString('es-CL')} uds</span>
+                <br><span class="text-muted" style="font-size:.72rem;">SKUs: ${skus}</span>
+                ${f.descripcion ? `<br><span class="text-muted" style="font-size:.72rem;">${f.descripcion}</span>` : ''}
+            </span>
+        </label>`;
+    }).join('');
+
+    Swal.fire({
+        icon: 'warning',
+        title: 'Código duplicado',
+        width: 620,
+        html: `
+            <p style="font-size:.85rem;margin-bottom:10px;text-align:left;">
+                <b>${res.articulo}</b> tiene <b>${res.total_fichas}</b> fichas idénticas en
+                <b>${res.sucursal}</b> (mismo código, marca, color, género y categoría).
+                No se creó nada todavía: elige en cuál debe entrar el stock, o
+                fusiónalas primero para dejar una sola.
+            </p>
+            <div style="max-height:280px;overflow-y:auto;">${filas}</div>
+            <p class="text-muted" style="font-size:.74rem;text-align:left;margin-top:6px;">
+                Si eliges una distinta cada vez, el histórico y los SKUs del artículo quedan partidos entre las dos fichas.
+            </p>`,
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: 'Sumar stock a la ficha elegida',
+        denyButtonText: 'Ir a Fusionar Duplicados',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0ab39c',
+        denyButtonColor: '#f7b84b',
+    }).then(function(r) {
+        if (r.isConfirmed) {
+            const elegida = document.querySelector('input[name="fichaDuplicadaManual"]:checked');
+            // La confirmación queda ATADA a la identidad confirmada, no a un
+            // hidden suelto: si el usuario cambia el código o los atributos (o
+            // usa "Crear y seguir"), deja de aplicar y el guard vuelve a pedirla.
+            window._duplicadoConfirmadoManual = {
+                clave: claveIdentidadManual(),
+                producto_id: elegida ? elegida.value : (res.producto_id_destino || ''),
+            };
+            // Reenviar: el resumen de confirmación ya fue aceptado en este intento
+            window._confirmadoCreacionManual = true;
+            window._modoSeguirCreando = (seguirCreando === true);
+            enviarFormularioCrearProductoManual(modal, $btnSubmit);
+        } else if (r.isDenied) {
+            window.open('/app/existencias/fusion-duplicados/', '_blank');
         }
     });
 }
@@ -14062,6 +14188,9 @@ function prepararSiguienteProductoManual() {
     window.stockPrevioManualPendiente = null;
     window._confirmPendienteManual = false;
     window._confirmadoCreacionManual = false;
+    window._duplicadoConfirmadoManual = null;   // la elección de ficha no se hereda
+    $('#hiddenProductoDestinoManual').val('');
+    $('#hiddenConfirmarDuplicadoManual').val('false');
     renderEstadoCodigoManual('vacio');
     $('.articulo-autocomplete-dropdown').hide();
     $('.articulo-search-feedback').hide();
@@ -16886,6 +17015,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
         const especialidadId = $('#filtroEspecialidadEditar').val() || '';
         const tallaFiltro = $('#filtroTallaEditar').val().trim();
         const sinEsp = $('#btnFiltroSinEsp').hasClass('active') ? '1' : '';
+        const orden = $('#filtroOrdenEditar').val() || 'reciente';
 
         if (!termino && !filtro && sucursalId === 'todas' && !categoriaId && !especialidadId && !tallaFiltro && !sinEsp) {
             Swal.fire({
@@ -16917,7 +17047,8 @@ $('#btnConfirmarActualizacion').on('click', function() {
                 categoria_id: categoriaId,
                 especialidad_id: especialidadId,
                 talla: tallaFiltro,
-                sin_especialidad: sinEsp
+                sin_especialidad: sinEsp,
+                orden: orden
             },
             success: function(response) {
                 // La API devuelve { results: [...], pagination: {...} }
@@ -17128,6 +17259,13 @@ $('#btnConfirmarActualizacion').on('click', function() {
         } else {
             $('#txtScopeActual').text(`Filtrando por bodega: ${nombreSucursal}`);
         }
+        resetearSeleccion();
+        buscarProductosParaEditar();
+    });
+
+    // Cambio de orden del listado (Más recientes / Código A-Z): re-consulta,
+    // porque el orden lo resuelve el backend sobre el total, no sobre la página.
+    $('#filtroOrdenEditar').on('change', function() {
         resetearSeleccion();
         buscarProductosParaEditar();
     });

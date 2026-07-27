@@ -8,12 +8,15 @@ Cubre:
 Ejecutar (en entorno con BD de test, NO producción):
     python manage.py test app.tests.test_producto_match
 """
+from datetime import datetime, timezone as dt_timezone
+
 from django.test import TestCase
 
 from app.models import AtributoOpcion, Categoria, Producto, Productos_Atributos
 from app.tests.factories import crear_sucursal
 from app.utils_producto_match import (
-    buscar_producto_por_identidad, normalizar_articulo, variantes_mismo_codigo,
+    buscar_producto_por_identidad, fichas_por_identidad, normalizar_articulo,
+    variantes_mismo_codigo,
 )
 
 
@@ -103,3 +106,58 @@ class TestIdentidadProducto(TestCase):
     def test_identidad_ignora_espacio_no_separable(self):
         # El match de creación debe reconocer el \xa0 como el mismo producto.
         self.assertEqual(self._buscar('\xa0ZAP-001 '), self.prod)
+
+
+class TestFichasDuplicadas(TestCase):
+    """Dos fichas con la MISMA identidad (duplicado legacy de la migración).
+
+    Sin ORDER BY explícito el motor devolvía una u otra según el orden físico de
+    la tabla, así que dos recepciones seguidas del mismo código caían en fichas
+    distintas y partían el histórico/los SKUs del artículo (caso real F35542).
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.suc = crear_sucursal(alias='BODEGA-DUP')
+        cls.cat = Categoria.objects.create(nombre='Zapatillas')
+        attr_marca = Productos_Atributos.objects.create(nombre='Marca', descripcion='Marca')
+        attr_color = Productos_Atributos.objects.create(nombre='Color', descripcion='Color')
+        attr_gen = Productos_Atributos.objects.create(nombre='Género', descripcion='Género')
+        cls.marca = AtributoOpcion.objects.create(atributo=attr_marca, valor='ADIDAS')
+        cls.azul = AtributoOpcion.objects.create(atributo=attr_color, valor='BLUE')
+        cls.hombre = AtributoOpcion.objects.create(atributo=attr_gen, valor='HOMBRE')
+
+        comun = dict(descripcion='ADILETTE', sucursal=cls.suc, atributo1=cls.marca,
+                     atributo2=cls.azul, atributo3=cls.hombre, categoria=cls.cat,
+                     costo=10000, sobreprecio=0, precioventa=26990)
+        # La ficha ANTIGUA se crea con id MENOR para que ordenar por id no
+        # pueda pasar por "más reciente" de casualidad.
+        cls.antigua = Producto.objects.create(articulo='F35542', **comun)
+        cls.reciente = Producto.objects.create(articulo=' f35542 ', **comun)
+        # fecha_creacion es auto_now_add: se fija con UPDATE.
+        Producto.objects.filter(pk=cls.antigua.pk).update(
+            fecha_creacion=datetime(2021, 1, 18, tzinfo=dt_timezone.utc))
+        Producto.objects.filter(pk=cls.reciente.pk).update(
+            fecha_creacion=datetime(2023, 9, 20, tzinfo=dt_timezone.utc))
+
+    def _fichas(self, articulo='F35542'):
+        return fichas_por_identidad(articulo, self.marca.id, self.azul.id,
+                                    self.hombre.id, self.cat.id, self.suc.id)
+
+    def test_devuelve_las_dos_fichas(self):
+        self.assertEqual(len(self._fichas()), 2)
+
+    def test_orden_mas_reciente_primero(self):
+        self.assertEqual([f.pk for f in self._fichas()],
+                         [self.reciente.pk, self.antigua.pk])
+
+    def test_match_es_estable_entre_llamadas(self):
+        elegidas = {buscar_producto_por_identidad(
+            'f35542  ', self.marca.id, self.azul.id, self.hombre.id,
+            self.cat.id, self.suc.id).pk for _ in range(5)}
+        self.assertEqual(elegidas, {self.reciente.pk})
+
+    def test_fecha_creacion_nula_va_al_final(self):
+        Producto.objects.filter(pk=self.antigua.pk).update(fecha_creacion=None)
+        self.assertEqual([f.pk for f in self._fichas()],
+                         [self.reciente.pk, self.antigua.pk])
