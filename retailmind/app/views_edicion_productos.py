@@ -1227,6 +1227,12 @@ def actualizar_productos_masivo(request):
                 update_kwargs['categoria'] = None
                 campos_aplicados.append('categoría')
 
+        # Descripción (el "modelo" comercial). Se propaga como el resto de los
+        # campos: una misma referencia no puede describirse distinto por bodega.
+        if campos.get('aplicar_descripcion'):
+            update_kwargs['descripcion'] = (campos.get('descripcion') or '').strip()
+            campos_aplicados.append('descripción')
+
         for i in range(1, 5):
             key = f'aplicar_atributo{i}'
             if campos.get(key):

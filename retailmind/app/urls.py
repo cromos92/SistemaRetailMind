@@ -325,6 +325,11 @@ from .views_modulo_existencias_nuevo import (
     api_editar_categoria_producto_global,
     # Actividad de creación manual (verGestionProducto)
     api_actividad_creacion_manual,
+    # Acciones rápidas sobre un ingreso manual (tabla Actividad reciente)
+    api_evento_ingreso_manual,
+    api_sumar_stock_rapido,
+    api_preview_reasignar_dte,
+    api_reasignar_dte_ingreso,
 )
 from .views_edicion_productos import (
     # Edición de productos
@@ -1249,6 +1254,13 @@ urlpatterns = [
     path('api/tarjeta-movimiento/', api_tarjeta_movimiento, name='api_tarjeta_movimiento'),
     path('api/tarjeta-movimiento/buscar/', api_buscar_productos_tarjeta_movimiento, name='api_buscar_productos_tarjeta_movimiento'),
     path('api/actividad-creacion-manual/', api_actividad_creacion_manual, name='api_actividad_creacion_manual'),
+
+    # Acciones de la tabla "Actividad reciente" de verGestionProducto:
+    # edición rápida del ingreso y corrección del DTE mal asignado.
+    path('api/ingreso-manual/ficha/', api_evento_ingreso_manual, name='api_evento_ingreso_manual'),
+    path('api/ingreso-manual/sumar-stock/', api_sumar_stock_rapido, name='api_sumar_stock_rapido'),
+    path('api/ingreso-manual/preview-reasignar-dte/', api_preview_reasignar_dte, name='api_preview_reasignar_dte'),
+    path('api/ingreso-manual/reasignar-dte/', api_reasignar_dte_ingreso, name='api_reasignar_dte_ingreso'),
 
     # ========== DESPACHO A TODAS SUCURSALES ==========
     path('despacho-sucursales/', despacho_todas_sucursales, name='despacho_todas_sucursales'),

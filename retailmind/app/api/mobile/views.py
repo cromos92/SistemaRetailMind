@@ -4,10 +4,11 @@ Views para API móvil (JWT).
 
 import logging
 
-from datetime import date
+from datetime import date, timedelta
 
 import pytz
 
+from django.contrib.auth import authenticate
 from django.core.cache import cache, caches
 from django.db import transaction
 from django.db.models import Q
@@ -17,8 +18,10 @@ from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from app.models import (
     CodigoAutorizacionDinamico,
@@ -32,6 +35,21 @@ from app.models import (
     Producto_Talla,
     Sucursal,
     EmpresaUser,
+    Vendedor,
+)
+from app.models_sync import (
+    DesafioPinMovil,
+    DispositivoAutorizado,
+    RefreshTokenDesktop,
+    SyncLog,
+)
+# Sólo lectura: no se modifica NADA de app/api/desktop/ (lo usa el POS Tauri).
+# Se importan sus serializers para que la sesión móvil tenga exactamente el
+# mismo cuerpo que el login desktop ya probado.
+from app.api.desktop.serializers import (
+    DispositivoSerializer,
+    SucursalConfigSerializer,
+    VendedorSerializer,
 )
 from app.utils_producto_match import normalizar_articulo
 from app.utils_tallas import clave_orden_talla
@@ -39,16 +57,21 @@ from app.views import registrar_movimiento_producto
 
 from .serializers import (
     ActualizarProductoSerializer,
+    MobileLoginSerializer,
     NOMBRE_ATRIBUTO_COLOR,
     NOMBRE_ATRIBUTO_GENERO,
     NOMBRE_ATRIBUTO_GENERO_ALT,
     NOMBRE_ATRIBUTO_MARCA,
+    ReenviarPinMovilSerializer,
     VerificarEtiquetaSerializer,
+    VerificarPinMovilSerializer,
     construir_catalogo,
+    enmascarar_email,
     obtener_atributo_especialidad,
     resolver_categoria,
     resolver_especialidades,
     resolver_opcion_atributo,
+    resolver_sucursal_login_movil,
     serializar_coincidencia,
     serializar_producto,
     version_catalogo,
@@ -1065,3 +1088,479 @@ class ProductoActualizarView(APIView):
             "cambios": cambios,
             "producto": self._payload_producto(producto, sucursal),
         }
+
+
+# ==========================================================================
+# LOGIN DE LA APP MOVIL DE STAFF (NEXO Staff)
+# ==========================================================================
+#
+# Contraseña + PIN de 6 dígitos por correo, UNA SOLA VEZ por teléfono.
+#
+# Por qué endpoints nuevos en vez de agregarle 2FA al login desktop:
+# `/api/v1/desktop/login/` lo usa TAMBIÉN el cliente Tauri del POS. Si ese
+# endpoint pidiera PIN, cada caja que reinicie el POS quedaría esperando un
+# correo para poder vender. `DesktopLoginView` no se toca; el cuerpo de la
+# respuesta sí se reusa (mismos serializers) para que la app reciba el payload
+# ya probado.
+#
+# Por qué hace falta: 13 de los 25 usuarios activos tienen `requiere_2fa=True`
+# y el login WEB les manda PIN, pero `DesktopLoginView` nunca mira ese campo:
+# entrando por la app el segundo factor se saltaba.
+#
+# DECISION: el enrolamiento por PIN se exige a TODOS los usuarios, tengan o no
+# `requiere_2fa`. Es una sola vez por teléfono, y un teléfono es un dispositivo
+# que se pierde o se roba: el `device_id` verificado es lo que después permite
+# expulsarlo desde el admin (suspender/revocar => vuelve a pedir PIN).
+
+
+class MobileAuthRateThrottle(AnonRateThrottle):
+    """
+    Máx 10 intentos de autenticación móvil por minuto por IP.
+
+    Es el cinturón; los tirantes son el contador de intentos POR DESAFIO
+    (3 y se quema), que no depende del cache ni de la IP del atacante.
+    """
+    scope = 'mobile_auth'
+    rate = '10/min'
+
+
+def _ip_cliente(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        return x_forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR')
+
+
+def _enviar_pin_por_correo(usuario):
+    """
+    Genera el PIN y lo manda por correo REUSANDO los helpers del login web
+    (`_obtener_codigo_2fa` respeta el ajuste `PIN_2FA_MODE`, y `_enviar_pin_2fa`
+    trae la plantilla HTML ya diseñada).
+
+    Import diferido: `retailmind.views` importa `app.models`, así que a nivel
+    de módulo se arriesga un ciclo. Es el mismo patrón que ya usa el proyecto.
+
+    Devuelve el PIN en claro SOLO para hashearlo en el desafío. Nunca sale en
+    una respuesta HTTP — ni con DEBUG=True.
+    """
+    from retailmind.views import _enviar_pin_2fa, _obtener_codigo_2fa
+
+    codigo = _obtener_codigo_2fa(usuario)
+    _enviar_pin_2fa(usuario, codigo)
+    return codigo
+
+
+def _sesion_movil(request, user, sucursal, dispositivo, device_created):
+    """
+    Emite los tokens y arma el MISMO cuerpo que devuelve hoy el login desktop.
+
+    Se mantiene idéntico a propósito: la app y el POS comparten el formato de
+    sesión, y así el cliente móvil no necesita un parser aparte.
+    """
+    with transaction.atomic():
+        dispositivo.registrar_acceso()
+
+        refresh = RefreshToken.for_user(user)
+        refresh['device_id'] = str(dispositivo.device_id)
+        refresh['sucursal_id'] = sucursal.id
+        refresh['rol'] = getattr(user, 'rol', 'vendedor')
+        access_token = str(refresh.access_token)
+
+        expires_at = timezone.now() + timedelta(days=7)
+
+        _, refresh_token_plain = RefreshTokenDesktop.crear_token(
+            dispositivo=dispositivo,
+            usuario=user,
+            dias_expiracion=30,
+            ip=_ip_cliente(request),
+            user_agent=request.headers.get('User-Agent'),
+        )
+
+        vendedor = None
+        try:
+            vendedor = Vendedor.objects.filter(correo=user.email, activo=True).first()
+            if not vendedor and getattr(user, 'rut', None):
+                vendedor = Vendedor.objects.filter(rut=user.rut, activo=True).first()
+        except Exception:
+            vendedor = None
+
+        SyncLog.objects.create(
+            tipo='status_check',
+            dispositivo=dispositivo,
+            sucursal=sucursal,
+            usuario=user,
+            estado='COMPLETADO',
+            exitoso=True,
+            detalles={'action': 'login_movil', 'device_created': device_created},
+        )
+
+    return {
+        # === Campos principales (mismos nombres que el login desktop) ===
+        'token': access_token,
+        'refresh_token': refresh_token_plain,
+        'expires_at': expires_at.isoformat(),
+        'user_id': user.id,
+        'user_name': user.get_full_name() or user.username,
+        'sucursal_id': sucursal.id,
+        'sucursal_nombre': sucursal.alias,
+        'device_id': str(dispositivo.device_id),
+
+        # === Datos extendidos ===
+        'sucursal': SucursalConfigSerializer(sucursal).data,
+        'vendedor': VendedorSerializer(vendedor).data if vendedor else None,
+        'vendedor_id': vendedor.id if vendedor else None,
+        'vendedor_nombre': vendedor.nombre if vendedor else user.get_full_name(),
+        'dispositivo': DispositivoSerializer(dispositivo).data,
+        'server_time': timezone.now().isoformat(),
+
+        'config': {
+            'max_tickets_offline': dispositivo.max_tickets_offline,
+            'permite_venta_sin_stock': False,
+            'max_descuento_porcentaje': 50,
+        },
+    }
+
+
+class MobileLoginView(APIView):
+    """
+    POST /api/v1/mobile/login/
+
+    Paso 1: usuario + contraseña + device_id.
+
+    Respuestas (ambas HTTP 200):
+      (a) teléfono ya verificado  -> cuerpo de sesión completo + requiere_pin: false
+      (b) teléfono nuevo          -> requiere_pin: true + desafio (SIN tokens)
+
+    Errores:
+      400 validation_error   - faltan campos
+      401 credenciales_invalidas - genérico a propósito (no se puede distinguir
+          "usuario no existe" de "contraseña mala": eso permite enumerar usuarios)
+      403 device_inactive    - el teléfono está suspendido/revocado
+      403 sin_acceso_sucursal
+      400 sin_correo         - el usuario no tiene email donde recibir el PIN
+      503 envio_pin_fallido  - el correo no salió
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [MobileAuthRateThrottle]
+
+    def post(self, request):
+        serializer = MobileLoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {'error': 'validation_error', 'details': serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        datos = serializer.validated_data
+        user = authenticate(
+            username=datos['username'], password=datos['password']
+        )
+        # authenticate() ya devuelve None si el usuario está inactivo (ModelBackend),
+        # así que un solo mensaje cubre los tres casos sin filtrar cuál fue.
+        if not user:
+            logger.warning(
+                'Login movil rechazado (credenciales) usuario=%s ip=%s',
+                datos.get('username'), _ip_cliente(request),
+            )
+            return Response(
+                {'error': 'credenciales_invalidas',
+                 'mensaje': 'Usuario o contraseña incorrectos.'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        sucursal, error_sucursal = resolver_sucursal_login_movil(
+            user, datos.get('sucursal_id')
+        )
+        if error_sucursal:
+            return Response(
+                {'error': 'sin_acceso_sucursal', 'mensaje': error_sucursal},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        device_id = datos['device_id']
+        dispositivo = DispositivoAutorizado.objects.filter(device_id=device_id).first()
+
+        if dispositivo and not dispositivo.esta_activo():
+            return Response(
+                {'error': 'device_inactive',
+                 'mensaje': f'Dispositivo {dispositivo.estado.lower()}. Contacta al administrador.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # --- (a) El teléfono ya verificó su PIN para ESTE usuario ---
+        if dispositivo and dispositivo.pin_esta_verificado(user):
+            dispositivo.sucursal = sucursal
+            if datos.get('device_name'):
+                dispositivo.nombre = datos['device_name']
+            if datos.get('sistema_operativo'):
+                dispositivo.sistema_operativo = datos['sistema_operativo']
+            if datos.get('version_app'):
+                dispositivo.version_app = datos['version_app']
+            dispositivo.save(update_fields=[
+                'sucursal', 'nombre', 'sistema_operativo', 'version_app', 'updated_at'
+            ])
+
+            respuesta = _sesion_movil(request, user, sucursal, dispositivo, False)
+            respuesta['requiere_pin'] = False
+            return Response(respuesta, status=status.HTTP_200_OK)
+
+        # --- (b) Primera vez en este teléfono: hay que verificar por correo ---
+        if not (user.email or '').strip():
+            return Response(
+                {'error': 'sin_correo',
+                 'mensaje': ('Tu usuario no tiene un correo registrado y el PIN se envia '
+                             'por correo. Pidele al administrador que registre tu email '
+                             'en tu ficha de usuario.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            pin = _enviar_pin_por_correo(user)
+        except Exception:
+            logger.exception('Login movil: fallo el envio del PIN a %s', user.username)
+            return Response(
+                {'error': 'envio_pin_fallido',
+                 'mensaje': 'No pudimos enviar el codigo a tu correo. Intenta nuevamente en unos minutos.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        desafio, token_plano = DesafioPinMovil.crear(
+            usuario=user,
+            device_id=device_id,
+            sucursal=sucursal,
+            pin_plano=pin,
+            device_name=datos.get('device_name') or f'Movil {str(device_id)[:8]}',
+            sistema_operativo=datos.get('sistema_operativo') or '',
+            version_app=datos.get('version_app') or '',
+            ip=_ip_cliente(request),
+            user_agent=request.headers.get('User-Agent'),
+        )
+
+        logger.info(
+            'Login movil: PIN enviado usuario=%s device=%s desafio=%s',
+            user.username, device_id, desafio.id,
+        )
+
+        # El PIN NO viaja en esta respuesta. Nunca. Ni con DEBUG=True.
+        return Response({
+            'requiere_pin': True,
+            'desafio': token_plano,
+            'pin_enviado_a': enmascarar_email(user.email),
+            'expira_en_minutos': DesafioPinMovil.MINUTOS_EXPIRACION,
+            'reenvio_disponible_en_segundos': DesafioPinMovil.SEGUNDOS_ENTRE_REENVIOS,
+        }, status=status.HTTP_200_OK)
+
+
+class MobileVerificarPinView(APIView):
+    """
+    POST /api/v1/mobile/login/verificar-pin/
+
+    Paso 2: canjea desafío + PIN por la sesión y deja el teléfono recordado.
+
+    200 -> cuerpo de sesión + dispositivo_recordado: true
+    400 -> pin_invalido (con intentos_restantes) | pin_expirado | desafio_invalido
+    429 -> demasiados_intentos (el desafío se quema)
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [MobileAuthRateThrottle]
+
+    def post(self, request):
+        serializer = VerificarPinMovilSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {'error': 'validation_error', 'details': serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        datos = serializer.validated_data
+        desafio_publico = DesafioPinMovil.buscar_vigente(datos['desafio'])
+
+        # Desafío inexistente, ya consumido, o pedido desde otro teléfono:
+        # misma respuesta para los tres (no se le dice al atacante en cual fallo).
+        if not desafio_publico or desafio_publico.device_id != datos['device_id']:
+            return Response(
+                {'error': 'desafio_invalido',
+                 'mensaje': 'La solicitud de codigo no es valida. Vuelve a iniciar sesion.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            # Lock de fila: sin esto, N peticiones simultaneas leerian el mismo
+            # contador de intentos y el tope de 3 no serviria de nada.
+            desafio = DesafioPinMovil.objects.select_for_update().select_related(
+                'usuario', 'sucursal'
+            ).filter(pk=desafio_publico.pk, consumido=False).first()
+
+            if not desafio:
+                return Response(
+                    {'error': 'desafio_invalido',
+                     'mensaje': 'La solicitud de codigo no es valida. Vuelve a iniciar sesion.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if desafio.intentos >= DesafioPinMovil.MAX_INTENTOS:
+                desafio.consumir()
+                return Response(
+                    {'error': 'demasiados_intentos',
+                     'mensaje': 'Superaste los intentos permitidos. Vuelve a iniciar sesion para recibir un codigo nuevo.'},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+
+            if desafio.esta_expirado:
+                desafio.consumir()
+                return Response(
+                    {'error': 'pin_expirado',
+                     'mensaje': 'El codigo expiro. Vuelve a iniciar sesion para recibir uno nuevo.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if desafio.pin_hash != DesafioPinMovil.hash_valor(datos['pin']):
+                desafio.intentos += 1
+                desafio.save(update_fields=['intentos'])
+                logger.warning(
+                    'Login movil: PIN incorrecto usuario=%s desafio=%s intento=%s',
+                    desafio.usuario.username, desafio.id, desafio.intentos,
+                )
+                if desafio.intentos >= DesafioPinMovil.MAX_INTENTOS:
+                    desafio.consumir()
+                    return Response(
+                        {'error': 'demasiados_intentos',
+                         'mensaje': 'Superaste los intentos permitidos. Vuelve a iniciar sesion para recibir un codigo nuevo.'},
+                        status=status.HTTP_429_TOO_MANY_REQUESTS,
+                    )
+                return Response(
+                    {'error': 'pin_invalido',
+                     'intentos_restantes': desafio.intentos_restantes,
+                     'mensaje': 'El codigo no es correcto. Revisa tu correo e intentalo de nuevo.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # --- PIN correcto ---
+            desafio.consumir()  # un solo uso
+
+            user = desafio.usuario
+            sucursal = desafio.sucursal
+            ahora = timezone.now()
+
+            dispositivo, creado = DispositivoAutorizado.objects.get_or_create(
+                device_id=desafio.device_id,
+                defaults={
+                    'sucursal': sucursal,
+                    'usuario': user,
+                    'nombre': desafio.device_name or f'Movil {str(desafio.device_id)[:8]}',
+                    'sistema_operativo': desafio.sistema_operativo or None,
+                    'version_app': desafio.version_app or None,
+                    'pin_verificado_en': ahora,
+                },
+            )
+            if not creado:
+                if not dispositivo.esta_activo():
+                    return Response(
+                        {'error': 'device_inactive',
+                         'mensaje': f'Dispositivo {dispositivo.estado.lower()}. Contacta al administrador.'},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+                dispositivo.usuario = user
+                dispositivo.sucursal = sucursal
+                if desafio.device_name:
+                    dispositivo.nombre = desafio.device_name
+                if desafio.sistema_operativo:
+                    dispositivo.sistema_operativo = desafio.sistema_operativo
+                if desafio.version_app:
+                    dispositivo.version_app = desafio.version_app
+                dispositivo.pin_verificado_en = ahora
+                dispositivo.save(update_fields=[
+                    'usuario', 'sucursal', 'nombre', 'sistema_operativo',
+                    'version_app', 'pin_verificado_en', 'updated_at',
+                ])
+
+        respuesta = _sesion_movil(request, user, sucursal, dispositivo, creado)
+        respuesta['requiere_pin'] = False
+        respuesta['dispositivo_recordado'] = True
+
+        logger.info(
+            'Login movil: PIN verificado usuario=%s device=%s',
+            user.username, dispositivo.device_id,
+        )
+        return Response(respuesta, status=status.HTTP_200_OK)
+
+
+class MobileReenviarPinView(APIView):
+    """
+    POST /api/v1/mobile/login/reenviar-pin/
+
+    Paso 3 (opcional). Reenvía el PIN del desafío abierto.
+
+    Los intentos fallidos NO se reinician al reenviar (si no, reenviar seria
+    la puerta de atras para forzar el PIN). El desafío admite como máximo
+    `MAX_ENVIOS` correos y uno por minuto.
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [MobileAuthRateThrottle]
+
+    def post(self, request):
+        serializer = ReenviarPinMovilSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {'error': 'validation_error', 'details': serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        desafio = DesafioPinMovil.buscar_vigente(serializer.validated_data['desafio'])
+        if not desafio:
+            return Response(
+                {'error': 'desafio_invalido',
+                 'mensaje': 'La solicitud de codigo no es valida. Vuelve a iniciar sesion.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if desafio.esta_expirado:
+            desafio.consumir()
+            return Response(
+                {'error': 'pin_expirado',
+                 'mensaje': 'El codigo expiro. Vuelve a iniciar sesion para recibir uno nuevo.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        espera = desafio.segundos_para_reenvio
+        if espera > 0:
+            return Response(
+                {'error': 'reenvio_muy_pronto',
+                 'reenvio_disponible_en_segundos': espera,
+                 'mensaje': f'Espera {espera} segundos antes de pedir otro codigo.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        if desafio.envios >= DesafioPinMovil.MAX_ENVIOS:
+            return Response(
+                {'error': 'demasiados_envios',
+                 'mensaje': 'Se alcanzo el maximo de reenvios. Vuelve a iniciar sesion.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        try:
+            pin = _enviar_pin_por_correo(desafio.usuario)
+        except Exception:
+            logger.exception('Login movil: fallo el reenvio del PIN a %s',
+                             desafio.usuario.username)
+            return Response(
+                {'error': 'envio_pin_fallido',
+                 'mensaje': 'No pudimos enviar el codigo a tu correo. Intenta nuevamente en unos minutos.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        desafio.registrar_reenvio(pin)
+
+        return Response({
+            'requiere_pin': True,
+            'pin_enviado_a': enmascarar_email(desafio.usuario.email),
+            'expira_en_minutos': DesafioPinMovil.MINUTOS_EXPIRACION,
+            'reenvio_disponible_en_segundos': DesafioPinMovil.SEGUNDOS_ENTRE_REENVIOS,
+            'intentos_restantes': desafio.intentos_restantes,
+        }, status=status.HTTP_200_OK)

@@ -2425,7 +2425,7 @@
                                 <th class="text-end" style="width:110px;"><i class="bi bi-currency-dollar me-1"></i>Costo</th>
                                 <th style="width:150px;"><i class="bi bi-receipt me-1"></i>Documento</th>
                                 <th style="width:110px;"><i class="bi bi-person me-1"></i>Responsable</th>
-                                <th class="text-center" style="width:110px;"><i class="bi bi-lightning me-1"></i>Acción</th>
+                                <th class="text-center" style="width:170px;"><i class="bi bi-lightning me-1"></i>Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="tbodyActividadManual"></tbody>
@@ -4664,6 +4664,219 @@
                 <div class="modal-footer py-2 px-3 bg-light">
                     <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
                     <button type="button" class="btn btn-warning btn-sm" id="btnAplicarReasignGuia"><i class="bi bi-check2-circle me-1"></i>Aplicar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== MODAL EDICIÓN RÁPIDA DE UN INGRESO MANUAL ========== -->
+    <!-- Se abre desde la tabla "Actividad reciente". Dos bloques independientes:
+         sumar unidades a tallas que YA existen (con su documento) y corregir
+         descripción/precios replicando a las demás bodegas del mismo código. -->
+    <div class="modal fade" id="modalEdicionRapidaIngreso" tabindex="-1" aria-labelledby="modalEdicionRapidaLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg" style="border-radius:14px;overflow:hidden;">
+                <div class="modal-header text-white py-2 px-3" style="background:linear-gradient(135deg,#405189 0%,#0ab39c 100%);">
+                    <div>
+                        <h6 class="modal-title mb-0 fw-bold" id="modalEdicionRapidaLabel">
+                            <i class="bi bi-pencil-square me-2"></i>Edición rápida del ingreso
+                        </h6>
+                        <small class="opacity-75" id="edRapidaSubtitulo">—</small>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body p-3">
+                    <input type="hidden" id="edRapidaProductoId">
+
+                    <div id="edRapidaCargando" class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando…</span></div>
+                        <p class="text-muted mt-2 mb-0" style="font-size:.82rem;">Cargando la ficha del ingreso…</p>
+                    </div>
+
+                    <div id="edRapidaContenido" class="d-none">
+                        <!-- Ficha del producto -->
+                        <div class="card border-0 mb-3" style="background:#f2f6ff;border-radius:10px;">
+                            <div class="card-body py-2 px-3">
+                                <div class="d-flex align-items-center gap-3 flex-wrap">
+                                    <div class="flex-grow-1">
+                                        <div class="fw-bold" id="edRapidaArticulo">—</div>
+                                        <small class="text-muted" id="edRapidaAtributos"></small>
+                                    </div>
+                                    <div class="text-end">
+                                        <small class="text-muted d-block" style="font-size:.7rem;">Documento</small>
+                                        <span class="badge bg-secondary" id="edRapidaDocumento">—</span>
+                                    </div>
+                                    <div class="text-end">
+                                        <small class="text-muted d-block" style="font-size:.7rem;">Uds. del ingreso</small>
+                                        <span class="badge bg-info" id="edRapidaUnidadesEvento">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- BLOQUE 1: sumar stock a tallas existentes -->
+                        <div class="fw-semibold mb-2" style="color:#405189;font-size:.9rem;">
+                            <i class="bi bi-boxes me-1"></i>Sumar unidades a las tallas existentes
+                        </div>
+                        <div class="table-responsive mb-2" style="max-height:230px;overflow-y:auto;">
+                            <table class="table table-sm align-middle mb-0" id="tablaEdRapidaTallas">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th style="width:22%;">Talla</th>
+                                        <th style="width:28%;">SKU</th>
+                                        <th class="text-end" style="width:22%;">Stock actual</th>
+                                        <th class="text-end" style="width:28%;">+ Unidades</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                            <div class="form-check form-switch d-flex align-items-center gap-2">
+                                <input class="form-check-input" type="checkbox" id="edRapidaVincularDte" checked>
+                                <label class="form-check-label small" for="edRapidaVincularDte">
+                                    Registrar en el documento del ingreso
+                                </label>
+                            </div>
+                            <div class="ms-auto d-flex align-items-center gap-2">
+                                <small class="text-muted">A ingresar:</small>
+                                <span class="badge bg-success" id="edRapidaBadgeSuma" style="font-size:.85rem;">0</span>
+                                <button type="button" class="btn btn-sm btn-success" id="btnEdRapidaSumarStock">
+                                    <i class="bi bi-plus-circle me-1"></i>Sumar stock
+                                </button>
+                            </div>
+                        </div>
+                        <div class="alert alert-secondary py-2 px-3 mb-3" style="font-size:.76rem;">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Solo tallas que ya existen. Para una talla nueva usa el botón
+                            <i class="bi bi-plus-circle"></i> de la fila: abre Crear Manual, que pide costo, precio y guía.
+                            Si desmarcas el switch el stock entra <strong>sin respaldo documental</strong>.
+                        </div>
+
+                        <!-- BLOQUE 2: campos del producto -->
+                        <div class="fw-semibold mb-2" style="color:#405189;font-size:.9rem;">
+                            <i class="bi bi-sliders me-1"></i>Corregir datos del producto
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-12">
+                                <label class="form-label small fw-semibold mb-1">Descripción (modelo)</label>
+                                <input type="text" class="form-control form-control-sm" id="edRapidaDescripcion" placeholder="Descripción del modelo">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-semibold mb-1">Costo</label>
+                                <input type="number" min="0" class="form-control form-control-sm text-end" id="edRapidaCosto">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-semibold mb-1">Sobreprecio</label>
+                                <input type="number" min="0" class="form-control form-control-sm text-end" id="edRapidaSobreprecio">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-semibold mb-1">Precio venta</label>
+                                <input type="number" min="0" class="form-control form-control-sm text-end" id="edRapidaPrecioVenta">
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                            <div class="form-check form-switch d-flex align-items-center gap-2">
+                                <input class="form-check-input" type="checkbox" id="edRapidaTodasBodegas" checked>
+                                <label class="form-check-label small" for="edRapidaTodasBodegas">
+                                    Aplicar a todas las bodegas con este código
+                                </label>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-primary ms-auto" id="btnEdRapidaGuardarCampos">
+                                <i class="bi bi-check2-circle me-1"></i>Guardar cambios
+                            </button>
+                        </div>
+                        <div id="edRapidaBodegas" class="small text-muted" style="font-size:.74rem;"></div>
+                        <div class="alert alert-warning py-2 px-3 mt-2 mb-0" style="font-size:.76rem;">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            Marca, color, género y categoría no se editan aquí: usa
+                            <strong>Editar Productos → Edición Masiva</strong>, que valida la identidad del producto.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer py-2 px-3 bg-light">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== MODAL REASIGNAR DTE DE UN INGRESO MANUAL ========== -->
+    <!-- Corrige el caso "elegí la factura equivocada en Crear Manual". Mueve el
+         ingreso completo (movimientos, lotes FIFO, líneas del DTE, recepciones
+         y compra) al documento correcto. El stock NO se toca. -->
+    <div class="modal fade" id="modalCambiarDteIngreso" tabindex="-1" aria-labelledby="modalCambiarDteLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg" style="border-radius:14px;overflow:hidden;">
+                <div class="modal-header text-white py-2 px-3" style="background:linear-gradient(135deg,#f0a500 0%,#e67e00 100%);">
+                    <div>
+                        <h6 class="modal-title mb-0 fw-bold" id="modalCambiarDteLabel">
+                            <i class="bi bi-receipt-cutoff me-2"></i>Reasignar DTE del ingreso
+                        </h6>
+                        <small class="opacity-75">Mueve el ingreso completo a la factura correcta — el stock no cambia</small>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body p-3">
+                    <div id="cambiarDteCargando" class="text-center py-4">
+                        <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Cargando…</span></div>
+                        <p class="text-muted mt-2 mb-0" style="font-size:.82rem;">Leyendo el ingreso…</p>
+                    </div>
+
+                    <div id="cambiarDteContenido" class="d-none">
+                        <div class="card border-0 mb-2" style="background:#fff7e6;border-radius:10px;">
+                            <div class="card-body py-2 px-3">
+                                <div class="d-flex align-items-center gap-3 flex-wrap">
+                                    <div class="flex-grow-1">
+                                        <div class="fw-bold" id="cambiarDteArticulo">—</div>
+                                        <small class="text-muted" id="cambiarDteResumenIngreso"></small>
+                                    </div>
+                                    <div class="text-end">
+                                        <small class="text-muted d-block" style="font-size:.7rem;">DTE actual (incorrecto)</small>
+                                        <span class="badge bg-danger" id="cambiarDteActual">—</span>
+                                        <div class="text-muted" style="font-size:.68rem;" id="cambiarDteEmisorActual"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold mb-1">
+                                    <i class="bi bi-building me-1 text-warning"></i>Proveedor del DTE correcto
+                                </label>
+                                <select class="form-select form-select-sm" id="cambiarDteProveedor">
+                                    <option value="">— Selecciona proveedor —</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold mb-1">
+                                    <i class="bi bi-receipt me-1 text-warning"></i>DTE correcto
+                                </label>
+                                <select class="form-select form-select-sm" id="cambiarDteDestino" disabled>
+                                    <option value="">— Elige primero el proveedor —</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold mb-1">Motivo (queda en la trazabilidad)</label>
+                            <input type="text" class="form-control form-control-sm" id="cambiarDteMotivo"
+                                   maxlength="180" placeholder="Ej.: se seleccionó la factura anterior del mismo proveedor">
+                        </div>
+
+                        <div id="cambiarDteImpacto"></div>
+                    </div>
+                </div>
+
+                <div class="modal-footer py-2 px-3 bg-light">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning btn-sm" id="btnAplicarCambioDte" disabled>
+                        <i class="bi bi-arrow-left-right me-1"></i>Reasignar DTE
+                    </button>
                 </div>
             </div>
         </div>
@@ -11912,6 +12125,17 @@ function cargarActividadManual() {
             const tipo = a.es_nuevo
                 ? '<span class="badge bg-success" title="La ficha del producto se creó ese mismo día">NUEVO</span>'
                 : '<span class="badge bg-info text-dark" title="Producto existente: se le sumó stock">+stock</span>';
+            // Identidad EXACTA del evento (misma clave con la que el backend
+            // agrupa los movimientos). Va serializada en el botón para que las
+            // acciones toquen este ingreso y no otro del mismo producto.
+            const evento = {
+                producto_id: a.producto_id,
+                fecha: a.fecha_iso,
+                dte_id: a.dte_id,
+                responsable: a.responsable_raw || '',
+                articulo: a.articulo,
+                documento: a.documento
+            };
             $tbody.append(`
                 <tr>
                     <td style="font-size:.8rem;">${a.fecha}<div class="text-muted" style="font-size:.68rem;">${a.hora}</div></td>
@@ -11928,11 +12152,29 @@ function cargarActividadManual() {
                     <td style="font-size:.75rem;">${escActividad(a.documento)}</td>
                     <td style="font-size:.75rem;">${escActividad(a.responsable)}</td>
                     <td class="text-center">
-                        <button class="btn btn-sm btn-outline-success btn-sumar-stock-actividad"
-                                data-articulo="${escActividad(a.articulo)}"
-                                title="Abrir Crear Manual con este código para sumarle stock">
-                            <i class="bi bi-plus-circle"></i> Sumar
-                        </button>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-outline-success btn-sumar-stock-actividad"
+                                    data-articulo="${escActividad(a.articulo)}"
+                                    title="Abrir Crear Manual con este código (tallas nuevas, costo, guía)">
+                                <i class="bi bi-plus-circle"></i>
+                            </button>
+                            <button class="btn btn-outline-primary btn-edicion-rapida-actividad"
+                                    data-evento="${escActividad(JSON.stringify(evento))}"
+                                    title="Edición rápida: sumar unidades a las tallas existentes y corregir descripción/precios en todas las bodegas">
+                                <i class="bi bi-pencil-square"></i>
+                            </button>
+                            <button class="btn btn-outline-warning btn-cambiar-dte-actividad"
+                                    data-evento="${escActividad(JSON.stringify(evento))}"
+                                    title="Reasignar el DTE de este ingreso (se eligió la factura equivocada)">
+                                <i class="bi bi-receipt-cutoff"></i>
+                            </button>
+                            <button class="btn btn-outline-secondary btn-trazabilidad-actividad"
+                                    data-skus="${escActividad(JSON.stringify(a.skus || []))}"
+                                    data-articulo="${escActividad(a.articulo)}"
+                                    title="Ver trazabilidad completa del producto">
+                                <i class="bi bi-diagram-3"></i>
+                            </button>
+                        </div>
                     </td>
                 </tr>`);
         });
@@ -11954,6 +12196,496 @@ $(document).on('click', '.btn-sumar-stock-actividad', function() {
 });
 
 $(document).on('click', '#btnRefrescarActividad', cargarActividadManual);
+
+// ===================================================================
+// ACCIONES DE LA TABLA "ACTIVIDAD RECIENTE"
+// ===================================================================
+// Trazabilidad · Edición rápida · Reasignar DTE. Las tres operan sobre el
+// mismo "evento" (producto + fecha + DTE + responsable), que es la clave con
+// la que el backend agrupa los movimientos INGRESO_MANUAL: así lo que se toca
+// en la BD es exactamente la fila que el usuario está mirando.
+const URL_INGRESO_MANUAL = {
+    ficha:     '/app/api/ingreso-manual/ficha/',
+    sumar:     '/app/api/ingreso-manual/sumar-stock/',
+    preview:   '/app/api/ingreso-manual/preview-reasignar-dte/',
+    reasignar: '/app/api/ingreso-manual/reasignar-dte/'
+};
+
+// Los helpers mostrarModal/cerrarModal del template viven en un scope anidado
+// y no alcanzan hasta acá; se usa la API de Bootstrap directamente.
+function _modalIngreso(id, accion) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (accion === 'show') {
+        bootstrap.Modal.getOrCreateInstance(el, { backdrop: true, keyboard: true }).show();
+    } else {
+        const inst = bootstrap.Modal.getInstance(el);
+        if (inst) inst.hide();
+    }
+}
+
+// ── 1. TRAZABILIDAD ────────────────────────────────────────────────
+// La trazabilidad se consulta por SKU (una talla), no por producto: si el
+// ingreso tocó varias tallas hay que elegir cuál.
+$(document).on('click', '.btn-trazabilidad-actividad', function() {
+    const skus = $(this).data('skus') || [];
+    const articulo = $(this).data('articulo') || '';
+
+    const abrir = (sku) => window.open(
+        '/app/trazabilidad-producto/?sku=' + encodeURIComponent(sku), '_blank');
+
+    const validos = skus.filter(s => s && s.sku);
+    if (!validos.length) {
+        Swal.fire('Sin SKU', 'Este ingreso no tiene tallas con SKU para consultar.', 'info');
+        return;
+    }
+    if (validos.length === 1) {
+        abrir(validos[0].sku);
+        return;
+    }
+
+    const opciones = {};
+    validos.forEach(s => { opciones[s.sku] = `Talla ${s.talla} — SKU ${s.sku}`; });
+    Swal.fire({
+        title: 'Trazabilidad',
+        text: `${articulo}: elige la talla`,
+        input: 'select',
+        inputOptions: opciones,
+        inputPlaceholder: 'Selecciona una talla',
+        showCancelButton: true,
+        confirmButtonText: 'Ver trazabilidad',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#405189',
+        inputValidator: (v) => !v && 'Elige una talla'
+    }).then(res => { if (res.isConfirmed && res.value) abrir(res.value); });
+});
+
+// ── 2. EDICIÓN RÁPIDA ──────────────────────────────────────────────
+let _edRapidaEvento = null;
+let _edRapidaOriginal = null;
+
+function edRapidaSumaSolicitada() {
+    let suma = 0;
+    $('.ed-rapida-add').each(function() { suma += parseInt($(this).val()) || 0; });
+    $('#edRapidaBadgeSuma').text(suma.toLocaleString('es-CL'));
+    $('#btnEdRapidaSumarStock').prop('disabled', suma <= 0);
+    return suma;
+}
+
+$(document).on('input', '.ed-rapida-add', edRapidaSumaSolicitada);
+
+$(document).on('click', '.btn-edicion-rapida-actividad', function() {
+    _edRapidaEvento = $(this).data('evento');
+    if (!_edRapidaEvento) return;
+
+    $('#edRapidaCargando').removeClass('d-none');
+    $('#edRapidaContenido').addClass('d-none');
+    $('#edRapidaSubtitulo').text(_edRapidaEvento.articulo || '—');
+    _modalIngreso('modalEdicionRapidaIngreso', 'show');
+
+    $.get(URL_INGRESO_MANUAL.ficha, {
+        producto_id: _edRapidaEvento.producto_id,
+        fecha:       _edRapidaEvento.fecha,
+        dte_id:      _edRapidaEvento.dte_id || '',
+        responsable: _edRapidaEvento.responsable || ''
+    }).done(function(res) {
+        if (!res || !res.success) {
+            _modalIngreso('modalEdicionRapidaIngreso', 'hide');
+            Swal.fire('Error', (res && res.error) || 'No se pudo leer el ingreso.', 'error');
+            return;
+        }
+        renderEdicionRapida(res);
+    }).fail(function(xhr) {
+        _modalIngreso('modalEdicionRapidaIngreso', 'hide');
+        Swal.fire('Error', (xhr.responseJSON && xhr.responseJSON.error) || 'Error de red.', 'error');
+    });
+});
+
+function renderEdicionRapida(res) {
+    const p = res.producto;
+    _edRapidaOriginal = {
+        descripcion: p.descripcion || '',
+        costo: p.costo, sobreprecio: p.sobreprecio, precioventa: p.precioventa
+    };
+
+    $('#edRapidaProductoId').val(p.id);
+    $('#edRapidaArticulo').text(p.articulo);
+    $('#edRapidaAtributos').text(
+        [p.marca, p.color, p.genero, p.categoria].filter(Boolean).join(' · ') +
+        (p.sucursal ? ` — bodega ${p.sucursal}` : ''));
+    $('#edRapidaDocumento').text(res.dte
+        ? `${res.dte.tipo_documento} #${res.dte.numero_documento}` : 'sin documento');
+    $('#edRapidaUnidadesEvento').text((res.unidades_evento || 0).toLocaleString('es-CL'));
+
+    const $tbody = $('#tablaEdRapidaTallas tbody').empty();
+    (res.tallas || []).forEach(t => {
+        $tbody.append(`
+            <tr>
+                <td><strong>${escActividad(t.talla)}</strong>${t.unidades_evento
+                    ? ` <span class="badge bg-light text-dark border" style="font-size:.62rem;" title="Unidades que entraron en este ingreso">+${t.unidades_evento}</span>` : ''}</td>
+                <td><code style="font-size:.74rem;">${escActividad(t.sku)}</code></td>
+                <td class="text-end">${(t.stock || 0).toLocaleString('es-CL')}</td>
+                <td class="text-end">
+                    <input type="number" min="0" class="form-control form-control-sm text-end ed-rapida-add"
+                           data-pt-id="${t.producto_talla_id}" value="0" style="max-width:110px;margin-left:auto;">
+                </td>
+            </tr>`);
+    });
+    if (!(res.tallas || []).length) {
+        $tbody.append('<tr><td colspan="4" class="text-center text-muted py-3">Este producto no tiene tallas.</td></tr>');
+    }
+
+    // Sin DTE en el ingreso no hay documento al que colgar la suma.
+    $('#edRapidaVincularDte')
+        .prop('checked', !!res.dte)
+        .prop('disabled', !res.dte)
+        .closest('.form-check').find('label')
+        .text(res.dte
+            ? `Registrar en ${res.dte.tipo_documento} #${res.dte.numero_documento}`
+            : 'El ingreso no tiene documento asociado');
+
+    $('#edRapidaDescripcion').val(p.descripcion || '');
+    $('#edRapidaCosto').val(p.costo);
+    $('#edRapidaSobreprecio').val(p.sobreprecio);
+    $('#edRapidaPrecioVenta').val(p.precioventa);
+
+    const bodegas = res.bodegas || [];
+    $('#edRapidaBodegas').html(bodegas.length
+        ? `<i class="bi bi-shop me-1"></i>Bodegas con este código: ` + bodegas.map(b =>
+            `<span class="badge" style="background:#eaf0ff;color:#2456d6;">${escActividad(b.sucursal)}<sup style="margin-left:2px;">${b.stock}</sup></span>`).join(' ')
+        : '');
+
+    edRapidaSumaSolicitada();
+    $('#edRapidaCargando').addClass('d-none');
+    $('#edRapidaContenido').removeClass('d-none');
+}
+
+$(document).on('click', '#btnEdRapidaSumarStock', function() {
+    const suma = edRapidaSumaSolicitada();
+    if (suma <= 0) return;
+
+    const lineas = [];
+    $('.ed-rapida-add').each(function() {
+        const cantidad = parseInt($(this).val()) || 0;
+        if (cantidad > 0) lineas.push({ producto_talla_id: $(this).data('pt-id'), cantidad: cantidad });
+    });
+
+    const vincular = $('#edRapidaVincularDte').is(':checked');
+    const $btn = $(this);
+
+    Swal.fire({
+        icon: 'question',
+        title: `¿Sumar ${suma.toLocaleString('es-CL')} unidad(es)?`,
+        html: vincular
+            ? `Se registrarán en <strong>${$('#edRapidaDocumento').text()}</strong> y generarán lotes FIFO.`
+            : `<span class="text-danger">Entrarán <strong>sin documento</strong> de respaldo.</span>`,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, sumar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0ab39c'
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Sumando…');
+        $.ajax({
+            url: URL_INGRESO_MANUAL.sumar,
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({
+                producto_id: $('#edRapidaProductoId').val(),
+                dte_id: _edRapidaEvento ? _edRapidaEvento.dte_id : null,
+                vincular_dte: vincular,
+                lineas: lineas
+            })
+        }).done(function(resp) {
+            if (!resp || !resp.success) {
+                Swal.fire('Error', (resp && resp.error) || 'No se pudo sumar el stock.', 'error');
+                return;
+            }
+            Swal.fire({
+                icon: 'success',
+                title: 'Stock sumado',
+                html: `<strong>${resp.unidades}</strong> unidad(es) en ${resp.tallas} talla(s).<br>` +
+                      `Documento: <strong>${escActividad(resp.documento)}</strong>`,
+                timer: 2600
+            });
+            _modalIngreso('modalEdicionRapidaIngreso', 'hide');
+            cargarActividadManual();
+        }).fail(function(xhr) {
+            Swal.fire('Error', (xhr.responseJSON && xhr.responseJSON.error) || 'Error de red.', 'error');
+        }).always(function() {
+            $btn.prop('disabled', false).html('<i class="bi bi-plus-circle me-1"></i>Sumar stock');
+        });
+    });
+});
+
+$(document).on('click', '#btnEdRapidaGuardarCampos', function() {
+    if (!_edRapidaOriginal) return;
+
+    const descripcion = ($('#edRapidaDescripcion').val() || '').trim();
+    const costo       = parseInt($('#edRapidaCosto').val()) || 0;
+    const sobreprecio = parseInt($('#edRapidaSobreprecio').val()) || 0;
+    const precioventa = parseInt($('#edRapidaPrecioVenta').val()) || 0;
+
+    const cambioDesc = descripcion !== (_edRapidaOriginal.descripcion || '');
+    const cambioPrecio = costo !== _edRapidaOriginal.costo
+        || sobreprecio !== _edRapidaOriginal.sobreprecio
+        || precioventa !== _edRapidaOriginal.precioventa;
+
+    if (!cambioDesc && !cambioPrecio) {
+        Swal.fire('Sin cambios', 'No modificaste ningún campo.', 'info');
+        return;
+    }
+    if (cambioPrecio && precioventa <= 0) {
+        Swal.fire('Precio inválido', 'El precio de venta debe ser mayor a 0.', 'warning');
+        return;
+    }
+
+    const campos = {};
+    if (cambioDesc)   { campos.aplicar_descripcion = true; campos.descripcion = descripcion; }
+    if (cambioPrecio) {
+        campos.aplicar_precios = true;
+        campos.costo = costo; campos.sobreprecio = sobreprecio; campos.precioventa = precioventa;
+    }
+
+    const propagar = $('#edRapidaTodasBodegas').is(':checked');
+    const $btn = $(this);
+
+    Swal.fire({
+        icon: 'warning',
+        title: 'Confirmar cambios',
+        html: `Se aplicará a <strong>${propagar ? 'TODAS las bodegas' : 'esta bodega'}</strong> ` +
+              `con el código <strong>${escActividad($('#edRapidaArticulo').text())}</strong>.` +
+              (cambioPrecio ? '<br>Los lotes FIFO con stock disponible se actualizan al nuevo precio.' : ''),
+        showCancelButton: true,
+        confirmButtonText: 'Aplicar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#405189'
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Guardando…');
+        $.ajax({
+            url: '/app/productos/actualizar-masivo/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({
+                producto_ids: [parseInt($('#edRapidaProductoId').val())],
+                campos: campos,
+                propagar_sucursales: propagar
+            })
+        }).done(function(resp) {
+            if (!resp || !resp.success) {
+                Swal.fire('Error', (resp && resp.error) || 'No se pudo actualizar.', 'error');
+                return;
+            }
+            const d = resp.detalle || {};
+            Swal.fire({
+                icon: 'success',
+                title: 'Producto actualizado',
+                html: `${d.productos_actualizados || 0} ficha(s) en ${(d.sucursales || []).length} bodega(s).<br>` +
+                      `Campos: ${(d.campos_aplicados || []).join(', ') || '—'}` +
+                      (d.lotes_actualizados ? `<br>Lotes FIFO actualizados: ${d.lotes_actualizados}` : ''),
+                timer: 3200
+            });
+            _edRapidaOriginal = { descripcion, costo, sobreprecio, precioventa };
+            cargarActividadManual();
+        }).fail(function(xhr) {
+            Swal.fire('Error', (xhr.responseJSON && xhr.responseJSON.error) || 'Error de red.', 'error');
+        }).always(function() {
+            $btn.prop('disabled', false).html('<i class="bi bi-check2-circle me-1"></i>Guardar cambios');
+        });
+    });
+});
+
+// ── 3. REASIGNAR DTE ───────────────────────────────────────────────
+let _cambioDteEvento = null;
+
+$(document).on('click', '.btn-cambiar-dte-actividad', function() {
+    _cambioDteEvento = $(this).data('evento');
+    if (!_cambioDteEvento) return;
+
+    $('#cambiarDteCargando').removeClass('d-none');
+    $('#cambiarDteContenido').addClass('d-none');
+    $('#cambiarDteImpacto').empty();
+    $('#cambiarDteMotivo').val('');
+    $('#cambiarDteDestino').empty().append('<option value="">— Elige primero el proveedor —</option>').prop('disabled', true);
+    $('#btnAplicarCambioDte').prop('disabled', true);
+    _modalIngreso('modalCambiarDteIngreso', 'show');
+
+    $.get(URL_INGRESO_MANUAL.preview, {
+        producto_id: _cambioDteEvento.producto_id,
+        fecha:       _cambioDteEvento.fecha,
+        dte_id:      _cambioDteEvento.dte_id || '',
+        responsable: _cambioDteEvento.responsable || ''
+    }).done(function(res) {
+        if (!res || !res.success) {
+            _modalIngreso('modalCambiarDteIngreso', 'hide');
+            Swal.fire('Error', (res && res.error) || 'No se pudo leer el ingreso.', 'error');
+            return;
+        }
+        $('#cambiarDteArticulo').text(res.producto.articulo);
+        $('#cambiarDteResumenIngreso').text(
+            `${res.impacto.unidades} uds · tallas ${res.impacto.tallas.join(', ') || '—'} · ${_cambioDteEvento.fecha}`);
+        $('#cambiarDteActual').text(res.dte_origen ? res.dte_origen.etiqueta : 'sin documento');
+        $('#cambiarDteEmisorActual').text(res.dte_origen ? res.dte_origen.emisor : '');
+        renderImpactoCambioDte(res);
+
+        cargarProveedoresCambioDte(res.dte_origen ? res.dte_origen.emisor_id : null);
+        $('#cambiarDteCargando').addClass('d-none');
+        $('#cambiarDteContenido').removeClass('d-none');
+    }).fail(function(xhr) {
+        _modalIngreso('modalCambiarDteIngreso', 'hide');
+        Swal.fire('Error', (xhr.responseJSON && xhr.responseJSON.error) || 'Error de red.', 'error');
+    });
+});
+
+function renderImpactoCambioDte(res) {
+    const i = res.impacto || {};
+    const avisos = (res.avisos || []).map(a =>
+        `<div class="alert alert-warning py-1 px-2 mb-1" style="font-size:.75rem;">
+            <i class="bi bi-exclamation-triangle me-1"></i>${escActividad(a)}</div>`).join('');
+
+    $('#cambiarDteImpacto').html(`
+        <div class="card border-0" style="background:#f6f7fb;border-radius:10px;">
+            <div class="card-body py-2 px-3">
+                <div class="fw-semibold mb-2" style="font-size:.82rem;color:#405189;">
+                    <i class="bi bi-list-check me-1"></i>Qué se mueve al documento nuevo
+                </div>
+                <div class="d-flex flex-wrap gap-3" style="font-size:.78rem;">
+                    <div><strong>${i.movimientos || 0}</strong> movimiento(s) de stock</div>
+                    <div><strong>${i.lotes_fifo || 0}</strong> lote(s) FIFO</div>
+                    <div><strong>${i.lineas_dte || 0}</strong> línea(s) del detalle del DTE${
+                        i.unidades_lineas_dte != null ? ` <span class="text-muted">(${i.unidades_lineas_dte} uds)</span>` : ''}</div>
+                    <div><strong>${i.recepciones || 0}</strong> recepción(es)</div>
+                    <div><strong>${i.lineas_compra || 0}</strong> línea(s) de compra</div>
+                </div>
+                <div class="text-muted mt-2" style="font-size:.72rem;">
+                    <i class="bi bi-shield-check me-1"></i>El stock en bodega <strong>no cambia</strong>:
+                    solo se corrige el documento que respalda esas ${i.unidades || 0} unidades.
+                </div>
+            </div>
+        </div>
+        ${avisos ? '<div class="mt-2">' + avisos + '</div>' : ''}`);
+}
+
+function cargarProveedoresCambioDte(preseleccion) {
+    const $sel = $('#cambiarDteProveedor');
+    $sel.empty().append('<option value="">Cargando proveedores…</option>');
+    $.get('/app/proveedores/', function(data) {
+        $sel.empty().append('<option value="">— Selecciona proveedor —</option>');
+        (data || []).forEach(p => $sel.append(`<option value="${p.id}">${escActividad(p.nombre)}</option>`));
+        // Lo más habitual es equivocarse de factura DENTRO del mismo proveedor,
+        // así que se preselecciona el emisor del DTE actual.
+        if (preseleccion) $sel.val(preseleccion).trigger('change');
+    }).fail(function() {
+        $sel.empty().append('<option value="">Error al cargar proveedores</option>');
+    });
+}
+
+$(document).on('change', '#cambiarDteProveedor', function() {
+    const proveedorId = $(this).val();
+    const $sel = $('#cambiarDteDestino');
+    $('#btnAplicarCambioDte').prop('disabled', true);
+    if (!proveedorId) {
+        $sel.empty().append('<option value="">— Elige primero el proveedor —</option>').prop('disabled', true);
+        return;
+    }
+    $sel.prop('disabled', true).empty().append('<option value="">Cargando DTEs…</option>');
+    $.get(`/app/dtes_por_proveedor/${proveedorId}/`, function(data) {
+        $sel.empty().append('<option value="">— Selecciona el DTE correcto —</option>');
+        const actual = _cambioDteEvento ? String(_cambioDteEvento.dte_id) : '';
+        (data || []).forEach(d => {
+            if (String(d.id) === actual) return;  // el equivocado no es opción
+            $sel.append(`<option value="${d.id}">#${escActividad(d.numero_documento)} — ${escActividad(d.fecha)}${d.estado_pago ? ' · ' + escActividad(d.estado_pago) : ''}</option>`);
+        });
+        $sel.prop('disabled', false);
+    }).fail(function() {
+        $sel.empty().append('<option value="">Error al cargar DTEs</option>');
+    });
+});
+
+$(document).on('change', '#cambiarDteDestino', function() {
+    const nuevoDteId = $(this).val();
+    $('#btnAplicarCambioDte').prop('disabled', true);
+    if (!nuevoDteId || !_cambioDteEvento) return;
+
+    $.get(URL_INGRESO_MANUAL.preview, {
+        producto_id:   _cambioDteEvento.producto_id,
+        fecha:         _cambioDteEvento.fecha,
+        dte_id:        _cambioDteEvento.dte_id || '',
+        responsable:   _cambioDteEvento.responsable || '',
+        nuevo_dte_id:  nuevoDteId
+    }).done(function(res) {
+        if (!res || !res.success) {
+            Swal.fire('No se puede reasignar', (res && res.error) || 'Error al validar el DTE.', 'warning');
+            return;
+        }
+        renderImpactoCambioDte(res);
+        $('#btnAplicarCambioDte').prop('disabled', false);
+    }).fail(function(xhr) {
+        Swal.fire('No se puede reasignar',
+            (xhr.responseJSON && xhr.responseJSON.error) || 'Error de red.', 'warning');
+    });
+});
+
+$(document).on('click', '#btnAplicarCambioDte', function() {
+    const nuevoDteId = $('#cambiarDteDestino').val();
+    if (!nuevoDteId || !_cambioDteEvento) return;
+    const $btn = $(this);
+    const etiquetaNueva = $('#cambiarDteDestino option:selected').text();
+
+    Swal.fire({
+        icon: 'warning',
+        title: '¿Reasignar el DTE?',
+        html: `El ingreso de <strong>${escActividad(_cambioDteEvento.articulo)}</strong> pasará de ` +
+              `<strong>${escActividad($('#cambiarDteActual').text())}</strong> a <strong>${escActividad(etiquetaNueva)}</strong>.<br><br>` +
+              `<span class="text-muted" style="font-size:.82rem;">Se mueven movimientos, lotes FIFO, líneas del DTE, ` +
+              `recepciones y compra. El stock no cambia. Queda registrado en la trazabilidad.</span>`,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, reasignar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#f0a500'
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Reasignando…');
+        $.ajax({
+            url: URL_INGRESO_MANUAL.reasignar,
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({
+                producto_id:  _cambioDteEvento.producto_id,
+                fecha:        _cambioDteEvento.fecha,
+                dte_id:       _cambioDteEvento.dte_id || null,
+                responsable:  _cambioDteEvento.responsable || '',
+                nuevo_dte_id: nuevoDteId,
+                motivo:       ($('#cambiarDteMotivo').val() || '').trim()
+            })
+        }).done(function(resp) {
+            if (!resp || !resp.success) {
+                Swal.fire('Error', (resp && resp.error) || 'No se pudo reasignar el DTE.', 'error');
+                return;
+            }
+            const s = resp.resumen || {};
+            Swal.fire({
+                icon: 'success',
+                title: 'DTE reasignado',
+                html: `Ingreso movido a <strong>${escActividad(resp.documento)}</strong>.<br>` +
+                      `${s.movimientos || 0} movimiento(s) · ${s.lotes_fifo || 0} lote(s) · ` +
+                      `${s.lineas_dte || 0} línea(s) DTE · ${s.recepciones || 0} recepción(es)` +
+                      (s.compras_no_movidas ? `<br><span class="text-warning">${s.compras_no_movidas} línea(s) de compra mixtas quedaron sin mover.</span>` : '')
+            });
+            _modalIngreso('modalCambiarDteIngreso', 'hide');
+            cargarActividadManual();
+        }).fail(function(xhr) {
+            Swal.fire('Error', (xhr.responseJSON && xhr.responseJSON.error) || 'Error de red.', 'error');
+        }).always(function() {
+            $btn.prop('disabled', false).html('<i class="bi bi-arrow-left-right me-1"></i>Reasignar DTE');
+        });
+    });
+});
+
 
 // Toggle del flujo antiguo de recepciones DTE (colapsado por defecto).
 // La tabla legacy se carga recién en la PRIMERA expansión (lazy).

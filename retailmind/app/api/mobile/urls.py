@@ -8,6 +8,9 @@ from django.urls import path
 from .views import (
     CodigoAutorizacionActualView,
     AjusteStockRapidoView,
+    MobileLoginView,
+    MobileReenviarPinView,
+    MobileVerificarPinView,
     ProductoActualizarView,
     ProductoBuscarView,
     ProductoCatalogoView,
@@ -17,6 +20,13 @@ from .views import (
 app_name = "mobile"
 
 urlpatterns = [
+    # Login de la app de staff: contraseña + PIN por correo (una vez por teléfono).
+    # NO reutiliza /api/v1/desktop/login/ porque ese endpoint lo usa el POS Tauri:
+    # meterle 2FA dejaría a cada caja esperando un correo para poder vender.
+    path("login/", MobileLoginView.as_view(), name="login"),
+    path("login/verificar-pin/", MobileVerificarPinView.as_view(), name="login-verificar-pin"),
+    path("login/reenviar-pin/", MobileReenviarPinView.as_view(), name="login-reenviar-pin"),
+
     path("codigo-autorizacion/actual/", CodigoAutorizacionActualView.as_view(), name="codigo-autorizacion-actual"),
     path("ajuste-stock-rapido/", AjusteStockRapidoView.as_view(), name="ajuste-stock-rapido"),
 

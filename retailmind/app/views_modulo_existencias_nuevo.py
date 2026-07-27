@@ -27,6 +27,8 @@ from .models import (
     Producto, Producto_Talla, Movimientos_Producto, LoteProducto,
     Sucursal, EmpresaUser, Traspaso, Traspaso_Detalle,
     PendienteDespacho, HistorialCambioPrecio,
+    Dte, Dte_Productos, Productos_Recepcionados,
+    Compras, Compras_Producto, Compras_Producto_Talla,
     CONCEPTO_MOVIMIENTO_CHOICES, TIPO_MOVIMIENTO_CHOICES,
 )
 
@@ -2078,6 +2080,13 @@ def api_actividad_creacion_manual(request):
                 'documento': m.referencia_externa or (
                     f"{m.dte.tipo_documento} #{m.dte.numero_documento}" if m.dte else '-'),
                 'es_nuevo': es_nuevo,
+                # Identidad exacta del evento, para las acciones de la fila
+                # (trazabilidad, edición rápida, reasignar DTE). `responsable`
+                # sale con '-' cuando viene vacío: el crudo es el que matchea.
+                'fecha_iso': m.fecha.isoformat() if m.fecha else '',
+                'dte_id': m.dte_id,
+                'responsable_raw': m.responsable or '',
+                '_skus': {},
             }
             orden.append(key)
         g = grupos[key]
@@ -2085,13 +2094,17 @@ def api_actividad_creacion_manual(request):
         g['valor'] += valor
         if pt.talla:
             g['tallas'].add(pt.talla)
+            g['_skus'].setdefault(pt.talla, pt.sku)
 
     actividad = []
     for key in orden[:60]:
         g = grupos[key]
         tallas = sorted(g.pop('tallas'), key=clave_orden_talla)
+        skus = g.pop('_skus')
         g['tallas'] = tallas
         g['tallas_n'] = len(tallas)
+        # Par talla→SKU: la trazabilidad se consulta por SKU, no por producto.
+        g['skus'] = [{'talla': t, 'sku': skus.get(t, '')} for t in tallas]
         actividad.append(g)
 
     return JsonResponse({
@@ -2107,4 +2120,646 @@ def api_actividad_creacion_manual(request):
             'mes_unidades': kpis['mes_unidades'],
         },
         'actividad': actividad,
+    })
+
+
+# =====================================================
+# 5. ACCIONES RÁPIDAS SOBRE UN INGRESO MANUAL
+# =====================================================
+#
+# La tabla "Actividad reciente" de verGestionProducto agrupa los movimientos
+# INGRESO_MANUAL por (producto, fecha, DTE, responsable): ese es el "evento"
+# real que el usuario hizo con el modal Crear Manual. Sobre ese mismo evento
+# operan las acciones de abajo:
+#
+#   * edición rápida  -> sumar unidades a tallas YA existentes y corregir
+#                        descripción/precios, replicando a las demás bodegas.
+#   * reasignar DTE   -> mover el ingreso completo a la factura correcta cuando
+#                        se eligió la equivocada en el modal.
+#
+# Un ingreso manual deja rastro del DTE en CINCO tablas (Movimientos_Producto,
+# LoteProducto, Dte_Productos, Productos_Recepcionados y la compra manual). Si
+# solo se corrige una, el resto sigue apuntando a la factura equivocada: por eso
+# la reasignación las mueve todas dentro de una misma transacción.
+
+
+def _sucursal_activa_validada(request):
+    """
+    (sucursal_id, error_response). La sucursal activa de la sesión, verificada
+    contra las bodegas del usuario — no se confía en lo que quedó en sesión.
+    """
+    sucursal_id = (request.session.get('idSucursalActual')
+                   or request.session.get('sucursalActual'))
+    if not sucursal_id:
+        return None, JsonResponse(
+            {'success': False, 'error': 'Sin sucursal activa en la sesión.'}, status=400)
+    if int(sucursal_id) not in set(_sucursales_usuario(request)):
+        return None, _sin_acceso('La sucursal activa no pertenece a tus empresas.')
+    return int(sucursal_id), None
+
+
+def _parse_fecha_iso(valor):
+    """'YYYY-MM-DD' -> date, o None si no se puede parsear."""
+    try:
+        return datetime.strptime(str(valor).strip(), '%Y-%m-%d').date()
+    except (TypeError, ValueError):
+        return None
+
+
+def _movimientos_del_evento(producto_id, fecha, dte_id, responsable, sucursal_id):
+    """
+    Movimientos INGRESO_MANUAL que componen un evento de la tabla Actividad.
+
+    Se usa exactamente la misma clave con la que `api_actividad_creacion_manual`
+    agrupa las filas — (producto, fecha, dte, responsable) — para que lo que el
+    usuario ve en pantalla sea lo que se toca en la BD, ni una unidad más.
+    """
+    qs = Movimientos_Producto.objects.filter(
+        concepto='INGRESO_MANUAL',
+        ProductoTalla__producto_id=producto_id,
+        fecha=fecha,
+        sucursal_destino_id=sucursal_id,
+        responsable=responsable or '',
+    )
+    qs = qs.filter(dte_id=dte_id) if dte_id else qs.filter(dte__isnull=True)
+    return qs.select_related('ProductoTalla', 'dte')
+
+
+def _producto_en_alcance(request, producto_id):
+    """(producto, error_response). Producto restringido a las bodegas del usuario."""
+    producto = (
+        Producto.objects
+        .select_related('sucursal', 'categoria', 'atributo1', 'atributo2', 'atributo3')
+        .filter(id=producto_id, sucursal_id__in=_sucursales_usuario(request))
+        .first()
+    )
+    if producto is None:
+        if Producto.objects.filter(id=producto_id).exists():
+            return None, _sin_acceso('Ese producto pertenece a una empresa a la que no tienes acceso.')
+        return None, JsonResponse({'success': False, 'error': 'Producto no encontrado.'}, status=404)
+    return producto, None
+
+
+@login_required
+@require_GET
+def api_evento_ingreso_manual(request):
+    """
+    Ficha de un evento de creación manual, para el modal de Edición Rápida.
+
+    Parámetros GET: producto_id, fecha (YYYY-MM-DD), dte_id (opcional),
+    responsable (tal como lo grabó el movimiento, puede venir vacío).
+    """
+    from .utils_tallas import clave_orden_talla
+
+    producto_id = request.GET.get('producto_id')
+    fecha = _parse_fecha_iso(request.GET.get('fecha'))
+    dte_id = request.GET.get('dte_id') or None
+    responsable = request.GET.get('responsable', '')
+
+    if not producto_id or fecha is None:
+        return JsonResponse({'success': False, 'error': 'Faltan producto_id o fecha.'}, status=400)
+
+    sucursal_id, err = _sucursal_activa_validada(request)
+    if err:
+        return err
+    producto, err = _producto_en_alcance(request, producto_id)
+    if err:
+        return err
+
+    movimientos = list(_movimientos_del_evento(
+        producto.id, fecha, dte_id, responsable, sucursal_id))
+    unidades_evento = {}
+    for m in movimientos:
+        unidades_evento[m.ProductoTalla_id] = (
+            unidades_evento.get(m.ProductoTalla_id, 0) + max(m.cantidad or 0, 0))
+
+    tallas = [{
+        'producto_talla_id': pt.id,
+        'talla': pt.talla,
+        'sku': pt.sku,
+        'stock': pt.stock or 0,
+        'unidades_evento': unidades_evento.get(pt.id, 0),
+    } for pt in Producto_Talla.objects.filter(producto=producto)]
+    tallas.sort(key=lambda t: clave_orden_talla(t['talla'] or ''))
+
+    # Mismas bodegas que alcanzará la propagación: mismo código en las
+    # sucursales del usuario. Se muestran para que el checkbox "todas las
+    # bodegas" no sea un salto al vacío.
+    bodegas = list(
+        Producto.objects
+        .filter(articulo=producto.articulo, sucursal_id__in=_sucursales_usuario(request))
+        .values('id', 'sucursal__alias')
+        .annotate(stock=Coalesce(Sum('producto_talla__stock'), 0))
+        .order_by('sucursal__alias')
+    )
+
+    dte = movimientos[0].dte if movimientos and movimientos[0].dte else None
+
+    return JsonResponse({
+        'success': True,
+        'producto': {
+            'id': producto.id,
+            'articulo': producto.articulo,
+            'descripcion': producto.descripcion or '',
+            'marca': producto.atributo1.valor if producto.atributo1 else '',
+            'color': producto.atributo2.valor if producto.atributo2 else '',
+            'genero': producto.atributo3.valor if producto.atributo3 else '',
+            'categoria': producto.categoria.nombre if producto.categoria else '',
+            'costo': int(producto.costo or 0),
+            'sobreprecio': int(producto.sobreprecio or 0),
+            'precioventa': int(producto.precioventa or 0),
+            'sucursal': producto.sucursal.alias if producto.sucursal else '',
+        },
+        'tallas': tallas,
+        'bodegas': [{
+            'producto_id': b['id'],
+            'sucursal': b['sucursal__alias'] or '—',
+            'stock': b['stock'],
+        } for b in bodegas],
+        'dte': {
+            'id': dte.id,
+            'tipo_documento': dte.tipo_documento,
+            'numero_documento': dte.numero_documento,
+            'fecha': dte.fecha_emision.strftime('%d/%m/%Y') if dte.fecha_emision else '',
+            'emisor': dte.emisor.nombre if dte.emisor else '',
+            'emisor_id': dte.emisor_id,
+        } if dte else None,
+        'unidades_evento': sum(unidades_evento.values()),
+    })
+
+
+def _vincular_linea_a_compra_dte(dte, producto, producto_talla, talla, cantidad,
+                                 sucursal, responsable_nombre):
+    """
+    Deja una suma de stock registrada en la compra y en el detalle del DTE,
+    igual que hace `crear_producto_manual`.
+
+    Sin esto el stock entra pero el DTE no lo refleja, y la factura termina
+    declarando menos unidades de las que realmente ingresaron a bodega.
+    """
+    from .views import obtener_siguiente_correlativo
+
+    hoy = timezone.localdate()
+    proveedor = dte.emisor
+
+    compra = Compras.objects.filter(
+        empresa=proveedor,
+        estado__in=['ACTIVA', 'COMPLETADA'],
+        nombre__startswith='Compra Manual -',
+        fecha=hoy,
+    ).first()
+    if compra is None:
+        compra = Compras.objects.create(
+            empresa=proveedor,
+            nombre=f"Compra Manual - {proveedor.nombre} - {hoy.strftime('%d/%m/%Y')}",
+            correlativo=obtener_siguiente_correlativo(sucursal, 'COMPRA'),
+            responsable=responsable_nombre,
+            temporada='',
+            fecha=hoy,
+            estado='COMPLETADA',
+            tipo='inicial',
+        )
+
+    compra_producto = Compras_Producto.objects.create(
+        compras=compra,
+        nombre=producto.articulo,
+        descripcion=producto.descripcion or '',
+        atributo1=producto.atributo1.valor if producto.atributo1 else '',
+        atributo2=producto.atributo2.valor if producto.atributo2 else '',
+        atributo3=producto.atributo3.valor if producto.atributo3 else '',
+        atributo4='',
+        tipo_talla=producto.tipo_talla or 'CL',
+        costo=int(producto.costo or 0),
+        precioSugerido=int(producto.precioventa or 0),
+        sucursal_destino=sucursal,
+    )
+    cpt = Compras_Producto_Talla.objects.create(
+        compra_producto=compra_producto,
+        stock=cantidad,
+        talla=talla,
+        producto_talla=producto_talla,
+        unidades_recibidas=cantidad,
+        estado_item='recibido_completo',
+    )
+    dte_prod = Dte_Productos.objects.create(
+        dte=dte,
+        productoTalla=producto_talla,
+        descripcion=f"{producto.articulo} - Talla {talla}",
+        costo=int(producto.costo or 0),
+        sobreprecio=int(producto.sobreprecio or 0),
+        precio=int(producto.precioventa or 0),
+        precio_unitario=int(producto.costo or 0),
+        monto_item=int(producto.costo or 0) * cantidad,
+        stock=cantidad,
+    )
+    Productos_Recepcionados.objects.create(
+        compra_producto_talla=cpt,
+        dte=dte,
+        dte_producto=dte_prod,
+        producto_talla=producto_talla,
+        stockArribado=cantidad,
+        cantidad_esperada=cantidad,
+        estado='RECEPCIONADO_OK',
+        sucursal_destino=sucursal,
+        recepcionado_por=responsable_nombre,
+        fecha_recepcion=timezone.now(),
+    )
+    return dte_prod
+
+
+@login_required
+@require_POST
+def api_sumar_stock_rapido(request):
+    """
+    Suma unidades a tallas YA existentes de un producto, contra el mismo DTE del
+    evento (o sin documento si el usuario lo desmarca).
+
+    Solo toca tallas existentes: para una talla nueva está el botón "Sumar", que
+    reabre Crear Manual con el código precargado y pide costo/precio/guía.
+    """
+    from .views import registrar_movimiento_producto
+
+    try:
+        data = json.loads(request.body or '{}')
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    producto_id = data.get('producto_id')
+    lineas = data.get('lineas') or []
+    vincular_dte = bool(data.get('vincular_dte', True))
+    dte_id = data.get('dte_id') or None
+
+    if not producto_id or not lineas:
+        return JsonResponse({'success': False, 'error': 'Faltan producto o líneas.'}, status=400)
+
+    sucursal_id, err = _sucursal_activa_validada(request)
+    if err:
+        return err
+    producto, err = _producto_en_alcance(request, producto_id)
+    if err:
+        return err
+
+    dte = None
+    if vincular_dte and dte_id:
+        dte = Dte.objects.select_related('emisor').filter(id=dte_id).first()
+        if dte is None:
+            return JsonResponse({'success': False, 'error': 'El DTE indicado no existe.'}, status=404)
+        if dte.emisor is None:
+            return JsonResponse(
+                {'success': False,
+                 'error': 'El DTE no tiene emisor: no se puede registrar la compra. '
+                          'Desmarca "vincular al documento" o corrige el DTE.'}, status=400)
+
+    # Normalizar líneas: solo tallas de ESTE producto y cantidades > 0.
+    tallas_validas = {pt.id: pt for pt in Producto_Talla.objects.filter(producto=producto)}
+    pendientes = []
+    for linea in lineas:
+        try:
+            pt_id = int(linea.get('producto_talla_id'))
+            cantidad = int(linea.get('cantidad') or 0)
+        except (TypeError, ValueError):
+            continue
+        if cantidad <= 0 or pt_id not in tallas_validas:
+            continue
+        pendientes.append((tallas_validas[pt_id], cantidad))
+
+    if not pendientes:
+        return JsonResponse(
+            {'success': False, 'error': 'No indicaste unidades para ninguna talla.'}, status=400)
+
+    sucursal = Sucursal.objects.get(id=sucursal_id)
+    responsable = request.session.get('nombreUsuario', '') or request.user.get_username()
+    responsable_nombre = request.user.get_full_name() or responsable
+    ref_externa = f'{dte.tipo_documento} #{dte.numero_documento}' if dte else 'AJUSTE MANUAL'
+
+    detalle = []
+    with transaction.atomic():
+        for producto_talla, cantidad in pendientes:
+            registrar_movimiento_producto(
+                producto_talla=producto_talla,
+                concepto='INGRESO_MANUAL',
+                cantidad=cantidad,
+                responsable=responsable,
+                dte=dte,
+                sucursal_origen=sucursal,
+                sucursal_destino=sucursal,
+                observaciones=(f'Suma rápida de stock - {producto.articulo} '
+                               f'Talla {producto_talla.talla}'),
+                referencia_externa=ref_externa,
+                crear_lote_fifo=True,
+            )
+            if dte is not None:
+                _vincular_linea_a_compra_dte(
+                    dte, producto, producto_talla, producto_talla.talla,
+                    cantidad, sucursal, responsable_nombre)
+            detalle.append({'talla': producto_talla.talla, 'unidades': cantidad})
+
+    total = sum(d['unidades'] for d in detalle)
+    logger.info(
+        "Suma rápida de stock: producto_id=%s sucursal_id=%s unidades=%s dte_id=%s usuario=%s",
+        producto.id, sucursal_id, total, dte.id if dte else None, request.user.username,
+    )
+    return JsonResponse({
+        'success': True,
+        'unidades': total,
+        'tallas': len(detalle),
+        'detalle': detalle,
+        'documento': ref_externa,
+    })
+
+
+def _piezas_del_evento(producto, movimientos, dte_origen):
+    """
+    Todo lo que un ingreso manual dejó colgando del DTE, para moverlo o para
+    mostrar el impacto antes de mover nada.
+
+    Las líneas del DTE y las recepciones se acotan a las tallas del evento; las
+    líneas de compra solo se consideran cuando TODAS las tallas de esa
+    Compras_Producto son del evento (si la compra mezcla otras cosas se informa
+    y no se toca).
+    """
+    mov_ids = [m.id for m in movimientos]
+    pt_ids = sorted({m.ProductoTalla_id for m in movimientos})
+
+    lotes = LoteProducto.objects.filter(movimiento_id__in=mov_ids)
+
+    lineas_dte = Dte_Productos.objects.none()
+    recepciones = Productos_Recepcionados.objects.none()
+    compras_producto_ids, compras_producto_mixtas = [], []
+
+    if dte_origen is not None and pt_ids:
+        lineas_dte = Dte_Productos.objects.filter(
+            dte=dte_origen, productoTalla_id__in=pt_ids)
+        recepciones = Productos_Recepcionados.objects.filter(
+            dte=dte_origen, producto_talla_id__in=pt_ids)
+
+        cp_ids = set(
+            Compras_Producto_Talla.objects
+            .filter(producto_talla_id__in=pt_ids,
+                    compra_producto__nombre=producto.articulo)
+            .values_list('compra_producto_id', flat=True)
+        )
+        for cp_id in cp_ids:
+            tallas_cp = set(
+                Compras_Producto_Talla.objects
+                .filter(compra_producto_id=cp_id)
+                .values_list('producto_talla_id', flat=True)
+            )
+            if tallas_cp and tallas_cp.issubset(set(pt_ids)):
+                compras_producto_ids.append(cp_id)
+            else:
+                compras_producto_mixtas.append(cp_id)
+
+    return {
+        'movimientos': movimientos,
+        'lotes': lotes,
+        'lineas_dte': lineas_dte,
+        'recepciones': recepciones,
+        'compras_producto_ids': compras_producto_ids,
+        'compras_producto_mixtas': compras_producto_mixtas,
+    }
+
+
+def _dte_destino_valido(dte_id):
+    """(dte, mensaje_error). Valida el DTE al que se quiere mover el ingreso."""
+    dte = Dte.objects.select_related('emisor').filter(id=dte_id).first()
+    if dte is None:
+        return None, 'El DTE de destino no existe.'
+    if (dte.estado_dte or '').upper() in ('ANULADO', 'CANCELADO', 'RECHAZADO'):
+        return None, f'El DTE de destino está {dte.estado_dte}: elige otro documento.'
+    if (dte.tipo_transaccion or '').upper() not in ('COMPRA', ''):
+        return None, ('El documento de destino no es una compra '
+                      f'(tipo_transaccion={dte.tipo_transaccion}).')
+    return dte, None
+
+
+@login_required
+@require_GET
+def api_preview_reasignar_dte(request):
+    """
+    Qué se movería al reasignar el DTE de un ingreso manual. Read-only: es la
+    pantalla de confirmación, no cambia nada.
+    """
+    producto_id = request.GET.get('producto_id')
+    fecha = _parse_fecha_iso(request.GET.get('fecha'))
+    dte_id = request.GET.get('dte_id') or None
+    nuevo_dte_id = request.GET.get('nuevo_dte_id') or None
+    responsable = request.GET.get('responsable', '')
+
+    if not producto_id or fecha is None:
+        return JsonResponse({'success': False, 'error': 'Faltan producto_id o fecha.'}, status=400)
+
+    sucursal_id, err = _sucursal_activa_validada(request)
+    if err:
+        return err
+    producto, err = _producto_en_alcance(request, producto_id)
+    if err:
+        return err
+
+    movimientos = list(_movimientos_del_evento(
+        producto.id, fecha, dte_id, responsable, sucursal_id))
+    if not movimientos:
+        return JsonResponse(
+            {'success': False,
+             'error': 'No se encontró el ingreso: puede que ya se haya corregido.'}, status=404)
+
+    dte_origen = movimientos[0].dte
+    piezas = _piezas_del_evento(producto, movimientos, dte_origen)
+
+    nuevo_dte = None
+    if nuevo_dte_id:
+        nuevo_dte, error = _dte_destino_valido(nuevo_dte_id)
+        if error:
+            return JsonResponse({'success': False, 'error': error}, status=400)
+        if dte_origen and int(nuevo_dte_id) == dte_origen.id:
+            return JsonResponse(
+                {'success': False, 'error': 'El DTE de destino es el mismo que el actual.'},
+                status=400)
+
+    unidades = sum(max(m.cantidad or 0, 0) for m in movimientos)
+    lotes_consumidos = piezas['lotes'].filter(
+        cantidad_disponible__lt=F('cantidad_inicial')).count()
+
+    # Las líneas del DTE se identifican por (documento, talla). Si el DTE
+    # equivocado ADEMÁS tiene una recepción real de estas mismas tallas, sus
+    # líneas entran en el mismo filtro y se moverían de más. No hay campo que
+    # las distinga, así que se compara el total contra las unidades del ingreso
+    # y se avisa cuando no cuadra: es el usuario quien decide.
+    unidades_lineas_dte = (
+        piezas['lineas_dte'].aggregate(t=Coalesce(Sum('stock'), 0))['t'] or 0)
+
+    avisos = []
+    if lotes_consumidos:
+        avisos.append(
+            f'{lotes_consumidos} lote(s) FIFO ya tienen ventas. Se reetiqueta el documento del '
+            f'lote, pero los DTE de venta ya emitidos no cambian.')
+    if piezas['lineas_dte'].exists() and unidades_lineas_dte != unidades:
+        avisos.append(
+            f'REVISA: las líneas del DTE actual suman {unidades_lineas_dte} uds y este ingreso '
+            f'fue de {unidades} uds. La factura puede tener además una recepción real de estas '
+            f'mismas tallas, y esas líneas también se moverían.')
+    if piezas['compras_producto_mixtas']:
+        avisos.append(
+            f'{len(piezas["compras_producto_mixtas"])} línea(s) de compra mezclan tallas de otros '
+            f'ingresos: NO se moverán, quedan en la compra actual.')
+    if nuevo_dte and dte_origen and nuevo_dte.emisor_id != dte_origen.emisor_id:
+        avisos.append(
+            f'Cambia el proveedor: de "{dte_origen.emisor.nombre if dte_origen.emisor else "—"}" '
+            f'a "{nuevo_dte.emisor.nombre if nuevo_dte.emisor else "—"}".')
+
+    return JsonResponse({
+        'success': True,
+        'producto': {'id': producto.id, 'articulo': producto.articulo,
+                     'descripcion': producto.descripcion or ''},
+        'dte_origen': {
+            'id': dte_origen.id,
+            'etiqueta': f'{dte_origen.tipo_documento} #{dte_origen.numero_documento}',
+            'emisor': dte_origen.emisor.nombre if dte_origen.emisor else '—',
+            'emisor_id': dte_origen.emisor_id,
+        } if dte_origen else None,
+        'dte_destino': {
+            'id': nuevo_dte.id,
+            'etiqueta': f'{nuevo_dte.tipo_documento} #{nuevo_dte.numero_documento}',
+            'emisor': nuevo_dte.emisor.nombre if nuevo_dte.emisor else '—',
+        } if nuevo_dte else None,
+        'impacto': {
+            'unidades': unidades,
+            'movimientos': len(movimientos),
+            'lotes_fifo': piezas['lotes'].count(),
+            'lineas_dte': piezas['lineas_dte'].count(),
+            'unidades_lineas_dte': unidades_lineas_dte,
+            'recepciones': piezas['recepciones'].count(),
+            'lineas_compra': len(piezas['compras_producto_ids']),
+            'tallas': sorted({m.ProductoTalla.talla for m in movimientos if m.ProductoTalla}),
+        },
+        'avisos': avisos,
+    })
+
+
+@login_required
+@require_POST
+def api_reasignar_dte_ingreso(request):
+    """
+    Mueve un ingreso manual completo al DTE correcto.
+
+    Reapunta, en una sola transacción: los movimientos de stock, los lotes FIFO
+    que generaron, las líneas del detalle del DTE, las recepciones y —cuando la
+    línea de compra es exclusiva de este ingreso— la compra manual del proveedor
+    correcto. El stock NO se toca: las unidades ya están en bodega, lo que
+    estaba mal era el documento que las respalda.
+    """
+    from .views import obtener_siguiente_correlativo
+
+    try:
+        data = json.loads(request.body or '{}')
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    producto_id = data.get('producto_id')
+    fecha = _parse_fecha_iso(data.get('fecha'))
+    dte_id = data.get('dte_id') or None
+    nuevo_dte_id = data.get('nuevo_dte_id')
+    responsable = data.get('responsable', '')
+    motivo = (data.get('motivo') or '').strip()
+
+    if not producto_id or fecha is None or not nuevo_dte_id:
+        return JsonResponse(
+            {'success': False, 'error': 'Faltan producto_id, fecha o nuevo_dte_id.'}, status=400)
+
+    sucursal_id, err = _sucursal_activa_validada(request)
+    if err:
+        return err
+    producto, err = _producto_en_alcance(request, producto_id)
+    if err:
+        return err
+
+    nuevo_dte, error = _dte_destino_valido(nuevo_dte_id)
+    if error:
+        return JsonResponse({'success': False, 'error': error}, status=400)
+
+    resumen = {}
+    with transaction.atomic():
+        # Lock de los movimientos: dos usuarios corrigiendo el mismo ingreso a la
+        # vez dejarían el DTE a medio mover.
+        movimientos = list(
+            _movimientos_del_evento(producto.id, fecha, dte_id, responsable, sucursal_id)
+            .select_for_update(of=('self',))
+        )
+        if not movimientos:
+            return JsonResponse(
+                {'success': False,
+                 'error': 'No se encontró el ingreso: puede que otro usuario ya lo haya corregido.'},
+                status=404)
+
+        dte_origen = movimientos[0].dte
+        if dte_origen and dte_origen.id == nuevo_dte.id:
+            return JsonResponse(
+                {'success': False, 'error': 'El DTE de destino es el mismo que el actual.'},
+                status=400)
+
+        piezas = _piezas_del_evento(producto, movimientos, dte_origen)
+        etiqueta_nueva = f'{nuevo_dte.tipo_documento} #{nuevo_dte.numero_documento}'
+        etiqueta_vieja = (f'{dte_origen.tipo_documento} #{dte_origen.numero_documento}'
+                          if dte_origen else 'sin documento')
+        nota = (f' | DTE reasignado {etiqueta_vieja} -> {etiqueta_nueva} el '
+                f'{timezone.localtime().strftime("%d-%m-%Y %H:%M")} por '
+                f'{request.user.get_username()}'
+                + (f': {motivo}' if motivo else ''))
+
+        for m in movimientos:
+            m.dte = nuevo_dte
+            m.referencia_externa = etiqueta_nueva
+            m.observaciones = ((m.observaciones or '') + nota)[:1000]
+            m.save(update_fields=['dte', 'referencia_externa', 'observaciones'])
+
+        resumen['movimientos'] = len(movimientos)
+        resumen['lotes_fifo'] = piezas['lotes'].update(dte=nuevo_dte)
+        resumen['lineas_dte'] = piezas['lineas_dte'].update(dte=nuevo_dte)
+        resumen['recepciones'] = piezas['recepciones'].update(dte=nuevo_dte)
+
+        # La compra manual solo se mueve si cambió el proveedor y la línea de
+        # compra es exclusiva de este ingreso.
+        resumen['lineas_compra'] = 0
+        cambio_proveedor = (
+            piezas['compras_producto_ids']
+            and nuevo_dte.emisor_id
+            and (dte_origen is None or nuevo_dte.emisor_id != dte_origen.emisor_id)
+        )
+        if cambio_proveedor:
+            hoy = timezone.localdate()
+            proveedor = nuevo_dte.emisor
+            compra = Compras.objects.filter(
+                empresa=proveedor,
+                estado__in=['ACTIVA', 'COMPLETADA'],
+                nombre__startswith='Compra Manual -',
+                fecha=hoy,
+            ).first()
+            if compra is None:
+                compra = Compras.objects.create(
+                    empresa=proveedor,
+                    nombre=f"Compra Manual - {proveedor.nombre} - {hoy.strftime('%d/%m/%Y')}",
+                    correlativo=obtener_siguiente_correlativo(
+                        Sucursal.objects.get(id=sucursal_id), 'COMPRA'),
+                    responsable=request.user.get_full_name() or request.user.get_username(),
+                    temporada='',
+                    fecha=hoy,
+                    estado='COMPLETADA',
+                    tipo='inicial',
+                )
+            resumen['lineas_compra'] = Compras_Producto.objects.filter(
+                id__in=piezas['compras_producto_ids']).update(compras=compra)
+
+        resumen['compras_no_movidas'] = len(piezas['compras_producto_mixtas'])
+
+    logger.info(
+        "Reasignación de DTE: producto_id=%s fecha=%s dte_origen=%s dte_destino=%s "
+        "sucursal_id=%s usuario=%s resumen=%s motivo=%s",
+        producto.id, fecha, dte_id, nuevo_dte.id, sucursal_id,
+        request.user.username, resumen, motivo or '(sin motivo)',
+    )
+
+    return JsonResponse({
+        'success': True,
+        'documento': etiqueta_nueva,
+        'resumen': resumen,
     })

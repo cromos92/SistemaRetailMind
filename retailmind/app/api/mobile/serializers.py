@@ -424,3 +424,112 @@ def version_catalogo(payload):
     """Huella del catálogo, estable entre workers (se deriva del contenido)."""
     crudo = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     return hashlib.sha1(crudo.encode('utf-8')).hexdigest()[:16]
+
+
+# ==========================================================================
+# LOGIN DE LA APP MÓVIL DE STAFF (NEXO Staff) — contraseña + PIN por correo
+# ==========================================================================
+#
+# Por qué existe esto y no se reusa `/api/v1/desktop/login/`:
+# ese endpoint lo consume TAMBIÉN el cliente Tauri del POS. Meterle 2FA
+# dejaría a cada caja que reinicie esperando un correo para poder vender.
+# Por eso la app móvil tiene endpoints propios y `DesktopLoginView` no se
+# toca. Lo que sí se reusa (importándolo) es el cuerpo de respuesta, para
+# que la app reciba exactamente el mismo payload que ya está probado.
+
+
+class MobileLoginSerializer(serializers.Serializer):
+    """
+    Paso 1 del login móvil.
+
+    A diferencia del login desktop, `device_id` es OBLIGATORIO: el segundo
+    factor se recuerda POR TELÉFONO, así que sin identificador de dispositivo
+    no hay nada que recordar (y generarlo en el servidor haría que cada login
+    pareciera un teléfono nuevo y pidiera PIN para siempre).
+
+    Ojo: aquí NO se autentica. La validación de credenciales vive en la vista
+    para poder responder 401 genérico (un `ValidationError` daría 400 y, peor,
+    permitiría distinguir "usuario no existe" de "contraseña incorrecta").
+    """
+    username = serializers.CharField(max_length=150)
+    password = serializers.CharField(write_only=True)
+    device_id = serializers.UUIDField()
+    device_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    sistema_operativo = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    version_app = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    sucursal_id = serializers.IntegerField(required=False, allow_null=True)
+
+
+class VerificarPinMovilSerializer(serializers.Serializer):
+    """Paso 2: canje del desafío + PIN por los tokens."""
+    desafio = serializers.CharField(max_length=128)
+    pin = serializers.CharField(max_length=10)
+    device_id = serializers.UUIDField()
+
+
+class ReenviarPinMovilSerializer(serializers.Serializer):
+    """Paso 3 (opcional): reenvío del PIN al correo del usuario."""
+    desafio = serializers.CharField(max_length=128)
+
+
+def enmascarar_email(email):
+    """
+    'javier.tebes@gmail.com' -> 'j***@gmail.com'.
+
+    Se devuelve enmascarado para que la app pueda decirle a la persona a qué
+    correo mirar SIN filtrar la dirección completa a quien sólo adivinó una
+    contraseña.
+    """
+    if not email or '@' not in email:
+        return ''
+    local, _, dominio = email.partition('@')
+    if not local:
+        return f'***@{dominio}'
+    return f'{local[0]}***@{dominio}'
+
+
+def resolver_sucursal_login_movil(user, sucursal_id):
+    """
+    Resuelve y AUTORIZA la sucursal del login móvil.
+
+    Réplica exacta de la regla de `DesktopLoginSerializer` (EmpresaUser
+    status=True + sucursales del Vendedor asociado, administrador sin
+    restricción). Se replica en vez de importarse porque aquel serializer
+    hace además el `authenticate()` y levanta 400 donde el contrato móvil
+    pide 401/403.
+
+    Devuelve (sucursal, error) — `error` es None si todo bien.
+    """
+    from app.models import EmpresaUser, Sucursal, Vendedor
+
+    if sucursal_id:
+        sucursal = Sucursal.objects.filter(id=sucursal_id).first()
+        if not sucursal:
+            return None, 'Sucursal no encontrada.'
+
+        if getattr(user, 'rol', '') != 'administrador':
+            permitidas = set(
+                EmpresaUser.objects.filter(
+                    user=user, status=True, sucursal__isnull=False
+                ).values_list('sucursal_id', flat=True)
+            )
+            vendedor = Vendedor.objects.filter(correo=user.email, activo=True).first()
+            if vendedor:
+                permitidas.update(vendedor.sucursales.values_list('id', flat=True))
+            if permitidas and sucursal_id not in permitidas:
+                return None, 'No tienes acceso a esta sucursal.'
+        return sucursal, None
+
+    empresa_user = EmpresaUser.objects.filter(
+        user=user, status=True, sucursal__isnull=False
+    ).select_related('sucursal').first()
+    if empresa_user:
+        return empresa_user.sucursal, None
+
+    vendedor = Vendedor.objects.filter(correo=user.email, activo=True).first()
+    if vendedor:
+        sucursal = vendedor.sucursales.first()
+        if sucursal:
+            return sucursal, None
+
+    return None, 'Usuario no tiene sucursal asignada. Contacta al administrador.'

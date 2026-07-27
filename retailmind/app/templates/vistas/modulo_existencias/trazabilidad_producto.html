@@ -554,4 +554,15 @@ function renderPendientes(items) {
 }
 
 document.getElementById('inputSku').addEventListener('keydown', e => { if (e.key === 'Enter') buscarTrazabilidad(); });
+
+// Deep-link: /app/trazabilidad-producto/?sku=12345 abre la trazabilidad ya
+// consultada. Lo usan los botones "Trazabilidad" de otros módulos (por ej. la
+// tabla de Actividad reciente de verGestionProducto), que abren esta pantalla
+// en una pestaña nueva y no pueden escribir en el input.
+(function () {
+    const skuUrl = new URLSearchParams(window.location.search).get('sku');
+    if (!skuUrl) return;
+    document.getElementById('inputSku').value = skuUrl.trim();
+    buscarTrazabilidad();
+})();
 </script>

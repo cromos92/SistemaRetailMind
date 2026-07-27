@@ -6,10 +6,12 @@ Modelos:
 - DispositivoAutorizado: Control de dispositivos autorizados para sync
 - RefreshTokenDesktop: Tokens de refresco para autenticación desktop
 - SyncLog: Registro de sincronizaciones
+- DesafioPinMovil: 2º factor por correo del login de la app móvil de staff
 """
 
 import uuid
 import hashlib
+import secrets
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
@@ -93,6 +95,14 @@ class DispositivoAutorizado(models.Model):
         null=True, blank=True,
         verbose_name='Última Sincronización'
     )
+    pin_verificado_en = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='PIN verificado el',
+        help_text=(
+            'Momento en que este dispositivo completó el segundo factor por '
+            'correo (app móvil de staff). NULL = todavía no lo hizo.'
+        )
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name='Fecha de Registro'
@@ -130,21 +140,48 @@ class DispositivoAutorizado(models.Model):
     def esta_activo(self):
         """Verifica si el dispositivo puede sincronizar"""
         return self.activo and self.estado == 'ACTIVO'
-    
+
+    def pin_esta_verificado(self, usuario=None):
+        """
+        ¿Este dispositivo ya pasó el 2º factor por correo de la app móvil?
+
+        POLÍTICA DE CADUCIDAD (decidida a propósito, no por omisión):
+        la verificación NO caduca con el tiempo mientras el dispositivo siga
+        ACTIVO. Caduca cuando alguien lo suspende o revoca — ése es el botón
+        de "expulsar teléfono perdido" del administrador: el estado se
+        consulta en cada login, así que basta con suspenderlo desde el admin
+        para que ese teléfono vuelva a exigir PIN (y, si además se revoca,
+        para que no pueda entrar en absoluto).
+
+        `usuario` (opcional): la verificación es POR USUARIO. Si otra persona
+        se loguea en el mismo teléfono, tiene que verificar su propio PIN —
+        de lo contrario un vendedor "heredaría" el enrolamiento de otro.
+        """
+        if not self.pin_verificado_en:
+            return False
+        if not self.esta_activo():
+            return False
+        if usuario is not None and self.usuario_id != usuario.id:
+            return False
+        return True
+
     def suspender(self, motivo=None):
         """Suspende el dispositivo"""
         self.estado = 'SUSPENDIDO'
         self.activo = False
+        # Suspender obliga a volver a verificar el PIN por correo.
+        self.pin_verificado_en = None
         if motivo:
             self.descripcion = f"{self.descripcion or ''}\n[SUSPENDIDO]: {motivo}"
         self.save()
-    
+
     def revocar(self, motivo=None):
         """Revoca permanentemente el dispositivo"""
         self.estado = 'REVOCADO'
         self.activo = False
         # Invalida todos los tokens
         self.refresh_tokens.all().update(revocado=True)
+        self.pin_verificado_en = None
         if motivo:
             self.descripcion = f"{self.descripcion or ''}\n[REVOCADO]: {motivo}"
         self.save()
@@ -774,3 +811,175 @@ class MovimientoCaja(models.Model):
     
     def __str__(self):
         return f"{self.get_tipo_display()} - ${self.monto:,} - {self.fecha_hora.strftime('%H:%M')}"
+
+
+class DesafioPinMovil(models.Model):
+    """
+    Desafío de 2º factor por correo para el login de la app móvil de staff
+    (NEXO Staff). Un desafío = un intento de enrolar UN teléfono para UN
+    usuario.
+
+    Por qué un modelo y no el cache: el cache `default` del proyecto es
+    LocMemCache (por proceso). Con varios workers de gunicorn el desafío
+    creado en el worker A no existiría en el B y el flujo fallaría de forma
+    intermitente. En BD es correcto siempre.
+
+    Por qué guarda el PIN hasheado en vez de leer `Usuario.codigo_2fa`:
+    `codigo_2fa` es un único campo compartido con el login web. Si la persona
+    entra por la web mientras tiene un desafío móvil abierto, el código se
+    pisa y el PIN que recibió por correo deja de servir. El hash aquí hace
+    el desafío autocontenido. El PIN se sigue GENERANDO con los helpers ya
+    existentes (`_obtener_codigo_2fa` / `generar_codigo_2fa`), así se respeta
+    el ajuste `PIN_2FA_MODE`.
+
+    El PIN nunca se guarda ni se devuelve en claro: sólo viaja por correo.
+    """
+
+    # Máximo de intentos de PIN por desafío. Un PIN de 6 dígitos son 1.000.000
+    # de combinaciones: sin tope se fuerza por fuerza bruta.
+    MAX_INTENTOS = 3
+    # Segundos mínimos entre reenvíos del PIN (anti mail-bombing).
+    SEGUNDOS_ENTRE_REENVIOS = 60
+    # Envíos totales por desafío (el inicial + 2 reenvíos).
+    MAX_ENVIOS = 3
+    # Vida del PIN / del desafío.
+    MINUTOS_EXPIRACION = 10
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='desafios_pin_movil',
+        verbose_name='Usuario'
+    )
+    # El dispositivo TODAVÍA no existe cuando se crea el desafío: se registra
+    # recién al verificar el PIN, para no ensuciar DispositivoAutorizado con
+    # teléfonos que nunca completaron el segundo factor.
+    device_id = models.UUIDField(db_index=True, verbose_name='ID del Dispositivo')
+    sucursal = models.ForeignKey(
+        'Sucursal',
+        on_delete=models.CASCADE,
+        related_name='desafios_pin_movil',
+        verbose_name='Sucursal'
+    )
+
+    # Datos del alta del dispositivo, congelados en el paso 1 para no volver a
+    # confiar en lo que mande el cliente en el paso 2.
+    device_name = models.CharField(max_length=100, blank=True, default='')
+    sistema_operativo = models.CharField(max_length=100, blank=True, default='')
+    version_app = models.CharField(max_length=20, blank=True, default='')
+
+    # Token opaco del desafío (se guarda SOLO el hash, como RefreshTokenDesktop).
+    token_hash = models.CharField(
+        max_length=64, unique=True, db_index=True,
+        verbose_name='Hash del token de desafío'
+    )
+    # PIN hasheado (SHA-256). Nunca en claro.
+    pin_hash = models.CharField(max_length=64, verbose_name='Hash del PIN')
+
+    intentos = models.IntegerField(default=0, verbose_name='Intentos de PIN')
+    envios = models.IntegerField(default=1, verbose_name='Correos enviados')
+    consumido = models.BooleanField(
+        default=False, verbose_name='Consumido',
+        help_text='Un desafío es de un solo uso: se marca al verificar OK o al agotar los intentos'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    expira_en = models.DateTimeField(db_index=True, verbose_name='Expira el')
+    ultimo_envio_en = models.DateTimeField(verbose_name='Último envío')
+    consumido_en = models.DateTimeField(null=True, blank=True)
+
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = 'Desafío PIN Móvil'
+        verbose_name_plural = 'Desafíos PIN Móvil'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['token_hash']),
+            models.Index(fields=['expira_en']),
+            models.Index(fields=['usuario', 'device_id']),
+        ]
+
+    def __str__(self):
+        return f"Desafío PIN {self.usuario_id} / {self.device_id}"
+
+    # ---------- helpers ----------
+
+    @staticmethod
+    def hash_valor(valor: str) -> str:
+        return hashlib.sha256(str(valor).encode()).hexdigest()
+
+    @property
+    def esta_expirado(self) -> bool:
+        return timezone.now() >= self.expira_en
+
+    @property
+    def intentos_restantes(self) -> int:
+        return max(0, self.MAX_INTENTOS - (self.intentos or 0))
+
+    @property
+    def segundos_para_reenvio(self) -> int:
+        transcurridos = (timezone.now() - self.ultimo_envio_en).total_seconds()
+        return max(0, int(self.SEGUNDOS_ENTRE_REENVIOS - transcurridos))
+
+    @classmethod
+    def crear(cls, usuario, device_id, sucursal, pin_plano, device_name='',
+              sistema_operativo='', version_app='', ip=None, user_agent=None):
+        """
+        Crea un desafío y devuelve (desafio, token_plano).
+
+        Invalida los desafíos abiertos previos del mismo usuario+dispositivo:
+        sólo puede haber uno vivo, así un atacante no acumula desafíos para
+        multiplicar los intentos.
+        """
+        ahora = timezone.now()
+        cls.objects.filter(
+            usuario=usuario, device_id=device_id, consumido=False
+        ).update(consumido=True, consumido_en=ahora)
+
+        token_plano = secrets.token_urlsafe(32)
+        desafio = cls.objects.create(
+            usuario=usuario,
+            device_id=device_id,
+            sucursal=sucursal,
+            device_name=(device_name or '')[:100],
+            sistema_operativo=(sistema_operativo or '')[:100],
+            version_app=(version_app or '')[:20],
+            token_hash=cls.hash_valor(token_plano),
+            pin_hash=cls.hash_valor(pin_plano),
+            expira_en=ahora + timezone.timedelta(minutes=cls.MINUTOS_EXPIRACION),
+            ultimo_envio_en=ahora,
+            ip_address=ip,
+            user_agent=user_agent,
+        )
+        return desafio, token_plano
+
+    @classmethod
+    def buscar_vigente(cls, token_plano):
+        """
+        Devuelve el desafío por su token opaco, sin juzgar expiración ni
+        intentos (de eso se encarga la vista, que tiene que distinguir los
+        códigos de error del contrato).
+        """
+        if not token_plano:
+            return None
+        return cls.objects.select_related('usuario', 'sucursal').filter(
+            token_hash=cls.hash_valor(token_plano), consumido=False
+        ).first()
+
+    def registrar_reenvio(self, pin_plano):
+        """Actualiza el desafío tras reenviar el PIN. NO reinicia `intentos`."""
+        ahora = timezone.now()
+        self.pin_hash = self.hash_valor(pin_plano)
+        self.envios = (self.envios or 0) + 1
+        self.ultimo_envio_en = ahora
+        self.expira_en = ahora + timezone.timedelta(minutes=self.MINUTOS_EXPIRACION)
+        self.save(update_fields=['pin_hash', 'envios', 'ultimo_envio_en', 'expira_en'])
+
+    def consumir(self):
+        self.consumido = True
+        self.consumido_en = timezone.now()
+        self.save(update_fields=['consumido', 'consumido_en'])
