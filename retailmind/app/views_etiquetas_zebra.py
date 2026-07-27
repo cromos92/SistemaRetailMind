@@ -227,12 +227,20 @@ def _aplicar_precio_etiqueta(item, producto, gemelo, sucursal_destino, campana):
         precio_destino = int(gemelo.producto.precioventa or 0)
         item['precio_destino'] = precio_destino
         item['sku_destino'] = str(gemelo.sku)
-        item['precio'] = float(precio_destino)
-        item['precio_lista'] = precio_destino
-        if precio_destino != precio_origen:
-            item['estado_precio'] = 'DIVERGE'
-        if str(gemelo.sku) != str(item.get('sku') or ''):
-            item['estado_precio'] = 'SKU_DISTINTO'
+        if precio_destino <= 0:
+            # El artículo ya existe en destino pero sin precio cargado (la fila
+            # se crea al recepcionar y se tarifa después). Adoptar ese 0 rotula
+            # la mercadería con $0; es preferible el precio de origen, avisado.
+            item['precio'] = float(precio_origen)
+            item['precio_lista'] = precio_origen
+            item['estado_precio'] = 'SIN_DESTINO'
+        else:
+            item['precio'] = float(precio_destino)
+            item['precio_lista'] = precio_destino
+            if precio_destino != precio_origen:
+                item['estado_precio'] = 'DIVERGE'
+            if str(gemelo.sku) != str(item.get('sku') or ''):
+                item['estado_precio'] = 'SKU_DISTINTO'
     else:
         # El artículo aún no existe en la sucursal destino (se crea al
         # recepcionar). Se imprime el precio de origen, pero avisado.
@@ -454,6 +462,46 @@ def _obtener_documentos_mysql(empresa_actual_id, sucursal_id=None, tipo_document
     return documentos
 
 
+def _precios_publicos_mysql(conn, codigos, alias_destino):
+    """{codigo_asociado: precioventapublico} leído de `talla` en MySQL.
+
+    `productos_dte.precio_publico` viene en 0 en buena parte del histórico
+    migrado, y hasta ahora el fallback era `precio_interno`, que en el legacy
+    es el precio INTERNO de traspaso (costo + sobreprecio del CD). Es decir:
+    cuando el DTE no traía precio público, la etiqueta que ve el cliente salía
+    rotulada con el sobreprecio interno en vez del precio de lista.
+
+    El precio de lista real vive en `talla.precioventapublico`, que es la misma
+    columna que usa la búsqueda manual y de la que se migró `Producto.precioventa`.
+    """
+    codigos = [c for c in codigos if c]
+    if not codigos:
+        return {}
+
+    marcadores = ','.join(['%s'] * len(codigos))
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(f"""
+        SELECT codigo_asociado, alias, precioventapublico
+        FROM talla
+        WHERE codigo_asociado IN ({marcadores})
+          AND precioventapublico > 0
+    """, list(codigos))
+    filas = cursor.fetchall()
+    cursor.close()
+
+    del_destino, cualquiera = {}, {}
+    for row in filas:
+        codigo = str(row.get('codigo_asociado') or '')
+        precio = _safe_int(row.get('precioventapublico'))
+        cualquiera.setdefault(codigo, precio)
+        if alias_destino and row.get('alias') == alias_destino:
+            del_destino.setdefault(codigo, precio)
+
+    # Manda el precio de la bodega donde se venderá la mercadería; si el SKU
+    # todavía no existe ahí, cualquiera del catálogo antes que dejarla en $0.
+    return {**cualquiera, **del_destino}
+
+
 def _obtener_productos_documento_mysql(tipo_documento, documento_id):
     with _get_mysql_connection() as conn:
         cursor_doc = conn.cursor(dictionary=True)
@@ -473,13 +521,17 @@ def _obtener_productos_documento_mysql(tipo_documento, documento_id):
         cursor_prod.execute("""
             SELECT
                 ID, codigo_asociado, articulo, descripcion, talla, cantidad,
-                precio_publico, precio_interno, marca, color
+                precio_publico, marca, color
             FROM productos_dte
             WHERE IdDte = %s
             ORDER BY ID
         """, (documento_id,))
         rows = cursor_prod.fetchall()
         cursor_prod.close()
+
+        alias_destino = dte.get('bodega_destino') or dte.get('bodega_inicio') or ''
+        precios_publicos = _precios_publicos_mysql(
+            conn, {str(r.get('codigo_asociado') or '') for r in rows}, alias_destino)
 
     fecha = dte.get('fecha_emision')
     documento_info = {
@@ -493,10 +545,14 @@ def _obtener_productos_documento_mysql(tipo_documento, documento_id):
 
     productos = []
     for row in rows:
-        precio = _safe_int(row.get('precio_publico')) or _safe_int(row.get('precio_interno'))
         articulo = (row.get('articulo') or '').strip()
         descripcion = (row.get('descripcion') or articulo).strip()
         sku = str(row.get('codigo_asociado') or '')
+
+        # Precio de lista del catálogo; el del DTE solo si el catálogo no lo
+        # tiene. NUNCA `precio_interno`: ese es costo + sobreprecio del CD y no
+        # es el precio que cobra el POS.
+        precio = precios_publicos.get(sku) or _safe_int(row.get('precio_publico'))
 
         productos.append({
             'id': row.get('ID'),

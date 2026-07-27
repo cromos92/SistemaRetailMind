@@ -867,6 +867,11 @@
                             <div class="chart-container-sm">
                                 <canvas id="chartROITemporada"></canvas>
                             </div>
+                            <div id="avisoSinTemporada" class="text-center text-muted py-4" style="display:none;">
+                                <i class="bi bi-calendar-x fs-3 d-block mb-2"></i>
+                                Las compras de este período no tienen temporada asignada,
+                                por eso no se puede desglosar el ROI por temporada.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1472,10 +1477,11 @@ function actualizarKPIs(data) {
     // Stock en Centro de Distribución
     $('#kpiStockCD').text(formatNumber(distribucion.stock_centro_distribucion || 0));
     
-    // Eficiencia de distribución (despachado / comprado * 100)
+    // Despachado / comprado * 100. Puede pasar de 100 (se despacha inventario
+    // de años anteriores), así que la barra se topa en 100 para no desbordarse.
     const eficiencia = distribucion.eficiencia_distribucion || 0;
     $('#kpiEficienciaDistribucion').text(eficiencia + '%');
-    $('#progressDistribucion').css('width', eficiencia + '%');
+    $('#progressDistribucion').css('width', Math.min(eficiencia, 100) + '%');
     
     // ===== MÁRGENES CENTRO DE DISTRIBUCIÓN =====
     const margenes = data.margenes_cd || {};
@@ -1802,9 +1808,16 @@ function crearGraficoComparativaAnual(datos) {
 // Gráfico ROI por Temporada
 function crearGraficoROITemporada(datos) {
     const ctx = document.getElementById('chartROITemporada').getContext('2d');
-    
+
     if (charts.roiTemporada) charts.roiTemporada.destroy();
-    
+
+    // Sin temporadas cargadas el doughnut quedaba en blanco y parecía un widget
+    // roto; mejor decir por qué no hay datos.
+    const hayDatos = Array.isArray(datos) && datos.length > 0;
+    $('#chartROITemporada').closest('.chart-container-sm').toggle(hayDatos);
+    $('#avisoSinTemporada').toggle(!hayDatos);
+    if (!hayDatos) return;
+
     const coloresTemporada = {
         'Invierno': '#3b82f6',
         'Verano': '#f59e0b',

@@ -3812,7 +3812,10 @@ def calcular_despachos_por_sucursal(anio):
     """Calcula los despachos realizados a cada sucursal destino"""
     from .models import Movimientos_Producto, Traspaso, Traspaso_Detalle
     
-    # Desde movimientos de producto
+    # Desde movimientos de producto. El abs() va DENTRO del Sum: los egresos
+    # son negativos, así que ordenar por '-unidades' dejaba primero el destino
+    # más chico y último el más grande — el gráfico salía al revés y el [:10]
+    # habría recortado justamente las sucursales con más despachos.
     despachos = Movimientos_Producto.objects.filter(
         fecha__year=anio,
         concepto='TRASPASO_SALIDA',
@@ -3823,16 +3826,16 @@ def calcular_despachos_por_sucursal(anio):
         'sucursal_destino__alias',
         'sucursal_destino__empresa__nombre'
     ).annotate(
-        unidades=Sum('cantidad')
+        unidades=Sum(Abs(F('cantidad')))
     ).order_by('-unidades')
-    
+
     resultado = []
     for d in despachos:
         resultado.append({
             'sucursal_id': d['sucursal_destino__id'],
             'sucursal': d['sucursal_destino__alias'] or 'Sin nombre',
             'empresa': d['sucursal_destino__empresa__nombre'] or '-',
-            'unidades': int(abs(d['unidades'] or 0))  # abs porque los egresos son negativos
+            'unidades': int(d['unidades'] or 0)
         })
     
     # Si no hay datos en movimientos, intentar con Traspasos

@@ -557,7 +557,8 @@ class Command(BaseCommand):
             self.stdout.write('')
             self.stdout.write(self.style.WARNING(
                 f'  [!] {en_bloque_error} de estos DTEs caen en el bloque de '
-                f'folios reusados {lo}-{hi} (error PAO4 vs PAO3, mismo RUT).'
+                f'folios reemitidos {lo}-{hi} (dos sucursales del mismo RUT '
+                f'consumieron el mismo bloque).'
             ))
 
         if not self.dry_run and generados:
