@@ -175,3 +175,47 @@ class TestOmitirTallasSinStock(BaseModalManual):
         data = resp.json()
         self.assertFalse(data['success'])
         self.assertFalse(Producto.objects.filter(articulo='F35543').exists())
+
+
+class TestActividadCreacionManual(BaseModalManual):
+    """Smoke test del endpoint que alimenta los KPIs/tabla de verGestionProducto."""
+    URL = '/app/api/actividad-creacion-manual/'
+
+    def test_kpis_y_agrupacion(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from app.models import Movimientos_Producto
+
+        producto, pts = self._crear_producto(tallas=[
+            ('1', 4715001, 0), ('2', 4715002, 0),
+        ])
+        hoy = timezone.localdate()
+        # Dos tallas ingresadas hoy (mismo evento) + un ingreso fuera de la
+        # ventana de 30 días que NO debe contar
+        for pt, cant in [(pts[0], 3), (pts[1], 2)]:
+            Movimientos_Producto.objects.create(
+                ProductoTalla=pt, concepto='INGRESO_MANUAL',
+                tipo_movimiento='INGRESO', cantidad=cant, costo=1000,
+                fecha=hoy, responsable='Tester',
+                sucursal_origen=self.sucursal, sucursal_destino=self.sucursal,
+            )
+        Movimientos_Producto.objects.create(
+            ProductoTalla=pts[0], concepto='INGRESO_MANUAL',
+            tipo_movimiento='INGRESO', cantidad=9, costo=1000,
+            fecha=hoy - timedelta(days=40), responsable='Tester',
+            sucursal_origen=self.sucursal, sucursal_destino=self.sucursal,
+        )
+
+        resp = self.client.get(self.URL)
+        data = resp.json()
+        self.assertTrue(data['success'], data)
+        self.assertEqual(data['kpis']['hoy_productos'], 1)
+        self.assertEqual(data['kpis']['hoy_unidades'], 5)
+        self.assertEqual(data['kpis']['hoy_valor'], 5000)
+        self.assertEqual(data['kpis']['mes_unidades'], 5)  # el viejo queda fuera
+
+        self.assertEqual(len(data['actividad']), 1)  # 2 tallas = 1 evento
+        evento = data['actividad'][0]
+        self.assertEqual(evento['unidades'], 5)
+        self.assertEqual(evento['tallas'], ['1', '2'])
+        self.assertTrue(evento['es_nuevo'])  # la ficha se creó hoy (en el test)

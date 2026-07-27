@@ -1994,3 +1994,117 @@ def api_editar_categoria_producto_global(request):
         'fichas_actualizadas': len(bodegas),
         'bodegas': bodegas,
     })
+
+
+# =====================================================
+# 5. ACTIVIDAD DE CREACIÓN MANUAL (verGestionProducto)
+# =====================================================
+
+@login_required
+@require_GET
+def api_actividad_creacion_manual(request):
+    """KPIs + últimos ingresos hechos con el modal Crear Producto Manual.
+
+    La página verGestionProducto nació centrada en el flujo "crear desde
+    recepción" (hoy en desuso); este endpoint alimenta los indicadores y la
+    tabla del flujo real: creaciones y sumas de stock del modal Crear Manual
+    (movimientos con concepto INGRESO_MANUAL) en la sucursal activa.
+    """
+    from .utils_tallas import clave_orden_talla
+
+    sucursal_id = (request.session.get('idSucursalActual')
+                   or request.session.get('sucursalActual'))
+    if not sucursal_id:
+        return JsonResponse({'success': False, 'error': 'Sin sucursal activa en la sesión'})
+
+    hoy = timezone.localdate()
+    desde_30 = hoy - timedelta(days=30)
+    desde_7 = hoy - timedelta(days=6)
+
+    # Ventana acotada: 30 días y máx. 600 movimientos (un evento del modal
+    # genera un movimiento por talla, así que esto cubre cientos de creaciones)
+    movs = list(
+        Movimientos_Producto.objects
+        .filter(concepto='INGRESO_MANUAL', sucursal_destino_id=sucursal_id,
+                fecha__gte=desde_30)
+        .select_related('ProductoTalla__producto__atributo1',
+                        'ProductoTalla__producto__atributo2', 'dte')
+        .order_by('-fecha', '-hora')[:600]
+    )
+
+    hoy_productos, semana_productos, mes_productos = set(), set(), set()
+    kpis = {'hoy_unidades': 0, 'hoy_valor': 0,
+            'semana_unidades': 0, 'semana_valor': 0, 'mes_unidades': 0}
+
+    # Un "evento" de creación = mismo producto + día + documento + responsable
+    # (el modal graba un movimiento por talla; acá se re-agrupan)
+    grupos, orden = {}, []
+    for m in movs:
+        pt = m.ProductoTalla
+        prod = pt.producto if pt else None
+        if prod is None:
+            continue
+        unidades = max(m.cantidad or 0, 0)
+        valor = unidades * (m.costo or 0)
+
+        if m.fecha == hoy:
+            hoy_productos.add(prod.id)
+            kpis['hoy_unidades'] += unidades
+            kpis['hoy_valor'] += valor
+        if m.fecha >= desde_7:
+            semana_productos.add(prod.id)
+            kpis['semana_unidades'] += unidades
+            kpis['semana_valor'] += valor
+        mes_productos.add(prod.id)
+        kpis['mes_unidades'] += unidades
+
+        key = (prod.id, m.fecha, m.dte_id, m.responsable)
+        if key not in grupos:
+            # ¿La ficha nació ese mismo día? → evento "NUEVO"; si no, "+stock"
+            creado = getattr(prod, 'fecha_creacion', None)
+            es_nuevo = bool(creado) and timezone.localtime(creado).date() == m.fecha
+            grupos[key] = {
+                'fecha': m.fecha.strftime('%d-%m-%Y'),
+                'hora': m.hora.strftime('%H:%M') if m.hora else '',
+                'producto_id': prod.id,
+                'articulo': prod.articulo,
+                'descripcion': prod.descripcion or '',
+                'marca': prod.atributo1.valor if prod.atributo1 else '-',
+                'color': prod.atributo2.valor if prod.atributo2 else '-',
+                'unidades': 0,
+                'valor': 0,
+                'tallas': set(),
+                'responsable': m.responsable or '-',
+                'documento': m.referencia_externa or (
+                    f"{m.dte.tipo_documento} #{m.dte.numero_documento}" if m.dte else '-'),
+                'es_nuevo': es_nuevo,
+            }
+            orden.append(key)
+        g = grupos[key]
+        g['unidades'] += unidades
+        g['valor'] += valor
+        if pt.talla:
+            g['tallas'].add(pt.talla)
+
+    actividad = []
+    for key in orden[:60]:
+        g = grupos[key]
+        tallas = sorted(g.pop('tallas'), key=clave_orden_talla)
+        g['tallas'] = tallas
+        g['tallas_n'] = len(tallas)
+        actividad.append(g)
+
+    return JsonResponse({
+        'success': True,
+        'kpis': {
+            'hoy_productos': len(hoy_productos),
+            'hoy_unidades': kpis['hoy_unidades'],
+            'hoy_valor': kpis['hoy_valor'],
+            'semana_productos': len(semana_productos),
+            'semana_unidades': kpis['semana_unidades'],
+            'semana_valor': kpis['semana_valor'],
+            'mes_productos': len(mes_productos),
+            'mes_unidades': kpis['mes_unidades'],
+        },
+        'actividad': actividad,
+    })

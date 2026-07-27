@@ -323,6 +323,8 @@ from .views_modulo_existencias_nuevo import (
     # Corrección de talla / categoría global (todas las bodegas)
     api_editar_talla_producto_global,
     api_editar_categoria_producto_global,
+    # Actividad de creación manual (verGestionProducto)
+    api_actividad_creacion_manual,
 )
 from .views_edicion_productos import (
     # Edición de productos
@@ -1246,6 +1248,7 @@ urlpatterns = [
     path('tarjeta-movimiento/', tarjeta_movimiento_producto, name='tarjeta_movimiento_producto'),
     path('api/tarjeta-movimiento/', api_tarjeta_movimiento, name='api_tarjeta_movimiento'),
     path('api/tarjeta-movimiento/buscar/', api_buscar_productos_tarjeta_movimiento, name='api_buscar_productos_tarjeta_movimiento'),
+    path('api/actividad-creacion-manual/', api_actividad_creacion_manual, name='api_actividad_creacion_manual'),
 
     # ========== DESPACHO A TODAS SUCURSALES ==========
     path('despacho-sucursales/', despacho_todas_sucursales, name='despacho_todas_sucursales'),

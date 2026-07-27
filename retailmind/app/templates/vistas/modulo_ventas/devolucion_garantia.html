@@ -425,9 +425,7 @@
 </div>
 {% endif %}
 
-{# El footer trae jQuery/Bootstrap/SweetAlert2: debe cargarse ANTES del JS del
-   módulo (mismo orden que generacionVentas.html y gestion_cambios_devoluciones.html),
-   si no el $(...) de más abajo revienta con "$ is not defined". #}
+{# El footer trae jQuery/Bootstrap/SweetAlert2: debe cargarse ANTES del JS del módulo, si no "$ is not defined" #}
 {% include 'layout/footer.html' %}
 
 <!-- Extra JS -->

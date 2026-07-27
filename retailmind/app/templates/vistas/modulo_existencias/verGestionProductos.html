@@ -2253,96 +2253,97 @@
     <div class="page-content">
     <div class="container-fluid">
 
-        <!-- ========== KPI CARDS COMPACTAS ========== -->
+        <!-- ========== KPI CARDS — ACTIVIDAD DE CREACIÓN MANUAL ========== -->
+        <!-- Fuente: movimientos INGRESO_MANUAL de la sucursal activa (el flujo
+             real de esta página). Los KPIs del flujo antiguo de recepciones
+             vivían acá; ese flujo quedó demovido al bloque colapsado de abajo. -->
         <div class="row g-2 mb-3">
-            <!-- Pendientes -->
             <div class="col-md-2 col-6">
-                <div class="kpi-card card" style="background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%); border-left: 3px solid #405189;">
+                <div class="kpi-card card" style="background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%); border-left: 3px solid #405189;"
+                     data-bs-toggle="tooltip" data-bs-placement="bottom"
+                     title="Productos distintos creados o con stock sumado HOY con el modal Crear Manual, en la sucursal activa.">
                     <div class="card-body d-flex align-items-center gap-2">
                         <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #405189 0%, #364574 100%);">
-                            <i class="bi bi-clock-history text-white" style="font-size:13px;"></i>
+                            <i class="bi bi-plus-square text-white" style="font-size:13px;"></i>
                         </div>
                         <div class="min-w-0">
-                            <div class="fw-bold lh-1" id="totalPendientes" style="color:#405189; font-size:1.05rem;">0</div>
-                            <div class="text-muted lh-1" style="font-size:0.68rem;">Por Despachar</div>
+                            <div class="fw-bold lh-1" id="kpiHoyProductos" style="color:#405189; font-size:1.05rem;">0</div>
+                            <div class="text-muted lh-1" style="font-size:0.68rem;">Productos hoy</div>
                         </div>
                     </div>
                 </div>
             </div>
-            <!-- Creados -->
             <div class="col-md-2 col-6">
-                <div class="kpi-card card" style="background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%); border-left: 3px solid #0ab39c;">
+                <div class="kpi-card card" style="background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%); border-left: 3px solid #0ab39c;"
+                     data-bs-toggle="tooltip" data-bs-placement="bottom"
+                     title="Unidades ingresadas HOY vía Crear Manual (suma de las cantidades por talla).">
                     <div class="card-body d-flex align-items-center gap-2">
                         <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #0ab39c 0%, #099885 100%);">
-                            <i class="bi bi-check-circle text-white" style="font-size:13px;"></i>
-                        </div>
-                        <div class="min-w-0">
-                            <div class="fw-bold lh-1" id="totalCreados" style="color:#0ab39c; font-size:1.05rem;">0</div>
-                            <div class="text-muted lh-1" style="font-size:0.68rem;">Creados</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <!-- Unidades recepcionadas (SOLO la pagina visible) -->
-            <div class="col-md-2 col-6">
-                <div class="kpi-card card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 3px solid #299cdb;"
-                     data-bs-toggle="tooltip" data-bs-placement="bottom"
-                     title="Unidades recepcionadas de las filas visibles en esta página. NO es el stock de bodega ni el total del filtro.">
-                    <div class="card-body d-flex align-items-center gap-2">
-                        <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #299cdb 0%, #1e7ab8 100%);">
                             <i class="bi bi-boxes text-white" style="font-size:13px;"></i>
                         </div>
                         <div class="min-w-0">
-                            <div class="fw-bold lh-1" id="totalStock" style="color:#299cdb; font-size:1.05rem;">0</div>
-                            <div class="text-muted lh-1" style="font-size:0.68rem;">Uds. recepcionadas <span class="badge bg-light text-secondary border" style="font-size:.55rem; padding:1px 4px;">página</span></div>
+                            <div class="fw-bold lh-1" id="kpiHoyUnidades" style="color:#0ab39c; font-size:1.05rem;">0</div>
+                            <div class="text-muted lh-1" style="font-size:0.68rem;">Unidades hoy</div>
                         </div>
                     </div>
                 </div>
             </div>
-            <!-- Costo recepcionado (SOLO la pagina visible) -->
             <div class="col-md-2 col-6">
-                <div class="kpi-card card" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 3px solid #ffbe0b;"
+                <div class="kpi-card card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 3px solid #299cdb;"
                      data-bs-toggle="tooltip" data-bs-placement="bottom"
-                     title="Costo de compra x unidades recepcionadas, sumado SOLO sobre las filas visibles en esta página.">
+                     title="Costo de compra de lo ingresado HOY (unidades x costo del movimiento).">
                     <div class="card-body d-flex align-items-center gap-2">
-                        <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%);">
+                        <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #299cdb 0%, #1e7ab8 100%);">
                             <i class="bi bi-currency-dollar text-white" style="font-size:13px;"></i>
                         </div>
                         <div class="min-w-0">
-                            <div class="fw-bold lh-1 text-truncate" id="valorTotal" style="color:#f0a500; font-size:0.9rem;">$0</div>
-                            <div class="text-muted lh-1" style="font-size:0.68rem;">Costo recep. <span class="badge bg-light text-secondary border" style="font-size:.55rem; padding:1px 4px;">página</span></div>
+                            <div class="fw-bold lh-1 text-truncate" id="kpiHoyValor" style="color:#299cdb; font-size:0.9rem;">$0</div>
+                            <div class="text-muted lh-1" style="font-size:0.68rem;">Costo hoy</div>
                         </div>
                     </div>
                 </div>
             </div>
-            <!-- Valor FIFO (sucursal activa, universo completo) -->
+            <div class="col-md-2 col-6">
+                <div class="kpi-card card" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 3px solid #ffbe0b;"
+                     data-bs-toggle="tooltip" data-bs-placement="bottom"
+                     title="Productos distintos trabajados con Crear Manual en los últimos 7 días.">
+                    <div class="card-body d-flex align-items-center gap-2">
+                        <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%);">
+                            <i class="bi bi-calendar-week text-white" style="font-size:13px;"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="fw-bold lh-1" id="kpi7dProductos" style="color:#f0a500; font-size:1.05rem;">0</div>
+                            <div class="text-muted lh-1" style="font-size:0.68rem;">Productos · 7 días</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="col-md-2 col-6">
                 <div class="kpi-card card" style="background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%); border-left: 3px solid #e91e63;"
                      data-bs-toggle="tooltip" data-bs-placement="bottom"
-                     title="Valorización FIFO de los lotes activos de la SUCURSAL ACTIVA (todo el inventario, no solo esta página). La diferencia compara el valor de lotes contra stock x costo del producto.">
+                     title="Unidades ingresadas vía Crear Manual en los últimos 7 días.">
                     <div class="card-body d-flex align-items-center gap-2">
                         <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #e91e63 0%, #c2185b 100%);">
                             <i class="bi bi-graph-up text-white" style="font-size:13px;"></i>
                         </div>
                         <div class="min-w-0">
-                            <div class="fw-bold lh-1 text-truncate" id="valorFIFO" style="color:#e91e63; font-size:0.9rem;">$0</div>
-                            <div class="text-muted lh-1" style="font-size:0.68rem;">Lotes FIFO · sucursal <span id="diferenciaFIFO"></span></div>
+                            <div class="fw-bold lh-1" id="kpi7dUnidades" style="color:#e91e63; font-size:1.05rem;">0</div>
+                            <div class="text-muted lh-1" style="font-size:0.68rem;">Unidades · 7 días</div>
                         </div>
                     </div>
                 </div>
             </div>
-            <!-- Total de filas del filtro activo (universo, no la pagina) -->
             <div class="col-md-2 col-6">
                 <div class="kpi-card card" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border-left: 3px solid #9c27b0;"
                      data-bs-toggle="tooltip" data-bs-placement="bottom"
-                     title="Total de líneas de compra que cumplen el filtro y la pestaña activa (todas las páginas).">
+                     title="Costo de compra de lo ingresado en los últimos 7 días vía Crear Manual.">
                     <div class="card-body d-flex align-items-center gap-2">
                         <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);">
-                            <i class="bi bi-box-seam text-white" style="font-size:13px;"></i>
+                            <i class="bi bi-cash-stack text-white" style="font-size:13px;"></i>
                         </div>
                         <div class="min-w-0">
-                            <div class="fw-bold lh-1" id="totalProductos" style="color:#9c27b0; font-size:1.05rem;">0</div>
-                            <div class="text-muted lh-1" style="font-size:0.68rem;">Total del filtro</div>
+                            <div class="fw-bold lh-1 text-truncate" id="kpi7dValor" style="color:#9c27b0; font-size:0.9rem;">$0</div>
+                            <div class="text-muted lh-1" style="font-size:0.68rem;">Costo · 7 días</div>
                         </div>
                     </div>
                 </div>
@@ -2367,9 +2368,10 @@
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
         </div>
 
-        <!-- ========== TABLA PRINCIPAL ========== -->
-        <div class="card shadow">
-            <!-- Header estilo Chat del Proyecto -->
+        <!-- ========== CARTA PRINCIPAL: CREACIÓN MANUAL ========== -->
+        <!-- El flujo real de la página. El header (con todas las acciones) se
+             movió acá desde la carta del flujo antiguo de recepciones. -->
+        <div class="card shadow mb-3">
             <div class="producto-header">
                 <div class="producto-header-left">
                     <div class="producto-header-icon">
@@ -2379,7 +2381,7 @@
                         <h5 style="color: white;">Gestión de Productos</h5>
                         <div class="producto-header-status">
                             <span class="status-dot"></span>
-                            Sistema Activo - <span id="contadorProductos">0 productos</span>
+                            Creación manual · <span id="statusActividadManual">cargando actividad...</span>
                         </div>
                     </div>
                 </div>
@@ -2402,6 +2404,54 @@
                 </div>
             </div>
 
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                    <div class="fw-semibold" style="color:#405189;">
+                        <i class="bi bi-activity me-1"></i>Actividad reciente (últimos 30 días · sucursal activa)
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary" id="btnRefrescarActividad">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+                    </button>
+                </div>
+                <div class="table-responsive" style="max-height:480px;overflow-y:auto;">
+                    <table class="table table-hover table-striped align-middle mb-0" id="tablaActividadManual">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="width:110px;"><i class="bi bi-calendar3 me-1"></i>Fecha</th>
+                                <th style="min-width:200px;"><i class="bi bi-box me-1"></i>Producto</th>
+                                <th class="text-center" style="width:90px;"><i class="bi bi-check-circle me-1"></i>Tipo</th>
+                                <th style="width:170px;"><i class="bi bi-rulers me-1"></i>Tallas</th>
+                                <th class="text-center" style="width:80px;"><i class="bi bi-boxes me-1"></i>Uds.</th>
+                                <th class="text-end" style="width:110px;"><i class="bi bi-currency-dollar me-1"></i>Costo</th>
+                                <th style="width:150px;"><i class="bi bi-receipt me-1"></i>Documento</th>
+                                <th style="width:110px;"><i class="bi bi-person me-1"></i>Responsable</th>
+                                <th class="text-center" style="width:110px;"><i class="bi bi-lightning me-1"></i>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyActividadManual"></tbody>
+                    </table>
+                </div>
+                <div id="actividadManualVacia" class="text-center py-4" style="display:none;">
+                    <i class="bi bi-inbox fs-1" style="color:#adb5bd;"></i>
+                    <p class="text-muted mb-2 mt-2">Aún no hay creaciones manuales en los últimos 30 días en esta sucursal.</p>
+                    <button class="btn btn-primary btn-sm" onclick="$('#btnCrearManualGeneral').trigger('click')">
+                        <i class="bi bi-plus-square me-1"></i>Crear el primero
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== FLUJO ANTIGUO: CREAR DESDE RECEPCIÓN (COLAPSADO) ========== -->
+        <!-- En desuso: los productos ya no se crean desde la recepción del DTE
+             sino con el modal Crear Manual. Se conserva colapsado como consulta
+             histórica de líneas de compra recepcionadas (creado/pendiente). -->
+        <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+            <button class="btn btn-sm btn-outline-secondary" id="btnToggleFlujoRecepcion">
+                <i class="bi bi-archive me-1"></i><span id="lblToggleFlujoRecepcion">Mostrar flujo antiguo: Crear desde Recepción (histórico)</span>
+            </button>
+            <span class="text-muted" style="font-size:.75rem;"><span id="contadorProductos"></span></span>
+        </div>
+        <div class="card shadow" id="cardFlujoRecepcion" style="display:none;">
             <div class="card-body">
                 <!-- ========== ACCESO RÁPIDO POR ESTADO ========== -->
                 <div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
@@ -5207,12 +5257,12 @@ function showError(msg) {
             $('#filtroEstado').val('').closest('.col-md-2').hide();
         }
 
-        // Cargar datos iniciales.
-        // cargarProductosParaCrear ya dispara cargarConteoTabs con los filtros
-        // activos: llamarlo también aquí duplicaba 3 requests en cada arranque.
+        // Carga inicial: el flujo antiguo de recepciones está colapsado por
+        // defecto, así que su tabla (y la métrica FIFO que alimentaba su KPI,
+        // hoy eliminado) ya no se piden en cada arranque — la tabla se carga
+        // recién cuando el usuario expande el bloque (ver window.cargarProductosLegacy).
         const anioActual = new Date().getFullYear();
-        cargarProductosParaCrear(anioActual);
-        actualizarMetricasFIFO();
+        window.cargarProductosLegacy = function() { cargarProductosParaCrear(anioActual); };
         cargarAlertaBannerPrecios();
         
         // Configurar eventos de paginación
@@ -5242,10 +5292,13 @@ function showError(msg) {
         // Configurar tooltips
         $('[data-bs-toggle="tooltip"]').tooltip();
         
-        // Configurar auto-refresh cada 5 minutos
+        // Configurar auto-refresh cada 5 minutos (solo si el flujo antiguo
+        // está expandido — colapsado no tiene sentido refrescarlo)
         setInterval(function() {
-            console.log('🔄 Auto-refresh de datos...');
-            cargarProductosParaCrear(anioActual);
+            if ($('#cardFlujoRecepcion').is(':visible')) {
+                console.log('🔄 Auto-refresh de datos...');
+                cargarProductosParaCrear(anioActual);
+            }
         }, 5 * 60 * 1000); // 5 minutos
         
         // Mostrar mensaje de bienvenida
@@ -11812,6 +11865,108 @@ $(document).on('click', '#btnCopiarDatosProducto', function() {
     });
 });
 
+// ========== ACTIVIDAD DE CREACIÓN MANUAL (carta principal) ==========
+// Alimenta los KPIs de arriba y la tabla de actividad con los movimientos
+// INGRESO_MANUAL de la sucursal activa (endpoint api/actividad-creacion-manual)
+function escActividad(t) {
+    return String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function cargarActividadManual() {
+    $('#statusActividadManual').text('cargando actividad...');
+    $.get('/app/api/actividad-creacion-manual/', function(res) {
+        if (!res || !res.success) {
+            $('#statusActividadManual').text((res && res.error) ? res.error : 'sin datos');
+            return;
+        }
+        const k = res.kpis || {};
+        $('#kpiHoyProductos').text((k.hoy_productos || 0).toLocaleString('es-CL'));
+        $('#kpiHoyUnidades').text((k.hoy_unidades || 0).toLocaleString('es-CL'));
+        $('#kpiHoyValor').text('$' + (k.hoy_valor || 0).toLocaleString('es-CL'));
+        $('#kpi7dProductos').text((k.semana_productos || 0).toLocaleString('es-CL'));
+        $('#kpi7dUnidades').text((k.semana_unidades || 0).toLocaleString('es-CL'));
+        $('#kpi7dValor').text('$' + (k.semana_valor || 0).toLocaleString('es-CL'));
+        $('#statusActividadManual').text(
+            `${(k.mes_productos || 0).toLocaleString('es-CL')} producto(s) · ` +
+            `${(k.mes_unidades || 0).toLocaleString('es-CL')} uds en 30 días`);
+
+        const acts = res.actividad || [];
+        const $tbody = $('#tbodyActividadManual').empty();
+        if (!acts.length) {
+            $('#tablaActividadManual').hide();
+            $('#actividadManualVacia').show();
+            return;
+        }
+        $('#tablaActividadManual').show();
+        $('#actividadManualVacia').hide();
+        acts.forEach(function(a) {
+            const tallas = a.tallas || [];
+            const tallasTxt = tallas.slice(0, 8).join(', ') + (tallas.length > 8 ? '…' : '');
+            const tipo = a.es_nuevo
+                ? '<span class="badge bg-success" title="La ficha del producto se creó ese mismo día">NUEVO</span>'
+                : '<span class="badge bg-info text-dark" title="Producto existente: se le sumó stock">+stock</span>';
+            $tbody.append(`
+                <tr>
+                    <td style="font-size:.8rem;">${a.fecha}<div class="text-muted" style="font-size:.68rem;">${a.hora}</div></td>
+                    <td>
+                        <div class="fw-semibold" style="font-size:.85rem;">${escActividad(a.articulo)}</div>
+                        <div class="text-muted text-truncate" style="font-size:.72rem;max-width:240px;">${escActividad(a.descripcion)}</div>
+                        <div><span class="badge bg-secondary" style="font-size:.6rem;">${escActividad(a.marca)}</span>
+                             <span class="badge bg-info text-dark" style="font-size:.6rem;">${escActividad(a.color)}</span></div>
+                    </td>
+                    <td class="text-center">${tipo}</td>
+                    <td style="font-size:.75rem;" title="${escActividad(tallas.join(', '))}">${escActividad(tallasTxt)} <span class="text-muted">(${a.tallas_n})</span></td>
+                    <td class="text-center fw-bold">${(a.unidades || 0).toLocaleString('es-CL')}</td>
+                    <td class="text-end">$${(a.valor || 0).toLocaleString('es-CL')}</td>
+                    <td style="font-size:.75rem;">${escActividad(a.documento)}</td>
+                    <td style="font-size:.75rem;">${escActividad(a.responsable)}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-success btn-sumar-stock-actividad"
+                                data-articulo="${escActividad(a.articulo)}"
+                                title="Abrir Crear Manual con este código para sumarle stock">
+                            <i class="bi bi-plus-circle"></i> Sumar
+                        </button>
+                    </td>
+                </tr>`);
+        });
+    }).fail(function() {
+        $('#statusActividadManual').text('error al cargar actividad');
+    });
+}
+
+// "Sumar": reabre Crear Manual con el código precargado. El trigger('change')
+// dispara la verificación de existente (carga tallas con SKUs reales) sin
+// abrir el dropdown del autocomplete.
+$(document).on('click', '.btn-sumar-stock-actividad', function() {
+    const articulo = $(this).data('articulo');
+    $('#btnCrearManualGeneral').trigger('click');
+    setTimeout(function() {
+        $('#modalCrearProductoManual input[name="articulo"]')
+            .val(articulo).trigger('change');
+    }, 400);
+});
+
+$(document).on('click', '#btnRefrescarActividad', cargarActividadManual);
+
+// Toggle del flujo antiguo de recepciones DTE (colapsado por defecto).
+// La tabla legacy se carga recién en la PRIMERA expansión (lazy).
+let _flujoRecepcionCargado = false;
+$(document).on('click', '#btnToggleFlujoRecepcion', function() {
+    const $card = $('#cardFlujoRecepcion');
+    const visible = $card.is(':visible');
+    $card.toggle(!visible);
+    $('#lblToggleFlujoRecepcion').text(visible
+        ? 'Mostrar flujo antiguo: Crear desde Recepción (histórico)'
+        : 'Ocultar flujo antiguo');
+    if (!visible && !_flujoRecepcionCargado && typeof window.cargarProductosLegacy === 'function') {
+        _flujoRecepcionCargado = true;
+        window.cargarProductosLegacy();
+    }
+});
+
+$(document).ready(cargarActividadManual);
+
 // ========== AUTOCOMPLETE INTELIGENTE DE ARTÍCULO ==========
 (function() {
     let acTimer = null;
@@ -13068,6 +13223,8 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
                 // ✅ Guardar proveedor/DTE usados para restaurarlos en la
                 // próxima creación (contexto de carga por lote)
                 guardarContextoTrasCrear();
+                // Refrescar KPIs y tabla de actividad de la carta principal
+                if (typeof cargarActividadManual === 'function') cargarActividadManual();
                 // Mostrar mensaje detallado según resultado
                 let titulo = res.producto_actualizado ? 'Producto actualizado' : 'Producto creado';
                 // ✅ Confirmación VERIFICABLE: detalle por talla con el stock

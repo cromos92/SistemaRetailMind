@@ -2218,8 +2218,6 @@
                             </a>
                         </li>
                         {% elif total_ventas > 0 %}
-                        {# Guarda anti-menú-vacío: el módulo 'ventas' incluye permisos de acción
-                           (dte_editar_fecha, dte_editar_pago, ...) que no tienen pantalla propia. #}
                         {% if permiso_ticket_venta or permiso_cambios_devoluciones or permiso_devolucion_garantia or permiso_pos_dashboard or permiso_gestion_documentos_ventas or permiso_cuadratura_caja or permiso_revision_arqueos or permiso_pos_transbank %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#moduloVentas" data-bs-toggle="collapse"
@@ -2322,9 +2320,6 @@
                         <!-- ========== MÓDULO DOCUMENTOS ========== -->
                         {% contar_opciones_disponibles user 'documentos' as total_documentos %}
                         {% if total_documentos > 0 %}
-                        {# Guarda anti-menú-vacío: el módulo 'documentos' incluye permisos de acción
-                           (dte_editar_folio, dte_descargar_txt, ...) que no tienen pantalla propia.
-                           Sin esto, un usuario con solo esos permisos abre un desplegable vacío. #}
                         {% if permiso_emision_dte or permiso_gestion_dte or permiso_recepcion_dte or permiso_gestion_cotizaciones or permiso_gestion_correlativos or permiso_gestion_creditos %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#moduloDocumentos" data-bs-toggle="collapse"
@@ -2658,8 +2653,6 @@
                         {% endif %}
                         <!-- ========== MÓDULO REPORTES ========== -->
                         {% contar_opciones_disponibles user 'reportes' as total_reportes %}
-                        {# Plan/Campañas de Liquidación viven en el módulo 'liquidacion' pero se muestran
-                           dentro de Reportes: sin este OR, quien solo tiene esos permisos no ve nada. #}
                         {% if total_reportes > 0 or permiso_plan_liquidacion or permiso_campanas_liquidacion %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#moduloReportes" data-bs-toggle="collapse"
