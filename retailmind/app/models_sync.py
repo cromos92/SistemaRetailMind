@@ -95,6 +95,25 @@ class DispositivoAutorizado(models.Model):
         null=True, blank=True,
         verbose_name='Última Sincronización'
     )
+    # OJO — ESTE CAMPO YA NO AUTORIZA NADA.
+    #
+    # Nació como "este teléfono ya pasó el PIN, déjalo entrar sin PIN". Eso
+    # tenía sentido cuando el login móvil además pedía contraseña: saltarse el
+    # PIN dejaba igual un factor en pie. El login móvil pasó a ser SOLO PIN
+    # (passwordless), y ahí esa misma lógica se convierte en "cualquiera que
+    # escriba un nombre de usuario en este teléfono entra sin credencial
+    # alguna". Por eso se eliminó `pin_esta_verificado()` y NADIE debe volver
+    # a usar esta fecha para decidir un login.
+    #
+    # Su rol hoy es de REGISTRO: cuándo se enroló este teléfono. Sirve para
+    # auditar y para reconocer un dispositivo nuevo. Por lo mismo ya no se
+    # borra al suspender o revocar (ver `suspender()` / `revocar()`): borrarla
+    # perdería el dato histórico y no protege de nada, porque quien corta el
+    # acceso es `esta_activo()`, que el login consulta en cada intento.
+    #
+    # El `help_text` se deja EXACTAMENTE como estaba (sigue siendo cierto: es
+    # cuándo se completó el segundo factor) para no generar una `AlterField`
+    # que obligaría a una migración nueva por un cambio puramente cosmético.
     pin_verificado_en = models.DateTimeField(
         null=True, blank=True,
         verbose_name='PIN verificado el',
@@ -141,36 +160,20 @@ class DispositivoAutorizado(models.Model):
         """Verifica si el dispositivo puede sincronizar"""
         return self.activo and self.estado == 'ACTIVO'
 
-    def pin_esta_verificado(self, usuario=None):
-        """
-        ¿Este dispositivo ya pasó el 2º factor por correo de la app móvil?
-
-        POLÍTICA DE CADUCIDAD (decidida a propósito, no por omisión):
-        la verificación NO caduca con el tiempo mientras el dispositivo siga
-        ACTIVO. Caduca cuando alguien lo suspende o revoca — ése es el botón
-        de "expulsar teléfono perdido" del administrador: el estado se
-        consulta en cada login, así que basta con suspenderlo desde el admin
-        para que ese teléfono vuelva a exigir PIN (y, si además se revoca,
-        para que no pueda entrar en absoluto).
-
-        `usuario` (opcional): la verificación es POR USUARIO. Si otra persona
-        se loguea en el mismo teléfono, tiene que verificar su propio PIN —
-        de lo contrario un vendedor "heredaría" el enrolamiento de otro.
-        """
-        if not self.pin_verificado_en:
-            return False
-        if not self.esta_activo():
-            return False
-        if usuario is not None and self.usuario_id != usuario.id:
-            return False
-        return True
+    # AQUÍ VIVÍA `pin_esta_verificado()`. Se eliminó al pasar el login móvil a
+    # passwordless: era la comprobación que permitía entregar tokens sin PIN a
+    # un teléfono ya enrolado, y sin contraseña detrás eso equivale a no pedir
+    # ninguna credencial. Si aparece la tentación de reponerla, la respuesta
+    # es no: la comodidad de "no pedir PIN cada vez" la da la SESIÓN (el JWT
+    # guardado que se refresca solo), no un atajo en el login.
 
     def suspender(self, motivo=None):
         """Suspende el dispositivo"""
         self.estado = 'SUSPENDIDO'
         self.activo = False
-        # Suspender obliga a volver a verificar el PIN por correo.
-        self.pin_verificado_en = None
+        # `pin_verificado_en` NO se toca: es el registro del enrolamiento, no
+        # un permiso. Quien corta el acceso es `esta_activo()`, que el login
+        # consulta en cada intento y que acaba de quedar en False.
         if motivo:
             self.descripcion = f"{self.descripcion or ''}\n[SUSPENDIDO]: {motivo}"
         self.save()
@@ -181,7 +184,7 @@ class DispositivoAutorizado(models.Model):
         self.activo = False
         # Invalida todos los tokens
         self.refresh_tokens.all().update(revocado=True)
-        self.pin_verificado_en = None
+        # `pin_verificado_en` se conserva a propósito (ver `suspender()`).
         if motivo:
             self.descripcion = f"{self.descripcion or ''}\n[REVOCADO]: {motivo}"
         self.save()
@@ -897,10 +900,14 @@ class DesafioPinMovil(models.Model):
         verbose_name = 'Desafío PIN Móvil'
         verbose_name_plural = 'Desafíos PIN Móvil'
         ordering = ['-created_at']
+        # Los nombres van explícitos y son EXACTAMENTE los que creó la
+        # migración 0193 (ya aplicada en producción). Sin `name=`, Django
+        # calcula un nombre con hash distinto al que hay en la base y
+        # `makemigrations` propone renombrar los tres índices en cada corrida.
         indexes = [
-            models.Index(fields=['token_hash']),
-            models.Index(fields=['expira_en']),
-            models.Index(fields=['usuario', 'device_id']),
+            models.Index(fields=['token_hash'], name='app_desafio_token_h_idx'),
+            models.Index(fields=['expira_en'], name='app_desafio_expira_idx'),
+            models.Index(fields=['usuario', 'device_id'], name='app_desafio_user_dev_idx'),
         ]
 
     def __str__(self):
@@ -927,20 +934,28 @@ class DesafioPinMovil(models.Model):
 
     @classmethod
     def crear(cls, usuario, device_id, sucursal, pin_plano, device_name='',
-              sistema_operativo='', version_app='', ip=None, user_agent=None):
+              sistema_operativo='', version_app='', ip=None, user_agent=None,
+              token_plano=None):
         """
         Crea un desafío y devuelve (desafio, token_plano).
 
         Invalida los desafíos abiertos previos del mismo usuario+dispositivo:
         sólo puede haber uno vivo, así un atacante no acumula desafíos para
         multiplicar los intentos.
+
+        `token_plano` permite que quien llama traiga el token ya generado. Lo
+        usa el login móvil: la respuesta al cliente sale ANTES de que la fila
+        exista (todo el trabajo de base se hace fuera del hilo de la petición
+        para no delatar por tiempo si el usuario existe), así que el token
+        tiene que nacer en el hilo que responde. Si no se pasa, se genera aquí
+        como siempre.
         """
         ahora = timezone.now()
         cls.objects.filter(
             usuario=usuario, device_id=device_id, consumido=False
         ).update(consumido=True, consumido_en=ahora)
 
-        token_plano = secrets.token_urlsafe(32)
+        token_plano = token_plano or secrets.token_urlsafe(32)
         desafio = cls.objects.create(
             usuario=usuario,
             device_id=device_id,

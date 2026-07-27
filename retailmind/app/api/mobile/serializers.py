@@ -22,11 +22,14 @@ Notas de dominio que condicionan todo este archivo:
 """
 
 import hashlib
+import hmac
 import json
 import logging
 
+from django.conf import settings
 from django.db.models import Max, Q
 from django.utils import timezone
+from django.utils.encoding import force_bytes
 
 from rest_framework import serializers
 
@@ -427,37 +430,68 @@ def version_catalogo(payload):
 
 
 # ==========================================================================
-# LOGIN DE LA APP MÓVIL DE STAFF (NEXO Staff) — contraseña + PIN por correo
+# LOGIN DE LA APP MÓVIL DE STAFF (NEXO Staff) — SOLO PIN por correo
 # ==========================================================================
 #
 # Por qué existe esto y no se reusa `/api/v1/desktop/login/`:
 # ese endpoint lo consume TAMBIÉN el cliente Tauri del POS. Meterle 2FA
 # dejaría a cada caja que reinicie esperando un correo para poder vender.
 # Por eso la app móvil tiene endpoints propios y `DesktopLoginView` no se
-# toca. Lo que sí se reusa (importándolo) es el cuerpo de respuesta, para
-# que la app reciba exactamente el mismo payload que ya está probado.
+# toca (ahí la contraseña sigue siendo obligatoria). Lo que sí se reusa
+# (importándolo) es el cuerpo de respuesta, para que la app reciba
+# exactamente el mismo payload que ya está probado.
+#
+# CAMBIO DE MODELO DE AUTENTICACIÓN (passwordless):
+# el flujo ya NO pide contraseña. La persona escribe su usuario o su correo,
+# recibe un código de 6 dígitos y con eso entra. Es el mismo modo que el ERP
+# web ya ofrece en `retailmind/views.py::login_pin_request_view`.
+#
+# Consecuencia de seguridad que ordena TODO lo de abajo: el PIN pasó a ser el
+# ÚNICO factor. Ya no hay contraseña de respaldo, así que:
+#   * no existe ninguna ruta que devuelva tokens sin PIN (ver la vista);
+#   * el paso 1 no puede delatar si un identificador existe o no, porque ese
+#     dato ya no está protegido por una segunda credencial: saber quién tiene
+#     cuenta es saber a quién se le puede pedir un PIN.
 
 
 class MobileLoginSerializer(serializers.Serializer):
     """
-    Paso 1 del login móvil.
+    Paso 1 del login móvil (passwordless).
 
-    A diferencia del login desktop, `device_id` es OBLIGATORIO: el segundo
-    factor se recuerda POR TELÉFONO, así que sin identificador de dispositivo
-    no hay nada que recordar (y generarlo en el servidor haría que cada login
-    pareciera un teléfono nuevo y pidiera PIN para siempre).
+    `identificador` es el nombre de usuario O el correo, indistintamente y sin
+    distinguir mayúsculas. Se acepta `username` como alias para no romper las
+    builds de la app que ya están instaladas y todavía mandan ese nombre de
+    campo (esas builds además mandan `password`: se ignora en silencio, ver
+    `validate()`).
 
-    Ojo: aquí NO se autentica. La validación de credenciales vive en la vista
-    para poder responder 401 genérico (un `ValidationError` daría 400 y, peor,
-    permitiría distinguir "usuario no existe" de "contraseña incorrecta").
+    `device_id` es OBLIGATORIO: identifica el teléfono para amarrar el desafío
+    (el PIN emitido para un teléfono no sirve en otro) y para registrar el
+    enrolamiento. Generarlo en el servidor haría que cada login pareciera un
+    teléfono distinto.
+
+    Aquí NO se resuelve el usuario ni se decide nada: eso vive en la vista,
+    que necesita responder EXACTAMENTE lo mismo exista o no el identificador.
+    Un `ValidationError` daría 400 y delataría la diferencia.
     """
-    username = serializers.CharField(max_length=150)
-    password = serializers.CharField(write_only=True)
+    # 254 = largo máximo de un email (RFC 5321). El username tope 150 cabe.
+    identificador = serializers.CharField(max_length=254, required=False, allow_blank=True)
+    username = serializers.CharField(max_length=254, required=False, allow_blank=True)
     device_id = serializers.UUIDField()
     device_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
     sistema_operativo = serializers.CharField(max_length=100, required=False, allow_blank=True)
     version_app = serializers.CharField(max_length=20, required=False, allow_blank=True)
     sucursal_id = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate(self, attrs):
+        # `password` no está declarado: si una build vieja lo manda, DRF lo
+        # descarta solo. Es deliberado — la contraseña salió del flujo móvil.
+        identificador = (attrs.get('identificador') or attrs.get('username') or '').strip()
+        if not identificador:
+            raise serializers.ValidationError(
+                {'identificador': 'Escribe tu usuario o tu correo.'}
+            )
+        attrs['identificador'] = identificador
+        return attrs
 
 
 class VerificarPinMovilSerializer(serializers.Serializer):
@@ -477,8 +511,8 @@ def enmascarar_email(email):
     'javier.tebes@gmail.com' -> 'j***@gmail.com'.
 
     Se devuelve enmascarado para que la app pueda decirle a la persona a qué
-    correo mirar SIN filtrar la dirección completa a quien sólo adivinó una
-    contraseña.
+    correo mirar SIN filtrar la dirección completa a quien escribió sólo un
+    nombre de usuario (que ahora es lo único que hace falta para llegar aquí).
     """
     if not email or '@' not in email:
         return ''
@@ -486,6 +520,79 @@ def enmascarar_email(email):
     if not local:
         return f'***@{dominio}'
     return f'{local[0]}***@{dominio}'
+
+
+# Dominios señuelo para el enmascarado ficticio. Son los proveedores masivos
+# de correo de Chile y están repetidos a propósito: la repetición es el peso.
+# No se leen de la BD para no exponer los dominios reales del staff (este
+# repositorio es público) y para no meter una consulta extra que sólo ocurre
+# en la rama "usuario inexistente" — esa asimetría sería medible por sí sola.
+_DOMINIOS_SENUELO = (
+    'gmail.com', 'gmail.com', 'gmail.com', 'gmail.com',
+    'gmail.com', 'gmail.com', 'gmail.com', 'gmail.com',
+    'outlook.com', 'hotmail.com', 'icloud.com',
+)
+
+
+def enmascarar_email_ficticio(identificador):
+    """
+    Máscara verosímil para un identificador que NO corresponde a ningún
+    usuario. Existe sólo para que el paso 1 responda lo mismo exista o no la
+    cuenta: si el `pin_enviado_a` viniera vacío, cualquiera sabría en un solo
+    request quién tiene cuenta en el sistema.
+
+    Dos propiedades que importan:
+
+    * Si el identificador ya es un correo, se enmascara ese mismo correo. Es
+      indistinguible del caso real, porque cuando la persona existe y entra
+      con su correo la máscara sale exactamente igual.
+    * Si es un nombre de usuario, el dominio se elige de forma determinista a
+      partir de HMAC(SECRET_KEY, identificador). Determinista importa: si el
+      dominio cambiara en cada intento, repetir el request delataría que la
+      respuesta es inventada. La clave secreta impide que el atacante
+      reproduzca la elección offline y la compare con la real.
+    """
+    ident = (identificador or '').strip().lower()
+    if not ident:
+        return ''
+    if '@' in ident:
+        return enmascarar_email(ident)
+
+    firma = hmac.new(
+        force_bytes(settings.SECRET_KEY),
+        force_bytes(ident),
+        hashlib.sha256,
+    ).digest()
+    dominio = _DOMINIOS_SENUELO[firma[0] % len(_DOMINIOS_SENUELO)]
+    return f'{ident[0]}***@{dominio}'
+
+
+def resolver_usuario_login_movil(identificador):
+    """
+    Resuelve el identificador del paso 1 (usuario O correo, sin distinguir
+    mayúsculas) a un `Usuario` activo. Devuelve None si no hay ninguno.
+
+    Se exige `is_active=True` aquí y no después: un usuario dado de baja tiene
+    que comportarse igual que un identificador inventado, si no la respuesta
+    distinta sería justamente la que confirma que la cuenta existió.
+
+    `order_by('id')` es por determinismo, no por desempate real: `username` es
+    único y en producción se verificó que los 25 usuarios activos tienen correo
+    y ninguno lo repite, así que el identificador no es ambiguo. El orden fijo
+    evita que, si algún día apareciera un duplicado, el login empezara a
+    resolver a una persona distinta en cada request.
+    """
+    from django.contrib.auth import get_user_model
+
+    ident = (identificador or '').strip()
+    if not ident:
+        return None
+
+    Usuario = get_user_model()
+    return Usuario.objects.filter(
+        Q(username__iexact=ident) | Q(email__iexact=ident),
+        is_active=True,
+    ).order_by('id').first()
 
 
 def resolver_sucursal_login_movil(user, sucursal_id):

@@ -20,9 +20,12 @@ from .views import (
 app_name = "mobile"
 
 urlpatterns = [
-    # Login de la app de staff: contraseña + PIN por correo (una vez por teléfono).
+    # Login de la app de staff: SOLO PIN por correo, sin contraseña.
+    # `login/` recibe usuario-o-correo + device_id y despacha el código;
+    # los tokens salen EXCLUSIVAMENTE de `login/verificar-pin/`.
     # NO reutiliza /api/v1/desktop/login/ porque ese endpoint lo usa el POS Tauri:
-    # meterle 2FA dejaría a cada caja esperando un correo para poder vender.
+    # quitarle la contraseña o meterle PIN dejaría a cada caja esperando un
+    # correo para poder vender.
     path("login/", MobileLoginView.as_view(), name="login"),
     path("login/verificar-pin/", MobileVerificarPinView.as_view(), name="login-verificar-pin"),
     path("login/reenviar-pin/", MobileReenviarPinView.as_view(), name="login-reenviar-pin"),

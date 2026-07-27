@@ -2,17 +2,23 @@
 Views para API móvil (JWT).
 """
 
+import hashlib
 import logging
+import secrets
+import threading
+import time
 
 from datetime import date, timedelta
 
 import pytz
 
-from django.contrib.auth import authenticate
+from django.conf import settings
 from django.core.cache import cache, caches
+from django.db import connection as db_connection
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.encoding import force_bytes
 from django.shortcuts import get_object_or_404
 
 from rest_framework.views import APIView
@@ -67,11 +73,13 @@ from .serializers import (
     VerificarPinMovilSerializer,
     construir_catalogo,
     enmascarar_email,
+    enmascarar_email_ficticio,
     obtener_atributo_especialidad,
     resolver_categoria,
     resolver_especialidades,
     resolver_opcion_atributo,
     resolver_sucursal_login_movil,
+    resolver_usuario_login_movil,
     serializar_coincidencia,
     serializar_producto,
     version_catalogo,
@@ -1091,26 +1099,61 @@ class ProductoActualizarView(APIView):
 
 
 # ==========================================================================
-# LOGIN DE LA APP MOVIL DE STAFF (NEXO Staff)
+# LOGIN DE LA APP MOVIL DE STAFF (NEXO Staff) — SOLO PIN, SIN CONTRASEÑA
 # ==========================================================================
 #
-# Contraseña + PIN de 6 dígitos por correo, UNA SOLA VEZ por teléfono.
+# Flujo: la persona escribe su usuario o su correo -> le llega un PIN de 6
+# dígitos por correo -> lo ingresa y entra. No hay contraseña en ningún paso.
+# Es el mismo modo que el ERP web ya ofrece en
+# `retailmind/views.py::login_pin_request_view`.
 #
-# Por qué endpoints nuevos en vez de agregarle 2FA al login desktop:
-# `/api/v1/desktop/login/` lo usa TAMBIÉN el cliente Tauri del POS. Si ese
-# endpoint pidiera PIN, cada caja que reinicie el POS quedaría esperando un
-# correo para poder vender. `DesktopLoginView` no se toca; el cuerpo de la
-# respuesta sí se reusa (mismos serializers) para que la app reciba el payload
-# ya probado.
+# Por qué endpoints propios y no `/api/v1/desktop/login/`:
+# ese endpoint lo usa TAMBIÉN el cliente Tauri del POS de las cajas. Si pidiera
+# PIN, cada caja que reinicie quedaría esperando un correo para poder vender.
+# `DesktopLoginView` NO SE TOCA y ahí la contraseña sigue siendo obligatoria.
+# Lo que sí se reusa (mismos serializers) es el cuerpo de la respuesta, para
+# que la app reciba el payload de sesión ya probado.
 #
-# Por qué hace falta: 13 de los 25 usuarios activos tienen `requiere_2fa=True`
-# y el login WEB les manda PIN, pero `DesktopLoginView` nunca mira ese campo:
-# entrando por la app el segundo factor se saltaba.
+# ---------------------------------------------------------------------------
+# LO QUE CAMBIÓ AL QUITAR LA CONTRASEÑA, Y POR QUÉ
+# ---------------------------------------------------------------------------
 #
-# DECISION: el enrolamiento por PIN se exige a TODOS los usuarios, tengan o no
-# `requiere_2fa`. Es una sola vez por teléfono, y un teléfono es un dispositivo
-# que se pierde o se roba: el `device_id` verificado es lo que después permite
-# expulsarlo desde el admin (suspender/revocar => vuelve a pedir PIN).
+# 1) SE ELIMINÓ LA RUTA DE "TELÉFONO RECORDADO".
+#    Antes, un teléfono ya enrolado recibía tokens directamente sin PIN. Con
+#    contraseña eso era razonable: quedaba ese factor. Sin contraseña, esa
+#    ruta es literalmente NINGUNA autenticación — bastaría escribir un nombre
+#    de usuario en un teléfono enrolado para entrar. Por eso el PIN se exige
+#    SIEMPRE que no haya sesión válida.
+#
+#    El "una sola vez" que se percibe lo da la SESIÓN, no el salto del PIN:
+#    se entra una vez, el JWT queda guardado y se refresca solo, y la pantalla
+#    de login no vuelve a aparecer mientras se siga usando la app.
+#
+# 2) `DispositivoAutorizado.pin_verificado_en` CAMBIÓ DE ROL.
+#    Ya no autoriza nada: pasó a ser el registro de CUÁNDO se enroló ese
+#    teléfono (auditoría, y detectar un teléfono nuevo). Ver el comentario en
+#    `app/models_sync.py`.
+#
+# 3) EL PASO 1 NO PUEDE DELATAR SI UN IDENTIFICADOR EXISTE.
+#    Con contraseña, un 401 genérico bastaba: saber que "javier" existe no
+#    servía de nada sin su clave. Ahora saber que existe es saber a quién se
+#    le puede disparar un PIN (y a quién llenarle la bandeja de entrada). Por
+#    eso el paso 1 responde SIEMPRE 200 con el mismo cuerpo, con un `desafio`
+#    de aspecto real, exista o no la cuenta. Si no existe, no sale ningún
+#    correo y ningún PIN va a validar nunca contra ese token.
+#
+#    Y no basta con igualar el cuerpo: hay que igualar el TIEMPO. Todo lo que
+#    sólo ocurre cuando la cuenta existe —resolver la sucursal, generar el
+#    PIN, grabar el desafío y mandar el correo— se hace FUERA del hilo de la
+#    petición (`_preparar_desafio_movil`). El hilo que responde ejecuta
+#    exactamente las mismas dos consultas en ambas ramas, y encima la
+#    respuesta tiene un piso de duración fijo (`PISO_RESPUESTA_LOGIN_SEG`)
+#    que absorbe el jitter que quede. Medido: ver el informe de verificación.
+#
+#    Consecuencia aceptada: la respuesta puede llegar unos milisegundos antes
+#    de que exista la fila del desafío. No importa — del otro lado hay una
+#    persona esperando un correo, que tarda segundos en llegar y más en
+#    leerse.
 
 
 class MobileAuthRateThrottle(AnonRateThrottle):
@@ -1124,11 +1167,196 @@ class MobileAuthRateThrottle(AnonRateThrottle):
     rate = '10/min'
 
 
+# --------------------------------------------------------------------------
+# Topes anti mail-bombing del paso 1
+# --------------------------------------------------------------------------
+# Sin contraseña, cualquiera que sepa (o adivine) un nombre de usuario puede
+# hacer que a esa persona le lluevan correos. Los números salen de cuánto
+# necesita un login honesto:
+#
+#   * Un login que sale bien abre 1 desafío. Los reintentos de PIN (3) y los
+#     reenvíos (2 más) viven DENTRO de ese mismo desafío, no abren otro.
+#   * El peor caso legítimo realista es: se equivoca 3 veces con el código y
+#     tiene que empezar de nuevo => 2 desafíos. Cerrar la app y reintentar,
+#     otro. Con 5 por hora sobra, y el techo de correos por persona queda en
+#     5 desafíos x 3 envíos = 15 correos/hora en el peor caso absoluto.
+LIMITE_DESAFIOS_POR_IDENTIFICADOR = 5
+#
+#   * Por IP el tope es más alto porque una tienda sale por NAT: varios
+#     vendedores comparten dirección. 20/hora deja entrar ~10 personas con dos
+#     intentos cada una y corta en seco un barrido de enumeración, que
+#     necesita un request por nombre probado.
+LIMITE_DESAFIOS_POR_IP = 20
+# Ventana de ambos topes.
+VENTANA_LIMITE_SEG = 3600
+# Duración mínima del paso 1. Ver punto (3) de la cabecera: es lo que hace que
+# "usuario existe" y "usuario no existe" no se distingan con un cronómetro.
+# Sube si algún día el peor caso de consultas se acerca a este número.
+PISO_RESPUESTA_LOGIN_SEG = 0.60
+
+
 def _ip_cliente(request):
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
         return x_forwarded_for.split(',')[0].strip()
     return request.META.get('REMOTE_ADDR')
+
+
+def _registrar_y_verificar_tope(clave, limite, ventana=VENTANA_LIMITE_SEG):
+    """
+    Ventana deslizante en cache. Devuelve (superado, segundos_para_reintentar).
+
+    Cuenta TODAS las solicitudes del paso 1, resuelvan o no a un usuario real.
+    Eso es deliberado: si sólo contara las reales, un 429 sería en sí mismo la
+    confirmación de que la cuenta existe, que es justo lo que se está evitando.
+
+    Limitación conocida: el cache `throttle` es LocMem, o sea POR WORKER, así
+    que el tope efectivo se multiplica por el número de workers. Es una capa,
+    no la última: el freno exacto contra el mail-bombing es el conteo en BD de
+    `_supera_tope_correos_usuario()`, que no depende del cache. Con REDIS_URL
+    configurado en `settings.CACHES['throttle']` este contador pasa a ser
+    exacto también.
+    """
+    almacen = caches['throttle']
+    ahora = time.time()
+    marcas = [t for t in (almacen.get(clave) or []) if ahora - t < ventana]
+
+    if len(marcas) >= limite:
+        return True, max(1, int(ventana - (ahora - marcas[0])) + 1)
+
+    marcas.append(ahora)
+    almacen.set(clave, marcas, ventana)
+    return False, 0
+
+
+def _clave_tope_identificador(identificador):
+    """
+    El identificador se hashea antes de usarlo como clave: el cache no tiene
+    por qué guardar en claro los nombres de usuario y correos que alguien
+    fue probando.
+    """
+    digest = hashlib.sha256(
+        force_bytes((identificador or '').strip().lower())
+    ).hexdigest()
+    return f'login-movil:ident:{digest}'
+
+
+def _supera_tope_correos_usuario(user):
+    """
+    Freno EXACTO (vive en BD, no en el cache por worker) contra el
+    mail-bombing: cuántos desafíos se abrieron para esta persona en la ventana.
+
+    Se consulta ya fuera del hilo de la petición, así que superarlo NO puede
+    cambiar la respuesta: sólo corta el envío del correo. Es a propósito —
+    responder distinto aquí volvería a delatar que la cuenta existe, porque a
+    un identificador inventado nunca se le podría acumular historial en esta
+    tabla.
+    """
+    desde = timezone.now() - timedelta(seconds=VENTANA_LIMITE_SEG)
+    return DesafioPinMovil.objects.filter(
+        usuario=user, created_at__gte=desde
+    ).count() >= LIMITE_DESAFIOS_POR_IDENTIFICADOR
+
+
+def _ejecutar_en_segundo_plano(funcion, *args, **kwargs):
+    """
+    Corre `funcion` fuera del hilo de la petición.
+
+    Existe por el punto (3) de la cabecera: mandar el correo tarda cientos de
+    milisegundos y SÓLO ocurre cuando el usuario existe. Si se hiciera dentro
+    de la petición, el reloj delataría lo que el cuerpo de la respuesta oculta.
+
+    `MOBILE_LOGIN_TAREAS_SINCRONAS = True` lo vuelve síncrono. Es la costura
+    para los tests: un hilo abre su PROPIA conexión y su propia transacción,
+    así que lo que escriba sobrevive al rollback de la prueba — inaceptable
+    corriendo contra la base de producción.
+
+    El hilo es daemon: si el worker se cae justo ahí, el correo se pierde y la
+    persona pide otro con "reenviar". Se prefiere eso a bloquear la respuesta.
+    """
+    if getattr(settings, 'MOBILE_LOGIN_TAREAS_SINCRONAS', False):
+        funcion(*args, **kwargs)
+        return
+
+    def _envoltorio():
+        try:
+            funcion(*args, **kwargs)
+        except Exception:
+            logger.exception('Login movil: fallo la tarea en segundo plano')
+        finally:
+            # El hilo abre su propia conexión: hay que devolverla o el pool de
+            # Postgres se llena de conexiones colgadas.
+            db_connection.close()
+
+    threading.Thread(target=_envoltorio, daemon=True).start()
+
+
+def _dormir_hasta_piso(inicio):
+    """Iguala la duración de las dos ramas del paso 1 (ver cabecera)."""
+    restante = PISO_RESPUESTA_LOGIN_SEG - (time.monotonic() - inicio)
+    if restante > 0:
+        time.sleep(restante)
+
+
+def _preparar_desafio_movil(user, device_id, token_plano, sucursal_id,
+                            device_name, sistema_operativo, version_app,
+                            ip, user_agent):
+    """
+    TODO el trabajo del paso 1 que sólo existe cuando la cuenta es real:
+    autorizar la sucursal, generar el PIN, grabar el desafío y mandar el
+    correo. Corre fuera del hilo de la petición (ver cabecera del bloque).
+
+    El `token_plano` viene de afuera: ya se le entregó al cliente.
+
+    Los dos motivos por los que esto puede terminar sin hacer nada —sucursal
+    no autorizada y tope de correos alcanzado— sólo dejan un log. No pueden
+    cambiar la respuesta porque la respuesta ya se envió, y ése es justamente
+    el punto: que no haya forma de distinguirlos desde afuera.
+    """
+    from retailmind.views import _enviar_pin_2fa, _obtener_codigo_2fa
+
+    sucursal, error_sucursal = resolver_sucursal_login_movil(user, sucursal_id)
+    if error_sucursal:
+        logger.error(
+            'Login movil: %s no puede entrar (%s). No se envia PIN; para esa '
+            'persona el codigo simplemente nunca llega.',
+            user.username, error_sucursal,
+        )
+        return
+
+    if _supera_tope_correos_usuario(user):
+        logger.warning(
+            'Login movil: tope de %s desafios/hora alcanzado para %s; no se envia PIN',
+            LIMITE_DESAFIOS_POR_IDENTIFICADOR, user.username,
+        )
+        return
+
+    # La generación del código y el alta del desafío van juntas o no van:
+    # `crear()` primero invalida los desafíos abiertos del mismo teléfono, y
+    # si el INSERT fallara después, la persona se quedaría sin el desafío
+    # viejo y sin el nuevo. El correo se manda FUERA de la transacción: es
+    # I/O de red y no hay que tener una transacción abierta esperándola.
+    with transaction.atomic():
+        pin = _obtener_codigo_2fa(user)
+        desafio, _ = DesafioPinMovil.crear(
+            usuario=user,
+            device_id=device_id,
+            sucursal=sucursal,
+            pin_plano=pin,
+            device_name=device_name or f'Movil {str(device_id)[:8]}',
+            sistema_operativo=sistema_operativo or '',
+            version_app=version_app or '',
+            ip=ip,
+            user_agent=user_agent,
+            token_plano=token_plano,
+        )
+
+    _enviar_pin_2fa(user, pin)
+
+    logger.info(
+        'Login movil: PIN enviado usuario=%s device=%s desafio=%s',
+        user.username, device_id, desafio.id,
+    )
 
 
 def _enviar_pin_por_correo(usuario):
@@ -1225,20 +1453,32 @@ class MobileLoginView(APIView):
     """
     POST /api/v1/mobile/login/
 
-    Paso 1: usuario + contraseña + device_id.
+    Paso 1 (passwordless): `identificador` (usuario O correo) + `device_id`.
+    NO se manda contraseña.
 
-    Respuestas (ambas HTTP 200):
-      (a) teléfono ya verificado  -> cuerpo de sesión completo + requiere_pin: false
-      (b) teléfono nuevo          -> requiere_pin: true + desafio (SIN tokens)
+    Respuesta 200 — SIEMPRE la misma forma, exista o no la cuenta:
 
-    Errores:
-      400 validation_error   - faltan campos
-      401 credenciales_invalidas - genérico a propósito (no se puede distinguir
-          "usuario no existe" de "contraseña mala": eso permite enumerar usuarios)
-      403 device_inactive    - el teléfono está suspendido/revocado
-      403 sin_acceso_sucursal
-      400 sin_correo         - el usuario no tiene email donde recibir el PIN
-      503 envio_pin_fallido  - el correo no salió
+        {"requiere_pin": true, "desafio": "<token opaco>",
+         "pin_enviado_a": "j***@gmail.com", "expira_en_minutos": 10,
+         "reenvio_disponible_en_segundos": 60}
+
+    Ya NO existe la respuesta con tokens: sin contraseña, devolver una sesión
+    en este paso sería entregarla a cambio de nada más que un nombre de
+    usuario. Los tokens salen únicamente de `verificar-pin/`.
+
+    Errores (ninguno depende de si el identificador existe):
+      400 validation_error      - falta el identificador o el device_id
+      403 device_inactive       - ese teléfono está suspendido/revocado
+      429 demasiadas_solicitudes- se pasó el tope por identificador o por IP
+
+    Los casos "existe pero no puede entrar" (sin correo registrado, sin
+    sucursal autorizada) NO devuelven un error propio: devuelven la misma
+    respuesta genérica y quedan registrados en el log del servidor. Un error
+    distinto ahí confirmaría la existencia de la cuenta, que es exactamente lo
+    que este endpoint no puede filtrar. El costo asumido, a conciencia, es que
+    esa persona ve "código incorrecto" en vez de un motivo; el log dice el
+    motivo real y en producción no hay ningún usuario activo en esa situación
+    (los 25 tienen correo).
     """
 
     authentication_classes = []
@@ -1246,6 +1486,8 @@ class MobileLoginView(APIView):
     throttle_classes = [MobileAuthRateThrottle]
 
     def post(self, request):
+        inicio = time.monotonic()
+
         serializer = MobileLoginSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
@@ -1254,34 +1496,37 @@ class MobileLoginView(APIView):
             )
 
         datos = serializer.validated_data
-        user = authenticate(
-            username=datos['username'], password=datos['password']
-        )
-        # authenticate() ya devuelve None si el usuario está inactivo (ModelBackend),
-        # así que un solo mensaje cubre los tres casos sin filtrar cuál fue.
-        if not user:
-            logger.warning(
-                'Login movil rechazado (credenciales) usuario=%s ip=%s',
-                datos.get('username'), _ip_cliente(request),
-            )
-            return Response(
-                {'error': 'credenciales_invalidas',
-                 'mensaje': 'Usuario o contraseña incorrectos.'},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-
-        sucursal, error_sucursal = resolver_sucursal_login_movil(
-            user, datos.get('sucursal_id')
-        )
-        if error_sucursal:
-            return Response(
-                {'error': 'sin_acceso_sucursal', 'mensaje': error_sucursal},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
+        identificador = datos['identificador']
         device_id = datos['device_id']
-        dispositivo = DispositivoAutorizado.objects.filter(device_id=device_id).first()
+        ip = _ip_cliente(request)
 
+        # --- Topes ANTES de tocar la base ---
+        # El orden importa: los dos topes se calculan sobre datos que el
+        # cliente ya conoce (su IP y lo que él mismo escribió), nunca sobre el
+        # resultado de buscar al usuario. Así el 429 sale igual para un
+        # identificador real que para uno inventado.
+        for clave, limite in (
+            (f'login-movil:ip:{ip or "sin-ip"}', LIMITE_DESAFIOS_POR_IP),
+            (_clave_tope_identificador(identificador), LIMITE_DESAFIOS_POR_IDENTIFICADOR),
+        ):
+            superado, espera = _registrar_y_verificar_tope(clave, limite)
+            if superado:
+                logger.warning(
+                    'Login movil: tope de solicitudes alcanzado ip=%s clave=%s', ip, clave,
+                )
+                return Response(
+                    {'error': 'demasiadas_solicitudes',
+                     'reintentar_en_segundos': espera,
+                     'mensaje': ('Se pidieron demasiados codigos. Espera un momento '
+                                 'antes de volver a intentarlo.')},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+
+        # --- Teléfono expulsado ---
+        # Se mira antes de resolver al usuario: el `device_id` es del propio
+        # teléfono que hace la llamada, así que este 403 no dice nada sobre
+        # ninguna cuenta ajena.
+        dispositivo = DispositivoAutorizado.objects.filter(device_id=device_id).first()
         if dispositivo and not dispositivo.esta_activo():
             return Response(
                 {'error': 'device_inactive',
@@ -1289,75 +1534,79 @@ class MobileLoginView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # --- (a) El teléfono ya verificó su PIN para ESTE usuario ---
-        if dispositivo and dispositivo.pin_esta_verificado(user):
-            dispositivo.sucursal = sucursal
-            if datos.get('device_name'):
-                dispositivo.nombre = datos['device_name']
-            if datos.get('sistema_operativo'):
-                dispositivo.sistema_operativo = datos['sistema_operativo']
-            if datos.get('version_app'):
-                dispositivo.version_app = datos['version_app']
-            dispositivo.save(update_fields=[
-                'sucursal', 'nombre', 'sistema_operativo', 'version_app', 'updated_at'
-            ])
+        # A partir de aquí las dos ramas hacen EXACTAMENTE el mismo trabajo en
+        # este hilo: una consulta de usuario y un token aleatorio. Todo lo que
+        # distinguiría a un identificador real (sucursal, PIN, desafío, correo)
+        # se despacha aparte, en `_preparar_desafio_movil`.
+        user = resolver_usuario_login_movil(identificador)
+        token_plano = secrets.token_urlsafe(32)
 
-            respuesta = _sesion_movil(request, user, sucursal, dispositivo, False)
-            respuesta['requiere_pin'] = False
-            return Response(respuesta, status=status.HTTP_200_OK)
-
-        # --- (b) Primera vez en este teléfono: hay que verificar por correo ---
-        if not (user.email or '').strip():
-            return Response(
-                {'error': 'sin_correo',
-                 'mensaje': ('Tu usuario no tiene un correo registrado y el PIN se envia '
-                             'por correo. Pidele al administrador que registre tu email '
-                             'en tu ficha de usuario.')},
-                status=status.HTTP_400_BAD_REQUEST,
+        if user and (user.email or '').strip():
+            correo_enmascarado = enmascarar_email(user.email)
+            _ejecutar_en_segundo_plano(
+                _preparar_desafio_movil,
+                user=user,
+                device_id=device_id,
+                token_plano=token_plano,
+                sucursal_id=datos.get('sucursal_id'),
+                device_name=datos.get('device_name'),
+                sistema_operativo=datos.get('sistema_operativo'),
+                version_app=datos.get('version_app'),
+                ip=ip,
+                user_agent=request.headers.get('User-Agent'),
             )
-
-        try:
-            pin = _enviar_pin_por_correo(user)
-        except Exception:
-            logger.exception('Login movil: fallo el envio del PIN a %s', user.username)
-            return Response(
-                {'error': 'envio_pin_fallido',
-                 'mensaje': 'No pudimos enviar el codigo a tu correo. Intenta nuevamente en unos minutos.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        else:
+            # Señuelo: mismo cuerpo, mismo status, mismo tiempo — pero no sale
+            # ningún correo y ese `desafio` no existe en la base, así que
+            # ningún PIN va a validar contra él jamás.
+            #
+            # "Usuario sin correo" cae aquí junto con "usuario inexistente" a
+            # propósito: son la misma respuesta o el error delataría la
+            # cuenta. En producción no hay ninguno (los 25 activos tienen
+            # correo); si apareciera, el log de abajo lo dice.
+            logger.warning(
+                'Login movil: respuesta senuelo ident=%s ip=%s motivo=%s',
+                identificador, ip,
+                'usuario sin correo registrado' if user else 'identificador sin usuario activo',
             )
+            correo_enmascarado = enmascarar_email_ficticio(identificador)
 
-        desafio, token_plano = DesafioPinMovil.crear(
-            usuario=user,
-            device_id=device_id,
-            sucursal=sucursal,
-            pin_plano=pin,
-            device_name=datos.get('device_name') or f'Movil {str(device_id)[:8]}',
-            sistema_operativo=datos.get('sistema_operativo') or '',
-            version_app=datos.get('version_app') or '',
-            ip=_ip_cliente(request),
-            user_agent=request.headers.get('User-Agent'),
-        )
-
-        logger.info(
-            'Login movil: PIN enviado usuario=%s device=%s desafio=%s',
-            user.username, device_id, desafio.id,
-        )
-
+        _dormir_hasta_piso(inicio)
         # El PIN NO viaja en esta respuesta. Nunca. Ni con DEBUG=True.
-        return Response({
+        return Response(
+            self._cuerpo_desafio(token_plano, correo_enmascarado),
+            status=status.HTTP_200_OK,
+        )
+
+    @staticmethod
+    def _cuerpo_desafio(token, correo_enmascarado=''):
+        """
+        Único armador de la respuesta del paso 1. Está centralizado a
+        propósito: si la rama real y la señuelo construyeran el diccionario
+        por su cuenta, cualquier campo que se agregue en una y se olvide en la
+        otra reabre el canal de enumeración.
+        """
+        return {
             'requiere_pin': True,
-            'desafio': token_plano,
-            'pin_enviado_a': enmascarar_email(user.email),
+            'desafio': token,
+            'pin_enviado_a': correo_enmascarado,
             'expira_en_minutos': DesafioPinMovil.MINUTOS_EXPIRACION,
             'reenvio_disponible_en_segundos': DesafioPinMovil.SEGUNDOS_ENTRE_REENVIOS,
-        }, status=status.HTTP_200_OK)
+        }
 
 
 class MobileVerificarPinView(APIView):
     """
     POST /api/v1/mobile/login/verificar-pin/
 
-    Paso 2: canjea desafío + PIN por la sesión y deja el teléfono recordado.
+    Paso 2: canjea desafío + PIN por la sesión. ES LA ÚNICA PUERTA por la que
+    salen tokens de la app móvil.
+
+    `dispositivo_recordado: true` y el sello de `pin_verificado_en` se
+    mantienen, pero ya sólo dejan constancia del enrolamiento: el próximo
+    login de este mismo teléfono vuelve a pedir PIN. Lo que evita repetir el
+    PIN a diario es la sesión (el JWT guardado que se refresca solo), no un
+    atajo en el paso 1. Ver la cabecera de este bloque.
 
     200 -> cuerpo de sesión + dispositivo_recordado: true
     400 -> pin_invalido (con intentos_restantes) | pin_expirado | desafio_invalido

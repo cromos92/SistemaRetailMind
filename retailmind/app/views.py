@@ -21472,11 +21472,11 @@ def crear_producto_manual(request):
         actualizar_precios = request.POST.get('actualizar_precios') == 'true'
         # Propagar la descripción a todas las bodegas del mismo código.
         aplicar_todas_bodegas = request.POST.get('aplicar_todas_bodegas') == 'true'
-        # Con "Completar desde guía" el modal puede mandar la curva completa;
-        # las tallas NUEVAS que queden en 0 no deben crear variantes vacías.
-        # (El frontend ya las filtra del payload; este flag es el respaldo por
-        # si algún re-render de la tabla las cuela igual.)
-        omitir_tallas_sin_stock = request.POST.get('omitir_tallas_sin_stock') == 'true'
+        # NOTA: `omitir_tallas_sin_stock` ya no se lee. Omitir las tallas nuevas
+        # que vienen en 0 es ahora el comportamiento ÚNICO (ver el loop de
+        # variantes más abajo), no una opción del formulario: el modal puede
+        # llenar la curva completa desde la guía o el generador de rango, y solo
+        # deben nacer las tallas que realmente llegaron.
         proveedor_id = request.POST.get('proveedor')
         dte_id = request.POST.get('dte_manual')
         # Canonizar SIEMPRE el código al guardarlo (mayúsculas, sin espacios
@@ -21780,7 +21780,8 @@ def crear_producto_manual(request):
         tallas_creadas = {}
         tallas_nuevas = 0
         tallas_existentes_count = 0
-        
+        tallas_omitidas = []   # tallas nuevas descartadas por venir en 0
+
         for i, talla in enumerate(tallas):
             if not talla.strip():
                 continue
@@ -21807,10 +21808,16 @@ def crear_producto_manual(request):
                 tallas_existentes_count += 1
                 logger.debug("Talla existente reutilizada en producto manual: talla=%s sku=%s", talla_limpia, pt_existente.sku)
             else:
-                if omitir_tallas_sin_stock and stock <= 0:
-                    # Fila de "Completar desde guía" sin unidades: no crear la
-                    # variante vacía (las tallas EXISTENTES se reutilizan igual)
-                    logger.debug("Talla de guía omitida por stock 0: talla=%s", talla_limpia)
+                if stock <= 0:
+                    # ✅ REGLA: una talla NUEVA solo se crea si trae unidades.
+                    # Antes esto dependía del flag `omitir_tallas_sin_stock`, que
+                    # el frontend solo mandaba desde "Completar desde guía": la
+                    # curva completa que arma el selector de guía (o el generador
+                    # de rango) creaba SKUs vacíos para tallas que nunca llegaron,
+                    # ensuciando el catálogo y las etiquetas. Las tallas que YA
+                    # existen se reutilizan igual (arriba) — acá no se borra nada.
+                    tallas_omitidas.append(talla_limpia)
+                    logger.debug("Talla nueva omitida por stock 0: producto_id=%s talla=%s", producto.id, talla_limpia)
                     continue
                 # 🆕 Talla nueva - crear con stock=0 (el movimiento sumará)
                 # ✅ VERIFICAR QUE EL SKU NO EXISTA - si existe o está vacío, generar uno nuevo
@@ -22166,6 +22173,10 @@ def crear_producto_manual(request):
             mensaje += f'. {tallas_nuevas} talla(s) nueva(s) agregada(s)'
         if tallas_existentes_con_stock > 0:
             mensaje += f'. {tallas_existentes_con_stock} talla(s) existente(s) actualizada(s)'
+        if tallas_omitidas:
+            mensaje += (f'. {len(tallas_omitidas)} talla(s) sin unidades NO se crearon '
+                        f'({", ".join(tallas_omitidas[:12])}'
+                        f'{"…" if len(tallas_omitidas) > 12 else ""})')
         if productos_sincronizados > 0:
             mensaje += f'. Precios sincronizados y alertas enviadas a {len(sucursales_afectadas)} sucursal(es)'
         if compra_creada:
@@ -22180,6 +22191,7 @@ def crear_producto_manual(request):
             'tallas_nuevas': tallas_nuevas,
             'tallas_existentes': tallas_existentes_count,
             'tallas_detalle': tallas_detalle,
+            'tallas_omitidas': tallas_omitidas,
             'productos_sincronizados': productos_sincronizados,
             'sucursales_afectadas': sucursales_afectadas,
             'compra_id': compra_creada.id if compra_creada else None,

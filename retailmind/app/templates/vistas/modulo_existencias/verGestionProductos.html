@@ -9987,8 +9987,9 @@ function abrirModalCrearProductoManual() {
     $('#formCrearProductoManual')[0].reset();
     if (window.NexoManualPicker) NexoManualPicker.reset();  // categoría + especialidades v1.2
     $('#tablaTallasManual tbody').empty();
-    // El flag de "Completar desde guía" es por-producto: no debe arrastrarse
-    // a la siguiente creación (reset() no borra hidden inputs agregados)
+    // Limpieza del flag histórico `omitir_tallas_sin_stock`: omitir las tallas
+    // en 0 pasó a ser el comportamiento único (frontend + backend), así que el
+    // hidden ya no se inyecta; se borra por si quedó de una sesión previa.
     $('#formCrearProductoManual input[name="omitir_tallas_sin_stock"]').remove();
     
     // ✅ Limpiar campo hidden del DTE
@@ -11091,9 +11092,8 @@ $('#selectGuiaTallaManual').on('change', function() {
 // Caso típico: el producto ya existe con parte de la curva (1 y 2) y llega
 // una talla intermedia (1.5). En vez de tipearla con "Agregar Talla", este
 // botón agrega de una vez TODAS las tallas de la guía que falten (stock 0);
-// el usuario pone stock solo a lo que llegó y al crear se omiten las filas
-// de guía que queden en 0 (filtro en el submit + flag omitir_tallas_sin_stock
-// en el backend).
+// el usuario pone stock solo a lo que llegó y al crear se omite TODA fila que
+// quede en 0 (filtro en el submit + misma regla en el backend).
 
 // Valor numérico de una talla ('7,5' → 7.5) o null si no es numérica
 function claveNumTalla(v) {
@@ -11176,12 +11176,8 @@ $('#btnCompletarDesdeGuia').on('click', function() {
         }
 
         reordenarTablaTallasManual();
-
-        // Solo se crearán las tallas de guía que queden con stock > 0
-        if (!$('#formCrearProductoManual input[name="omitir_tallas_sin_stock"]').length) {
-            $('#formCrearProductoManual').append('<input type="hidden" name="omitir_tallas_sin_stock" value="true">');
-        }
-
+        // (Ya no se inyecta `omitir_tallas_sin_stock`: cualquier talla en 0 se
+        // descarta siempre, venga de la guía, del rango o tipeada a mano.)
         actualizarResumenTallasManual();
         generarTodosLosSkusManual();
         actualizarEquivalenciasTallasManual(res.tallas, tipoTalla);
@@ -13815,13 +13811,26 @@ $('#formCrearProductoManual').on('submit', function(e) {
 // Resumen claro de "qué va a pasar" antes de crear (cierra el aviso del sistema)
 function confirmarCreacionManual(modal, $btnSubmit) {
     const existente = window.productoExistenteManual;
-    const tallas = modal.find('#tablaTallasManual input[name="talla[]"]')
-        .map(function () { return String($(this).val()).trim(); }).get().filter(Boolean);
+    // Solo entran las tallas CON unidades: las que están en 0 no se envían ni
+    // se crean (misma regla que aplica el backend). Se listan aparte para que
+    // el usuario vea qué queda fuera antes de confirmar.
+    const tallas = [], tallasSinStock = [];
+    modal.find('#tablaTallasManual tbody tr').each(function () {
+        const t = String($(this).find('input[name="talla[]"]').val() || '').trim();
+        if (!t) return;
+        const st = parseInt($(this).find('input[name="stock[]"]').val()) || 0;
+        (st > 0 ? tallas : tallasSinStock).push(t);
+    });
     const nTallas = tallas.length;
     const articulo = (modal.find('input[name="articulo"]').val() || '').trim();
     const actualizarPrecios = $('#hiddenActualizarPreciosManual').val() === 'true';
     const chips = tallas.slice(0, 30).map(t => `<span class="badge bg-light text-dark border">${t}</span>`).join(' ')
         + (tallas.length > 30 ? ` <span class="text-muted">+${tallas.length - 30}</span>` : '');
+    const avisoSinStock = tallasSinStock.length ? `
+        <div class="alert alert-light border py-1 px-2 mt-2 mb-0" style="font-size:.8rem;">
+            <i class="bi bi-slash-circle text-muted me-1"></i><b>${tallasSinStock.length}</b> talla(s) quedaron en 0 y
+            <b>no se crearán</b>: ${tallasSinStock.slice(0, 20).join(', ')}${tallasSinStock.length > 20 ? '…' : ''}
+        </div>` : '';
 
     let html, confirmText, icon;
     if (existente) {
@@ -13831,10 +13840,11 @@ function confirmarCreacionManual(modal, $btnSubmit) {
                 <div class="alert alert-warning py-2 mb-2"><b>Se agregará al producto que YA EXISTE</b><br>
                     <span class="text-muted" style="font-size:.85rem;">${existente.marca || '-'} · ${existente.color || '-'} · ${existente.genero || '-'} · Código <b>${existente.articulo || articulo}</b></span></div>
                 <ul class="mb-2" style="font-size:.9rem;">
-                    <li>Tallas del formulario: <b>${nTallas}</b> (las nuevas se agregan; a las existentes se les suma el stock)</li>
+                    <li>Tallas con unidades: <b>${nTallas}</b> (las nuevas se agregan; a las existentes se les suma el stock)</li>
                     <li>Precios: <b>${actualizarPrecios ? 'SE ACTUALIZARÁN con los del formulario (modificaste costo/precio)' : 'sin cambios — se conservan los del producto'}</b></li></ul>
                 <div>${chips}</div>
                 <div class="text-muted mt-2" style="font-size:.82rem;"><i class="bi bi-info-circle"></i> No se crea un producto nuevo.</div>
+                ${avisoSinStock}
             </div>`;
     } else {
         icon = 'question'; confirmText = 'Sí, crear nuevo';
@@ -13842,8 +13852,9 @@ function confirmarCreacionManual(modal, $btnSubmit) {
             <div class="text-start">
                 <div class="alert alert-success py-2 mb-2"><b>Se creará un PRODUCTO NUEVO</b><br>
                     <span class="text-muted" style="font-size:.85rem;">Código <b>${articulo}</b></span></div>
-                <ul class="mb-2" style="font-size:.9rem;"><li>Tallas a crear: <b>${nTallas}</b></li></ul>
+                <ul class="mb-2" style="font-size:.9rem;"><li>Tallas a crear: <b>${nTallas}</b> <span class="text-muted">(solo las que tienen unidades)</span></li></ul>
                 <div>${chips}</div>
+                ${avisoSinStock}
             </div>`;
     }
     // ✅ Mientras el usuario decide en el Swal, bloquear la verificación de
@@ -13945,18 +13956,21 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
     console.log('🔍 Valor final DTE hidden:', $('#hiddenDteManual').val());
     console.log('🔍 actualizar_precios a enviar:', $('#hiddenActualizarPreciosManual').val());
     
-    // Filas agregadas con "Completar desde guía" que quedaron en 0 NO se
-    // envían: el usuario solo quiere crear lo que llegó. Se deshabilitan (un
-    // input disabled no se serializa) y se re-habilitan apenas se arma el
-    // payload, para no perder la tabla si el envío falla.
-    const $filasGuiaSinStock = $('#tablaTallasManual tbody tr.talla-de-guia').filter(function() {
+    // NINGUNA talla en 0 se envía — no solo las de "Completar desde guía".
+    // El selector de guía y el generador de rango llenan la curva completa; sin
+    // este filtro nacían SKUs vacíos de tallas que nunca llegaron. Se
+    // deshabilitan las filas (un input disabled no se serializa: talla, stock,
+    // sku y guía salen juntos, así los arrays posicionales quedan alineados) y
+    // se re-habilitan apenas se arma el payload, para no perder la tabla si el
+    // envío falla. El backend aplica la misma regla como respaldo.
+    const $filasSinStock = $('#tablaTallasManual tbody tr').filter(function() {
         return (parseInt($(this).find('input[name="stock[]"]').val()) || 0) <= 0;
     });
-    $filasGuiaSinStock.find('input').prop('disabled', true);
+    $filasSinStock.find('input').prop('disabled', true);
 
     // En modo "Sin guía" normalizamos a guia_talla vacío antes de enviar.
     let formDataArr = $('#formCrearProductoManual').serializeArray();
-    $filasGuiaSinStock.find('input').prop('disabled', false);
+    $filasSinStock.find('input').prop('disabled', false);
     if ($('#selectGuiaTallaManual').val() === 'SIN_GUIA') {
         formDataArr = formDataArr.map(f => f.name === 'guia_talla' ? { name: 'guia_talla', value: '' } : f);
     }
