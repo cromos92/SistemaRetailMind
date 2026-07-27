@@ -1688,8 +1688,20 @@
                             </div>
                         </div>
                         {% else %}
+                        <!-- Non-Admin Mobile: pill compacta, misma info que la version desktop.
+                             Sin esto la sucursal activa no se ve bajo 992px y operaciones como
+                             Ajuste de Stock quedan sin contexto de sobre que bodega se aplican. -->
+                        <div class="d-flex d-lg-none align-items-center gap-1 me-2 px-2"
+                             style="height: 38px; background: #F5F5F7; border-radius: 10px;"
+                             title="Sucursal asignada: {{ request.session.alias|default:'Sin sucursal' }}">
+                            <i class="ri-store-3-fill" style="color: #8A8A9A; font-size: 0.9rem;"></i>
+                            <span style="font-size: 0.75rem; font-weight: 600; color: #1A1A2E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px;">
+                                {{ request.session.alias|default:"Sin sucursal" }}
+                            </span>
+                        </div>
+
                         <!-- Non-Admin: Solo mostrar info de sucursal actual (sin dropdown) -->
-                        <div class="d-none d-lg-flex align-items-center ms-3 me-2 px-3 py-2" 
+                        <div class="d-none d-lg-flex align-items-center ms-3 me-2 px-3 py-2"
                              style="background: linear-gradient(135deg, #F5F5F7 0%, #FFFFFF 100%); border-radius: 10px;">
                             <div class="d-flex align-items-center gap-2">
                                 <div style="width: 32px; height: 32px; background: rgba(138, 138, 154, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">

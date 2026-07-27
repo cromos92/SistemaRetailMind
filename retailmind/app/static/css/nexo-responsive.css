@@ -773,8 +773,10 @@
    17. PAGE CONTENT / CONTAINER
    ========================================================================== */
 @media (max-width: 768px) {
+    /* El topbar es position:fixed y mide 70px: el padding-top DEBE compensarlo
+       o el contenido (titulo, breadcrumb) queda tapado por el navbar. */
     .page-content {
-        padding: 0.5rem 0.5rem 3.5rem 0.5rem !important;
+        padding: calc(70px + 0.5rem) 0.5rem 3.5rem 0.5rem !important;
     }
 
     .container-fluid {
@@ -785,7 +787,7 @@
 
 @media (max-width: 576px) {
     .page-content {
-        padding: 0.25rem 0.25rem 3.5rem 0.25rem !important;
+        padding: calc(70px + 0.25rem) 0.25rem 3.5rem 0.25rem !important;
     }
 
     .container-fluid {
@@ -1112,7 +1114,8 @@
         height: 180px !important;
     }
 
+    /* Igual que arriba: el topbar fixed sigue midiendo 70px en landscape. */
     .page-content {
-        padding-top: 0.25rem !important;
+        padding-top: calc(70px + 0.25rem) !important;
     }
 }
