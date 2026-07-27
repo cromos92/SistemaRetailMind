@@ -176,6 +176,30 @@ class TestOmitirTallasSinStock(BaseModalManual):
         self.assertFalse(data['success'])
         self.assertFalse(Producto.objects.filter(articulo='F35543').exists())
 
+    def test_sincroniza_costo_en_otras_bodegas_aunque_venta_no_cambie(self):
+        # Ficha del mismo código+marca+color en OTRA bodega con la MISMA venta
+        # pero costo/sobreprecio distintos: el gate viejo (que solo comparaba
+        # la venta) la saltaba y el costo quedaba desincronizado para siempre.
+        suc_b = crear_sucursal(empresa=self.empresa, alias='EDEL')
+        prod_b = Producto.objects.create(
+            articulo='F35543', descripcion='SANDALIA ADILETTE',
+            sucursal=suc_b, atributo1=self.marca, atributo2=self.color,
+            atributo3=self.genero, categoria=self.cat,
+            costo=9990, sobreprecio=2000, precioventa=21990,
+        )
+        Producto_Talla.objects.create(producto=prod_b, talla='1', sku=4716001, stock=0)
+
+        resp = self._post(['1'], ['2'])  # crea en la bodega A con costo 11330
+        data = resp.json()
+        self.assertTrue(data['success'], data)
+        self.assertGreaterEqual(data.get('productos_sincronizados', 0), 1)
+
+        prod_b.refresh_from_db()
+        self.assertEqual(int(prod_b.costo), 11330)
+        self.assertEqual(int(prod_b.sobreprecio), 1473)
+        self.assertEqual(int(prod_b.precioventa), 21990)
+        self.assertEqual(int(prod_b.precioSugerido), 21990)
+
 
 class TestActividadCreacionManual(BaseModalManual):
     """Smoke test del endpoint que alimenta los KPIs/tabla de verGestionProducto."""

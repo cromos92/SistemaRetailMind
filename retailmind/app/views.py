@@ -21863,9 +21863,11 @@ def crear_producto_manual(request):
             from .models import HistorialCambioPrecio, CambioPrecioPendiente, NotificacionCambioPrecio, EmpresaUser
             from datetime import timedelta
             
-            # Buscar productos similares en TODAS las sucursales (para sincronizar precios)
+            # Buscar productos similares en TODAS las sucursales (para sincronizar
+            # precios). iexact: las fichas legacy con el código en otra caja
+            # quedaban fuera de la sincronización.
             productos_similares = Producto.objects.filter(
-                articulo=articulo,
+                articulo__iexact=articulo,
                 atributo1=atributo1_obj,
                 atributo2=atributo2_obj
             ).exclude(
@@ -21892,23 +21894,33 @@ def crear_producto_manual(request):
                         precio_anterior,
                     )
                     
-                    # Solo procesar si hay diferencia de precio
-                    if precio_anterior == int(precioventa):
+                    # Solo procesar si ALGÚN precio difiere. Antes se comparaba
+                    # SOLO la venta: un cambio de costo o sobreprecio con venta
+                    # igual quedaba sin sincronizar para siempre.
+                    if (precio_anterior == int(precioventa)
+                            and int(prod_similar.costo or 0) == int(costo)
+                            and int(prod_similar.sobreprecio or 0) == int(sobreprecio)):
                         logger.debug("Producto similar manual sin cambio de precio: sucursal=%s producto_id=%s", prod_similar.sucursal.alias, prod_similar.id)
                         continue
-                    
-                    # === SINCRONIZAR PRECIO ===
+
+                    # === SINCRONIZAR PRECIO (venta + costo + sobreprecio + sugerido) ===
                     prod_similar.precioventa = precioventa
                     prod_similar.costo = costo
                     prod_similar.sobreprecio = sobreprecio
+                    prod_similar.precioSugerido = precioventa
                     prod_similar.save()
-                    
-                    # Actualizar lotes activos
+
+                    # Actualizar lotes activos (los 3 valores, igual que en la
+                    # ficha local — antes solo se tocaba el precio de venta)
                     LoteProducto.objects.filter(
                         producto_talla__producto=prod_similar,
                         cantidad_disponible__gt=0,
                         activo=True
-                    ).update(precio_venta_unitario=int(precioventa))
+                    ).update(
+                        precio_venta_unitario=int(precioventa),
+                        costo_unitario=int(costo),
+                        sobreprecio_unitario=int(sobreprecio)
+                    )
                     
                     # Calcular diferencia
                     diferencia_sync = int(precioventa) - precio_anterior

@@ -9,7 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg
-from django.db.models.functions import Abs
+from django.db.models.functions import Abs, Coalesce, ExtractMonth
 from django.db import models
 from django.core.paginator import Paginator
 from django.utils import timezone
@@ -3093,76 +3093,63 @@ def dashboard_compras_mejorado_api(request):
 
 def calcular_metricas_principales_mejorado(compras_query, compras_ids, anio):
     """Calcula las métricas principales del dashboard"""
-    
-    # Total compras
-    total_compras = compras_query.count()
-    
-    # Productos y tallas
-    productos_compras = Compras_Producto.objects.filter(compras__in=compras_ids)
-    tallas_compras = Compras_Producto_Talla.objects.filter(
+
+    total_compras = len(compras_ids)
+
+    # Unidades, inversión y valor venta en UNA pasada por las líneas de compra
+    agg = Compras_Producto_Talla.objects.filter(
         compra_producto__compras__in=compras_ids
+    ).aggregate(
+        unidades=Sum('stock'),
+        inversion=Sum(F('stock') * F('compra_producto__costo')),
+        valor=Sum(F('stock') * F('compra_producto__precioSugerido')),
     )
-    
-    # Unidades esperadas y recepcionadas
-    unidades_esperadas = tallas_compras.aggregate(
-        total=Sum('stock')
-    )['total'] or 0
-    
-    recepciones = Productos_Recepcionados.objects.filter(
+    unidades_esperadas = agg['unidades'] or 0
+    inversion_total = agg['inversion'] or 0
+    valor_venta = agg['valor'] or 0
+
+    unidades_recepcionadas = Productos_Recepcionados.objects.filter(
         compra_producto_talla__compra_producto__compras__in=compras_ids
-    )
-    unidades_recepcionadas = recepciones.aggregate(
-        total=Sum('stockArribado')
-    )['total'] or 0
-    
-    # Cumplimiento general
+    ).aggregate(total=Sum('stockArribado'))['total'] or 0
+
     cumplimiento_general = 0
     if unidades_esperadas > 0:
         cumplimiento_general = round((unidades_recepcionadas / unidades_esperadas) * 100, 1)
-    
-    # Inversión total
-    inversion_total = productos_compras.aggregate(
-        total=Sum(F('costo') * F('compras_producto_talla__stock'))
-    )['total'] or 0
-    
-    # Valor de venta esperado
-    valor_venta = productos_compras.aggregate(
-        total=Sum(F('precioSugerido') * F('compras_producto_talla__stock'))
-    )['total'] or 0
-    
-    # ROI promedio
+
     roi_promedio = 0
     if inversion_total > 0:
         roi_promedio = round(((valor_venta - inversion_total) / inversion_total) * 100, 1)
-    
+
     # ===== TENDENCIAS vs AÑO ANTERIOR =====
-    compras_anterior = Compras.objects.filter(fecha__year=anio-1)
+    # Misma exclusión de eliminadas/canceladas que el query base — si no,
+    # la tendencia compara contra un año anterior inflado con compras borradas.
+    compras_anterior = Compras.objects.filter(fecha__year=anio - 1).exclude(
+        estado__in=['ELIMINADA', 'CANCELADA'])
     total_anterior = compras_anterior.count()
-    
-    compras_anterior_ids = list(compras_anterior.values_list('id', flat=True))
-    productos_anterior = Compras_Producto.objects.filter(compras__in=compras_anterior_ids)
-    inversion_anterior = productos_anterior.aggregate(
-        total=Sum(F('costo') * F('compras_producto_talla__stock'))
-    )['total'] or 1  # Evitar división por cero
-    
+
+    agg_ant = Compras_Producto_Talla.objects.filter(
+        compra_producto__compras__in=compras_anterior
+    ).aggregate(
+        inversion=Sum(F('stock') * F('compra_producto__costo')),
+        valor=Sum(F('stock') * F('compra_producto__precioSugerido')),
+    )
+    inversion_anterior = agg_ant['inversion'] or 1  # Evitar división por cero
+    valor_anterior = agg_ant['valor'] or 0
+
     trend_compras = 0
     if total_anterior > 0:
         trend_compras = round(((total_compras - total_anterior) / total_anterior) * 100, 1)
-    
+
     trend_inversion = 0
     if inversion_anterior > 0:
         trend_inversion = round(((float(inversion_total) - float(inversion_anterior)) / float(inversion_anterior)) * 100, 1)
-    
-    # ROI anterior para tendencia
-    valor_anterior = productos_anterior.aggregate(
-        total=Sum(F('precioSugerido') * F('compras_producto_talla__stock'))
-    )['total'] or 0
+
     roi_anterior = 0
     if inversion_anterior > 0:
         roi_anterior = ((valor_anterior - inversion_anterior) / inversion_anterior) * 100
-    
+
     trend_roi = round(roi_promedio - roi_anterior, 1)
-    
+
     return {
         'total_compras': total_compras,
         'inversion_total': float(inversion_total) if inversion_total else 0,
@@ -3171,7 +3158,8 @@ def calcular_metricas_principales_mejorado(compras_query, compras_ids, anio):
         'unidades_recepcionadas': int(unidades_recepcionadas),
         'cumplimiento_general': cumplimiento_general,
         'roi_promedio': roi_promedio,
-        'productos_distintos': productos_compras.values('nombre').distinct().count(),
+        'productos_distintos': Compras_Producto.objects.filter(
+            compras__in=compras_ids).values('nombre').distinct().count(),
         'proveedores_activos': compras_query.values('empresa').distinct().count(),
         'trend_compras': trend_compras,
         'trend_inversion': trend_inversion,
@@ -3180,84 +3168,68 @@ def calcular_metricas_principales_mejorado(compras_query, compras_ids, anio):
 
 
 def calcular_evolucion_mensual_mejorado(anio, temporada='', proveedor_id=''):
-    """Calcula la evolución mensual de compras vs ventas"""
+    """Calcula la evolución mensual de compras vs ventas.
+
+    3 queries agrupadas por mes (antes: 42+ — tres queries POR mes)."""
     from .models import Ticket
-    
+
     meses_nombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-    
-    resultado = []
-    
-    for mes in range(1, 13):
-        # Query de compras del mes
-        compras_mes = Compras.objects.filter(fecha__year=anio, fecha__month=mes)
 
-        if temporada:
-            _t_norm = temporada.strip().upper()
-            if _t_norm in {'VERANO', 'OTONO', 'INVIERNO', 'PRIMAVERA'}:
-                compras_mes = compras_mes.filter(temporada_familia=_t_norm)
-            else:
-                compras_mes = compras_mes.filter(temporada__icontains=temporada)
-        if proveedor_id:
-            compras_mes = compras_mes.filter(empresa_id=proveedor_id)
-        
-        compras_mes_ids = list(compras_mes.values_list('id', flat=True))
-        
-        # Inversión del mes
-        productos_mes = Compras_Producto.objects.filter(compras__in=compras_mes_ids)
-        inversion_mes = productos_mes.aggregate(
-            total=Sum(F('costo') * F('compras_producto_talla__stock'))
-        )['total'] or 0
-        
-        # Ventas relacionadas del mes (simplificado - ventas totales del mes)
-        try:
-            ventas_mes = Ticket.objects.filter(
-                created_at__year=anio,
-                created_at__month=mes,
-                estado='PAGADO'
-            ).aggregate(total=Sum('total'))['total'] or 0
-        except:
-            ventas_mes = 0
-        
-        resultado.append({
-            'mes': mes,
-            'mes_nombre': meses_nombres[mes - 1],
-            'inversion': float(inversion_mes),
-            'ventas': float(ventas_mes),
-            'total_compras': compras_mes.count()
-        })
-    
-    return resultado
+    compras_base = Compras.objects.filter(fecha__year=anio).exclude(
+        estado__in=['ELIMINADA', 'CANCELADA'])
+    if temporada:
+        _t_norm = temporada.strip().upper()
+        if _t_norm in {'VERANO', 'OTONO', 'INVIERNO', 'PRIMAVERA'}:
+            compras_base = compras_base.filter(temporada_familia=_t_norm)
+        else:
+            compras_base = compras_base.filter(temporada__icontains=temporada)
+    if proveedor_id:
+        compras_base = compras_base.filter(empresa_id=proveedor_id)
+
+    # Inversión por mes (una query, agrupada)
+    inv_mes = {r['m']: float(r['inv'] or 0) for r in (
+        Compras_Producto_Talla.objects
+        .filter(compra_producto__compras__in=compras_base)
+        .annotate(m=ExtractMonth('compra_producto__compras__fecha'))
+        .values('m')
+        .annotate(inv=Sum(F('stock') * F('compra_producto__costo'))))}
+
+    # Número de compras por mes (una query)
+    n_mes = {r['m']: r['n'] for r in (
+        compras_base.annotate(m=ExtractMonth('fecha'))
+        .values('m').annotate(n=Count('id')))}
+
+    # Ventas por mes (una query)
+    ventas_mes = {r['m']: float(r['t'] or 0) for r in (
+        Ticket.objects.filter(created_at__year=anio, estado='PAGADO')
+        .annotate(m=ExtractMonth('created_at'))
+        .values('m').annotate(t=Sum('total')))}
+
+    return [{
+        'mes': mes,
+        'mes_nombre': meses_nombres[mes - 1],
+        'inversion': inv_mes.get(mes, 0.0),
+        'ventas': ventas_mes.get(mes, 0.0),
+        'total_compras': n_mes.get(mes, 0),
+    } for mes in range(1, 13)]
 
 
 def calcular_pareto_proveedores_mejorado(compras_query, compras_ids):
-    """Calcula el análisis Pareto (80/20) de proveedores"""
-    
-    proveedores = compras_query.values('empresa__id', 'empresa__nombre').distinct()
-    
-    inversiones = []
-    for prov in proveedores:
-        if not prov['empresa__id']:
-            continue
-            
-        compras_prov = compras_query.filter(empresa_id=prov['empresa__id'])
-        compras_prov_ids = list(compras_prov.values_list('id', flat=True))
-        
-        productos_prov = Compras_Producto.objects.filter(compras__in=compras_prov_ids)
-        inversion = productos_prov.aggregate(
-            total=Sum(F('costo') * F('compras_producto_talla__stock'))
-        )['total'] or 0
-        
-        if inversion > 0:
-            inversiones.append({
-                'proveedor': prov['empresa__nombre'] or 'Sin nombre',
-                'inversion': float(inversion)
-            })
-    
-    # Ordenar por inversión descendente
-    inversiones.sort(key=lambda x: x['inversion'], reverse=True)
-    
-    return inversiones[:15]  # Top 15 para el gráfico
+    """Calcula el análisis Pareto (80/20) de proveedores.
+
+    Una sola query agrupada por proveedor (antes: 2 queries POR proveedor)."""
+
+    rows = (Compras_Producto_Talla.objects
+            .filter(compra_producto__compras__in=compras_ids)
+            .values('compra_producto__compras__empresa__nombre')
+            .annotate(inversion=Sum(F('stock') * F('compra_producto__costo')))
+            .order_by('-inversion'))
+
+    return [{
+        'proveedor': r['compra_producto__compras__empresa__nombre'] or 'Sin nombre',
+        'inversion': float(r['inversion']),
+    } for r in rows if r['inversion'] and r['inversion'] > 0][:15]
 
 
 def calcular_comparativa_anual_mejorado(anio, temporada='', proveedor_id=''):
@@ -3282,34 +3254,24 @@ def calcular_comparativa_anual_mejorado(anio, temporada='', proveedor_id=''):
             qs = qs.filter(empresa_id=proveedor_id)
         return qs
 
-    resultado = {
-        'actual': [],
-        'anterior': []
+    def _inversion_mensual(anio_x):
+        """Inversión por mes de un año en UNA query agrupada (antes: 2 por mes)."""
+        compras_anio = _aplicar_filtros(
+            Compras.objects.filter(fecha__year=anio_x).exclude(
+                estado__in=['ELIMINADA', 'CANCELADA'])
+        )
+        rows = (Compras_Producto_Talla.objects
+                .filter(compra_producto__compras__in=compras_anio)
+                .annotate(m=ExtractMonth('compra_producto__compras__fecha'))
+                .values('m')
+                .annotate(inv=Sum(F('stock') * F('compra_producto__costo'))))
+        por_mes = {r['m']: float(r['inv'] or 0) for r in rows}
+        return [por_mes.get(mes, 0.0) for mes in range(1, 13)]
+
+    return {
+        'actual': _inversion_mensual(anio),
+        'anterior': _inversion_mensual(anio - 1),
     }
-
-    for mes in range(1, 13):
-        compras_actual = _aplicar_filtros(
-            Compras.objects.filter(fecha__year=anio, fecha__month=mes)
-        )
-        compras_actual_ids = list(compras_actual.values_list('id', flat=True))
-        productos_actual = Compras_Producto.objects.filter(compras__in=compras_actual_ids)
-        inversion_actual = productos_actual.aggregate(
-            total=Sum(F('costo') * F('compras_producto_talla__stock'))
-        )['total'] or 0
-
-        compras_anterior = _aplicar_filtros(
-            Compras.objects.filter(fecha__year=anio - 1, fecha__month=mes)
-        )
-        compras_anterior_ids = list(compras_anterior.values_list('id', flat=True))
-        productos_anterior = Compras_Producto.objects.filter(compras__in=compras_anterior_ids)
-        inversion_anterior = productos_anterior.aggregate(
-            total=Sum(F('costo') * F('compras_producto_talla__stock'))
-        )['total'] or 0
-
-        resultado['actual'].append(float(inversion_actual))
-        resultado['anterior'].append(float(inversion_anterior))
-
-    return resultado
 
 
 def calcular_roi_temporadas_mejorado(compras_query, compras_ids):
@@ -3343,52 +3305,44 @@ def calcular_roi_temporadas_mejorado(compras_query, compras_ids):
         'PRIMAVERA': 'Primavera',
     }
 
-    def _metricas(qs_compras):
-        ids = list(qs_compras.values_list('id', flat=True))
-        prods = Compras_Producto.objects.filter(compras__in=ids)
-        inv = prods.aggregate(
-            total=Sum(F('costo') * F('compras_producto_talla__stock'))
-        )['total'] or 0
-        val = prods.aggregate(
-            total=Sum(F('precioSugerido') * F('compras_producto_talla__stock'))
-        )['total'] or 0
-        roi = round(((float(val) - float(inv)) / float(inv)) * 100, 1) if inv else 0
-        return float(inv), float(val), roi
+    def _roi(inv, val):
+        return round(((float(val) - float(inv)) / float(inv)) * 100, 1) if inv else 0
 
     resultado = []
 
-    # 1) Rubros normalizados (familia + año) — base de la comparativa YoY
-    rubros_normalizados = compras_query.exclude(
-        temporada_familia__isnull=True
-    ).exclude(
-        temporada_anio__isnull=True
-    ).values('temporada_familia', 'temporada_anio').distinct()
+    # 1) Rubros normalizados del período en UNA query agrupada
+    rubros = list(
+        Compras_Producto_Talla.objects
+        .filter(compra_producto__compras__in=compras_query.exclude(
+            temporada_familia__isnull=True).exclude(temporada_anio__isnull=True))
+        .values('compra_producto__compras__temporada_familia',
+                'compra_producto__compras__temporada_anio')
+        .annotate(inv=Sum(F('stock') * F('compra_producto__costo')),
+                  val=Sum(F('stock') * F('compra_producto__precioSugerido'))))
 
-    familias_anios_vistos = set()
+    # Año anterior de cada rubro visto, también agrupado (una query)
+    familias = {r['compra_producto__compras__temporada_familia'] for r in rubros}
+    anteriores = {}
+    if rubros:
+        rows_ant = (Compras_Producto_Talla.objects
+                    .filter(compra_producto__compras__temporada_familia__in=familias)
+                    .exclude(compra_producto__compras__estado='ELIMINADA')
+                    .values('compra_producto__compras__temporada_familia',
+                            'compra_producto__compras__temporada_anio')
+                    .annotate(inv=Sum(F('stock') * F('compra_producto__costo')),
+                              val=Sum(F('stock') * F('compra_producto__precioSugerido'))))
+        anteriores = {(r['compra_producto__compras__temporada_familia'],
+                       r['compra_producto__compras__temporada_anio']): r
+                      for r in rows_ant}
 
-    for r in rubros_normalizados:
-        familia = r['temporada_familia']
-        anio = r['temporada_anio']
-        familias_anios_vistos.add((familia, anio))
-
-        compras_temp = compras_query.filter(
-            temporada_familia=familia, temporada_anio=anio
-        )
-        inv, val, roi = _metricas(compras_temp)
-
-        # Año anterior (mismo rubro) — NO filtra por compras_query porque el
-        # query original ya está acotado al año actual; buscamos el anterior
-        # en toda la tabla de compras (respetando eliminadas no incluidas aquí).
-        compras_temp_ant = Compras.objects.filter(
-            temporada_familia=familia,
-            temporada_anio=anio - 1,
-        ).exclude(estado='ELIMINADA')
-        inv_ant, _val_ant, roi_ant = _metricas(compras_temp_ant)
-
-        delta_roi = round(roi - roi_ant, 1)
-        delta_inv_pct = 0.0
-        if inv_ant > 0:
-            delta_inv_pct = round(((inv - inv_ant) / inv_ant) * 100, 1)
+    for r in rubros:
+        familia = r['compra_producto__compras__temporada_familia']
+        anio = r['compra_producto__compras__temporada_anio']
+        inv, val = float(r['inv'] or 0), float(r['val'] or 0)
+        ant = anteriores.get((familia, anio - 1))
+        inv_ant = float(ant['inv'] or 0) if ant else 0.0
+        val_ant = float(ant['val'] or 0) if ant else 0.0
+        roi, roi_ant = _roi(inv, val), _roi(inv_ant, val_ant)
 
         resultado.append({
             'temporada': f"{FAMILIA_LEGIBLE.get(familia, familia)} {anio}",
@@ -3399,29 +3353,26 @@ def calcular_roi_temporadas_mejorado(compras_query, compras_ids):
             'valor_venta': val,
             'roi_anterior': roi_ant,
             'inversion_anterior': inv_ant,
-            'delta_roi': delta_roi,
-            'delta_inversion_pct': delta_inv_pct,
+            'delta_roi': round(roi - roi_ant, 1),
+            'delta_inversion_pct': round(((inv - inv_ant) / inv_ant) * 100, 1) if inv_ant > 0 else 0.0,
         })
 
-    # 2) Fallback: compras viejas sin campos normalizados (texto libre)
-    legacy = compras_query.filter(
-        Q(temporada_familia__isnull=True) | Q(temporada_anio__isnull=True)
-    ).values('temporada').distinct()
+    # 2) Fallback: compras viejas sin campos normalizados (texto libre), agrupado
+    legacy_rows = (Compras_Producto_Talla.objects
+                   .filter(compra_producto__compras__in=compras_query.filter(
+                       Q(temporada_familia__isnull=True) | Q(temporada_anio__isnull=True)))
+                   .exclude(compra_producto__compras__temporada='')
+                   .values('compra_producto__compras__temporada')
+                   .annotate(inv=Sum(F('stock') * F('compra_producto__costo')),
+                             val=Sum(F('stock') * F('compra_producto__precioSugerido'))))
 
-    for temp in legacy:
-        temporada_nombre = temp['temporada']
-        if not temporada_nombre:
-            continue
-        compras_temp = compras_query.filter(
-            temporada=temporada_nombre,
-            temporada_familia__isnull=True,
-        )
-        inv, val, roi = _metricas(compras_temp)
+    for r in legacy_rows:
+        inv, val = float(r['inv'] or 0), float(r['val'] or 0)
         resultado.append({
-            'temporada': temporada_nombre,
+            'temporada': r['compra_producto__compras__temporada'],
             'temporada_familia': None,
             'temporada_anio': None,
-            'roi': roi,
+            'roi': _roi(inv, val),
             'inversion': inv,
             'valor_venta': val,
             # Sin comparativo YoY confiable cuando no hay familia/año
@@ -3435,47 +3386,44 @@ def calcular_roi_temporadas_mejorado(compras_query, compras_ids):
 
 
 def calcular_top_proveedores_mejorado(compras_query, compras_ids):
-    """Calcula top 10 proveedores por inversión con cumplimiento"""
-    
-    proveedores = compras_query.values('empresa__id', 'empresa__nombre').distinct()
-    
+    """Calcula top 10 proveedores por inversión con cumplimiento.
+
+    3 queries agrupadas por proveedor (antes: ~5 queries POR proveedor)."""
+
+    # Inversión + unidades esperadas por proveedor (una query)
+    inv_rows = {r['compra_producto__compras__empresa_id']: r for r in (
+        Compras_Producto_Talla.objects
+        .filter(compra_producto__compras__in=compras_ids)
+        .values('compra_producto__compras__empresa_id',
+                'compra_producto__compras__empresa__nombre')
+        .annotate(inversion=Sum(F('stock') * F('compra_producto__costo')),
+                  esperadas=Sum('stock')))}
+
+    # Unidades recibidas por proveedor (una query)
+    rec_rows = {r['compra_producto_talla__compra_producto__compras__empresa_id']: int(r['recibidas'] or 0)
+                for r in (Productos_Recepcionados.objects
+                          .filter(compra_producto_talla__compra_producto__compras__in=compras_ids)
+                          .values('compra_producto_talla__compra_producto__compras__empresa_id')
+                          .annotate(recibidas=Sum('stockArribado')))}
+
+    # Número de compras por proveedor (una query; cuenta también compras sin líneas)
+    n_compras = {r['empresa_id']: r['n'] for r in
+                 compras_query.values('empresa_id').annotate(n=Count('id'))}
+
     resultado = []
-    for prov in proveedores:
-        if not prov['empresa__id']:
+    for emp_id, r in inv_rows.items():
+        inversion = r['inversion'] or 0
+        if inversion <= 0:
             continue
-        
-        compras_prov = compras_query.filter(empresa_id=prov['empresa__id'])
-        compras_prov_ids = list(compras_prov.values_list('id', flat=True))
-        
-        productos_prov = Compras_Producto.objects.filter(compras__in=compras_prov_ids)
-        inversion = productos_prov.aggregate(
-            total=Sum(F('costo') * F('compras_producto_talla__stock'))
-        )['total'] or 0
-        
-        # Cumplimiento
-        tallas_prov = Compras_Producto_Talla.objects.filter(
-            compra_producto__compras__in=compras_prov_ids
-        )
-        esperadas = tallas_prov.aggregate(total=Sum('stock'))['total'] or 0
-        
-        recepciones = Productos_Recepcionados.objects.filter(
-            compra_producto_talla__compra_producto__compras__in=compras_prov_ids
-        )
-        recibidas = recepciones.aggregate(total=Sum('stockArribado'))['total'] or 0
-        
-        cumplimiento = 0
-        if esperadas > 0:
-            cumplimiento = round((recibidas / esperadas) * 100, 1)
-        
-        if inversion > 0:
-            resultado.append({
-                'proveedor': prov['empresa__nombre'] or 'Sin nombre',
-                'inversion': float(inversion),
-                'total_compras': compras_prov.count(),
-                'cumplimiento': cumplimiento
-            })
-    
-    # Ordenar y limitar
+        esperadas = int(r['esperadas'] or 0)
+        recibidas = rec_rows.get(emp_id, 0)
+        resultado.append({
+            'proveedor': r['compra_producto__compras__empresa__nombre'] or 'Sin nombre',
+            'inversion': float(inversion),
+            'total_compras': n_compras.get(emp_id, 0),
+            'cumplimiento': round((recibidas / esperadas) * 100, 1) if esperadas > 0 else 0,
+        })
+
     resultado.sort(key=lambda x: x['inversion'], reverse=True)
     return resultado[:10]
 
@@ -3505,40 +3453,35 @@ def calcular_top_productos_mejorado(compras_ids):
 
 
 def calcular_cumplimiento_proveedores_mejorado(compras_query, compras_ids):
-    """Calcula cumplimiento detallado por proveedor"""
-    
-    proveedores = compras_query.values('empresa__id', 'empresa__nombre').distinct()
-    
+    """Calcula cumplimiento detallado por proveedor.
+
+    2 queries agrupadas (antes: ~4 queries POR proveedor)."""
+
+    esp_rows = (Compras_Producto_Talla.objects
+                .filter(compra_producto__compras__in=compras_ids)
+                .values('compra_producto__compras__empresa_id',
+                        'compra_producto__compras__empresa__nombre')
+                .annotate(esperadas=Sum('stock')))
+
+    rec_rows = {r['compra_producto_talla__compra_producto__compras__empresa_id']: int(r['recibidas'] or 0)
+                for r in (Productos_Recepcionados.objects
+                          .filter(compra_producto_talla__compra_producto__compras__in=compras_ids)
+                          .values('compra_producto_talla__compra_producto__compras__empresa_id')
+                          .annotate(recibidas=Sum('stockArribado')))}
+
     resultado = []
-    for prov in proveedores:
-        if not prov['empresa__id']:
+    for r in esp_rows:
+        esperadas = int(r['esperadas'] or 0)
+        if esperadas <= 0:
             continue
-        
-        compras_prov = compras_query.filter(empresa_id=prov['empresa__id'])
-        compras_prov_ids = list(compras_prov.values_list('id', flat=True))
-        
-        tallas_prov = Compras_Producto_Talla.objects.filter(
-            compra_producto__compras__in=compras_prov_ids
-        )
-        esperadas = tallas_prov.aggregate(total=Sum('stock'))['total'] or 0
-        
-        recepciones = Productos_Recepcionados.objects.filter(
-            compra_producto_talla__compra_producto__compras__in=compras_prov_ids
-        )
-        recibidas = recepciones.aggregate(total=Sum('stockArribado'))['total'] or 0
-        
-        cumplimiento = 0
-        if esperadas > 0:
-            cumplimiento = round((recibidas / esperadas) * 100, 1)
-        
-        if esperadas > 0:
-            resultado.append({
-                'proveedor': prov['empresa__nombre'] or 'Sin nombre',
-                'cumplimiento': cumplimiento,
-                'esperadas': int(esperadas),
-                'recibidas': int(recibidas)
-            })
-    
+        recibidas = rec_rows.get(r['compra_producto__compras__empresa_id'], 0)
+        resultado.append({
+            'proveedor': r['compra_producto__compras__empresa__nombre'] or 'Sin nombre',
+            'cumplimiento': round((recibidas / esperadas) * 100, 1),
+            'esperadas': esperadas,
+            'recibidas': recibidas,
+        })
+
     resultado.sort(key=lambda x: x['cumplimiento'], reverse=True)
     return resultado[:12]
 
@@ -3634,58 +3577,62 @@ def calcular_compras_por_categoria_marca(compras_ids):
 
 
 def calcular_rendimiento_detallado_mejorado(compras_query, compras_ids):
-    """Calcula rendimiento detallado por compra para la tabla"""
-    
+    """Calcula rendimiento detallado por compra para la tabla.
+
+    3 queries en total (antes: 4 queries POR compra × 20)."""
+
+    compras_20 = list(compras_query.select_related('empresa')[:20])
+    ids_20 = [c.id for c in compras_20]
+
+    lineas = {r['compra_producto__compras_id']: r for r in (
+        Compras_Producto_Talla.objects
+        .filter(compra_producto__compras_id__in=ids_20)
+        .values('compra_producto__compras_id')
+        .annotate(inversion=Sum(F('stock') * F('compra_producto__costo')),
+                  valor=Sum(F('stock') * F('compra_producto__precioSugerido')),
+                  esperadas=Sum('stock')))}
+
+    recibidas_map = {r['compra_producto_talla__compra_producto__compras_id']: int(r['recibidas'] or 0)
+                     for r in (Productos_Recepcionados.objects
+                               .filter(compra_producto_talla__compra_producto__compras_id__in=ids_20)
+                               .values('compra_producto_talla__compra_producto__compras_id')
+                               .annotate(recibidas=Sum('stockArribado')))}
+
     resultado = []
-    
-    for compra in compras_query.select_related('empresa')[:20]:
-        productos_compra = Compras_Producto.objects.filter(compras=compra)
-        
-        inversion = productos_compra.aggregate(
-            total=Sum(F('costo') * F('compras_producto_talla__stock'))
-        )['total'] or 0
-        
-        valor_venta = productos_compra.aggregate(
-            total=Sum(F('precioSugerido') * F('compras_producto_talla__stock'))
-        )['total'] or 0
-        
-        tallas_compra = Compras_Producto_Talla.objects.filter(
-            compra_producto__compras=compra
-        )
-        unidades_esperadas = tallas_compra.aggregate(total=Sum('stock'))['total'] or 0
-        
-        recepciones = Productos_Recepcionados.objects.filter(
-            compra_producto_talla__compra_producto__compras=compra
-        )
-        unidades_recibidas = recepciones.aggregate(total=Sum('stockArribado'))['total'] or 0
-        
+    for compra in compras_20:
+        r = lineas.get(compra.id, {})
+        inversion = r.get('inversion') or 0
+        valor_venta = r.get('valor') or 0
+        unidades_esperadas = int(r.get('esperadas') or 0)
+        unidades_recibidas = recibidas_map.get(compra.id, 0)
+
         cumplimiento = 0
         if unidades_esperadas > 0:
             cumplimiento = round((unidades_recibidas / unidades_esperadas) * 100, 1)
-        
+
         roi = 0
         if inversion > 0:
             roi = round(((valor_venta - inversion) / inversion) * 100, 1)
-        
+
         if cumplimiento >= 100:
             estado = 'Completado'
         elif cumplimiento >= 80:
             estado = 'Pendiente'
         else:
             estado = 'Retrasado'
-        
+
         resultado.append({
-            'nombre': compra.nombre if hasattr(compra, 'nombre') and compra.nombre else f'Compra #{compra.id}',
+            'nombre': compra.nombre or f'Compra #{compra.id}',
             'proveedor': compra.empresa.nombre if compra.empresa else 'Sin proveedor',
-            'temporada': compra.temporada if hasattr(compra, 'temporada') and compra.temporada else 'N/A',
+            'temporada': compra.temporada or 'N/A',
             'inversion': float(inversion),
             'cumplimiento': cumplimiento,
             'roi': roi,
-            'unidades_esperadas': int(unidades_esperadas),
-            'unidades_recibidas': int(unidades_recibidas),
+            'unidades_esperadas': unidades_esperadas,
+            'unidades_recibidas': unidades_recibidas,
             'estado': estado
         })
-    
+
     return resultado
 
 
@@ -3898,74 +3845,57 @@ def calcular_rendimiento_sucursales_destino(anio):
     - Ventas en dinero
     - Margen estimado
     """
-    from .models import Movimientos_Producto, Traspaso, Ticket, Ticket_Productos, Sucursal
-    
+    from .models import Movimientos_Producto, Ticket, Ticket_Productos
+
+    # Unidades recibidas por traspaso, agrupadas por sucursal destino (una query)
+    mov_rows = list(Movimientos_Producto.objects.filter(
+        fecha__year=anio,
+        concepto='TRASPASO_ENTRADA',
+        estado='COMPLETADO',
+        sucursal_destino__isnull=False,
+    ).values('sucursal_destino_id', 'sucursal_destino__alias',
+             'sucursal_destino__empresa__nombre')
+     .annotate(despachado=Sum('cantidad')))
+
+    sucursal_ids = [r['sucursal_destino_id'] for r in mov_rows]
+    if not sucursal_ids:
+        return []
+
+    # Ventas por sucursal (una query)
+    ventas_map = {r['sucursal_id']: float(r['total'] or 0) for r in (
+        Ticket.objects.filter(sucursal_id__in=sucursal_ids,
+                              created_at__year=anio, estado='PAGADO')
+        .values('sucursal_id').annotate(total=Sum('total')))}
+
+    # Unidades vendidas + costo FIFO real de lo vendido, por sucursal (una query).
+    # OJO nombres reales: FK=idTicket, cantidad=stock. costo_fifo=0 en líneas
+    # legacy: ahí el margen sale optimista, pero es dato real, no inventado.
+    lineas_map = {r['idTicket__sucursal_id']: r for r in (
+        Ticket_Productos.objects.filter(
+            idTicket__sucursal_id__in=sucursal_ids,
+            idTicket__created_at__year=anio,
+            idTicket__estado='PAGADO')
+        .values('idTicket__sucursal_id')
+        .annotate(unidades=Sum('stock'),
+                  costo=Sum(F('stock') * F('costo_fifo'))))}
+
     resultado = []
-    
-    try:
-        # Obtener sucursales que han recibido mercadería
-        sucursales_destino = Movimientos_Producto.objects.filter(
-            fecha__year=anio,
-            concepto='TRASPASO_ENTRADA',
-            estado='COMPLETADO'
-        ).values('sucursal_destino__id').distinct()
-        
-        sucursal_ids = [s['sucursal_destino__id'] for s in sucursales_destino if s['sucursal_destino__id']]
-    except:
-        return resultado
-    
-    for suc_id in sucursal_ids:
-        try:
-            # Solo obtener campos básicos para evitar error si hay campos nuevos no migrados
-            sucursal = Sucursal.objects.only('id', 'alias', 'direccion', 'empresa_id').select_related('empresa').get(id=suc_id)
-            
-            # Unidades despachadas (recibidas en esta sucursal)
-            despachado = Movimientos_Producto.objects.filter(
-                fecha__year=anio,
-                sucursal_destino_id=suc_id,
-                concepto='TRASPASO_ENTRADA',
-                estado='COMPLETADO'
-            ).aggregate(total=Sum('cantidad'))['total'] or 0
+    for r in mov_rows:
+        suc_id = r['sucursal_destino_id']
+        lin = lineas_map.get(suc_id, {})
+        resultado.append({
+            'sucursal_id': suc_id,
+            'sucursal': r['sucursal_destino__alias'] or 'Sin nombre',
+            'empresa': r['sucursal_destino__empresa__nombre'] or '-',
+            'despachado': int(r['despachado'] or 0),
+            'vendido': int(lin.get('unidades') or 0),
+            'ventas_monto': ventas_map.get(suc_id, 0.0),
+            'costo': float(lin.get('costo') or 0)
+        })
 
-            # Ventas de esta sucursal
-            tickets = Ticket.objects.filter(
-                sucursal_id=suc_id,
-                created_at__year=anio,
-                estado='PAGADO'
-            )
-
-            ventas_monto = tickets.aggregate(total=Sum('total'))['total'] or 0
-
-            # Unidades vendidas + costo FIFO real de lo vendido.
-            # OJO nombres reales: FK=idTicket, cantidad=stock (antes usaba
-            # ticket__in/cantidad → FieldError silenciado y la tabla salía
-            # vacía desde siempre).
-            lineas_agg = Ticket_Productos.objects.filter(
-                idTicket__in=tickets
-            ).aggregate(
-                unidades=Sum('stock'),
-                costo=Sum(F('stock') * F('costo_fifo')),
-            )
-            vendido = lineas_agg['unidades'] or 0
-            # Costo FIFO real de lo vendido (costo_fifo=0 en líneas legacy:
-            # ahí el margen sale optimista, pero es dato real, no inventado)
-            costo_vendido = lineas_agg['costo'] or 0
-
-            resultado.append({
-                'sucursal_id': suc_id,
-                'sucursal': sucursal.alias or 'Sin nombre',
-                'empresa': sucursal.empresa.nombre if sucursal.empresa else '-',
-                'despachado': int(despachado),
-                'vendido': int(vendido),
-                'ventas_monto': float(ventas_monto),
-                'costo': float(costo_vendido)
-            })
-        except Sucursal.DoesNotExist:
-            continue
-    
     # Ordenar por ventas
     resultado.sort(key=lambda x: x['ventas_monto'], reverse=True)
-    
+
     return resultado[:15]
 
 
@@ -3975,49 +3905,41 @@ def calcular_flujo_distribucion_mensual(anio):
     Para visualizar la cadena de suministro
     """
     from .models import Movimientos_Producto, Ticket
-    
+
     meses_nombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-    
-    resultado = []
-    
-    for mes in range(1, 13):
-        # Compras del mes (inversión)
-        compras_mes = Compras.objects.filter(fecha__year=anio, fecha__month=mes)
-        compras_ids = list(compras_mes.values_list('id', flat=True))
-        
-        productos_mes = Compras_Producto.objects.filter(compras__in=compras_ids)
-        inversion = productos_mes.aggregate(
-            total=Sum(F('costo') * F('compras_producto_talla__stock'))
-        )['total'] or 0
-        
-        # Despachos del mes
-        despachos_mes = Movimientos_Producto.objects.filter(
-            fecha__year=anio,
-            fecha__month=mes,
-            concepto='TRASPASO_SALIDA',
-            estado='COMPLETADO'
-        ).aggregate(total=Sum(F('cantidad') * F('costo')))['total'] or 0
-        
-        # Ventas del mes
-        try:
-            ventas_mes = Ticket.objects.filter(
-                created_at__year=anio,
-                created_at__month=mes,
-                estado='PAGADO'
-            ).aggregate(total=Sum('total'))['total'] or 0
-        except:
-            ventas_mes = 0
-        
-        resultado.append({
-            'mes': mes,
-            'mes_nombre': meses_nombres[mes - 1],
-            'inversion': float(inversion),
-            'despachos': abs(float(despachos_mes)),  # abs porque egresos son negativos
-            'ventas': float(ventas_mes)
-        })
-    
-    return resultado
+
+    # Inversión por mes (una query agrupada; antes 2 queries POR mes)
+    compras_base = Compras.objects.filter(fecha__year=anio).exclude(
+        estado__in=['ELIMINADA', 'CANCELADA'])
+    inv_mes = {r['m']: float(r['inv'] or 0) for r in (
+        Compras_Producto_Talla.objects
+        .filter(compra_producto__compras__in=compras_base)
+        .annotate(m=ExtractMonth('compra_producto__compras__fecha'))
+        .values('m')
+        .annotate(inv=Sum(F('stock') * F('compra_producto__costo'))))}
+
+    # Despachos ($ costo) por mes (una query)
+    desp_mes = {r['m']: abs(float(r['v'] or 0)) for r in (
+        Movimientos_Producto.objects
+        .filter(fecha__year=anio, concepto='TRASPASO_SALIDA', estado='COMPLETADO')
+        .annotate(m=ExtractMonth('fecha'))
+        .values('m')
+        .annotate(v=Sum(F('cantidad') * F('costo'))))}  # abs: egresos negativos
+
+    # Ventas por mes (una query)
+    ventas_mes = {r['m']: float(r['t'] or 0) for r in (
+        Ticket.objects.filter(created_at__year=anio, estado='PAGADO')
+        .annotate(m=ExtractMonth('created_at'))
+        .values('m').annotate(t=Sum('total')))}
+
+    return [{
+        'mes': mes,
+        'mes_nombre': meses_nombres[mes - 1],
+        'inversion': inv_mes.get(mes, 0.0),
+        'despachos': desp_mes.get(mes, 0.0),
+        'ventas': ventas_mes.get(mes, 0.0),
+    } for mes in range(1, 13)]
 
 
 # ========== FUNCIONES DE ANÁLISIS DE MÁRGENES CENTRO DE DISTRIBUCIÓN ==========
@@ -4054,94 +3976,78 @@ def calcular_margenes_centro_distribucion(anio, sucursal_cd_id=None):
             sucursales_cd = Sucursal.objects.filter(empresa__esProveedor=True)
     
     sucursales_cd_ids = list(sucursales_cd.values_list('id', flat=True))
-    
-    # 1. Desde Traspasos (tienen sobreprecio, costo, costo_destino)
-    traspasos_detalles = Traspaso_Detalle.objects.filter(
-        traspaso__fecha_solicitud__year=anio,
-        traspaso__sucursal_origen__in=sucursales_cd_ids,
-        traspaso__estado__in=['EN_TRANSITO', 'RECIBIDO']
-    ).select_related('traspaso__sucursal_destino', 'traspaso__sucursal_origen')
-    
+
     margen_total_cd = 0
     costo_proveedor_total = 0
     unidades_total = 0
     detalle_por_sucursal = {}
-    
-    for detalle in traspasos_detalles:
-        cantidad = detalle.cantidad_enviada or 0
-        costo_unitario = detalle.costo or 0
-        sobreprecio = detalle.sobreprecio if hasattr(detalle, 'sobreprecio') and detalle.sobreprecio else 0
-        costo_destino = detalle.costo_destino if hasattr(detalle, 'costo_destino') and detalle.costo_destino else (costo_unitario + sobreprecio)
-        
-        # Calcular margen
-        margen_cd = sobreprecio * cantidad
-        costo_prov = costo_unitario * cantidad
-        
-        margen_total_cd += margen_cd
+
+    def _acumular(suc_id, alias, empresa, unidades, costo_prov, margen, costo_dest):
+        nonlocal margen_total_cd, costo_proveedor_total, unidades_total
+        margen_total_cd += margen
         costo_proveedor_total += costo_prov
-        unidades_total += cantidad
-        
-        # Agrupar por sucursal destino
-        suc_destino = detalle.traspaso.sucursal_destino
-        suc_key = suc_destino.id
-        
-        if suc_key not in detalle_por_sucursal:
-            detalle_por_sucursal[suc_key] = {
-                'sucursal_id': suc_destino.id,
-                'sucursal': suc_destino.alias,
-                'empresa': suc_destino.empresa.nombre if suc_destino.empresa else '-',
-                'unidades': 0,
-                'costo_proveedor_total': 0,
-                'sobreprecio_total': 0,
-                'costo_destino_total': 0
-            }
-        
-        detalle_por_sucursal[suc_key]['unidades'] += cantidad
-        detalle_por_sucursal[suc_key]['costo_proveedor_total'] += costo_prov
-        detalle_por_sucursal[suc_key]['sobreprecio_total'] += margen_cd
-        detalle_por_sucursal[suc_key]['costo_destino_total'] += costo_destino * cantidad
-    
-    # 2. Si no hay datos en Traspasos, intentar con Movimientos_Producto
+        unidades_total += unidades
+        if suc_id is None:
+            return
+        d = detalle_por_sucursal.setdefault(suc_id, {
+            'sucursal_id': suc_id, 'sucursal': alias, 'empresa': empresa or '-',
+            'unidades': 0, 'costo_proveedor_total': 0,
+            'sobreprecio_total': 0, 'costo_destino_total': 0,
+        })
+        d['unidades'] += unidades
+        d['costo_proveedor_total'] += costo_prov
+        d['sobreprecio_total'] += margen
+        d['costo_destino_total'] += costo_dest
+
+    # 1. Desde Traspasos (sobreprecio/costo/costo_destino), agrupado por destino
+    # en UNA query (antes: se iteraba cada Traspaso_Detalle en Python).
+    # costo_destino==0/null cae a costo+sobreprecio (mismo fallback que antes).
+    _costo_destino_expr = models.Case(
+        models.When(Q(costo_destino__isnull=True) | Q(costo_destino=0),
+                    then=(F('costo') + F('sobreprecio')) * Coalesce(F('cantidad_enviada'), 0)),
+        default=F('costo_destino') * Coalesce(F('cantidad_enviada'), 0),
+        output_field=models.BigIntegerField(),
+    )
+    traspaso_rows = (Traspaso_Detalle.objects.filter(
+        traspaso__fecha_solicitud__year=anio,
+        traspaso__sucursal_origen__in=sucursales_cd_ids,
+        traspaso__estado__in=['EN_TRANSITO', 'RECIBIDO'])
+        .values('traspaso__sucursal_destino_id',
+                'traspaso__sucursal_destino__alias',
+                'traspaso__sucursal_destino__empresa__nombre')
+        .annotate(unidades=Sum(Coalesce(F('cantidad_enviada'), 0)),
+                  costo_prov=Sum(F('costo') * Coalesce(F('cantidad_enviada'), 0)),
+                  margen=Sum(F('sobreprecio') * Coalesce(F('cantidad_enviada'), 0)),
+                  costo_dest=Sum(_costo_destino_expr)))
+    for r in traspaso_rows:
+        _acumular(r['traspaso__sucursal_destino_id'],
+                  r['traspaso__sucursal_destino__alias'],
+                  r['traspaso__sucursal_destino__empresa__nombre'],
+                  int(r['unidades'] or 0), r['costo_prov'] or 0,
+                  r['margen'] or 0, r['costo_dest'] or 0)
+
+    # 2. Si no hay datos en Traspasos, usar Movimientos_Producto (también agrupado;
+    # antes iteraba en Python TODOS los TRASPASO_SALIDA del año).
     if unidades_total == 0:
-        movimientos = Movimientos_Producto.objects.filter(
+        detalle_por_sucursal.clear()
+        margen_total_cd = costo_proveedor_total = 0
+        mov_rows = (Movimientos_Producto.objects.filter(
             fecha__year=anio,
             concepto='TRASPASO_SALIDA',
             sucursal_origen__in=sucursales_cd_ids,
-            estado='COMPLETADO'
-        ).select_related('sucursal_destino', 'sucursal_origen')
-        
-        for mov in movimientos:
-            cantidad = abs(mov.cantidad or 0)
-            costo_unitario = mov.costo or 0
-            sobreprecio = mov.sobreprecio or 0
-            precio = mov.precio or 0
-            
-            margen_cd = sobreprecio * cantidad
-            costo_prov = costo_unitario * cantidad
-            
-            margen_total_cd += margen_cd
-            costo_proveedor_total += costo_prov
-            unidades_total += cantidad
-            
-            if mov.sucursal_destino:
-                suc_key = mov.sucursal_destino.id
-                
-                if suc_key not in detalle_por_sucursal:
-                    detalle_por_sucursal[suc_key] = {
-                        'sucursal_id': mov.sucursal_destino.id,
-                        'sucursal': mov.sucursal_destino.alias,
-                        'empresa': mov.sucursal_destino.empresa.nombre if mov.sucursal_destino.empresa else '-',
-                        'unidades': 0,
-                        'costo_proveedor_total': 0,
-                        'sobreprecio_total': 0,
-                        'costo_destino_total': 0
-                    }
-                
-                detalle_por_sucursal[suc_key]['unidades'] += cantidad
-                detalle_por_sucursal[suc_key]['costo_proveedor_total'] += costo_prov
-                detalle_por_sucursal[suc_key]['sobreprecio_total'] += margen_cd
-                detalle_por_sucursal[suc_key]['costo_destino_total'] += (costo_unitario + sobreprecio) * cantidad
-    
+            estado='COMPLETADO')
+            .values('sucursal_destino_id', 'sucursal_destino__alias',
+                    'sucursal_destino__empresa__nombre')
+            .annotate(unidades=Sum(Abs(F('cantidad'))),
+                      costo_prov=Sum(F('costo') * Abs(F('cantidad'))),
+                      margen=Sum(F('sobreprecio') * Abs(F('cantidad'))),
+                      costo_dest=Sum((F('costo') + F('sobreprecio')) * Abs(F('cantidad')))))
+        for r in mov_rows:
+            _acumular(r['sucursal_destino_id'], r['sucursal_destino__alias'],
+                      r['sucursal_destino__empresa__nombre'],
+                      int(r['unidades'] or 0), r['costo_prov'] or 0,
+                      r['margen'] or 0, r['costo_dest'] or 0)
+
     # Calcular margen promedio %
     margen_promedio_pct = 0
     if costo_proveedor_total > 0:
@@ -4190,33 +4096,37 @@ def calcular_comparativa_costos_cd_vs_sucursales(anio):
     sucursales_cd_ids = list(sucursales_cd.values_list('id', flat=True))
     
     # Sucursales vendedoras (no son CD)
-    sucursales_vendedoras = Sucursal.objects.exclude(id__in=sucursales_cd_ids)
-    
+    sucursales_vendedoras = list(
+        Sucursal.objects.exclude(id__in=sucursales_cd_ids)
+        .select_related('empresa')[:10])
+
+    # OJO: LoteProducto NO tiene campo `sucursal` — el filtro antiguo
+    # (sucursal=suc_vendedora) lanzaba FieldError silenciado y esta comparativa
+    # salía SIEMPRE vacía. La sucursal del lote es la del producto:
+    # producto_talla → producto → sucursal. Además: una query agrupada en vez
+    # de iterar cada lote en Python.
+    lotes_map = {r['producto_talla__producto__sucursal_id']: r for r in (
+        LoteProducto.objects.filter(
+            producto_talla__producto__sucursal_id__in=[s.id for s in sucursales_vendedoras],
+            fecha_ingreso__year=anio)
+        .values('producto_talla__producto__sucursal_id')
+        .annotate(costo=Sum(F('costo_unitario') * F('cantidad_inicial')),
+                  sobreprecio=Sum(Coalesce(F('sobreprecio_unitario'), 0) * F('cantidad_inicial')),
+                  unidades=Sum('cantidad_inicial')))}
+
     comparativa = []
-    
-    for suc_vendedora in sucursales_vendedoras[:10]:
-        # Lotes recibidos en la sucursal vendedora
-        lotes = LoteProducto.objects.filter(
-            sucursal=suc_vendedora,
-            fecha_ingreso__year=anio
-        )
-        
-        total_costo = 0
-        total_sobreprecio = 0
-        total_unidades = 0
-        
-        for lote in lotes:
-            total_costo += lote.costo_unitario * lote.cantidad_inicial
-            total_sobreprecio += (lote.sobreprecio_unitario or 0) * lote.cantidad_inicial
-            total_unidades += lote.cantidad_inicial
-        
+    for suc_vendedora in sucursales_vendedoras:
+        r = lotes_map.get(suc_vendedora.id, {})
+        total_costo = r.get('costo') or 0
+        total_sobreprecio = r.get('sobreprecio') or 0
+        total_unidades = r.get('unidades') or 0
+
         costo_promedio = 0
         sobreprecio_promedio = 0
-        
         if total_unidades > 0:
             costo_promedio = round(total_costo / total_unidades)
             sobreprecio_promedio = round(total_sobreprecio / total_unidades)
-        
+
         comparativa.append({
             'sucursal_id': suc_vendedora.id,
             'sucursal': suc_vendedora.alias,
@@ -4227,7 +4137,7 @@ def calcular_comparativa_costos_cd_vs_sucursales(anio):
             'costo_total_promedio': costo_promedio + sobreprecio_promedio,
             'incremento_pct': round((sobreprecio_promedio / costo_promedio * 100), 2) if costo_promedio > 0 else 0
         })
-    
+
     return sorted(comparativa, key=lambda x: x['unidades_recibidas'], reverse=True)
 
 
@@ -4240,102 +4150,107 @@ def calcular_rentabilidad_por_tipo_sucursal(anio):
     Analiza márgenes en cada etapa de la cadena.
     """
     from .models import Sucursal, Ticket, Ticket_Productos, Movimientos_Producto
-    
+
     resultado = {
         'centros_distribucion': [],
         'sucursales_vendedoras': []
     }
-    
+
     # Sucursales CD (con fallback si no existe el campo nuevo)
     try:
-        sucursales_cd = Sucursal.objects.filter(
-            models.Q(es_centro_distribucion=True) | 
+        sucursales_cd = list(Sucursal.objects.filter(
+            models.Q(es_centro_distribucion=True) |
             models.Q(tipo_sucursal='CENTRO_DISTRIBUCION') |
             models.Q(empresa__esProveedor=True)
-        )
-    except:
-        sucursales_cd = Sucursal.objects.filter(empresa__esProveedor=True)
-    
-    for suc_cd in sucursales_cd:
-        # Inversión en compras a proveedores
-        compras_cd = Compras.objects.filter(
-            responsable__sucursales=suc_cd,
-            fecha__year=anio
-        )
-        compras_ids = list(compras_cd.values_list('id', flat=True))
-        
-        inversion = Compras_Producto.objects.filter(
-            compras__in=compras_ids
-        ).aggregate(
-            total=Sum(F('costo') * F('compras_producto_talla__stock'))
-        )['total'] or 0
-        
-        # Ingresos por despachos (sobreprecio)
-        despachos = Movimientos_Producto.objects.filter(
+        ).select_related('empresa'))
+    except Exception:
+        sucursales_cd = list(Sucursal.objects.filter(
+            empresa__esProveedor=True).select_related('empresa'))
+
+    sucursales_cd_ids = [s.id for s in sucursales_cd]
+
+    # Inversión de compras atribuible a cada CD: lo recepcionado en esa sucursal
+    # (recepción → producto → sucursal), valorizado al costo de la OC.
+    # El filtro antiguo (responsable__sucursales) era un FieldError silenciado:
+    # Compras.responsable es un CharField, así que esta sección salía SIEMPRE vacía.
+    inversion_map = {r['s']: float(r['inv'] or 0) for r in (
+        Productos_Recepcionados.objects.filter(
+            producto_talla__producto__sucursal_id__in=sucursales_cd_ids,
+            compra_producto_talla__compra_producto__compras__fecha__year=anio)
+        .exclude(compra_producto_talla__compra_producto__compras__estado__in=[
+            'ELIMINADA', 'CANCELADA'])
+        .annotate(s=F('producto_talla__producto__sucursal_id'))
+        .values('s')
+        .annotate(inv=Sum(F('stockArribado') * F('compra_producto_talla__compra_producto__costo'))))}
+
+    # Despachos por CD (una query agrupada por sucursal origen)
+    despachos_map = {r['sucursal_origen_id']: r for r in (
+        Movimientos_Producto.objects.filter(
             fecha__year=anio,
-            sucursal_origen=suc_cd,
+            sucursal_origen_id__in=sucursales_cd_ids,
             concepto='TRASPASO_SALIDA',
-            estado='COMPLETADO'
-        ).aggregate(
-            total_sobreprecio=Sum(F('sobreprecio') * Abs(F('cantidad'))),
-            total_costo=Sum(F('costo') * Abs(F('cantidad')))
-        )
-        
-        sobreprecio_generado = despachos['total_sobreprecio'] or 0
-        costo_despachado = despachos['total_costo'] or 0
-        
+            estado='COMPLETADO')
+        .values('sucursal_origen_id')
+        .annotate(total_sobreprecio=Sum(F('sobreprecio') * Abs(F('cantidad'))),
+                  total_costo=Sum(F('costo') * Abs(F('cantidad')))))}
+
+    for suc_cd in sucursales_cd:
+        d = despachos_map.get(suc_cd.id, {})
+        sobreprecio_generado = d.get('total_sobreprecio') or 0
+        costo_despachado = d.get('total_costo') or 0
+
         rentabilidad_cd = 0
         if costo_despachado > 0:
             rentabilidad_cd = round((sobreprecio_generado / costo_despachado) * 100, 2)
-        
+
         resultado['centros_distribucion'].append({
             'sucursal_id': suc_cd.id,
             'sucursal': suc_cd.alias,
             'empresa': suc_cd.empresa.nombre if suc_cd.empresa else '-',
-            'inversion_proveedores': float(inversion),
+            'inversion_proveedores': inversion_map.get(suc_cd.id, 0.0),
             'costo_despachado': float(costo_despachado),
             'sobreprecio_generado': float(sobreprecio_generado),
             'rentabilidad_pct': rentabilidad_cd
         })
-    
-    # Sucursales vendedoras
-    sucursales_cd_ids = list(sucursales_cd.values_list('id', flat=True))
-    sucursales_vendedoras = Sucursal.objects.exclude(id__in=sucursales_cd_ids)[:10]
-    
+
+    # Sucursales vendedoras: ventas y costo FIFO de lo vendido, agrupado
+    # (los nombres antiguos ticket__in / costo*cantidad no existen en
+    # Ticket_Productos → FieldError silenciado → sección siempre vacía).
+    sucursales_vendedoras = list(
+        Sucursal.objects.exclude(id__in=sucursales_cd_ids)
+        .select_related('empresa')[:10])
+    vend_ids = [s.id for s in sucursales_vendedoras]
+
+    ventas_map = {r['sucursal_id']: float(r['total'] or 0) for r in (
+        Ticket.objects.filter(sucursal_id__in=vend_ids,
+                              created_at__year=anio, estado='PAGADO')
+        .values('sucursal_id').annotate(total=Sum('total')))}
+
+    costo_map = {r['idTicket__sucursal_id']: float(r['costo'] or 0) for r in (
+        Ticket_Productos.objects.filter(
+            idTicket__sucursal_id__in=vend_ids,
+            idTicket__created_at__year=anio,
+            idTicket__estado='PAGADO')
+        .values('idTicket__sucursal_id')
+        .annotate(costo=Sum(F('stock') * F('costo_fifo'))))}
+
     for suc_vend in sucursales_vendedoras:
-        # Ventas realizadas
-        try:
-            ventas = Ticket.objects.filter(
-                sucursal=suc_vend,
-                created_at__year=anio,
-                estado='PAGADO'
-            )
-            
-            total_ventas = ventas.aggregate(total=Sum('total'))['total'] or 0
-            
-            # Costo de lo vendido (incluyendo sobreprecio del CD)
-            costo_ventas = Ticket_Productos.objects.filter(
-                ticket__in=ventas
-            ).aggregate(
-                total=Sum(F('costo') * F('cantidad'))
-            )['total'] or 0
-            
-            margen_bruto = total_ventas - costo_ventas
-            rentabilidad_vend = 0
-            if total_ventas > 0:
-                rentabilidad_vend = round((margen_bruto / total_ventas) * 100, 2)
-            
-            resultado['sucursales_vendedoras'].append({
-                'sucursal_id': suc_vend.id,
-                'sucursal': suc_vend.alias,
-                'empresa': suc_vend.empresa.nombre if suc_vend.empresa else '-',
-                'ventas_total': float(total_ventas),
-                'costo_ventas': float(costo_ventas),
-                'margen_bruto': float(margen_bruto),
-                'rentabilidad_pct': rentabilidad_vend
-            })
-        except Exception as e:
-            continue
+        total_ventas = ventas_map.get(suc_vend.id, 0.0)
+        costo_ventas = costo_map.get(suc_vend.id, 0.0)
+        margen_bruto = total_ventas - costo_ventas
+        rentabilidad_vend = 0
+        if total_ventas > 0:
+            rentabilidad_vend = round((margen_bruto / total_ventas) * 100, 2)
+
+        resultado['sucursales_vendedoras'].append({
+            'sucursal_id': suc_vend.id,
+            'sucursal': suc_vend.alias,
+            'empresa': suc_vend.empresa.nombre if suc_vend.empresa else '-',
+            'ventas_total': total_ventas,
+            'costo_ventas': costo_ventas,
+            'margen_bruto': margen_bruto,
+            'rentabilidad_pct': rentabilidad_vend
+        })
 
     return resultado
 

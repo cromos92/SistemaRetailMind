@@ -13249,12 +13249,14 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
                 } else {
                     showSuccessAlert(titulo, res.mensaje || 'El producto fue procesado correctamente.');
                 }
-                // Mostrar resultado de sincronización multi-sucursal
-                const nSync = res.sucursales_sincronizadas || res.productos_otras_sucursales?.length || 0;
+                // Mostrar resultado de sincronización multi-sucursal.
+                // FIX: se leían claves que el backend nunca envía
+                // (sucursales_sincronizadas) y el aviso jamás aparecía; las
+                // claves reales son productos_sincronizados / sucursales_afectadas.
+                const nSync = res.productos_sincronizados || 0;
                 if (nSync > 0) {
-                    const txtSync = nSync === 1
-                        ? 'Precio sincronizado con 1 sucursal adicional.'
-                        : `Precio sincronizado con ${nSync} sucursales adicionales.`;
+                    const sucs = (res.sucursales_afectadas || []).join(', ');
+                    const txtSync = `Precios (venta/costo/sobreprecio) aplicados también en ${nSync} ficha(s) de otras bodegas${sucs ? ': ' + sucs : ''}.`;
                     $('#alertaSincManualTexto').text(txtSync);
                     $('#alertaSincManual').removeClass('d-none').addClass('show');
                 }
@@ -13267,9 +13269,12 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
                     // y fuerza el cierre si quedó pegado (transición a medias)
                     cerrarModalCrearManualSeguro();
                 }
-                // Refrescar la tabla de productos
-                const anioActual = new Date().getFullYear();
-                cargarProductosParaCrear(anioActual);  // ya refresca los conteos
+                // Refrescar la tabla del flujo antiguo solo si está expandida
+                // (colapsada, la query pesada de recepciones era gasto puro)
+                if ($('#cardFlujoRecepcion').is(':visible')) {
+                    const anioActual = new Date().getFullYear();
+                    cargarProductosParaCrear(anioActual);  // ya refresca los conteos
+                }
                 cargarAlertaBannerPrecios();
             } else if (res.producto_existente) {
                 // Mostrar modal de producto existente
