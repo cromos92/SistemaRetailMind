@@ -2749,7 +2749,7 @@
                                         <input type="text" name="descripcion" class="form-control" placeholder="Ej: Zapatilla Running Hombre Talla CL">
                                         <label class="d-flex align-items-center gap-1 mt-1 mb-0 text-muted" style="font-size:.74rem;cursor:pointer;">
                                             <input type="checkbox" name="aplicar_todas_bodegas" value="true">
-                                            <i class="bi bi-building-gear"></i> Aplicar esta descripción a todas las bodegas de este código
+                                            <i class="bi bi-building-gear"></i> Aplicar descripción y especialidades a todas las bodegas de este código
                                         </label>
                                     </div>
                                 </div>
@@ -11535,6 +11535,70 @@ $(document).on('click', '.btnCorregirCategoriaGlobal', function() {
     });
 });
 
+// ── Aplicar las especialidades del formulario a TODAS las bodegas ──────
+// Espejo de "corregir categoría global". Dos modos: REEMPLAZAR (deja
+// exactamente las del picker) o AGREGAR (suma sin borrar las que ya tenía,
+// útil cuando la migración v1.2 ya etiquetó algunas fichas).
+$(document).on('click', '.btnAplicarEspecialidadGlobal', function() {
+    const productoId = $(this).data('producto-id');
+    const espIds = $('#espManualHidden input[name="especialidad[]"]')
+        .map(function () { return parseInt($(this).val()); }).get().filter(Boolean);
+    if (!productoId || !espIds.length) {
+        showErrorAlert('Sin especialidades', 'Selecciona al menos una especialidad en el formulario.');
+        return;
+    }
+    const etiquetas = $('#espManualCrumbs .nexo-crumb').map(function () { return $(this).text(); }).get().join(', ');
+
+    Swal.fire({
+        title: '¿Aplicar especialidades?',
+        icon: 'question',
+        width: 500,
+        html: `
+            <div class="text-start" style="font-size:.9rem;">
+                <p class="mb-2">Se aplicará <b>${etiquetas || espIds.length + ' especialidad(es)'}</b> a la ficha de este producto en <b>TODAS las bodegas</b>.</p>
+                <div class="alert alert-light border py-2 px-2 mb-0" style="font-size:.8rem;">
+                    <i class="bi bi-info-circle me-1"></i><b>Reemplazar</b> deja exactamente estas.
+                    <b>Agregar</b> las suma y conserva las que ya tuviera cada ficha.<br>
+                    SKUs, tallas, stock, precios y categoría NO cambian.
+                </div>
+            </div>`,
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: 'Reemplazar',
+        denyButtonText: 'Agregar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#6b3fd4',
+        denyButtonColor: '#0ab39c',
+    }).then(r => {
+        if (!r.isConfirmed && !r.isDenied) return;
+        const modo = r.isConfirmed ? 'reemplazar' : 'agregar';
+        $.ajax({
+            url: '/app/api/editar-especialidad-global/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ producto_id: productoId, especialidad_ids: espIds, modo: modo }),
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(res) {
+                if (!res.success) {
+                    showErrorAlert('Error', res.error || 'No se pudieron aplicar las especialidades.');
+                    return;
+                }
+                const filas = (res.bodegas || []).map(b =>
+                    `<tr><td style="padding:2px 10px;">${b.sucursal}</td><td style="padding:2px 10px;text-align:center;">${b.antes} → ${b.ahora}</td></tr>`).join('');
+                Swal.fire({
+                    icon: 'success', title: 'Especialidades aplicadas', width: 480,
+                    html: `<p style="font-size:.88rem;">${(res.especialidades || []).join(', ')} · modo <b>${res.modo}</b> · ${res.fichas_actualizadas} ficha(s)</p>` +
+                          (filas ? `<table style="margin:0 auto;font-size:.84rem;border-collapse:collapse;"><thead><tr style="border-bottom:1px solid #dee2e6;"><th style="padding:2px 10px;">Bodega</th><th style="padding:2px 10px;">Etiquetas</th></tr></thead><tbody>${filas}</tbody></table>` : ''),
+                });
+                verificarProductoExistenteManual();   // refresca el panel
+            },
+            error: function(xhr) {
+                showErrorAlert('Error', xhr.responseJSON?.error || 'Error inesperado al aplicar las especialidades.');
+            }
+        });
+    });
+});
+
 // Evento para verificar producto existente en modal manual
 // ==================================================================
 // ✅ PANEL ÚNICO "ESTADO DEL CÓDIGO" (#estadoCodigoManual, columna derecha).
@@ -11554,6 +11618,10 @@ function renderEstadoCodigoManual(estado, response) {
     if (!$cont.length) return;
     const articulo = ($('#modalCrearProductoManual input[name="articulo"]').val() || '').trim();
     response = response || {};
+    // Última respuesta del verify, para poder repintar solo trozos del panel
+    // (ej. la sección de especialidad al tocar el picker) sin re-renderizarlo
+    // entero — un re-render completo destruye estado del formulario.
+    window._ecUltimoEstadoManual = { estado: estado, response: response };
 
     const CFG = {
         vacio:       { icono: 'bi-upc-scan',        titulo: 'Verificación del código', badge: '' },
@@ -11636,6 +11704,7 @@ function _ecSeccionExistente(r) {
             <span class="badge bg-secondary">${p.genero || '-'}</span>
             <span class="badge bg-light text-dark border" title="Categoría guardada del producto. ¿Está mal? Selecciona la correcta en el formulario y aparecerá el botón para corregirla en TODAS las bodegas.">${p.categoria || '-'}</span>
         </div>
+        ${_ecSeccionEspecialidad(r)}
         <div class="alert alert-success py-1 px-2 mb-2" style="font-size:.76rem;">
             <i class="bi bi-check-circle-fill me-1"></i>Las tallas ya se cargaron abajo en <b>Tallas y Stock</b> con sus SKUs reales — escribe solo las <b>cantidades a sumar</b>. No se crea un producto nuevo.
         </div>
@@ -11650,6 +11719,53 @@ function _ecSeccionExistente(r) {
         <div id="avisoPreciosManual" class="mt-1"></div>
         ${variantes}`;
 }
+
+// Sección ESPECIALIDAD del producto existente: qué tiene guardado hoy y botón
+// para aplicar las del formulario a TODAS las bodegas. La especialidad es una
+// propiedad del producto (deporte/uso), no de la bodega, pero al crear solo se
+// escribía en la ficha de la sucursal activa: las demás quedaban sin etiquetar
+// y no aparecían en los filtros ni dashboards por especialidad.
+function _ecSeccionEspecialidad(r) {
+    const p = r.producto_encontrado || {};
+    const actuales = p.especialidades || [];
+    const label = (v) => (window.ESP_LABEL_V12 && window.ESP_LABEL_V12[v]) || v;
+    const chips = actuales.length
+        ? actuales.map(e => `<span class="badge" style="background:#f1ebfd;color:#6b3fd4;font-weight:700;">${label(e.valor)}</span>`).join(' ')
+        : '<span class="badge" style="background:#f0f1f6;color:#99a;font-weight:600;">sin especialidad</span>';
+
+    // Lo elegido AHORA en el picker del formulario (hidden especialidad[])
+    const enForm = $('#espManualHidden input[name="especialidad[]"]')
+        .map(function () { return String($(this).val()); }).get();
+    const actualesIds = actuales.map(e => String(e.id));
+    const difiere = enForm.length > 0 &&
+        (enForm.length !== actualesIds.length || enForm.some(id => !actualesIds.includes(id)));
+
+    const boton = difiere ? `
+        <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 mt-1 btnAplicarEspecialidadGlobal"
+                data-producto-id="${r.producto_id}" style="font-size:.74rem;">
+            <i class="bi bi-tags me-1"></i>Aplicar las especialidades del formulario a TODAS las bodegas
+        </button>` : '';
+
+    return `
+        <div class="ec-seccion" id="ecEspecialidadManual">
+            <div class="d-flex align-items-center gap-1 flex-wrap" style="font-size:.76rem;">
+                <i class="bi bi-tags text-muted"></i><span class="text-muted">Especialidad guardada:</span> ${chips}
+            </div>
+            ${boton}
+        </div>`;
+}
+
+// El botón "aplicar a todas las bodegas" depende de lo que haya en el picker,
+// que cambia DESPUÉS de renderizar el panel. Se repinta solo esta sección al
+// tocar el picker (no todo el panel: re-renderizarlo destruye estado del form).
+function refrescarSeccionEspecialidadManual() {
+    const est = window._ecUltimoEstadoManual;
+    if (!est || est.estado !== 'existe' || !$('#ecEspecialidadManual').length) return;
+    $('#ecEspecialidadManual').replaceWith(_ecSeccionEspecialidad(est.response));
+}
+$(document).on('click', '#espManualList .nexo-prow.child', function () {
+    setTimeout(refrescarSeccionEspecialidadManual, 0);   // tras actualizar el hidden
+});
 
 // Sección estado "catdif": MISMO producto (código+marca+color+género) pero
 // guardado con OTRA categoría. Sin corrección, crear generaría un DUPLICADO

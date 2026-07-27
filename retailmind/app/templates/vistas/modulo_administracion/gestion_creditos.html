@@ -703,6 +703,110 @@
     border-radius: var(--nexo-radius-md); padding: 0.65rem 0.85rem; font-size: 0.8rem;
 }
 
+/* ============================================================
+   TABLA DE CRÉDITOS
+   Pensada para el notebook de 15" de tienda (1366x768): densa,
+   con la cabecera fija y los montos alineados a la derecha con
+   cifras de ancho fijo (tabular-nums) para poder compararlos
+   de un vistazo.
+   ============================================================ */
+.creditos-toolbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem;
+    padding: 0 0 0.75rem 0;
+}
+.creditos-toolbar .toolbar-sep { flex: 1 1 auto; }
+
+/* Chips de filtro rápido (mismo rol que .quick-filter-btn del resto
+   del ERP, con la paleta NEXO de esta pantalla). */
+.quick-filter-btn {
+    background: var(--nexo-white);
+    border: 1px solid var(--nexo-border-light);
+    border-radius: var(--nexo-radius-full);
+    padding: 5px 13px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--nexo-text-secondary);
+    transition: var(--nexo-transition-fast);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.quick-filter-btn:hover {
+    border-color: var(--nexo-primary);
+    color: var(--nexo-primary);
+}
+.quick-filter-btn.active {
+    background: var(--nexo-primary);
+    border-color: var(--nexo-primary);
+    color: var(--nexo-text-inverse);
+}
+.quick-filter-btn.is-riesgo.active { background: var(--nexo-error); border-color: var(--nexo-error); }
+.quick-filter-btn .qf-count {
+    font-weight: 700; opacity: 0.75; margin-left: 0.25rem;
+}
+
+.creditos-scroll { max-height: 62vh; overflow: auto; border-radius: var(--nexo-radius-md); }
+.tabla-creditos { width: 100%; font-size: 0.8rem; margin-bottom: 0; border-collapse: separate; border-spacing: 0; }
+.tabla-creditos thead th {
+    position: sticky; top: 0; z-index: 3;
+    background: var(--nexo-gray-100);
+    color: var(--nexo-text-secondary);
+    font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.03em;
+    font-weight: 700; white-space: nowrap;
+    padding: 0.5rem 0.5rem;
+    border-bottom: 2px solid var(--nexo-border-light);
+}
+.tabla-creditos tbody td {
+    padding: 0.45rem 0.5rem; vertical-align: middle;
+    border-bottom: 1px solid var(--nexo-gray-100);
+}
+.tabla-creditos tbody tr:hover td { background: var(--nexo-primary-light); }
+.tabla-creditos .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tabla-creditos .principal { font-weight: 600; color: var(--nexo-text-primary); line-height: 1.15; }
+.tabla-creditos .secundario { font-size: 0.69rem; color: var(--nexo-text-muted); line-height: 1.25; }
+.tabla-creditos .monto-deuda { font-weight: 700; color: var(--nexo-error); }
+.tabla-creditos .monto-neutro { color: var(--nexo-text-muted); }
+.tabla-creditos tfoot td {
+    position: sticky; bottom: 0; z-index: 2;
+    background: var(--nexo-gray-100);
+    font-weight: 700; font-size: 0.78rem;
+    padding: 0.5rem; border-top: 2px solid var(--nexo-border-light);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Marca de riesgo en el borde izquierdo de la fila */
+.tabla-creditos tr.fila-vencida td:first-child   { box-shadow: inset 3px 0 0 var(--nexo-error); }
+.tabla-creditos tr.fila-por-caducar td:first-child { box-shadow: inset 3px 0 0 var(--nexo-warning); }
+.tabla-creditos tr.fila-caducada td:first-child  { box-shadow: inset 3px 0 0 var(--nexo-gray-500); }
+.tabla-creditos tr.fila-caducada td { background: rgba(138, 138, 154, 0.06); }
+
+.chip-estado-cupo {
+    display: inline-block; margin-top: 2px;
+    font-size: 0.66rem; font-weight: 700; line-height: 1.4;
+    padding: 1px 7px; border-radius: var(--nexo-radius-full);
+    white-space: nowrap;
+}
+.chip-estado-cupo.vigente  { background: rgba(0, 212, 170, 0.14); color: #067a63; }
+.chip-estado-cupo.por-caducar { background: rgba(255, 176, 32, 0.18); color: #8a5b00; }
+.chip-estado-cupo.caducado { background: rgba(138, 138, 154, 0.18); color: var(--nexo-gray-700); }
+.chip-mora { color: var(--nexo-error); font-weight: 700; font-size: 0.69rem; }
+
+.leyenda-tabla {
+    display: flex; flex-wrap: wrap; gap: 0.9rem;
+    font-size: 0.69rem; color: var(--nexo-text-muted);
+    padding-top: 0.6rem;
+}
+.leyenda-tabla .li { display: inline-flex; align-items: center; gap: 0.3rem; }
+.leyenda-tabla .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+/* Notebook de tienda: 1366x768 y similares */
+@media (max-width: 1440px) {
+    .tabla-creditos { font-size: 0.74rem; }
+    .tabla-creditos thead th { font-size: 0.63rem; padding: 0.4rem 0.35rem; }
+    .tabla-creditos tbody td { padding: 0.35rem 0.35rem; }
+    .tabla-creditos .secundario { font-size: 0.64rem; }
+    .creditos-scroll { max-height: 56vh; }
+}
+
 /* ========== RESPONSIVE - Small Mobile ========== */
 @media (max-width: 576px) {
     .creditos-kpi-grid { grid-template-columns: 1fr !important; }
@@ -1025,8 +1129,9 @@
                                 <button type="button" class="nexo-btn-outline ms-2" id="btn-limpiar">
                                     <i class="ri-refresh-line"></i> Limpiar
                                 </button>
-                                <button type="button" class="nexo-btn-success ms-2" id="btn-exportar">
-                                    <i class="ri-file-excel-line"></i> Exportar
+                                <button type="button" class="nexo-btn-success ms-2" id="btn-exportar"
+                                        title="Genera un PDF con los créditos que estás viendo (respeta los filtros aplicados)">
+                                    <i class="ri-file-pdf-line"></i> Exportar PDF
                                 </button>
                                 <button type="button" class="nexo-btn-info ms-2" id="btn-reporte">
                                     <i class="ri-bar-chart-line"></i> Reporte
@@ -1052,6 +1157,37 @@
                     </div>
                 </div>
                 <div class="card-body">
+                <!-- Filtros rápidos: atajos a los filtros del servidor de más arriba.
+                     No filtran en el navegador, así que los totales y la paginación
+                     siguen siendo los reales. -->
+                <div class="creditos-toolbar">
+                    <button type="button" class="quick-filter-btn active" data-qf-estado="">
+                        <i class="ri-list-check-2"></i> Todos
+                    </button>
+                    <button type="button" class="quick-filter-btn" data-qf-estado="PENDIENTE">
+                        <i class="ri-time-line"></i> Por aprobar
+                    </button>
+                    <button type="button" class="quick-filter-btn" data-qf-estado="ACTIVO">
+                        <i class="ri-play-circle-line"></i> Activos
+                    </button>
+                    <button type="button" class="quick-filter-btn is-riesgo" data-qf-estado="VENCIDO">
+                        <i class="ri-alarm-warning-line"></i> Vencidos
+                    </button>
+                    <span style="width: 1px; height: 20px; background: var(--nexo-border-light);"></span>
+                    <button type="button" class="quick-filter-btn" id="qf-historial"
+                            title="Quita el filtro de fechas: muestra toda la cartera, no solo el mes en curso">
+                        <i class="ri-calendar-2-line"></i> Todo el historial
+                    </button>
+                    <span class="toolbar-sep"></span>
+                    <label class="secundario mb-0" style="font-size: 0.72rem; color: var(--nexo-text-muted);">Filas</label>
+                    <select class="form-select form-select-sm nexo-input" id="filtro-por-pagina" style="width: auto; padding: 0.25rem 1.75rem 0.25rem 0.5rem; font-size: 0.75rem;">
+                        <option value="10">10</option>
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+
                 <div id="loading-creditos" class="nexo-empty-state" style="display: none;">
                     <div class="spinner-border nexo-spinner" role="status">
                         <span class="visually-hidden">Cargando...</span>
@@ -1062,7 +1198,13 @@
                     <div id="contenedor-creditos">
                         <!-- Los créditos se cargarán aquí dinámicamente -->
                     </div>
-                    
+
+                <div class="leyenda-tabla" id="leyenda-creditos" style="display: none;">
+                    <span class="li"><span class="sw" style="background: var(--nexo-error);"></span> Vencido: la deuda ya pasó su fecha de pago</span>
+                    <span class="li"><span class="sw" style="background: var(--nexo-warning);"></span> Cupo por caducar: quedan 3 días o menos para usarlo</span>
+                    <span class="li"><span class="sw" style="background: var(--nexo-gray-500);"></span> Cupo caducado: pasaron los <span id="leyenda-dias-caducidad">10</span> días y ya no se puede usar</span>
+                </div>
+
                 <!-- Paginación NEXO -->
                     <div class="row mt-4">
                     <div class="col-sm-6">
@@ -1298,8 +1440,8 @@
                 <button type="button" class="nexo-btn-secondary" data-bs-dismiss="modal">
                     <i class="ri-close-line me-1"></i> Cerrar
                 </button>
-                <button type="button" class="nexo-btn-success" onclick="exportarReporte()">
-                    <i class="ri-file-excel-line me-1"></i> Exportar Excel
+                <button type="button" class="nexo-btn-success" onclick="exportarReporte(this)">
+                    <i class="ri-file-pdf-line me-1"></i> Exportar PDF
                 </button>
                 <button type="button" class="nexo-btn-info" onclick="imprimirReporte()">
                     <i class="ri-printer-line me-1"></i> Imprimir
@@ -1671,10 +1813,25 @@ $(document).ready(function() {
     let currentPage = 1;
     let totalPages = 1;
     let creditosData = [];
-    
+    let perPage = 25;
+
+    // Días que dura el cupo aprobado sin usar antes de caducar (regla del dueño:
+    // "si queda un cupo sin usar y pasan 10 días no debería poder usarlo").
+    // El valor real lo manda el backend por crédito; esto es solo el respaldo
+    // para pintar la pantalla si la respuesta todavía no trae el dato.
+    const CADUCIDAD_DIAS_CUPO = 10;
+    const CADUCIDAD_DIAS_AVISO = 3;   // a partir de aquí se pinta "por caducar"
+    // Casi todos los cupos sin usar son vueltos de $10–$30 (el POS no puede
+    // gastar el último peso). El dato se muestra igual, pero la fila solo se
+    // resalta cuando queda un cupo que de verdad alcanza para comprar algo.
+    const CADUCIDAD_MONTO_RELEVANTE = 1000;
+
     // Inicializar componentes
     initializeDatePickers();
     setFiltrosMesActual();
+    sincronizarFiltrosRapidos();
+    $('#leyenda-dias-caducidad').text(CADUCIDAD_DIAS_CUPO);
+    $('#filtro-por-pagina').val(String(perPage));
     loadTrabajadores();
     loadEstadisticas();
     loadCreditos();
@@ -1734,6 +1891,7 @@ $(document).ready(function() {
         limpiarCampoFecha('#fecha-inicio');
         limpiarCampoFecha('#fecha-fin');
         $('#filtro-estado').val('VENCIDO');
+        sincronizarFiltrosRapidos();
         currentPage = 1;
         loadCreditos();
         loadEstadisticas();
@@ -1753,11 +1911,61 @@ $(document).ready(function() {
     }
     
     $('#btn-exportar').click(function() {
-        exportarCreditos();
+        exportarCreditos(this);
     });
-    
+
     $('#btn-reporte').click(function() {
         abrirModalReporte();
+    });
+
+    // ---- Filtros rápidos de la tabla -------------------------------------
+    // Son atajos al <select> de estado: el filtrado lo sigue haciendo el
+    // servidor, así que el contador de registros y la paginación no mienten.
+    $('.quick-filter-btn[data-qf-estado]').click(function() {
+        const estado = $(this).data('qf-estado') || '';
+        $('#filtro-estado').val(estado);
+        sincronizarFiltrosRapidos();
+        currentPage = 1;
+        loadCreditos();
+        loadEstadisticas();
+    });
+
+    // "Todo el historial": la pantalla arranca filtrada al mes en curso y eso
+    // esconde la deuda vieja, que es justamente la que hay que cobrar.
+    $('#qf-historial').click(function() {
+        const activo = $(this).hasClass('active');
+        if (activo) {
+            setFiltrosMesActual();
+        } else {
+            limpiarCampoFecha('#fecha-inicio');
+            limpiarCampoFecha('#fecha-fin');
+        }
+        sincronizarFiltrosRapidos();
+        currentPage = 1;
+        loadCreditos();
+        loadEstadisticas();
+    });
+
+    $('#filtro-por-pagina').change(function() {
+        perPage = parseInt($(this).val(), 10) || 25;
+        currentPage = 1;
+        loadCreditos();
+    });
+
+    // Mantiene los chips en sintonía con los filtros "grandes" de arriba
+    // (se pueden cambiar por cualquiera de los dos caminos).
+    function sincronizarFiltrosRapidos() {
+        const estadoActual = $('#filtro-estado').val() || '';
+        $('.quick-filter-btn[data-qf-estado]').each(function() {
+            const propio = $(this).data('qf-estado') || '';
+            $(this).toggleClass('active', propio === estadoActual);
+        });
+        const sinFechas = !$('#fecha-inicio').val() && !$('#fecha-fin').val();
+        $('#qf-historial').toggleClass('active', sinFechas);
+    }
+
+    $('#filtro-estado').on('change', function() {
+        sincronizarFiltrosRapidos();
     });
     
     $('#form-ajustar-monto').submit(function(e) {
@@ -2461,22 +2669,12 @@ $(document).ready(function() {
         $('#loading-creditos').show();
         $('#contenedor-creditos').hide();
         
-        const filtros = {
+        // Mismos filtros que se le mandan al PDF (filtrosActuales) + paginación
+        const filtros = Object.assign({
             page: currentPage,
-            per_page: 10,
-            fecha_inicio: $('#fecha-inicio').val(),
-            fecha_fin: $('#fecha-fin').val(),
-            estado: $('#filtro-estado').val(),
-            trabajador_id: $('#filtro-trabajador').val(),
-            tipo_credito: $('#filtro-tipo').val(),
-            numero_credito: $('#filtro-numero').val(),
-            trabajador_texto: $('#filtro-trabajador-texto').val(),
-            sucursal_texto: $('#filtro-sucursal-texto').val(),
-            alcance: $('#filtro-alcance').length ? $('#filtro-alcance').val() : 'actual',
-            saldo_min: $('#filtro-saldo-min').val(),
-            saldo_max: $('#filtro-saldo-max').val()
-        };
-        
+            per_page: perPage
+        }, filtrosActuales());
+
         $.ajax({
             url: '/app/api/creditos/cargar/',
             type: 'POST',
@@ -2502,9 +2700,151 @@ $(document).ready(function() {
             });
     }
     
+    // ============================================================
+    // CADUCIDAD DEL CUPO SIN USAR
+    // Regla del negocio: el cupo aprobado que nadie ocupa caduca a los
+    // CADUCIDAD_DIAS_CUPO días y deja de poder usarse en el POS.
+    // El dueño de la regla es el backend: si la respuesta ya trae el dato
+    // se usa ese; si todavía no lo trae, se calcula aquí para no dejar la
+    // pantalla ciega. NO aplica a los créditos importados (CP-…): en esos
+    // el monto ya es mercadería retirada, no un cupo por gastar.
+    // ============================================================
+    function parseFechaCL(texto) {
+        if (!texto) return null;
+        const soloFecha = String(texto).trim().split(' ')[0];
+        const partes = soloFecha.split('/');
+        if (partes.length !== 3) return null;
+        const dia = parseInt(partes[0], 10);
+        const mes = parseInt(partes[1], 10) - 1;
+        const anio = parseInt(partes[2], 10);
+        if (Number.isNaN(dia) || Number.isNaN(mes) || Number.isNaN(anio)) return null;
+        return new Date(anio, mes, dia);
+    }
+
+    // Días transcurridos desde `fecha` hasta hoy (positivo = fecha pasada)
+    function diasDesde(fecha) {
+        if (!fecha) return null;
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        const base = new Date(fecha.getTime());
+        base.setHours(0, 0, 0, 0);
+        return Math.round((hoy - base) / 86400000);
+    }
+
+    function primerNumero(valores) {
+        for (let i = 0; i < valores.length; i++) {
+            const v = valores[i];
+            if (v !== undefined && v !== null && v !== '' && !Number.isNaN(Number(v))) {
+                return Number(v);
+            }
+        }
+        return null;
+    }
+
+    // Cupo que todavía no se gasta. El backend lo calcula como
+    // otorgado - consumido en POS (`cupo_remanente`), que es lo correcto;
+    // `saldo_pendiente` mezcla los abonos y solo se usa como respaldo.
+    function cupoSinUsarDe(credito) {
+        const remanente = primerNumero([credito.cupo_remanente]);
+        const base = remanente !== null ? remanente : Number(credito.saldo_pendiente) || 0;
+        return Math.max(base, 0);
+    }
+
+    function infoCaducidadCupo(credito) {
+        const cupoSinUsar = cupoSinUsarDe(credito);
+        const estadoVivo = credito.estado === 'ACTIVO' || credito.estado === 'APROBADO';
+
+        // Los importados (CP-…) no tienen cupo por gastar: su monto ya salió en
+        // mercadería. El backend los marca caducado con motivo LEGACY; acá no se
+        // muestra chip para no llenar la tabla de avisos que no accionan nada.
+        if (credito.es_legacy || credito.motivo_caducidad === 'LEGACY') return null;
+        if (!estadoVivo || cupoSinUsar <= 0) return null;
+
+        const diasVigencia = primerNumero([credito.dias_vigencia_cupo]) || CADUCIDAD_DIAS_CUPO;
+        const backendInforma = typeof credito.cupo_caducado === 'boolean' ||
+                               credito.dias_para_caducar !== undefined;
+
+        let diasRestantes;
+        let caducado;
+
+        if (backendInforma) {
+            // El backend manda la regla (plazo configurable, renovación con cada
+            // uso, tope en la fecha de vencimiento). No se recalcula acá.
+            caducado = credito.cupo_caducado === true;
+            diasRestantes = primerNumero([credito.dias_para_caducar]);
+            if (diasRestantes === null) {
+                if (!caducado) return null;   // sin plazo definido: nada que avisar
+                diasRestantes = 0;
+            }
+        } else {
+            // Respaldo si la respuesta todavía no trae la caducidad.
+            const inicio = parseFechaCL(credito.fecha_aprobacion) || parseFechaCL(credito.fecha_solicitud);
+            const transcurridos = diasDesde(inicio);
+            if (transcurridos === null) return null;
+            diasRestantes = diasVigencia - transcurridos;
+            caducado = diasRestantes < 0;
+        }
+
+        return {
+            monto: cupoSinUsar,
+            dias: diasRestantes,
+            caducado: !!caducado,
+            porCaducar: !caducado && diasRestantes <= CADUCIDAD_DIAS_AVISO,
+            diasVigencia: diasVigencia,
+            fechaLimite: credito.fecha_limite_uso || null,
+            mensaje: credito.mensaje_caducidad || ''
+        };
+    }
+
+    function chipCaducidad(info) {
+        if (!info) return '';
+        if (info.caducado) {
+            const hace = Math.abs(info.dias);
+            const titulo = info.mensaje || 'El cupo sin usar caducó: ya no se puede ocupar en el POS';
+            return `<span class="chip-estado-cupo caducado" title="${escapeHtml(titulo)}">
+                        <i class="ri-lock-line"></i> Caducado${hace > 0 ? ` hace ${hace} d` : ''}
+                    </span>`;
+        }
+        const hasta = info.fechaLimite
+            ? `Se puede usar hasta el ${info.fechaLimite}.`
+            : `Los cupos sin usar caducan a los ${info.diasVigencia} días.`;
+        if (info.porCaducar) {
+            const texto = info.dias <= 0 ? 'Caduca hoy' : `Caduca en ${info.dias} d`;
+            return `<span class="chip-estado-cupo por-caducar" title="${escapeHtml(hasta)}">
+                        <i class="ri-alarm-warning-line"></i> ${texto}
+                    </span>`;
+        }
+        return `<span class="chip-estado-cupo vigente" title="${escapeHtml(hasta)}">
+                    ${info.dias} d para usarlo
+                </span>`;
+    }
+
+    // Último uso del crédito (boleta + sucursal + fecha). Antes había que abrir
+    // el detalle para ver con qué boleta se gastó el crédito.
+    function celdaUltimoUso(credito) {
+        const usos = credito.usos || [];
+        if (!usos.length) {
+            return '<span class="secundario">Sin usos</span>';
+        }
+        const ultimo = usos[usos.length - 1];
+        const boleta = formatBoleta(ultimo.numero_boleta);
+        const detalle = usos.map(function(u) {
+            const b = formatBoleta(u.numero_boleta);
+            return `${u.fecha_pago} · ${b || 'sin boleta'} · ${u.sucursal_cobro || 'sin sucursal'} · ${formatCurrency(u.monto_pago)} (${u.metodo_pago || ''})`;
+        }).join('\n');
+
+        return `
+            <div class="principal" title="${escapeHtml(detalle)}">${escapeHtml(boleta || 'Sin boleta')}</div>
+            <div class="secundario" title="${escapeHtml(detalle)}">
+                ${escapeHtml(ultimo.fecha_pago || '')}${ultimo.sucursal_cobro ? ' · ' + escapeHtml(ultimo.sucursal_cobro) : ''}
+                ${usos.length > 1 ? `<span class="fw-semibold"> · +${usos.length - 1}</span>` : ''}
+            </div>
+        `;
+    }
+
     function renderCreditos(creditos) {
         let html = '';
-        
+
         if (creditos.length === 0) {
             html = `
                 <div class="nexo-empty-state">
@@ -2513,21 +2853,40 @@ $(document).ready(function() {
                     <p>Intenta ajustar los filtros de búsqueda o crea un nuevo crédito</p>
                 </div>
             `;
+            $('#leyenda-creditos').hide();
         } else {
+            // Totales de lo que se está viendo (una página), etiquetado como tal
+            // para no confundirlo con la cartera total de más arriba.
+            const totales = creditos.reduce(function(acc, c) {
+                acc.cupo += Number(c.monto_aprobado || c.monto_solicitado || 0);
+                acc.consumido += Number(c.consumo_pos !== undefined ? c.consumo_pos : c.monto_pagado || 0);
+                acc.sinUsar += cupoSinUsarDe(c);
+                acc.deuda += Number(c.deuda || 0);
+                return acc;
+            }, { cupo: 0, consumido: 0, sinUsar: 0, deuda: 0 });
+
+            // El plazo de caducidad es configurable en el servidor: la leyenda
+            // muestra el que realmente está rigiendo, no un número escrito acá.
+            const vigencia = creditos
+                .map(function(c) { return primerNumero([c.dias_vigencia_cupo]); })
+                .find(function(v) { return v !== null; });
+            if (vigencia) {
+                $('#leyenda-dias-caducidad').text(vigencia);
+            }
+
             html = `
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle">
+                <div class="table-responsive creditos-scroll">
+                    <table class="table table-hover align-middle tabla-creditos">
                         <thead>
                             <tr>
                                 <th>Crédito</th>
                                 <th>Beneficiario</th>
-                                <th>Sucursal</th>
-                                <th>Fecha</th>
-                                <th>Vencimiento</th>
-                                <th class="text-end">Cupo / Monto</th>
-                                <th class="text-end" title="Consumido en el POS con este crédito">Consumido</th>
-                                <th class="text-end" title="Cupo aprobado que aún no se usa (NO es deuda)">Cupo sin usar</th>
-                                <th class="text-end" title="Lo que realmente se debe hoy">Deuda</th>
+                                <th>Solicitud / Vencimiento</th>
+                                <th class="num" title="Cupo otorgado (monto aprobado o, si no hay, el solicitado)">Cupo</th>
+                                <th class="num" title="Consumido en el POS con este crédito">Consumido</th>
+                                <th class="num" title="Cupo aprobado que aún no se usa (NO es deuda) y su plazo para usarlo">Cupo sin usar</th>
+                                <th class="num" title="Lo que realmente se debe hoy">Deuda</th>
+                                <th title="Última boleta con la que se ocupó el crédito">Último uso</th>
                                 <th>Estado</th>
                                 <th class="text-end">Acciones</th>
                             </tr>
@@ -2535,52 +2894,77 @@ $(document).ready(function() {
                         <tbody>
                             ${creditos.map(credito => renderCreditoRow(credito)).join('')}
                         </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="3">Totales de esta página (${creditos.length} ${creditos.length === 1 ? 'crédito' : 'créditos'})</td>
+                                <td class="num">${formatCurrency(totales.cupo)}</td>
+                                <td class="num">${formatCurrency(totales.consumido)}</td>
+                                <td class="num">${formatCurrency(totales.sinUsar)}</td>
+                                <td class="num" style="color: var(--nexo-error);">${formatCurrency(totales.deuda)}</td>
+                                <td colspan="3"></td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             `;
+            $('#leyenda-creditos').css('display', 'flex');
         }
-        
+
         $('#contenedor-creditos').html(html);
     }
-    
+
     function renderCreditoRow(credito) {
         const estadoClass = credito.estado.toLowerCase();
         const montoBase = credito.monto_aprobado || credito.monto_solicitado;
-        const fechaMes = formatMonthLabel(credito.fecha_solicitud);
+        const consumido = credito.consumo_pos !== undefined ? credito.consumo_pos : credito.monto_pagado;
+        const cupoSinUsar = cupoSinUsarDe(credito);
+        const deuda = credito.deuda !== undefined ? credito.deuda : 0;
+        const caducidad = infoCaducidadCupo(credito);
         const sucursalLabel = credito.sucursal || 'Sin sucursal';
+
+        // Prioridad del semáforo: primero la plata vencida, después el cupo
+        // que se está por perder (solo si el cupo es relevante, ver constante).
+        const caducidadRelevante = caducidad && caducidad.monto >= CADUCIDAD_MONTO_RELEVANTE;
+        let claseFila = '';
+        if (credito.vencido_real) {
+            claseFila = 'fila-vencida';
+        } else if (caducidadRelevante && caducidad.caducado) {
+            claseFila = 'fila-caducada';
+        } else if (caducidadRelevante && caducidad.porCaducar) {
+            claseFila = 'fila-por-caducar';
+        }
+
         return `
-            <tr>
+            <tr class="${claseFila}">
                 <td>
-                    <div class="fw-semibold text-primary">${credito.numero_credito}</div>
-                    <div class="text-muted small">${credito.tipo_credito_display}</div>
-                </td>
-                <td>
-                    <div class="fw-semibold">${credito.trabajador.nombre}</div>
-                    <div class="text-muted small">${credito.trabajador.rut || ''}</div>
-                </td>
-                <td title="${credito.sucursal_direccion || ''}">
-                    <div>${sucursalLabel}</div>
-                    <div class="text-muted small">${credito.sucursal_direccion || ''}</div>
+                    <div class="principal" style="color: var(--nexo-primary);">${escapeHtml(credito.numero_credito)}</div>
+                    <div class="secundario">${escapeHtml(credito.tipo_credito_display)}${credito.es_legacy ? ' · Importado' : ''}</div>
                 </td>
                 <td>
-                    <div>${credito.fecha_solicitud}</div>
-                    <div class="text-muted small">${fechaMes}</div>
+                    <div class="principal">${escapeHtml(credito.trabajador.nombre)}</div>
+                    <div class="secundario" title="${escapeHtml(credito.sucursal_direccion || '')}">
+                        ${escapeHtml(credito.trabajador.rut || 's/rut')} · ${escapeHtml(sucursalLabel)}
+                    </div>
                 </td>
                 <td>
-                    <div>${credito.fecha_vencimiento || '-'}</div>
-                    ${credito.dias_vencido > 0
-                        ? `<div class="small" style="color: var(--nexo-error); font-weight: 600;">Vencido hace ${credito.dias_vencido} d</div>`
-                        : `<div class="text-muted small">Vigente</div>`}
+                    <div class="principal">${escapeHtml(String(credito.fecha_solicitud).split(' ')[0])}</div>
+                    <div class="secundario">
+                        Vence ${escapeHtml(credito.fecha_vencimiento || '-')}
+                        ${credito.dias_vencido > 0
+                            ? `<span class="chip-mora"> · vencido hace ${credito.dias_vencido} d</span>`
+                            : ''}
+                    </div>
                 </td>
-                <td class="text-end">${formatCurrency(montoBase)}</td>
-                <td class="text-end">${formatCurrency(credito.consumo_pos !== undefined ? credito.consumo_pos : credito.monto_pagado)}</td>
-                <td class="text-end text-muted">${formatCurrency(Math.max(credito.saldo_pendiente, 0))}</td>
-                <td class="text-end fw-semibold" style="color: ${credito.deuda > 0 ? 'var(--nexo-error)' : 'var(--nexo-text-muted)'};">
-                    ${formatCurrency(credito.deuda !== undefined ? credito.deuda : 0)}
+                <td class="num">${formatCurrency(montoBase)}</td>
+                <td class="num">${formatCurrency(consumido)}</td>
+                <td class="num">
+                    <div class="${cupoSinUsar > 0 ? '' : 'monto-neutro'}">${formatCurrency(cupoSinUsar)}</div>
+                    ${chipCaducidad(caducidad)}
                 </td>
+                <td class="num ${deuda > 0 ? 'monto-deuda' : 'monto-neutro'}">${formatCurrency(deuda)}</td>
+                <td>${celdaUltimoUso(credito)}</td>
                 <td>
-                    <span class="nexo-badge nexo-badge-${estadoClass}">${credito.estado_display}</span>
-                    ${credito.es_legacy ? '<div class="text-muted small" title="Importado del sistema anterior: el monto ya es mercadería retirada">Importado</div>' : ''}
+                    <span class="nexo-badge nexo-badge-${estadoClass}">${escapeHtml(credito.estado_display)}</span>
                 </td>
                 <td class="text-end">
                     <div class="dropdown">
@@ -2613,7 +2997,7 @@ $(document).ready(function() {
                                     <i class="ri-play-line me-2"></i>Activar
                                 </a></li>
                             ` : ''}
-                            ${credito.deuda > 0 ? `
+                            ${deuda > 0 ? `
                                 <li><a class="dropdown-item text-warning" href="#" onclick="registrarPagoModal(${credito.id})">
                                     <i class="ri-money-dollar-circle-line me-2"></i>Registrar Cobro
                                 </a></li>
@@ -2660,8 +3044,10 @@ $(document).ready(function() {
         
         $('#paginacion').html(html);
         
-        const desde = (currentPage - 1) * 10 + 1;
-        const hasta = Math.min(currentPage * 10, pagination.total_items);
+        // El tamaño de página ahora lo elige el usuario: si se deja fijo en 10
+        // el "Mostrando X a Y" queda mintiendo.
+        const desde = pagination.total_items === 0 ? 0 : (currentPage - 1) * perPage + 1;
+        const hasta = Math.min(currentPage * perPage, pagination.total_items);
         $('#info-desde').text(desde);
         $('#info-hasta').text(hasta);
         $('#info-total').text(pagination.total_items);
@@ -2838,6 +3224,7 @@ $(document).ready(function() {
     function limpiarFiltros() {
         $('#form-filtros')[0].reset();
         setFiltrosMesActual();
+        sincronizarFiltrosRapidos();
         currentPage = 1;
         loadCreditos();
         loadEstadisticas();
@@ -3181,9 +3568,18 @@ $(document).ready(function() {
         window.open(url, '_blank', 'width=350,height=650');
     };
     
-    // ============ EXPORTAR CREDITOS ============
-    function exportarCreditos() {
-        const filtros = {
+    // ============ EXPORTAR A PDF ============
+    // El PDF lo arma el servidor (ReportLab) en /app/api/creditos/exportar-pdf/.
+    // Antes se generaba un CSV aquí en el navegador: no se podía imprimir ni
+    // enviar tal cual y dependía de traerse todos los créditos por AJAX.
+    // Ahora se le pasan al endpoint LOS MISMOS filtros que están aplicados en el
+    // listado, para que el PDF sea exactamente lo que el usuario está viendo.
+    const URL_EXPORTAR_PDF = '/app/api/creditos/exportar-pdf/';
+
+    // Único lugar donde se leen los filtros de la pantalla. Lo usan el listado
+    // y la exportación, así que no pueden desincronizarse.
+    function filtrosActuales() {
+        return {
             fecha_inicio: $('#fecha-inicio').val(),
             fecha_fin: $('#fecha-fin').val(),
             estado: $('#filtro-estado').val(),
@@ -3196,40 +3592,126 @@ $(document).ready(function() {
             saldo_min: $('#filtro-saldo-min').val(),
             saldo_max: $('#filtro-saldo-max').val()
         };
-        
-        // Construir URL con parámetros
-        let params = new URLSearchParams();
-        Object.keys(filtros).forEach(key => {
-            if (filtros[key]) params.append(key, filtros[key]);
+    }
+
+    function construirQueryFiltros(filtros) {
+        const params = new URLSearchParams();
+        Object.keys(filtros).forEach(function(key) {
+            const valor = filtros[key];
+            if (valor !== undefined && valor !== null && String(valor).trim() !== '') {
+                params.append(key, valor);
+            }
         });
-        
-        // Mostrar loading
+        return params.toString();
+    }
+
+    // El endpoint puede responder JSON (sin datos / sin permiso / error) en vez
+    // del PDF: se intenta rescatar el mensaje para mostrarlo tal cual.
+    function extraerMensajeError(texto) {
+        if (!texto) return '';
+        try {
+            const data = JSON.parse(texto);
+            return data.error || data.detail || data.message || '';
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function nombreArchivoPdf(respuesta) {
+        const disposicion = respuesta.headers.get('Content-Disposition') || '';
+        const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposicion);
+        if (match && match[1]) {
+            try {
+                return decodeURIComponent(match[1]);
+            } catch (e) {
+                return match[1];
+            }
+        }
+        return `Creditos_${new Date().toISOString().slice(0, 10)}.pdf`;
+    }
+
+    // Se descarga con fetch (y no con window.open) para poder detectar el fallo
+    // y avisarlo: la cartera completa son ~1.000 créditos y el PDF tarda.
+    async function descargarPdfCreditos(filtros, boton) {
+        const $btn = boton ? $(boton) : $();
+        const htmlOriginal = $btn.length ? $btn.html() : '';
+        if ($btn.length) {
+            $btn.prop('disabled', true).html(
+                '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Generando PDF...'
+            );
+        }
+
         Swal.fire({
-            title: 'Exportando...',
-            html: 'Generando archivo Excel',
+            title: 'Generando PDF',
+            html: 'Armando el reporte con los filtros aplicados...',
             allowOutsideClick: false,
             didOpen: () => {
                 Swal.showLoading();
             }
         });
-        
-        // Obtener todos los créditos para exportar
-        $.ajax({
-            url: '/app/api/creditos/cargar/',
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({...filtros, per_page: 9999}),
-            success: function(response) {
-                if (response.success) {
-                    generateExcelFile(response.creditos);
-                } else {
-                    Swal.fire('Error', response.error, 'error');
-                }
-            },
-            error: function() {
-                Swal.fire('Error', 'Error al obtener datos para exportar', 'error');
+
+        try {
+            const qs = construirQueryFiltros(filtros);
+            const respuesta = await fetch(URL_EXPORTAR_PDF + (qs ? '?' + qs : ''), {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+
+            const contentType = (respuesta.headers.get('Content-Type') || '').toLowerCase();
+
+            if (!respuesta.ok) {
+                const texto = await respuesta.text();
+                throw new Error(
+                    extraerMensajeError(texto) ||
+                    `El servidor respondió ${respuesta.status} ${respuesta.statusText || ''}`.trim()
+                );
             }
-        });
+
+            const blob = await respuesta.blob();
+
+            if (contentType.indexOf('pdf') === -1) {
+                const texto = await blob.text();
+                throw new Error(extraerMensajeError(texto) || 'El servidor no devolvió un PDF.');
+            }
+            if (!blob.size) {
+                throw new Error('El PDF llegó vacío. Revisa los filtros e inténtalo de nuevo.');
+            }
+
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = nombreArchivoPdf(respuesta);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            // El blob debe seguir vivo mientras el navegador inicia la descarga
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+            Swal.fire({
+                icon: 'success',
+                title: 'PDF generado',
+                html: '<small style="color: var(--nexo-text-muted);">La descarga ya empezó. El PDF contiene los créditos filtrados.</small>',
+                timer: 2500,
+                showConfirmButton: false
+            });
+        } catch (error) {
+            console.error('[Créditos] Error al exportar PDF:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'No se pudo generar el PDF',
+                text: error && error.message ? error.message : 'Error inesperado al exportar.',
+                confirmButtonColor: '#0066FF'
+            });
+        } finally {
+            if ($btn.length) {
+                $btn.prop('disabled', false).html(htmlOriginal);
+            }
+        }
+    }
+
+    function exportarCreditos(boton) {
+        descargarPdfCreditos(filtrosActuales(), boton);
     }
     
     // Formatea una referencia de pago como número de boleta "BE-<número>".
@@ -3243,108 +3725,6 @@ $(document).ready(function() {
         return `BE-${digits}`;
     }
 
-    function generateExcelFile(creditos) {
-        if (creditos.length === 0) {
-            Swal.fire('Sin datos', 'No hay créditos para exportar', 'info');
-            return;
-        }
-
-        // Reporte resumido + columnas de cobranza
-        const headers = [
-            'N° Crédito',
-            'Beneficiario',
-            'RUT Beneficiario',
-            'Empresa Beneficiario',
-            'Monto Usado',
-            'Mes Solicitud',
-            'Sucursal Uso Ticket',
-            'Número Boleta',
-            'Cupo Aprobado',
-            'Consumido POS',
-            'Abonos',
-            'Deuda',
-            'Vencimiento',
-            'Días Vencido',
-            'Estado',
-            'Origen'
-        ];
-
-        // Crear contenido CSV con BOM para UTF-8
-        let csvRows = [];
-        csvRows.push(headers.join(';'));
-
-        creditos.forEach(c => {
-            const usos = c.usos || [];
-
-            // Sucursal Uso: "alias - dirección" de cada uso, sin duplicados
-            const sucursalesSet = new Set();
-            usos.forEach(u => {
-                if (u.sucursal_cobro) {
-                    const dir = u.sucursal_direccion ? ` - ${u.sucursal_direccion}` : '';
-                    sucursalesSet.add(`${u.sucursal_cobro}${dir}`);
-                }
-            });
-            const sucursalUso = Array.from(sucursalesSet).join(' | ');
-
-            // Número Boleta: "BE-<número>" de cada uso, sin duplicados
-            const boletasSet = new Set();
-            usos.forEach(u => {
-                const b = formatBoleta(u.numero_boleta);
-                if (b) boletasSet.add(b);
-            });
-            const numeroBoleta = Array.from(boletasSet).join(', ');
-
-            const row = [
-                c.numero_credito || '',
-                c.trabajador?.nombre || '',
-                c.trabajador?.rut || '',
-                c.trabajador?.empresa || '',
-                c.monto_pagado || 0,
-                formatMonthLabel(c.fecha_solicitud),
-                sucursalUso,
-                numeroBoleta,
-                c.monto_aprobado || c.monto_solicitado || 0,
-                c.consumo_pos !== undefined ? c.consumo_pos : 0,
-                c.abonos_reales !== undefined ? c.abonos_reales : 0,
-                c.deuda !== undefined ? c.deuda : 0,
-                c.fecha_vencimiento || '',
-                c.dias_vencido || 0,
-                c.estado_display || '',
-                c.origen_registro || ''
-            ];
-            // Escapar comillas y wrap en comillas si hay punto y coma
-            csvRows.push(row.map(field => {
-                const str = String(field).replace(/"/g, '""');
-                return `"${str}"`;
-            }).join(';'));
-        });
-
-        // Crear Blob con BOM para UTF-8
-        const BOM = '\uFEFF';
-        const csvContent = BOM + csvRows.join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        
-        // Descargar archivo
-        const link = document.createElement("a");
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", `Creditos_${new Date().toISOString().slice(0,10)}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
-        Swal.fire({
-            icon: 'success',
-            title: 'Exportación Exitosa',
-            html: `
-                <p>Se exportaron <strong>${creditos.length}</strong> créditos</p>
-                <small style="color: var(--nexo-text-muted);">El archivo se puede abrir en Excel</small>
-            `,
-            timer: 3000,
-            showConfirmButton: false
-        });
-    }
     
     // ============ REPORTE ============
     function abrirModalReporte() {
@@ -3560,12 +3940,18 @@ $(document).ready(function() {
         window.reporteData = creditos;
     }
     
-    window.exportarReporte = function() {
+    // El modal de reporte solo filtra por rango de fechas, así que exporta el
+    // mismo PDF del servidor pero con SUS fechas (no las del listado de atrás).
+    window.exportarReporte = function(boton) {
         if (!window.reporteData || window.reporteData.length === 0) {
             showError('No hay datos para exportar');
             return;
         }
-        generateExcelFile(window.reporteData);
+        descargarPdfCreditos({
+            fecha_inicio: $('#reporte-fecha-inicio').val(),
+            fecha_fin: $('#reporte-fecha-fin').val(),
+            alcance: $('#filtro-alcance').length ? $('#filtro-alcance').val() : 'actual'
+        }, boton);
     };
     
     window.imprimirReporte = function() {

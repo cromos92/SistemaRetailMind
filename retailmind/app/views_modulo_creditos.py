@@ -17,6 +17,7 @@ from django.db import transaction
 import json
 import logging
 import re
+from datetime import date, timedelta
 from decimal import Decimal
 
 logger = logging.getLogger('app')
@@ -130,6 +131,196 @@ def _usuario_puede_acceder_credito(request, credito):
 # en los nativos es el cupo que todavía NO se ha usado. La cartera se calcula
 # aquí de forma explícita para no sumar peras con manzanas.
 METODOS_CONSUMO_CREDITO = ('CREDITO_TRABAJADOR', 'CREDITO_EXTERNO')
+
+
+# ========== CADUCIDAD DEL CUPO SIN USAR ==========
+#
+# Regla de negocio pedida por gerencia: "si queda un cupo sin usar y pasan 10
+# días no debería poder usarlo".
+#
+# DOMINIO (verificado contra los datos de producción):
+#
+#  * "USAR" el cupo = cerrar una venta en el POS cobrada con el método
+#    CREDITO_TRABAJADOR / CREDITO_EXTERNO. Eso hace que el POS llame a
+#    `usar_credito_en_venta`, que deja un `PagoCreditoTrabajador` con ese
+#    método, la sucursal de la venta (Sucursal Uso) y la boleta en
+#    `referencia_pago` (Número Boleta). Ese registro ES el uso; no hay otro.
+#
+#  * EL RELOJ ARRANCA cuando el cupo queda DISPONIBLE, no cuando se solicita:
+#    `fecha_aprobacion`. En este ERP `crear_credito_trabajador` deja el crédito
+#    ACTIVO y auto-aprobado, así que aprobación y solicitud coinciden; pero si
+#    mañana se reactiva el flujo de aprobación manual, contar desde la solicitud
+#    castigaría al beneficiario por la demora de quien aprueba. Si por datos
+#    migrados no hay `fecha_aprobacion`, se cae a `fecha_solicitud`.
+#
+#  * CRÉDITO PARCIALMENTE USADO: cada consumo REINICIA el plazo (el cupo está
+#    demostradamente vivo y suele gastarse en varias compras). Caduca solamente
+#    el REMANENTE; la deuda ya generada por lo consumido NO se toca y el crédito
+#    NO cambia de estado, porque `_calcular_cartera_creditos` sólo mira
+#    ACTIVO/APROBADO/PAGADO y cancelarlo borraría plata por cobrar de la cartera.
+#
+#  * TOPE DURO: nunca se puede usar el cupo después de `fecha_vencimiento`.
+#    `validar_codigo_credito` ya lo validaba, pero `usar_credito_en_venta` NO:
+#    el POS podía consumir un crédito vencido saltándose la validación previa.
+#
+#  * CRÉDITOS IMPORTADOS (CP-*): su monto NO es cupo, es mercadería ya retirada
+#    (deuda). Sin embargo `saldo_pendiente` los muestra con "saldo disponible",
+#    o sea que el POS aceptaría gastarlos: 993 créditos por $84,7 MM. Se bloquea
+#    siempre su uso en el POS, sin importar fechas ni configuración.
+CREDITOS_DIAS_VIGENCIA_CUPO_DEFAULT = 10
+
+
+def _dias_vigencia_cupo():
+    """Días que un cupo sigue disponible. Configurable por entorno."""
+    import os
+    from django.conf import settings as _settings
+
+    valor = os.environ.get('CREDITOS_DIAS_VIGENCIA_CUPO')
+    if valor in (None, ''):
+        valor = getattr(_settings, 'CREDITOS_DIAS_VIGENCIA_CUPO', CREDITOS_DIAS_VIGENCIA_CUPO_DEFAULT)
+    try:
+        dias = int(valor)
+    except (TypeError, ValueError):
+        logger.warning('CREDITOS_DIAS_VIGENCIA_CUPO invalido (%r), se usa %s',
+                       valor, CREDITOS_DIAS_VIGENCIA_CUPO_DEFAULT)
+        return CREDITOS_DIAS_VIGENCIA_CUPO_DEFAULT
+    return dias if dias > 0 else CREDITOS_DIAS_VIGENCIA_CUPO_DEFAULT
+
+
+def _caducidad_renueva_con_uso():
+    """True si cada consumo reinicia el plazo del cupo remanente."""
+    import os
+    from django.conf import settings as _settings
+
+    valor = os.environ.get('CREDITOS_CADUCIDAD_RENUEVA_CON_USO')
+    if valor in (None, ''):
+        valor = getattr(_settings, 'CREDITOS_CADUCIDAD_RENUEVA_CON_USO', True)
+    if isinstance(valor, bool):
+        return valor
+    return str(valor).strip().lower() not in ('0', 'false', 'no', 'off')
+
+
+def _caducidad_aplica_desde():
+    """Fecha desde la cual rige la caducidad (None = rige para todos).
+
+    Permite decidir si la regla se aplica retroactivamente o sólo a los créditos
+    nuevos, sin tocar código: `CREDITOS_CADUCIDAD_DESDE=2026-08-01`.
+    """
+    import os
+    from django.conf import settings as _settings
+
+    valor = os.environ.get('CREDITOS_CADUCIDAD_DESDE')
+    if valor in (None, ''):
+        valor = getattr(_settings, 'CREDITOS_CADUCIDAD_DESDE', None)
+    if not valor:
+        return None
+    if isinstance(valor, date):
+        return valor
+    try:
+        partes = [int(p) for p in str(valor).strip().split('-')]
+        return date(partes[0], partes[1], partes[2])
+    except (ValueError, IndexError):
+        logger.warning('CREDITOS_CADUCIDAD_DESDE invalido (%r), se ignora', valor)
+        return None
+
+
+def _consumo_de_credito(credito):
+    """(total consumido en POS, fecha del último consumo) de un crédito.
+
+    Usa `credito.pagos` ya precargado si existe (prefetch_related) para no
+    disparar una query por crédito dentro del listado.
+    """
+    total = Decimal('0')
+    ultimo = None
+    for pago in credito.pagos.all():
+        if pago.metodo_pago not in METODOS_CONSUMO_CREDITO:
+            continue
+        total += Decimal(str(pago.monto_pago or 0))
+        if pago.fecha_pago and (ultimo is None or pago.fecha_pago > ultimo):
+            ultimo = pago.fecha_pago
+    return total, ultimo
+
+
+def _estado_caducidad_cupo(credito, consumido=None, ultimo_consumo=None, dias=None):
+    """Evalúa la caducidad del cupo remanente de un crédito.
+
+    Devuelve un dict con la decisión y su fundamento. Es una regla CALCULADA
+    (no un campo en la BD): así rige aunque nadie haya corrido el comando de
+    caducidad y sin necesitar una migración.
+    """
+    hoy = timezone.localdate()
+    dias = _dias_vigencia_cupo() if dias is None else dias
+
+    if consumido is None:
+        consumido, ultimo_consumo = _consumo_de_credito(credito)
+    consumido = Decimal(str(consumido or 0))
+
+    otorgado = Decimal(str(credito.monto_aprobado or credito.monto_solicitado or 0))
+    remanente = otorgado - consumido
+
+    base_disponible = None
+    if credito.fecha_aprobacion:
+        base_disponible = timezone.localtime(credito.fecha_aprobacion).date()
+    elif credito.fecha_solicitud:
+        base_disponible = timezone.localtime(credito.fecha_solicitud).date()
+
+    base = base_disponible
+    if _caducidad_renueva_con_uso() and ultimo_consumo and base:
+        base = max(base, ultimo_consumo)
+
+    fecha_limite = (base + timedelta(days=dias)) if base else None
+
+    tope_vencimiento = credito.fecha_vencimiento
+    if fecha_limite and tope_vencimiento and tope_vencimiento < fecha_limite:
+        fecha_limite = tope_vencimiento
+        motivo_tope = 'VENCIMIENTO'
+    else:
+        motivo_tope = 'PLAZO'
+
+    resultado = {
+        'caducado': False,
+        'motivo': None,
+        'mensaje': '',
+        'fecha_limite': fecha_limite,
+        'fecha_base': base,
+        'dias_vigencia': dias,
+        'consumido': float(consumido),
+        'remanente': float(remanente),
+        'dias_para_caducar': (fecha_limite - hoy).days if fecha_limite else None,
+    }
+
+    # Los importados de Laravel no son cupo: su monto ya se retiró en mercadería.
+    if _es_credito_legacy(credito.numero_credito):
+        resultado.update({
+            'caducado': True,
+            'motivo': 'LEGACY',
+            'mensaje': ('Crédito importado del sistema anterior: su monto es deuda '
+                        'ya retirada, no un cupo disponible para comprar.'),
+        })
+        return resultado
+
+    if remanente <= 0:
+        return resultado
+
+    desde = _caducidad_aplica_desde()
+    if desde and base_disponible and base_disponible < desde:
+        resultado['mensaje'] = f'Caducidad no retroactiva (rige desde {desde.strftime("%d/%m/%Y")}).'
+        return resultado
+
+    if fecha_limite and fecha_limite < hoy:
+        dias_pasados = (hoy - fecha_limite).days
+        resultado.update({
+            'caducado': True,
+            'motivo': motivo_tope,
+            'mensaje': (
+                f'El cupo caducó el {fecha_limite.strftime("%d/%m/%Y")} '
+                f'(hace {dias_pasados} día{"s" if dias_pasados != 1 else ""}). '
+                + ('Superó la fecha de vencimiento del crédito.' if motivo_tope == 'VENCIMIENTO'
+                   else f'Los cupos sin usar caducan a los {dias} días.')
+            ),
+        })
+    return resultado
+
 
 BUCKETS_ANTIGUEDAD = (
     ('por_vencer', 'Por vencer'),
@@ -502,132 +693,137 @@ def crear_credito_trabajador(request):
         }, status=500)
 
 
+def _normalizar_fecha_filtro(fecha_str):
+    """Normaliza DD/MM/AAAA o DD-MM-AAAA a AAAA-MM-DD."""
+    if not fecha_str:
+        return None
+    fecha_str = str(fecha_str).strip()
+    if '/' in fecha_str:
+        partes = fecha_str.split('/')
+    elif '-' in fecha_str:
+        partes = fecha_str.split('-')
+    else:
+        return fecha_str
+    if len(partes) != 3:
+        return fecha_str
+    if len(partes[0]) == 2:
+        return f"{partes[2]}-{partes[1]}-{partes[0]}"
+    return fecha_str
+
+
+# Filtros que acepta el listado. El PDF usa EXACTAMENTE los mismos (por GET),
+# para que el papel sea lo que el usuario está viendo en pantalla.
+FILTROS_CREDITOS = (
+    'fecha_inicio', 'fecha_fin', 'estado', 'trabajador_id', 'tipo_credito',
+    'numero_credito', 'trabajador_texto', 'sucursal_texto', 'saldo_min',
+    'saldo_max', 'alcance',
+)
+
+
+def _queryset_creditos_filtrado(request, data):
+    """Arma el queryset de créditos aplicando alcance + filtros de pantalla.
+
+    Devuelve (queryset, alcance_info, error). `error` es un string listo para
+    devolver al cliente; si viene distinto de None, queryset es None.
+    """
+    alcance = data.get('alcance') or 'actual'
+    alcance_info = _alcance_creditos_usuario(request, alcance)
+    if not alcance_info['empresa_ids']:
+        return None, alcance_info, 'No hay empresas disponibles para consultar créditos'
+
+    queryset = CreditoTrabajador.objects.filter(
+        empresa_origen_id__in=alcance_info['empresa_ids']
+    ).select_related(
+        'beneficiario', 'beneficiario__empresa', 'empresa_origen', 'sucursal',
+        'autorizado_por', 'solicitado_por',
+    ).prefetch_related('pagos__sucursal_cobro', 'pagos__registrado_por')
+
+    if alcance_info['sucursal_ids']:
+        queryset = queryset.filter(sucursal_id__in=alcance_info['sucursal_ids'])
+    elif alcance_info['alcance'] != 'todas':
+        return None, alcance_info, 'No hay sucursal activa en la sesión'
+
+    fecha_inicio = _normalizar_fecha_filtro(data.get('fecha_inicio'))
+    fecha_fin = _normalizar_fecha_filtro(data.get('fecha_fin'))
+    if fecha_inicio:
+        queryset = queryset.filter(fecha_solicitud__date__gte=fecha_inicio)
+    if fecha_fin:
+        queryset = queryset.filter(fecha_solicitud__date__lte=fecha_fin)
+
+    estado = data.get('estado')
+    if estado == 'VENCIDO':
+        # Ningún proceso escribe estado='VENCIDO' en la BD (0 registros en
+        # producción), así que filtrar por el literal devolvía siempre vacío.
+        # "Vencido" es una condición calculada: activo/aprobado y con la
+        # fecha de vencimiento pasada.
+        queryset = queryset.filter(
+            estado__in=['ACTIVO', 'APROBADO'],
+            fecha_vencimiento__lt=timezone.localdate(),
+        )
+    elif estado:
+        queryset = queryset.filter(estado=estado)
+
+    if data.get('trabajador_id'):
+        queryset = queryset.filter(beneficiario_id=data['trabajador_id'])
+
+    if data.get('tipo_credito'):
+        queryset = queryset.filter(tipo_credito=data['tipo_credito'])
+
+    if data.get('numero_credito'):
+        queryset = queryset.filter(numero_credito__icontains=data['numero_credito'])
+
+    if data.get('trabajador_texto'):
+        texto = str(data['trabajador_texto']).strip()
+        queryset = queryset.filter(
+            Q(beneficiario__nombre__icontains=texto) |
+            Q(beneficiario__apellido__icontains=texto) |
+            Q(beneficiario__rut__icontains=texto)
+        )
+
+    if data.get('sucursal_texto'):
+        texto = str(data['sucursal_texto']).strip()
+        queryset = queryset.filter(
+            Q(sucursal__alias__icontains=texto) |
+            Q(sucursal__direccion__icontains=texto)
+        )
+
+    saldo_min = data.get('saldo_min')
+    saldo_max = data.get('saldo_max')
+    if saldo_min or saldo_max:
+        saldo_expr = ExpressionWrapper(
+            Coalesce('monto_aprobado', 'monto_solicitado') - F('monto_pagado'),
+            output_field=DecimalField(max_digits=12, decimal_places=2)
+        )
+        queryset = queryset.annotate(saldo_calc=saldo_expr)
+        try:
+            if saldo_min is not None and saldo_min != '':
+                queryset = queryset.filter(saldo_calc__gte=float(saldo_min))
+        except (ValueError, TypeError):
+            pass
+        try:
+            if saldo_max is not None and saldo_max != '':
+                queryset = queryset.filter(saldo_calc__lte=float(saldo_max))
+        except (ValueError, TypeError):
+            pass
+
+    return queryset.order_by('-fecha_solicitud'), alcance_info, None
+
+
 @login_required
 @require_POST
 def cargar_creditos_trabajadores(request):
     """Cargar créditos con filtros y paginación"""
     try:
-        def normalize_fecha(fecha_str):
-            if not fecha_str:
-                return None
-            fecha_str = fecha_str.strip()
-            if '/' in fecha_str:
-                partes = fecha_str.split('/')
-            elif '-' in fecha_str:
-                partes = fecha_str.split('-')
-            else:
-                return fecha_str
-            if len(partes) != 3:
-                return fecha_str
-            if len(partes[0]) == 2:
-                return f"{partes[2]}-{partes[1]}-{partes[0]}"
-            return fecha_str
-
         data = json.loads(request.body)
-        
-        # Parámetros de filtro
-        fecha_inicio = data.get('fecha_inicio')
-        fecha_fin = data.get('fecha_fin')
-        estado = data.get('estado')
-        trabajador_id = data.get('trabajador_id')
-        tipo_credito = data.get('tipo_credito')
-        numero_credito = data.get('numero_credito')
-        trabajador_texto = data.get('trabajador_texto')
-        sucursal_texto = data.get('sucursal_texto')
-        saldo_min = data.get('saldo_min')
-        saldo_max = data.get('saldo_max')
-        alcance = data.get('alcance', 'actual')
-        
+
         # Parámetros de paginación
         page = int(data.get('page', 1))
         per_page = int(data.get('per_page', 20))
-        
-        alcance_info = _alcance_creditos_usuario(request, alcance)
-        if not alcance_info['empresa_ids']:
-            return JsonResponse({
-                'success': False,
-                'error': 'No hay empresas disponibles para consultar créditos'
-            }, status=400)
-        
-        # Construir queryset base
-        queryset = CreditoTrabajador.objects.filter(
-            empresa_origen_id__in=alcance_info['empresa_ids']
-        ).select_related(
-            'beneficiario', 'empresa_origen', 'sucursal', 'autorizado_por', 'solicitado_por'
-        ).prefetch_related('pagos__sucursal_cobro', 'pagos__registrado_por')
 
-        if alcance_info['sucursal_ids']:
-            queryset = queryset.filter(sucursal_id__in=alcance_info['sucursal_ids'])
-        elif alcance_info['alcance'] != 'todas':
-            return JsonResponse({
-                'success': False,
-                'error': 'No hay sucursal activa en la sesión'
-            }, status=400)
-        
-        # Aplicar filtros de fecha (DD/MM/YYYY o DD-MM-YYYY)
-        fecha_inicio = normalize_fecha(fecha_inicio)
-        fecha_fin = normalize_fecha(fecha_fin)
-        if fecha_inicio:
-            queryset = queryset.filter(fecha_solicitud__date__gte=fecha_inicio)
-        if fecha_fin:
-            queryset = queryset.filter(fecha_solicitud__date__lte=fecha_fin)
-        
-        if estado == 'VENCIDO':
-            # Ningún proceso escribe estado='VENCIDO' en la BD (0 registros en
-            # producción), así que filtrar por el literal devolvía siempre vacío.
-            # "Vencido" es una condición calculada: activo/aprobado y con la
-            # fecha de vencimiento pasada.
-            queryset = queryset.filter(
-                estado__in=['ACTIVO', 'APROBADO'],
-                fecha_vencimiento__lt=timezone.localdate(),
-            )
-        elif estado:
-            queryset = queryset.filter(estado=estado)
+        queryset, alcance_info, error = _queryset_creditos_filtrado(request, data)
+        if error:
+            return JsonResponse({'success': False, 'error': error}, status=400)
 
-        if trabajador_id:
-            queryset = queryset.filter(beneficiario_id=trabajador_id)
-        
-        if tipo_credito:
-            queryset = queryset.filter(tipo_credito=tipo_credito)
-        
-        if numero_credito:
-            queryset = queryset.filter(numero_credito__icontains=numero_credito)
-
-        if trabajador_texto:
-            texto = trabajador_texto.strip()
-            queryset = queryset.filter(
-                Q(beneficiario__nombre__icontains=texto) |
-                Q(beneficiario__apellido__icontains=texto) |
-                Q(beneficiario__rut__icontains=texto)
-            )
-
-        if sucursal_texto:
-            texto = sucursal_texto.strip()
-            queryset = queryset.filter(
-                Q(sucursal__alias__icontains=texto) |
-                Q(sucursal__direccion__icontains=texto)
-            )
-
-        if saldo_min or saldo_max:
-            saldo_expr = ExpressionWrapper(
-                Coalesce('monto_aprobado', 'monto_solicitado') - F('monto_pagado'),
-                output_field=DecimalField(max_digits=12, decimal_places=2)
-            )
-            queryset = queryset.annotate(saldo_calc=saldo_expr)
-            try:
-                if saldo_min is not None and saldo_min != '':
-                    queryset = queryset.filter(saldo_calc__gte=float(saldo_min))
-            except (ValueError, TypeError):
-                pass
-            try:
-                if saldo_max is not None and saldo_max != '':
-                    queryset = queryset.filter(saldo_calc__lte=float(saldo_max))
-            except (ValueError, TypeError):
-                pass
-        
-        # Ordenar por fecha descendente
-        queryset = queryset.order_by('-fecha_solicitud')
-        
         # Paginación
         paginator = Paginator(queryset, per_page)
         creditos_page = paginator.get_page(page)
@@ -642,11 +838,14 @@ def cargar_creditos_trabajadores(request):
             usos = []
             consumo_pos = 0.0
             abonos_reales = 0.0
+            ultimo_consumo = None
             # Se usa la lista precargada (prefetch_related) en vez de volver a
             # consultar por cada crédito: antes eran N queries por página.
             for pago in sorted(credito.pagos.all(), key=lambda p: (p.fecha_pago, p.created_at)):
                 if pago.metodo_pago in METODOS_CONSUMO_CREDITO:
                     consumo_pos += float(pago.monto_pago or 0)
+                    if pago.fecha_pago and (ultimo_consumo is None or pago.fecha_pago > ultimo_consumo):
+                        ultimo_consumo = pago.fecha_pago
                 else:
                     abonos_reales += float(pago.monto_pago or 0)
                 # Intentar extraer número de boleta de la referencia o de las observaciones
@@ -686,7 +885,21 @@ def cargar_creditos_trabajadores(request):
             deuda = round(max(deuda, 0.0), 2)
             dias_vencido = (timezone.localdate() - credito.fecha_vencimiento).days if credito.fecha_vencimiento else 0
 
+            # Caducidad del cupo remanente (regla calculada, ver bloque de arriba).
+            # Se manda al frontend para que pueda marcar la fila; el bloqueo real
+            # ocurre en `validar_codigo_credito` / `usar_credito_en_venta`.
+            caducidad = _estado_caducidad_cupo(
+                credito, consumido=consumo_pos, ultimo_consumo=ultimo_consumo,
+            )
+
             creditos_data.append({
+                'cupo_caducado': caducidad['caducado'],
+                'motivo_caducidad': caducidad['motivo'],
+                'mensaje_caducidad': caducidad['mensaje'],
+                'cupo_remanente': round(caducidad['remanente'], 2),
+                'fecha_limite_uso': caducidad['fecha_limite'].strftime('%d/%m/%Y') if caducidad['fecha_limite'] else None,
+                'dias_para_caducar': caducidad['dias_para_caducar'],
+                'dias_vigencia_cupo': caducidad['dias_vigencia'],
                 'es_legacy': es_legacy,
                 'origen_registro': 'Importado' if es_legacy else 'ERP',
                 'consumo_pos': round(consumo_pos, 2),
@@ -824,7 +1037,16 @@ def detalle_credito_trabajador(request, credito_id):
         if credito.estado in ('PENDIENTE', 'RECHAZADO'):
             deuda = 0.0
 
+        caducidad = _estado_caducidad_cupo(credito)
+
         credito_data = {
+            'cupo_caducado': caducidad['caducado'],
+            'motivo_caducidad': caducidad['motivo'],
+            'mensaje_caducidad': caducidad['mensaje'],
+            'cupo_remanente': round(caducidad['remanente'], 2),
+            'fecha_limite_uso': caducidad['fecha_limite'].strftime('%d/%m/%Y') if caducidad['fecha_limite'] else None,
+            'dias_para_caducar': caducidad['dias_para_caducar'],
+            'dias_vigencia_cupo': caducidad['dias_vigencia'],
             'id': credito.id,
             'numero_credito': credito.numero_credito,
             'es_legacy': es_legacy,
@@ -2129,7 +2351,22 @@ def validar_codigo_credito(request):
                 'error': f'Crédito vencido desde el {credito.fecha_vencimiento.strftime("%d/%m/%Y")}',
                 'vencido': True
             }, status=400)
-        
+
+        # Validar que el cupo no haya caducado (ver bloque "CADUCIDAD DEL CUPO").
+        caducidad = _estado_caducidad_cupo(credito)
+        if caducidad['caducado']:
+            logger.info(
+                'validar_codigo_credito: cupo caducado credito=%s motivo=%s limite=%s',
+                credito.numero_credito, caducidad['motivo'], caducidad['fecha_limite'],
+            )
+            return JsonResponse({
+                'success': False,
+                'error': caducidad['mensaje'],
+                'caducado': True,
+                'motivo_caducidad': caducidad['motivo'],
+                'fecha_limite_uso': caducidad['fecha_limite'].strftime('%d/%m/%Y') if caducidad['fecha_limite'] else None,
+            }, status=400)
+
         # Retornar datos del crédito
         return JsonResponse({
             'success': True,
@@ -2144,7 +2381,9 @@ def validar_codigo_credito(request):
                 'fecha_vencimiento': credito.fecha_vencimiento.strftime('%d/%m/%Y'),
                 'dias_para_vencimiento': credito.dias_para_vencimiento,
                 'numero_cuotas': credito.numero_cuotas,
-                'tipo_credito': credito.get_tipo_credito_display()
+                'tipo_credito': credito.get_tipo_credito_display(),
+                'fecha_limite_uso': caducidad['fecha_limite'].strftime('%d/%m/%Y') if caducidad['fecha_limite'] else None,
+                'dias_para_caducar': caducidad['dias_para_caducar'],
             }
         })
         
@@ -2253,6 +2492,28 @@ def usar_credito_en_venta(request):
             # Se bloquea la fila para que dos ventas simultáneas contra el mismo
             # crédito no lean el mismo saldo y lo sobregiren.
             credito = CreditoTrabajador.objects.select_for_update().get(id=credito.id)
+
+            # CADUCIDAD: se evalúa DENTRO del lock y justo antes de debitar, que
+            # es el único punto donde el bloqueo es real. La validación previa
+            # (`validar_codigo_credito`) es sólo la advertencia al cajero: el POS
+            # llama a este endpoint después de cerrar la venta, así que si el
+            # cupo caducó entre medio el débito igual no debe ocurrir.
+            caducidad = _estado_caducidad_cupo(credito)
+            if caducidad['caducado']:
+                logger.warning(
+                    'usar_credito_en_venta RECHAZADO por cupo caducado: credito=%s motivo=%s '
+                    'limite=%s monto=%s ticket=%s boleta=%s usuario=%s',
+                    credito.numero_credito, caducidad['motivo'], caducidad['fecha_limite'],
+                    monto_usado, ticket_id, numero_boleta, request.user.username,
+                )
+                return JsonResponse({
+                    'success': False,
+                    'error': caducidad['mensaje'],
+                    'caducado': True,
+                    'motivo_caducidad': caducidad['motivo'],
+                    'fecha_limite_uso': caducidad['fecha_limite'].strftime('%d/%m/%Y') if caducidad['fecha_limite'] else None,
+                }, status=400)
+
             if monto_usado > credito.saldo_pendiente:
                 return JsonResponse({
                     'success': False,
@@ -2301,3 +2562,366 @@ def usar_credito_en_venta(request):
             'success': False,
             'error': f'Error al usar crédito: {str(e)}'
         }, status=500)
+
+
+# ========== EXPORTACIÓN A PDF ==========
+#
+# Reemplaza el "Excel" que armaba el navegador (en realidad un CSV con `;`).
+# El PDF se genera en el servidor para que:
+#   - respete el alcance por empresa/sucursal del usuario (el navegador pedía
+#     `per_page: 9999` y exportaba lo que le devolvieran),
+#   - y salga siempre igual, sin depender de Excel ni de la configuración
+#     regional del PC del usuario.
+#
+# GRANULARIDAD: UNA FILA POR USO, no por crédito.
+# Cuatro de las nueve columnas pedidas (Monto Usado, Sucursal Uso, Número Boleta
+# y Fecha Boleta) son atributos de la COMPRA, no del crédito. Al agrupar por
+# crédito habría que apilar "BE-1234, BE-1288 | Nickolas, Paola" dentro de una
+# celda, y quien recibe el papel (administración / cobranza) no podría cruzar
+# cada boleta con su monto ni con su sucursal. Con una fila por uso, cada línea
+# es un documento verificable. Para que el crédito se siga leyendo como una
+# unidad: sus usos van juntos y consecutivos, el número de crédito se repite en
+# cada fila (una hoja suelta sigue siendo legible) y, cuando un crédito tiene más
+# de un uso, se agrega una línea de subtotal. Los créditos sin uso aparecen igual
+# con "Sin uso registrado": un cupo entregado y no usado también es información.
+
+MESES_ES = (
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+)
+
+# Tope de seguridad: un PDF más grande que esto no lo lee nadie y castiga la
+# memoria del worker. Si se trunca, se avisa en el encabezado del reporte.
+MAX_FILAS_PDF_CREDITOS = 8000
+
+
+def _fmt_clp(valor):
+    """Formato chileno de moneda: $1.234.567 (sin decimales)."""
+    try:
+        numero = float(valor or 0)
+    except (TypeError, ValueError):
+        return '$0'
+    return '$' + f'{numero:,.0f}'.replace(',', '.')
+
+
+def _mes_solicitud_label(fecha):
+    if not fecha:
+        return ''
+    local = timezone.localtime(fecha) if timezone.is_aware(fecha) else fecha
+    return f'{MESES_ES[local.month - 1]} {local.year}'
+
+
+def _formatear_boleta(referencia, observaciones=''):
+    """Número de boleta como 'BE-<dígitos>' (mismo criterio que usaba el Excel)."""
+    crudo = (referencia or '').strip()
+    if not crudo and observaciones:
+        match = re.search(r'Ticket\s*#?(\d+)', observaciones)
+        if match:
+            crudo = match.group(1)
+    digitos = re.sub(r'\D', '', crudo)
+    if digitos:
+        return f'BE-{digitos}'
+    return crudo
+
+
+def _filas_pdf_creditos(queryset):
+    """Aplana los créditos a filas de uso, listas para la tabla del PDF."""
+    creditos = sorted(
+        queryset,
+        key=lambda c: (
+            (c.nombre_beneficiario or '').upper(),
+            c.numero_credito or '',
+        ),
+    )
+
+    filas = []
+    total_monto = Decimal('0')
+    total_usos = 0
+    total_creditos = 0
+    truncado = False
+
+    for credito in creditos:
+        if len(filas) >= MAX_FILAS_PDF_CREDITOS:
+            truncado = True
+            break
+        total_creditos += 1
+
+        beneficiario = credito.beneficiario
+        empresa_beneficiaria = ''
+        if beneficiario and beneficiario.empresa_id:
+            empresa_beneficiaria = beneficiario.empresa.nombre or ''
+        if not empresa_beneficiaria and credito.empresa_origen_id:
+            # Sin ficha de empresa en el cliente se cae a la empresa que otorgó
+            # el crédito, que es quien termina cobrándolo.
+            empresa_beneficiaria = credito.empresa_origen.nombre or ''
+
+        base = {
+            'numero_credito': credito.numero_credito or '',
+            'beneficiario': credito.nombre_beneficiario,
+            'rut': (beneficiario.rut if beneficiario else '') or '',
+            'empresa': empresa_beneficiaria,
+            'mes_solicitud': _mes_solicitud_label(credito.fecha_solicitud),
+        }
+
+        usos = [p for p in credito.pagos.all() if p.metodo_pago in METODOS_CONSUMO_CREDITO]
+        usos.sort(key=lambda p: (p.fecha_pago, p.created_at))
+
+        if not usos:
+            filas.append(dict(base, tipo='sin_uso', monto=Decimal('0'),
+                              sucursal='Sin uso registrado', boleta='', fecha_boleta=''))
+            continue
+
+        subtotal = Decimal('0')
+        for pago in usos:
+            monto = Decimal(str(pago.monto_pago or 0))
+            subtotal += monto
+            total_monto += monto
+            total_usos += 1
+            filas.append(dict(
+                base, tipo='uso', monto=monto,
+                sucursal=(pago.sucursal_cobro.alias if pago.sucursal_cobro_id else ''),
+                boleta=_formatear_boleta(pago.referencia_pago, pago.observaciones or ''),
+                fecha_boleta=pago.fecha_pago.strftime('%d/%m/%Y') if pago.fecha_pago else '',
+            ))
+
+        if len(usos) > 1:
+            # En el subtotal sólo se repite el número de crédito: los datos del
+            # beneficiario en blanco hacen que la línea se lea como cierre del
+            # bloque y no como un uso más.
+            filas.append({
+                'numero_credito': base['numero_credito'], 'beneficiario': '',
+                'rut': '', 'empresa': '', 'mes_solicitud': '',
+                'tipo': 'subtotal', 'monto': subtotal,
+                'sucursal': f'Subtotal {len(usos)} usos', 'boleta': '', 'fecha_boleta': '',
+            })
+
+    return {
+        'filas': filas,
+        'total_monto': total_monto,
+        'total_usos': total_usos,
+        'total_creditos': total_creditos,
+        'truncado': truncado,
+    }
+
+
+def _descripcion_filtros_creditos(data, alcance_info):
+    """Texto legible con los filtros aplicados, para el encabezado del PDF."""
+    etiquetas = (
+        ('fecha_inicio', 'Desde'), ('fecha_fin', 'Hasta'), ('estado', 'Estado'),
+        ('tipo_credito', 'Tipo'), ('numero_credito', 'N. Crédito'),
+        ('trabajador_texto', 'Beneficiario'), ('sucursal_texto', 'Sucursal'),
+        ('saldo_min', 'Saldo min.'), ('saldo_max', 'Saldo max.'),
+    )
+    partes = []
+    for clave, etiqueta in etiquetas:
+        valor = data.get(clave)
+        if valor not in (None, ''):
+            partes.append(f'{etiqueta}: {valor}')
+    if data.get('trabajador_id'):
+        nombre = Cliente.objects.filter(id=data['trabajador_id']).values_list('nombre', 'apellido').first()
+        if nombre:
+            partes.append('Beneficiario: ' + ' '.join(x for x in nombre if x))
+    partes.append('Alcance: ' + ('todas las sucursales visibles' if alcance_info['alcance'] == 'todas'
+                                 else 'sucursal actual'))
+    return ' | '.join(partes)
+
+
+@login_required
+@require_GET
+def exportar_creditos_pdf(request):
+    """Exporta el listado de créditos a PDF (una fila por uso de cupo).
+
+    Acepta por GET los mismos filtros que `cargar_creditos_trabajadores`, de modo
+    que el PDF sea exactamente lo que el usuario tiene en pantalla. El alcance
+    por empresa/sucursal es el del usuario: nadie exporta lo que no puede ver.
+    """
+    try:
+        from io import BytesIO
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import cm
+        from reportlab.pdfgen import canvas as rl_canvas
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+
+        data = {clave: request.GET.get(clave) for clave in FILTROS_CREDITOS}
+
+        queryset, alcance_info, error = _queryset_creditos_filtrado(request, data)
+        if error:
+            return JsonResponse({'success': False, 'error': error}, status=400)
+
+        resultado = _filas_pdf_creditos(queryset)
+        filas = resultado['filas']
+        if not filas:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay créditos para exportar con los filtros aplicados',
+            }, status=404)
+
+        # Paleta NEXO (nexo-design-system.css): no se inventan colores nuevos.
+        azul = colors.HexColor('#0066FF')
+        azul_oscuro = colors.HexColor('#1A1A2E')
+        gris_claro = colors.HexColor('#F5F7FA')
+        gris_borde = colors.HexColor('#DEE2E6')
+        verde = colors.HexColor('#00D4AA')
+
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            leftMargin=1.2 * cm, rightMargin=1.2 * cm,
+            topMargin=1.4 * cm, bottomMargin=1.6 * cm,
+            title='Reporte de Creditos a Trabajadores',
+            author='RetailMind',
+        )
+
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle('TituloCred', parent=styles['Title'], fontSize=15,
+                                     textColor=azul_oscuro, spaceAfter=2, alignment=0)
+        sub_style = ParagraphStyle('SubCred', parent=styles['Normal'], fontSize=8,
+                                   textColor=colors.HexColor('#555555'), spaceAfter=2, leading=11)
+        cell_style = ParagraphStyle('CeldaCred', parent=styles['Normal'], fontSize=7, leading=8.5)
+
+        generado = timezone.localtime(timezone.now())
+        total_creditos_txt = f"{resultado['total_creditos']:,}".replace(',', '.')
+        elementos = [
+            Paragraph('Créditos a Trabajadores - Uso de Cupos', title_style),
+            Paragraph(_descripcion_filtros_creditos(data, alcance_info), sub_style),
+            Paragraph(
+                f"Generado: {generado.strftime('%d/%m/%Y %H:%M')} hrs&nbsp; |&nbsp; "
+                f"Usuario: {request.user.get_full_name() or request.user.username}&nbsp; |&nbsp; "
+                f"Créditos: {total_creditos_txt}&nbsp; |&nbsp; "
+                f"Usos registrados: {resultado['total_usos']}",
+                sub_style,
+            ),
+        ]
+        if resultado['truncado']:
+            elementos.append(Paragraph(
+                f'ATENCION: el reporte se truncó en {MAX_FILAS_PDF_CREDITOS} filas. '
+                f'Acote los filtros para exportarlo completo.', sub_style))
+        elementos.append(Spacer(1, 0.25 * cm))
+
+        encabezados = ['N° Crédito', 'Beneficiario', 'RUT Beneficiario', 'Empresa Beneficiaria',
+                       'Monto Usado', 'Mes Solicitud', 'Sucursal Uso', 'N° Boleta', 'Fecha Boleta']
+        anchos = [2.7 * cm, 5.2 * cm, 2.4 * cm, 4.4 * cm, 2.4 * cm, 2.6 * cm, 3.4 * cm, 2.2 * cm, 2.0 * cm]
+
+        tabla_datos = [encabezados]
+        filas_subtotal = []
+        filas_sin_uso = []
+        for indice, fila in enumerate(filas, start=1):
+            if fila['tipo'] == 'subtotal':
+                filas_subtotal.append(indice)
+            elif fila['tipo'] == 'sin_uso':
+                filas_sin_uso.append(indice)
+            tabla_datos.append([
+                fila['numero_credito'],
+                Paragraph(fila['beneficiario'] or '', cell_style),
+                fila['rut'],
+                Paragraph(fila['empresa'] or '', cell_style),
+                _fmt_clp(fila['monto']) if fila['tipo'] != 'sin_uso' else '-',
+                fila['mes_solicitud'],
+                Paragraph(fila['sucursal'] or '', cell_style),
+                fila['boleta'],
+                fila['fecha_boleta'],
+            ])
+
+        # Fila de totales
+        tabla_datos.append([
+            'TOTAL',
+            f"{resultado['total_creditos']} créditos",
+            '',
+            f"{resultado['total_usos']} usos",
+            _fmt_clp(resultado['total_monto']),
+            '', '', '', '',
+        ])
+        fila_total = len(tabla_datos) - 1
+
+        # repeatRows=1 -> la cabecera se repite en TODAS las páginas.
+        tabla = Table(tabla_datos, colWidths=anchos, repeatRows=1)
+        estilos_tabla = [
+            ('BACKGROUND', (0, 0), (-1, 0), azul_oscuro),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 7.5),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 7),
+            ('GRID', (0, 0), (-1, -1), 0.4, gris_borde),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, gris_claro]),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (4, 1), (4, -1), 'RIGHT'),
+            ('ALIGN', (8, 1), (8, -1), 'CENTER'),
+            ('TOPPADDING', (0, 0), (-1, -1), 2.5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+            ('BACKGROUND', (0, fila_total), (-1, fila_total), azul),
+            ('TEXTCOLOR', (0, fila_total), (-1, fila_total), colors.white),
+            ('FONTNAME', (0, fila_total), (-1, fila_total), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, fila_total), (-1, fila_total), 8),
+        ]
+        for indice in filas_subtotal:
+            estilos_tabla.append(('BACKGROUND', (0, indice), (-1, indice), colors.HexColor('#E8F5F2')))
+            estilos_tabla.append(('FONTNAME', (0, indice), (-1, indice), 'Helvetica-Bold'))
+            estilos_tabla.append(('TEXTCOLOR', (6, indice), (6, indice), verde))
+        for indice in filas_sin_uso:
+            estilos_tabla.append(('TEXTCOLOR', (6, indice), (6, indice), colors.HexColor('#9A9A9A')))
+        tabla.setStyle(TableStyle(estilos_tabla))
+        elementos.append(tabla)
+
+        ancho_pagina = landscape(A4)[0]
+
+        class _LienzoNumerado(rl_canvas.Canvas):
+            """Canvas de dos pasadas, necesario para 'Página X de Y'.
+
+            En la pasada normal ReportLab todavía no sabe cuántas páginas habrá,
+            así que se guardan los estados de página y el pie se dibuja al final,
+            cuando el total ya se conoce.
+            """
+
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self._paginas = []
+
+            def showPage(self):
+                self._paginas.append(dict(self.__dict__))
+                self._startPage()
+
+            def save(self):
+                total = len(self._paginas)
+                for estado in self._paginas:
+                    self.__dict__.update(estado)
+                    self._dibujar_pie(total)
+                    super().showPage()
+                super().save()
+
+            def _dibujar_pie(self, total):
+                self.saveState()
+                self.setFont('Helvetica', 7)
+                self.setFillColor(colors.grey)
+                self.drawString(
+                    1.2 * cm, 0.9 * cm,
+                    'RetailMind - Créditos a Trabajadores - '
+                    + generado.strftime('%d/%m/%Y %H:%M')
+                )
+                self.drawRightString(
+                    ancho_pagina - 1.2 * cm, 0.9 * cm,
+                    f'Página {self._pageNumber} de {total}'
+                )
+                self.restoreState()
+
+        doc.build(elementos, canvasmaker=_LienzoNumerado)
+        buffer.seek(0)
+
+        logger.info(
+            'exportar_creditos_pdf: usuario=%s creditos=%s usos=%s monto=%s alcance=%s',
+            request.user.username, resultado['total_creditos'], resultado['total_usos'],
+            resultado['total_monto'], alcance_info['alcance'],
+        )
+
+        response = HttpResponse(buffer.read(), content_type='application/pdf')
+        nombre = f"creditos_trabajadores_{generado.strftime('%Y%m%d_%H%M')}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+        return response
+
+    except Exception as e:
+        logger.exception('Error al exportar créditos a PDF')
+        return JsonResponse({'success': False, 'error': f'Error al generar PDF: {str(e)}'}, status=500)

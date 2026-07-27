@@ -219,6 +219,7 @@ from .views_modulo_creditos import (
     obtener_sucursales_empresa,
     obtener_empresas_disponibles,
     reporte_creditos_trabajadores,
+    exportar_creditos_pdf,
     # Voucher e Integración POS
     imprimir_voucher_credito,
     validar_codigo_credito,
@@ -320,9 +321,10 @@ from .views_modulo_existencias_nuevo import (
     api_buscar_productos_precios,
     api_modificar_precio_costo,
     api_modificar_precios_masivo,
-    # Corrección de talla / categoría global (todas las bodegas)
+    # Corrección de talla / categoría / especialidad global (todas las bodegas)
     api_editar_talla_producto_global,
     api_editar_categoria_producto_global,
+    api_editar_especialidad_producto_global,
     # Actividad de creación manual (verGestionProducto)
     api_actividad_creacion_manual,
     # Acciones rápidas sobre un ingreso manual (tabla Actividad reciente)
@@ -1003,6 +1005,7 @@ urlpatterns = [
     path('api/creditos/sucursales/', obtener_sucursales_empresa, name='obtener_sucursales_empresa'),
     path('api/empresas/', obtener_empresas_disponibles, name='obtener_empresas_disponibles'),
     path('api/creditos/reporte/', reporte_creditos_trabajadores, name='reporte_creditos_trabajadores'),
+    path('api/creditos/exportar-pdf/', exportar_creditos_pdf, name='exportar_creditos_pdf'),
     path('api/creditos/imprimir-voucher/<int:credito_id>/', imprimir_voucher_credito, name='imprimir_voucher_credito'),
     path('api/creditos/validar-codigo/', validar_codigo_credito, name='validar_codigo_credito'),
     path('api/creditos/usar-en-venta/', usar_credito_en_venta, name='usar_credito_en_venta'),
@@ -1284,6 +1287,7 @@ urlpatterns = [
     # Corrección de talla / categoría mal registradas — replican a TODAS las bodegas (modal Crear Manual)
     path('api/editar-talla-global/', api_editar_talla_producto_global, name='api_editar_talla_producto_global'),
     path('api/editar-categoria-global/', api_editar_categoria_producto_global, name='api_editar_categoria_producto_global'),
+    path('api/editar-especialidad-global/', api_editar_especialidad_producto_global, name='api_editar_especialidad_producto_global'),
 
     path('reportes/existencias/', views.ver_reporte_existencias, name='ver_reporte_existencias'),
     path('api/obtener-existencias/', views.obtener_existencias_reporte, name='obtener_existencias_reporte'),

@@ -2082,6 +2082,51 @@ function safeParseTallas(data) {
     return [];
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// ORDEN DE TALLAS — mismo criterio que el modal "Crear Producto Manual"
+// (verGestionProductos.html → claveNumTalla / reordenarTablaTallasManual):
+// numéricas ascendentes primero, luego las de letra en su orden natural de
+// vestuario y, al final, el resto alfabético. El backend devuelve las tallas
+// en el orden en que se crearon, no en orden de guía, así que el orden se
+// resuelve acá antes de pintar.
+// ═══════════════════════════════════════════════════════════════════════
+const ORDEN_TALLA_LETRA = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'XXXXL'];
+
+function claveNumTalla(v) {
+    const n = parseFloat(String(v ?? '').replace(',', '.'));
+    return isNaN(n) ? null : n;
+}
+
+function compararTallas(a, b) {
+    const va = String(a ?? '').trim();
+    const vb = String(b ?? '').trim();
+
+    // 1) Numéricas (tolera '7,5' ≡ '7.5' ≡ '07.5') siempre primero y ascendentes
+    const na = claveNumTalla(va), nb = claveNumTalla(vb);
+    if (na !== null && nb !== null) return na - nb;
+    if (na !== null) return -1;
+    if (nb !== null) return 1;
+
+    // 2) Tallas de letra en orden de vestuario (XS < S < M < L < XL…),
+    //    no alfabético — un localeCompare daría L, M, S, XL, XS
+    const la = ORDEN_TALLA_LETRA.indexOf(va.toUpperCase());
+    const lb = ORDEN_TALLA_LETRA.indexOf(vb.toUpperCase());
+    if (la !== -1 && lb !== -1) return la - lb;
+    if (la !== -1) return -1;
+    if (lb !== -1) return 1;
+
+    // 3) Cualquier otra cosa, alfabético
+    return va.localeCompare(vb);
+}
+
+// Ordena una lista de tallas; acepta objetos {talla: '38', ...} o strings sueltos
+function ordenarTallas(lista) {
+    return [...(lista || [])].sort((x, y) => compararTallas(
+        (x && typeof x === 'object') ? x.talla : x,
+        (y && typeof y === 'object') ? y.talla : y
+    ));
+}
+
 // Función para obtener cookies (CSRF token)
 function getCookie(name) {
     let cookieValue = null;
@@ -3548,8 +3593,8 @@ function displayProducts(products) {
     }
     
     products.forEach(product => {
-        const tallasDisponibles = product.tallas_disponibles && Array.isArray(product.tallas_disponibles) 
-            ? product.tallas_disponibles.join(', ') 
+        const tallasDisponibles = product.tallas_disponibles && Array.isArray(product.tallas_disponibles)
+            ? ordenarTallas(product.tallas_disponibles).join(', ')
             : 'No disponible';
         
         const productHtml = `
@@ -3899,7 +3944,11 @@ function loadTallasDisponibles(product) {
         }
     }
 
-    console.log('👕 Tallas procesadas:', tallas);
+    // Ordenar de menor a mayor antes de pintar: la tabla, el patrón de tarea
+    // (se arma leyendo las filas) y el detalle del despacho heredan este orden.
+    tallas = ordenarTallas(tallas);
+
+    console.log('👕 Tallas procesadas (ordenadas):', tallas);
 
     if (!tallas || tallas.length === 0) {
         tbody.append(`

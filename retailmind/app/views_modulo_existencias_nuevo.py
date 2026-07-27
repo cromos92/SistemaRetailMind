@@ -1999,6 +1999,118 @@ def api_editar_categoria_producto_global(request):
 
 
 # =====================================================
+# 6-bis. ESPECIALIDAD GLOBAL (todas las bodegas)
+# =====================================================
+
+@login_required
+@require_POST
+def api_editar_especialidad_producto_global(request):
+    """
+    Aplica especialidades (atributo transversal v1.2) a un producto en TODAS las
+    bodegas del usuario, sobre la misma VARIANTE (código normalizado + marca +
+    color + género). Espejo de `api_editar_categoria_producto_global`.
+
+    Existe porque la especialidad es una propiedad del PRODUCTO (deporte/uso),
+    no de la bodega: al crear/recepcionar solo se escribía en la ficha de la
+    sucursal activa y las demás quedaban sin etiquetar, invisibles para los
+    filtros y dashboards por especialidad.
+
+    Body JSON: { producto_id, especialidad_ids: [...], modo: 'reemplazar'|'agregar' }
+      · reemplazar → deja EXACTAMENTE las enviadas (lista vacía = las limpia)
+      · agregar    → suma las enviadas y conserva las que ya tenía
+    SKUs, tallas, stock, precios y categoría no se tocan.
+    """
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    producto_id = data.get('producto_id')
+    modo = (data.get('modo') or 'reemplazar').lower()
+    especialidad_ids = [e for e in (data.get('especialidad_ids') or []) if e]
+    if not producto_id:
+        return JsonResponse({'success': False, 'error': 'Falta el producto.'}, status=400)
+    if modo not in ('reemplazar', 'agregar'):
+        return JsonResponse({'success': False, 'error': 'Modo inválido.'}, status=400)
+    if modo == 'agregar' and not especialidad_ids:
+        return JsonResponse({'success': False, 'error': 'Selecciona al menos una especialidad.'}, status=400)
+
+    from .models import AtributoOpcion, Productos_Atributos, ProductoAtributoValor
+    from .utils_producto_match import normalizar_articulo
+
+    producto = get_object_or_404(Producto, id=producto_id)
+
+    emp_ids = EmpresaUser.objects.filter(user=request.user, status=True).values_list('empresa_id', flat=True)
+    suc_ids = list(Sucursal.objects.filter(empresa_id__in=emp_ids).values_list('id', flat=True))
+    if producto.sucursal_id not in suc_ids:
+        return JsonResponse({'success': False, 'error': 'No tienes acceso a la bodega de este producto.'}, status=403)
+
+    attr_esp = Productos_Atributos.objects.filter(nombre__iexact='Especialidad').first()
+    if attr_esp is None:
+        return JsonResponse({'success': False, 'error': 'El atributo "Especialidad" no está creado.'}, status=400)
+
+    opciones = list(AtributoOpcion.objects.filter(atributo=attr_esp, id__in=especialidad_ids))
+    if especialidad_ids and len(opciones) != len(set(str(e) for e in especialidad_ids)):
+        return JsonResponse({'success': False, 'error': 'Alguna especialidad enviada no existe.'}, status=400)
+
+    # Misma variante en todas las bodegas, con CUALQUIER categoría (una ficha
+    # mal categorizada igual debe recibir la especialidad).
+    objetivo = normalizar_articulo(producto.articulo)
+    token = objetivo.split(' ')[0] if objetivo else ''
+    if not token:
+        return JsonResponse({'success': False, 'error': 'El producto no tiene código válido.'}, status=400)
+    candidatos = Producto.objects.filter(
+        sucursal_id__in=suc_ids, articulo__icontains=token,
+        atributo1_id=producto.atributo1_id, atributo2_id=producto.atributo2_id,
+        atributo3_id=producto.atributo3_id,
+    ).select_related('sucursal')
+    afectados = [p for p in candidatos if normalizar_articulo(p.articulo) == objetivo]
+    if not afectados:
+        return JsonResponse({'success': False, 'error': 'No se encontraron fichas de esta variante.'}, status=400)
+
+    ids_ok = {o.id for o in opciones}
+    bodegas = []
+    with transaction.atomic():
+        for p in afectados:
+            previas = set(ProductoAtributoValor.objects
+                          .filter(producto=p, atributo=attr_esp)
+                          .values_list('opcion_id', flat=True))
+            objetivo_ids = ids_ok if modo == 'reemplazar' else (previas | ids_ok)
+            if previas == objetivo_ids:
+                continue
+            ProductoAtributoValor.objects.filter(
+                producto=p, atributo=attr_esp).exclude(opcion_id__in=objetivo_ids).delete()
+            for opcion_id in objetivo_ids - previas:
+                ProductoAtributoValor.objects.get_or_create(
+                    producto=p, atributo=attr_esp, opcion_id=opcion_id)
+            bodegas.append({
+                'sucursal': p.sucursal.alias if p.sucursal else f'Sucursal {p.sucursal_id}',
+                'producto_id': p.id,
+                'antes': len(previas),
+                'ahora': len(objetivo_ids),
+            })
+
+    etiquetas = [o.valor for o in opciones]
+    logger.info(
+        "Especialidad aplicada globalmente por %s: articulo=%s modo=%s esp=%s fichas=%s bodegas=%s",
+        request.user.username, producto.articulo, modo, etiquetas,
+        len(bodegas), [b['sucursal'] for b in bodegas],
+    )
+
+    if not bodegas:
+        return JsonResponse({'success': False,
+                             'error': 'Ninguna ficha necesitaba cambio: ya tienen esas especialidades.'}, status=400)
+
+    return JsonResponse({
+        'success': True,
+        'modo': modo,
+        'especialidades': etiquetas,
+        'fichas_actualizadas': len(bodegas),
+        'bodegas': bodegas,
+    })
+
+
+# =====================================================
 # 5. ACTIVIDAD DE CREACIÓN MANUAL (verGestionProducto)
 # =====================================================
 

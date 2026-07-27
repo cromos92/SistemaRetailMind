@@ -18864,6 +18864,30 @@ def buscar_articulo_autocomplete(request):
         'query': q,
     })
 
+def _especialidades_por_producto(producto_ids):
+    """{producto_id: [{'id', 'valor'}]} del atributo "Especialidad" (v1.2), en UNA query.
+
+    Todo endpoint que alimente el picker del modal Crear Manual debe devolver
+    esta lista: `NexoManualPicker.setEsp(p.especialidades || [])` interpreta la
+    ausencia de la clave como "sin especialidades" y LIMPIA lo que hubiera,
+    así que un endpoint que la omita borra la especialidad en pantalla.
+    """
+    out = {}
+    if not producto_ids:
+        return out
+    try:
+        from .models import ProductoAtributoValor
+        for pav in (ProductoAtributoValor.objects
+                    .filter(producto_id__in=producto_ids,
+                            atributo__nombre__iexact='Especialidad')
+                    .select_related('opcion')):
+            out.setdefault(pav.producto_id, []).append(
+                {'id': pav.opcion_id, 'valor': pav.opcion.valor})
+    except Exception as e:
+        logger.warning("No se pudieron leer las especialidades: %s", e)
+    return out
+
+
 @require_GET
 def buscar_productos_por_articulo(request):
     """
@@ -18885,13 +18909,19 @@ def buscar_productos_por_articulo(request):
         'atributo1', 'atributo2', 'atributo3', 'categoria'
     ).prefetch_related('producto_talla')[:20]
     
+    # Especialidades v1.2 de todos los resultados en UNA query: sin esto el
+    # autocomplete del artículo dejaba el picker en blanco al elegir un producto
+    # existente (setEsp([]) borra lo que hubiera seleccionado).
+    esp_map = _especialidades_por_producto([p.id for p in productos])
+
     resultado = []
     for p in productos:
         tallas = list(p.producto_talla.values('talla', 'sku', 'stock'))
         stock_total = sum(t.get('stock', 0) for t in tallas)
-        
+
         resultado.append({
             'id': p.id,
+            'especialidades': esp_map.get(p.id, []),
             'articulo': p.articulo,
             'descripcion': p.descripcion,
             'marca': p.atributo1.valor if p.atributo1 else '-',
@@ -21740,6 +21770,7 @@ def crear_producto_manual(request):
         # vacío no se toca nada: al agregar tallas a un producto EXISTENTE (flujo
         # típico post-recategorización) un borrado incondicional limpiaría las
         # especialidades que la migración v1.2 ya le asignó.
+        especialidades_bodegas = 0
         try:
             if especialidad_ids:
                 from .models import ProductoAtributoValor
@@ -21748,12 +21779,39 @@ def crear_producto_manual(request):
                     opciones_validas = list(AtributoOpcion.objects.filter(
                         atributo=attr_esp, id__in=especialidad_ids))
                     ids_ok = {o.id for o in opciones_validas}
-                    # Quitar las deseleccionadas y agregar las nuevas (no duplica)
-                    ProductoAtributoValor.objects.filter(
-                        producto=producto, atributo=attr_esp).exclude(opcion_id__in=ids_ok).delete()
-                    for opcion in opciones_validas:
-                        ProductoAtributoValor.objects.get_or_create(
-                            producto=producto, atributo=attr_esp, opcion=opcion)
+                    # Destino: la ficha de esta bodega y, si el usuario marcó
+                    # "aplicar a todas las bodegas", la MISMA variante en el
+                    # resto. La especialidad es propiedad del producto
+                    # (deporte/uso), no de la bodega: escribirla solo aquí
+                    # dejaba las demás fichas sin etiquetar y por lo tanto
+                    # invisibles para los filtros y dashboards por especialidad.
+                    destinos = [producto]
+                    if aplicar_todas_bodegas:
+                        try:
+                            _emp_ids = EmpresaUser.objects.filter(
+                                user=request.user, status=True).values_list('empresa_id', flat=True)
+                            _suc_ids = list(Sucursal.objects.filter(
+                                empresa_id__in=_emp_ids).values_list('id', flat=True))
+                            from .utils_producto_match import productos_por_identidad_sucursales
+                            destinos = productos_por_identidad_sucursales(
+                                articulo, producto.atributo1_id, producto.atributo2_id,
+                                producto.atributo3_id, producto.categoria_id, _suc_ids) or [producto]
+                            if producto.id not in [d.id for d in destinos]:
+                                destinos.append(producto)
+                        except Exception as e:
+                            logger.warning("No se pudo resolver las bodegas para especialidades: %s", e)
+                            destinos = [producto]
+                    for _dest in destinos:
+                        # Quitar las deseleccionadas y agregar las nuevas (no duplica)
+                        ProductoAtributoValor.objects.filter(
+                            producto=_dest, atributo=attr_esp).exclude(opcion_id__in=ids_ok).delete()
+                        for opcion in opciones_validas:
+                            ProductoAtributoValor.objects.get_or_create(
+                                producto=_dest, atributo=attr_esp, opcion=opcion)
+                    especialidades_bodegas = len(destinos)
+                    if especialidades_bodegas > 1:
+                        logger.info("Especialidades aplicadas a %s fichas del código %s",
+                                    especialidades_bodegas, articulo)
         except Exception as e:
             logger.warning("Error guardando especialidades del producto %s: %s", producto.id, e)
 
@@ -22177,6 +22235,8 @@ def crear_producto_manual(request):
             mensaje += (f'. {len(tallas_omitidas)} talla(s) sin unidades NO se crearon '
                         f'({", ".join(tallas_omitidas[:12])}'
                         f'{"…" if len(tallas_omitidas) > 12 else ""})')
+        if especialidades_bodegas > 1:
+            mensaje += f'. Especialidades aplicadas en {especialidades_bodegas} bodega(s)'
         if productos_sincronizados > 0:
             mensaje += f'. Precios sincronizados y alertas enviadas a {len(sucursales_afectadas)} sucursal(es)'
         if compra_creada:
@@ -22192,6 +22252,7 @@ def crear_producto_manual(request):
             'tallas_existentes': tallas_existentes_count,
             'tallas_detalle': tallas_detalle,
             'tallas_omitidas': tallas_omitidas,
+            'especialidades_bodegas': especialidades_bodegas,
             'productos_sincronizados': productos_sincronizados,
             'sucursales_afectadas': sucursales_afectadas,
             'compra_id': compra_creada.id if compra_creada else None,
@@ -22475,9 +22536,12 @@ def detalle_producto_para_copiar(request, producto_id):
             'costo': float(producto.costo),
             'sobreprecio': float(producto.sobreprecio),
             'precioventa': float(producto.precioventa),
-            'tallas': list(tallas)
+            'tallas': list(tallas),
+            # Sin esto, los botones "Copiar"/"Usar" del panel de bodegas
+            # limpiaban el picker de especialidades del modal.
+            'especialidades': _especialidades_por_producto([producto.id]).get(producto.id, []),
         }
-        
+
         return JsonResponse({
             'success': True,
             'producto': datos_producto
