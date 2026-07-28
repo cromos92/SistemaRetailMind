@@ -31,7 +31,17 @@ Clave de agrupación: (articulo, marca, color, genero, categoria)
 from rest_framework import serializers
 
 
-def agrupar_por_producto(rows: list, fotos_map: dict = None) -> list:
+#: Prefijo con el que la recategorización v1.2 deprecó las categorías planas
+#: viejas. NO se borran porque `Producto.categoria` es on_delete=CASCADE.
+PREFIJO_CATEGORIA_OBSOLETA = '_ZZ_'
+
+#: Nombre del atributo multi-etiqueta que reemplazó al eje deporte/uso.
+NOMBRE_ATRIBUTO_ESPECIALIDAD = 'Especialidad'
+
+
+def agrupar_por_producto(
+    rows: list, fotos_map: dict = None, especialidades_map: dict = None,
+) -> list:
     """
     Toma una lista de dicts planos (una fila por sku×sucursal) y los agrupa
     en una lista de dicts donde cada entrada representa un PRODUCTO ÚNICO
@@ -89,8 +99,26 @@ def agrupar_por_producto(rows: list, fotos_map: dict = None) -> list:
                 'marca':            marca,
                 'color':            color,
                 'genero':           genero,
+                # Categoría HOJA del árbol v1.2 ("Zapatillas", "Protecciones").
                 'categoria':        categoria,
+                # DEPRECADO: siempre vacío. Se conserva porque sacar la clave
+                # rompería a los consumidores que la leen. Lo que antes se
+                # esperaba acá hoy vive en `categoria_padre` y `especialidades`.
                 'subcategoria':     '',
+                # ── Taxonomía v1.2 ────────────────────────────────────────
+                # El árbol de 2 niveles y el eje multi-etiqueta que reemplazó
+                # al deporte/uso. AllConnected los necesita para poder filtrar
+                # y publicar por categoría real y por especialidad.
+                'categoria_id':       row.get('producto__categoria__id'),
+                'categoria_padre':    row.get('producto__categoria__padre__nombre') or '',
+                'categoria_padre_id': row.get('producto__categoria__padre__id'),
+                # Se MARCA, no se excluye: este endpoint es un espejo de
+                # catálogo, y dropear filas haría desaparecer productos del
+                # espejo del consumidor (y con el soft-delete de ausentes,
+                # despublicarlos). Que decida quien consume.
+                'categoria_obsoleta': categoria.startswith(PREFIJO_CATEGORIA_OBSOLETA),
+                'especialidades':   (especialidades_map or {}).get(
+                    row.get('producto__id')) or [],
                 'precio_venta':     int(row.get('producto__precioventa', 0) or 0),
                 'precio_costo':     int(row.get('producto__costo', 0) or 0),
                 'precio_interno':   int(row.get('producto__precioSugerido', 0) or 0),
@@ -146,6 +174,15 @@ class ProductoExternalSerializer(serializers.Serializer):
     genero           = serializers.CharField()
     categoria        = serializers.CharField()
     subcategoria     = serializers.CharField()
+    # Taxonomía v1.2. Todos con required=False + default para que payloads
+    # viejos (y los que queden en la caché de 1 h tras el deploy) sigan validando.
+    categoria_id       = serializers.IntegerField(allow_null=True, required=False)
+    categoria_padre    = serializers.CharField(allow_blank=True, required=False, default='')
+    categoria_padre_id = serializers.IntegerField(allow_null=True, required=False)
+    categoria_obsoleta = serializers.BooleanField(required=False, default=False)
+    especialidades     = serializers.ListField(
+        child=serializers.DictField(), required=False, default=list,
+    )
     precio_venta     = serializers.IntegerField()
     precio_costo     = serializers.IntegerField()
     precio_interno   = serializers.IntegerField()

@@ -713,10 +713,13 @@ urlpatterns = [
      path('obtener_tickets_venta/', views.obtener_tickets_venta, name='obtener_tickets_venta'),
      
      # === TRASPASOS ===
-     path('crear_traspaso/', views.crear_traspaso, name='crear_traspaso'),
-     path('aprobar_traspaso/', views.aprobar_traspaso, name='aprobar_traspaso'),
-     path('recibir_traspaso/', views.recibir_traspaso, name='recibir_traspaso'),
-     
+     # Rutas crear_traspaso / aprobar_traspaso / recibir_traspaso eliminadas
+     # (2026-07-28). Eran flujo muerto: ningún template ni JS las llamaba, y las
+     # tres FBV movían stock sin @login_required (POST anónimo con CSRF token
+     # obtenible sin sesión). Además aprobar_traspaso descontaba stock de
+     # Traspaso PENDIENTE que api_crear_despacho_masivo ya había descontado.
+     # El circuito real de traspasos es por DTE (ver recepcion-dte/).
+
      # === AJUSTES DE INVENTARIO ===
      path('crear_ajuste_inventario/', views.crear_ajuste_inventario, name='crear_ajuste_inventario'),
     path('ajuste-stock-rapido/', views.ajuste_stock_rapido, name='ajuste_stock_rapido'),
@@ -1636,6 +1639,7 @@ urlpatterns = [
     path('api/cron/verificar-drift/', views_cron.verificar_drift_http, name='api_cron_verificar_drift'),
     path('api/ecommerce/pedidos/consultar/', views_ecommerce.api_asignar_ticket_rm, name='api_ecommerce_consultar_pedido'),
     path('api/ecommerce/pedidos/cancelar/', views_ecommerce.api_cancelar_pedido_ecommerce, name='api_ecommerce_cancelar_pedido'),
+    path('api/ecommerce/pedidos/cambio-producto/', views_ecommerce.api_cambio_producto_pedido, name='api_ecommerce_cambio_producto'),
     path('api/ecommerce/facturar-masivo/', views_ecommerce.facturar_ecommerce_masivo, name='facturar_ecommerce_masivo'),
     path('ecommerce/pedidos/', views_ecommerce.PedidosEcommerceListView.as_view(), name='pedidos_ecommerce_list'),
     path('ecommerce/pedidos/traer/', views_ecommerce.traer_pedidos_allconnected, name='traer_pedidos_allconnected'),

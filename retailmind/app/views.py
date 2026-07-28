@@ -50,10 +50,42 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 import re
 from django.db import transaction, connection
+from functools import wraps
 import json
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def rollback_en_error(view_func):
+    """Revierte la transacción si la vista responde con un error (status >= 400).
+
+    Dentro de ``transaction.atomic()`` un ``return`` NO es una excepción: al salir
+    del bloque, Django hace COMMIT de todo lo escrito hasta ese punto. Varias
+    vistas de regularización escribían stock y recién después validaban, así que
+    un 400 devolvía "no se pudo" al usuario pero dejaba el stock movido — y cada
+    reintento lo volvía a mover.
+
+    Este decorador debe ir SIEMPRE inmediatamente DEBAJO de ``@transaction.atomic``
+    para que el bloque siga abierto cuando se marca el rollback::
+
+        @login_required
+        @require_POST
+        @transaction.atomic
+        @rollback_en_error
+        def mi_vista(request): ...
+    """
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        response = view_func(request, *args, **kwargs)
+        if getattr(response, 'status_code', 200) >= 400:
+            transaction.set_rollback(True)
+            logger.warning(
+                "%s respondió %s dentro de una transacción: se revierte lo escrito.",
+                view_func.__name__, response.status_code,
+            )
+        return response
+    return _wrapped
 
 
 def _obtener_rol_usuario(user):
@@ -131,6 +163,50 @@ def _recalcular_estado_dte(dte, guardar=True):
     return nuevo
 
 
+def _sucursal_destino_traspaso(dte):
+    """Sucursal destino REAL de un traspaso, derivada del movimiento de salida.
+
+    Única fuente de verdad para decidir quién puede recepcionar/rechazar/resolver
+    un DTE. NO usar la sucursal de sesión: un usuario que ve varias sucursales
+    puede tener activa una distinta a la del documento.
+
+    Devuelve None si el DTE no tiene movimiento TRASPASO_SALIDA con destino. Los
+    llamadores deben tratar ese None como fail-closed (403), nunca como
+    "permitido": antes, un DTE sin movimiento de salida se saltaba el guard
+    entero.
+    """
+    if not dte:
+        return None
+    mov_salida = dte.dte_movimientos.filter(concepto='TRASPASO_SALIDA').first()
+    return mov_salida.sucursal_destino if mov_salida else None
+
+
+def _validar_destino_traspaso(dte, sucursal_sesion_id):
+    """Valida que la sucursal activa sea el destino del traspaso.
+
+    Devuelve (sucursal_destino, None) si está OK, o (None, JsonResponse 403).
+    """
+    destino = _sucursal_destino_traspaso(dte)
+    if destino is None:
+        logger.warning(
+            "DTE %s sin movimiento TRASPASO_SALIDA con destino: se deniega la operación.",
+            getattr(dte, 'numero_documento', dte),
+        )
+        return None, JsonResponse(
+            {'success': False,
+             'error': 'El documento no tiene un movimiento de salida con sucursal destino. '
+                      'No se puede determinar quién debe recepcionarlo.'},
+            status=403,
+        )
+    if str(destino.id) != str(sucursal_sesion_id):
+        return None, JsonResponse(
+            {'success': False,
+             'error': f'Solo la sucursal destino ({destino.alias}) puede operar sobre este documento.'},
+            status=403,
+        )
+    return destino, None
+
+
 @login_required
 @requiere_permiso('recepcion_dte', 'puede_ver')
 def recepcion_dte(request):
@@ -204,11 +280,29 @@ def recepciones_pendientes_api(request):
                 | Q(sucursal_id=sucursal_actual_id)
             )
 
+        # Prefetch explícito de las líneas ACTIVAS con sus atributos.
+        #
+        # Antes se prefetcheaba 'dte_productos__productoTalla__producto' y luego,
+        # dentro del bucle, se hacía dte.dte_productos.filter(activo=True): ese
+        # .filter() invalida la cache del prefetch y lanza una query nueva por
+        # DTE, tirando a la basura el prefetch ya ejecutado. Encima marca y color
+        # se leen de producto.atributo1/atributo2, que no estaban en ningún
+        # select_related, así que cada línea disparaba hasta 2 queries más.
+        # Con page_size=10 y traspasos grandes eran cientos a miles de
+        # round-trips (RTT ~220ms) en la pantalla principal del módulo.
+        from django.db.models import Prefetch
         queryset = (
             Dte.objects.filter(filtros_base_q)
             .select_related('emisor', 'sucursal')
             .prefetch_related(
-                'dte_productos__productoTalla__producto',
+                Prefetch(
+                    'dte_productos',
+                    queryset=Dte_Productos.objects.filter(activo=True).select_related(
+                        'productoTalla__producto__atributo1',
+                        'productoTalla__producto__atributo2',
+                    ),
+                    to_attr='lineas_activas',
+                ),
                 'dte_movimientos__sucursal_origen__empresa',
                 'dte_movimientos__sucursal_destino__empresa',
             )
@@ -288,8 +382,16 @@ def recepciones_pendientes_api(request):
                 })
 
         for dte in page_obj.object_list:
-            # Solo productos activos (no los anulados por ajuste del emisor)
-            detalles_queryset = dte.dte_productos.filter(activo=True).select_related('productoTalla__producto')
+            # Solo productos activos (no los anulados por ajuste del emisor).
+            # Viene del Prefetch de arriba (to_attr='lineas_activas'): ya está en
+            # memoria, no dispara query. NO volver a usar .filter() acá.
+            detalles_queryset = getattr(dte, 'lineas_activas', None)
+            if detalles_queryset is None:  # defensa si el prefetch no se aplicó
+                detalles_queryset = list(
+                    dte.dte_productos.filter(activo=True)
+                    .select_related('productoTalla__producto__atributo1',
+                                    'productoTalla__producto__atributo2')
+                )
 
             movimientos_salida = [
                 mov for mov in dte.dte_movimientos.all()
@@ -536,6 +638,7 @@ def historial_recepciones_api(request):
 
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_crear')
 @require_http_methods(["POST"])
 def confirmar_recepcion_api(request):
     """
@@ -594,12 +697,11 @@ def confirmar_recepcion_api(request):
             # Defensa: solo la sucursal destino puede recepcionar este DTE.
             # La vista unificada lista DTEs donde la sucursal es origen O destino,
             # y un emisor no debe poder confirmar una recepción ajena.
-            mov_salida = dte.dte_movimientos.filter(concepto='TRASPASO_SALIDA').first()
-            if mov_salida and mov_salida.sucursal_destino_id != sucursal_destino_id:
-                return JsonResponse(
-                    {'success': False, 'error': 'Solo la sucursal destino puede recepcionar este DTE.'},
-                    status=403,
-                )
+            # FAIL-CLOSED: antes la condición era `if mov_salida and ...`, así que
+            # un DTE sin movimiento de salida se saltaba el guard por completo.
+            _destino, err = _validar_destino_traspaso(dte, sucursal_destino_id)
+            if err:
+                return err
 
             if dte.estado_dte != 'EMITIDO':
                 return JsonResponse({'success': False, 'error': f'El DTE ya fue procesado (estado: {dte.estado_dte}).'}, status=400)
@@ -668,16 +770,36 @@ def confirmar_recepcion_api(request):
                 if not producto_talla:
                     continue
                 
-                cantidad_esperada = int(prod_data.get('cantidad_esperada', 0))
-                cantidad_recepcionada_raw = int(prod_data.get('cantidad_recepcionada', 0))
-                cantidad_danada = int(prod_data.get('cantidad_danada', 0))
-                cantidad_sobrante = int(prod_data.get('cantidad_sobrante', 0))  # Campo separado del frontend
+                # max(0, ...) en todas: el payload viene del cliente y un valor
+                # negativo se propagaba hasta el stock. Con cantidad_danada < 0,
+                # `cantidad_documentada - cantidad_danada` INFLABA el inventario.
+                cantidad_esperada = max(0, int(prod_data.get('cantidad_esperada', 0) or 0))
+                cantidad_recepcionada_raw = max(0, int(prod_data.get('cantidad_recepcionada', 0) or 0))
+                cantidad_danada = max(0, int(prod_data.get('cantidad_danada', 0) or 0))
+                cantidad_sobrante = max(0, int(prod_data.get('cantidad_sobrante', 0) or 0))  # Campo separado del frontend
                 estado = prod_data.get('estado', 'RECEPCIONADO_OK')
                 observaciones = prod_data.get('observaciones', '')
+
+                # Defensa: la cantidad esperada la manda el cliente, pero la
+                # verdad está en la línea del DTE. Si no coinciden, gana el
+                # documento — si no, bastaba con mandar cantidad_esperada
+                # inflada para ingresar más stock del facturado.
+                cantidad_esperada_real = max(0, int(dte_producto.stock or 0))
+                if cantidad_esperada != cantidad_esperada_real:
+                    logger.warning(
+                        "Recepción DTE %s: el cliente envió cantidad_esperada=%s para la línea %s "
+                        "pero el documento dice %s. Se usa la del documento.",
+                        dte.numero_documento, cantidad_esperada, dte_producto.id, cantidad_esperada_real,
+                    )
+                    cantidad_esperada = cantidad_esperada_real
 
                 # Clampear recepcionada: nunca más que la esperada (el sobrante va aparte)
                 cantidad_recepcionada = min(cantidad_recepcionada_raw, cantidad_esperada)
                 cantidad_faltante = max(0, cantidad_esperada - cantidad_recepcionada)
+
+                # Lo dañado no puede exceder lo que efectivamente llegó: sin este
+                # tope, recepcionada=2 con danada=5 daba cantidad_a_ingresar=-3.
+                cantidad_danada = min(cantidad_danada, cantidad_recepcionada)
 
                 # ✅ Acumular totales
                 total_esperado += cantidad_esperada
@@ -693,7 +815,14 @@ def confirmar_recepcion_api(request):
 
                 if tiene_problemas:
                     productos_problemas += 1
-                    cantidad_devolver_origen = cantidad_faltante + cantidad_danada
+                    # Al origen vuelve SOLO el faltante: es mercadería que nunca
+                    # salió físicamente de la bodega emisora.
+                    #
+                    # Lo DAÑADO no se devuelve: sí salió del origen y está roto
+                    # en el destino. Sumárselo al origen le inventaba stock
+                    # vendible que no existe. Se registra abajo como pérdida por
+                    # deterioro en el destino.
+                    cantidad_devolver_origen = cantidad_faltante
                     es_sobrante_puro = (cantidad_sobrante > 0 and cantidad_faltante == 0 and cantidad_danada == 0)
                     # Estado inicial al DETECTAR el problema. No usamos
                     # EN_REGULARIZACION aquí porque ese estado significa
@@ -703,12 +832,18 @@ def confirmar_recepcion_api(request):
                     # flujo de NC o el de Solicitud_Regularizacion.
                     if es_sobrante_puro:
                         estado_final = 'RECEPCIONADO_SOBRANTE'
-                    elif es_guia and cantidad_devolver_origen > 0 and cantidad_sobrante == 0:
+                    elif (es_guia and cantidad_devolver_origen > 0
+                          and cantidad_sobrante == 0 and cantidad_danada == 0):
                         # Auto-devolución al origen: para guías no aplica NC, el
                         # stock vuelve a la bodega emisora y la línea queda
                         # cerrada (REGULARIZADO) sin pasar por pestaña Regularizar.
                         # Si además hay sobrante, NO auto-resolvemos porque el
                         # sobrante requiere decisión manual de bodega.
+                        # Tampoco auto-resolvemos si hay DAÑO: esa mercadería
+                        # está rota en el destino y necesita una decisión
+                        # explícita (devolver al origen, dar de baja o NC). Antes
+                        # la línea se cerraba en REGULARIZADO arrastrando el daño
+                        # sin resolver.
                         estado_final = 'REGULARIZADO'
                         productos_auto_regularizados += 1
                         ids_origen_a_actualizar[producto_talla.id] = (
@@ -729,7 +864,7 @@ def confirmar_recepcion_api(request):
                             responsable=usuario,
                             observaciones=(
                                 f'Devolución automática a origen ({dte.sucursal.alias}): '
-                                f'{cantidad_devolver_origen} und ({cantidad_faltante} faltante + {cantidad_danada} dañado) '
+                                f'{cantidad_devolver_origen} und faltantes '
                                 f'- Recepción DTE GUIA #{dte.numero_documento}'
                             ),
                         ))
@@ -764,6 +899,12 @@ def confirmar_recepcion_api(request):
                     dte=dte,
                     dte_producto=dte_producto,
                     producto_talla=producto_talla,
+                    # sucursal_destino se dejaba en NULL en el 100% de las
+                    # recepciones de traspaso, y api_reporte_recepciones_detallado
+                    # filtra y agrupa por ese campo: el jefe de bodega filtraba
+                    # por su sucursal y veía 0 recepciones, o todas caían en
+                    # "Sin asignar". El dato ya estaba acá en una variable local.
+                    sucursal_destino=sucursal_destino,
                     stockArribado=cantidad_recepcionada,
                     cantidad_esperada=cantidad_esperada,
                     cantidad_danada=cantidad_danada,
@@ -773,7 +914,7 @@ def confirmar_recepcion_api(request):
                     observaciones=(
                         observaciones + (
                             f'\n[{hoy.strftime("%Y-%m-%d %H:%M")}] Auto-devolución a origen: '
-                            f'{cantidad_faltante + cantidad_danada} und (faltante/dañado).'
+                            f'{cantidad_faltante} und faltantes.'
                         ) if es_auto_regularizado else observaciones
                     ),
                     fecha_recepcion=hoy,
@@ -853,6 +994,32 @@ def confirmar_recepcion_api(request):
                 if cantidad_a_ingresar > 0:
                     tallas_a_actualizar[sku] = tallas_a_actualizar.get(sku, 0) + cantidad_a_ingresar
 
+                    # El COSTO viaja en el documento, no se toma del destino.
+                    #
+                    # Antes se usaba talla_destino.producto.costo: si el SKU ya
+                    # existía en la tienda con un costo local desactualizado (la
+                    # recepción de compra solo actualiza el costo de la sucursal
+                    # que recibe, y no hay signal que lo propague), el traspaso
+                    # REVALORIZABA la mercadería. Salía a 12.000 del CD y entraba
+                    # a 8.500 a la tienda: capital evaporado, margen de tienda
+                    # inflado y aging/liquidación subvalorando ese stock.
+                    #
+                    # El precio de VENTA sí sale del destino: es política
+                    # comercial local, no valorización.
+                    costo_doc = dte_producto.costo if dte_producto.costo else talla_destino.producto.costo
+                    sobreprecio_doc = (
+                        dte_producto.sobreprecio
+                        if getattr(dte_producto, 'sobreprecio', None)
+                        else talla_destino.producto.sobreprecio
+                    )
+                    if dte_producto.costo and talla_destino.producto.costo != dte_producto.costo:
+                        logger.info(
+                            "Recepción DTE %s SKU %s: costo del documento %s != costo local %s. "
+                            "Se valoriza con el del documento.",
+                            dte.numero_documento, sku,
+                            dte_producto.costo, talla_destino.producto.costo,
+                        )
+
                     # Movimiento de ingreso documentado (COMPLETADO)
                     movimientos_a_crear.append(Movimientos_Producto(
                         dte=dte,
@@ -860,8 +1027,8 @@ def confirmar_recepcion_api(request):
                         sucursal_origen=dte.sucursal,
                         sucursal_destino=sucursal_destino,
                         cantidad=cantidad_a_ingresar,
-                        costo=talla_destino.producto.costo,
-                        sobreprecio=talla_destino.producto.sobreprecio,
+                        costo=costo_doc,
+                        sobreprecio=sobreprecio_doc,
                         precio=talla_destino.producto.precioventa,
                         concepto='TRASPASO_ENTRADA',
                         tipo_movimiento='INGRESO',
@@ -1077,6 +1244,7 @@ def confirmar_recepcion_api(request):
 
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
 @require_http_methods(["POST"])
 def decidir_sobrante_api(request):
     """
@@ -1118,10 +1286,30 @@ def decidir_sobrante_api(request):
     if recepcion.estado not in ('RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE'):
         return JsonResponse({'success': False, 'error': f'Estado no válido para decidir sobrante: {recepcion.estado}'}, status=400)
 
+    # Scoping: el sobrante entra al destino REAL del traspaso, no a la sucursal
+    # de sesión. Sin esto, cualquiera con permiso podía sumarse el sobrante de
+    # una recepción ajena a su propia bodega pasando el id por el body (IDOR).
+    sucursal_destino, err = _validar_destino_traspaso(recepcion.dte, sucursal_id)
+    if err:
+        return err
+
     try:
         with transaction.atomic():
             hoy = timezone.now()
-            sucursal_destino = get_object_or_404(Sucursal, id=sucursal_id)
+            # Lock pesimista + revalidación: dos operadores resolviendo el mismo
+            # sobrante a la vez lo ingresaban dos veces.
+            recepcion = (
+                Productos_Recepcionados.objects
+                .select_for_update()
+                .select_related('dte', 'dte__sucursal', 'producto_talla', 'producto_talla__producto')
+                .get(id=recepcion_id)
+            )
+            if recepcion.estado not in ('RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE'):
+                return JsonResponse(
+                    {'success': False,
+                     'error': f'El sobrante ya fue resuelto (estado: {recepcion.estado}).'},
+                    status=409,
+                )
             producto_talla = recepcion.producto_talla
             dte = recepcion.dte
 
@@ -1245,8 +1433,10 @@ def decidir_sobrante_api(request):
 
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
 @require_http_methods(["POST"])
 @transaction.atomic
+@rollback_en_error
 def rechazar_recepcion_api(request):
     """
     Rechaza la recepción de un DTE de traspaso.
@@ -1259,7 +1449,10 @@ def rechazar_recepcion_api(request):
 
     dte_id = data.get('dte_id')
     motivo_rechazo = data.get('motivo_rechazo', '').strip()
-    usuario = data.get('usuario', request.user.username)
+    # El responsable sale SIEMPRE de la sesión. Antes se leía del body
+    # (data.get('usuario', ...)), así que el cliente podía firmar el rechazo
+    # con el nombre de otra persona en la traza de auditoría.
+    usuario = request.user.username
 
     if not dte_id:
         return JsonResponse({'success': False, 'error': 'Falta dte_id.'}, status=400)
@@ -1282,10 +1475,17 @@ def rechazar_recepcion_api(request):
     if not sucursal_destino_id:
         return JsonResponse({'success': False, 'error': 'No hay sucursal activa en la sesión.'}, status=400)
 
+    # Solo la sucursal DESTINO puede rechazar. Antes se leía la sucursal de
+    # sesión y no se comparaba con nada: cualquier usuario autenticado podía
+    # rechazar cualquier traspaso pendiente de toda la empresa.
+    _destino, err = _validar_destino_traspaso(dte, sucursal_destino_id)
+    if err:
+        return err
+
     try:
         with transaction.atomic():
             hoy = timezone.now()
-            
+
             # Marcar movimientos de salida como RECHAZADOS
             # Los movimientos de TRASPASO_SALIDA se guardan con estado COMPLETADO (el stock ya salió),
             # por eso buscamos tanto PENDIENTE_RECEPCION como COMPLETADO
@@ -4809,6 +5009,7 @@ def _validar_disponible_nc_linea(dte_original, dte_producto, cantidad_nueva):
 @requiere_permiso('recepcion_dte', 'puede_aprobar')
 @require_POST
 @transaction.atomic
+@rollback_en_error
 def regularizar_producto_api(request):
     """Regulariza un producto con problemas en la recepción o crea solicitud"""
     try:
@@ -4828,7 +5029,25 @@ def regularizar_producto_api(request):
                 'error': 'Faltan datos requeridos'
             }, status=400)
         
-        recepcion = get_object_or_404(Productos_Recepcionados, id=producto_id)
+        # Lock pesimista sobre la línea. La vista corre bajo @transaction.atomic,
+        # así que el lock vive hasta el final del request.
+        #
+        # Sin esto, dos operadores de la misma bodega regularizando la misma
+        # línea a la vez leían `cantidad_faltante = 3` los dos, ambos pasaban el
+        # candado de MERCADERIA_ENCONTRADA y sumaban 3 + 3 = 6 unidades sobre un
+        # faltante real de 3. El botón deshabilitado del frontend evita el
+        # doble-click de una persona, pero no a dos personas.
+        try:
+            recepcion = (
+                Productos_Recepcionados.objects
+                .select_for_update(of=('self',))
+                .get(id=producto_id)
+            )
+        except Productos_Recepcionados.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'No se encontró la línea de recepción indicada.'
+            }, status=404)
 
         if recepcion.estado == 'REGULARIZADO':
             return JsonResponse({
@@ -4937,15 +5156,47 @@ def regularizar_producto_api(request):
                 if recepcion.dte:
                     _recalcular_estado_dte(recepcion.dte)
                 
-                from .models import NotificacionDTE
-                NotificacionDTE.objects.create(
-                    dte=recepcion.dte,
-                    tipo='REGULARIZACION_REQUERIDA',
-                    titulo=f'Mercadería encontrada - DTE #{recepcion.dte.numero_documento if recepcion.dte else "N/A"}',
-                    mensaje=f'Se encontraron {cantidad_encontrada} unidades de {recepcion.producto_talla.producto.articulo if recepcion.producto_talla and recepcion.producto_talla.producto else "producto"} y se ingresaron al inventario de {sucursal_destino.alias}.',
-                    sucursal=sucursal_destino
-                )
-                
+                # Notificación al ORIGEN (que fue quien recibió la alerta de
+                # regularización requerida y necesita saber que se resolvió).
+                #
+                # Este bloque tenía DOS bugs que dejaban la opción inutilizable:
+                #   1. Faltaba `empresa_receptora`, que es FK NOT NULL
+                #      (models/dte.py). Era el único de los 9 create() del repo
+                #      que lo omitía: saltaba IntegrityError dentro del atomic y
+                #      revertía TODO (stock, movimiento y recepción), con un 500.
+                #      "Mercadería Encontrada" viene marcada por defecto en el
+                #      modal, así que la opción estaba rota al 100%.
+                #   2. Apuntaba a sucursal=sucursal_destino, o sea a la propia
+                #      sucursal que ejecutó la acción: el origen nunca se enteraba.
+                #
+                # Además va en su propio try/except: una notificación no puede
+                # tumbar un movimiento de stock ya confirmado (mismo criterio que
+                # confirmar_recepcion_api).
+                try:
+                    from .models import NotificacionDTE
+                    _empresa_notif = None
+                    if recepcion.dte:
+                        _empresa_notif = recepcion.dte.receptor or recepcion.dte.emisor
+                    if _empresa_notif:
+                        NotificacionDTE.objects.create(
+                            dte=recepcion.dte,
+                            empresa_receptora=_empresa_notif,
+                            tipo='REGULARIZACION_REQUERIDA',
+                            titulo=f'Mercadería encontrada - DTE #{recepcion.dte.numero_documento if recepcion.dte else "N/A"}',
+                            mensaje=(
+                                f'Se encontraron {cantidad_encontrada} unidades de '
+                                f'{recepcion.producto_talla.producto.articulo if recepcion.producto_talla and recepcion.producto_talla.producto else "producto"} '
+                                f'y se ingresaron al inventario de {sucursal_destino.alias}.'
+                            ),
+                            sucursal=recepcion.dte.sucursal if recepcion.dte else sucursal_destino,
+                        )
+                except Exception as e:
+                    logger.warning(
+                        "Notificacion de mercaderia encontrada no enviada (recepcion %s): %s",
+                        recepcion.id, str(e)[:200],
+                    )
+
+
                 return JsonResponse({
                     'success': True,
                     'message': f'Mercadería encontrada: +{cantidad_encontrada} unidades ingresadas a {sucursal_destino.alias}',
@@ -4970,18 +5221,54 @@ def regularizar_producto_api(request):
                         'success': False,
                         'error': 'No hay cantidad para regularizar'
                     }, status=400)
-                
+
+                # ─── VALIDAR ANTES DE ESCRIBIR ───────────────────────────────
+                # Todo lo que pueda rechazar la operación va ANTES de tocar
+                # stock. Motivo: esta vista corre bajo @transaction.atomic y un
+                # `return` no es una excepción — al salir, la transacción hace
+                # COMMIT. Antes se devolvía el stock al origen y recién después
+                # se validaba la NC previa: el usuario veía un 400 y creía que
+                # no había pasado nada, pero el origen ya había subido. Cada
+                # reintento sumaba otra vez (+3, +6, +9 unidades fantasma).
+                tope_regularizable = (recepcion.cantidad_faltante or 0) + (recepcion.cantidad_danada or 0)
+                if cantidad_nc > tope_regularizable:
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            f'Solo se pueden regularizar {tope_regularizable} u. '
+                            f'({recepcion.cantidad_faltante or 0} faltante + '
+                            f'{recepcion.cantidad_danada or 0} dañada). Pediste {cantidad_nc}.'
+                        )
+                    }, status=400)
+
+                _emite_nc = (
+                    hacer_nc and recepcion.dte and recepcion.dte_producto
+                    and recepcion.dte.tipo_documento in [
+                        'FACTURA ELECTRONICA', 'FACTURA', 'BOLETA ELECTRONICA', 'BOLETA'
+                    ]
+                )
+                if _emite_nc:
+                    err_disp = _validar_disponible_nc_linea(
+                        recepcion.dte, recepcion.dte_producto, cantidad_nc
+                    )
+                    if err_disp:
+                        return JsonResponse({'success': False, 'error': err_disp}, status=400)
+                # ─── FIN VALIDACIONES. A PARTIR DE ACÁ SE ESCRIBE ────────────
+
                 sucursal_origen = recepcion.dte.sucursal if recepcion.dte else None
-                
+
                 if sucursal_origen and recepcion.producto_talla:
                     producto_origen = Producto_Talla.objects.filter(
                         sku=recepcion.producto_talla.sku,
                         producto__sucursal=sucursal_origen
-                    ).first()
+                    ).order_by('id').first()
                     if producto_origen:
-                        producto_origen.stock += cantidad_nc
-                        producto_origen.save()
-                    
+                        # F() en vez de `stock += n; save()`: el read-modify-write
+                        # pierde actualizaciones concurrentes (lost update).
+                        Producto_Talla.objects.filter(id=producto_origen.id).update(
+                            stock=F('stock') + cantidad_nc
+                        )
+
                     Movimientos_Producto.objects.create(
                         dte=recepcion.dte,
                         ProductoTalla=producto_origen or recepcion.producto_talla,
@@ -5001,14 +5288,9 @@ def regularizar_producto_api(request):
                 if hacer_nc and recepcion.dte and recepcion.dte_producto:
                     dte_original = recepcion.dte
                     if dte_original.tipo_documento in ['FACTURA ELECTRONICA', 'FACTURA', 'BOLETA ELECTRONICA', 'BOLETA']:
-                        # Bloquear doble NC sobre la misma línea (anti-bug:
-                        # gestion-DTE + regularización podían acreditar la
-                        # misma productoTalla dos veces).
-                        err_disp = _validar_disponible_nc_linea(
-                            dte_original, recepcion.dte_producto, cantidad_nc
-                        )
-                        if err_disp:
-                            return JsonResponse({'success': False, 'error': err_disp}, status=400)
+                        # El candado anti doble-NC (_validar_disponible_nc_linea)
+                        # ya se ejecutó arriba, ANTES de tocar stock. No repetirlo
+                        # acá: un return en este punto commitearía la devolución.
                         # Montos sin doble IVA: calcular_montos_nc detecta si el
                         # precio del original es neto (traspaso) o con IVA (boleta).
                         from .views_modulo_documentos import calcular_montos_nc
@@ -5924,6 +6206,8 @@ def regularizar_producto_api(request):
 @login_required
 @requiere_permiso('recepcion_dte', 'puede_aprobar')
 @require_http_methods(["POST"])
+@transaction.atomic
+@rollback_en_error
 def regularizar_dte_masivo(request):
     """Genera 1 SOLA Nota de Crédito por todo el DTE con múltiples productos"""
     try:
@@ -5944,11 +6228,20 @@ def regularizar_dte_masivo(request):
         hoy = timezone.now()
         
         with transaction.atomic():
-            # Obtener todas las recepciones del DTE
-            recepciones = Productos_Recepcionados.objects.filter(
-                id__in=productos_ids
+            # Obtener las recepciones del DTE.
+            # ACOTADO al DTE del payload: antes se tomaban los productos_ids tal
+            # cual del cliente, sin comprobar que pertenecieran al documento que
+            # se dice estar regularizando.
+            # select_for_update(of=('self',)) bloquea solo las filas de
+            # Productos_Recepcionados (no las tablas de select_related, que
+            # además son nullable y romperían el FOR UPDATE).
+            recepciones = Productos_Recepcionados.objects.select_for_update(
+                of=('self',)
+            ).filter(
+                id__in=productos_ids,
+                dte__numero_documento=dte_numero,
             ).select_related('dte', 'dte_producto', 'producto_talla', 'producto_talla__producto')
-            
+
             if not recepciones.exists():
                 return JsonResponse({
                     'success': False,
@@ -5982,24 +6275,65 @@ def regularizar_dte_masivo(request):
             monto_neto_total = Decimal('0')
             productos_nc = []
             
+            lineas_rechazadas = []
+
             for recepcion in recepciones:
                 cantidad_acreditar = recepcion.cantidad_faltante + recepcion.cantidad_danada
-                
+
                 if cantidad_acreditar <= 0:
                     continue
-                
+
+                _sku = (
+                    recepcion.producto_talla.sku
+                    if recepcion.producto_talla else f'recepción {recepcion.id}'
+                )
+
+                # Candado 1: la línea ya cerrada no se vuelve a acreditar.
+                # Las rutas individuales (EMITIR_NC, REGULARIZAR_CON_NC,
+                # ENVIAR_CAMBIO) cierran en REGULARIZADO pero NO ponen
+                # cantidad_faltante en 0, así que sin este guard la masiva
+                # volvía a encontrar material acreditable en una línea ya
+                # acreditada y emitía una SEGUNDA NC con folio SII nuevo.
+                if recepcion.estado == 'REGULARIZADO':
+                    lineas_rechazadas.append(
+                        f'{_sku}: ya fue regularizada anteriormente.'
+                    )
+                    continue
+
+                # Candado 2: el mismo control anti doble-NC que usan las tres
+                # rutas individuales y que a la masiva le faltaba. Cubre el caso
+                # de una NC emitida antes desde gestión-DTE, que no toca
+                # Productos_Recepcionados.
+                err_disp = _validar_disponible_nc_linea(
+                    dte_original, recepcion.dte_producto, cantidad_acreditar
+                )
+                if err_disp:
+                    lineas_rechazadas.append(err_disp)
+                    continue
+
                 precio_unitario = recepcion.dte_producto.precio
                 monto_producto = cantidad_acreditar * precio_unitario
-                
+
                 total_unidades += cantidad_acreditar
                 monto_neto_total += monto_producto
-                
+
                 productos_nc.append({
                     'recepcion': recepcion,
                     'cantidad': cantidad_acreditar,
                     'precio_unitario': precio_unitario
                 })
-            
+
+            # Fail-closed: si alguna línea del lote está bloqueada, no se emite
+            # nada. Emitir una NC parcial y silenciosa dejaría al usuario creyendo
+            # que acreditó todo el documento.
+            if lineas_rechazadas:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No se emitió ninguna Nota de Crédito. Líneas bloqueadas:\n- '
+                             + '\n- '.join(lineas_rechazadas),
+                    'lineas_rechazadas': lineas_rechazadas,
+                }, status=409)
+
             if not productos_nc:
                 return JsonResponse({
                     'success': False,
@@ -7527,168 +7861,24 @@ def obtener_tickets_venta(request):
     })
 
 # ========== VISTAS PARA TRASPASOS ==========
+#
+# crear_traspaso / aprobar_traspaso / recibir_traspaso fueron ELIMINADAS el
+# 2026-07-28. Motivos:
+#   1. Ningún template ni archivo JS las invocaba (flujo muerto).
+#   2. Las tres colgaban solo de @require_POST + @transaction.atomic, sin
+#      @login_required. PermisosMenuMiddleware devuelve None para usuarios no
+#      autenticados (middleware_permisos.py), así que un POST anónimo con un
+#      csrftoken obtenido sin sesión movía stock firmado como 'Sistema'.
+#   3. aprobar_traspaso descontaba stock de los Traspaso en estado PENDIENTE,
+#      pero esos los crea api_crear_despacho_masivo
+#      (views_modulo_existencias_nuevo.py) que YA descontó el stock: aprobarlos
+#      lo descontaba por segunda vez y reconsumía lotes FIFO.
+#
+# El circuito real de traspasos entre sucursales es por DTE: emitir_dte genera
+# el TRASPASO_SALIDA y confirmar_recepcion_api el TRASPASO_ENTRADA.
+# Los modelos Traspaso / Traspaso_Detalle se conservan: los usa el despacho
+# masivo y hay datos históricos.
 
-@require_POST
-@transaction.atomic
-def crear_traspaso(request):
-    """
-    Crea una solicitud de traspaso entre sucursales
-    """
-    try:
-        data = json.loads(request.body)
-        
-        # Datos de sesión
-        sucursal_origen_id = request.session.get('idSucursalActual')
-        responsable = request.session.get('nombreUsuario', 'Sistema')
-        
-        if not sucursal_origen_id:
-            return JsonResponse({'success': False, 'error': 'No hay sucursal activa'}, status=400)
-        
-        sucursal_origen = get_object_or_404(Sucursal, id=sucursal_origen_id)
-        sucursal_destino = get_object_or_404(Sucursal, id=data.get('sucursal_destino_id'))
-        
-        if sucursal_origen == sucursal_destino:
-            return JsonResponse({'success': False, 'error': 'No se puede traspasar a la misma sucursal'}, status=400)
-        
-        productos = data.get('productos', [])
-        observaciones = data.get('observaciones', '')
-        
-        if not productos:
-            return JsonResponse({'success': False, 'error': 'No hay productos en el traspaso'}, status=400)
-        
-        # Verificar stock disponible
-        for producto in productos:
-            producto_talla = get_object_or_404(Producto_Talla, id=producto['producto_talla_id'])
-            cantidad = int(producto['cantidad'])
-            
-            if producto_talla.stock < cantidad:
-                raise Exception(f'Stock insuficiente para {producto_talla.producto.articulo} - Talla {producto_talla.talla}')
-        
-        # Crear traspaso
-        numero_traspaso = obtener_siguiente_correlativo(sucursal_origen, 'TRASPASO')
-        
-        traspaso = Traspaso.objects.create(
-            sucursal_origen=sucursal_origen,
-            sucursal_destino=sucursal_destino,
-            numero_traspaso=numero_traspaso,
-            solicitante=responsable,
-            observaciones_solicitud=observaciones
-        )
-        
-        # Crear detalles
-        for producto in productos:
-            producto_talla = get_object_or_404(Producto_Talla, id=producto['producto_talla_id'])
-            cantidad = int(producto['cantidad'])
-            
-            Traspaso_Detalle.objects.create(
-                traspaso=traspaso,
-                producto_talla=producto_talla,
-                cantidad_solicitada=cantidad,
-                costo=producto_talla.producto.costo,
-                precio_venta=producto_talla.producto.precioventa
-            )
-        
-        return JsonResponse({
-            'success': True,
-            'traspaso_id': traspaso.id,
-            'numero_traspaso': numero_traspaso
-        })
-        
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
-@require_POST
-@transaction.atomic
-def aprobar_traspaso(request):
-    """
-    Aprueba un traspaso y registra los movimientos de salida
-    """
-    try:
-        data = json.loads(request.body)
-        traspaso_id = data.get('traspaso_id')
-        aprobador = request.session.get('nombreUsuario', 'Sistema')
-        
-        traspaso = get_object_or_404(Traspaso, id=traspaso_id)
-        
-        if traspaso.estado != 'PENDIENTE':
-            return JsonResponse({'success': False, 'error': 'El traspaso no está pendiente'}, status=400)
-        
-        # Actualizar traspaso
-        traspaso.estado = 'APROBADO'
-        traspaso.aprobador = aprobador
-        traspaso.fecha_aprobacion = timezone.localdate()
-        traspaso.observaciones_aprobacion = data.get('observaciones', '')
-        traspaso.save()
-        
-        # Registrar movimientos de salida
-        for detalle in traspaso.detalles.all():
-            if detalle.cantidad_aprobada:
-                cantidad = detalle.cantidad_aprobada
-            else:
-                cantidad = detalle.cantidad_solicitada
-                detalle.cantidad_aprobada = cantidad
-                detalle.save()
-            
-            # Registrar movimiento de salida
-            registrar_movimiento_producto(
-                producto_talla=detalle.producto_talla,
-                concepto='TRASPASO_SALIDA',
-                cantidad=-cantidad,
-                responsable=aprobador,
-                sucursal_origen=traspaso.sucursal_origen,
-                sucursal_destino=traspaso.sucursal_destino,
-                observaciones=f'Traspaso #{traspaso.numero_traspaso} a {traspaso.sucursal_destino}',
-                referencia_externa=str(traspaso.numero_traspaso)
-            )
-        
-        return JsonResponse({'success': True})
-        
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
-@require_POST
-@transaction.atomic
-def recibir_traspaso(request):
-    """
-    Recibe un traspaso y registra los movimientos de entrada
-    """
-    try:
-        data = json.loads(request.body)
-        traspaso_id = data.get('traspaso_id')
-        receptor = request.session.get('nombreUsuario', 'Sistema')
-        
-        traspaso = get_object_or_404(Traspaso, id=traspaso_id)
-        
-        if traspaso.estado != 'APROBADO':
-            return JsonResponse({'success': False, 'error': 'El traspaso no está aprobado'}, status=400)
-        
-        # Actualizar traspaso
-        traspaso.estado = 'RECIBIDO'
-        traspaso.receptor = receptor
-        traspaso.fecha_recepcion = timezone.localdate()
-        traspaso.observaciones_recepcion = data.get('observaciones', '')
-        traspaso.save()
-        
-        # Registrar movimientos de entrada
-        for detalle in traspaso.detalles.all():
-            cantidad = detalle.cantidad_aprobada or detalle.cantidad_solicitada
-            
-            # Registrar movimiento de entrada
-            registrar_movimiento_producto(
-                producto_talla=detalle.producto_talla,
-                concepto='TRASPASO_ENTRADA',
-                cantidad=cantidad,
-                responsable=receptor,
-                sucursal_origen=traspaso.sucursal_origen,
-                sucursal_destino=traspaso.sucursal_destino,
-                observaciones=f'Traspaso #{traspaso.numero_traspaso} desde {traspaso.sucursal_origen}',
-                referencia_externa=str(traspaso.numero_traspaso)
-            )
-        
-        return JsonResponse({'success': True})
-        
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 # ========== VISTAS PARA AJUSTES DE INVENTARIO ==========
 

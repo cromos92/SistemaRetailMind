@@ -1,0 +1,976 @@
+{
+  "generado_en": "2026-07-28T16:12:01.203270-04:00",
+  "solo_lectura": true,
+  "parametros": {
+    "desde": "2026-01-01",
+    "hasta": "2026-07-28",
+    "sucursal_ids": [],
+    "sucursales": "TODAS",
+    "muestra": 10
+  },
+  "chequeos": [
+    {
+      "clave": "kardex-stock",
+      "titulo": "1. El kardex no cuadra con el stock",
+      "que_mide": "SKUs donde SUM(Movimientos_Producto.cantidad) != Producto_Talla.stock.",
+      "alcance": "Acumulado histórico completo (ignora --desde/--hasta por diseño).",
+      "casos": 126457,
+      "unidades": 84948,
+      "pesos": 18378179806,
+      "semaforo": "CRITICO",
+      "metricas": [
+        [
+          "SKUs analizados",
+          "605.912"
+        ],
+        [
+          "SKUs descuadrados",
+          "126.457  (20.87%)"
+        ],
+        [
+          "Stock declarado (total)",
+          "168.582 u"
+        ],
+        [
+          "Kardex acumulado (total)",
+          "83.634 u"
+        ],
+        [
+          "Delta global stock - kardex",
+          "84.948 u"
+        ],
+        [
+          "Unidades sin respaldo en kardex",
+          "775.925 u"
+        ],
+        [
+          "Unidades movidas de más",
+          "690.977 u"
+        ],
+        [
+          "Magnitud valorizada (|delta| x costo)",
+          "$18.378.179.806"
+        ]
+      ],
+      "desglose_titulo": "Descuadre por sucursal",
+      "muestra": [
+        {
+          "producto_talla_id": 211777,
+          "sku": 4790751,
+          "stock": 0,
+          "kardex": 56007,
+          "delta": -56007,
+          "articulo": "486-6037",
+          "descripcion": "COLEGIAL",
+          "talla": "38",
+          "sucursal": "EDEL"
+        },
+        {
+          "producto_talla_id": 362927,
+          "sku": 545455,
+          "stock": 0,
+          "kardex": -51000,
+          "delta": 51000,
+          "articulo": "BOLSA",
+          "descripcion": "BOLSA",
+          "talla": "00",
+          "sucursal": "EDEL"
+        },
+        {
+          "producto_talla_id": 49651,
+          "sku": 4712901,
+          "stock": 0,
+          "kardex": 50000,
+          "delta": -50000,
+          "articulo": "1356772-001",
+          "descripcion": "MK-1",
+          "talla": "XL",
+          "sucursal": "EDEL"
+        },
+        {
+          "producto_talla_id": 202788,
+          "sku": 4744022,
+          "stock": 0,
+          "kardex": -49500,
+          "delta": 49500,
+          "articulo": "45-2",
+          "descripcion": "BOLSA CORPORATIVA",
+          "talla": "00",
+          "sucursal": "EDEL"
+        },
+        {
+          "producto_talla_id": 202785,
+          "sku": 4744021,
+          "stock": 0,
+          "kardex": -42000,
+          "delta": 42000,
+          "articulo": "45-1",
+          "descripcion": "BOLSA CORPORATIVA",
+          "talla": "00",
+          "sucursal": "EDEL"
+        },
+        {
+          "producto_talla_id": 510401,
+          "sku": 4770407,
+          "stock": 0,
+          "kardex": 40488,
+          "delta": -40488,
+          "articulo": "MO21945",
+          "descripcion": "BG3200",
+          "talla": "7,0",
+          "sucursal": "EDEL"
+        },
+        {
+          "producto_talla_id": 566700,
+          "sku": 123456789,
+          "stock": 9914,
+          "kardex": -11877,
+          "delta": 21791,
+          "articulo": "VISA",
+          "descripcion": "DIFER VISA",
+          "talla": "00",
+          "sucursal": "PAO4"
+        },
+        {
+          "producto_talla_id": 566703,
+          "sku": 123456789,
+          "stock": 959,
+          "kardex": -19697,
+          "delta": 20656,
+          "articulo": "VISA",
+          "descripcion": "DIFER VISA",
+          "talla": "00",
+          "sucursal": "NICK1"
+        },
+        {
+          "producto_talla_id": 507658,
+          "sku": 4762283,
+          "stock": 6,
+          "kardex": 16006,
+          "delta": -16000,
+          "articulo": "MESA DE PING PONG",
+          "descripcion": "FRONTÓN M4 PRO",
+          "talla": "00",
+          "sucursal": "EDEL"
+        },
+        {
+          "producto_talla_id": 362971,
+          "sku": 4812815,
+          "stock": 2200,
+          "kardex": -12800,
+          "delta": 15000,
+          "articulo": "BOLSA REAL",
+          "descripcion": "PAPEL",
+          "talla": "00",
+          "sucursal": "IMP"
+        }
+      ],
+      "veredicto": "El kardex es la única fuente auditable del inventario: mientras no cuadre, ningún reporte de costo o rotación es defendible. Revisar primero los SKUs de la muestra (mayor |delta|). OJO: la cifra en pesos es la MAGNITUD del descuadre (suma de |delta| x costo), no una pérdida contable.",
+      "segundos": 50.9
+    },
+    {
+      "clave": "ventas-sin-movimiento",
+      "titulo": "2. Ventas cobradas que nunca descontaron stock",
+      "que_mide": "Tickets PAGADOS sin ningún Movimientos_Producto asociado.",
+      "alcance": "Tickets creados entre 2026-01-01 y 2026-07-28 (por created_at).",
+      "casos": 151,
+      "unidades": 239,
+      "pesos": 5759823,
+      "semaforo": "CRITICO",
+      "metricas": [
+        [
+          "Tickets PAGADOS en el rango",
+          "15.082"
+        ],
+        [
+          "Tickets sin movimiento",
+          "151  (1.0%)"
+        ],
+        [
+          "Monto involucrado",
+          "$5.759.823"
+        ],
+        [
+          "Con líneas de producto real",
+          "132 tickets / $4.427.682"
+        ],
+        [
+          "Unidades vendidas no descontadas",
+          "239 u"
+        ]
+      ],
+      "desglose_titulo": "Por sucursal / por módulo de origen",
+      "muestra": [
+        {
+          "id": 23,
+          "correlativo": 2,
+          "sucursal__alias": "NICK2",
+          "total": 299970,
+          "modulo_origen": "VENTA_PUBLICO",
+          "estado": "PAGADO",
+          "responsable": "javier",
+          "tipo_dte": "TICKET",
+          "folio_dte": 4,
+          "fecha": "26-01-2026 17:44"
+        },
+        {
+          "id": 37,
+          "correlativo": 10008,
+          "sucursal__alias": "PAO1",
+          "total": 209940,
+          "modulo_origen": "VENTA_PUBLICO",
+          "estado": "PAGADO",
+          "responsable": "javier",
+          "tipo_dte": "TICKET",
+          "folio_dte": 410006,
+          "fecha": "27-03-2026 17:07"
+        },
+        {
+          "id": 58,
+          "correlativo": 10026,
+          "sucursal__alias": "PAO1",
+          "total": 179970,
+          "modulo_origen": "VENTA_PUBLICO",
+          "estado": "PAGADO",
+          "responsable": "javier",
+          "tipo_dte": "TICKET",
+          "folio_dte": 1,
+          "fecha": "30-03-2026 13:46"
+        },
+        {
+          "id": 92,
+          "correlativo": 10042,
+          "sucursal__alias": "PAO1",
+          "total": 159980,
+          "modulo_origen": "VENTA_PUBLICO",
+          "estado": "PAGADO",
+          "responsable": "javier",
+          "tipo_dte": "TICKET",
+          "folio_dte": 410029,
+          "fecha": "07-04-2026 12:15"
+        },
+        {
+          "id": 84,
+          "correlativo": 10034,
+          "sucursal__alias": "PAO1",
+          "total": 149970,
+          "modulo_origen": "VENTA_PUBLICO",
+          "estado": "PAGADO",
+          "responsable": "javier",
+          "tipo_dte": "TICKET",
+          "folio_dte": 4,
+          "fecha": "06-04-2026 11:23"
+        },
+        {
+          "id": 22,
+          "correlativo": 1,
+          "sucursal__alias": "NICK2",
+          "total": 143970,
+          "modulo_origen": "VENTA_PUBLICO",
+          "estado": "PAGADO",
+          "responsable": "javier",
+          "tipo_dte": "TICKET",
+          "folio_dte": 5,
+          "fecha": "26-01-2026 17:43"
+        },
+        {
+          "id": 24,
+          "correlativo": 3,
+          "sucursal__alias": "NICK2",
+          "total": 139990,
+          "modulo_origen": "VENTA_PUBLICO",
+          "estado": "PAGADO",
+          "responsable": "javier",
+          "tipo_dte": "TICKET",
+          "folio_dte": 2,
+          "fecha": "26-01-2026 17:44"
+        },
+        {
+          "id": 87,
+          "correlativo": 10037,
+          "sucursal__alias": "PAO1",
+          "total": 139980,
+          "modulo_origen": "VENTA_PUBLICO",
+          "estado": "PAGADO",
+          "responsable": "javier",
+          "tipo_dte": "TICKET",
+          "folio_dte": 410025,
+          "fecha": "06-04-2026 16:54"
+        },
+        {
+          "id": 8006,
+          "correlativo": 121432,
+          "sucursal__alias": "PAO4",
+          "total": 139980,
+          "modulo_origen": "VENTA_PUBLICO",
+          "estado": "PAGADO",
+          "responsable": "",
+          "tipo_dte": "TICKET",
+          "folio_dte": null,
+          "fecha": "02-06-2026 15:07"
+        },
+        {
+          "id": 8510,
+          "correlativo": 181930,
+          "sucursal__alias": "NICK2",
+          "total": 134990,
+          "modulo_origen": "ECOMMERCE",
+          "estado": "PAGADO",
+          "responsable": "ECOMMERCE",
+          "tipo_dte": "TICKET",
+          "folio_dte": 284348,
+          "fecha": "04-06-2026 17:44"
+        }
+      ],
+      "veredicto": "Cada uno de estos tickets es plata cobrada con inventario intacto: el stock del sistema está inflado en esas unidades. Encaja con la falta de atomicidad del cobro (registrar_pagos_ticket). Los de módulo CAMBIO_DEVOLUCION pueden ser legítimos (canje sin ítems); priorizar los que tienen líneas de producto real.",
+      "segundos": 1.8
+    },
+    {
+      "clave": "movimientos-huerfanos",
+      "titulo": "3. Movimientos de venta sin ticket ni DTE",
+      "que_mide": "Movimientos con concepto de venta (VENTA_PUBLICO, VENTA_MAYORISTA, VENTA_DIRECTA) cuyos campos ticket y dte están ambos en NULL.",
+      "alcance": "Movimientos con fecha entre 2026-01-01 y 2026-07-28.",
+      "casos": 29086,
+      "unidades": 30977,
+      "pesos": 344178180,
+      "semaforo": "CRITICO",
+      "metricas": [
+        [
+          "Movimientos de venta en el rango",
+          "51.702"
+        ],
+        [
+          "Sin respaldo documental",
+          "29.086  (56.26%)"
+        ],
+        [
+          "Unidades sin respaldo",
+          "30.977 u"
+        ],
+        [
+          "Costo involucrado",
+          "$344.178.180"
+        ]
+      ],
+      "desglose_titulo": "Por mes / por sucursal de origen",
+      "muestra": [
+        {
+          "id": 2470643,
+          "ProductoTalla__sku": 4827052,
+          "ProductoTalla__talla": "00",
+          "ProductoTalla__producto__articulo": "BALON FUTSAL CAFU",
+          "sucursal_origen__alias": "NICK2",
+          "fecha": "2026-01-21",
+          "cantidad": -100,
+          "concepto": "VENTA_PUBLICO",
+          "responsable": "Maria Zabala"
+        },
+        {
+          "id": 2519752,
+          "ProductoTalla__sku": 4827052,
+          "ProductoTalla__talla": "00",
+          "ProductoTalla__producto__articulo": "BALON FUTSAL CAFU",
+          "sucursal_origen__alias": "NICK2",
+          "fecha": "2026-03-20",
+          "cantidad": -99,
+          "concepto": "VENTA_PUBLICO",
+          "responsable": "Maria Zabala"
+        },
+        {
+          "id": 2504416,
+          "ProductoTalla__sku": 4827052,
+          "ProductoTalla__talla": "00",
+          "ProductoTalla__producto__articulo": "BALON FUTSAL CAFU",
+          "sucursal_origen__alias": "NICK2",
+          "fecha": "2026-02-27",
+          "cantidad": -99,
+          "concepto": "VENTA_PUBLICO",
+          "responsable": "Maria Zabala"
+        },
+        {
+          "id": 2484930,
+          "ProductoTalla__sku": 4828643,
+          "ProductoTalla__talla": "00",
+          "ProductoTalla__producto__articulo": "SET UNIFORME FUTBOL",
+          "sucursal_origen__alias": "NICK2",
+          "fecha": "2026-01-14",
+          "cantidad": -42,
+          "concepto": "VENTA_PUBLICO",
+          "responsable": "Maria Zabala"
+        },
+        {
+          "id": 2486315,
+          "ProductoTalla__sku": 4789800,
+          "ProductoTalla__talla": "00",
+          "ProductoTalla__producto__articulo": "MEDALLA A11",
+          "sucursal_origen__alias": "NICK2",
+          "fecha": "2026-01-24",
+          "cantidad": -36,
+          "concepto": "VENTA_PUBLICO",
+          "responsable": "Maria Zabala"
+        },
+        {
+          "id": 2450993,
+          "ProductoTalla__sku": 4779520,
+          "ProductoTalla__talla": "6,0",
+          "ProductoTalla__producto__articulo": "MO21938",
+          "sucursal_origen__alias": "NICK2",
+          "fecha": "2026-01-02",
+          "cantidad": -30,
+          "concepto": "VENTA_PUBLICO",
+          "responsable": "Maria Zabala"
+        },
+        {
+          "id": 2504639,
+          "ProductoTalla__sku": 4828268,
+          "ProductoTalla__talla": "4,0",
+          "ProductoTalla__producto__articulo": "FM00001",
+          "sucursal_origen__alias": "NICK2",
+          "fecha": "2026-02-27",
+          "cantidad": -30,
+          "concepto": "VENTA_PUBLICO",
+          "responsable": "Maria Zabala"
+        },
+        {
+          "id": 2504638,
+          "ProductoTalla__sku": 4421027,
+          "ProductoTalla__talla": "00",
+          "ProductoTalla__producto__articulo": "MO21761",
+          "sucursal_origen__alias": "NICK2",
+          "fecha": "2026-02-27",
+          "cantidad": -30,
+          "concepto": "VENTA_PUBLICO",
+          "responsable": "Maria Zabala"
+        },
+        {
+          "id": 2470644,
+          "ProductoTalla__sku": 4772992,
+          "ProductoTalla__talla": "00",
+          "ProductoTalla__producto__articulo": "8.10.27",
+          "sucursal_origen__alias": "NICK2",
+          "fecha": "2026-01-21",
+          "cantidad": -25,
+          "concepto": "VENTA_PUBLICO",
+          "responsable": "Maria Zabala"
+        },
+        {
+          "id": 2854610,
+          "ProductoTalla__sku": 4826478,
+          "ProductoTalla__talla": "00",
+          "ProductoTalla__producto__articulo": "1014067902",
+          "sucursal_origen__alias": "NICK2",
+          "fecha": "2026-04-14",
+          "cantidad": -25,
+          "concepto": "VENTA_PUBLICO",
+          "responsable": "Maria Zabala"
+        }
+      ],
+      "veredicto": "Stock que salió sin documento asociado. Si se concentran en los meses de la sincronización con el sistema legacy es deuda histórica; si aparecen en meses recientes es un flujo vivo que está descontando stock sin dejar rastro.",
+      "segundos": 1.7
+    },
+    {
+      "clave": "traspasos-sin-recibir",
+      "titulo": "4. Mercadería despachada que nadie recibió",
+      "que_mide": "DTE de traspaso donde las unidades con TRASPASO_SALIDA superan a las recibidas (TRASPASO_ENTRADA / REGULARIZACION_TRASPASO / SOBRANTE_INGRESO).",
+      "alcance": "DTE de traspaso emitidos entre 2026-01-01 y 2026-07-28.",
+      "casos": 35,
+      "unidades": 1515,
+      "pesos": 25964017,
+      "semaforo": "CRITICO",
+      "metricas": [
+        [
+          "DTE de traspaso con salida",
+          "601"
+        ],
+        [
+          "Sin ninguna entrada",
+          "25"
+        ],
+        [
+          "Recibidos parcialmente",
+          "10"
+        ],
+        [
+          "Unidades en tránsito eterno",
+          "1.515 u"
+        ],
+        [
+          "Pendientes hace más de 7 días",
+          "21 DTE / 380 u"
+        ],
+        [
+          "Valorizado al costo de salida",
+          "$25.964.017"
+        ]
+      ],
+      "muestra": [
+        {
+          "dte_id": 2180512,
+          "numero_documento": 11422,
+          "tipo_documento": "GUIA",
+          "fecha_emision": "2026-04-29",
+          "dias_en_transito": 90,
+          "estado_dte": "EMITIDO",
+          "origen": "PA00",
+          "destino": "PAO3",
+          "despachado": 300,
+          "recibido": 0,
+          "pendiente": 300,
+          "valor_pendiente": 27000
+        },
+        {
+          "dte_id": 2194090,
+          "numero_documento": 17039,
+          "tipo_documento": "FACTURA ELECTRONICA",
+          "fecha_emision": "2026-07-25",
+          "dias_en_transito": 3,
+          "estado_dte": "EMITIDO",
+          "origen": "EDEL",
+          "destino": "NICK1",
+          "despachado": 203,
+          "recibido": 0,
+          "pendiente": 203,
+          "valor_pendiente": 5800060
+        },
+        {
+          "dte_id": 2194387,
+          "numero_documento": 17043,
+          "tipo_documento": "FACTURA ELECTRONICA",
+          "fecha_emision": "2026-07-27",
+          "dias_en_transito": 1,
+          "estado_dte": "EMITIDO",
+          "origen": "EDEL",
+          "destino": "PAO2",
+          "despachado": 191,
+          "recibido": 0,
+          "pendiente": 191,
+          "valor_pendiente": 3375350
+        },
+        {
+          "dte_id": 2194105,
+          "numero_documento": 17040,
+          "tipo_documento": "FACTURA ELECTRONICA",
+          "fecha_emision": "2026-07-25",
+          "dias_en_transito": 3,
+          "estado_dte": "EMITIDO",
+          "origen": "EDEL",
+          "destino": "NICK1",
+          "despachado": 174,
+          "recibido": 0,
+          "pendiente": 174,
+          "valor_pendiente": 4946640
+        },
+        {
+          "dte_id": 2194388,
+          "numero_documento": 17044,
+          "tipo_documento": "FACTURA ELECTRONICA",
+          "fecha_emision": "2026-07-27",
+          "dias_en_transito": 1,
+          "estado_dte": "EMITIDO",
+          "origen": "EDEL",
+          "destino": "PAO2",
+          "despachado": 147,
+          "recibido": 0,
+          "pendiente": 147,
+          "valor_pendiente": 3682260
+        },
+        {
+          "dte_id": 2194392,
+          "numero_documento": 17046,
+          "tipo_documento": "FACTURA ELECTRONICA",
+          "fecha_emision": "2026-07-27",
+          "dias_en_transito": 1,
+          "estado_dte": "EMITIDO",
+          "origen": "EDEL",
+          "destino": "PAO3",
+          "despachado": 83,
+          "recibido": 0,
+          "pendiente": 83,
+          "valor_pendiente": 1867380
+        },
+        {
+          "dte_id": 2194390,
+          "numero_documento": 17045,
+          "tipo_documento": "FACTURA ELECTRONICA",
+          "fecha_emision": "2026-07-27",
+          "dias_en_transito": 1,
+          "estado_dte": "EMITIDO",
+          "origen": "EDEL",
+          "destino": "PAO4",
+          "despachado": 63,
+          "recibido": 0,
+          "pendiente": 63,
+          "valor_pendiente": 1824370
+        },
+        {
+          "dte_id": 2194452,
+          "numero_documento": 17050,
+          "tipo_documento": "FACTURA ELECTRONICA",
+          "fecha_emision": "2026-07-28",
+          "dias_en_transito": 0,
+          "estado_dte": "EMITIDO",
+          "origen": "EDEL",
+          "destino": "PAO3",
+          "despachado": 59,
+          "recibido": 0,
+          "pendiente": 59,
+          "valor_pendiente": 515130
+        },
+        {
+          "dte_id": 2194454,
+          "numero_documento": 17052,
+          "tipo_documento": "FACTURA ELECTRONICA",
+          "fecha_emision": "2026-07-28",
+          "dias_en_transito": 0,
+          "estado_dte": "EMITIDO",
+          "origen": "EDEL",
+          "destino": "PAO4",
+          "despachado": 55,
+          "recibido": 0,
+          "pendiente": 55,
+          "valor_pendiente": 445450
+        },
+        {
+          "dte_id": 2194455,
+          "numero_documento": 17053,
+          "tipo_documento": "FACTURA ELECTRONICA",
+          "fecha_emision": "2026-07-28",
+          "dias_en_transito": 0,
+          "estado_dte": "EMITIDO",
+          "origen": "EDEL",
+          "destino": "PAO1",
+          "despachado": 50,
+          "recibido": 0,
+          "pendiente": 50,
+          "valor_pendiente": 395500
+        }
+      ],
+      "veredicto": "Ninguna pantalla del módulo de existencias expone estos casos: la mercadería salió del origen, no entró al destino y el sistema la da por movida. Los DTE de los últimos 7 días pueden estar legítimamente en camino; los más antiguos con estado EMITIDO y cero entradas son los urgentes.",
+      "segundos": 1.0
+    },
+    {
+      "clave": "stock-lotes",
+      "titulo": "5. Stock vendible sin costo FIFO",
+      "que_mide": "SKUs donde Producto_Talla.stock != suma de LoteProducto.cantidad_disponible (lotes activos).",
+      "alcance": "Foto del inventario actual (ignora --desde/--hasta por diseño).",
+      "casos": 117,
+      "unidades": 72,
+      "pesos": 1710520,
+      "semaforo": "REVISAR",
+      "metricas": [
+        [
+          "SKUs descuadrados vs lotes",
+          "117"
+        ],
+        [
+          "Unidades en lotes activos",
+          "168.705 u"
+        ],
+        [
+          "Stock SIN costo FIFO",
+          "72 u"
+        ],
+        [
+          "Lotes que sobran sobre el stock",
+          "195 u"
+        ],
+        [
+          "Valorizado al costo del producto",
+          "$1.710.520"
+        ]
+      ],
+      "desglose_titulo": "Unidades sin costo por sucursal (delta = stock - lotes)",
+      "muestra": [
+        {
+          "producto_talla_id": 16028,
+          "sku": 4708315,
+          "stock": -40,
+          "kardex": 0,
+          "delta": -40,
+          "articulo": "1003",
+          "descripcion": "CALZA CORTA",
+          "talla": "L",
+          "sucursal": "EDEL FALLADOS"
+        },
+        {
+          "producto_talla_id": 16034,
+          "sku": 4708313,
+          "stock": -40,
+          "kardex": 0,
+          "delta": -40,
+          "articulo": "1003",
+          "descripcion": "CALZA CORTA",
+          "talla": "S",
+          "sucursal": "EDEL FALLADOS"
+        },
+        {
+          "producto_talla_id": 323441,
+          "sku": 4742877,
+          "stock": -25,
+          "kardex": 0,
+          "delta": -25,
+          "articulo": "954",
+          "descripcion": "CAM ALTO RENDIMIENTO",
+          "talla": "00",
+          "sucursal": "EDEL FALLADOS"
+        },
+        {
+          "producto_talla_id": 16035,
+          "sku": 4708312,
+          "stock": -20,
+          "kardex": 0,
+          "delta": -20,
+          "articulo": "1003",
+          "descripcion": "CALZA CORTA",
+          "talla": "XS",
+          "sucursal": "EDEL FALLADOS"
+        },
+        {
+          "producto_talla_id": 22814,
+          "sku": 361791,
+          "stock": -5,
+          "kardex": 0,
+          "delta": -5,
+          "articulo": "1113",
+          "descripcion": "CALZA LARGA LYCRA",
+          "talla": "00",
+          "sucursal": "EDEL FALLADOS"
+        },
+        {
+          "producto_talla_id": 415622,
+          "sku": 110403,
+          "stock": -5,
+          "kardex": 0,
+          "delta": -5,
+          "articulo": "ER-400",
+          "descripcion": "CHALA",
+          "talla": "37",
+          "sucursal": "EDEL FALLADOS"
+        },
+        {
+          "producto_talla_id": 206028,
+          "sku": 158092,
+          "stock": -4,
+          "kardex": 0,
+          "delta": -4,
+          "articulo": "45594000",
+          "descripcion": "BALON BASK N5GR6",
+          "talla": "00",
+          "sucursal": "EDEL FALLADOS"
+        },
+        {
+          "producto_talla_id": 415509,
+          "sku": 4790546,
+          "stock": 560,
+          "kardex": 556,
+          "delta": 4,
+          "articulo": "ENVIOS",
+          "descripcion": "COSTO ENVIO",
+          "talla": "00",
+          "sucursal": "NICK2"
+        },
+        {
+          "producto_talla_id": 415615,
+          "sku": 110402,
+          "stock": -4,
+          "kardex": 0,
+          "delta": -4,
+          "articulo": "ER-400",
+          "descripcion": "CHALA",
+          "talla": "36",
+          "sucursal": "EDEL FALLADOS"
+        },
+        {
+          "producto_talla_id": 507983,
+          "sku": 4691560,
+          "stock": -4,
+          "kardex": 0,
+          "delta": -4,
+          "articulo": "MI32646",
+          "descripcion": "BOLSO AERIAL",
+          "talla": "00",
+          "sucursal": "EDEL FALLADOS"
+        }
+      ],
+      "veredicto": "Estas unidades se pueden vender pero el sistema no sabe cuánto costaron: el margen de esas ventas es inauditable y contamina aging de capital y plan de liquidación. La causa conocida es la recepción de traspaso, que escribe stock sin crear lote.",
+      "segundos": 3.1
+    },
+    {
+      "clave": "recepciones-sin-mov",
+      "titulo": "6. El eslabón compra <-> kardex está roto",
+      "que_mide": "Productos_Recepcionados con movimiento_ingreso en NULL (no históricas).",
+      "alcance": "Recepciones entre 2026-01-01 y 2026-07-28 (por fecha_recepcion; si es NULL, por fecha).",
+      "casos": 10869,
+      "unidades": 43660,
+      "pesos": 485756392,
+      "semaforo": "CRITICO",
+      "metricas": [
+        [
+          "Recepciones en el rango",
+          "10.869"
+        ],
+        [
+          "Sin movimiento asociado",
+          "10.869  (100.0%)"
+        ],
+        [
+          "Con línea de compra / con DTE",
+          "4.643 / 10.682 (pueden solaparse)"
+        ],
+        [
+          "Unidades sin trazabilidad",
+          "43.660 u"
+        ],
+        [
+          "Valorizado al costo del producto",
+          "$485.756.392"
+        ]
+      ],
+      "desglose_titulo": "Por estado de recepción",
+      "muestra": [
+        {
+          "id": 10269,
+          "estado": "RECEPCIONADO_OK",
+          "stockArribado": 1000,
+          "fecha": "2026-07-17",
+          "fecha_recepcion": "2026-07-17 15:57:24.276553+00:00",
+          "producto_talla__sku": 4744021,
+          "producto_talla__producto__articulo": "45-1",
+          "dte__numero_documento": 4291,
+          "sucursal_destino__alias": null,
+          "producto_talla__producto__sucursal__alias": "IMP",
+          "recepcionado_por": "marcelohurtadoh",
+          "sucursal": "IMP"
+        },
+        {
+          "id": 10270,
+          "estado": "RECEPCIONADO_OK",
+          "stockArribado": 1000,
+          "fecha": "2026-07-17",
+          "fecha_recepcion": "2026-07-17 15:57:24.276553+00:00",
+          "producto_talla__sku": 4812815,
+          "producto_talla__producto__articulo": "BOLSA REAL",
+          "dte__numero_documento": 4291,
+          "sucursal_destino__alias": null,
+          "producto_talla__producto__sucursal__alias": "IMP",
+          "recepcionado_por": "marcelohurtadoh",
+          "sucursal": "IMP"
+        },
+        {
+          "id": 3811,
+          "estado": "RECEPCIONADO_OK",
+          "stockArribado": 600,
+          "fecha": "2026-05-09",
+          "fecha_recepcion": "2026-05-09 21:22:34.395962+00:00",
+          "producto_talla__sku": 4812815,
+          "producto_talla__producto__articulo": "BOLSA REAL",
+          "dte__numero_documento": 4256,
+          "sucursal_destino__alias": null,
+          "producto_talla__producto__sucursal__alias": "IMP",
+          "recepcionado_por": "marcelohurtadoh",
+          "sucursal": "IMP"
+        },
+        {
+          "id": 10274,
+          "estado": "RECEPCIONADO_OK",
+          "stockArribado": 600,
+          "fecha": "2026-07-17",
+          "fecha_recepcion": "2026-07-17 16:33:34.630503+00:00",
+          "producto_talla__sku": 4812815,
+          "producto_talla__producto__articulo": "BOLSA REAL",
+          "dte__numero_documento": 4292,
+          "sucursal_destino__alias": null,
+          "producto_talla__producto__sucursal__alias": "IMP",
+          "recepcionado_por": "collaovegas14",
+          "sucursal": "IMP"
+        },
+        {
+          "id": 6693,
+          "estado": "RECEPCIONADO_OK",
+          "stockArribado": 600,
+          "fecha": "2026-06-11",
+          "fecha_recepcion": "2026-06-11 21:04:31.720438+00:00",
+          "producto_talla__sku": 4790652,
+          "producto_talla__producto__articulo": "BOLSA GENERO",
+          "dte__numero_documento": 11545,
+          "sucursal_destino__alias": null,
+          "producto_talla__producto__sucursal__alias": "PA00",
+          "recepcionado_por": "davidtomy1970",
+          "sucursal": "PA00"
+        },
+        {
+          "id": 6694,
+          "estado": "RECEPCIONADO_OK",
+          "stockArribado": 600,
+          "fecha": "2026-06-11",
+          "fecha_recepcion": "2026-06-11 21:04:31.720438+00:00",
+          "producto_talla__sku": 4744021,
+          "producto_talla__producto__articulo": "45-1",
+          "dte__numero_documento": 11545,
+          "sucursal_destino__alias": null,
+          "producto_talla__producto__sucursal__alias": "PA00",
+          "recepcionado_por": "davidtomy1970",
+          "sucursal": "PA00"
+        },
+        {
+          "id": 10301,
+          "estado": "RECEPCIONADO_OK",
+          "stockArribado": 600,
+          "fecha": "2026-07-23",
+          "fecha_recepcion": "2026-07-23 21:09:47.519161+00:00",
+          "producto_talla__sku": 4790652,
+          "producto_talla__producto__articulo": "BOLSA GENERO",
+          "dte__numero_documento": 11682,
+          "sucursal_destino__alias": null,
+          "producto_talla__producto__sucursal__alias": "PA00",
+          "recepcionado_por": "tarifafabiolita",
+          "sucursal": "PA00"
+        },
+        {
+          "id": 10302,
+          "estado": "RECEPCIONADO_OK",
+          "stockArribado": 600,
+          "fecha": "2026-07-23",
+          "fecha_recepcion": "2026-07-23 21:44:00.041229+00:00",
+          "producto_talla__sku": 4790652,
+          "producto_talla__producto__articulo": "BOLSA GENERO",
+          "dte__numero_documento": 11681,
+          "sucursal_destino__alias": null,
+          "producto_talla__producto__sucursal__alias": "PA00",
+          "recepcionado_por": "tamaratorrez",
+          "sucursal": "PA00"
+        },
+        {
+          "id": 4436,
+          "estado": "RECEPCIONADO_OK",
+          "stockArribado": 500,
+          "fecha": "2026-05-16",
+          "fecha_recepcion": "2026-05-16 17:15:37.886968+00:00",
+          "producto_talla__sku": 4790652,
+          "producto_talla__producto__articulo": "BOLSA GENERO",
+          "dte__numero_documento": 11478,
+          "sucursal_destino__alias": null,
+          "producto_talla__producto__sucursal__alias": "PA00",
+          "recepcionado_por": "tamaratorrez",
+          "sucursal": "PA00"
+        },
+        {
+          "id": 8622,
+          "estado": "RECEPCIONADO_OK",
+          "stockArribado": 500,
+          "fecha": "2026-06-18",
+          "fecha_recepcion": "2026-06-18 15:50:30.403542+00:00",
+          "producto_talla__sku": 4790652,
+          "producto_talla__producto__articulo": "BOLSA GENERO",
+          "dte__numero_documento": 11575,
+          "sucursal_destino__alias": null,
+          "producto_talla__producto__sucursal__alias": "PA00",
+          "recepcionado_por": "tabiloarayamariaangelica",
+          "sucursal": "PA00"
+        }
+      ],
+      "veredicto": "Sin este enlace no se puede ir de una factura de compra al movimiento que ingresó la mercadería: la trazabilidad compra -> kardex no existe. Es un dato de auditoría faltante, no un descuadre de unidades.",
+      "segundos": 1.0
+    }
+  ]
+}

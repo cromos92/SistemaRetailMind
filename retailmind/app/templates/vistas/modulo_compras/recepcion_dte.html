@@ -1402,32 +1402,48 @@
                             <small class="text-muted">En tránsito</small>
                         </div>
                     </div>
+                    <!-- KPI clickeables: el handler $(document).on('click','.estado-indicator')
+                         y el resaltado del activo ya existían, pero ningún elemento
+                         tenía la clase, así que eran ~35 líneas de JS muerto y 5
+                         números que no hacían nada. Solo hacía falta la clase +
+                         data-estado. Se estilan inline igual que antes (el design system expone .kpi-card-nexo,
+                         que trae ::before y transform y rompe esta fila compacta). -->
                     <div class="col-6 col-md-2">
-                        <div class="text-center p-2 rounded" style="background:rgba(0,212,170,.12);">
+                        <div class="text-center p-2 rounded estado-indicator" role="button" tabindex="0"
+                             data-estado="RECEPCIONADO_COMPLETO" title="Ver los documentos ya recepcionados"
+                             style="cursor:pointer;background:rgba(0,212,170,.12);">
                             <div class="fw-bold" id="kpiRecibidosCompacto">0</div>
                             <small class="text-muted">Recibidos hoy</small>
                         </div>
                     </div>
                     <div class="col-6 col-md-2">
-                        <div class="text-center p-2 rounded" style="background:rgba(255,77,77,.10);">
+                        <div class="text-center p-2 rounded estado-indicator" role="button" tabindex="0"
+                             data-estado="RECEPCIONADO_PARCIAL" title="Ver los documentos con faltante, daño o sobrante"
+                             style="cursor:pointer;background:rgba(255,77,77,.10);">
                             <div class="fw-bold" id="kpiProblemasCompacto">0</div>
                             <small class="text-muted">Con problema</small>
                         </div>
                     </div>
                     <div class="col-6 col-md-2">
-                        <div class="text-center p-2 rounded" style="background:rgba(0,102,255,.10);">
+                        <div class="text-center p-2 rounded estado-indicator" role="button" tabindex="0"
+                             data-estado="EN_REGULARIZACION" title="Ver los documentos en regularización"
+                             style="cursor:pointer;background:rgba(0,102,255,.10);">
                             <div class="fw-bold" id="kpiRegularizacionCompacto">0</div>
                             <small class="text-muted">En regularización</small>
                         </div>
                     </div>
                     <div class="col-6 col-md-2">
-                        <div class="text-center p-2 rounded" style="background:rgba(108,117,125,.10);">
+                        <div class="text-center p-2 rounded estado-indicator" role="button" tabindex="0"
+                             data-estado="RECHAZADO" title="Ver los documentos rechazados"
+                             style="cursor:pointer;background:rgba(108,117,125,.10);">
                             <div class="fw-bold" id="kpiRechazadosCompacto">0</div>
                             <small class="text-muted">Rechazados</small>
                         </div>
                     </div>
                     <div class="col-6 col-md-2">
-                        <div class="text-center p-2 rounded" style="background:var(--nexo-gray-100);">
+                        <div class="text-center p-2 rounded estado-indicator" role="button" tabindex="0"
+                             data-estado="" title="Ver todos los documentos"
+                             style="cursor:pointer;background:var(--nexo-gray-100);">
                             <div class="fw-bold" id="kpiUnidadesCompacto">0</div>
                             <small class="text-muted">Unidades</small>
                         </div>
@@ -2063,7 +2079,12 @@
 </div>
 
 <!-- Modal detalle documento MEJORADO -->
-<div class="modal fade" id="modalDetalleDocumento" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
+<!-- backdrop static + keyboard false: el conteo vive en el array en memoria
+     productosVerificacion y se reinicializa entero al reabrir. Un click en el
+     fondo o un Esc borraban 40 líneas contadas sin preguntar. Mismo patrón que
+     #modalGestionarNC más abajo. -->
+<div class="modal fade" id="modalDetalleDocumento" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true"
+     data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -3594,11 +3615,27 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
         //  - Ya regularizado → solo "Ver detalle".
         //  - Soy origen (emisor) → "Corregir" (afirmar despacho) + "Emitir NC".
         //  - Soy destino (receptor) → "Actualizar faltante" (Mercadería Encontrada).
+        // Sobrante puro (llegó de más, sin faltante ni daño): la única acción
+        // válida es decidir qué se hace con el excedente. Antes esta línea
+        // mostraba "Actualizar faltante", que valida contra cantidad_faltante=0
+        // y siempre fallaba: el sobrante no se podía resolver por ninguna vía y
+        // la pestaña nunca bajaba a 0.
+        const esSobrantePuro = (prod.cantidad_sobrante || 0) > 0
+            && (prod.cantidad_faltante || 0) === 0
+            && (prod.cantidad_danada || 0) === 0;
+
         let acciones;
         if (yaRegularizado) {
             acciones = `<button type="button" class="btn btn-outline-success btn-sm" onclick="abrirModalRegularizar(${prod.id})" title="Ver detalle de la regularización">
                     <i class="bi bi-eye me-1"></i>Ver detalle
                </button>`;
+        } else if (esSobrantePuro && prod.soy_receptor) {
+            acciones = `<button type="button" class="btn btn-info btn-sm" onclick="decidirSobrante(${prod.id})" title="Llegaron ${prod.cantidad_sobrante} unidades de más: decidí si entran a tu inventario o vuelven al origen">
+                    <i class="bi bi-plus-slash-minus me-1"></i>Resolver sobrante
+               </button>
+               ${prod.dte_id ? `<button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionado(${prod.dte_id})" title="Ver DTE">
+                    <i class="bi bi-eye"></i>
+               </button>` : ''}`;
         } else if (prod.soy_emisor) {
             acciones = `<button type="button" class="btn btn-warning btn-sm" onclick="abrirCorreccionDTE(${prod.dte_id})" title="Afirmar que despachaste completo: sube la cantidad faltante al stock del destino">
                     <i class="bi bi-pencil-square me-1"></i>Corregir
@@ -3653,6 +3690,88 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
                 <td class="text-end">${acciones}${rolHint}</td>
             </tr>
         `);
+        });
+    });
+}
+
+/**
+ * Resuelve un SOBRANTE de recepción (llegó más de lo documentado).
+ *
+ * El backend (decidir_sobrante_api) tenía el flujo completo ACEPTAR/DEVOLVER
+ * desde siempre, pero esta función nunca se escribió: el único onclick que la
+ * nombraba vivía dentro de una función que tampoco se invocaba. Resultado: cada
+ * sobrante quedaba como Movimientos_Producto en estado PENDIENTE para siempre,
+ * con la mercadería física en la tienda y ausente del sistema.
+ */
+function decidirSobrante(recepcionId) {
+    const prod = (window.productosProblemas || []).find(p => p.id === recepcionId);
+    const nombre = prod
+        ? `${prod.producto_nombre || prod.sku || ''} (${prod.talla || '-'})`
+        : `línea #${recepcionId}`;
+    const cantidad = prod ? (prod.cantidad_sobrante || 0) : 0;
+    const origen = prod ? (prod.sucursal_origen || 'el origen') : 'el origen';
+
+    Swal.fire({
+        title: '➕ Resolver sobrante',
+        html: `
+            <div class="text-start">
+                <p>Llegaron <strong>${cantidad} unidad(es) de más</strong> de
+                   <strong>${_escapeHtmlDte(nombre)}</strong>, por encima de lo que dice el documento.</p>
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Aceptar:</strong> entran a tu inventario ahora.<br>
+                    <strong>Devolver:</strong> se marcan para retorno a ${_escapeHtmlDte(origen)} y no entran a tu stock.
+                </div>
+                <label class="form-label fw-bold">Observaciones</label>
+                <textarea id="obsDecidirSobrante" class="form-control" rows="2"
+                          placeholder="Ej: venían 2 pares extra en la misma caja"></textarea>
+            </div>
+        `,
+        icon: 'question',
+        width: '600px',
+        focusConfirm: false,
+        showDenyButton: true,
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-box-arrow-in-down me-1"></i>Aceptar e ingresar',
+        denyButtonText: '<i class="bi bi-arrow-return-left me-1"></i>Devolver al origen',
+        cancelButtonText: 'Volver',
+        confirmButtonColor: '#0ab39c',
+        denyButtonColor: '#f7b84b'
+    }).then(result => {
+        if (result.isDismissed) return;
+        const decision = result.isConfirmed ? 'ACEPTAR' : 'DEVOLVER';
+        const observaciones = (document.getElementById('obsDecidirSobrante') || {}).value || '';
+
+        Swal.fire({
+            title: 'Procesando...',
+            html: decision === 'ACEPTAR' ? 'Ingresando el sobrante...' : 'Marcando para devolución...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        $.ajax({
+            url: '/app/dte/decidir_sobrante/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({ recepcion_id: recepcionId, decision, observaciones: observaciones.trim() })
+        }).done(response => {
+            if (response.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: decision === 'ACEPTAR' ? '✅ Sobrante ingresado' : '✅ Sobrante marcado para devolución',
+                    text: response.message || '',
+                    confirmButtonText: 'Entendido'
+                }).then(() => {
+                    cargarRegularizaciones();
+                    if (typeof cargarRecepciones === 'function') cargarRecepciones();
+                });
+            } else {
+                Swal.fire({ icon: 'error', title: 'No se pudo resolver', text: response.error || 'Error desconocido' });
+            }
+        }).fail(xhr => {
+            const msg = (xhr.responseJSON && xhr.responseJSON.error) || 'Error de conexión con el servidor.';
+            Swal.fire({ icon: 'error', title: 'No se pudo resolver', text: msg });
         });
     });
 }

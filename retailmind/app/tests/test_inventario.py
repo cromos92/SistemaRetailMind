@@ -186,69 +186,10 @@ class TraspasoModelTest(TestCase):
             )
 
 
-@override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)
-class CrearTraspasoViewTest(TestCase):
-    """Tests para la vista crear_traspaso."""
-
-    def setUp(self):
-        self.env = setup_entorno_completo()
-        self.sucursal_destino = crear_sucursal(
-            self.env['empresa'], alias='DESTINO',
-        )
-        crear_correlativo(self.env['sucursal'], tipo_dte='TRASPASO')
-        self.client = Client()
-        self.client.login(username='testuser', password='TestPass123!')
-        session = self.client.session
-        session['idSucursalActual'] = self.env['sucursal'].id
-        session['nombreUsuario'] = 'testuser'
-        session.save()
-
-    def test_crear_traspaso_exitoso(self):
-        response = self.client.post(
-            reverse('crear_traspaso'),
-            data=json.dumps({
-                'sucursal_destino_id': self.sucursal_destino.id,
-                'productos': [{
-                    'producto_talla_id': self.env['producto_talla'].id,
-                    'cantidad': 3,
-                }],
-                'observaciones': 'Test traspaso',
-            }),
-            content_type='application/json',
-        )
-        data = response.json()
-        self.assertTrue(data['success'])
-        self.assertIn('traspaso_id', data)
-
-    def test_crear_traspaso_misma_sucursal_falla(self):
-        response = self.client.post(
-            reverse('crear_traspaso'),
-            data=json.dumps({
-                'sucursal_destino_id': self.env['sucursal'].id,
-                'productos': [{
-                    'producto_talla_id': self.env['producto_talla'].id,
-                    'cantidad': 1,
-                }],
-            }),
-            content_type='application/json',
-        )
-        data = response.json()
-        self.assertFalse(data['success'])
-
-    def test_crear_traspaso_sin_stock_falla(self):
-        response = self.client.post(
-            reverse('crear_traspaso'),
-            data=json.dumps({
-                'sucursal_destino_id': self.sucursal_destino.id,
-                'productos': [{
-                    'producto_talla_id': self.env['producto_talla'].id,
-                    'cantidad': 99999,
-                }],
-            }),
-            content_type='application/json',
-        )
-        data = response.json()
-        self.assertFalse(data['success'])
+# NOTA (2026-07-28): la clase CrearTraspasoViewTest fue eliminada junto con la
+# ruta 'crear_traspaso'. Esa vista movia stock sin @login_required y no la
+# invocaba ningun template ni JS. El circuito real de traspasos es por DTE y
+# esta cubierto por test_ajuste_traspaso.py.
 
 
 class AjusteInventarioModelTest(TestCase):

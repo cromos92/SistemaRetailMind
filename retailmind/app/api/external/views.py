@@ -32,7 +32,11 @@ from app.models.ventas import Ticket, TicketDetallePago
 from app.utils_ventas import canal_desde_plataforma_pago, es_metodo_pago_internet
 
 from .authentication import ApiKeyAuthentication, ApiKeyPermission
-from .serializers import ProductoExternalSerializer, agrupar_por_producto
+from .serializers import (
+    NOMBRE_ATRIBUTO_ESPECIALIDAD,
+    ProductoExternalSerializer,
+    agrupar_por_producto,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +68,56 @@ _VALUES_FIELDS = (
     'producto__sucursal__empresa_id',  # para resolver foto_portada_url
     'producto__guia_talla_id',
     'producto__tipo_talla',
+    # Taxonomía v1.2: el árbol de 2 niveles. El JOIN a Categoria ya existe
+    # por 'producto__categoria__nombre', así que el padre sale casi gratis.
+    'producto__id',
+    'producto__categoria__id',
+    'producto__categoria__padre__id',
+    'producto__categoria__padre__nombre',
 )
+
+
+def _ids_de_producto(rows) -> set:
+    """Ids de Producto presentes en las filas planas del queryset."""
+    return {r.get('producto__id') for r in rows if r.get('producto__id')}
+
+
+def _mapa_especialidades(rut: str, producto_ids=None) -> dict:
+    """
+    ``{producto_id: [{'id', 'nombre'}, ...]}`` de las especialidades v1.2.
+
+    Una sola query con ``values_list``. NO usar el helper ``especialidades_de``
+    de la API mobile: es por producto y acá serían ~19.000 queries.
+
+    ``AtributoOpcion.valor`` guarda el SLUG estable (``running``, ``pasto``…),
+    que es lo que consumen los menús del ecommerce.
+
+    ``producto_ids`` acota la consulta cuando el endpoint devuelve pocos
+    productos (``/tallas/`` de un artículo, ``/novedades/``); sin él se trae la
+    empresa entera, que es lo correcto para ``/skus/``.
+    """
+    from app.models import ProductoAtributoValor
+
+    qs = ProductoAtributoValor.objects.filter(
+        atributo__nombre__iexact=NOMBRE_ATRIBUTO_ESPECIALIDAD,
+    )
+    if producto_ids is not None:
+        ids = list(producto_ids)
+        if not ids:
+            return {}
+        qs = qs.filter(producto_id__in=ids)
+    else:
+        qs = qs.filter(producto__sucursal__empresa__rut=rut)
+
+    salida: dict = {}
+    filas = (
+        qs
+        .order_by('producto_id', 'opcion__valor')
+        .values_list('producto_id', 'opcion_id', 'opcion__valor')
+    )
+    for producto_id, opcion_id, valor in filas:
+        salida.setdefault(producto_id, []).append({'id': opcion_id, 'nombre': valor})
+    return salida
 
 
 def _build_qs(rut: str):
@@ -83,9 +136,62 @@ def _build_qs(rut: str):
     )
 
 
+#: Tope de productos por página. Por encima de esto el consumidor pierde el
+#: beneficio de memoria, que es justamente para lo que existe la paginación.
+PAGE_SIZE_MAX = 5000
+
+
+def _paginar(response_data: dict, request) -> dict:
+    """
+    Devuelve ``response_data`` completo, o una página de él si el consumidor
+    pidió ``?page=``.
+
+    Se rebana **después** de agrupar y sobre el payload YA cacheado, no sobre
+    el queryset: un producto abarca varias filas (sku × sucursal), así que
+    cortar el queryset partiría productos por la mitad. Como el corte es sobre
+    la caché, el ERP calcula el catálogo una sola vez y sirve N páginas.
+
+    Por qué existe: AllConnected cargaba los ~21.000 productos de Paola
+    (100.084 SKUs) en una sola respuesta y el worker que importa se reciclaba
+    por memoria (límite 450 MB, pico medido 585 MB), matando la importación sin
+    dejar rastro.
+
+    Sin ``page`` el comportamiento es idéntico al de siempre: los consumidores
+    viejos no se enteran.
+    """
+    page_raw = request.query_params.get('page')
+    if not page_raw:
+        return response_data
+
+    try:
+        page = max(1, int(page_raw))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        page_size = int(request.query_params.get('page_size') or 2000)
+    except (TypeError, ValueError):
+        page_size = 2000
+    page_size = max(1, min(page_size, PAGE_SIZE_MAX))
+
+    data = response_data.get('data') or []
+    total = len(data)
+    total_paginas = (total + page_size - 1) // page_size if total else 0
+    inicio = (page - 1) * page_size
+
+    return {
+        **response_data,
+        'data': data[inicio:inicio + page_size],
+        'total': total,              # total de productos, no de la página
+        'page': page,
+        'page_size': page_size,
+        'total_paginas': total_paginas,
+        'has_more': page < total_paginas,
+    }
+
+
 # ──────────────────────────────────────────────
 # Endpoint 1 — Productos/SKUs por empresa
-# GET /api/skus/?rut_empresa=XXXXXXXX-X
+# GET /api/skus/?rut_empresa=XXXXXXXX-X[&page=N&page_size=M]
 # ──────────────────────────────────────────────
 
 class SkusPorEmpresaView(APIView):
@@ -115,11 +221,11 @@ class SkusPorEmpresaView(APIView):
         # Cache de 15 min: el catálogo casi no cambia en ese rango y el endpoint
         # es pesado (~19K productos). Esto absorbe el polling agresivo de
         # AllConected.
-        cache_key = f'external_skus_v1:{rut}'
+        cache_key = f'external_skus_v2:{rut}'
         cached = cache.get(cache_key)
         if cached is not None:
             logger.info(f"[external/skus] rut={rut} -> CACHE HIT")
-            return Response(cached)
+            return Response(_paginar(cached, request))
 
         # Anti-stampede: cuando expira la caché de 15 min, varias requests
         # concurrentes (reintentos 1/3, 2/3 + polling) caen en MISS a la vez.
@@ -133,7 +239,7 @@ class SkusPorEmpresaView(APIView):
             stale = cache.get(stale_key)
             if stale is not None:
                 logger.info(f"[external/skus] rut={rut} -> MISS, lock tomado -> STALE")
-                return Response(stale)
+                return Response(_paginar(stale, request))
             # Cold start sin copia stale y con el lock ya tomado por otro worker:
             # no podemos devolver vacío, así que recalculamos igual. Caso raro
             # (primer arranque bajo carga concurrente).
@@ -154,7 +260,10 @@ class SkusPorEmpresaView(APIView):
             )
             fotos_map = resolver_fotos_portada_bulk(articulos, empresa_id)
 
-            productos = agrupar_por_producto(rows, fotos_map=fotos_map)
+            productos = agrupar_por_producto(
+                rows, fotos_map=fotos_map,
+                especialidades_map=_mapa_especialidades(rut),
+            )
             serializer = ProductoExternalSerializer(productos, many=True)
             logger.info(f"[external/skus] rut={rut} -> {len(productos)} productos ({len(rows)} filas raw)")
             response_data = {
@@ -165,7 +274,7 @@ class SkusPorEmpresaView(APIView):
             }
             cache.set(cache_key, response_data, timeout=900)         # 15 min (fresca)
             cache.set(stale_key, response_data, timeout=STALE_TIMEOUT)  # 1h (respaldo)
-            return Response(response_data)
+            return Response(_paginar(response_data, request))
         finally:
             if got_lock:
                 cache.delete(lock_key)
@@ -205,7 +314,10 @@ class TallasPorArticuloView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        productos = agrupar_por_producto(rows)
+        productos = agrupar_por_producto(
+            rows,
+            especialidades_map=_mapa_especialidades(rut, _ids_de_producto(rows)),
+        )
         serializer = ProductoExternalSerializer(productos, many=True)
         logger.info(f"[external/tallas] articulo={articulo_codigo} → {len(productos)} productos")
         return Response({
@@ -1123,7 +1235,10 @@ class NovedadesView(APIView):
             .values(*_VALUES_FIELDS)
         )
 
-        productos = agrupar_por_producto(rows)
+        productos = agrupar_por_producto(
+            rows,
+            especialidades_map=_mapa_especialidades(rut, _ids_de_producto(rows)),
+        )
         serializer = ProductoExternalSerializer(productos, many=True)
 
         logger.info(

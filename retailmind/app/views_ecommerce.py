@@ -7,6 +7,7 @@ y vista de gestión para facturarlos directamente.
 import json
 import logging
 import uuid
+from decimal import Decimal, InvalidOperation
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError, transaction
@@ -719,6 +720,219 @@ def api_cancelar_pedido_ecommerce(request):
     )
 
     return JsonResponse({'ok': True, 'estado': 'CANCELADO', 'ya_cancelado': False})
+
+
+@csrf_exempt
+def api_cambio_producto_pedido(request):
+    """
+    POST /api/ecommerce/pedidos/cambio-producto/
+
+    AllConnected avisa que las LÍNEAS de un pedido cambiaron (sustitución de
+    producto por cacho / sin stock). RM reemplaza ``items``, re-matchea los SKUs
+    contra el stock de la sucursal y recalcula el sub-estado.
+
+    Por qué existe: el pedido se registra en RM apenas entra (``PedidoEcommerce``
+    en estado PENDIENTE, sin DTE y sin mover stock) y se factura DESPUÉS, a mano,
+    desde la UI. Entre esos dos momentos el operador de AllConnected todavía puede
+    sustituir un producto, pero el POST de creación es idempotente por
+    (canal_origen, numero_pedido_canal) y DESCARTA los items nuevos en silencio —
+    o sea que sin este endpoint RM facturaba el producto viejo.
+
+    Auth: header X-RetailMind-Key (igual que el resto de la API de ecommerce).
+
+    Body JSON:
+        {
+            "numero_ticket_rm": "RM-XXXXXXXX",           (uno de los dos)
+            "numero_pedido_canal": "...",                 (uno de los dos)
+            "canal_origen": "REALSPORT|PAOLA|..."         (si se usa el anterior)
+            "items": [{"sku": "...", "nombre": "...",
+                       "cantidad": 1, "precio_unitario": 12990}, ...],
+            "subtotal"/"descuento"/"impuestos"/"costo_envio"/"total"  (opcionales)
+        }
+
+    Respuestas:
+        200 {ok:true, numero_ticket_rm, sub_estado, todos_items_con_stock, items_sin_stock}
+        409 {ok:false, error:'ya facturado', dte_id}  -> requiere nota de crédito
+        409 {ok:false, error:'cancelado'}
+        404 {ok:false, error:'no encontrado'}
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Método no permitido'}, status=405)
+
+    if not _verificar_api_key(request):
+        return JsonResponse({'ok': False, 'error': 'API key inválida'}, status=401)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'Body JSON inválido'}, status=400)
+
+    items_nuevos = data.get('items')
+    if not isinstance(items_nuevos, list) or not items_nuevos:
+        return JsonResponse(
+            {'ok': False, 'error': 'items es obligatorio y debe ser una lista no vacía'},
+            status=400,
+        )
+
+    # Localización: se aceptan LAS DOS claves. Los endpoints existentes son
+    # asimétricos (crear/cancelar/pagado usan canal+numero_pedido_canal;
+    # consultar usa numero_ticket_rm) y no conviene repetir el problema.
+    numero_ticket_rm = (data.get('numero_ticket_rm') or '').strip()
+    numero_pedido_canal = (data.get('numero_pedido_canal') or '').strip()
+    canal_origen = _normalizar_canal(data.get('canal_origen'))
+
+    pedido = None
+    if numero_ticket_rm:
+        pedido = PedidoEcommerce.objects.filter(numero_ticket_rm=numero_ticket_rm).first()
+    if pedido is None and numero_pedido_canal and canal_origen:
+        pedido = PedidoEcommerce.objects.filter(
+            numero_pedido_canal=numero_pedido_canal,
+            canal_origen=canal_origen,
+        ).first()
+    if pedido is None:
+        if not numero_ticket_rm and not (numero_pedido_canal and canal_origen):
+            return JsonResponse(
+                {'ok': False,
+                 'error': 'Indicá numero_ticket_rm, o numero_pedido_canal + canal_origen'},
+                status=400,
+            )
+        return JsonResponse({'ok': False, 'error': 'Pedido no encontrado'}, status=404)
+
+    # Ya facturado: el DTE está emitido y el stock salió por FIFO. Un cambio de
+    # línea acá dejaría la boleta y la venta descuadradas — va por nota de crédito.
+    if pedido.estado == 'FACTURADO' or pedido.dte_id:
+        return JsonResponse({
+            'ok': False,
+            'error': 'El pedido ya fue facturado (DTE emitido). El cambio de producto '
+                     'requiere nota de crédito.',
+            'estado': pedido.estado,
+            'dte_id': pedido.dte_id,
+        }, status=409)
+
+    if pedido.estado == 'CANCELADO':
+        return JsonResponse({
+            'ok': False,
+            'error': 'El pedido está cancelado; no se pueden cambiar sus líneas.',
+            'estado': pedido.estado,
+        }, status=409)
+
+    # Normalizar los items al shape que espera _validar_items_pedido
+    # (sku / cantidad / precio_unitario, más el nombre para mostrar).
+    items_normalizados = []
+    for it in items_nuevos:
+        if not isinstance(it, dict):
+            continue
+        try:
+            cantidad = int(it.get('cantidad') or 1)
+        except (TypeError, ValueError):
+            cantidad = 1
+        try:
+            precio_unitario = float(it.get('precio_unitario') or 0)
+        except (TypeError, ValueError):
+            precio_unitario = 0
+        items_normalizados.append({
+            'sku': str(it.get('sku') or '').strip(),
+            'nombre': (it.get('nombre') or it.get('nombre_producto') or '').strip(),
+            'cantidad': max(cantidad, 1),
+            'precio_unitario': precio_unitario,
+        })
+
+    if not items_normalizados:
+        return JsonResponse(
+            {'ok': False, 'error': 'Ningún item válido en el payload'}, status=400
+        )
+
+    items_anteriores = pedido.items or []
+    sub_estado_anterior = pedido.sub_estado
+
+    with transaction.atomic():
+        pedido = PedidoEcommerce.objects.select_for_update().get(pk=pedido.pk)
+
+        # Revalidar bajo lock: entre el chequeo de arriba y el UPDATE alguien
+        # pudo haber facturado el pedido desde la UI.
+        if pedido.estado == 'FACTURADO' or pedido.dte_id:
+            return JsonResponse({
+                'ok': False,
+                'error': 'El pedido se facturó mientras se procesaba el cambio.',
+                'estado': pedido.estado,
+                'dte_id': pedido.dte_id,
+            }, status=409)
+
+        pedido.items = items_normalizados
+
+        # Totales: si AllConnected los manda, mandan ellos (es la fuente de
+        # verdad del monto cobrado). Si no, se recalcula el subtotal desde las
+        # líneas y el total se rearma con la misma fórmula del pedido.
+        def _dec(clave, actual):
+            valor = data.get(clave)
+            if valor in (None, ''):
+                return actual
+            try:
+                return Decimal(str(valor))
+            except (InvalidOperation, TypeError, ValueError):
+                return actual
+
+        subtotal_calculado = sum(
+            Decimal(str(i['precio_unitario'])) * i['cantidad'] for i in items_normalizados
+        )
+        pedido.subtotal = _dec('subtotal', subtotal_calculado)
+        pedido.descuento = _dec('descuento', pedido.descuento)
+        pedido.impuestos = _dec('impuestos', pedido.impuestos)
+        pedido.costo_envio = _dec('costo_envio', pedido.costo_envio)
+        total_calculado = (
+            pedido.subtotal - pedido.descuento + pedido.impuestos + pedido.costo_envio
+        )
+        pedido.total = _dec('total', total_calculado)
+
+        # Re-matchear contra el stock de la sucursal, igual que en la ingesta.
+        items_val = _validar_items_pedido(pedido, sucursal=pedido.sucursal)
+        todos_con_stock = all(iv['encontrado'] for iv in items_val) if items_val else False
+        items_sin = sum(1 for iv in items_val if not iv['encontrado'])
+
+        if todos_con_stock:
+            pedido.sub_estado = 'ASIGNADO'
+            if not pedido.fecha_asignacion:
+                pedido.fecha_asignacion = timezone.now()
+        else:
+            pedido.sub_estado = 'RECIBIDO'
+
+        pedido.save(update_fields=[
+            'items', 'subtotal', 'descuento', 'impuestos', 'costo_envio', 'total',
+            'sub_estado', 'fecha_asignacion',
+        ])
+
+        # El historial no tiene campo JSON, así que el detalle del cambio va en
+        # `motivo` (TextField) — es la única traza de qué se sustituyó.
+        skus_antes = ', '.join(str(i.get('sku') or '?') for i in items_anteriores) or '—'
+        skus_despues = ', '.join(i['sku'] or '?' for i in items_normalizados) or '—'
+        motivo_base = (data.get('motivo')
+                       or 'Cambio de producto notificado por AllConnected')
+        HistorialPedidoEcommerce.objects.create(
+            pedido=pedido,
+            estado_anterior=pedido.estado,
+            estado_nuevo=pedido.estado,
+            sub_estado_anterior=sub_estado_anterior,
+            sub_estado_nuevo=pedido.sub_estado,
+            tipo_evento='CAMBIO_ESTADO',
+            motivo=(
+                f'{motivo_base}. SKUs antes: [{skus_antes}] → después: [{skus_despues}]. '
+                f'Stock completo: {"si" if todos_con_stock else "NO"}.'
+            ),
+        )
+
+    logger.info(
+        'Cambio de producto RM %s: %d items (%s)',
+        pedido.numero_ticket_rm, len(items_normalizados), pedido.sub_estado,
+    )
+    return JsonResponse({
+        'ok': True,
+        'numero_ticket_rm': pedido.numero_ticket_rm,
+        'estado': pedido.estado,
+        'sub_estado': pedido.sub_estado,
+        'todos_items_con_stock': todos_con_stock,
+        'items_sin_stock': items_sin,
+        'total': str(pedido.total),
+    })
 
 
 @login_required

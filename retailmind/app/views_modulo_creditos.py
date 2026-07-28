@@ -2624,11 +2624,33 @@ def _formatear_boleta(referencia, observaciones=''):
     return crudo
 
 
+def _clave_mes(fecha):
+    """(año, mes) para agrupar. Sin fecha va al final, no al principio."""
+    if not fecha:
+        return (0, 0)
+    return (fecha.year, fecha.month)
+
+
 def _filas_pdf_creditos(queryset):
-    """Aplana los créditos a filas de uso, listas para la tabla del PDF."""
+    """Aplana los créditos a filas de uso, listas para la tabla del PDF.
+
+    ORDEN: agrupado por MES DE SOLICITUD, del más reciente al más antiguo, con
+    una fila de encabezado y otra de subtotal por mes.
+
+    Antes se ordenaba por nombre de beneficiario, y como cada beneficiario
+    puede tener créditos de meses distintos, las fechas quedaban intercaladas
+    (julio, marzo, julio…) y el reporte no se podía leer por período, que es
+    justo para lo que se usa. Dentro de cada mes se ordena de la solicitud más
+    reciente a la más antigua, y a igualdad de fecha por beneficiario para que
+    dos corridas den siempre el mismo papel.
+    """
     creditos = sorted(
         queryset,
         key=lambda c: (
+            # (año, mes) descendente: se niega la clave para no depender de
+            # reverse=True, que invertiría también el desempate alfabético.
+            tuple(-v for v in _clave_mes(c.fecha_solicitud)),
+            -(c.fecha_solicitud.toordinal() if c.fecha_solicitud else 0),
             (c.nombre_beneficiario or '').upper(),
             c.numero_credito or '',
         ),
@@ -2640,11 +2662,41 @@ def _filas_pdf_creditos(queryset):
     total_creditos = 0
     truncado = False
 
+    mes_actual = None
+    mes_monto = Decimal('0')
+    mes_usos = 0
+    mes_creditos = 0
+
+    def _cerrar_mes():
+        """Agrega el subtotal del mes que se está cerrando."""
+        if mes_actual is None:
+            return
+        filas.append({
+            'numero_credito': '', 'beneficiario': '', 'rut': '', 'empresa': '',
+            'mes_solicitud': '', 'tipo': 'subtotal_mes', 'monto': mes_monto,
+            'sucursal': f'Total {mes_actual} · {mes_creditos} créditos · {mes_usos} usos',
+            'boleta': '', 'fecha_boleta': '',
+        })
+
     for credito in creditos:
         if len(filas) >= MAX_FILAS_PDF_CREDITOS:
             truncado = True
             break
+
+        etiqueta_mes = _mes_solicitud_label(credito.fecha_solicitud) or 'Sin fecha'
+        if etiqueta_mes != mes_actual:
+            _cerrar_mes()
+            mes_actual = etiqueta_mes
+            mes_monto, mes_usos, mes_creditos = Decimal('0'), 0, 0
+            filas.append({
+                'numero_credito': '', 'beneficiario': etiqueta_mes.upper(),
+                'rut': '', 'empresa': '', 'mes_solicitud': '',
+                'tipo': 'encabezado_mes', 'monto': Decimal('0'),
+                'sucursal': '', 'boleta': '', 'fecha_boleta': '',
+            })
+
         total_creditos += 1
+        mes_creditos += 1
 
         beneficiario = credito.beneficiario
         empresa_beneficiaria = ''
@@ -2677,6 +2729,8 @@ def _filas_pdf_creditos(queryset):
             subtotal += monto
             total_monto += monto
             total_usos += 1
+            mes_monto += monto
+            mes_usos += 1
             filas.append(dict(
                 base, tipo='uso', monto=monto,
                 sucursal=(pago.sucursal_cobro.alias if pago.sucursal_cobro_id else ''),
@@ -2694,6 +2748,10 @@ def _filas_pdf_creditos(queryset):
                 'tipo': 'subtotal', 'monto': subtotal,
                 'sucursal': f'Subtotal {len(usos)} usos', 'boleta': '', 'fecha_boleta': '',
             })
+
+    # El último mes también necesita su cierre (el bucle solo cierra al cambiar).
+    if not truncado:
+        _cerrar_mes()
 
     return {
         'filas': filas,
@@ -2808,11 +2866,26 @@ def exportar_creditos_pdf(request):
         tabla_datos = [encabezados]
         filas_subtotal = []
         filas_sin_uso = []
+        filas_mes = []
+        filas_subtotal_mes = []
         for indice, fila in enumerate(filas, start=1):
             if fila['tipo'] == 'subtotal':
                 filas_subtotal.append(indice)
             elif fila['tipo'] == 'sin_uso':
                 filas_sin_uso.append(indice)
+            elif fila['tipo'] == 'encabezado_mes':
+                # Banda de mes: el nombre ocupa todo el ancho, así el corte
+                # entre períodos se ve de un vistazo al hojear el reporte.
+                filas_mes.append(indice)
+                tabla_datos.append([fila['beneficiario'], '', '', '', '', '', '', '', ''])
+                continue
+            elif fila['tipo'] == 'subtotal_mes':
+                filas_subtotal_mes.append(indice)
+                tabla_datos.append([
+                    '', '', '', '', _fmt_clp(fila['monto']), '',
+                    Paragraph(fila['sucursal'] or '', cell_style), '', '',
+                ])
+                continue
             tabla_datos.append([
                 fila['numero_credito'],
                 Paragraph(fila['beneficiario'] or '', cell_style),
@@ -2864,6 +2937,22 @@ def exportar_creditos_pdf(request):
             estilos_tabla.append(('TEXTCOLOR', (6, indice), (6, indice), verde))
         for indice in filas_sin_uso:
             estilos_tabla.append(('TEXTCOLOR', (6, indice), (6, indice), colors.HexColor('#9A9A9A')))
+        for indice in filas_mes:
+            # La banda del mes va DESPUÉS de ROWBACKGROUNDS en la lista de
+            # estilos para que el rayado cebra no la pise.
+            estilos_tabla.append(('SPAN', (0, indice), (-1, indice)))
+            estilos_tabla.append(('BACKGROUND', (0, indice), (-1, indice), azul_oscuro))
+            estilos_tabla.append(('TEXTCOLOR', (0, indice), (-1, indice), colors.white))
+            estilos_tabla.append(('FONTNAME', (0, indice), (-1, indice), 'Helvetica-Bold'))
+            estilos_tabla.append(('FONTSIZE', (0, indice), (-1, indice), 8))
+            estilos_tabla.append(('ALIGN', (0, indice), (-1, indice), 'LEFT'))
+            estilos_tabla.append(('LEFTPADDING', (0, indice), (-1, indice), 6))
+            estilos_tabla.append(('TOPPADDING', (0, indice), (-1, indice), 4))
+            estilos_tabla.append(('BOTTOMPADDING', (0, indice), (-1, indice), 4))
+        for indice in filas_subtotal_mes:
+            estilos_tabla.append(('BACKGROUND', (0, indice), (-1, indice), colors.HexColor('#DCE3F0')))
+            estilos_tabla.append(('FONTNAME', (0, indice), (-1, indice), 'Helvetica-Bold'))
+            estilos_tabla.append(('FONTSIZE', (0, indice), (-1, indice), 7.5))
         tabla.setStyle(TableStyle(estilos_tabla))
         elementos.append(tabla)
 
