@@ -19,6 +19,7 @@ from .models import (
     Categoria, AtributoOpcion, Productos_Atributos, Sucursal,
     Ticket_Productos, Dte_Productos, PermisoRol
 )
+from .services.historial_precios import registrar_cambios_precio
 
 
 # ========== UTILIDAD: OBTENER PRODUCTO DESDE TALLA ==========
@@ -258,16 +259,15 @@ def actualizar_producto(request, producto_id):
         
         # Importar modelos necesarios
         from .models import LoteProducto
-        try:
-            from .models import HistorialCambioPrecio
-            tiene_historial = True
-        except ImportError:
-            tiene_historial = False
-        
+
         # ========== ACTUALIZAR TODOS LOS PRODUCTOS ==========
         for prod in productos_a_actualizar:
-            precio_prod_anterior = prod.precioventa
-            
+            precios_previos = {
+                'costo': prod.costo,
+                'sobreprecio': prod.sobreprecio,
+                'precioventa': prod.precioventa,
+            }
+
             # Actualizar campos básicos
             prod.articulo = articulo
             prod.descripcion = data.get('descripcion', '')
@@ -305,28 +305,18 @@ def actualizar_producto(request, producto_id):
             )
             lotes_totales_actualizados += lotes_actualizados
             
-            # Registrar historial si cambió el precio
-            if tiene_historial and precio_prod_anterior != precioventa:
-                diferencia = precioventa - precio_prod_anterior
-                porcentaje = (diferencia / precio_prod_anterior * 100) if precio_prod_anterior > 0 else 0
-                
-                try:
-                    HistorialCambioPrecio.objects.create(
-                        producto=prod,
-                        precio_anterior=precio_prod_anterior,
-                        precio_nuevo=precioventa,
-                        diferencia=diferencia,
-                        porcentaje_cambio=porcentaje,
-                        motivo=f'Sincronización global desde {sucursal_origen.alias if sucursal_origen else "Sistema"}',
-                        tipo_cambio='SINCRONIZACION_GLOBAL',
-                        usuario=request.user,
-                        ip_address=request.META.get('REMOTE_ADDR'),
-                        tallas_afectadas=prod.producto_talla.count(),
-                        lotes_afectados=lotes_actualizados
-                    )
-                    historial_registrado = True
-                except Exception:
-                    pass  # Si falla el historial, continuar
+            # Registrar historial de cambio (una fila por campo pisado:
+            # costo, sobreprecio y precio de venta)
+            if registrar_cambios_precio(
+                prod, precios_previos,
+                usuario=request.user,
+                motivo=f'Sincronización global desde {sucursal_origen.alias if sucursal_origen else "Sistema"}',
+                tipo_cambio='SINCRONIZACION',
+                ip_address=request.META.get('REMOTE_ADDR'),
+                tallas_afectadas=prod.producto_talla.count(),
+                lotes_afectados=lotes_actualizados,
+            ):
+                historial_registrado = True
         
         # Construir mensaje de respuesta
         if productos_actualizados > 1:
@@ -1289,7 +1279,23 @@ def actualizar_productos_masivo(request):
         sucursales_set = set()
         lotes_total = 0
 
+        # Auditoría de precios: el Producto solo guarda el valor vigente, así
+        # que el valor anterior debe capturarse ANTES de pisarlo o se pierde.
+        es_edicion_individual = len(set(producto_ids)) == 1
+        tipo_cambio_hist = 'MANUAL' if es_edicion_individual else 'MASIVO'
+        motivo_hist = (
+            'Edición rápida de producto' if es_edicion_individual
+            else 'Edición masiva de productos'
+        ) + (' (propagada a todas las bodegas)' if propagar else '')
+
         for prod in productos:
+            precios_previos = None
+            if campos.get('aplicar_precios'):
+                precios_previos = {
+                    'costo': prod.costo,
+                    'sobreprecio': prod.sobreprecio,
+                    'precioventa': prod.precioventa,
+                }
             if update_kwargs:
                 for field, value in update_kwargs.items():
                     setattr(prod, field, value)
@@ -1298,6 +1304,7 @@ def actualizar_productos_masivo(request):
             if prod.sucursal:
                 sucursales_set.add(prod.sucursal.alias)
 
+            lotes = 0
             if 'precioventa' in update_kwargs:
                 lotes = LoteProducto.objects.filter(
                     producto_talla__producto=prod,
@@ -1309,6 +1316,16 @@ def actualizar_productos_masivo(request):
                     sobreprecio_unitario=update_kwargs.get('sobreprecio', prod.sobreprecio),
                 )
                 lotes_total += lotes
+
+            if precios_previos:
+                registrar_cambios_precio(
+                    prod, precios_previos,
+                    usuario=request.user,
+                    motivo=motivo_hist,
+                    tipo_cambio=tipo_cambio_hist,
+                    ip_address=request.META.get('REMOTE_ADDR'),
+                    lotes_afectados=lotes,
+                )
 
         # ── Aplicar especialidades en bloque ──
         if esp_modo:

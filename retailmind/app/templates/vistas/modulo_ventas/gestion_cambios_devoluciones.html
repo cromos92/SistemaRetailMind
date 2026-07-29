@@ -4535,6 +4535,14 @@ function generarBotonesAccion(cambio) {
                 </a>
             `);
         }
+        // Solo administrador: ajustar la diferencia a un monto menor (el cobro sigue en el POS)
+        if (acciones.ajustar) {
+            botones.push(`
+                <button class="btn btn-outline-warning btn-sm px-2" onclick='ajustarDiferencia(${cambio.id}, ${cambio.diferencia_monto}, "${cambio.numero_operacion}")' title='Ajustar: rebajar la diferencia a un monto menor con justificación; el cobro sigue pendiente en el POS por el monto nuevo'>
+                    <i class="ri-scales-3-line me-1"></i>Ajustar
+                </button>
+            `);
+        }
         // Solo administrador: condonar la diferencia (perdonar el cobro) sin anular el cambio
         if (acciones.condonar) {
             botones.push(`
@@ -8332,6 +8340,100 @@ function condonarDiferencia(cambioId, montoDiferencia, numeroOperacion) {
                     const msg = resp.mensaje
                         || (typeof resp.error === 'string' ? resp.error : '')
                         || 'Error de conexión al condonar';
+                    mostrarError(msg);
+                }
+            });
+        }
+    });
+}
+
+/**
+ * Ajustar la diferencia de cobro de un cambio a un monto menor (solo administrador).
+ * A diferencia de condonar, el cobro NO se perdona: el ticket pendiente queda por
+ * el monto ajustado y se cobra normal en el POS. La rebaja queda auditada en el
+ * historial del cambio y como línea de ajuste en el ticket.
+ */
+function ajustarDiferencia(cambioId, montoDiferencia, numeroOperacion) {
+    const montoActual = Math.round(Math.abs(montoDiferencia || 0));
+    const montoFmt = '$' + Number(montoActual).toLocaleString('es-CL');
+    Swal.fire({
+        title: 'Ajustar diferencia de cobro',
+        html: `
+            <div class="text-start">
+                <p class="mb-2">Diferencia pendiente del cambio <strong>${numeroOperacion || ''}</strong>:
+                   <strong class="text-danger">${montoFmt}</strong>.</p>
+                <div class="alert alert-info py-2 small mb-3">
+                    <i class="ri-information-line me-1"></i>
+                    El cobro <strong>NO se perdona</strong>: el ticket queda pendiente en el POS
+                    por el monto nuevo y la boleta se emitirá por ese monto.
+                    Para perdonar todo el cobro usa <strong>Condonar</strong>.
+                </div>
+                <label class="form-label small fw-semibold">Nuevo monto a cobrar (menor a ${montoFmt})</label>
+                <input id="nuevo-monto-ajuste" type="number" class="form-control mb-3" min="1"
+                       max="${montoActual - 1}" step="1" placeholder="Ej: ${Math.floor(montoActual / 2)}">
+                <label class="form-label small fw-semibold">Justificación (obligatoria)</label>
+                <textarea id="motivo-ajuste" class="form-control" rows="3"
+                          placeholder="Ej: Acuerdo con el cliente por demora en el cambio; se cobra solo la mitad de la diferencia."></textarea>
+            </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#e67e22',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="ri-scales-3-line me-1"></i> Ajustar diferencia',
+        cancelButtonText: 'Cancelar',
+        focusCancel: true,
+        preConfirm: () => {
+            const nuevoMonto = parseInt(document.getElementById('nuevo-monto-ajuste')?.value, 10);
+            const motivo = (document.getElementById('motivo-ajuste')?.value || '').trim();
+            if (!Number.isFinite(nuevoMonto) || nuevoMonto <= 0) {
+                Swal.showValidationMessage('Debes indicar el nuevo monto a cobrar (mayor a $0)');
+                return false;
+            }
+            if (nuevoMonto >= montoActual) {
+                Swal.showValidationMessage(`El nuevo monto debe ser menor a ${montoFmt}`);
+                return false;
+            }
+            if (motivo.length < 5) {
+                Swal.showValidationMessage('Debes escribir una justificación (mínimo 5 caracteres)');
+                return false;
+            }
+            return { nuevoMonto, motivo };
+        }
+    }).then((result) => {
+        if (result.isConfirmed && result.value) {
+            mostrarLoading('Ajustando diferencia...');
+            $.ajax({
+                url: '/app/ventas/api/ajustar-diferencia-cobro/',
+                method: 'POST',
+                data: JSON.stringify({
+                    cambio_id: cambioId,
+                    nuevo_monto: result.value.nuevoMonto,
+                    motivo: result.value.motivo
+                }),
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function(response) {
+                    ocultarLoading();
+                    if (response.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Diferencia ajustada',
+                            text: response.message,
+                            timer: 4000
+                        });
+                        cargarCambiosDevoluciones();
+                    } else {
+                        mostrarError(response.error || response.mensaje || 'No se pudo ajustar la diferencia');
+                    }
+                },
+                error: function(xhr) {
+                    ocultarLoading();
+                    const resp = xhr.responseJSON || {};
+                    // requiere_rol devuelve {error: true, mensaje: '...'}; la vista devuelve {error: '<texto>'}
+                    const msg = resp.mensaje
+                        || (typeof resp.error === 'string' ? resp.error : '')
+                        || 'Error de conexión al ajustar';
                     mostrarError(msg);
                 }
             });

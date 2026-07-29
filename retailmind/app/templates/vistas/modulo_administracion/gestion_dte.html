@@ -331,17 +331,30 @@
     color: white;
 }
 
-/* Action buttons in table */
+/* Action buttons in table: ícono + etiqueta corta visible (más entendibles
+   que el ícono solo; el title sigue dando la descripción completa) */
 .nexo-action-btn {
-    width: 32px;
-    height: 32px;
-    padding: 0;
+    min-width: 46px;
+    height: auto;
+    padding: 4px 5px 3px;
     display: inline-flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 1px;
     border-radius: var(--nexo-radius-sm);
     transition: var(--nexo-transition-fast);
     border: 1px solid transparent;
+    line-height: 1;
+}
+
+.nexo-action-btn .action-label {
+    font-size: 8.5px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
 }
 
 .nexo-action-btn.info {
@@ -639,7 +652,7 @@
     }
 
     .nexo-filters .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
-    .nexo-action-btn { width: 36px; height: 36px; min-height: 44px; min-width: 44px; }
+    .nexo-action-btn { min-height: 44px; min-width: 48px; }
     .nexo-badge { font-size: 0.688rem; }
     .nexo-info-box { padding: 1rem; }
     .modal-dialog.modal-xl { max-width: calc(100% - 1rem); }
@@ -910,6 +923,160 @@
         </div>
     </div>
 </div>
+
+<!-- Modal Reasignar Destino de Traspaso -->
+<div class="modal fade nexo-modal" id="modalReasignarDestino" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #fd7e14 0%, #e8590c 100%); color: white;">
+                <h5 class="modal-title">
+                    <i class="bi bi-signpost-split me-2"></i>
+                    Reasignar destino del traspaso
+                    <span id="reasignarDteNumero" class="header-badge ms-2">-</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info py-2 mb-3 small">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Cambia la sucursal que debe <strong>recepcionar</strong> este traspaso (ej: se emitió a PAO2
+                    pero correspondía PAO4). El cambio queda registrado en los movimientos y la nueva sucursal
+                    verá el documento pendiente en <strong>Recepción DTE</strong>; al confirmar, el stock
+                    ingresará a esa sucursal. Solo se permite entre sucursales de la
+                    <strong>misma empresa receptora</strong> (mismo RUT).
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <div class="nexo-info-row">
+                            <span class="nexo-info-label">Destino actual</span>
+                            <span id="reasignarDestinoActual" class="nexo-info-value fw-bold">-</span>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <label for="reasignarNuevoDestino" class="form-label fw-bold small mb-1">
+                            Nuevo destino <span class="text-danger">*</span>
+                        </label>
+                        <select id="reasignarNuevoDestino" class="form-select form-select-sm">
+                            <option value="">Cargando sucursales...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label for="reasignarMotivo" class="form-label fw-bold small">
+                        <i class="bi bi-pencil me-1"></i>Motivo <span class="text-danger">*</span>
+                    </label>
+                    <input type="text" id="reasignarMotivo" class="form-control"
+                           placeholder="Ej: Se emitió a PAO2 por error; la mercadería va a PAO4"
+                           maxlength="250">
+                </div>
+
+                <div id="reasignarError" class="alert alert-danger py-2 small mt-2 d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-1"></i>Cancelar
+                </button>
+                <button type="button" class="nexo-btn" id="btnConfirmarReasignar" style="background:#fd7e14;color:white;">
+                    <i class="bi bi-check-circle me-1"></i>Reasignar destino
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    let reasignarDteId = null;
+    let reasignarDestinoActualId = null;
+
+    window.abrirReasignarDestino = function (dteId, folio, destinoId, destinoAlias) {
+        reasignarDteId = dteId;
+        reasignarDestinoActualId = destinoId;
+        document.getElementById('reasignarDteNumero').textContent = '#' + folio;
+        document.getElementById('reasignarDestinoActual').textContent = destinoAlias || '-';
+        document.getElementById('reasignarMotivo').value = '';
+        const errBox = document.getElementById('reasignarError');
+        errBox.classList.add('d-none');
+        errBox.textContent = '';
+
+        const select = document.getElementById('reasignarNuevoDestino');
+        select.innerHTML = '<option value="">Cargando sucursales...</option>';
+        fetch('/app/api/sucursales/listar/', { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) throw new Error(data.error || 'Error al listar sucursales');
+                select.innerHTML = '<option value="">— Selecciona sucursal —</option>';
+                (data.sucursales || []).forEach(s => {
+                    if (s.id === destinoId) return; // el destino actual no es opción
+                    const opt = document.createElement('option');
+                    opt.value = s.id;
+                    opt.textContent = s.alias;
+                    select.appendChild(opt);
+                });
+            })
+            .catch(() => {
+                select.innerHTML = '<option value="">Error al cargar sucursales</option>';
+            });
+
+        new bootstrap.Modal(document.getElementById('modalReasignarDestino')).show();
+    };
+
+    document.getElementById('btnConfirmarReasignar').addEventListener('click', function () {
+        const btn = this;
+        const nuevaSucursalId = document.getElementById('reasignarNuevoDestino').value;
+        const motivo = document.getElementById('reasignarMotivo').value.trim();
+        const errBox = document.getElementById('reasignarError');
+        errBox.classList.add('d-none');
+
+        if (!nuevaSucursalId) {
+            errBox.textContent = 'Selecciona la nueva sucursal destino.';
+            errBox.classList.remove('d-none');
+            return;
+        }
+        if (!motivo) {
+            errBox.textContent = 'El motivo es obligatorio.';
+            errBox.classList.remove('d-none');
+            return;
+        }
+
+        const csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Reasignando...';
+
+        fetch('/app/dte/reasignar_destino_traspaso/', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+            body: JSON.stringify({
+                dte_id: reasignarDteId,
+                nueva_sucursal_id: parseInt(nuevaSucursalId, 10),
+                motivo: motivo,
+            }),
+        })
+            .then(r => r.json().then(data => ({ ok: r.ok, data })))
+            .then(({ ok, data }) => {
+                if (!ok || !data.success) throw new Error(data.error || 'No se pudo reasignar el destino.');
+                bootstrap.Modal.getInstance(document.getElementById('modalReasignarDestino')).hide();
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({ icon: 'success', title: 'Destino reasignado', text: data.message, timer: 3500, showConfirmButton: false });
+                } else {
+                    alert(data.message);
+                }
+                if (typeof cargarDTEs === 'function') cargarDTEs(currentPageDTE || 1, currentSearchDTE || '');
+            })
+            .catch(err => {
+                errBox.textContent = err.message;
+                errBox.classList.remove('d-none');
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Reasignar destino';
+            });
+    });
+})();
+</script>
 
 <!-- Modal Diagnóstico/Reparación Traspaso -->
 <div class="modal fade nexo-modal" id="modalDiagnosticoTraspaso" tabindex="-1" aria-hidden="true">
@@ -2183,6 +2350,7 @@
         <strong>${resaltarBusqueda(dte.numero_documento || '', search)}</strong>
         ${asociacionNC}
         <br><span class="nexo-badge nexo-badge-info" style="font-size:0.7rem;">${resaltarBusqueda(dte.tipo_documento || '', search)}</span>
+        ${dte.es_traspaso && dte.sucursal_destino ? `<br><small class="text-muted" title="Sucursal destino del traspaso"><i class="bi bi-geo-alt"></i> destino: <strong>${_esc(dte.sucursal_destino.alias)}</strong></small>` : ''}
     </td>
     <td class="small">
         ${dte.fecha_emision || ''}
@@ -2202,12 +2370,12 @@
     </td>
     <td>
         <div class="d-flex justify-content-center gap-1 flex-wrap">
-            <button class="nexo-action-btn info" title="Ver detalles" onclick="verDetalleDTE(${dte.id || 0})">
-                <i class="bi bi-eye"></i>
+            <button class="nexo-action-btn info" title="Ver detalles del documento" onclick="verDetalleDTE(${dte.id || 0})">
+                <i class="bi bi-eye"></i><span class="action-label">Detalle</span>
             </button>
             ${dte.estado_pago !== 'PAGADO' ? `
             <button class="nexo-action-btn success" title="Registrar pago" onclick="registrarPago(${dte.id || 0})">
-                <i class="bi bi-cash-coin"></i>
+                <i class="bi bi-cash-coin"></i><span class="action-label">Pago</span>
             </button>` : ''}
             {% if puede_descargar_txt_dte %}
             ${[
@@ -2219,35 +2387,41 @@
                 'NOTA DE DEBITO', 'NOTA_DEBITO'
             ].includes(dte.tipo_documento) ? `
             <button class="nexo-action-btn warning" title="Descargar TXT Acepta" onclick='descargarTXTAcepta(${dte.id || 0}, ${JSON.stringify(String(dte.tipo_documento || ""))}, ${JSON.stringify(String(dte.numero_documento || ""))})'>
-                <i class="bi bi-file-earmark-text"></i>
+                <i class="bi bi-file-earmark-text"></i><span class="action-label">TXT</span>
             </button>` : ''}
             {% endif %}
             {% if es_admin %}
             ${['FACTURA ELECTRONICA','FACTURA_ELECTRONICA','BOLETA ELECTRONICA','BOLETA_ELECTRONICA'].includes(dte.tipo_documento) && dte.estado_dte !== 'ANULADO' && (dte.monto_con_iva - (dte.total_nc_acumulado || 0)) > 0 ? `
-            <button class="nexo-action-btn danger" title="Generar NC" onclick='anularDocumento(${dte.id || 0}, ${JSON.stringify(String(dte.numero_documento || ""))}, ${JSON.stringify(String(dte.tipo_documento || ""))}, ${dte.monto_con_iva || 0}, ${dte.total_nc_acumulado || 0})'>
-                <i class="bi bi-file-earmark-minus"></i>
+            <button class="nexo-action-btn danger" title="Generar Nota de Crédito" onclick='anularDocumento(${dte.id || 0}, ${JSON.stringify(String(dte.numero_documento || ""))}, ${JSON.stringify(String(dte.tipo_documento || ""))}, ${dte.monto_con_iva || 0}, ${dte.total_nc_acumulado || 0})'>
+                <i class="bi bi-file-earmark-minus"></i><span class="action-label">NC</span>
             </button>` : ''}
             ${['NOTA DE CREDITO','NOTA_CREDITO'].includes(dte.tipo_documento) ? `
             <button class="nexo-action-btn warning" title="Editar folio / cliente NC" onclick='editarFolioNC(${dte.id || 0}, ${JSON.stringify(String(dte.numero_documento || ""))}, ${JSON.stringify(dte.tipo_documento || "")}, ${dte.receptor_id ? "true" : "false"}, ${JSON.stringify(dte.receptor_nombre || "")}, ${JSON.stringify(dte.receptor_rut || "")})'>
-                <i class="bi bi-pencil-square"></i>
+                <i class="bi bi-pencil-square"></i><span class="action-label">Folio</span>
             </button>` : ''}
             ${(!dte.receptor_id && (dte.es_nota_credito || ['NOTA DE CREDITO','NOTA_CREDITO'].includes(dte.tipo_documento))) ? `
             <button class="nexo-action-btn" style="background:#0dcaf0;color:white;" title="Asignar receptor a esta NC (necesario para descargar el TXT Acepta)" onclick='asignarReceptorNC(${dte.id || 0}, ${JSON.stringify(String(dte.numero_documento || ""))})'>
-                <i class="bi bi-person-plus"></i>
+                <i class="bi bi-person-plus"></i><span class="action-label">Receptor</span>
+            </button>` : ''}
+            {% endif %}
+            {% if puede_reasignar_destino %}
+            ${dte.es_traspaso && dte.sucursal_destino && ['EMITIDO','ACEPTADO'].includes(dte.estado_dte) && !dte.fecha_recepcion && (!dte.nc_asociadas || dte.nc_asociadas.length === 0) && (!dte.ajustes_asociados || dte.ajustes_asociados.length === 0) ? `
+            <button class="nexo-action-btn" style="background:#fd7e14;color:white;" title="Reasignar sucursal destino del traspaso (actual: ${_esc(dte.sucursal_destino.alias)})" onclick='abrirReasignarDestino(${dte.id || 0}, ${JSON.stringify(String(dte.numero_documento || ""))}, ${dte.sucursal_destino.id}, ${JSON.stringify(String(dte.sucursal_destino.alias || ""))})'>
+                <i class="bi bi-signpost-split"></i><span class="action-label">Reasignar</span>
             </button>` : ''}
             {% endif %}
             ${dte.es_traspaso && dte.sucursal_destino && (!dte.nc_asociadas || dte.nc_asociadas.length === 0) && (!dte.ajustes_asociados || dte.ajustes_asociados.length === 0) && dte.estado_dte !== 'ANULADO' && dte.estado_dte !== 'CANCELADO' ? `
             <button class="nexo-action-btn btn-crear-stock-destino" style="background: var(--nexo-accent); color: white;" title="Crear stock manualmente en sucursal destino (${_esc(dte.sucursal_destino.alias)})" data-dte-id="${dte.id || 0}">
-                <i class="bi bi-box-arrow-in-down"></i>
+                <i class="bi bi-box-arrow-in-down"></i><span class="action-label">Stock dest.</span>
             </button>` : ''}
             {% if es_admin %}
             ${dte.es_traspaso && dte.estado_dte !== 'ANULADO' && dte.estado_dte !== 'CANCELADO' ? `
             <button class="nexo-action-btn btn-diagnostico-traspaso" style="background:#6f42c1;color:white;" title="Diagnosticar/reparar trazabilidad de traspaso" data-dte-id="${dte.id || 0}">
-                <i class="bi bi-shield-exclamation"></i>
+                <i class="bi bi-shield-exclamation"></i><span class="action-label">Diagnóst.</span>
             </button>` : ''}
             {% endif %}
             <button class="nexo-action-btn btn-ver-trazabilidad" data-dte-id="${dte.id || 0}" title="Ver trazabilidad (compras origen, NC hijos, movimientos)">
-                <i class="bi bi-diagram-3"></i>
+                <i class="bi bi-diagram-3"></i><span class="action-label">Traza</span>
             </button>
         </div>
     </td>

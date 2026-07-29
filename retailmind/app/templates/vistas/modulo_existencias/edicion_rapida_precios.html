@@ -1951,6 +1951,278 @@
     .edicion-rapida-table { font-size: 0.75rem; }
     .edicion-rapida-table input { min-height: 44px; font-size: 16px !important; width: 80px !important; }
 }
+
+/* ========== MODAL PRECIO RÁPIDO (tocar producto → escribir precio → Enter) ========== */
+.modal-precio-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(26, 26, 46, 0.7);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+}
+
+.modal-precio-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-precio {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-lg);
+    max-width: 480px;
+    width: 95%;
+    overflow: hidden;
+    transform: translateY(-20px);
+    transition: transform 0.2s ease;
+}
+
+.modal-precio-overlay.active .modal-precio {
+    transform: translateY(0);
+}
+
+.modal-precio-header {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
+    color: var(--nexo-white);
+    padding: 16px 20px;
+}
+
+.modal-precio-header .mp-nombre {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+    line-height: 1.3;
+}
+
+.modal-precio-header .mp-detalle {
+    font-size: 12px;
+    opacity: 0.75;
+    margin-top: 4px;
+}
+
+.modal-precio-body {
+    padding: 20px;
+}
+
+.mp-datos-actuales {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    background: var(--nexo-gray-100);
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--nexo-gray-700);
+}
+
+.mp-datos-actuales strong {
+    color: var(--nexo-secondary);
+}
+
+.mp-precio-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--nexo-gray-500);
+    margin-bottom: 6px;
+    display: block;
+}
+
+.mp-precio-input {
+    width: 100%;
+    font-size: 28px;
+    font-weight: 700;
+    padding: 12px 16px;
+    border: 2px solid var(--nexo-primary);
+    border-radius: var(--nexo-radius-md);
+    color: var(--nexo-secondary);
+    text-align: right;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.mp-precio-input:focus {
+    box-shadow: 0 0 0 4px rgba(0, 102, 255, 0.15);
+}
+
+.mp-fila-secundaria {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    margin-top: 14px;
+}
+
+.mp-desc-group {
+    width: 110px;
+}
+
+.mp-desc-input {
+    width: 100%;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 8px 10px;
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    text-align: right;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.mp-desc-input:focus {
+    border-color: var(--nexo-primary);
+}
+
+.mp-quick-btns {
+    display: flex;
+    gap: 6px;
+    flex: 1;
+}
+
+.mp-btn-quick {
+    flex: 1;
+    padding: 9px 4px;
+    border: 2px solid var(--nexo-gray-300);
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-md);
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--nexo-gray-700);
+    transition: var(--nexo-transition-fast);
+}
+
+.mp-btn-quick:hover, .mp-btn-quick.active {
+    border-color: var(--nexo-error);
+    color: var(--nexo-error);
+    background: #FFF5F5;
+}
+
+.mp-preview {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 16px;
+    padding: 12px 14px;
+    background: var(--nexo-primary-light);
+    border-radius: var(--nexo-radius-md);
+    font-size: 13px;
+}
+
+.mp-preview .mp-prev-item {
+    text-align: center;
+    flex: 1;
+}
+
+.mp-preview .mp-prev-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    color: var(--nexo-gray-500);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.mp-preview .mp-prev-value {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    margin-top: 2px;
+}
+
+.mp-aviso-sync {
+    margin-top: 12px;
+    font-size: 12px;
+    color: #854d0e;
+    background: #fef9c3;
+    border: 1px solid #fde68a;
+    border-radius: var(--nexo-radius-md);
+    padding: 8px 12px;
+    display: none;
+}
+
+.mp-acciones {
+    display: flex;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.mp-btn-confirmar {
+    flex: 2;
+    padding: 12px;
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--nexo-transition-fast);
+}
+
+.mp-btn-confirmar:hover {
+    background: var(--nexo-primary-dark);
+}
+
+.mp-btn-cancelar {
+    flex: 1;
+    padding: 12px;
+    background: var(--nexo-white);
+    color: var(--nexo-gray-700);
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--nexo-transition-fast);
+}
+
+.mp-btn-cancelar:hover {
+    border-color: var(--nexo-gray-500);
+}
+
+.mp-hint {
+    text-align: center;
+    font-size: 11px;
+    color: var(--nexo-gray-500);
+    margin-top: 10px;
+}
+
+.mp-hint kbd {
+    background: var(--nexo-gray-100);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 10px;
+}
+
+/* Flash del ítem recién agregado/actualizado en la lista de edición */
+@keyframes flashItemEdicion {
+    0% { box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.6); border-color: var(--nexo-accent); }
+    100% { box-shadow: none; }
+}
+
+.edit-item.flash-nuevo {
+    animation: flashItemEdicion 1.2s ease-out;
+}
+
+/* Estado "en lista" dentro de los resultados de búsqueda */
+.result-en-lista {
+    color: var(--nexo-primary);
+    font-size: 12px;
+    margin-top: 6px;
+    font-weight: 600;
+}
+
+.result-en-lista .precio-cambiado {
+    color: var(--nexo-error);
+}
 </style>
 
 <!-- El main-content ya está incluido en layout/menu.html -->
@@ -2100,7 +2372,7 @@
                     <div class="empty-list">
                         <i class="ri-inbox-line"></i>
                         <h4>Lista vacía</h4>
-                        <p>Busca y agrega productos para editar</p>
+                        <p>Toca un resultado de búsqueda, escribe el precio nuevo y presiona Enter</p>
                     </div>
                 </div>
 
@@ -2266,6 +2538,74 @@
 </div>
 
 <!-- Modal Historial de Precios -->
+<!-- Modal Precio Rápido: tocar producto → escribir precio → Enter -->
+<div class="modal-precio-overlay" id="modalPrecioOverlay" onclick="cerrarModalPrecio(event)">
+    <div class="modal-precio" onclick="event.stopPropagation()">
+        <div class="modal-precio-header">
+            <p class="mp-nombre" id="mpNombre">-</p>
+            <div class="mp-detalle" id="mpDetalle"></div>
+        </div>
+        <div class="modal-precio-body">
+            <div class="mp-datos-actuales">
+                <span>Precio actual: <strong id="mpPrecioActual">-</strong></span>
+                <span>Costo: <strong id="mpCosto">-</strong></span>
+                <span>Margen: <strong id="mpMargenActual">-</strong></span>
+            </div>
+
+            <label class="mp-precio-label" for="mpPrecioNuevo">Precio nuevo</label>
+            <input type="number" id="mpPrecioNuevo" class="mp-precio-input" step="10" min="0"
+                   inputmode="numeric"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault(); confirmarModalPrecio(); return false;}"
+                   oninput="modalPrecioDesdePrecio()">
+
+            <div class="mp-fila-secundaria">
+                <div class="mp-desc-group">
+                    <label class="mp-precio-label" for="mpDescPct">Desc. %</label>
+                    <input type="number" id="mpDescPct" class="mp-desc-input" step="1" placeholder="0"
+                           inputmode="numeric"
+                           onkeydown="if(event.key==='Enter'){event.preventDefault(); confirmarModalPrecio(); return false;}"
+                           oninput="modalPrecioDesdePorcentaje()">
+                </div>
+                <div class="mp-quick-btns">
+                    <button type="button" class="mp-btn-quick" onclick="modalPrecioQuick(10)">-10%</button>
+                    <button type="button" class="mp-btn-quick" onclick="modalPrecioQuick(20)">-20%</button>
+                    <button type="button" class="mp-btn-quick" onclick="modalPrecioQuick(30)">-30%</button>
+                    <button type="button" class="mp-btn-quick" onclick="modalPrecioQuick(40)">-40%</button>
+                </div>
+            </div>
+
+            <div class="mp-preview">
+                <div class="mp-prev-item">
+                    <div class="mp-prev-label">Diferencia</div>
+                    <div class="mp-prev-value" id="mpPrevDiferencia">$0</div>
+                </div>
+                <div class="mp-prev-item">
+                    <div class="mp-prev-label">Margen nuevo</div>
+                    <div class="mp-prev-value" id="mpPrevMargen">-</div>
+                </div>
+                <div class="mp-prev-item">
+                    <div class="mp-prev-label">Markup</div>
+                    <div class="mp-prev-value" id="mpPrevMarkup">-</div>
+                </div>
+            </div>
+
+            <div class="mp-aviso-sync" id="mpAvisoSync">
+                <i class="ri-notification-line"></i> <span id="mpAvisoSyncTexto"></span>
+            </div>
+
+            <div class="mp-acciones">
+                <button type="button" class="mp-btn-cancelar" onclick="cerrarModalPrecio()">Cancelar</button>
+                <button type="button" class="mp-btn-confirmar" id="mpBtnConfirmar" onclick="confirmarModalPrecio()">
+                    <i class="ri-check-line"></i> Agregar a la lista
+                </button>
+            </div>
+            <div class="mp-hint">
+                <kbd>Enter</kbd> confirma y vuelve al buscador &nbsp;·&nbsp; <kbd>Esc</kbd> cancela
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal-historial-overlay" id="modalHistorialOverlay" onclick="cerrarModalHistorial(event)">
     <div class="modal-historial" onclick="event.stopPropagation()">
         <div class="modal-historial-header">
@@ -2929,11 +3269,12 @@ function renderizarResultadosBusqueda(productos) {
     
     productos.forEach((producto, index) => {
         const margen = calcularMargen(producto.costo, producto.precio_venta);
-        const yaAgregado = listaEdicion.some(item => item.id === producto.id);
-        
+        const itemEnLista = listaEdicion.find(item => item.id === producto.id);
+        const yaAgregado = !!itemEnLista;
+
         const div = document.createElement('div');
         div.className = 'product-search-result' + (yaAgregado ? ' selected' : '');
-        div.onclick = () => agregarALista(producto);
+        div.onclick = () => abrirModalPrecio(producto);
         
         // Info de sucursales con stock por cada una (incluye la sucursal actual)
         let sucursalesInfo = '';
@@ -3038,55 +3379,202 @@ function renderizarResultadosBusqueda(productos) {
                 ${fechaCreacionBadge}
                 ${fechaDespachoBadge}
             </div>
-            ${yaAgregado ? '<div style="color: var(--nexo-primary); font-size: 11px; margin-top: 6px; font-weight: 600;"><i class="ri-check-line"></i> Ya agregado a la lista</div>' : ''}
+            ${yaAgregado ? (
+                itemEnLista.precio_nuevo !== itemEnLista.precio_original
+                    ? `<div class="result-en-lista"><i class="ri-check-double-line"></i> En lista — Nuevo: <span class="precio-cambiado">${formatearMoneda(Math.round(itemEnLista.precio_nuevo))}</span> (${itemEnLista.precio_nuevo < itemEnLista.precio_original ? '−' : '+'}${Math.abs(((itemEnLista.precio_original - itemEnLista.precio_nuevo) / itemEnLista.precio_original) * 100).toFixed(1)}%) · toca para ajustar</div>`
+                    : `<div class="result-en-lista"><i class="ri-check-line"></i> En lista sin cambio de precio · toca para ponerle precio</div>`
+            ) : ''}
         `;
         
         container.appendChild(div);
     });
 }
 
-// Agregar producto a lista de edición
-function agregarALista(producto) {
-    // Verificar si ya está
-    if (listaEdicion.some(item => item.id === producto.id)) {
-        // Enfocar el campo de descuento del producto
-        const input = document.querySelector(`#desc-${producto.id}`);
-        if (input) input.focus();
+// ========== MODAL PRECIO RÁPIDO ==========
+// Flujo: tocar producto → escribir precio (o %) → Enter → queda en la lista y
+// el foco vuelve al buscador. Sin buscar el ítem de nuevo en la lista derecha.
+
+let modalPrecioProducto = null;
+
+function abrirModalPrecio(producto) {
+    modalPrecioProducto = producto;
+    const enLista = listaEdicion.find(i => i.id === producto.id);
+    const precioInicial = enLista ? enLista.precio_nuevo : producto.precio_venta;
+
+    document.getElementById('mpNombre').textContent = producto.nombre;
+    const partes = [];
+    if (producto.talla) partes.push('Talla ' + producto.talla);
+    if (producto.marca) partes.push(producto.marca);
+    if (producto.color) partes.push(producto.color);
+    if (producto.sucursal) partes.push(producto.sucursal);
+    document.getElementById('mpDetalle').textContent = partes.join(' · ');
+
+    document.getElementById('mpPrecioActual').textContent = formatearMoneda(producto.precio_venta);
+    document.getElementById('mpCosto').textContent = formatearMoneda(producto.costo || 0);
+    document.getElementById('mpMargenActual').textContent =
+        calcularMargen(producto.costo || 0, producto.precio_venta).toFixed(1) + '%';
+
+    document.getElementById('mpPrecioNuevo').value = Math.round(precioInicial);
+    document.getElementById('mpDescPct').value = '';
+    document.getElementById('mpBtnConfirmar').innerHTML = enLista
+        ? '<i class="ri-check-line"></i> Actualizar precio'
+        : '<i class="ri-check-line"></i> Agregar a la lista';
+
+    const aviso = document.getElementById('mpAvisoSync');
+    if (producto.sucursales_similares > 0) {
+        const listaSuc = (producto.sucursales_lista && producto.sucursales_lista.length > 0)
+            ? producto.sucursales_lista.join(', ')
+            : `${producto.sucursales_similares} sucursal${producto.sucursales_similares > 1 ? 'es' : ''}`;
+        document.getElementById('mpAvisoSyncTexto').textContent = 'El cambio notificará a: ' + listaSuc;
+        aviso.style.display = 'block';
+    } else {
+        aviso.style.display = 'none';
+    }
+
+    modalPrecioActualizarPreview();
+    document.getElementById('modalPrecioOverlay').classList.add('active');
+
+    setTimeout(() => {
+        const input = document.getElementById('mpPrecioNuevo');
+        input.focus();
+        input.select(); // el precio queda seleccionado: escribir reemplaza directo
+    }, 80);
+}
+
+function modalPrecioDesdePrecio() {
+    if (!modalPrecioProducto) return;
+    const precio = parseFloat(document.getElementById('mpPrecioNuevo').value) || 0;
+    const original = modalPrecioProducto.precio_venta;
+    const pct = original > 0 ? ((original - precio) / original * 100) : 0;
+    document.getElementById('mpDescPct').value = Math.abs(pct) < 0.05 ? '' : pct.toFixed(1);
+    modalPrecioActualizarPreview();
+}
+
+function modalPrecioDesdePorcentaje() {
+    if (!modalPrecioProducto) return;
+    const pct = parseFloat(document.getElementById('mpDescPct').value) || 0;
+    const original = modalPrecioProducto.precio_venta;
+    document.getElementById('mpPrecioNuevo').value = Math.round(original * (1 - pct / 100));
+    modalPrecioActualizarPreview();
+}
+
+function modalPrecioQuick(pct) {
+    document.getElementById('mpDescPct').value = pct;
+    modalPrecioDesdePorcentaje();
+    // Dejar el precio enfocado y seleccionado: Enter confirma al tiro
+    const input = document.getElementById('mpPrecioNuevo');
+    input.focus();
+    input.select();
+}
+
+function modalPrecioActualizarPreview() {
+    if (!modalPrecioProducto) return;
+    const precio = parseFloat(document.getElementById('mpPrecioNuevo').value) || 0;
+    const costo = modalPrecioProducto.costo || 0;
+    const dif = precio - modalPrecioProducto.precio_venta;
+
+    const difEl = document.getElementById('mpPrevDiferencia');
+    difEl.textContent = (dif > 0 ? '+' : (dif < 0 ? '−' : '')) + formatearMoneda(Math.abs(Math.round(dif)));
+    difEl.style.color = dif < 0 ? 'var(--nexo-error)' : (dif > 0 ? 'var(--nexo-accent)' : 'var(--nexo-secondary)');
+
+    const margen = calcularMargen(costo, precio);
+    const margenEl = document.getElementById('mpPrevMargen');
+    margenEl.textContent = margen.toFixed(1) + '%';
+    margenEl.style.color = margen > 25 ? 'var(--nexo-accent)' : (margen > 15 ? 'var(--nexo-warning)' : 'var(--nexo-error)');
+
+    document.getElementById('mpPrevMarkup').textContent = calcularMarkup(costo, precio).toFixed(1) + '%';
+}
+
+function confirmarModalPrecio() {
+    if (!modalPrecioProducto) return;
+    const producto = modalPrecioProducto;
+    const precio = Math.round(parseFloat(document.getElementById('mpPrecioNuevo').value));
+
+    if (!precio || precio <= 0) {
+        const input = document.getElementById('mpPrecioNuevo');
+        input.focus();
+        input.select();
         return;
     }
-    
-    // Agregar a lista
-    listaEdicion.push({
-        id: producto.id,
-        nombre: producto.nombre,
-        talla: producto.talla,
-        costo: producto.costo,
-        precio_original: producto.precio_venta,
-        precio_nuevo: producto.precio_venta,
-        descuento_porcentaje: 0,
-        descuento_pesos: 0,
-        margen_nuevo: calcularMargen(producto.costo, producto.precio_venta),
-        markup_nuevo: calcularMarkup(producto.costo, producto.precio_venta),
-        sucursales_similares: producto.sucursales_similares || 0,
-        sucursales_lista: producto.sucursales_lista || [],
-        sucursales_detalle: producto.sucursales_detalle || [],
-        stock_total_red: producto.stock_total_red || 0,
-        ultimo_cambio: producto.ultimo_cambio
+
+    upsertItemPrecio(producto, precio);
+    cerrarModalPrecio();
+
+    // Confirmación no bloqueante
+    const dif = precio - producto.precio_venta;
+    const pct = producto.precio_venta > 0 ? (dif / producto.precio_venta * 100) : 0;
+    Swal.fire({
+        toast: true,
+        position: 'top-end',
+        timer: 2200,
+        timerProgressBar: true,
+        showConfirmButton: false,
+        icon: 'success',
+        title: producto.nombre,
+        text: dif === 0
+            ? `Agregado sin cambio (${formatearMoneda(precio)})`
+            : `${formatearMoneda(producto.precio_venta)} → ${formatearMoneda(precio)} (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)`
     });
-    
+
+    // Volver al buscador con el texto seleccionado para encadenar la siguiente búsqueda
+    const search = document.getElementById('quickSearch');
+    search.focus();
+    search.select();
+}
+
+function cerrarModalPrecio(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('modalPrecioOverlay').classList.remove('active');
+    modalPrecioProducto = null;
+}
+
+// Agregar o actualizar producto en la lista de edición con su precio nuevo
+function upsertItemPrecio(producto, precioNuevo) {
+    let item = listaEdicion.find(i => i.id === producto.id);
+
+    if (!item) {
+        item = {
+            id: producto.id,
+            nombre: producto.nombre,
+            talla: producto.talla,
+            costo: producto.costo,
+            precio_original: producto.precio_venta,
+            precio_nuevo: precioNuevo,
+            descuento_porcentaje: 0,
+            descuento_pesos: 0,
+            margen_nuevo: 0,
+            markup_nuevo: 0,
+            sucursales_similares: producto.sucursales_similares || 0,
+            sucursales_lista: producto.sucursales_lista || [],
+            sucursales_detalle: producto.sucursales_detalle || [],
+            stock_total_red: producto.stock_total_red || 0,
+            ultimo_cambio: producto.ultimo_cambio
+        };
+        listaEdicion.push(item);
+    } else {
+        item.precio_nuevo = precioNuevo;
+    }
+
+    item.descuento_pesos = Math.round(item.precio_original - item.precio_nuevo);
+    item.descuento_porcentaje = item.precio_original > 0
+        ? Math.round(((item.precio_original - item.precio_nuevo) / item.precio_original) * 1000) / 10
+        : 0;
+    item.margen_nuevo = calcularMargen(item.costo, item.precio_nuevo);
+    item.markup_nuevo = calcularMarkup(item.costo, item.precio_nuevo);
+
     renderizarListaEdicion();
     actualizarEstadisticas();
-    renderizarResultadosBusqueda(productosDisponibles); // Actualizar vista de búsqueda
-    
-    // Auto-scroll hacia abajo en la lista
+    renderizarResultadosBusqueda(productosDisponibles);
+
+    // Ubicar y destacar el ítem en la lista sin que el usuario lo busque
     setTimeout(() => {
-        const editList = document.getElementById('editList');
-        editList.scrollTop = editList.scrollHeight;
-        
-        // Enfocar el primer campo del nuevo item
-        const nuevoInput = document.querySelector(`#desc-${producto.id}`);
-        if (nuevoInput) nuevoInput.focus();
-    }, 100);
+        const el = document.getElementById(`item-${producto.id}`);
+        if (el) {
+            el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            el.classList.add('flash-nuevo');
+            setTimeout(() => el.classList.remove('flash-nuevo'), 1300);
+        }
+    }, 60);
 }
 
 // Renderizar lista de edición
@@ -3098,7 +3586,7 @@ function renderizarListaEdicion() {
             <div class="empty-list">
                 <i class="ri-inbox-line"></i>
                 <h4>Lista vacía</h4>
-                <p>Busca y agrega productos para editar</p>
+                <p>Toca un resultado de búsqueda, escribe el precio nuevo y presiona Enter</p>
             </div>
         `;
         document.getElementById('totalesSection').style.display = 'none';
@@ -3352,11 +3840,11 @@ function toggleExpand(productoId) {
     const item = document.getElementById(`item-${productoId}`);
     if (item) {
         item.classList.toggle('expanded');
-        
-        // Si se expandió, enfocar el primer campo
+
+        // Si se expandió, enfocar el precio (el campo que la gente realmente usa)
         if (item.classList.contains('expanded')) {
             setTimeout(() => {
-                const input = document.getElementById(`desc-${productoId}`);
+                const input = document.getElementById(`precioDirecto-${productoId}`);
                 if (input) {
                     input.focus();
                     input.select();
@@ -3882,10 +4370,15 @@ document.addEventListener('keydown', function(e) {
     if (e.ctrlKey && e.key === 'Enter') {
         aplicarTodosCambios();
     }
-    // ESC para cerrar modales (primero el de historial por producto, luego auditoría)
+    // ESC para cerrar modales (precio rápido → historial por producto → auditoría)
     if (e.key === 'Escape') {
+        const modalPrecio = document.getElementById('modalPrecioOverlay');
         const modalHistorial = document.getElementById('modalHistorialOverlay');
-        if (modalHistorial && modalHistorial.classList.contains('active')) {
+        if (modalPrecio && modalPrecio.classList.contains('active')) {
+            cerrarModalPrecio();
+            const search = document.getElementById('quickSearch');
+            if (search) search.focus();
+        } else if (modalHistorial && modalHistorial.classList.contains('active')) {
             cerrarModalHistorial();
         } else {
             cerrarAuditoriaPrecios();

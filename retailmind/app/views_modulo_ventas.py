@@ -259,6 +259,7 @@ def _acciones_cambio_para_usuario(usuario, cambio):
         'cancelar': cancelar_autorizado,
         'revertir': revertir_autorizado,
         'condonar': es_admin and cambio.estado == 'EJECUTADO_COBRO_PENDIENTE',
+        'ajustar': es_admin and cambio.estado == 'EJECUTADO_COBRO_PENDIENTE',
         'puede_solicitar_cancelar': estado_cancelable and tiene_base,
         'puede_solicitar_revertir': (
             estado_revertible and ticket_pendiente and integridad_reversion and tiene_base
@@ -2571,8 +2572,8 @@ def construir_ticket_data(ticket):
             'producto_talla_id': producto_talla.id if producto_talla else None,
             'producto_id': producto.id if producto else None,
             'sku': producto_talla.sku if producto_talla else '',
-            'articulo': producto.articulo if producto else '',
-            'descripcion': producto.descripcion if producto else '',
+            'articulo': producto.articulo if producto else (tp.descripcion_linea or ''),
+            'descripcion': producto.descripcion if producto else (tp.descripcion_linea or ''),
             'marca': marca,
             'talla': producto_talla.talla if producto_talla else '',
             'cantidad': tp.stock,
@@ -15983,6 +15984,177 @@ def condonar_diferencia_cobro(request):
         return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': f'Error al condonar la diferencia: {str(e)}'})
+
+
+@require_POST
+@requiere_rol('administrador')
+def ajustar_diferencia_cobro(request):
+    """
+    Ajustar (rebajar) la diferencia de cobro pendiente de un cambio a un monto
+    menor, con justificación. Solo administradores.
+
+    A diferencia de condonar (que perdona el 100% y cierra el cambio), acá el
+    cobro sigue vivo: el ticket pendiente queda por el monto ajustado y se cobra
+    normal en el POS. La rebaja se materializa como una línea manual negativa
+    en el ticket, porque la generación del DTE recalcula el total desde la suma
+    de líneas (ver construir DTE: total autoritativo = suma de ticket_productos)
+    y un total editado sin línea de respaldo sería revertido en la emisión.
+    """
+    try:
+        data = json.loads(request.body)
+        cambio_id = data.get('cambio_id')
+        motivo = str(data.get('motivo', '') or '').strip()
+
+        if not cambio_id:
+            return JsonResponse({'success': False, 'error': 'Falta el identificador del cambio'})
+
+        if len(motivo) < 5:
+            return JsonResponse({
+                'success': False,
+                'error': 'Debe indicar una justificación (mínimo 5 caracteres) para ajustar la diferencia'
+            })
+
+        try:
+            nuevo_monto = int(data.get('nuevo_monto'))
+        except (TypeError, ValueError):
+            return JsonResponse({'success': False, 'error': 'El nuevo monto debe ser un número entero'})
+
+        if nuevo_monto <= 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'El nuevo monto debe ser mayor que $0. Para perdonar todo el cobro use "Condonar".'
+            })
+
+        get_object_or_404(CambioDevolucion, id=cambio_id)
+
+        # Verificar acceso por sucursal (fail-closed: exigir sucursal en sesión)
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        if not sucursal_id:
+            return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'})
+
+        with transaction.atomic():
+            # Bloquear la fila para idempotencia frente a doble click / operaciones
+            # concurrentes (cobro, condonación o reversión simultáneos).
+            cambio = CambioDevolucion.objects.select_for_update().get(id=cambio_id)
+
+            if cambio.sucursal_id != int(sucursal_id):
+                return JsonResponse({'success': False, 'error': 'No tiene acceso a este cambio'})
+
+            # Solo cambios con cobro de diferencia pendiente (re-verificado bajo el lock)
+            if cambio.estado != 'EJECUTADO_COBRO_PENDIENTE':
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Solo se puede ajustar un cambio con cobro pendiente. Estado actual: {cambio.get_estado_display()}'
+                })
+
+            diferencia_actual = int(cambio.diferencia_monto or 0)
+            if nuevo_monto >= diferencia_actual:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'El nuevo monto (${nuevo_monto:,}) debe ser menor que la diferencia actual (${diferencia_actual:,})'
+                })
+
+            # Ubicar y bloquear el ticket pendiente del cobro (misma prioridad que
+            # condonar: ticket_diferencia primero, luego ticket_nuevo). El lock
+            # evita la carrera con un cobro simultáneo en el POS.
+            ticket_ids = [tid for tid in (cambio.ticket_diferencia_id, cambio.ticket_nuevo_id) if tid]
+            tickets_bloqueados = {
+                t.id: t
+                for t in Ticket.objects.select_for_update().filter(id__in=sorted(ticket_ids))
+            }
+            ticket_pendiente = None
+            for tid in ticket_ids:
+                candidato = tickets_bloqueados.get(tid)
+                if candidato and candidato.estado == 'PENDIENTE':
+                    ticket_pendiente = candidato
+                    break
+            if not ticket_pendiente:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'El ticket del cobro ya no está pendiente (fue pagado o anulado)'
+                })
+
+            rebaja = int(ticket_pendiente.total or 0) - nuevo_monto
+            if rebaja <= 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'El nuevo monto (${nuevo_monto:,}) debe ser menor que el total del ticket pendiente (${int(ticket_pendiente.total or 0):,})'
+                })
+
+            # Línea manual negativa que respalda la rebaja: así la suma de líneas
+            # del ticket cuadra con el nuevo total y el DTE se emite por el monto
+            # realmente cobrado.
+            Ticket_Productos.objects.create(
+                idTicket=ticket_pendiente,
+                ProductoTalla=None,
+                stock=1,
+                precio=-rebaja,
+                precio_original=-rebaja,
+                descuento_unitario=0,
+                subtotal=-rebaja,
+                descripcion_linea=f'AJUSTE DE DIFERENCIA (admin {request.user.username})'[:255],
+            )
+
+            nota = (f'[AJUSTE DIFERENCIA] ${diferencia_actual:,} → ${nuevo_monto:,} '
+                    f'por {request.user.username}: {motivo}')
+            ticket_pendiente.total = nuevo_monto
+            ticket_pendiente.subTotal = nuevo_monto
+            ticket_pendiente.observaciones = ((ticket_pendiente.observaciones or '') + f'\n{nota}').strip()
+            ticket_pendiente.save(update_fields=['total', 'subTotal', 'observaciones'])
+
+            # Registrar el ajuste en el cambio SIN cerrar el cobro: el estado se
+            # mantiene EJECUTADO_COBRO_PENDIENTE y se completa al pagar en el POS.
+            if cambio.monto_diferencia_original is None:
+                cambio.monto_diferencia_original = cambio.diferencia_monto
+            cambio.diferencia_monto = nuevo_monto
+            cambio.diferencia_ajustada = True
+            cambio.motivo_ajuste = motivo
+            cambio.ajustada_por = request.user
+            cambio.fecha_ajuste = timezone.now()
+            cambio.save(update_fields=[
+                'monto_diferencia_original', 'diferencia_monto', 'diferencia_ajustada',
+                'motivo_ajuste', 'ajustada_por', 'fecha_ajuste',
+            ])
+
+            HistorialCambioDevolucion.objects.create(
+                cambio_devolucion=cambio,
+                accion='AJUSTE_DIFERENCIA',
+                estado_anterior=cambio.estado,
+                estado_nuevo=cambio.estado,
+                usuario=request.user,
+                descripcion=(
+                    f'Diferencia ajustada de ${diferencia_actual:,} a ${nuevo_monto:,} '
+                    f'(rebaja de ${rebaja:,}) por {request.user.username}. Motivo: {motivo}'
+                ),
+                datos_adicionales={
+                    'monto_anterior': float(diferencia_actual),
+                    'monto_nuevo': float(nuevo_monto),
+                    'monto_rebajado': float(rebaja),
+                    'motivo': motivo,
+                    'ajustada_por': request.user.username,
+                    'ticket_correlativo': ticket_pendiente.correlativo,
+                    'fecha': timezone.now().isoformat(),
+                }
+            )
+
+        return JsonResponse({
+            'success': True,
+            'message': (
+                f'Diferencia ajustada de ${diferencia_actual:,} a ${nuevo_monto:,}. '
+                f'El cobro sigue pendiente en el POS por el monto nuevo.'
+            ),
+            'cambio_id': cambio.id,
+            'nuevo_monto': nuevo_monto,
+            'monto_rebajado': rebaja,
+            'ticket_correlativo': ticket_pendiente.correlativo,
+            'estado_final': cambio.get_estado_display(),
+            'estado_final_codigo': cambio.estado,
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error al ajustar la diferencia: {str(e)}'})
 
 
 @login_required

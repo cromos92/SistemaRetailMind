@@ -4130,13 +4130,19 @@ function renderTablaRecepciones() {
         const empresaOrigen = doc.empresa_origen
             ? `<div><small class="text-muted">${doc.empresa_origen}</small></div>`
             : '';
+        // Aviso: el destino de este traspaso fue reasignado (venía dirigido a otra sucursal)
+        const reasignadoHtml = doc.reasignado_desde
+            ? `<div class="mt-1"><span class="badge bg-warning text-dark" title="Destino reasignado el ${doc.reasignado_desde.fecha} por ${doc.reasignado_desde.responsable}. Antes: ${doc.reasignado_desde.sucursal}">
+                   <i class="bi bi-signpost-split"></i> Reasignado desde ${doc.reasignado_desde.sucursal}
+               </span></div>`
+            : '';
         const flujoHtml = `
             <div class="d-flex align-items-center gap-2 flex-nowrap">
                 <span class="${claseOrigen}">${doc.sucursal_origen}</span>
                 <i class="bi bi-arrow-right text-muted"></i>
                 <span class="${claseDestino}">${doc.sucursal_destino}</span>
                 ${doc.vista_global ? '<span class="badge bg-light text-dark border ms-1" title="Vista global de todas las sucursales"><i class="bi bi-globe2"></i></span>' : ''}
-            </div>${empresaOrigen}`;
+            </div>${empresaOrigen}${reasignadoHtml}`;
 
         tbody.append(`
             <tr data-id="${doc.id}" class="${config.rowClass}">

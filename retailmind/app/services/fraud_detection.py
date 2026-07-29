@@ -416,6 +416,16 @@ def obtener_analisis_avanzado(sucursal_id=None, fecha_inicio=None, fecha_fin=Non
         devoluciones=Sum('diferencia_monto', filter=Q(diferencia_monto__lt=0)),
         # Excluir condonaciones: la diferencia fue perdonada, no recaudada
         cobros=Sum('diferencia_monto', filter=Q(diferencia_monto__gt=0) & Q(diferencia_condonada=False)),
+        # Rebajas por ajuste de diferencia (admin): diferencia original - monto
+        # ajustado. `diferencia_monto` ya quedó en el monto rebajado, así que
+        # los cobros de arriba reflejan lo efectivamente cobrable; esto mide lo
+        # que se dejó de cobrar vía ajustes (control anti-abuso, como las
+        # condonaciones).
+        monto_ajustado=Sum(
+            F('monto_diferencia_original') - F('diferencia_monto'),
+            filter=Q(diferencia_ajustada=True) & Q(monto_diferencia_original__isnull=False),
+        ),
+        ajustes_count=Count('id', filter=Q(diferencia_ajustada=True)),
     )
 
     # --- Top 10 productos devueltos ---
@@ -519,6 +529,8 @@ def obtener_analisis_avanzado(sucursal_id=None, fecha_inicio=None, fecha_fin=Non
         # Financiero
         'devoluciones_total': float(impacto.get('devoluciones') or 0),
         'cobros_total': float(impacto.get('cobros') or 0),
+        'monto_ajustado_total': float(impacto.get('monto_ajustado') or 0),
+        'ajustes_count': impacto.get('ajustes_count') or 0,
 
         # Top productos
         'top_productos': [

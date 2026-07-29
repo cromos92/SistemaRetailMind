@@ -2050,6 +2050,8 @@ let currentPage = 1;
 let totalPages = 1;
 let currentSearch = '';
 let productData = [];
+let searchMode = 'productos';   // 'productos' | 'referencia' — de dónde vino la última búsqueda
+let lastReferencia = '';
 
 // Variables del wizard
 let currentStep = 1;
@@ -2273,30 +2275,30 @@ function initializeEventListeners() {
         recalcularPreciosExterno();
     });
 
-    // Búsqueda de productos
-    $('#btnSearchProduct').on('click', searchProducts);
+    // Búsqueda de productos (una búsqueda nueva siempre parte en página 1)
+    $('#btnSearchProduct').on('click', function() { searchProducts(true); });
     $('#searchProduct').on('keypress', function(e) {
-        if (e.which === 13) searchProducts();
+        if (e.which === 13) searchProducts(true);
     });
 
     // Filtros
-    $('#filterMarca, #filterCategoria, #filterTipoTalla').on('change', searchProducts);
-    
-    // Checkbox para incluir productos sin stock
-    $('#checkIncluirSinStock').on('change', searchProducts);
+    $('#filterMarca, #filterCategoria, #filterTipoTalla').on('change', function() { searchProducts(true); });
 
-    // Paginación
+    // Checkbox para incluir productos sin stock
+    $('#checkIncluirSinStock').on('change', function() { searchProducts(true); });
+
+    // Paginación (respeta el modo de búsqueda activo: productos o referencia)
     $('#btnPrevProducts').on('click', function() {
         if (currentPage > 1) {
             currentPage--;
-            searchProducts();
+            repetirBusquedaActual();
         }
     });
 
     $('#btnNextProducts').on('click', function() {
         if (currentPage < totalPages) {
             currentPage++;
-            searchProducts();
+            repetirBusquedaActual();
         }
     });
 
@@ -2635,7 +2637,7 @@ function goToStep(step) {
         
         // Acciones específicas por paso
         if (step === 2) {
-            searchProducts(); // Cargar productos automáticamente al entrar al paso de productos
+            searchProducts(true); // Cargar productos automáticamente al entrar al paso de productos
             setTimeout(() => $('#searchProduct').focus(), 350); // Auto-focus en el buscador
         }
     });
@@ -3127,7 +3129,7 @@ function loadInitialData() {
     // Verificar sesión antes de cargar productos
     setTimeout(() => {
         console.log('🔄 Cargando productos después de verificar sesión...');
-        searchProducts(); // Cargar productos iniciales
+        searchProducts(true); // Cargar productos iniciales
     }, 1000);
 }
 
@@ -3414,9 +3416,9 @@ function loadMarcas() {
                     }
                 }
             }).on('select2:select select2:clear', function() {
-                searchProducts();
+                searchProducts(true);
             });
-            
+
             console.log(`✅ ${data.length} marcas cargadas con Select2`);
         },
         error: function() {
@@ -3455,9 +3457,9 @@ function loadCategorias() {
                     }
                 }
             }).on('select2:select select2:clear', function() {
-                searchProducts();
+                searchProducts(true);
             });
-            
+
             console.log(`✅ ${data.length} categorías cargadas con Select2`);
         },
         error: function() {
@@ -3490,7 +3492,9 @@ function enfocarBuscadorProductos(delay) {
 }
 window.enfocarBuscadorProductos = enfocarBuscadorProductos;
 
-function searchProducts() {
+function searchProducts(resetPage) {
+    if (resetPage) currentPage = 1;
+    searchMode = 'productos';
     const search = $('#searchProduct').val().trim();
     const marca = $('#filterMarca').val();
     const categoria = $('#filterCategoria').val();
@@ -3572,6 +3576,16 @@ function searchProducts() {
             showError(mensaje);
         }
     });
+}
+
+// Repite la búsqueda vigente (productos o referencia) manteniendo currentPage.
+// Lo usan los botones Anterior/Siguiente del paginador.
+function repetirBusquedaActual() {
+    if (searchMode === 'referencia' && lastReferencia) {
+        buscarPorReferencia(lastReferencia, currentPage);
+    } else {
+        searchProducts();
+    }
 }
 
 function displayProducts(products) {
@@ -5782,9 +5796,13 @@ $('#searchReference').on('keypress', function(e) {
 });
 
 // Función para buscar por referencia (DTEs recepcionados / facturas de compra)
-function buscarPorReferencia(referencia) {
-    console.log('🔍 Buscando productos de DTE por referencia:', referencia);
-    
+function buscarPorReferencia(referencia, page) {
+    console.log('🔍 Buscando productos de DTE por referencia:', referencia, 'página:', page || 1);
+
+    searchMode = 'referencia';
+    lastReferencia = referencia;
+    currentPage = page || 1;
+
     $('#datos_tabla_productos').html(`
         <tr>
             <td colspan="7" class="text-center py-4">
@@ -5795,17 +5813,18 @@ function buscarPorReferencia(referencia) {
             </td>
         </tr>
     `);
-    
+
     $.ajax({
         url: '/app/buscar_dte_referencia/',
         method: 'GET',
-        data: { search: referencia },
+        data: { search: referencia, page: currentPage, page_size: 10 },
         success: function(response) {
             if (response.success && response.productos && response.productos.length > 0) {
                 displayProducts(response.productos);
                 updatePagination(response.pagination);
                 updateProductInfo(response.pagination.total_count);
             } else {
+                if (response.pagination) updatePagination(response.pagination);
                 $('#datos_tabla_productos').html(`
                     <tr>
                         <td colspan="7" class="text-center text-muted py-4">
@@ -6333,11 +6352,11 @@ function initializeSelect2Filters() {
     
     // Mantener el evento change para búsqueda automática
     $('#filterMarca').on('select2:select select2:clear', function() {
-        searchProducts();
+        searchProducts(true);
     });
-    
+
     $('#filterCategoria').on('select2:select select2:clear', function() {
-        searchProducts();
+        searchProducts(true);
     });
     
     // Select2 para Empresa Cliente (receptor)

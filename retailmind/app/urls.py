@@ -155,6 +155,7 @@ from .views_modulo_ventas import (
     ejecutar_cambio_devolucion,
     registrar_pago_diferencia,
     condonar_diferencia_cobro,
+    ajustar_diferencia_cobro,
     completar_cambio_devolucion,
     buscar_ticket_para_cambio,
     buscar_documento_cambio,
@@ -800,6 +801,7 @@ urlpatterns = [
     path('dte/corregir_recepcion_emisor/', views.corregir_recepcion_emisor_api, name='corregir_recepcion_emisor_api'),
     path('dte/cancelar_traspaso/', views.cancelar_dte_traspaso_api, name='cancelar_dte_traspaso_api'),
     path('dte/editar_traspaso/', views.editar_dte_traspaso_api, name='editar_dte_traspaso_api'),
+    path('dte/reasignar_destino_traspaso/', views.reasignar_destino_traspaso_api, name='reasignar_destino_traspaso_api'),
     path('dte/emitidos_pendientes/', views.emitidos_pendientes_api, name='emitidos_pendientes_api'),
     path('dte/emitidos_recepcionados/', views.emitidos_recepcionados_api, name='emitidos_recepcionados_api'),
     path('dte/ajustar_emitido/', views.ajustar_dte_emisor_api, name='ajustar_dte_emisor_api'),
@@ -1082,6 +1084,7 @@ urlpatterns = [
     path('ventas/api/ejecutar-cambio-devolucion/', ejecutar_cambio_devolucion, name='ejecutar_cambio_devolucion'),
     path('ventas/api/registrar-pago-diferencia/', registrar_pago_diferencia, name='registrar_pago_diferencia'),
     path('ventas/api/condonar-diferencia-cobro/', condonar_diferencia_cobro, name='condonar_diferencia_cobro'),
+    path('ventas/api/ajustar-diferencia-cobro/', ajustar_diferencia_cobro, name='ajustar_diferencia_cobro'),
     path('ventas/api/completar-cambio-devolucion/', completar_cambio_devolucion, name='completar_cambio_devolucion'),
     
     # APIs de búsqueda

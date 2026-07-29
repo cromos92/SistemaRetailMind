@@ -87,6 +87,10 @@ CONCEPTO_MOVIMIENTO_CHOICES = [
     ('ANULACION_REGULARIZACION', 'Anulación de Regularización'),
     ('ANULACION', 'Anulación de DTE'),
     ('CANCELACION', 'Cancelación de DTE'),
+    # Registro documental (cantidad 0): el destino de un traspaso emitido se
+    # cambió antes de la recepción. sucursal_origen = destino anterior,
+    # sucursal_destino = destino nuevo. No mueve stock.
+    ('REASIGNACION_DESTINO', 'Reasignación de Destino de Traspaso'),
     
     # === AJUSTES DE INVENTARIO FÍSICO ===
     ('AJUSTE_INVENTARIO_ENTRADA', 'Ajuste Inventario - Entrada (Sobrante)'),
@@ -604,6 +608,36 @@ class CambioDevolucion(models.Model):
     fecha_condonacion = models.DateTimeField(
         null=True, blank=True,
         help_text="Fecha en que se condonó la diferencia"
+    )
+
+    # === AJUSTE DE DIFERENCIA (solo administrador) ===
+    # Permite que un administrador rebaje una diferencia de cobro pendiente a un
+    # monto menor con justificación, SIN condonarla completa: el cobro sigue su
+    # curso normal en el POS pero por el monto ajustado. El monto previo queda
+    # respaldado en `monto_diferencia_original` para auditoría.
+    diferencia_ajustada = models.BooleanField(
+        default=False,
+        help_text="Si la diferencia de cobro fue rebajada a un monto menor por un administrador"
+    )
+    monto_diferencia_original = models.DecimalField(
+        max_digits=12, decimal_places=2,
+        null=True, blank=True,
+        help_text="Diferencia original antes del primer ajuste (respaldo de auditoría)"
+    )
+    motivo_ajuste = models.TextField(
+        blank=True, null=True,
+        help_text="Justificación obligatoria del último ajuste de la diferencia"
+    )
+    ajustada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='ajustes_diferencia_cambio',
+        null=True, blank=True,
+        help_text="Administrador que ajustó la diferencia"
+    )
+    fecha_ajuste = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Fecha del último ajuste de la diferencia"
     )
 
     # === RESPONSABLES ===
@@ -1133,6 +1167,7 @@ class HistorialCambioDevolucion(models.Model):
             ('REVERTIDO', 'Revertido'),
             ('COBRO_DIFERENCIA', 'Cobro de Diferencia'),
             ('CONDONACION_DIFERENCIA', 'Condonación de Diferencia'),
+            ('AJUSTE_DIFERENCIA', 'Ajuste de Diferencia'),
             ('DEVOLUCION_PROCESADA', 'Devolución Procesada'),
             ('NC_GENERADA', 'Nota de Crédito Generada'),
             ('NC_ANULADA', 'Nota de Crédito Anulada'),

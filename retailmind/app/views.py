@@ -410,6 +410,23 @@ def recepciones_pendientes_api(request):
                     empresa_origen_nombre = movimiento_origen.sucursal_origen.empresa.razon_social or empresa_origen_nombre
             sucursal_destino_alias = movimiento_origen.sucursal_destino.alias if movimiento_origen.sucursal_destino else request.session.get('alias', '-')
 
+            # Última reasignación de destino (registro documental cantidad 0),
+            # para avisar al receptor que este DTE venía dirigido a otra sucursal.
+            # Sale del mismo prefetch de dte_movimientos (ordering -fecha,-hora).
+            reasignaciones = [
+                mov for mov in dte.dte_movimientos.all()
+                if mov.concepto == 'REASIGNACION_DESTINO'
+            ]
+            reasignado_desde = None
+            if reasignaciones:
+                ultima_reasignacion = reasignaciones[0]
+                reasignado_desde = {
+                    'sucursal': (ultima_reasignacion.sucursal_origen.alias
+                                 if ultima_reasignacion.sucursal_origen else '-'),
+                    'fecha': ultima_reasignacion.fecha.strftime('%d/%m/%Y') if ultima_reasignacion.fecha else '',
+                    'responsable': ultima_reasignacion.responsable or '',
+                }
+
             # Determinar rol de la sucursal actual en este DTE.
             # Importante: SIEMPRE calculamos el rol real aunque ver_todas=True,
             # para que las acciones (Rehabilitar/Anular/Recepcionar) se
@@ -475,6 +492,7 @@ def recepciones_pendientes_api(request):
                 'empresa_origen': empresa_origen_nombre,
                 'sucursal_origen': sucursal_origen_alias,
                 'sucursal_destino': sucursal_destino_alias,
+                'reasignado_desde': reasignado_desde,
                 'detalle_resumen': [
                     {'talla': talla, 'cantidad': cantidad}
                     for talla, cantidad in resumen_tallas.items()
@@ -2354,6 +2372,210 @@ def editar_dte_traspaso_api(request):
         return JsonResponse({
             'success': False,
             'error': f'Error al editar DTE: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def reasignar_destino_traspaso_api(request):
+    """
+    Reasigna la sucursal DESTINO de un traspaso emitido que aún NO fue
+    recepcionado (caso: se emitió a PAO2 pero correspondía PAO4).
+
+    El destino de un traspaso vive en los Movimientos_Producto
+    TRASPASO_SALIDA (fuente única: `_sucursal_destino_traspaso`), así que
+    reasignar = actualizar `sucursal_destino` de esos movimientos. La
+    recepción no necesita cambios: el nuevo destino ve el DTE pendiente y
+    al confirmar el stock entra a su sucursal activa (validada fail-closed
+    contra el movimiento).
+
+    Restricción dura: solo entre sucursales de la MISMA empresa receptora.
+    Con otro RUT cambia el receptor legal del documento tributario, y ahí
+    corresponde anular y re-emitir, no reasignar.
+
+    Recibe JSON: {"dte_id": int, "nueva_sucursal_id": int, "motivo": str}
+
+    Trazabilidad: movimiento documental REASIGNACION_DESTINO (cantidad 0,
+    sucursal_origen = destino anterior, sucursal_destino = destino nuevo)
+    + nota en `Dte.referencias` + notificación al receptor.
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    dte_id = data.get('dte_id')
+    nueva_sucursal_id = data.get('nueva_sucursal_id')
+    motivo = (data.get('motivo') or '').strip()
+
+    if not dte_id or not nueva_sucursal_id:
+        return JsonResponse({'success': False, 'error': 'Faltan dte_id o nueva_sucursal_id.'}, status=400)
+    if not motivo:
+        return JsonResponse({'success': False, 'error': 'El motivo es obligatorio.'}, status=400)
+
+    sucursal_actual_id = request.session.get('idSucursalActual')
+    if not sucursal_actual_id:
+        return JsonResponse({'success': False, 'error': 'No hay sucursal activa en la sesión.'}, status=400)
+
+    if not _puede_ajustar_dte_emisor(request.user, sucursal_actual_id):
+        return JsonResponse({
+            'success': False,
+            'error': 'No tienes permiso para reasignar destinos (recepcion_dte / puede_aprobar).'
+        }, status=403)
+
+    try:
+        with transaction.atomic():
+            try:
+                dte = (
+                    Dte.objects
+                    .select_for_update(of=('self',))
+                    .select_related('sucursal', 'receptor')
+                    .get(id=dte_id)
+                )
+            except Dte.DoesNotExist:
+                return JsonResponse({'success': False, 'error': 'DTE no encontrado.'}, status=404)
+
+            if dte.tipo_transaccion != 'TRASPASO':
+                return JsonResponse({'success': False, 'error': 'Solo se puede reasignar el destino de traspasos.'}, status=400)
+
+            # ACEPTADO es estado legado equivalente a EMITIDO (datos Laravel).
+            if dte.estado_dte not in ('EMITIDO', 'ACEPTADO') or dte.fecha_recepcion is not None:
+                return JsonResponse({
+                    'success': False,
+                    'error': (
+                        f'El DTE está en estado {dte.get_estado_dte_display()} y no se puede reasignar. '
+                        'Si ya fue recepcionado en la sucursal equivocada, usa "Ajustar emitido" o un nuevo traspaso.'
+                    )
+                }, status=400)
+
+            # Solo la sucursal emisora puede reasignar su propio despacho.
+            if dte.sucursal_id != int(sucursal_actual_id):
+                return JsonResponse({'success': False, 'error': 'Solo la sucursal emisora puede reasignar este DTE.'}, status=403)
+
+            from .models import Productos_Recepcionados
+            if Productos_Recepcionados.objects.filter(dte=dte).exists():
+                return JsonResponse({
+                    'success': False,
+                    'error': 'El DTE ya tiene recepciones registradas; no se puede reasignar el destino.'
+                }, status=400)
+
+            if Dte.objects.filter(documento_afectado=dte).exclude(
+                    estado_dte__in=['ANULADO', 'CANCELADO']).exists():
+                return JsonResponse({
+                    'success': False,
+                    'error': 'El DTE tiene NC/ajustes asociados; resuélvelos antes de reasignar el destino.'
+                }, status=400)
+
+            movs_salida = Movimientos_Producto.objects.filter(
+                dte=dte, concepto='TRASPASO_SALIDA'
+            ).select_related('sucursal_destino__empresa')
+
+            mov_ref = movs_salida.filter(sucursal_destino__isnull=False).first()
+            if mov_ref is None:
+                # Fail-closed, igual que la recepción: sin movimiento de salida
+                # con destino no se puede saber a quién pertenece el despacho.
+                return JsonResponse({
+                    'success': False,
+                    'error': ('El DTE no tiene movimiento de salida con sucursal destino. '
+                              'Usa primero "Diagnosticar/reparar trazabilidad".')
+                }, status=400)
+
+            destino_anterior = mov_ref.sucursal_destino
+
+            try:
+                nueva_sucursal = Sucursal.objects.select_related('empresa').get(id=nueva_sucursal_id)
+            except Sucursal.DoesNotExist:
+                return JsonResponse({'success': False, 'error': 'La sucursal destino indicada no existe.'}, status=404)
+
+            if nueva_sucursal.id == dte.sucursal_id:
+                return JsonResponse({'success': False, 'error': 'El nuevo destino no puede ser la sucursal de origen.'}, status=400)
+            if nueva_sucursal.id == destino_anterior.id:
+                return JsonResponse({'success': False, 'error': f'{nueva_sucursal.alias} ya es el destino actual.'}, status=400)
+
+            if nueva_sucursal.empresa_id != destino_anterior.empresa_id:
+                return JsonResponse({
+                    'success': False,
+                    'error': (
+                        f'{nueva_sucursal.alias} pertenece a otra empresa (RUT receptor distinto). '
+                        'El documento tributario cambiaría de receptor: corresponde anular y re-emitir.'
+                    )
+                }, status=400)
+
+            hoy = timezone.now()
+            usuario = request.user.username
+
+            # 1) Reasignar TODOS los movimientos de salida del traspaso.
+            actualizados = Movimientos_Producto.objects.filter(
+                dte=dte, concepto='TRASPASO_SALIDA'
+            ).update(sucursal_destino=nueva_sucursal)
+
+            # 2) Rastro en el kardex: movimiento documental de cantidad 0.
+            #    ProductoTalla es NOT NULL → usar la primera línea activa del DTE
+            #    (o la talla del movimiento de referencia como fallback).
+            linea_ref = dte.dte_productos.filter(activo=True).select_related('productoTalla').first()
+            talla_ref = linea_ref.productoTalla if (linea_ref and linea_ref.productoTalla) else mov_ref.ProductoTalla
+            Movimientos_Producto.objects.create(
+                dte=dte,
+                ProductoTalla=talla_ref,
+                sucursal_origen=destino_anterior,
+                sucursal_destino=nueva_sucursal,
+                cantidad=0,
+                concepto='REASIGNACION_DESTINO',
+                tipo_movimiento='INGRESO',
+                estado='COMPLETADO',
+                responsable=usuario,
+                observaciones=(
+                    f'Traspaso #{dte.numero_documento}: destino reasignado '
+                    f'{destino_anterior.alias} → {nueva_sucursal.alias} por {usuario}. Motivo: {motivo}'
+                ),
+            )
+
+            # 3) Rastro en el propio DTE.
+            registro = (
+                f"\n🔁 DESTINO REASIGNADO {destino_anterior.alias} → {nueva_sucursal.alias} "
+                f"por {usuario} el {hoy.strftime('%Y-%m-%d %H:%M')}. Motivo: {motivo}"
+            )
+            dte.referencias = ((dte.referencias or '') + registro).strip()
+            dte.save(update_fields=['referencias'])
+
+            # 4) Notificar al receptor (best-effort, mismo patrón que editar).
+            try:
+                if dte.receptor:
+                    NotificacionDTE.objects.create(
+                        dte=dte,
+                        empresa_receptora=dte.receptor,
+                        tipo='DTE_RECIBIDO',
+                        titulo=f"🔁 Traspaso #{dte.numero_documento} reasignado a {nueva_sucursal.alias}",
+                        mensaje=(
+                            f"El traspaso #{dte.numero_documento} emitido por {dte.sucursal.alias} "
+                            f"cambió de destino: {destino_anterior.alias} → {nueva_sucursal.alias}. "
+                            f"Ahora debe recepcionarlo {nueva_sucursal.alias}. Motivo: {motivo}"
+                        ),
+                    )
+            except Exception:
+                pass
+
+        logger.info(
+            "Traspaso %s reasignado %s → %s por %s (movs=%s)",
+            dte.numero_documento, destino_anterior.alias, nueva_sucursal.alias, usuario, actualizados,
+        )
+        return JsonResponse({
+            'success': True,
+            'message': (
+                f'Destino del traspaso #{dte.numero_documento} reasignado: '
+                f'{destino_anterior.alias} → {nueva_sucursal.alias}. '
+                f'Ahora lo recepciona {nueva_sucursal.alias}.'
+            ),
+            'destino_anterior': {'id': destino_anterior.id, 'alias': destino_anterior.alias},
+            'destino_nuevo': {'id': nueva_sucursal.id, 'alias': nueva_sucursal.alias},
+            'movimientos_actualizados': actualizados,
+        })
+
+    except Exception as e:
+        logger.exception("Error al reasignar destino de traspaso")
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al reasignar destino: {str(e)}'
         }, status=500)
 
 
@@ -20040,27 +20262,8 @@ def crear_producto_desde_recepcion(request):
             producto.save()
             logger.info("Producto guardado con nuevos precios: producto_id=%s", producto.id)
             
-            # Registrar historial de cambio de precio
-            try:
-                from .models import HistorialCambioPrecio
-                diferencia = precioventa - precio_anterior
-                porcentaje = round((diferencia / precio_anterior * 100), 2) if precio_anterior else 0
-                HistorialCambioPrecio.objects.create(
-                    producto=producto,
-                    precio_anterior=precio_anterior,
-                    precio_nuevo=precioventa,
-                    diferencia=diferencia,
-                    porcentaje_cambio=porcentaje,
-                    tipo_cambio='ACTUALIZACION_RECEPCION',
-                    motivo=f'Actualización desde recepción de compra en {sucursal.alias}',
-                    usuario=request.user if hasattr(request, 'user') and request.user.is_authenticated else None,
-                    ip_address=request.META.get('REMOTE_ADDR')
-                )
-            except Exception as e:
-                logger.warning("Error registrando historial de precio para producto_id=%s: %s", producto.id, e)
-            
             # Actualizar lotes FIFO activos con el nuevo precio
-            LoteProducto.objects.filter(
+            lotes_repreciados = LoteProducto.objects.filter(
                 producto_talla__producto=producto,
                 cantidad_disponible__gt=0,
                 activo=True
@@ -20069,7 +20272,20 @@ def crear_producto_desde_recepcion(request):
                 costo_unitario=costo,
                 sobreprecio_unitario=sobreprecio
             )
-            
+
+            # Registrar historial de cambio (una fila por campo pisado:
+            # costo, sobreprecio y precio de venta)
+            from .services.historial_precios import registrar_cambios_precio
+            registrar_cambios_precio(
+                producto,
+                {'costo': costo_db, 'sobreprecio': sobreprecio_db, 'precioventa': precioventa_db},
+                usuario=getattr(request, 'user', None),
+                motivo=f'Actualización desde recepción de compra en {sucursal.alias}',
+                tipo_cambio='ACTUALIZACION_RECEPCION',
+                ip_address=request.META.get('REMOTE_ADDR'),
+                lotes_afectados=lotes_repreciados,
+            )
+
             producto_actualizado = True
             logger.info(
                 "Producto existente actualizado desde recepcion: producto_id=%s articulo=%s precio_anterior=%s precio_nuevo=%s",
@@ -21878,6 +22094,7 @@ def crear_producto_manual(request):
             producto = producto_existente
             precio_anterior = float(producto.precioventa)
             costo_anterior = float(producto.costo)
+            sobreprecio_anterior = float(producto.sobreprecio)
             
             # Verificar si los precios cambiaron (solo si el usuario autorizó
             # la actualización en el modal; si no, se conservan los del producto).
@@ -21892,27 +22109,8 @@ def crear_producto_manual(request):
                 producto.descripcion = descripcion
                 producto.save()
                 
-                # Registrar historial de cambio de precio
-                try:
-                    from .models import HistorialCambioPrecio
-                    diferencia = int(precioventa) - int(precio_anterior)
-                    porcentaje = round((diferencia / precio_anterior * 100), 2) if precio_anterior else 0
-                    HistorialCambioPrecio.objects.create(
-                        producto=producto,
-                        precio_anterior=int(precio_anterior),
-                        precio_nuevo=int(precioventa),
-                        diferencia=diferencia,
-                        porcentaje_cambio=porcentaje,
-                        tipo_cambio='ACTUALIZACION_MANUAL',
-                        motivo=f'Actualización desde creación manual en {sucursal.alias}',
-                        usuario=request.user if hasattr(request, 'user') and request.user.is_authenticated else None,
-                        ip_address=request.META.get('REMOTE_ADDR')
-                    )
-                except Exception as e:
-                    logger.warning("Error registrando historial de precio manual para producto_id=%s: %s", producto.id, e)
-                
                 # Actualizar lotes FIFO activos con el nuevo precio
-                LoteProducto.objects.filter(
+                lotes_repreciados = LoteProducto.objects.filter(
                     producto_talla__producto=producto,
                     cantidad_disponible__gt=0,
                     activo=True
@@ -21921,7 +22119,24 @@ def crear_producto_manual(request):
                     costo_unitario=costo,
                     sobreprecio_unitario=sobreprecio
                 )
-                
+
+                # Registrar historial de cambio (una fila por campo pisado:
+                # costo, sobreprecio y precio de venta)
+                from .services.historial_precios import registrar_cambios_precio
+                registrar_cambios_precio(
+                    producto,
+                    {
+                        'costo': costo_anterior,
+                        'sobreprecio': sobreprecio_anterior,
+                        'precioventa': precio_anterior,
+                    },
+                    usuario=getattr(request, 'user', None),
+                    motivo=f'Actualización desde creación manual en {sucursal.alias}',
+                    tipo_cambio='ACTUALIZACION_MANUAL',
+                    ip_address=request.META.get('REMOTE_ADDR'),
+                    lotes_afectados=lotes_repreciados,
+                )
+
                 producto_actualizado = True
                 logger.info(
                     "Producto existente actualizado manualmente: producto_id=%s articulo=%s precio_anterior=%s precio_nuevo=%s",
@@ -22502,6 +22717,24 @@ def actualizar_producto_existente(request):
             
             if precio_cambiado:
                 producto.save()
+
+                # Registrar historial de cambio (una fila por campo pisado):
+                # sin esto el precio original se pierde — el Producto solo
+                # guarda el valor vigente.
+                from .services.historial_precios import registrar_cambios_precio
+                registrar_cambios_precio(
+                    producto,
+                    {
+                        'costo': costo_anterior,
+                        'sobreprecio': sobreprecio_anterior,
+                        'precioventa': precioventa_anterior,
+                    },
+                    usuario=getattr(request, 'user', None),
+                    motivo='Actualización desde modal de producto existente',
+                    tipo_cambio='ACTUALIZACION_MANUAL',
+                    ip_address=request.META.get('REMOTE_ADDR'),
+                )
+
                 logger.info(
                     "Producto actualizado desde modal existente: producto_id=%s costo=%s sobreprecio=%s precioventa=%s",
                     producto.id,
@@ -26489,6 +26722,15 @@ def buscar_dte_referencia(request):
         if not search:
             return JsonResponse({'success': False, 'error': 'Ingrese un término de búsqueda'}, status=400)
 
+        try:
+            page = max(1, int(request.GET.get('page', 1)))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = min(max(1, int(request.GET.get('page_size', 10))), 50)
+        except (TypeError, ValueError):
+            page_size = 10
+
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         empresa_id = request.session.get('idEmpresaActual')
         if not sucursal_id or not empresa_id:
@@ -26538,7 +26780,7 @@ def buscar_dte_referencia(request):
             return JsonResponse({
                 'success': True,
                 'productos': [],
-                'pagination': {'page': 1, 'page_size': 50, 'total_count': 0, 'total_pages': 1,
+                'pagination': {'page': 1, 'page_size': page_size, 'total_count': 0, 'total_pages': 1,
                                 'has_next': False, 'has_previous': False}
             })
 
@@ -26630,16 +26872,25 @@ def buscar_dte_referencia(request):
                 'origen_dte': data['dte_info'],
             })
 
+        # Orden estable (el iterado de Dte_Productos no tiene order_by, asi que
+        # sin esto cada request podria entregar paginas inconsistentes)
+        productos_data.sort(key=lambda p: ((p['articulo'] or ''), p['id']))
+
+        total_count = len(productos_data)
+        total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+        page = min(page, total_pages)
+        start = (page - 1) * page_size
+
         return JsonResponse({
             'success': True,
-            'productos': productos_data,
+            'productos': productos_data[start:start + page_size],
             'pagination': {
-                'page': 1,
-                'page_size': len(productos_data),
-                'total_count': len(productos_data),
-                'total_pages': 1,
-                'has_next': False,
-                'has_previous': False,
+                'page': page,
+                'page_size': page_size,
+                'total_count': total_count,
+                'total_pages': total_pages,
+                'has_next': page < total_pages,
+                'has_previous': page > 1,
             }
         })
 
@@ -29224,9 +29475,14 @@ def gestion_dte(request):
         sucursal_id=sucursal_actual_id,
     )
 
+    # Reasignar destino de traspasos emitidos: mismo gate que los ajustes
+    # del emisor (recepcion_dte / puede_aprobar sobre la sucursal activa).
+    puede_reasignar_destino = _puede_ajustar_dte_emisor(request.user, sucursal_actual_id)
+
     return render(request, 'vistas/modulo_administracion/gestion_dte.html', {
         'es_admin': es_admin,
         'puede_descargar_txt_dte': puede_descargar_txt_dte,
+        'puede_reasignar_destino': puede_reasignar_destino,
     })
 
 
