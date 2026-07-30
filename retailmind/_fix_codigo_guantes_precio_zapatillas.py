@@ -28,12 +28,14 @@ from django.db import transaction
 from app.models import Producto, LoteProducto, HistorialCambioPrecio
 from app.utils_producto_match import normalizar_articulo
 
-DRY_RUN = True
+DRY_RUN = False
 NUEVO_CODIGO_GUANTES = "009283623G"   # <-- CONFIRMAR este codigo antes de aplicar
 PRECIO_ZAPATILLAS = 109990
 
 ID_GUANTES = 138379      # EDEL, categoria Guantes, tallas 12/14/16
 ID_ZAP_NICK2 = 136745    # NICK2, zapatillas ROJO, 8 unidades
+
+SKUS_GUANTES = [4837256, 4837257, 4837264]
 
 guantes = Producto.objects.select_related("sucursal", "categoria").get(id=ID_GUANTES)
 zap = Producto.objects.select_related("sucursal").get(id=ID_ZAP_NICK2)
@@ -46,15 +48,31 @@ assert guantes.categoria and "guante" in guantes.categoria.nombre.lower(), \
 assert int(zap.precioventa) == 44990, \
     f"ABORT: las zapatillas NICK2 ya no estan en $44.990: {zap.precioventa}"
 
+# Los guantes salieron de EDEL a NICK2 en el traspaso 17049 (emitido 28-jul).
+# Al RECEPCIONARLO, NICK2 crea su propia ficha copiando el codigo del origen:
+# si eso ya pasó, hay MAS de una ficha de guantes con el codigo colisionado y
+# hay que renombrarlas TODAS. Se detectan por ser dueñas de los SKUs de guante.
+fichas_guantes = list(
+    Producto.objects
+    .filter(producto_talla__sku__in=SKUS_GUANTES)
+    .filter(articulo__iexact="009283623")
+    .select_related("sucursal", "categoria")
+    .distinct()
+)
+assert fichas_guantes, "ABORT: no se encontro ninguna ficha de guantes con el codigo 009283623"
+
 objetivo = normalizar_articulo(NUEVO_CODIGO_GUANTES)
+_ids_guantes = {f.id for f in fichas_guantes}
 en_uso = [p for p in Producto.objects.filter(articulo__iexact=NUEVO_CODIGO_GUANTES)
-          if p.id != ID_GUANTES and normalizar_articulo(p.articulo) == objetivo]
+          if p.id not in _ids_guantes and normalizar_articulo(p.articulo) == objetivo]
 assert not en_uso, f"ABORT: el codigo {NUEVO_CODIGO_GUANTES!r} ya lo usan las fichas {[p.id for p in en_uso]}"
 
 modo = "DRY-RUN (rollback al final, no guarda nada)" if DRY_RUN else "APLICANDO CAMBIOS REALES"
 print(f"=== {modo} ===")
-print(f"1) Ficha {guantes.id} ({guantes.sucursal.alias}, {guantes.categoria.nombre}): "
-      f"codigo {guantes.articulo!r} -> {NUEVO_CODIGO_GUANTES!r} (precio ${guantes.precioventa} se mantiene)")
+for f in fichas_guantes:
+    print(f"1) Ficha {f.id} ({f.sucursal.alias if f.sucursal else '-'}, "
+          f"{f.categoria.nombre if f.categoria else '-'}): "
+          f"codigo {f.articulo!r} -> {NUEVO_CODIGO_GUANTES!r} (precio ${f.precioventa} se mantiene)")
 print(f"2) Ficha {zap.id} ({zap.sucursal.alias}, zapatillas ROJO): "
       f"precio ${zap.precioventa} -> ${PRECIO_ZAPATILLAS}")
 
@@ -62,8 +80,12 @@ usuario = get_user_model().objects.filter(username="javier").first()
 precio_anterior = int(zap.precioventa)
 
 with transaction.atomic():
-    # 1) Codigo propio para los guantes (update() directo: sin señales ni save() custom)
-    Producto.objects.filter(id=ID_GUANTES).update(articulo=NUEVO_CODIGO_GUANTES)
+    # 1) Codigo propio para los guantes, en TODAS las fichas que lo comparten
+    #    (update() directo: sin señales ni save() custom)
+    n_renombradas = Producto.objects.filter(
+        id__in=[f.id for f in fichas_guantes]
+    ).update(articulo=NUEVO_CODIGO_GUANTES)
+    print(f"   fichas de guantes renombradas: {n_renombradas}")
 
     # 2) Restaurar precio zapatillas NICK2: ficha + lotes activos (igual que actualizar_precio)
     Producto.objects.filter(id=ID_ZAP_NICK2).update(precioventa=PRECIO_ZAPATILLAS)

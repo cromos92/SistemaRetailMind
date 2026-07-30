@@ -120,9 +120,30 @@ class Dte(models.Model):
         help_text="DTE original que se está corrigiendo (solo para NC)"
     )
     motivo_nc = models.TextField(
-        blank=True, 
+        blank=True,
         null=True,
         help_text="Motivo de la Nota de Crédito"
+    )
+    # ¿Esta NC/ajuste ya descontó las unidades de las líneas del documento
+    # afectado? Depende del flujo que la emitió, y sin este dato la pantalla
+    # de recepción no puede saber si el total del DTE ya viene neteado:
+    #
+    #   True  → `ajustar_dte_emisor_api` pre-recepción y `anular_factura_dte`
+    #           por línea: reducen `Dte_Productos.stock` del original y
+    #           recalculan su cabezal. El total del DTE YA excluye estas uds.
+    #   False → NC post-recepción (el original se preserva como evidencia
+    #           histórica), NC parcial por monto (legacy), NC "corrige montos"
+    #           y cualquier NC contable: las uds SIGUEN contadas en el total.
+    #
+    # Antes esto se deducía leyendo `referencias`, lo que dejaba fuera del
+    # neteo a las NC emitidas desde Gestión DTE: la recepción pedía (e
+    # ingresaba a stock) unidades que ya tenían nota de crédito.
+    redujo_lineas_documento = models.BooleanField(
+        default=False,
+        help_text=(
+            "Solo para NC/ajustes: True si este documento ya descontó sus "
+            "unidades de las líneas del documento afectado."
+        ),
     )
     documento_padre = models.ForeignKey(
         'self',

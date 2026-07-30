@@ -4262,7 +4262,8 @@ async function aplicarTodosCambios() {
     let exitosos = 0;
     let errores = 0;
     let sucursalesNotificadasTotal = 0;
-    
+    const noSincronizadas = [];
+
     for (let i = 0; i < cambios.length; i++) {
         const cambio = cambios[i];
         
@@ -4290,6 +4291,11 @@ async function aplicarTodosCambios() {
                 if (data.sucursales_notificadas) {
                     sucursalesNotificadasTotal += data.sucursales_notificadas;
                 }
+                // Fichas que comparten código+marca+color pero son OTRO producto
+                // (distinta categoría/género): no se sincronizan a propósito.
+                (data.no_sincronizadas || []).forEach(f => {
+                    noSincronizadas.push({ producto: cambio.nombre, ...f });
+                });
             } else {
                 errores++;
             }
@@ -4313,7 +4319,21 @@ async function aplicarTodosCambios() {
         if (errores > 0) {
             mensajeExito += `<br><small style="color: var(--nexo-error);">⚠️ ${errores} error${errores > 1 ? 'es' : ''}</small>`;
         }
-        
+        if (noSincronizadas.length > 0) {
+            // Aviso: hay fichas con el MISMO código+marca+color que NO se
+            // sincronizaron porque son otro producto (otra categoría/género).
+            // Suele significar un código reutilizado o una ficha mal categorizada.
+            const detalle = noSincronizadas.slice(0, 5).map(f =>
+                `<li style="text-align:left;">${f.sucursal} — ${f.categoria} / ${f.genero} · ${formatearMoneda(f.precio)}</li>`
+            ).join('');
+            mensajeExito += `<br><br><div style="text-align:left;font-size:12px;background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:8px;">
+                <strong style="color:#996B00;"><i class="ri-error-warning-line"></i> ${noSincronizadas.length} ficha(s) con el mismo código NO se sincronizaron</strong>
+                <div style="color:#666;margin:4px 0;">Tienen otra categoría o género, así que son otro producto. Revisa si el código está reutilizado o mal categorizado.</div>
+                <ul style="margin:4px 0 0 16px;padding:0;">${detalle}</ul>
+            </div>`;
+        }
+
+
         Swal.fire({
             icon: 'success',
             title: '¡Cambios aplicados!',

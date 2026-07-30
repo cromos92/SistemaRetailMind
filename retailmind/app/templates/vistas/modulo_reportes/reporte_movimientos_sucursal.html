@@ -703,11 +703,14 @@
                     Stock Inicial vs Restante por Sucursal
                 </h1>
                 <p>Compara cuánto recibió cada sucursal y cuánto queda actualmente</p>
-                <!-- Advertencias de lectura: la resta no cierra y el restante es de hoy. -->
-                <p style="font-size:.72rem; opacity:.75; margin-top:2px;">
-                    “Restante” es el stock de <b>hoy</b>, aunque filtres fechas ·
-                    Recibido − Vendido ≠ Restante: faltan mermas, ajustes y devoluciones ·
-                    “Vendido” es bruto (no descuenta devoluciones ni anulaciones)
+                <!-- El modo cambia según haya o no filtro de fechas: sin fechas
+                     es "histórico vs hoy"; con fechas es un kardex que cuadra. -->
+                <p style="font-size:.72rem; opacity:.75; margin-top:2px;" id="leyenda-modo">
+                    Sin filtro de fechas: “Recibido” es <b>todo</b> lo que entró alguna vez y
+                    “Restante” es el stock de <b>hoy</b> · Recibido − Vendido ≠ Restante:
+                    faltan mermas, ajustes y devoluciones · “Vendido” es bruto (no descuenta
+                    devoluciones ni anulaciones) · <b>Filtra por fechas para ver el kardex del
+                    período, que sí cuadra.</b>
                 </p>
             </div>
             <div class="nexo-header-badge">
@@ -724,22 +727,30 @@
             <div class="nexo-kpi-label">Total Artículos</div>
             <div class="nexo-kpi-value" id="kpi-articulos">-</div>
         </div>
+        <!-- Solo con filtro de fechas: saldo al inicio del período, rebobinando
+             el stock de hoy contra los movimientos (no hay snapshots en BD). -->
+        <div class="nexo-kpi-card kpi-primary" id="kpi-card-saldo-ini" style="display:none;"
+             title="Saldo al inicio del período = stock de hoy menos todos los movimientos desde la fecha Desde. El sistema no guarda snapshots de stock: se reconstruye desde el kardex.">
+            <div class="nexo-kpi-icon icon-primary"><i class="ri-history-line"></i></div>
+            <div class="nexo-kpi-label">Saldo Inicial</div>
+            <div class="nexo-kpi-value" id="kpi-saldo-ini">-</div>
+        </div>
         <div class="nexo-kpi-card kpi-success">
             <div class="nexo-kpi-icon icon-success"><i class="ri-inbox-archive-line"></i></div>
-            <div class="nexo-kpi-label">Total Recibido</div>
+            <div class="nexo-kpi-label" id="kpi-label-inicial">Total Recibido</div>
             <div class="nexo-kpi-value" id="kpi-inicial">-</div>
         </div>
         <div class="nexo-kpi-card kpi-primary">
             <div class="nexo-kpi-icon icon-primary"><i class="ri-truck-line"></i></div>
-            <div class="nexo-kpi-label">Despachado (Traspasos)</div>
+            <div class="nexo-kpi-label" id="kpi-label-despachado">Despachado (Traspasos)</div>
             <div class="nexo-kpi-value" id="kpi-despachado">-</div>
         </div>
-        <!-- El "restante" es SIEMPRE el stock de hoy: el filtro de fechas solo
-             afecta a los movimientos (recibido / despachado / vendido). -->
-        <div class="nexo-kpi-card kpi-warning"
-             title="Stock actual de hoy. El filtro de fechas NO se aplica a esta columna: no es el saldo al final del período.">
+        <!-- Sin filtro de fechas es el stock de hoy; con filtro es el saldo al
+             cierre del período (ver _saldos_periodo en views_modulo_reportes). -->
+        <div class="nexo-kpi-card kpi-warning" id="kpi-card-restante"
+             title="Stock actual de hoy. Si filtras por fechas pasa a ser el saldo al cierre del período.">
             <div class="nexo-kpi-icon icon-warning"><i class="ri-archive-line"></i></div>
-            <div class="nexo-kpi-label">Stock Restante (hoy)</div>
+            <div class="nexo-kpi-label" id="kpi-label-restante">Stock Restante (hoy)</div>
             <div class="nexo-kpi-value" id="kpi-restante">-</div>
         </div>
         <div class="nexo-kpi-card kpi-error">
@@ -773,7 +784,7 @@
 
         <div class="nexo-control-group" style="min-width: 130px;">
             <label class="nexo-control-label"
-                   title="Las fechas filtran solo los movimientos (recibido, despachado, vendido). La columna Restante siempre muestra el stock de hoy.">
+                   title="Al filtrar por fechas el reporte pasa a modo kardex: muestra Saldo inicial, Entradas y Salidas del período y el Saldo final al cierre (no el stock de hoy). Saldo inicial + Entradas − Salidas = Saldo final.">
                 <i class="ri-calendar-line"></i> Desde <i class="ri-question-line"></i>
             </label>
             <input type="date" id="filtro-fecha-desde" class="nexo-input">
@@ -781,7 +792,7 @@
 
         <div class="nexo-control-group" style="min-width: 130px;">
             <label class="nexo-control-label"
-                   title="Las fechas filtran solo los movimientos (recibido, despachado, vendido). La columna Restante siempre muestra el stock de hoy.">
+                   title="Al filtrar por fechas el reporte pasa a modo kardex: muestra Saldo inicial, Entradas y Salidas del período y el Saldo final al cierre (no el stock de hoy). Saldo inicial + Entradas − Salidas = Saldo final.">
                 <i class="ri-calendar-check-line"></i> Hasta <i class="ri-question-line"></i>
             </label>
             <input type="date" id="filtro-fecha-hasta" class="nexo-input">
@@ -832,6 +843,10 @@
 let datosCompletos = [];
 let datosFiltrados = [];
 let sucursalesDisponibles = [];
+// Modo del reporte, lo decide el backend segun haya filtro de fechas.
+// activo=false -> "Recib. / Desp. / Rest.(hoy)"  (historico vs stock actual)
+// activo=true  -> "S.Ini / Ent. / Sal. / S.Fin"  (kardex del periodo, cuadra)
+let periodo = { activo: false, desde: null, hasta: null };
 
 // Paginacion
 let paginaActual = 1;
@@ -976,6 +991,7 @@ async function cargarReporte() {
             datosCompletos = data.datos;
             datosFiltrados = [...datosCompletos];
             sucursalesDisponibles = data.sucursales || [];
+            periodo = data.periodo || { activo: false };
             paginaActual = 1;
 
             actualizarKPIs(datosCompletos);
@@ -1029,19 +1045,67 @@ function actualizarKPIs(datos) {
     let totalDespachado = 0;
     let totalRestante = 0;
     let totalVendido = 0;
+    let totalSaldoIni = 0;
+    let totalEntradas = 0;
+    let totalSalidas = 0;
 
     datos.forEach(item => {
         totalInicial += item.total_inicial || 0;
         totalDespachado += item.total_traspasos_out || 0;
         totalRestante += item.total_restante || 0;
         totalVendido += item.total_vendido || 0;
+        totalSaldoIni += item.total_saldo_inicial || 0;
+        totalEntradas += item.total_entradas || 0;
+        totalSalidas += item.total_salidas || 0;
     });
 
     document.getElementById('kpi-articulos').textContent = formatearNumero(datos.length);
-    document.getElementById('kpi-inicial').textContent = formatearNumero(totalInicial);
-    document.getElementById('kpi-despachado').textContent = formatearNumero(totalDespachado);
-    document.getElementById('kpi-restante').textContent = formatearNumero(totalRestante);
     document.getElementById('kpi-vendido').textContent = formatearNumero(totalVendido);
+
+    // En modo kardex los KPIs pasan a ser las magnitudes del periodo: si no,
+    // "Total Recibido" (solo compras+traspasos) no cierra contra el saldo.
+    const cardSaldoIni = document.getElementById('kpi-card-saldo-ini');
+    if (periodo.activo) {
+        cardSaldoIni.style.display = '';
+        document.getElementById('kpi-saldo-ini').textContent = formatearNumero(totalSaldoIni);
+        document.getElementById('kpi-label-inicial').textContent = 'Entradas del período';
+        document.getElementById('kpi-inicial').textContent = formatearNumero(totalEntradas);
+        document.getElementById('kpi-label-despachado').textContent = 'Salidas del período';
+        document.getElementById('kpi-despachado').textContent = formatearNumero(totalSalidas);
+        document.getElementById('kpi-label-restante').textContent = 'Saldo Final (al cierre)';
+    } else {
+        cardSaldoIni.style.display = 'none';
+        document.getElementById('kpi-label-inicial').textContent = 'Total Recibido';
+        document.getElementById('kpi-inicial').textContent = formatearNumero(totalInicial);
+        document.getElementById('kpi-label-despachado').textContent = 'Despachado (Traspasos)';
+        document.getElementById('kpi-despachado').textContent = formatearNumero(totalDespachado);
+        document.getElementById('kpi-label-restante').textContent = 'Stock Restante (hoy)';
+    }
+    document.getElementById('kpi-restante').textContent = formatearNumero(totalRestante);
+
+    const leyenda = document.getElementById('leyenda-modo');
+    if (leyenda && periodo.activo) {
+        // Un saldo inicial NEGATIVO no es un error de cálculo: significa que el
+        // kardex registra más movimiento neto del que respalda el stock real,
+        // o sea drift entre Producto_Talla.stock y Movimientos_Producto.
+        const alertaDrift = totalSaldoIni < 0
+            ? ` · <b style="color:var(--nexo-warning);">Saldo inicial negativo ` +
+              `(${formatearNumero(totalSaldoIni)}): el kardex registra más ` +
+              `movimiento del que respalda el stock real en ese tramo.</b>`
+            : '';
+        leyenda.innerHTML = '<b>Modo kardex del período</b> ' +
+            `(${periodo.desde || 'inicio'} → ${periodo.hasta || 'hoy'}): ` +
+            'Saldo inicial + Entradas − Salidas = Saldo final, por sucursal. ' +
+            'El saldo se reconstruye rebobinando el stock actual contra el kardex ' +
+            '(el sistema no guarda snapshots de stock). “Vendido” es bruto.' +
+            alertaDrift;
+    } else if (leyenda) {
+        leyenda.innerHTML = 'Sin filtro de fechas: “Recibido” es <b>todo</b> lo que entró ' +
+            'alguna vez y “Restante” es el stock de <b>hoy</b> · Recibido − Vendido ≠ ' +
+            'Restante: faltan mermas, ajustes y devoluciones · “Vendido” es bruto (no ' +
+            'descuenta devoluciones ni anulaciones) · <b>Filtra por fechas para ver el ' +
+            'kardex del período, que sí cuadra.</b>';
+    }
 }
 
 // ========== RENDERIZAR TABLA ==========
@@ -1097,21 +1161,59 @@ function renderizarTabla() {
                             <th style="text-align: right;" rowspan="2">P. Venta</th>
     `;
     
-    // Headers sucursales (Recib. = compras + traspasos recibidos; Desp. =
-    // traspasos enviados desde la sucursal; Rest. = stock actual)
+    // Headers sucursales. Dos modos:
+    //  - sin fechas: Recib. (compras + traspasos recibidos) | Desp. (traspasos
+    //    enviados) | Rest. (stock de hoy)
+    //  - con fechas: S.Ini | Ent. | Sal. | S.Fin  -> kardex del periodo, donde
+    //    S.Ini + Ent - Sal = S.Fin exactamente (Ent./Sal. son TODO el kardex de
+    //    la ventana, no solo compras/traspasos/ventas, o no cuadraria).
+    const nSub = periodo.activo ? 4 : 3;
     sucursalesList.forEach(suc => {
-        html += `<th class="th-sucursal" colspan="3">${suc}</th>`;
+        html += `<th class="th-sucursal" colspan="${nSub}">${suc}</th>`;
     });
 
-    html += `<th class="th-total" colspan="3">TOTAL</th></tr><tr>`;
+    html += `<th class="th-total" colspan="${nSub}">TOTAL</th></tr><tr>`;
 
-    // Sub-headers
-    sucursalesList.forEach(() => {
-        html += `<th class="th-sub th-inicial">Recib.</th><th class="th-sub th-despacho">Desp.</th><th class="th-sub th-restante">Rest.</th>`;
-    });
+    const subHeaders = periodo.activo
+        ? `<th class="th-sub th-restante" title="Saldo al inicio del período">S.Ini</th>`
+          + `<th class="th-sub th-inicial" title="Todo lo que entró en el período">Ent.</th>`
+          + `<th class="th-sub th-despacho" title="Todo lo que salió en el período">Sal.</th>`
+          + `<th class="th-sub th-restante" title="Saldo al cierre del período">S.Fin</th>`
+        : `<th class="th-sub th-inicial">Recib.</th><th class="th-sub th-despacho">Desp.</th>`
+          + `<th class="th-sub th-restante">Rest.</th>`;
 
-    html += `<th class="th-sub th-total">Recib.</th><th class="th-sub th-total">Desp.</th><th class="th-sub th-total">Rest.</th></tr></thead><tbody>`;
-    
+    sucursalesList.forEach(() => { html += subHeaders; });
+    html += subHeaders.replace(/class="th-sub [^"]*"/g, 'class="th-sub th-total"');
+    html += `</tr></thead><tbody>`;
+
+    // Celdas de una sucursal (o del total) segun el modo.
+    const celdasVacias = () =>
+        '<td><span class="stock-badge stock-empty">-</span></td>'.repeat(nSub);
+
+    function celdas(d, etiqueta) {
+        if (periodo.activo) {
+            const tipEnt = `Compras: ${d.compras || 0} · Traspasos recibidos: `
+                + `${d.traspasos_in || 0} · Otras entradas (ajustes, cambios, `
+                + `devoluciones): ${d.otros_entradas || 0}`;
+            const tipSal = `Vendido: ${d.vendido || 0} · Traspasos enviados: `
+                + `${d.traspasos_out || 0} · Otras salidas (mermas, ajustes, `
+                + `cambios): ${d.otros_salidas || 0}`;
+            const tipFin = `Saldo al cierre del período. Stock de hoy: ${d.stock_hoy}`;
+            return `
+                <td><span class="stock-badge stock-restante" title="Saldo al inicio de ${etiqueta}">${d.saldo_inicial || 0}</span></td>
+                <td><span class="stock-badge stock-inicial" title="${tipEnt}">${d.entradas || 0}</span></td>
+                <td><span class="stock-badge stock-despacho" title="${tipSal}">${d.salidas || 0}</span></td>
+                <td><span class="stock-badge stock-restante" title="${tipFin}">${d.restante || 0}</span></td>
+            `;
+        }
+        const tipRecib = `Compras: ${d.compras || 0} · Traspasos recibidos: ${d.traspasos_in || 0}`;
+        return `
+            <td><span class="stock-badge stock-inicial" title="${tipRecib}">${d.inicial || 0}</span></td>
+            <td><span class="stock-badge stock-despacho" title="Traspasos enviados desde ${etiqueta}">${d.traspasos_out || 0}</span></td>
+            <td><span class="stock-badge stock-restante">${d.restante || 0}</span></td>
+        `;
+    }
+
     // Filas
     datosPagina.forEach(producto => {
         html += `
@@ -1122,27 +1224,35 @@ function renderizarTabla() {
                 <td class="td-costo">${formatearMoneda(producto.costo)}</td>
                 <td class="td-precio">${formatearMoneda(producto.precio_venta)}</td>
         `;
-        
+
         sucursalesList.forEach(suc => {
             const sucData = producto.sucursales[suc];
-            if (sucData && (sucData.inicial > 0 || sucData.restante > 0 || (sucData.traspasos_out || 0) > 0)) {
-                const tipRecib = `Compras: ${sucData.compras || 0} · Traspasos recibidos: ${sucData.traspasos_in || 0}`;
-                html += `
-                    <td><span class="stock-badge stock-inicial" title="${tipRecib}">${sucData.inicial}</span></td>
-                    <td><span class="stock-badge stock-despacho" title="Traspasos enviados desde ${suc}">${sucData.traspasos_out || 0}</span></td>
-                    <td><span class="stock-badge stock-restante">${sucData.restante}</span></td>
-                `;
-            } else {
-                html += `<td><span class="stock-badge stock-empty">-</span></td><td><span class="stock-badge stock-empty">-</span></td><td><span class="stock-badge stock-empty">-</span></td>`;
-            }
+            const tieneAlgo = sucData && (
+                sucData.inicial || sucData.restante || sucData.traspasos_out
+                || sucData.entradas || sucData.salidas || sucData.saldo_inicial
+            );
+            html += tieneAlgo ? celdas(sucData, suc) : celdasVacias();
         });
 
-        const tipRecibTotal = `Compras: ${producto.total_compras || 0} · Traspasos recibidos: ${producto.total_traspasos_in || 0}`;
-        html += `
-            <td><span class="stock-badge stock-inicial" title="${tipRecibTotal}">${producto.total_inicial || 0}</span></td>
-            <td><span class="stock-badge stock-despacho">${producto.total_traspasos_out || 0}</span></td>
-            <td><span class="stock-badge stock-restante">${producto.total_restante || 0}</span></td>
-        </tr>`;
+        html += celdas({
+            compras: producto.total_compras,
+            traspasos_in: producto.total_traspasos_in,
+            traspasos_out: producto.total_traspasos_out,
+            vendido: producto.total_vendido,
+            inicial: producto.total_inicial,
+            restante: producto.total_restante,
+            saldo_inicial: producto.total_saldo_inicial,
+            entradas: producto.total_entradas,
+            salidas: producto.total_salidas,
+            stock_hoy: producto.total_stock_hoy,
+            otros_entradas: Math.max(
+                (producto.total_entradas || 0) - (producto.total_compras || 0)
+                - (producto.total_traspasos_in || 0), 0),
+            otros_salidas: Math.max(
+                (producto.total_salidas || 0) - (producto.total_traspasos_out || 0)
+                - (producto.total_vendido || 0), 0),
+        }, 'todas las sucursales');
+        html += `</tr>`;
     });
     
     html += `</tbody></table></div>`;
@@ -1266,10 +1376,13 @@ function limpiarFiltros() {
     datosFiltrados = [];
     paginaActual = 1;
 
+    periodo = { activo: false, desde: null, hasta: null };
     document.getElementById('kpi-articulos').textContent = '-';
     document.getElementById('kpi-inicial').textContent = '-';
+    document.getElementById('kpi-despachado').textContent = '-';
     document.getElementById('kpi-restante').textContent = '-';
     document.getElementById('kpi-vendido').textContent = '-';
+    document.getElementById('kpi-card-saldo-ini').style.display = 'none';
     document.getElementById('btn-exportar').disabled = true;
 
     document.getElementById('contenido-reporte').innerHTML = `

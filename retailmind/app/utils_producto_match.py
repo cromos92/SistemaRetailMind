@@ -110,6 +110,73 @@ def producto_talla_por_sku(sku, sucursal_id=None, select_related=None,
     return qs.first()
 
 
+def qs_fichas_identidad_otras_sucursales(articulo, atributo1_id, atributo2_id,
+                                         atributo3_id, categoria_id,
+                                         excluir_sucursal_id):
+    """Fichas de OTRAS sucursales que son el MISMO producto (identidad completa).
+
+    Clave que DEBE usar la sincronización de precios: código + marca + color +
+    **género + categoría**, la misma identidad con la que se decide si un
+    producto ya existe (`fichas_por_identidad`).
+
+    Sin género/categoría la sincronización pisaba el precio de productos
+    DISTINTOS que comparten código, marca y color. Caso real 25-07-2026: unos
+    GUANTES creados en EDEL reutilizando el código de una ZAPATILLA (ambos
+    EVERLAST ROJO UNISEX) dejaron las zapatillas de NICK2 a precio de guante
+    ($109.990 → $44.990) con 8 pares en venta.
+
+    `articulo` se compara con iexact: las fichas legacy con el código en otra
+    caja quedaban fuera de la sincronización. Devuelve un QuerySet para que los
+    llamadores sigan anotando stock / iterando como antes.
+    """
+    from .models import Producto
+    return Producto.objects.filter(
+        articulo__iexact=(articulo or '').strip(),
+        atributo1_id=atributo1_id,
+        atributo2_id=atributo2_id,
+        atributo3_id=atributo3_id,
+        categoria_id=categoria_id,
+    ).exclude(sucursal_id=excluir_sucursal_id)
+
+
+def qs_fichas_codigo_otra_identidad(articulo, atributo1_id, atributo2_id,
+                                    atributo3_id, categoria_id,
+                                    excluir_sucursal_id):
+    """"Casi-coincidencias": mismo código+marca+color pero OTRO género/categoría.
+
+    Son exactamente las fichas que `qs_fichas_identidad_otras_sucursales` deja
+    fuera. Se listan para poder AVISAR, porque significan una de dos cosas y
+    ambas importan:
+
+    - un código reutilizado por productos distintos (el bug del caso guantes), o
+    - la misma ficha mal categorizada en otra bodega, que por eso ya no recibe
+      la sincronización de precio.
+    """
+    from .models import Producto
+    return (
+        Producto.objects
+        .filter(
+            articulo__iexact=(articulo or '').strip(),
+            atributo1_id=atributo1_id,
+            atributo2_id=atributo2_id,
+        )
+        .exclude(sucursal_id=excluir_sucursal_id)
+        .exclude(atributo3_id=atributo3_id, categoria_id=categoria_id)
+    )
+
+
+def resumen_casi_coincidencias(qs, limite=8):
+    """Texto corto 'SUC:categoría/género' para loguear las casi-coincidencias."""
+    partes = []
+    for p in qs.select_related('sucursal', 'categoria', 'atributo3')[:limite]:
+        partes.append('{}:{}/{}'.format(
+            p.sucursal.alias if p.sucursal else '?',
+            p.categoria.nombre if p.categoria else 'sin-categoria',
+            p.atributo3.valor if p.atributo3 else 'sin-genero',
+        ))
+    return ', '.join(partes)
+
+
 def productos_por_codigo_sucursales(articulo, sucursal_ids):
     """Todos los Producto con el mismo código normalizado en las sucursales dadas.
 

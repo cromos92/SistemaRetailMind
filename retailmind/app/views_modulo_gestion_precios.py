@@ -23,6 +23,12 @@ from .models import (
     ParametroGlobal, EmpresaUser, PermisoRol
 )
 from .utils_permisos import usuario_puede_ver_todas_sucursales
+from .utils_producto_match import (
+    qs_fichas_identidad_otras_sucursales,
+    qs_fichas_codigo_otra_identidad,
+    resumen_casi_coincidencias,
+)
+from .services.historial_precios import registrar_cambios_precio
 
 logger = logging.getLogger('app')
 
@@ -472,12 +478,14 @@ def buscar_productos(request):
                 producto=producto
             ).select_related('usuario').first()
 
-            # Buscar productos similares en otras sucursales (con stock agregado por sucursal)
-            productos_similares = Producto.objects.filter(
-                articulo=producto.articulo,
-                atributo1=producto.atributo1,
-                atributo2=producto.atributo2
-            ).exclude(sucursal=producto.sucursal).select_related('sucursal').annotate(
+            # El MISMO producto en otras sucursales (con stock por sucursal).
+            # Usa la MISMA identidad completa que la sincronización de precios:
+            # este badge promete "Sincronización", así que debe listar exactamente
+            # las fichas que el sync va a tocar, ni más ni menos.
+            productos_similares = qs_fichas_identidad_otras_sucursales(
+                producto.articulo, producto.atributo1_id, producto.atributo2_id,
+                producto.atributo3_id, producto.categoria_id, producto.sucursal_id,
+            ).select_related('sucursal').annotate(
                 stock_sucursal=Sum('producto_talla__stock')
             )
 
@@ -915,17 +923,22 @@ def actualizar_precio(request):
         sucursales_notificadas = 0
         productos_sincronizados = 0
         notificaciones_creadas = 0
-        
+        # Fichas que comparten código+marca+color pero son otro producto
+        # (distinta categoría/género): quedan fuera del sync y se avisan.
+        no_sincronizadas = []
+
         if sincronizar_sucursales:
             from django.db.models import Sum
             
-            # Buscar productos similares en TODAS las demás sucursales (con o sin stock)
-            productos_otras_sucursales = Producto.objects.filter(
-                articulo=producto.articulo,
-                atributo1=producto.atributo1,
-                atributo2=producto.atributo2
-            ).exclude(
-                sucursal=sucursal_origen  # Excluir sucursal donde se edita
+            # El MISMO producto en las otras sucursales, por identidad COMPLETA
+            # (código+marca+color+género+categoría). Con la clave corta se pisaba
+            # el precio de productos distintos que comparten código+marca+color
+            # (caso guantes/zapatillas 25-07-2026); ver
+            # `qs_fichas_identidad_otras_sucursales`.
+            productos_otras_sucursales = qs_fichas_identidad_otras_sucursales(
+                producto.articulo, producto.atributo1_id, producto.atributo2_id,
+                producto.atributo3_id, producto.categoria_id,
+                sucursal_origen.id if sucursal_origen else None,
             ).annotate(
                 stock_total=Sum('producto_talla__stock')
             ).select_related('sucursal')
@@ -935,6 +948,31 @@ def actualizar_precio(request):
                 producto.id,
                 productos_otras_sucursales.count(),
             )
+
+            # Fichas con el mismo código+marca+color pero otro género/categoría:
+            # quedan fuera del sync (son otro producto) y se reportan para avisar
+            # en la respuesta.
+            _casi_qs = qs_fichas_codigo_otra_identidad(
+                producto.articulo, producto.atributo1_id, producto.atributo2_id,
+                producto.atributo3_id, producto.categoria_id,
+                sucursal_origen.id if sucursal_origen else None,
+            )
+            no_sincronizadas = [
+                {
+                    'sucursal': p.sucursal.alias if p.sucursal else '-',
+                    'categoria': p.categoria.nombre if p.categoria else 'Sin categoría',
+                    'genero': p.atributo3.valor if p.atributo3 else 'Sin género',
+                    'precio': int(p.precioventa or 0),
+                }
+                for p in _casi_qs.select_related('sucursal', 'categoria', 'atributo3')[:10]
+            ]
+            if no_sincronizadas:
+                logger.warning(
+                    "Edicion rapida precios: %s ficha(s) con codigo %s NO sincronizadas "
+                    "por distinta categoria/genero -> %s",
+                    len(no_sincronizadas), producto.articulo,
+                    resumen_casi_coincidencias(_casi_qs),
+                )
 
             for prod_similar in productos_otras_sucursales:
                 precio_anterior_sync = int(prod_similar.precioventa or 0)
@@ -1115,7 +1153,10 @@ def actualizar_precio(request):
             'tallas_actualizadas': tallas_actualizadas,
             'historial_registrado': True,
             'sucursales_notificadas': sucursales_notificadas,
-            'productos_sincronizados': productos_sincronizados
+            'productos_sincronizados': productos_sincronizados,
+            # Fichas con el mismo código+marca+color que NO se sincronizaron
+            # porque son otro producto (distinta categoría/género).
+            'no_sincronizadas': no_sincronizadas,
         })
         
     except Producto.DoesNotExist:
@@ -1195,18 +1236,29 @@ def modificacion_masiva(request):
                 
                 # Convertir a entero (los precios son IntegerField)
                 nuevo_precio_int = int(nuevo_precio)
-                
-                # Actualizar producto principal
+
+                # Actualizar producto principal (capturando el precio anterior
+                # ANTES de pisarlo: solo el historial lo preserva)
+                precio_previo = producto.precioventa
                 producto.precioventa = nuevo_precio_int
                 producto.save()
-                
+
                 # Actualizar TODOS los lotes de TODAS las tallas
                 lotes_actualizados = LoteProducto.objects.filter(
                     producto_talla__producto=producto,
                     cantidad_disponible__gt=0,
                     activo=True
                 ).update(precio_venta_unitario=nuevo_precio_int)
-                
+
+                registrar_cambios_precio(
+                    producto, {'precioventa': precio_previo},
+                    usuario=request.user,
+                    motivo=f'Modificación masiva de precios ({tipo_modificacion})',
+                    tipo_cambio='MASIVO',
+                    ip_address=request.META.get('REMOTE_ADDR'),
+                    lotes_afectados=lotes_actualizados,
+                )
+
                 # Contar tallas
                 tallas_count = producto.producto_talla.count()
                 tallas_actualizadas_total += tallas_count
@@ -1259,32 +1311,51 @@ def sincronizar_sucursales(request):
                 # Obtener precio del producto origen
                 precio_origen = Decimal(str(producto_origen.precioventa))
                 
-                # Buscar productos similares en otras sucursales
+                # Buscar el MISMO producto en las sucursales destino. Identidad
+                # completa (incluye género y categoría): con la clave corta se
+                # pisaba el precio de productos distintos que comparten
+                # código+marca+color. Ver `qs_fichas_identidad_otras_sucursales`.
                 for sucursal_id in sucursales_destino:
-                    # Buscar productos con mismo nombre y atributos
-                    productos_similares = Producto.objects.filter(
-                        articulo=producto_origen.articulo,
-                        atributo1=producto_origen.atributo1,
-                        atributo2=producto_origen.atributo2,
-                        sucursal_id=sucursal_id
-                    )
+                    productos_similares = qs_fichas_identidad_otras_sucursales(
+                        producto_origen.articulo,
+                        producto_origen.atributo1_id,
+                        producto_origen.atributo2_id,
+                        producto_origen.atributo3_id,
+                        producto_origen.categoria_id,
+                        excluir_sucursal_id=producto_origen.sucursal_id,
+                    ).filter(sucursal_id=sucursal_id)
                     
                     for prod_similar in productos_similares:
                         # Calcular precio ajustado
                         nuevo_precio = precio_origen * (Decimal('1') + (ajuste_porcentual / Decimal('100')))
                         nuevo_precio_int = int(nuevo_precio)
-                        
-                        # Actualizar producto
+
+                        # Actualizar producto (capturando el precio anterior
+                        # ANTES de pisarlo: solo el historial lo preserva)
+                        precio_previo = prod_similar.precioventa
                         prod_similar.precioventa = nuevo_precio_int
                         prod_similar.save()
-                        
+
                         # Actualizar lotes de TODAS las tallas
-                        LoteProducto.objects.filter(
+                        lotes_sync = LoteProducto.objects.filter(
                             producto_talla__producto=prod_similar,
                             cantidad_disponible__gt=0,
                             activo=True
                         ).update(precio_venta_unitario=nuevo_precio_int)
-                        
+
+                        registrar_cambios_precio(
+                            prod_similar, {'precioventa': precio_previo},
+                            usuario=request.user,
+                            motivo=(
+                                f'Sincronización de precio desde '
+                                f'{producto_origen.sucursal.alias if producto_origen.sucursal else "origen"}'
+                                + (f' (ajuste {ajuste_porcentual}%)' if ajuste_porcentual else '')
+                            ),
+                            tipo_cambio='SINCRONIZACION',
+                            ip_address=request.META.get('REMOTE_ADDR'),
+                            lotes_afectados=lotes_sync,
+                        )
+
                         productos_sincronizados += 1
                         sucursales_afectadas.add(sucursal_id)
                         
@@ -1924,14 +1995,12 @@ def buscar_productos_similares_sucursales(request, producto_id):
     """Buscar productos similares en otras sucursales"""
     try:
         producto = Producto.objects.select_related('atributo1', 'atributo2', 'sucursal').get(id=producto_id)
-        
-        # Buscar productos con mismo nombre y atributos en OTRAS sucursales
-        productos_similares = Producto.objects.filter(
-            articulo=producto.articulo,
-            atributo1=producto.atributo1,
-            atributo2=producto.atributo2
-        ).exclude(
-            sucursal=producto.sucursal
+
+        # El MISMO producto en OTRAS sucursales, por identidad completa (igual
+        # criterio que la sincronización de precios).
+        productos_similares = qs_fichas_identidad_otras_sucursales(
+            producto.articulo, producto.atributo1_id, producto.atributo2_id,
+            producto.atributo3_id, producto.categoria_id, producto.sucursal_id,
         ).select_related('sucursal').distinct()
         
         sucursales_data = []

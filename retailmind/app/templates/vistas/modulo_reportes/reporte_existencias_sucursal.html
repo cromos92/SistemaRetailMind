@@ -778,11 +778,12 @@ const COLS = [
   { key: 'color',         label: 'Color',          cls: '' },
   { key: 'genero',        label: 'Género',         cls: '' },
   { key: 'talla',         label: 'Talla',          cls: '' },
-  // Ojo: NO es un saldo inicial de período. Es todo lo que entró alguna vez a
-  // ese SKU (compras + traspasos + ajustes positivos + cambios), sin fecha de
-  // corte. Restarlo del stock actual NO da el consumo del período.
+  // Ojo: NO es un saldo inicial de período. Es la suma de TODO movimiento de
+  // kardex con cantidad > 0 sobre ese SKU (compras, traspasos recibidos,
+  // ajustes positivos, cambios, devoluciones), sin fecha de corte. Restarlo
+  // del stock actual NO da el consumo del período.
   { key: 'stock_inicial', label: 'Recibido hist.', cls: 'td-right',
-    tip: 'Total histórico recibido de este SKU (compras + traspasos + ajustes), sin fecha de corte. NO es el saldo al inicio de un período: la diferencia con el stock actual incluye traspasos salientes, mermas y años de historia.' },
+    tip: 'Total histórico que entró a este SKU: todo movimiento de kardex con cantidad positiva (compras, traspasos recibidos, ajustes, cambios, devoluciones), sin fecha de corte. NO es el saldo al inicio de un período: la diferencia con el stock actual incluye traspasos salientes, ventas, mermas y años de historia. Nunca puede ser menor al stock actual; si lo es, hay stock sin respaldo en el kardex.' },
   { key: 'stock',         label: 'Stock Act.',     cls: 'td-right',
     tip: 'Stock actual de esta sucursal (campo plano Producto_Talla.stock).' },
   { key: 'costo',         label: 'Costo',          cls: 'td-right' },

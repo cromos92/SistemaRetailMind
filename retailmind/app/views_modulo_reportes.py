@@ -3215,23 +3215,29 @@ def obtener_reporte_existencias_sucursal(request):
         )
 
         from django.db.models import Sum as _Sum
-        # Misma definición de "recibido" que movimientos-sucursal (sets
-        # canónicos) para que ambos reportes cuenten igual.
-        from app.constants_kardex import (
-            CONCEPTOS_ABASTECIMIENTO, CONCEPTOS_TRASPASO_ENTRADA,
-        )
-        conceptos_ingreso = list(
-            CONCEPTOS_ABASTECIMIENTO + CONCEPTOS_TRASPASO_ENTRADA + (
-                'CAMBIO_PRODUCTO_ENTRADA', 'AJUSTE_POSITIVO',
-                'AJUSTE_INVENTARIO_ENTRADA', 'SOBRANTE_INGRESO',
-                'DONACION_RECIBIDA',
-            )
-        )
+        # "Recibido hist." = TODO lo que alguna vez SUMÓ stock a este SKU.
+        #
+        # Antes se usaba una lista blanca de conceptos y se sumaba `cantidad`
+        # sin exigir signo, lo que producía el absurdo "recibido histórico <
+        # stock actual":
+        #   - dejaba fuera los traspasos legacy de una pierna
+        #     (TRASPASO_SUCURSAL/BODEGA/VITRINA), que son la vía de entrada de
+        #     buena parte del catálogo migrado de Laravel;
+        #   - RECEPCION_COMPRA con cantidad negativa RESTABA del recibido.
+        # Medición contra prod (jul-2026): SKECHERS tenía 1.063 SKUs con stock
+        # vivo y "recibido" por debajo (1.534 unidades; 976 de esos SKUs en 0),
+        # todos explicados por TRASPASO_SUCURSAL.
+        #
+        # Clasificar por SIGNO en vez de por concepto no hay que mantenerlo
+        # cuando se agrega un concepto nuevo, y hace cumplir el invariante por
+        # construcción: como stock = SUM(entradas) + SUM(salidas) y las salidas
+        # son <= 0, sumar solo cantidad > 0 garantiza recibido >= stock siempre
+        # que el kardex esté completo.
         stocks_iniciales_qs = (
             Movimientos_Producto.objects.filter(
                 ProductoTalla_id__in=talla_ids,
-                concepto__in=conceptos_ingreso,
                 estado='COMPLETADO',
+                cantidad__gt=0,
             )
             .values('ProductoTalla_id')
             .annotate(total=_Sum('cantidad'))
@@ -5662,36 +5668,34 @@ def _mapas_movimientos_sucursal(productos_ids, sucursales_ids, filtro_fecha):
     def _mapa_entrada(qs_base):
         """Suma entradas por (producto, sucursal RECEPTORA).
 
-        La sucursal receptora es ``sucursal_destino`` cuando está seteada
-        (recepciones/traspasos nuevos), y ``sucursal_origen`` cuando el
-        movimiento migró de Laravel: esa migración guardó la sucursal SIEMPRE
-        en ``sucursal_origen`` y dejó ``sucursal_destino`` en NULL, incluso
-        para ingresos iniciales y recepciones de compra
-        (migrate_from_laravel.py). Contar el "inicial" solo por
-        ``sucursal_destino`` dejaba en 0 el recibido de todo el histórico
-        migrado (la queja "el inicial tira mal el valor"). Los dos conjuntos
-        (destino seteado / destino NULL) son disjuntos, así que no hay doble
-        conteo."""
+        La sucursal receptora es SIEMPRE la dueña del SKU
+        (``ProductoTalla.producto.sucursal_id``). En este modelo el stock vive
+        por sucursal en la propia fila ``Producto``, así que un movimiento
+        sobre un SKU solo puede afectar el stock de esa sucursal:
+        ``sucursal_origen``/``sucursal_destino`` describen el traslado, no
+        dónde quedó el saldo.
+
+        La versión anterior atribuía por ``COALESCE(destino, origen)``. Eso es
+        correcto para INGRESO_INICIAL/RECEPCION_COMPRA (la migración de Laravel
+        dejó ``sucursal_destino=NULL`` y la sucursal en ``sucursal_origen``),
+        pero es al revés para los traspasos legacy de una pierna: ahí
+        ``sucursal_origen`` es la sucursal EMISORA, así que la entrada se
+        sumaba a quien despachó y no a quien recibió. Medición contra prod
+        (jul-2026): en SKECHERS ~13.000 unidades quedaban contadas en
+        PAO4/NICK1/PAO3/PAO1 siendo de EDEL, dejando la fila de EDEL con
+        Recib. por debajo de Rest.; en PANAMA JACK eran 215 de 4.724 entradas
+        (4,5%). Contar por la sucursal dueña elimina el caso y no puede
+        duplicar (cada SKU pertenece a una sola sucursal)."""
         mapa = {}
-        por_destino = (
-            qs_base.filter(sucursal_destino_id__in=sucursales_ids)
-            .values('ProductoTalla__producto_id', 'sucursal_destino_id')
+        filas = (
+            qs_base.filter(ProductoTalla__producto__sucursal_id__in=sucursales_ids)
+            .values('ProductoTalla__producto_id',
+                    'ProductoTalla__producto__sucursal_id')
             .annotate(total=Sum('cantidad'))
         )
-        for item in por_destino:
+        for item in filas:
             prod = item['ProductoTalla__producto_id']
-            suc = item['sucursal_destino_id']
-            d = mapa.setdefault(prod, {})
-            d[suc] = d.get(suc, 0) + abs(item['total'] or 0)
-        por_origen = (
-            qs_base.filter(sucursal_destino_id__isnull=True,
-                           sucursal_origen_id__in=sucursales_ids)
-            .values('ProductoTalla__producto_id', 'sucursal_origen_id')
-            .annotate(total=Sum('cantidad'))
-        )
-        for item in por_origen:
-            prod = item['ProductoTalla__producto_id']
-            suc = item['sucursal_origen_id']
+            suc = item['ProductoTalla__producto__sucursal_id']
             d = mapa.setdefault(prod, {})
             d[suc] = d.get(suc, 0) + abs(item['total'] or 0)
         return mapa
@@ -5723,6 +5727,70 @@ def _mapas_movimientos_sucursal(productos_ids, sucursales_ids, filtro_fecha):
         'sucursal_origen_id',
     )
     return compras, traspasos_in, traspasos_out, ventas
+
+
+# NOTA: helper interno, NO es una vista (mismo motivo que el de arriba: no
+# lleva @login_required porque se invoca con args posicionales).
+def _saldos_periodo(productos_ids, sucursales_ids, filtro_fecha):
+    """Mapas para reconstruir el saldo de un período (kardex real).
+
+    Devuelve tres mapas ``{producto_id: {sucursal_id: unidades}}``:
+
+    - ``entradas``  — SUM(cantidad) de los movimientos con ``cantidad > 0``
+      DENTRO de la ventana de fechas.
+    - ``salidas``   — idem con ``cantidad < 0``, en valor absoluto.
+    - ``posterior`` — SUM(cantidad) CON SIGNO de los movimientos POSTERIORES a
+      ``fecha_hasta``. Vacío si no se filtró por ``fecha_hasta``.
+
+    El sistema no guarda snapshots históricos de stock en ninguna tabla: el
+    único saldo conocido es ``Producto_Talla.stock`` de HOY. Así que el saldo
+    del período se obtiene rebobinando ese stock::
+
+        saldo_final   = stock_hoy   - posterior
+        saldo_inicial = saldo_final - (entradas - salidas)
+
+    Con esa definición se cumple por construcción
+    ``saldo_inicial + entradas - salidas = saldo_final``.
+
+    Sin esto el reporte comparaba el RECIBIDO DE LA VENTANA contra el STOCK DE
+    HOY —dos magnitudes que no se relacionan—, así que todo lo que hubiera
+    llegado antes de ``fecha_desde`` aparecía como "Restante sin Recibido".
+    Medición contra prod (jul-2026): PANAMA JACK filtrado desde 2026-07-01
+    daba Recib. 0 vs Rest. 368, o sea el 100% del stock como fantasma.
+
+    Todo se atribuye a la sucursal DUEÑA del SKU, igual que ``_mapa_entrada``.
+    """
+    base = Movimientos_Producto.objects.filter(
+        ProductoTalla__producto_id__in=productos_ids,
+        ProductoTalla__producto__sucursal_id__in=sucursales_ids,
+        estado='COMPLETADO',
+    )
+
+    def _agrupar(queryset, absoluto):
+        mapa = {}
+        filas = (
+            queryset.values('ProductoTalla__producto_id',
+                            'ProductoTalla__producto__sucursal_id')
+            .annotate(total=Sum('cantidad'))
+        )
+        for item in filas:
+            prod = item['ProductoTalla__producto_id']
+            suc = item['ProductoTalla__producto__sucursal_id']
+            valor = item['total'] or 0
+            d = mapa.setdefault(prod, {})
+            d[suc] = d.get(suc, 0) + (abs(valor) if absoluto else valor)
+        return mapa
+
+    ventana = base.filter(**filtro_fecha)
+    entradas = _agrupar(ventana.filter(cantidad__gt=0), True)
+    salidas = _agrupar(ventana.filter(cantidad__lt=0), True)
+
+    posterior = {}
+    if filtro_fecha.get('fecha__lte'):
+        posterior = _agrupar(
+            base.filter(fecha__gt=filtro_fecha['fecha__lte']), False
+        )
+    return entradas, salidas, posterior
 
 
 def ver_reporte_movimientos_sucursal(request):
@@ -5857,6 +5925,15 @@ def obtener_reporte_movimientos_sucursal(request):
             _mapas_movimientos_sucursal(productos_ids, sucursales_ids, filtro_fecha)
         )
 
+        # ========== SALDOS DEL PERÍODO (kardex real) ==========
+        # Con filtro de fechas el reporte deja de ser "recibido histórico vs
+        # stock de hoy" y pasa a ser un kardex: saldo inicial + entradas -
+        # salidas = saldo final. Ver _saldos_periodo.
+        periodo_activo = bool(filtro_fecha)
+        entradas_map, salidas_map, posterior_map = _saldos_periodo(
+            productos_ids, sucursales_ids, filtro_fecha
+        )
+
         # ========== QUERY 3: STOCK ACTUAL AGREGADO POR PRODUCTO Y SUCURSAL ==========
         stock_query = Producto_Talla.objects.filter(
             producto_id__in=productos_ids
@@ -5892,16 +5969,22 @@ def obtener_reporte_movimientos_sucursal(request):
             tout_producto = traspasos_out_map.get(prod_id, {})
             stock_producto = stock_map.get(prod_id, {})
             ventas_producto = ventas_map.get(prod_id, {})
+            ent_producto = entradas_map.get(prod_id, {})
+            sal_producto = salidas_map.get(prod_id, {})
+            post_producto = posterior_map.get(prod_id, {})
 
             # Construir datos por sucursal
             stock_por_sucursal = {}
             total_compras = total_tin = total_tout = 0
             total_restante = 0
             total_vendido = 0
+            total_entradas = total_salidas = total_saldo_inicial = 0
+            total_stock_hoy = 0
 
             sucursales_con_datos = (
                 set(compras_producto) | set(tin_producto) | set(tout_producto)
                 | set(stock_producto) | set(ventas_producto)
+                | set(ent_producto) | set(sal_producto) | set(post_producto)
             )
 
             for suc_id in sucursales_con_datos:
@@ -5911,11 +5994,21 @@ def obtener_reporte_movimientos_sucursal(request):
                 compras = compras_producto.get(suc_id, 0)
                 traspasos_in = tin_producto.get(suc_id, 0)
                 traspasos_out = tout_producto.get(suc_id, 0)
-                restante = stock_producto.get(suc_id, 0)
                 vendido = ventas_producto.get(suc_id, 0)
                 inicial = compras + traspasos_in  # compat con la UI actual
 
-                if inicial > 0 or restante > 0 or vendido > 0 or traspasos_out > 0:
+                # Kardex del período. Sin filtro de fechas `posterior` es 0 y
+                # `restante` sigue siendo el stock de hoy (comportamiento
+                # histórico intacto). Con filtro, `restante` pasa a ser el saldo
+                # al cierre de la ventana y aparece el saldo inicial.
+                stock_hoy = stock_producto.get(suc_id, 0)
+                entradas = ent_producto.get(suc_id, 0)
+                salidas = sal_producto.get(suc_id, 0)
+                restante = stock_hoy - post_producto.get(suc_id, 0)
+                saldo_inicial = restante - (entradas - salidas)
+
+                if (inicial or restante or vendido or traspasos_out
+                        or entradas or salidas or saldo_inicial):
                     suc_alias = sucursales_map[suc_id]
                     stock_por_sucursal[suc_alias] = {
                         'sucursal_id': suc_id,
@@ -5925,12 +6018,25 @@ def obtener_reporte_movimientos_sucursal(request):
                         'traspasos_out': traspasos_out,
                         'restante': restante,
                         'vendido': vendido,
+                        # Kardex del período (solo con sentido si periodo_activo)
+                        'saldo_inicial': saldo_inicial,
+                        'entradas': entradas,
+                        'salidas': salidas,
+                        'stock_hoy': stock_hoy,
+                        # Lo que no cae en compras/traspasos/ventas: ajustes,
+                        # correcciones, cambios, devoluciones, anulaciones.
+                        'otros_entradas': max(entradas - compras - traspasos_in, 0),
+                        'otros_salidas': max(salidas - traspasos_out - vendido, 0),
                     }
                     total_compras += compras
                     total_tin += traspasos_in
                     total_tout += traspasos_out
                     total_restante += restante
                     total_vendido += vendido
+                    total_entradas += entradas
+                    total_salidas += salidas
+                    total_saldo_inicial += saldo_inicial
+                    total_stock_hoy += stock_hoy
 
             total_inicial = total_compras + total_tin
 
@@ -5950,14 +6056,26 @@ def obtener_reporte_movimientos_sucursal(request):
                     'total_traspasos_out': total_tout,
                     'total_restante': total_restante,
                     'total_vendido': total_vendido,
+                    'total_saldo_inicial': total_saldo_inicial,
+                    'total_entradas': total_entradas,
+                    'total_salidas': total_salidas,
+                    'total_stock_hoy': total_stock_hoy,
                 })
-        
+
         sucursales_data = [{'id': s.id, 'alias': s.alias} for s in sucursales_list]
-        
+
         return JsonResponse({
             'success': True,
             'datos': datos_reporte,
             'sucursales': sucursales_data,
+            # La UI cambia de columnas según esto: sin período muestra
+            # "Recib./Desp./Rest.(hoy)"; con período muestra el kardex
+            # "S.Ini/Entradas/Salidas/S.Fin", que sí cuadra.
+            'periodo': {
+                'activo': periodo_activo,
+                'desde': fecha_desde or None,
+                'hasta': fecha_hasta or None,
+            },
             'debug': {
                 'total_productos': len(datos_reporte),
                 'total_sucursales': len(sucursales_data),
@@ -6057,6 +6175,14 @@ def exportar_movimientos_sucursal_excel(request):
             if productos_ids else ({}, {}, {}, {})
         )
 
+        # Saldos del período: el Excel tiene que decir lo mismo que la web, o
+        # el usuario exporta un "Rest." de hoy junto a un "Recib." de la ventana.
+        periodo_activo = bool(filtro_fecha)
+        entradas_map, salidas_map, posterior_map = (
+            _saldos_periodo(productos_ids, sucursales_ids, filtro_fecha)
+            if productos_ids else ({}, {}, {})
+        )
+
         # QUERY 3: Stock actual agregado
         stock_map = {}
         if productos_ids:
@@ -6097,23 +6223,43 @@ def exportar_movimientos_sucursal_excel(request):
         
         # Título
         ws.merge_cells('A1:F1')
-        ws['A1'] = "MOVIMIENTOS POR SUCURSAL — Compras · Traspasos IN/OUT · Stock actual · Vendido"
+        ws['A1'] = (
+            "MOVIMIENTOS POR SUCURSAL — KARDEX DEL PERÍODO: Saldo inicial · "
+            "Entradas · Salidas · Saldo final"
+            if periodo_activo else
+            "MOVIMIENTOS POR SUCURSAL — Compras · Traspasos IN/OUT · Stock actual · Vendido"
+        )
         ws['A1'].font = Font(bold=True, color="FFFFFF", size=14)
         ws['A1'].fill = header_fill
-        
+
         # Info
-        ws['A2'] = f"Generado: {timezone.now().strftime('%d/%m/%Y %H:%M')} | {len(productos_list)} productos"
+        leyenda_periodo = (
+            f" | Período {fecha_desde or 'inicio'} → {fecha_hasta or 'hoy'}"
+            " | Saldo inicial + Entradas − Salidas = Saldo final"
+            if periodo_activo else
+            " | Sin filtro de fechas: Rest. es el stock de HOY"
+        )
+        ws['A2'] = (f"Generado: {timezone.now().strftime('%d/%m/%Y %H:%M')} | "
+                    f"{len(productos_list)} productos{leyenda_periodo}")
         ws['A2'].font = Font(italic=True, size=9)
-        
+
         # Headers fila 4
         row = 4
         headers = ['Artículo', 'Marca', 'Color', 'Departamento', 'Costo', 'Precio Venta']
 
         sucursales_nombres = [s.alias for s in sucursales_list]
-        for suc in sucursales_nombres:
-            headers.extend([f'{suc} Comp.', f'{suc} T.IN', f'{suc} T.OUT', f'{suc} Rest.'])
-
-        headers.extend(['TOTAL Comp.', 'TOTAL T.IN', 'TOTAL T.OUT', 'TOTAL Rest.', 'VENDIDO'])
+        if periodo_activo:
+            for suc in sucursales_nombres:
+                headers.extend([f'{suc} S.Ini', f'{suc} Ent.', f'{suc} Sal.',
+                                f'{suc} S.Fin'])
+            headers.extend(['TOTAL S.Ini', 'TOTAL Ent.', 'TOTAL Sal.',
+                            'TOTAL S.Fin', 'VENDIDO'])
+        else:
+            for suc in sucursales_nombres:
+                headers.extend([f'{suc} Comp.', f'{suc} T.IN', f'{suc} T.OUT',
+                                f'{suc} Rest.'])
+            headers.extend(['TOTAL Comp.', 'TOTAL T.IN', 'TOTAL T.OUT',
+                            'TOTAL Rest.', 'VENDIDO'])
         
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=row, column=col, value=header)
@@ -6136,11 +6282,29 @@ def exportar_movimientos_sucursal_excel(request):
             total_compras = sum(compras_prod.values())
             total_tin = sum(tin_prod.values())
             total_tout = sum(tout_prod.values())
-            total_restante = sum(stock_prod.values())
             total_vendido = sum(ventas_prod.values())
 
+            ent_prod = entradas_map.get(prod_id, {})
+            sal_prod = salidas_map.get(prod_id, {})
+            post_prod = posterior_map.get(prod_id, {})
+            # Saldo al cierre = stock de hoy rebobinado por lo posterior al corte.
+            saldo_fin_prod = {
+                suc.id: stock_prod.get(suc.id, 0) - post_prod.get(suc.id, 0)
+                for suc in sucursales_list
+            }
+            saldo_ini_prod = {
+                suc.id: (saldo_fin_prod[suc.id]
+                         - (ent_prod.get(suc.id, 0) - sal_prod.get(suc.id, 0)))
+                for suc in sucursales_list
+            }
+            total_restante = sum(saldo_fin_prod.values())
+            total_entradas = sum(ent_prod.values())
+            total_salidas = sum(sal_prod.values())
+            total_saldo_ini = sum(saldo_ini_prod.values())
+
             if (total_compras > 0 or total_tin > 0 or total_tout > 0
-                    or total_restante > 0 or total_vendido > 0):
+                    or total_restante > 0 or total_vendido > 0
+                    or total_entradas > 0 or total_salidas > 0):
                 col = 1
 
                 ws.cell(row=row, column=col, value=producto.articulo).border = border
@@ -6170,10 +6334,17 @@ def exportar_movimientos_sucursal_excel(request):
                 # Datos por sucursal (desde los mapas, sin queries)
                 for suc in sucursales_list:
                     valores_suc = (
-                        (compras_prod.get(suc.id, 0), inicial_fill),
-                        (tin_prod.get(suc.id, 0), inicial_fill),
-                        (tout_prod.get(suc.id, 0), restante_fill),
-                        (stock_prod.get(suc.id, 0), restante_fill),
+                        (
+                            (saldo_ini_prod[suc.id], restante_fill),
+                            (ent_prod.get(suc.id, 0), inicial_fill),
+                            (sal_prod.get(suc.id, 0), inicial_fill),
+                            (saldo_fin_prod[suc.id], restante_fill),
+                        ) if periodo_activo else (
+                            (compras_prod.get(suc.id, 0), inicial_fill),
+                            (tin_prod.get(suc.id, 0), inicial_fill),
+                            (tout_prod.get(suc.id, 0), restante_fill),
+                            (stock_prod.get(suc.id, 0), restante_fill),
+                        )
                     )
                     for valor, relleno in valores_suc:
                         celda = ws.cell(row=row, column=col, value=valor)
@@ -6184,11 +6355,19 @@ def exportar_movimientos_sucursal_excel(request):
 
                 # Totales
                 for valor, color_fuente in (
-                    (total_compras, None),
-                    (total_tin, None),
-                    (total_tout, None),
-                    (total_restante, None),
-                    (total_vendido, 'CC0000'),
+                    (
+                        (total_saldo_ini, None),
+                        (total_entradas, None),
+                        (total_salidas, None),
+                        (total_restante, None),
+                        (total_vendido, 'CC0000'),
+                    ) if periodo_activo else (
+                        (total_compras, None),
+                        (total_tin, None),
+                        (total_tout, None),
+                        (total_restante, None),
+                        (total_vendido, 'CC0000'),
+                    )
                 ):
                     celda = ws.cell(row=row, column=col, value=valor)
                     celda.border = border

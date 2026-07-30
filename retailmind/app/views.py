@@ -360,6 +360,11 @@ def recepciones_pendientes_api(request):
         # Pre-cargar todos los ajustes/NCs vinculados a los DTEs de la pagina en 1 sola query
         dte_ids_pagina = [d.id for d in page_obj.object_list]
         ajustes_por_dte = {}
+        # Unidades con NC que TODAVÍA están contadas dentro del documento,
+        # por (dte_padre, productoTalla). Solo cuentan las NC con
+        # `redujo_lineas_documento=False`: las otras ya redujeron `dp.stock`
+        # y restarlas de nuevo sería contar dos veces la misma devolución.
+        nc_pendientes_por_talla = {}
         if dte_ids_pagina:
             docs_vinculados_qs = Dte.objects.filter(
                 documento_afectado_id__in=dte_ids_pagina,
@@ -367,9 +372,13 @@ def recepciones_pendientes_api(request):
             ).values(
                 'id', 'documento_afectado_id', 'tipo_documento', 'numero_documento',
                 'monto_con_iva', 'unidades_productos', 'motivo_nc', 'fecha_emision',
-                'es_nota_credito',
+                'es_nota_credito', 'redujo_lineas_documento',
             )
+            ids_nc_pendientes = []
             for row in docs_vinculados_qs:
+                ya_descontada = bool(row['redujo_lineas_documento'])
+                if not ya_descontada:
+                    ids_nc_pendientes.append(row['id'])
                 ajustes_por_dte.setdefault(row['documento_afectado_id'], []).append({
                     'id': row['id'],
                     'tipo_documento': row['tipo_documento'],
@@ -379,7 +388,29 @@ def recepciones_pendientes_api(request):
                     'motivo': (row.get('motivo_nc') or '').strip(),
                     'fecha_emision': row['fecha_emision'].strftime('%d/%m/%Y') if row['fecha_emision'] else '',
                     'es_nota_credito': bool(row['es_nota_credito']),
+                    # Clave para leer el badge: si es True las unidades ya
+                    # salieron del total del DTE; si es False siguen dentro.
+                    'ya_descontada': ya_descontada,
                 })
+
+            if ids_nc_pendientes:
+                padre_de_nc = {
+                    row['id']: row['documento_afectado_id']
+                    for row in docs_vinculados_qs
+                }
+                for row in (
+                    Dte_Productos.objects
+                    .filter(dte_id__in=ids_nc_pendientes, productoTalla__isnull=False)
+                    .values('dte_id', 'productoTalla_id')
+                    .annotate(total=Sum('stock'))
+                ):
+                    padre_id = padre_de_nc.get(row['dte_id'])
+                    if padre_id is None:
+                        continue
+                    clave = (padre_id, row['productoTalla_id'])
+                    nc_pendientes_por_talla[clave] = (
+                        nc_pendientes_por_talla.get(clave, 0) + int(row['total'] or 0)
+                    )
 
         for dte in page_obj.object_list:
             # Solo productos activos (no los anulados por ajuste del emisor).
@@ -449,6 +480,15 @@ def recepciones_pendientes_api(request):
 
             resumen_tallas = {}
             detalle_completo = []
+            # Saldo por talla de NC aún no descontadas: se va consumiendo entre
+            # las líneas que comparten la misma productoTalla para no imputar
+            # la misma unidad acreditada a dos líneas distintas.
+            saldo_nc_talla = {
+                talla_id: uds
+                for (padre_id, talla_id), uds in nc_pendientes_por_talla.items()
+                if padre_id == dte.id
+            }
+            total_nc_pendiente_doc = 0
 
             for detalle in detalles_queryset:
                 producto_talla = detalle.productoTalla
@@ -456,6 +496,16 @@ def recepciones_pendientes_api(request):
                 talla = producto_talla.talla if producto_talla else '-'
                 cantidad = detalle.stock or 0
                 precio = int(detalle.precio or 0)
+
+                # Unidades de esta línea que ya tienen NC pero que el
+                # documento todavía cuenta como despachadas.
+                nc_pendiente_linea = 0
+                if detalle.productoTalla_id and saldo_nc_talla.get(detalle.productoTalla_id):
+                    nc_pendiente_linea = min(
+                        int(cantidad), int(saldo_nc_talla[detalle.productoTalla_id])
+                    )
+                    saldo_nc_talla[detalle.productoTalla_id] -= nc_pendiente_linea
+                    total_nc_pendiente_doc += nc_pendiente_linea
 
                 resumen_tallas[talla] = resumen_tallas.get(talla, 0) + cantidad
 
@@ -473,6 +523,10 @@ def recepciones_pendientes_api(request):
                     'color': color,
                     'talla': talla,
                     'cantidad': cantidad,
+                    # Lo que el documento sigue pidiendo menos lo ya acreditado
+                    # por NC que nadie descontó. Es lo que debería entrar a stock.
+                    'cantidad_nc_pendiente': nc_pendiente_linea,
+                    'cantidad_neta': max(0, int(cantidad) - nc_pendiente_linea),
                     'precio': precio,
                 })
 
@@ -499,6 +553,11 @@ def recepciones_pendientes_api(request):
                 ],
                 'detalle': detalle_completo,
                 'total_unidades': total_unidades_doc,
+                # Unidades con NC que el documento AÚN cuenta (0 cuando todas
+                # las NC ya redujeron las líneas). El neto es lo que realmente
+                # corresponde ingresar a stock.
+                'total_unidades_nc_pendiente': total_nc_pendiente_doc,
+                'total_unidades_neto': max(0, total_unidades_doc - total_nc_pendiente_doc),
                 'referencias': dte.referencias or '',
                 'observaciones': movimiento_origen.observaciones or '',
                 'ajustes_previos': ajustes_del_dte,
@@ -687,8 +746,12 @@ def confirmar_recepcion_api(request):
         with transaction.atomic():
             # Defensa en profundidad: PostgreSQL aborta la transaccion si alguna
             # query se cuelga por un lock, antes que Gunicorn mate el worker.
-            with connection.cursor() as cur:
-                cur.execute("SET LOCAL statement_timeout = '25s'")
+            # Es sintaxis exclusiva de Postgres: sin el guard, cualquier suite
+            # que corra sobre otro motor revienta el endpoint entero con
+            # 'near "SET": syntax error' y la recepción queda sin tests.
+            if connection.vendor == 'postgresql':
+                with connection.cursor() as cur:
+                    cur.execute("SET LOCAL statement_timeout = '25s'")
 
             # Lock pesimista del DTE para evitar doble-submit / doble-click.
             # of=('self',) bloquea solo la fila de Dte, no las tablas prefetched.
@@ -777,7 +840,29 @@ def confirmar_recepcion_api(request):
             # ✅ Variables para el resumen
             total_esperado = 0
             total_recepcionado = 0
-            
+
+            # Unidades con NC viva que este documento TODAVÍA cuenta como
+            # despachadas (NC que no redujeron las líneas: por monto, corrige
+            # montos, post-recepción). No se descuentan por la fuerza —la
+            # mercadería puede venir físicamente en el bulto y ahí es sobrante,
+            # no faltante— pero sí quedan registradas para poder auditar
+            # después cuántas unidades ya acreditadas entraron igual a stock.
+            nc_pendiente_por_talla = {}
+            for row in (
+                Dte_Productos.objects
+                .filter(
+                    dte__documento_afectado_id=dte.id,
+                    dte__es_nota_credito=True,
+                    dte__estado_dte__in=['EMITIDO', 'ACEPTADO'],
+                    dte__redujo_lineas_documento=False,
+                    productoTalla__isnull=False,
+                )
+                .values('productoTalla_id')
+                .annotate(total=Sum('stock'))
+            ):
+                nc_pendiente_por_talla[row['productoTalla_id']] = int(row['total'] or 0)
+            unidades_nc_ingresadas = 0
+
             for prod_data in productos_recepcion:
                 dte_producto_id = prod_data.get('dte_producto_id')
                 dte_producto = dte_productos_map.get(dte_producto_id)
@@ -814,6 +899,19 @@ def confirmar_recepcion_api(request):
                 # Clampear recepcionada: nunca más que la esperada (el sobrante va aparte)
                 cantidad_recepcionada = min(cantidad_recepcionada_raw, cantidad_esperada)
                 cantidad_faltante = max(0, cantidad_esperada - cantidad_recepcionada)
+
+                # ¿Estamos ingresando unidades que ya tienen nota de crédito?
+                saldo_nc = nc_pendiente_por_talla.get(dte_producto.productoTalla_id, 0)
+                if saldo_nc > 0 and cantidad_recepcionada > 0:
+                    imputadas = min(saldo_nc, cantidad_recepcionada)
+                    nc_pendiente_por_talla[dte_producto.productoTalla_id] = saldo_nc - imputadas
+                    unidades_nc_ingresadas += imputadas
+                    logger.warning(
+                        "Recepción DTE %s: la línea %s (SKU %s) ingresa %s uds y %s de ellas "
+                        "ya tienen NC que nunca se descontó del documento.",
+                        dte.numero_documento, dte_producto.id,
+                        producto_talla.sku, cantidad_recepcionada, imputadas,
+                    )
 
                 # Lo dañado no puede exceder lo que efectivamente llegó: sin este
                 # tope, recepcionada=2 con danada=5 daba cantidad_a_ingresar=-3.
@@ -1250,7 +1348,11 @@ def confirmar_recepcion_api(request):
             'productos_problemas': productos_problemas,
             'productos_sobrantes': productos_sobrantes,
             'total_esperado': total_esperado,
-            'total_recepcionado': total_recepcionado
+            'total_recepcionado': total_recepcionado,
+            # >0 cuando entraron a stock unidades que ya tenían NC y que el
+            # documento nunca descontó. Sirve para avisar al operador en el
+            # momento, no para bloquear (pueden ser sobrante físico legítimo).
+            'unidades_con_nc_ingresadas': unidades_nc_ingresadas,
         })
 
     except Exception as e:
@@ -3229,6 +3331,10 @@ def ajustar_dte_emisor_api(request):
                 es_nota_credito=es_facturable,
                 documento_afectado=dte,
                 motivo_nc=motivo,
+                # Pre-recepción el loop de arriba ya redujo `dp.stock` y
+                # recalculó el cabezal → el total del DTE YA excluye estas uds.
+                # Post-recepción el original se preserva intacto a propósito.
+                redujo_lineas_documento=(not es_post_recepcion),
                 referencias=(
                     f"Ajuste emisor ({etiqueta_fase}) sobre DTE #{dte.numero_documento} ({tipo_doc_original}). "
                     f"{diferencial_unidades} uds retiradas. Motivo: {motivo}"
@@ -20866,22 +20972,37 @@ def crear_producto_desde_recepcion(request):
         from .models import HistorialCambioPrecio, CambioPrecioPendiente, NotificacionCambioPrecio, EmpresaUser
         from datetime import timedelta
         
-        # Buscar productos similares en TODAS las sucursales (para sincronizar precios)
-        productos_similares = Producto.objects.filter(
-            articulo=articulo,
-            atributo1_id=atributo1,
-            atributo2_id=atributo2
-        ).exclude(
-            sucursal=sucursal  # Excluir la sucursal donde se crea
+        # Buscar el MISMO producto en las otras sucursales (identidad completa:
+        # código+marca+color+género+categoría). Ver el porqué de género/categoría
+        # en `qs_fichas_identidad_otras_sucursales`.
+        from .utils_producto_match import (
+            qs_fichas_identidad_otras_sucursales, qs_fichas_codigo_otra_identidad,
+            resumen_casi_coincidencias,
+        )
+        productos_similares = qs_fichas_identidad_otras_sucursales(
+            articulo, atributo1, atributo2, atributo3, categoria, sucursal.id,
         ).annotate(
             stock_total=Sum('producto_talla__stock')
         ).select_related('sucursal')
-        
+
         logger.debug(
             "Buscando productos similares en otras sucursales: articulo=%s total=%s",
             articulo,
             productos_similares.count(),
         )
+
+        # Fichas con el mismo código+marca+color pero otro género/categoría: NO
+        # se sincronizan (serían otro producto). Se loguea para poder detectar
+        # códigos reutilizados o fichas mal categorizadas.
+        _casi = qs_fichas_codigo_otra_identidad(
+            articulo, atributo1, atributo2, atributo3, categoria, sucursal.id,
+        )
+        if _casi.exists():
+            logger.warning(
+                "Sync precios: %s ficha(s) con codigo %s NO sincronizadas por "
+                "distinta categoria/genero -> %s",
+                _casi.count(), articulo, resumen_casi_coincidencias(_casi),
+            )
         
         if productos_similares.exists():
             for prod_similar in productos_similares:
@@ -22446,24 +22567,44 @@ def crear_producto_manual(request):
             from .models import HistorialCambioPrecio, CambioPrecioPendiente, NotificacionCambioPrecio, EmpresaUser
             from datetime import timedelta
             
-            # Buscar productos similares en TODAS las sucursales (para sincronizar
-            # precios). iexact: las fichas legacy con el código en otra caja
-            # quedaban fuera de la sincronización.
-            productos_similares = Producto.objects.filter(
-                articulo__iexact=articulo,
-                atributo1=atributo1_obj,
-                atributo2=atributo2_obj
-            ).exclude(
-                sucursal=sucursal  # Excluir la sucursal donde se crea
+            # Buscar el MISMO producto en las otras sucursales. La identidad
+            # incluye género y categoría además de código+marca+color: sin ellas
+            # este mismo bloque dejó unas ZAPATILLAS de NICK2 a precio de GUANTE
+            # el 25-07-2026 (código reutilizado). Ver
+            # `qs_fichas_identidad_otras_sucursales`.
+            from .utils_producto_match import (
+                qs_fichas_identidad_otras_sucursales, qs_fichas_codigo_otra_identidad,
+                resumen_casi_coincidencias,
+            )
+            productos_similares = qs_fichas_identidad_otras_sucursales(
+                articulo, atributo1_obj.id, atributo2_obj.id,
+                atributo3_obj.id if atributo3_obj else None,
+                categoria.id if categoria else None,
+                sucursal.id,
             ).annotate(
                 stock_total=Sum('producto_talla__stock')
             ).select_related('sucursal')
-            
+
             logger.debug(
                 "Buscando productos similares para sincronizacion manual: articulo=%s total=%s",
                 articulo,
                 productos_similares.count(),
             )
+
+            # Mismo código+marca+color pero otro género/categoría → otro producto:
+            # no se sincroniza y se avisa (código reutilizado o mala categorización).
+            _casi = qs_fichas_codigo_otra_identidad(
+                articulo, atributo1_obj.id, atributo2_obj.id,
+                atributo3_obj.id if atributo3_obj else None,
+                categoria.id if categoria else None,
+                sucursal.id,
+            )
+            if _casi.exists():
+                logger.warning(
+                    "Sync precios (manual): %s ficha(s) con codigo %s NO sincronizadas "
+                    "por distinta categoria/genero -> %s",
+                    _casi.count(), articulo, resumen_casi_coincidencias(_casi),
+                )
             
             if productos_similares.exists():
                 for prod_similar in productos_similares:
@@ -30120,6 +30261,14 @@ def anular_factura_dte(request):
             es_nota_credito=True,
             documento_afectado=dte,
             motivo_nc=motivo_nc_texto,
+            # Solo la NC parcial POR LÍNEA reduce `Dte_Productos.stock` del
+            # original (ver más abajo, ramas traspaso pre-recepción y venta
+            # normal). La NC por monto (legacy), la de corrección de monto y
+            # la post-recepción dejan las líneas intactas: sus unidades SIGUEN
+            # contadas en el total del documento.
+            redujo_lineas_documento=bool(
+                usa_productos_afectados and not es_post_recepcion_traspaso
+            ),
             hora=timezone.localtime().time(),
             referencias=_json.dumps([{
                 'tipo_documento': tipo_sii_original,

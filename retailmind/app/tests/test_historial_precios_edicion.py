@@ -145,6 +145,59 @@ class HistorialPreciosEdicionTest(TestCase):
         self.assertEqual(fila_pv2.precio_anterior, 18990)
         self.assertIn('propagada', fila_pv2.motivo)
 
+    # ---------- Gestión de Precios ----------
+
+    def test_modificacion_masiva_gestion_precios_registra_historial(self):
+        crear_lote_fifo(
+            self.talla, cantidad=5, costo_unitario=10000,
+            sobreprecio_unitario=14000, precio_venta_unitario=19990,
+        )
+        resp = self.client.post(
+            reverse('modificacion_masiva_precios'),
+            data=json.dumps({
+                'productos': [self.producto.id],
+                'tipo_modificacion': 'fixed',
+                'valor': 24990,
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['success'])
+
+        fila = HistorialCambioPrecio.objects.get(producto=self.producto)
+        self.assertEqual(fila.precio_anterior, 19990)
+        self.assertEqual(fila.precio_nuevo, 24990)
+        self.assertEqual(fila.tipo_cambio, 'MASIVO')
+        self.assertEqual(fila.lotes_afectados, 1)
+        self.assertIn('Modificación masiva', fila.motivo)
+
+    def test_sincronizar_sucursales_registra_historial_en_destino(self):
+        sucursal2 = crear_sucursal(empresa=self.empresa, alias='SUC-SYNC')
+        producto2, _ = crear_producto_con_talla(
+            sucursal2, articulo='ZAPHIST01', sku=9100003,
+            costo=9000, sobreprecio=13000, precioventa=18990,
+        )
+        resp = self.client.post(
+            reverse('sincronizar_precios_sucursales'),
+            data=json.dumps({
+                'productos': [self.producto.id],
+                'sucursales_destino': [sucursal2.id],
+                'ajuste_porcentual': 0,
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['success'])
+
+        fila = HistorialCambioPrecio.objects.get(producto=producto2)
+        self.assertEqual(fila.precio_anterior, 18990)
+        self.assertEqual(fila.precio_nuevo, 19990)
+        self.assertEqual(fila.tipo_cambio, 'SINCRONIZACION')
+        # El producto origen NO cambió de precio → sin filas suyas
+        self.assertFalse(
+            HistorialCambioPrecio.objects.filter(producto=self.producto).exists()
+        )
+
     # ---------- /app/actualizar_producto_existente/ ----------
 
     def test_actualizar_producto_existente_registra_historial(self):
