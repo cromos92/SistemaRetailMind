@@ -309,7 +309,7 @@ def dashboard_home(request):
         # Retornar contexto mínimo en caso de error
         return render(request, 'vistas/dashboard_home.html', {
             'error': str(e),
-            'ventas': {'hoy': 0, 'semana': 0, 'mes': 0, 'unidades_hoy': 0, 'ticket_promedio': 0, 'ventas_ultimos_30_dias': []},
+            'ventas': {'hoy': 0, 'semana': 0, 'mes': 0, 'unidades_hoy': 0, 'ticket_promedio': 0, 'ventas_ultimos_30_dias': [], 'ventas_por_hora': []},
             'stock': {'total_skus': 0, 'stock_critico': 0, 'sin_stock': 0, 'valor_inventario': 0,
                       'quiebres_rotantes': 0, 'quiebres_lista': [], 'total_unidades': 0, 'rotacion_mes': 0},
             'compras': {'pendientes_recepcion': 0, 'dtes_pendientes': 0, 'monto_pendiente': 0, 'compras_mes': 0, 'lista_pendientes': []},
@@ -349,9 +349,11 @@ def calcular_kpis_ventas(sucursal_id, hoy, inicio_semana, inicio_mes, mes_pasado
     ventas_hoy = ventas_hoy_query.aggregate(total=Sum('total'))['total'] or 0
     tickets_hoy = ventas_hoy_query.count()
     
-    # Unidades vendidas hoy
+    # Unidades vendidas hoy (sin pseudo-artículos: un COSTO ENVIO no es una unidad)
     unidades_hoy = Ticket_Productos.objects.filter(
         idTicket__in=ventas_hoy_query
+    ).exclude(
+        ProductoTalla__producto__excluir_de_analitica=True
     ).aggregate(total=Sum('stock'))['total'] or 0
     
     # Ventas SEMANA
@@ -434,9 +436,15 @@ def calcular_kpis_stock(sucursal_id, empresa_id):
     Calcula KPIs de stock/inventario
     CORREGIDO: Usa Producto_Talla.stock directamente para reflejar los 100,000+ productos
     """
-    # Base query para productos con talla
-    productos_talla_query = Producto_Talla.objects.select_related(
-        'producto', 
+    # Base query para productos con talla. Excluye los pseudo-artículos
+    # (excluir_de_analitica=True: DIFER VISA, bolsas de empaque, COSTO ENVIO...)
+    # cuyo "stock" no es mercadería: solo en PAO2 sumaban ~14k unidades. El
+    # panel de Salud de Inventario ya los filtraba y esta sección no, así que
+    # el mismo tablero mostraba dos totales de unidades distintos.
+    productos_talla_query = Producto_Talla.objects.filter(
+        producto__excluir_de_analitica=False,
+    ).select_related(
+        'producto',
         'producto__sucursal',
         'producto__atributo1'
     )
@@ -489,6 +497,9 @@ def calcular_kpis_stock(sucursal_id, empresa_id):
     ventas_mes_query = Ticket_Productos.objects.filter(
         idTicket__created_at__date__gte=inicio_mes,
         idTicket__estado='PAGADO'
+    ).exclude(
+        # La rotación compara vendido vs stock: ambos lados sin pseudo-artículos.
+        ProductoTalla__producto__excluir_de_analitica=True
     )
     if sucursal_id:
         ventas_mes_query = ventas_mes_query.filter(idTicket__sucursal_id=sucursal_id)
@@ -510,6 +521,7 @@ def calcular_kpis_stock(sucursal_id, empresa_id):
     quiebres_qs = Producto_Talla.objects.filter(
         Q(stock=0) | Q(stock__isnull=True),
         id__in=vendidos_30d.values('ProductoTalla_id'),
+        producto__excluir_de_analitica=False,
     )
     if sucursal_id:
         quiebres_qs = quiebres_qs.filter(producto__sucursal_id=sucursal_id)
@@ -934,8 +946,12 @@ def obtener_top_productos(sucursal_id, inicio_mes, hoy):
         # Mismo criterio que calcular_kpis_ventas: la diferencia cobrada en un
         # cambio no es venta de ese producto.
         idTicket__modulo_origen='CAMBIO_DEVOLUCION'
+    ).exclude(
+        # Los pseudo-artículos (COSTO ENVIO, bolsas) se "venden" en tickets y
+        # por unidades se colaban al Top desplazando productos reales.
+        ProductoTalla__producto__excluir_de_analitica=True
     )
-    
+
     if sucursal_id:
         ventas_productos = ventas_productos.filter(idTicket__sucursal_id=sucursal_id)
     
