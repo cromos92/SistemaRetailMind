@@ -374,12 +374,7 @@
         padding-left: 1rem;
     }
 
-    /* Widget código autorización */
-    #codigo-autorizacion-widget > div {
-        background: rgba(0, 102, 255, 0.08) !important;
-        border: 2px solid #0066FF !important;
-        border-radius: 12px;
-    }
+    /* Widget código autorización: estilos junto al propio widget (más abajo en este archivo) */
 
     /* Avatar del usuario */
     .header-profile-user {
@@ -643,112 +638,274 @@
 
                         <!-- Widget de Código de Autorización Dinámico (Solo para Administradores y Jefes de Local) -->
                         {% if user.rol == 'administrador' or user.rol == 'jefe_local' %}
-                        <div class="ms-3 header-item d-none d-lg-flex" id="codigo-autorizacion-widget">
-                            <div class="d-flex align-items-center px-3 py-2" style="background: rgba(0, 102, 255, 0.08); border: 2px solid #0066FF; border-radius: 12px;">
-                                <div class="me-3">
-                                    <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                                        <i class='bx bx-shield-quarter' style="font-size: 1.4rem; color: white;"></i>
-                                    </div>
+                        <div class="ms-2 ms-lg-3 header-item d-flex align-items-center" id="codigo-autorizacion-widget">
+                            <!-- Botón trigger: solo móvil/tablet (<992px), abre el panel flotante -->
+                            <button type="button" id="btn-codigo-trigger" onclick="toggleCodigoPanel()"
+                                    title="Código de Autorización" aria-label="Ver código de autorización"
+                                    aria-controls="codigo-autorizacion-panel" aria-expanded="false">
+                                <i class='bx bx-shield-quarter'></i>
+                            </button>
+
+                            <!-- Panel: inline en desktop, tarjeta flotante bajo el topbar en móvil -->
+                            <div id="codigo-autorizacion-panel">
+                                <div class="codigo-panel-icon">
+                                    <i class='bx bx-shield-quarter'></i>
                                 </div>
-                                <div>
-                                    <small class="d-block" style="font-size: 0.7rem; line-height: 1; color: #8A8A9A; font-weight: 500; margin-bottom: 4px;">Código de Autorización</small>
-                                    <div class="d-flex align-items-center gap-2">
+                                <div class="codigo-panel-body">
+                                    <small class="codigo-panel-label">Código de Autorización</small>
+                                    <div class="d-flex align-items-center flex-wrap gap-2">
                                         <!-- Código oculto (visible por defecto) -->
-                                        <span id="codigo-autorizacion-oculto" class="fw-bold font-monospace" style="font-size: 1.1rem; letter-spacing: 3px; color: #1A1A2E; cursor: pointer;" onclick="toggleCodigoAutorizacion()" title="Clic para ver el código">
-                                            ••••••
-                                        </span>
+                                        <span id="codigo-autorizacion-oculto" class="fw-bold font-monospace" onclick="toggleCodigoAutorizacion()" title="Clic para ver el código">••••••</span>
                                         <!-- Código real (oculto por defecto) -->
-                                        <strong id="codigo-autorizacion-display" class="fw-bold font-monospace" style="font-size: 1.1rem; letter-spacing: 3px; color: #1A1A2E; display: none;">------</strong>
-                                        
+                                        <strong id="codigo-autorizacion-display" class="fw-bold font-monospace" style="display: none;">------</strong>
+
                                         <!-- Botones Touch-Friendly -->
                                         <div class="d-flex align-items-center gap-1 ms-1">
-                                            <!-- Botón ver/ocultar -->
-                                            <button type="button"
-                                                    class="btn btn-codigo-action" 
-                                                    onclick="toggleCodigoAutorizacion()" 
-                                                    id="btn-toggle-codigo"
-                                                    title="Ver/Ocultar código"
-                                                    style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: #F5F5F7; color: #8A8A9A; border: 2px solid #D1D1D9; border-radius: 8px; transition: all 150ms ease; cursor: pointer;">
-                                                <i class='bx bx-show' style="font-size: 1.2rem;" id="icon-toggle-codigo"></i>
+                                            <button type="button" class="btn-codigo-action btn-codigo-toggle"
+                                                    onclick="toggleCodigoAutorizacion()" id="btn-toggle-codigo"
+                                                    title="Ver/Ocultar código" aria-label="Ver u ocultar código">
+                                                <i class='bx bx-show' id="icon-toggle-codigo"></i>
                                             </button>
-                                            <!-- Botón copiar -->
-                                            <button type="button"
-                                                    class="btn btn-codigo-action" 
-                                                    onclick="copiarCodigoAutorizacion()" 
-                                                    id="btn-copiar-codigo"
-                                                    title="Copiar código"
-                                                    style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #00D4AA 0%, #00B090 100%); color: white; border: none; border-radius: 8px; transition: all 150ms ease; cursor: pointer;">
-                                                <i class='bx bx-copy' style="font-size: 1.2rem;"></i>
+                                            <button type="button" class="btn-codigo-action btn-codigo-copiar"
+                                                    onclick="copiarCodigoAutorizacion()" id="btn-copiar-codigo"
+                                                    title="Copiar código" aria-label="Copiar código">
+                                                <i class='bx bx-copy'></i>
                                             </button>
-                                            <!-- Botón actualizar -->
-                                            <button type="button"
-                                                    class="btn btn-codigo-action" 
-                                                    onclick="actualizarCodigoAutorizacion()" 
-                                                    id="btn-refresh-codigo"
-                                                    title="Actualizar código"
-                                                    style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: #E6F0FF; color: #0066FF; border: 2px solid #0066FF; border-radius: 8px; transition: all 150ms ease; cursor: pointer;">
-                                                <i class='bx bx-refresh' style="font-size: 1.2rem;" id="icon-refresh-codigo"></i>
+                                            <button type="button" class="btn-codigo-action btn-codigo-refresh"
+                                                    onclick="actualizarCodigoAutorizacion()" id="btn-refresh-codigo"
+                                                    title="Actualizar código" aria-label="Actualizar código">
+                                                <i class='bx bx-refresh' id="icon-refresh-codigo"></i>
                                             </button>
                                         </div>
                                     </div>
-                                    <small class="d-block" style="font-size: 0.65rem; line-height: 1; color: #8A8A9A; margin-top: 4px;">
-                                        <span id="codigo-validez-display">Cargando...</span> 
+                                    <small class="codigo-panel-validez">
+                                        <span id="codigo-validez-display">Cargando...</span>
                                         <span class="fw-bold" id="codigo-tiempo-restante" style="color: #FF4D4D;"></span>
                                     </small>
                                 </div>
                             </div>
                         </div>
                         
-                        <!-- Estilos para botones touch-friendly -->
+                        <!-- Estilos del widget de código de autorización -->
                         <style>
+                            #codigo-autorizacion-widget {
+                                position: relative;
+                            }
+
+                            /* Botón trigger (oculto en desktop, visible <992px) */
+                            #btn-codigo-trigger {
+                                display: none;
+                                align-items: center;
+                                justify-content: center;
+                                width: 42px;
+                                height: 42px;
+                                background: var(--nexo-primary-light, #E6F0FF);
+                                color: var(--nexo-primary, #0066FF);
+                                border: 2px solid rgba(0, 102, 255, 0.35);
+                                border-radius: 50%;
+                                font-size: 1.3rem;
+                                cursor: pointer;
+                                transition: all 150ms ease;
+                                touch-action: manipulation;
+                                -webkit-tap-highlight-color: transparent;
+                            }
+                            #btn-codigo-trigger:active {
+                                transform: scale(0.93);
+                            }
+                            #btn-codigo-trigger.panel-abierto {
+                                background: var(--nexo-primary, #0066FF);
+                                color: #FFFFFF;
+                                border-color: var(--nexo-primary, #0066FF);
+                            }
+
+                            /* Panel del código (inline en desktop) */
+                            #codigo-autorizacion-panel {
+                                display: flex;
+                                align-items: center;
+                                gap: 12px;
+                                padding: 8px 14px;
+                                background: #F0F6FF;
+                                border: 2px solid rgba(0, 102, 255, 0.45);
+                                border-radius: var(--nexo-radius-lg, 12px);
+                            }
+                            .codigo-panel-icon {
+                                width: 40px;
+                                height: 40px;
+                                flex-shrink: 0;
+                                background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%);
+                                border-radius: 10px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                            }
+                            .codigo-panel-icon i {
+                                font-size: 1.4rem;
+                                color: #FFFFFF;
+                            }
+                            .codigo-panel-body {
+                                min-width: 0;
+                            }
+                            .codigo-panel-label {
+                                display: block;
+                                font-size: 0.7rem;
+                                line-height: 1;
+                                color: var(--nexo-text-muted, #8A8A9A);
+                                font-weight: 600;
+                                margin-bottom: 4px;
+                            }
+                            #codigo-autorizacion-oculto,
+                            #codigo-autorizacion-display {
+                                font-size: 1.1rem;
+                                letter-spacing: 3px;
+                                color: var(--nexo-text-primary, #1A1A2E);
+                                transition: color 250ms ease, transform 250ms ease;
+                            }
+                            #codigo-autorizacion-oculto {
+                                cursor: pointer;
+                                user-select: none;
+                            }
+                            .codigo-panel-validez {
+                                display: block;
+                                font-size: 0.68rem;
+                                line-height: 1.2;
+                                color: var(--nexo-text-muted, #8A8A9A);
+                                margin-top: 4px;
+                            }
+
+                            /* Botones de acción */
                             .btn-codigo-action {
+                                width: 36px;
+                                height: 36px;
                                 min-width: 36px;
                                 min-height: 36px;
+                                padding: 0;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                border: none;
+                                border-radius: var(--nexo-radius-md, 8px);
+                                cursor: pointer;
+                                transition: all 150ms ease;
                                 touch-action: manipulation;
                                 -webkit-tap-highlight-color: transparent;
                                 user-select: none;
                             }
+                            .btn-codigo-action i {
+                                font-size: 1.2rem;
+                            }
                             .btn-codigo-action:hover {
-                                transform: scale(1.08);
-                                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                                transform: translateY(-1px);
+                                box-shadow: 0 4px 12px rgba(26, 26, 46, 0.15);
                             }
                             .btn-codigo-action:active {
-                                transform: scale(0.95);
+                                transform: scale(0.93);
+                                box-shadow: none;
                             }
                             .btn-codigo-action:disabled {
                                 opacity: 0.6;
                                 cursor: not-allowed;
                                 transform: none !important;
+                                box-shadow: none !important;
                             }
-                            #btn-toggle-codigo.codigo-visible {
-                                background: #0066FF !important;
-                                color: white !important;
-                                border-color: #0066FF !important;
+
+                            .btn-codigo-toggle {
+                                background: #FFFFFF;
+                                color: var(--nexo-text-muted, #8A8A9A);
+                                border: 2px solid var(--nexo-border-light, #D1D1D9);
                             }
-                            #btn-copiar-codigo:hover {
-                                background: linear-gradient(135deg, #00B090 0%, #009A7A 100%) !important;
+                            .btn-codigo-toggle:hover {
+                                color: var(--nexo-primary, #0066FF);
+                                border-color: var(--nexo-primary, #0066FF);
                             }
-                            #btn-refresh-codigo:hover {
-                                background: #0066FF !important;
-                                color: white !important;
+                            .btn-codigo-toggle.codigo-visible {
+                                background: var(--nexo-primary, #0066FF);
+                                color: #FFFFFF;
+                                border-color: var(--nexo-primary, #0066FF);
                             }
-                            #btn-refresh-codigo.refreshing i {
-                                animation: spin 1s linear infinite;
+
+                            .btn-codigo-copiar {
+                                background: linear-gradient(135deg, #00D4AA 0%, #00B090 100%);
+                                color: #FFFFFF;
                             }
-                            @keyframes spin {
+                            .btn-codigo-copiar:hover {
+                                background: linear-gradient(135deg, #00B090 0%, #009A7A 100%);
+                            }
+                            .btn-codigo-copiar.btn-exito {
+                                background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%);
+                            }
+
+                            .btn-codigo-refresh {
+                                background: var(--nexo-primary-light, #E6F0FF);
+                                color: var(--nexo-primary, #0066FF);
+                                border: 2px solid var(--nexo-primary, #0066FF);
+                            }
+                            .btn-codigo-refresh:hover {
+                                background: var(--nexo-primary, #0066FF);
+                                color: #FFFFFF;
+                            }
+                            .btn-codigo-refresh.refreshing i {
+                                animation: girar-codigo 1s linear infinite;
+                            }
+                            .btn-codigo-refresh.btn-exito {
+                                background: var(--nexo-accent, #00D4AA);
+                                color: #FFFFFF;
+                                border-color: var(--nexo-accent, #00D4AA);
+                            }
+
+                            @keyframes girar-codigo {
                                 from { transform: rotate(0deg); }
                                 to { transform: rotate(360deg); }
                             }
-                            /* Touch screens - botones más grandes */
+
+                            /* Móvil/tablet <992px: trigger visible, panel flotante bajo el topbar (70px) */
+                            @media (max-width: 991.98px) {
+                                #btn-codigo-trigger {
+                                    display: flex;
+                                }
+                                #codigo-autorizacion-panel {
+                                    display: none;
+                                    position: fixed;
+                                    top: 78px;
+                                    right: 10px;
+                                    z-index: 1005;
+                                    width: min(360px, calc(100vw - 20px));
+                                    padding: 14px 16px;
+                                    background: #FFFFFF;
+                                    box-shadow: var(--nexo-shadow-xl, 0 20px 25px rgba(26, 26, 46, 0.15));
+                                }
+                                #codigo-autorizacion-panel.show {
+                                    display: flex;
+                                    animation: codigo-panel-in 180ms ease;
+                                }
+                                #codigo-autorizacion-oculto,
+                                #codigo-autorizacion-display {
+                                    font-size: 1.4rem;
+                                    letter-spacing: 4px;
+                                }
+                            }
+                            @keyframes codigo-panel-in {
+                                from { opacity: 0; transform: translateY(-6px); }
+                                to { opacity: 1; transform: translateY(0); }
+                            }
+
+                            /* Pantallas táctiles: targets de 44px y sin efectos hover */
                             @media (pointer: coarse) {
                                 .btn-codigo-action {
-                                    width: 44px !important;
-                                    height: 44px !important;
-                                    min-width: 44px !important;
-                                    min-height: 44px !important;
+                                    width: 44px;
+                                    height: 44px;
+                                    min-width: 44px;
+                                    min-height: 44px;
                                 }
                                 .btn-codigo-action i {
-                                    font-size: 1.4rem !important;
+                                    font-size: 1.4rem;
+                                }
+                                .btn-codigo-action:hover {
+                                    transform: none;
+                                    box-shadow: none;
+                                }
+                                #btn-codigo-trigger {
+                                    width: 44px;
+                                    height: 44px;
                                 }
                             }
                         </style>

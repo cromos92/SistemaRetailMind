@@ -136,6 +136,82 @@ setInterval(checkSession, 3600000);  // 1 hora = 60*60*1000 milisegundos
 let intervaloActualizacionCodigo = null;
 let codigoVisible = false;  // Estado de visibilidad del código
 let autoOcultarTimeout = null;  // Timeout para auto-ocultar
+let codigoExpiraEn = null;  // Timestamp (ms) en que expira el código actual
+let codigoValidoHasta = '';  // Hora de expiración formateada (ej. "22:00")
+let autoRefreshCodigoDisparado = false;  // Evita loops de auto-refresh al expirar
+
+// Abre/cierra el panel flotante en móvil/tablet (<992px); en desktop el panel es inline
+function toggleCodigoPanel() {
+    const panel = document.getElementById('codigo-autorizacion-panel');
+    const trigger = document.getElementById('btn-codigo-trigger');
+    if (!panel) return;
+    const abierto = panel.classList.toggle('show');
+    if (trigger) {
+        trigger.classList.toggle('panel-abierto', abierto);
+        trigger.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+    }
+}
+
+// Cerrar el panel móvil al tocar fuera del widget
+document.addEventListener('click', function(e) {
+    const panel = document.getElementById('codigo-autorizacion-panel');
+    if (!panel || !panel.classList.contains('show')) return;
+    const widget = document.getElementById('codigo-autorizacion-widget');
+    if (widget && !widget.contains(e.target)) {
+        panel.classList.remove('show');
+        const trigger = document.getElementById('btn-codigo-trigger');
+        if (trigger) {
+            trigger.classList.remove('panel-abierto');
+            trigger.setAttribute('aria-expanded', 'false');
+        }
+    }
+});
+
+// Copia con fallback para contextos no seguros (http) y navegadores móviles viejos
+function copiarTextoPortapapeles(texto) {
+    if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(texto);
+    }
+    return new Promise(function(resolve, reject) {
+        const ta = document.createElement('textarea');
+        ta.value = texto;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try {
+            if (document.execCommand('copy')) {
+                resolve();
+            } else {
+                reject(new Error('execCommand copy falló'));
+            }
+        } catch (err) {
+            reject(err);
+        } finally {
+            document.body.removeChild(ta);
+        }
+    });
+}
+
+// Repinta "Válido hasta HH:MM (X min)" con cuenta regresiva local entre refrescos
+function pintarValidezCodigo() {
+    const displayValidez = document.getElementById('codigo-validez-display');
+    if (!displayValidez || !codigoExpiraEn) return;
+    const minutos = Math.max(0, Math.round((codigoExpiraEn - Date.now()) / 60000));
+    if (minutos <= 0) {
+        displayValidez.innerHTML = '<span class="text-danger fw-bold">Expirado — actualizando...</span>';
+        if (!autoRefreshCodigoDisparado) {
+            autoRefreshCodigoDisparado = true;
+            actualizarCodigoAutorizacion();
+        }
+    } else if (minutos < 15) {
+        displayValidez.innerHTML = 'Expira ' + codigoValidoHasta + ' <span class="text-danger fw-bold">(¡' + minutos + ' min!)</span>';
+    } else {
+        displayValidez.textContent = 'Válido hasta ' + codigoValidoHasta + ' (' + minutos + ' min)';
+    }
+}
 
 // Función para mostrar/ocultar código de autorización
 function toggleCodigoAutorizacion() {
@@ -256,35 +332,30 @@ function actualizarCodigoAutorizacion() {
                 }
             }
             
-            // Restaurar el texto oculto
+            // Restaurar el texto oculto (y limpiar el rojo de un error previo)
             if (displayOculto) {
                 displayOculto.textContent = '••••••';
+                displayOculto.style.color = '';
             }
-            
-            // Actualizar validez con formato mejorado
-            if (displayValidez) {
-                const minutos = data.codigo.minutos_restantes;
-                if (minutos < 15) {
-                    displayValidez.innerHTML = `Expira ${data.codigo.valido_hasta} <span class="text-danger fw-bold">(${minutos}min!)</span>`;
-                } else {
-                    displayValidez.textContent = `Válido hasta ${data.codigo.valido_hasta} (${minutos}min)`;
-                }
+
+            // Guardar expiración y repintar validez (la cuenta regresiva local sigue entre refrescos)
+            codigoValidoHasta = data.codigo.valido_hasta;
+            codigoExpiraEn = Date.now() + data.codigo.minutos_restantes * 60000;
+            if (data.codigo.minutos_restantes > 0) {
+                autoRefreshCodigoDisparado = false;
             }
-            
+            pintarValidezCodigo();
+
             // Limpiar el tiempo restante ya que se muestra en validez
             if (displayTiempoRestante) {
                 displayTiempoRestante.textContent = '';
             }
-            
-            // Feedback visual de éxito
+
+            // Feedback visual de éxito (via clase CSS, sin pisar estilos)
             if (btnRefresh) {
-                btnRefresh.style.background = '#00D4AA';
-                btnRefresh.style.color = 'white';
-                btnRefresh.style.borderColor = '#00D4AA';
+                btnRefresh.classList.add('btn-exito');
                 setTimeout(() => {
-                    btnRefresh.style.background = '#E6F0FF';
-                    btnRefresh.style.color = '#0066FF';
-                    btnRefresh.style.borderColor = '#0066FF';
+                    btnRefresh.classList.remove('btn-exito');
                 }, 1000);
             }
         } else {
@@ -324,20 +395,24 @@ $(document).ready(function() {
     if (document.getElementById('codigo-autorizacion-widget')) {
         // Actualizar inmediatamente
         actualizarCodigoAutorizacion();
-        
+
         // Actualizar cada 5 minutos
         intervaloActualizacionCodigo = setInterval(actualizarCodigoAutorizacion, 5 * 60 * 1000);
+
+        // Cuenta regresiva local de validez cada 30 segundos
+        setInterval(pintarValidezCodigo, 30 * 1000);
     }
 });
 
 // Función para copiar código al portapapeles
 function copiarCodigoAutorizacion() {
-    // Obtener código del display (siempre tiene el código real aunque esté oculto visualmente)
+    // El display siempre tiene el código real aunque esté oculto visualmente
     const displayCodigo = document.getElementById('codigo-autorizacion-display');
-    const codigo = displayCodigo?.textContent;
+    const codigo = (displayCodigo ? displayCodigo.textContent : '').trim();
     const btnCopiar = document.getElementById('btn-copiar-codigo');
-    
-    if (!codigo || codigo === '------' || codigo === 'ERROR' || codigo.includes('spinner') || codigo === '...') {
+
+    // Solo copiar si hay un código real (dígitos), no placeholders/spinner/ERROR
+    if (!/^\d{4,8}$/.test(codigo)) {
         Swal.fire({
             icon: 'warning',
             title: 'No hay código disponible',
@@ -349,19 +424,24 @@ function copiarCodigoAutorizacion() {
         });
         return;
     }
-    
-    // Deshabilitar botón y cambiar icono temporalmente
+
+    const restaurarBotonCopiar = function() {
+        if (!btnCopiar) return;
+        btnCopiar.disabled = false;
+        btnCopiar.innerHTML = '<i class="bx bx-copy"></i>';
+        btnCopiar.classList.remove('btn-exito');
+    };
+
+    // Feedback inmediato: check + color de éxito
     if (btnCopiar) {
         btnCopiar.disabled = true;
-        btnCopiar.innerHTML = '<i class="bx bx-check" style="font-size: 1.2rem;"></i>';
-        btnCopiar.style.background = 'linear-gradient(135deg, #0066FF 0%, #0052CC 100%)';
+        btnCopiar.innerHTML = '<i class="bx bx-check"></i>';
+        btnCopiar.classList.add('btn-exito');
     }
-    
-    // Copiar al portapapeles
-    navigator.clipboard.writeText(codigo).then(() => {
-        // Mostrar el código brevemente si estaba oculto
+
+    copiarTextoPortapapeles(codigo).then(() => {
         const wasHidden = !codigoVisible;
-        
+
         Swal.fire({
             icon: 'success',
             title: '✓ Código Copiado',
@@ -375,23 +455,11 @@ function copiarCodigoAutorizacion() {
             background: '#FFFFFF',
             iconColor: '#00D4AA'
         });
-        
-        // Restaurar botón después de 1.5 segundos
-        setTimeout(() => {
-            if (btnCopiar) {
-                btnCopiar.disabled = false;
-                btnCopiar.innerHTML = '<i class="bx bx-copy" style="font-size: 1.2rem;"></i>';
-                btnCopiar.style.background = 'linear-gradient(135deg, #00D4AA 0%, #00B090 100%)';
-            }
-        }, 1500);
+
+        setTimeout(restaurarBotonCopiar, 1500);
     }).catch(err => {
         console.error('Error al copiar:', err);
-        // Restaurar botón en caso de error
-        if (btnCopiar) {
-            btnCopiar.disabled = false;
-            btnCopiar.innerHTML = '<i class="bx bx-copy" style="font-size: 1.2rem;"></i>';
-            btnCopiar.style.background = 'linear-gradient(135deg, #00D4AA 0%, #00B090 100%)';
-        }
+        restaurarBotonCopiar();
         Swal.fire({
             icon: 'error',
             title: 'Error al copiar',
@@ -401,12 +469,6 @@ function copiarCodigoAutorizacion() {
             toast: true,
             position: 'top-end'
         });
-        
-        // Restaurar botón en caso de error
-        if (btnCopiar) {
-            btnCopiar.disabled = false;
-            btnCopiar.innerHTML = '<i class="bx bx-copy fs-14"></i>';
-        }
     });
 }
 
