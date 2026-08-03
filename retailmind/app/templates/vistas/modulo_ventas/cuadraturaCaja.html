@@ -288,20 +288,22 @@
         .btn-sm { min-height: 36px; font-size: .8rem; }
     }
 
-    /* Ultra mobile */
-    @media (max-width: 576px) {
-        .cuadratura-header { flex-direction: column; gap: 0.5rem; text-align: center; }
-        .cuadratura-header .btn { width: 100%; }
-        .denominacion-row { flex-direction: column; gap: 0.25rem; }
-        .denominacion-row input { width: 100% !important; }
-        .supervision-banner { flex-direction: column; padding: 0.75rem; text-align: center; }
-        .modal-cuadratura .modal-dialog { margin: 0.25rem; max-width: calc(100% - 0.5rem); }
-        .paso-header { font-size: 0.875rem; }
-        .resumen-cierre .total { font-size: 1.125rem; }
+    /* Conteo de billetes en tablet.
+       El wizard es `modal-xl`, pero Bootstrap sólo le da 800px desde 992px:
+       entre 576 y 991px el modal mide 500px. Con las denominaciones en dos
+       columnas, cada fila necesita ~270px (etiqueta 80 + input 80 + total 100)
+       y desbordaba horizontalmente sin ningún contenedor con scroll. Las
+       columnas ahora son `col-lg-6` (una sola columna bajo 992px) y la fila se
+       apila bajo 992px en vez de bajo 576px. */
+    @media (max-width: 991px) {
+        .denominacion-row { flex-wrap: wrap; }
+        .denominacion-row .conteo-input { width: 90px !important; }
     }
-
-    @media (min-width: 769px) {
-        .col-show-sm { display: none !important; }
+    @media (max-width: 576px) {
+        .denominacion-row { flex-direction: column; align-items: stretch !important; gap: 0.25rem; }
+        .denominacion-row .conteo-input { width: 100% !important; }
+        .denominacion-row .total-denominacion { margin-left: 0 !important; }
+        .modal-cuadratura .modal-dialog { margin: 0.25rem; max-width: calc(100% - 0.5rem); }
     }
 
     /* ========== VENTA POST-CIERRE ========== */
@@ -932,65 +934,65 @@
                                     <div class="card-body">
                                         <div class="row g-2">
                                             <div class="col-12"><h6 class="text-primary mb-2" style="font-size:.8rem;text-transform:uppercase;">Billetes</h6></div>
-                                            <div class="col-md-6">
-                                                <div class="d-flex align-items-center mb-2">
+                                            <div class="col-lg-6">
+                                                <div class="d-flex align-items-center denominacion-row mb-2">
                                                     <span class="me-2" style="width:80px;font-size:.85rem;">$20.000 ×</span>
                                                     <input type="number" class="form-control conteo-input" id="billetes_20000" min="0" onchange="calcularTotalFisico()">
                                                     <span class="ms-2 total-denominacion" id="total_20000" style="font-size:.85rem;">= $0</span>
                                                 </div>
-                                                <div class="d-flex align-items-center mb-2">
+                                                <div class="d-flex align-items-center denominacion-row mb-2">
                                                     <span class="me-2" style="width:80px;font-size:.85rem;">$5.000 ×</span>
                                                     <input type="number" class="form-control conteo-input" id="billetes_5000" min="0" onchange="calcularTotalFisico()">
                                                     <span class="ms-2 total-denominacion" id="total_5000" style="font-size:.85rem;">= $0</span>
                                                 </div>
-                                                <div class="d-flex align-items-center">
+                                                <div class="d-flex align-items-center denominacion-row">
                                                     <span class="me-2" style="width:80px;font-size:.85rem;">$1.000 ×</span>
                                                     <input type="number" class="form-control conteo-input" id="billetes_1000" min="0" onchange="calcularTotalFisico()">
                                                     <span class="ms-2 total-denominacion" id="total_1000" style="font-size:.85rem;">= $0</span>
                                                 </div>
                                             </div>
-                                            <div class="col-md-6">
-                                                <div class="d-flex align-items-center mb-2">
+                                            <div class="col-lg-6">
+                                                <div class="d-flex align-items-center denominacion-row mb-2">
                                                     <span class="me-2" style="width:80px;font-size:.85rem;">$10.000 ×</span>
                                                     <input type="number" class="form-control conteo-input" id="billetes_10000" min="0" onchange="calcularTotalFisico()">
                                                     <span class="ms-2 total-denominacion" id="total_10000" style="font-size:.85rem;">= $0</span>
                                                 </div>
-                                                <div class="d-flex align-items-center mb-2">
+                                                <div class="d-flex align-items-center denominacion-row mb-2">
                                                     <span class="me-2" style="width:80px;font-size:.85rem;">$2.000 ×</span>
                                                     <input type="number" class="form-control conteo-input" id="billetes_2000" min="0" onchange="calcularTotalFisico()">
                                                     <span class="ms-2 total-denominacion" id="total_2000" style="font-size:.85rem;">= $0</span>
                                                 </div>
                                             </div>
                                             <div class="col-12 mt-1"><h6 class="text-primary mb-2" style="font-size:.8rem;text-transform:uppercase;">Monedas</h6></div>
-                                            <div class="col-md-6">
-                                                <div class="d-flex align-items-center mb-2">
+                                            <div class="col-lg-6">
+                                                <div class="d-flex align-items-center denominacion-row mb-2">
                                                     <span class="me-2" style="width:80px;font-size:.85rem;">$500 ×</span>
                                                     <input type="number" class="form-control conteo-input" id="monedas_500" min="0" onchange="calcularTotalFisico()">
                                                     <span class="ms-2 total-denominacion" id="total_500" style="font-size:.85rem;">= $0</span>
                                                 </div>
-                                                <div class="d-flex align-items-center mb-2">
+                                                <div class="d-flex align-items-center denominacion-row mb-2">
                                                     <span class="me-2" style="width:80px;font-size:.85rem;">$50 ×</span>
                                                     <input type="number" class="form-control conteo-input" id="monedas_50" min="0" onchange="calcularTotalFisico()">
                                                     <span class="ms-2 total-denominacion" id="total_50" style="font-size:.85rem;">= $0</span>
                                                 </div>
-                                                <div class="d-flex align-items-center mb-2">
+                                                <div class="d-flex align-items-center denominacion-row mb-2">
                                                     <span class="me-2" style="width:80px;font-size:.85rem;">$5 ×</span>
                                                     <input type="number" class="form-control conteo-input" id="monedas_5" min="0" onchange="calcularTotalFisico()">
                                                     <span class="ms-2 total-denominacion" id="total_5" style="font-size:.85rem;">= $0</span>
                                                 </div>
                                             </div>
-                                            <div class="col-md-6">
-                                                <div class="d-flex align-items-center mb-2">
+                                            <div class="col-lg-6">
+                                                <div class="d-flex align-items-center denominacion-row mb-2">
                                                     <span class="me-2" style="width:80px;font-size:.85rem;">$100 ×</span>
                                                     <input type="number" class="form-control conteo-input" id="monedas_100" min="0" onchange="calcularTotalFisico()">
                                                     <span class="ms-2 total-denominacion" id="total_100" style="font-size:.85rem;">= $0</span>
                                                 </div>
-                                                <div class="d-flex align-items-center mb-2">
+                                                <div class="d-flex align-items-center denominacion-row mb-2">
                                                     <span class="me-2" style="width:80px;font-size:.85rem;">$10 ×</span>
                                                     <input type="number" class="form-control conteo-input" id="monedas_10" min="0" onchange="calcularTotalFisico()">
                                                     <span class="ms-2 total-denominacion" id="total_10" style="font-size:.85rem;">= $0</span>
                                                 </div>
-                                                <div class="d-flex align-items-center mb-2">
+                                                <div class="d-flex align-items-center denominacion-row mb-2">
                                                     <span class="me-2" style="width:80px;font-size:.85rem;">$1 ×</span>
                                                     <input type="number" class="form-control conteo-input" id="monedas_1" min="0" onchange="calcularTotalFisico()">
                                                     <span class="ms-2 total-denominacion" id="total_1" style="font-size:.85rem;">= $0</span>
@@ -1992,11 +1994,19 @@ function initArqueoApp() {
         $('#fechaDesde').val(primerDia.toISOString().split('T')[0]);
         $('#fechaHasta').val(ultimoDia.toISOString().split('T')[0]);
         actualizarHora();
-        setInterval(actualizarHora, 1000);
+        // El reloj sólo cambia de minuto; refrescarlo cada segundo repintaba el
+        // DOM 86.400 veces por jornada sin que se notara la diferencia.
+        setInterval(actualizarHora, 30000);
         verificarEstadoHoy();
         cargarArqueos();
         verificarVentasPostCierre();
         verificarArqueosPendientesAnteriores();
+        // El panel "Depósitos declarados pendientes de confirmar" nace oculto y
+        // sólo se mostraba desde dentro de `cargarDepositosPendientes()`, cuyo
+        // único disparador era un botón de refresco que vive DENTRO del propio
+        // panel oculto. Resultado: el supervisor nunca veía los depósitos que
+        // tenía que confirmar desde esta pantalla.
+        if (esSupervisor) cargarDepositosPendientes();
         $('input[name="modoArqueo"]').change(function() { cambiarModoArqueo(); });
         actualizarWorkflow('inicial');
     } catch(e) { console.error('Error al inicializar arqueo:', e); }
@@ -4427,8 +4437,18 @@ async function sincronizarFechaTicketDte(dteId, ticketId, fechaDte, fechaTicket,
 
 // Wire up clicks de filas del Resumen de Caja (delegation sobre el body
 // del modal, así se engancha aunque las filas se reconstruyan).
-$(document).on('click', '#modalResumenCaja .row-detalle', function() {
-    abrirDetalleDesdeFila(this);
+//
+// OJO: jQuery lo carga `layout/footer.html`, que se incluye DESPUÉS de este
+// bloque, así que aquí `$` todavía no existe. Sin `waitForJQuery` esta línea
+// lanzaba `ReferenceError: $ is not defined` y abortaba TODAS las sentencias
+// de nivel superior que venían detrás (las `function` sobreviven por hoisting,
+// por eso la pantalla parecía funcionar). Lo que se perdía en silencio:
+// este handler, el preview de imagen del comprobante y —el más grave— el
+// aviso de diferencia entre lo declarado y lo confirmado al supervisor.
+waitForJQuery(function() {
+    $(document).on('click', '#modalResumenCaja .row-detalle', function() {
+        abrirDetalleDesdeFila(this);
+    });
 });
 
 
@@ -4813,19 +4833,24 @@ function abrirModalDeclararDeposito() {
     $('#modalDeclararDeposito').modal('show');
 }
 
-// Preview de imagen al seleccionar archivo
-$('#imagenComprobanteDeclaracion').on('change', function() {
-    const file = this.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            $('#imgPreviewDeclaracion').attr('src', e.target.result);
-            $('#previewImagenDeclaracion').show();
-        };
-        reader.readAsDataURL(file);
-    } else {
-        $('#previewImagenDeclaracion').hide();
-    }
+// Preview de imagen al seleccionar archivo.
+// Va dentro de `waitForJQuery` por lo mismo que el handler de arriba: jQuery
+// llega con el footer, después de este script. Además se delega en `document`
+// porque el input vive dentro de un modal.
+waitForJQuery(function() {
+    $(document).on('change', '#imagenComprobanteDeclaracion', function() {
+        const file = this.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                $('#imgPreviewDeclaracion').attr('src', e.target.result);
+                $('#previewImagenDeclaracion').show();
+            };
+            reader.readAsDataURL(file);
+        } else {
+            $('#previewImagenDeclaracion').hide();
+        }
+    });
 });
 
 function escaparDepositoHtml(valor) {

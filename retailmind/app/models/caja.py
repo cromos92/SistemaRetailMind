@@ -431,16 +431,43 @@ class ArqueoCaja(models.Model):
         return 'PARCIAL'
 
     @property
+    def revisado(self):
+        """True si el supervisor ya emitió un veredicto sobre este arqueo.
+
+        La fuente de verdad es `resultado_revision`, NO el estado. `REQUIERE_ACCION`
+        deja el estado intacto a propósito (el arqueo sigue en CON_DIFERENCIAS /
+        DEPOSITO_CONFIRMADO hasta que se corrija), así que mirar el estado hacía
+        que un arqueo ya atendido figurara como "nunca revisado" para siempre:
+        `dias_sin_revision` seguía creciendo, el chip escalaba a CRÍTICO con
+        animación de pulso y volvía a pedir revisión todos los días. Ese bucle
+        sin salida es el origen de la sensación de arqueo repetitivo.
+        """
+        return self.estado == 'REVISADO' or self.resultado_revision != 'PENDIENTE'
+
+    @property
     def dias_sin_revision(self):
-        """Días desde el arqueo sin ser revisado"""
-        if self.estado == 'REVISADO':
+        """Días desde el arqueo sin que un supervisor lo haya mirado."""
+        if self.revisado:
             return 0
         return (timezone.localdate() - self.fecha_arqueo).days
 
     @property
     def requiere_revision_urgente(self):
-        """True si el arqueo tiene >3 días sin ser revisado"""
-        return self.dias_sin_revision > 3 and self.estado != 'REVISADO'
+        """True si el arqueo tiene >3 días sin veredicto del supervisor"""
+        return not self.revisado and self.dias_sin_revision > 3
+
+    @property
+    def dias_accion_pendiente(self):
+        """Días que lleva abierta una acción correctiva ya solicitada.
+
+        Se cuenta desde `fecha_revision` (cuándo el supervisor pidió la acción),
+        no desde la fecha del arqueo: mide el tiempo de respuesta de la tienda,
+        que es lo que hay que perseguir. Devuelve 0 si no hay acción pendiente.
+        """
+        if self.resultado_revision != 'REQUIERE_ACCION':
+            return 0
+        origen = self.fecha_revision.date() if self.fecha_revision else self.fecha_arqueo
+        return (timezone.localdate() - origen).days
 
 
 # ========== MODELO PARA DEPÓSITOS BANCARIOS ==========

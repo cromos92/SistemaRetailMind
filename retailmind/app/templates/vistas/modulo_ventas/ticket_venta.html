@@ -639,11 +639,13 @@ div[style*="border: 1px solid #000"] {
    ================================================================ */
 
 /* --- Contenedor principal POS --- */
+/* La barra de totales es sticky (ocupa su lugar en el flujo), así que no
+   necesita colchón debajo: el foco bajo la barra lo cubre scroll-padding-bottom. */
 .pos-container {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    padding-bottom: 90px;
+    padding-bottom: 12px;
 }
 
 /* --- Barra unificada info + accesos rápidos --- */
@@ -1106,9 +1108,11 @@ div[style*="border: 1px solid #000"] {
 /* --- Panel unificado: contenedor de tabla --- */
 .pos-unified-panel .card { width: 100%; }
 
+/* El descuento es todo lo que rodea la tabla: topbar del layout, accesos
+   rápidos, header de entrada, card Cliente colapsada y barra de totales. */
 .pos-table-wrapper {
     overflow-y: auto;
-    max-height: calc(100vh - 300px);
+    max-height: calc(100vh - 390px);
     min-height: 220px;
 }
 
@@ -1192,9 +1196,19 @@ div[style*="border: 1px solid #000"] {
     color: var(--nexo-secondary);
 }
 .pos-total-money {
-    font-size: 1.8rem !important;
-    color: var(--nexo-success) !important;
+    font-size: 1.8rem;
+    font-weight: 900;
+    line-height: 1.1;
+    color: var(--nexo-success);
     letter-spacing: -0.5px;
+    font-variant-numeric: tabular-nums;
+}
+.pos-total-count {
+    font-size: 1.25rem;
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--nexo-secondary);
+    font-variant-numeric: tabular-nums;
 }
 .pos-total-sep {
     color: var(--nexo-gray-300);
@@ -1259,7 +1273,7 @@ div[style*="border: 1px solid #000"] {
     .pos-unified-form .pos-sku-input { height: 34px !important; }
     .pos-unified-actions .pos-add-btn,
     .pos-unified-actions .btn-outline-secondary { height: 34px !important; }
-    .pos-table-wrapper { max-height: calc(100vh - 260px); min-height: 180px; }
+    .pos-table-wrapper { max-height: calc(100vh - 350px); min-height: 180px; }
     .pos-bottom-bar .card-body { padding: 6px 12px !important; }
     .pos-print-btn { height: 46px !important; }
     .pos-reprint-btn { height: 46px !important; font-size: 0.82rem !important; }
@@ -1306,102 +1320,9 @@ div[style*="border: 1px solid #000"] {
     .accesos-strip .btn { font-size: 0.75rem; padding: 0.375rem 0.5rem; }
 }
 
-.acceso-card {
-    position: relative;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 6px 4px;
-    text-align: center;
-    cursor: pointer;
-    background: #fff;
-    transition: all 0.18s ease;
-    min-height: 72px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    user-select: none;
-}
-.acceso-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-    border-color: #0066FF;
-}
-.acceso-card.con-producto {
-    border-color: #cbd5e1;
-    background: linear-gradient(145deg, #f8faff, #fff);
-}
-.acceso-card.con-producto:hover {
-    border-color: #0066FF;
-    background: linear-gradient(145deg, #e6f0ff, #f0f7ff);
-}
-.acceso-card.sin-producto {
-    border: 1.5px dashed #d1d5db;
-    background: #f9fafb;
-    color: #9ca3af;
-}
-.acceso-card.sin-producto:hover {
-    border-color: #6b7280;
-    background: #f3f4f6;
-}
-.acceso-card.en-config {
-    border-color: #f59e0b !important;
-    background: #fffbeb !important;
-}
-.acceso-card.en-config:hover {
-    border-color: #d97706 !important;
-    box-shadow: 0 4px 12px rgba(245,158,11,0.3) !important;
-}
-.acceso-nombre {
-    font-size: 0.68rem;
-    font-weight: 700;
-    line-height: 1.2;
-    color: #1e293b;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    width: 100%;
-    margin-bottom: 2px;
-}
-.acceso-talla {
-    font-size: 0.6rem;
-    background: #e2e8f0;
-    color: #475569;
-    border-radius: 3px;
-    padding: 0 4px;
-    margin-bottom: 2px;
-    display: inline-block;
-}
-.acceso-precio {
-    font-size: 0.7rem;
-    font-weight: 800;
-    color: #0066FF;
-}
-.acceso-num {
-    position: absolute;
-    top: 2px;
-    left: 3px;
-    font-size: 0.55rem;
-    color: #cbd5e1;
-    font-weight: 700;
-}
-.acceso-sin-icon {
-    font-size: 1.3rem;
-    color: #d1d5db;
-    line-height: 1;
-}
-.acceso-config-icon {
-    position: absolute;
-    top: 3px;
-    right: 3px;
-    font-size: 0.75rem;
-    color: #f59e0b;
-    display: none;
-}
-.modo-config-activo .acceso-config-icon { display: block; }
-.modo-config-activo .acceso-card { cursor: cell; }
+/* Los estilos de .acceso-* viven arriba (variante "strip" sobre la barra oscura).
+   Aquí había una copia legacy de tema claro que, por ir después con la misma
+   especificidad, ganaba la cascada y pintaba las tarjetas blancas y de 72px. */
 </style>
 
 <div class="page-content">
@@ -1807,16 +1728,19 @@ div[style*="border: 1px solid #000"] {
                 <div class="pos-bottom-bar card mt-2">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-3 flex-wrap">
+                            <!-- Los inputs ocultos llevan el valor crudo que se envía al
+                                 backend; los spans son lo que lee el cajero. Un input
+                                 type=number no puede mostrar separador de miles. -->
                             <div class="pos-total-item">
                                 <span class="pos-total-label">Items totales</span>
-                                <input type="number" id="totalItems" class="form-control form-control-sm text-center"
-                                       value="0" disabled style="width:70px;font-weight:800;">
+                                <span class="pos-total-count" id="totalItemsVisual">0</span>
+                                <input type="hidden" id="totalItems" value="0">
                             </div>
                             <div class="pos-total-sep">|</div>
                             <div class="pos-total-item flex-grow-1">
                                 <span class="pos-total-label">Total a cobrar</span>
-                                <input type="number" id="totalTicket" class="form-control form-control-sm text-center pos-total-money"
-                                       value="0" disabled style="max-width:240px;font-weight:900;font-size:1.4rem;color:var(--nexo-success);border-color:var(--nexo-success);">
+                                <span class="pos-total-money" id="totalTicketVisual">$0</span>
+                                <input type="hidden" id="totalTicket" value="0">
                             </div>
 
                             <!-- ===== Info del vendedor/sucursal/fecha (sincronizado con topbar) ===== -->
@@ -2305,6 +2229,24 @@ $(document).ready(function() {
 
     // ==================== FUNCIONES DEL TICKET ====================
 
+    // Aviso de éxito para el camino caliente (escanear y agregar). Tiene que ser
+    // toast sí o sí: un Swal centrado tapa la pantalla y toma el foco, y la
+    // pistola de código de barras sigue disparando dígitos mientras está abierto,
+    // así que el siguiente producto se pierde.
+    function posToast(titulo, texto) {
+        Swal.fire({
+            icon: 'success',
+            title: titulo,
+            text: texto,
+            toast: true,
+            position: 'top-end',
+            timer: 1400,
+            timerProgressBar: true,
+            showConfirmButton: false,
+            returnFocus: false
+        });
+    }
+
     // Cambiar vendedor (volver a la selección)
     $('#btnCambiarVendedor').click(function() {
         // Confirmar cambio de vendedor
@@ -2625,14 +2567,8 @@ $(document).ready(function() {
             productoExistente.cantidad += cantidad;
             productoExistente.subtotal = productoExistente.cantidad * productoExistente.precio;
             
-            Swal.fire({
-                icon: 'success',
-                title: 'Cantidad actualizada',
-                text: `Se agregaron ${cantidad} unidades. Total en esta línea: ${productoExistente.cantidad}`,
-                timer: 1500,
-                showConfirmButton: false,
-                returnFocus: false
-            });
+            posToast('Cantidad actualizada',
+                     `+${cantidad} — total en esta línea: ${productoExistente.cantidad}`);
         } else {
             // Verificar si existe el mismo producto con DIFERENTE precio
             const productoMismoPrecio = productosTicket.find(p => p.sku === sku && p.precio !== precio && !p.es_promo_nxm);
@@ -2701,15 +2637,8 @@ $(document).ready(function() {
             oferta_label: oferta ? 'LIQUIDACIÓN' : null,
         };
         productosTicket.push(nuevoProducto);
-        
-        Swal.fire({
-            icon: 'success',
-            title: 'Producto agregado',
-            text: `${articulo} agregado al ticket`,
-            timer: 1500,
-            showConfirmButton: false,
-            returnFocus: false
-        });
+
+        posToast('Producto agregado', `${articulo}${talla && talla !== '—' ? ' — ' + talla : ''}`);
     }
 
     // Validar cantidad en tiempo real
@@ -2955,6 +2884,8 @@ $(document).ready(function() {
 
         $('#totalItems').val(totalItems);
         $('#totalTicket').val(totalTicket);
+        $('#totalItemsVisual').text(totalItems);
+        $('#totalTicketVisual').text('$' + totalTicket.toLocaleString('es-CL'));
         // Actualizar badge de items en las barras de info (topbar + bottom bar)
         $('.js-ticket-items').html(`<i class="ri-shopping-cart-line me-1"></i>${totalItems} item${totalItems !== 1 ? 's' : ''}`);
     }
@@ -3773,7 +3704,7 @@ $(document).ready(function() {
         // Confirmar impresión
         Swal.fire({
             title: '¿Imprimir ticket?',
-            text: `Total: $${$('#totalTicket').val()} - Items: ${$('#totalItems').val()}`,
+            text: `Total: $${(parseInt($('#totalTicket').val(), 10) || 0).toLocaleString('es-CL')} — Items: ${$('#totalItems').val()}`,
             icon: 'question',
             showCancelButton: true,
             confirmButtonText: 'Sí, imprimir',

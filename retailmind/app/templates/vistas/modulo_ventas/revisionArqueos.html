@@ -15,23 +15,15 @@
 </script>
 
 <style>
+    /* Sólo los tokens que NO están en nexo-design-system.css (ya cargado por
+       layout/header.html). Antes este bloque redeclaraba los 16 tokens del
+       design system con valores propios —`--nexo-error` en #FF4757 en vez de
+       #FF4D4D, `--nexo-gray-100` en #F8F9FA en vez de #F5F5F7— y como es un
+       `:root`, el override afectaba a toda la página, no sólo a este módulo.
+       `--nexo-gray-200` se usaba en 2 sitios sin estar definido en ningún lado:
+       el badge quedaba sin fondo y la bitácora sin separadores. */
     :root {
-        --nexo-primary: #0066FF;
-        --nexo-primary-dark: #0052CC;
-        --nexo-primary-light: #E6F0FF;
-        --nexo-secondary: #1A1A2E;
-        --nexo-accent: #00D4AA;
-        --nexo-success: #00D4AA;
-        --nexo-warning: #FFB020;
-        --nexo-error: #FF4757;
-        --nexo-gray-100: #F8F9FA;
-        --nexo-gray-300: #DEE2E6;
-        --nexo-gray-700: #495057;
-        --nexo-gray-900: #212529;
-        --nexo-radius-md: .5rem;
-        --nexo-radius-lg: .75rem;
-        --nexo-shadow-sm: 0 1px 3px rgba(0,0,0,.08);
-        --nexo-shadow-md: 0 4px 12px rgba(0,0,0,.1);
+        --nexo-gray-200: #E9ECEF;
     }
     .nexo-page-header { background: linear-gradient(135deg, var(--nexo-secondary), #2a2a4a); color: #fff; border-radius: var(--nexo-radius-lg); padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }
     .nexo-page-header h4 { margin: 0; font-weight: 700; font-size: 1.15rem; }
@@ -70,22 +62,16 @@
     .deposit-confirm-kpi { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .65rem .75rem; border-radius: var(--nexo-radius-md); background: #fff; border: 1px solid var(--nexo-gray-300); margin-bottom: .6rem; }
     .deposit-confirm-kpi small { display: block; color: var(--nexo-gray-700); font-size: .72rem; }
     .deposit-confirm-kpi strong { display: block; font-family: monospace; font-size: 1rem; }
+    /* Se eliminaron las reglas de `.arqueos-header`, `.kpi-arqueos`,
+       `.kpi-item`, `.arqueos-filters`, `.estado-badge` y `.nav-pills`: ninguna
+       de esas clases existe en este template, era CSS responsive muerto. */
     @media(max-width:768px) {
         .sucursal-pill { font-size: .72rem; padding: .3rem .6rem; }
         .kpi-card .kpi-value { font-size: 1.1rem; }
-        .arqueos-header { flex-direction: column; gap: 0.5rem; }
-        .arqueos-header .form-select, .arqueos-header .form-control { width: 100%; }
-        .kpi-arqueos { flex-direction: column; gap: 0.5rem; }
-        .kpi-arqueos .kpi-item { width: 100%; }
-        .nav-pills { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
-        .nav-pills .nav-link { white-space: nowrap; flex-shrink: 0; }
         .arqueo-row { flex-direction: column; gap: 0.5rem; }
         .deposit-confirm-grid { grid-template-columns: 1fr; }
-    }
-    @media (max-width: 576px) {
-        .kpi-arqueos .kpi-value { font-size: 1.125rem; }
-        .arqueo-row .estado-badge { font-size: 0.688rem; }
-        .arqueos-filters { flex-direction: column; }
+        .filtros-avanzados { flex-direction: column; align-items: stretch !important; }
+        .filtros-avanzados .form-select, .filtros-avanzados .form-control { width: 100% !important; }
     }
     /* ---- Select2 overrides para #modalComprobante ---- */
     #modalComprobante .select2-container { width: 100% !important; }
@@ -147,6 +133,22 @@
     .dp-result-pend { background:rgba(255,176,32,.12); color:#7D4E00; }
     .dp-result-empty{ background:var(--nexo-gray-100); color:var(--nexo-gray-700); }
 
+    /* === BANDEJA DE ALERTAS ACCIONABLES === */
+    .alert-chip { display:inline-flex; align-items:center; gap:.4rem; padding:.35rem .7rem; border-radius:2rem; font-size:.76rem; font-weight:700; border:1px solid transparent; cursor:pointer; transition:all .15s; }
+    .alert-chip:hover { transform:translateY(-1px); box-shadow:var(--nexo-shadow-sm); }
+    .alert-chip .chip-count { font-family:monospace; font-size:.82rem; padding:0 .35rem; border-radius:1rem; background:rgba(255,255,255,.65); }
+    .alert-chip.nivel-error   { background:rgba(255,77,77,.12);  color:#C0392B; border-color:rgba(255,77,77,.35); }
+    .alert-chip.nivel-warning { background:rgba(255,176,32,.14); color:#7D4E00; border-color:rgba(255,176,32,.4); }
+    .alert-chip.nivel-info    { background:rgba(0,102,255,.09);  color:var(--nexo-primary); border-color:rgba(0,102,255,.28); }
+    .alert-chip.activo { outline:2px solid currentColor; outline-offset:1px; }
+
+    /* === SELECCIÓN EN LOTE === */
+    .bulk-bar { position:sticky; top:70px; z-index:20; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;
+                padding:.6rem 1rem; border-radius:var(--nexo-radius-md); background:var(--nexo-secondary); color:#fff; box-shadow:var(--nexo-shadow-md); margin-bottom:.6rem; }
+    .bulk-bar strong { font-family:monospace; }
+    .arqueo-check { width:18px; height:18px; cursor:pointer; accent-color:var(--nexo-primary); }
+    .arqueo-row.seleccionado { background:rgba(0,102,255,.05) !important; }
+
     /* === SECCIÓN CONTEO === */
     .conteo-section-label { font-size:.6rem; color:var(--nexo-gray-700); text-transform:uppercase; letter-spacing:.04em; }
     .conteo-expl { font-size:.62rem; color:var(--nexo-gray-700); margin-top:.15rem; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -187,89 +189,58 @@
         </div>
     </div>
 
-    <!-- ===== KPIs =====
-         OJO: el backend (`listar_arqueos`) calcula estos indicadores SIEMPRE
-         sobre el MES EN CURSO, no sobre el rango de fechas del filtro. La
-         tabla de abajo sí respeta el filtro. Se rotula explícitamente para
-         que nadie lea "Cumplimiento 80%" creyendo que es del período
-         filtrado. -->
-    <div class="d-flex align-items-center gap-2 mb-1">
-        <span class="badge" style="background:var(--nexo-gray-200);color:var(--nexo-gray-700);font-weight:700;">
-            <i class="ri-calendar-check-line me-1"></i>Indicadores del mes en curso
-        </span>
-        <small class="text-muted" style="font-size:.72rem;">No dependen del rango de fechas del filtro; la tabla de abajo sí.</small>
-    </div>
+    <!-- ===== BANDEJA DE ALERTAS ACCIONABLES =====
+         Reemplaza al muro de 9 KPIs. Cada chip es una cola de trabajo con su
+         filtro: un click deja en la tabla exactamente esos arqueos. Los chips
+         con count 0 no se pintan, así que la barra queda vacía cuando no hay
+         nada que hacer — que es la señal más útil de todas. -->
+    <div id="barraAlertas" class="d-flex flex-wrap align-items-center gap-2 mb-3"></div>
+
+    <!-- ===== KPIs DEL PERÍODO CONSULTADO =====
+         Todos responden al rango de fechas y a las sucursales seleccionadas.
+         Antes 8 de las 9 tarjetas se calculaban siempre sobre el mes en curso
+         mientras la tabla respetaba el filtro, y el template lo tapaba con un
+         cartel que decía "no dependen del rango". -->
     <div class="row g-2 mb-3" id="panelKpis">
-        <div class="col-6 col-md-3 col-lg">
-            <div class="kpi-card">
-                <div class="kpi-value" id="kpiDiasHabiles" style="color:var(--nexo-primary);">0</div>
-                <div class="kpi-label">Días Hábiles</div>
+        <div class="col-6 col-lg-3">
+            <div class="kpi-card" id="cardExposicion"
+                 title="Faltantes y sobrantes sumados en valor absoluto: no se compensan entre sí. Es la plata que estuvo descuadrada en el período.">
+                <div class="kpi-value" id="kpiExposicion" style="color:var(--nexo-error);">$0</div>
+                <div class="kpi-label">Exposición en efectivo <i class="ri-information-line"></i></div>
+                <div id="kpiExposicionDetalle" style="font-size:.68rem;color:var(--nexo-gray-500);margin-top:.2rem;">&nbsp;</div>
             </div>
         </div>
-        <div class="col-6 col-md-3 col-lg">
-            <div class="kpi-card">
-                <div class="kpi-value" id="kpiRealizados" style="color:var(--nexo-success);">0</div>
-                <div class="kpi-label">Completados</div>
+        <div class="col-6 col-lg-3">
+            <div class="kpi-card" title="Arqueos que aún esperan veredicto del supervisor.">
+                <div class="kpi-value" id="kpiPendRevision" style="color:var(--nexo-warning);">0</div>
+                <div class="kpi-label">Por revisar</div>
+                <div id="kpiPendDetalle" style="font-size:.68rem;color:var(--nexo-gray-500);margin-top:.2rem;">&nbsp;</div>
             </div>
         </div>
-        <div class="col-6 col-md-3 col-lg">
-            <div class="kpi-card">
-                <div class="kpi-value" id="kpiFaltantes" style="color:var(--nexo-error);">0</div>
-                <div class="kpi-label">Sin Arqueo</div>
-            </div>
-        </div>
-        <div class="col-6 col-md-3 col-lg">
-            <div class="kpi-card">
-                <div class="kpi-value" id="kpiDiferencias" style="color:var(--nexo-warning);">0</div>
-                <div class="kpi-label">Con Diferencias</div>
-            </div>
-        </div>
-        <div class="col-6 col-md-3 col-lg">
-            <div class="kpi-card">
+        <div class="col-6 col-lg-3">
+            <div class="kpi-card" title="Días con venta que tienen su arqueo hecho. El denominador son los días con venta real, no los días de calendario.">
                 <div class="kpi-value" id="kpiCumplimiento" style="color:var(--nexo-primary);">0%</div>
-                <div class="kpi-label">Cumplimiento</div>
+                <div class="kpi-label">Cobertura de arqueo</div>
+                <div id="kpiCumplimientoDetalle" style="font-size:.68rem;color:var(--nexo-gray-500);margin-top:.2rem;">&nbsp;</div>
             </div>
         </div>
-        <div class="col-6 col-md-3 col-lg">
-            <div class="kpi-card" title="Arqueos del rango filtrado cuyo efectivo contado coincide EXACTO con el teórico. Sobre 80% es la señal que el propio módulo de análisis de riesgo marca como copia del teórico en vez de conteo real.">
-                <div class="kpi-value" id="kpiExactos" style="color:var(--nexo-gray-700);">0%</div>
+        <div class="col-6 col-lg-3">
+            <div class="kpi-card" title="Arqueos cuyo efectivo contado coincide EXACTO con el teórico. Sobre 80% el módulo de riesgo lo marca como copia del teórico en vez de conteo real.">
+                <div class="kpi-value" id="kpiExactos" style="color:var(--nexo-gray-700);">—</div>
                 <div class="kpi-label">Cuadran al peso <i class="ri-information-line"></i></div>
-            </div>
-        </div>
-        <div class="col-6 col-md-3 col-lg">
-            <div class="kpi-card">
-                <div class="kpi-value" id="kpiRevisados" style="color:#6C63FF;">0%</div>
-                <div class="kpi-label">Revisados</div>
-            </div>
-        </div>
-        <div class="col-6 col-md-3 col-lg">
-            <div class="kpi-card">
-                <div class="kpi-value" id="kpiDepPend" style="color:var(--nexo-warning);">0</div>
-                <div class="kpi-label">Dep. Pendientes</div>
-            </div>
-        </div>
-        <div class="col-6 col-md-3 col-lg">
-            <div class="kpi-card">
-                <div class="kpi-value" id="kpiDifDepositos" style="color:var(--nexo-success);">$0</div>
-                <div class="kpi-label">Dif. Depósitos Mes</div>
+                <div id="kpiExactosDetalle" style="font-size:.68rem;color:var(--nexo-gray-500);margin-top:.2rem;">&nbsp;</div>
             </div>
         </div>
     </div>
 
     <!-- ===== FILTROS + ACCIONES ===== -->
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
         <div class="d-flex flex-wrap gap-1" id="filtrosTabs">
-            <span class="filtro-tab active" data-estado="" onclick="filtrarEstado(this)">Todos</span>
-            <span class="filtro-tab" data-estado="CON_DIFERENCIAS" onclick="filtrarEstado(this)">Con Diferencias</span>
-            <span class="filtro-tab" data-estado="CERRADO" onclick="filtrarEstado(this)">Cerrados</span>
-            <span class="filtro-tab" data-estado="DEPOSITO_DECLARADO" onclick="filtrarEstado(this)">Dep. Declarados</span>
-            <span class="filtro-tab" data-estado="DEPOSITO_CONFIRMADO" onclick="filtrarEstado(this)">Dep. Confirmados</span>
-            <span class="filtro-tab" data-estado="ABIERTO" onclick="filtrarEstado(this)">Abiertos</span>
-            <span class="filtro-tab" data-estado="REVISADO" onclick="filtrarEstado(this)">Revisados</span>
-            <span style="border-left:1px solid var(--nexo-gray-300);margin:0 4px;"></span>
-            <span class="filtro-tab" data-estado="" data-revision="REQUIERE_ACCION" onclick="filtrarResultado(this)" style="border-color:var(--nexo-error);color:var(--nexo-error);">Req. Acción</span>
-            <span class="filtro-tab" data-estado="" data-revision="OK_CON_OBS" onclick="filtrarResultado(this)" style="border-color:#6C63FF;color:#6C63FF;">OK c/Obs</span>
-            <span class="filtro-tab" data-estado="" data-revision="PENDIENTE" onclick="filtrarResultado(this)">Pend. Revisión</span>
+            <span class="filtro-tab active" data-estado="" data-revision="" onclick="aplicarTab(this)">Todos</span>
+            <span class="filtro-tab" data-estado="" data-revision="PENDIENTE" onclick="aplicarTab(this)">Por revisar</span>
+            <span class="filtro-tab" data-estado="" data-revision="REQUIERE_ACCION" onclick="aplicarTab(this)" style="border-color:var(--nexo-error);color:var(--nexo-error);">Req. Acción</span>
+            <span class="filtro-tab" data-estado="ABIERTO" data-revision="" onclick="aplicarTab(this)">Sin cerrar</span>
+            <span class="filtro-tab" data-estado="" data-revision="OK,OK_CON_OBS" onclick="aplicarTab(this)">Ya revisados</span>
         </div>
         <div class="d-flex gap-2">
             <button class="btn btn-sm btn-outline-success" onclick="abrirDepositoMultidia()">
@@ -280,6 +251,66 @@
             </button>
             <button class="btn btn-sm btn-outline-danger" onclick="verAnalisisFraude()" title="Análisis de riesgo por cajero">
                 <i class="ri-shield-star-line me-1"></i>Análisis Riesgo
+            </button>
+        </div>
+    </div>
+
+    <!-- ===== FILTROS AVANZADOS (todos server-side) =====
+         `resultado_revision` se filtraba en JavaScript sobre las 100 filas ya
+         descargadas: "Requiere acción" sólo encontraba los que hubieran caído
+         en la primera página. Ahora todo viaja al backend. -->
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3 filtros-avanzados">
+        <select class="form-select form-select-sm" id="filtroTipoDif" style="width:150px;" onchange="cargarDatos()">
+            <option value="">Cuadre: todos</option>
+            <option value="FALTANTE">Sólo faltantes</option>
+            <option value="SOBRANTE">Sólo sobrantes</option>
+            <option value="EXACTO">Sólo los que cuadran</option>
+        </select>
+        <select class="form-select form-select-sm" id="filtroMinDif" style="width:165px;" onchange="cargarDatos()">
+            <option value="0">Diferencia: cualquiera</option>
+            <option value="1000">Mayor a $1.000</option>
+            <option value="5000">Mayor a $5.000</option>
+            <option value="20000">Mayor a $20.000</option>
+        </select>
+        <select class="form-select form-select-sm" id="filtroDias" style="width:170px;" onchange="cargarDatos()">
+            <option value="0">Antigüedad: cualquiera</option>
+            <option value="3">Sin revisar +3 días</option>
+            <option value="7">Sin revisar +7 días</option>
+            <option value="15">Sin revisar +15 días</option>
+        </select>
+        <select class="form-select form-select-sm" id="filtroOrden" style="width:160px;" onchange="cargarDatos()">
+            <option value="fecha">Más recientes</option>
+            <option value="fecha_asc">Más antiguos</option>
+            <option value="diferencia">Mayor faltante</option>
+            <option value="sucursal">Por sucursal</option>
+        </select>
+        <div class="form-check form-check-inline ms-1">
+            <input class="form-check-input" type="checkbox" id="filtroExpress" onchange="cargarDatos()">
+            <label class="form-check-label" for="filtroExpress" style="font-size:.78rem;">Conteo express</label>
+        </div>
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" id="filtroDepPend" onchange="cargarDatos()">
+            <label class="form-check-label" for="filtroDepPend" style="font-size:.78rem;">Depósito pendiente</label>
+        </div>
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" id="filtroSinExpl" onchange="cargarDatos()">
+            <label class="form-check-label" for="filtroSinExpl" style="font-size:.78rem;">Sin explicación</label>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary" onclick="limpiarFiltros()" style="font-size:.76rem;">
+            <i class="ri-filter-off-line me-1"></i>Limpiar
+        </button>
+    </div>
+
+    <!-- ===== BARRA DE SELECCIÓN EN LOTE ===== -->
+    <div id="bulkBar" class="bulk-bar" style="display:none;">
+        <div class="d-flex align-items-center gap-3">
+            <span><strong id="bulkCount">0</strong> arqueo(s) seleccionados</span>
+            <button class="btn btn-sm btn-outline-light py-0" onclick="limpiarSeleccion()" style="font-size:.75rem;">Deseleccionar</button>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <small style="opacity:.7;font-size:.72rem;">Sólo se aprueban los que cuadran y no tienen depósitos pendientes</small>
+            <button class="btn btn-sm btn-success" onclick="aprobarSeleccionados()">
+                <i class="ri-check-double-line me-1"></i>Aprobar seleccionados
             </button>
         </div>
     </div>
@@ -310,6 +341,22 @@
         <div class="text-center py-5">
             <div class="spinner-border text-primary" role="status"></div>
             <p class="mt-2 text-muted">Cargando arqueos...</p>
+        </div>
+    </div>
+
+    <!-- ===== PAGINACIÓN =====
+         El backend siempre devolvió `pagination`, pero el frontend pedía
+         `per_page=100` y nunca la leía: con más de 100 arqueos en el rango el
+         resto desaparecía sin ningún aviso. -->
+    <div id="paginacionArqueos" class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3" style="display:none !important;">
+        <small class="text-muted" id="paginacionInfo"></small>
+        <div class="d-flex gap-1">
+            <button class="btn btn-sm btn-outline-secondary" id="btnPagPrev" onclick="irPagina(paginaActual-1)">
+                <i class="ri-arrow-left-s-line"></i> Anterior
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="btnPagNext" onclick="irPagina(paginaActual+1)">
+                Siguiente <i class="ri-arrow-right-s-line"></i>
+            </button>
         </div>
     </div>
 
@@ -618,6 +665,13 @@ let sucursalActualId = {{ sucursal_actual.id }};
 let estadoFiltro = '';
 let resultadoFiltro = '';
 let arqueoDetalleId = null;
+let paginaActual = 1;
+let totalPaginas = 1;
+let alertaActiva = '';
+// Ids seleccionados para aprobación en lote. Se guarda en un Set para que la
+// selección sobreviva a los re-render de la tabla.
+let seleccionados = new Set();
+let arqueosCargados = [];
 
 function getCookie(name) {
     let v = null; document.cookie.split(';').forEach(c => { c = c.trim(); if (c.startsWith(name + '=')) v = decodeURIComponent(c.substring(name.length + 1)); }); return v;
@@ -658,6 +712,17 @@ function cargarSucursales() {
             if (!data.sucursales) return;
             const container = document.getElementById('sucursalSelector');
             container.innerHTML = '';
+            // Vista consolidada: el endpoint sólo aceptaba una sucursal, así
+            // que un supervisor con 13 tiendas tenía que entrar 13 veces y
+            // sumar de cabeza. Ahora "Todas" es una sola consulta.
+            if (data.sucursales.length > 1) {
+                const todas = document.createElement('span');
+                todas.className = 'sucursal-pill';
+                todas.dataset.id = 'all';
+                todas.textContent = 'Todas';
+                todas.onclick = function() { cambiarSucursal('all', this); };
+                container.appendChild(todas);
+            }
             data.sucursales.forEach(s => {
                 const pill = document.createElement('span');
                 pill.className = 'sucursal-pill' + (s.sucursal_id === sucursalActualId ? ' active' : '');
@@ -672,70 +737,167 @@ function cargarSucursales() {
 
 function cambiarSucursal(id, el) {
     sucursalActualId = id;
+    paginaActual = 1;
+    limpiarSeleccion();
     document.querySelectorAll('.sucursal-pill').forEach(p => p.classList.remove('active'));
     el.classList.add('active');
     cargarDatos();
 }
 
 // ===== CARGAR DATOS =====
-function cargarDatos() {
-    const desde = document.getElementById('fechaDesde').value;
-    const hasta = document.getElementById('fechaHasta').value;
-
+function construirParams() {
     const params = new URLSearchParams({
-        fecha_desde: desde, fecha_hasta: hasta, per_page: 100
+        fecha_desde: document.getElementById('fechaDesde').value,
+        fecha_hasta: document.getElementById('fechaHasta').value,
+        per_page: 50,
+        page: paginaActual,
+        sucursal_id: sucursalActualId,
+        orden: document.getElementById('filtroOrden').value
     });
     if (estadoFiltro) params.append('estado', estadoFiltro);
-    params.append('sucursal_id', sucursalActualId);
+    if (resultadoFiltro) params.append('resultado', resultadoFiltro);
+    const tipoDif = document.getElementById('filtroTipoDif').value;
+    if (tipoDif) params.append('tipo_dif', tipoDif);
+    const minDif = document.getElementById('filtroMinDif').value;
+    if (minDif && minDif !== '0') params.append('min_dif', minDif);
+    const dias = document.getElementById('filtroDias').value;
+    if (dias && dias !== '0') params.append('dias_min', dias);
+    if (document.getElementById('filtroExpress').checked) params.append('solo_express', 1);
+    if (document.getElementById('filtroDepPend').checked) params.append('solo_dep_pendiente', 1);
+    if (document.getElementById('filtroSinExpl').checked) params.append('solo_sin_explicacion', 1);
+    if (alertaActiva === 'ACCION') params.append('solo_accion', 1);
+    return params;
+}
 
-    fetch('/app/api/arqueos/?' + params)
+function cargarDatos() {
+    const cont = document.getElementById('listaArqueos');
+    cont.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Cargando arqueos...</p></div>';
+
+    fetch('/app/api/arqueos/?' + construirParams())
         .then(r => r.json())
         .then(data => {
-            if (!data.success) return;
-            renderKpis(data.indicadores_mensuales || {});
-            renderExactos(data.arqueos || []);
-            renderArqueos(data.arqueos || []);
+            if (!data.success) {
+                cont.innerHTML = '<div class="alert alert-danger">' + escHtml(data.error || 'No se pudieron cargar los arqueos') + '</div>';
+                return;
+            }
+            arqueosCargados = data.arqueos || [];
+            renderKpis(data.indicadores || {});
+            renderAlertas(data.indicadores || {});
+            renderArqueos(arqueosCargados);
+            renderPaginacion(data.pagination || {});
+        })
+        // Sin `.catch` el spinner giraba para siempre ante cualquier fallo de
+        // red, sin decir nada.
+        .catch(() => {
+            cont.innerHTML = '<div class="alert alert-danger">Error de conexión al cargar los arqueos.</div>';
         });
 
     cargarDepositosPend();
 }
 
-// Porcentaje de arqueos del rango filtrado que cuadran EXACTO ($0 de
-// diferencia). Se calcula en el cliente con los datos que ya vienen en la
-// respuesta (no requiere endpoint nuevo). Es el mismo indicador que usa
-// `AnalisisFraudeCaja._porcentaje_exactos`, cuyo umbral de alerta es 80%:
-// por encima de eso lo habitual es que se esté tipeando el teórico en vez
-// de contar la caja.
-function renderExactos(arqueos) {
-    const el = document.getElementById('kpiExactos');
-    if (!el) return;
-    const cerrados = arqueos.filter(a => a.estado !== 'ABIERTO');
-    if (!cerrados.length) {
-        el.textContent = '-';
-        el.style.color = 'var(--nexo-gray-700)';
-        el.parentElement.title = 'Sin arqueos cerrados en el rango filtrado.';
-        return;
-    }
-    const exactos = cerrados.filter(a => (parseInt(a.diferencia_efectivo || 0) === 0)).length;
-    const pct = Math.round(exactos / cerrados.length * 1000) / 10;
-    el.textContent = pct.toFixed(0) + '%';
-    el.style.color = pct > 80 ? 'var(--nexo-error)' : 'var(--nexo-gray-700)';
-    el.parentElement.title = exactos + ' de ' + cerrados.length + ' arqueos cerrados del rango cuadran exacto ($0). '
-        + (pct > 80 ? 'Sobre 80% el módulo de riesgo lo marca como posible copia del teórico.' : '');
+function limpiarFiltros() {
+    ['filtroTipoDif','filtroMinDif','filtroDias'].forEach(id => document.getElementById(id).value = document.getElementById(id).options[0].value);
+    document.getElementById('filtroOrden').value = 'fecha';
+    ['filtroExpress','filtroDepPend','filtroSinExpl'].forEach(id => document.getElementById(id).checked = false);
+    estadoFiltro = ''; resultadoFiltro = ''; alertaActiva = ''; paginaActual = 1;
+    document.querySelectorAll('.filtro-tab').forEach(t => t.classList.remove('active'));
+    const primero = document.querySelector('.filtro-tab');
+    if (primero) primero.classList.add('active');
+    cargarDatos();
 }
 
+// ===== KPIs DEL PERÍODO =====
 function renderKpis(ind) {
-    document.getElementById('kpiDiasHabiles').textContent = ind.dias_habiles || 0;
-    document.getElementById('kpiRealizados').textContent = ind.arqueos_realizados || 0;
-    document.getElementById('kpiFaltantes').textContent = ind.arqueos_faltantes || 0;
-    document.getElementById('kpiDiferencias').textContent = ind.arqueos_con_diferencias || 0;
-    document.getElementById('kpiCumplimiento').textContent = (ind.porcentaje_cumplimiento || 0).toFixed(0) + '%';
-    document.getElementById('kpiRevisados').textContent = (ind.porcentaje_revisados || 0).toFixed(0) + '%';
-    document.getElementById('kpiDepPend').textContent = ind.depositos_pendientes_confirmacion || 0;
-    const difDep = ind.diferencia_depositos_mes || 0;
-    const kpiDifDep = document.getElementById('kpiDifDepositos');
-    kpiDifDep.textContent = (difDep >= 0 ? '' : '-') + fmt(Math.abs(difDep));
-    kpiDifDep.style.color = difDep >= 0 ? 'var(--nexo-success)' : 'var(--nexo-error)';
+    const exp = ind.exposicion_efectivo || 0;
+    document.getElementById('kpiExposicion').textContent = fmt(exp);
+    document.getElementById('kpiExposicion').style.color = exp > 0 ? 'var(--nexo-error)' : 'var(--nexo-success)';
+    document.getElementById('kpiExposicionDetalle').textContent =
+        (ind.n_faltante || 0) + ' faltante(s) ' + fmt(Math.abs(ind.faltante_total || 0)) +
+        ' · ' + (ind.n_sobrante || 0) + ' sobrante(s) ' + fmt(ind.sobrante_total || 0);
+
+    document.getElementById('kpiPendRevision').textContent = ind.n_pend_revision || 0;
+    document.getElementById('kpiPendDetalle').textContent =
+        (ind.n_atrasados || 0) + ' con más de 3 días · ' + (ind.n_requiere_accion || 0) + ' req. acción';
+
+    const cumpl = (ind.cumplimiento_pct !== undefined) ? ind.cumplimiento_pct : null;
+    document.getElementById('kpiCumplimiento').textContent =
+        (cumpl !== null ? cumpl : (ind.total_arqueos ? 100 : 0)).toFixed(0) + '%';
+    document.getElementById('kpiCumplimientoDetalle').textContent =
+        (ind.total_arqueos || 0) + ' arqueos' +
+        (ind.multi_sucursal ? ' · ' + (ind.sucursales_consultadas || 0) + ' sucursales' : '');
+
+    const elEx = document.getElementById('kpiExactos');
+    if (ind.n_cerrados) {
+        const pct = ind.pct_exacto || 0;
+        elEx.textContent = pct.toFixed(0) + '%';
+        elEx.style.color = pct > 80 ? 'var(--nexo-error)' : 'var(--nexo-gray-700)';
+        document.getElementById('kpiExactosDetalle').textContent =
+            (ind.n_exacto || 0) + ' de ' + ind.n_cerrados + (pct > 80 ? ' — posible copia del teórico' : '');
+    } else {
+        elEx.textContent = '—';
+        elEx.style.color = 'var(--nexo-gray-700)';
+        document.getElementById('kpiExactosDetalle').textContent = 'Sin arqueos cerrados';
+    }
+}
+
+// ===== BANDEJA DE ALERTAS =====
+function renderAlertas(ind) {
+    const cont = document.getElementById('barraAlertas');
+    const alertas = ind.alertas || [];
+    if (!alertas.length) {
+        cont.innerHTML = '<span class="badge" style="background:rgba(0,212,170,.12);color:var(--nexo-success);font-weight:700;padding:.45rem .8rem;">' +
+            '<i class="ri-check-double-line me-1"></i>Sin pendientes en el período consultado</span>';
+        return;
+    }
+    cont.innerHTML = alertas.map(a =>
+        '<span class="alert-chip nivel-' + escHtml(a.nivel) + (alertaActiva === a.codigo ? ' activo' : '') +
+        '" onclick="aplicarAlerta(' + JSON.stringify(a.codigo).replace(/"/g, '&quot;') + ')">' +
+        '<span class="chip-count">' + fmtN(a.count) + '</span>' + escHtml(a.label) + '</span>'
+    ).join('');
+}
+
+function aplicarAlerta(codigo) {
+    // Segundo click sobre la misma alerta la desactiva.
+    if (alertaActiva === codigo) { limpiarFiltros(); return; }
+    limpiarFiltros_silencioso();
+    alertaActiva = codigo;
+    paginaActual = 1;
+    if (codigo === 'ABIERTOS') estadoFiltro = 'ABIERTO';
+    else if (codigo === 'ATRASADOS') document.getElementById('filtroDias').value = '3';
+    else if (codigo === 'ACCION') resultadoFiltro = 'REQUIERE_ACCION';
+    else if (codigo === 'DEP_PEND') document.getElementById('filtroDepPend').checked = true;
+    else if (codigo === 'SIN_EXPL') document.getElementById('filtroSinExpl').checked = true;
+    else if (codigo === 'EXPRESS') document.getElementById('filtroExpress').checked = true;
+    cargarDatos();
+}
+
+function limpiarFiltros_silencioso() {
+    ['filtroTipoDif','filtroMinDif','filtroDias'].forEach(id => document.getElementById(id).value = document.getElementById(id).options[0].value);
+    ['filtroExpress','filtroDepPend','filtroSinExpl'].forEach(id => document.getElementById(id).checked = false);
+    estadoFiltro = ''; resultadoFiltro = ''; alertaActiva = '';
+    document.querySelectorAll('.filtro-tab').forEach(t => t.classList.remove('active'));
+}
+
+// ===== PAGINACIÓN =====
+function renderPaginacion(p) {
+    const cont = document.getElementById('paginacionArqueos');
+    paginaActual = p.current_page || 1;
+    totalPaginas = p.total_pages || 1;
+    if ((p.total_items || 0) === 0) { cont.style.setProperty('display', 'none', 'important'); return; }
+    cont.style.setProperty('display', 'flex', 'important');
+    const desde = ((paginaActual - 1) * (p.per_page || 50)) + 1;
+    const hasta = Math.min(paginaActual * (p.per_page || 50), p.total_items);
+    document.getElementById('paginacionInfo').textContent =
+        'Mostrando ' + desde + '–' + hasta + ' de ' + fmtN(p.total_items) + ' arqueos · página ' + paginaActual + ' de ' + totalPaginas;
+    document.getElementById('btnPagPrev').disabled = !p.has_previous;
+    document.getElementById('btnPagNext').disabled = !p.has_next;
+}
+
+function irPagina(n) {
+    if (n < 1 || n > totalPaginas) return;
+    paginaActual = n;
+    cargarDatos();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function miniStepperHtml(estado) {
@@ -770,8 +932,14 @@ function estadoBadgeColor(estado) {
 }
 
 // ===== HELPERS DE RENDERING =====
+// Un arqueo ya revisado NO vuelve a escalar. Antes sólo `OK`+`REVISADO`
+// contaba como resuelto: un `OK_CON_OBS` caía a la rama final y mostraba el
+// chip azul "● NUEVO" tres semanas después de cerrarse, y un `REQUIERE_ACCION`
+// (que a propósito no cambia el estado) quedaba en CRÍTICO parpadeante para
+// siempre, sin ninguna acción en la UI capaz de apagarlo.
 function getUrgencyLevel(a) {
-    if (a.resultado_revision === 'OK' && a.estado === 'REVISADO') return 'OK';
+    if (a.resultado_revision === 'REQUIERE_ACCION') return 'ACCION';
+    if (a.revisado) return 'OK';
     const dias = a.dias_sin_revision || 0;
     if (dias > 7) return 'CRITICO';
     if (dias > 3 || a.requiere_revision_urgente) return 'URGENTE';
@@ -816,7 +984,11 @@ function renderDepositoPipeline(a) {
 function renderConteoSection(a) {
     const diffEf    = a.diferencia_efectivo || 0;
     const diffTbk   = a.diferencia_transbank || 0;
-    const diffColor = diffEf === 0 ? 'var(--nexo-success)' : 'var(--nexo-error)';
+    // Se colorea por el veredicto del backend (tolerancia única), no por
+    // `=== 0`: antes una diferencia de $1 se pintaba en rojo igual que una de
+    // $80.000, así que la pantalla estaba permanentemente en rojo y el color
+    // dejaba de señalar nada.
+    const diffColor = a.veredicto === 'CUADRA' ? 'var(--nexo-success)' : 'var(--nexo-error)';
     const diffSign  = diffEf > 0 ? '+' : '';
 
     let explHtml = '';
@@ -832,7 +1004,7 @@ function renderConteoSection(a) {
         explHtml += `<div class="conteo-expl" style="color:var(--nexo-primary);" title="Sup: ${(a.observaciones_supervisor||'').replace(/"/g,'&quot;')}"><i class="ri-shield-check-line"></i> ${escHtml((a.observaciones_supervisor||'').substring(0,40))}</div>`;
     }
 
-    const contextoHtml = (diffEf !== 0 && a.estado_deposito === 'COMPLETO')
+    const contextoHtml = (a.veredicto !== 'CUADRA' && a.estado_deposito === 'COMPLETO')
         ? `<div class="conteo-ok-context"><i class="ri-bank-line"></i> Dep. cuadra ✓</div>`
         : '';
 
@@ -846,20 +1018,18 @@ function renderConteoSection(a) {
 function renderArqueos(arqueos) {
     const container = document.getElementById('listaArqueos');
 
-    // Client-side filter by resultado_revision when set
-    let filtered = arqueos;
-    if (resultadoFiltro) {
-        filtered = arqueos.filter(function(a) {
-            return (a.resultado_revision || 'PENDIENTE') === resultadoFiltro;
-        });
-    }
+    // El filtro por `resultado_revision` se hacía aquí, en el cliente, sobre
+    // las filas ya descargadas. Ahora viaja al backend (`construirParams`), así
+    // que la cola de "Requiere acción" ya no se corta en la primera página.
+    const filtered = arqueos;
 
     if (filtered.length === 0) {
-        container.innerHTML = '<div class="text-center py-5"><i class="ri-folder-open-line" style="font-size:3rem;color:var(--nexo-gray-300);"></i><p class="text-muted mt-2">No hay arqueos en el periodo seleccionado</p></div>';
+        container.innerHTML = '<div class="text-center py-5"><i class="ri-folder-open-line" style="font-size:3rem;color:var(--nexo-gray-300);"></i><p class="text-muted mt-2">No hay arqueos que cumplan el filtro</p></div>';
+        actualizarBulkBar();
         return;
     }
 
-    const urgLabels = { 'CRITICO': '⚑ CRÍTICO', 'URGENTE': '⚠ URGENTE', 'ATENCION': '↺ ATENCIÓN', 'NUEVO': '● NUEVO', 'OK': '✓ OK' };
+    const urgLabels = { 'CRITICO': '⚑ CRÍTICO', 'URGENTE': '⚠ URGENTE', 'ATENCION': '↺ ATENCIÓN', 'NUEVO': '● NUEVO', 'OK': '✓ OK', 'ACCION': '⚡ ACCIÓN PENDIENTE' };
     let html = '';
     filtered.forEach(a => {
         const urgLevel = getUrgencyLevel(a);
@@ -891,15 +1061,31 @@ function renderArqueos(arqueos) {
             actionBtns += `<div class="btn-group btn-group-sm"><button class="btn btn-success btn-sm" onclick="aprobarArqueoDirecto(${a.id},'OK')" title="Aprobar OK"><i class="ri-check-line"></i></button><button class="btn btn-success btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown"></button><ul class="dropdown-menu dropdown-menu-end"><li><a class="dropdown-item" href="#" onclick="aprobarArqueoDirecto(${a.id},'OK');return false;"><i class="ri-check-line me-2 text-success"></i>Aprobar OK</a></li><li><a class="dropdown-item" href="#" onclick="aprobarArqueoDirecto(${a.id},'OK_CON_OBS');return false;"><i class="ri-message-3-line me-2 text-primary"></i>OK con Observaciones</a></li><li><a class="dropdown-item" href="#" onclick="aprobarArqueoDirecto(${a.id},'REQUIERE_ACCION');return false;"><i class="ri-alarm-warning-line me-2 text-danger"></i>Requiere Acción</a></li></ul></div>`;
         }
 
-        html += `<div class="arqueo-row ${estadoClass} urg-${urgLevel}">
+        // Sólo se ofrece checkbox donde la aprobación en lote es legítima:
+        // el backend vuelve a validarlo, esto es únicamente la señal visual.
+        const chk = a.aprobable_en_lote
+            ? `<input type="checkbox" class="arqueo-check me-2" data-id="${a.id}" ${seleccionados.has(a.id) ? 'checked' : ''} onchange="toggleSeleccion(${a.id}, this)" title="Seleccionar para aprobar en lote">`
+            : '<span class="me-2" style="display:inline-block;width:18px;"></span>';
+
+        const sucursalHtml = a.sucursal_alias
+            ? `<div style="font-size:.68rem;color:var(--nexo-primary);font-weight:700;">${escHtml(a.sucursal_alias)}</div>`
+            : '';
+
+        html += `<div class="arqueo-row ${estadoClass} urg-${urgLevel}${seleccionados.has(a.id) ? ' seleccionado' : ''}" id="fila-arqueo-${a.id}">
             <div class="row align-items-center g-2">
                 <div class="col-12 col-md-2">
                     ${urgChipHtml}
-                    <strong style="font-size:.9rem;">${fechaDisplay}</strong>
-                    <div style="font-size:.72rem;color:var(--nexo-gray-700);">${escHtml(a.usuario_responsable)}</div>
+                    <div class="d-flex align-items-start">
+                        ${chk}
+                        <div>
+                            <strong style="font-size:.9rem;">${fechaDisplay}</strong>
+                            ${sucursalHtml}
+                            <div style="font-size:.72rem;color:var(--nexo-gray-700);">${escHtml(a.usuario_responsable)}</div>
+                        </div>
+                    </div>
                     ${fondoFijo}
                     <div class="d-flex flex-wrap align-items-center gap-1 mt-1">
-                        <span class="badge" style="font-size:.65rem;background:${bgBadge};color:${colorBadge};">${a.estado_display}</span>
+                        <span class="badge" style="font-size:.65rem;background:${bgBadge};color:${colorBadge};">${escHtml(a.estado_display)}</span>
                         ${revBadge}${expressBadge}${obsCountBadge}
                     </div>
                     <div class="d-flex align-items-center gap-1 mt-1">${stepper}</div>
@@ -918,22 +1104,75 @@ function renderArqueos(arqueos) {
         </div>`;
     });
     container.innerHTML = html;
+    actualizarBulkBar();
 }
 
-// ===== FILTRO =====
-function filtrarEstado(el) {
-    document.querySelectorAll('.filtro-tab').forEach(t => t.classList.remove('active'));
-    el.classList.add('active');
-    estadoFiltro = el.dataset.estado;
-    resultadoFiltro = '';
-    cargarDatos();
+// ===== SELECCIÓN EN LOTE =====
+function toggleSeleccion(id, el) {
+    if (el.checked) seleccionados.add(id); else seleccionados.delete(id);
+    const fila = document.getElementById('fila-arqueo-' + id);
+    if (fila) fila.classList.toggle('seleccionado', el.checked);
+    actualizarBulkBar();
 }
 
-function filtrarResultado(el) {
+function limpiarSeleccion() {
+    seleccionados.clear();
+    document.querySelectorAll('.arqueo-check').forEach(c => { c.checked = false; });
+    document.querySelectorAll('.arqueo-row').forEach(f => f.classList.remove('seleccionado'));
+    actualizarBulkBar();
+}
+
+function actualizarBulkBar() {
+    const bar = document.getElementById('bulkBar');
+    document.getElementById('bulkCount').textContent = seleccionados.size;
+    bar.style.display = seleccionados.size > 0 ? 'flex' : 'none';
+}
+
+function aprobarSeleccionados() {
+    const ids = Array.from(seleccionados);
+    if (!ids.length) return;
+    Swal.fire({
+        title: 'Aprobar ' + ids.length + ' arqueo(s)',
+        html: 'Se aprobarán sólo los que cuadran dentro de la tolerancia y no tienen depósitos pendientes.<br>' +
+              '<small class="text-muted">Los que no cumplan quedarán para revisión manual y se te informará cuáles.</small>',
+        icon: 'question', showCancelButton: true,
+        confirmButtonText: '<i class="ri-check-double-line me-1"></i>Aprobar',
+        cancelButtonText: 'Cancelar', confirmButtonColor: '#00D4AA'
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        fetch('/app/api/arqueo/revisar-lote/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ arqueo_ids: ids })
+        }).then(res => res.json()).then(res => {
+            if (!res.success) { Swal.fire('Error', escHtml(res.error || 'No se pudo aprobar'), 'error'); return; }
+            let html = '<p><strong>' + res.aprobados + '</strong> aprobado(s).</p>';
+            if (res.omitidos > 0) {
+                html += '<p class="mb-1"><strong>' + res.omitidos + '</strong> quedaron pendientes:</p><ul class="text-start" style="font-size:.85rem;">';
+                (res.detalle_omitidos || []).slice(0, 12).forEach(o => {
+                    html += '<li>' + escHtml(o.etiqueta) + ' — ' + escHtml(o.motivo) + '</li>';
+                });
+                html += '</ul>';
+            }
+            Swal.fire({ title: 'Listo', html: html, icon: res.omitidos ? 'info' : 'success' });
+            limpiarSeleccion();
+            cargarDatos();
+        }).catch(() => Swal.fire('Error', 'Error de red', 'error'));
+    });
+}
+
+// ===== FILTROS POR TAB =====
+// Antes había dos funciones (`filtrarEstado` / `filtrarResultado`) que se
+// anulaban entre sí: cada una borraba el filtro de la otra, así que no se podía
+// pedir "con diferencias Y pendiente de revisión", que es justo la cola de
+// trabajo del supervisor. Ahora un solo tab fija ambos ejes a la vez.
+function aplicarTab(el) {
     document.querySelectorAll('.filtro-tab').forEach(t => t.classList.remove('active'));
     el.classList.add('active');
-    estadoFiltro = '';
+    estadoFiltro = el.dataset.estado || '';
     resultadoFiltro = el.dataset.revision || '';
+    alertaActiva = '';
+    paginaActual = 1;
     cargarDatos();
 }
 
@@ -977,8 +1216,11 @@ function verDetalle(id) {
             var revMap = {'OK':['var(--nexo-success)','Aprobado OK'],'OK_CON_OBS':['#6C63FF','Aprobado con Observaciones'],'REQUIERE_ACCION':['var(--nexo-error)','Requiere Acción']};
             if (revMap[resRev]) {
                 revInfo = '<div class="alert mt-3 mb-2" style="font-size:.85rem;background:rgba(0,0,0,.03);border-left:4px solid ' + revMap[resRev][0] + ';"><strong style="color:' + revMap[resRev][0] + ';"><i class="ri-shield-check-line me-1"></i>' + revMap[resRev][1] + '</strong>';
-                if (a.observaciones_supervisor) revInfo += '<div class="mt-1" style="color:var(--nexo-gray-700);">' + a.observaciones_supervisor + '</div>';
-                if (a.supervisor) revInfo += '<small class="text-muted">' + a.supervisor + (a.fecha_revision ? ' — ' + a.fecha_revision : '') + '</small>';
+                // `escHtml`: las observaciones son texto libre escrito por
+                // personal de tienda y se estaban concatenando crudas a
+                // innerHTML.
+                if (a.observaciones_supervisor) revInfo += '<div class="mt-1" style="color:var(--nexo-gray-700);white-space:pre-wrap;">' + escHtml(a.observaciones_supervisor) + '</div>';
+                if (a.supervisor) revInfo += '<small class="text-muted">' + escHtml(a.supervisor) + (a.fecha_revision ? ' — ' + escHtml(a.fecha_revision) : '') + '</small>';
                 revInfo += '</div>';
             }
 
@@ -994,8 +1236,8 @@ function verDetalle(id) {
                     bitacoraHtml += '<div class="d-flex align-items-start gap-2 py-2" style="border-bottom:1px solid var(--nexo-gray-200);">' +
                         '<i class="' + (iconMap[obs.tipo]||'ri-chat-3-line') + ' mt-1" style="color:' + (colorMap[obs.tipo]||'var(--nexo-gray-500)') + ';"></i>' +
                         '<div class="flex-grow-1">' +
-                            '<div style="font-size:.82rem;color:var(--nexo-gray-900);">' + obs.texto + '</div>' +
-                            '<small class="text-muted" style="font-size:.7rem;">' + obs.usuario + ' — ' + obs.fecha + ' — ' + obs.tipo_display + '</small>' +
+                            '<div style="font-size:.82rem;color:var(--nexo-gray-900);white-space:pre-wrap;">' + escHtml(obs.texto) + '</div>' +
+                            '<small class="text-muted" style="font-size:.7rem;">' + escHtml(obs.usuario) + ' — ' + escHtml(obs.fecha) + ' — ' + escHtml(obs.tipo_display) + '</small>' +
                         '</div></div>';
                 });
                 bitacoraHtml += '</div>';
@@ -1016,7 +1258,7 @@ function verDetalle(id) {
                     '<div class="col-md-6"><div class="kpi-card"><div class="kpi-value" style="font-size:1.1rem;">' + fmt(a.venta_total) + '</div><div class="kpi-label">Venta Total</div></div></div>' +
                     '<div class="col-md-6"><div class="kpi-card"><div class="kpi-value" style="font-size:1.1rem;">' + (a.usuario||'—') + '</div><div class="kpi-label">Responsable</div></div></div>' +
                 '</div>' +
-                (a.observaciones ? '<div class="alert alert-secondary mt-3" style="font-size:.85rem;"><i class="ri-chat-3-line me-1"></i>' + a.observaciones + '</div>' : '') +
+                (a.observaciones ? '<div class="alert alert-secondary mt-3" style="font-size:.85rem;white-space:pre-wrap;"><i class="ri-chat-3-line me-1"></i>' + escHtml(a.observaciones) + '</div>' : '') +
                 revInfo + dep_html + bitacoraHtml;
         });
     new bootstrap.Modal(document.getElementById('modalDetalle')).show();
@@ -1130,11 +1372,15 @@ function aprobarArqueoDirecto(id, resultado) {
     }
 }
 
-function enviarRevision(id, resultado, observaciones) {
+function enviarRevision(id, resultado, observaciones, forzarSinDeposito) {
     fetch('/app/api/arqueo/revisar/', {
         method: 'POST',
         headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ arqueo_id: id, resultado_revision: resultado, observaciones: observaciones, aprobar: resultado !== 'REQUIERE_ACCION' })
+        body: JSON.stringify({
+            arqueo_id: id, resultado_revision: resultado, observaciones: observaciones,
+            aprobar: resultado !== 'REQUIERE_ACCION',
+            forzar_sin_deposito: !!forzarSinDeposito
+        })
     }).then(r => r.json()).then(res => {
         if (res.success) {
             var msg = resultado === 'OK' ? 'Arqueo aprobado' : resultado === 'OK_CON_OBS' ? 'Arqueo aprobado con observaciones' : 'Acción requerida registrada';
@@ -1142,16 +1388,42 @@ function enviarRevision(id, resultado, observaciones) {
             cargarDatos();
             var modal = bootstrap.Modal.getInstance(document.getElementById('modalDetalle'));
             if (modal) modal.hide();
-        } else Swal.fire('Error', res.error, 'error');
-    });
+            return;
+        }
+        // El depósito de ese día todavía no está confirmado. Antes esto era un
+        // callejón sin salida: el supervisor no podía aprobar y quedaba
+        // obligado a inventar una observación cada vez. Ahora se ofrece
+        // aprobar dejando constancia del motivo, que queda en la bitácora.
+        if (res.puede_forzar) {
+            Swal.fire({
+                title: 'Depósito sin confirmar',
+                html: '<p style="font-size:.9rem;">' + escHtml(res.error) + '</p>' +
+                      '<div class="text-start small mb-2">Verificado: <strong>' + fmt(res.total_depositado_verificado) +
+                      '</strong> de <strong>' + fmt(res.total_esperado_deposito) + '</strong> esperados.</div>' +
+                      '<textarea class="form-control" id="swalMotivoDep" rows="3" placeholder="Motivo por el que se aprueba sin depósito confirmado (mín. 10 caracteres)"></textarea>',
+                icon: 'warning', showCancelButton: true,
+                confirmButtonText: 'Aprobar dejando constancia',
+                cancelButtonText: 'Cancelar', confirmButtonColor: '#FFB020',
+                preConfirm: function() {
+                    var m = document.getElementById('swalMotivoDep').value;
+                    if (!m || m.trim().length < 10) { Swal.showValidationMessage('Indique el motivo (mín. 10 caracteres)'); return false; }
+                    return m;
+                }
+            }).then(function(r2) {
+                if (r2.isConfirmed) enviarRevision(id, resultado, r2.value, true);
+            });
+            return;
+        }
+        Swal.fire('Error', escHtml(res.error || 'No se pudo registrar la revisión'), 'error');
+    }).catch(() => Swal.fire('Error', 'Error de red', 'error'));
 }
 
 function revisarConResultado(resultado) {
     if (arqueoDetalleId) aprobarArqueoDirecto(arqueoDetalleId, resultado);
 }
 
-function aprobarArqueo(id) { aprobarArqueoDirecto(id, 'OK'); }
-function aprobarArqueoDetalle() { if (arqueoDetalleId) aprobarArqueoDirecto(arqueoDetalleId, 'OK'); }
+// `aprobarArqueo` y `aprobarArqueoDetalle` eran wrappers sin ningún llamador
+// (el segundo, además, duplicaba exactamente a `revisarConResultado('OK')`).
 
 // ===== COMPROBANTE BANCARIO =====
 let cbArqueosData = [];
@@ -1208,7 +1480,14 @@ function abrirComprobanteBancario() {
         }
     });
 
-    fetch('/app/api/arqueos/?per_page=100&sucursal_id=' + sucursalActualId)
+    // Se respeta el rango de fechas de la pantalla y se ordena por antigüedad,
+    // para que los días viejos sin comprobante —los que de verdad hay que
+    // regularizar— no queden fuera del selector. Antes pedía los 100 arqueos
+    // más recientes sin rango y filtraba en cliente.
+    const cbSuc = (sucursalActualId === 'all') ? '' : '&sucursal_id=' + encodeURIComponent(sucursalActualId);
+    fetch('/app/api/arqueos/?per_page=200&orden=fecha_asc' + cbSuc +
+          '&fecha_desde=' + document.getElementById('fechaDesde').value +
+          '&fecha_hasta=' + document.getElementById('fechaHasta').value)
         .then(r => r.json())
         .then(data => {
             if (!data.success) return;
@@ -1348,7 +1627,13 @@ function guardarMultidia() {
 
 // ===== DEPÓSITOS PENDIENTES =====
 function cargarDepositosPend() {
-    fetch('/app/api/cuadratura/deposito/pendientes/')
+    // Se pasa la sucursal seleccionada en las pills. Antes no se enviaba y el
+    // endpoint caía a la sucursal de SESIÓN: al cambiar de pill, la tabla
+    // mostraba la sucursal B mientras este panel seguía mostrando la A, sin
+    // ninguna señal de que eran datos de tiendas distintas.
+    const q = (sucursalActualId && sucursalActualId !== 'all')
+        ? '?sucursal_id=' + encodeURIComponent(sucursalActualId) : '';
+    fetch('/app/api/cuadratura/deposito/pendientes/' + q)
         .then(r => r.json())
         .then(data => {
             if (!data.success) return;

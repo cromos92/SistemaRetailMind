@@ -7469,21 +7469,29 @@ function mostrarDetalleCambio(data) {
 }
 
 // Ajusta la etiqueta/ayuda del campo de autorización según el tipo de cambio:
-//  - fuera de plazo  → código dinámico de ADMINISTRADOR
-//  - dentro de plazo → PIN de cualquier usuario activo
-function aplicarModoAutorizacionAprobacion(fueraDePlazo) {
+//  - fuera de plazo SIN autorizar    → código dinámico de ADMINISTRADOR
+//  - fuera de plazo YA autorizado    → la excepción se firmó al crear; basta el código normal
+//  - dentro de plazo                 → código de administrador o jefe de local
+function aplicarModoAutorizacionAprobacion(fueraDePlazo, yaAutorizado, autorizadoPor) {
     const $label = $('#label-autorizacion-aprobacion');
     const $hint = $('#hint-autorizacion-aprobacion');
     const $input = $('#input-codigo-autorizacion-aprobacion');
-    if (fueraDePlazo) {
+    if (fueraDePlazo && yaAutorizado) {
+        const _quien = autorizadoPor ? ` por <strong>${autorizadoPor}</strong>` : '';
+        $label.html('<i class="ri-shield-check-line text-success me-1"></i>Código de autorización (barra superior)');
+        $hint.html(`Excepción de plazo <strong>ya autorizada</strong>${_quien} al crear la solicitud. `
+                 + 'No hace falta un segundo código de administrador: basta el de un <strong>administrador o jefe de local</strong>.')
+             .removeClass('text-danger text-muted').addClass('text-success');
+        $input.attr('placeholder', '6 dígitos');
+    } else if (fueraDePlazo) {
         $label.html('<i class="ri-shield-keyhole-line text-danger me-1"></i>Código de ADMINISTRADOR (barra superior)');
         $hint.html('Cambio <strong>fuera de plazo</strong>: requiere el código dinámico de un <strong>administrador</strong>.')
-             .removeClass('text-muted').addClass('text-danger');
+             .removeClass('text-muted text-success').addClass('text-danger');
         $input.attr('placeholder', 'Código admin');
     } else {
         $label.html('<i class="ri-shield-keyhole-line text-primary me-1"></i>Código de autorización (barra superior)');
         $hint.html('Cambio dentro de plazo: código de la barra de un <strong>administrador o jefe de local</strong>.')
-             .removeClass('text-danger').addClass('text-muted');
+             .removeClass('text-danger text-success').addClass('text-muted');
         $input.attr('placeholder', '6 dígitos');
     }
 }
@@ -7491,14 +7499,20 @@ function aplicarModoAutorizacionAprobacion(fueraDePlazo) {
 function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
     cambioActual = { id: cambioId, tipo_operacion: tipo, monto_original: montoDevuelto, monto_nuevo: montoNuevo };
 
-    // Determinar si el cambio está fuera de plazo (requiere admin) o es normal (PIN de cualquier usuario)
+    // Determinar si el cambio es una excepción de plazo y si esa excepción ya
+    // viene autorizada desde la creación. Se usa `es_fuera_de_plazo` (marcado al
+    // crear) y NO `dentro_del_plazo` (que se recalcula contra hoy), igual que el
+    // backend: si no coinciden, la pantalla pide un código de admin que el
+    // servidor ya no exige.
     const _cambioLista = (typeof cambiosData !== 'undefined' && Array.isArray(cambiosData))
         ? cambiosData.find(c => Number(c.id) === Number(cambioId)) : null;
-    const fueraDePlazo = _cambioLista
-        ? (_cambioLista.es_fuera_de_plazo === true || _cambioLista.dentro_del_plazo === false)
-        : false;
+    const fueraDePlazo = _cambioLista ? (_cambioLista.es_fuera_de_plazo === true) : false;
+    const yaAutorizado = _cambioLista ? (_cambioLista.excepcion_plazo_ya_autorizada === true) : false;
     cambioActual.fuera_de_plazo = fueraDePlazo;
-    aplicarModoAutorizacionAprobacion(fueraDePlazo);
+    cambioActual.excepcion_plazo_ya_autorizada = yaAutorizado;
+    aplicarModoAutorizacionAprobacion(
+        fueraDePlazo, yaAutorizado, _cambioLista ? _cambioLista.autorizado_por_usuario : null
+    );
 
     $('#aprobar-num-operacion').text(cambioId);
     $('#aprobar-tipo').text(tipo === 'CAMBIO' ? 'Cambio' : 'Devolución');
@@ -7564,7 +7578,21 @@ function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
                 // Manejar diferentes estructuras de respuesta
                 const cambio = data.cambio_devolucion || data.cambio || data;
                 const productos = data.productos || [];
-                
+
+                // El detalle es la fuente autoritativa: si se entró sin pasar por
+                // la lista, `cambiosData` no tiene la fila y el modo quedó en el
+                // valor por defecto. Corregirlo aquí evita pedir un código de
+                // administrador que el backend ya no exige.
+                if (cambio && typeof cambio.es_fuera_de_plazo !== 'undefined') {
+                    cambioActual.fuera_de_plazo = cambio.es_fuera_de_plazo === true;
+                    cambioActual.excepcion_plazo_ya_autorizada = cambio.excepcion_plazo_ya_autorizada === true;
+                    aplicarModoAutorizacionAprobacion(
+                        cambioActual.fuera_de_plazo,
+                        cambioActual.excepcion_plazo_ya_autorizada,
+                        cambio.autorizado_por_usuario || null
+                    );
+                }
+
                 // Actualizar cliente si está disponible
                 if (cambio && cambio.cliente_nombre) {
                     $('#aprobar-cliente').text(cambio.cliente_nombre);
@@ -8048,7 +8076,10 @@ function confirmarAprobacionYGenerarTicket() {
         return;
     }
     if (!/^\d{6}$/.test(codigoAutorizacion)) {
-        const _msg = (cambioActual && cambioActual.fuera_de_plazo)
+        const _requiereAdmin = cambioActual
+            && cambioActual.fuera_de_plazo
+            && !cambioActual.excepcion_plazo_ya_autorizada;
+        const _msg = _requiereAdmin
             ? 'Ingrese los 6 dígitos del código de un ADMINISTRADOR (barra superior)'
             : 'Ingrese los 6 dígitos del código de autorización de la barra superior';
         mostrarError(_msg);

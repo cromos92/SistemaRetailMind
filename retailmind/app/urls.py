@@ -121,6 +121,7 @@ from .views_modulo_ventas import (
     reabrir_arqueo,
     cancelar_arqueo,
     revisar_arqueo,
+    revisar_arqueos_lote,
     registrar_comprobante_supervisor,
     obtener_depositos_arqueo,
     verificar_deposito,
@@ -948,6 +949,7 @@ urlpatterns = [
     
     # Funciones de supervisión (Administración/Administrador)
     path('api/arqueo/revisar/', revisar_arqueo, name='revisar_arqueo'),
+    path('api/arqueo/revisar-lote/', revisar_arqueos_lote, name='revisar_arqueos_lote'),
     path('api/arqueo/comprobante/', registrar_comprobante_supervisor, name='registrar_comprobante_supervisor'),
     path('api/arqueo/depositos/<int:arqueo_id>/', obtener_depositos_arqueo, name='obtener_depositos_arqueo'),
     path('api/deposito/verificar/', verificar_deposito, name='verificar_deposito'),

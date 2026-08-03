@@ -200,6 +200,24 @@ def _usuario_es_administrador_activo(usuario):
     )
 
 
+def _autorizacion_fuera_plazo_previa(cambio):
+    """Administrador que ya autorizó la excepción de plazo al crear la solicitud.
+
+    El código dinámico es de un solo uso. Si al aprobar se vuelve a exigir un
+    código de administrador, el mismo administrador tiene que emitir un segundo
+    código para la misma operación: esa segunda firma no agrega control (la
+    excepción ya quedó autorizada y registrada en el cambio) y en la práctica
+    deja la solicitud creada pero imposible de aprobar hasta ubicar de nuevo al
+    administrador.
+    """
+    if not cambio.es_fuera_de_plazo:
+        return None
+    autorizador = cambio.autorizado_por_usuario
+    if _usuario_es_administrador_activo(autorizador):
+        return autorizador
+    return None
+
+
 def _usuario_tiene_permiso_base_cambios(usuario, sucursal_id):
     if _usuario_es_administrador_activo(usuario):
         return True
@@ -10158,14 +10176,35 @@ def eliminar_deposito_bancario(request):
         diferencia_efectivo_real = arqueo.diferencia_efectivo_real
         diferencia_total_real = arqueo.diferencia_total_real
         
-        # Recalcular estado basado en la diferencia REAL (considerando depósitos)
-        if abs(diferencia_efectivo_real) <= 1000 and abs(arqueo.diferencia_transbank) <= 1000:
-            arqueo.estado = 'CERRADO'
+        # Recalcular el estado según el veredicto canónico del conteo.
+        #
+        # Antes se usaba `diferencia_efectivo_real`, que resta los depósitos al
+        # efectivo físico: como el conteo se hace ANTES de depositar, eso
+        # descontaba la plata dos veces y un día perfectamente cuadrado pasaba a
+        # CON_DIFERENCIAS por el solo hecho de haber depositado. Y se aplicaba
+        # tolerancia ±$1.000 mientras `cerrar_arqueo` exigía $0 exacto, así que
+        # un faltante real de $999 se blanqueaba al tocar un depósito.
+        #
+        # Un arqueo ya revisado no se degrada: la revisión del supervisor es un
+        # hecho auditado y borrar un depósito mal cargado no debe deshacerla.
+        if arqueo.estado != 'REVISADO':
+            nuevo_estado_arqueo = (
+                'CERRADO'
+                if abs(arqueo.diferencia_efectivo or 0) <= TOLERANCIA_ARQUEO_EFECTIVO
+                else 'CON_DIFERENCIAS'
+            )
         else:
-            arqueo.estado = 'CON_DIFERENCIAS'
-        
-        arqueo.save()
-        
+            nuevo_estado_arqueo = arqueo.estado
+
+        # `.update()` y NO `save()`: `ArqueoCaja.save()` recalcula
+        # `total_efectivo_fisico` sumando billetes y monedas, que en modo
+        # EXPRESS están todos en 0. Este endpoint era el único del módulo que
+        # se saltaba esa regla, así que borrar un depósito de un arqueo express
+        # dejaba el efectivo contado en $0 y la diferencia en -(teórico+fondo).
+        ArqueoCaja.objects.filter(id=arqueo.id).update(estado=nuevo_estado_arqueo)
+        arqueo.estado = nuevo_estado_arqueo
+
+
         logger.info(
             "Deposito %s eliminado del arqueo %s: monto=%s, total_depositos=%s, "
             "efectivo_en_caja=%s, diferencia_efectivo_real=%s, diferencia_total_real=%s, estado=%s",
@@ -10542,7 +10581,16 @@ def obtener_depositos_pendientes(request):
         if not es_supervisor:
             return JsonResponse({'success': True, 'depositos': [], 'total': 0})
 
+        # Acepta `sucursal_id` por query param (validado contra las sucursales
+        # del usuario). Antes leía SIEMPRE la sucursal de sesión, así que en la
+        # pantalla de revisión el panel quedaba desincronizado con la sucursal
+        # elegida en las pills.
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        pedida = request.GET.get('sucursal_id')
+        if pedida and str(pedida).isdigit():
+            permitidas, _ = _sucursales_permitidas(request)
+            if not permitidas or int(pedida) in permitidas:
+                sucursal_id = int(pedida)
         fecha_str = request.GET.get('fecha')
 
         qs = DepositoBancario.objects.filter(
@@ -11214,59 +11262,175 @@ def obtener_transacciones_dia(request):
 
 # ========== NUEVAS FUNCIONALIDADES DE ARQUEO ==========
 
+# ===== TOLERANCIAS DEL MÓDULO DE CAJA =====
+# Antes convivían cuatro umbrales distintos sin relación entre sí: $0 decidía si
+# el arqueo quedaba `CERRADO` o `CON_DIFERENCIAS`, $500 exigía observación al
+# cerrar, $1.000 activaba `requiere_supervision` y daba el depósito por cuadrado,
+# y $5.000 pedía categorizar. Con eso un mismo arqueo de $300 salía "cuadrado"
+# para el cierre y "con diferencias" en el listado. Se unifican aquí para que
+# todas las pantallas den el mismo veredicto.
+TOLERANCIA_ARQUEO_EFECTIVO = 500     # bajo esto el día se considera cuadrado
+TOLERANCIA_ARQUEO_DEPOSITO = 1000    # holgura al comparar depósito vs teórico
+UMBRAL_ARQUEO_CATEGORIA = 5000       # sobre esto se exige categoría de diferencia
+
+
+def _sucursales_permitidas(request):
+    """IDs de sucursal que el usuario puede consultar en el módulo de caja.
+
+    Un supervisor con 13 sucursales tenía que entrar sucursal por sucursal
+    (13 recargas) porque el endpoint sólo aceptaba un id escalar. Devolvemos el
+    universo permitido para poder soportar `sucursal_id=all` y listas separadas
+    por coma sin abrir el acceso a sucursales ajenas.
+    """
+    rol_usuario = getattr(request.user, 'rol', None)
+    es_supervisor = rol_usuario in ['administrador', 'administracion']
+    try:
+        permitidas = [
+            int(s['sucursal_id'])
+            for s in obtener_sucursales_usuario(request.user)
+            if s.get('sucursal_id')
+        ]
+    except Exception:
+        permitidas = []
+    if not permitidas:
+        actual = get_sucursal_id(request)
+        permitidas = [int(actual)] if actual else []
+    return permitidas, es_supervisor
+
+
+def _resolver_sucursales_filtro(request):
+    """Traduce el parámetro `sucursal_id` a una lista de ids ya autorizada.
+
+    Acepta: vacío (sucursal activa), `all`/`todas`, o "1,4,7".
+    """
+    permitidas, es_supervisor = _sucursales_permitidas(request)
+    raw = (request.GET.get('sucursal_id') or '').strip().lower()
+    activa = get_sucursal_id(request)
+
+    if not raw:
+        return ([int(activa)] if activa else permitidas), es_supervisor
+
+    if raw in ('all', 'todas', '*'):
+        # Sin permisos de supervisión el "todas" se degrada a la sucursal activa
+        # en vez de filtrar de más y mostrar datos de otra empresa.
+        if not es_supervisor:
+            return ([int(activa)] if activa else []), es_supervisor
+        return permitidas, es_supervisor
+
+    pedidas = []
+    for parte in raw.split(','):
+        parte = parte.strip()
+        if parte.isdigit():
+            pedidas.append(int(parte))
+    if not pedidas:
+        return ([int(activa)] if activa else permitidas), es_supervisor
+
+    if es_supervisor:
+        autorizadas = [s for s in pedidas if not permitidas or s in permitidas]
+    else:
+        autorizadas = [s for s in pedidas if s in permitidas]
+    if not autorizadas:
+        autorizadas = [int(activa)] if activa else []
+    return autorizadas, es_supervisor
+
+
 @login_required
 @require_GET
 def listar_arqueos(request):
-    """API para listar arqueos históricos con indicadores mensuales.
+    """API para listar arqueos con indicadores del período consultado.
 
-    Optimización clave:
-    - Indicadores mensuales en UN solo `aggregate` condicional (antes: 8+ queries).
-    - Totales de depósitos por arqueo se calculan con `annotate(filter=Q(...))`
-      evitando N+1 (antes: 10-12 queries por arqueo × 20 arqueos por página).
-    - Se eliminaron los `print()` de debug del endpoint productivo.
+    Los indicadores se calculan sobre EL MISMO rango y las MISMAS sucursales que
+    la tabla. Antes se calculaban siempre sobre el mes en curso mientras la tabla
+    respetaba el filtro, así que al consultar junio los KPIs seguían mostrando
+    julio; el template lo había parcheado con un cartel ("no dependen del rango")
+    en vez de arreglar el cálculo.
+
+    Se mantiene `indicadores_mensuales` en la respuesta porque `cuadraturaCaja`
+    también consume este endpoint.
     """
     try:
         from datetime import date, timedelta as _td
         from calendar import monthrange
 
-        sucursal_id = get_sucursal_id(request)
-
-        # Supervisores pueden consultar otra sucursal via query param
-        sucursal_override = request.GET.get('sucursal_id')
+        sucursal_ids, es_supervisor = _resolver_sucursales_filtro(request)
         rol_usuario = getattr(request.user, 'rol', None)
-        es_supervisor = rol_usuario in ['administrador', 'administracion']
-        if sucursal_override and es_supervisor:
-            sucursal_id = sucursal_override
 
-        if not sucursal_id:
+        if not sucursal_ids:
             return JsonResponse({
                 'success': False,
                 'error': 'No hay sucursal seleccionada'
             })
+
+        # `sucursal_id` escalar se conserva para los cálculos que siguen siendo
+        # mono-sucursal (indicadores mensuales de compatibilidad).
+        sucursal_id = sucursal_ids[0]
+        multi_sucursal = len(sucursal_ids) > 1
 
         # Parámetros de filtro
         fecha_desde = request.GET.get('fecha_desde')
         fecha_hasta = request.GET.get('fecha_hasta')
         estado = request.GET.get('estado')
         page = int(request.GET.get('page', 1))
-        per_page = int(request.GET.get('per_page', 20))
+        per_page = min(int(request.GET.get('per_page', 20)), 500)
 
-        # ========== INDICADORES MENSUALES (1 aggregate + 1 select distinct) ==========
+        # --- Filtros nuevos (todos server-side) ---
+        # Antes sólo existían fecha/estado; `resultado_revision` se filtraba en
+        # JavaScript sobre las filas ya descargadas, así que "Requiere acción"
+        # sólo encontraba los que hubieran entrado en la primera página.
+        resultado = (request.GET.get('resultado') or '').strip().upper()
+        tipo_dif = (request.GET.get('tipo_dif') or '').strip().upper()
+        try:
+            min_dif = int(request.GET.get('min_dif') or 0)
+        except (TypeError, ValueError):
+            min_dif = 0
+        solo_express = request.GET.get('solo_express') in ('1', 'true', 'True')
+        solo_dep_pend = request.GET.get('solo_dep_pendiente') in ('1', 'true', 'True')
+        solo_sin_expl = request.GET.get('solo_sin_explicacion') in ('1', 'true', 'True')
+        solo_accion = request.GET.get('solo_accion') in ('1', 'true', 'True')
+        usuario_filtro = request.GET.get('usuario_id')
+        try:
+            dias_min = int(request.GET.get('dias_min') or 0)
+        except (TypeError, ValueError):
+            dias_min = 0
+        orden = (request.GET.get('orden') or 'fecha').strip()
+
+        # ========== INDICADORES MENSUALES (compatibilidad con cuadraturaCaja) ==========
         hoy = timezone.localdate()
         primer_dia_mes = date(hoy.year, hoy.month, 1)
         ultimo_dia_mes = date(hoy.year, hoy.month, monthrange(hoy.year, hoy.month)[1])
 
-        # Días hábiles del mes (lunes a sábado = 0-5) hasta hoy
-        dias_habiles = []
+        # Días operativos del mes. Antes se usaba el calendario (lunes a sábado,
+        # `weekday() < 6`), lo que dejaba dos huecos: los domingos con venta
+        # nunca aparecían como día faltante, y a una sucursal cerrada los lunes
+        # se le contaba un faltante inexistente. Ahora el día "cuenta" si hubo
+        # venta pagada, que es la única razón por la que debe existir un arqueo.
+        dias_calendario = []
         dia_actual = primer_dia_mes
         while dia_actual <= min(hoy, ultimo_dia_mes):
-            if dia_actual.weekday() < 6:
-                dias_habiles.append(dia_actual)
+            dias_calendario.append(dia_actual)
             dia_actual += _td(days=1)
-        total_dias_habiles = len(dias_habiles)
+
+        dias_venta_mes = set(
+            Ticket.objects.filter(
+                sucursal_id__in=sucursal_ids,
+                fecha__gte=primer_dia_mes,
+                fecha__lte=hoy,
+                estado='PAGADO',
+            ).values_list('sucursal_id', 'fecha').distinct()
+        )
+        if dias_venta_mes:
+            pares_esperados = dias_venta_mes
+        else:
+            # Sin datos de venta (sucursal nueva o Ticket vacío) se cae al
+            # calendario lunes-sábado para no reportar 0 días operativos.
+            pares_esperados = {
+                (s, d) for s in sucursal_ids
+                for d in dias_calendario if d.weekday() < 6
+            }
+        total_dias_habiles = len(pares_esperados)
 
         arqueos_mes_qs = ArqueoCaja.objects.filter(
-            sucursal_id=sucursal_id,
+            sucursal_id__in=sucursal_ids,
             fecha_arqueo__gte=primer_dia_mes,
             fecha_arqueo__lte=hoy,
         )
@@ -11274,38 +11438,72 @@ def listar_arqueos(request):
         # Único aggregate para todos los contadores y sumas del mes
         indic = arqueos_mes_qs.aggregate(
             arqueos_pendientes=Count('id', filter=Q(estado='ABIERTO')),
-            arqueos_con_diferencias=Count('id', filter=Q(estado='CON_DIFERENCIAS')),
+            # Se cuenta por el MONTO de la diferencia, no por el estado. Con
+            # `Count(estado='CON_DIFERENCIAS')` el KPI se autoborraba: al aprobar
+            # el arqueo `revisar_arqueo` lo pasa a `REVISADO`, así que un día con
+            # $80.000 de faltante desaparecía del indicador apenas el supervisor
+            # lo revisaba, y el mes cerraba en 0 con la caja igual de descuadrada.
+            arqueos_con_diferencias=Count(
+                'id',
+                filter=(
+                    Q(diferencia_efectivo__gt=TOLERANCIA_ARQUEO_EFECTIVO)
+                    | Q(diferencia_efectivo__lt=-TOLERANCIA_ARQUEO_EFECTIVO)
+                ),
+            ),
             arqueos_cerrados=Count('id', filter=Q(estado='CERRADO')),
-            arqueos_revisados=Count('id', filter=Q(estado='REVISADO')),
+            # "Revisado" es tener un veredicto del supervisor, no estar en el
+            # estado REVISADO: `REQUIERE_ACCION` deja el estado intacto, así que
+            # por estado un arqueo ya atendido figuraba como nunca revisado.
+            arqueos_revisados=Count(
+                'id', filter=~Q(resultado_revision='PENDIENTE')
+            ),
             arqueos_sin_revision=Count(
-                'id', filter=~Q(estado__in=['ABIERTO', 'REVISADO'])
+                'id',
+                filter=Q(resultado_revision='PENDIENTE') & ~Q(estado='ABIERTO'),
+            ),
+            arqueos_requieren_accion=Count(
+                'id', filter=Q(resultado_revision='REQUIERE_ACCION')
             ),
             # Se lee la diferencia ya calculada en vez de recalcular
             # físico - teórico: `ArqueoCaja.save()` descuenta además el
             # `fondo_fijo_snapshot`, así que ambas fórmulas divergen apenas
             # una sucursal configure fondo fijo (hoy todas están en 0).
             total_diferencia_efectivo=Sum('diferencia_efectivo'),
+            # Sólo sobre arqueos que informaron cierre POS. Sumar los que tienen
+            # `cierre_pos_fisico = 0` restaba el Transbank teórico completo y
+            # producía un "faltante" inventado del tamaño de la venta con tarjeta.
             total_diferencia_transbank=Sum(
                 F('cierre_pos_fisico') - F('total_transbank_teorico'),
+                filter=Q(cierre_pos_fisico__gt=0),
                 output_field=IntegerField(),
+            ),
+            arqueos_sin_cierre_pos=Count(
+                'id',
+                filter=Q(cierre_pos_fisico=0, total_transbank_teorico__gt=0),
             ),
             total_teorico_efectivo_mes=Sum('total_efectivo_teorico'),
         )
 
-        fechas_con_arqueo = set(
-            arqueos_mes_qs.values_list('fecha_arqueo', flat=True).distinct()
+        pares_con_arqueo = set(
+            arqueos_mes_qs.values_list('sucursal_id', 'fecha_arqueo').distinct()
         )
-        arqueos_realizados = len(fechas_con_arqueo)
-        dias_faltantes = [d for d in dias_habiles if d not in fechas_con_arqueo]
-        arqueos_faltantes = len(dias_faltantes)
+        arqueos_realizados = len(pares_con_arqueo)
+        pares_faltantes = sorted(
+            pares_esperados - pares_con_arqueo, key=lambda p: (p[1], p[0])
+        )
+        arqueos_faltantes = len(pares_faltantes)
 
         dep_mes_agg = DepositoBancario.objects.filter(
-            arqueo__sucursal_id=sucursal_id,
+            arqueo__sucursal_id__in=sucursal_ids,
             arqueo__fecha_arqueo__gte=primer_dia_mes,
             arqueo__fecha_arqueo__lte=hoy,
         ).aggregate(
             depositos_pendientes_conf=Count(
                 'id', filter=Q(verificado=False, monto_declarado__gt=0)
+            ),
+            monto_pendiente_conf=Sum(
+                'monto_declarado',
+                filter=Q(verificado=False, monto_declarado__gt=0),
             ),
             total_depositado_mes=Sum(
                 Case(
@@ -11333,20 +11531,26 @@ def listar_arqueos(request):
             'arqueos_pendientes': indic['arqueos_pendientes'] or 0,
             'arqueos_con_diferencias': indic['arqueos_con_diferencias'] or 0,
             'arqueos_cerrados': indic['arqueos_cerrados'] or 0,
+            # Se topa en 100: antes el numerador contaba los arqueos de domingo
+            # y el denominador excluía los domingos, así que una sucursal que
+            # arqueaba el fin de semana mostraba 103% de cumplimiento.
             'porcentaje_cumplimiento': round(
-                (arqueos_realizados / total_dias_habiles * 100)
+                min(100.0, arqueos_realizados / total_dias_habiles * 100)
                 if total_dias_habiles > 0 else 0, 1
             ),
-            'dias_faltantes': [d.strftime('%Y-%m-%d') for d in dias_faltantes[:10]],
+            'dias_faltantes': [d.strftime('%Y-%m-%d') for _s, d in pares_faltantes[:10]],
             'total_diferencia_efectivo': indic['total_diferencia_efectivo'] or 0,
             'total_diferencia_transbank': indic['total_diferencia_transbank'] or 0,
+            'arqueos_sin_cierre_pos': indic['arqueos_sin_cierre_pos'] or 0,
             'arqueos_revisados': arqueos_revisados,
             'arqueos_sin_revision': indic['arqueos_sin_revision'] or 0,
+            'arqueos_requieren_accion': indic['arqueos_requieren_accion'] or 0,
             'porcentaje_revisados': round(
-                (arqueos_revisados / arqueos_realizados * 100)
+                min(100.0, arqueos_revisados / arqueos_realizados * 100)
                 if arqueos_realizados > 0 else 0, 1
             ),
             'depositos_pendientes_confirmacion': dep_mes_agg['depositos_pendientes_conf'] or 0,
+            'monto_depositos_pendientes': dep_mes_agg['monto_pendiente_conf'] or 0,
             'total_depositado_mes': total_depositado_mes,
             'total_teorico_efectivo_mes': total_teorico_efectivo_mes,
             'diferencia_depositos_mes': total_depositado_mes - total_teorico_efectivo_mes,
@@ -11357,10 +11561,282 @@ def listar_arqueos(request):
         # post_save/post_delete de DepositoBancario, evitando JOINs aquí.
         # Solo anotamos lo que no se puede denormalizar trivialmente:
         # existencia de comprobante y conteos de relaciones externas.
-        queryset = (
+        # `base` sólo lleva filtros (sin anotaciones): sobre él se cuentan las
+        # filas y se calculan los indicadores del período. Contar sobre el
+        # queryset anotado obligaba a Postgres a resolver el GROUP BY completo
+        # (dos `Count` sobre relaciones distintas + `Exists` + los dos JOIN del
+        # `select_related`) dos veces por request, una para `count()` y otra
+        # para la página.
+        base = ArqueoCaja.objects.filter(sucursal_id__in=sucursal_ids)
+
+        if fecha_desde:
+            base = base.filter(fecha_arqueo__gte=fecha_desde)
+        if fecha_hasta:
+            base = base.filter(fecha_arqueo__lte=fecha_hasta)
+        if estado:
+            # Admite varios estados separados por coma para que el supervisor
+            # pueda pedir "lo que aún no está cerrado" en una sola consulta.
+            estados = [e.strip() for e in estado.split(',') if e.strip()]
+            base = base.filter(estado__in=estados) if len(estados) > 1 \
+                else base.filter(estado=estados[0])
+        if resultado:
+            resultados = [r.strip() for r in resultado.split(',') if r.strip()]
+            base = base.filter(resultado_revision__in=resultados)
+        if tipo_dif == 'FALTANTE':
+            base = base.filter(diferencia_efectivo__lt=-TOLERANCIA_ARQUEO_EFECTIVO)
+        elif tipo_dif == 'SOBRANTE':
+            base = base.filter(diferencia_efectivo__gt=TOLERANCIA_ARQUEO_EFECTIVO)
+        elif tipo_dif == 'EXACTO':
+            base = base.filter(
+                diferencia_efectivo__gte=-TOLERANCIA_ARQUEO_EFECTIVO,
+                diferencia_efectivo__lte=TOLERANCIA_ARQUEO_EFECTIVO,
+            )
+        if min_dif > 0:
+            base = base.filter(
+                Q(diferencia_efectivo__gte=min_dif)
+                | Q(diferencia_efectivo__lte=-min_dif)
+            )
+        if solo_express:
+            base = base.filter(modo_conteo='EXPRESS')
+        if solo_dep_pend:
+            base = base.filter(cache_depositos_pendientes__gt=0)
+        if solo_sin_expl:
+            # Diferencia relevante sin que nadie haya escrito por qué.
+            base = base.filter(
+                Q(diferencia_efectivo__gt=TOLERANCIA_ARQUEO_EFECTIVO)
+                | Q(diferencia_efectivo__lt=-TOLERANCIA_ARQUEO_EFECTIVO)
+            ).filter(
+                Q(observaciones_diferencia__isnull=True)
+                | Q(observaciones_diferencia='')
+            )
+        if solo_accion:
+            base = base.filter(resultado_revision='REQUIERE_ACCION')
+        if usuario_filtro and str(usuario_filtro).isdigit():
+            base = base.filter(usuario_responsable_id=int(usuario_filtro))
+        if dias_min > 0:
+            # "Sin revisar hace más de N días". `dias_sin_revision` es una
+            # property de Python y no se puede filtrar en SQL, pero equivale a
+            # acotar la fecha del arqueo entre los que aún no tienen veredicto.
+            base = base.filter(
+                fecha_arqueo__lte=hoy - _td(days=dias_min),
+                resultado_revision='PENDIENTE',
+            ).exclude(estado='ABIERTO')
+
+        # ========== INDICADORES DEL PERÍODO CONSULTADO ==========
+        # Estos sí responden al filtro que el usuario tiene puesto.
+        ind_periodo = base.aggregate(
+            total=Count('id'),
+            faltante=Sum(
+                'diferencia_efectivo',
+                filter=Q(diferencia_efectivo__lt=-TOLERANCIA_ARQUEO_EFECTIVO),
+            ),
+            sobrante=Sum(
+                'diferencia_efectivo',
+                filter=Q(diferencia_efectivo__gt=TOLERANCIA_ARQUEO_EFECTIVO),
+            ),
+            n_faltante=Count(
+                'id', filter=Q(diferencia_efectivo__lt=-TOLERANCIA_ARQUEO_EFECTIVO)
+            ),
+            n_sobrante=Count(
+                'id', filter=Q(diferencia_efectivo__gt=TOLERANCIA_ARQUEO_EFECTIVO)
+            ),
+            n_exacto=Count('id', filter=Q(diferencia_efectivo=0)),
+            n_cerrados=Count('id', filter=~Q(estado='ABIERTO')),
+            n_express=Count('id', filter=Q(modo_conteo='EXPRESS')),
+            n_sin_explicacion=Count(
+                'id',
+                filter=(
+                    Q(diferencia_efectivo__gt=TOLERANCIA_ARQUEO_EFECTIVO)
+                    | Q(diferencia_efectivo__lt=-TOLERANCIA_ARQUEO_EFECTIVO)
+                ) & (
+                    Q(observaciones_diferencia__isnull=True)
+                    | Q(observaciones_diferencia='')
+                ),
+            ),
+            n_sin_categoria=Count(
+                'id',
+                filter=(
+                    Q(diferencia_efectivo__gt=UMBRAL_ARQUEO_CATEGORIA)
+                    | Q(diferencia_efectivo__lt=-UMBRAL_ARQUEO_CATEGORIA)
+                ) & (
+                    Q(categoria_diferencia__isnull=True)
+                    | Q(categoria_diferencia='')
+                ),
+            ),
+            n_pend_revision=Count(
+                'id',
+                filter=Q(resultado_revision='PENDIENTE') & ~Q(estado='ABIERTO'),
+            ),
+            n_requiere_accion=Count(
+                'id', filter=Q(resultado_revision='REQUIERE_ACCION')
+            ),
+            n_abiertos=Count('id', filter=Q(estado='ABIERTO')),
+            n_dep_pendientes=Count('id', filter=Q(cache_depositos_pendientes__gt=0)),
+            tbk_diferencia=Sum(
+                F('cierre_pos_fisico') - F('total_transbank_teorico'),
+                filter=Q(cierre_pos_fisico__gt=0),
+                output_field=IntegerField(),
+            ),
+            n_tbk_sin_cierre=Count(
+                'id', filter=Q(cierre_pos_fisico=0, total_transbank_teorico__gt=0)
+            ),
+        )
+
+        _falt = ind_periodo['faltante'] or 0
+        _sobr = ind_periodo['sobrante'] or 0
+        _n_cerr = ind_periodo['n_cerrados'] or 0
+
+        # Cobertura del período consultado: días-sucursal CON VENTA que tienen
+        # su arqueo. Se calcula sólo cuando el rango es acotado y no hay filtros
+        # de contenido activos (con un filtro puesto la tabla ya no representa
+        # "todos los días del período" y el porcentaje no significaría nada).
+        cobertura_pct = None
+        cobertura_detalle = {}
+        filtros_de_contenido = any([
+            estado, resultado, tipo_dif, min_dif, solo_express,
+            solo_dep_pend, solo_sin_expl, solo_accion, usuario_filtro, dias_min,
+        ])
+        if fecha_desde and fecha_hasta and not filtros_de_contenido:
+            try:
+                _d1 = datetime.strptime(fecha_desde, '%Y-%m-%d').date()
+                _d2 = datetime.strptime(fecha_hasta, '%Y-%m-%d').date()
+            except (TypeError, ValueError):
+                _d1 = _d2 = None
+            if _d1 and _d2 and 0 <= (_d2 - _d1).days <= 400:
+                dias_venta_periodo = set(
+                    Ticket.objects.filter(
+                        sucursal_id__in=sucursal_ids,
+                        fecha__gte=_d1, fecha__lte=_d2,
+                        estado='PAGADO',
+                    ).values_list('sucursal_id', 'fecha').distinct()
+                )
+                dias_arqueo_periodo = set(
+                    base.values_list('sucursal_id', 'fecha_arqueo').distinct()
+                )
+                if dias_venta_periodo:
+                    cubiertos = len(dias_venta_periodo & dias_arqueo_periodo)
+                    cobertura_pct = round(cubiertos / len(dias_venta_periodo) * 100, 1)
+                    sin_arqueo = sorted(
+                        dias_venta_periodo - dias_arqueo_periodo,
+                        key=lambda p: (p[1], p[0]), reverse=True,
+                    )
+                    alias_suc = dict(
+                        Sucursal.objects.filter(
+                            id__in={s for s, _ in sin_arqueo[:20]}
+                        ).values_list('id', 'alias')
+                    )
+                    cobertura_detalle = {
+                        'dias_con_venta': len(dias_venta_periodo),
+                        'dias_con_arqueo': cubiertos,
+                        'dias_sin_arqueo': len(sin_arqueo),
+                        # El backend siempre supo QUÉ días faltan; la UI sólo
+                        # mostraba el número, así que el supervisor no tenía
+                        # forma de saber cuáles perseguir.
+                        'detalle_sin_arqueo': [
+                            {'sucursal': alias_suc.get(s, f'#{s}'), 'fecha': d.strftime('%Y-%m-%d')}
+                            for s, d in sin_arqueo[:20]
+                        ],
+                    }
+
+        # Arqueos viejos sin veredicto: la cola real de trabajo del supervisor.
+        n_atrasados = base.filter(
+            resultado_revision='PENDIENTE',
+            fecha_arqueo__lte=hoy - _td(days=3),
+        ).exclude(estado='ABIERTO').count()
+
+        indicadores = {
+            'total_arqueos': ind_periodo['total'] or 0,
+            # Exposición real: faltantes y sobrantes NO se compensan entre sí.
+            # `Sum('diferencia_efectivo')` a secas dejaba que un sobrante de
+            # $50.000 tapara un faltante de $50.000 y el KPI marcaba $0.
+            'exposicion_efectivo': abs(_falt) + abs(_sobr),
+            'faltante_total': _falt,
+            'sobrante_total': _sobr,
+            'neto_efectivo': _falt + _sobr,
+            'n_faltante': ind_periodo['n_faltante'] or 0,
+            'n_sobrante': ind_periodo['n_sobrante'] or 0,
+            'n_exacto': ind_periodo['n_exacto'] or 0,
+            'n_cerrados': _n_cerr,
+            # Señal de riesgo: conteo idéntico al teórico al peso. El propio
+            # `AnalisisFraudeCaja` marca sobre 80% como copia del teórico.
+            'pct_exacto': round(
+                (ind_periodo['n_exacto'] or 0) / _n_cerr * 100, 1
+            ) if _n_cerr else 0,
+            'n_express': ind_periodo['n_express'] or 0,
+            'n_sin_explicacion': ind_periodo['n_sin_explicacion'] or 0,
+            'n_sin_categoria': ind_periodo['n_sin_categoria'] or 0,
+            'n_pend_revision': ind_periodo['n_pend_revision'] or 0,
+            'n_requiere_accion': ind_periodo['n_requiere_accion'] or 0,
+            'n_abiertos': ind_periodo['n_abiertos'] or 0,
+            'n_atrasados': n_atrasados,
+            'n_dep_pendientes': ind_periodo['n_dep_pendientes'] or 0,
+            'tbk_diferencia': ind_periodo['tbk_diferencia'] or 0,
+            'n_tbk_sin_cierre': ind_periodo['n_tbk_sin_cierre'] or 0,
+            'tolerancia': TOLERANCIA_ARQUEO_EFECTIVO,
+            'multi_sucursal': multi_sucursal,
+            'sucursales_consultadas': len(sucursal_ids),
+            'cumplimiento_pct': cobertura_pct,
+            'cobertura': cobertura_detalle,
+        }
+
+        # Bandeja de alertas accionables: cada una trae el filtro que la aísla,
+        # para que el supervisor pueda saltar directo a esa cola en un click.
+        indicadores['alertas'] = [
+            a for a in [
+                {'codigo': 'ABIERTOS', 'label': 'Arqueos sin cerrar',
+                 'count': indicadores['n_abiertos'], 'nivel': 'warning',
+                 'filtro': {'estado': 'ABIERTO'}},
+                {'codigo': 'ATRASADOS', 'label': 'Sin revisar hace +3 días',
+                 'count': n_atrasados, 'nivel': 'error',
+                 'filtro': {'dias_min': 3}},
+                {'codigo': 'ACCION', 'label': 'Requieren acción correctiva',
+                 'count': indicadores['n_requiere_accion'], 'nivel': 'error',
+                 'filtro': {'solo_accion': 1}},
+                {'codigo': 'DEP_PEND', 'label': 'Depósitos sin confirmar',
+                 'count': indicadores['n_dep_pendientes'], 'nivel': 'warning',
+                 'filtro': {'solo_dep_pendiente': 1}},
+                {'codigo': 'SIN_EXPL', 'label': 'Diferencias sin explicación',
+                 'count': indicadores['n_sin_explicacion'], 'nivel': 'error',
+                 'filtro': {'solo_sin_explicacion': 1}},
+                {'codigo': 'EXPRESS', 'label': 'Conteos express por validar',
+                 'count': indicadores['n_express'], 'nivel': 'info',
+                 'filtro': {'solo_express': 1}},
+                {'codigo': 'TBK_SIN_CIERRE', 'label': 'Sin cierre POS informado',
+                 'count': indicadores['n_tbk_sin_cierre'], 'nivel': 'info',
+                 'filtro': {}},
+                # Días con venta que nunca se arquearon: no aparecen en la
+                # tabla (no existe la fila), así que sin esta alerta eran
+                # invisibles.
+                {'codigo': 'SIN_ARQUEO', 'label': 'Días con venta sin arqueo',
+                 'count': cobertura_detalle.get('dias_sin_arqueo', 0),
+                 'nivel': 'error', 'filtro': {}},
+            ] if a['count'] > 0
+        ]
+
+        # ========== PÁGINA ==========
+        ordenes = {
+            'fecha': ('-fecha_arqueo', '-id'),
+            'fecha_asc': ('fecha_arqueo', 'id'),
+            'diferencia': ('diferencia_efectivo', '-id'),
+            'sucursal': ('sucursal__alias', '-fecha_arqueo'),
+        }
+        order_by = ordenes.get(orden, ordenes['fecha'])
+
+        total_items = base.count()
+        per_page = max(1, per_page)
+        total_pages = max(1, -(-total_items // per_page))
+        page = min(max(1, page), total_pages)
+        offset = (page - 1) * per_page
+
+        ids_pagina = list(
+            base.order_by(*order_by).values_list('id', flat=True)[offset:offset + per_page]
+        )
+
+        # Las anotaciones caras se aplican sólo a las filas de la página.
+        arqueos_page = (
             ArqueoCaja.objects
-            .filter(sucursal_id=sucursal_id)
-            .select_related('usuario_responsable', 'supervisor_revision')
+            .filter(id__in=ids_pagina)
+            .select_related('usuario_responsable', 'supervisor_revision', 'sucursal')
             .annotate(
                 ann_tiene_comprobante=Exists(
                     DepositoBancario.objects.filter(
@@ -11371,39 +11847,46 @@ def listar_arqueos(request):
                 ann_reaperturas=Count('historial_reaperturas', distinct=True),
                 ann_bitacora_count=Count('bitacora', distinct=True),
             )
-            .order_by('-fecha_arqueo', '-id')
+            .order_by(*order_by)
         )
 
-        # Aplicar filtros
-        if fecha_desde:
-            queryset = queryset.filter(fecha_arqueo__gte=fecha_desde)
-        if fecha_hasta:
-            queryset = queryset.filter(fecha_arqueo__lte=fecha_hasta)
-        if estado:
-            queryset = queryset.filter(estado=estado)
-
-        paginator = Paginator(queryset, per_page)
-        arqueos_page = paginator.get_page(page)
-
         resultado_revision_dict = dict(RESULTADO_REVISION_CHOICES)
+        arqueos_lista = list(arqueos_page)
+
+        # Fallback para arqueos con la cache de depósitos desincronizada
+        # (legacy o signal no ejecutado). Antes se resolvía con un `aggregate`
+        # DENTRO del loop: hasta 100 queries extra en una sola página. Ahora es
+        # una única consulta agrupada para las filas que lo necesitan.
+        ids_fallback = [
+            a.id for a in arqueos_lista
+            if (a.cache_total_dep_verificado or 0) == 0
+            and (a.cache_depositos_confirmados or 0) > 0
+            and (a.cache_total_depositos or 0) > 0
+        ]
+        fallback_por_arqueo = {}
+        if ids_fallback:
+            for fila in (
+                DepositoBancario.objects
+                .filter(arqueo_id__in=ids_fallback, verificado=True)
+                .values('arqueo_id')
+                .annotate(
+                    total=Sum('monto'),
+                    efectivo=Sum('monto', filter=Q(tipo_medio='EFECTIVO')),
+                    cheque=Sum('monto', filter=Q(tipo_medio='CHEQUE')),
+                )
+            ):
+                fallback_por_arqueo[fila['arqueo_id']] = fila
+
         arqueos_data = []
-        for arqueo in arqueos_page:
+        for arqueo in arqueos_lista:
             # Leer desde campos denormalizados (actualizados por signal)
             depositos_declarados = arqueo.cache_depositos_declarados or 0
             total_dep_efectivo = arqueo.cache_total_dep_efectivo_verif or 0
             total_dep_cheque = arqueo.cache_total_dep_cheque_verif or 0
             total_dep_verif_all = arqueo.cache_total_dep_verificado or 0
 
-            if (
-                total_dep_verif_all == 0
-                and (arqueo.cache_depositos_confirmados or 0) > 0
-                and (arqueo.cache_total_depositos or 0) > 0
-            ):
-                fallback_dep = arqueo.depositos.filter(verificado=True).aggregate(
-                    total=Sum('monto'),
-                    efectivo=Sum('monto', filter=Q(tipo_medio='EFECTIVO')),
-                    cheque=Sum('monto', filter=Q(tipo_medio='CHEQUE')),
-                )
+            fallback_dep = fallback_por_arqueo.get(arqueo.id)
+            if fallback_dep:
                 total_dep_verif_all = fallback_dep['total'] or 0
                 total_dep_efectivo = fallback_dep['efectivo'] or 0
                 total_dep_cheque = fallback_dep['cheque'] or 0
@@ -11416,10 +11899,23 @@ def listar_arqueos(request):
             esperado_total = teorico_ef + teorico_ch
             if esperado_total == 0 or total_dep_verif_all == 0:
                 estado_deposito = 'SIN_DEPOSITO'
-            elif abs(total_dep_verif_all - esperado_total) <= 1000:
+            elif abs(total_dep_verif_all - esperado_total) <= TOLERANCIA_ARQUEO_DEPOSITO:
                 estado_deposito = 'COMPLETO'
             else:
                 estado_deposito = 'PARCIAL'
+
+            dif_ef = arqueo.diferencia_efectivo or 0
+            # Veredicto único del día, con la misma tolerancia en todas las
+            # pantallas. Antes cada consumidor aplicaba la suya ($0, $500,
+            # $1.000) y el mismo arqueo salía "cuadrado" en una y "con
+            # diferencias" en otra.
+            if abs(dif_ef) <= TOLERANCIA_ARQUEO_EFECTIVO:
+                veredicto = 'CUADRA'
+            elif dif_ef < 0:
+                veredicto = 'FALTANTE'
+            else:
+                veredicto = 'SOBRANTE'
+            revisado = arqueo.resultado_revision != 'PENDIENTE'
 
             arqueos_data.append({
                 'id': arqueo.id,
@@ -11475,22 +11971,55 @@ def listar_arqueos(request):
                 ),
                 'cantidad_observaciones': arqueo.ann_bitacora_count or 0,
                 'ultima_obs_supervisor': '',
+                # --- Campos nuevos ---
+                'sucursal_id': arqueo.sucursal_id,
+                'sucursal_alias': arqueo.sucursal.alias if arqueo.sucursal else '',
+                'veredicto': veredicto,
+                'revisado': revisado,
+                'sin_explicacion': (
+                    veredicto != 'CUADRA' and not (arqueo.observaciones_diferencia or '').strip()
+                ),
+                'requiere_categoria': (
+                    abs(dif_ef) > UMBRAL_ARQUEO_CATEGORIA
+                    and not (arqueo.categoria_diferencia or '').strip()
+                ),
+                'fecha_revision': (
+                    arqueo.fecha_revision.strftime('%d/%m/%Y %H:%M')
+                    if arqueo.fecha_revision else ''
+                ),
+                # Aprobable en lote sólo si no hay nada que juzgar: cuadra
+                # dentro de tolerancia, no está abierto y el depósito no quedó
+                # a medias.
+                'aprobable_en_lote': (
+                    veredicto == 'CUADRA'
+                    and arqueo.estado != 'ABIERTO'
+                    and not revisado
+                    and estado_deposito in ('COMPLETO', 'SIN_DEPOSITO')
+                    and (arqueo.cache_depositos_pendientes or 0) == 0
+                ),
             })
 
         return JsonResponse({
             'success': True,
             'arqueos': arqueos_data,
+            # Indicadores del rango + sucursales realmente consultados.
+            'indicadores': indicadores,
+            # Se mantiene por compatibilidad: `cuadraturaCaja.html` consume
+            # este mismo endpoint y lee `indicadores_mensuales`.
             'indicadores_mensuales': indicadores_mensuales,
+            'sucursales_consultadas': sucursal_ids,
             'pagination': {
-                'current_page': arqueos_page.number,
-                'total_pages': paginator.num_pages,
-                'total_items': paginator.count,
-                'has_next': arqueos_page.has_next(),
-                'has_previous': arqueos_page.has_previous(),
+                'current_page': page,
+                'total_pages': total_pages,
+                'total_items': total_items,
+                'per_page': per_page,
+                'has_next': page < total_pages,
+                'has_previous': page > 1,
             }
         })
 
     except Exception as e:
+        logger.exception("Error en listar_arqueos")
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener arqueos: {str(e)}'
@@ -12179,18 +12708,29 @@ def revisar_arqueo(request):
         observaciones_supervisor = data.get('observaciones', '')
         aprobar = data.get('aprobar', True)
         resultado = data.get('resultado_revision', '')
-        
+        # Permite aprobar OK dejando constancia de que el depósito todavía no
+        # está confirmado (ver más abajo por qué la puerta dura no servía).
+        forzar_sin_deposito = bool(data.get('forzar_sin_deposito'))
+
         if not arqueo_id:
             return JsonResponse({
                 'success': False,
                 'error': 'ID de arqueo requerido'
             })
-        
-        arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id)
+
+        # Scoping por sucursal: antes se cargaba sólo por id, así que un
+        # supervisor de una empresa podía aprobar arqueos de otra mandando el
+        # id por POST.
+        sucursales_ok, _ = _sucursales_permitidas(request)
+        arqueos_qs = ArqueoCaja.objects.all()
+        if sucursales_ok:
+            arqueos_qs = arqueos_qs.filter(sucursal_id__in=sucursales_ok)
+        arqueo = get_object_or_404(arqueos_qs, id=arqueo_id)
 
         es_aprobacion_ok = resultado == 'OK' or (
             aprobar and resultado not in ('OK_CON_OBS', 'REQUIERE_ACCION')
         )
+        nota_deposito_forzado = ''
         if es_aprobacion_ok:
             esperado_deposito = (
                 (arqueo.total_efectivo_teorico or 0)
@@ -12214,25 +12754,70 @@ def revisar_arqueo(request):
                 total_verificado = dep_agg['total_verificado'] or 0
                 if total_verificado == 0:
                     estado_deposito = 'SIN_DEPOSITO'
-                elif abs(total_verificado - esperado_deposito) <= 1000:
+                elif abs(total_verificado - esperado_deposito) <= TOLERANCIA_ARQUEO_DEPOSITO:
                     estado_deposito = 'COMPLETO'
                 else:
                     estado_deposito = 'PARCIAL'
 
-                if estado_deposito != 'COMPLETO':
+                # La puerta exigía que el depósito verificado igualara el
+                # efectivo teórico del día (±$1.000) para poder aprobar OK. En
+                # la operación real eso casi nunca se cumple: el depósito se
+                # hace con rezago, un mismo comprobante cubre varios días
+                # (GrupoDeposito existe justo para eso) y parte del efectivo se
+                # queda como fondo fijo. Resultado: el supervisor no podía
+                # aprobar prácticamente ningún día con efectivo y quedaba
+                # obligado a escribir una justificación a mano cada vez —
+                # trabajo repetido sin control adicional.
+                #
+                # Ahora sigue bloqueando por defecto (nada se aprueba en
+                # silencio), pero es franqueable de forma explícita, con motivo
+                # obligatorio y traza en bitácora + log de auditoría.
+                if estado_deposito != 'COMPLETO' and not forzar_sin_deposito:
                     return JsonResponse({
                         'success': False,
                         'error': (
-                            'No se puede aprobar OK: el deposito bancario '
-                            'no esta completo. Confirme el deposito o use '
-                            'OK con observaciones / Requiere accion.'
+                            'El depósito bancario de este día todavía no está '
+                            'confirmado. Confírmelo, o apruebe indicando el '
+                            'motivo por el que se aprueba sin depósito.'
                         ),
                         'estado_deposito': estado_deposito,
                         'total_depositado_verificado': total_verificado,
                         'total_esperado_deposito': esperado_deposito,
                         'diferencia_deposito': total_verificado - esperado_deposito,
+                        # El frontend usa esto para ofrecer "aprobar igual"
+                        # pidiendo el motivo, en vez de dejar al supervisor sin
+                        # salida.
+                        'puede_forzar': True,
                     }, status=400)
-        
+
+                if estado_deposito != 'COMPLETO' and forzar_sin_deposito:
+                    if len((observaciones_supervisor or '').strip()) < 10:
+                        return JsonResponse({
+                            'success': False,
+                            'error': (
+                                'Para aprobar sin depósito confirmado debe '
+                                'indicar el motivo (mínimo 10 caracteres).'
+                            ),
+                        }, status=400)
+                    nota_deposito_forzado = (
+                        f'Aprobado sin depósito confirmado '
+                        f'(estado depósito: {estado_deposito}, '
+                        f'verificado ${total_verificado:,} de ${esperado_deposito:,}).'
+                    )
+
+        # Segregación de funciones: nadie aprueba su propio arqueo. `crear_arqueo`
+        # no tiene gate de rol, así que un administrador que además opera caja
+        # podía crear, contar, cerrar y aprobar el mismo día de punta a punta —
+        # el control de cuatro ojos existía sólo de palabra.
+        if arqueo.usuario_responsable_id == request.user.id:
+            return JsonResponse({
+                'success': False,
+                'error': (
+                    'No puede revisar un arqueo del que usted es responsable. '
+                    'Debe revisarlo otro supervisor.'
+                ),
+            }, status=403)
+
         if resultado == 'REQUIERE_ACCION':
             if not observaciones_supervisor or len(observaciones_supervisor.strip()) < 10:
                 return JsonResponse({
@@ -12260,6 +12845,11 @@ def revisar_arqueo(request):
             resultado_rev = 'PENDIENTE'
             accion_texto = 'marcado como pendiente de revisión'
         
+        if nota_deposito_forzado:
+            observaciones_supervisor = (
+                f'{observaciones_supervisor.strip()}\n[{nota_deposito_forzado}]'
+            )
+
         ArqueoCaja.objects.filter(id=arqueo.id).update(
             estado=nuevo_estado,
             supervisor_revision=request.user,
@@ -12267,7 +12857,7 @@ def revisar_arqueo(request):
             observaciones_supervisor=observaciones_supervisor,
             resultado_revision=resultado_rev
         )
-        
+
         if observaciones_supervisor:
             ObservacionArqueo.objects.create(
                 arqueo=arqueo,
@@ -12300,10 +12890,115 @@ def revisar_arqueo(request):
             'error': 'Datos JSON inválidos'
         })
     except Exception as e:
+        logger.exception("Error al revisar arqueo")
         return JsonResponse({
             'success': False,
             'error': f'Error al revisar arqueo: {str(e)}'
         })
+
+
+@login_required
+@require_POST
+def revisar_arqueos_lote(request):
+    """Aprueba en lote los arqueos que no tienen nada que juzgar.
+
+    Revisar un mes de 13 sucursales son ~340 arqueos y, uno por uno, entre 700 y
+    1.700 clicks. La inmensa mayoría de esos días cuadra al peso y no requiere
+    criterio humano: el supervisor sólo estaba firmando lo obvio, y ese trabajo
+    mecánico es el que hace que la revisión se sienta repetitiva.
+
+    Aquí sólo entran arqueos que cumplen TODAS las condiciones:
+      * diferencia de efectivo dentro de la tolerancia,
+      * no están ABIERTO,
+      * todavía sin veredicto,
+      * sin depósitos declarados pendientes de confirmar,
+      * el revisor no es el responsable del arqueo.
+
+    Cualquier arqueo con diferencia, depósito a medias o acción pendiente queda
+    fuera y se sigue revisando a mano, con su motivo. Cada aprobación deja su
+    `LogAccionCaja`, igual que la individual.
+    """
+    try:
+        rol_usuario = getattr(request.user, 'rol', None)
+        if rol_usuario not in ['administrador', 'administracion']:
+            return JsonResponse({
+                'success': False,
+                'error': 'No tiene permisos para revisar arqueos.'
+            }, status=403)
+
+        data = json.loads(request.body or '{}')
+        ids = data.get('arqueo_ids') or []
+        if not isinstance(ids, list) or not ids:
+            return JsonResponse({
+                'success': False, 'error': 'Debe indicar al menos un arqueo.'
+            }, status=400)
+        ids = [int(i) for i in ids if str(i).isdigit()][:500]
+
+        sucursales_ok, _ = _sucursales_permitidas(request)
+        candidatos = ArqueoCaja.objects.filter(id__in=ids)
+        if sucursales_ok:
+            candidatos = candidatos.filter(sucursal_id__in=sucursales_ok)
+
+        aprobados, omitidos = [], []
+        ahora = timezone.now()
+
+        for arqueo in candidatos.select_related('sucursal'):
+            etiqueta = f'{arqueo.sucursal.alias} {arqueo.fecha_arqueo:%d-%m-%Y}'
+            motivo = None
+            if arqueo.estado == 'ABIERTO':
+                motivo = 'sigue abierto'
+            elif arqueo.resultado_revision != 'PENDIENTE':
+                motivo = 'ya tiene veredicto'
+            elif abs(arqueo.diferencia_efectivo or 0) > TOLERANCIA_ARQUEO_EFECTIVO:
+                motivo = 'tiene diferencia de efectivo'
+            elif (arqueo.cache_depositos_pendientes or 0) > 0:
+                motivo = 'tiene depósitos sin confirmar'
+            elif arqueo.usuario_responsable_id == request.user.id:
+                motivo = 'usted es el responsable'
+
+            if motivo:
+                omitidos.append({'id': arqueo.id, 'etiqueta': etiqueta, 'motivo': motivo})
+                continue
+
+            with transaction.atomic():
+                ArqueoCaja.objects.filter(id=arqueo.id).update(
+                    estado='REVISADO',
+                    supervisor_revision=request.user,
+                    fecha_revision=ahora,
+                    resultado_revision='OK',
+                )
+                ObservacionArqueo.objects.create(
+                    arqueo=arqueo,
+                    usuario=request.user,
+                    tipo='SISTEMA',
+                    texto=(
+                        'Aprobado en lote: efectivo dentro de tolerancia '
+                        f'(±${TOLERANCIA_ARQUEO_EFECTIVO:,}) y sin depósitos pendientes.'
+                    ),
+                    visible_para_cajera=True,
+                )
+                log_accion_caja(
+                    request, 'REVISAR_ARQUEO', arqueo, modo='lote'
+                )
+            aprobados.append({'id': arqueo.id, 'etiqueta': etiqueta})
+
+        return JsonResponse({
+            'success': True,
+            'aprobados': len(aprobados),
+            'omitidos': len(omitidos),
+            'detalle_aprobados': aprobados,
+            'detalle_omitidos': omitidos,
+            'message': (
+                f'{len(aprobados)} arqueo(s) aprobados. '
+                f'{len(omitidos)} quedaron para revisión manual.'
+            ),
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'}, status=400)
+    except Exception as e:
+        logger.exception("Error en revision en lote de arqueos")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 @login_required
@@ -14672,6 +15367,7 @@ def listar_cambios_devoluciones(request):
                 'es_autorizacion_cross_branch': cambio.es_autorizacion_cross_branch,
                 'es_cambio_concepto': cambio.es_cambio_concepto,
                 'autorizado_por_usuario': cambio.autorizado_por_usuario.get_full_name() if cambio.autorizado_por_usuario else None,
+                'excepcion_plazo_ya_autorizada': _autorizacion_fuera_plazo_previa(cambio) is not None,
                 'score_riesgo': cambio.score_riesgo,
                 'requiere_revision_gerencial': cambio.requiere_revision_gerencial,
                 'revisado_por_gerencia': cambio.revisado_por_gerencia.get_full_name() if cambio.revisado_por_gerencia else None,
@@ -15352,6 +16048,7 @@ def obtener_detalle_cambio(request, cambio_id):
             'es_cambio_concepto': cambio.es_cambio_concepto,
             'concepto_descripcion': cambio.concepto_descripcion or '',
             'autorizado_por_usuario': cambio.autorizado_por_usuario.get_full_name() if cambio.autorizado_por_usuario else None,
+            'excepcion_plazo_ya_autorizada': _autorizacion_fuera_plazo_previa(cambio) is not None,
             'sucursal_autorizador': cambio.sucursal_autorizador.alias if cambio.sucursal_autorizador else None,
             'score_riesgo': cambio.score_riesgo,
             'requiere_revision_gerencial': cambio.requiere_revision_gerencial,
@@ -16195,9 +16892,16 @@ def aprobar_cambio_generar_ticket(request):
             }, status=403)
 
         # ¿Requiere autorización especial de administrador?
-        # Solo cuando el cambio está FUERA DE PLAZO. Dentro de plazo es un cambio
-        # normal y basta el PIN de cualquier usuario activo de la empresa.
-        requiere_admin = not cambio.dentro_del_plazo
+        # La excepción de plazo se autoriza UNA sola vez, al crear la solicitud.
+        # Si el cambio ya trae esa firma, aprobar vuelve a ser un paso normal
+        # (código de administrador o de jefe de local).
+        #
+        # Se evalúa sobre `es_fuera_de_plazo` (marcado al crear) y no sobre
+        # `dentro_del_plazo` (que se recalcula contra la fecha de hoy): un cambio
+        # creado en plazo que queda días esperando aprobación no es una excepción
+        # y no debe empezar a exigir un administrador por el solo paso del tiempo.
+        autorizacion_previa = _autorizacion_fuera_plazo_previa(cambio)
+        requiere_admin = cambio.es_fuera_de_plazo and autorizacion_previa is None
 
         # Toda autorización se hace con el código dinámico de la barra superior.
         es_valido_codigo, mensaje_codigo, codigo_obj = \
@@ -16225,7 +16929,10 @@ def aprobar_cambio_generar_ticket(request):
             return JsonResponse({
                 'success': False,
                 'code': 'ADMIN_REQUIRED',
-                'error': 'Los cambios fuera de plazo requieren el código de autorización de un ADMINISTRADOR.',
+                'error': (
+                    'Este cambio fuera de plazo no tiene una autorización de administrador '
+                    'vigente, así que requiere el código de un ADMINISTRADOR para aprobarse.'
+                ),
             }, status=403)
 
         asignacion_autorizador = EmpresaUser.objects.filter(
@@ -16295,7 +17002,8 @@ def aprobar_cambio_generar_ticket(request):
                 reversion=False,
             )
 
-            # Solo los cambios fuera de plazo consumen un código dinámico de admin.
+            # Todo código dinámico es de un solo uso: se consume aquí, sea de
+            # administrador o de jefe de local.
             if codigo_obj is not None:
                 codigo_obj = CodigoAutorizacionDinamico.objects.select_for_update().get(id=codigo_obj.id)
                 if not codigo_obj.es_valido():
@@ -16318,7 +17026,11 @@ def aprobar_cambio_generar_ticket(request):
                 descripcion=(
                     (f'Aprobación y ejecución (fuera de plazo) autorizada por {_autorizador_nombre}'
                      if requiere_admin else
-                     f'Aprobación y ejecución (cambio normal) autorizada por {_autorizador_nombre}')
+                     (f'Aprobación y ejecución (fuera de plazo ya autorizada por '
+                      f'{autorizacion_previa.get_full_name() or autorizacion_previa.username}) '
+                      f'ejecutada por {_autorizador_nombre}'
+                      if autorizacion_previa else
+                      f'Aprobación y ejecución (cambio normal) autorizada por {_autorizador_nombre}'))
                 ),
                 ip_origen=request.META.get('REMOTE_ADDR'),
                 exitoso=True,
@@ -16347,14 +17059,18 @@ def aprobar_cambio_generar_ticket(request):
             else:
                 logger.debug("Cambio %s ya estaba en estado %s; continuando ejecucion", cambio.id, cambio.estado)
 
-            cambio.autorizado_por_usuario = usuario_autorizador
-            cambio.sucursal_autorizador = asignacion_autorizador.sucursal
+            # No pisar al administrador que autorizó la excepción de plazo al crear:
+            # es el dato que justifica el cambio ante una auditoría, y es el que
+            # evita volver a exigir un código de administrador si esta aprobación
+            # se reintenta (el flujo es re-entrante y admite revertir + re-aprobar).
+            campos_autorizacion = ['registro_autorizacion', 'requiere_autorizacion']
+            if autorizacion_previa is None:
+                cambio.autorizado_por_usuario = usuario_autorizador
+                cambio.sucursal_autorizador = asignacion_autorizador.sucursal
+                campos_autorizacion += ['autorizado_por_usuario', 'sucursal_autorizador']
             cambio.registro_autorizacion = registro_autorizacion
-            cambio.requiere_autorizacion = requiere_admin
-            cambio.save(update_fields=[
-                'autorizado_por_usuario', 'sucursal_autorizador',
-                'registro_autorizacion', 'requiere_autorizacion',
-            ])
+            cambio.requiere_autorizacion = bool(requiere_admin or autorizacion_previa)
+            cambio.save(update_fields=campos_autorizacion)
             
             # GENERAR TICKET DE VENTA
             # Obtener correlativo usando la función centralizada

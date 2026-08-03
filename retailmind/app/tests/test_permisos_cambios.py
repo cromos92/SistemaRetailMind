@@ -250,6 +250,72 @@ class PermisosCambiosTest(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()['code'], 'AUTH_CODE_REQUIRED')
 
+    def _codigo_de(self, usuario, codigo):
+        return CodigoAutorizacionDinamico.objects.create(
+            codigo=codigo,
+            fecha_hora_inicio=timezone.now() - timezone.timedelta(minutes=1),
+            fecha_hora_fin=timezone.now() + timezone.timedelta(minutes=30),
+            generado_por=usuario,
+        )
+
+    def _marcar_fuera_de_plazo(self, autorizado_por=None):
+        self.cambio.es_fuera_de_plazo = True
+        self.cambio.dias_fuera_de_plazo = 5
+        self.cambio.tipo_cambio_especial = 'FUERA_PLAZO'
+        self.cambio.fecha_limite_cambio = timezone.localdate() - timezone.timedelta(days=5)
+        self.cambio.autorizado_por_usuario = autorizado_por
+        self.cambio.save(update_fields=[
+            'es_fuera_de_plazo', 'dias_fuera_de_plazo', 'tipo_cambio_especial',
+            'fecha_limite_cambio', 'autorizado_por_usuario',
+        ])
+
+    def test_fuera_de_plazo_ya_autorizado_no_pide_segundo_codigo_admin(self):
+        """La excepción se firma al crear: aprobar no debe exigir otro código de admin.
+
+        El código dinámico es de un solo uso, así que exigirlo dos veces obliga al
+        administrador a emitir un segundo código para la misma operación.
+        """
+        self._marcar_fuera_de_plazo(autorizado_por=self.admin)
+        codigo_jefe = self._codigo_de(self.jefe, '555111')
+
+        response = self._post_aprobar(codigo_jefe.codigo)
+
+        self.assertNotEqual(response.json().get('code'), 'ADMIN_REQUIRED')
+        self.assertNotEqual(response.status_code, 403)
+
+    def test_fuera_de_plazo_sin_autorizacion_previa_sigue_exigiendo_admin(self):
+        """Sin firma de administrador (filas legacy) la excepción no se puede aprobar sola."""
+        self._marcar_fuera_de_plazo(autorizado_por=None)
+        codigo_jefe = self._codigo_de(self.jefe, '555222')
+
+        response = self._post_aprobar(codigo_jefe.codigo)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()['code'], 'ADMIN_REQUIRED')
+        codigo_jefe.refresh_from_db()
+        self.assertFalse(codigo_jefe.usado)
+
+    def test_fuera_de_plazo_autorizado_por_no_administrador_exige_admin(self):
+        """La firma previa solo vale si viene de un administrador activo."""
+        self._marcar_fuera_de_plazo(autorizado_por=self.jefe)
+        codigo_jefe = self._codigo_de(self.jefe, '555444')
+
+        response = self._post_aprobar(codigo_jefe.codigo)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()['code'], 'ADMIN_REQUIRED')
+
+    def test_cambio_creado_en_plazo_no_exige_admin_por_vencer_esperando_aprobacion(self):
+        """Vencer mientras espera aprobación no convierte el cambio en una excepción."""
+        self.cambio.fecha_limite_cambio = timezone.localdate() - timezone.timedelta(days=2)
+        self.cambio.save(update_fields=['fecha_limite_cambio'])
+        codigo_jefe = self._codigo_de(self.jefe, '555333')
+
+        response = self._post_aprobar(codigo_jefe.codigo)
+
+        self.assertNotEqual(response.json().get('code'), 'ADMIN_REQUIRED')
+        self.assertNotEqual(response.status_code, 403)
+
     @override_settings(CSRF_FAILURE_VIEW='django.views.csrf.csrf_failure')
     def test_crear_cambio_rechaza_post_sin_csrf(self):
         csrf_client = Client(enforce_csrf_checks=True)
