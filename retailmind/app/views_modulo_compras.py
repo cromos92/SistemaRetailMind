@@ -47,6 +47,10 @@ METODOS_COMPENSACION = (METODO_COMPENSACION, METODO_COMPENSACION_EMITIDA)
 
 logger = logging.getLogger('app')
 
+# Compras_Producto.precioSugerido es precio público CON IVA, mientras `costo` es
+# neto. Para comparar ambos en el mismo plano hay que descontar el impuesto.
+IVA_FACTOR_COMPRAS = 1.19
+
 
 # ========== GESTIÓN DE COMPRAS ==========
 
@@ -3116,9 +3120,15 @@ def calcular_metricas_principales_mejorado(compras_query, compras_ids, anio):
     if unidades_esperadas > 0:
         cumplimiento_general = round((unidades_recepcionadas / unidades_esperadas) * 100, 1)
 
+    # MARKUP DE LISTA (no es ROI): compara el precio sugerido de venta contra el
+    # costo de lo ORDENADO — no de lo vendido, así que no hay retorno realizado.
+    # Además `precioSugerido` es precio público CON IVA y `costo` es neto: sin
+    # descontar el IVA el indicador salía ~35 puntos inflado (medido contra prod
+    # 2026: mostraba 120,3% cuando el markup real es 85,2%).
+    valor_venta_neto = float(valor_venta) / IVA_FACTOR_COMPRAS if valor_venta else 0
     roi_promedio = 0
     if inversion_total > 0:
-        roi_promedio = round(((valor_venta - inversion_total) / inversion_total) * 100, 1)
+        roi_promedio = round(((valor_venta_neto - float(inversion_total)) / float(inversion_total)) * 100, 1)
 
     # ===== TENDENCIAS vs AÑO ANTERIOR =====
     # Misma exclusión de eliminadas/canceladas que el query base — si no,
@@ -3153,13 +3163,15 @@ def calcular_metricas_principales_mejorado(compras_query, compras_ids, anio):
     return {
         'total_compras': total_compras,
         'inversion_total': float(inversion_total) if inversion_total else 0,
+        # `valor_venta` se sigue publicando en bruto (es el PVP de lista), pero el
+        # frontend calcula el "Margen Esperado" contra la inversión NETA, así que
+        # se agrega la versión sin IVA para que reste magnitudes comparables.
         'valor_venta': float(valor_venta) if valor_venta else 0,
+        'valor_venta_neto': round(valor_venta_neto, 2),
         'unidades_esperadas': int(unidades_esperadas),
         'unidades_recepcionadas': int(unidades_recepcionadas),
         'cumplimiento_general': cumplimiento_general,
         'roi_promedio': roi_promedio,
-        'productos_distintos': Compras_Producto.objects.filter(
-            compras__in=compras_ids).values('nombre').distinct().count(),
         'proveedores_activos': compras_query.values('empresa').distinct().count(),
         'trend_compras': trend_compras,
         'trend_inversion': trend_inversion,
@@ -3985,21 +3997,25 @@ def calcular_margenes_centro_distribucion(anio, sucursal_cd_id=None):
     """
     from .models import Movimientos_Producto, Traspaso, Traspaso_Detalle, Sucursal
     
-    # Identificar sucursales que son Centros de Distribución
+    # Identificar sucursales que son Centros de Distribución.
+    # El criterio es el MISMO que usan calcular_comparativa_costos_cd_vs_sucursales
+    # y calcular_rentabilidad_por_tipo_sucursal. Antes había aquí un `except:`
+    # desnudo que caía a `empresa__esProveedor=True`: como las 4 empresas del
+    # holding están marcadas esProveedor, ese fallback clasificaba las 13
+    # sucursales (incluidas las tiendas) como centros de distribución. Si no hay
+    # ninguna marcada, lo correcto es devolver vacío y que se vea, no inventar.
     if sucursal_cd_id:
         sucursales_cd = Sucursal.objects.filter(id=sucursal_cd_id)
     else:
-        # Intentar buscar por los nuevos campos (pueden no existir si no se aplicó migración)
-        try:
-            sucursales_cd = Sucursal.objects.filter(
-                models.Q(es_centro_distribucion=True) | 
-                models.Q(tipo_sucursal='CENTRO_DISTRIBUCION')
+        sucursales_cd = Sucursal.objects.filter(
+            models.Q(es_centro_distribucion=True) |
+            models.Q(tipo_sucursal='CENTRO_DISTRIBUCION')
+        )
+        if not sucursales_cd.exists():
+            logger.warning(
+                "margenes_cd: ninguna Sucursal marcada como centro de distribución; "
+                "el panel de márgenes CD quedará vacío"
             )
-            if not sucursales_cd.exists():
-                raise Exception("No hay CD marcados")
-        except:
-            # Fallback: identificar por empresa proveedora
-            sucursales_cd = Sucursal.objects.filter(empresa__esProveedor=True)
     
     sucursales_cd_ids = list(sucursales_cd.values_list('id', flat=True))
 

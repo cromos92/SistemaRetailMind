@@ -14,14 +14,52 @@ from .models import PermisoRol, OpcionMenu, Sucursal
 # Valor: código de la opción en el sistema de permisos
 URL_PERMISO_MAP = {
     # Dashboard
-    '/app/dashboard_productos/': 'dashboard_productos',
+    # ⚠️ Las PÁGINAS de dashboard estaban mapeadas, pero sus endpoints AJAX y de
+    # exportación NO: el match es por substring y el segmento '/api/' (o el
+    # prefijo 'obtener_datos_'/'exportar_') rompe la coincidencia, así que
+    # obtener_codigo_opcion devolvía None y el middleware dejaba pasar. Cualquier
+    # autenticado podía leer por URL directa el JSON completo (montos, deuda,
+    # costos, márgenes, ranking de proveedores) de un dashboard que su rol tiene
+    # vedado. Se mapea cada endpoint al MISMO código que su página.
+    # Las claves sin barra final cubren la página y su variante '_mejorado'.
+    '/app/dashboard_productos': 'dashboard_productos',
+    '/app/exportar_dashboard_productos/': 'dashboard_productos',
+    '/app/exportar_productos_filtrado/': 'dashboard_productos',
     '/app/dashboard_fifo/': 'dashboard_fifo',
-    '/app/verDashboardCompras/': 'dashboard_compras_estrategico',
+    '/app/obtener_datos_dashboard_fifo/': 'dashboard_fifo',
+    '/app/exportar_dashboard_fifo/': 'dashboard_fifo',
+    '/app/verDashboardCompras': 'dashboard_compras_estrategico',
+    '/app/dashboard_compras_mejorado_api/': 'dashboard_compras_estrategico',
+    '/app/exportar_dashboard_compras/': 'dashboard_compras_estrategico',
     '/app/ventas/dashboard': 'dashboard_ventas',
     '/app/dashboard-documentos/': 'dashboard_documentos',
+    '/app/api/dashboard-documentos/': 'dashboard_documentos',
     '/app/dashboard-despachos/': 'dashboard_despachos',
+    '/app/api/dashboard-despachos/': 'dashboard_despachos',
     '/app/dashboard-requerimientos/': 'dashboard_requerimientos',
+    '/app/api/dashboard-requerimientos/': 'dashboard_requerimientos',
     '/app/prediccion/': 'prediccion_compras',
+
+    # APIs del Dashboard de Ventas Mejorado. Se listan una a una a propósito:
+    # NO mapear el prefijo '/app/api/ventas/', porque bajo él viven también
+    # 'editar-boleta-papel' y 'eliminar-documento', que llama cuadraturaCaja.html
+    # (rol cajero, sin permiso de dashboard) — gatear el prefijo los dejaría en 403.
+    '/app/api/ventas/indicadores-globales/': 'dashboard_ventas',
+    '/app/api/ventas/indicadores-avanzados/': 'dashboard_ventas',
+    '/app/api/ventas/por-vendedor/': 'dashboard_ventas',
+    '/app/api/ventas/por-sucursal/': 'dashboard_ventas',
+    '/app/api/ventas/sucursales-dashboard/': 'dashboard_ventas',
+    '/app/api/ventas/por-metodo-pago/': 'dashboard_ventas',
+    '/app/api/ventas/analisis-cambios/': 'dashboard_ventas',
+    '/app/api/ventas/estado-cuadraturas/': 'dashboard_ventas',
+    '/app/api/ventas/estado-operacional/': 'dashboard_ventas',
+    '/app/api/ventas/productos-mas-vendidos/': 'dashboard_ventas',
+    '/app/api/ventas/por-categoria/': 'dashboard_ventas',
+    '/app/api/ventas/por-especialidad/': 'dashboard_ventas',
+    '/app/api/ventas/indicador-compra/': 'dashboard_ventas',
+    '/app/api/ventas/mix-por-sucursal/': 'dashboard_ventas',
+    '/app/api/ventas/tendencias/': 'dashboard_ventas',
+    '/app/api/ventas/exportar-dashboard/': 'dashboard_ventas',
     
     # Ventas
     '/app/ticket-venta/': 'ticket_venta',

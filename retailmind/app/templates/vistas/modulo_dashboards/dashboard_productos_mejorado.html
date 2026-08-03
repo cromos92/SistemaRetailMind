@@ -1084,8 +1084,13 @@ function actualizarKPIs(kpis) {
     $('#kpiValorVenta').text(formatMoney(kpis.valor_venta || 0));
     $('#kpiMargenPotencial').text(formatMoney(kpis.margen_potencial || 0));
     
+    // El badge tenia la clase 'up' y la flecha hacia arriba fijas en el HTML:
+    // un margen negativo se mostraba igual, en verde y subiendo.
     const margenPorcentaje = kpis.margen_porcentaje || 0;
-    $('#kpiMargenPorcentaje').html(`<i class="bi bi-arrow-up"></i> ${margenPorcentaje.toFixed(1)}%`);
+    const margenNeg = margenPorcentaje < 0;
+    $('#kpiMargenPorcentaje')
+        .attr('class', 'kpi-trend ' + (margenNeg ? 'down' : 'up'))
+        .html('<i class="bi bi-arrow-' + (margenNeg ? 'down' : 'up') + '"></i> ' + margenPorcentaje.toFixed(1) + '%');
     
     $('#kpiConStock').text(formatNumber(kpis.con_stock || 0));
     $('#kpiAgotados').text(formatNumber(kpis.agotados || 0));

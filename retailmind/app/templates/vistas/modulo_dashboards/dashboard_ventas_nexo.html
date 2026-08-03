@@ -2149,8 +2149,9 @@ function cargarTendencias(params) {
             }
             if (response.por_dia_semana) {
                 actualizarChartPorDia(response.por_dia_semana);
-                // Identificar mejor día
-                const diasNombres = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                // Identificar mejor día. OJO: el backend usa ExtractIsoWeekDay y
+                // llena por_dia_semana[d-1], así que el índice 0 es LUNES.
+                const diasNombres = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
                 if (Array.isArray(response.por_dia_semana)) {
                     let maxIdx = 0, maxVal = 0;
                     response.por_dia_semana.forEach((v, i) => {
@@ -2192,12 +2193,27 @@ function cargarIndicadoresAvanzados(params) {
         if (response.success) {
             dashboardData.avanzados = response;
             
-            $('#kpiMargen').text(formatMoney(response.margen_bruto || 0));
-            $('#kpiMargenPct').text((response.margen_pct || 0) + '%');
+            // El backend devuelve null (no 0) cuando no hay ninguna linea con
+            // costo FIFO en el periodo, junto con margen_calculable/margen_nota.
+            // Pintar `|| 0` convertia "no se puede calcular" en "el margen es
+            // cero", que se lee como negocio quebrado. Ahora se muestra s/d y el
+            // motivo queda en el tooltip.
+            var margenOk = response.margen_calculable !== false && response.margen_bruto !== null;
+            if (margenOk) {
+                $('#kpiMargen').text(formatMoney(response.margen_bruto || 0));
+                $('#kpiMargenPct').text((response.margen_pct || 0) + '%');
+            } else {
+                $('#kpiMargen').text('s/d');
+                $('#kpiMargenPct').text(response.margen_nota || 'sin costo FIFO en el periodo');
+            }
+            $('#kpiMargen').attr('title',
+                'Cobertura de costeo: ' + (response.cobertura_costeo_pct != null ? response.cobertura_costeo_pct + '%' : 's/d') +
+                ' de las lineas vendidas tienen costo FIFO.' +
+                (response.margen_nota ? ' ' + response.margen_nota : ''));
             $('#kpiSellThrough').text((response.sell_through || 0) + '%');
             $('#kpiRotacion').text((response.rotacion_periodo || 0).toFixed(2));
             $('#kpiDiasStock').text(Math.round(response.dias_stock || 0));
-            $('#kpiGMROI').text((response.gmroi || 0).toFixed(2));
+            $('#kpiGMROI').text(response.gmroi != null ? response.gmroi.toFixed(2) : 's/d');
             $('#kpiDescuento').text((response.descuento_promedio || 0).toFixed(1) + '%');
             $('#kpiDescuentoMonto').text(formatMoney(response.descuento_total_monto || 0) + ' total descontado');
 
@@ -2453,13 +2469,16 @@ function actualizarChartPorDia(data) {
     
     if (charts.porDia) charts.porDia.destroy();
     
-    const diasNombres = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    // El backend indexa 0 = LUNES (ExtractIsoWeekDay - 1). Con las etiquetas
+    // arrancando en domingo, la venta del lunes se pintaba bajo "Dom" y el
+    // resaltado de fin de semana marcaba lunes y domingo.
+    const diasNombres = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
     const valores = Array.isArray(data) ? data : Object.values(data);
-    
+
     // Colores por día (fines de semana destacados)
     const colores = valores.map((_, i) => {
-        if (i === 0) return NEXO_COLORS.error; // Domingo
-        if (i === 6) return NEXO_COLORS.success; // Sábado
+        if (i === 5) return NEXO_COLORS.success; // Sábado
+        if (i === 6) return NEXO_COLORS.error;   // Domingo
         return NEXO_COLORS.primary;
     });
     

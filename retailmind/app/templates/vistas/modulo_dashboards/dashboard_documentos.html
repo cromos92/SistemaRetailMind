@@ -151,6 +151,7 @@
 .mini-guias .doc-kpi-mini-icon { background: var(--doc-teal-light); color: var(--doc-teal); }
 .mini-vencidos .doc-kpi-mini-icon { background: var(--doc-danger-light); color: var(--doc-danger); }
 .mini-sii .doc-kpi-mini-icon { background: var(--doc-primary-light); color: var(--doc-primary); }
+.mini-cobrar .doc-kpi-mini-icon { background: var(--doc-success-light); color: var(--doc-success); }
 .mini-ticket .doc-kpi-mini-icon { background: var(--doc-accent-light); color: var(--doc-accent); }
 .mini-incidencias .doc-kpi-mini-icon { background: var(--doc-warning-light); color: var(--doc-warning); }
 .mini-credito .doc-kpi-mini-icon { background: var(--doc-info-light); color: var(--doc-info); }
@@ -384,7 +385,7 @@
                     <div class="doc-kpi-icon-box"><i class="ri-bank-line"></i></div>
                 </div>
                 <div class="doc-kpi-value" id="kpiMontoPendiente">--</div>
-                <div class="doc-kpi-label">Deuda Pendiente</div>
+                <div class="doc-kpi-label" title="Facturas de compra impagas. No incluye boletas de venta al publico, que nacen PENDIENTE y se cobran en caja.">Por Pagar a Proveedores</div>
                 <div class="doc-kpi-footer" id="kpiDeudaFooter">--</div>
             </div>
         </div>
@@ -424,14 +425,21 @@
                 <div class="doc-kpi-mini-icon"><i class="ri-alarm-warning-line"></i></div>
                 <div class="doc-kpi-mini-text">
                     <div class="doc-kpi-mini-value" id="kpiVencidos">--</div>
-                    <div class="doc-kpi-mini-label">Pagos Vencidos</div>
+                    <div class="doc-kpi-mini-label" title="Compras impagas cuya fecha de vencimiento ya paso">Compras Vencidas</div>
+                </div>
+            </div>
+            <div class="doc-kpi-mini mini-cobrar">
+                <div class="doc-kpi-mini-icon"><i class="ri-hand-coin-line"></i></div>
+                <div class="doc-kpi-mini-text">
+                    <div class="doc-kpi-mini-value" id="kpiPorCobrar">--</div>
+                    <div class="doc-kpi-mini-label" title="Ventas a credito (diasCredito &gt; 0) aun sin pago">Por Cobrar</div>
                 </div>
             </div>
             <div class="doc-kpi-mini mini-sii">
-                <div class="doc-kpi-mini-icon"><i class="ri-shield-check-line"></i></div>
+                <div class="doc-kpi-mini-icon"><i class="ri-inbox-archive-line"></i></div>
                 <div class="doc-kpi-mini-text">
                     <div class="doc-kpi-mini-value" id="kpiAceptados">--</div>
-                    <div class="doc-kpi-mini-label">% Aceptados SII</div>
+                    <div class="doc-kpi-mini-label" title="Estado INTERNO de recepcion de mercaderia, no el acuse del SII. Las boletas del POS quedan EMITIDO para siempre, por eso el porcentaje es bajo.">% Recepcion Cerrada</div>
                 </div>
             </div>
             <div class="doc-kpi-mini mini-ticket">
@@ -685,13 +693,16 @@ function cargarDatos() {
 
         $('#kpiTotalFooter').html('Facturas: <b>' + k.facturas + '</b> &middot; Boletas: <b>' + k.boletas + '</b>');
         $('#kpiMontoFooter').html('Ticket promedio: <b>' + fmt(k.ticket_promedio) + '</b>');
-        $('#kpiDeudaFooter').html('Vencidos: <b style="color:var(--doc-danger)">' + k.dtes_vencidos + '</b> documentos');
+        $('#kpiDeudaFooter').html(
+            'Vencido: <b style="color:var(--doc-danger)">' + fmt(k.monto_vencido || 0) + '</b> (' + k.dtes_vencidos + ' docs)'
+        );
 
         $('#kpiFacturas').text(k.facturas.toLocaleString());
         $('#kpiBoletas').text(k.boletas.toLocaleString());
         $('#kpiNC').text(k.notas_credito.toLocaleString());
         $('#kpiGuias').text(k.guias.toLocaleString());
         $('#kpiVencidos').text(k.dtes_vencidos.toLocaleString());
+        $('#kpiPorCobrar').text(fmtShort(k.monto_por_cobrar || 0));
         $('#kpiAceptados').text(k.pct_aceptados + '%');
         $('#kpiTicketProm').text(fmtShort(k.ticket_promedio));
         $('#kpiIncidencias').text(k.incidencias_abiertas.toLocaleString());

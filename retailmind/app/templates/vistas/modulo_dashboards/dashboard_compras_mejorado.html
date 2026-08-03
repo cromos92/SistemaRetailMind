@@ -633,11 +633,11 @@
                     </div>
                 </div>
 
-                <!-- ROI Promedio -->
-                <div class="kpi-card kpi-warning">
+                <!-- Markup de lista (NO es ROI: mide lo ordenado, no lo vendido) -->
+                <div class="kpi-card kpi-warning" title="Precio de lista sugerido (sin IVA) contra el costo de lo ORDENADO. Es un margen teorico de catalogo, no un retorno realizado: no considera ventas, descuentos ni liquidaciones.">
                     <div class="kpi-icon"><i class="bi bi-graph-up-arrow"></i></div>
                     <div class="kpi-value" id="kpiROI">0%</div>
-                    <div class="kpi-label">ROI Promedio</div>
+                    <div class="kpi-label">Markup de Lista (teórico)</div>
                     <div class="kpi-trend neutral" id="trendROI">
                         <i class="bi bi-dash"></i> 0 pts vs año anterior
                     </div>
@@ -1453,12 +1453,14 @@ function actualizarKPIs(data) {
     $('#kpiUnidadesEsperadas').text(formatNumber(metricas.unidades_esperadas || 0));
     $('#subtextUnidades').text(formatNumber(metricas.unidades_recepcionadas || 0) + ' recepcionadas');
     
-    // Margen
-    const margen = (metricas.valor_venta || 0) - (metricas.inversion_total || 0);
-    const margenPorcentaje = metricas.inversion_total > 0 ? 
+    // Margen: usa el valor de venta NETO. Antes restaba el PVP con IVA menos el
+    // costo neto, mezclando dos bases y sobrestimando el margen ~19 puntos.
+    const ventaNeta = metricas.valor_venta_neto || 0;
+    const margen = ventaNeta - (metricas.inversion_total || 0);
+    const margenPorcentaje = metricas.inversion_total > 0 ?
         ((margen / metricas.inversion_total) * 100).toFixed(1) : 0;
     $('#kpiMargen').text(formatMoney(margen));
-    $('#subtextMargen').text(margenPorcentaje + '% sobre inversión');
+    $('#subtextMargen').text(margenPorcentaje + '% sobre inversión (neto de IVA)');
 
     // Compras no inventariables (por concepto): antes invisibles en este dashboard
     const cni = data.compras_no_inventariables || {};

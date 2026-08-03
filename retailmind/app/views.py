@@ -25327,15 +25327,27 @@ def dashboard_productos_mejorado_api(request):
         categoria_id = request.GET.get('categoria', '')
         sucursal_id = request.GET.get('sucursal', '') or request.session.get('idSucursalActual')
         estado_stock = request.GET.get('estado_stock', '')
-        periodo_dias = int(request.GET.get('periodo', 30))
-        
+        # Un '?periodo=abc' reventaba la vista con ValueError (500).
+        try:
+            periodo_dias = int(request.GET.get('periodo', 30))
+        except (TypeError, ValueError):
+            periodo_dias = 30
+
         fecha_inicio = timezone.now() - timedelta(days=periodo_dias)
         fecha_90dias = timezone.now() - timedelta(days=90)
-        
+
         # ========== BASE QUERY CON FILTROS ==========
         productos_talla_qs = Producto_Talla.objects.select_related(
             'producto', 'producto__categoria'
         ).exclude(producto__excluir_de_analitica=True)
+
+        # El filtro de sucursal SOLO se aplicaba al valor a costo (los lotes),
+        # mientras el resto del tablero quedaba global. "Margen Potencial"
+        # terminaba restando el costo de UNA sucursal al valor de venta de TODA
+        # la red: medido contra prod daba 608,4% cuando lo correcto es 97,9%.
+        # Producto_Talla no tiene sucursal propia; cuelga de Producto.sucursal.
+        if sucursal_id:
+            productos_talla_qs = productos_talla_qs.filter(producto__sucursal_id=sucursal_id)
 
         if categoria_id:
             productos_talla_qs = productos_talla_qs.filter(producto__categoria_id=categoria_id)
@@ -25362,7 +25374,15 @@ def dashboard_productos_mejorado_api(request):
             productos_criticos=Count('id', filter=Q(stock__gt=0, stock__lt=5)),
         )
         
-        total_productos = Producto.objects.count()
+        # Contaba TODO el catálogo de todas las empresas, incluidos los
+        # pseudo-artículos, e ignoraba los filtros: quedaba incoherente con el
+        # contador de SKUs de la misma tarjeta.
+        productos_filtrados_qs = Producto.objects.filter(excluir_de_analitica=False)
+        if sucursal_id:
+            productos_filtrados_qs = productos_filtrados_qs.filter(sucursal_id=sucursal_id)
+        if categoria_id:
+            productos_filtrados_qs = productos_filtrados_qs.filter(categoria_id=categoria_id)
+        total_productos = productos_filtrados_qs.count()
         total_skus = kpis_productos['total_skus'] or 0
         con_stock = kpis_productos['con_stock'] or 0
         agotados = kpis_productos['agotados'] or 0
@@ -25371,9 +25391,17 @@ def dashboard_productos_mejorado_api(request):
         
         # ========== VALOR INVENTARIO (CONSULTAS AGREGADAS) ==========
         # Valor FIFO desde lotes (filtrado por sucursal si aplica)
-        lotes_filter = {'activo': True, 'cantidad_disponible__gt': 0}
+        # Mismo universo que productos_talla_qs: sin pseudo-artículos, para que
+        # el margen no reste magnitudes de poblaciones distintas.
+        lotes_filter = {
+            'activo': True,
+            'cantidad_disponible__gt': 0,
+            'producto_talla__producto__excluir_de_analitica': False,
+        }
         if sucursal_id:
             lotes_filter['producto_talla__producto__sucursal_id'] = sucursal_id
+        if categoria_id:
+            lotes_filter['producto_talla__producto__categoria_id'] = categoria_id
         valor_costo = LoteProducto.objects.filter(
             **lotes_filter
         ).aggregate(
@@ -25395,12 +25423,19 @@ def dashboard_productos_mejorado_api(request):
         # ========== VENTAS Y ROTACIÓN (UNA CONSULTA) ==========
         # created_at = fecha real de la venta (Ticket.fecha es auto_now y se
         # reescribe con cada save); subtotal = monto real con descuentos.
-        ventas_periodo = Ticket_Productos.objects.filter(
+        ventas_qs = Ticket_Productos.objects.filter(
             idTicket__created_at__date__gte=fecha_inicio.date(),
             idTicket__estado='PAGADO'
         ).exclude(
             ProductoTalla__producto__excluir_de_analitica=True
-        ).aggregate(
+        )
+        # La rotación divide vendido/stock: si el stock ya es de una sucursal, el
+        # vendido también debe serlo, o el índice queda sin sentido.
+        if sucursal_id:
+            ventas_qs = ventas_qs.filter(idTicket__sucursal_id=sucursal_id)
+        if categoria_id:
+            ventas_qs = ventas_qs.filter(ProductoTalla__producto__categoria_id=categoria_id)
+        ventas_periodo = ventas_qs.aggregate(
             total_unidades=Coalesce(Sum('stock'), 0),
             total_ingresos=Coalesce(Sum('subtotal'), 0)
         )
