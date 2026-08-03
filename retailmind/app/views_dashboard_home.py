@@ -39,6 +39,17 @@ def bienvenida(request):
     modulos_con_opciones = []
     total_accesos = 0
 
+    # Caché de permisos por request: resuelve los ~69 ítems del menú en memoria.
+    # Sin esto, cada `PermisoRol.tiene_permiso` dispara 4 consultas y esta página
+    # costaba ~300 queries. Es el mismo caché que ya usa el menú lateral.
+    from app.templatetags.permisos_tags import _permisos
+    permisos_cache = _permisos(request, request.user)
+
+    def _puede_ver(codigo):
+        if permisos_cache is not None:
+            return permisos_cache.resolver(codigo, 'puede_ver')
+        return PermisoRol.tiene_permiso(request.user, codigo, 'puede_ver', sucursal_id)
+
     try:
         modulos = ModuloSistema.objects.filter(activo=True).order_by('orden')
 
@@ -54,7 +65,7 @@ def bienvenida(request):
 
             items = []
             for opcion in opciones_hijas:
-                if PermisoRol.tiene_permiso(request.user, opcion.codigo, 'puede_ver', sucursal_id):
+                if _puede_ver(opcion.codigo):
                     items.append({
                         'nombre': opcion.nombre,
                         'codigo': opcion.codigo,
@@ -74,7 +85,7 @@ def bienvenida(request):
                 ).exclude(url_name='').exclude(url_path='').select_related('modulo').order_by('orden')
 
                 for opcion in opciones_padre:
-                    if PermisoRol.tiene_permiso(request.user, opcion.codigo, 'puede_ver', sucursal_id):
+                    if _puede_ver(opcion.codigo):
                         items.append({
                             'nombre': opcion.nombre,
                             'codigo': opcion.codigo,

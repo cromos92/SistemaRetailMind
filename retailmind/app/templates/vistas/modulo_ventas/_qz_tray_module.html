@@ -323,16 +323,21 @@ function _generarEscPosVenta(td) {
     return c;
 }
 
-/* ── Generar comandos ESC/POS — modo PEDIDO ECOMMERCE ─────── */
+/* ── Generar comandos ESC/POS — modo PEDIDO ECOMMERCE ───────
+   Con td.es_guia=true imprime la GUÍA DE PREPARACIÓN (picking):
+   sin precios, con casilla [ ] por línea para marcar a mano,
+   folio de despacho AC y rótulo "NO VALIDO COMO BOLETA".     */
 function _generarEscPosEcommerce(td) {
     const suc  = td.sucursal  || {};
     const prod = td.productos || [];
+    const esGuia = !!td.es_guia;
 
     const empNombre = String(suc.empresa    || 'MI EMPRESA');
     const empRut    = String(suc.rut_empresa|| '');
     const numRM     = String(td.numero_ticket_rm || '');
     const canal     = String(td.canal_origen || '').toUpperCase();
     const numCanal  = String(td.numero_pedido_canal || '');
+    const folioDesp = String(td.folio_despacho || '');
 
     let fechaStr = td.fecha || new Date().toLocaleString('es-CL');
 
@@ -350,10 +355,11 @@ function _generarEscPosEcommerce(td) {
     if (empRut)        c.push('RUT: ' + empRut + _N);
     c.push(_sep('='));
 
-    // Banner PEDIDO ECOMMERCE
+    // Banner
     c.push(_EP.CENTER, _EP.DBL_ON, _EP.BOLD_ON);
-    c.push('PEDIDO ECOMMERCE' + _N);
+    c.push((esGuia ? 'GUIA PREPARACION' : 'PEDIDO ECOMMERCE') + _N);
     c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
+    if (esGuia) c.push('(picking - documento interno)' + _N);
     c.push(_sep('-'));
 
     // Canal y N pedido
@@ -361,6 +367,7 @@ function _generarEscPosEcommerce(td) {
     c.push(canal + _N);
     c.push(_EP.BOLD_OFF);
     c.push('Pedido: ' + numCanal + _N);
+    if (folioDesp) c.push('Folio despacho: ' + folioDesp + _N);
     c.push(_sep('-'));
 
     // Ticket RM (doble tamaño)
@@ -379,29 +386,54 @@ function _generarEscPosEcommerce(td) {
     if (td.dte_numero)        c.push(_row('DTE:', '#' + td.dte_numero + ' (' + (td.dte_tipo||'') + ')'));
     c.push(_sep('='));
 
-    // Cabecera columnas
-    c.push(_EP.BOLD_ON);
-    c.push(_pL('CANT',5) + _pL('DESCRIPCION',29) + _pR('TOTAL',10) + _N);
-    c.push(_EP.BOLD_OFF);
-    c.push(_sep('-'));
+    if (esGuia) {
+        // ── GUÍA: sin precios, casilla para marcar cada línea al sacarla ──
+        c.push(_EP.BOLD_ON);
+        c.push(_pL('SACAR',6) + _pL('CANT',5) + _pL('PRODUCTO',37) + _N);
+        c.push(_EP.BOLD_OFF);
+        c.push(_sep('-'));
 
-    // Productos
-    prod.forEach(function(p) {
-        const cant = String(p.cantidad || 1);
-        const nom  = String(p.nombre||p.articulo||'').toUpperCase().substring(0,29);
-        const st   = (p.cantidad||1) * (p.precio_unitario||0);
-        const sku  = p.sku ? 'SKU:'+p.sku : '';
-        c.push(_pR(cant,4)+' '+_pL(nom,29)+_pR(_clp(st),10)+_N);
-        if (sku) c.push('     '+_pL(sku,43)+_N);
-    });
-    c.push(_sep('='));
+        let totalUnidades = 0;
+        prod.forEach(function(p) {
+            const cant  = p.cantidad || 1;
+            totalUnidades += cant;
+            const nom   = String(p.nombre||p.articulo||'').toUpperCase().substring(0,37);
+            const sku   = p.sku ? 'SKU:'+p.sku : '';
+            const talla = p.talla ? ' TALLA:'+String(p.talla).toUpperCase() : '';
+            c.push(_pL('[ ]',6) + _pR(String(cant),4) + ' ' + _pL(nom,37) + _N);
+            if (sku || talla) c.push('      '+_pL((sku+talla).substring(0,42),42)+_N);
+        });
+        c.push(_sep('='));
 
-    // Total
-    const total = td.total || 0;
-    c.push(_EP.CENTER, _EP.DBL_ON, _EP.BOLD_ON);
-    c.push('TOTAL: '+_clp(total)+_N);
-    c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
-    c.push(_sep('='));
+        c.push(_EP.CENTER, _EP.BOLD_ON);
+        c.push('TOTAL A SACAR: ' + totalUnidades + ' UNIDAD' + (totalUnidades === 1 ? '' : 'ES') + _N);
+        c.push(_EP.BOLD_OFF);
+        c.push(_sep('='));
+    } else {
+        // Cabecera columnas
+        c.push(_EP.BOLD_ON);
+        c.push(_pL('CANT',5) + _pL('DESCRIPCION',29) + _pR('TOTAL',10) + _N);
+        c.push(_EP.BOLD_OFF);
+        c.push(_sep('-'));
+
+        // Productos
+        prod.forEach(function(p) {
+            const cant = String(p.cantidad || 1);
+            const nom  = String(p.nombre||p.articulo||'').toUpperCase().substring(0,29);
+            const st   = (p.cantidad||1) * (p.precio_unitario||0);
+            const sku  = p.sku ? 'SKU:'+p.sku : '';
+            c.push(_pR(cant,4)+' '+_pL(nom,29)+_pR(_clp(st),10)+_N);
+            if (sku) c.push('     '+_pL(sku,43)+_N);
+        });
+        c.push(_sep('='));
+
+        // Total
+        const total = td.total || 0;
+        c.push(_EP.CENTER, _EP.DBL_ON, _EP.BOLD_ON);
+        c.push('TOTAL: '+_clp(total)+_N);
+        c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
+        c.push(_sep('='));
+    }
 
     // Barcode
     if (numRM) c.push(..._escBarcode128(numRM.replace('RM-','')));
@@ -409,7 +441,14 @@ function _generarEscPosEcommerce(td) {
 
     // Pie
     c.push(_EP.CENTER);
-    c.push('*** PEDIDO ECOMMERCE ***' + _N);
+    if (esGuia) {
+        c.push(_EP.BOLD_ON);
+        c.push('*** NO VALIDO COMO BOLETA ***' + _N);
+        c.push(_EP.BOLD_OFF);
+        c.push('Preparado por: ______________________' + _N);
+    } else {
+        c.push('*** PEDIDO ECOMMERCE ***' + _N);
+    }
     c.push(_EP.FEED3, _EP.CUT);
 
     return c;

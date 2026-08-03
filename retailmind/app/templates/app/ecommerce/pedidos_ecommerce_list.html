@@ -71,6 +71,12 @@
 /* ── checkbox ── */
 .cb-pedido{width:15px;height:15px;cursor:pointer;accent-color:#3b82f6;}
 
+/* ── semáforo de aging (horas desde asignación) ── */
+.aging-b{display:inline-block;margin-left:4px;font-size:.62rem;font-weight:700;padding:1px 6px;border-radius:8px;vertical-align:middle;}
+.aging-ok{background:#dcfce7;color:#15803d;}
+.aging-warn{background:#fef3c7;color:#b45309;}
+.aging-bad{background:#fee2e2;color:#b91c1c;}
+
 /* ── barra de acción masiva (inline, entre filtros y tabla) ── */
 #bulk-bar{
   background:linear-gradient(135deg,#1e3a5f,#1d4ed8);
@@ -529,6 +535,10 @@
     <button class="btn btn-light btn-sm fw-bold" id="btn-facturar-masivo" onclick="confirmarFacturacionMasiva()">
       <i class="bi bi-receipt me-1"></i>Facturar
     </button>
+    <button class="btn btn-outline-light btn-sm" id="btn-imprimir-guias" onclick="imprimirGuiasSeleccionadas()"
+            title="Imprimir guías de preparación de los seleccionados (marca En Preparación)">
+      <i class="bi bi-printer me-1"></i>Guías
+    </button>
     <button class="btn-distribuir" onclick="abrirDistribucion()">
       <i class="bi bi-diagram-3 me-1"></i>Distribuir
     </button>
@@ -811,6 +821,7 @@ function aplicarFiltros(page, silencioso){
       cont.innerHTML = html;
       cont.style.opacity = ''; cont.style.pointerEvents = '';
       formatMiles(cont);
+      pintarAging(cont);
       reaplicarSeleccion();   // el re-render borra los checks del DOM; la verdad vive en _seleccion
       actualizarContador();
     })
@@ -1505,6 +1516,98 @@ function ejecutarReasignacion(){
 }
 
 /* ─────────────────────────────────────────────────────
+   Guía de preparación (picking en tienda)
+   Imprimir la guía registra la impresión en el backend y,
+   si el pedido estaba ASIGNADO, lo pasa a EN_PREPARACION.
+   ───────────────────────────────────────────────────── */
+async function _imprimirGuiaFetch(pedidoId){
+  const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  const r = await fetch(`/app/ecommerce/pedidos/${pedidoId}/imprimir-guia/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+    body: '{}'
+  });
+  return r.json();
+}
+
+async function imprimirGuiaPedido(pedidoId, btn){
+  if(typeof imprimirConQZ === 'undefined' || !QZ_CONFIG.habilitado){
+    alert('QZ Tray no está habilitado para esta sucursal.');
+    return;
+  }
+  if(btn) btn.disabled = true;
+  try {
+    const data = await _imprimirGuiaFetch(pedidoId);
+    if(!data.ok){ alert('Error: ' + (data.error || 'no se pudo registrar la guía')); return; }
+    const ok = await imprimirConQZ(data.print_data);
+    if(!ok) alert('No se pudo imprimir. Verifica que QZ Tray esté activo (la guía quedó registrada igual).');
+    aplicarFiltros(_pagina, true);
+  } catch(e){
+    alert('Error de conexión: ' + e);
+  } finally {
+    if(btn) btn.disabled = false;
+  }
+}
+
+async function imprimirGuiasSeleccionadas(){
+  const ids = getSeleccionados();
+  if(!ids.length){ alert('Selecciona al menos un pedido.'); return; }
+  if(typeof imprimirConQZ === 'undefined' || !QZ_CONFIG.habilitado){
+    alert('QZ Tray no está habilitado para esta sucursal.');
+    return;
+  }
+  const btn = document.getElementById('btn-imprimir-guias');
+  btn.disabled = true;
+  const total = ids.length;
+  let impresas = 0, fallidas = 0;
+  for(const id of ids){
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${impresas + fallidas + 1}/${total}`;
+    try {
+      const data = await _imprimirGuiaFetch(id);
+      if(data.ok && await imprimirConQZ(data.print_data)) impresas++;
+      else fallidas++;
+    } catch(e){ fallidas++; }
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-printer me-1"></i>Guías';
+  alert(`Guías: ${impresas} impresa(s)` + (fallidas ? `, ${fallidas} con error` : ''));
+  deseleccionarTodo();
+  aplicarFiltros(_pagina, true);
+}
+
+function marcarListoDespacho(pedidoId, btn){
+  const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  if(btn) btn.disabled = true;
+  fetch(`/app/ecommerce/pedidos/${pedidoId}/sub-estado/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+    body: JSON.stringify({ sub_estado: 'LISTO_DESPACHO', motivo: 'Picking terminado (botón Listo)' })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if(data.ok){ aplicarFiltros(_pagina, true); }
+    else { alert('Error: ' + (data.error || 'no se pudo cambiar el sub-estado')); if(btn) btn.disabled = false; }
+  })
+  .catch(err => { alert('Error de conexión: ' + err); if(btn) btn.disabled = false; });
+}
+
+/* Semáforo de aging: tiempo transcurrido desde la asignación (o recepción)
+   en pedidos PENDIENTES. Verde <2h, amarillo 2-4h, rojo >4h. */
+function pintarAging(root){
+  const ahora = Date.now();
+  (root || document).querySelectorAll('.aging-b[data-asig]').forEach(el => {
+    const t = Date.parse(el.dataset.asig);
+    if(isNaN(t)) return;
+    const horas = (ahora - t) / 3600000;
+    el.textContent = horas < 1
+      ? Math.max(0, Math.round(horas * 60)) + 'm'
+      : (horas < 48 ? Math.round(horas) + 'h' : Math.round(horas / 24) + 'd');
+    el.classList.remove('aging-ok','aging-warn','aging-bad');
+    el.classList.add(horas >= 4 ? 'aging-bad' : (horas >= 2 ? 'aging-warn' : 'aging-ok'));
+  });
+}
+
+/* ─────────────────────────────────────────────────────
    Auto-refresh AJAX cada 60s — NO recarga la página: solo
    re-pide la tabla en segundo plano. Se salta si hay
    selección activa o un modal abierto (para no molestar).
@@ -1542,6 +1645,8 @@ document.addEventListener('keydown', function(e){
 
 /* ── Inicialización (render inicial ya viene del servidor) ── */
 formatMiles(document);
+pintarAging(document);
+setInterval(function(){ pintarAging(document); }, 120000);  // el aging envejece solo
 actualizarContador();
 </script>
 

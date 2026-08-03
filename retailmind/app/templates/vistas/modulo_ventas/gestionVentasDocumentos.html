@@ -1267,7 +1267,7 @@ document.addEventListener('DOMContentLoaded', function() {
         eliminarDocumento: '{% url "eliminar_documento_venta" %}',
         editarBoletaPapel: '{% url "editar_dte_boleta_papel" %}',
         crearDteManual: '{% url "crear_dte_manual" %}',
-        exportarExcel: '/api/ventas/exportar-documentos/',
+        exportarExcel: '{% url "exportar_documentos_ventas_excel" %}',
         detalleDocumento: (id) => `{% url "detalle_documento_venta" documento_id=0 %}`.replace('/0/', `/${id}/`),
         listarTicketsDteFallido: '{% url "listar_tickets_dte_fallido" %}',
         reintentarDte: (ticketId) => `{% url "reintentar_generar_dte_ticket" ticket_id=0 %}`.replace('/0/', `/${ticketId}/`),
@@ -3084,6 +3084,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 const docs = data.documentos;
+
+                // El backend acota `per_page`. Si el filtro tiene más documentos
+                // de los que caben, hay que decirlo: una tabla recortada en
+                // silencio se pega en Excel como si estuviera completa.
+                const totalFiltrado = (data.pagination && data.pagination.total_items) || docs.length;
+                if (totalFiltrado > docs.length) {
+                    mostrarError(
+                        `Se copiaron ${docs.length} de ${totalFiltrado} documentos (limite por consulta). ` +
+                        `Acota el rango de fechas o usa el boton Excel para bajarlos todos.`
+                    );
+                }
+
                 const headers = ['Tipo', 'N Documento', 'Fecha', 'Cliente', 'RUT', 'Vendedor', 'Items', 'Metodo Pago', 'Subtotal', 'Descuento', 'Total'];
                 const rows = docs.map(doc => [
                     doc.tipo || '',

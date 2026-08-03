@@ -36,6 +36,7 @@ from .utils_ventas import (
     get_sucursal_id,
     puede_editar_campo_dte,
     permisos_edicion_dte_context,
+    persistir_costeo_fifo,
     puede_cambiar_tipo_dte,
     son_tipos_compatibles,
     tipos_compatibles_para,
@@ -1096,8 +1097,11 @@ def buscar_productos_pos_avanzado(request):
 
         palabras = [p for p in search_term.split() if p.strip()]
         for palabra in palabras:
-            productos_query = productos_query.filter(
-                Q(sku__icontains=palabra) |
+            # `sku` es BigIntegerField: un __icontains fuerza CAST a texto y un
+            # seq scan de ~605.000 filas en CADA tecla. Mismo criterio que el
+            # buscador de existencias: si el término es numérico, match exacto
+            # contra el índice; si no, el SKU no participa del OR.
+            filtros_palabra = (
                 Q(producto__articulo__icontains=palabra) |
                 Q(producto__atributo1__valor__icontains=palabra) |
                 Q(producto__atributo2__valor__icontains=palabra) |
@@ -1106,6 +1110,9 @@ def buscar_productos_pos_avanzado(request):
                 Q(producto__categoria__nombre__icontains=palabra) |
                 Q(talla__icontains=palabra)
             )
+            if palabra.strip().isdigit():
+                filtros_palabra = filtros_palabra | Q(sku=int(palabra.strip()))
+            productos_query = productos_query.filter(filtros_palabra)
 
         productos_con_stock = []
         for pt in productos_query[:30]:
@@ -1166,6 +1173,14 @@ def buscar_productos_bodega(request):
                 'error': 'No hay sucursal activa'
             })
 
+        # Igual que arriba: nada de __icontains sobre el SKU numérico.
+        filtros_termino = (
+            Q(producto__articulo__icontains=termino) |
+            Q(producto__atributo1__valor__icontains=termino)
+        )
+        if termino.strip().isdigit():
+            filtros_termino = filtros_termino | Q(sku=int(termino.strip()))
+
         productos_query = (
             Producto_Talla.objects
             .filter(producto__sucursal_id=sucursal_id, stock__gt=0)
@@ -1174,11 +1189,7 @@ def buscar_productos_bodega(request):
                 'producto__categoria',
                 'producto__atributo1',
             )
-            .filter(
-                Q(sku__icontains=termino) |
-                Q(producto__articulo__icontains=termino) |
-                Q(producto__atributo1__valor__icontains=termino)
-            )
+            .filter(filtros_termino)
         )
 
         productos_data = []
@@ -4474,7 +4485,7 @@ def registrar_pagos_ticket(request, correlativo):
             try:
                 # Consumir stock FIFO (esto crea automáticamente el movimiento de EGRESO)
                 # ✅ No pasar referencia_externa para que consumir_stock_fifo use DTE si está disponible
-                consumir_stock_fifo(
+                costo_total_fifo, lotes_fifo = consumir_stock_fifo(
                     producto_talla=tp.ProductoTalla,
                     cantidad_requerida=tp.stock,
                     responsable=request.user.username,
@@ -4482,7 +4493,12 @@ def registrar_pagos_ticket(request, correlativo):
                     observaciones=f'Pago de ticket #{ticket.correlativo}',
                     referencia_externa=None  # Dejamos que consumir_stock_fifo determine la referencia correcta
                 )
-                
+
+                # Trazabilidad: dejar registrado de qué lotes (y por tanto de qué
+                # DTE de compra) salió esta línea. Sin esto el dato se pierde al
+                # terminar el cobro y el margen real queda en 0.
+                persistir_costeo_fifo(tp, costo_total_fifo, lotes_fifo)
+
                 # Recargar para ver el stock actualizado
                 tp.ProductoTalla.refresh_from_db()
                 stock_despues = tp.ProductoTalla.stock
@@ -4988,6 +5004,10 @@ def ticket_pago_pos(request):
 
 # ========== GESTIÓN DE DOCUMENTOS DE VENTAS ==========
 
+# Máximo de documentos que `listar_documentos_ventas` devuelve en una página.
+# Acota el costo del endpoint sin importar lo que pida el cliente.
+PER_PAGE_MAX_DOCUMENTOS_VENTAS = 1000
+
 @login_required
 def gestion_ventas_documentos(request):
     """Vista principal para gestión de ventas y documentos"""
@@ -5130,7 +5150,13 @@ def listar_documentos_ventas(request):
         metodo_pago = request.GET.get('metodo_pago')
         buscar = request.GET.get('buscar', '').strip()
         page = int(request.GET.get('page', 1))
-        per_page = int(request.GET.get('per_page', 20))
+        # Tope de `per_page`: sin él, "Copiar Tabla" pedía 99999 y el endpoint
+        # armaba en memoria todos los DTE del rango con sus líneas y pagos.
+        # Se devuelve `per_page_solicitado` para que el frontend pueda avisar
+        # cuando el tope recorta — una tabla truncada en silencio se lee como
+        # completa, que es peor que un error visible.
+        per_page_solicitado = int(request.GET.get('per_page', 20))
+        per_page = max(1, min(per_page_solicitado, PER_PAGE_MAX_DOCUMENTOS_VENTAS))
         monto_min_raw = request.GET.get('monto_min', '').strip()
         monto_max_raw = request.GET.get('monto_max', '').strip()
         monto_min = int(monto_min_raw) if monto_min_raw.isdigit() else None
@@ -5391,7 +5417,7 @@ def listar_documentos_ventas(request):
                     'monto': pago.monto,
                     'voucher': pago.voucher or '',
                     'tipo_tarjeta': pago.tipo_tarjeta or '',
-                    'notas': getattr(pago, 'notas', '') or '',
+                    'notas': pago.notas or '',
                     'fecha_pago': fecha_pago_dte,
                 })
             metodos_pago = agrupar_metodos_pago(metodos_pago_raw)
@@ -5466,6 +5492,7 @@ def listar_documentos_ventas(request):
             'pagination': {
                 'current_page': page_obj.number,
                 'per_page': per_page,
+                'per_page_solicitado': per_page_solicitado,
                 'total_pages': paginator.num_pages,
                 'total_items': total_documentos,
                 'has_previous': page_obj.has_previous(),
@@ -5554,11 +5581,15 @@ def exportar_documentos_ventas_excel(request):
             'vendedor', 
             'receptor'
         ).prefetch_related(
+            # Solo los pagos: el Excel no exporta líneas de producto, así que
+            # prefetchear `dte_productos` materializaba miles de filas para nada.
             'dte_asociado',
-            'dte_productos__productoTalla__producto'
         ).filter(
             sucursal_id=sucursal_id,
-            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO']
+            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
+            # Mismo criterio que `listar_documentos_ventas`: sin esto el Excel
+            # incluía los DTE eliminados lógicamente y no cuadraba con la pantalla.
+            descartado=False,
         )
         
         # Aplicar filtros de fecha
@@ -5637,8 +5668,13 @@ def exportar_documentos_ventas_excel(request):
                 'cliente_nombre': dte.receptor.nombre if dte.receptor else 'Sin nombre',
                 'cliente_rut': dte.receptor.rut if dte.receptor else '',
                 'vendedor_nombre': f"{dte.vendedor.codigo_vendedor} - {dte.vendedor.nombre}" if dte.vendedor else 'Sin vendedor',
-                'neto': int(dte.monto_total or 0),
-                'iva': int(dte.iva or 0),
+                # `Dte` no tiene `monto_total` ni `iva`: son `monto_neto` y
+                # `monto_con_iva`. Leer los nombres inexistentes lanzaba
+                # AttributeError en el primer documento, lo tragaba el
+                # `except Exception` de más abajo y el usuario recibía un JSON
+                # de error en vez del .xlsx.
+                'neto': int(dte.monto_neto or 0),
+                'iva': int((dte.monto_con_iva or 0) - (dte.monto_neto or 0)),
                 'total': int(dte.monto_con_iva or 0),
                 'metodos_pago': metodos_pago_str,
                 'estado': estado_display,

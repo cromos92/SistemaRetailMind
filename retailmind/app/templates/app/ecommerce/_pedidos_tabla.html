@@ -77,6 +77,9 @@
             </td>
             <td>
               <span class="sub-{{ p.sub_estado|lower }}">{{ p.get_sub_estado_display }}</span>
+              {% if p.estado == 'PENDIENTE' %}
+                <span class="aging-b" data-asig="{% if p.fecha_asignacion %}{{ p.fecha_asignacion|date:'c' }}{% else %}{{ p.fecha_recepcion|date:'c' }}{% endif %}" title="Tiempo desde {% if p.fecha_asignacion %}asignación{% else %}recepción{% endif %}"></span>
+              {% endif %}
             </td>
             <td>
               {% if p.id in pedidos_sin_stock_ids %}
@@ -98,6 +101,16 @@
                   <a href="{% url 'pedido_ecommerce_detalle' pedido_id=p.id %}" class="btn btn-sm btn-outline-primary" style="font-size:.72rem;padding:2px 8px;">
                     {% if p.estado == 'PENDIENTE' %}Facturar{% else %}Ver{% endif %}
                   </a>
+                  {% if p.estado == 'PENDIENTE' and p.sub_estado != 'RECIBIDO' %}
+                  <button class="btn btn-sm btn-outline-dark" style="font-size:.68rem;padding:1px 6px;" onclick="imprimirGuiaPedido({{ p.id }}, this)" title="Imprimir guía de preparación{% if p.sub_estado == 'ASIGNADO' %} (marca En Preparación){% else %} (reimprimir){% endif %}">
+                    <i class="bi bi-printer"></i>
+                  </button>
+                  {% endif %}
+                  {% if p.estado == 'PENDIENTE' and p.sub_estado == 'EN_PREPARACION' %}
+                  <button class="btn btn-sm btn-outline-success" style="font-size:.68rem;padding:1px 6px;" onclick="marcarListoDespacho({{ p.id }}, this)" title="Marcar Listo para Despacho (picking terminado)">
+                    <i class="bi bi-check2-circle"></i>
+                  </button>
+                  {% endif %}
                   {% if p.estado == 'PENDIENTE' %}
                   <button class="btn btn-sm btn-outline-secondary" style="font-size:.68rem;padding:1px 6px;" onclick="abrirReasignar({{ p.id }})" title="Reasignar">
                     <i class="bi bi-arrow-left-right"></i>

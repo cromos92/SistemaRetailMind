@@ -103,8 +103,12 @@
               <th class="text-center">Reasignados</th>
               <th class="text-center">Tasa Reasign.</th>
               <th class="text-center">Sin Stock</th>
-              <th class="text-center">Tasa Sin Stock</th>
-              <th class="text-center">Tiempo Prom.</th>
+              <th class="text-center" title="% de pedidos del periodo con guía de preparación impresa">% Guía</th>
+              <th class="text-center" title="% de pedidos del periodo marcados Listo Despacho">% Listo</th>
+              <th class="text-center" title="T1: asignación → impresión de guía (reacción de la tienda)">T1 Reacción</th>
+              <th class="text-center" title="T2: inicio preparación → listo despacho (picking)">T2 Picking</th>
+              <th class="text-center" title="T3: listo despacho → facturación">T3 Factura</th>
+              <th class="text-center" title="Recepción → facturación (métrica histórica)">T Total</th>
               <th class="text-center">Estado</th>
             </tr>
           </thead>
@@ -112,7 +116,7 @@
             {% for s in sucursales_data %}
             <tr>
               <td style="font-weight:700;">{{ s.nombre }}</td>
-              <td class="text-center">{{ s.total_pedidos }}</td>
+              <td class="text-center">{{ s.pedidos_periodo|default:s.total_pedidos }}</td>
               <td class="text-center">{{ s.reasignados }}</td>
               <td class="text-center">
                 <div class="d-flex align-items-center justify-content-center gap-2">
@@ -124,12 +128,19 @@
               </td>
               <td class="text-center">{{ s.sin_stock }}</td>
               <td class="text-center">
-                <div class="d-flex align-items-center justify-content-center gap-2">
-                  <div class="bar-pct">
-                    <div class="bar-pct-fill" style="width:{{ s.tasa_sin_stock }}%;background:{% if s.tasa_sin_stock > 30 %}#ef4444{% elif s.tasa_sin_stock > 15 %}#f59e0b{% else %}#22c55e{% endif %};"></div>
-                  </div>
-                  <span style="font-weight:600;font-size:.82rem;">{{ s.tasa_sin_stock }}%</span>
-                </div>
+                <span style="font-weight:700;font-size:.82rem;color:{% if s.pct_con_guia >= 90 %}#16a34a{% elif s.pct_con_guia >= 50 %}#d97706{% else %}#dc2626{% endif %};">{{ s.pct_con_guia }}%</span>
+              </td>
+              <td class="text-center">
+                <span style="font-weight:600;font-size:.82rem;">{{ s.pct_listos }}%</span>
+              </td>
+              <td class="text-center">
+                {% if s.t1_min is not None %}<span style="font-weight:600;">{{ s.t1_min }} min</span>{% else %}<span class="text-muted">--</span>{% endif %}
+              </td>
+              <td class="text-center">
+                {% if s.t2_min is not None %}<span style="font-weight:600;">{{ s.t2_min }} min</span>{% else %}<span class="text-muted">--</span>{% endif %}
+              </td>
+              <td class="text-center">
+                {% if s.t3_min is not None %}<span style="font-weight:600;">{{ s.t3_min }} min</span>{% else %}<span class="text-muted">--</span>{% endif %}
               </td>
               <td class="text-center">
                 {% if s.tiempo_promedio_min > 0 %}
@@ -157,6 +168,59 @@
     <i class="bi bi-info-circle me-2"></i>No hay datos de metricas para el periodo seleccionado.
   </div>
   {% endif %}
+
+  <!-- Atrasados AHORA (en vivo) -->
+  <div class="card border-0 shadow-sm mt-4">
+    <div class="card-header py-3 {% if atrasados %}bg-danger-subtle{% else %}bg-white{% endif %}">
+      <h6 class="mb-0 fw-bold" style="font-size:.9rem;">
+        <i class="bi bi-alarm me-2"></i>Atrasados AHORA
+        <span class="text-muted fw-normal" style="font-size:.72rem;">
+          — Asignado sin preparar &gt;{{ sla_preparar_h }}h · En preparación sin listo &gt;{{ sla_listo_h }}h
+        </span>
+        {% if atrasados %}<span class="badge-alerta ms-2">{{ atrasados|length }}</span>{% endif %}
+      </h6>
+    </div>
+    <div class="card-body p-0">
+      {% if atrasados %}
+      <div class="table-responsive">
+        <table class="table tbl-rank mb-0">
+          <thead>
+            <tr>
+              <th>Ticket RM</th>
+              <th>Canal</th>
+              <th>Cliente</th>
+              <th>Sucursal</th>
+              <th>Sub-estado</th>
+              <th class="text-center">Horas estancado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in atrasados %}
+            <tr>
+              <td style="font-weight:700;">{{ a.numero_ticket_rm }}</td>
+              <td>{{ a.canal_origen }}</td>
+              <td>{{ a.cliente_nombre }}</td>
+              <td>{{ a.sucursal }}</td>
+              <td>{{ a.sub_estado }}</td>
+              <td class="text-center">
+                <span class="badge-alerta">{{ a.horas_estancado|floatformat:1 }} h</span>
+              </td>
+              <td>
+                <a href="{% url 'pedido_ecommerce_detalle' pedido_id=a.id %}" class="btn btn-sm btn-outline-primary" style="font-size:.7rem;padding:1px 8px;">Ver</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="p-3 text-muted" style="font-size:.82rem;">
+        <i class="bi bi-check-circle me-1" style="color:#16a34a;"></i>Ningún pedido pendiente fuera de SLA en este momento.
+      </div>
+      {% endif %}
+    </div>
+  </div>
 
 </div>
 </div>

@@ -1344,6 +1344,35 @@ async function imprimirGuiaPreparacion() {
         return;
     }
 
+    {% if pedido.estado == 'PENDIENTE' %}
+    // Registrar la impresión en el backend: guarda quién/cuándo y, si el
+    // pedido estaba ASIGNADO, lo pasa a EN_PREPARACION (inicio del picking).
+    // El print_data vuelve del servidor con es_guia (rótulo GUIA PREPARACION).
+    const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+    let data;
+    try {
+        const r = await fetch("{% url 'api_imprimir_guia_preparacion' pedido_id=pedido.id %}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: '{}'
+        });
+        if (r.status === 404) { alert('El pedido ya no está pendiente.'); return; }
+        data = await r.json();
+    } catch (e) {
+        alert('Error de conexión: ' + e);
+        return;
+    }
+    if (!data.ok) { alert('Error: ' + (data.error || 'no se pudo registrar la guía')); return; }
+
+    const ok = await imprimirConQZ(data.print_data);
+    if (ok) {
+        if (data.transiciono) { location.reload(); return; }
+        alert('Guía de preparación impresa.');
+    } else {
+        alert('Error al imprimir. Verifica que QZ Tray esté activo (la guía quedó registrada igual).');
+    }
+    {% else %}
+    // Pedido ya facturado/cancelado: impresión informativa sin registro.
     const ticketData = {
         modulo_origen: 'ECOMMERCE',
         numero_ticket_rm: '{{ pedido.numero_ticket_rm }}',
@@ -1368,8 +1397,9 @@ async function imprimirGuiaPreparacion() {
     };
 
     const ok = await imprimirConQZ(ticketData);
-    if (ok) alert('Guía de preparación impresa.');
+    if (ok) alert('Comprobante impreso.');
     else alert('Error al imprimir. Verifica que QZ Tray esté activo.');
+    {% endif %}
 }
 </script>
 

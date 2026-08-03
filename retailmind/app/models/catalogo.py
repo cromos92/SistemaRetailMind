@@ -149,6 +149,14 @@ class Producto(models.Model):
         help_text='No aparece en dashboards, predicciones ni KPIs. Usar para exhibición, consignación o catálogo histórico.'
     )
 
+    class Meta:
+        # El índice de `articulo` lo creó la migración 0109 y lo revirtió sin
+        # querer la 0110 (autogenerada, porque este modelo nunca se actualizó).
+        # Se declara aquí para que no vuelva a perderse.
+        indexes = [
+            models.Index(fields=['articulo'], name='producto_articulo_idx'),
+        ]
+
     def __str__(self):
         return f"Producto {self.articulo} - {self.precioventa}"
 
@@ -160,6 +168,16 @@ class Producto_Talla(models.Model):
     stock =   models.IntegerField( )
     talla =   models.CharField(max_length=50)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+    class Meta:
+        # Mismo caso que Producto.articulo: la 0110 revirtió el índice que la
+        # 0109 había creado. Sin él, cada búsqueda por SKU (lector de códigos del
+        # POS, ecommerce, trazabilidad, API externa) es un seq scan de ~605.000
+        # filas. NO lleva unique: existen SKUs duplicados de la migración legacy
+        # (ver el comando diagnosticar_skus_duplicados).
+        indexes = [
+            models.Index(fields=['sku'], name='prodtalla_sku_idx'),
+        ]
 
     def __str__(self):
         return f"Producto_Talla {self.sku} - {self.stock}"

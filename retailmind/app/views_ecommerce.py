@@ -26,6 +26,7 @@ from app.models import (
     SUB_ESTADO_PEDIDO_CHOICES, TRANSICIONES_SUB_ESTADO,
     PermisoRol,
 )
+from app.utils_ventas import persistir_costeo_fifo
 
 
 def _verificar_permiso_ecommerce(request, tipo_permiso):
@@ -627,15 +628,88 @@ def api_asignar_ticket_rm(request):
     except PedidoEcommerce.DoesNotExist:
         return JsonResponse({'ok': False, 'error': 'Pedido no encontrado'}, status=404)
 
-    return JsonResponse({
+    respuesta = {
         'ok': True,
-        'numero_ticket_rm': pedido.numero_ticket_rm,
-        'estado': pedido.estado,
-        'canal_origen': pedido.canal_origen,
         'cliente_nombre': pedido.cliente_nombre,
         'total': str(pedido.total),
+    }
+    respuesta.update(_tracking_pedido_dict(pedido))
+    return JsonResponse(respuesta)
+
+
+def _tracking_pedido_dict(pedido):
+    """Estado operativo del pedido para AllConnected (consultar + batch).
+
+    Solo AGREGAR claves aquí: el cliente de AC lee la respuesta
+    defensivamente y versiones viejas siguen consumiendo las claves
+    originales (estado / ticket_id / dte_id).
+    """
+    def _iso(dt):
+        return timezone.localtime(dt).isoformat() if dt else None
+
+    suc = pedido.sucursal
+    return {
+        'numero_ticket_rm': pedido.numero_ticket_rm,
+        'estado': pedido.estado,
+        'sub_estado': pedido.sub_estado,
+        'sub_estado_display': pedido.get_sub_estado_display(),
+        'canal_origen': pedido.canal_origen,
+        'sucursal': {
+            'id': pedido.sucursal_id,
+            'alias': (suc.nombre or suc.alias or '') if suc else '',
+        },
+        'fechas': {
+            'recepcion': _iso(pedido.fecha_recepcion),
+            'asignacion': _iso(pedido.fecha_asignacion),
+            'impresion_guia': _iso(pedido.fecha_impresion_guia),
+            'inicio_preparacion': _iso(pedido.fecha_inicio_preparacion),
+            'listo_despacho': _iso(pedido.fecha_listo_despacho),
+            'facturacion': _iso(pedido.fecha_facturacion),
+        },
         'ticket_id': pedido.ticket_id,
         'dte_id': pedido.dte_id,
+    }
+
+
+@csrf_exempt
+def api_estado_pedidos_batch(request):
+    """POST /app/api/ecommerce/pedidos/estado-batch/
+
+    Estado operativo (avance en tienda) de hasta 300 pedidos por
+    `numero_ticket_rm`, para que AllConnected refresque su columna
+    "Tienda (RM)" sin consultar de a uno. Misma API key que el resto
+    de la API ecommerce.
+
+    Body: {"tickets": ["<numero_ticket_rm>", ...]}
+    Respuesta: {"ok": true, "pedidos": {"<ticket>": {...}}, "no_encontrados": [...]}
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST requerido'}, status=405)
+    if not _verificar_api_key(request):
+        return JsonResponse({'ok': False, 'error': 'API key inválida'}, status=401)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'JSON inválido'}, status=400)
+
+    tickets = data.get('tickets') or []
+    if not isinstance(tickets, list) or not tickets:
+        return JsonResponse({'ok': False, 'error': 'tickets debe ser una lista no vacía'}, status=400)
+    if len(tickets) > 300:
+        return JsonResponse({'ok': False, 'error': 'Máximo 300 tickets por consulta'}, status=400)
+
+    tickets = [str(t).strip() for t in tickets if str(t).strip()]
+    pedidos = (
+        PedidoEcommerce.objects
+        .filter(numero_ticket_rm__in=tickets)
+        .select_related('sucursal')
+    )
+    por_ticket = {p.numero_ticket_rm: _tracking_pedido_dict(p) for p in pedidos}
+    return JsonResponse({
+        'ok': True,
+        'pedidos': por_ticket,
+        'no_encontrados': [t for t in tickets if t not in por_ticket],
     })
 
 
@@ -1997,13 +2071,15 @@ def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMM
         # Descontar stock y registrar movimiento de EGRESO
         if producto_talla:
             try:
-                consumir_stock_fifo(
+                costo_total_fifo, lotes_fifo = consumir_stock_fifo(
                     producto_talla=producto_talla,
                     cantidad_requerida=cantidad,
                     responsable=responsable,
                     ticket=ticket,
                     observaciones=f'Venta ecommerce {pedido.canal_origen} #{pedido.numero_pedido_canal} | RM: {pedido.numero_ticket_rm}',
                 )
+                # Trazabilidad: guardar de qué lotes (y DTE de compra) salió la línea.
+                persistir_costeo_fifo(tp_obj, costo_total_fifo, lotes_fifo)
             except Exception as fifo_err:
                 # Si FIFO falla (stock insuficiente en lotes), descuento manual
                 logger.warning(
@@ -2571,10 +2647,20 @@ def api_cambiar_sub_estado(request, pedido_id):
 
     sub_estado_anterior = pedido.sub_estado
     pedido.sub_estado = nuevo_sub_estado
+    ahora = timezone.now()
     if nuevo_sub_estado == 'ASIGNADO' and not pedido.fecha_asignacion:
-        pedido.fecha_asignacion = timezone.now()
+        pedido.fecha_asignacion = ahora
         pedido.asignado_por = request.user
-    pedido.save(update_fields=['sub_estado', 'fecha_asignacion', 'asignado_por'])
+    # Timestamps de picking: solo la PRIMERA vez que se alcanza cada etapa
+    # (retroceder y volver a avanzar no debe pisar la medición original).
+    if nuevo_sub_estado == 'EN_PREPARACION' and not pedido.fecha_inicio_preparacion:
+        pedido.fecha_inicio_preparacion = ahora
+    if nuevo_sub_estado == 'LISTO_DESPACHO' and not pedido.fecha_listo_despacho:
+        pedido.fecha_listo_despacho = ahora
+    pedido.save(update_fields=[
+        'sub_estado', 'fecha_asignacion', 'asignado_por',
+        'fecha_inicio_preparacion', 'fecha_listo_despacho',
+    ])
 
     HistorialPedidoEcommerce.objects.create(
         pedido=pedido,
@@ -2591,6 +2677,102 @@ def api_cambiar_sub_estado(request, pedido_id):
         'ok': True,
         'sub_estado': pedido.sub_estado,
         'sub_estado_anterior': sub_estado_anterior,
+    })
+
+
+# ---------------------------------------------------------------------------
+# API — Imprimir guía de preparación (picking en tienda)
+# ---------------------------------------------------------------------------
+
+@login_required
+@csrf_exempt
+def api_imprimir_guia_preparacion(request, pedido_id):
+    """POST /app/ecommerce/pedidos/<id>/imprimir-guia/
+
+    Registra la impresión de la guía de preparación y, si el pedido estaba
+    ASIGNADO, lo transiciona a EN_PREPARACION: imprimir la guía ES el inicio
+    del picking, así el rastro sale gratis sin pasos extra para la tienda.
+    Reimprimir es idempotente (no duplica la transición ni pisa la primera
+    fecha). Devuelve el print_data que consume `imprimirConQZ` (modo
+    ECOMMERCE con `es_guia`, que rotula "GUIA DE PREPARACION").
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST requerido'}, status=405)
+    denegado = _verificar_permiso_ecommerce(request, 'puede_editar')
+    if denegado:
+        return denegado
+
+    pedido = get_object_or_404(
+        PedidoEcommerce.objects.select_related('sucursal', 'sucursal__empresa'),
+        id=pedido_id, estado='PENDIENTE',
+    )
+
+    ahora = timezone.now()
+    update_fields = []
+    if not pedido.fecha_impresion_guia:
+        pedido.fecha_impresion_guia = ahora
+        pedido.guia_impresa_por = request.user
+        update_fields += ['fecha_impresion_guia', 'guia_impresa_por']
+
+    transiciono = False
+    sub_estado_anterior = pedido.sub_estado
+    if pedido.sub_estado == 'ASIGNADO':
+        pedido.sub_estado = 'EN_PREPARACION'
+        if not pedido.fecha_inicio_preparacion:
+            pedido.fecha_inicio_preparacion = ahora
+        update_fields += ['sub_estado', 'fecha_inicio_preparacion']
+        transiciono = True
+
+    if update_fields:
+        pedido.save(update_fields=update_fields)
+
+    if transiciono:
+        HistorialPedidoEcommerce.objects.create(
+            pedido=pedido,
+            estado_anterior=pedido.estado,
+            estado_nuevo=pedido.estado,
+            sub_estado_anterior=sub_estado_anterior,
+            sub_estado_nuevo='EN_PREPARACION',
+            usuario=request.user,
+            tipo_evento='CAMBIO_ESTADO',
+            motivo='Guía de preparación impresa (inicio de picking)',
+        )
+
+    empresa = getattr(pedido.sucursal, 'empresa', None)
+    productos = []
+    for item in (pedido.items or []):
+        productos.append({
+            'sku': str(item.get('sku') or ''),
+            'nombre': item.get('nombre') or item.get('descripcion') or 'Ítem',
+            'talla': str(item.get('talla') or ''),
+            'cantidad': item.get('cantidad') or 1,
+            'precio_unitario': item.get('precio_unitario') or 0,
+        })
+
+    return JsonResponse({
+        'ok': True,
+        'sub_estado': pedido.sub_estado,
+        'transiciono': transiciono,
+        'print_data': {
+            'modulo_origen': 'ECOMMERCE',
+            'es_guia': True,
+            'numero_ticket_rm': pedido.numero_ticket_rm,
+            'canal_origen': pedido.canal_origen,
+            'numero_pedido_canal': pedido.numero_pedido_canal or '',
+            'folio_despacho': pedido.correlativo or '',
+            'cliente_nombre': pedido.cliente_nombre or '',
+            'cliente_documento': pedido.cliente_documento or '',
+            'direccion_envio': (pedido.direccion_envio or '')[:80],
+            'total': int(pedido.total or 0),
+            'fecha': timezone.localtime(ahora).strftime('%d/%m/%Y %H:%M'),
+            'sucursal': {
+                'empresa': (getattr(empresa, 'razon_social', '') or getattr(empresa, 'nombre', '') or '') if empresa else '',
+                'rut_empresa': (getattr(empresa, 'rut', '') or '') if empresa else '',
+                'alias': pedido.sucursal.nombre or pedido.sucursal.alias or '',
+                'direccion': pedido.sucursal.direccion or '',
+            },
+            'productos': productos,
+        },
     })
 
 
@@ -2972,13 +3154,40 @@ def ecommerce_dashboard_asignacion(request):
         except Exception:
             pass
 
+    # ── Tiempos de picking por sucursal (sobre PedidoEcommerce, no métricas):
+    # T1 reacción (asignación→impresión guía), T2 picking (inicio→listo),
+    # T3 espera factura (listo→facturación) + adopción de la guía.
+    from django.db.models import DurationField, ExpressionWrapper
+
+    def _dur(a, b):
+        return ExpressionWrapper(F(a) - F(b), output_field=DurationField())
+
+    def _min(td):
+        return round(td.total_seconds() / 60) if td else None
+
+    picking_por_suc = {
+        fila['sucursal_id']: fila
+        for fila in pedidos_qs.values('sucursal_id').annotate(
+            total=Count('id'),
+            con_guia=Count('id', filter=Q(fecha_impresion_guia__isnull=False)),
+            listos=Count('id', filter=Q(fecha_listo_despacho__isnull=False)),
+            t1=Avg(_dur('fecha_impresion_guia', 'fecha_asignacion'),
+                   filter=Q(fecha_impresion_guia__isnull=False, fecha_asignacion__isnull=False)),
+            t2=Avg(_dur('fecha_listo_despacho', 'fecha_inicio_preparacion'),
+                   filter=Q(fecha_listo_despacho__isnull=False, fecha_inicio_preparacion__isnull=False)),
+            t3=Avg(_dur('fecha_facturacion', 'fecha_listo_despacho'),
+                   filter=Q(fecha_facturacion__isnull=False, fecha_listo_despacho__isnull=False)),
+        )
+    }
+
     # KPIs por sucursal
     sucursales_data = []
     sucursales = Sucursal.objects.filter(activa=True).order_by('nombre')
     for suc in sucursales:
         m_suc = metricas_qs.filter(sucursal_asignada=suc)
         total = m_suc.count()
-        if total == 0:
+        pk = picking_por_suc.get(suc.id)
+        if total == 0 and not pk:
             continue
         reasignados = m_suc.filter(fue_reasignado=True).count()
         sin_stock = m_suc.filter(todos_items_con_stock=False).count()
@@ -2986,6 +3195,9 @@ def ecommerce_dashboard_asignacion(request):
             avg=Avg('tiempo_procesamiento_min')
         )['avg']
 
+        pedidos_suc = pk['total'] if pk else 0
+        con_guia = pk['con_guia'] if pk else 0
+        listos = pk['listos'] if pk else 0
         sucursales_data.append({
             'sucursal_id': suc.id,
             'nombre': suc.nombre or suc.alias,
@@ -2996,10 +3208,57 @@ def ecommerce_dashboard_asignacion(request):
             'tasa_sin_stock': round(sin_stock / total * 100, 1) if total > 0 else 0,
             'tiempo_promedio_min': round(avg_tiempo or 0, 0),
             'alerta': (reasignados / total * 100) > 20 if total > 0 else False,
+            # Picking en tienda
+            'pedidos_periodo': pedidos_suc,
+            'pct_con_guia': round(con_guia / pedidos_suc * 100, 1) if pedidos_suc else 0,
+            'pct_listos': round(listos / pedidos_suc * 100, 1) if pedidos_suc else 0,
+            't1_min': _min(pk['t1']) if pk else None,
+            't2_min': _min(pk['t2']) if pk else None,
+            't3_min': _min(pk['t3']) if pk else None,
         })
 
     # Ordenar por score (menos reasignaciones = mejor)
     sucursales_data.sort(key=lambda x: x['tasa_reasignacion'])
+
+    # ── Atrasados AHORA (en vivo, no depende del rango de días): pedidos
+    # PENDIENTES que llevan demasiado sin avanzar. SLA configurable por env.
+    import os
+    SLA_SIN_PREPARAR_H = int(os.environ.get('ECOM_SLA_PREPARAR_HORAS', '4'))
+    SLA_SIN_LISTO_H = int(os.environ.get('ECOM_SLA_LISTO_HORAS', '8'))
+    ahora = timezone.now()
+    lim_prep = ahora - timedelta(hours=SLA_SIN_PREPARAR_H)
+    lim_listo = ahora - timedelta(hours=SLA_SIN_LISTO_H)
+
+    qs_pend = PedidoEcommerce.objects.filter(estado='PENDIENTE').select_related('sucursal')
+    if canal:
+        qs_pend = qs_pend.filter(canal_origen=canal)
+    if getattr(user, 'rol', '') != 'administrador':
+        try:
+            from app.models import EmpresaUser
+            eu = EmpresaUser.objects.filter(user=user).select_related('empresa').first()
+            if eu and eu.empresa and (eu.empresa.rut or ''):
+                qs_pend = qs_pend.filter(
+                    django_models.Q(rut_empresa=eu.empresa.rut) | django_models.Q(rut_empresa='')
+                )
+        except Exception:
+            pass
+
+    atrasados = []
+    qs_atrasados = qs_pend.filter(
+        Q(sub_estado='ASIGNADO', fecha_asignacion__lt=lim_prep)
+        | Q(sub_estado='EN_PREPARACION', fecha_inicio_preparacion__lt=lim_listo)
+    ).order_by('fecha_recepcion')[:50]
+    for p in qs_atrasados:
+        ref = p.fecha_asignacion if p.sub_estado == 'ASIGNADO' else p.fecha_inicio_preparacion
+        atrasados.append({
+            'id': p.id,
+            'numero_ticket_rm': p.numero_ticket_rm,
+            'canal_origen': p.canal_origen,
+            'cliente_nombre': p.cliente_nombre,
+            'sucursal': p.sucursal.nombre or p.sucursal.alias if p.sucursal else '',
+            'sub_estado': p.get_sub_estado_display(),
+            'horas_estancado': round((ahora - ref).total_seconds() / 3600, 1) if ref else None,
+        })
 
     # KPIs globales
     total_pedidos = pedidos_qs.count()
@@ -3016,6 +3275,9 @@ def ecommerce_dashboard_asignacion(request):
         'dias': dias,
         'canal_filtro': canal,
         'canales_choices': [('SHOPIFY', 'Shopify'), ('PARIS', 'Paris'), ('RIPLEY', 'Ripley'), ('WALMART', 'Walmart'), ('OTRO', 'Otro')],
+        'atrasados': atrasados,
+        'sla_preparar_h': SLA_SIN_PREPARAR_H,
+        'sla_listo_h': SLA_SIN_LISTO_H,
     }
     return render(request, 'app/ecommerce/dashboard_asignacion.html', context)
 
@@ -3051,9 +3313,16 @@ def exportar_pedidos_csv(request):
         # Cabecera del DTE: permite detectar en Excel las boletas emitidas con
         # unidades y/o monto en 0 (ver alerta del listado).
         'DTE Unidades (cab.)', 'DTE Monto (cab.)',
+        # Picking en tienda: línea de tiempo + duraciones por etapa (min)
+        'Fecha Asignacion', 'Fecha Impresion Guia', 'Guia Impresa Por',
+        'Fecha Inicio Prep.', 'Fecha Listo Despacho',
+        'T1 Reaccion (min)', 'T2 Picking (min)', 'T3 Espera Factura (min)',
     ])
 
-    for p in qs[:5000]:
+    def _f(dt):
+        return dt.strftime('%d/%m/%Y %H:%M') if dt else ''
+
+    for p in qs.select_related('guia_impresa_por')[:5000]:
         writer.writerow([
             p.numero_ticket_rm,
             p.correlativo,
@@ -3065,12 +3334,20 @@ def exportar_pedidos_csv(request):
             int(p.total or 0),
             p.estado,
             p.sub_estado,
-            p.fecha_recepcion.strftime('%d/%m/%Y %H:%M') if p.fecha_recepcion else '',
-            p.fecha_facturacion.strftime('%d/%m/%Y %H:%M') if p.fecha_facturacion else '',
+            _f(p.fecha_recepcion),
+            _f(p.fecha_facturacion),
             p.ticket.correlativo if p.ticket else '',
             p.dte.numero_documento if p.dte else '',
             p.dte.unidades_productos if p.dte else '',
             int(p.dte.monto_con_iva or 0) if p.dte else '',
+            _f(p.fecha_asignacion),
+            _f(p.fecha_impresion_guia),
+            (p.guia_impresa_por.username if p.guia_impresa_por else ''),
+            _f(p.fecha_inicio_preparacion),
+            _f(p.fecha_listo_despacho),
+            p.minutos_reaccion if p.minutos_reaccion is not None else '',
+            p.minutos_picking if p.minutos_picking is not None else '',
+            p.minutos_espera_factura if p.minutos_espera_factura is not None else '',
         ])
 
     return response

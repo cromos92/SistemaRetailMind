@@ -10,7 +10,51 @@ Centraliza lógica repetida en vistas de listado/POS:
 """
 from __future__ import annotations
 
+import json
+import logging
 from typing import Iterable
+
+logger = logging.getLogger('app')
+
+
+# ========== COSTEO FIFO DE LA LÍNEA DE VENTA ==========
+
+def persistir_costeo_fifo(linea_ticket, costo_total_consumido, lotes_utilizados) -> bool:
+    """Guarda en la línea de venta qué lotes FIFO la abastecieron.
+
+    `consumir_stock_fifo()` calcula el costo real y los lotes consumidos, pero ese
+    dato solo existe durante el cobro: los lotes son fungibles y `cantidad_disponible`
+    ya quedó decrementada, así que si no se persiste aquí se pierde de forma
+    irrecuperable de qué lote —y por tanto de qué DTE de compra y a qué costo— salió
+    la unidad vendida.
+
+    `costo_fifo` se guarda UNITARIO porque los reportes de margen calculan
+    `stock * costo_fifo` (ver views_modulo_reportes, views_modulo_compras y el
+    resumen de márgenes de views_modulo_ventas).
+
+    Nunca propaga excepciones: un fallo guardando trazabilidad no puede voltear un
+    cobro ya materializado.
+    """
+    if linea_ticket is None:
+        return False
+
+    try:
+        cantidad = int(getattr(linea_ticket, 'stock', 0) or 0)
+        total = int(costo_total_consumido or 0)
+        costo_unitario = int(round(total / cantidad)) if cantidad > 0 else 0
+
+        linea_ticket.costo_fifo = costo_unitario
+        linea_ticket.lotes_utilizados = json.dumps(
+            lotes_utilizados or [], ensure_ascii=False, default=str
+        )
+        linea_ticket.save(update_fields=['costo_fifo', 'lotes_utilizados'])
+        return True
+    except Exception:
+        logger.exception(
+            "No se pudo persistir el costeo FIFO de la linea de ticket id=%s",
+            getattr(linea_ticket, 'id', None),
+        )
+        return False
 
 
 # ========== NOMBRES DE MÉTODOS DE PAGO ==========
@@ -176,7 +220,11 @@ ONLY_DTE_PRODUCTO = (
 )
 
 ONLY_DTE_PAGO = (
-    'id', 'dte_id', 'metodo_pago', 'monto', 'voucher', 'tipo_tarjeta',
+    # OJO: todo campo que el consumidor lea debe estar aquí. Un campo ausente
+    # queda diferido y Django dispara un `refresh_from_db` por cada acceso —
+    # un N+1 mudo (no falla, solo se hace lento). `notas` faltaba y se lee en
+    # `listar_documentos_ventas`: eran ~120 queries extra por página de 100.
+    'id', 'dte_id', 'metodo_pago', 'monto', 'voucher', 'tipo_tarjeta', 'notas',
 )
 
 # Ticket (dashboard POS)

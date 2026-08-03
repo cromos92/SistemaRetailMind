@@ -43,7 +43,7 @@ from django.contrib.sessions.models import Session
 from django.http import JsonResponse,Http404, HttpResponseBadRequest, HttpResponse
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.shortcuts import get_object_or_404
-from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg, Min, Max, Case, When, Value, IntegerField, CharField
+from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg, Min, Max, Case, When, Value, IntegerField, CharField, Window
 from django.db.models.functions import Cast
 from django.core.paginator import Paginator
 from django.utils import timezone
@@ -8104,9 +8104,10 @@ def crear_ticket_venta(request):
                     ProductoTalla=producto_talla,
                     idTicket=ticket
                 )
-                ticket_producto.costo_fifo = costo_total_consumido
-                ticket_producto.lotes_utilizados = str(lotes_utilizados)  # Convertir a string para almacenar
-                ticket_producto.save()
+                # costo_fifo se guarda UNITARIO (los reportes calculan stock * costo_fifo)
+                # y los lotes como JSON valido, via el helper compartido.
+                from .utils_ventas import persistir_costeo_fifo
+                persistir_costeo_fifo(ticket_producto, costo_total_consumido, lotes_utilizados)
                 
             except Exception as e:
                 raise Exception(f'Error en FIFO para {producto_talla.producto.articulo} - Talla {producto_talla.talla}: {str(e)}')
@@ -8528,9 +8529,11 @@ def reporte_movimientos_kardex(request):
             {'success': False, 'error': 'No tiene acceso al kardex de esta sucursal.'},
             status=403,
         )
+    # select_related sobre dte y ticket: el bucle de abajo los lee para armar la
+    # referencia, y sin esto son 2 queries por fila (hasta 1.000 por pagina).
     movimientos = Movimientos_Producto.objects.filter(
         ProductoTalla=producto_talla
-    ).select_related('sucursal_destino').order_by('fecha', 'hora')
+    ).select_related('sucursal_destino', 'dte', 'ticket').order_by('fecha', 'hora', 'id')
     if fecha_inicio:
         from django.utils.dateparse import parse_date
         movimientos = movimientos.filter(fecha__gte=parse_date(fecha_inicio))
@@ -8539,11 +8542,19 @@ def reporte_movimientos_kardex(request):
         movimientos = movimientos.filter(fecha__lte=parse_date(fecha_fin))
     total_count = movimientos.count()
     offset = (page - 1) * page_size
+    # El saldo se acumula en SQL sobre TODO el rango filtrado, no sobre la pagina:
+    # antes se reiniciaba en 0 en cada pagina y el saldo era falso desde la 2 en
+    # adelante. La window function se evalua antes del LIMIT/OFFSET.
+    movimientos = movimientos.annotate(
+        saldo_acumulado=Window(
+            expression=Sum('cantidad'),
+            order_by=[F('fecha').asc(), F('hora').asc(), F('id').asc()],
+        )
+    )
     movimientos = movimientos[offset:offset+page_size]
     kardex = []
-    saldo = 0
     for m in movimientos:
-        saldo += m.cantidad
+        saldo = m.saldo_acumulado
         # Enriquecer referencia
         referencia = ''
         if m.dte:
@@ -8722,10 +8733,12 @@ def obtener_productos_base(request):
     page_size = min(int(request.GET.get('page_size', 20)), 100)
     sucursal_id = request.session.get('idSucursalActual')
     
-    productos = Producto.objects.all()
+    # select_related sobre los atributos: el bucle de abajo lee .valor de los tres
+    # y sin esto son 3 consultas por fila (hasta 300 por página).
+    productos = Producto.objects.select_related('atributo1', 'atributo2', 'atributo3')
     if sucursal_id:
         productos = productos.filter(sucursal_id=sucursal_id)
-    
+
     if q:
         productos = productos.filter(
             Q(articulo__icontains=q) |
@@ -26048,17 +26061,22 @@ def listar_proveedores(request):
         total_count = proveedores.count()
         total_pages = (total_count + page_size - 1) // page_size
         
-        # Aplicar paginación
+        # Aplicar paginación.
+        # Los contadores van anotados: antes eran 2 consultas por fila (hasta 200
+        # por página). `distinct=True` es obligatorio porque son dos JOIN distintos
+        # en el mismo annotate y sin él se multiplican entre sí.
         offset = (page - 1) * page_size
-        proveedores = proveedores[offset:offset + page_size]
-        
+        proveedores = proveedores.annotate(
+            n_dtes=Count('empresa_destino', distinct=True),
+            n_compras=Count('compras', distinct=True),
+        )[offset:offset + page_size]
+
         # Formatear datos
         data = []
         for proveedor in proveedores:
-            # Contar DTEs y compras asociadas
-            dtes_count = Dte.objects.filter(receptor=proveedor).count()
-            compras_count = Compras.objects.filter(empresa=proveedor).count()
-            
+            dtes_count = proveedor.n_dtes
+            compras_count = proveedor.n_compras
+
             data.append({
                 'id': proveedor.id,
                 'nombre': proveedor.nombre,
@@ -26686,8 +26704,9 @@ def buscar_productos_bodega(request):
             )
             if search_strip.isdigit():
                 filtros = filtros | Q(producto_talla__sku=int(search_strip))
-            else:
-                filtros = filtros | Q(producto_talla__sku__icontains=search)
+            # Si no es numérico no se toca el SKU: comparar texto contra un campo
+            # que solo contiene dígitos no puede devolver nada, y costaba un CAST
+            # más el scan completo del join en cada búsqueda.
             productos_query = productos_query.filter(filtros)
 
         if categoria_id:
@@ -26923,6 +26942,13 @@ def buscar_dte_referencia(request):
             Q(receptor=empresa_actual) | Q(tipo_transaccion='COMPRA', sucursal=sucursal_actual)
         ).filter(descartado=False)
 
+        # `sku` es BigIntegerField: el __icontains forzaba CAST a texto sobre las
+        # ~605.000 filas de Producto_Talla, dos veces (Dte_Productos y
+        # Productos_Recepcionados) y con DISTINCT encima. Si el término es
+        # numérico se busca exacto contra el índice; si no, el SKU no participa.
+        search_strip = (search or '').strip()
+        search_es_numerico = search_strip.isdigit()
+
         # Buscar por campos del DTE y por productos en Dte_Productos
         search_q_dte = (
             Q(numero_documento__icontains=search) |
@@ -26930,7 +26956,6 @@ def buscar_dte_referencia(request):
             Q(emisor__rut__icontains=search) |
             Q(tipo_documento__icontains=search) |
             Q(responsable__icontains=search) |
-            Q(dte_productos__productoTalla__sku__icontains=search) |
             Q(dte_productos__productoTalla__producto__articulo__icontains=search) |
             Q(dte_productos__descripcion__icontains=search)
         )
@@ -26941,10 +26966,12 @@ def buscar_dte_referencia(request):
             Q(emisor__rut__icontains=search) |
             Q(tipo_documento__icontains=search) |
             Q(responsable__icontains=search) |
-            Q(recepciones__producto_talla__sku__icontains=search) |
             Q(recepciones__producto_talla__producto__articulo__icontains=search) |
             Q(recepciones__compra_producto_talla__compra_producto__nombre__icontains=search)
         )
+        if search_es_numerico:
+            search_q_dte = search_q_dte | Q(dte_productos__productoTalla__sku=int(search_strip))
+            search_q_recepcion = search_q_recepcion | Q(recepciones__producto_talla__sku=int(search_strip))
 
         dte_ids = list(
             dte_query.filter(search_q_dte | search_q_recepcion)
@@ -33784,14 +33811,30 @@ def obtener_dtes_pendientes_regularizar(request):
         
         # Lista de DTEs (máximo 20)
         lista_dtes = []
-        for dte in dtes_query[:20]:
-            hoy = timezone.localdate()
+        # Este endpoint alimenta la campana del navbar, así que se dispara en toda
+        # la navegación. Leer el destino dentro del bucle costaba 2 consultas por
+        # DTE (~41 por página); con el Prefetch queda en 2 en total.
+        from django.db.models import Prefetch
+        pagina_dtes = list(
+            dtes_query[:20].prefetch_related(
+                Prefetch(
+                    'dte_movimientos',
+                    queryset=Movimientos_Producto.objects.filter(
+                        concepto='TRASPASO_SALIDA'
+                    ).select_related('sucursal_destino'),
+                    to_attr='salidas_traspaso',
+                )
+            )
+        )
+        hoy = timezone.localdate()
+        for dte in pagina_dtes:
             dias_desde_recepcion = (hoy - dte.fecha_recepcion).days if dte.fecha_recepcion else 0
-            
+
             # Obtener destino del traspaso
-            movimiento = dte.dte_movimientos.filter(concepto='TRASPASO_SALIDA').first()
+            salidas = getattr(dte, 'salidas_traspaso', None) or []
+            movimiento = salidas[0] if salidas else None
             destino_alias = movimiento.sucursal_destino.alias if movimiento and movimiento.sucursal_destino else 'Desconocido'
-            
+
             lista_dtes.append({
                 'id': dte.id,
                 'numero_documento': dte.numero_documento,

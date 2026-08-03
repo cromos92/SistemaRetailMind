@@ -232,6 +232,31 @@ class PedidoEcommerce(models.Model):
         verbose_name='Asignado por',
     )
 
+    # Trazabilidad de picking en tienda (guía de preparación)
+    fecha_impresion_guia = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Fecha impresión guía',
+        help_text='Primera vez que la tienda imprimió la guía de preparación',
+    )
+    guia_impresa_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pedidos_ecommerce_guias_impresas',
+        verbose_name='Guía impresa por',
+    )
+    fecha_inicio_preparacion = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Fecha inicio preparación',
+        help_text='Cuándo pasó a EN_PREPARACION (imprimir la guía lo marca)',
+    )
+    fecha_listo_despacho = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Fecha listo despacho',
+        help_text='Cuándo la tienda marcó LISTO_DESPACHO (fin del picking)',
+    )
+
     # Vínculo con documentos generados (se completa al facturar)
     ticket = models.ForeignKey(
         'app.Ticket',
@@ -304,6 +329,28 @@ class PedidoEcommerce(models.Model):
         """Verifica si la transición de sub-estado es válida."""
         permitidos = TRANSICIONES_SUB_ESTADO.get(self.sub_estado, [])
         return nuevo_sub_estado in permitidos
+
+    @staticmethod
+    def _minutos_entre(inicio, fin):
+        """Minutos enteros entre dos datetimes; None si falta alguno."""
+        if not inicio or not fin or fin < inicio:
+            return None
+        return int((fin - inicio).total_seconds() / 60)
+
+    @property
+    def minutos_reaccion(self):
+        """T1: asignación → impresión de guía (cuánto tardó la tienda en reaccionar)."""
+        return self._minutos_entre(self.fecha_asignacion, self.fecha_impresion_guia)
+
+    @property
+    def minutos_picking(self):
+        """T2: inicio preparación → listo despacho (cuánto tardó el picking)."""
+        return self._minutos_entre(self.fecha_inicio_preparacion, self.fecha_listo_despacho)
+
+    @property
+    def minutos_espera_factura(self):
+        """T3: listo despacho → facturación."""
+        return self._minutos_entre(self.fecha_listo_despacho, self.fecha_facturacion)
 
 
 class HistorialPedidoEcommerce(models.Model):

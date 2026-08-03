@@ -12,6 +12,28 @@ leyendo el código citado.
 
 ---
 
+## Estado de aplicación (2026-08-03)
+
+Se aplicó **solo el subconjunto sin riesgo**. Nada de lo que cambia permisos o cifras fue tocado.
+
+| Hallazgo | Estado |
+|---|---|
+| 4 — N+1 por `ONLY_DTE_PAGO` sin `'notas'` | ✅ **APLICADO** |
+| 4 — tope de `per_page` (+ aviso de truncado en "Copiar Tabla") | ✅ **APLICADO** |
+| 11 — export a Excel (campos, `descartado=False`, prefetch muerto, URL sin `/app`) | ✅ **APLICADO** |
+| 1 — clave del middleware de permisos | ⛔ **NO aplicado** — activa un permiso nunca aplicado; requiere probar antes con un rol no-administrador para no dejar en 403 al personal de tienda |
+| 2, 3 — `anular_documento_venta` y `convertir_ticket_a_factura` | ⛔ **NO aplicado** |
+| 5 — botón "Cambio" imprime el ticket de otra venta | ⛔ **NO aplicado** |
+| 6-10 — universo del queryset, NC, ANULADOS, columna Total | ⛔ **NO aplicado** — requiere decidir primero qué debe contar la pantalla |
+| 12-18 — UX, filtros muertos, FIFO en eliminar, folio por RUT | ⛔ **NO aplicado** |
+
+Verificación de lo aplicado: `py_compile` PASS, `manage.py check` PASS (0 issues),
+`node --check` del fragmento JS PASS, y smoke sin tocar la BD — la URL del export resuelve a
+`/app/api/ventas/exportar-documentos/`, el template compila, y `query.deferred_loading` confirma
+que `notas` ya se carga con la fila.
+
+---
+
 ## P0 — Arreglar primero
 
 ### 1. El módulo entero está fuera del sistema de permisos
