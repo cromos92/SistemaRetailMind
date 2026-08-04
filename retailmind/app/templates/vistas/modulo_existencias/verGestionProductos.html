@@ -10190,7 +10190,10 @@ function cargarProveedoresManual(preProveedorId, preDteId) {
         select.empty().append('<option value="">-- Seleccionar proveedor --</option>');
         if (data && data.length > 0) {
             data.forEach(prov => {
-                select.append(`<option value="${prov.id}">${prov.nombre}</option>`);
+                // El RUT va en el texto de la opción para que el buscador de
+                // Select2 (substring sobre el texto visible) también lo matchee.
+                const rut = prov.rut ? ` — ${prov.rut}` : '';
+                select.append(`<option value="${prov.id}">${prov.nombre}${rut}</option>`);
             });
         } else {
             select.append('<option value="" disabled>No hay proveedores disponibles</option>');
@@ -10242,6 +10245,13 @@ function reinicializarSelect2Proveedor() {
         width: '100%',
         placeholder: '-- Seleccionar proveedor --',
         allowClear: false,
+        // Matcher tolerante a puntos para poder buscar por RUT tal como lo
+        // tipee el usuario (76.123.456-7 encuentra 76123456-7 y viceversa).
+        matcher: function(params, data) {
+            if (!params.term || !params.term.trim()) return data;
+            const norm = s => (s || '').toLowerCase().replace(/\./g, '');
+            return norm(data.text).indexOf(norm(params.term)) > -1 ? data : null;
+        },
         language: {
             noResults: function () { return "Sin resultados"; }
         }
@@ -12715,7 +12725,7 @@ function cargarProveedoresCambioDte(preseleccion) {
     $sel.empty().append('<option value="">Cargando proveedores…</option>');
     $.get('/app/proveedores/', function(data) {
         $sel.empty().append('<option value="">— Selecciona proveedor —</option>');
-        (data || []).forEach(p => $sel.append(`<option value="${p.id}">${escActividad(p.nombre)}</option>`));
+        (data || []).forEach(p => $sel.append(`<option value="${p.id}">${escActividad(p.nombre)}${p.rut ? ' — ' + escActividad(p.rut) : ''}</option>`));
         // Lo más habitual es equivocarse de factura DENTRO del mismo proveedor,
         // así que se preselecciona el emisor del DTE actual.
         if (preseleccion) $sel.val(preseleccion).trigger('change');

@@ -110,6 +110,8 @@
 .sub-en_preparacion{background:#fef3c7;color:#92400e;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:600;}
 .sub-listo_despacho{background:#dcfce7;color:#166534;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:600;}
 .sub-facturado_ok{background:#dcfce7;color:#166534;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:600;}
+/* Cerrado por el sync: despachado por el canal, documentado por concepto (sin DTE propio) */
+.sub-facturado_externo{background:#e0f2fe;color:#075985;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:600;}
 .sub-cancelado_cliente,.sub-cancelado_sin_stock{background:#fee2e2;color:#991b1b;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:600;}
 .sub-error_stock,.sub-error_dte{background:#fee2e2;color:#991b1b;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:600;}
 
@@ -172,9 +174,52 @@
 .tabla-vacia .tv-title{font-weight:700;color:#334155;font-size:.95rem;}
 .tabla-vacia .tv-sub{font-size:.8rem;margin-top:4px;}
 
-/* ── pantallas de 15" (1366x768): que el panel no coma la tabla ── */
+/* ══ POS 15" (1366x768 / 1440x900): modo denso ══
+   Objetivo: que la TABLA sea la protagonista — más filas visibles y las 12
+   columnas completas sin scroll lateral. Solo se compacta (padding/fuentes);
+   no se oculta información ni se cambia la paleta. */
+@media (max-width:1440px){
+  .card-body{padding:12px 14px;}
+  .module-header{padding:10px 16px;}
+  .module-header-icon{width:38px;height:38px;font-size:19px;border-radius:10px;}
+  .module-header-info h5{font-size:15.5px;}
+  .module-header-status{font-size:11.5px;margin-top:2px;}
+  .module-header-actions .btn{padding:5px 10px;font-size:12px;}
+  .he-daterange{padding:3px 6px;}
+  .he-daterange input{font-size:11px;}
+  .he-badge{padding:3px 10px;font-size:.7rem;}
+  /* tabla densa: en 1366px caben todas las columnas */
+  .tbl thead th{padding:7px 7px;font-size:.65rem;letter-spacing:.02em;}
+  .tbl tbody td{padding:6px 7px;font-size:.79rem;}
+  .tbl .col-num-pedido{max-width:105px;}
+  .tbl .col-cliente-nombre{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tbl .col-cliente-doc{font-size:.68rem;}
+  .tbl .col-sucursal{font-size:.75rem;}
+  .tbl .col-total{font-size:.84rem;}
+  .tbl .col-fecha{font-size:.7rem;}
+  .ticket-rm-badge{font-size:.72rem;padding:1px 5px;}
+  .folio-badge{font-size:.7rem;padding:1px 5px;}
+  .canal-b{font-size:.6rem;padding:1px 5px;}
+  .badge-p,.badge-f,.badge-c{font-size:.64rem;padding:2px 7px;}
+  .pagination-controls{padding:10px 12px;margin-bottom:10px;}
+  .quick-filter-btn{padding:4px 12px;font-size:11px;}
+  .quick-filter-btn:hover{transform:none;}
+  .filtro-label{font-size:.64rem;}
+}
+
+/* ── poca ALTURA (768-800px): recuperar vertical para la tabla ── */
 @media (max-height:800px){
   .sync-body{max-height:230px;overflow-y:auto;}
+  /* KPIs pasan de tarjeta vertical a fila compacta: ~70px menos de alto */
+  .kpi-card .card-body{padding:5px 10px;display:flex;align-items:center;gap:8px;}
+  .kpi-ic{width:26px;height:26px;font-size:.8rem;margin:0;border-radius:8px;flex-shrink:0;}
+  .kpi-card h4{font-size:1.05rem;}
+  .kpi-card .kpi-lbl{font-size:.6rem;margin:0;white-space:nowrap;}
+  .kpi-card:hover{transform:none;box-shadow:none;}
+  .sync-head{padding:6px 12px;}
+  .qf-row{margin-bottom:8px;gap:5px;}
+  .card.shadow{animation:none;}   /* sin fade-in: en POS lento se nota */
+  .tabla-vacia{padding:22px 14px;}
 }
 </style>
 
@@ -373,12 +418,6 @@
         </div>
       </div>
       {% endif %}
-
-      {# La alerta de "boletas con cabecera en 0" se quitó a pedido del usuario
-         (2026-08-04). El dato sigue accesible con el filtro ?problema=dte_cero
-         y con `python manage.py diagnostico_pedidos_cantidad --solo-facturados`
-         (solo lectura). OJO: el problema de fondo sigue: esos DTE llegan al
-         SII con 0 unidades y quedan fuera de la cuadratura. #}
 
       <!-- filtros -->
       <div class="pagination-controls">
@@ -706,6 +745,9 @@ function traerPedidos(){
         const se = d.sync_estados || {};
         if (se.cancelados) {
           sync += `<br><small class="text-danger"><b>${se.cancelados}</b> cancelado(s) en el canal → marcados CANCELADO acá.</small>`;
+        }
+        if (se.cerrados_despachados) {
+          sync += `<br><small class="text-info"><b>${se.cerrados_despachados}</b> ya despachado(s) por el canal → cerrados como facturados por concepto.</small>`;
         }
         if (se.sin_pago) {
           sync += `<br><small class="text-warning"><b>${se.sin_pago}</b> sin pago confirmado en el canal (bloqueados para facturar).</small>`;

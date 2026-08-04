@@ -21,6 +21,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import transaction
 import json
+import os
 import re
 import logging
 from datetime import datetime, timedelta
@@ -81,6 +82,13 @@ from .models import (
 # ========== GESTIÓN DE VENDEDORES ==========
 
 logger = logging.getLogger('app')
+
+# Guard de cobro: exige que los pagos cubran el total antes de marcar un ticket
+# como PAGADO. Se puede desactivar por entorno (VALIDAR_COBERTURA_PAGOS=0) si
+# algún flujo legítimo quedara bloqueado, sin necesidad de tocar código.
+VALIDAR_COBERTURA_PAGOS = os.environ.get('VALIDAR_COBERTURA_PAGOS', '1') != '0'
+# Holgura en pesos para redondeos entre el front y el backend.
+TOLERANCIA_COBERTURA_PAGOS = int(os.environ.get('TOLERANCIA_COBERTURA_PAGOS', '1'))
 
 
 ACCIONES_TEMPORALES_CAMBIO = {
@@ -1223,10 +1231,14 @@ def buscar_productos_bodega(request):
         })
 
 
-@csrf_exempt
+@login_required
 @require_http_methods(["POST"])
 def crear_ticket(request):
-    """Crear nuevo ticket de venta"""
+    """Crear nuevo ticket de venta.
+
+    Antes estaba `@csrf_exempt` y sin autenticación: cualquiera podía crear
+    tickets contra el sistema sin sesión.
+    """
     try:
         data = json.loads(request.body)
 
@@ -1451,10 +1463,18 @@ def crear_ticket(request):
 
 # ========== TICKETS DE VENTA - GESTIÓN ==========
 
+@login_required
 @require_POST
 @transaction.atomic
 def crear_ticket_venta(request):
-    """Crear ticket de venta al público"""
+    """Crear ticket de venta al público.
+
+    OJO (deuda conocida, no corregida aquí): esta ruta descuenta el stock DOS
+    veces — llama a `consumir_stock_fifo()`, que ya descuenta, y después a
+    `registrar_movimiento_producto()`, que vuelve a descontar. Hay 3 tests que
+    fallan por esto desde antes. No se toca en este cambio para no mezclar el
+    arreglo de autenticación con un cambio de comportamiento de stock.
+    """
     try:
         data = json.loads(request.body)
         
@@ -4266,6 +4286,49 @@ def registrar_pagos_ticket(request, correlativo):
 
     pagos = payload.get('pagos') or []
     ids_existentes = list(ticket.pagos.values_list('id', flat=True))
+
+    # ─────────── GUARD: los pagos deben cubrir el total para marcar PAGADO ───────────
+    # El estado venía del cliente sin ninguna comprobación: un POST con
+    # estado='PAGADO' y pagos=[] dejaba la venta pagada, consumía el stock y
+    # emitía el DTE. Aquí el total ya es definitivo (descuentos y vale aplicados)
+    # y los pagos del payload están completos, así que es el punto correcto.
+    #
+    # Se excluye CAMBIO_DEVOLUCION: ahí el total es la diferencia y puede ser 0 o
+    # negativo, con su propio flujo de cobro.
+    if VALIDAR_COBERTURA_PAGOS and ticket.estado == 'PAGADO' and ticket.modulo_origen != 'CAMBIO_DEVOLUCION':
+        total_a_cubrir = int(ticket.total or 0)
+        if total_a_cubrir > 0:
+            total_pagado = 0
+            for _p in pagos:
+                try:
+                    _monto = int(_p.get('monto', 0))
+                except (TypeError, ValueError):
+                    continue
+                if _monto > 0:
+                    total_pagado += _monto
+            # Los pagos ya registrados en el ticket también cuentan.
+            total_pagado += int(
+                ticket.pagos.exclude(id__in=[p.get('id') for p in pagos if p.get('id')])
+                .aggregate(t=Sum('monto'))['t'] or 0
+            )
+
+            if total_pagado < total_a_cubrir - TOLERANCIA_COBERTURA_PAGOS:
+                logger.warning(
+                    "Cobro rechazado por pagos insuficientes ticket=%s total=%s pagado=%s usuario=%s",
+                    ticket.correlativo, total_a_cubrir, total_pagado, request.user.username,
+                )
+                return JsonResponse({
+                    'success': False,
+                    'error': (
+                        f'Los pagos (${total_pagado:,.0f}) no cubren el total del '
+                        f'ticket (${total_a_cubrir:,.0f}). Faltan '
+                        f'${total_a_cubrir - total_pagado:,.0f}.'
+                    ).replace(',', '.'),
+                    'error_tipo': 'PAGOS_INSUFICIENTES',
+                    'total_ticket': total_a_cubrir,
+                    'total_pagado': total_pagado,
+                }, status=400)
+    # ─────────────────────────────────────────────────────────────────────────────────
 
     # Procesar pagos (sin transaction.atomic anidado para evitar TransactionManagementError)
     for pago in pagos:
@@ -9468,23 +9531,42 @@ def guardar_cuadratura_completa(request):
         # Guardar primero para obtener el ID
         arqueo.save()
         
-        # Ahora actualizar los campos que no deben ser recalculados usando update()
-        # para evitar que el método save() recalcule el efectivo físico desde las denominaciones
-        diferencia_efectivo = efectivo_real - (efectivo_teorico + sucursal.fondo_fijo_caja)
-        diferencia_transbank = cierre_pos - cuadratura_completa.get('total_transbank', 0)
-        estado_final = 'CERRADO' if diferencia_efectivo == 0 and diferencia_transbank == 0 else 'CON_DIFERENCIAS'
-        
+        # Los CONTADOS (físico) sí vienen del cajero: son el resultado de contar
+        # la caja. Se guardan con update() para que `save()` no los recalcule
+        # desde las denominaciones (que aquí van vacías).
         ArqueoCaja.objects.filter(id=arqueo.id).update(
             total_efectivo_fisico=efectivo_real,
-            diferencia_efectivo=diferencia_efectivo,
             cierre_pos_fisico=cierre_pos,
-            diferencia_transbank=diferencia_transbank,
-            estado=estado_final
         )
-        
-        # Recargar para obtener valores actualizados
         arqueo.refresh_from_db()
-        
+
+        # Los TEÓRICOS, en cambio, no pueden venir del navegador: enviando
+        # teórico == contado se cerraba cualquier caja con diferencia $0. Se
+        # re-snapshotean desde la cuadratura real del servidor, que es la misma
+        # fuente que usan reabrir y recalcular.
+        try:
+            _recalcular_teoricos_arqueo(
+                arqueo,
+                usuario=request.user,
+                registrar_bitacora=True,
+                razon='cierre de caja (teóricos recalculados en el servidor)',
+            )
+            arqueo.refresh_from_db()
+        except Exception:
+            logger.exception(
+                "No se pudieron recalcular los teoricos del arqueo id=%s; "
+                "se conservan los enviados por el cliente", arqueo.id,
+            )
+
+        # El estado se decide con las diferencias ya recalculadas contra los
+        # teóricos del servidor, no contra los del formulario.
+        diferencia_efectivo = _to_int(arqueo.diferencia_efectivo)
+        diferencia_transbank = _to_int(arqueo.diferencia_transbank)
+        estado_final = 'CERRADO' if diferencia_efectivo == 0 and diferencia_transbank == 0 else 'CON_DIFERENCIAS'
+
+        ArqueoCaja.objects.filter(id=arqueo.id).update(estado=estado_final)
+        arqueo.refresh_from_db()
+
         logger.info(
             "Arqueo creado id=%s efectivo_teorico=%s efectivo_fisico=%s cierre_pos=%s transbank_teorico=%s",
             arqueo.id,

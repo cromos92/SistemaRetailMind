@@ -1118,10 +1118,15 @@ def _bloqueo_por_estado_canal(pedido):
 
       - CANCELADO/DEVUELTO/REEMBOLSADO → cinturón: la sync ya los marca
         CANCELADO local, pero si alguien factura entre medio, esto lo corta.
+      - ENVIADO/EN_TRANSITO/ENTREGADO → ya despachado: la venta se documentó
+        por concepto fuera del módulo (la sync lo cierra como
+        FACTURADO_EXTERNO); boletearlo acá sería doble documento.
       - PENDIENTE → el canal aún no confirma el pago del pedido; boletearlo
         sería facturar una venta que puede no concretarse.
     """
-    from app.services.allconnected_pedidos_service import ESTADOS_CANAL_CANCELADOS
+    from app.services.allconnected_pedidos_service import (
+        ESTADOS_CANAL_CANCELADOS, ESTADOS_CANAL_DESPACHADOS,
+    )
 
     ec = (pedido.estado_canal or '').upper()
     if not ec:
@@ -1129,6 +1134,10 @@ def _bloqueo_por_estado_canal(pedido):
     if ec in ESTADOS_CANAL_CANCELADOS:
         return (f'El canal reporta este pedido como {ec} (AllConnected). '
                 f'No corresponde facturarlo.')
+    if ec in ESTADOS_CANAL_DESPACHADOS:
+        return (f'El canal reporta este pedido como {ec}: ya fue despachado y la '
+                f'venta se documenta por concepto fuera del módulo. Facturarlo acá '
+                f'generaría doble documento (la sincronización lo cierra sola).')
     if ec == 'PENDIENTE':
         fecha = pedido.fecha_sync_estado_canal
         cuando = timezone.localtime(fecha).strftime('%d/%m %H:%M') if fecha else '—'
@@ -1382,10 +1391,6 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
                 logger.exception('No se pudo construir el panel de sincronización ecommerce')
                 context['panel_sync'] = None
 
-            # La alerta de "boletas con cabecera en 0" se quitó del listado a
-            # pedido del usuario (2026-08-04): ya no se calcula acá (ahorra 1-2
-            # queries remotas por carga). El dato sigue disponible vía el
-            # filtro ?problema=dte_cero y el command diagnostico_pedidos_cantidad.
         context['tipos_documento_choices'] = [
             ('BOLETA_ELECTRONICA', 'Boleta Electrónica'),
             ('BOLETA_PAPEL', 'Boleta Papel'),

@@ -7,6 +7,7 @@ La lógica de saldos vive en `app/services/giftcard_service.py`.
 """
 import json
 import logging
+import os
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, HttpResponse
@@ -26,6 +27,24 @@ from .models import (
 from .services import giftcard_service, fidelizacion_service
 
 logger = logging.getLogger('app')
+
+# Tope por operación de emisión/recarga. Una gift card es dinero canjeable en
+# caja y hasta ahora se emitía sin ningún límite: un error de tipeo (un cero de
+# más) o un abuso creaban saldo real sin contrapartida. Configurable por entorno.
+MONTO_MAXIMO_GIFTCARD = int(os.environ.get('GIFTCARD_MONTO_MAXIMO', '2000000'))
+
+
+def _validar_monto_giftcard(monto):
+    """Devuelve un mensaje de error si el monto no es válido, o None si lo es."""
+    if monto <= 0:
+        return 'Monto inválido.'
+    if monto > MONTO_MAXIMO_GIFTCARD:
+        return (
+            f'El monto (${monto:,.0f}) supera el máximo permitido por operación '
+            f'(${MONTO_MAXIMO_GIFTCARD:,.0f}). Si es correcto, pide que suban el '
+            f'límite (GIFTCARD_MONTO_MAXIMO).'
+        ).replace(',', '.')
+    return None
 
 
 def _sucursal_actual(request):
@@ -231,8 +250,9 @@ def api_emitir_giftcard(request):
     try:
         data = json.loads(request.body or '{}')
         monto = int(data.get('monto') or 0)
-        if monto <= 0:
-            return JsonResponse({'success': False, 'error': 'Monto inválido.'}, status=400)
+        error_monto = _validar_monto_giftcard(monto)
+        if error_monto:
+            return JsonResponse({'success': False, 'error': error_monto}, status=400)
 
         tipo_tarjeta = (data.get('tipo_tarjeta') or 'DIGITAL').upper()
 
@@ -489,6 +509,9 @@ def api_recargar_giftcard(request):
         data = json.loads(request.body or '{}')
         codigo = (data.get('codigo') or '').strip()
         monto = int(data.get('monto') or 0)
+        error_monto = _validar_monto_giftcard(monto)
+        if error_monto:
+            return JsonResponse({'success': False, 'error': error_monto}, status=400)
 
         gc_prev = GiftCard.objects.filter(
             Q(codigo=codigo.upper()) | Q(codigo_fisico=codigo.upper())

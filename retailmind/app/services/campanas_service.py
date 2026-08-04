@@ -31,12 +31,17 @@ logger = logging.getLogger('app')
 PISO_COSTO_FACTOR = 1.1  # mismo criterio que modificacion_masiva
 
 
-def _precio_liquidacion(campana, producto):
+def _precio_liquidacion(campana, producto, base=None):
     """Precio final de un item %/fijo, respetando el piso de costo si aplica.
+
+    `base` es el precio SIN campaña. Se pasa explícito al reaplicar una campaña
+    ya activa: leer `producto.precioventa` en ese caso tomaría el precio ya
+    rebajado y compondría el descuento (30% sobre 30% deja el producto al 49%).
 
     Devuelve (precio_final, clamp_aplicado). None para NXM (no cambia precio).
     """
-    base = producto.precioventa or 0
+    if base is None:
+        base = producto.precioventa or 0
     if campana.tipo_regla == 'PORCENTAJE':
         pct = float(campana.valor_porcentaje or 0)
         nuevo = int(round(base * (1 - pct / 100.0)))
@@ -80,7 +85,21 @@ def aplicar_precios_campana(campana, usuario=None, ip=None):
     for item in items:
         producto = item.producto
         precio_ant = producto.precioventa or 0
-        item.precio_original = precio_ant
+
+        # Si el item YA estaba aplicado, `producto.precioventa` es el precio de
+        # liquidación, no el original. Re-snapshotearlo destruía el precio real
+        # de forma irreversible (y con regla PORCENTAJE componía el descuento).
+        # El precio original solo se captura la primera vez.
+        ya_aplicado = (
+            item.estado == 'APLICADO'
+            and item.activo
+            and (item.precio_original or 0) > 0
+        )
+        if ya_aplicado:
+            base_sin_campana = item.precio_original
+        else:
+            base_sin_campana = precio_ant
+            item.precio_original = precio_ant
 
         if campana.tipo_regla == 'NXM':
             item.precio_liquidacion = None
@@ -92,7 +111,7 @@ def aplicar_precios_campana(campana, usuario=None, ip=None):
             nxm += 1
             continue
 
-        nuevo, clamp = _precio_liquidacion(campana, producto)
+        nuevo, clamp = _precio_liquidacion(campana, producto, base=base_sin_campana)
         if clamp:
             clamps += 1
 

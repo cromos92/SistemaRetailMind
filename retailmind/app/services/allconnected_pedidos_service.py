@@ -64,6 +64,12 @@ def _config() -> dict:
 # del lado AllConnected (system/orders/retailmind_connector.py).
 ESTADOS_CANAL_CANCELADOS = ('CANCELADO', 'DEVUELTO', 'REEMBOLSADO')
 
+# Estados de AC "ya despachado al cliente". Decisión de negocio (04-ago): si el
+# paquete ya salió y este módulo no emitió boleta, la venta se documentó POR
+# CONCEPTO fuera de acá → el pedido se cierra como FACTURADO/FACTURADO_EXTERNO
+# (sale de la cola sin doble documento). En prod había ~90 así, de jun-jul.
+ESTADOS_CANAL_DESPACHADOS = ('ENVIADO', 'EN_TRANSITO', 'ENTREGADO')
+
 # Lookback de la sincronización de estados: qué tan atrás mirar los PENDIENTES
 # locales. 120 días cubre con holgura la cola zombie observada.
 SYNC_ESTADOS_LOOKBACK_DIAS = 120
@@ -190,9 +196,13 @@ def traer_pedidos_pendientes(rut_empresa: Optional[str] = None,
     # como estaban. Si un pedido se canceló/devolvió en el canal después de
     # ingresado, acá seguía PENDIENTE para siempre (zombie facturable). Este
     # paso pregunta a AC el estado real y marca CANCELADO lo que corresponda.
+    # SIN filtro de empresa a propósito: si se acotara al rut de la sesión,
+    # los zombies de las otras cadenas no se limpiarían nunca (verificado en
+    # prod 04-ago: 42 cancelados de PAOLA seguían PENDIENTES porque el sync
+    # corría desde una sesión NICK). Es idempotente y barato (1 request/300).
     # Nunca tumba el pull: si falla, el resultado lo dice y el resto sigue.
     try:
-        sync_estados = sincronizar_estados_pedidos(rut_empresa=rut_empresa)
+        sync_estados = sincronizar_estados_pedidos()
     except Exception as exc:  # pragma: no cover — defensivo
         logger.exception('Sync de estados AllConnected falló')
         sync_estados = {'ok': False, 'error': str(exc)[:200]}
@@ -200,6 +210,9 @@ def traer_pedidos_pendientes(rut_empresa: Optional[str] = None,
     detalle = f'{nuevos} nuevos, {ya_existian} ya existían, {len(errores)} con error.'
     if sync_estados.get('cancelados'):
         detalle += f" {sync_estados['cancelados']} pedido(s) cancelados en el canal fueron marcados CANCELADO."
+    if sync_estados.get('cerrados_despachados'):
+        detalle += (f" {sync_estados['cerrados_despachados']} ya despachados por el canal "
+                    f"se cerraron como facturados por concepto.")
     if sync_estados.get('sin_pago'):
         detalle += f" {sync_estados['sin_pago']} sin pago confirmado en el canal (no facturables por ahora)."
 
@@ -242,21 +255,53 @@ def _marcar_cancelado_por_canal(pedido, estado_canal):
     )
 
 
-def sincronizar_estados_pedidos(rut_empresa: Optional[str] = None,
-                                dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
+def _cerrar_facturado_externo(pedido, estado_canal):
+    """Cierra un PENDIENTE que el canal reporta ya DESPACHADO al cliente.
+
+    Regla de negocio (04-ago): si el paquete ya salió y este módulo nunca
+    emitió boleta, la venta se documentó POR CONCEPTO fuera de acá. Queda
+    FACTURADO/FACTURADO_EXTERNO (sin ticket ni DTE propios — el sub-estado
+    es justamente el rastro de eso) y con historial.
     """
-    Pregunta a AllConnected el estado actual de los PENDIENTES locales y:
+    from app.models import HistorialPedidoEcommerce
+
+    estado_anterior = pedido.estado
+    sub_estado_anterior = pedido.sub_estado
+    pedido.estado = 'FACTURADO'
+    pedido.sub_estado = 'FACTURADO_EXTERNO'
+    pedido.save(update_fields=['estado', 'sub_estado'])
+    HistorialPedidoEcommerce.objects.create(
+        pedido=pedido,
+        estado_anterior=estado_anterior,
+        estado_nuevo='FACTURADO',
+        sub_estado_anterior=sub_estado_anterior,
+        sub_estado_nuevo='FACTURADO_EXTERNO',
+        tipo_evento='CAMBIO_ESTADO',
+        motivo=(f'Sync de estados: el canal lo reporta {estado_canal} (ya despachado). '
+                f'Se asume facturado por concepto fuera del módulo — sin DTE propio.'),
+    )
+
+
+def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
+    """
+    Pregunta a AllConnected el estado actual de TODOS los PENDIENTES locales
+    del lookback (sin filtro de empresa: los zombies de todas las cadenas se
+    limpian en la misma pasada) y:
 
       - guarda ``estado_canal`` + ``fecha_sync_estado_canal`` en cada pedido;
       - los que AC reporta CANCELADO/DEVUELTO/REEMBOLSADO pasan a CANCELADO
         local (con historial), saliendo de la cola de facturación;
+      - los que AC reporta ENVIADO/EN_TRANSITO/ENTREGADO se cierran como
+        FACTURADO_EXTERNO (ya despachados = facturados por concepto fuera del
+        módulo; no deben facturarse de nuevo acá);
       - los que AC aún tiene PENDIENTE (sin pago) quedan marcados: la
         facturación los rechaza hasta que una sync posterior los confirme.
 
     Los FACTURADOS locales no se tocan (cancelado en el canal + boleta emitida
     = nota de crédito, decisión humana — mismo criterio que el endpoint push).
 
-    Devuelve {ok, consultados, cancelados, sin_pago, no_encontrados, lotes_caidos}.
+    Devuelve {ok, consultados, cancelados, cerrados_despachados, sin_pago,
+    no_encontrados, lotes_caidos}.
     """
     from datetime import timedelta
 
@@ -267,30 +312,23 @@ def sincronizar_estados_pedidos(rut_empresa: Optional[str] = None,
     cfg = _config()
     if not cfg['base_url']:
         return {'ok': True, 'configurado': False, 'consultados': 0,
-                'cancelados': 0, 'sin_pago': 0, 'no_encontrados': 0, 'lotes_caidos': 0}
+                'cancelados': 0, 'cerrados_despachados': 0, 'sin_pago': 0,
+                'no_encontrados': 0, 'lotes_caidos': 0}
     if not _REQUESTS_OK:
         return {'ok': False, 'error': "Falta el paquete 'requests'.", 'consultados': 0,
-                'cancelados': 0, 'sin_pago': 0, 'no_encontrados': 0, 'lotes_caidos': 0}
+                'cancelados': 0, 'cerrados_despachados': 0, 'sin_pago': 0,
+                'no_encontrados': 0, 'lotes_caidos': 0}
 
     desde_dt = timezone.now() - timedelta(days=dias)
     qs = PedidoEcommerce.objects.filter(
         estado='PENDIENTE', fecha_recepcion__gte=desde_dt,
     ).only('id', 'numero_pedido_canal', 'canal_origen', 'estado', 'sub_estado',
-           'estado_canal', 'numero_ticket_rm', 'rut_empresa')
+           'estado_canal', 'numero_ticket_rm')
     pendientes = list(qs)
-    if rut_empresa:
-        # Comparación normalizada en Python (el rut de sesión puede venir con
-        # puntos y el del pedido sin): un mismatch de formato en un .filter()
-        # exacto dejaría el sync silenciosamente en cero. Los pedidos sin rut
-        # (legacy) se incluyen, igual que en el scope del listado.
-        def _norm(r):
-            return (r or '').replace('.', '').replace(' ', '').upper().strip()
-        objetivo = _norm(rut_empresa)
-        pendientes = [p for p in pendientes
-                      if not (p.rut_empresa or '').strip() or _norm(p.rut_empresa) == objetivo]
     if not pendientes:
         return {'ok': True, 'configurado': True, 'consultados': 0,
-                'cancelados': 0, 'sin_pago': 0, 'no_encontrados': 0, 'lotes_caidos': 0}
+                'cancelados': 0, 'cerrados_despachados': 0, 'sin_pago': 0,
+                'no_encontrados': 0, 'lotes_caidos': 0}
 
     url = f"{cfg['base_url']}{cfg['estados_path']}"
     headers = {
@@ -306,7 +344,8 @@ def sincronizar_estados_pedidos(rut_empresa: Optional[str] = None,
         por_clave[(p.canal_origen, (p.numero_pedido_canal or '').strip())] = p
 
     ahora = timezone.now()
-    consultados = cancelados = sin_pago = no_encontrados = lotes_caidos = 0
+    consultados = cancelados = cerrados_despachados = 0
+    sin_pago = no_encontrados = lotes_caidos = 0
 
     for i in range(0, len(pendientes), _LOTE_ESTADOS):
         lote = pendientes[i:i + _LOTE_ESTADOS]
@@ -325,8 +364,8 @@ def sincronizar_estados_pedidos(rut_empresa: Optional[str] = None,
         if r.status_code == 404:
             # AC aún no tiene deployado el endpoint: no es un error del operador.
             return {'ok': True, 'configurado': True, 'consultados': 0,
-                    'cancelados': 0, 'sin_pago': 0, 'no_encontrados': 0,
-                    'lotes_caidos': 0,
+                    'cancelados': 0, 'cerrados_despachados': 0, 'sin_pago': 0,
+                    'no_encontrados': 0, 'lotes_caidos': 0,
                     'detalle': 'AllConnected aún no expone /app/pedidos/estados/ (deploy pendiente).'}
         if r.status_code != 200:
             logger.warning('sincronizar_estados_pedidos: HTTP %s: %s',
@@ -355,18 +394,23 @@ def sincronizar_estados_pedidos(rut_empresa: Optional[str] = None,
             if est.get('cancelado') or estado_canal in ESTADOS_CANAL_CANCELADOS:
                 _marcar_cancelado_por_canal(pedido, estado_canal)
                 cancelados += 1
+            elif estado_canal in ESTADOS_CANAL_DESPACHADOS:
+                _cerrar_facturado_externo(pedido, estado_canal)
+                cerrados_despachados += 1
             elif estado_canal == 'PENDIENTE':
                 sin_pago += 1
 
     logger.info(
-        'Sync estados AllConnected: %s consultados, %s cancelados, %s sin pago, '
-        '%s no encontrados, %s lotes caídos',
-        consultados, cancelados, sin_pago, no_encontrados, lotes_caidos,
+        'Sync estados AllConnected: %s consultados, %s cancelados, %s cerrados '
+        'por despacho, %s sin pago, %s no encontrados, %s lotes caídos',
+        consultados, cancelados, cerrados_despachados, sin_pago,
+        no_encontrados, lotes_caidos,
     )
     return {
         'ok': True, 'configurado': True,
         'consultados': consultados,
         'cancelados': cancelados,
+        'cerrados_despachados': cerrados_despachados,
         'sin_pago': sin_pago,
         'no_encontrados': no_encontrados,
         'lotes_caidos': lotes_caidos,

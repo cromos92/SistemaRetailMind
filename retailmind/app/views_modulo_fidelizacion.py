@@ -7,6 +7,7 @@ La lógica vive en `app/services/fidelizacion_service.py`.
 """
 import json
 import logging
+import os
 from datetime import datetime, time
 
 from django.shortcuts import render, get_object_or_404, redirect
@@ -28,6 +29,11 @@ from .services import fidelizacion_service, giftcard_service
 from .utils_permisos import usuario_puede_ver_todas_sucursales
 
 logger = logging.getLogger('app')
+
+# Tope de un ajuste manual de puntos. Los puntos se canjean por vales y el vale
+# es descuento real en caja, así que un ajuste sin límite equivale a emitir
+# dinero desde el back-office. Configurable por entorno.
+PUNTOS_MAXIMO_AJUSTE_MANUAL = int(os.environ.get('FIDELIZACION_AJUSTE_MAX_PUNTOS', '50000'))
 
 # Chip de tipo de cliente: color de fondo, color de texto e icono Remix.
 # Se usan SOLO colores ya presentes en el módulo (paleta Velzon/NEXO), para que
@@ -1327,9 +1333,34 @@ def api_ajuste_manual_puntos(request):
                 status=403,
             )
         puntos = int(data.get('puntos') or 0)
+        if puntos == 0:
+            return JsonResponse(
+                {'success': False, 'error': 'El ajuste debe ser distinto de 0.'},
+                status=400,
+            )
+
+        # Los puntos se convierten en vale y el vale en descuento de caja, así que
+        # un ajuste manual es dinero. Se acota y se exige justificación, igual que
+        # ya se hace al anular una gift card.
+        if abs(puntos) > PUNTOS_MAXIMO_AJUSTE_MANUAL:
+            return JsonResponse({
+                'success': False,
+                'error': (
+                    f'El ajuste ({puntos:+,} pts) supera el máximo permitido de '
+                    f'{PUNTOS_MAXIMO_AJUSTE_MANUAL:,} pts por operación.'
+                ).replace(',', '.'),
+            }, status=400)
+
+        observaciones = (data.get('observaciones') or '').strip()
+        if len(observaciones) < 5:
+            return JsonResponse({
+                'success': False,
+                'error': 'Indica el motivo del ajuste (mínimo 5 caracteres).',
+            }, status=400)
+
         saldo = fidelizacion_service.ajuste_manual(
             cliente, puntos, usuario=request.user,
-            observaciones=data.get('observaciones', ''),
+            observaciones=observaciones,
         )
         return JsonResponse({'success': True, 'saldo_total': saldo})
     except fidelizacion_service.FidelizacionError as e:

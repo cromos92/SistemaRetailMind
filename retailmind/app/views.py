@@ -21962,7 +21962,7 @@ def obtener_proveedores(request):
     Obtiene lista de proveedores para el modal de creación manual
     """
     try:
-        proveedores = Empresa.objects.filter(esProveedor=True).values('id', 'nombre').order_by('nombre')
+        proveedores = Empresa.objects.filter(esProveedor=True).values('id', 'nombre', 'rut').order_by('nombre')
         result = list(proveedores)
         logger.debug("Proveedores obtenidos para creacion manual: total=%s", len(result))
         return JsonResponse(result, safe=False)

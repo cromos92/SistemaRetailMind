@@ -29,6 +29,7 @@ from .utils_producto_match import (
     resumen_casi_coincidencias,
 )
 from .services.historial_precios import registrar_cambios_precio
+from .decorators import requiere_permiso
 
 logger = logging.getLogger('app')
 
@@ -850,17 +851,26 @@ def obtener_recomendaciones(request, producto_id):
 # ========== ACTUALIZACIÓN DE PRECIOS ==========
 
 @require_POST
-@login_required
+@requiere_permiso('edicion_rapida_precios', 'puede_editar')
 @transaction.atomic
 def actualizar_precio(request):
-    """Actualizar precio de un producto (todas las tallas) y registrar en historial"""
+    """Actualizar precio de un producto (todas las tallas) y registrar en historial.
+
+    Exige `puede_editar`: sin eso cualquier usuario autenticado podía mover el
+    precio de venta de cualquier producto, saltándose por completo el flujo de
+    proponer → revisar → aprobar.
+
+    La sincronización a otras sucursales ya no viene activada por defecto: es una
+    escritura sobre fichas de sucursales distintas de la actual y debe pedirse
+    explícitamente.
+    """
     try:
         data = json.loads(request.body)
         producto_id = data.get('producto_id')
         nuevo_precio = data.get('nuevo_precio')
         motivo = data.get('motivo', 'Cambio manual de precio')
         tipo_cambio = data.get('tipo_cambio', 'MANUAL')
-        sincronizar_sucursales = data.get('sincronizar_sucursales', True)  # Por defecto sincroniza
+        sincronizar_sucursales = data.get('sincronizar_sucursales', False)
         
         if not producto_id or not nuevo_precio:
             return JsonResponse({

@@ -128,6 +128,33 @@ class SincronizarEstadosTest(TestCase):
         self.assertEqual(p.estado_canal, 'PAGADO')
         self.assertIsNone(_bloqueo_por_estado_canal(p))
 
+    def test_despachado_se_cierra_como_facturado_externo(self):
+        """Regla de negocio 04-ago: ENVIADO/ENTREGADO en el canal = la venta ya
+        se documentó por concepto fuera del módulo → sale de la cola SIN
+        cancelarse (es una venta real) y SIN DTE propio."""
+        enviado = _pedido(self.sucursal, 'RIP-6')
+        entregado = _pedido(self.sucursal, 'RIP-7')
+        with mock.patch.object(ac_service.requests, 'post') as m:
+            m.return_value = _respuesta_ac([
+                {'canal_origen': 'RIPLEY', 'numero_pedido_canal': 'RIP-6',
+                 'estado': 'ENVIADO', 'cancelado': False, 'pagado': True},
+                {'canal_origen': 'RIPLEY', 'numero_pedido_canal': 'RIP-7',
+                 'estado': 'ENTREGADO', 'cancelado': False, 'pagado': True},
+            ])
+            res = ac_service.sincronizar_estados_pedidos()
+
+        self.assertEqual(res['cerrados_despachados'], 2)
+        self.assertEqual(res['cancelados'], 0)
+        for p, estado_ac in ((enviado, 'ENVIADO'), (entregado, 'ENTREGADO')):
+            p.refresh_from_db()
+            self.assertEqual(p.estado, 'FACTURADO')
+            self.assertEqual(p.sub_estado, 'FACTURADO_EXTERNO')
+            self.assertEqual(p.estado_canal, estado_ac)
+            self.assertIsNone(p.dte_id, 'sin DTE propio: se documentó por concepto')
+            h = HistorialPedidoEcommerce.objects.get(pedido=p)
+            self.assertIn('por concepto', h.motivo)
+            self.assertEqual(h.sub_estado_nuevo, 'FACTURADO_EXTERNO')
+
     def test_facturados_no_se_consultan(self):
         _pedido(self.sucursal, 'RIP-3', estado='FACTURADO', sub_estado='FACTURADO_OK')
         with mock.patch.object(ac_service.requests, 'post') as m:
@@ -146,16 +173,24 @@ class SincronizarEstadosTest(TestCase):
         self.assertEqual(res['cancelados'], 0)
         self.assertIn('deploy pendiente', res.get('detalle', ''))
 
-    def test_filtro_rut_empresa_normaliza_formato(self):
-        """Un rut con puntos en sesión no debe dejar el sync en cero."""
-        _pedido(self.sucursal, 'RIP-5', rut_empresa='76123456-7')
+    def test_sync_cubre_todas_las_empresas(self):
+        """Sin filtro de empresa: los zombies de OTRA cadena también se limpian
+        (en prod, 42 cancelados de PAOLA quedaban vivos porque el sync corría
+        desde una sesión NICK)."""
+        _pedido(self.sucursal, 'RIP-5', rut_empresa='76.111.111-1')
+        _pedido(self.sucursal, 'PAO-1', canal='PAOLA', rut_empresa='76.222.222-2')
         with mock.patch.object(ac_service.requests, 'post') as m:
-            m.return_value = _respuesta_ac([{
-                'canal_origen': 'RIPLEY', 'numero_pedido_canal': 'RIP-5',
-                'estado': 'CANCELADO', 'cancelado': True, 'pagado': True,
-            }])
-            res = ac_service.sincronizar_estados_pedidos(rut_empresa='76.123.456-7')
-        self.assertEqual(res['cancelados'], 1)
+            m.return_value = _respuesta_ac([
+                {'canal_origen': 'RIPLEY', 'numero_pedido_canal': 'RIP-5',
+                 'estado': 'CANCELADO', 'cancelado': True, 'pagado': True},
+                {'canal_origen': 'PAOLA', 'numero_pedido_canal': 'PAO-1',
+                 'estado': 'CANCELADO', 'cancelado': True, 'pagado': True},
+            ])
+            res = ac_service.sincronizar_estados_pedidos()
+        self.assertEqual(res['cancelados'], 2)
+        # El request incluyó AMBOS pedidos (ninguna cadena quedó fuera).
+        enviados = m.call_args.kwargs['json']['pedidos']
+        self.assertEqual({p['numero_pedido_canal'] for p in enviados}, {'RIP-5', 'PAO-1'})
 
 
 class BloqueoEstadoCanalTest(TestCase):
@@ -184,6 +219,14 @@ class BloqueoEstadoCanalTest(TestCase):
     def test_pagado_no_bloquea(self):
         p = _pedido(self.sucursal, 'B-5', estado_canal='PAGADO')
         self.assertIsNone(_bloqueo_por_estado_canal(p))
+
+    def test_despachado_bloquea_por_doble_documento(self):
+        """ENVIADO/ENTREGADO: ya facturado por concepto → boletear acá sería
+        doble documento (cubre la ventana entre syncs con estado_canal viejo)."""
+        for ec in ('ENVIADO', 'EN_TRANSITO', 'ENTREGADO'):
+            p = _pedido(self.sucursal, f'B-D-{ec}', estado_canal=ec)
+            msg = _bloqueo_por_estado_canal(p)
+            self.assertIn('doble documento', msg, ec)
 
 
 class _BaseVistaTest(TestCase):

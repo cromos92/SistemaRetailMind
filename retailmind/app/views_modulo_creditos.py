@@ -29,6 +29,8 @@ from .models import (
     METODO_PAGO_TICKET_CHOICES,
 )
 from .models.permisos import PermisoUsuario
+from .models import PermisoRol
+from .decorators import requiere_permiso
 
 
 def _serializar_beneficiario(credito):
@@ -595,10 +597,16 @@ def gestion_creditos(request):
     return render(request, 'vistas/modulo_administracion/gestion_creditos.html', context)
 
 
-@login_required
+@requiere_permiso('gestion_creditos', 'puede_crear')
 @require_POST
 def crear_credito_trabajador(request):
-    """Crear una nueva solicitud de crédito para trabajador"""
+    """Crear una nueva solicitud de crédito para trabajador.
+
+    El crédito nace ACTIVO solo si quien lo crea tiene `puede_aprobar`; en caso
+    contrario queda PENDIENTE y debe aprobarlo alguien más. Antes cualquier
+    usuario autenticado se auto-otorgaba un crédito ACTIVO, sin permiso ni tope,
+    gastable de inmediato en el POS.
+    """
     try:
         data = json.loads(request.body)
         
@@ -643,7 +651,16 @@ def crear_credito_trabajador(request):
                 'error': 'Monto inválido'
             }, status=400)
         
-        # Crear crédito directamente ACTIVO (sin aprobación)
+        # Segregación de funciones: solo quien puede aprobar crea créditos ya
+        # activos. El resto genera una solicitud PENDIENTE.
+        puede_autoaprobar = PermisoRol.tiene_permiso(
+            usuario=request.user,
+            codigo_opcion='gestion_creditos',
+            tipo_permiso='puede_aprobar',
+            sucursal_id=sucursal_actual_id,
+        )
+        estado_inicial = 'ACTIVO' if puede_autoaprobar else 'PENDIENTE'
+
         credito = CreditoTrabajador.objects.create(
             beneficiario=beneficiario,
             tipo_beneficiario=tipo_beneficiario,
@@ -651,7 +668,7 @@ def crear_credito_trabajador(request):
             sucursal=sucursal,
             tipo_credito=tipo_credito,
             monto_solicitado=monto_solicitado,
-            monto_aprobado=monto_solicitado,  # Auto-aprobado por el mismo monto
+            monto_aprobado=monto_solicitado if puede_autoaprobar else None,
             fecha_vencimiento=fecha_vencimiento,
             motivo_solicitud=motivo_solicitud,
             observaciones_solicitud=data.get('observaciones_solicitud', ''),
@@ -662,10 +679,10 @@ def crear_credito_trabajador(request):
             aval_rut=data.get('aval_rut', ''),
             aval_telefono=data.get('aval_telefono', ''),
             solicitado_por=request.user,
-            autorizado_por=request.user,  # Auto-autorizado
+            autorizado_por=request.user if puede_autoaprobar else None,
             fecha_primer_pago=data.get('fecha_primer_pago'),
-            estado='ACTIVO',  # Directamente ACTIVO
-            fecha_aprobacion=timezone.now()  # Fecha de aprobación inmediata
+            estado=estado_inicial,
+            fecha_aprobacion=timezone.now() if puede_autoaprobar else None,
         )
         
         # Crear registro de firma
@@ -673,10 +690,15 @@ def crear_credito_trabajador(request):
         
         return JsonResponse({
             'success': True,
-            'message': 'Crédito creado y activado exitosamente',
+            'message': (
+                'Crédito creado y activado exitosamente' if puede_autoaprobar
+                else 'Solicitud de crédito creada. Queda PENDIENTE de aprobación.'
+            ),
             'credito_id': credito.id,
             'numero_credito': credito.numero_credito,
-            'monto_aprobado': float(credito.monto_aprobado),
+            'estado': credito.estado,
+            'requiere_aprobacion': not puede_autoaprobar,
+            'monto_aprobado': float(credito.monto_aprobado) if credito.monto_aprobado else 0,
             'trabajador': credito.nombre_beneficiario,
             'imprimir_url': f'/app/api/creditos/imprimir-voucher/{credito.id}/'
         })
@@ -2431,7 +2453,16 @@ def usar_credito_en_venta(request):
         
         # Obtener crédito
         credito = get_object_or_404(CreditoTrabajador, id=credito_id)
-        
+
+        # Mismo control de alcance que el resto del módulo: era el único endpoint
+        # que no lo aplicaba, así que se podía debitar el crédito de otra empresa
+        # pasando un credito_id arbitrario.
+        if not _usuario_puede_acceder_credito(request, credito):
+            return JsonResponse({
+                'success': False,
+                'error': 'No tiene acceso a este crédito'
+            }, status=403)
+
         # Validar estado
         if credito.estado != 'ACTIVO':
             return JsonResponse({

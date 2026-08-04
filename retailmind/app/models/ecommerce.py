@@ -36,6 +36,11 @@ SUB_ESTADO_PEDIDO_CHOICES = [
     ('LISTO_DESPACHO', 'Listo para Despacho'),
     # Sub-estados de FACTURADO
     ('FACTURADO_OK', 'Facturado OK'),
+    # El canal lo reporta ENVIADO/ENTREGADO sin boleta del módulo: la venta ya
+    # se documentó POR CONCEPTO fuera de acá (decisión de negocio 04-ago). El
+    # sync de estados lo cierra con este sub-estado para que salga de la cola
+    # sin inflar "Facturado OK" ni perder el rastro de que no tiene DTE propio.
+    ('FACTURADO_EXTERNO', 'Facturado por Concepto (externo)'),
     # Sub-estados de CANCELADO
     ('CANCELADO_CLIENTE', 'Cancelado por Cliente'),
     ('CANCELADO_SIN_STOCK', 'Cancelado por Sin Stock'),
