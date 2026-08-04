@@ -5874,7 +5874,21 @@ def regularizar_producto_api(request):
 
                 sucursal_origen = recepcion.dte.sucursal if recepcion.dte else None
 
-                if sucursal_origen and recepcion.producto_talla:
+                # REGLA DE NEGOCIO: la mercadería DAÑADA se queda en la tienda
+                # (se destruye o se gestiona allí); no vuelve al origen. Por eso
+                # el stock que se le acredita al origen cubre SOLO las unidades
+                # FALTANTES —las que nunca llegaron físicamente—, aunque la NC
+                # financiera sí cubra faltantes + dañadas: el documento acredita
+                # la plata, pero la unidad rota ya no existe como vendible.
+                # Antes se acreditaban ambas y el origen recuperaba como stock
+                # bueno unidades que estaban rotas en la tienda (y que además
+                # quedan registradas como merma en destino: la misma unidad se
+                # contaba dos veces).
+                faltantes_disponibles = recepcion.cantidad_faltante or 0
+                cantidad_stock_origen = min(cantidad_nc, faltantes_disponibles)
+                cantidad_danada_nc = cantidad_nc - cantidad_stock_origen
+
+                if sucursal_origen and recepcion.producto_talla and cantidad_stock_origen > 0:
                     producto_origen = Producto_Talla.objects.filter(
                         sku=recepcion.producto_talla.sku,
                         producto__sucursal=sucursal_origen
@@ -5883,7 +5897,7 @@ def regularizar_producto_api(request):
                         # F() en vez de `stock += n; save()`: el read-modify-write
                         # pierde actualizaciones concurrentes (lost update).
                         Producto_Talla.objects.filter(id=producto_origen.id).update(
-                            stock=F('stock') + cantidad_nc
+                            stock=F('stock') + cantidad_stock_origen
                         )
 
                     Movimientos_Producto.objects.create(
@@ -5891,14 +5905,20 @@ def regularizar_producto_api(request):
                         ProductoTalla=producto_origen or recepcion.producto_talla,
                         sucursal_origen=Sucursal.objects.get(id=request.session.get('idSucursalActual', request.session.get('sucursalActual'))),
                         sucursal_destino=sucursal_origen,
-                        cantidad=cantidad_nc,
+                        cantidad=cantidad_stock_origen,
                         concepto='DEVOLUCION_NC' if hacer_nc else 'REGULARIZACION_TRASPASO',
                         tipo_movimiento='INGRESO',
                         estado='COMPLETADO',
                         responsable=usuario,
                         fecha=hoy.date(),
                         hora=hoy.time(),
-                        observaciones=f"{'NC' if hacer_nc else 'Regularización sin NC'}: Devolución de {cantidad_nc} unidades a {sucursal_origen.alias}. {motivo}"
+                        observaciones=(
+                            f"{'NC' if hacer_nc else 'Regularización sin NC'}: "
+                            f"Devolución de {cantidad_stock_origen} unidades faltantes a {sucursal_origen.alias}."
+                            + (f" ({cantidad_danada_nc} u. dañadas acreditadas en la NC quedan en la tienda,"
+                               f" no vuelven al origen.)" if cantidad_danada_nc > 0 else "")
+                            + f" {motivo}"
+                        )
                     )
                 
                 nc_info = None

@@ -393,3 +393,95 @@ class RechazoDevuelveStockTest(_BaseTraspasoTest):
         resp = self._rechazar()
         self.assertEqual(resp.status_code, 409, resp.content)
         self.assertEqual(self._stock(self.talla_origen), self.STOCK_ORIGEN - self.CANTIDAD)
+
+
+class RegularizarConNCDanadoTest(_BaseTraspasoTest):
+    """REGLA DE NEGOCIO: la mercadería dañada se queda en la tienda.
+
+    Decisión del negocio (04-ago-2026): la unidad rota NO vuelve al centro de
+    distribución — se destruye o se gestiona en la tienda. Por eso la
+    regularización con NC acredita al origen SOLO las unidades FALTANTES.
+
+    La NC financiera sí cubre faltantes + dañadas (el documento acredita la
+    plata), pero el stock del origen no puede recuperar una unidad que está
+    rota en la tienda y que además ya quedó registrada como merma allí: sería
+    contar la misma unidad dos veces.
+    """
+
+    CANTIDAD = 10
+
+    def setUp(self):
+        super().setUp()
+        self.dte, self.linea = _crear_traspaso(
+            self.origen, self.destino, self.talla_origen, self.CANTIDAD,
+            numero=9400,
+        )
+        self.stock_origen_tras_despacho = self._stock(self.talla_origen)
+
+    def _recepcion(self, faltante, danada):
+        return Productos_Recepcionados.objects.create(
+            dte=self.dte,
+            dte_producto=self.linea,
+            producto_talla=self.talla_destino,
+            sucursal_destino=self.destino,
+            cantidad_esperada=self.CANTIDAD,
+            stockArribado=self.CANTIDAD - faltante - danada,
+            cantidad_faltante=faltante,
+            cantidad_danada=danada,
+            estado='RECEPCIONADO_PARCIAL',
+        )
+
+    def _regularizar(self, recepcion, cantidad_nc):
+        self._sesion(self.destino)
+        p1, p2 = _patch_permisos()
+        with p1, p2:
+            return self.client.post(
+                '/app/dte/regularizar_producto/',
+                data=json.dumps({
+                    'producto_id': recepcion.id,
+                    'tipo_regularizacion': 'REGULARIZAR_CON_NC',
+                    'cantidad_nc': cantidad_nc,
+                    'hacer_nc': False,
+                    'motivo_nc': 'Regularización de prueba',
+                    'observaciones': 'Regularización de prueba',
+                }),
+                content_type='application/json',
+            )
+
+    def test_danado_no_devuelve_stock_al_origen(self):
+        """3 dañadas y 0 faltantes: el origen no recupera nada."""
+        recepcion = self._recepcion(faltante=0, danada=3)
+        resp = self._regularizar(recepcion, cantidad_nc=3)
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(
+            self._stock(self.talla_origen), self.stock_origen_tras_despacho,
+            'El origen no debe recuperar unidades que están rotas en la tienda.',
+        )
+
+    def test_faltante_si_devuelve_stock_al_origen(self):
+        """Lo que nunca llegó sí vuelve: es mercadería que existe."""
+        recepcion = self._recepcion(faltante=4, danada=0)
+        resp = self._regularizar(recepcion, cantidad_nc=4)
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(
+            self._stock(self.talla_origen), self.stock_origen_tras_despacho + 4,
+        )
+
+    def test_mixto_solo_devuelve_la_parte_faltante(self):
+        """2 faltantes + 3 dañadas: la NC cubre 5, el stock devuelve 2."""
+        recepcion = self._recepcion(faltante=2, danada=3)
+        resp = self._regularizar(recepcion, cantidad_nc=5)
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(
+            self._stock(self.talla_origen), self.stock_origen_tras_despacho + 2,
+            'Solo las 2 faltantes vuelven al origen; las 3 dañadas se quedan.',
+        )
+        movimiento = Movimientos_Producto.objects.filter(
+            dte=self.dte, cantidad__gt=0,
+        ).exclude(concepto='TRASPASO_ENTRADA').order_by('-id').first()
+        self.assertIsNotNone(movimiento)
+        self.assertEqual(movimiento.cantidad, 2)
+        self.assertIn('dañadas', movimiento.observaciones)

@@ -2,7 +2,10 @@
 
 {% include '../../layout/header.html' %}
 {% include '../../layout/menu.html' %}
-{% include '../../layout/footer.html' %}
+{% comment %} El footer cierra .main-content, #layout-wrapper y </body></html>. Estando
+   aqui arriba, TODA la pantalla quedaba renderizada despues de </html> y el pie
+   («© AllConnected») salia por encima del contenido. Va al final, justo antes del
+   JS del modulo — que necesita el jQuery que trae el footer. {% endcomment %}
 
 <style>
 /* ============================================================
@@ -783,7 +786,8 @@ kbd.sc {
     </div>
 </div>
 
-<div class="main-content">
+{% comment %} menu.html ya abre <div class="main-content">; anidar otro duplicaba el
+   margin-left:250px del layout. Como el resto de los modulos, solo .page-content. {% endcomment %}
     <div class="page-content">
         <div class="container-fluid p-0">
         <div class="pos-wrap">
@@ -1010,7 +1014,6 @@ kbd.sc {
         </div><!-- /pos-wrap -->
         </div>
     </div>
-</div>
 
 <!-- ===== MODAL DETALLE DE TALLAS ===== -->
 <div class="modal fade nexo-modal" id="modalDetalleTallas" tabindex="-1" aria-hidden="true">
@@ -1146,6 +1149,8 @@ kbd.sc {
         </div>
     </div>
 </div>
+
+{% include '../../layout/footer.html' %}
 
 <script>
 /* ============================================================

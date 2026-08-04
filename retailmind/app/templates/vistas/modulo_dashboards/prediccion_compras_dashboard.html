@@ -2,7 +2,10 @@
 {% load humanize %}
 {% include 'layout/header.html' %}
 {% include 'layout/menu.html' %}
-{% include 'layout/footer.html' %}
+{% comment %} El footer cierra .main-content, #layout-wrapper y </body></html>. Estando
+   aqui arriba, TODA la pantalla quedaba renderizada despues de </html> y el pie
+   («© AllConnected») salia por encima del contenido. Va al final, justo antes del
+   JS del modulo — que necesita el jQuery que trae el footer. {% endcomment %}
 
 <style>
 /* ========== NEXO DESIGN SYSTEM - Predicción de Compras ========== */
@@ -415,7 +418,7 @@
 .rank-3 { background:#FFE8D6;color:#9A3412; }
 </style>
 
-<div class="main-content pred-container">
+<div class="pred-container">
     <div class="page-content">
         <div class="container-fluid px-4">
 
@@ -776,6 +779,8 @@
         <div class="empty-state"><i class="ri-loader-4-line"></i>Cargando...</div>
     </div>
 </div>
+
+{% include 'layout/footer.html' %}
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script>

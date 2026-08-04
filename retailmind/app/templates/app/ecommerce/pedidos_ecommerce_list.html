@@ -1689,6 +1689,21 @@ formatMiles(document);
 pintarAging(document);
 setInterval(function(){ pintarAging(document); }, 120000);  // el aging envejece solo
 actualizarContador();
+
+// Al cerrar el modal de resultados de facturación — POR CUALQUIER VÍA (la X
+// o "Recargar lista") — la tabla se refresca sola. Antes solo el botón
+// "Recargar lista" refrescaba: cerrando con la X, los pedidos recién
+// facturados seguían pintados como "Pendiente" hasta recargar a mano.
+// NO se toca la selección: los fallidos quedan marcados a propósito para
+// reintentar (los facturados OK ya salieron de _seleccion al terminar).
+(function(){
+  const modalRes = document.getElementById('modal-resultados');
+  if(modalRes){
+    modalRes.addEventListener('hidden.bs.modal', function(){
+      aplicarFiltros(_pagina, true);
+    });
+  }
+})();
 </script>
 
 {% csrf_token %}
