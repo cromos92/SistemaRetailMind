@@ -1219,14 +1219,26 @@ ESTADO_DEVOLUCION_GARANTIA_CHOICES = [
 ]
 
 # Decisión del aprobador: cómo impacta la NC en la cuadratura de caja.
-# EFECTIVO_CAJA/TRANSFERENCIA_BANCARIA -> NC tipo_transaccion='DEVOLUCION'
-# con Dte_Detalle_Pago.fecha_pago = fecha_imputacion_caja (resta teóricos);
+# TRANSFERENCIA_BANCARIA/EFECTIVO_CAJA/REBAJA_CREDITO -> NC
+# tipo_transaccion='DEVOLUCION' con Dte_Detalle_Pago.fecha_pago =
+# fecha_imputacion_caja; cada uno cae en el bucket de cuadratura de su medio
+# (transferencia / efectivo / crédito externo);
 # NO_AFECTA_CAJA -> NC tipo_transaccion='ANULACION' sin detalle de pago
 # (informativa: cuenta como documento del día, no resta teóricos).
+#
+# REBAJA_CREDITO es el método correcto cuando el documento original se vendió
+# A CRÉDITO: el cliente nunca puso plata en la caja, así que devolverle
+# efectivo (o transferencia) dejaría el arqueo con un faltante inventado. La NC
+# rebaja la cuenta por cobrar y se imputa al bucket de crédito.
+#
+# El orden importa: es el que usa la UI. TRANSFERENCIA_BANCARIA va primero
+# (opción primaria) y EFECTIVO_CAJA queda al final, oculto en la UI y
+# conservado solo para las devoluciones históricas que ya lo usaron.
 METODO_DEVOLUCION_DG_CHOICES = [
-    ('EFECTIVO_CAJA', 'Efectivo de caja'),
     ('TRANSFERENCIA_BANCARIA', 'Transferencia bancaria'),
+    ('REBAJA_CREDITO', 'Rebaja crédito del cliente'),
     ('NO_AFECTA_CAJA', 'No afecta caja'),
+    ('EFECTIVO_CAJA', 'Efectivo de caja'),
 ]
 
 # Modo de devolución por línea: CANTIDAD = n unidades al precio cobrado

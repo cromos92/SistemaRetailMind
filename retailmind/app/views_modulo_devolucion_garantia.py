@@ -19,7 +19,7 @@ from datetime import datetime
 
 from django.utils import timezone
 from django.shortcuts import render, get_object_or_404
-from django.http import JsonResponse
+from django.http import JsonResponse, Http404
 from django.urls import reverse
 from django.views.decorators.http import require_POST, require_GET
 from django.core.paginator import Paginator
@@ -65,16 +65,54 @@ def _puede_aprobar(request):
     )
 
 
-def _cargar_devolucion(devolucion_id, sucursal, extra_select=None):
-    """Carga una DevolucionGarantia aislada por sucursal (anti-IDOR)."""
+def _scope_devoluciones(request, queryset=None):
+    """
+    Acota un queryset de DevolucionGarantia al ámbito visible del usuario.
+
+    Regla: todo usuario ve SOLO su sucursal activa (aislamiento anti-IDOR).
+    El administrador es la excepción — necesita revisar y aprobar solicitudes
+    de cualquier sucursal, así que puede pedir otra vía `?sucursal=` o todas
+    con `?sucursal=TODAS`. Sin el parámetro, incluso el administrador arranca
+    acotado a su sucursal activa (el default no cambia para nadie).
+    """
+    qs = queryset if queryset is not None else DevolucionGarantia.objects.all()
+    sucursal = _sucursal_actual(request)
+
+    if not _es_admin(request):
+        # Sin sucursal activa no hay ámbito: vacío, nunca "todas".
+        # (`filter(sucursal=None)` sería `IS NULL` y no filtra lo que se cree).
+        return qs.filter(sucursal=sucursal) if sucursal else qs.none()
+
+    pedido = (request.GET.get('sucursal') or '').strip().upper()
+    if pedido == 'TODAS':
+        return qs
+    if pedido.isdigit():
+        return qs.filter(sucursal_id=int(pedido))
+    # Admin sin filtro explícito: su sucursal activa, igual que el resto.
+    return qs.filter(sucursal=sucursal) if sucursal else qs
+
+
+def _cargar_devolucion(request, devolucion_id, extra_select=None, prefetch=None):
+    """
+    Carga una DevolucionGarantia del ámbito del usuario (anti-IDOR).
+
+    Para el administrador el ámbito es global: si no, el filtro "todas las
+    sucursales" del listado sería un callejón sin salida (fila visible, todas
+    las acciones en 404). El resto sigue encerrado en su sucursal activa.
+    """
     select = ['dte_original', 'receptor', 'nota_credito', 'sucursal',
               'solicitado_por', 'autorizado_por', 'anulada_por']
     if extra_select:
         select += extra_select
-    return get_object_or_404(
-        DevolucionGarantia.objects.select_related(*select),
-        id=devolucion_id, sucursal=sucursal,
-    )
+    qs = DevolucionGarantia.objects.select_related(*select)
+    if prefetch:
+        qs = qs.prefetch_related(*prefetch)
+    if not _es_admin(request):
+        sucursal = _sucursal_actual(request)
+        if not sucursal:
+            raise Http404('No hay sucursal seleccionada.')
+        qs = qs.filter(sucursal=sucursal)
+    return get_object_or_404(qs, id=devolucion_id)
 
 
 # ========== VISTAS HTML ==========
@@ -85,10 +123,18 @@ def modulo_devolucion_garantia(request):
     from .views_modulo_ventas import _get_qz_config
 
     sucursal = _sucursal_actual(request)
+    es_admin = _es_admin(request)
     context = {
         'sucursal_actual': sucursal,
         'estado_choices': DevolucionGarantia._meta.get_field('estado').choices,
         'puede_aprobar': _puede_aprobar(request),
+        # Solo el administrador ve el selector de sucursal (y puede pedir
+        # "todas"): el resto queda encerrado en su sucursal activa.
+        'es_admin': es_admin,
+        'sucursales': (
+            Sucursal.objects.order_by('alias').values('id', 'alias')
+            if es_admin else []
+        ),
         # Sin puede_crear el botón "Nueva Solicitud" no se muestra (el endpoint
         # de crear igual lo exige — esto solo evita el wizard-callejón).
         'puede_crear': PermisoRol.tiene_permiso(
@@ -113,12 +159,9 @@ def detalle_devolucion_garantia(request, devolucion_id):
         messages.error(request, 'No hay sucursal seleccionada.')
         return redirect('bienvenida')
 
-    devolucion = get_object_or_404(
-        DevolucionGarantia.objects.select_related(
-            'dte_original', 'receptor', 'nota_credito', 'sucursal',
-            'solicitado_por', 'autorizado_por', 'anulada_por',
-        ).prefetch_related('detalles__dte_producto__productoTalla__producto'),
-        id=devolucion_id, sucursal=sucursal,
+    devolucion = _cargar_devolucion(
+        request, devolucion_id,
+        prefetch=['detalles__dte_producto__productoTalla__producto'],
     )
     from .views_modulo_ventas import _get_qz_config
 
@@ -182,6 +225,10 @@ def api_buscar_dte_devolucion_garantia(request):
             'sucursal_id': dte.sucursal_id,
             'sucursal': dte.sucursal.alias if dte.sucursal else '',
         },
+        # Cómo se vendió (contado vs crédito). El wizard lo muestra para que
+        # quien crea la solicitud no le prometa efectivo a un cliente que
+        # compró a crédito.
+        'condicion_pago': service.condicion_pago_dte(dte),
         'receptor_actual': {
             'rut': receptor.rut if receptor else '',
             'nombre': receptor.nombre if receptor else '',
@@ -278,10 +325,7 @@ def api_generar_devolucion_garantia(request):
 @requiere_permiso('devolucion_garantia', 'puede_ver')
 def api_anular_solicitud_devolucion_garantia(request, devolucion_id):
     """Anula una solicitud PENDIENTE (el service valida solicitante-o-admin)."""
-    sucursal = _sucursal_actual(request)
-    if not sucursal:
-        return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'}, status=400)
-    _cargar_devolucion(devolucion_id, sucursal)
+    _cargar_devolucion(request, devolucion_id)
 
     try:
         devolucion = service.anular_solicitud(devolucion_id=devolucion_id, usuario=request.user)
@@ -297,14 +341,19 @@ def api_anular_solicitud_devolucion_garantia(request, devolucion_id):
 @require_GET
 @requiere_permiso('devolucion_garantia', 'puede_ver')
 def api_listar_devoluciones_garantia(request):
-    """Listado paginado de solicitudes de devolución con filtros."""
+    """Listado paginado de solicitudes de devolución con filtros.
+
+    Ámbito: sucursal activa. El administrador puede ampliarlo con
+    `?sucursal=<id>` o `?sucursal=TODAS` (ver `_scope_devoluciones`).
+    """
     sucursal = _sucursal_actual(request)
-    if not sucursal:
+    if not sucursal and not _es_admin(request):
         return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'}, status=400)
 
-    qs = DevolucionGarantia.objects.select_related(
+    qs = _scope_devoluciones(request, DevolucionGarantia.objects.select_related(
         'dte_original', 'receptor', 'nota_credito', 'solicitado_por', 'autorizado_por',
-    ).filter(sucursal=sucursal)
+        'sucursal',
+    ))
 
     busqueda = (request.GET.get('q') or '').strip()
     if busqueda:
@@ -344,10 +393,13 @@ def api_listar_devoluciones_garantia(request):
         'fecha': timezone.localtime(d.created_at).strftime('%d/%m/%Y %H:%M'),
         'solicitado_por': d.solicitado_por.username if d.solicitado_por else '',
         'autorizado_por': d.autorizado_por.username if d.autorizado_por else '',
+        'sucursal': d.sucursal.alias if d.sucursal else '',
         'puede_anular': d.estado == 'PENDIENTE' and (es_admin or d.solicitado_por_id == uid),
     } for d in pagina]
 
-    pendientes = DevolucionGarantia.objects.filter(sucursal=sucursal, estado='PENDIENTE').count()
+    # Pendientes en el MISMO ámbito que el listado (no solo la sucursal
+    # activa): si el admin pidió "todas", la tarjeta debe contar todas.
+    pendientes = _scope_devoluciones(request).filter(estado='PENDIENTE').count()
 
     # KPIs sobre el universo COMPLETO filtrado (no solo la página visible),
     # para que las tarjetas no mientan cuando hay más de una página.
@@ -362,6 +414,7 @@ def api_listar_devoluciones_garantia(request):
         'data': data,
         'total': paginator.count,
         'pendientes': pendientes,
+        'multi_sucursal': (request.GET.get('sucursal') or '').strip().upper() == 'TODAS' and es_admin,
         'nc_generadas': agg['nc_generadas'] or 0,
         'monto_total_global': float(agg['monto_total_global'] or 0),
         'pagina_actual': pagina.number,
@@ -377,16 +430,10 @@ def api_ticket_devolucion_garantia(request, devolucion_id):
     Lo consume el front tanto al CREAR (impresión inmediata) como al reimprimir
     desde el listado, vía QZ Tray (ESC/POS) o el fallback HTML de `window.print()`.
     """
-    sucursal = _sucursal_actual(request)
-    if not sucursal:
-        return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'}, status=400)
-
-    devolucion = get_object_or_404(
-        DevolucionGarantia.objects.select_related(
-            'dte_original', 'receptor', 'sucursal', 'sucursal__empresa',
-            'solicitado_por', 'autorizado_por', 'nota_credito',
-        ).prefetch_related('detalles__dte_producto__productoTalla'),
-        id=devolucion_id, sucursal=sucursal,
+    devolucion = _cargar_devolucion(
+        request, devolucion_id,
+        extra_select=['sucursal__empresa'],
+        prefetch=['detalles__dte_producto__productoTalla'],
     )
 
     suc, emp, dte = devolucion.sucursal, devolucion.sucursal.empresa, devolucion.dte_original
@@ -457,15 +504,9 @@ def api_ticket_devolucion_garantia(request, devolucion_id):
 def api_detalle_solicitud_devolucion_garantia(request, devolucion_id):
     """Detalle completo de una solicitud para el panel de aprobación, con
     re-chequeo de disponibilidad por línea (marca conflictos)."""
-    sucursal = _sucursal_actual(request)
-    if not sucursal:
-        return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'}, status=400)
-
-    devolucion = get_object_or_404(
-        DevolucionGarantia.objects.select_related(
-            'dte_original', 'receptor', 'sucursal', 'solicitado_por',
-        ).prefetch_related('detalles__dte_producto__productoTalla'),
-        id=devolucion_id, sucursal=sucursal,
+    devolucion = _cargar_devolucion(
+        request, devolucion_id,
+        prefetch=['detalles__dte_producto__productoTalla'],
     )
 
     dte = devolucion.dte_original
@@ -504,6 +545,13 @@ def api_detalle_solicitud_devolucion_garantia(request, devolucion_id):
             'fecha_solicitud': timezone.localtime(devolucion.created_at).strftime('%d/%m/%Y %H:%M'),
             'metodo_solicitado': devolucion.metodo_solicitado,
             'metodo_solicitado_display': devolucion.get_metodo_solicitado_display() if devolucion.metodo_solicitado else '',
+            # Condición de pago del documento original: si la venta fue a
+            # crédito, el aprobador NO puede devolver efectivo de caja (el
+            # cliente nunca la puso ahí). El front preselecciona
+            # `metodo_sugerido` con esto.
+            'condicion_pago': service.condicion_pago_dte(dte),
+            'metodo_sugerido': service.metodo_devolucion_sugerido(dte),
+            'sucursal': devolucion.sucursal.alias if devolucion.sucursal else '',
             'transferencia': {
                 'banco': devolucion.banco,
                 'tipo_cuenta': devolucion.get_tipo_cuenta_display() if devolucion.tipo_cuenta else '',
@@ -533,11 +581,7 @@ def api_detalle_solicitud_devolucion_garantia(request, devolucion_id):
 @requiere_permiso('devolucion_garantia', 'puede_aprobar')
 def api_impacto_caja_devolucion_garantia(request, devolucion_id):
     """Previsualiza el impacto en cuadratura de caja de aprobar con un método/fecha."""
-    sucursal = _sucursal_actual(request)
-    if not sucursal:
-        return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'}, status=400)
-
-    devolucion = _cargar_devolucion(devolucion_id, sucursal)
+    devolucion = _cargar_devolucion(request, devolucion_id)
 
     metodo = (request.GET.get('metodo') or '').strip()
     if metodo not in dict(service.METODO_DEVOLUCION_DG_CHOICES):
@@ -559,10 +603,7 @@ def api_impacto_caja_devolucion_garantia(request, devolucion_id):
 @requiere_permiso('devolucion_garantia', 'puede_aprobar')
 def api_aprobar_devolucion_garantia(request, devolucion_id):
     """Aprueba una solicitud: genera la NC 61 + TXT con el impacto en caja elegido."""
-    sucursal = _sucursal_actual(request)
-    if not sucursal:
-        return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'}, status=400)
-    _cargar_devolucion(devolucion_id, sucursal)
+    _cargar_devolucion(request, devolucion_id)
 
     try:
         body = json.loads(request.body or '{}')
@@ -612,10 +653,7 @@ def api_aprobar_devolucion_garantia(request, devolucion_id):
 @requiere_permiso('devolucion_garantia', 'puede_aprobar')
 def api_rechazar_devolucion_garantia(request, devolucion_id):
     """Rechaza una solicitud PENDIENTE con motivo obligatorio."""
-    sucursal = _sucursal_actual(request)
-    if not sucursal:
-        return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'}, status=400)
-    _cargar_devolucion(devolucion_id, sucursal)
+    _cargar_devolucion(request, devolucion_id)
 
     try:
         body = json.loads(request.body or '{}')

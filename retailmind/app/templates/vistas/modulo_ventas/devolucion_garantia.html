@@ -170,7 +170,7 @@
     <!-- Controles de búsqueda -->
     <div class="table-nexo p-2 mb-2">
         <div class="row g-2 align-items-center">
-            <div class="col-md-6">
+            <div class="col-md-{% if es_admin %}4{% else %}6{% endif %}">
                 <input type="text" id="filtro-busqueda" class="form-control form-control-sm" placeholder="Buscar por N° operación, RUT, nombre o N° NC...">
             </div>
             <div class="col-md-3">
@@ -181,7 +181,19 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3 text-end">
+            {% if es_admin %}
+            {# Solo Administrador: ver solicitudes fuera de su sucursal activa. #}
+            <div class="col-md-3">
+                <select id="filtro-sucursal" class="form-select form-select-sm" onchange="cargarDevoluciones()">
+                    <option value="">{{ sucursal_actual.alias }} (mi sucursal)</option>
+                    <option value="TODAS">Todas las sucursales</option>
+                    {% for s in sucursales %}
+                    <option value="{{ s.id }}">{{ s.alias }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="col-md-2 text-end">
                 <button class="btn btn-sm btn-outline-primary" onclick="cargarDevoluciones()">
                     <i class="ri-search-line me-1"></i> Buscar
                 </button>
@@ -202,12 +214,14 @@
                         <th>NC</th>
                         <th>Estado</th>
                         <th>Solicitado por</th>
+                        {# Columna sucursal: solo tiene sentido al ver más de una. #}
+                        <th class="col-sucursal-dg d-none">Sucursal</th>
                         <th>Fecha</th>
                         <th class="text-end">Acciones</th>
                     </tr>
                 </thead>
                 <tbody id="tbody-devoluciones">
-                    <tr><td colspan="9" class="text-center text-muted py-4">Cargando...</td></tr>
+                    <tr><td colspan="10" class="text-center text-muted py-4">Cargando...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -322,12 +336,20 @@
                     <!-- Método de devolución al cliente -->
                     <div class="cliente-box mb-2">
                         <div class="text-white fw-semibold mb-2" style="font-size:0.85rem;"><i class="ri-bank-line me-1" style="color:#0d6efd;"></i> Método de devolución al cliente</div>
+                        {# Transferencia es el método primario. Efectivo queda OCULTO
+                           (el input sigue en el DOM para no romper el JS y para poder
+                           mostrar solicitudes históricas que sí lo usaron). #}
                         <div class="btn-group btn-group-sm w-100 mb-2" role="group">
-                            <input type="radio" class="btn-check" name="dg-metodo" id="dg-metodo-efectivo" value="EFECTIVO_CAJA" checked onchange="dgToggleMetodo()">
-                            <label class="btn btn-outline-light" for="dg-metodo-efectivo"><i class="ri-cash-line me-1"></i> Efectivo (caja)</label>
-                            <input type="radio" class="btn-check" name="dg-metodo" id="dg-metodo-transf" value="TRANSFERENCIA_BANCARIA" onchange="dgToggleMetodo()">
+                            <input type="radio" class="btn-check" name="dg-metodo" id="dg-metodo-transf" value="TRANSFERENCIA_BANCARIA" checked onchange="dgToggleMetodo()">
                             <label class="btn btn-outline-light" for="dg-metodo-transf"><i class="ri-bank-card-line me-1"></i> Transferencia</label>
+                            {# Solo aparece si el documento se vendió a crédito: ahí no hay
+                               plata que devolver, se rebaja la cuenta por cobrar. #}
+                            <input type="radio" class="btn-check d-none" name="dg-metodo" id="dg-metodo-credito" value="REBAJA_CREDITO" onchange="dgToggleMetodo()">
+                            <label class="btn btn-outline-light d-none" id="dg-lbl-credito" for="dg-metodo-credito"><i class="ri-scales-3-line me-1"></i> Rebaja de crédito</label>
+                            <input type="radio" class="btn-check d-none" name="dg-metodo" id="dg-metodo-efectivo" value="EFECTIVO_CAJA" onchange="dgToggleMetodo()">
+                            <label class="btn btn-outline-light d-none" for="dg-metodo-efectivo"><i class="ri-cash-line me-1"></i> Efectivo (caja)</label>
                         </div>
+                        <div id="dg-aviso-credito" class="alert alert-warning py-1 px-2 small mb-2 d-none"></div>
                         <div id="dg-transf-fields" class="row g-2 d-none">
                             <div class="col-md-6"><input type="text" id="dg-banco" class="form-control form-control-sm" placeholder="Banco"></div>
                             <div class="col-md-6">
@@ -399,10 +421,14 @@
                     <div class="text-white fw-semibold mb-2" style="font-size:0.85rem;"><i class="ri-bank-line me-1" style="color:#0d6efd;"></i> Impacto en caja</div>
                     <div class="row g-2 align-items-center mb-2">
                         <div class="col-md-7">
+                            {# Transferencia primero (primaria). "Efectivo de caja"
+                               va oculto: solo se muestra si la solicitud ya venía
+                               con ese método (histórico). #}
                             <select id="apr-metodo" class="form-select form-select-sm" onchange="aprActualizarImpacto()">
-                                <option value="EFECTIVO_CAJA">Efectivo de caja</option>
                                 <option value="TRANSFERENCIA_BANCARIA">Transferencia bancaria</option>
+                                <option value="REBAJA_CREDITO">Rebaja crédito del cliente (venta a crédito)</option>
                                 <option value="NO_AFECTA_CAJA">No afecta caja</option>
+                                <option value="EFECTIVO_CAJA" hidden>Efectivo de caja</option>
                             </select>
                         </div>
                         <div class="col-md-5" id="apr-fecha-wrap">
@@ -449,7 +475,7 @@
     const urlCon = (plantilla, id) => plantilla.replace('/0/', '/' + id + '/');
 
     // Estado del wizard
-    let dgWizard = { paso: 1, dte: null, seleccion: {}, requerimientoId: null };
+    let dgWizard = { paso: 1, dte: null, seleccion: {}, requerimientoId: null, condicionPago: null };
 
     function getCookie(name) {
         let v = null;
@@ -524,7 +550,7 @@
 
     // ===================== WIZARD =====================
     function resetModalDevolucionGarantia() {
-        dgWizard = { paso: 1, dte: null, seleccion: {}, requerimientoId: null };
+        dgWizard = { paso: 1, dte: null, seleccion: {}, requerimientoId: null, condicionPago: null };
         $('#dg-folio').val('');
         $('#dg-doc-info').addClass('d-none').empty();
         $('#dg-lista-productos').empty();
@@ -533,7 +559,10 @@
         $('#dg-cliente-estado').addClass('d-none');
         $('#dg-alerta-generico').addClass('d-none');
         $('#dg-motivo').val('Garantía aprobada');
-        $('#dg-metodo-efectivo').prop('checked', true);
+        // Transferencia es el método primario (efectivo está oculto).
+        $('#dg-metodo-transf').prop('checked', true);
+        $('#dg-metodo-credito, #dg-lbl-credito').addClass('d-none');
+        $('#dg-aviso-credito').addClass('d-none').empty();
         $('#dg-banco, #dg-num-cuenta, #dg-titular-rut').val('');
         $('#dg-tipo-cuenta').val('');
         $('#dg-titular-mismo').prop('checked', true);
@@ -678,11 +707,25 @@
             }
             dgWizard.dte = resp.dte;
             dgWizard.seleccion = {};
+            dgWizard.condicionPago = resp.condicion_pago || null;
 
+            const cp = dgWizard.condicionPago;
+            // Venta a crédito → se ofrece (y preselecciona) "Rebaja de crédito":
+            // no hay plata que transferir, se descuenta la cuenta por cobrar.
+            const esCredito = !!(cp && cp.es_credito);
+            $('#dg-metodo-credito, #dg-lbl-credito').toggleClass('d-none', !esCredito);
+            $(esCredito ? '#dg-metodo-credito' : '#dg-metodo-transf').prop('checked', true);
+            dgToggleMetodo();
             $('#dg-doc-info').removeClass('d-none').html(
                 `<i class="ri-checkbox-circle-line text-success me-1"></i>` +
                 `${resp.dte.tipo_documento} #${resp.dte.folio} — ${resp.dte.fecha_emision} — Total ${clp(resp.dte.total)}` +
-                `<br><span class="text-info">Saldo de NC disponible: ${clp(resp.dte.monto_restante_nc)}</span>`
+                `<br><span class="text-info">Saldo de NC disponible: ${clp(resp.dte.monto_restante_nc)}</span>` +
+                // Venta a crédito: el cliente no puso plata en la caja. Se avisa
+                // desde el paso 1 para no prometerle efectivo/transferencia.
+                (cp && cp.es_credito
+                    ? `<br><span class="text-warning"><i class="ri-error-warning-line me-1"></i>` +
+                      `Vendida A CRÉDITO — ${esc(cp.motivos.join('; '))}</span>`
+                    : '')
             );
 
             const $lista = $('#dg-lista-productos').empty();
@@ -851,6 +894,20 @@
 
     function dgRenderResumen() {
         const d = dgWizard.dte;
+        // Aviso de crédito en el paso del método: quien aprueba no podrá
+        // pagar esto con plata de la caja, así que no hay que ofrecérselo
+        // al cliente como si fuera un reembolso inmediato.
+        const cp = dgWizard.condicionPago;
+        const $av = $('#dg-aviso-credito');
+        if (cp && cp.es_credito) {
+            $av.removeClass('d-none').html(
+                `<i class="ri-error-warning-line me-1"></i>Documento vendido <strong>a crédito</strong> ` +
+                `(${esc(cp.motivos.join('; '))}). El aprobador deberá resolverla como ` +
+                `<strong>rebaja de crédito</strong> — no como entrega de dinero.`
+            );
+        } else {
+            $av.addClass('d-none').empty();
+        }
         let filas = '';
         Object.values(dgWizard.seleccion).forEach(function (s) {
             if (s.modo === 'CANTIDAD') {
@@ -882,7 +939,9 @@
             ? ($('#dg-titular-mismo').is(':checked') ? $('#dg-cliente-rut').val().trim() : $('#dg-titular-rut').val().trim())
             : '';
         const datosTransf = {
-            metodo_solicitado: esTransf ? 'TRANSFERENCIA_BANCARIA' : 'EFECTIVO_CAJA',
+            // Lo que pidió el cliente = el radio marcado (transferencia por
+            // defecto, rebaja de crédito si la venta fue a crédito).
+            metodo_solicitado: $('input[name="dg-metodo"]:checked').val() || 'TRANSFERENCIA_BANCARIA',
             banco: esTransf ? $('#dg-banco').val().trim() : '',
             tipo_cuenta: esTransf ? $('#dg-tipo-cuenta').val() : '',
             numero_cuenta: esTransf ? $('#dg-num-cuenta').val().trim() : '',
@@ -943,14 +1002,22 @@
     function cargarDevoluciones(page) {
         dgPaginaActual = Math.max(1, page || 1);
         const params = { q: $('#filtro-busqueda').val().trim(), estado: $('#filtro-estado').val(), page: dgPaginaActual };
+        // Filtro de sucursal: solo existe para Administrador (lo renderiza el
+        // template bajo `es_admin`); el backend igual ignora el parámetro para
+        // el resto, así que mandarlo vacío no cambia nada.
+        const sucSel = $('#filtro-sucursal').val();
+        if (sucSel) { params.sucursal = sucSel; }
         $.get(URLS_DG.listar, params, function (resp) {
             if (!resp.success) {
-                $('#tbody-devoluciones').html(`<tr><td colspan="9" class="text-center text-danger py-4">${esc(resp.error || 'Error al cargar el listado')}</td></tr>`);
+                $('#tbody-devoluciones').html(`<tr><td colspan="10" class="text-center text-danger py-4">${esc(resp.error || 'Error al cargar el listado')}</td></tr>`);
                 return;
             }
+            // La columna Sucursal aparece solo cuando se ven varias a la vez.
+            const verSucursal = sucSel === 'TODAS';
+            $('.col-sucursal-dg').toggleClass('d-none', !verSucursal);
             const $tbody = $('#tbody-devoluciones').empty();
             if (!resp.data.length) {
-                $tbody.append('<tr><td colspan="9" class="text-center text-muted py-4">Sin solicitudes registradas</td></tr>');
+                $tbody.append('<tr><td colspan="10" class="text-center text-muted py-4">Sin solicitudes registradas</td></tr>');
             }
             resp.data.forEach(function (d) {
                 let acciones = `<a href="/app/devolucion-garantia/${d.id}/" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Ver"><i class="ri-eye-line"></i></a>`;
@@ -970,6 +1037,7 @@
                         <td>${d.nc_numero ? '#' + esc(d.nc_numero) : '-'}</td>
                         <td><span class="status-badge status-${esc(d.estado.toLowerCase())}">${esc(d.estado_display)}</span></td>
                         <td>${esc(d.solicitado_por)}</td>
+                        <td class="col-sucursal-dg ${verSucursal ? '' : 'd-none'}">${esc(d.sucursal || '')}</td>
                         <td>${esc(d.fecha)}</td>
                         <td class="text-end">${acciones}</td>
                     </tr>
@@ -988,7 +1056,7 @@
             $('#dg-pag-prev').prop('disabled', dgPaginaActual <= 1);
             $('#dg-pag-next').prop('disabled', dgPaginaActual >= totalPag);
         }).fail(function (xhr) {
-            $('#tbody-devoluciones').html(`<tr><td colspan="9" class="text-center text-danger py-4">${esc(errMsg(xhr, 'Error al cargar el listado'))}</td></tr>`);
+            $('#tbody-devoluciones').html(`<tr><td colspan="10" class="text-center text-danger py-4">${esc(errMsg(xhr, 'Error al cargar el listado'))}</td></tr>`);
         });
     }
 
@@ -1019,7 +1087,9 @@
         $('#apr-num-operacion').text('');
         $('#apr-resumen').html('Cargando...');
         $('#apr-observaciones').val('');
-        $('#apr-metodo').val('EFECTIVO_CAJA');
+        // Transferencia es el default; el backend puede sugerir REBAJA_CREDITO
+        // si el documento se vendió a crédito (se aplica al llegar el detalle).
+        $('#apr-metodo').val('TRANSFERENCIA_BANCARIA');
         const hoy = fechaLocalISO();
         $('#apr-fecha').val(hoy).attr('max', hoy);
         new bootstrap.Modal(document.getElementById('modalAprobarDevolucion')).show();
@@ -1042,18 +1112,33 @@
                     metodoHtml += `<div class="small text-info">Banco ${esc(d.transferencia.banco)} · ${esc(d.transferencia.tipo_cuenta)} · N° ${esc(d.transferencia.numero_cuenta)} · Titular ${esc(d.transferencia.titular_rut)}</div>`;
                 }
             }
+            // Condición de pago del documento original: es lo que decide si
+            // se puede sacar plata de la caja o hay que rebajar el crédito.
+            const cp = d.condicion_pago || {};
+            const credHtml = cp.es_credito
+                ? `<div class="alert alert-warning py-1 px-2 small mt-2 mb-0">` +
+                  `<i class="ri-error-warning-line me-1"></i>Documento vendido <strong>A CRÉDITO</strong> ` +
+                  `(${esc((cp.motivos || []).join('; '))}). El cliente no puso esta plata en la caja: ` +
+                  `corresponde <strong>Rebaja crédito del cliente</strong>.</div>`
+                : '';
             $('#apr-resumen').html(
-                `<div class="mb-1"><strong>Solicitante:</strong> ${esc(d.solicitado_por)} · ${esc(d.fecha_solicitud)}</div>` +
+                `<div class="mb-1"><strong>Solicitante:</strong> ${esc(d.solicitado_por)} · ${esc(d.fecha_solicitud)}${d.sucursal ? ' · ' + esc(d.sucursal) : ''}</div>` +
                 `<div class="mb-1"><strong>Documento:</strong> ${esc(d.dte.tipo)} #${esc(d.dte.folio)} (${esc(d.dte.fecha)}) — Total ${clp(d.dte.total)}</div>` +
                 `<div class="mb-1"><strong>Cliente:</strong> ${esc(d.receptor.nombre)} (${esc(d.receptor.rut)})</div>` +
                 `<div class="mb-1"><strong>Motivo:</strong> ${esc(d.motivo)}</div>` +
                 `<hr class="my-1" style="border-color:#2a3045;">` + lineas +
                 `<div class="mt-1"><strong>Total NC:</strong> ${clp(d.monto_total)}</div>` +
-                metodoHtml +
+                metodoHtml + credHtml +
                 (d.hay_conflicto ? `<div class="alert alert-danger py-1 px-2 small mt-2 mb-0">Alguna línea ya no tiene disponibilidad suficiente. Si apruebas puede fallar; considera rechazar.</div>` : '')
             );
-            // Prefijar el método de caja con lo que pidió el cliente.
-            if (d.metodo_solicitado) { $('#apr-metodo').val(d.metodo_solicitado); }
+            // Preselección: manda la sugerencia del backend (REBAJA_CREDITO si
+            // la venta fue a crédito). Solo si NO es a crédito se respeta lo
+            // que pidió el cliente — pedir efectivo no puede imponer efectivo.
+            if (d.metodo_sugerido === 'REBAJA_CREDITO') {
+                $('#apr-metodo').val('REBAJA_CREDITO');
+            } else if (d.metodo_solicitado) {
+                $('#apr-metodo').val(d.metodo_solicitado);
+            }
             aprActualizarImpacto();
         }).fail(function (xhr) {
             $('#apr-resumen').html(`<span class="text-danger">${esc(errMsg(xhr, 'Error al cargar'))}</span>`);
@@ -1079,7 +1164,9 @@
                 html += `<div class="alert alert-warning py-1 px-2 small mt-2 mb-0"><i class="ri-alert-line me-1"></i>${esc(a)}</div>`;
             });
             $('#apr-impacto').html(html);
-            $('#apr-btn-aprobar').prop('disabled', !im.fecha_valida);
+            // `bloqueado` = método incompatible con la condición de pago del
+            // documento (ej. efectivo sobre una venta a crédito sin cobrar).
+            $('#apr-btn-aprobar').prop('disabled', !im.fecha_valida || !!im.bloqueado);
         }).fail(function (xhr) {
             $('#apr-impacto').html(`<span class="text-danger">${esc(errMsg(xhr, 'No se pudo calcular el impacto'))}</span>`);
         });

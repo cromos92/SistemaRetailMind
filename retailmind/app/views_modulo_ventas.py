@@ -7879,6 +7879,13 @@ def cuadratura_caja(request):
     return render(request, 'vistas/modulo_ventas/cuadraturaCaja.html', context)
 
 
+# Métodos con los que se graba el Dte_Detalle_Pago de una NC de devolución
+# cuando la venta original fue A CRÉDITO (ver `METODO_PAGO_NC_POR_DG` en
+# devolucion_garantia_service). No sacan plata de la caja: rebajan la cuenta
+# por cobrar, así que descuentan de `total_credito_externo` y no del efectivo.
+_METODOS_PAGO_CREDITO_NC = {'CREDITO_EXTERNO', 'CREDITO_TRABAJADOR', 'CONVENIO', 'ORDEN_COMPRA'}
+
+
 def _calcular_cuadratura_data(sucursal, fecha_str):
     """
     Función helper para calcular datos de cuadratura.
@@ -7939,6 +7946,10 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         'total_notas_credito': 0,
         'total_nc_efectivo': 0,
         'total_nc_transferencia': 0,
+        # NC de devolución que rebajan la cuenta por cobrar en vez de sacar
+        # plata de un medio de caja (ventas a crédito). Descuentan de
+        # `total_credito_externo`, no del efectivo ni de las transferencias.
+        'total_nc_credito': 0,
         # Totales "display" (bruto por tipo de documento) — suman TODOS los
         # DTEs del día, incluso los que tienen ticket asociado. Sirven para
         # mostrar en la sección "Documentos (referencia)" del Resumen de
@@ -8278,6 +8289,12 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
             cuadratura_data['total_nc_efectivo'] += monto_nc
         elif any((p.metodo_pago or '').upper() == 'TRANSFERENCIA' for p in pagos_nc):
             cuadratura_data['total_nc_transferencia'] += monto_nc
+        elif any((p.metodo_pago or '').upper() in _METODOS_PAGO_CREDITO_NC for p in pagos_nc):
+            # Devolución sobre una venta A CRÉDITO: no salió plata de ningún
+            # medio de caja, se rebajó la cuenta por cobrar. Se descuenta del
+            # bucket de crédito (que igual entra a "Efectivo y Otros" del
+            # Resumen) para que el VENTA TOTAL cuadre con `total_notas_credito`.
+            cuadratura_data['total_nc_credito'] += monto_nc
 
     # ========== CALCULAR TOTALES GENERALES ==========
     # Tarjetas comerciales: solo Hites
@@ -8311,6 +8328,13 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
     # pero nunca se descontaba → el arqueo cerraba con diferencia en transferencia
     # cada vez que se emitía una NC por devolución vía transferencia.
     cuadratura_data['total_transferencia'] -= cuadratura_data['total_nc_transferencia']
+    # NC sobre ventas a crédito: rebajan la cuenta por cobrar, no la caja.
+    # `total_credito_externo` es parte de "Efectivo y Otros" en el Resumen, así
+    # que restar aquí mantiene esa suma coherente con el VENTA TOTAL (que ya
+    # descuenta la NC vía `total_notas_credito`). Puede quedar negativo si la
+    # venta a crédito original es de otro día — es correcto: representa plata
+    # que se dejó de cobrar, no un ingreso.
+    cuadratura_data['total_credito_externo'] -= cuadratura_data['total_nc_credito']
 
     return cuadratura_data
 

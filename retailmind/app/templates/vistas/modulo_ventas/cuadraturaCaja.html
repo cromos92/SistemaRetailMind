@@ -1276,6 +1276,7 @@
                                         <tr><td class="text-muted" style="font-size:.75rem;">NC TOTAL</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="nota_credito">$0</span></td></tr>
                                         <tr><td class="text-muted ps-3" style="font-size:.68rem;">NC Efectivo Caja</td><td class="text-end" style="font-size:.75rem;font-family:monospace;color:var(--nexo-danger);"><span id="nc_efectivo">$0</span></td></tr>
                                         <tr><td class="text-muted ps-3" style="font-size:.68rem;">NC Transferencia</td><td class="text-end" style="font-size:.75rem;font-family:monospace;color:var(--nexo-info);"><span id="nc_transferencia">$0</span></td></tr>
+                                        <tr><td class="text-muted ps-3" style="font-size:.68rem;">NC Crédito (cta. por cobrar)</td><td class="text-end" style="font-size:.75rem;font-family:monospace;color:var(--nexo-warning);"><span id="nc_credito">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="efectivo" data-metodos="CONVENIO" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">CONVENIO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="convenio">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="efectivo" data-metodos="CREDITO_TRABAJADOR" title="Ver detalle"><td style="font-size:.75rem;color:var(--nexo-primary);">CRÉD. TRABAJADOR</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;color:var(--nexo-primary);"><span id="credito_trabajador">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="efectivo" data-metodos="CREDITO_EXTERNO" title="Ver detalle"><td style="font-size:.75rem;color:var(--nexo-warning);">CRÉD. EXTERNO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;color:var(--nexo-warning);"><span id="credito_externo">$0</span></td></tr>
@@ -3512,7 +3513,7 @@ function abrirResumenCaja() {
 }
 
 function limpiarCamposCuadratura() {
-    ['visa','debito','presto','hites','efectivo','transferencia','nota_credito','nc_efectivo','nc_transferencia','convenio','credito_trabajador','credito_externo',
+    ['visa','debito','presto','hites','efectivo','transferencia','nota_credito','nc_efectivo','nc_transferencia','nc_credito','convenio','credito_trabajador','credito_externo',
      'falabella','paris','ripley','mercadopago','klap','totalboletaelectronica','totalboletapapel','totalfactura','totalfacturaexenta','totalnotascredito','totalncefectivo','totalnctransferencia',
      'ventatotal','totalefectivo','totaltbk','totalcomercial','totalinternet',
      'sum_tarjetas','sum_efectivo','sum_internet'].forEach(c => $(`#${c}`).text('$0'));
@@ -3559,6 +3560,7 @@ function cargarDatosCuadratura(c) {
     $('#nota_credito').text(fmCLP(c.total_notas_credito||0));
     $('#nc_efectivo').text(fmCLP(c.total_nc_efectivo||0));
     $('#nc_transferencia').text(fmCLP(c.total_nc_transferencia||0));
+    $('#nc_credito').text(fmCLP(c.total_nc_credito||0));
     $('#convenio').text(fmCLP(c.total_convenio||0));
     $('#credito_trabajador').text(fmCLP(c.total_credito_trabajador||0)); $('#credito_externo').text(fmCLP(c.total_credito_externo||0));
     $('#cheque').text(fmCLP(c.total_cheque||0)); $('#orden_compra').text(fmCLP(c.total_orden_compra||0));

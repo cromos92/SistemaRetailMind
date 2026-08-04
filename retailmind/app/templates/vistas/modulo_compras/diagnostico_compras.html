@@ -37,7 +37,8 @@
 }
 </style>
 
-<div class="main-content">
+{% comment %} menu.html ya abre <div class="main-content">; anidar otro duplicaba el
+   margin-left:250px del layout. Como el resto de los modulos, solo .page-content. {% endcomment %}
     <div class="page-content">
         <div class="container-fluid">
             
@@ -193,7 +194,6 @@
 
         </div>
     </div>
-</div>
 
 <!-- Footer personalizado sin CKEditor -->
 <footer class="footer">

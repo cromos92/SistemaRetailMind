@@ -1,8 +1,12 @@
 {% load static %}
 
 {% include 'layout/header.html' %}
-{% csrf_token %}
 {% include 'layout/menu.html' %}
+{% comment %} header.html termina en </head> y el <body> lo abre menu.html: estando
+   antes del include, este token emitía un <input> entre </head> y <body> (HTML
+   inválido). No se lee del DOM — va aquí porque es lo que hace que Django emita
+   la cookie csrftoken que sí usan los POST vía getCSRFToken(). {% endcomment %}
+{% csrf_token %}
 
 <!-- NEXO Design System - Gestión de Empresas -->
 <style>
@@ -249,7 +253,8 @@
 }
 </style>
 
-<div class="main-content">
+{% comment %} menu.html ya abre <div class="main-content">; anidar otro duplicaba el
+   margin-left:250px del layout. Como el resto de los modulos, solo .page-content. {% endcomment %}
     <div class="page-content nexo-page">
         <div class="container-fluid">
             
@@ -332,31 +337,32 @@
                 <div class="nexo-filter-row">
                     <div class="nexo-filter-group search">
                         <div class="nexo-filter-label">Buscar</div>
-                        <input type="text" class="nexo-filter-input" id="filtroBusqueda" placeholder="Nombre, RUT (con o sin puntos), razón social, giro o comuna...">
+                        <input type="text" class="nexo-filter-input" id="filtroBusqueda" value="{{ search }}" placeholder="Nombre, RUT (con o sin puntos), razón social, giro o comuna...">
                     </div>
                     <div class="nexo-filter-group">
                         <div class="nexo-filter-label">Estado</div>
                         <select class="nexo-filter-select" id="filtroEstado">
                             <option value="">Todos</option>
-                            <option value="activo">Activas</option>
-                            <option value="inactivo">Inactivas</option>
+                            <option value="activo" {% if estado == 'activo' %}selected{% endif %}>Activas</option>
+                            <option value="inactivo" {% if estado == 'inactivo' %}selected{% endif %}>Inactivas</option>
                         </select>
                     </div>
                     <div class="nexo-filter-group">
                         <div class="nexo-filter-label">Tipo</div>
                         <select class="nexo-filter-select" id="filtroTipo">
                             <option value="">Todos</option>
-                            <option value="cliente">Cliente</option>
-                            <option value="proveedor">Proveedor</option>
+                            {% for valor, etiqueta in tipos_empresa %}
+                            <option value="{{ valor }}" {% if tipo_empresa == valor %}selected{% endif %}>{{ etiqueta }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <div class="nexo-filter-group">
                         <div class="nexo-filter-label">Ordenar por</div>
                         <select class="nexo-filter-select" id="ordenarPor">
-                            <option value="nombre">Nombre</option>
-                            <option value="rut">RUT</option>
-                            <option value="fecha">Fecha</option>
-                            <option value="sucursales">Sucursales</option>
+                            <option value="nombre" {% if orden == 'nombre' %}selected{% endif %}>Nombre</option>
+                            <option value="rut" {% if orden == 'rut' %}selected{% endif %}>RUT</option>
+                            <option value="fecha" {% if orden == 'fecha' %}selected{% endif %}>Fecha</option>
+                            <option value="sucursales" {% if orden == 'sucursales' %}selected{% endif %}>Sucursales</option>
                         </select>
                     </div>
                     <div class="nexo-filter-actions">
@@ -425,10 +431,10 @@
                                 Siguiente <i class="ri-arrow-right-s-line"></i>
                             </button>
                             <select class="nexo-pagination-select" id="registrosPorPagina" onchange="cambiarRegistrosPorPagina()">
-                                <option value="10">10</option>
-                                <option value="25" selected>25</option>
-                                <option value="50">50</option>
-                                <option value="100">100</option>
+                                <option value="10" {% if page_size == 10 %}selected{% endif %}>10</option>
+                                <option value="25" {% if page_size == 25 %}selected{% endif %}>25</option>
+                                <option value="50" {% if page_size == 50 %}selected{% endif %}>50</option>
+                                <option value="100" {% if page_size == 100 %}selected{% endif %}>100</option>
                             </select>
                         </div>
                     </div>
@@ -437,7 +443,6 @@
 
         </div>
     </div>
-</div>
 
 <!-- Modal Crear/Editar Empresa -->
 <div class="modal fade nexo-modal" id="modalEmpresa" tabindex="-1" aria-hidden="true">
@@ -736,6 +741,15 @@ let modoEdicionSucursal = false;
 
 $(document).ready(function() {
     console.log('🚀 Inicializando Gestión de Empresas NEXO...');
+
+    // Los controles vienen sembrados por el servidor con la querystring ya
+    // interpretada. Arrancar el estado JS DESDE el DOM (y no de los literales de
+    // arriba) es lo que hace que ?search=<rut> funcione: así llegan con filtro
+    // aplicado el botón "editar receptor" de emisionDTE y las redirecciones
+    // post-guardado de empresa/sucursal, que antes caían en el listado completo.
+    registrosPorPagina = parseInt($('#registrosPorPagina').val(), 10) || 25;
+    paginaActual = {{ page_obj.number|default:1 }};
+
     cargarEmpresas();
 
     // Eventos de filtros

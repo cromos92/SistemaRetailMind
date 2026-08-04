@@ -297,6 +297,10 @@ def lista_empresas(request):
         'tipo_empresa': tipo_empresa,
         'estado': estado,
         'orden': orden,
+        # El template siembra los controles con esto: sin ello el ?search=<rut> de
+        # emisionDTE y de las redirecciones post-guardado se perdía y la pantalla
+        # abría siempre el listado completo.
+        'page_size': page_size,
         'tipos_empresa': [
             ('cliente', 'Cliente'),
             ('proveedor', 'Proveedor'),

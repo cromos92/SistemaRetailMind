@@ -331,6 +331,100 @@ class DevolucionGarantiaServiceTest(TestCase):
         c2 = _calcular_cuadratura_data(self.sucursal, manana)
         self.assertEqual(int(c2['total_nc_efectivo']), 0)
 
+    # ---------- venta a crédito ----------
+
+    def _factura_credito(self, numero, cantidad=1, precio=10000, **kwargs):
+        """Factura a crédito: sin pago registrado y con la cuenta por cobrar abierta."""
+        f = _crear_documento(
+            self.env, numero, [(self.pt, cantidad, precio)],
+            tipo_documento='FACTURA ELECTRONICA', metodo_pago=None, **kwargs
+        )
+        Dte.objects.filter(id=f.id).update(estado_pago='PENDIENTE', diasCredito=30)
+        f.refresh_from_db()
+        return f
+
+    def test_condicion_pago_detecta_credito_y_contado(self):
+        contado = _crear_documento(self.env, 5101, [(self.pt, 1, 11900)])
+        self.assertFalse(service.condicion_pago_dte(contado)['es_credito'])
+
+        credito = self._factura_credito(5102)
+        cond = service.condicion_pago_dte(credito)
+        self.assertTrue(cond['es_credito'])
+        self.assertTrue(cond['cobro_abierto'])
+        self.assertEqual(cond['estado_pago'], 'PENDIENTE')
+        self.assertEqual(cond['dias_credito'], 30)
+
+    def test_credito_bloquea_efectivo_de_caja(self):
+        f = self._factura_credito(5103)
+        dev = self._crear_solicitud(f, [{'dte_producto_id': f.dte_productos.first().id,
+                                         'modo': 'CANTIDAD', 'cantidad': 1}])
+        with self.assertRaises(service.DevolucionGarantiaError) as ctx:
+            service.aprobar_devolucion(
+                devolucion_id=dev.id, aprobador=self.user,
+                metodo_devolucion='EFECTIVO_CAJA', fecha_imputacion=self.hoy,
+            )
+        self.assertIn('CRÉDITO', str(ctx.exception))
+        dev.refresh_from_db()
+        self.assertEqual(dev.estado, 'PENDIENTE')  # queda viva, no se quema
+
+    def test_rebaja_credito_no_toca_efectivo_ni_transferencia(self):
+        f = self._factura_credito(5104, cantidad=1, precio=10000)
+        dev = self._crear_solicitud(f, [{'dte_producto_id': f.dte_productos.first().id,
+                                         'modo': 'CANTIDAD', 'cantidad': 1}])
+        _dev, nc, _txt, _w = service.aprobar_devolucion(
+            devolucion_id=dev.id, aprobador=self.user,
+            metodo_devolucion='REBAJA_CREDITO', fecha_imputacion=self.hoy,
+        )
+        # Es DEVOLUCION (cuenta en la cuadratura), no ANULACION (informativa).
+        self.assertEqual(nc.tipo_transaccion, 'DEVOLUCION')
+        pago = nc.dte_asociado.get()
+        self.assertEqual(pago.metodo_pago, 'CREDITO_EXTERNO')
+        self.assertEqual(pago.fecha_pago, self.hoy)
+
+        c = _calcular_cuadratura_data(self.sucursal, self.hoy_str)
+        monto = int(nc.monto_con_iva)
+        self.assertEqual(int(c['total_nc_credito']), monto)
+        self.assertEqual(int(c['total_nc_efectivo']), 0)
+        self.assertEqual(int(c['total_nc_transferencia']), 0)
+        # Sí aparece como NC del día y rebaja la cuenta por cobrar.
+        self.assertEqual(int(c['total_notas_credito']), monto)
+        self.assertEqual(int(c['total_credito_externo']), -monto)
+
+    def test_rebaja_credito_se_imputa_a_la_fecha_elegida(self):
+        f = self._factura_credito(5105)
+        dev = self._crear_solicitud(f, [{'dte_producto_id': f.dte_productos.first().id,
+                                         'modo': 'CANTIDAD', 'cantidad': 1}])
+        service.aprobar_devolucion(
+            devolucion_id=dev.id, aprobador=self.user,
+            metodo_devolucion='REBAJA_CREDITO', fecha_imputacion=self.hoy,
+        )
+        manana = (self.hoy + timedelta(days=1)).strftime('%Y-%m-%d')
+        self.assertEqual(int(_calcular_cuadratura_data(self.sucursal, manana)['total_nc_credito']), 0)
+
+    def test_preview_bloquea_efectivo_y_sugiere_rebaja_credito(self):
+        f = self._factura_credito(5106)
+        dev = self._crear_solicitud(f, [{'dte_producto_id': f.dte_productos.first().id,
+                                         'modo': 'CANTIDAD', 'cantidad': 1}])
+        pv = service.impacto_caja_preview(devolucion=dev, metodo='EFECTIVO_CAJA',
+                                          fecha_imputacion=self.hoy)
+        self.assertTrue(pv['bloqueado'])
+        self.assertEqual(pv['metodo_sugerido'], 'REBAJA_CREDITO')
+
+        ok = service.impacto_caja_preview(devolucion=dev, metodo='REBAJA_CREDITO',
+                                          fecha_imputacion=self.hoy)
+        self.assertFalse(ok['bloqueado'])
+        self.assertTrue(ok['afecta_caja'])
+
+    def test_contado_sigue_permitiendo_efectivo(self):
+        """El guard es solo para ventas a crédito: no rompe el flujo normal."""
+        boleta = _crear_documento(self.env, 5107, [(self.pt, 1, 11900)])
+        dev = self._crear_solicitud(boleta, [{'dte_producto_id': boleta.dte_productos.first().id,
+                                              'modo': 'CANTIDAD', 'cantidad': 1}])
+        pv = service.impacto_caja_preview(devolucion=dev, metodo='EFECTIVO_CAJA',
+                                          fecha_imputacion=self.hoy)
+        self.assertFalse(pv['bloqueado'])
+        self.assertEqual(pv['metodo_sugerido'], 'TRANSFERENCIA_BANCARIA')
+
     # ---------- guards ----------
 
     def test_guard_sobre_acreditacion_por_linea_con_nc_otra_via(self):
@@ -646,3 +740,109 @@ class DevolucionGarantiaTicketTest(TestCase):
         session.save()
         resp = self.client.get(reverse('api_ticket_devolucion_garantia', args=[self.dev.id]))
         self.assertEqual(resp.status_code, 404)
+
+
+@override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)
+class DevolucionGarantiaFiltroSucursalTest(TestCase):
+    """El listado va acotado a la sucursal activa; el administrador puede
+    pedir otra o todas (`?sucursal=`). Nadie más."""
+
+    def setUp(self):
+        self.env = setup_entorno_completo()
+        self.suc_a = self.env['sucursal']
+        self.suc_b = crear_sucursal(empresa=self.env['empresa'], alias='SUC-B')
+        pt = self.env['producto_talla']
+
+        def _solicitud(numero, sucursal):
+            boleta = _crear_documento(self.env, numero, [(pt, 2, 11900)])
+            Dte.objects.filter(id=boleta.id).update(sucursal=sucursal)
+            boleta.refresh_from_db()
+            return service.crear_solicitud_devolucion(
+                dte_original=boleta, sucursal=sucursal, receptor=_receptor(self.env),
+                motivo='Garantía', usuario=self.env['user'],
+                detalles=[{'dte_producto_id': boleta.dte_productos.first().id,
+                           'modo': 'CANTIDAD', 'cantidad': 1}],
+            )
+
+        self.dev_a = _solicitud(5300, self.suc_a)
+        self.dev_b = _solicitud(5301, self.suc_b)
+
+        modulo, _ = ModuloSistema.objects.get_or_create(
+            codigo='ventas', defaults={'nombre': 'Ventas', 'orden': 2})
+        self.opcion, _ = OpcionMenu.objects.get_or_create(
+            codigo='devolucion_garantia',
+            defaults={'modulo': modulo, 'nombre': 'Devolucion por Garantia', 'orden': 3})
+        self.url = reverse('api_listar_devoluciones_garantia')
+
+    def _cliente(self, rol):
+        user = crear_usuario(username=f'user_filtro_{rol}', rol=rol)
+        PermisoRol.objects.update_or_create(
+            rol=user.rol, opcion_menu=self.opcion, defaults={'puede_ver': True})
+        client = Client()
+        client.force_login(user)
+        session = client.session
+        session['idSucursalActual'] = self.suc_a.id
+        session.save()
+        return client
+
+    def test_no_admin_solo_ve_su_sucursal_aunque_pida_todas(self):
+        client = self._cliente('jefe_local')
+        for params in ({}, {'sucursal': 'TODAS'}, {'sucursal': self.suc_b.id}):
+            data = client.get(self.url, params).json()
+            self.assertEqual(data['total'], 1, params)
+            self.assertEqual(data['data'][0]['numero_operacion'], self.dev_a.numero_operacion)
+
+    def test_admin_ve_todas_cuando_lo_pide(self):
+        client = self._cliente('administrador')
+        # Default: sigue acotado a la sucursal activa.
+        self.assertEqual(client.get(self.url).json()['total'], 1)
+        # Explícito: todas.
+        todas = client.get(self.url, {'sucursal': 'TODAS'}).json()
+        self.assertEqual(todas['total'], 2)
+        self.assertEqual(todas['pendientes'], 2)  # el KPI sigue el mismo ámbito
+        self.assertEqual(
+            {d['sucursal'] for d in todas['data']}, {self.suc_a.alias, self.suc_b.alias})
+        # Una sucursal puntual.
+        una = client.get(self.url, {'sucursal': self.suc_b.id}).json()
+        self.assertEqual(una['total'], 1)
+        self.assertEqual(una['data'][0]['numero_operacion'], self.dev_b.numero_operacion)
+
+    def test_pagina_renderiza_y_el_selector_es_solo_para_admin(self):
+        """Smoke del template + el filtro de sucursal solo para administrador."""
+        url = reverse('modulo_devolucion_garantia')
+
+        admin = self._cliente('administrador')
+        resp = admin.get(url)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode('utf-8')
+        self.assertIn('id="filtro-sucursal"', html)
+        self.assertIn('Todas las sucursales', html)
+        self.assertIn(self.suc_b.alias, html)
+
+        jefe = self._cliente('jefe_local')
+        self.assertNotIn('id="filtro-sucursal"', jefe.get(url).content.decode('utf-8'))
+
+    def test_modal_aprobacion_ofrece_rebaja_credito_y_oculta_efectivo(self):
+        """Con permiso de aprobar: transferencia primaria, rebaja de crédito
+        disponible y efectivo oculto (solo para solicitudes históricas)."""
+        user = crear_usuario(username='user_aprob_metodos', rol='administrador')
+        PermisoRol.objects.update_or_create(
+            rol=user.rol, opcion_menu=self.opcion,
+            defaults={'puede_ver': True, 'puede_aprobar': True})
+        client = Client()
+        client.force_login(user)
+        session = client.session
+        session['idSucursalActual'] = self.suc_a.id
+        session.save()
+
+        html = client.get(reverse('modulo_devolucion_garantia')).content.decode('utf-8')
+        self.assertIn('<option value="TRANSFERENCIA_BANCARIA">', html)
+        self.assertIn('<option value="REBAJA_CREDITO">', html)
+        self.assertIn('<option value="EFECTIVO_CAJA" hidden>', html)
+
+    def test_admin_puede_abrir_devolucion_de_otra_sucursal(self):
+        """Sin esto el filtro "todas" sería un callejón: fila visible, 404 al abrir."""
+        client = self._cliente('administrador')
+        resp = client.get(reverse('api_ticket_devolucion_garantia', args=[self.dev_b.id]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['data']['numero_operacion'], self.dev_b.numero_operacion)

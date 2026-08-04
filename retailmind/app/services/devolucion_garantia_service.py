@@ -50,6 +50,103 @@ ESTADOS_CONSUMO = ['PENDIENTE', 'REGISTRADA', 'NC_GENERADA']
 # completa con el estándar chileno para boletas/NC a personas.
 GIRO_PARTICULAR_DEFAULT = 'PARTICULAR'
 
+# === CONDICIÓN DE PAGO DEL DOCUMENTO ORIGINAL ===
+# Métodos de pago que NO son plata recibida: la venta quedó como cuenta por
+# cobrar. Mismo conjunto que `METODOS_CREDITO_DTE` de views_modulo_ventas
+# (el que decide forma_pago_dte = 2/Crédito al emitir el DTE del ticket).
+METODOS_PAGO_CREDITO = {'CREDITO_TRABAJADOR', 'CREDITO_EXTERNO', 'CONVENIO', 'ORDEN_COMPRA'}
+
+# Métodos de devolución que se imputan a un día de cuadratura (llevan
+# Dte_Detalle_Pago con fecha_pago). NO_AFECTA_CAJA queda fuera a propósito.
+METODOS_DG_CON_IMPUTACION = ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA', 'REBAJA_CREDITO')
+
+# Método de pago con el que se graba el Dte_Detalle_Pago de la NC. Es lo que
+# lee `_calcular_cuadratura_data` para saber de qué teórico descontar.
+METODO_PAGO_NC_POR_DG = {
+    'EFECTIVO_CAJA': 'EFECTIVO',
+    'TRANSFERENCIA_BANCARIA': 'TRANSFERENCIA',
+    'REBAJA_CREDITO': 'CREDITO_EXTERNO',
+}
+
+
+def condicion_pago_dte(dte):
+    """
+    ¿El documento original se vendió al CONTADO o A CRÉDITO?
+
+    Importa porque el método de devolución debe seguir por dónde entró la
+    plata: si la venta fue a crédito, el cliente nunca puso dinero en la caja
+    y devolvérselo en efectivo deja el arqueo de ese día con un faltante que
+    nunca existió (`total_efectivo` teórico baja sin que haya salido plata).
+
+    Se considera a crédito si se cumple cualquiera de estas (en orden de
+    confianza):
+      - `estado_pago` PENDIENTE/VENCIDO  → la cuenta por cobrar sigue abierta;
+      - `diasCredito > 0`                → se emitió con pago diferido;
+      - hay pagos y TODOS son de crédito (CREDITO_EXTERNO, CONVENIO, ...);
+      - no hay ni un `Dte_Detalle_Pago`  → no entró a ningún medio de caja.
+
+    Devuelve un dict serializable (lo consumen la API y el preview de caja).
+    """
+    pagos = list(dte.dte_asociado.all())
+    metodos = {(p.metodo_pago or '').upper() for p in pagos if (p.metodo_pago or '').strip()}
+    monto_credito = sum(int(p.monto or 0) for p in pagos
+                        if (p.metodo_pago or '').upper() in METODOS_PAGO_CREDITO)
+    monto_contado = sum(int(p.monto or 0) for p in pagos
+                        if (p.metodo_pago or '').upper() not in METODOS_PAGO_CREDITO)
+
+    estado_pago = (dte.estado_pago or '').upper()
+    dias_credito = int(dte.diasCredito or 0)
+    # Cobro abierto: es el caso duro — el cliente aún debe la plata.
+    cobro_abierto = estado_pago in ('PENDIENTE', 'VENCIDO')
+
+    motivos = []
+    if cobro_abierto:
+        motivos.append(f'el documento está {estado_pago.lower()} de pago (cuenta por cobrar abierta)')
+    if dias_credito > 0:
+        motivos.append(f'se emitió a {dias_credito} días de crédito')
+    if not pagos:
+        motivos.append('no tiene ningún pago registrado (no entró a ningún medio de caja)')
+    elif metodos and metodos <= METODOS_PAGO_CREDITO:
+        motivos.append('todos sus pagos son de crédito (' + ', '.join(sorted(metodos)) + ')')
+
+    return {
+        'es_credito': bool(motivos),
+        'cobro_abierto': cobro_abierto,
+        'estado_pago': estado_pago,
+        'dias_credito': dias_credito,
+        'metodos_pago': sorted(metodos),
+        'monto_credito': monto_credito,
+        'monto_contado': monto_contado,
+        'motivos': motivos,
+    }
+
+
+def metodo_devolucion_sugerido(dte):
+    """Método que la UI debe preseleccionar según cómo se vendió el documento."""
+    return 'REBAJA_CREDITO' if condicion_pago_dte(dte)['es_credito'] else 'TRANSFERENCIA_BANCARIA'
+
+
+def _validar_metodo_vs_condicion_pago(dte, metodo_devolucion):
+    """
+    Bloquea sacar plata de la caja por una venta que nunca la puso ahí.
+
+    Solo es un error duro cuando la cuenta por cobrar sigue ABIERTA
+    (`estado_pago` PENDIENTE/VENCIDO): ahí no hay ninguna lectura en que
+    corresponda entregar efectivo del día. Para el resto de los casos a
+    crédito el preview de caja advierte, pero no bloquea (una factura a
+    crédito ya cobrada sí puede devolverse por transferencia).
+    """
+    if metodo_devolucion != 'EFECTIVO_CAJA':
+        return
+    cond = condicion_pago_dte(dte)
+    if cond['cobro_abierto']:
+        raise DevolucionGarantiaError(
+            f'El documento #{dte.numero_documento} se vendió A CRÉDITO y su pago sigue '
+            f'{cond["estado_pago"].lower()}: no corresponde devolver efectivo de caja '
+            f'(dejaría el arqueo del día con un faltante que nunca existió). '
+            f'Use "Rebaja crédito del cliente" para descontar la cuenta por cobrar.'
+        )
+
 
 def buscar_dte_para_devolucion(folio, sucursal=None):
     """
@@ -598,10 +695,18 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
 
     if metodo_devolucion not in dict(METODO_DEVOLUCION_DG_CHOICES):
         raise DevolucionGarantiaError('Método de devolución inválido.')
-    afecta_caja = metodo_devolucion in ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA')
+    # "Afecta caja" = se imputa a un día de cuadratura y lleva Dte_Detalle_Pago.
+    # REBAJA_CREDITO también entra: no toca efectivo, pero sí baja la cuenta
+    # por cobrar y debe verse en la cuadratura del día elegido.
+    afecta_caja = metodo_devolucion in METODOS_DG_CON_IMPUTACION
 
     dte_original = devolucion.dte_original
     sucursal = devolucion.sucursal
+
+    # Una venta a crédito no puede devolverse con plata de la caja: el cliente
+    # nunca la puso ahí. Se valida acá (no solo en la UI) porque el endpoint
+    # acepta el método por JSON.
+    _validar_metodo_vs_condicion_pago(dte_original, metodo_devolucion)
 
     fecha_imp = None
     if afecta_caja:
@@ -764,16 +869,17 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
                 activo=True,
             )
 
-    # `fecha_pago` = día al que la cuadratura imputa el egreso de caja.
-    if metodo_devolucion == 'EFECTIVO_CAJA':
-        Dte_Detalle_Pago.objects.create(
-            dte=nc, metodo_pago='EFECTIVO', monto=monto_con_iva_nc, fecha_pago=fecha_imp,
-        )
-    elif metodo_devolucion == 'TRANSFERENCIA_BANCARIA':
-        Dte_Detalle_Pago.objects.create(
-            dte=nc, metodo_pago='TRANSFERENCIA', monto=monto_con_iva_nc, fecha_pago=fecha_imp,
-        )
+    # `fecha_pago` = día al que la cuadratura imputa el egreso. El
+    # `metodo_pago` decide de qué teórico se descuenta:
+    #   EFECTIVO       -> total_efectivo
+    #   TRANSFERENCIA  -> total_transferencia
+    #   CREDITO_EXTERNO-> total_credito_externo (rebaja de cuenta por cobrar)
     # NO_AFECTA_CAJA: sin Dte_Detalle_Pago (NC informativa que no resta teóricos).
+    metodo_pago_nc = METODO_PAGO_NC_POR_DG.get(metodo_devolucion)
+    if metodo_pago_nc:
+        Dte_Detalle_Pago.objects.create(
+            dte=nc, metodo_pago=metodo_pago_nc, monto=monto_con_iva_nc, fecha_pago=fecha_imp,
+        )
 
     devolucion.nota_credito = nc
     devolucion.estado = 'NC_GENERADA'
@@ -868,7 +974,7 @@ def impacto_caja_preview(*, devolucion, metodo, fecha_imputacion=None):
 
     monto = int(devolucion.monto_total or 0)
     sucursal = devolucion.sucursal
-    afecta = metodo in ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA')
+    afecta = metodo in METODOS_DG_CON_IMPUTACION
     tipo_tx = 'DEVOLUCION' if afecta else 'ANULACION'
 
     advertencias = []
@@ -877,6 +983,27 @@ def impacto_caja_preview(*, devolucion, metodo, fecha_imputacion=None):
     arqueo_existe = False
     arqueo_estado = None
     arqueo_abierto = True
+
+    # === CONDICIÓN DE PAGO DEL DOCUMENTO ORIGINAL ===
+    # Si la venta fue a crédito, sacar plata de un medio de caja (efectivo o
+    # transferencia) descuadra el arqueo: nunca entró por ahí.
+    cond = condicion_pago_dte(devolucion.dte_original)
+    bloqueado = False
+    if cond['es_credito'] and metodo in ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA'):
+        detalle = '; '.join(cond['motivos'])
+        if metodo == 'EFECTIVO_CAJA' and cond['cobro_abierto']:
+            bloqueado = True
+            advertencias.append(
+                f'BLOQUEADO: el documento se vendió a crédito ({detalle}). Devolver '
+                f'efectivo dejaría el arqueo con un faltante que nunca existió. '
+                f'Use "Rebaja crédito del cliente".'
+            )
+        else:
+            advertencias.append(
+                f'El documento se vendió a crédito ({detalle}): el cliente no puso esta '
+                f'plata en la caja. Salvo que el cobro ya se haya recibido por este medio, '
+                f'corresponde "Rebaja crédito del cliente".'
+            )
 
     if afecta:
         fecha = fecha_imputacion or timezone.localdate()
@@ -901,11 +1028,23 @@ def impacto_caja_preview(*, devolucion, metodo, fecha_imputacion=None):
                     f"arqueo tras aprobar."
                 )
 
-        medio = 'efectivo' if metodo == 'EFECTIVO_CAJA' else 'la transferencia'
-        descripcion = (
-            f"Esta NC restará ${monto:,} de {medio} teórico de "
-            f"{sucursal.alias} el {fecha_str}."
-        )
+        if metodo == 'EFECTIVO_CAJA':
+            descripcion = (
+                f"Esta NC restará ${monto:,} del efectivo teórico de "
+                f"{sucursal.alias} el {fecha_str}."
+            )
+        elif metodo == 'TRANSFERENCIA_BANCARIA':
+            descripcion = (
+                f"Esta NC restará ${monto:,} de la transferencia teórica de "
+                f"{sucursal.alias} el {fecha_str}."
+            )
+        else:  # REBAJA_CREDITO
+            descripcion = (
+                f"Esta NC rebajará ${monto:,} de la cuenta por cobrar del cliente. "
+                f"Aparece en la cuadratura de {sucursal.alias} del {fecha_str} bajo "
+                f"CRÉD. EXTERNO y baja el VENTA TOTAL del día; NO toca el efectivo "
+                f"ni las transferencias teóricas."
+            )
     else:
         descripcion = (
             "NC informativa: cuenta como documento del día pero NO resta de los "
@@ -925,6 +1064,12 @@ def impacto_caja_preview(*, devolucion, metodo, fecha_imputacion=None):
         'advertencias': advertencias,
         'descripcion': descripcion,
         'fecha_valida': fecha_valida,
+        # `bloqueado` es distinto de `fecha_valida`: la combinación método +
+        # condición de pago del documento es inválida, no la fecha. El front
+        # deshabilita "Aprobar" con cualquiera de las dos.
+        'bloqueado': bloqueado,
+        'condicion_pago': cond,
+        'metodo_sugerido': 'REBAJA_CREDITO' if cond['es_credito'] else 'TRANSFERENCIA_BANCARIA',
     }
 
 
