@@ -209,6 +209,12 @@
           <i class="bi bi-cloud-download me-1"></i>Traer pedidos
         </button>
         {% if sucursal_sesion_obj %}
+        <button class="btn btn-outline-light btn-sm" id="btn-imprimir-guias-suc" onclick="imprimirGuiasSucursal()"
+                title="Imprime la guía de preparación de TODOS los pedidos por preparar de tu sucursal (los que aún no tienen guía impresa)">
+          <i class="bi bi-printer-fill me-1"></i>Imprimir guías de mi sucursal
+        </button>
+        {% endif %}
+        {% if sucursal_sesion_obj %}
           <span class="he-badge he-badge-ok"><i class="bi bi-building me-1"></i>{{ sucursal_sesion_obj.nombre|default:sucursal_sesion_obj.alias }}</span>
         {% else %}
           <span class="he-badge he-badge-warn"><i class="bi bi-exclamation-triangle me-1"></i>Sin sucursal activa</span>
@@ -368,77 +374,11 @@
       </div>
       {% endif %}
 
-      <!-- ═══════════════════════════════════════════════════════
-           ALERTA: boletas emitidas con la cabecera en 0
-           Solo visibilidad — esta pantalla NO corrige datos.
-           ═══════════════════════════════════════════════════════ -->
-      {% if dte_cero_total %}
-      <div class="alerta-cero">
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-          <div>
-            <div class="ac-title">
-              <i class="bi bi-exclamation-triangle-fill me-1"></i>
-              {{ dte_cero_total }} boleta(s) emitida(s) con la cabecera en 0
-            </div>
-            <div class="ac-sub">
-              El DTE quedó con <strong>unidades</strong> y/o <strong>monto</strong> en 0 en la cabecera aunque las
-              líneas sí tengan datos: el SII las recibe en 0 unidades y quedan fuera de la cuadratura.
-              Hay que corregirlas a mano — desde acá <strong>solo se listan</strong>.
-            </div>
-          </div>
-          <div class="d-flex gap-1 flex-wrap">
-            <button class="btn btn-sm btn-outline-danger" style="font-size:.75rem;" onclick="filtrarProblemaDteCero()">
-              <i class="bi bi-funnel me-1"></i>Ver las {{ dte_cero_total }} en la tabla
-            </button>
-          </div>
-        </div>
-        {% if dte_cero_pedidos %}
-        <div class="table-responsive">
-          <table class="ac-tbl">
-            <thead>
-              <tr>
-                <th>N° Pedido</th>
-                <th>Canal</th>
-                <th>Sucursal</th>
-                <th>DTE</th>
-                <th class="text-end">Uds. cab.</th>
-                <th class="text-end">Monto cab.</th>
-                <th class="text-end">Total pedido</th>
-                <th>Facturado</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for p in dte_cero_pedidos %}
-              <tr>
-                <td><span class="ticket-rm-badge">{{ p.numero_pedido_origen|default:p.numero_ticket_rm }}</span></td>
-                <td><span class="canal-b canal-{{ p.canal_origen|lower }}">{{ p.canal_origen }}</span></td>
-                <td>{{ p.sucursal.nombre|default:p.sucursal.alias }}</td>
-                <td>{{ p.dte.tipo_documento }} #{{ p.dte.numero_documento }}</td>
-                <td class="text-end {% if not p.dte.unidades_productos %}ac-cero{% endif %}">{{ p.dte.unidades_productos|default_if_none:"—" }}</td>
-                <td class="text-end {% if not p.dte.monto_con_iva %}ac-cero{% endif %}">${{ p.dte.monto_con_iva|floatformat:0 }}</td>
-                <td class="text-end">${{ p.total|floatformat:0 }}</td>
-                <td>{{ p.fecha_facturacion|date:"d/m/Y H:i"|default:"—" }}</td>
-                <td>
-                  <a href="{% url 'pedido_ecommerce_detalle' pedido_id=p.id %}" class="btn btn-sm btn-outline-secondary" style="font-size:.68rem;padding:1px 7px;">
-                    <i class="bi bi-eye"></i>
-                  </a>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        {% if dte_cero_total > dte_cero_pedidos|length %}
-          <div class="ac-sub mt-1">
-            Mostrando las {{ dte_cero_pedidos|length }} más recientes de {{ dte_cero_total }}.
-            El detalle completo sale con
-            <code>python manage.py diagnostico_pedidos_cantidad --solo-facturados</code> (solo lectura).
-          </div>
-        {% endif %}
-        {% endif %}
-      </div>
-      {% endif %}
+      {# La alerta de "boletas con cabecera en 0" se quitó a pedido del usuario
+         (2026-08-04). El dato sigue accesible con el filtro ?problema=dte_cero
+         y con `python manage.py diagnostico_pedidos_cantidad --solo-facturados`
+         (solo lectura). OJO: el problema de fondo sigue: esos DTE llegan al
+         SII con 0 unidades y quedan fuera de la cuadratura. #}
 
       <!-- filtros -->
       <div class="pagination-controls">
@@ -761,10 +701,22 @@ function traerPedidos(){
           ? `<br><small class="text-danger">${d.errores.length} con error.</small>` : '';
         const rango = (d.desde && d.hasta)
           ? `<br><small class="text-muted">Rango: ${d.desde} → ${d.hasta}</small>` : '';
+        // Resultado de la sincronización de ESTADOS (cancelados / sin pago).
+        let sync = '';
+        const se = d.sync_estados || {};
+        if (se.cancelados) {
+          sync += `<br><small class="text-danger"><b>${se.cancelados}</b> cancelado(s) en el canal → marcados CANCELADO acá.</small>`;
+        }
+        if (se.sin_pago) {
+          sync += `<br><small class="text-warning"><b>${se.sin_pago}</b> sin pago confirmado en el canal (bloqueados para facturar).</small>`;
+        }
+        if (se.detalle) {
+          sync += `<br><small class="text-muted">${se.detalle}</small>`;
+        }
         Swal.fire({
           icon: 'success',
           title: 'Pedidos actualizados',
-          html: `<b>${d.nuevos}</b> nuevos · <b>${d.ya_existian}</b> ya estaban${errs}${rango}`,
+          html: `<b>${d.nuevos}</b> nuevos · <b>${d.ya_existian}</b> ya estaban${errs}${sync}${rango}`,
         });
       } else {
         Swal.fire('Error', d.error || 'No se pudo conectar a AllConnected', 'error');
@@ -1546,6 +1498,50 @@ async function imprimirGuiaPedido(pedidoId, btn){
     alert('Error de conexión: ' + e);
   } finally {
     if(btn) btn.disabled = false;
+  }
+}
+
+async function imprimirGuiasSucursal(){
+  // Un clic = todas las guías POR PREPARAR de la sucursal activa (sin
+  // seleccionar filas; el backend acota a ASIGNADO/EN_PREPARACION sin guía).
+  if(typeof imprimirConQZ === 'undefined' || !QZ_CONFIG.habilitado){
+    alert('QZ Tray no está habilitado para esta sucursal.');
+    return;
+  }
+  const btn = document.getElementById('btn-imprimir-guias-suc');
+  const htmlOriginal = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Preparando...';
+  const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  try {
+    const r = await fetch('/app/ecommerce/pedidos/imprimir-guias-sucursal/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: '{}'
+    });
+    const data = await r.json();
+    if(!data.ok){ alert('Error: ' + (data.error || 'no se pudo preparar la impresión')); return; }
+    if(!data.total){
+      alert('No hay pedidos por preparar sin guía en ' + (data.sucursal || 'tu sucursal') + '.');
+      return;
+    }
+    let impresas = 0, fallidas = 0;
+    for(const g of data.guias){
+      btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${impresas + fallidas + 1}/${data.total}`;
+      try {
+        if(await imprimirConQZ(g.print_data)) impresas++;
+        else fallidas++;
+      } catch(e){ fallidas++; }
+    }
+    let msg = `Guías de ${data.sucursal}: ${impresas} impresa(s)` + (fallidas ? `, ${fallidas} con error de impresora` : '');
+    if(data.truncado) msg += `.\nHabía más de ${data.max}: vuelve a presionar el botón para continuar con el resto.`;
+    alert(msg);
+    aplicarFiltros(_pagina, true);
+  } catch(e){
+    alert('Error de conexión: ' + e);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = htmlOriginal;
   }
 }
 

@@ -209,6 +209,24 @@ class PedidoEcommerce(models.Model):
         verbose_name='Prioridad',
     )
 
+    # Último estado conocido del pedido EN EL CANAL (AllConnected), traído por
+    # la sincronización de estados del botón "Traer pedidos". Es el estado
+    # crudo de AC (PENDIENTE/CONFIRMADO/PAGADO/.../CANCELADO/DEVUELTO/
+    # REEMBOLSADO), no el `estado` local. '' = nunca sincronizado (pedidos
+    # anteriores a esta feature). La facturación bloquea cuando es
+    # terminal-negativo o sigue PENDIENTE (sin pago confirmado en el canal).
+    estado_canal = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        verbose_name='Estado en el canal',
+        help_text='Último Pedido.estado reportado por AllConnected (sync de estados)',
+    )
+    fecha_sync_estado_canal = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Última sync de estado canal',
+    )
+
     # Trazabilidad de asignación
     sucursal_original = models.ForeignKey(
         'app.Sucursal',

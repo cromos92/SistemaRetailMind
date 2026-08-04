@@ -1109,6 +1109,35 @@ def _scope_sucursal_pedidos(qs, request):
     return qs
 
 
+def _bloqueo_por_estado_canal(pedido):
+    """Razón para NO facturar según el último estado sincronizado del canal.
+
+    Devuelve un string de error o None. Solo bloquea cuando hay información
+    POSITIVA de AllConnected (``estado_canal`` no vacío): los pedidos nunca
+    sincronizados siguen facturables como siempre (compatibilidad).
+
+      - CANCELADO/DEVUELTO/REEMBOLSADO → cinturón: la sync ya los marca
+        CANCELADO local, pero si alguien factura entre medio, esto lo corta.
+      - PENDIENTE → el canal aún no confirma el pago del pedido; boletearlo
+        sería facturar una venta que puede no concretarse.
+    """
+    from app.services.allconnected_pedidos_service import ESTADOS_CANAL_CANCELADOS
+
+    ec = (pedido.estado_canal or '').upper()
+    if not ec:
+        return None
+    if ec in ESTADOS_CANAL_CANCELADOS:
+        return (f'El canal reporta este pedido como {ec} (AllConnected). '
+                f'No corresponde facturarlo.')
+    if ec == 'PENDIENTE':
+        fecha = pedido.fecha_sync_estado_canal
+        cuando = timezone.localtime(fecha).strftime('%d/%m %H:%M') if fecha else '—'
+        return ('El canal aún no confirma el pago de este pedido '
+                f'(estado PENDIENTE en AllConnected, sync {cuando}). '
+                'Usa "Traer pedidos" para re-sincronizar cuando se confirme.')
+    return None
+
+
 # Condición de "boleta emitida con la cabecera en cero": el DTE existe, pero el
 # header quedó con 0 unidades y/o $0 aunque las líneas sí tengan datos. Son las
 # boletas que salen del cuadre y que el SII recibe en 0 unidades.
@@ -1353,28 +1382,10 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
                 logger.exception('No se pudo construir el panel de sincronización ecommerce')
                 context['panel_sync'] = None
 
-            # ── Alerta: boletas emitidas con la cabecera en 0 ────────────────
-            # NO se corrige nada acá: se hacen visibles para que operaciones las
-            # revise (caso conocido de la auditoría 2026-07-25).
-            try:
-                # 1 sola consulta en el caso normal: se traen hasta TOPE filas y
-                # el total sale del len(). Solo si se llega al tope se paga un
-                # count() extra (la conexión es remota: cada query cuesta ~0,2 s).
-                TOPE_CERO = 200
-                qs_cero = (
-                    _filtrar_pedidos_dte_cero(qs_empresa)
-                    .select_related('dte', 'sucursal')
-                    .order_by('-fecha_facturacion', '-fecha_recepcion')
-                )
-                filas = list(qs_cero[:TOPE_CERO])
-                context['dte_cero_total'] = (
-                    len(filas) if len(filas) < TOPE_CERO else qs_cero.count()
-                )
-                context['dte_cero_pedidos'] = filas[:10]
-            except Exception:  # pragma: no cover
-                logger.exception('No se pudo calcular la alerta de boletas en cero')
-                context['dte_cero_total'] = 0
-                context['dte_cero_pedidos'] = []
+            # La alerta de "boletas con cabecera en 0" se quitó del listado a
+            # pedido del usuario (2026-08-04): ya no se calcula acá (ahorra 1-2
+            # queries remotas por carga). El dato sigue disponible vía el
+            # filtro ?problema=dte_cero y el command diagnostico_pedidos_cantidad.
         context['tipos_documento_choices'] = [
             ('BOLETA_ELECTRONICA', 'Boleta Electrónica'),
             ('BOLETA_PAPEL', 'Boleta Papel'),
@@ -1751,6 +1762,11 @@ def api_facturar_pedido_individual(request, pedido_id):
     from app.views import obtener_siguiente_correlativo
     from app.views_modulo_ventas import generar_dte_desde_ticket
     pedido = get_object_or_404(PedidoEcommerce.objects.filter(estado='PENDIENTE'), id=pedido_id)
+
+    # El estado del CANAL manda: cancelado o sin pago confirmado no se factura.
+    bloqueo_canal = _bloqueo_por_estado_canal(pedido)
+    if bloqueo_canal:
+        return JsonResponse({'ok': False, 'error': bloqueo_canal}, status=409)
 
     # Validar items contra la sucursal de sesión: todos deben existir Y tener stock suficiente
     items_val = _validar_items_pedido(pedido, sucursal=sucursal)
@@ -2291,6 +2307,19 @@ def facturar_ecommerce_masivo(request):
     fallidos = 0
 
     for pedido in pedidos:
+        # El estado del CANAL manda: cancelado o sin pago confirmado no se factura.
+        bloqueo_canal = _bloqueo_por_estado_canal(pedido)
+        if bloqueo_canal:
+            resultados.append({
+                'pedido_id': pedido.id,
+                'ok': False,
+                'numero_ticket_rm': pedido.numero_ticket_rm,
+                'cliente': pedido.cliente_nombre,
+                'error': bloqueo_canal,
+            })
+            fallidos += 1
+            continue
+
         # Validar que todos los items tengan stock suficiente en la sucursal de sesión
         items_val = _validar_items_pedido(pedido, sucursal=sucursal)
         sin_stock = [iv for iv in items_val if not iv['encontrado']]
@@ -2707,11 +2736,22 @@ def api_imprimir_guia_preparacion(request, pedido_id):
         id=pedido_id, estado='PENDIENTE',
     )
 
+    resultado = _registrar_guia_preparacion(pedido, request.user)
+    return JsonResponse({'ok': True, **resultado})
+
+
+def _registrar_guia_preparacion(pedido, user):
+    """Registra la impresión de la guía de un pedido y arma su print_data.
+
+    Compartido por la impresión individual y la masiva por sucursal: sella la
+    primera impresión, transiciona ASIGNADO→EN_PREPARACION (idempotente) y
+    devuelve {sub_estado, transiciono, print_data} listo para `imprimirConQZ`.
+    """
     ahora = timezone.now()
     update_fields = []
     if not pedido.fecha_impresion_guia:
         pedido.fecha_impresion_guia = ahora
-        pedido.guia_impresa_por = request.user
+        pedido.guia_impresa_por = user
         update_fields += ['fecha_impresion_guia', 'guia_impresa_por']
 
     transiciono = False
@@ -2733,7 +2773,7 @@ def api_imprimir_guia_preparacion(request, pedido_id):
             estado_nuevo=pedido.estado,
             sub_estado_anterior=sub_estado_anterior,
             sub_estado_nuevo='EN_PREPARACION',
-            usuario=request.user,
+            usuario=user,
             tipo_evento='CAMBIO_ESTADO',
             motivo='Guía de preparación impresa (inicio de picking)',
         )
@@ -2749,8 +2789,7 @@ def api_imprimir_guia_preparacion(request, pedido_id):
             'precio_unitario': item.get('precio_unitario') or 0,
         })
 
-    return JsonResponse({
-        'ok': True,
+    return {
         'sub_estado': pedido.sub_estado,
         'transiciono': transiciono,
         'print_data': {
@@ -2773,6 +2812,82 @@ def api_imprimir_guia_preparacion(request, pedido_id):
             },
             'productos': productos,
         },
+    }
+
+
+# Tope duro de la impresión masiva: evita mandar cientos de tickets a la
+# térmica por un clic (si hay más, se avisa y se re-ejecuta).
+MAX_GUIAS_MASIVAS = 60
+
+
+@login_required
+@csrf_exempt
+def api_imprimir_guias_sucursal(request):
+    """POST /app/ecommerce/pedidos/imprimir-guias-sucursal/
+
+    "Imprimir TODO lo por preparar de mi sucursal" en un clic, sin seleccionar
+    fila por fila (la selección por checkbox solo alcanza la página visible).
+
+    Alcance: pedidos PENDIENTES de la sucursal ACTIVA en sesión con sub-estado
+    ASIGNADO o EN_PREPARACION (los RECIBIDO no tienen stock confirmado y los
+    LISTO_DESPACHO ya terminaron picking). Por defecto solo los que aún no
+    tienen guía impresa — así el botón es re-ejecutable sin duplicar papel;
+    body {"incluir_reimpresiones": true} imprime también los ya impresos.
+
+    Registra cada guía con la MISMA lógica que la impresión individual
+    (transición a EN_PREPARACION incluida) y devuelve los print_data para que
+    el front los mande a QZ en secuencia.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST requerido'}, status=405)
+    denegado = _verificar_permiso_ecommerce(request, 'puede_editar')
+    if denegado:
+        return denegado
+
+    sucursal, err = _get_session_sucursal(request)
+    if err:
+        return err
+
+    incluir_reimpresiones = False
+    try:
+        if request.body:
+            incluir_reimpresiones = bool(json.loads(request.body).get('incluir_reimpresiones'))
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    qs = (
+        PedidoEcommerce.objects
+        .select_related('sucursal', 'sucursal__empresa')
+        .filter(
+            sucursal=sucursal,
+            estado='PENDIENTE',
+            sub_estado__in=['ASIGNADO', 'EN_PREPARACION'],
+        )
+        .order_by('fecha_recepcion')  # los más antiguos primero
+    )
+    if not incluir_reimpresiones:
+        qs = qs.filter(fecha_impresion_guia__isnull=True)
+
+    pedidos = list(qs[:MAX_GUIAS_MASIVAS + 1])
+    truncado = len(pedidos) > MAX_GUIAS_MASIVAS
+    pedidos = pedidos[:MAX_GUIAS_MASIVAS]
+
+    guias = []
+    for pedido in pedidos:
+        resultado = _registrar_guia_preparacion(pedido, request.user)
+        guias.append({
+            'pedido_id': pedido.id,
+            'numero_ticket_rm': pedido.numero_ticket_rm,
+            **resultado,
+        })
+
+    return JsonResponse({
+        'ok': True,
+        'total': len(guias),
+        'truncado': truncado,
+        'max': MAX_GUIAS_MASIVAS,
+        'sucursal': sucursal.nombre or sucursal.alias or '',
+        'guias': guias,
     })
 
 
@@ -2802,15 +2917,29 @@ def api_reasignar_pedido(request, pedido_id):
         return JsonResponse({'ok': False, 'error': 'sucursal_id es obligatorio'}, status=400)
 
     try:
-        nueva_sucursal = Sucursal.objects.get(id=nueva_sucursal_id, activa=True)
+        nueva_sucursal = Sucursal.objects.select_related('empresa').get(id=nueva_sucursal_id, activa=True)
     except Sucursal.DoesNotExist:
         return JsonResponse({'ok': False, 'error': 'Sucursal no encontrada o inactiva'}, status=400)
 
-    pedido = get_object_or_404(PedidoEcommerce.objects.filter(estado='PENDIENTE'), id=pedido_id)
+    pedido = get_object_or_404(
+        PedidoEcommerce.objects.select_related('sucursal', 'sucursal__empresa').filter(estado='PENDIENTE'),
+        id=pedido_id,
+    )
     sucursal_anterior = pedido.sucursal
 
     if sucursal_anterior.id == nueva_sucursal.id:
         return JsonResponse({'ok': False, 'error': 'La sucursal destino es la misma que la actual'}, status=400)
+
+    # Solo sucursales de la MISMA empresa: la boleta debe salir con el RUT del
+    # canal que vendió. Cruzar de empresa emitiría el DTE con otro emisor.
+    empresa_actual = getattr(sucursal_anterior, 'empresa', None)
+    if empresa_actual and nueva_sucursal.empresa_id != empresa_actual.id:
+        return JsonResponse({
+            'ok': False,
+            'error': (f'{nueva_sucursal.nombre or nueva_sucursal.alias} pertenece a otra empresa '
+                      f'({nueva_sucursal.empresa.razon_social or nueva_sucursal.empresa.nombre}). '
+                      f'Solo se puede reasignar dentro de {empresa_actual.razon_social or empresa_actual.nombre}.'),
+        }, status=400)
 
     # Validar stock en nueva sucursal
     items_val = _validar_items_pedido(pedido, sucursal=nueva_sucursal)
@@ -2862,10 +2991,17 @@ def api_reasignar_pedido(request, pedido_id):
 @login_required
 def api_sugerir_sucursal(request, pedido_id):
     """GET /app/ecommerce/pedidos/<id>/sugerir-sucursal/"""
-    pedido = get_object_or_404(PedidoEcommerce.objects.filter(estado='PENDIENTE'), id=pedido_id)
+    pedido = get_object_or_404(
+        PedidoEcommerce.objects.select_related('sucursal', 'sucursal__empresa').filter(estado='PENDIENTE'),
+        id=pedido_id,
+    )
 
-    # Obtener sucursales activas de la empresa
+    # Solo sucursales de la MISMA empresa del pedido: cruzar de empresa
+    # emitiría la boleta con otro RUT (mismo guard que api_reasignar_pedido).
     sucursales = Sucursal.objects.filter(activa=True).order_by('nombre')
+    empresa_pedido = getattr(pedido.sucursal, 'empresa', None)
+    if empresa_pedido:
+        sucursales = sucursales.filter(empresa=empresa_pedido)
 
     # Filtrar por empresa del usuario si no es admin
     user = request.user

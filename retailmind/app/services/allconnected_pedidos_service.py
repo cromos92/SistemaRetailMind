@@ -55,7 +55,19 @@ def _config() -> dict:
         'api_key': getattr(settings, 'ALLCONNECTED_API_KEY', '') or '',
         'header_name': getattr(settings, 'ALLCONNECTED_API_HEADER_NAME', '') or 'X-AllConnected-Key',
         'pedidos_path': getattr(settings, 'ALLCONNECTED_PEDIDOS_PATH', '') or '/app/pedidos/pendientes/',
+        'estados_path': getattr(settings, 'ALLCONNECTED_ESTADOS_PATH', '') or '/app/pedidos/estados/',
     }
+
+
+# Estados de AC que terminan el pedido sin venta: en RM el pedido debe quedar
+# CANCELADO (fuera de la cola de facturación). Espejo de ESTADOS_CANCELADOS_PULL
+# del lado AllConnected (system/orders/retailmind_connector.py).
+ESTADOS_CANAL_CANCELADOS = ('CANCELADO', 'DEVUELTO', 'REEMBOLSADO')
+
+# Lookback de la sincronización de estados: qué tan atrás mirar los PENDIENTES
+# locales. 120 días cubre con holgura la cola zombie observada.
+SYNC_ESTADOS_LOOKBACK_DIAS = 120
+_LOTE_ESTADOS = 300
 
 
 def _extraer_lista(data) -> list:
@@ -173,6 +185,24 @@ def traer_pedidos_pendientes(rut_empresa: Optional[str] = None,
         len(pedidos), nuevos, ya_existian, len(errores),
     )
 
+    # === Sincronización de ESTADOS de los pendientes locales ===
+    # El pull de arriba solo INGRESA pedidos nuevos; los ya existentes quedan
+    # como estaban. Si un pedido se canceló/devolvió en el canal después de
+    # ingresado, acá seguía PENDIENTE para siempre (zombie facturable). Este
+    # paso pregunta a AC el estado real y marca CANCELADO lo que corresponda.
+    # Nunca tumba el pull: si falla, el resultado lo dice y el resto sigue.
+    try:
+        sync_estados = sincronizar_estados_pedidos(rut_empresa=rut_empresa)
+    except Exception as exc:  # pragma: no cover — defensivo
+        logger.exception('Sync de estados AllConnected falló')
+        sync_estados = {'ok': False, 'error': str(exc)[:200]}
+
+    detalle = f'{nuevos} nuevos, {ya_existian} ya existían, {len(errores)} con error.'
+    if sync_estados.get('cancelados'):
+        detalle += f" {sync_estados['cancelados']} pedido(s) cancelados en el canal fueron marcados CANCELADO."
+    if sync_estados.get('sin_pago'):
+        detalle += f" {sync_estados['sin_pago']} sin pago confirmado en el canal (no facturables por ahora)."
+
     return {
         'ok': True,
         'configurado': True,
@@ -180,7 +210,164 @@ def traer_pedidos_pendientes(rut_empresa: Optional[str] = None,
         'nuevos': nuevos,
         'ya_existian': ya_existian,
         'errores': errores,
+        'sync_estados': sync_estados,
         'desde': (payload.get('desde') if isinstance(payload, dict) else None) or desde,
         'hasta': (payload.get('hasta') if isinstance(payload, dict) else None) or hasta,
-        'detalle': f'{nuevos} nuevos, {ya_existian} ya existían, {len(errores)} con error.',
+        'detalle': detalle,
+    }
+
+
+def _marcar_cancelado_por_canal(pedido, estado_canal):
+    """Marca CANCELADO un PENDIENTE local que el canal dio por terminado.
+
+    Misma transición y rastro que el endpoint oficial
+    ``api_cancelar_pedido_ecommerce`` (push de AC), para que el historial
+    quede indistinguible de una cancelación avisada en vivo.
+    """
+    from app.models import HistorialPedidoEcommerce
+
+    estado_anterior = pedido.estado
+    sub_estado_anterior = pedido.sub_estado
+    pedido.estado = 'CANCELADO'
+    pedido.sub_estado = 'CANCELADO_CLIENTE'
+    pedido.save(update_fields=['estado', 'sub_estado'])
+    HistorialPedidoEcommerce.objects.create(
+        pedido=pedido,
+        estado_anterior=estado_anterior,
+        estado_nuevo='CANCELADO',
+        sub_estado_anterior=sub_estado_anterior,
+        sub_estado_nuevo='CANCELADO_CLIENTE',
+        tipo_evento='CAMBIO_ESTADO',
+        motivo=f'Sync de estados: el canal lo reporta {estado_canal} (AllConnected)',
+    )
+
+
+def sincronizar_estados_pedidos(rut_empresa: Optional[str] = None,
+                                dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
+    """
+    Pregunta a AllConnected el estado actual de los PENDIENTES locales y:
+
+      - guarda ``estado_canal`` + ``fecha_sync_estado_canal`` en cada pedido;
+      - los que AC reporta CANCELADO/DEVUELTO/REEMBOLSADO pasan a CANCELADO
+        local (con historial), saliendo de la cola de facturación;
+      - los que AC aún tiene PENDIENTE (sin pago) quedan marcados: la
+        facturación los rechaza hasta que una sync posterior los confirme.
+
+    Los FACTURADOS locales no se tocan (cancelado en el canal + boleta emitida
+    = nota de crédito, decisión humana — mismo criterio que el endpoint push).
+
+    Devuelve {ok, consultados, cancelados, sin_pago, no_encontrados, lotes_caidos}.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from app.models import PedidoEcommerce
+
+    cfg = _config()
+    if not cfg['base_url']:
+        return {'ok': True, 'configurado': False, 'consultados': 0,
+                'cancelados': 0, 'sin_pago': 0, 'no_encontrados': 0, 'lotes_caidos': 0}
+    if not _REQUESTS_OK:
+        return {'ok': False, 'error': "Falta el paquete 'requests'.", 'consultados': 0,
+                'cancelados': 0, 'sin_pago': 0, 'no_encontrados': 0, 'lotes_caidos': 0}
+
+    desde_dt = timezone.now() - timedelta(days=dias)
+    qs = PedidoEcommerce.objects.filter(
+        estado='PENDIENTE', fecha_recepcion__gte=desde_dt,
+    ).only('id', 'numero_pedido_canal', 'canal_origen', 'estado', 'sub_estado',
+           'estado_canal', 'numero_ticket_rm', 'rut_empresa')
+    pendientes = list(qs)
+    if rut_empresa:
+        # Comparación normalizada en Python (el rut de sesión puede venir con
+        # puntos y el del pedido sin): un mismatch de formato en un .filter()
+        # exacto dejaría el sync silenciosamente en cero. Los pedidos sin rut
+        # (legacy) se incluyen, igual que en el scope del listado.
+        def _norm(r):
+            return (r or '').replace('.', '').replace(' ', '').upper().strip()
+        objetivo = _norm(rut_empresa)
+        pendientes = [p for p in pendientes
+                      if not (p.rut_empresa or '').strip() or _norm(p.rut_empresa) == objetivo]
+    if not pendientes:
+        return {'ok': True, 'configurado': True, 'consultados': 0,
+                'cancelados': 0, 'sin_pago': 0, 'no_encontrados': 0, 'lotes_caidos': 0}
+
+    url = f"{cfg['base_url']}{cfg['estados_path']}"
+    headers = {
+        cfg['header_name']: cfg['api_key'],
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'RetailMind-PedidosPull/1.0',
+    }
+
+    # Índice local por (canal, numero) para aplicar las respuestas.
+    por_clave = {}
+    for p in pendientes:
+        por_clave[(p.canal_origen, (p.numero_pedido_canal or '').strip())] = p
+
+    ahora = timezone.now()
+    consultados = cancelados = sin_pago = no_encontrados = lotes_caidos = 0
+
+    for i in range(0, len(pendientes), _LOTE_ESTADOS):
+        lote = pendientes[i:i + _LOTE_ESTADOS]
+        payload = {'pedidos': [
+            {'canal_origen': p.canal_origen,
+             'numero_pedido_canal': (p.numero_pedido_canal or '').strip()}
+            for p in lote
+        ]}
+        try:
+            r = requests.post(url, json=payload, headers=headers, timeout=TIMEOUT_SEGUNDOS)
+        except requests.RequestException as exc:
+            logger.warning('sincronizar_estados_pedidos: lote %s sin respuesta: %s',
+                           i // _LOTE_ESTADOS + 1, exc)
+            lotes_caidos += 1
+            continue
+        if r.status_code == 404:
+            # AC aún no tiene deployado el endpoint: no es un error del operador.
+            return {'ok': True, 'configurado': True, 'consultados': 0,
+                    'cancelados': 0, 'sin_pago': 0, 'no_encontrados': 0,
+                    'lotes_caidos': 0,
+                    'detalle': 'AllConnected aún no expone /app/pedidos/estados/ (deploy pendiente).'}
+        if r.status_code != 200:
+            logger.warning('sincronizar_estados_pedidos: HTTP %s: %s',
+                           r.status_code, (r.text or '')[:150])
+            lotes_caidos += 1
+            continue
+        try:
+            data = r.json()
+        except ValueError:
+            lotes_caidos += 1
+            continue
+
+        no_encontrados += len(data.get('no_encontrados') or [])
+        for est in (data.get('estados') or []):
+            clave = (str(est.get('canal_origen') or '').strip().upper(),
+                     str(est.get('numero_pedido_canal') or '').strip())
+            pedido = por_clave.get(clave)
+            if pedido is None:
+                continue
+            consultados += 1
+            estado_canal = str(est.get('estado') or '')[:20]
+            pedido.estado_canal = estado_canal
+            pedido.fecha_sync_estado_canal = ahora
+            pedido.save(update_fields=['estado_canal', 'fecha_sync_estado_canal'])
+
+            if est.get('cancelado') or estado_canal in ESTADOS_CANAL_CANCELADOS:
+                _marcar_cancelado_por_canal(pedido, estado_canal)
+                cancelados += 1
+            elif estado_canal == 'PENDIENTE':
+                sin_pago += 1
+
+    logger.info(
+        'Sync estados AllConnected: %s consultados, %s cancelados, %s sin pago, '
+        '%s no encontrados, %s lotes caídos',
+        consultados, cancelados, sin_pago, no_encontrados, lotes_caidos,
+    )
+    return {
+        'ok': True, 'configurado': True,
+        'consultados': consultados,
+        'cancelados': cancelados,
+        'sin_pago': sin_pago,
+        'no_encontrados': no_encontrados,
+        'lotes_caidos': lotes_caidos,
     }

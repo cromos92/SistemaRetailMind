@@ -1655,6 +1655,7 @@ urlpatterns = [
     path('ecommerce/pedidos/<int:pedido_id>/facturar/', views_ecommerce.api_facturar_pedido_individual, name='api_facturar_pedido_individual'),
     path('ecommerce/pedidos/<int:pedido_id>/sub-estado/', views_ecommerce.api_cambiar_sub_estado, name='api_cambiar_sub_estado_pedido'),
     path('ecommerce/pedidos/<int:pedido_id>/imprimir-guia/', views_ecommerce.api_imprimir_guia_preparacion, name='api_imprimir_guia_preparacion'),
+    path('ecommerce/pedidos/imprimir-guias-sucursal/', views_ecommerce.api_imprimir_guias_sucursal, name='api_imprimir_guias_sucursal'),
     path('ecommerce/pedidos/<int:pedido_id>/reasignar/', views_ecommerce.api_reasignar_pedido, name='api_reasignar_pedido'),
     path('ecommerce/pedidos/<int:pedido_id>/sugerir-sucursal/', views_ecommerce.api_sugerir_sucursal, name='api_sugerir_sucursal'),
     path('ecommerce/pedidos/<int:pedido_id>/historial/', views_ecommerce.api_historial_pedido, name='api_historial_pedido'),
