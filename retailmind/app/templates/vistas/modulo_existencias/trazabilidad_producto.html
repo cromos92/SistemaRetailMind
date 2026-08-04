@@ -52,6 +52,11 @@
     .traza-saldo.neg { background: #fdecec; color: #e14b4b; }
     .traza-apertura td { background: #f8f9fa !important; font-style: italic; color: #495057; border-top: 2px solid #dee2e6 !important; }
     #tbodyMovimientos tr td { vertical-align: middle; }
+    /* Movimientos que NO están COMPLETADO: se muestran, pero atenuados y sin
+       saldo, para que no se lean como parte del kardex. */
+    .traza-no-computa td { opacity: .62; }
+    .traza-no-computa td:first-child { border-left: 3px solid #adb5bd; }
+    #tbodyRecepciones tr td { vertical-align: middle; }
 
     @media (max-width: 768px) {
         .module-header { padding: 12px 16px; border-radius: 12px 12px 0 0; }
@@ -87,7 +92,7 @@
                                 <h5>Trazabilidad de Producto</h5>
                                 <div class="module-header-status">
                                     <span class="status-dot"></span>
-                                    Kardex, lotes FIFO, traspasos y precios de un SKU
+                                    Kardex, lotes FIFO con su DTE de origen, compras/recepciones, traspasos y precios de un SKU
                                 </div>
                             </div>
                         </div>
@@ -217,6 +222,7 @@
                                     <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tabTimeline"><i class="ri-time-line me-1"></i>Timeline</a></li>
                                     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabMovimientos"><i class="ri-arrow-left-right-line me-1"></i>Movimientos <span class="badge bg-info ms-1" id="badgeMov">0</span></a></li>
                                     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabLotes"><i class="ri-stack-line me-1"></i>Lotes FIFO <span class="badge bg-success ms-1" id="badgeLotes">0</span></a></li>
+                                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabRecepciones"><i class="ri-inbox-archive-line me-1"></i>Origen / Compras <span class="badge bg-primary ms-1" id="badgeRecepciones">0</span></a></li>
                                     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabTraspasos"><i class="ri-truck-line me-1"></i>Traspasos <span class="badge bg-warning ms-1" id="badgeTraspasos">0</span></a></li>
                                     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabPrecios"><i class="ri-price-tag-3-line me-1"></i>Historial Precios <span class="badge bg-purple ms-1" id="badgePrecios">0</span></a></li>
                                     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabPendientes"><i class="ri-time-line me-1"></i>Pendientes <span class="badge bg-danger ms-1" id="badgePendientes">0</span></a></li>
@@ -240,10 +246,22 @@
                                     </div>
                                     <!-- Lotes -->
                                     <div class="tab-pane" id="tabLotes">
+                                        <div id="avisoLotes"></div>
                                         <div class="table-responsive">
                                             <table class="table table-hover table-sm"><thead class="table-light"><tr>
-                                                <th>Fecha Ingreso</th><th>N° Lote</th><th class="text-end">Inicial</th><th class="text-end">Disponible</th><th class="text-end">Costo</th><th class="text-end">Precio</th><th>% Consumido</th><th>Estado</th>
+                                                <th>Fecha Ingreso</th><th>N° Lote</th><th>DTE Origen</th><th>Proveedor / Emisor</th><th class="text-end">Inicial</th><th class="text-end">Disponible</th><th class="text-end">Costo</th><th class="text-end">Precio</th><th>% Consumido</th><th>Estado</th>
                                             </tr></thead><tbody id="tbodyLotes"></tbody></table>
+                                        </div>
+                                    </div>
+                                    <!-- Origen / Compras (recepciones) -->
+                                    <div class="tab-pane" id="tabRecepciones">
+                                        <div id="avisoRecepciones"></div>
+                                        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                                            <table class="table table-hover table-sm table-striped"><thead class="table-light sticky-top"><tr>
+                                                <th>Fecha</th><th>Origen</th><th>Documento</th><th>Proveedor</th><th>Orden de compra</th>
+                                                <th class="text-end">Esperado</th><th class="text-end">Recibido</th><th class="text-end">Faltante</th><th class="text-end">Dañado</th><th class="text-end">Sobrante</th>
+                                                <th>Estado</th><th>Destino</th><th>Recepcionó</th><th>Mov.</th>
+                                            </tr></thead><tbody id="tbodyRecepciones"></tbody></table>
                                         </div>
                                     </div>
                                     <!-- Traspasos -->
@@ -314,14 +332,20 @@ function buscarTrazabilidad() {
             renderProductoInfo(data.producto);
             renderKpis(data.producto, meta);
             renderTimeline(data.timeline, data.timeline_total);
+            const metaLotes = data.lotes_meta || {};
+            const metaRecepciones = data.recepciones_meta || {};
             renderMovimientos(data.movimientos, meta);
-            renderLotes(data.lotes);
+            renderLotes(data.lotes, metaLotes);
+            renderRecepciones(data.recepciones || [], metaRecepciones);
             renderTraspasos(data.traspasos, metaTraspasos);
             renderPrecios(data.historial_precios);
             renderPendientes(data.pendientes_despacho);
             document.getElementById('badgeMov').textContent =
                 meta.truncado ? `${meta.mostrados}/${fmtNum(meta.total)}` : fmtNum(data.movimientos.length);
-            document.getElementById('badgeLotes').textContent = data.lotes.length;
+            document.getElementById('badgeLotes').textContent =
+                metaLotes.truncado ? `${metaLotes.mostrados}/${fmtNum(metaLotes.total)}` : data.lotes.length;
+            document.getElementById('badgeRecepciones').textContent =
+                metaRecepciones.truncado ? `${metaRecepciones.mostrados}/${fmtNum(metaRecepciones.total)}` : fmtNum(metaRecepciones.total || 0);
             document.getElementById('badgeTraspasos').textContent =
                 (metaTraspasos.omitidos > 0) ? `${metaTraspasos.mostrados}/${fmtNum(metaTraspasos.total)}` : data.traspasos.length;
             document.getElementById('badgePrecios').textContent = data.historial_precios.length;
@@ -426,9 +450,15 @@ function renderMovimientos(items, meta) {
             <strong>${fmtNum(meta.mostrados)}</strong> más recientes (los <strong>${fmtNum(meta.omitidos)}</strong>
             anteriores están resumidos en la fila <em>Saldo de apertura</em> al final de la tabla).</div>`;
     }
+    if (meta.no_computados > 0) {
+        avisos += `<div class="alert alert-info small py-2"><i class="ri-information-line me-1"></i>
+            <strong>${fmtNum(meta.no_computados)}</strong> de los <strong>${fmtNum(meta.total)}</strong> movimientos de este SKU
+            no están en estado <strong>${escapeHtml(meta.estado_computado || 'COMPLETADO')}</strong> (anulados, pendientes, rechazados…):
+            se listan igual, pero <u>no suman al saldo</u> y aparecen con el saldo en «—».</div>`;
+    }
     if (!meta.cuadra) {
         avisos += `<div class="alert alert-danger small py-2"><i class="ri-error-warning-line me-1"></i>
-            <strong>El kardex no cuadra con el stock:</strong> sumando todos los movimientos el saldo es
+            <strong>El kardex no cuadra con el stock:</strong> sumando los movimientos ${escapeHtml(meta.estado_computado || 'COMPLETADO')} el saldo es
             <strong>${fmtNum(meta.saldo_final)}</strong>, pero el stock registrado es
             <strong>${fmtNum(meta.stock_actual)}</strong> (diferencia ${meta.diferencia > 0 ? '+' : ''}${fmtNum(meta.diferencia)} u).</div>`;
     }
@@ -443,16 +473,21 @@ function renderMovimientos(items, meta) {
         const badge = m.es_traspaso ? 'warning' : m.tipo === 'INGRESO' ? 'success' : m.tipo === 'EGRESO' ? 'danger' : 'info';
         const etiquetaTipo = m.es_traspaso ? 'TRASPASO' : m.tipo;
         const ref = m.dte_folio ? `DTE #${m.dte_folio}` : m.ticket_correlativo ? `T #${m.ticket_correlativo}` : (m.referencia || '-');
-        return `<tr title="${escapeHtml(m.observaciones || '')}">
+        // Los movimientos que no movieron stock (ANULADO, PENDIENTE...) se muestran
+        // atenuados y sin saldo: siguen visibles, pero no se confunden con el kardex.
+        const saldoCelda = m.computa_saldo
+            ? `<span class="traza-saldo ${m.saldo < 0 ? 'neg' : ''}">${m.saldo}</span>`
+            : '<span class="text-muted" title="No afecta el saldo: el movimiento no está COMPLETADO">—</span>';
+        return `<tr class="${m.computa_saldo ? '' : 'traza-no-computa'}" title="${escapeHtml(m.observaciones || '')}">
             <td class="text-nowrap">${escapeHtml(m.fecha)}</td><td>${escapeHtml(m.hora)}</td>
             <td><span class="badge bg-${badge}-subtle text-${badge}">${escapeHtml(etiquetaTipo)}</span></td>
             <td class="small">${escapeHtml(m.concepto)}</td>
             <td class="text-end ${m.cantidad > 0 ? 'text-success' : 'text-danger'} fw-bold">${m.cantidad > 0 ? '+' : ''}${m.cantidad}</td>
-            <td class="text-end"><span class="traza-saldo ${m.saldo < 0 ? 'neg' : ''}">${m.saldo}</span></td>
+            <td class="text-end">${saldoCelda}</td>
             <td class="text-end">${fmtMoneda(m.costo)}</td>
             <td>${escapeHtml(m.origen)}</td><td>${escapeHtml(m.destino)}</td>
             <td class="small">${escapeHtml(m.responsable)}</td><td class="small">${escapeHtml(ref)}</td>
-            <td><span class="badge bg-${m.estado === 'COMPLETADO' ? 'success' : 'warning'}-subtle text-dark">${escapeHtml(m.estado)}</span></td></tr>`;
+            <td><span class="badge bg-${m.computa_saldo ? 'success' : 'secondary'}-subtle text-dark">${escapeHtml(m.estado)}</span></td></tr>`;
     }).join('');
 
     // La tabla va de lo más nuevo a lo más viejo: la apertura cierra el listado.
@@ -468,20 +503,112 @@ function renderMovimientos(items, meta) {
     tbody.innerHTML = html;
 }
 
-function renderLotes(items) {
+/* Lotes FIFO: cada lote nace de una entrada concreta y guarda el DTE de origen.
+   Antes se mostraba costo y fecha pero NO de qué factura de proveedor venía,
+   que es justo lo que hace trazable una unidad. */
+function renderLotes(items, meta) {
     const tbody = document.getElementById('tbodyLotes');
+    const avisoBox = document.getElementById('avisoLotes');
+    meta = meta || {};
+
+    let aviso = '';
+    if (meta.truncado) {
+        aviso += `<div class="alert alert-warning small py-2"><i class="ri-alert-line me-1"></i>
+            Este SKU tiene <strong>${fmtNum(meta.total)}</strong> lotes: se muestran los
+            <strong>${fmtNum(meta.mostrados)}</strong> más recientes.</div>`;
+    }
+    if (meta.sin_origen > 0) {
+        aviso += `<div class="alert alert-light border small py-2"><i class="ri-information-line me-1 text-primary"></i>
+            <strong>${fmtNum(meta.sin_origen)}</strong> de los lotes mostrados no tienen DTE de origen registrado
+            (lotes creados por ajustes, migración legacy o ingresos sin documento).</div>`;
+    }
+    avisoBox.innerHTML = aviso;
+
     if (!items.length) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Este SKU no tiene lotes FIFO registrados</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">Este SKU no tiene lotes FIFO registrados</td></tr>';
         return;
     }
     tbody.innerHTML = items.map(l => {
         const estado = l.agotado ? '<span class="badge bg-danger">Agotado</span>' : l.activo ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Inactivo</span>';
-        return `<tr><td>${escapeHtml(l.fecha_ingreso)}</td><td>${escapeHtml(l.numero_lote)}</td>
+        const dte = l.dte_id
+            ? `<a href="${escapeHtml(l.dte_url)}" target="_blank" class="text-primary fw-semibold" title="${escapeHtml(l.dte_tipo)}${l.dte_fecha ? ' · ' + escapeHtml(l.dte_fecha) : ''}">
+                   #${escapeHtml(l.dte_folio)}</a>
+               <br><small class="text-muted">${escapeHtml(l.dte_tipo)}${l.dte_fecha ? ' · ' + escapeHtml(l.dte_fecha) : ''}</small>`
+            : '<span class="text-muted" title="El lote no tiene DTE de origen registrado">Sin documento</span>';
+        const proveedor = l.proveedor
+            ? `${escapeHtml(l.proveedor)}${l.proveedor_rut ? `<br><small class="text-muted">${escapeHtml(l.proveedor_rut)}</small>` : ''}`
+            : '<span class="text-muted">—</span>';
+        return `<tr><td class="text-nowrap">${escapeHtml(l.fecha_ingreso)}</td><td>${escapeHtml(l.numero_lote)}</td>
+            <td class="small">${dte}</td>
+            <td class="small">${proveedor}</td>
             <td class="text-end">${l.cantidad_inicial}</td><td class="text-end fw-bold">${l.cantidad_disponible}</td>
             <td class="text-end">${fmtMoneda(l.costo_unitario)}</td>
             <td class="text-end">${fmtMoneda(l.precio_venta)}</td>
             <td><div class="progress" style="height:18px;"><div class="progress-bar" style="width:${l.porcentaje_consumido}%;">${l.porcentaje_consumido}%</div></div></td>
             <td>${estado}</td></tr>`;
+    }).join('');
+}
+
+/* Origen / Compras: recepciones de este SKU (Productos_Recepcionados).
+   Es la pata que faltaba: qué se esperaba, qué llegó, qué faltó/vino dañado o
+   de más, de qué documento y proveedor, y quién lo recibió. */
+function renderRecepciones(items, meta) {
+    const tbody = document.getElementById('tbodyRecepciones');
+    const avisoBox = document.getElementById('avisoRecepciones');
+    meta = meta || {};
+
+    let aviso = '';
+    if (meta.total > 0) {
+        aviso += `<div class="alert alert-light border small py-2 d-flex flex-wrap gap-3">
+            <span><i class="ri-inbox-archive-line me-1 text-primary"></i><strong>${fmtNum(meta.total)}</strong> recepción(es)</span>
+            <span>Esperado: <strong>${fmtNum(meta.total_esperado)}</strong></span>
+            <span>Recibido: <strong>${fmtNum(meta.total_recibido)}</strong></span>
+            <span class="${meta.total_faltante ? 'text-danger' : ''}">Faltante: <strong>${fmtNum(meta.total_faltante)}</strong></span>
+            <span class="${meta.total_danado ? 'text-danger' : ''}">Dañado: <strong>${fmtNum(meta.total_danado)}</strong></span>
+            <span class="${meta.total_sobrante ? 'text-warning' : ''}">Sobrante: <strong>${fmtNum(meta.total_sobrante)}</strong></span>
+        </div>`;
+    }
+    if (meta.sin_movimiento > 0) {
+        aviso += `<div class="alert alert-warning small py-2"><i class="ri-link-unlink me-1"></i>
+            <strong>${fmtNum(meta.sin_movimiento)}</strong> de estas recepciones <u>no tienen movimiento de stock vinculado</u>:
+            la mercadería se recepcionó pero el kardex no la referencia, así que su ingreso no se puede rastrear
+            hasta el documento desde la pestaña <strong>Movimientos</strong>.</div>`;
+    }
+    if (meta.truncado) {
+        aviso += `<div class="alert alert-warning small py-2"><i class="ri-alert-line me-1"></i>
+            Mostrando ${fmtNum(meta.mostrados)} de ${fmtNum(meta.total)} recepciones (las más recientes).</div>`;
+    }
+    avisoBox.innerHTML = aviso;
+
+    if (!items.length) {
+        tbody.innerHTML = `<tr><td colspan="14" class="text-center text-muted py-4">
+            Este SKU no tiene recepciones registradas. Recuerde que cada bodega tiene su propio SKU:
+            la compra pudo recepcionarse contra el SKU de otra sucursal.</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = items.map(r => {
+        const badge = r.tiene_problemas ? 'danger' : (r.estado === 'RECEPCIONADO_OK' ? 'success' : 'secondary');
+        const doc = r.dte_url
+            ? `<a href="${escapeHtml(r.dte_url)}" target="_blank" class="text-primary">${escapeHtml(r.documento)}</a>`
+            : escapeHtml(r.documento);
+        const mov = r.sin_movimiento
+            ? '<span class="badge bg-warning-subtle text-dark" title="Recepción sin movimiento de stock vinculado">Sin vínculo</span>'
+            : `<span class="badge bg-success-subtle text-dark" title="Movimiento #${escapeHtml(r.movimiento_id)}">#${escapeHtml(r.movimiento_id)}</span>`;
+        return `<tr title="${escapeHtml(r.observaciones || '')}">
+            <td class="text-nowrap">${escapeHtml(r.fecha)} ${escapeHtml(r.hora || '')}</td>
+            <td><span class="badge bg-info-subtle text-info">${escapeHtml(r.origen)}</span>${r.es_historica ? ' <span class="badge bg-secondary-subtle text-dark">Histórica</span>' : ''}</td>
+            <td class="small">${doc}</td>
+            <td class="small">${escapeHtml(r.proveedor)}</td>
+            <td class="small">${escapeHtml(r.orden_compra)}</td>
+            <td class="text-end">${r.esperado}</td>
+            <td class="text-end fw-bold">${r.recibido}</td>
+            <td class="text-end ${r.faltante ? 'text-danger fw-bold' : 'text-muted'}">${r.faltante}</td>
+            <td class="text-end ${r.danado ? 'text-danger fw-bold' : 'text-muted'}">${r.danado}</td>
+            <td class="text-end ${r.sobrante ? 'text-warning fw-bold' : 'text-muted'}">${r.sobrante}</td>
+            <td><span class="badge bg-${badge}-subtle text-dark">${escapeHtml(r.estado_display)}</span></td>
+            <td class="small">${escapeHtml(r.destino)}</td>
+            <td class="small">${escapeHtml(r.recepcionado_por)}</td>
+            <td>${mov}</td></tr>`;
     }).join('');
 }
 

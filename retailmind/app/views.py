@@ -1043,7 +1043,11 @@ def confirmar_recepcion_api(request):
                 # Solo ingresar lo documentado (no sobrantes) - sobrantes requieren aprobación
                 cantidad_documentada = min(cantidad_recepcionada, cantidad_esperada)
                 cantidad_a_ingresar = cantidad_documentada - cantidad_danada
-                if cantidad_a_ingresar <= 0 and cantidad_sobrante <= 0:
+                # `cantidad_danada` entra al corte: una línea 100% dañada
+                # (a_ingresar = 0, sin sobrante) salía por este `continue` y se
+                # quedaba sin el par entrada/baja del kardex — justo el caso que
+                # más importa registrar.
+                if cantidad_a_ingresar <= 0 and cantidad_sobrante <= 0 and cantidad_danada <= 0:
                     continue
                 
                 # Buscar o crear talla en destino
@@ -1170,7 +1174,94 @@ def confirmar_recepcion_api(request):
                         responsable=usuario,
                         observaciones=f'Sobrante +{cantidad_sobrante} en recepción DTE #{dte.numero_documento} - Pendiente decisión bodega'
                     ))
-            
+
+                # ── Mercadería DAÑADA: par entrada + baja ────────────────────
+                # Antes esto NO existía: `cantidad_a_ingresar` restaba lo dañado
+                # y no se escribía ningún movimiento. Las unidades salían del
+                # origen con TRASPASO_SALIDA y no entraban a NINGUNA parte: el
+                # único rastro era `Productos_Recepcionados.cantidad_danada`, que
+                # ningún reporte de kardex mira. El traspaso quedaba descuadrado
+                # por diseño (despachado N, recibido N - dañadas, diferencia sin
+                # explicación).
+                #
+                # DECISIÓN: se registran DOS movimientos, no uno.
+                #   1) TRASPASO_ENTRADA (+dañadas): la mercadería SÍ llegó
+                #      físicamente al destino. Es un hecho del documento.
+                #   2) PERDIDA_DETERIORO (-dañadas): llegó rota, se da de baja
+                #      en el mismo acto.
+                # Un solo movimiento de pérdida (sin la entrada) dejaría el
+                # kardex del destino cuadrando contra un stock que nunca subió:
+                # los reportes reconstruyen el saldo como
+                # `saldo_inicial + entradas - salidas` (ver `_saldos_periodo` en
+                # views_modulo_reportes.py), así que un egreso huérfano
+                # desbalancea el SKU en la sucursal destino. Con el par, la suma
+                # del kardex sigue siendo `cantidad_a_ingresar` —idéntica al
+                # stock que efectivamente se suma más abajo— y además queda el
+                # rastro auditable de la pérdida.
+                #
+                # NETO SOBRE STOCK = 0: este bloque no altera `tallas_a_actualizar`.
+                # El fix es de trazabilidad, no mueve una sola unidad de stock.
+                #
+                # PERDIDA_DETERIORO es el concepto de CONCEPTO_MOVIMIENTO_CHOICES
+                # (app/models/ventas.py) para esto; está clasificado en
+                # CONCEPTOS_PERDIDA (constants_kardex.py) y en los "otros egresos"
+                # de los reportes, así que la merma queda contada donde debe.
+                if cantidad_danada > 0:
+                    costo_danado = dte_producto.costo or talla_destino.producto.costo
+                    sobreprecio_danado = (
+                        getattr(dte_producto, 'sobreprecio', None)
+                        or talla_destino.producto.sobreprecio
+                    )
+                    mov_entrada_danada = Movimientos_Producto(
+                        dte=dte,
+                        ProductoTalla=talla_destino,
+                        sucursal_origen=dte.sucursal,
+                        sucursal_destino=sucursal_destino,
+                        cantidad=cantidad_danada,
+                        costo=costo_danado,
+                        sobreprecio=sobreprecio_danado,
+                        precio=talla_destino.producto.precioventa,
+                        concepto='TRASPASO_ENTRADA',
+                        tipo_movimiento='INGRESO',
+                        estado='COMPLETADO',
+                        responsable=usuario,
+                        observaciones=(
+                            f'Recepción DTE #{dte.numero_documento} — {cantidad_danada} und '
+                            f'recibidas CON DAÑO (se dan de baja en el mismo acto)'
+                        ),
+                    )
+                    # Marca para la creación de lotes FIFO: estas unidades nunca
+                    # quedan disponibles, así que no deben generar lote. Sin esto
+                    # el lote tendría stock vendible que Producto_Talla no tiene
+                    # (drift FIFO).
+                    mov_entrada_danada._omitir_lote_fifo = True
+                    movimientos_a_crear.append(mov_entrada_danada)
+
+                    movimientos_a_crear.append(Movimientos_Producto(
+                        dte=dte,
+                        ProductoTalla=talla_destino,
+                        # Ambas sucursales = destino: la pérdida ocurre ahí. Los
+                        # reportes de merma agrupan por `sucursal_origen`.
+                        sucursal_origen=sucursal_destino,
+                        sucursal_destino=sucursal_destino,
+                        cantidad=-cantidad_danada,
+                        costo=costo_danado,
+                        sobreprecio=sobreprecio_danado,
+                        precio=talla_destino.producto.precioventa,
+                        concepto='PERDIDA_DETERIORO',
+                        # bulk_create NO llama a save(), así que el tipo derivado
+                        # del signo hay que ponerlo a mano.
+                        tipo_movimiento='EGRESO',
+                        estado='COMPLETADO',
+                        responsable=usuario,
+                        observaciones=(
+                            f'Baja por deterioro: {cantidad_danada} und llegaron dañadas '
+                            f'en la recepción del DTE #{dte.numero_documento} '
+                            f'(origen: {dte.sucursal.alias if dte.sucursal else "-"}). '
+                            f'{observaciones}'.strip()
+                        ),
+                    ))
+
             # ============================================
             # FASE 3: Bulk inserts
             # ============================================
@@ -1196,12 +1287,16 @@ def confirmar_recepcion_api(request):
                 #
                 # El sobrante NO genera lote: entra como movimiento PENDIENTE y
                 # todavía no forma parte del inventario.
+                # `_omitir_lote_fifo` marca la entrada de mercadería DAÑADA: se
+                # registra en el kardex pero se da de baja en el mismo acto, así
+                # que no puede generar lote (sería stock vendible inexistente).
                 entradas_con_stock = [
                     mov for mov in movimientos_a_crear
                     if mov.concepto == 'TRASPASO_ENTRADA'
                     and mov.estado == 'COMPLETADO'
                     and mov.cantidad > 0
                     and mov.pk
+                    and not getattr(mov, '_omitir_lote_fifo', False)
                 ]
                 if entradas_con_stock:
                     # Idempotencia: si la recepción se reintenta, no duplicar.
@@ -1606,38 +1701,108 @@ def rechazar_recepcion_api(request):
         with transaction.atomic():
             hoy = timezone.now()
 
-            # Marcar movimientos de salida como RECHAZADOS
-            # Los movimientos de TRASPASO_SALIDA se guardan con estado COMPLETADO (el stock ya salió),
-            # por eso buscamos tanto PENDIENTE_RECEPCION como COMPLETADO
-            from django.db.models.functions import Concat
-            from django.db.models import Value
-            Movimientos_Producto.objects.filter(
-                dte=dte,
-                concepto='TRASPASO_SALIDA',
-                estado__in=['PENDIENTE_RECEPCION', 'COMPLETADO']
-            ).update(
-                estado='RECHAZADO',
-                observaciones=Concat(
-                    F('observaciones'), Value(f'\n❌ RECHAZADO: {motivo_rechazo}')
+            # Lock + revalidación del estado DENTRO de la transacción. El chequeo
+            # de arriba se hizo sin lock; con la devolución de stock en juego, un
+            # doble-click podía entrar dos veces y acreditar el doble.
+            try:
+                dte = (
+                    Dte.objects
+                    .select_for_update(of=('self',))
+                    .select_related('sucursal')
+                    .get(id=dte_id)
                 )
+            except Dte.DoesNotExist:
+                return JsonResponse({'success': False, 'error': 'DTE no encontrado.'}, status=404)
+
+            if dte.estado_dte not in ('EMITIDO', 'ACEPTADO'):
+                return JsonResponse({
+                    'success': False,
+                    'error': f'El DTE ya fue procesado (estado: {dte.estado_dte}). No se puede rechazar.',
+                }, status=409)
+
+            # ── Devolución del stock al ORIGEN ──────────────────────────────
+            # Antes esto NO pasaba: se marcaban los movimientos como RECHAZADO y
+            # nadie tocaba `Producto_Talla.stock`. La mercadería quedaba fuera de
+            # las dos bodegas —ya no en el origen, nunca en el destino— hasta que
+            # alguien se acordara de cancelar el DTE.
+            #
+            # Se sigue el patrón de `cancelar_dte_traspaso_api`: se revierte el
+            # stock del egreso y el movimiento se marca como revertido. NO se
+            # crea un movimiento de ingreso de contrapartida: el TRASPASO_SALIDA
+            # sale del set COMPLETADO, así que el kardex (que suma solo
+            # COMPLETADO) vuelve a cuadrar solo. Escribir además un ingreso
+            # contaría la devolución dos veces.
+            #
+            # IDEMPOTENCIA (dos candados):
+            #   1) el guard de estado_dte de arriba, bajo select_for_update;
+            #   2) solo se devuelven los movimientos que todavía están en un
+            #      estado "stock afuera" (COMPLETADO / PENDIENTE_RECEPCION).
+            #      Una segunda pasada no encuentra ninguno y devuelve 0.
+            #
+            # El estado final es CANCELADO —no RECHAZADO— a propósito: es la
+            # marca de "este egreso ya fue revertido", la misma que usa
+            # `cancelar_dte_traspaso_api`. Los rechazos ANTERIORES a este fix
+            # quedaron en RECHAZADO con el stock nunca devuelto, y
+            # `rehabilitar_dte_rechazado_api` / `cancelar_dte_traspaso_api`
+            # distinguen los dos casos por ese estado. No cambiar sin leer
+            # esas dos funciones.
+            movimientos_salida = list(
+                Movimientos_Producto.objects
+                .select_for_update()
+                .filter(
+                    dte=dte,
+                    concepto='TRASPASO_SALIDA',
+                    estado__in=['PENDIENTE_RECEPCION', 'COMPLETADO'],
+                )
+                .only('id', 'cantidad', 'ProductoTalla')
             )
-            
+
+            unidades_devueltas = 0
+            for mov in movimientos_salida:
+                cantidad_revertir = abs(mov.cantidad or 0)
+                if cantidad_revertir > 0 and mov.ProductoTalla_id:
+                    Producto_Talla.objects.filter(id=mov.ProductoTalla_id).update(
+                        stock=F('stock') + cantidad_revertir
+                    )
+                    unidades_devueltas += cantidad_revertir
+
+            if movimientos_salida:
+                from django.db.models.functions import Concat, Coalesce
+                from django.db.models import Value, TextField
+                Movimientos_Producto.objects.filter(
+                    id__in=[m.id for m in movimientos_salida]
+                ).update(
+                    estado='CANCELADO',
+                    # Coalesce: en PostgreSQL CONCAT(NULL, x) es NULL y el
+                    # observaciones original podía venir vacío.
+                    observaciones=Concat(
+                        Coalesce(F('observaciones'), Value('')),
+                        Value(
+                            f'\n❌ RECHAZADO por {usuario} {hoy.strftime("%Y-%m-%d %H:%M")}: '
+                            f'{motivo_rechazo} — stock devuelto al origen.'
+                        ),
+                        output_field=TextField(),
+                    ),
+                )
+
             # Marcar el DTE como rechazado (pero NO ponemos fecha_recepcion para poder rehabilitar)
             dte.estado_dte = 'RECHAZADO'
             dte.motivo_rechazo = motivo_rechazo  # Guardar motivo en campo específico
             # NO establecemos fecha_recepcion para poder rehabilitar después
-            
+
             referencias_texto = (dte.referencias or '').strip()
             registro = f"❌ RECEPCIÓN RECHAZADA por {usuario} el {hoy.strftime('%Y-%m-%d %H:%M')}"
             registro += f"\nMotivo: {motivo_rechazo}"
+            registro += f"\nUnidades devueltas al stock de origen: {unidades_devueltas}"
             dte.referencias = f"{referencias_texto}\n{registro}".strip()
             dte.save()
-            
+
             logger.info(
-                "DTE rechazado: dte_id=%s numero=%s motivo=%s",
+                "DTE rechazado: dte_id=%s numero=%s motivo=%s unidades_devueltas=%s",
                 dte.id,
                 dte.numero_documento,
                 motivo_rechazo,
+                unidades_devueltas,
             )
             
             # Notificación al emisor (dentro de la transacción para garantizar creación)
@@ -1664,8 +1829,14 @@ def rechazar_recepcion_api(request):
 
         return JsonResponse({
             'success': True,
-            'message': f'La recepción del DTE #{dte.numero_documento} ha sido rechazada. Se notificó a la bodega emisora.',
-            'motivo': motivo_rechazo
+            'message': (
+                f'La recepción del DTE #{dte.numero_documento} ha sido rechazada. '
+                f'{unidades_devueltas} unidades volvieron al stock de origen '
+                f'({dte.sucursal.alias if dte.sucursal else "-"}). '
+                f'Se notificó a la bodega emisora.'
+            ),
+            'motivo': motivo_rechazo,
+            'unidades_devueltas': unidades_devueltas,
         })
 
     except Exception as e:
@@ -1739,14 +1910,100 @@ def rehabilitar_dte_rechazado_api(request):
         with transaction.atomic():
             hoy = timezone.now()
             usuario = request.user.username
-            
+
+            from django.db.models.functions import Concat, Coalesce
+            from django.db.models import Value, TextField
+
+            # ── Re-descuento del stock devuelto por el rechazo ───────────────
+            # Contrapartida obligatoria de `rechazar_recepcion_api`: si el
+            # rechazo devolvió el stock al origen, rehabilitar el DTE lo vuelve
+            # a poner "en tránsito" y hay que sacarlo de nuevo. Sin esto, el
+            # destino recepcionaría sumando unidades que el origen nunca perdió
+            # → inventario inflado.
+            #
+            # Los movimientos en CANCELADO son los revertidos por un rechazo
+            # POSTERIOR al fix (stock ya devuelto). Los que están en RECHAZADO
+            # vienen de rechazos ANTERIORES al fix: ahí el stock nunca volvió,
+            # así que se rehabilitan sin tocar `Producto_Talla`.
+            movs_con_stock_devuelto = list(
+                Movimientos_Producto.objects
+                .select_for_update()
+                .filter(
+                    dte=dte,
+                    concepto='TRASPASO_SALIDA',
+                    tipo_movimiento='EGRESO',
+                    estado='CANCELADO',
+                )
+                .only('id', 'cantidad', 'ProductoTalla')
+            )
+
+            if movs_con_stock_devuelto:
+                # Validar ANTES de escribir: si el origen ya vendió/despachó esas
+                # unidades, rehabilitar dejaría el stock NEGATIVO. Se bloquea con
+                # mensaje accionable en vez de corromper el inventario.
+                requerido_por_talla = {}
+                for mov in movs_con_stock_devuelto:
+                    cant = abs(mov.cantidad or 0)
+                    if cant > 0 and mov.ProductoTalla_id:
+                        requerido_por_talla[mov.ProductoTalla_id] = (
+                            requerido_por_talla.get(mov.ProductoTalla_id, 0) + cant
+                        )
+
+                stock_actual = {
+                    t.id: (t.stock or 0)
+                    for t in Producto_Talla.objects
+                    .select_for_update()
+                    .filter(id__in=requerido_por_talla.keys())
+                    .only('id', 'stock')
+                }
+                insuficientes = [
+                    (tid, req, stock_actual.get(tid, 0))
+                    for tid, req in requerido_por_talla.items()
+                    if stock_actual.get(tid, 0) < req
+                ]
+                if insuficientes:
+                    skus = ', '.join(
+                        str(Producto_Talla.objects.filter(id=tid).values_list('sku', flat=True).first())
+                        for tid, _, _ in insuficientes[:5]
+                    )
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            'No se puede rehabilitar: al rechazarse, el stock volvió al origen '
+                            'y ya no hay unidades suficientes para volver a despacharlo '
+                            f'(SKU con faltante: {skus}). Cancela este DTE y emite uno nuevo '
+                            'con las cantidades reales.'
+                        ),
+                    }, status=409)
+
+                for tid, req in requerido_por_talla.items():
+                    Producto_Talla.objects.filter(id=tid).update(stock=F('stock') - req)
+
+                Movimientos_Producto.objects.filter(
+                    id__in=[m.id for m in movs_con_stock_devuelto]
+                ).update(
+                    estado='COMPLETADO',
+                    observaciones=Concat(
+                        Coalesce(F('observaciones'), Value('')),
+                        Value(
+                            f'\n🔄 REHABILITADO: {hoy.strftime("%Y-%m-%d %H:%M")} por {usuario} '
+                            f'— stock vuelve a salir del origen.'
+                        ),
+                        output_field=TextField(),
+                    ),
+                )
+                logger.info(
+                    "DTE %s rehabilitado: %s unidades vuelven a descontarse del origen",
+                    dte.numero_documento,
+                    sum(requerido_por_talla.values()),
+                )
+
             # Rehabilitar movimientos de producto (volver a COMPLETADO para que
             # recepciones_pendientes_api los encuentre correctamente).
+            # Rama legacy: rechazos previos al fix, cuyo stock nunca se devolvió.
             # PostgreSQL no soporta `F('text_col') + str` (operador text+unknown
             # ausente). Usamos Concat con Coalesce porque CONCAT(NULL, ...) da
             # NULL en Postgres — y observaciones puede venir NULL.
-            from django.db.models.functions import Concat, Coalesce
-            from django.db.models import Value, TextField
             Movimientos_Producto.objects.filter(
                 dte=dte,
                 concepto='TRASPASO_SALIDA',
@@ -1759,7 +2016,7 @@ def rehabilitar_dte_rechazado_api(request):
                     output_field=TextField(),
                 ),
             )
-            
+
             # Rehabilitar el DTE — usar EMITIDO (valor válido en ESTADO_DTE_CHOICES)
             motivo_anterior = dte.motivo_rechazo or 'Sin motivo registrado'
             dte.estado_dte = 'EMITIDO'
@@ -2214,6 +2471,17 @@ def cancelar_dte_traspaso_api(request):
 
             unidades_revertidas = 0
             for mov in movimientos_salida:
+                # CANCELADO/ANULADO = el egreso YA fue revertido antes (p.ej. un
+                # rechazo, que desde el fix de jul-2026 devuelve el stock al
+                # origen y deja el movimiento en CANCELADO). Volver a sumarlo
+                # aquí acreditaría las unidades dos veces.
+                #
+                # OJO: los rechazos ANTERIORES a ese fix quedaron en RECHAZADO
+                # con el stock nunca devuelto, y ese estado SÍ debe revertirse
+                # acá — por eso el filtro es por estado y no por "el DTE está
+                # rechazado".
+                if mov.estado in ('CANCELADO', 'ANULADO'):
+                    continue
                 cantidad_revertir = abs(mov.cantidad)
                 if cantidad_revertir > 0 and mov.ProductoTalla_id:
                     Producto_Talla.objects.filter(id=mov.ProductoTalla_id).update(
@@ -3035,6 +3303,27 @@ def ajustar_dte_emisor_api(request):
                 return JsonResponse({
                     'success': False,
                     'error': f'El DTE está {dte.estado_dte}. No se puede ajustar.',
+                }, status=409)
+
+            # Un DTE rechazado DESPUÉS del fix de jul-2026 ya devolvió su stock
+            # al origen (ver `rechazar_recepcion_api`), y sus TRASPASO_SALIDA
+            # quedaron en CANCELADO. La rama pre-recepción de abajo suma otra vez
+            # `+diferencia` al origen → doble crédito. Se bloquea.
+            # Los rechazos ANTERIORES al fix (movimientos en RECHAZADO, stock
+            # nunca devuelto) siguen siendo ajustables como hasta ahora.
+            if dte.estado_dte == 'RECHAZADO' and Movimientos_Producto.objects.filter(
+                dte=dte,
+                concepto='TRASPASO_SALIDA',
+                tipo_movimiento='EGRESO',
+                estado='CANCELADO',
+            ).exists():
+                return JsonResponse({
+                    'success': False,
+                    'error': (
+                        'El DTE fue rechazado y su stock ya volvió al origen. '
+                        'Rehabilítalo (si el destino va a recibirlo) o cancélalo; '
+                        'ajustarlo ahora duplicaría las unidades en el origen.'
+                    ),
                 }, status=409)
 
             ESTADOS_POST_RECEPCION = {
@@ -30320,6 +30609,12 @@ def anular_factura_dte(request):
             tipo_transaccion=tipo_anulacion,
             responsable=request.user.username,
             sucursal=dte.sucursal,
+            # La NC hereda el vendedor de la venta original. Sin esto quedaba en
+            # NULL SIEMPRE, y como el reporte de comisiones imputa las
+            # devoluciones por vendedor, ninguna devolución descontaba comisión:
+            # se liquidaba sobre ventas brutas. Los reportes tienen un fallback
+            # por `documento_afectado`, pero el dato correcto es este.
+            vendedor=dte.vendedor,
             es_nota_credito=True,
             documento_afectado=dte,
             motivo_nc=motivo_nc_texto,

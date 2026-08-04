@@ -39,8 +39,11 @@
                                         <option value="ultimos_30">Últimos 30 días vs 30 días previos</option>
                                     </optgroup>
                                     <optgroup label="— Mes a mes (tendencia corto plazo) —">
-                                        <option value="mes_mtd">Mes a la fecha vs Mes pasado (MTD)</option>
-                                        <option value="mes_full" selected>Mes actual completo vs Mes pasado completo</option>
+                                        <!-- MTD es el default: comparar el mes en curso INCOMPLETO
+                                             contra el mes pasado COMPLETO mostraba una caída falsa
+                                             de ~-80% cada vez que se abría el reporte. -->
+                                        <option value="mes_mtd" selected>Mes a la fecha vs Mes pasado (MTD)</option>
+                                        <option value="mes_full">Mes actual completo vs Mes pasado completo</option>
                                     </optgroup>
                                     <optgroup label="— Año contra año (sin estacionalidad) ★ —">
                                         <option value="yoy">YoY · Este mes vs Mismo mes año pasado</option>

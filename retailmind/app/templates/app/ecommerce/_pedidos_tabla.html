@@ -79,6 +79,10 @@
               <span class="sub-{{ p.sub_estado|lower }}">{{ p.get_sub_estado_display }}</span>
               {% if p.estado == 'PENDIENTE' %}
                 <span class="aging-b" data-asig="{% if p.fecha_asignacion %}{{ p.fecha_asignacion|date:'c' }}{% else %}{{ p.fecha_recepcion|date:'c' }}{% endif %}" title="Tiempo desde {% if p.fecha_asignacion %}asignación{% else %}recepción{% endif %}"></span>
+                {% if p.estado_canal == 'PENDIENTE' %}
+                  {# El canal aún no confirma el pago: no sacar ni facturar. #}
+                  <br><span class="badge-sin-pago" title="AllConnected reporta el pedido SIN PAGO confirmado: no imprimir guía ni facturar hasta que el canal lo confirme (se actualiza con Traer pedidos)"><i class="bi bi-cash-coin me-1"></i>Sin pago canal</span>
+                {% endif %}
               {% endif %}
             </td>
             <td>

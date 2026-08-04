@@ -1238,6 +1238,37 @@ def trazabilidad_producto(request):
 _TRAZA_MAX_MOVIMIENTOS = 200
 _TRAZA_MAX_TRASPASOS = 100
 _TRAZA_MAX_TIMELINE = 100
+_TRAZA_MAX_LOTES = 50
+_TRAZA_MAX_RECEPCIONES = 100
+
+# Único estado de `Movimientos_Producto` que efectivamente movió stock.
+#
+# `ESTADO_MOVIMIENTO_CHOICES` (app/models/ventas.py) admite PENDIENTE,
+# PENDIENTE_RECEPCION, APROBADO, RECHAZADO, ANULADO, COMPLETADO y CANCELADO.
+# El kardex de esta ficha los sumaba TODOS: un movimiento ANULADO o un despacho
+# aún PENDIENTE inflaba el saldo acumulado y hacía que el chequeo
+# `cuadra`/`diferencia` marcara descuadres que no existen. El saldo se calcula
+# ahora solo con COMPLETADO.
+#
+# DECISIÓN: los movimientos no completados NO se esconden — se siguen listando
+# (ocultarlos sería el error opuesto: el usuario no vería que hay un despacho
+# pendiente sobre ese SKU), pero no avanzan el saldo, se marcan en pantalla y
+# se cuentan aparte en `movimientos_meta.no_computados`.
+_ESTADO_MOVIMIENTO_KARDEX = 'COMPLETADO'
+
+
+def _fmt_local(valor, formato='%d/%m/%Y'):
+    """
+    Formatea un datetime/date en hora local (America/Santiago).
+
+    Con `USE_TZ=True` los DateTimeField llegan en UTC: hacerles strftime directo
+    corría la hora (y de madrugada, la fecha) de recepciones y lotes.
+    """
+    if not valor:
+        return ''
+    if hasattr(valor, 'tzinfo') and timezone.is_aware(valor):
+        valor = timezone.localtime(valor)
+    return valor.strftime(formato)
 
 
 def _traspasos_producto_talla(producto_talla, limite=_TRAZA_MAX_TRASPASOS):
@@ -1325,6 +1356,117 @@ def _traspasos_producto_talla(producto_talla, limite=_TRAZA_MAX_TRASPASOS):
     }
 
 
+def _recepciones_producto_talla(producto_talla, limite=_TRAZA_MAX_RECEPCIONES):
+    """
+    Recepciones de un SKU: la pata de ORIGEN (compras) de la trazabilidad.
+
+    `Productos_Recepcionados` es donde queda lo que REALMENTE llegó contra lo que
+    se esperaba (faltante / dañado / sobrante), de qué documento vino y quién lo
+    recibió. La ficha no la leía, así que la pantalla oficial de trazabilidad no
+    contestaba la pregunta más básica del origen: de qué compra y de qué
+    proveedor entró este stock.
+
+    Se busca por DOS caminos porque la FK directa `producto_talla` es nullable y
+    en las recepciones de compra antiguas quedó en NULL: ahí el vínculo vive en
+    `compra_producto_talla.producto_talla`. Son FKs a-uno, así que el OR no
+    multiplica filas.
+
+    Devuelve (filas, meta). `meta` trae los totales de TODA la historia (no solo
+    de la ventana mostrada) y cuántas recepciones no tienen movimiento de stock
+    vinculado — el eslabón que la auditoría midió como roto.
+    """
+    qs = Productos_Recepcionados.objects.filter(
+        Q(producto_talla=producto_talla)
+        | Q(compra_producto_talla__producto_talla=producto_talla)
+    )
+
+    total = qs.count()
+    sin_movimiento = qs.filter(movimiento_ingreso__isnull=True).count()
+    totales = qs.aggregate(
+        esperado=Sum('cantidad_esperada'),
+        recibido=Sum('stockArribado'),
+        faltante=Sum('cantidad_faltante'),
+        danado=Sum('cantidad_danada'),
+        sobrante=Sum('cantidad_sobrante'),
+    )
+
+    recepciones = list(
+        qs.select_related(
+            'dte', 'dte__emisor', 'sucursal_destino', 'movimiento_ingreso',
+            'compra_producto_talla',
+            'compra_producto_talla__compra_producto',
+            'compra_producto_talla__compra_producto__compras',
+            'compra_producto_talla__compra_producto__compras__empresa',
+        )
+        # `fecha_recepcion` es la fecha real pero es nullable (las recepciones
+        # legacy no la tienen): NULLS LAST para que no encabecen el listado.
+        .order_by(F('fecha_recepcion').desc(nulls_last=True), '-fecha', '-id')[:limite]
+    )
+
+    filas = []
+    for r in recepciones:
+        cpt = r.compra_producto_talla
+        compra = cpt.compra_producto.compras if (cpt and cpt.compra_producto_id) else None
+
+        # El proveedor es el EMISOR del documento de compra. Si la recepción no
+        # tiene DTE (compras cargadas sin documento), se cae a la empresa de la
+        # orden de compra, que en `Compras` es justamente el proveedor.
+        proveedor = ''
+        if r.dte and r.dte.emisor:
+            proveedor = r.dte.emisor.nombre
+        elif compra and compra.empresa:
+            proveedor = compra.empresa.nombre
+
+        esperado = r.cantidad_esperada or 0
+        recibido = r.stockArribado or 0
+
+        filas.append({
+            'id': r.id,
+            'fecha': _fmt_local(r.fecha_recepcion) or (r.fecha.strftime('%d/%m/%Y') if r.fecha else ''),
+            'hora': _fmt_local(r.fecha_recepcion, '%H:%M'),
+            'origen': 'COMPRA' if cpt else ('DOCUMENTO' if r.dte_id else 'SIN ORIGEN'),
+            'documento': (
+                f"{r.dte.get_tipo_documento_display()} #{r.dte.numero_documento}"
+                if r.dte else '—'
+            ),
+            'dte_id': r.dte_id,
+            'dte_url': f'/app/detalle_dte/{r.dte_id}/' if r.dte_id else None,
+            'proveedor': proveedor or '—',
+            'orden_compra': f"{compra.nombre} (#{compra.correlativo})" if compra else '—',
+            'compra_id': compra.id if compra else None,
+            'esperado': esperado,
+            'recibido': recibido,
+            'faltante': r.cantidad_faltante or 0,
+            'danado': r.cantidad_danada or 0,
+            'sobrante': r.cantidad_sobrante or 0,
+            'diferencia': recibido - esperado,
+            'estado': r.estado,
+            'estado_display': r.get_estado_display(),
+            'tiene_problemas': r.tiene_problemas,
+            'recepcionado_por': r.recepcionado_por or '—',
+            'destino': r.sucursal_destino.alias if r.sucursal_destino else '-',
+            'movimiento_id': r.movimiento_ingreso_id,
+            'sin_movimiento': r.movimiento_ingreso_id is None,
+            'es_historica': r.es_historica,
+            'observaciones': r.observaciones or '',
+        })
+
+    meta = {
+        'total': total,
+        'mostrados': len(filas),
+        'omitidos': max(total - len(filas), 0),
+        'truncado': total > len(filas),
+        'limite': limite,
+        'total_esperado': totales['esperado'] or 0,
+        'total_recibido': totales['recibido'] or 0,
+        'total_faltante': totales['faltante'] or 0,
+        'total_danado': totales['danado'] or 0,
+        'total_sobrante': totales['sobrante'] or 0,
+        'sin_movimiento': sin_movimiento,
+    }
+    return filas, meta
+
+
 @login_required
 @require_GET
 def api_trazabilidad_producto(request):
@@ -1397,9 +1539,16 @@ def api_trazabilidad_producto(request):
     # arrancar en 0 o no cuadraría nunca con el stock: se calcula en SQL el
     # saldo de toda la historia y se descuenta lo mostrado para obtener el
     # saldo de apertura de la ventana.
+    #
+    # El saldo suma SOLO los movimientos COMPLETADO (ver
+    # `_ESTADO_MOVIMIENTO_KARDEX`): antes entraban también ANULADO y PENDIENTE,
+    # que nunca tocaron stock, y el chequeo `cuadra` reportaba descuadres falsos.
+    # Los no completados se siguen listando, marcados y sin avanzar el saldo.
     movimientos_qs = Movimientos_Producto.objects.filter(ProductoTalla=producto_talla)
+    movimientos_kardex_qs = movimientos_qs.filter(estado=_ESTADO_MOVIMIENTO_KARDEX)
     total_movimientos = movimientos_qs.count()
-    saldo_final = movimientos_qs.aggregate(t=Sum(DELTA_KARDEX_SQL))['t'] or 0
+    total_computados = movimientos_kardex_qs.count()
+    saldo_final = movimientos_kardex_qs.aggregate(t=Sum(DELTA_KARDEX_SQL))['t'] or 0
 
     movimientos = list(
         movimientos_qs.select_related(
@@ -1407,15 +1556,21 @@ def api_trazabilidad_producto(request):
         ).order_by('-fecha', '-hora', '-id')[:_TRAZA_MAX_MOVIMIENTOS]
     )
 
+    # `deltas` es informativo (se muestra la cantidad de TODOS los movimientos);
+    # `computa` decide cuáles empujan el saldo acumulado.
     deltas = {m.id: _delta_kardex(m) for m in movimientos}
-    saldo_apertura = saldo_final - sum(deltas.values())
+    computa = {m.id: m.estado == _ESTADO_MOVIMIENTO_KARDEX for m in movimientos}
+    saldo_apertura = saldo_final - sum(d for mid, d in deltas.items() if computa[mid])
 
     # Recorrido cronológico ascendente para acumular (la lista viene descendente).
     saldos = {}
     saldo_corriente = saldo_apertura
     for m in reversed(movimientos):
-        saldo_corriente += deltas[m.id]
-        saldos[m.id] = saldo_corriente
+        if computa[m.id]:
+            saldo_corriente += deltas[m.id]
+            saldos[m.id] = saldo_corriente
+        else:
+            saldos[m.id] = None  # no movió stock: el saldo no avanza
 
     movimientos_data = [{
         'id': m.id,
@@ -1427,6 +1582,7 @@ def api_trazabilidad_producto(request):
         'es_traspaso': _es_traspaso(m.concepto),
         'cantidad': deltas[m.id],
         'saldo': saldos[m.id],
+        'computa_saldo': computa[m.id],
         'costo': m.costo,
         'precio': m.precio,
         'origen': m.sucursal_origen.alias if m.sucursal_origen else '-',
@@ -1454,16 +1610,31 @@ def api_trazabilidad_producto(request):
         'stock_actual': stock_actual,
         'diferencia': stock_actual - saldo_final,
         'cuadra': stock_actual == saldo_final,
+        # Desglose por estado: cuántos movimientos entran al saldo y cuántos no
+        # (ANULADO, PENDIENTE, RECHAZADO...). Se informa en pantalla para que el
+        # usuario sepa por qué la tabla tiene filas sin saldo.
+        'estado_computado': _ESTADO_MOVIMIENTO_KARDEX,
+        'total_computados': total_computados,
+        'no_computados': max(total_movimientos - total_computados, 0),
+        'no_computados_en_ventana': sum(1 for v in computa.values() if not v),
     }
 
     # --- Lotes FIFO ---
-    lotes = LoteProducto.objects.filter(
-        producto_talla=producto_talla,
-    ).order_by('-fecha_ingreso')[:50]
+    #
+    # Cada lote nace de una entrada concreta y `LoteProducto` guarda las FKs
+    # `dte` y `movimiento` con esa entrada. La ficha las ignoraba: mostraba
+    # costo y fecha pero NO de qué factura de proveedor venía el lote, que es
+    # justo el dato que hace trazable una unidad. `select_related` evita el N+1
+    # que provocaría tocar `l.dte.emisor` lote por lote.
+    lotes_qs = LoteProducto.objects.filter(producto_talla=producto_talla)
+    total_lotes = lotes_qs.count()
+    lotes = lotes_qs.select_related('dte', 'dte__emisor', 'movimiento').order_by(
+        '-fecha_ingreso'
+    )[:_TRAZA_MAX_LOTES]
 
     lotes_data = [{
         'id': l.id,
-        'fecha_ingreso': l.fecha_ingreso.strftime('%d/%m/%Y') if l.fecha_ingreso else '',
+        'fecha_ingreso': _fmt_local(l.fecha_ingreso),
         'cantidad_inicial': l.cantidad_inicial,
         'cantidad_disponible': l.cantidad_disponible,
         'costo_unitario': l.costo_unitario,
@@ -1472,10 +1643,32 @@ def api_trazabilidad_producto(request):
         'agotado': l.agotado,
         'numero_lote': l.numero_lote or '-',
         'porcentaje_consumido': round(l.porcentaje_consumido, 1),
+        # --- Origen del lote (DTE + proveedor) ---
+        'dte_id': l.dte_id,
+        'dte_folio': l.dte.numero_documento if l.dte else None,
+        'dte_tipo': l.dte.get_tipo_documento_display() if l.dte else '',
+        'dte_fecha': l.dte.fecha_emision.strftime('%d/%m/%Y') if (l.dte and l.dte.fecha_emision) else '',
+        'dte_url': f'/app/detalle_dte/{l.dte_id}/' if l.dte_id else None,
+        'proveedor': l.dte.emisor.nombre if (l.dte and l.dte.emisor) else '',
+        'proveedor_rut': l.dte.emisor.rut if (l.dte and l.dte.emisor) else '',
+        'movimiento_id': l.movimiento_id,
+        'movimiento_concepto': l.movimiento.get_concepto_display() if l.movimiento else '',
     } for l in lotes]
+
+    lotes_meta = {
+        'total': total_lotes,
+        'mostrados': len(lotes_data),
+        'omitidos': max(total_lotes - len(lotes_data), 0),
+        'truncado': total_lotes > len(lotes_data),
+        'limite': _TRAZA_MAX_LOTES,
+        'sin_origen': sum(1 for l in lotes_data if not l['dte_id']),
+    }
 
     # --- Traspasos ---
     traspasos_data, traspasos_meta = _traspasos_producto_talla(producto_talla)
+
+    # --- Origen / Compras (recepciones) ---
+    recepciones_data, recepciones_meta = _recepciones_producto_talla(producto_talla)
 
     # --- Cambios de precio ---
     historial_precios = HistorialCambioPrecio.objects.filter(
@@ -1510,15 +1703,43 @@ def api_trazabilidad_producto(request):
     # --- Timeline unificada ---
     timeline = []
     for m in movimientos_data:
+        # Los movimientos que no computan al saldo se marcan en el evento: si no,
+        # la timeline daba a entender que un ANULADO movió mercadería.
+        detalle = f"Cantidad: {m['cantidad']} | {m['origen']} → {m['destino']}"
+        if not m['computa_saldo']:
+            detalle += f" | {m['estado']} (no afecta el saldo)"
         timeline.append({
             'fecha': m['fecha'],
             'hora': m['hora'],
             'tipo': 'movimiento',
             'icono': 'ri-arrow-left-right-line',
-            'color': '#00D4AA' if m['tipo'] == 'INGRESO' else '#FF6B6B' if m['tipo'] == 'EGRESO' else '#0066FF',
+            'color': (
+                '#adb5bd' if not m['computa_saldo']
+                else '#00D4AA' if m['tipo'] == 'INGRESO'
+                else '#FF6B6B' if m['tipo'] == 'EGRESO' else '#0066FF'
+            ),
             'titulo': m['concepto'],
-            'detalle': f"Cantidad: {m['cantidad']} | {m['origen']} → {m['destino']}",
+            'detalle': detalle,
             'responsable': m['responsable'],
+        })
+    # Recepciones SIN movimiento de stock vinculado: son el eslabón roto de la
+    # cadena (llegó mercadería pero el kardex no lo sabe). Las que sí tienen
+    # movimiento ya están en la timeline como movimiento, no se duplican.
+    for r in recepciones_data:
+        if not r['sin_movimiento']:
+            continue
+        timeline.append({
+            'fecha': r['fecha'],
+            'hora': r['hora'] or '00:00',
+            'tipo': 'recepcion',
+            'icono': 'ri-inbox-archive-line',
+            'color': '#FF9F43',
+            'titulo': f"Recepción de compra ({r['estado_display']}) — sin movimiento de stock vinculado",
+            'detalle': (
+                f"{r['documento']} · {r['proveedor']} | "
+                f"Esperado: {r['esperado']} · Recibido: {r['recibido']}"
+            ),
+            'responsable': r['recepcionado_por'],
         })
     # Los traspasos reconstruidos desde movimientos YA están en la timeline
     # (son movimientos): solo se agregan aparte cuando vienen de la tabla formal
@@ -1569,8 +1790,11 @@ def api_trazabilidad_producto(request):
         'movimientos': movimientos_data,
         'movimientos_meta': movimientos_meta,
         'lotes': lotes_data,
+        'lotes_meta': lotes_meta,
         'traspasos': traspasos_data,
         'traspasos_meta': traspasos_meta,
+        'recepciones': recepciones_data,
+        'recepciones_meta': recepciones_meta,
         'historial_precios': precios_data,
         'pendientes_despacho': pendientes_data,
         'timeline': timeline[:_TRAZA_MAX_TIMELINE],

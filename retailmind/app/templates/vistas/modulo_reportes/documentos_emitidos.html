@@ -121,7 +121,7 @@
         <span class="chip chip-count chip-warn" id="chipSinPagos" title="DTEs sin pagos registrados (fallback a ticket/efectivo)">
             <i class="ri-alert-line"></i> Sin pagos: <strong id="chipSinPagosVal">0</strong>
         </span>
-        <span class="chip chip-equiv" id="chipEquivVentas" title="Total equivalente a /app/ventas/documentos/ (bruto - descuentos, sin restar NC)">
+        <span class="chip chip-equiv" id="chipEquivVentas" title="Total equivalente a /app/ventas/documentos/ (suma de pagos, o monto del documento si no tiene pagos registrados)">
             <i class="ri-equal-line"></i> ≈ Ventas/Doc: <strong id="chipEquivVentasVal">$0</strong>
         </span>
     </div>
@@ -163,11 +163,12 @@
             <div><div class="kpi-lbl">Notas de Crédito <i class="ri-question-line"></i></div><div class="kpi-val" id="kpiNC">$0</div></div>
         </div>
         <div class="kpi-sep kpi-sep-total"></div>
-        <!-- Rótulo honesto: el total es bruto menos descuentos. Las NC no se
-             restan porque no forman parte de este listado. -->
-        <div class="kpi-item kpi-total" title="Ventas brutas − descuentos. No descuenta notas de crédito.">
+        <!-- El total resta las notas de crédito y NO vuelve a restar los
+             descuentos: `monto_con_iva` ya viene neto de ellos (antes se
+             restaban dos veces y el total salía por debajo del real). -->
+        <div class="kpi-item kpi-total" title="Ventas brutas − notas de crédito. Los descuentos ya vienen aplicados en el monto de cada documento.">
             <i class="ri-funds-line kpi-ico"></i>
-            <div><div class="kpi-lbl">TOTAL (bruto − dsctos.)</div><div class="kpi-val fw-bold" id="kpiTotal">$0</div></div>
+            <div><div class="kpi-lbl">TOTAL (neto de NC)</div><div class="kpi-val fw-bold" id="kpiTotal">$0</div></div>
         </div>
     </div>
 

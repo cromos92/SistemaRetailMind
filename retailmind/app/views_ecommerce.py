@@ -2741,6 +2741,12 @@ def api_imprimir_guia_preparacion(request, pedido_id):
         id=pedido_id, estado='PENDIENTE',
     )
 
+    # Sin pago confirmado (o cancelado/despachado según el canal): imprimir la
+    # guía sería sacar stock para una venta que no corresponde preparar.
+    bloqueo_canal = _bloqueo_por_estado_canal(pedido)
+    if bloqueo_canal:
+        return JsonResponse({'ok': False, 'error': bloqueo_canal}, status=409)
+
     resultado = _registrar_guia_preparacion(pedido, request.user)
     return JsonResponse({'ok': True, **resultado})
 
@@ -2860,6 +2866,10 @@ def api_imprimir_guias_sucursal(request):
     except (json.JSONDecodeError, ValueError):
         pass
 
+    from app.services.allconnected_pedidos_service import (
+        ESTADOS_CANAL_CANCELADOS, ESTADOS_CANAL_DESPACHADOS,
+    )
+
     qs = (
         PedidoEcommerce.objects
         .select_related('sucursal', 'sucursal__empresa')
@@ -2868,6 +2878,11 @@ def api_imprimir_guias_sucursal(request):
             estado='PENDIENTE',
             sub_estado__in=['ASIGNADO', 'EN_PREPARACION'],
         )
+        # Bloqueados por el estado del canal quedan FUERA del lote: sin pago
+        # confirmado (PENDIENTE) no se saca stock, y cancelados/despachados
+        # los cierra la sincronización — imprimirles guía sería picking basura.
+        .exclude(estado_canal__in=list(ESTADOS_CANAL_CANCELADOS)
+                 + list(ESTADOS_CANAL_DESPACHADOS) + ['PENDIENTE'])
         .order_by('fecha_recepcion')  # los más antiguos primero
     )
     if not incluir_reimpresiones:

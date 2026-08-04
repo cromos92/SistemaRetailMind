@@ -56,6 +56,75 @@ def _expandir_categoria_ids(categoria_id):
     return ids
 
 
+# ========== NOTAS DE CRÉDITO DEL LADO VENTA (helper único) ==========
+
+# Una NC de venta NO nace con `tipo_transaccion='VENTA'`: los flujos que la
+# emiten (`emisionNotaCredito`, `anular_factura_dte`, devolución garantía,
+# `pos_service`) la graban como 'DEVOLUCION' (mueve plata) o 'ANULACION'
+# (solo contable). 'VENTA'/'VENTA_PUBLICO' quedan en la lista únicamente
+# porque `emitir_dte_concepto` sí crea NC/ND heredando el tipo de la venta
+# (bug conocido, ver AUDITORIA_DOCUMENTOS_VENTAS_2026-07-30).
+TIPOS_TRANSACCION_NC_VENTA = ('VENTA', 'VENTA_PUBLICO', 'DEVOLUCION', 'ANULACION')
+
+# Estados que representan facturación válida (mismo criterio que
+# `_queryset_dtes_ventas_vendedor` / `obtener_ventas_por_sucursal_reporte`).
+ESTADOS_DTE_FACTURACION = ('EMITIDO', 'ACEPTADO', 'ANULADO')
+
+
+def _queryset_ncs_venta(fecha_inicio, fecha_fin, user=None, request=None,
+                        estados=ESTADOS_DTE_FACTURACION,
+                        excluir_internas=False, base_queryset=None):
+    """Notas de crédito REALES del lado venta en el rango [fecha_inicio, fecha_fin].
+
+    POR QUÉ EXISTE
+    --------------
+    Varios reportes armaban el universo con
+    ``tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO']`` y recién después
+    hacían ``.filter(tipo_documento='NOTA DE CREDITO')``. Ese orden no
+    devuelve casi nada: las NC de venta se emiten con
+    ``tipo_transaccion`` en ('DEVOLUCION', 'ANULACION'), así que el primer
+    filtro ya las había descartado. Consecuencia visible: la "Tasa de
+    Devolución" del comparativo salía ~0% siempre y los netos quedaban
+    inflados por el monto completo de las devoluciones.
+
+    Parámetros
+    ----------
+    fecha_inicio / fecha_fin : date
+        Rango sobre ``fecha_emision`` (inclusivo en ambos extremos).
+    user / request :
+        Si se pasan, aplica ``filtrar_queryset_por_sucursal`` (permisos).
+    estados : tuple
+        Estados de ``estado_dte`` admitidos. Por defecto los de
+        facturación histórica; los reportes de caja pasan
+        ``('EMITIDO', 'ACEPTADO')`` para dejar fuera anulados.
+    excluir_internas : bool
+        Excluye documentos donde receptor == emisor (facturación entre
+        sucursales de la misma empresa).
+    base_queryset : QuerySet | None
+        Permite reusar un queryset ya filtrado (sucursal, tipo de
+        documento, etc.) en vez de partir de ``Dte.objects``.
+
+    Nota: siempre filtra ``descartado=False``. Las NC de modalidad OCULTA
+    se marcan descartadas a propósito para quedar fuera de caja y de los
+    listados; contarlas acá las haría restar dos veces (el DTE original
+    ya queda en estado ANULADO).
+    """
+    qs = base_queryset if base_queryset is not None else Dte.objects.all()
+    qs = qs.filter(
+        fecha_emision__gte=fecha_inicio,
+        fecha_emision__lte=fecha_fin,
+        tipo_documento='NOTA DE CREDITO',
+        tipo_transaccion__in=TIPOS_TRANSACCION_NC_VENTA,
+        descartado=False,
+    )
+    if estados:
+        qs = qs.filter(estado_dte__in=list(estados))
+    if excluir_internas:
+        qs = qs.exclude(receptor__isnull=False, receptor_id=F('emisor_id'))
+    if user is not None:
+        qs = filtrar_queryset_por_sucursal(qs, user, request)
+    return qs
+
 
 # ========== REPORTE DE VENTAS POR SUCURSAL ==========
 
@@ -393,12 +462,9 @@ def _parse_rango_fechas_reporte(request):
 def _calcular_comisiones_vendedor(request):
     """Calcula la matriz de comisiones por vendedor para los filtros pedidos.
 
-    Reusa los mismos filtros que `obtener_ventas_por_vendedor_reporte`
-    (facturación histórica: incluye ``ANULADO``, todas las NC restan
-    independiente de modalidad). La "venta neta" se define como la suma
-    de `monto_neto` (sin IVA) de los DTEs de venta menos la suma de
-    `monto_neto` de las Notas de Crédito asociadas al mismo vendedor
-    en la misma sucursal y período.
+    La "venta neta" se define como la suma de `monto_neto` (sin IVA) de los
+    DTEs de venta menos la suma de `monto_neto` de las Notas de Crédito
+    imputadas al mismo vendedor, empresa y sucursal en el período.
 
     La comisión se calcula como `venta_neta_sin_iva * (Vendedor.comision / 100)`.
 
@@ -410,6 +476,46 @@ def _calcular_comisiones_vendedor(request):
     Las NC que salen en una sucursal distinta a la de la venta original se
     imputan a la sucursal donde efectivamente se emitió la NC (la cardinalidad
     natural del agregado SQL).
+
+    DINERO REAL — dos correcciones respecto de la versión anterior
+    -------------------------------------------------------------
+    1. **Se excluye ``estado_dte='ANULADO'``.** Antes entraba "porque el
+       reporte de facturación histórica lo incluye". Pero un DTE queda en
+       ANULADO solo en dos casos, y en los dos la venta dejó de existir:
+       anulación manual (`anular_documento`) o NC de modalidad OCULTA. En
+       ese segundo caso la NC se graba con ``descartado=True``, así que
+       nunca entraba al queryset y NO compensaba nada: la venta anulada
+       pagaba comisión completa. Excluir ANULADO no genera doble resta
+       justamente porque su NC está descartada.
+
+       Efecto lateral consciente: comisiones deja de calzar exactamente con
+       `obtener_ventas_por_vendedor_reporte`, que sí es facturación
+       histórica y mantiene los ANULADO.
+
+    2. **Las NC sin vendedor ya no se descartan.** `emisionNotaCredito` no
+       copia el vendedor a la NC, así que ``vendedor_id`` viene NULL en
+       prácticamente todas. El filtro anterior (``if r['vendedor__id'] and
+       r['emisor__id']``) las botaba todas: ninguna devolución descontaba
+       comisión de nadie. La imputación ahora es, en este orden:
+
+         a) ``vendedor`` de la propia NC, si lo tiene;
+         b) ``documento_afectado.vendedor`` — el vendedor de la venta
+            original. Es un dato real, no un prorrateo estimado;
+         c) si tampoco hay (NC huérfana), la NC va a una fila explícita
+            **"Sin vendedor asignado"** dentro de su empresa/sucursal, que
+            SÍ resta de los subtotales y del total global pero no descuenta
+            comisión a ninguna persona en particular.
+
+       Se eligió (b)+(c) sobre el prorrateo por sucursal porque prorratear
+       inventa una atribución: le bajaría el sueldo a vendedores que no
+       hicieron esa venta. El caso (c) queda visible en pantalla y en el
+       Excel para que la liquidación lo resuelva a mano.
+
+    Cuando una NC se imputa a un vendedor que no registró ventas en esa
+    empresa/sucursal en el período (vendió el mes pasado, la devolución
+    llegó este mes), se agrega igual su fila con ventas brutas en 0: la
+    venta neta y la comisión quedan NEGATIVAS. Es un descuento real de
+    liquidación, no un error de cálculo.
 
     Devuelve un dict con::
 
@@ -445,13 +551,13 @@ def _calcular_comisiones_vendedor(request):
     sucursal_id = request.GET.get('sucursal_id')
     vendedor_id = request.GET.get('vendedor_id')
 
-    # Mismos filtros que los reportes de ventas-sucursal/-vendedor:
-    # facturación histórica (ANULADO entra, todas las NC restan).
+    # `ANULADO` fuera: son ventas que dejaron de existir y su NC (cuando la
+    # hay) está descartada, así que nunca las compensaba. Ver docstring.
     queryset_dtes = Dte.objects.filter(
         fecha_emision__gte=fi,
         fecha_emision__lte=ff,
         tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO', 'DEVOLUCION', 'ANULACION'],
-        estado_dte__in=['EMITIDO', 'ACEPTADO', 'ANULADO'],
+        estado_dte__in=['EMITIDO', 'ACEPTADO'],
         descartado=False,
     ).select_related('vendedor', 'sucursal', 'emisor')
 
@@ -459,11 +565,19 @@ def _calcular_comisiones_vendedor(request):
     queryset_dtes = filtrar_queryset_por_sucursal(queryset_dtes, request.user, request)
     if sucursal_id:
         queryset_dtes = queryset_dtes.filter(sucursal_id=sucursal_id)
-    if vendedor_id:
-        queryset_dtes = queryset_dtes.filter(vendedor_id=vendedor_id)
 
     queryset_ventas = queryset_dtes.exclude(tipo_documento='NOTA DE CREDITO')
     queryset_ncs = queryset_dtes.filter(tipo_documento='NOTA DE CREDITO')
+
+    # El filtro por vendedor se aplica DESPUÉS de separar: si se aplicara al
+    # queryset común, las NC (que traen vendedor_id NULL) desaparecerían y el
+    # vendedor filtrado aparecería sin ninguna devolución descontada.
+    if vendedor_id:
+        queryset_ventas = queryset_ventas.filter(vendedor_id=vendedor_id)
+        queryset_ncs = queryset_ncs.filter(
+            Q(vendedor_id=vendedor_id)
+            | Q(vendedor__isnull=True, documento_afectado__vendedor_id=vendedor_id)
+        )
 
     # Agrupación triple (vendedor, emisor=empresa, sucursal). Un mismo
     # vendedor que vendió para varias empresas o en varias sucursales
@@ -487,19 +601,41 @@ def _calcular_comisiones_vendedor(request):
 
     # NC con la misma clave triple. Si una NC se emite en otra sucursal
     # respecto de la venta original, se imputa donde se emitió.
-    ncs_agg = {
-        (r['vendedor__id'], r['emisor__id'], r['sucursal__id']): {
-            'total': int(r['total'] or 0),
-            'neto': int(r['neto'] or 0),
-        }
-        for r in queryset_ncs.values(
-            'vendedor__id', 'emisor__id', 'sucursal__id',
-        ).annotate(
-            total=Sum('monto_con_iva'),
-            neto=Sum('monto_neto'),
-        )
-        if r['vendedor__id'] and r['emisor__id']
-    }
+    #
+    # El vendedor sale de la NC o, si viene NULL (el caso normal: la NC no
+    # hereda vendedor), del documento afectado. Las que no tienen ninguno de
+    # los dos van a `ncs_sin_vendedor` y terminan en una fila explícita.
+    ncs_agg: dict[tuple, dict] = {}
+    ncs_sin_vendedor: dict[tuple, dict] = {}
+    for r in queryset_ncs.values(
+        'vendedor__id', 'documento_afectado__vendedor__id',
+        'emisor__id', 'sucursal__id',
+    ).annotate(
+        total=Sum('monto_con_iva'),
+        neto=Sum('monto_neto'),
+        cant=Count('id'),
+    ):
+        eid = r['emisor__id']
+        if not eid:
+            # Sin empresa emisora no hay liquidación posible; se registra
+            # para no perder la plata en silencio.
+            logger.warning(
+                "Comisiones: NC sin empresa emisora en %s..%s (monto=%s)",
+                fi, ff, r['total'],
+            )
+            continue
+        vid = r['vendedor__id'] or r['documento_afectado__vendedor__id']
+        sid = r['sucursal__id']
+        destino = ncs_agg if vid else ncs_sin_vendedor
+        clave = (vid, eid, sid) if vid else (eid, sid)
+        acum = destino.setdefault(clave, {'total': 0, 'neto': 0, 'cantidad': 0})
+        acum['total'] += int(r['total'] or 0)
+        acum['neto'] += int(r['neto'] or 0)
+        acum['cantidad'] += int(r['cant'] or 0)
+
+    # Claves de NC efectivamente consumidas por una fila de ventas; el resto
+    # se materializa después como fila propia (comisión negativa).
+    ncs_consumidas: set[tuple] = set()
 
     def _nuevo_subtotal() -> dict:
         return {
@@ -517,56 +653,18 @@ def _calcular_comisiones_vendedor(request):
     # Construcción anidada Empresa -> Sucursal -> Vendedor + lista flat.
     empresas_map: dict[int, dict] = {}
     vendedores_data: list[dict] = []
-    total_comisiones = 0
-    total_ventas_brutas_con_iva = 0
-    total_ventas_brutas_sin_iva = 0
-    total_ventas_netas_sin_iva = 0
-    total_ventas_netas_con_iva = 0
-    total_documentos = 0
-    total_devoluciones = 0
-    total_devoluciones_neto = 0
+    glob = _nuevo_subtotal()
     sucursales_distintas: set[int] = set()
 
-    for item in ventas_agg:
-        vid = item['vendedor__id']
-        eid = item['emisor__id']
-        sid = item['sucursal__id']
-        if not vid or not eid:
-            continue
-        ventas_brutas_iva = int(item['total_ventas'] or 0)
-        ventas_brutas_neto = int(item['total_neto'] or 0)
-        nc = ncs_agg.get((vid, eid, sid), {'total': 0, 'neto': 0})
-        ventas_netas_iva = ventas_brutas_iva - nc['total']
-        ventas_netas_neto = ventas_brutas_neto - nc['neto']
-        try:
-            comision_pct = float(item['vendedor__comision'] or 0)
-        except (TypeError, ValueError):
-            comision_pct = 0.0
-        comision_monto = int(round(ventas_netas_neto * comision_pct / 100.0))
+    def _registrar_fila(fila, cuenta_como_vendedor=True):
+        """Agrega `fila` a la lista flat y propaga a los 3 niveles de subtotal.
 
-        sucursal_alias = item['sucursal__alias'] or ''
-        sucursal_direccion = item['sucursal__direccion'] or ''
-
-        fila = {
-            'id': vid,
-            'nombre': item['vendedor__nombre'] or '(sin nombre)',
-            'codigo': item['vendedor__codigo_vendedor'] or '',
-            'empresa_id': eid,
-            'empresa_nombre': item['emisor__nombre'] or '(sin empresa)',
-            'empresa_rut': item['emisor__rut'] or '',
-            'sucursal_id': sid,
-            'sucursal_alias': sucursal_alias,
-            'sucursal_direccion': sucursal_direccion,
-            'ventas_brutas': ventas_brutas_iva,
-            'ventas_brutas_neto': ventas_brutas_neto,
-            'devoluciones': nc['total'],
-            'devoluciones_neto': nc['neto'],
-            'ventas_netas_con_iva': ventas_netas_iva,
-            'ventas_netas_sin_iva': ventas_netas_neto,
-            'documentos': int(item['total_documentos'] or 0),
-            'comision_pct': comision_pct,
-            'comision_monto': comision_monto,
-        }
+        `cuenta_como_vendedor=False` para la fila sintética "Sin vendedor
+        asignado": suma su plata a los subtotales (para eso existe) pero no
+        infla el conteo de vendedores de la liquidación.
+        """
+        eid = fila['empresa_id']
+        sid = fila['sucursal_id']
         vendedores_data.append(fila)
 
         emp = empresas_map.setdefault(eid, {
@@ -582,47 +680,170 @@ def _calcular_comisiones_vendedor(request):
         suc_key = sid if sid is not None else f"_no_suc_{eid}"
         suc = emp['sucursales_map'].setdefault(suc_key, {
             'id': sid,
-            'alias': sucursal_alias,
-            'direccion': sucursal_direccion,
+            'alias': fila['sucursal_alias'],
+            'direccion': fila['sucursal_direccion'],
             'vendedores': [],
             'subtotales': _nuevo_subtotal(),
         })
         suc['vendedores'].append(fila)
 
-        # Subtotales por sucursal.
-        ssub = suc['subtotales']
-        ssub['total_ventas_brutas_con_iva'] += ventas_brutas_iva
-        ssub['total_ventas_brutas_neto'] += ventas_brutas_neto
-        ssub['total_devoluciones_con_iva'] += nc['total']
-        ssub['total_devoluciones_neto'] += nc['neto']
-        ssub['total_ventas_netas_sin_iva'] += ventas_netas_neto
-        ssub['total_ventas_netas_con_iva'] += ventas_netas_iva
-        ssub['total_comisiones'] += comision_monto
-        ssub['total_documentos'] += int(item['total_documentos'] or 0)
-        ssub['cantidad_vendedores'] += 1
+        for sub in (suc['subtotales'], emp['subtotales'], glob):
+            sub['total_ventas_brutas_con_iva'] += fila['ventas_brutas']
+            sub['total_ventas_brutas_neto'] += fila['ventas_brutas_neto']
+            sub['total_devoluciones_con_iva'] += fila['devoluciones']
+            sub['total_devoluciones_neto'] += fila['devoluciones_neto']
+            sub['total_ventas_netas_sin_iva'] += fila['ventas_netas_sin_iva']
+            sub['total_ventas_netas_con_iva'] += fila['ventas_netas_con_iva']
+            sub['total_comisiones'] += fila['comision_monto']
+            sub['total_documentos'] += fila['documentos']
+            if cuenta_como_vendedor:
+                sub['cantidad_vendedores'] += 1
 
-        # Subtotales por empresa = suma natural sobre todas sus sucursales.
-        esub = emp['subtotales']
-        esub['total_ventas_brutas_con_iva'] += ventas_brutas_iva
-        esub['total_ventas_brutas_neto'] += ventas_brutas_neto
-        esub['total_devoluciones_con_iva'] += nc['total']
-        esub['total_devoluciones_neto'] += nc['neto']
-        esub['total_ventas_netas_sin_iva'] += ventas_netas_neto
-        esub['total_ventas_netas_con_iva'] += ventas_netas_iva
-        esub['total_comisiones'] += comision_monto
-        esub['total_documentos'] += int(item['total_documentos'] or 0)
-        esub['cantidad_vendedores'] += 1
-
-        total_comisiones += comision_monto
-        total_ventas_brutas_con_iva += ventas_brutas_iva
-        total_ventas_brutas_sin_iva += ventas_brutas_neto
-        total_ventas_netas_sin_iva += ventas_netas_neto
-        total_ventas_netas_con_iva += ventas_netas_iva
-        total_documentos += int(item['total_documentos'] or 0)
-        total_devoluciones += nc['total']
-        total_devoluciones_neto += nc['neto']
         if sid is not None:
             sucursales_distintas.add(sid)
+
+    for item in ventas_agg:
+        vid = item['vendedor__id']
+        eid = item['emisor__id']
+        sid = item['sucursal__id']
+        if not vid or not eid:
+            continue
+        ventas_brutas_iva = int(item['total_ventas'] or 0)
+        ventas_brutas_neto = int(item['total_neto'] or 0)
+        nc = ncs_agg.get((vid, eid, sid), {'total': 0, 'neto': 0})
+        ncs_consumidas.add((vid, eid, sid))
+        ventas_netas_iva = ventas_brutas_iva - nc['total']
+        ventas_netas_neto = ventas_brutas_neto - nc['neto']
+        try:
+            comision_pct = float(item['vendedor__comision'] or 0)
+        except (TypeError, ValueError):
+            comision_pct = 0.0
+        comision_monto = int(round(ventas_netas_neto * comision_pct / 100.0))
+
+        _registrar_fila({
+            'id': vid,
+            'nombre': item['vendedor__nombre'] or '(sin nombre)',
+            'codigo': item['vendedor__codigo_vendedor'] or '',
+            'empresa_id': eid,
+            'empresa_nombre': item['emisor__nombre'] or '(sin empresa)',
+            'empresa_rut': item['emisor__rut'] or '',
+            'sucursal_id': sid,
+            'sucursal_alias': item['sucursal__alias'] or '',
+            'sucursal_direccion': item['sucursal__direccion'] or '',
+            'ventas_brutas': ventas_brutas_iva,
+            'ventas_brutas_neto': ventas_brutas_neto,
+            'devoluciones': nc['total'],
+            'devoluciones_neto': nc['neto'],
+            'ventas_netas_con_iva': ventas_netas_iva,
+            'ventas_netas_sin_iva': ventas_netas_neto,
+            'documentos': int(item['total_documentos'] or 0),
+            'comision_pct': comision_pct,
+            'comision_monto': comision_monto,
+            'sin_vendedor': False,
+        })
+
+    # --- NC que no encontraron una fila de ventas donde restarse ---
+    # Caso típico: el vendedor vendió en un período anterior y la devolución
+    # cae en éste. Antes desaparecían y la comisión salía sin descontar.
+    ncs_huerfanas = {
+        k: v for k, v in ncs_agg.items() if k not in ncs_consumidas
+    }
+    if ncs_huerfanas:
+        vendedores_meta = {
+            v.id: v for v in Vendedor.objects.filter(
+                id__in={k[0] for k in ncs_huerfanas}
+            ).only('id', 'nombre', 'codigo_vendedor', 'comision')
+        }
+        empresas_meta = {
+            e.id: e for e in Empresa.objects.filter(
+                id__in={k[1] for k in ncs_huerfanas}
+            ).only('id', 'nombre', 'rut')
+        }
+        sucursales_meta = {
+            s.id: s for s in Sucursal.objects.filter(
+                id__in={k[2] for k in ncs_huerfanas if k[2] is not None}
+            ).only('id', 'alias', 'direccion')
+        }
+        for (vid, eid, sid), nc in ncs_huerfanas.items():
+            vend = vendedores_meta.get(vid)
+            emp_obj = empresas_meta.get(eid)
+            suc_obj = sucursales_meta.get(sid)
+            try:
+                comision_pct = float(getattr(vend, 'comision', 0) or 0)
+            except (TypeError, ValueError):
+                comision_pct = 0.0
+            _registrar_fila({
+                'id': vid,
+                'nombre': getattr(vend, 'nombre', None) or '(sin nombre)',
+                'codigo': getattr(vend, 'codigo_vendedor', None) or '',
+                'empresa_id': eid,
+                'empresa_nombre': getattr(emp_obj, 'nombre', None) or '(sin empresa)',
+                'empresa_rut': getattr(emp_obj, 'rut', None) or '',
+                'sucursal_id': sid,
+                'sucursal_alias': getattr(suc_obj, 'alias', None) or '',
+                'sucursal_direccion': getattr(suc_obj, 'direccion', None) or '',
+                'ventas_brutas': 0,
+                'ventas_brutas_neto': 0,
+                'devoluciones': nc['total'],
+                'devoluciones_neto': nc['neto'],
+                'ventas_netas_con_iva': -nc['total'],
+                'ventas_netas_sin_iva': -nc['neto'],
+                'documentos': 0,
+                'comision_pct': comision_pct,
+                'comision_monto': int(round(-nc['neto'] * comision_pct / 100.0)),
+                'sin_vendedor': False,
+                'solo_devoluciones': True,
+            })
+
+    # --- NC realmente huérfanas (sin vendedor propio ni en el documento
+    # afectado): fila explícita que SÍ resta de los subtotales, pero sin
+    # descontarle comisión a ninguna persona concreta. ---
+    if ncs_sin_vendedor:
+        empresas_meta_sv = {
+            e.id: e for e in Empresa.objects.filter(
+                id__in={k[0] for k in ncs_sin_vendedor}
+            ).only('id', 'nombre', 'rut')
+        }
+        sucursales_meta_sv = {
+            s.id: s for s in Sucursal.objects.filter(
+                id__in={k[1] for k in ncs_sin_vendedor if k[1] is not None}
+            ).only('id', 'alias', 'direccion')
+        }
+        for (eid, sid), nc in ncs_sin_vendedor.items():
+            emp_obj = empresas_meta_sv.get(eid)
+            suc_obj = sucursales_meta_sv.get(sid)
+            _registrar_fila({
+                'id': None,
+                'nombre': 'Sin vendedor asignado',
+                'codigo': '',
+                'empresa_id': eid,
+                'empresa_nombre': getattr(emp_obj, 'nombre', None) or '(sin empresa)',
+                'empresa_rut': getattr(emp_obj, 'rut', None) or '',
+                'sucursal_id': sid,
+                'sucursal_alias': getattr(suc_obj, 'alias', None) or '',
+                'sucursal_direccion': getattr(suc_obj, 'direccion', None) or '',
+                'ventas_brutas': 0,
+                'ventas_brutas_neto': 0,
+                'devoluciones': nc['total'],
+                'devoluciones_neto': nc['neto'],
+                'ventas_netas_con_iva': -nc['total'],
+                'ventas_netas_sin_iva': -nc['neto'],
+                'documentos': 0,
+                'comision_pct': 0.0,
+                # 0 a propósito: no se le descuenta a nadie en particular.
+                'comision_monto': 0,
+                'sin_vendedor': True,
+                'solo_devoluciones': True,
+            }, cuenta_como_vendedor=False)
+
+    total_comisiones = glob['total_comisiones']
+    total_ventas_brutas_con_iva = glob['total_ventas_brutas_con_iva']
+    total_ventas_brutas_sin_iva = glob['total_ventas_brutas_neto']
+    total_ventas_netas_sin_iva = glob['total_ventas_netas_sin_iva']
+    total_ventas_netas_con_iva = glob['total_ventas_netas_con_iva']
+    total_documentos = glob['total_documentos']
+    total_devoluciones = glob['total_devoluciones_con_iva']
+    total_devoluciones_neto = glob['total_devoluciones_neto']
 
     # Ordenamientos: empresas alfabéticamente; dentro de cada empresa las
     # sucursales por alias alfabético; dentro de cada sucursal los
@@ -669,9 +890,19 @@ def _calcular_comisiones_vendedor(request):
             'total_documentos': total_documentos,
             'total_devoluciones': total_devoluciones,
             'total_devoluciones_neto': total_devoluciones_neto,
-            'cantidad_vendedores': len(vendedores_data),
+            # Excluye las filas sintéticas "Sin vendedor asignado".
+            'cantidad_vendedores': glob['cantidad_vendedores'],
             'cantidad_empresas': len(empresas_data),
             'cantidad_sucursales': len(sucursales_distintas),
+            # Devoluciones que no se pudieron imputar a ninguna persona:
+            # restan del neto pero NO descuentan comisión de nadie. Si esto
+            # es > 0, la liquidación necesita revisión manual.
+            'devoluciones_sin_vendedor': sum(
+                v['total'] for v in ncs_sin_vendedor.values()
+            ),
+            'cantidad_ncs_sin_vendedor': sum(
+                v['cantidad'] for v in ncs_sin_vendedor.values()
+            ),
         },
     }
 
@@ -1893,10 +2124,17 @@ def obtener_comparativa_mensual(request):
             sucursales_dict[sucursal_nombre][mes_str] = \
                 sucursales_dict[sucursal_nombre].get(mes_str, 0) + int(item['total_ventas'] or 0)
 
-        # Restar Notas de Crédito (devoluciones)
-        nc_mensuales = queryset_dtes.filter(
-            tipo_documento='NOTA DE CREDITO'
-        ).annotate(
+        # Restar Notas de Crédito (devoluciones).
+        # `queryset_dtes` ya filtró `tipo_transaccion='VENTA_PUBLICO'`, y las
+        # NC nunca llevan ese tipo: pedirlas ahí devolvía ~0 y la comparativa
+        # mostraba las sucursales sin ninguna devolución descontada. Se
+        # rearman desde el helper compartido.
+        nc_mensuales = _queryset_ncs_venta(
+            fecha_inicio.date(), fecha_fin.date(),
+            user=request.user, request=request,
+            estados=('EMITIDO', 'ACEPTADO'),
+            excluir_internas=True,
+        ).select_related('sucursal').annotate(
             mes=TruncMonth('fecha_emision')
         ).values(
             'mes',
@@ -1979,6 +2217,12 @@ def obtener_documentos_emitidos(request):
         # Consultar DTEs (Boletas y Facturas Electrónicas)
         # NOTA: Incluimos facturas entre sucursales (receptor=emisor) para coincidir
         # con el comportamiento de /app/ventas/documentos/.
+        #
+        # Se excluyen los estados que NO representan un documento vigente
+        # (RECHAZADO por el SII, CANCELADO, ANULADO) y los `descartado=True`
+        # (borrado lógico desde gestión de documentos). Antes entraban todos:
+        # un documento rechazado o eliminado seguía sumando a los totales por
+        # método de pago y al KPI de ventas del reporte.
         queryset = Dte.objects.select_related(
             'vendedor',
             'receptor',
@@ -1988,8 +2232,22 @@ def obtener_documentos_emitidos(request):
         ).filter(
             tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
             fecha_emision__gte=fecha_desde,
-            fecha_emision__lte=fecha_hasta
+            fecha_emision__lte=fecha_hasta,
+            descartado=False,
+        ).exclude(
+            estado_dte__in=['ANULADO', 'CANCELADO', 'RECHAZADO']
         )
+
+        # Notas de crédito reales del período (helper compartido). El filtro
+        # de arriba jamás las traía: una NC no lleva tipo_transaccion 'VENTA'.
+        # Se filtran en paralelo con los mismos criterios de sucursal/tipo/
+        # método de pago y se unen a la lista antes de paginar.
+        queryset_ncs = _queryset_ncs_venta(
+            fecha_desde, fecha_hasta,
+            estados=('EMITIDO', 'ACEPTADO'),
+        ).select_related(
+            'vendedor', 'receptor', 'sucursal'
+        ).prefetch_related('dte_asociado')
 
         # --- Filtro de sucursal con semántica explícita ---
         # Reglas:
@@ -2006,55 +2264,75 @@ def obtener_documentos_emitidos(request):
             obtener_sucursales_usuario(request.user).values_list('id', flat=True)
         )
 
+        # La decisión de sucursal se resuelve UNA vez y se aplica igual al
+        # queryset de ventas y al de notas de crédito (si divergieran, las NC
+        # de otra sucursal restarían de un total que no las contiene).
         if sucursal_param == 'all':
             if usuario_puede_ver_todas_sucursales(request.user):
-                queryset = queryset.filter(sucursal_id__in=sucursal_ids_permitidas) \
-                    if sucursal_ids_permitidas else queryset.none()
                 filtro_sucursal_desc = 'Todas las sucursales accesibles'
             else:
                 # Usuario no puede ver todas → se restringe a las asignadas
-                queryset = queryset.filter(sucursal_id__in=sucursal_ids_permitidas) \
-                    if sucursal_ids_permitidas else queryset.none()
                 filtro_sucursal_desc = 'Sucursales asignadas al usuario'
+
+            def _aplicar_sucursal(qs):
+                return qs.filter(sucursal_id__in=sucursal_ids_permitidas) \
+                    if sucursal_ids_permitidas else qs.none()
         elif sucursal_param:
             # Validar permiso sobre esa sucursal específica
             if puede_ver_sucursal(request.user, sucursal_param):
-                queryset = queryset.filter(sucursal_id=sucursal_param)
                 filtro_sucursal_desc = f'Sucursal específica (id={sucursal_param})'
-            else:
+
+                def _aplicar_sucursal(qs):
+                    return qs.filter(sucursal_id=sucursal_param)
+            elif sucursal_sesion_id:
                 # Fallback: sucursal de sesión si la tiene
-                if sucursal_sesion_id:
-                    queryset = queryset.filter(sucursal_id=sucursal_sesion_id)
-                    filtro_sucursal_desc = (
-                        f'Sin permiso para id={sucursal_param}, se usó sucursal de sesión'
-                    )
-                else:
-                    queryset = queryset.none()
-                    filtro_sucursal_desc = 'Sin permiso y sin sucursal de sesión'
+                filtro_sucursal_desc = (
+                    f'Sin permiso para id={sucursal_param}, se usó sucursal de sesión'
+                )
+
+                def _aplicar_sucursal(qs):
+                    return qs.filter(sucursal_id=sucursal_sesion_id)
+            else:
+                filtro_sucursal_desc = 'Sin permiso y sin sucursal de sesión'
+
+                def _aplicar_sucursal(qs):
+                    return qs.none()
         else:
             # Default: sucursal activa de la sesión
             if sucursal_sesion_id:
-                queryset = queryset.filter(sucursal_id=sucursal_sesion_id)
                 filtro_sucursal_desc = f'Sucursal activa de sesión (id={sucursal_sesion_id})'
+
+                def _aplicar_sucursal(qs):
+                    return qs.filter(sucursal_id=sucursal_sesion_id)
             else:
                 # Si no hay sesión, restringir a las sucursales del usuario
-                queryset = queryset.filter(sucursal_id__in=sucursal_ids_permitidas) \
-                    if sucursal_ids_permitidas else queryset.none()
                 filtro_sucursal_desc = 'Sin sucursal de sesión, se usaron las accesibles'
 
+                def _aplicar_sucursal(qs):
+                    return qs.filter(sucursal_id__in=sucursal_ids_permitidas) \
+                        if sucursal_ids_permitidas else qs.none()
+
+        queryset = _aplicar_sucursal(queryset)
+        queryset_ncs = _aplicar_sucursal(queryset_ncs)
+
         # Aplicar filtros
+        MAPA_TIPO_DOCUMENTO = {
+            'BOLETA_ELECTRONICA': 'BOLETA ELECTRONICA',
+            'BOLETA_PAPEL': 'BOLETA PAPEL',
+            'FACTURA_ELECTRONICA': 'FACTURA ELECTRONICA',
+            'FACTURA_EXENTA': 'FACTURA EXENTA',
+            'BOLETA': 'BOLETA',
+        }
         if tipo_documento:
-            if tipo_documento == 'BOLETA_ELECTRONICA':
-                queryset = queryset.filter(tipo_documento='BOLETA ELECTRONICA')
-            elif tipo_documento == 'BOLETA_PAPEL':
-                queryset = queryset.filter(tipo_documento='BOLETA PAPEL')
-            elif tipo_documento == 'FACTURA_ELECTRONICA':
-                queryset = queryset.filter(tipo_documento='FACTURA ELECTRONICA')
-            elif tipo_documento == 'FACTURA_EXENTA':
-                queryset = queryset.filter(tipo_documento='FACTURA EXENTA')
-            elif tipo_documento == 'BOLETA':
-                queryset = queryset.filter(tipo_documento='BOLETA')
-        
+            tipo_doc_db = MAPA_TIPO_DOCUMENTO.get(tipo_documento)
+            if tipo_doc_db:
+                queryset = queryset.filter(tipo_documento=tipo_doc_db)
+                # Al pedir un tipo específico de venta, las NC no corresponden
+                # (el usuario está mirando un subconjunto, no un neto).
+                queryset_ncs = queryset_ncs.none()
+            elif tipo_documento in ('NOTA_DE_CREDITO', 'NOTA DE CREDITO'):
+                queryset = queryset.none()
+
         # ✅ FILTRO POR MÉTODO DE PAGO - Aplicado ANTES de limitar registros
         if metodo_pago_filtro:
             from django.db.models import Q
@@ -2063,31 +2341,62 @@ def obtener_documentos_emitidos(request):
             queryset = queryset.filter(
                 Q(dte_asociado__metodo_pago__icontains=metodo_pago_filtro)
             ).distinct()
-            
-            # Si el filtro es por método de pago específico del sistema de tickets, 
+            queryset_ncs = queryset_ncs.filter(
+                Q(dte_asociado__metodo_pago__icontains=metodo_pago_filtro)
+            ).distinct()
+
+            # Si el filtro es por método de pago específico del sistema de tickets,
             # también necesitamos incluir DTEs sin detalles de pago pero con ticket relacionado
             # (Esta es una optimización adicional que puede implementarse después)
-        
-        # Ordernar por fecha descendente
-        queryset = queryset.order_by('-fecha_emision', '-numero_documento')
 
         # Una sola materialización para la lista y el resumen, con los pagos
         # prefetched (antes: 2 recorridos del queryset + 2-4 queries por DTE).
-        queryset = queryset.select_related('receptor', 'sucursal').prefetch_related('dte_asociado')
-        dtes_todos = list(queryset)
+        # Ventas y NC se ordenan juntas para que la paginación no separe las
+        # devoluciones al final del listado.
+        dtes_todos = sorted(
+            list(queryset) + list(queryset_ncs),
+            key=lambda d: (d.fecha_emision, int(d.numero_documento or 0)),
+            reverse=True,
+        )
 
         # Fallback masivo de tickets para los DTEs sin detalle de pago
         # (reemplaza la búsqueda de Ticket/TicketDetallePago fila a fila).
+        #
+        # El vínculo Ticket↔Dte es `Ticket.folio_dte == Dte.numero_documento`
+        # (mismo criterio que views_modulo_documentos y la cuadratura). Antes
+        # se cruzaba contra `Ticket.correlativo`, que es la secuencia interna
+        # del ticket y NO tiene relación con el folio del CAF: el "match"
+        # devolvía el ticket equivocado o ninguno, y el método de pago caía al
+        # default 'Efectivo'. Las NC se excluyen del cruce a propósito: su
+        # folio pertenece a otra serie y podría colisionar con el de una boleta.
         claves_sin_pago = {
-            (str(d.numero_documento), d.sucursal_id)
-            for d in dtes_todos if not d.dte_asociado.all()
+            (int(d.numero_documento), d.sucursal_id)
+            for d in dtes_todos
+            if not d.dte_asociado.all()
+            and d.numero_documento is not None
+            and (d.tipo_documento or '').upper() != 'NOTA DE CREDITO'
         }
         tickets_map = {}
         pagos_ticket_map = {}
         if claves_sin_pago:
-            correlativos = {c for c, _ in claves_sin_pago}
-            for t in Ticket.objects.filter(correlativo__in=correlativos):
-                tickets_map.setdefault((str(t.correlativo), t.sucursal_id), t)
+            folios = {f for f, _ in claves_sin_pago}
+            sucursales_cruce = {s for _, s in claves_sin_pago if s is not None}
+            # Acotado por sucursal y por fecha (antes: `correlativo__in=...` a
+            # secas, que barría la tabla Ticket completa de todas las
+            # sucursales). La banda es holgada a propósito: `Ticket.fecha` es
+            # `auto_now=True`, o sea se mueve con cada save posterior, así que
+            # un margen justo dejaría fuera tickets reeditados.
+            qs_tickets_cruce = Ticket.objects.filter(
+                folio_dte__in=folios,
+                fecha__gte=fecha_desde - timedelta(days=365),
+                fecha__lte=fecha_hasta + timedelta(days=365),
+            )
+            if sucursales_cruce:
+                qs_tickets_cruce = qs_tickets_cruce.filter(
+                    sucursal_id__in=sucursales_cruce
+                )
+            for t in qs_tickets_cruce:
+                tickets_map.setdefault((t.folio_dte, t.sucursal_id), t)
             ids_tickets = [t.id for t in tickets_map.values()]
             if ids_tickets:
                 for pt in TicketDetallePago.objects.filter(
@@ -2144,10 +2453,10 @@ def obtener_documentos_emitidos(request):
                 voucher = ', '.join(vouchers) if vouchers else ''
             else:
                 # Sin detalles de pago: fallback al ticket relacionado desde el
-                # mapa precalculado (sin query por fila)
+                # mapa precalculado (sin query por fila). Cruce por folio_dte.
                 ticket_relacionado = tickets_map.get(
-                    (str(dte.numero_documento), dte.sucursal_id)
-                )
+                    (int(dte.numero_documento), dte.sucursal_id)
+                ) if dte.numero_documento is not None else None
 
                 if ticket_relacionado:
                     metodo_pago_display = dict(METODO_PAGO_TICKET_CHOICES).get(
@@ -2178,18 +2487,21 @@ def obtener_documentos_emitidos(request):
                 [f"{metodo} ${int(monto):,}".replace(',', '.') for metodo, monto in pagos_detalle.items()]
             ) if pagos_detalle else 'No especificado'
 
-            # Monto efectivamente pagado = suma de pagos registrados
+            # Monto efectivamente pagado = suma de pagos registrados.
+            # `monto_con_iva` YA viene neto del descuento (ver el cálculo de
+            # `total_dte` en views_modulo_ventas.generar_dte_desde_ticket), así
+            # que el fallback NO debe volver a restarlo.
             pagado = sum(pagos_detalle.values())
             if not pagado:
-                # Fallback: monto_con_iva - descuento si no hay pagos
-                pagado = int(dte.monto_con_iva) - (int(dte.descuento) if dte.descuento else 0)
+                pagado = int(dte.monto_con_iva or 0)
 
-            # Descuento real: preferir dte.descuento; si es 0 pero pagado < total, inferirlo
+            # Descuento real = el que quedó grabado en el DTE, punto.
+            # Antes, si `dte.descuento` era 0 y los pagos sumaban menos que el
+            # total, la diferencia se declaraba "descuento". Pero esa
+            # diferencia es un SALDO NO PAGADO: una venta a crédito, un
+            # convenio o un pago parcial. Se expone aparte con su nombre real.
             descuento_dte = int(dte.descuento) if dte.descuento else 0
-            if descuento_dte == 0 and pagado > 0:
-                calculado = int(dte.monto_con_iva) - pagado
-                if calculado > 0:
-                    descuento_dte = calculado
+            saldo_no_pagado_doc = max(int(dte.monto_con_iva or 0) - pagado, 0)
 
             documentos_data.append({
                 'id': dte.id,
@@ -2203,7 +2515,9 @@ def obtener_documentos_emitidos(request):
                 'cliente_info': cliente_info,
                 'total': int(dte.monto_con_iva),
                 'descuento': descuento_dte,
+                'saldo_no_pagado': saldo_no_pagado_doc,
                 'pagado': pagado,
+                'es_nota_credito': (dte.tipo_documento or '').upper() == 'NOTA DE CREDITO',
                 'vendedor': dte.vendedor.nombre if dte.vendedor else 'N/A',
                 'vendedor_codigo': dte.vendedor.codigo_vendedor if dte.vendedor else '',
                 'fecha': dte.fecha_emision.strftime('%d/%m/%Y'),
@@ -2224,8 +2538,17 @@ def obtener_documentos_emitidos(request):
             'credito_trabajador': 0,
             'otros': 0,
             'notas_credito': 0,   # total de NC (se resta del global)
-            'ventas_brutas': 0,   # suma bruta sin NC ni descuentos
-            'total_global': 0     # ventas_brutas - notas_credito - descuentos
+            # `monto_con_iva` YA viene neto del descuento de línea, así que
+            # `ventas_brutas` es en realidad "vendido después de descuento".
+            'ventas_brutas': 0,
+            # Informativo: descuentos ya aplicados dentro de ventas_brutas.
+            # NO se vuelven a restar (ver total_global).
+            'descuentos': 0,
+            # Diferencia entre lo facturado y lo efectivamente pagado
+            # (crédito, convenio, pago parcial). Antes esto se reportaba
+            # como "descuento" y se restaba del total.
+            'saldo_no_pagado': 0,
+            'total_global': 0     # ventas_brutas - notas_credito
         }
         
         # --- Helper: clasifica un método de pago en la categoría del resumen ---
@@ -2264,6 +2587,10 @@ def obtener_documentos_emitidos(request):
         diag_cant_dtes = 0            # DTEs "normales" (no NC) que aportan a ventas brutas
         diag_cant_nc = 0              # Notas de crédito
         diag_sin_pagos = 0            # DTEs sin registros en dte_asociado
+        # Equivalente al 'total_ventas' de /app/ventas/documentos/: suma de
+        # pagos cuando existen, monto_con_iva cuando no (misma regla que
+        # `listar_documentos_ventas`).
+        total_equivalente_ventas_doc = 0
 
         # Calcular totales por método de pago desde Dte_Detalle_Pago
         # (misma lista materializada; sin segunda evaluación del queryset)
@@ -2312,27 +2639,24 @@ def obtener_documentos_emitidos(request):
             else:
                 diag_sin_pagos += 1
 
-            # --- Cálculo de descuento unificado con /app/ventas/documentos/ ---
-            # Prioridad:
-            #   1) dte.descuento si existe y es coherente
-            #   2) diferencia entre monto_con_iva y pagos (si hay pagos y son menores)
-            # Esto evita sobreestimar descuentos cuando los pagos ya reflejan el neto.
-            if descuento_db > 0:
-                descuento = descuento_db
-            elif pagado_sum > 0 and pagado_sum < total:
-                descuento = total - pagado_sum
-            else:
-                descuento = 0
+            # Descuento = el grabado en el DTE. Es SOLO informativo: ya está
+            # descontado dentro de `monto_con_iva`, así que no se vuelve a
+            # restar del total. La diferencia entre lo facturado y lo pagado
+            # NO es descuento (es crédito / convenio / pago parcial) y va a
+            # su propio acumulador.
+            resumen['descuentos'] += descuento_db
+            if pagado_sum > 0 and pagado_sum < total:
+                resumen['saldo_no_pagado'] += total - pagado_sum
 
-            resumen['descuentos'] += descuento
             resumen['ventas_brutas'] += total
+            total_equivalente_ventas_doc += pagado_sum if pagado_sum > 0 else total
 
             # Si no se procesó método de pago (no había registros en dte_asociado),
             # buscar en el ticket relacionado como fallback (mapa precalculado).
             if not detalles_pago:
                 ticket_relacionado = tickets_map.get(
-                    (str(dte.numero_documento), dte.sucursal_id)
-                )
+                    (int(dte.numero_documento), dte.sucursal_id)
+                ) if dte.numero_documento is not None else None
 
                 if ticket_relacionado:
                     metodo_ticket = ticket_relacionado.metodo_pago
@@ -2355,8 +2679,12 @@ def obtener_documentos_emitidos(request):
                     # Si no hay ticket ni detalle de pago, asumir efectivo
                     resumen['efectivo'] += total
 
-        # Total neto = ventas brutas - notas de crédito - descuentos
-        resumen['total_global'] = resumen['ventas_brutas'] - resumen['notas_credito'] - resumen['descuentos']
+        # Total neto = ventas brutas - notas de crédito.
+        # Los descuentos NO se restan acá: `monto_con_iva` se graba ya neto
+        # del descuento de línea (`total_dte = suma_items - descuentos` en
+        # generar_dte_desde_ticket), así que restarlos de nuevo bajaba el
+        # total del reporte por el monto completo de los descuentos del período.
+        resumen['total_global'] = resumen['ventas_brutas'] - resumen['notas_credito']
 
         # --- Bloque de diagnóstico (para cuadrar con /app/ventas/documentos/) ---
         # Permite identificar rápidamente discrepancias: universo de sucursales,
@@ -2374,10 +2702,6 @@ def obtener_documentos_emitidos(request):
                 reverse=True,
             )
         ]
-        # Equivalente al 'total_ventas' que muestra /app/ventas/documentos/:
-        # ventas brutas - descuentos (sin restar NC, tal como lo hace ventas).
-        total_equivalente_ventas_doc = resumen['ventas_brutas'] - resumen['descuentos']
-
         diagnostico = {
             'filtro_sucursal_aplicado': filtro_sucursal_desc,
             'sucursal_param_recibido': sucursal_param or '(vacío)',
@@ -2415,6 +2739,7 @@ def obtener_documentos_emitidos(request):
         })
 
     except Exception as e:
+        logger.exception("Error al obtener documentos emitidos")
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener documentos: {str(e)}'
@@ -2449,6 +2774,8 @@ def exportar_documentos_emitidos_excel(request):
         # Consultar DTEs (Boletas y Facturas Electrónicas)
         # NOTA: Sin exclusión de facturas internas (receptor=emisor) para que el
         # Excel coincida con /app/ventas/documentos/ y con la vista en pantalla.
+        # Mismos filtros de vigencia que `obtener_documentos_emitidos`: fuera
+        # los rechazados/cancelados/anulados y los descartados.
         queryset = Dte.objects.select_related(
             'vendedor',
             'receptor',
@@ -2458,8 +2785,21 @@ def exportar_documentos_emitidos_excel(request):
         ).filter(
             tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
             fecha_emision__gte=fecha_desde,
-            fecha_emision__lte=fecha_hasta
+            fecha_emision__lte=fecha_hasta,
+            descartado=False,
+        ).exclude(
+            estado_dte__in=['ANULADO', 'CANCELADO', 'RECHAZADO']
         )
+
+        # Las NC nunca entraban al Excel (no llevan tipo_transaccion 'VENTA'),
+        # así que el archivo listaba solo ventas y quien sumaba la columna
+        # "Total" obtenía el bruto sin devoluciones.
+        queryset_ncs = _queryset_ncs_venta(
+            fecha_desde, fecha_hasta,
+            estados=('EMITIDO', 'ACEPTADO'),
+        ).select_related(
+            'vendedor', 'receptor', 'sucursal'
+        ).prefetch_related('dte_asociado')
 
         # Filtro de sucursal con la misma semántica que obtener_documentos_emitidos:
         #   'all' = todas, vacío = sucursal de sesión, id = específica.
@@ -2472,42 +2812,93 @@ def exportar_documentos_emitidos_excel(request):
         )
 
         if sucursal_param == 'all':
-            queryset = queryset.filter(sucursal_id__in=sucursal_ids_permitidas) \
-                if sucursal_ids_permitidas else queryset.none()
+            def _aplicar_sucursal(qs):
+                return qs.filter(sucursal_id__in=sucursal_ids_permitidas) \
+                    if sucursal_ids_permitidas else qs.none()
         elif sucursal_param:
             if puede_ver_sucursal(request.user, sucursal_param):
-                queryset = queryset.filter(sucursal_id=sucursal_param)
+                def _aplicar_sucursal(qs):
+                    return qs.filter(sucursal_id=sucursal_param)
             elif sucursal_sesion_id:
-                queryset = queryset.filter(sucursal_id=sucursal_sesion_id)
+                def _aplicar_sucursal(qs):
+                    return qs.filter(sucursal_id=sucursal_sesion_id)
             else:
-                queryset = queryset.none()
+                def _aplicar_sucursal(qs):
+                    return qs.none()
         else:
             if sucursal_sesion_id:
-                queryset = queryset.filter(sucursal_id=sucursal_sesion_id)
+                def _aplicar_sucursal(qs):
+                    return qs.filter(sucursal_id=sucursal_sesion_id)
             else:
-                queryset = queryset.filter(sucursal_id__in=sucursal_ids_permitidas) \
-                    if sucursal_ids_permitidas else queryset.none()
+                def _aplicar_sucursal(qs):
+                    return qs.filter(sucursal_id__in=sucursal_ids_permitidas) \
+                        if sucursal_ids_permitidas else qs.none()
+
+        queryset = _aplicar_sucursal(queryset)
+        queryset_ncs = _aplicar_sucursal(queryset_ncs)
 
         # Aplicar filtros
+        MAPA_TIPO_DOCUMENTO = {
+            'BOLETA_ELECTRONICA': 'BOLETA ELECTRONICA',
+            'BOLETA_PAPEL': 'BOLETA PAPEL',
+            'FACTURA_ELECTRONICA': 'FACTURA ELECTRONICA',
+            'FACTURA_EXENTA': 'FACTURA EXENTA',
+            'BOLETA': 'BOLETA',
+        }
         if tipo_documento:
-            if tipo_documento == 'BOLETA_ELECTRONICA':
-                queryset = queryset.filter(tipo_documento='BOLETA ELECTRONICA')
-            elif tipo_documento == 'BOLETA_PAPEL':
-                queryset = queryset.filter(tipo_documento='BOLETA PAPEL')
-            elif tipo_documento == 'FACTURA_ELECTRONICA':
-                queryset = queryset.filter(tipo_documento='FACTURA ELECTRONICA')
-            elif tipo_documento == 'FACTURA_EXENTA':
-                queryset = queryset.filter(tipo_documento='FACTURA EXENTA')
-            elif tipo_documento == 'BOLETA':
-                queryset = queryset.filter(tipo_documento='BOLETA')
+            tipo_doc_db = MAPA_TIPO_DOCUMENTO.get(tipo_documento)
+            if tipo_doc_db:
+                queryset = queryset.filter(tipo_documento=tipo_doc_db)
+                queryset_ncs = queryset_ncs.none()
+            elif tipo_documento in ('NOTA_DE_CREDITO', 'NOTA DE CREDITO'):
+                queryset = queryset.none()
 
         if metodo_pago_filtro:
             from django.db.models import Q
             queryset = queryset.filter(
                 Q(dte_asociado__metodo_pago__icontains=metodo_pago_filtro)
             ).distinct()
+            queryset_ncs = queryset_ncs.filter(
+                Q(dte_asociado__metodo_pago__icontains=metodo_pago_filtro)
+            ).distinct()
 
-        queryset = queryset.order_by('-fecha_emision', '-numero_documento')
+        documentos_excel = sorted(
+            list(queryset) + list(queryset_ncs),
+            key=lambda d: (d.fecha_emision, int(d.numero_documento or 0)),
+            reverse=True,
+        )
+
+        # Cruce masivo Ticket↔Dte por `folio_dte` (la clave real; antes se
+        # consultaba `correlativo=dte.numero_documento` fila a fila, que además
+        # de ser N+1 comparaba dos secuencias distintas y nunca acertaba).
+        claves_cruce = {
+            (int(d.numero_documento), d.sucursal_id)
+            for d in documentos_excel
+            if not d.dte_asociado.all()
+            and d.numero_documento is not None
+            and (d.tipo_documento or '').upper() != 'NOTA DE CREDITO'
+        }
+        tickets_map = {}
+        primer_pago_ticket = {}
+        if claves_cruce:
+            folios = {f for f, _ in claves_cruce}
+            sucursales_cruce = {s for _, s in claves_cruce if s is not None}
+            qs_tickets_cruce = Ticket.objects.filter(
+                folio_dte__in=folios,
+                fecha__gte=fecha_desde - timedelta(days=365),
+                fecha__lte=fecha_hasta + timedelta(days=365),
+            )
+            if sucursales_cruce:
+                qs_tickets_cruce = qs_tickets_cruce.filter(
+                    sucursal_id__in=sucursales_cruce
+                )
+            for t in qs_tickets_cruce:
+                tickets_map.setdefault((t.folio_dte, t.sucursal_id), t)
+            ids_tickets = [t.id for t in tickets_map.values()]
+            if ids_tickets:
+                for pt in TicketDetallePago.objects.filter(
+                        ticket_id__in=ids_tickets).order_by('id'):
+                    primer_pago_ticket.setdefault(pt.ticket_id, pt)
 
         # Crear workbook
         wb = openpyxl.Workbook()
@@ -2529,7 +2920,9 @@ def exportar_documentos_emitidos_excel(request):
             cell.fill = header_fill
             cell.alignment = header_alignment
 
-        for dte in queryset:
+        for dte in documentos_excel:
+            es_nc = (dte.tipo_documento or '').upper() == 'NOTA DE CREDITO'
+
             # Cliente
             cliente_info = 'N.N'
             if dte.receptor:
@@ -2542,8 +2935,8 @@ def exportar_documentos_emitidos_excel(request):
             voucher = ''
             tipo_tarjeta = ''
 
-            detalles_pago = dte.dte_asociado.all()
-            if detalles_pago.exists():
+            detalles_pago = list(dte.dte_asociado.all())
+            if detalles_pago:
                 metodos = []
                 vouchers = []
                 for detalle in detalles_pago:
@@ -2556,21 +2949,20 @@ def exportar_documentos_emitidos_excel(request):
                 metodo_pago_display = ', '.join(metodos) if metodos else 'No especificado'
                 voucher = ', '.join(vouchers) if vouchers else ''
             else:
-                ticket_relacionado = Ticket.objects.filter(
-                    correlativo=dte.numero_documento,
-                    sucursal=dte.sucursal
-                ).first()
+                ticket_relacionado = tickets_map.get(
+                    (int(dte.numero_documento), dte.sucursal_id)
+                ) if (dte.numero_documento is not None and not es_nc) else None
 
                 if ticket_relacionado:
                     metodo_pago_display = dict(METODO_PAGO_TICKET_CHOICES).get(
                         ticket_relacionado.metodo_pago,
                         ticket_relacionado.metodo_pago
                     )
-                    pago_ticket = TicketDetallePago.objects.filter(ticket=ticket_relacionado).first()
+                    pago_ticket = primer_pago_ticket.get(ticket_relacionado.id)
                     if pago_ticket:
                         voucher = pago_ticket.voucher or ''
                         tipo_tarjeta = pago_ticket.tipo_tarjeta or ''
-                else:
+                elif not es_nc:
                     metodo_pago_display = 'Efectivo'
 
             vendedor_nombre = dte.vendedor.nombre if dte.vendedor else 'N/A'
@@ -2579,9 +2971,15 @@ def exportar_documentos_emitidos_excel(request):
                 f'{vendedor_nombre} ({vendedor_codigo})' if vendedor_codigo else vendedor_nombre
             )
 
-            total = int(dte.monto_con_iva)
+            # `monto_con_iva` ya viene neto del descuento (ver
+            # generar_dte_desde_ticket), así que "Pagado" NO puede volver a
+            # restarlo: el Excel mostraba cada venta con descuento por debajo
+            # de lo realmente cobrado. Las NC van con signo negativo para que
+            # la suma de la columna "Total" dé el neto del período.
+            signo = -1 if es_nc else 1
+            total = signo * int(dte.monto_con_iva or 0)
             descuento = int(dte.descuento) if dte.descuento else 0
-            pagado = total - descuento
+            pagado = total
 
             ws.append([
                 dte.id,
@@ -8675,8 +9073,16 @@ def _sumar_ventas_comparativo(fi, ff, user, request):
         v['ventas_brutas'] += int(r['total'] or 0)
         v['documentos'] += int(r['docs'] or 0)
 
-    # NC (devoluciones) por sucursal
-    qs_nc = qs_dtes_base.filter(tipo_documento='NOTA DE CREDITO')
+    # NC (devoluciones) por sucursal.
+    # `qs_dtes_base` está restringido a tipo_transaccion VENTA/VENTA_PUBLICO y
+    # ninguna NC lleva esos tipos, así que filtrarla por tipo_documento sobre
+    # esa base devolvía casi cero: el KPI "Tasa Devolución" salía ~0% en todos
+    # los períodos y `total_ventas_netas` era igual a las brutas.
+    qs_nc = _queryset_ncs_venta(
+        fi, ff, user=user, request=request,
+        estados=('EMITIDO', 'ACEPTADO'),
+        excluir_internas=True,
+    )
     for r in qs_nc.values('sucursal_id').annotate(
         total=Sum('monto_con_iva'), cant=Count('id')
     ):
@@ -8688,9 +9094,14 @@ def _sumar_ventas_comparativo(fi, ff, user, request):
         if sid and sid in resultado['sucursales']:
             resultado['sucursales'][sid]['devoluciones'] += total_nc
 
-    # NC por vendedor
-    for r in qs_nc.values('vendedor_id').annotate(total=Sum('monto_con_iva')):
-        vid = r['vendedor_id']
+    # NC por vendedor.
+    # `emisionNotaCredito` no copia el vendedor a la NC, así que `vendedor_id`
+    # viene NULL en casi todas: sin el fallback al vendedor del documento
+    # afectado, la columna "devoluciones" del ranking quedaba en cero.
+    for r in qs_nc.values(
+        'vendedor_id', 'documento_afectado__vendedor_id'
+    ).annotate(total=Sum('monto_con_iva')):
+        vid = r['vendedor_id'] or r['documento_afectado__vendedor_id']
         if vid and vid in resultado['vendedores']:
             resultado['vendedores'][vid]['devoluciones'] += int(r['total'] or 0)
 
@@ -8718,7 +9129,11 @@ def obtener_ventas_comparativo(request):
       - sucursal_id: opcional (filtra por una sucursal; respeta permisos)
     """
     try:
-        tipo_flujo = request.GET.get('tipo_flujo', 'mes_full')
+        # Default `mes_mtd` (mes a la fecha vs mismo tramo del mes anterior).
+        # Con `mes_full` se comparaba el mes en curso INCOMPLETO contra el mes
+        # anterior COMPLETO, así que al abrir el reporte siempre aparecía una
+        # caída fantasma que se iba corrigiendo sola a fin de mes.
+        tipo_flujo = request.GET.get('tipo_flujo', 'mes_mtd')
         fi_param = request.GET.get('fecha_inicio')
         ff_param = request.GET.get('fecha_fin')
 
@@ -9558,7 +9973,10 @@ def obtener_productos_vendidos(request):
       - top_n (default 50) — limita sólo la tabla de productos, no las agregaciones
     """
     try:
-        tipo_flujo = request.GET.get('tipo_flujo', 'mes_full')
+        # Mismo motivo que en `obtener_ventas_comparativo`: `mes_full`
+        # proyecta el mes en curso como si estuviera cerrado y deja al
+        # reporte mostrando una caída que no existe.
+        tipo_flujo = request.GET.get('tipo_flujo', 'mes_mtd')
         fi_param = request.GET.get('fecha_inicio')
         ff_param = request.GET.get('fecha_fin')
 

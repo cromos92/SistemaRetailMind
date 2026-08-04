@@ -4,6 +4,7 @@ from django.shortcuts import render
 from . import views_modulo_compras
 from . import views_modulo_configuracion
 from . import views_modulo_reportes
+from . import views_modulo_reportes_diferencias
 from . import views_gestion_sucursales
 from . import views_resumen_existencias
 from . import views_inteligencia_compra
@@ -1387,7 +1388,18 @@ urlpatterns = [
     # Reporte de despachos a tiendas (traspasos de salida)
     path('reportes/despachos-tiendas/', views_modulo_reportes.ver_reporte_despachos_tiendas, name='ver_reporte_despachos_tiendas'),
     path('api/reporte-despachos-tiendas/', views_modulo_reportes.obtener_reporte_despachos_tiendas, name='obtener_reporte_despachos_tiendas'),
-    
+
+    # Reporte de diferencias despachado vs recepcionado (faltantes / dañados /
+    # sobrantes de Productos_Recepcionados) y mercadería en tránsito consolidada.
+    # Ambas vistas ya llevan @requiere_permiso('reporte_compras') en el módulo,
+    # así que no dependen de que la URL esté en URL_PERMISO_MAP.
+    path('reportes/diferencias-recepcion/', views_modulo_reportes_diferencias.ver_reporte_diferencias_recepcion, name='ver_reporte_diferencias_recepcion'),
+    path('api/reportes/diferencias-recepcion/', views_modulo_reportes_diferencias.api_reporte_diferencias_recepcion, name='api_reporte_diferencias_recepcion'),
+    path('reportes/mercaderia-transito/', views_modulo_reportes_diferencias.ver_reporte_mercaderia_transito, name='ver_reporte_mercaderia_transito'),
+    path('api/reportes/mercaderia-transito/', views_modulo_reportes_diferencias.api_reporte_mercaderia_transito, name='api_reporte_mercaderia_transito'),
+    path('api/reportes/mercaderia-transito/detalle/', views_modulo_reportes_diferencias.api_detalle_mercaderia_transito, name='api_detalle_mercaderia_transito'),
+
+
     # Reporte de resumen de existencias
     path('reportes/resumen-existencias/', views_resumen_existencias.ver_resumen_existencias, name='ver_resumen_existencias'),
     path('api/resumen-existencias/', views_resumen_existencias.obtener_resumen_existencias, name='obtener_resumen_existencias'),

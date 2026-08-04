@@ -1,0 +1,688 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<div class="page-content">
+<div class="container-fluid">
+
+<style>
+  /* ========== NEXO DESIGN SYSTEM ========== */
+  :root {
+    --nexo-primary:       #0066FF;
+    --nexo-primary-dark:  #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary:     #1A1A2E;
+    --nexo-accent:        #00D4AA;
+    --nexo-success:       #00D4AA;
+    --nexo-warning:       #FFB020;
+    --nexo-error:         #FF4D4D;
+    --nexo-gray-900:      #1A1A2E;
+    --nexo-gray-700:      #4A4A5A;
+    --nexo-gray-600:      #6A6A7A;
+    --nexo-gray-500:      #8A8A9A;
+    --nexo-gray-400:      #AAAABC;
+    --nexo-gray-300:      #D1D1D9;
+    --nexo-gray-200:      #E8E8F0;
+    --nexo-gray-100:      #F5F5F7;
+    --nexo-white:         #FFFFFF;
+    --nexo-shadow-sm:     0 1px 2px rgba(26,26,46,.05);
+    --nexo-shadow-md:     0 4px 6px rgba(26,26,46,.1);
+    --nexo-shadow-lg:     0 10px 15px rgba(26,26,46,.1);
+    --nexo-radius-sm:     4px;
+    --nexo-radius-md:     8px;
+    --nexo-radius-lg:     12px;
+    --nexo-radius-xl:     16px;
+    --nexo-transition:    150ms ease;
+  }
+
+  .nexo-container { background: var(--nexo-gray-100); min-height: calc(100vh - 70px); padding-bottom: 40px; }
+
+  .nexo-header {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%);
+    color: var(--nexo-white); padding: 24px 40px; position: relative; overflow: hidden;
+  }
+  .nexo-header::before {
+    content: ''; position: absolute; top: -50%; right: -10%;
+    width: 400px; height: 300%;
+    background: linear-gradient(135deg, var(--nexo-accent) 0%, transparent 60%);
+    opacity: .08; transform: rotate(-15deg);
+  }
+  .nexo-header-content { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  .nexo-header h1 { font-size: 1.5rem; font-weight: 700; margin: 0 0 4px; color: var(--nexo-white); display: flex; align-items: center; gap: 12px; }
+  .nexo-header p { font-size: .8rem; color: var(--nexo-gray-300); margin: 0; }
+  .nexo-header-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(0,212,170,.15); border: 1px solid rgba(0,212,170,.3);
+    color: var(--nexo-accent); padding: 8px 16px; border-radius: 9999px;
+    font-size: .8rem; font-weight: 600;
+  }
+  .nexo-header-badge.alerta { background: rgba(255,77,77,.15); border-color: rgba(255,77,77,.35); color: #ff8a8a; }
+
+  .nexo-kpi-row {
+    display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 40px;
+    background: var(--nexo-white); border-bottom: 1px solid var(--nexo-gray-300); align-items: center;
+  }
+  .nexo-kpi-card {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--nexo-gray-100); border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md); padding: 7px 14px 7px 10px;
+    position: relative; overflow: hidden; transition: var(--nexo-transition);
+    flex: 1; min-width: 160px; max-width: 240px;
+  }
+  .nexo-kpi-card:hover { box-shadow: var(--nexo-shadow-md); transform: translateY(-1px); }
+  .nexo-kpi-card::before { content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%; }
+  .nexo-kpi-card.kpi-primary::before { background: var(--nexo-primary); }
+  .nexo-kpi-card.kpi-success::before { background: var(--nexo-success); }
+  .nexo-kpi-card.kpi-warning::before { background: var(--nexo-warning); }
+  .nexo-kpi-card.kpi-error::before   { background: var(--nexo-error); }
+  .nexo-kpi-icon {
+    width: 28px; height: 28px; border-radius: var(--nexo-radius-sm);
+    display: flex; align-items: center; justify-content: center; font-size: .85rem; flex-shrink: 0;
+  }
+  .icon-primary { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+  .icon-success { background: rgba(0,212,170,.1);  color: var(--nexo-success); }
+  .icon-warning { background: rgba(255,176,32,.1); color: #8a5c00; }
+  .icon-error   { background: rgba(255,77,77,.1);  color: var(--nexo-error); }
+  .nexo-kpi-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .nexo-kpi-label {
+    font-size: .6rem; font-weight: 600; color: var(--nexo-gray-500);
+    text-transform: uppercase; letter-spacing: .4px; white-space: nowrap;
+  }
+  .nexo-kpi-value { font-size: 1.05rem; font-weight: 700; color: var(--nexo-gray-900); line-height: 1.2; white-space: nowrap; }
+
+  .nexo-controls {
+    padding: 16px 40px; background: var(--nexo-white);
+    border-bottom: 1px solid var(--nexo-gray-300);
+    display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;
+  }
+  .nexo-control-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 150px; max-width: 210px; }
+  .nexo-control-label { font-size: .65rem; font-weight: 600; color: var(--nexo-gray-700); text-transform: uppercase; letter-spacing: .5px; }
+  .nexo-input, .nexo-select {
+    padding: 8px 12px; border: 1px solid var(--nexo-gray-300); border-radius: var(--nexo-radius-md);
+    font-size: .8rem; color: var(--nexo-gray-900); background: var(--nexo-white);
+    transition: var(--nexo-transition); width: 100%;
+  }
+  .nexo-input:focus, .nexo-select:focus { outline: none; border-color: var(--nexo-primary); box-shadow: 0 0 0 3px rgba(0,102,255,.1); }
+
+  .nexo-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 8px 16px; border: none; border-radius: var(--nexo-radius-md);
+    font-size: .8rem; font-weight: 600; cursor: pointer; transition: var(--nexo-transition); white-space: nowrap;
+  }
+  .nexo-btn-primary { background: var(--nexo-primary); color: var(--nexo-white); }
+  .nexo-btn-primary:hover { background: var(--nexo-primary-dark); transform: translateY(-1px); box-shadow: var(--nexo-shadow-md); }
+  .nexo-btn-group { display: flex; gap: 8px; margin-left: auto; }
+  .nexo-btn:disabled { opacity: .55; cursor: not-allowed; pointer-events: none; }
+
+  .quick-filters { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 40px 0; }
+  .quick-filter-btn {
+    padding: 5px 12px; border: 1px solid var(--nexo-gray-300); background: var(--nexo-white);
+    border-radius: 9999px; font-size: .72rem; font-weight: 600; color: var(--nexo-gray-700);
+    cursor: pointer; transition: var(--nexo-transition);
+  }
+  .quick-filter-btn:hover { border-color: var(--nexo-primary); color: var(--nexo-primary); }
+  .quick-filter-btn.active { background: var(--nexo-primary); border-color: var(--nexo-primary); color: var(--nexo-white); }
+
+  .nexo-content { padding: 20px 40px; }
+
+  .nexo-table-card {
+    background: var(--nexo-white); border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm); overflow: hidden; border: 1px solid var(--nexo-gray-300);
+    margin-bottom: 16px;
+  }
+  .nexo-table-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 20px; background: var(--nexo-secondary); color: var(--nexo-white);
+  }
+  .nexo-table-title { font-size: .9rem; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .nexo-table-info { font-size: .72rem; color: var(--nexo-gray-300); }
+  .nexo-table-wrapper { overflow-x: auto; max-height: 560px; overflow-y: auto; }
+  .nexo-table { width: 100%; border-collapse: collapse; font-size: .75rem; }
+  .nexo-table thead { background: var(--nexo-gray-100); position: sticky; top: 0; z-index: 10; }
+  .nexo-table th {
+    padding: 9px 8px; text-align: center; font-weight: 700; color: var(--nexo-gray-700);
+    border-bottom: 2px solid var(--nexo-gray-300); font-size: .62rem;
+    text-transform: uppercase; letter-spacing: .4px; white-space: nowrap;
+  }
+  .nexo-table td { padding: 7px 6px; text-align: center; border-bottom: 1px solid var(--nexo-gray-200); vertical-align: middle; }
+  .nexo-table tbody tr:hover { background: var(--nexo-primary-light); }
+  .nexo-table tbody tr:nth-child(even) { background: rgba(245,245,247,.5); }
+  .nexo-table tbody tr:nth-child(even):hover { background: var(--nexo-primary-light); }
+  .td-left  { text-align: left !important; }
+  .td-right { text-align: right !important; font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono','Courier New',monospace; }
+
+  .badge-doc { display: inline-flex; padding: 2px 8px; background: var(--nexo-primary-light); color: var(--nexo-primary); border-radius: var(--nexo-radius-sm); font-size: .68rem; font-weight: 700; white-space: nowrap; }
+  .badge-sit { display: inline-flex; padding: 2px 9px; border-radius: 9999px; font-size: .65rem; font-weight: 700; white-space: nowrap; }
+  .sit-SIN_RECIBIR    { background: rgba(255,77,77,.12);  color: var(--nexo-error); }
+  .sit-EN_TRANSITO    { background: rgba(255,176,32,.15); color: #8a5c00; }
+  .sit-RECIBIDO       { background: rgba(0,212,170,.12);  color: #007a62; }
+  .sit-SOBRE_RECIBIDO { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+  .row-alerta { background: rgba(255,77,77,.04) !important; }
+  .row-alerta:hover { background: rgba(255,77,77,.1) !important; }
+  .num-bad  { color: var(--nexo-error); font-weight: 700; }
+  .num-zero { color: var(--nexo-gray-400); }
+  .dias-chip { display: inline-flex; padding: 1px 7px; border-radius: var(--nexo-radius-sm); font-size: .68rem; font-weight: 700; background: var(--nexo-gray-200); color: var(--nexo-gray-700); }
+  .dias-chip.viejo { background: rgba(255,77,77,.12); color: var(--nexo-error); }
+
+  .btn-detalle {
+    padding: 3px 9px; border: 1px solid var(--nexo-gray-300); background: var(--nexo-white);
+    border-radius: var(--nexo-radius-sm); font-size: .68rem; font-weight: 600;
+    color: var(--nexo-primary); cursor: pointer; transition: var(--nexo-transition);
+  }
+  .btn-detalle:hover { background: var(--nexo-primary-light); border-color: var(--nexo-primary); }
+
+  .pagination-controls {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 20px; background: var(--nexo-gray-100);
+    border-top: 1px solid var(--nexo-gray-300); flex-wrap: wrap; gap: 10px;
+  }
+  .pagination-info { font-size: .75rem; color: var(--nexo-gray-600); }
+  .pagination-btns { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .pagination-btn {
+    padding: 5px 11px; border: 1px solid var(--nexo-gray-300); background: var(--nexo-white);
+    border-radius: var(--nexo-radius-sm); font-size: .75rem; cursor: pointer; transition: var(--nexo-transition);
+  }
+  .pagination-btn:hover:not(:disabled) { background: var(--nexo-primary-light); border-color: var(--nexo-primary); }
+  .pagination-btn.active { background: var(--nexo-primary); color: var(--nexo-white); border-color: var(--nexo-primary); }
+  .pagination-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  .nexo-empty-state { text-align: center; padding: 46px 20px; color: var(--nexo-gray-500); }
+  .nexo-empty-icon  { font-size: 3rem; margin-bottom: 12px; opacity: .5; display: block; }
+  .nexo-empty-title { font-size: 1.05rem; font-weight: 700; color: var(--nexo-gray-700); margin-bottom: 6px; }
+  .nexo-empty-text  { font-size: .8rem; max-width: 420px; margin: 0 auto; }
+
+  .nexo-loading-overlay {
+    position: fixed; inset: 0; background: rgba(26,26,46,.85); backdrop-filter: blur(4px);
+    display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 9999;
+  }
+  .nexo-loading-overlay.active { display: flex; }
+  .nexo-loading-content { background: var(--nexo-white); padding: 34px 48px; border-radius: var(--nexo-radius-xl); text-align: center; box-shadow: var(--nexo-shadow-lg); }
+  .nexo-spinner {
+    width: 40px; height: 40px; border: 4px solid var(--nexo-gray-300);
+    border-top-color: var(--nexo-primary); border-radius: 50%;
+    animation: spin .8s linear infinite; margin: 0 auto 14px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { display: inline-block; animation: spin .8s linear infinite; }
+
+  .nexo-toast {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--nexo-error); color: #fff; padding: 12px 28px;
+    border-radius: var(--nexo-radius-md); font-size: .88rem; font-weight: 600;
+    z-index: 10050; box-shadow: var(--nexo-shadow-lg);
+  }
+
+  .aviso-truncado {
+    margin: 0 40px 12px; padding: 9px 14px; border-radius: var(--nexo-radius-md);
+    background: rgba(255,176,32,.12); border: 1px solid rgba(255,176,32,.35);
+    color: #8a5c00; font-size: .75rem; font-weight: 600;
+  }
+
+  @media (max-width: 768px) {
+    .nexo-header { padding: 16px 20px; }
+    .nexo-header h1 { font-size: 1.1rem; }
+    .nexo-header-badge { display: none; }
+    .nexo-controls, .nexo-kpi-row, .nexo-content, .quick-filters { padding-left: 16px; padding-right: 16px; }
+    .aviso-truncado { margin-left: 16px; margin-right: 16px; }
+    .nexo-btn-group { margin-left: 0; width: 100%; }
+    .nexo-btn { flex: 1; }
+    .nexo-kpi-card { min-width: 140px; }
+  }
+  @media (max-width: 576px) {
+    .nexo-header-content { flex-direction: column; gap: .5rem; text-align: center; }
+    .nexo-kpi-card { min-width: 100%; }
+    .nexo-controls { flex-direction: column; }
+    .nexo-control-group { min-width: 100%; max-width: 100%; }
+    .nexo-table { font-size: .7rem; }
+    .pagination-controls { flex-direction: column; text-align: center; }
+  }
+  @media print {
+    .nexo-controls, .nexo-btn-group, .quick-filters, .pagination-controls, .nexo-header-badge { display: none !important; }
+  }
+</style>
+
+<div class="nexo-loading-overlay" id="loadingOverlay">
+  <div class="nexo-loading-content">
+    <div class="nexo-spinner"></div>
+    <div style="font-size:.95rem;font-weight:600;color:var(--nexo-gray-900)">Reconstruyendo tránsito…</div>
+    <div style="font-size:.8rem;color:var(--nexo-gray-500);margin-top:4px">Por favor espera</div>
+  </div>
+</div>
+
+<div class="nexo-container mt-0">
+
+  <div class="nexo-header">
+    <div class="nexo-header-content">
+      <div>
+        <h1><i class="ri-truck-line"></i> Mercadería en Tránsito (consolidado)</h1>
+        <p>
+          Despachos reconstruidos desde el kardex en TODAS tus sucursales:
+          enviado − recibido − devuelto por NC. Más de {{ umbral_transito }} días sin recibir se marca como problema.
+        </p>
+      </div>
+      <div class="nexo-header-badge" id="badge-alerta">
+        <i class="ri-time-line"></i>
+        <span id="badge-alerta-txt">Cargando…</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="nexo-kpi-row">
+    <div class="nexo-kpi-card kpi-primary">
+      <div class="nexo-kpi-icon icon-primary"><i class="ri-file-list-3-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label">Documentos</div>
+        <div class="nexo-kpi-value" id="kpi-docs">—</div>
+      </div>
+    </div>
+    <div class="nexo-kpi-card kpi-primary">
+      <div class="nexo-kpi-icon icon-primary"><i class="ri-inbox-unarchive-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label">Unidades enviadas</div>
+        <div class="nexo-kpi-value" id="kpi-enviadas">—</div>
+      </div>
+    </div>
+    <div class="nexo-kpi-card kpi-success">
+      <div class="nexo-kpi-icon icon-success"><i class="ri-inbox-archive-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label">Unidades recibidas</div>
+        <div class="nexo-kpi-value" id="kpi-recibidas">—</div>
+      </div>
+    </div>
+    <div class="nexo-kpi-card kpi-warning">
+      <div class="nexo-kpi-icon icon-warning"><i class="ri-truck-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label" title="Salieron de la bodega y aún no las ingresa nadie">Pendientes</div>
+        <div class="nexo-kpi-value" id="kpi-pendientes">—</div>
+      </div>
+    </div>
+    <div class="nexo-kpi-card kpi-error">
+      <div class="nexo-kpi-icon icon-error"><i class="ri-error-warning-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label" title="Documentos con más de {{ umbral_transito }} días sin recibir">Docs sin recibir</div>
+        <div class="nexo-kpi-value" id="kpi-sin-recibir">—</div>
+      </div>
+    </div>
+    <div class="nexo-kpi-card kpi-error">
+      <div class="nexo-kpi-icon icon-error"><i class="ri-money-dollar-circle-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label" title="Unidades pendientes × costo unitario promedio del documento">$ Pendiente</div>
+        <div class="nexo-kpi-value" id="kpi-valor">—</div>
+      </div>
+    </div>
+    <div class="nexo-kpi-card kpi-warning">
+      <div class="nexo-kpi-icon icon-warning"><i class="ri-hourglass-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label">Antigüedad máx.</div>
+        <div class="nexo-kpi-value" id="kpi-antiguedad">—</div>
+      </div>
+    </div>
+    <div class="nexo-kpi-card kpi-primary">
+      <div class="nexo-kpi-icon icon-primary"><i class="ri-add-box-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label" title="El destino ingresó más de lo que salió: descuadratura">Sobre-recibidos</div>
+        <div class="nexo-kpi-value" id="kpi-sobre">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="nexo-controls">
+    <div class="nexo-control-group">
+      <label class="nexo-control-label">Últimos días</label>
+      <select class="nexo-select" id="f-dias">
+        <option value="30">30 días</option>
+        <option value="60">60 días</option>
+        <option value="90" selected>90 días</option>
+        <option value="180">180 días</option>
+        <option value="365">365 días</option>
+      </select>
+    </div>
+    <div class="nexo-control-group">
+      <label class="nexo-control-label">Sucursal origen</label>
+      <select class="nexo-select" id="f-origen">
+        <option value="">Todas las mías</option>
+        {% for s in sucursales %}<option value="{{ s.id }}">{{ s.alias }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="nexo-control-group">
+      <label class="nexo-control-label">Sucursal destino</label>
+      <select class="nexo-select" id="f-destino">
+        <option value="">Todas</option>
+        {% for s in sucursales %}<option value="{{ s.id }}">{{ s.alias }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="nexo-btn-group">
+      <button class="nexo-btn nexo-btn-primary" id="btn-generar" onclick="cargar(1)">
+        <i class="ri-refresh-line"></i> Actualizar
+      </button>
+    </div>
+  </div>
+
+  <div class="quick-filters" id="quick-filters">
+    <button class="quick-filter-btn active" data-sit="PENDIENTE" onclick="setSituacion(this)">Con pendientes</button>
+    <button class="quick-filter-btn" data-sit="SIN_RECIBIR" onclick="setSituacion(this)">Sin recibir</button>
+    <button class="quick-filter-btn" data-sit="EN_TRANSITO" onclick="setSituacion(this)">En tránsito</button>
+    <button class="quick-filter-btn" data-sit="SOBRE_RECIBIDO" onclick="setSituacion(this)">Sobre-recibidos</button>
+    <button class="quick-filter-btn" data-sit="RECIBIDO" onclick="setSituacion(this)">Recibidos</button>
+    <button class="quick-filter-btn" data-sit="" onclick="setSituacion(this)">Todos</button>
+  </div>
+
+  <div class="aviso-truncado" id="aviso-truncado" style="display:none">
+    <i class="ri-information-line"></i>
+    Se alcanzó el tope de documentos del período. Acota el rango de días o filtra por sucursal para ver el resto.
+  </div>
+
+  <div class="nexo-content">
+
+    <div class="nexo-table-card" id="card-destinos" style="display:none">
+      <div class="nexo-table-header">
+        <div class="nexo-table-title"><i class="ri-store-2-line"></i> Consolidado por sucursal destino</div>
+      </div>
+      <div class="nexo-table-wrapper" style="max-height:250px">
+        <table class="nexo-table">
+          <thead>
+            <tr>
+              <th class="td-left">Destino</th><th>Docs</th><th>Enviadas</th><th>Recibidas</th>
+              <th>Pendientes</th><th>Docs sin recibir</th><th>Antig. máx</th><th>$ Pendiente</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-destinos"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="nexo-table-card">
+      <div id="estado-inicial">
+        <div class="nexo-empty-state">
+          <span class="nexo-empty-icon">🚚</span>
+          <div class="nexo-empty-title">Cargando despachos…</div>
+          <p class="nexo-empty-text">Se agrupan por documento los movimientos de traspaso de todas tus sucursales.</p>
+        </div>
+      </div>
+
+      <div id="tabla-wrapper" style="display:none">
+        <div class="nexo-table-header">
+          <div class="nexo-table-title"><i class="ri-table-line"></i> Despachos</div>
+          <div class="nexo-table-info" id="tabla-info"></div>
+        </div>
+        <div class="nexo-table-wrapper">
+          <table class="nexo-table">
+            <thead>
+              <tr>
+                <th class="td-left">Documento</th>
+                <th>Fecha</th>
+                <th>Días</th>
+                <th class="td-left">Origen</th>
+                <th class="td-left">Destino</th>
+                <th>Ítems</th>
+                <th>Enviadas</th>
+                <th>Recibidas</th>
+                <th>Dev. NC</th>
+                <th>Pendientes</th>
+                <th>$ Pendiente</th>
+                <th>Situación</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbody-despachos"></tbody>
+          </table>
+        </div>
+        <div class="pagination-controls">
+          <span class="pagination-info" id="pag-info"></span>
+          <div class="pagination-btns" id="pag-btns"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /nexo-container -->
+
+<!-- Modal de detalle por SKU -->
+<div class="modal fade" id="modalDetalle" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--nexo-secondary);color:#fff">
+        <h5 class="modal-title" id="modal-titulo">Detalle del despacho</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="modal-body">
+        <div class="nexo-empty-state"><div class="nexo-spinner"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let situacionActual = 'PENDIENTE';
+let paginaActual = 1;
+
+function num(v)  { return (v ?? 0).toLocaleString('es-CL'); }
+function money(v){ return '$' + Math.round(v || 0).toLocaleString('es-CL'); }
+function esc(s)  {
+  if (s === null || s === undefined || s === '') return '—';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'nexo-toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+function mostrarLoading(on) {
+  document.getElementById('loadingOverlay').classList.toggle('active', !!on);
+}
+
+function setSituacion(btn) {
+  document.querySelectorAll('#quick-filters .quick-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  situacionActual = btn.dataset.sit;
+  cargar(1);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  ['f-dias', 'f-origen', 'f-destino'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => cargar(1));
+  });
+  cargar(1);
+});
+
+async function cargar(pagina) {
+  const btn = document.getElementById('btn-generar');
+  if (btn.disabled) return;
+  paginaActual = pagina || 1;
+
+  const params = new URLSearchParams({
+    dias: document.getElementById('f-dias').value,
+    page: paginaActual,
+  });
+  if (situacionActual) params.append('situacion', situacionActual);
+  const origen = document.getElementById('f-origen').value;
+  const destino = document.getElementById('f-destino').value;
+  if (origen) params.append('origen_id', origen);
+  if (destino) params.append('destino_id', destino);
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ri-loader-4-line spin"></i> Consultando...';
+  mostrarLoading(true);
+
+  try {
+    const resp = await fetch('/app/api/reportes/mercaderia-transito/?' + params.toString(),
+                             { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    const data = await resp.json();
+    if (!data.success) { toast(data.error || 'Error al cargar el reporte'); return; }
+    pintar(data);
+  } catch (e) {
+    console.error(e);
+    toast('No se pudo consultar el reporte');
+  } finally {
+    mostrarLoading(false);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ri-refresh-line"></i> Actualizar';
+  }
+}
+
+function pintar(data) {
+  const r = data.resumen || {};
+  document.getElementById('kpi-docs').textContent       = num(r.documentos);
+  document.getElementById('kpi-enviadas').textContent   = num(r.unidades_enviadas);
+  document.getElementById('kpi-recibidas').textContent  = num(r.unidades_recibidas);
+  document.getElementById('kpi-pendientes').textContent = num(r.unidades_pendientes);
+  document.getElementById('kpi-sin-recibir').textContent = num(r.docs_sin_recibir);
+  document.getElementById('kpi-valor').textContent      = money(r.valor_pendiente);
+  document.getElementById('kpi-antiguedad').textContent = (r.antiguedad_max_dias || 0) + ' d';
+  document.getElementById('kpi-sobre').textContent      = num(r.docs_sobre_recibidos);
+
+  const badge = document.getElementById('badge-alerta');
+  const criticos = r.docs_sin_recibir || 0;
+  document.getElementById('badge-alerta-txt').textContent =
+    criticos ? (criticos + ' docs sin recibir · ' + money(r.valor_sin_recibir)) : 'Todo al día';
+  badge.classList.toggle('alerta', criticos > 0);
+
+  document.getElementById('aviso-truncado').style.display = data.truncado ? '' : 'none';
+
+  // Consolidado por destino
+  const tbDest = document.getElementById('tbody-destinos');
+  tbDest.innerHTML = (data.por_destino || []).map(d =>
+    '<tr>' +
+      '<td class="td-left">' + esc(d.destino) + '</td>' +
+      '<td class="td-right">' + num(d.documentos) + '</td>' +
+      '<td class="td-right">' + num(d.enviadas) + '</td>' +
+      '<td class="td-right">' + num(d.recibidas) + '</td>' +
+      '<td class="td-right ' + (d.pendientes ? 'num-bad' : 'num-zero') + '">' + num(d.pendientes) + '</td>' +
+      '<td class="td-right ' + (d.docs_sin_recibir ? 'num-bad' : 'num-zero') + '">' + num(d.docs_sin_recibir) + '</td>' +
+      '<td class="td-right">' + (d.antiguedad_max_dias || 0) + ' d</td>' +
+      '<td class="td-right">' + money(d.valor_pendiente) + '</td>' +
+    '</tr>'
+  ).join('') || '<tr><td colspan="8" style="padding:14px;color:var(--nexo-gray-500)">Sin datos</td></tr>';
+  document.getElementById('card-destinos').style.display = '';
+
+  const filas = data.despachos || [];
+  if (!filas.length) {
+    document.getElementById('estado-inicial').innerHTML =
+      '<div class="nexo-empty-state">' +
+        '<span class="nexo-empty-icon">✅</span>' +
+        '<div class="nexo-empty-title">Sin despachos con ese filtro</div>' +
+        '<p class="nexo-empty-text">No hay documentos que cumplan la condición en el período seleccionado.</p>' +
+      '</div>';
+    document.getElementById('estado-inicial').style.display = '';
+    document.getElementById('tabla-wrapper').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('tbody-despachos').innerHTML = filas.map(d =>
+    '<tr class="' + (d.situacion === 'SIN_RECIBIR' ? 'row-alerta' : '') + '">' +
+      '<td class="td-left"><span class="badge-doc">' + esc(d.tipo_documento) + ' #' + esc(d.folio) + '</span></td>' +
+      '<td>' + esc(d.fecha) + '</td>' +
+      '<td><span class="dias-chip ' + (d.situacion === 'SIN_RECIBIR' ? 'viejo' : '') + '">' + d.dias + '</span></td>' +
+      '<td class="td-left">' + esc(d.origen) + '</td>' +
+      '<td class="td-left">' + esc(d.destino) + (d.multi_ruta ? ' <span class="badge-doc" title="El documento salió hacia más de un destino">+</span>' : '') + '</td>' +
+      '<td class="td-right">' + num(d.items) + '</td>' +
+      '<td class="td-right">' + num(d.enviadas) + '</td>' +
+      '<td class="td-right">' + num(d.recibidas) + '</td>' +
+      '<td class="td-right ' + (d.devueltas_nc ? '' : 'num-zero') + '">' + num(d.devueltas_nc) + '</td>' +
+      '<td class="td-right ' + (d.pendientes ? 'num-bad' : 'num-zero') + '">' + num(d.pendientes) + '</td>' +
+      '<td class="td-right">' + (d.valor_pendiente ? money(d.valor_pendiente) : '—') + '</td>' +
+      '<td><span class="badge-sit sit-' + d.situacion + '">' + d.situacion.replace(/_/g, ' ') + '</span></td>' +
+      '<td><button class="btn-detalle" onclick="verDetalle(' + d.dte_id + ')">Ver SKUs</button></td>' +
+    '</tr>'
+  ).join('');
+
+  document.getElementById('estado-inicial').style.display = 'none';
+  document.getElementById('tabla-wrapper').style.display = '';
+  document.getElementById('tabla-info').textContent =
+    num(data.total_despachos) + ' documentos · página ' + data.pagina_actual + ' de ' + data.total_paginas;
+
+  pintarPaginacion(data);
+}
+
+function pintarPaginacion(data) {
+  const size = 25;
+  const desde = data.total_despachos ? (data.pagina_actual - 1) * size + 1 : 0;
+  const hasta = Math.min(data.pagina_actual * size, data.total_despachos);
+  document.getElementById('pag-info').textContent =
+    'Mostrando ' + num(desde) + '–' + num(hasta) + ' de ' + num(data.total_despachos);
+
+  const cont = document.getElementById('pag-btns');
+  cont.innerHTML = '';
+  const btn = (txt, page, disabled, active) => {
+    const b = document.createElement('button');
+    b.className = 'pagination-btn' + (active ? ' active' : '');
+    b.textContent = txt;
+    b.disabled = !!disabled;
+    if (!disabled && page) b.onclick = () => cargar(page);
+    cont.appendChild(b);
+  };
+  btn('«', 1, data.pagina_actual === 1);
+  btn('‹', data.pagina_actual - 1, data.pagina_actual === 1);
+  const ini = Math.max(1, data.pagina_actual - 2);
+  const fin = Math.min(data.total_paginas, ini + 4);
+  for (let p = ini; p <= fin; p++) btn(String(p), p, false, p === data.pagina_actual);
+  btn('›', data.pagina_actual + 1, data.pagina_actual === data.total_paginas);
+  btn('»', data.total_paginas, data.pagina_actual === data.total_paginas);
+}
+
+async function verDetalle(dteId) {
+  const modalEl = document.getElementById('modalDetalle');
+  const modal = new bootstrap.Modal(modalEl);
+  document.getElementById('modal-body').innerHTML =
+    '<div class="nexo-empty-state"><div class="nexo-spinner"></div><div>Cargando detalle…</div></div>';
+  modal.show();
+
+  try {
+    const resp = await fetch('/app/api/reportes/mercaderia-transito/detalle/?dte_id=' + encodeURIComponent(dteId),
+                             { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    const data = await resp.json();
+    if (!data.success) {
+      document.getElementById('modal-body').innerHTML =
+        '<div class="nexo-empty-state"><div class="nexo-empty-title">No disponible</div>' +
+        '<p class="nexo-empty-text">' + esc(data.error) + '</p></div>';
+      return;
+    }
+    const doc = data.documento || {};
+    document.getElementById('modal-titulo').textContent =
+      (doc.tipo_documento || 'Documento') + ' #' + (doc.folio || '') + ' · ' + (doc.fecha_emision || '');
+
+    const t = data.totales || {};
+    document.getElementById('modal-body').innerHTML =
+      '<div class="nexo-table-wrapper" style="max-height:60vh">' +
+      '<table class="nexo-table">' +
+        '<thead><tr>' +
+          '<th class="td-left">SKU / Artículo</th><th>Talla</th><th>Enviadas</th>' +
+          '<th>Recibidas</th><th>Dev. NC</th><th>Pendientes</th><th>$ Pendiente</th>' +
+        '</tr></thead><tbody>' +
+        (data.detalle || []).map(f =>
+          '<tr class="' + (f.pendientes ? 'row-alerta' : '') + '">' +
+            '<td class="td-left">' + esc(f.articulo) +
+              '<div style="font-size:.65rem;color:var(--nexo-gray-500)">' + esc(f.sku) + '</div></td>' +
+            '<td>' + esc(f.talla) + '</td>' +
+            '<td class="td-right">' + num(f.enviadas) + '</td>' +
+            '<td class="td-right">' + num(f.recibidas) + '</td>' +
+            '<td class="td-right ' + (f.devueltas_nc ? '' : 'num-zero') + '">' + num(f.devueltas_nc) + '</td>' +
+            '<td class="td-right ' + (f.pendientes ? 'num-bad' : 'num-zero') + '">' + num(f.pendientes) + '</td>' +
+            '<td class="td-right">' + (f.valor_pendiente ? money(f.valor_pendiente) : '—') + '</td>' +
+          '</tr>'
+        ).join('') +
+        '</tbody><tfoot><tr style="font-weight:700;background:var(--nexo-gray-100)">' +
+          '<td class="td-left">TOTAL</td><td></td>' +
+          '<td class="td-right">' + num(t.enviadas) + '</td>' +
+          '<td class="td-right">' + num(t.recibidas) + '</td>' +
+          '<td class="td-right">' + num(t.devueltas_nc) + '</td>' +
+          '<td class="td-right ' + (t.pendientes ? 'num-bad' : '') + '">' + num(t.pendientes) + '</td>' +
+          '<td class="td-right">' + money(t.valor_pendiente) + '</td>' +
+        '</tr></tfoot>' +
+      '</table></div>';
+  } catch (e) {
+    console.error(e);
+    document.getElementById('modal-body').innerHTML =
+      '<div class="nexo-empty-state"><div class="nexo-empty-title">Error</div>' +
+      '<p class="nexo-empty-text">No se pudo cargar el detalle del despacho.</p></div>';
+  }
+}
+</script>
+
+</div>
+</div>
+
+{% include 'layout/footer.html' %}

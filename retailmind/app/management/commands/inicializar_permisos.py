@@ -300,6 +300,11 @@ class Command(BaseCommand):
             ('reporte_despachos_proveedor', 'Despachos por Proveedor', None, '/app/verReporteDespachosProveedor/', 'bi-truck', 8),
             ('reporte_compras', 'Reporte de Compras', None, '/app/reportes/compras/', 'bi-bag', 9),
             ('reporte_rendimiento_proveedor', 'Rendimiento por Proveedor', None, '/app/reportes/rendimiento-proveedor/', 'bi-people', 10),
+            # Diferencias de recepcion y mercaderia en transito. Los campos
+            # cantidad_faltante / cantidad_danada / cantidad_sobrante ya se
+            # llenaban en cada recepcion y ningun reporte los leia.
+            ('reporte_diferencias_recepcion', 'Diferencias de Recepcion', None, '/app/reportes/diferencias-recepcion/', 'ri-error-warning-line', 11),
+            ('reporte_mercaderia_transito', 'Mercaderia en Transito', None, '/app/reportes/mercaderia-transito/', 'ri-truck-line', 12),
         ]
         
         for codigo, nombre, url_name, url_path, icono, orden in opciones:
@@ -561,7 +566,8 @@ class Command(BaseCommand):
             'reporte_ventas_sucursal', 'reporte_ventas_comparativo', 'reporte_productos_vendidos', 'reporte_ventas_internet', 'reporte_documentos_emitidos', 'reporte_existencias',
             'reporte_existencias_marca', 'reporte_existencias_sucursal', 'reporte_despachos_proveedor',
             'resumen_existencias', 'reporte_movimientos_sucursal', 'reporte_compras',
-            'reporte_rendimiento_proveedor',
+            'reporte_rendimiento_proveedor', 'reporte_diferencias_recepcion',
+            'reporte_mercaderia_transito',
             # Liquidaci?n
             'plan_liquidacion', 'campanas_liquidacion',
             # Configuraci?n

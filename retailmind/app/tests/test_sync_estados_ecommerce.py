@@ -267,6 +267,10 @@ class ImprimirGuiasSucursalTest(_BaseVistaTest):
         _pedido(self.sucursal, 'G-5', fecha_impresion_guia=timezone.now())
         otra = crear_sucursal(empresa=self.empresa, alias='NICK1')
         _pedido(otra, 'G-6')
+        # Bloqueados por el canal: sin pago / cancelado / ya despachado
+        _pedido(self.sucursal, 'G-SP', estado_canal='PENDIENTE')
+        _pedido(self.sucursal, 'G-CA', estado_canal='CANCELADO')
+        _pedido(self.sucursal, 'G-EN', estado_canal='ENVIADO')
 
         response = self._post(api_imprimir_guias_sucursal,
                               '/app/ecommerce/pedidos/imprimir-guias-sucursal/')
@@ -304,6 +308,17 @@ class ImprimirGuiasSucursalTest(_BaseVistaTest):
         request.session = {}
         response = api_imprimir_guias_sucursal(request)
         self.assertEqual(response.status_code, 400)
+
+    def test_guia_individual_bloqueada_si_sin_pago(self):
+        """El botón por fila tampoco saca stock para una venta sin pago."""
+        from app.views_ecommerce import api_imprimir_guia_preparacion
+        p = _pedido(self.sucursal, 'G-SP2', estado_canal='PENDIENTE')
+        response = self._post(api_imprimir_guia_preparacion, '/x/', pedido_id=p.id)
+        self.assertEqual(response.status_code, 409)
+        self.assertIn('no confirma el pago', json.loads(response.content)['error'])
+        p.refresh_from_db()
+        self.assertIsNone(p.fecha_impresion_guia)
+        self.assertEqual(p.sub_estado, 'ASIGNADO', 'no debe transicionar')
 
 
 class ReasignarMismaEmpresaTest(_BaseVistaTest):

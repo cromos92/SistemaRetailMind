@@ -39,8 +39,11 @@
                                         <option value="ultimos_30">Últimos 30 días</option>
                                     </optgroup>
                                     <optgroup label="— Mensual —">
-                                        <option value="mes_mtd">Mes a la fecha</option>
-                                        <option value="mes_full" selected>Mes actual completo</option>
+                                        <!-- MTD por default: "mes actual completo" incluye días
+                                             futuros, y el sell-through y la cobertura se calculaban
+                                             con un denominador de días que aún no ocurrían. -->
+                                        <option value="mes_mtd" selected>Mes a la fecha</option>
+                                        <option value="mes_full">Mes actual completo</option>
                                     </optgroup>
                                     <optgroup label="— Anual —">
                                         <option value="yoy">Este mes (YoY)</option>
@@ -612,7 +615,7 @@
             document.getElementById(id).value = '';
         });
         document.getElementById('filtroOrden').value = 'unidades_desc';
-        document.getElementById('tipoFlujo').value = 'mes_full';
+        document.getElementById('tipoFlujo').value = 'mes_mtd';
         document.getElementById('contFechaInicio').classList.add('d-none');
         document.getElementById('contFechaFin').classList.add('d-none');
         document.getElementById('incluirExcluidos').checked = false;
