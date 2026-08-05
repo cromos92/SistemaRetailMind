@@ -2,9 +2,11 @@ from retailmind import settings
 from . import views
 from django.shortcuts import render
 from . import views_modulo_compras
+from . import views_modulo_compras_xml
 from . import views_modulo_configuracion
 from . import views_modulo_reportes
 from . import views_modulo_reportes_diferencias
+from . import views_modulo_reportes_tallas
 from . import views_gestion_sucursales
 from . import views_resumen_existencias
 from . import views_inteligencia_compra
@@ -559,7 +561,20 @@ urlpatterns = [
      path('api/descargar-formato-dtes/', views_modulo_compras.descargar_formato_dtes, name='descargar_formato_dtes'),
      path('api/exportar-dtes-actuales/', views_modulo_compras.exportar_dtes_actuales, name='exportar_dtes_actuales'),
      path('api/exportar-dtes-excel/', views_modulo_compras.exportar_dtes_excel, name='exportar_dtes_excel'),
-     
+
+     # === IMPORTACIÓN DE FACTURA DE PROVEEDOR DESDE XML DTE (SII) ===
+     # Entrada de documentos, NO emisión: la emisión sigue siendo el TXT de
+     # Acepta. Confirmar aquí crea Dte + Dte_Productos y NO mueve stock
+     # (ver docstring de views_modulo_compras_xml).
+     # Las vistas llevan @requiere_permiso('gestion_dte_compras','puede_crear')
+     # en el propio módulo: el middleware solo comprueba `puede_ver` y además
+     # su match por substring no cubre las rutas bajo `/app/api/`.
+     path('compras/importar-xml-dte/', views_modulo_compras_xml.ver_importar_xml_dte, name='ver_importar_xml_dte'),
+     path('api/compras/xml-dte/analizar/', views_modulo_compras_xml.analizar_xml_dte, name='analizar_xml_dte'),
+     path('api/compras/xml-dte/buscar-producto/', views_modulo_compras_xml.buscar_producto_xml_dte, name='buscar_producto_xml_dte'),
+     path('api/compras/xml-dte/confirmar/', views_modulo_compras_xml.confirmar_xml_dte, name='confirmar_xml_dte'),
+
+
      # === EXPORTACIÓN DE COMPRAS ACTUALES ===
      path('api/exportar-compras-excel/', views_modulo_compras.exportar_compras_excel, name='exportar_compras_excel'),
      path('api/exportar-compras-csv/', views_modulo_compras.exportar_compras_csv, name='exportar_compras_csv'),
@@ -1376,6 +1391,11 @@ urlpatterns = [
     
     # Reporte de existencias por sucursal
     path('reportes/existencias-sucursal/', views_modulo_reportes.ver_reporte_existencias_sucursal, name='ver_reporte_existencias_sucursal'),
+    # Quiebre de talla: en calzado una talla core en cero es venta perdida
+    # inmediata (el cliente no transa el calce). Cuelga del mismo permiso que
+    # existencias por sucursal.
+    path('reportes/quiebre-talla/', views_modulo_reportes_tallas.ver_reporte_quiebre_talla, name='ver_reporte_quiebre_talla'),
+    path('api/reportes/quiebre-talla/', views_modulo_reportes_tallas.api_reporte_quiebre_talla, name='api_reporte_quiebre_talla'),
     path('api/reporte-existencias-sucursal/', views_modulo_reportes.obtener_reporte_existencias_sucursal, name='obtener_reporte_existencias_sucursal'),
     path('api/exportar-existencias-sucursal-excel/', views_modulo_reportes.exportar_existencias_sucursal_excel, name='exportar_existencias_sucursal_excel'),
     path('api/exportar-existencias-sucursal-pdf/', views_modulo_reportes.exportar_existencias_sucursal_pdf, name='exportar_existencias_sucursal_pdf'),
@@ -1668,6 +1688,8 @@ urlpatterns = [
     path('ecommerce/pedidos/<int:pedido_id>/sub-estado/', views_ecommerce.api_cambiar_sub_estado, name='api_cambiar_sub_estado_pedido'),
     path('ecommerce/pedidos/<int:pedido_id>/imprimir-guia/', views_ecommerce.api_imprimir_guia_preparacion, name='api_imprimir_guia_preparacion'),
     path('ecommerce/pedidos/imprimir-guias-sucursal/', views_ecommerce.api_imprimir_guias_sucursal, name='api_imprimir_guias_sucursal'),
+    path('ecommerce/pedidos/<int:pedido_id>/sin-stock/', views_ecommerce.api_marcar_sin_stock, name='api_marcar_sin_stock'),
+    path('ecommerce/pedidos/<int:pedido_id>/reactivar/', views_ecommerce.api_reactivar_sin_stock, name='api_reactivar_sin_stock'),
     path('ecommerce/pedidos/<int:pedido_id>/reasignar/', views_ecommerce.api_reasignar_pedido, name='api_reasignar_pedido'),
     path('ecommerce/pedidos/<int:pedido_id>/sugerir-sucursal/', views_ecommerce.api_sugerir_sucursal, name='api_sugerir_sucursal'),
     path('ecommerce/pedidos/<int:pedido_id>/historial/', views_ecommerce.api_historial_pedido, name='api_historial_pedido'),

@@ -34,6 +34,8 @@ from .models import (
 )
 from .utils_permisos import (
     obtener_sucursales_usuario,
+    ids_empresas_alcance,
+    ids_sucursales_alcance,
     puede_ver_sucursal,
     filtrar_queryset_por_sucursal,
     usuario_puede_ver_todas_sucursales,
@@ -41,6 +43,106 @@ from .utils_permisos import (
 )
 
 logger = logging.getLogger('app')
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ALCANCE POR EMPRESA (scoping) — helpers compartidos del módulo de reportes
+# ═══════════════════════════════════════════════════════════════════════════
+# El middleware de permisos es FAIL-OPEN (una URL que no está en
+# `URL_PERMISO_MAP` pasa) y además sólo mira `puede_ver`, así que la frontera
+# entre las empresas del holding tiene que estar DENTRO de la vista. Sin esto,
+# cualquier usuario autenticado leía inversión, ventas, márgenes y proveedores
+# de otra empresa cambiando `?sucursal_id=` a mano.
+#
+# Convención (la misma de `_rp_filtros`, más abajo): una lista de ids en
+# `None` significa "sin restricción" — rol administrador o flag
+# `puede_ver_todas_sucursales`. Materializar los ~1.700 ids de un admin dentro
+# del SQL no acotaría nada.
+
+def _sin_acceso_reporte(mensaje='No tienes acceso a esa sucursal: pertenece a otra empresa.'):
+    """403 uniforme, mismo contrato JSON que el resto del módulo de reportes."""
+    return JsonResponse({'success': False, 'error': mensaje}, status=403)
+
+
+def _alcance_sucursales(request, sucursal_id=None):
+    """
+    Universo de sucursales del usuario + validación del filtro recibido por GET.
+
+    Devuelve ``(sucursales_ids, error)``:
+      · ``sucursales_ids`` — lista de ids permitidos, o ``None`` si ve todo.
+      · ``error`` — ``JsonResponse`` 403 listo para devolver cuando la sucursal
+        pedida por querystring no pertenece a ninguna empresa del usuario.
+        Nunca se confía en el id que llega del cliente.
+    """
+    permitidas = ids_sucursales_alcance(request.user)
+
+    if permitidas is None or sucursal_id in (None, ''):
+        return permitidas, None
+
+    try:
+        pedida = int(sucursal_id)
+    except (TypeError, ValueError):
+        return permitidas, _sin_acceso_reporte('Sucursal no válida.')
+
+    if pedida not in permitidas:
+        logger.warning(
+            'scoping reportes: usuario %s pidió la sucursal %s fuera de su alcance',
+            getattr(request.user, 'username', request.user), sucursal_id,
+        )
+        return permitidas, _sin_acceso_reporte()
+
+    return permitidas, None
+
+
+def _filtro_alcance(campo, sucursal_pedida, permitidas):
+    """
+    kwargs de filtro para un campo de sucursal ya validado por `_alcance_sucursales`.
+
+    · ``{campo: valor}``     si el usuario pidió una sucursal concreta.
+    · ``{campo__in: [...]}`` si no pidió ninguna y su alcance está acotado.
+    · ``{}``                 si ve todo el holding.
+    """
+    if sucursal_pedida:
+        return {campo: sucursal_pedida}
+    if permitidas is not None:
+        return {f'{campo}__in': permitidas}
+    return {}
+
+
+def _q_alcance_dte(usuario):
+    """
+    Q de alcance para `Dte`, con el mismo criterio de 3 puntas que usa
+    `views_modulo_reportes_diferencias._queryset_recepciones`.
+
+    `Dte.sucursal` sería el anclaje natural, pero en producción los DTE de
+    COMPRA vienen con `sucursal=NULL` (ver auditoría de sucursales), así que
+    filtrar sólo por sucursal borraría del reporte toda la compra histórica de
+    un usuario acotado. Un documento entra si lo emitió o lo recibió una
+    empresa del usuario, o si quedó anclado a una sucursal suya.
+    """
+    empresas_ids = ids_empresas_alcance(usuario)
+    if empresas_ids is None:
+        return Q()
+    return (
+        Q(emisor_id__in=empresas_ids)
+        | Q(receptor_id__in=empresas_ids)
+        | Q(sucursal__empresa_id__in=empresas_ids)
+    )
+
+
+def _q_alcance_recepcion(usuario):
+    """
+    Q de alcance para `Productos_Recepcionados` (mismas 3 puntas que el DTE,
+    más la sucursal donde aterrizó la mercadería).
+    """
+    empresas_ids = ids_empresas_alcance(usuario)
+    if empresas_ids is None:
+        return Q()
+    return (
+        Q(dte__emisor_id__in=empresas_ids)
+        | Q(dte__receptor_id__in=empresas_ids)
+        | Q(sucursal_destino__empresa_id__in=empresas_ids)
+    )
 
 
 def _expandir_categoria_ids(categoria_id):
@@ -4026,9 +4128,14 @@ def api_productos_por_origen(request):
     GET params:
         anio      — año a analizar (default = actual)
         sucursal  — id de sucursal (opcional)
+
+    SCOPING: el universo de SKU se acota a las sucursales de las empresas del
+    usuario. Antes no había ningún filtro por empresa, así que sin pasar
+    `sucursal` se veían las altas de catálogo, unidades y costo de TODO el
+    holding, y pasando el id de otra empresa se veían las de esa empresa.
     """
     from django.db.models import Min
-    from .utils_analitica import ids_producto_talla_activos
+    from .utils_analitica import productos_activos_qs
 
     try:
         anio = int(request.GET.get('anio', timezone.localdate().year))
@@ -4036,7 +4143,17 @@ def api_productos_por_origen(request):
         anio = timezone.localdate().year
     sucursal_id = request.GET.get('sucursal') or None
 
-    pt_ids = ids_producto_talla_activos(sucursal_id=sucursal_id)
+    permitidas, sin_acceso = _alcance_sucursales(request, sucursal_id)
+    if sin_acceso:
+        return sin_acceso
+
+    # `Producto` tiene FK a `Sucursal`, así que la sucursal del producto es el
+    # anclaje directo del SKU a la empresa dueña del catálogo.
+    pt_ids = (
+        productos_activos_qs()
+        .filter(**_filtro_alcance('producto__sucursal_id', sucursal_id, permitidas))
+        .values_list('id', flat=True)
+    )
 
     base = Movimientos_Producto.objects.filter(
         tipo_movimiento='INGRESO', estado='COMPLETADO',
@@ -5479,17 +5596,32 @@ def api_rendimiento_compras(request):
       - Si el año tiene >= 500 movimientos en Movimientos_Producto → usa movimientos (sistema actual/2025-2026)
       - Si tiene < 500 movimientos → usa DTEs migrados de Laravel (histórico 2018-2024)
     Soporta comparativa interanual (param comparar=1).
+
+    SCOPING: todas las puntas del embudo (movimientos, tickets y DTE) se acotan
+    al alcance del usuario. Antes esta vista no tenía ni un filtro por empresa:
+    bastaba llamarla sin `sucursal` para leer inversión, ventas, margen y ROI
+    de TODO el holding, o pasar el id de una sucursal ajena para leer los de
+    esa empresa.
     """
     from .models import Movimientos_Producto
-    from .utils_analitica import ids_producto_talla_activos
+    from .utils_analitica import productos_activos_qs
 
     UMBRAL_MOVIMIENTOS = 500
+
+    sucursal_id = request.GET.get('sucursal', '') or None
+    permitidas, sin_acceso = _alcance_sucursales(request, sucursal_id)
+    if sin_acceso:
+        return sin_acceso
+
+    def _dtes(**filtros):
+        """DTE dentro del alcance del usuario (ver `_q_alcance_dte`)."""
+        base = Dte.objects.filter(_q_alcance_dte(request.user), **filtros)
+        return base.filter(sucursal_id=sucursal_id) if sucursal_id else base
 
     def _datos_desde_movimientos(anio, sucursal_id, pt_ids):
         """Agrega datos de Movimientos_Producto para el año dado."""
         bf = {'fecha__year': anio, 'estado': 'COMPLETADO', 'ProductoTalla_id__in': pt_ids}
-        if sucursal_id:
-            bf['sucursal_origen_id'] = sucursal_id
+        bf.update(_filtro_alcance('sucursal_origen_id', sucursal_id, permitidas))
 
         ent = Movimientos_Producto.objects.filter(concepto__in=CONCEPTOS_ENTRADA, **bf).aggregate(
             uds=Sum('cantidad'),
@@ -5509,8 +5641,7 @@ def api_rendimiento_compras(request):
         )
         q_tk = {'idTicket__fecha__year': anio, 'idTicket__estado__in': ['PAGADO', 'PENDIENTE'],
                 'ProductoTalla_id__in': pt_ids}
-        if sucursal_id:
-            q_tk['idTicket__sucursal_id'] = sucursal_id
+        q_tk.update(_filtro_alcance('idTicket__sucursal_id', sucursal_id, permitidas))
         vtas_tk = Ticket_Productos.objects.filter(**q_tk).aggregate(
             uds=Sum('stock'), ingreso=Sum('subtotal'),
         )
@@ -5529,12 +5660,11 @@ def api_rendimiento_compras(request):
 
     def _datos_desde_dte(anio, sucursal_id):
         """Agrega datos de DTEs migrados de Laravel para el año dado."""
+        # El filtro por sucursal (pedida o alcance) lo aplica `_dtes`.
         dte_f = {'fecha_emision__year': anio}
-        if sucursal_id:
-            dte_f['sucursal_id'] = sucursal_id
 
         # Entrada: DTEs tipo COMPRA → Dte_Productos (stock=unidades, costo=costo unit)
-        dte_compra_ids = Dte.objects.filter(tipo_transaccion='COMPRA', **dte_f).values_list('id', flat=True)
+        dte_compra_ids = _dtes(tipo_transaccion='COMPRA', **dte_f).values_list('id', flat=True)
         ent = Dte_Productos.objects.filter(
             dte_id__in=dte_compra_ids,
             productoTalla__producto__excluir_de_analitica=False,
@@ -5544,7 +5674,7 @@ def api_rendimiento_compras(request):
         )
 
         # Despacho: DTEs tipo TRASPASO
-        dte_traspaso_ids = Dte.objects.filter(tipo_transaccion='TRASPASO', **dte_f).values_list('id', flat=True)
+        dte_traspaso_ids = _dtes(tipo_transaccion='TRASPASO', **dte_f).values_list('id', flat=True)
         desp = Dte_Productos.objects.filter(
             dte_id__in=dte_traspaso_ids,
             productoTalla__producto__excluir_de_analitica=False,
@@ -5553,7 +5683,7 @@ def api_rendimiento_compras(request):
         )
 
         # Ventas: DTEs tipo VENTA_PUBLICO + VENTA (ingreso = precio * stock)
-        dte_venta_ids = Dte.objects.filter(
+        dte_venta_ids = _dtes(
             tipo_transaccion__in=['VENTA_PUBLICO', 'VENTA'], **dte_f
         ).values_list('id', flat=True)
         vtas = Dte_Productos.objects.filter(
@@ -5587,8 +5717,7 @@ def api_rendimiento_compras(request):
         ).values(mes=F('fecha__month')).annotate(uds=Sum('cantidad'), ingreso=Sum(F('precio') * F('cantidad')))}
 
         q_tk = {'idTicket__fecha__year': anio, 'idTicket__estado__in': ['PAGADO', 'PENDIENTE']}
-        if sucursal_id:
-            q_tk['idTicket__sucursal_id'] = sucursal_id
+        q_tk.update(_filtro_alcance('idTicket__sucursal_id', sucursal_id, permitidas))
         vtas_tk = {v['mes']: v for v in Ticket_Productos.objects.filter(**q_tk).values(
             mes=F('idTicket__fecha__month')
         ).annotate(uds=Sum('stock'), ingreso=Sum('subtotal'))}
@@ -5608,11 +5737,9 @@ def api_rendimiento_compras(request):
 
     def _evolucion_desde_dte(anio, sucursal_id):
         dte_f = {'fecha_emision__year': anio}
-        if sucursal_id:
-            dte_f['sucursal_id'] = sucursal_id
 
-        dte_compra_ids = list(Dte.objects.filter(tipo_transaccion='COMPRA', **dte_f).values_list('id', flat=True))
-        dte_venta_ids = list(Dte.objects.filter(
+        dte_compra_ids = list(_dtes(tipo_transaccion='COMPRA', **dte_f).values_list('id', flat=True))
+        dte_venta_ids = list(_dtes(
             tipo_transaccion__in=['VENTA_PUBLICO', 'VENTA'], **dte_f
         ).values_list('id', flat=True))
 
@@ -5645,12 +5772,10 @@ def api_rendimiento_compras(request):
     def _sucursales_desde_dte(anio, sucursal_id):
         """Desglose por sucursal usando DTEs (por sucursal del DTE)."""
         dte_f = {'fecha_emision__year': anio}
-        if sucursal_id:
-            dte_f['sucursal_id'] = sucursal_id
 
         # Ventas agrupadas por sucursal del DTE
         vtas_suc = {}
-        for v in Dte.objects.filter(
+        for v in _dtes(
             tipo_transaccion__in=['VENTA_PUBLICO', 'VENTA'], **dte_f
         ).annotate(
             uds=Sum('dte_productos__stock',
@@ -5727,12 +5852,19 @@ def api_rendimiento_compras(request):
 
     try:
         anio = int(request.GET.get('anio', timezone.localdate().year))
-        sucursal_id = request.GET.get('sucursal', '') or None
         comparar = request.GET.get('comparar', '0') == '1'
 
-        pt_ids = ids_producto_talla_activos(sucursal_id=sucursal_id)
+        pt_ids = (
+            productos_activos_qs()
+            .filter(**_filtro_alcance('producto__sucursal_id', sucursal_id, permitidas))
+            .values_list('id', flat=True)
+        )
 
         # ── Determinar fuente para el año solicitado ──
+        # `count_movs` es un HEURÍSTICO de disponibilidad de datos del sistema
+        # (¿este año está en el sistema nuevo o sólo en los DTE migrados?), no
+        # un dato de negocio de una empresa; se deja global a propósito para no
+        # cambiar la fuente —y con ella los números— según quién mire.
         count_movs = Movimientos_Producto.objects.filter(
             estado='COMPLETADO', fecha__year=anio
         ).count()
@@ -5757,7 +5889,7 @@ def api_rendimiento_compras(request):
 
         # ── Años disponibles (basados en DTEs que tienen datos) ──
         anios_dte = sorted(set(
-            Dte.objects.filter(
+            _dtes(
                 tipo_transaccion__in=['COMPRA', 'VENTA_PUBLICO', 'VENTA']
             ).dates('fecha_emision', 'year')
         ), key=lambda d: d.year, reverse=True)
@@ -5848,8 +5980,7 @@ def api_rendimiento_compras(request):
                 uds=Sum('cantidad'), ingreso=Sum(F('precio') * F('cantidad')),
             )}
             q_tk_suc = {'idTicket__fecha__year': anio, 'idTicket__estado__in': ['PAGADO', 'PENDIENTE']}
-            if sucursal_id:
-                q_tk_suc['idTicket__sucursal_id'] = sucursal_id
+            q_tk_suc.update(_filtro_alcance('idTicket__sucursal_id', sucursal_id, permitidas))
             ventas_suc_ticket = {v['idTicket__sucursal_id']: v for v in Ticket_Productos.objects.filter(
                 **q_tk_suc
             ).values('idTicket__sucursal_id', 'idTicket__sucursal__alias').annotate(
@@ -5920,8 +6051,7 @@ def api_rendimiento_compras(request):
         por_producto = []
         if not usar_dte:
             q_top_tk = {'idTicket__fecha__year': anio, 'idTicket__estado__in': ['PAGADO', 'PENDIENTE']}
-            if sucursal_id:
-                q_top_tk['idTicket__sucursal_id'] = sucursal_id
+            q_top_tk.update(_filtro_alcance('idTicket__sucursal_id', sucursal_id, permitidas))
             top_vendidos = list(Ticket_Productos.objects.filter(**q_top_tk).values(
                 'ProductoTalla_id', 'ProductoTalla__producto__articulo', 'ProductoTalla__talla',
             ).annotate(uds_vendidas=Sum('stock'), ingreso=Sum('subtotal')).order_by('-uds_vendidas')[:150])
@@ -5974,7 +6104,7 @@ def api_rendimiento_compras(request):
             por_producto.sort(key=lambda x: x['rotacion_pct'], reverse=True)
         else:
             # Para años DTE: top ventas desde DTEs
-            dte_venta_ids = list(Dte.objects.filter(
+            dte_venta_ids = list(_dtes(
                 tipo_transaccion__in=['VENTA_PUBLICO', 'VENTA'], fecha_emision__year=anio
             ).values_list('id', flat=True))
             if dte_venta_ids:
@@ -6191,8 +6321,16 @@ def _saldos_periodo(productos_ids, sucursales_ids, filtro_fecha):
     return entradas, salidas, posterior
 
 
+@login_required
 def ver_reporte_movimientos_sucursal(request):
-    """Vista principal del reporte de movimientos por sucursal (inicial vs restante)"""
+    """
+    Vista principal del reporte de movimientos por sucursal (inicial vs restante).
+
+    `@login_required` es obligatorio: el middleware de permisos devuelve None
+    para usuarios anónimos (no los bloquea), así que sin el decorador la vista
+    corría con `AnonymousUser`, el filtro `EmpresaUser.objects.filter(user=...)`
+    reventaba y la página respondía 500 en vez de mandar al login.
+    """
     sucursal_actual_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
     sucursal_actual = None
     if sucursal_actual_id:
@@ -6817,12 +6955,24 @@ def api_reporte_recepciones_detallado(request):
     - Desglose por sucursal destino
     - Split reposicion vs compra nueva
     - Diferencias de precio detectadas
+
+    HUÉRFANO (jul-2026): ningún template ni JS llama a esta URL. Se le aplica
+    igual el alcance por empresa porque la ruta sigue publicada y el middleware
+    de permisos es fail-open; queda pendiente decidir si se elimina.
+
+    SCOPING: el universo se acota con las mismas 3 puntas del reporte de
+    diferencias (emisor / receptor del DTE, o sucursal donde aterrizó la
+    mercadería). Antes no había ningún filtro por empresa.
     """
     try:
         fecha_inicio = request.GET.get('fecha_inicio')
         fecha_fin = request.GET.get('fecha_fin')
         proveedor_id = request.GET.get('proveedor_id')
         sucursal_id = request.GET.get('sucursal_id')
+
+        _permitidas, sin_acceso = _alcance_sucursales(request, sucursal_id)
+        if sin_acceso:
+            return sin_acceso
 
         if not fecha_inicio or not fecha_fin:
             fecha_fin_dt = timezone.localdate()
@@ -6835,6 +6985,7 @@ def api_reporte_recepciones_detallado(request):
         # se setea con compra.fecha (fecha real). Filtramos por ese campo
         # cuando existe, y caemos a `fecha` (auto_now) para registros legados.
         recepciones_qs = Productos_Recepcionados.objects.filter(
+            _q_alcance_recepcion(request.user),
             Q(fecha_recepcion__date__range=[fecha_inicio_dt, fecha_fin_dt]) |
             (Q(fecha_recepcion__isnull=True) & Q(fecha__range=[fecha_inicio_dt, fecha_fin_dt]))
         ).select_related(
@@ -7015,11 +7166,22 @@ def api_reporte_despachos_detallado(request):
     """
     API mejorada para despachos con datos reales de recepción,
     desglose por sucursal destino y split reposición/nuevo.
+
+    HUÉRFANO (jul-2026): ningún template ni JS llama a esta URL. Se le aplica
+    igual el alcance por empresa porque la ruta sigue publicada; queda
+    pendiente decidir si se elimina.
+
+    SCOPING: los DTE se acotan al alcance del usuario (`_q_alcance_dte`) y las
+    recepciones de cada documento a las sucursales de sus empresas. `proveedor_id`
+    filtra por EMISOR (el proveedor externo), así que no se valida contra el
+    alcance: quien acota es el universo de DTE, no el parámetro.
     """
     try:
         fecha_inicio = request.GET.get('fecha_inicio')
         fecha_fin = request.GET.get('fecha_fin')
         proveedor_id = request.GET.get('proveedor_id')
+
+        permitidas = ids_sucursales_alcance(request.user)
 
         if not fecha_inicio or not fecha_fin:
             fecha_fin_dt = timezone.localdate()
@@ -7029,6 +7191,7 @@ def api_reporte_despachos_detallado(request):
             fecha_fin_dt = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
 
         dtes_compra = Dte.objects.filter(
+            _q_alcance_dte(request.user),
             tipo_transaccion='COMPRA',
             fecha_emision__range=[fecha_inicio_dt, fecha_fin_dt],
         ).select_related('emisor')
@@ -7048,6 +7211,10 @@ def api_reporte_despachos_detallado(request):
             recepciones = Productos_Recepcionados.objects.filter(
                 dte=dte,
             ).select_related('sucursal_destino', 'producto_talla__producto')
+            if permitidas is not None:
+                # Un DTE del alcance puede tener recepciones repartidas en
+                # sucursales de otra empresa; el desglose sólo muestra las propias.
+                recepciones = recepciones.filter(sucursal_destino_id__in=permitidas)
 
             total_esperado = sum(p.stock or 0 for p in productos_dte)
             total_recibido = sum(r.stockArribado or 0 for r in recepciones)

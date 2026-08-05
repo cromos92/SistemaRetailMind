@@ -572,6 +572,12 @@
       <button class="nexo-btn nexo-btn-pdf" id="btn-pdf" onclick="exportar('pdf')" disabled>
         <i class="ri-file-pdf-line"></i> PDF
       </button>
+      <!-- Mismo permiso que este reporte (es el mismo stock, visto por talla),
+           por eso no necesita opción de menú propia. -->
+      <a class="nexo-btn" href="{% url 'ver_reporte_quiebre_talla' %}"
+         title="Ver qué tallas están en cero con venta histórica, y cuáles se pueden reponer desde el centro de distribución">
+        <i class="ri-error-warning-line"></i> Quiebre de talla
+      </a>
     </div>
   </div>
 

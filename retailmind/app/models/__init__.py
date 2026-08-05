@@ -96,6 +96,7 @@ from .compras import (  # noqa: F401
     Solicitud_Regularizacion,
     CurvaDistribucion,
     CurvaDistribucionItem,
+    ProveedorProductoEquivalencia,
 )
 
 from .cotizaciones import (  # noqa: F401
@@ -208,6 +209,7 @@ from .ecommerce import (  # noqa: F401
     TIPO_EVENTO_HISTORIAL_CHOICES,
     MOTIVO_REASIGNACION_CHOICES,
     TRANSICIONES_SUB_ESTADO,
+    SUB_ESTADOS_BLOQUEADOS_PICKING,
     PedidoEcommerce,
     HistorialPedidoEcommerce,
     MetricaAsignacionPedido,

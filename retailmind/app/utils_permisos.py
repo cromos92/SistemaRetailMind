@@ -205,6 +205,37 @@ def obtener_empresas_usuario(usuario):
     return Empresa.objects.filter(id__in=empresa_ids, activo=True).order_by('nombre')
 
 
+def ids_empresas_alcance(usuario):
+    """
+    IDs de las empresas visibles para el usuario, o ``None`` si ve todo.
+
+    Envoltorio delgado sobre ``obtener_empresas_usuario`` pensado para acotar
+    querysets de reportes. ``None`` significa "sin restricción" (rol
+    administrador o flag `puede_ver_todas_sucursales`): materializar la lista
+    completa no acotaría nada y sólo engordaría el SQL con cientos de ids.
+    """
+    if usuario_puede_ver_todas_sucursales(usuario):
+        return None
+    return list(obtener_empresas_usuario(usuario).values_list('id', flat=True))
+
+
+def ids_sucursales_alcance(usuario):
+    """
+    IDs de sucursal del alcance del usuario, o ``None`` si ve todo.
+
+    Se derivan de las EMPRESAS del usuario (no de sus `EmpresaUser` con
+    sucursal), que es el mismo universo que usan los reportes ya corregidos, y
+    se incluyen las inactivas a propósito: una bodega cerrada sigue teniendo
+    historia que su empresa tiene derecho a mirar.
+    """
+    empresas_ids = ids_empresas_alcance(usuario)
+    if empresas_ids is None:
+        return None
+    return list(
+        Sucursal.objects.filter(empresa_id__in=empresas_ids).values_list('id', flat=True)
+    )
+
+
 def puede_ver_sucursal(usuario, sucursal_id):
     """
     Verifica si un usuario puede acceder a datos de una sucursal específica.

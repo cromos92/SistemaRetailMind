@@ -248,6 +248,10 @@ URL_PERMISO_MAP = {
 
     # Existencias por sucursal
     '/app/reportes/existencias-sucursal/': 'reporte_existencias_sucursal',
+    # Quiebre de talla comparte el permiso de existencias por sucursal: es la
+    # misma información de stock, mirada por talla. La vista además lo revalida
+    # con @requiere_permiso (el middleware solo comprueba `puede_ver`).
+    '/app/reportes/quiebre-talla/': 'reporte_existencias_sucursal',
     '/app/api/reporte-existencias-sucursal/': 'reporte_existencias_sucursal',
     '/app/api/exportar-existencias-sucursal-excel/': 'reporte_existencias_sucursal',
     '/app/api/exportar-existencias-sucursal-pdf/': 'reporte_existencias_sucursal',

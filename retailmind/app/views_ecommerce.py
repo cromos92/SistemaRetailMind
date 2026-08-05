@@ -24,6 +24,7 @@ from app.models import (
     Ticket_Productos, TicketDetallePago, Producto_Talla, Vendedor,
     HistorialPedidoEcommerce, MetricaAsignacionPedido,
     SUB_ESTADO_PEDIDO_CHOICES, TRANSICIONES_SUB_ESTADO,
+    SUB_ESTADOS_BLOQUEADOS_PICKING,
     PermisoRol,
 )
 from app.utils_ventas import persistir_costeo_fifo
@@ -1109,6 +1110,15 @@ def _scope_sucursal_pedidos(qs, request):
     return qs
 
 
+# Mensaje único para todo lo que queda bloqueado mientras el pedido está
+# marcado SIN_STOCK (guía, facturación individual y masiva).
+_MSG_BLOQUEO_SIN_STOCK = (
+    'Este pedido está marcado SIN STOCK y la incidencia sigue abierta. '
+    'Resuélvelo primero: reasígnalo a otra sucursal, o usa "Reactivar" si el '
+    'producto apareció.'
+)
+
+
 def _bloqueo_por_estado_canal(pedido):
     """Razón para NO facturar según el último estado sincronizado del canal.
 
@@ -1773,6 +1783,10 @@ def api_facturar_pedido_individual(request, pedido_id):
     if bloqueo_canal:
         return JsonResponse({'ok': False, 'error': bloqueo_canal}, status=409)
 
+    # Quiebre de stock reportado a AllConnected: no facturar hasta resolverlo.
+    if pedido.sub_estado in SUB_ESTADOS_BLOQUEADOS_PICKING:
+        return JsonResponse({'ok': False, 'error': _MSG_BLOQUEO_SIN_STOCK}, status=409)
+
     # Validar items contra la sucursal de sesión: todos deben existir Y tener stock suficiente
     items_val = _validar_items_pedido(pedido, sucursal=sucursal)
     sin_match = [iv for iv in items_val if not iv['encontrado']]
@@ -2313,7 +2327,11 @@ def facturar_ecommerce_masivo(request):
 
     for pedido in pedidos:
         # El estado del CANAL manda: cancelado o sin pago confirmado no se factura.
-        bloqueo_canal = _bloqueo_por_estado_canal(pedido)
+        # Idem un quiebre de stock ya reportado a AllConnected.
+        bloqueo_canal = (
+            _bloqueo_por_estado_canal(pedido)
+            or (_MSG_BLOQUEO_SIN_STOCK if pedido.sub_estado in SUB_ESTADOS_BLOQUEADOS_PICKING else None)
+        )
         if bloqueo_canal:
             resultados.append({
                 'pedido_id': pedido.id,
@@ -2747,6 +2765,9 @@ def api_imprimir_guia_preparacion(request, pedido_id):
     if bloqueo_canal:
         return JsonResponse({'ok': False, 'error': bloqueo_canal}, status=409)
 
+    if pedido.sub_estado in SUB_ESTADOS_BLOQUEADOS_PICKING:
+        return JsonResponse({'ok': False, 'error': _MSG_BLOQUEO_SIN_STOCK}, status=409)
+
     resultado = _registrar_guia_preparacion(pedido, request.user)
     return JsonResponse({'ok': True, **resultado})
 
@@ -2912,6 +2933,176 @@ def api_imprimir_guias_sucursal(request):
 
 
 # ---------------------------------------------------------------------------
+# API — Quiebre de stock en tienda (marca en RM + aviso a AllConnected)
+# ---------------------------------------------------------------------------
+
+def _items_faltantes_pedido(pedido):
+    """SKUs del pedido que hoy no se pueden servir desde su sucursal.
+
+    Se manda a AllConnected como detalle de la incidencia para que central vea
+    QUÉ falta sin tener que entrar a RM. Si la validación falla por lo que sea,
+    devuelve lista vacía: el aviso vale igual.
+    """
+    try:
+        validados = _validar_items_pedido(pedido, sucursal=pedido.sucursal)
+    except Exception:  # pragma: no cover - el detalle nunca tumba el aviso
+        logger.exception('No se pudo calcular el detalle de faltantes de %s',
+                         pedido.numero_ticket_rm)
+        return []
+    faltantes = []
+    for iv in validados:
+        if iv.get('encontrado'):
+            continue
+        faltantes.append({
+            'sku': str(iv.get('sku') or ''),
+            'nombre': iv.get('nombre') or '',
+            'cantidad_pedida': iv.get('cantidad_pedida') or 0,
+            'stock_disponible': iv.get('stock_disponible') or 0,
+        })
+    return faltantes
+
+
+@login_required
+@csrf_exempt
+def api_marcar_sin_stock(request, pedido_id):
+    """POST /app/ecommerce/pedidos/<id>/sin-stock/
+
+    La tienda fue a buscar el producto y NO estaba. El pedido:
+
+      - queda en sub-estado SIN_STOCK (sigue PENDIENTE, pero sale del flujo de
+        picking: no se le imprime guía ni se puede facturar);
+      - se reporta a AllConnected, que abre su incidencia operativa SIN_STOCK
+        (bloquea re-envío/impresión/etiqueta allá, deja bitácora "Problemas
+        Inventario" y dispara alerta a central).
+
+    El aviso es best-effort: si AllConnected no responde, el pedido IGUAL queda
+    marcado acá con `sin_stock_avisado_ac=False` y el mismo endpoint reintenta
+    el aviso si se vuelve a llamar sobre un pedido ya marcado.
+
+    Body: {"motivo": "texto libre (opcional)"}
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST requerido'}, status=405)
+    denegado = _verificar_permiso_ecommerce(request, 'puede_editar')
+    if denegado:
+        return denegado
+
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'JSON inválido'}, status=400)
+
+    motivo = (data.get('motivo') or '').strip()[:255]
+
+    pedido = get_object_or_404(
+        PedidoEcommerce.objects.select_related('sucursal'),
+        id=pedido_id, estado='PENDIENTE',
+    )
+
+    ya_estaba = pedido.sub_estado == 'SIN_STOCK'
+    if not ya_estaba and pedido.sub_estado not in ('ASIGNADO', 'EN_PREPARACION', 'RECIBIDO'):
+        return JsonResponse({
+            'ok': False,
+            'error': f'No se puede marcar sin stock desde "{pedido.get_sub_estado_display()}".',
+        }, status=400)
+
+    sub_estado_anterior = pedido.sub_estado
+    if not ya_estaba:
+        pedido.sub_estado = 'SIN_STOCK'
+        pedido.sin_stock_motivo = motivo or 'Sin stock en tienda'
+        pedido.save(update_fields=['sub_estado', 'sin_stock_motivo'])
+        HistorialPedidoEcommerce.objects.create(
+            pedido=pedido,
+            estado_anterior=pedido.estado,
+            estado_nuevo=pedido.estado,
+            sub_estado_anterior=sub_estado_anterior,
+            sub_estado_nuevo='SIN_STOCK',
+            usuario=request.user,
+            tipo_evento='ERROR',
+            motivo=f'Sin stock en tienda: {pedido.sin_stock_motivo}',
+        )
+    elif motivo:
+        pedido.sin_stock_motivo = motivo
+        pedido.save(update_fields=['sin_stock_motivo'])
+
+    # Aviso a AllConnected (nunca lanza). Si ya estaba avisado, el endpoint
+    # remoto es idempotente y responde `ya_existia`.
+    from app.services.allconnected_pedidos_service import reportar_sin_stock
+    aviso = reportar_sin_stock(
+        pedido,
+        motivo=pedido.sin_stock_motivo,
+        items=_items_faltantes_pedido(pedido),
+    )
+    if bool(aviso.get('ok')) != pedido.sin_stock_avisado_ac:
+        pedido.sin_stock_avisado_ac = bool(aviso.get('ok'))
+        pedido.save(update_fields=['sin_stock_avisado_ac'])
+
+    return JsonResponse({
+        'ok': True,
+        'ya_estaba': ya_estaba,
+        'sub_estado': pedido.sub_estado,
+        'sub_estado_display': pedido.get_sub_estado_display(),
+        'motivo': pedido.sin_stock_motivo,
+        'avisado_allconnected': pedido.sin_stock_avisado_ac,
+        'aviso_detalle': aviso.get('detalle', ''),
+    })
+
+
+@login_required
+@csrf_exempt
+def api_reactivar_sin_stock(request, pedido_id):
+    """POST /app/ecommerce/pedidos/<id>/reactivar/
+
+    El producto apareció (o llegó por traspaso): el pedido vuelve a ASIGNADO y
+    la tienda puede reimprimir la guía.
+
+    NO cierra la incidencia en AllConnected: allá el cierre exige el permiso de
+    resolución y es una decisión de central (puede haber avisado al cliente o
+    reasignado). Se avisa por el historial y por la respuesta.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST requerido'}, status=405)
+    denegado = _verificar_permiso_ecommerce(request, 'puede_editar')
+    if denegado:
+        return denegado
+
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except (json.JSONDecodeError, ValueError):
+        data = {}
+    motivo = (data.get('motivo') or '').strip()[:255]
+
+    pedido = get_object_or_404(
+        PedidoEcommerce.objects.filter(estado='PENDIENTE', sub_estado='SIN_STOCK'),
+        id=pedido_id,
+    )
+
+    pedido.sub_estado = 'ASIGNADO'
+    pedido.sin_stock_motivo = ''
+    pedido.sin_stock_avisado_ac = False
+    pedido.save(update_fields=['sub_estado', 'sin_stock_motivo', 'sin_stock_avisado_ac'])
+
+    HistorialPedidoEcommerce.objects.create(
+        pedido=pedido,
+        estado_anterior=pedido.estado,
+        estado_nuevo=pedido.estado,
+        sub_estado_anterior='SIN_STOCK',
+        sub_estado_nuevo='ASIGNADO',
+        usuario=request.user,
+        tipo_evento='CAMBIO_ESTADO',
+        motivo=motivo or 'Reactivado: el stock apareció en tienda',
+    )
+
+    return JsonResponse({
+        'ok': True,
+        'sub_estado': pedido.sub_estado,
+        'sub_estado_display': pedido.get_sub_estado_display(),
+        'aviso': ('El pedido volvió al flujo de picking. La incidencia en '
+                  'AllConnected la cierra central cuando corresponda.'),
+    })
+
+
+# ---------------------------------------------------------------------------
 # API — Reasignar pedido a otra sucursal
 # ---------------------------------------------------------------------------
 
@@ -2971,7 +3162,12 @@ def api_reasignar_pedido(request, pedido_id):
     pedido.sub_estado = 'ASIGNADO' if todos_con_stock else 'RECIBIDO'
     pedido.fecha_asignacion = timezone.now()
     pedido.asignado_por = request.user
-    pedido.save(update_fields=['sucursal', 'sub_estado', 'fecha_asignacion', 'asignado_por'])
+    # Reasignar es una de las formas de resolver el quiebre: el pedido sale de
+    # SIN_STOCK. (La incidencia en AllConnected la cierra central.)
+    pedido.sin_stock_motivo = ''
+    pedido.sin_stock_avisado_ac = False
+    pedido.save(update_fields=['sucursal', 'sub_estado', 'fecha_asignacion', 'asignado_por',
+                               'sin_stock_motivo', 'sin_stock_avisado_ac'])
 
     HistorialPedidoEcommerce.objects.create(
         pedido=pedido,

@@ -83,6 +83,10 @@
                   {# El canal aún no confirma el pago: no sacar ni facturar. #}
                   <br><span class="badge-sin-pago" title="AllConnected reporta el pedido SIN PAGO confirmado: no imprimir guía ni facturar hasta que el canal lo confirme (se actualiza con Traer pedidos)"><i class="bi bi-cash-coin me-1"></i>Sin pago canal</span>
                 {% endif %}
+                {% if p.sub_estado == 'SIN_STOCK' and not p.sin_stock_avisado_ac %}
+                  {# El aviso a AllConnected falló: el pedido está marcado acá pero central NO lo sabe. #}
+                  <br><span class="badge-aviso-pendiente" title="No se pudo avisar a AllConnected. Volvé a apretar &quot;Sin stock&quot; para reintentar el aviso."><i class="bi bi-wifi-off me-1"></i>Aviso AC pendiente</span>
+                {% endif %}
               {% endif %}
             </td>
             <td>
@@ -91,6 +95,15 @@
                   <span class="btn btn-sm btn-sin-stock disabled" title="Stock insuficiente en sucursal activa">
                     <i class="bi bi-exclamation-circle"></i>
                   </span>
+                  {% if p.estado == 'PENDIENTE' and p.sub_estado == 'SIN_STOCK' %}
+                  <button class="btn btn-sm btn-outline-warning" style="font-size:.68rem;padding:1px 6px;" onclick="reactivarSinStock({{ p.id }}, this)" title="El producto apareció: volver al flujo de preparación">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                  </button>
+                  {% elif p.estado == 'PENDIENTE' %}
+                  <button class="btn btn-sm btn-outline-danger" style="font-size:.68rem;padding:1px 6px;" onclick="abrirSinStock({{ p.id }}, '{{ p.numero_ticket_rm|escapejs }}')" title="Confirmar que no hay stock y avisar a AllConnected">
+                    <i class="bi bi-box-seam"></i>
+                  </button>
+                  {% endif %}
                   {% if p.estado == 'PENDIENTE' %}
                   <button class="btn btn-sm btn-outline-secondary" style="font-size:.68rem;padding:1px 6px;" onclick="abrirReasignar({{ p.id }})" title="Reasignar a otra sucursal">
                     <i class="bi bi-arrow-left-right"></i>
@@ -105,7 +118,7 @@
                   <a href="{% url 'pedido_ecommerce_detalle' pedido_id=p.id %}" class="btn btn-sm btn-outline-primary" style="font-size:.72rem;padding:2px 8px;">
                     {% if p.estado == 'PENDIENTE' %}Facturar{% else %}Ver{% endif %}
                   </a>
-                  {% if p.estado == 'PENDIENTE' and p.sub_estado != 'RECIBIDO' %}
+                  {% if p.estado == 'PENDIENTE' and p.sub_estado != 'RECIBIDO' and p.sub_estado != 'SIN_STOCK' %}
                   <button class="btn btn-sm btn-outline-dark" style="font-size:.68rem;padding:1px 6px;" onclick="imprimirGuiaPedido({{ p.id }}, this)" title="Imprimir guía de preparación{% if p.sub_estado == 'ASIGNADO' %} (marca En Preparación){% else %} (reimprimir){% endif %}">
                     <i class="bi bi-printer"></i>
                   </button>
@@ -113,6 +126,15 @@
                   {% if p.estado == 'PENDIENTE' and p.sub_estado == 'EN_PREPARACION' %}
                   <button class="btn btn-sm btn-outline-success" style="font-size:.68rem;padding:1px 6px;" onclick="marcarListoDespacho({{ p.id }}, this)" title="Marcar Listo para Despacho (picking terminado)">
                     <i class="bi bi-check2-circle"></i>
+                  </button>
+                  {% endif %}
+                  {% if p.estado == 'PENDIENTE' and p.sub_estado == 'SIN_STOCK' %}
+                  <button class="btn btn-sm btn-outline-warning" style="font-size:.68rem;padding:1px 6px;" onclick="reactivarSinStock({{ p.id }}, this)" title="El producto apareció: volver al flujo de preparación{% if p.sin_stock_motivo %} (marcado: {{ p.sin_stock_motivo }}){% endif %}">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                  </button>
+                  {% elif p.estado == 'PENDIENTE' and p.sub_estado != 'RECIBIDO' %}
+                  <button class="btn btn-sm btn-outline-danger" style="font-size:.68rem;padding:1px 6px;" onclick="abrirSinStock({{ p.id }}, '{{ p.numero_ticket_rm|escapejs }}')" title="No hay stock del producto: marcar y avisar a AllConnected">
+                    <i class="bi bi-box-seam"></i>
                   </button>
                   {% endif %}
                   {% if p.estado == 'PENDIENTE' %}

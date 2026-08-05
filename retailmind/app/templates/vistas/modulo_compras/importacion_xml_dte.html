@@ -1,0 +1,901 @@
+{% load static %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+
+<style>
+.card-importacion {
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.upload-zone {
+    border: 2px dashed #dee2e6;
+    border-radius: 10px;
+    padding: 40px;
+    text-align: center;
+    background-color: #f8f9fa;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.upload-zone:hover {
+    border-color: #0d6efd;
+    background-color: #e7f1ff;
+}
+
+.upload-zone.drag-over {
+    border-color: #198754;
+    background-color: #d1e7dd;
+}
+
+.result-table {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+/* Semáforo de conciliación */
+.sem {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+.sem-ALTA      { background-color: #0ab39c; }
+.sem-MEDIA     { background-color: #f7b84b; }
+.sem-SIN_MATCH { background-color: #f06548; }
+
+tr.fila-ALTA      { background-color: rgba(10,179,156,0.06); }
+tr.fila-MEDIA     { background-color: rgba(247,184,75,0.10); }
+tr.fila-SIN_MATCH { background-color: rgba(240,101,72,0.10); }
+
+.doc-card { border-left: 4px solid #405189; }
+.doc-card.doc-bloqueado { border-left-color: #f06548; }
+.doc-card.doc-ok { border-left-color: #0ab39c; }
+
+.cant-faltante { border-color: #f06548 !important; background-color: #fff5f4; }
+
+.xml-codigo { font-family: monospace; font-size: 0.75rem; }
+
+.aviso-stock {
+    border-left: 4px solid #405189;
+    background: #eef1f8;
+}
+
+@media (max-width: 768px) {
+    .upload-zone { padding: 1.5rem 1rem; }
+    .import-table { font-size: 0.75rem; }
+}
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+
+        <!-- Breadcrumb -->
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0">Importar Factura de Proveedor (XML DTE)</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="{% url 'verHome' %}">Inicio</a></li>
+                            <li class="breadcrumb-item"><a href="{% url 'verGestionDteCompras' %}">Gestión DTEs</a></li>
+                            <li class="breadcrumb-item active">Importar XML</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Aviso permanente: esto NO mueve stock -->
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="alert aviso-stock d-flex align-items-start" role="alert">
+                    <i class="bi bi-box-seam me-2 mt-1"></i>
+                    <div>
+                        <strong>Esto registra la FACTURA, no la mercadería.</strong>
+                        Al confirmar se crea el documento de compra con su detalle de líneas.
+                        <u>No se mueve stock</u>: las unidades siguen entrando por el flujo de siempre
+                        (creación de productos / recepción de la compra).
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instrucciones -->
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="alert alert-info alert-dismissible fade show" role="alert">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Cómo funciona:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>Sube el <strong>XML del DTE</strong> que te envió el proveedor (uno o varios, hasta {{ max_archivos }}).</li>
+                        <li>Se valida el <strong>duplicado</strong> (RUT emisor + tipo + folio) y la <strong>cuadratura</strong> (suma de líneas vs. totales declarados).</li>
+                        <li>Cada línea se concilia contra tu catálogo: <span class="sem sem-ALTA"></span>verde = match seguro,
+                            <span class="sem sem-MEDIA"></span>amarillo = revísalo, <span class="sem sem-SIN_MATCH"></span>rojo = elígelo a mano.</li>
+                        <li><strong>Cantidad:</strong> el SII permite que la factura venga <em>sin</em> cantidad por línea. Esas líneas salen marcadas y tendrás que completarlas: sin cantidad no se puede confirmar.</li>
+                        <li>Cada línea que resuelvas a mano <strong>se aprende</strong>: la próxima factura de ese proveedor con el mismo código entra sola.</li>
+                        <li>El proveedor debe existir previamente en el sistema. Máximo {{ max_lineas }} líneas por documento (tope SII).</li>
+                    </ul>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            </div>
+        </div>
+
+        {% if not defusedxml_disponible %}
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="alert alert-warning" role="alert">
+                    <i class="bi bi-shield-exclamation me-2"></i>
+                    <strong>Nota técnica:</strong> el paquete <code>defusedxml</code> no está instalado; se usa el parser de la
+                    librería estándar. Sube solo XML de proveedores de confianza.
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- ============ PASO 1: SUBIR ============ -->
+        <div class="row" id="paso1">
+            <div class="col-lg-12">
+                <div class="card card-importacion">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0 text-white">
+                            <i class="bi bi-filetype-xml me-2"></i>
+                            Paso 1 · Cargar XML del proveedor
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold" for="selSucursal">
+                                    <i class="bi bi-shop me-1"></i> Sucursal (catálogo contra el que se concilia)
+                                </label>
+                                <select class="form-select" id="selSucursal">
+                                    {% for s in sucursales %}
+                                    <option value="{{ s.id }}" {% if s.id == sucursal_actual_id %}selected{% endif %}>{{ s.alias }}</option>
+                                    {% empty %}
+                                    <option value="">Sin sucursales asignadas</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">Determina en qué bodega se buscan los productos del detalle.</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold" for="selEmpresaReceptora">
+                                    <i class="bi bi-building me-1"></i> Empresa receptora (solo si el XML no la identifica)
+                                </label>
+                                <select class="form-select" id="selEmpresaReceptora">
+                                    <option value="">Detectar desde el XML</option>
+                                    {% for e in empresas %}
+                                    <option value="{{ e.id }}" {% if e.id == empresa_actual_id %}selected{% endif %}>{{ e.nombre }} ({{ e.rut }})</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">Se usa cuando el RUT receptor del XML no coincide con ninguna de tus empresas.</small>
+                            </div>
+                        </div>
+
+                        <div class="upload-zone" id="uploadZone">
+                            <i class="bi bi-cloud-arrow-up display-1 text-primary"></i>
+                            <h5 class="mt-3">Arrastra los XML aquí</h5>
+                            <p class="text-muted">o haz clic para seleccionar</p>
+                            <p class="mt-2"><span class="badge bg-success">XML</span></p>
+                            <input type="file" id="archivosXml" accept=".xml,text/xml,application/xml" multiple style="display:none;">
+                        </div>
+
+                        <div id="listaArchivos" class="mt-3"></div>
+                    </div>
+                    <div class="card-footer d-flex justify-content-between">
+                        <a href="{% url 'verGestionDteCompras' %}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left me-1"></i> Volver a DTEs
+                        </a>
+                        <div>
+                            <button type="button" class="btn btn-outline-secondary me-2" id="btnLimpiar">
+                                <i class="bi bi-x-circle me-1"></i> Limpiar
+                            </button>
+                            <button type="button" class="btn btn-primary" id="btnAnalizar" disabled>
+                                <i class="bi bi-search me-1"></i> Analizar XML
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ RESULTADO DEL ANÁLISIS ============ -->
+        <div class="row mt-3" id="seccionDocumentos" style="display:none;">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="card-title mb-0 text-white">
+                            <i class="bi bi-list-check me-2"></i> Documentos encontrados
+                        </h5>
+                    </div>
+                    <div class="card-body" id="contenedorDocumentos"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ PASO 2: CONCILIAR ============ -->
+        <div class="row mt-3" id="paso2" style="display:none;">
+            <div class="col-lg-12">
+                <div class="card card-importacion">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0 text-white">
+                            <i class="bi bi-diagram-3 me-2"></i>
+                            Paso 2 · Conciliación línea a línea
+                        </h5>
+                        <span id="tituloDocConciliado" class="badge bg-light text-dark"></span>
+                    </div>
+                    <div class="card-body">
+                        <div id="resumenConciliacion" class="mb-3"></div>
+                        <div class="table-responsive result-table">
+                            <table class="table table-sm table-hover align-middle import-table" id="tablaConciliacion">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width:40px;">#</th>
+                                        <th>Código(s) del proveedor</th>
+                                        <th>Descripción en la factura</th>
+                                        <th style="width:110px;" class="text-end">Cantidad</th>
+                                        <th style="width:110px;" class="text-end">P. unit.</th>
+                                        <th style="width:110px;" class="text-end">Monto</th>
+                                        <th style="width:32%;">Producto del sistema</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="form-check mb-2" id="wrapDescuadre" style="display:none;">
+                            <input class="form-check-input" type="checkbox" id="chkDescuadre">
+                            <label class="form-check-label text-danger" for="chkDescuadre">
+                                Aceptar el descuadre y registrar igual (queda en el log)
+                            </label>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <button type="button" class="btn btn-secondary" id="btnVolverPaso1">
+                                <i class="bi bi-arrow-left me-1"></i> Volver
+                            </button>
+                            <button type="button" class="btn btn-success" id="btnConfirmar">
+                                <i class="bi bi-check2-circle me-1"></i> Confirmar e importar (sin mover stock)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ PASO 3: RESULTADO ============ -->
+        <div class="row mt-3" id="paso3" style="display:none;">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="card-title mb-0 text-white">
+                            <i class="bi bi-check-circle me-2"></i> Resultado
+                        </h5>
+                    </div>
+                    <div class="card-body" id="contenedorResultado"></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Modal buscador de producto -->
+<div class="modal fade" id="modalBuscarProducto" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-search me-2"></i>Elegir producto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-2" id="ctxLineaBuscador"></p>
+                <div class="input-group mb-2">
+                    <input type="text" class="form-control" id="inpBuscarProducto" placeholder="SKU, código o descripción…">
+                    <button class="btn btn-primary" type="button" id="btnBuscarProducto">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="chkTodasSucursales">
+                    <label class="form-check-label small" for="chkTodasSucursales">Buscar en todas las sucursales</label>
+                </div>
+                <div id="resultadosBuscador"></div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-outline-danger btn-sm" id="btnDejarSinProducto">
+                    <i class="bi bi-slash-circle me-1"></i> Dejar como línea solo-texto
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+// OJO: el footer trae jQuery, por eso este bloque va DESPUÉS del include.
+(function () {
+    'use strict';
+
+    var URL_ANALIZAR  = "{% url 'analizar_xml_dte' %}";
+    var URL_BUSCAR    = "{% url 'buscar_producto_xml_dte' %}";
+    var URL_CONFIRMAR = "{% url 'confirmar_xml_dte' %}";
+    var URL_GESTION   = "{% url 'verGestionDteCompras' %}";
+
+    var archivos = [];        // File[]
+    var documentos = [];      // documentos analizados devueltos por el backend
+    var docActual = null;     // documento en conciliación
+    var lineaEnEdicion = null;
+
+    // ---------------------------------------------------------------
+    // Utilidades
+    // ---------------------------------------------------------------
+    function getCookie(name) {
+        var valor = null;
+        if (document.cookie && document.cookie !== '') {
+            document.cookie.split(';').forEach(function (c) {
+                var cookie = c.trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    valor = decodeURIComponent(cookie.substring(name.length + 1));
+                }
+            });
+        }
+        return valor;
+    }
+
+    function esc(txt) {
+        return $('<div>').text(txt === null || txt === undefined ? '' : txt).html();
+    }
+
+    function money(valor) {
+        if (valor === null || valor === undefined || valor === '') { return '—'; }
+        var n = Number(valor);
+        if (isNaN(n)) { return esc(valor); }
+        return '$' + n.toLocaleString('es-CL');
+    }
+
+    // ---------------------------------------------------------------
+    // PASO 1 · selección de archivos
+    // ---------------------------------------------------------------
+    function initDragAndDrop() {
+        var zona = $('#uploadZone');
+        zona.on('click', function () { $('#archivosXml').click(); });
+        zona.on('dragover', function (e) {
+            e.preventDefault(); e.stopPropagation(); $(this).addClass('drag-over');
+        });
+        zona.on('dragleave', function (e) {
+            e.preventDefault(); e.stopPropagation(); $(this).removeClass('drag-over');
+        });
+        zona.on('drop', function (e) {
+            e.preventDefault(); e.stopPropagation(); $(this).removeClass('drag-over');
+            agregarArchivos(e.originalEvent.dataTransfer.files);
+        });
+        $('#archivosXml').on('change', function (e) { agregarArchivos(e.target.files); });
+    }
+
+    function agregarArchivos(lista) {
+        for (var i = 0; i < lista.length; i++) {
+            var f = lista[i];
+            if (!/\.xml$/i.test(f.name)) {
+                Swal.fire('Formato no válido', esc(f.name) + ' no es un archivo .xml', 'warning');
+                continue;
+            }
+            archivos.push(f);
+        }
+        renderListaArchivos();
+    }
+
+    function renderListaArchivos() {
+        var cont = $('#listaArchivos').empty();
+        if (!archivos.length) {
+            $('#btnAnalizar').prop('disabled', true);
+            return;
+        }
+        var html = '<ul class="list-group">';
+        archivos.forEach(function (f, idx) {
+            html += '<li class="list-group-item d-flex justify-content-between align-items-center">' +
+                    '<span><i class="bi bi-filetype-xml text-primary me-2"></i>' + esc(f.name) +
+                    ' <small class="text-muted">(' + Math.round(f.size / 1024) + ' KB)</small></span>' +
+                    '<button class="btn btn-sm btn-outline-danger btn-quitar" data-idx="' + idx + '">' +
+                    '<i class="bi bi-x"></i></button></li>';
+        });
+        html += '</ul>';
+        cont.html(html);
+        $('#btnAnalizar').prop('disabled', false);
+    }
+
+    $(document).on('click', '.btn-quitar', function () {
+        archivos.splice(parseInt($(this).data('idx'), 10), 1);
+        renderListaArchivos();
+    });
+
+    // ---------------------------------------------------------------
+    // Análisis
+    // ---------------------------------------------------------------
+    function analizar() {
+        if (!archivos.length) { return; }
+        var fd = new FormData();
+        archivos.forEach(function (f) { fd.append('archivos', f); });
+        fd.append('sucursal_id', $('#selSucursal').val() || '');
+
+        Swal.fire({
+            title: 'Analizando…',
+            text: 'Leyendo el XML y buscando los productos en tu catálogo',
+            allowOutsideClick: false,
+            didOpen: function () { Swal.showLoading(); }
+        });
+
+        $.ajax({
+            url: URL_ANALIZAR, method: 'POST', data: fd,
+            processData: false, contentType: false,
+            headers: { 'X-CSRFToken': getCookie('csrftoken') }
+        }).done(function (resp) {
+            Swal.close();
+            if (!resp.success) {
+                Swal.fire('Error', resp.error || 'No se pudo analizar', 'error');
+                return;
+            }
+            renderDocumentos(resp.archivos);
+        }).fail(function (xhr) {
+            Swal.close();
+            var msg = (xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.mensaje)) ||
+                      'Error al analizar los archivos';
+            Swal.fire('Error', msg, 'error');
+        });
+    }
+
+    function renderDocumentos(resultadosArchivos) {
+        documentos = [];
+        var cont = $('#contenedorDocumentos').empty();
+
+        resultadosArchivos.forEach(function (arch) {
+            if (!arch.ok) {
+                cont.append(
+                    '<div class="alert alert-danger"><i class="bi bi-exclamation-octagon me-2"></i>' +
+                    '<strong>' + esc(arch.archivo) + ':</strong> ' + esc(arch.error) + '</div>');
+                return;
+            }
+            arch.documentos.forEach(function (doc) {
+                var idx = documentos.length;
+                documentos.push(doc);
+                cont.append(tarjetaDocumento(doc, idx));
+            });
+        });
+
+        if (!documentos.length) {
+            cont.append('<div class="alert alert-warning mb-0">No se encontró ningún documento válido.</div>');
+        }
+        $('#seccionDocumentos').show();
+    }
+
+    function tarjetaDocumento(doc, idx) {
+        var d = doc.documento || {};
+        var t = doc.totales || {};
+        var cuad = (doc.validacion && doc.validacion.cuadratura) || {};
+        var claseCard = doc.puede_confirmar ? 'doc-ok' : 'doc-bloqueado';
+
+        var badges = '';
+        badges += '<span class="badge bg-primary me-1">' + esc(d.tipo_documento_sistema || ('Tipo ' + d.tipo_documento)) + '</span>';
+        badges += '<span class="badge bg-dark me-1">Folio ' + esc(d.folio) + '</span>';
+        if (doc.duplicados && doc.duplicados.length) {
+            badges += '<span class="badge bg-danger me-1"><i class="bi bi-files me-1"></i>DUPLICADO</span>';
+        }
+        if (cuad.verificable === false) {
+            badges += '<span class="badge bg-warning text-dark me-1">Sin totales</span>';
+        } else if (cuad.cuadra) {
+            badges += '<span class="badge bg-success me-1"><i class="bi bi-check2 me-1"></i>Cuadra</span>';
+        } else {
+            badges += '<span class="badge bg-danger me-1"><i class="bi bi-exclamation-triangle me-1"></i>Descuadre ' +
+                      esc(cuad.diferencia) + '</span>';
+        }
+
+        var r = doc.resumen_match || {};
+        var semaforo =
+            '<span class="me-2"><span class="sem sem-ALTA"></span>' + (r.ALTA || 0) + '</span>' +
+            '<span class="me-2"><span class="sem sem-MEDIA"></span>' + (r.MEDIA || 0) + '</span>' +
+            '<span class="me-2"><span class="sem sem-SIN_MATCH"></span>' + (r.SIN_MATCH || 0) + '</span>';
+
+        var avisos = '';
+        (doc.bloqueos || []).forEach(function (b) {
+            avisos += '<li class="text-danger">' + esc(b) + '</li>';
+        });
+        ((doc.validacion && doc.validacion.warnings) || []).forEach(function (w) {
+            avisos += '<li class="text-warning-emphasis">' + esc(w) + '</li>';
+        });
+
+        return '' +
+        '<div class="card doc-card ' + claseCard + ' mb-3">' +
+          '<div class="card-body">' +
+            '<div class="d-flex justify-content-between align-items-start flex-wrap gap-2">' +
+              '<div>' +
+                '<div class="mb-2">' + badges + '</div>' +
+                '<h6 class="mb-1">' + esc(doc.emisor.razon_social || '(sin razón social)') +
+                  ' <small class="text-muted">' + esc(doc.emisor.rut || '') + '</small></h6>' +
+                '<div class="small text-muted">' +
+                  'Emitida el ' + esc(d.fecha_emision || '?') + ' · ' +
+                  'Neto ' + money(t.monto_neto) + ' · IVA ' + money(t.iva) + ' · ' +
+                  '<strong>Total ' + money(t.monto_total) + '</strong>' +
+                '</div>' +
+                '<div class="small text-muted mt-1">Archivo: ' + esc(doc.archivo) + '</div>' +
+                '<div class="small mt-1">' +
+                  (doc.proveedor.encontrado
+                    ? '<span class="text-success"><i class="bi bi-check2 me-1"></i>Proveedor: ' + esc(doc.proveedor.nombre) + '</span>'
+                    : '<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Proveedor no existe en el sistema</span>') +
+                  ' · ' +
+                  (doc.empresa_receptora.reconocida
+                    ? '<span class="text-success">Receptor: ' + esc(doc.empresa_receptora.nombre) + '</span>'
+                    : '<span class="text-danger">Receptor no reconocido (' + esc(doc.empresa_receptora.rut || '?') + ')</span>') +
+                '</div>' +
+              '</div>' +
+              '<div class="text-end">' +
+                '<div class="mb-2 small">' + semaforo + '<span class="text-muted">' + (doc.detalle || []).length + ' líneas</span></div>' +
+                '<button class="btn btn-primary btn-sm btn-conciliar" data-idx="' + idx + '">' +
+                  '<i class="bi bi-diagram-3 me-1"></i>Conciliar</button>' +
+              '</div>' +
+            '</div>' +
+            (avisos ? '<ul class="small mt-3 mb-0">' + avisos + '</ul>' : '') +
+          '</div>' +
+        '</div>';
+    }
+
+    // ---------------------------------------------------------------
+    // PASO 2 · conciliación
+    // ---------------------------------------------------------------
+    $(document).on('click', '.btn-conciliar', function () {
+        docActual = documentos[parseInt($(this).data('idx'), 10)];
+        // Estado editable por línea (lo único que el usuario decide)
+        docActual._estado = (docActual.detalle || []).map(function (l) {
+            return {
+                nro_linea: l.nro_linea,
+                cantidad: (l.cantidad === null || l.cantidad === undefined || l.cantidad === '')
+                            ? '' : l.cantidad,
+                cantidad_del_xml: !(l.cantidad === null || l.cantidad === undefined || l.cantidad === ''),
+                seleccion: (l.match && l.match.propuesta) ? l.match.propuesta : null,
+                confianza: l.match ? l.match.confianza : 'SIN_MATCH',
+                origen_match: l.match ? l.match.origen : null,
+                manual: false,
+                solo_texto: false
+            };
+        });
+        renderConciliacion();
+        $('#paso2').show();
+        $('html, body').animate({ scrollTop: $('#paso2').offset().top - 80 }, 300);
+    });
+
+    function renderConciliacion() {
+        var d = docActual.documento || {};
+        $('#tituloDocConciliado').text(
+            (d.tipo_documento_sistema || '') + ' folio ' + d.folio + ' · ' +
+            (docActual.emisor.razon_social || ''));
+
+        var cuad = (docActual.validacion && docActual.validacion.cuadratura) || {};
+        $('#wrapDescuadre').toggle(cuad.verificable !== false && !cuad.cuadra);
+        $('#chkDescuadre').prop('checked', false);
+
+        var tbody = $('#tablaConciliacion tbody').empty();
+        (docActual.detalle || []).forEach(function (linea, i) {
+            tbody.append(filaConciliacion(linea, i));
+        });
+        actualizarResumen();
+    }
+
+    function filaConciliacion(linea, i) {
+        var est = docActual._estado[i];
+        var codigos = (linea.codigos || []).map(function (c) {
+            return '<span class="badge bg-light text-dark xml-codigo" title="' + esc(c.tipo) + '">' +
+                   esc(c.valor) + '</span>';
+        }).join(' ') || '<span class="text-muted small">sin código</span>';
+
+        return '' +
+        '<tr class="fila-' + est.confianza + '" data-i="' + i + '">' +
+          '<td>' + esc(linea.nro_linea) + '</td>' +
+          '<td>' + codigos + '</td>' +
+          '<td><div>' + esc(linea.nombre || '') + '</div>' +
+              (linea.descripcion ? '<small class="text-muted">' + esc(linea.descripcion) + '</small>' : '') +
+          '</td>' +
+          '<td class="text-end">' +
+            '<input type="number" min="0" step="0.01" class="form-control form-control-sm text-end inp-cantidad' +
+              (est.cantidad === '' ? ' cant-faltante' : '') + '" ' +
+              'data-i="' + i + '" value="' + esc(est.cantidad) + '" ' +
+              (est.cantidad_del_xml ? '' : 'placeholder="falta"') + '>' +
+            (est.cantidad_del_xml ? '' : '<small class="text-danger">sin QtyItem</small>') +
+          '</td>' +
+          '<td class="text-end">' + money(linea.precio_unitario) + '</td>' +
+          '<td class="text-end">' + money(linea.monto_item) + '</td>' +
+          '<td>' + celdaProducto(i) + '</td>' +
+        '</tr>';
+    }
+
+    function celdaProducto(i) {
+        var est = docActual._estado[i];
+        var linea = docActual.detalle[i];
+        var match = linea.match || {};
+        var html = '<div class="d-flex justify-content-between align-items-start gap-2">';
+        html += '<div class="flex-grow-1">';
+        html += '<span class="sem sem-' + est.confianza + '"></span>';
+
+        if (est.solo_texto) {
+            html += '<span class="text-muted">Línea solo-texto (sin producto)</span>';
+        } else if (est.seleccion) {
+            html += '<strong>' + esc(est.seleccion.articulo) + '</strong> ' +
+                    '<span class="badge bg-light text-dark">T ' + esc(est.seleccion.talla) + '</span>' +
+                    '<div class="small text-muted">SKU ' + esc(est.seleccion.sku) +
+                    ' · ' + esc(est.seleccion.sucursal || '') + '</div>';
+        } else {
+            html += '<span class="text-danger">Sin producto asignado</span>';
+        }
+
+        if (match.motivo) {
+            html += '<div class="small text-muted fst-italic">' + esc(match.motivo) + '</div>';
+        }
+        if (est.manual) {
+            html += '<div class="small text-success"><i class="bi bi-mortarboard me-1"></i>' +
+                    'Se guardará la equivalencia</div>';
+        }
+        html += '</div>';
+        html += '<button class="btn btn-sm btn-outline-primary btn-elegir" data-i="' + i + '">' +
+                '<i class="bi bi-search"></i></button>';
+        html += '</div>';
+
+        if ((match.candidatos || []).length && !est.seleccion && !est.solo_texto) {
+            html += '<div class="mt-1">';
+            match.candidatos.forEach(function (c, k) {
+                html += '<button class="btn btn-sm btn-outline-secondary me-1 mb-1 btn-candidato" ' +
+                        'data-i="' + i + '" data-k="' + k + '">' +
+                        esc(c.articulo) + ' · T' + esc(c.talla) + '</button>';
+            });
+            html += '</div>';
+        }
+        return html;
+    }
+
+    function refrescarFila(i) {
+        var $tr = $('#tablaConciliacion tbody tr[data-i="' + i + '"]');
+        $tr.attr('class', 'fila-' + docActual._estado[i].confianza);
+        $tr.find('td').last().html(celdaProducto(i));
+        actualizarResumen();
+    }
+
+    function actualizarResumen() {
+        var sinCant = 0, sinProd = 0, ok = 0, aprender = 0;
+        docActual._estado.forEach(function (e) {
+            if (e.cantidad === '' || Number(e.cantidad) <= 0) { sinCant++; }
+            if (!e.seleccion && !e.solo_texto) { sinProd++; } else { ok++; }
+            if (e.manual && e.seleccion) { aprender++; }
+        });
+
+        var html = '<div class="row g-2">';
+        html += kpi('Líneas', docActual._estado.length, 'bg-primary-subtle text-primary');
+        html += kpi('Resueltas', ok, 'bg-success-subtle text-success');
+        html += kpi('Sin producto', sinProd, sinProd ? 'bg-danger-subtle text-danger' : 'bg-light text-muted');
+        html += kpi('Sin cantidad', sinCant, sinCant ? 'bg-danger-subtle text-danger' : 'bg-light text-muted');
+        html += kpi('Se aprenderán', aprender, 'bg-info-subtle text-info');
+        html += '</div>';
+
+        if (sinCant) {
+            html += '<div class="alert alert-danger mt-2 mb-0 py-2 small">' +
+                    '<i class="bi bi-exclamation-triangle me-1"></i>' +
+                    'Hay ' + sinCant + ' línea(s) sin cantidad. El SII permite facturas sin <code>QtyItem</code>, ' +
+                    'pero una línea sin unidades no puede registrarse: complétalas para confirmar.</div>';
+        }
+        $('#resumenConciliacion').html(html);
+        $('#btnConfirmar').prop('disabled', sinCant > 0);
+    }
+
+    function kpi(titulo, valor, clases) {
+        return '<div class="col-6 col-md">' +
+               '<div class="p-2 rounded ' + clases + ' text-center">' +
+               '<div class="fs-5 fw-bold">' + valor + '</div>' +
+               '<div class="small">' + titulo + '</div></div></div>';
+    }
+
+    $(document).on('input', '.inp-cantidad', function () {
+        var i = parseInt($(this).data('i'), 10);
+        docActual._estado[i].cantidad = $(this).val();
+        $(this).toggleClass('cant-faltante', $(this).val() === '');
+        actualizarResumen();
+    });
+
+    $(document).on('click', '.btn-candidato', function () {
+        var i = parseInt($(this).data('i'), 10);
+        var k = parseInt($(this).data('k'), 10);
+        seleccionarProducto(i, docActual.detalle[i].match.candidatos[k], true);
+    });
+
+    function seleccionarProducto(i, producto, manual) {
+        var est = docActual._estado[i];
+        est.seleccion = producto;
+        est.solo_texto = false;
+        est.manual = !!manual;
+        est.confianza = 'ALTA';
+        refrescarFila(i);
+    }
+
+    // ---------------------------------------------------------------
+    // Buscador de producto
+    // ---------------------------------------------------------------
+    $(document).on('click', '.btn-elegir', function () {
+        lineaEnEdicion = parseInt($(this).data('i'), 10);
+        var linea = docActual.detalle[lineaEnEdicion];
+        $('#ctxLineaBuscador').html(
+            'Línea ' + esc(linea.nro_linea) + ': <strong>' + esc(linea.nombre || '') + '</strong>');
+        $('#inpBuscarProducto').val(linea.nombre || '');
+        $('#resultadosBuscador').empty();
+        new bootstrap.Modal(document.getElementById('modalBuscarProducto')).show();
+        buscarProducto();
+    });
+
+    function buscarProducto() {
+        var q = $('#inpBuscarProducto').val().trim();
+        if (q.length < 2) {
+            $('#resultadosBuscador').html('<p class="text-muted small mb-0">Escribe al menos 2 caracteres.</p>');
+            return;
+        }
+        $('#resultadosBuscador').html('<p class="text-muted small mb-0">Buscando…</p>');
+        $.get(URL_BUSCAR, {
+            q: q,
+            sucursal_id: $('#selSucursal').val() || '',
+            todas: $('#chkTodasSucursales').is(':checked') ? '1' : '0'
+        }).done(function (resp) {
+            var res = (resp && resp.resultados) || [];
+            if (!res.length) {
+                $('#resultadosBuscador').html('<p class="text-muted small mb-0">Sin resultados.</p>');
+                return;
+            }
+            var html = '<div class="list-group">';
+            res.forEach(function (p, k) {
+                html += '<button type="button" class="list-group-item list-group-item-action btn-pick" data-k="' + k + '">' +
+                        '<div class="d-flex justify-content-between">' +
+                        '<div><strong>' + esc(p.articulo) + '</strong> ' +
+                        '<span class="badge bg-light text-dark">T ' + esc(p.talla) + '</span>' +
+                        '<div class="small text-muted">' + esc(p.descripcion || '') + '</div></div>' +
+                        '<div class="text-end small text-muted">SKU ' + esc(p.sku) + '<br>' +
+                        esc(p.sucursal || '') + ' · stock ' + esc(p.stock) + '</div>' +
+                        '</div></button>';
+            });
+            html += '</div>';
+            $('#resultadosBuscador').data('res', res).html(html);
+        }).fail(function () {
+            $('#resultadosBuscador').html('<p class="text-danger small mb-0">Error al buscar.</p>');
+        });
+    }
+
+    $(document).on('click', '#btnBuscarProducto', buscarProducto);
+    $(document).on('keypress', '#inpBuscarProducto', function (e) {
+        if (e.which === 13) { e.preventDefault(); buscarProducto(); }
+    });
+    $(document).on('change', '#chkTodasSucursales', buscarProducto);
+
+    $(document).on('click', '.btn-pick', function () {
+        var res = $('#resultadosBuscador').data('res') || [];
+        seleccionarProducto(lineaEnEdicion, res[parseInt($(this).data('k'), 10)], true);
+        bootstrap.Modal.getInstance(document.getElementById('modalBuscarProducto')).hide();
+    });
+
+    $(document).on('click', '#btnDejarSinProducto', function () {
+        var est = docActual._estado[lineaEnEdicion];
+        est.seleccion = null;
+        est.solo_texto = true;
+        est.manual = false;
+        est.confianza = 'MEDIA';
+        refrescarFila(lineaEnEdicion);
+        bootstrap.Modal.getInstance(document.getElementById('modalBuscarProducto')).hide();
+    });
+
+    // ---------------------------------------------------------------
+    // PASO 3 · confirmar
+    // ---------------------------------------------------------------
+    function confirmar() {
+        var lineas = docActual._estado.map(function (e) {
+            return {
+                nro_linea: e.nro_linea,
+                cantidad: e.cantidad,
+                producto_talla_id: e.seleccion ? e.seleccion.producto_talla_id : null,
+                guardar_equivalencia: !!(e.manual && e.seleccion),
+                origen_match: e.origen_match
+            };
+        });
+
+        var sinProd = lineas.filter(function (l) { return !l.producto_talla_id; }).length;
+        var aprender = lineas.filter(function (l) { return l.guardar_equivalencia; }).length;
+
+        Swal.fire({
+            title: '¿Confirmar la importación?',
+            html: '<div class="text-start small">' +
+                  '<p class="mb-1">Se creará el documento de compra con <strong>' + lineas.length + '</strong> línea(s).</p>' +
+                  (sinProd ? '<p class="mb-1 text-warning"><strong>' + sinProd + '</strong> línea(s) quedarán sin producto vinculado (solo texto).</p>' : '') +
+                  (aprender ? '<p class="mb-1 text-info">Se guardarán <strong>' + aprender + '</strong> equivalencia(s) para la próxima factura de este proveedor.</p>' : '') +
+                  '<p class="mb-0 mt-2"><strong>No se moverá stock.</strong> La mercadería entra por la recepción / creación de productos.</p>' +
+                  '</div>',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, importar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#0ab39c'
+        }).then(function (r) {
+            if (!r.isConfirmed) { return; }
+            enviarConfirmacion(lineas);
+        });
+    }
+
+    function enviarConfirmacion(lineas) {
+        Swal.fire({
+            title: 'Registrando…', allowOutsideClick: false,
+            didOpen: function () { Swal.showLoading(); }
+        });
+
+        $.ajax({
+            url: URL_CONFIRMAR,
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({
+                token: docActual.token,
+                lineas: lineas,
+                sucursal_id: $('#selSucursal').val() || null,
+                empresa_receptora_id: $('#selEmpresaReceptora').val() || null,
+                aceptar_descuadre: $('#chkDescuadre').is(':checked')
+            })
+        }).done(function (resp) {
+            Swal.close();
+            if (!resp.success) {
+                Swal.fire('No se pudo importar', esc(resp.error || ''), 'error');
+                return;
+            }
+            mostrarResultado(resp);
+        }).fail(function (xhr) {
+            Swal.close();
+            var data = xhr.responseJSON || {};
+            var html = '<div class="text-start small">';
+            (data.errores || [data.error || data.mensaje || 'Error desconocido']).forEach(function (e) {
+                html += '<div class="text-danger">• ' + esc(e) + '</div>';
+            });
+            html += '</div>';
+            Swal.fire({ title: 'No se pudo importar', html: html, icon: 'error' });
+        });
+    }
+
+    function mostrarResultado(resp) {
+        var html = '<div class="alert alert-success">' +
+            '<h5><i class="bi bi-check-circle me-2"></i>' + esc(resp.mensaje) + '</h5>' +
+            '<ul class="mb-0 mt-2">' +
+            '<li>DTE creado: <strong>#' + esc(resp.dte_id) + '</strong></li>' +
+            '<li>Líneas registradas: <strong>' + esc(resp.lineas_creadas) + '</strong> ' +
+              '(' + esc(resp.lineas_con_producto) + ' con producto vinculado)</li>' +
+            '<li>Equivalencias aprendidas: <strong>' + esc(resp.equivalencias_creadas) + '</strong> ' +
+              '(reutilizadas: ' + esc(resp.equivalencias_reutilizadas) + ')</li>' +
+            '<li><strong>Stock movido: NO</strong> — la mercadería entra por la recepción.</li>' +
+            '</ul></div>' +
+            '<a href="' + URL_GESTION + '" class="btn btn-primary">' +
+            '<i class="bi bi-list-ul me-1"></i>Ir a Gestión de DTEs</a>';
+        $('#contenedorResultado').html(html);
+        $('#paso3').show();
+        $('#paso2').hide();
+        $('html, body').animate({ scrollTop: $('#paso3').offset().top - 80 }, 300);
+    }
+
+    // ---------------------------------------------------------------
+    // Bootstrap del módulo
+    // ---------------------------------------------------------------
+    $(document).ready(function () {
+        initDragAndDrop();
+        $('#btnAnalizar').on('click', analizar);
+        $('#btnConfirmar').on('click', confirmar);
+        $('#btnVolverPaso1').on('click', function () {
+            $('#paso2').hide();
+            $('html, body').animate({ scrollTop: 0 }, 300);
+        });
+        $('#btnLimpiar').on('click', function () {
+            archivos = []; documentos = []; docActual = null;
+            $('#archivosXml').val('');
+            renderListaArchivos();
+            $('#seccionDocumentos, #paso2, #paso3').hide();
+            $('#contenedorDocumentos').empty();
+        });
+    });
+})();
+</script>

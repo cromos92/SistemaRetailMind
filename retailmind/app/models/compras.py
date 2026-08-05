@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from .organizacion import Empresa, Sucursal
@@ -610,3 +611,95 @@ class CurvaDistribucionItem(models.Model):
 
     def __str__(self):
         return f"{self.curva.nombre} · {self.talla} = {self.porcentaje}%"
+
+
+# =====================================================================
+# EQUIVALENCIAS DE CÓDIGO DEL PROVEEDOR  →  PRODUCTO NUESTRO
+# =====================================================================
+# Traduce el código con el que un proveedor identifica un producto en SU
+# factura (el `CdgItem/VlrCodigo` del XML DTE) al `Producto_Talla` nuestro.
+#
+# POR QUÉ HACE FALTA UNA TABLA Y NO BASTA CON MATCHEAR AL VUELO
+# ------------------------------------------------------------
+# 1. `CdgItem` NO es confiable: `TpoCodigo` es texto libre que el SII no
+#    valida. Cada proveedor pone lo que quiere ("INT1", "EAN", "SKU",
+#    "PROV", "ART"…), y el `VlrCodigo` suele ser el código INTERNO DEL
+#    PROVEEDOR, que no tiene por qué parecerse a nuestro SKU.
+# 2. Matchear por `NmbItem` (que es lo que hace Dynamics 365) falla apenas
+#    el proveedor cambia una palabra de la descripción.
+#
+# Por eso la conciliación es asistida: la primera factura de un proveedor se
+# resuelve a mano, y CADA línea resuelta a mano deja aquí su equivalencia.
+# La siguiente factura de ese mismo proveedor entra sola. Es decir, la tabla
+# es el mecanismo por el que el import APRENDE.
+#
+# La clave es (proveedor, código): el mismo código puede significar cosas
+# distintas en dos proveedores, y por eso NO es único global.
+# =====================================================================
+class ProveedorProductoEquivalencia(models.Model):
+    empresa_proveedor = models.ForeignKey(
+        Empresa,
+        on_delete=models.CASCADE,
+        related_name='equivalencias_productos',
+        help_text='Proveedor (emisor del DTE) dueño de este código.',
+    )
+    codigo_externo = models.CharField(
+        max_length=50,
+        help_text='VlrCodigo del CdgItem tal como viene en el XML del proveedor.',
+    )
+    tipo_codigo = models.CharField(
+        max_length=10,
+        blank=True,
+        help_text=(
+            'TpoCodigo informado por el proveedor (INT1, EAN, SKU…). Es texto '
+            'libre no validado por el SII: se guarda solo como referencia, '
+            'NO forma parte de la clave.'
+        ),
+    )
+    descripcion_externa = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text=(
+            'NmbItem/DscItem con que el proveedor describió el producto la '
+            'primera vez. Sirve para que un humano audite la equivalencia.'
+        ),
+    )
+    producto_talla = models.ForeignKey(
+        Producto_Talla,
+        on_delete=models.CASCADE,
+        related_name='equivalencias_proveedor',
+        help_text='Producto/talla nuestro al que corresponde el código.',
+    )
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='equivalencias_proveedor_creadas',
+        help_text='Usuario que resolvió la línea a mano.',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    veces_usada = models.IntegerField(
+        default=0,
+        help_text=(
+            'Cuántas veces esta equivalencia resolvió sola una línea. '
+            'Un contador alto es señal de que la equivalencia es correcta; '
+            'uno en 0 después de varias facturas, de que sobra.'
+        ),
+    )
+
+    class Meta:
+        verbose_name = 'Equivalencia de producto del proveedor'
+        verbose_name_plural = 'Equivalencias de productos de proveedores'
+        ordering = ['empresa_proveedor__nombre', 'codigo_externo']
+        unique_together = ('empresa_proveedor', 'codigo_externo')
+        indexes = [
+            # `unique_together` ya deja indexado el par (proveedor, código),
+            # que es el acceso del matching. Este índice cubre el otro acceso:
+            # "¿dónde más he visto este código?" al auditar duplicados entre
+            # proveedores.
+            models.Index(fields=['codigo_externo'], name='provequiv_codext_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.empresa_proveedor.nombre}:{self.codigo_externo} → {self.producto_talla_id}"

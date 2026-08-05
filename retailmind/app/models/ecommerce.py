@@ -34,6 +34,11 @@ SUB_ESTADO_PEDIDO_CHOICES = [
     ('ASIGNADO', 'Asignado a Sucursal'),
     ('EN_PREPARACION', 'En Preparación'),
     ('LISTO_DESPACHO', 'Listo para Despacho'),
+    # La tienda fue a buscar el producto y NO estaba (quiebre real de stock, no
+    # un error del sistema): el pedido sigue PENDIENTE pero sale del flujo de
+    # picking y se le reporta la incidencia a AllConnected, que decide qué hacer
+    # (reasignar, sustituir o cancelar con el cliente).
+    ('SIN_STOCK', 'Sin stock en tienda'),
     # Sub-estados de FACTURADO
     ('FACTURADO_OK', 'Facturado OK'),
     # El canal lo reporta ENVIADO/ENTREGADO sin boleta del módulo: la venta ya
@@ -69,12 +74,22 @@ MOTIVO_REASIGNACION_CHOICES = [
 ]
 
 # Transiciones válidas de sub-estado
+# SIN_STOCK se alcanza desde cualquier etapa de picking (el quiebre se descubre
+# tanto al asignar como con la guía en la mano) y solo vuelve a ASIGNADO, que es
+# el punto desde donde se re-imprime la guía. Marcarlo/reactivarlo va por
+# `api_marcar_sin_stock` (avisa a AllConnected), no por el cambio de sub-estado
+# genérico: por eso NO se lista como destino en las otras entradas.
 TRANSICIONES_SUB_ESTADO = {
     'RECIBIDO': ['ASIGNADO'],
     'ASIGNADO': ['EN_PREPARACION', 'RECIBIDO'],
     'EN_PREPARACION': ['LISTO_DESPACHO', 'ASIGNADO'],
     'LISTO_DESPACHO': ['EN_PREPARACION'],
+    'SIN_STOCK': ['ASIGNADO'],
 }
+
+# Sub-estados en los que el pedido NO es trabajable por la tienda (ni guía de
+# preparación ni facturación) hasta que se resuelva la incidencia.
+SUB_ESTADOS_BLOQUEADOS_PICKING = ('SIN_STOCK',)
 
 
 class PedidoEcommerce(models.Model):
@@ -230,6 +245,19 @@ class PedidoEcommerce(models.Model):
     fecha_sync_estado_canal = models.DateTimeField(
         null=True, blank=True,
         verbose_name='Última sync de estado canal',
+    )
+
+    # Quiebre de stock reportado por la tienda (sub_estado SIN_STOCK)
+    sin_stock_motivo = models.CharField(
+        max_length=255, blank=True, default='',
+        verbose_name='Motivo sin stock',
+        help_text='Lo que la tienda declaró al marcar el pedido sin stock.',
+    )
+    sin_stock_avisado_ac = models.BooleanField(
+        default=False,
+        verbose_name='Sin stock avisado a AllConnected',
+        help_text='True si AllConnected confirmó la incidencia. False = el aviso '
+                  'falló y hay que reintentarlo (el pedido igual quedó marcado acá).',
     )
 
     # Trazabilidad de asignación

@@ -2228,9 +2228,13 @@ let rendimientoCargado = false;
 let chartRendMensual = null;
 let chartFunnel = null;
 
-// Poblar selector de sucursales
+// Poblar selector de sucursales.
+// OJO: tiene que ser el endpoint de reportes (acotado a las empresas del
+// usuario) y no `/app/api/sucursales/listar/`, que devuelve TODAS: desde que
+// `api_rendimiento_compras` valida el alcance, elegir una sucursal ajena en
+// este combo devolvía 403 y el usuario no entendía por qué.
 (function poblarSucursalesRendimiento() {
-    fetch('/app/api/sucursales/listar/')
+    fetch('/app/api/reportes/sucursales/')
         .then(r => r.json())
         .then(data => {
             const sel = document.getElementById('rendimientoSucursal');

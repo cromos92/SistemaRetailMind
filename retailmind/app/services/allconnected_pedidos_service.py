@@ -415,3 +415,93 @@ def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
         'no_encontrados': no_encontrados,
         'lotes_caidos': lotes_caidos,
     }
+
+
+# ---------------------------------------------------------------------------
+# Aviso de quiebre de stock (RM → AllConnected)
+# ---------------------------------------------------------------------------
+
+# Timeout corto: el aviso va DENTRO del click de la tienda. Si AC no responde
+# rápido, el pedido igual queda marcado en RM y el aviso se reintenta después.
+TIMEOUT_AVISO_SEGUNDOS = 12
+
+
+def reportar_sin_stock(pedido, motivo: str = '', items=None) -> dict:
+    """
+    Avisa a AllConnected que la tienda NO tiene stock para un pedido.
+
+    AllConnected abre una ``PedidoIncidenciaOperativa`` tipo SIN_STOCK, que ya
+    en ese sistema: bloquea el re-envío a RetailMind, la impresión y la
+    etiqueta; deja bitácora "Problemas Inventario"; y muestra el pedido como
+    RETENIDO/Sin stock en la grilla. Central decide qué hacer (reasignar,
+    sustituir o cancelar con el cliente) — RM solo reporta el problema.
+
+    NUNCA lanza: marcar el pedido en RM no puede depender de que AC conteste.
+    Devuelve ``{'ok': bool, 'configurado': bool, 'detalle': str,
+    'incidencia_id': int|None, 'ya_existia': bool}``.
+    """
+    cfg = _config()
+    path = getattr(settings, 'ALLCONNECTED_SIN_STOCK_PATH', '') or '/app/pedidos/incidencia-sin-stock/'
+
+    if not cfg['base_url']:
+        return {'ok': False, 'configurado': False, 'incidencia_id': None, 'ya_existia': False,
+                'detalle': 'AllConnected no está configurado en este entorno '
+                           '(ALLCONNECTED_API_BASE_URL vacío): el pedido quedó marcado solo en RetailMind.'}
+    if not _REQUESTS_OK:
+        return {'ok': False, 'configurado': True, 'incidencia_id': None, 'ya_existia': False,
+                'detalle': "Falta el paquete 'requests' en este entorno."}
+
+    payload = {
+        'canal_origen': pedido.canal_origen,
+        'numero_pedido_canal': (pedido.numero_pedido_canal or '').strip(),
+        'numero_ticket_rm': pedido.numero_ticket_rm,
+        'motivo': (motivo or 'Sin stock en tienda').strip()[:500],
+        'items': items or [],
+        'sucursal': (
+            (pedido.sucursal.nombre or pedido.sucursal.alias or '') if pedido.sucursal_id else ''
+        ),
+    }
+    headers = {
+        cfg['header_name']: cfg['api_key'],
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'RetailMind-PedidosPull/1.0',
+    }
+    url = f"{cfg['base_url']}{path}"
+
+    try:
+        r = requests.post(url, json=payload, headers=headers, timeout=TIMEOUT_AVISO_SEGUNDOS)
+    except requests.RequestException as exc:
+        logger.warning('reportar_sin_stock: %s sin respuesta de AllConnected: %s',
+                       pedido.numero_ticket_rm, exc)
+        return {'ok': False, 'configurado': True, 'incidencia_id': None, 'ya_existia': False,
+                'detalle': f'No se pudo avisar a AllConnected: {exc}'[:300]}
+
+    if r.status_code == 404:
+        return {'ok': False, 'configurado': True, 'incidencia_id': None, 'ya_existia': False,
+                'detalle': 'AllConnected no encontró este pedido (¿se creó manualmente en RM?).'}
+    if r.status_code == 501:
+        return {'ok': False, 'configurado': True, 'incidencia_id': None, 'ya_existia': False,
+                'detalle': 'AllConnected todavía no tiene el endpoint de incidencias (deploy pendiente).'}
+    if r.status_code != 200:
+        return {'ok': False, 'configurado': True, 'incidencia_id': None, 'ya_existia': False,
+                'detalle': f'AllConnected respondió HTTP {r.status_code}.'}
+
+    try:
+        data = r.json() or {}
+    except ValueError:
+        return {'ok': False, 'configurado': True, 'incidencia_id': None, 'ya_existia': False,
+                'detalle': 'Respuesta de AllConnected ilegible.'}
+
+    if not data.get('ok'):
+        return {'ok': False, 'configurado': True, 'incidencia_id': None, 'ya_existia': False,
+                'detalle': str(data.get('error') or 'AllConnected rechazó el aviso.')[:300]}
+
+    ya_existia = bool(data.get('ya_existia'))
+    return {
+        'ok': True, 'configurado': True,
+        'incidencia_id': data.get('incidencia_id'),
+        'ya_existia': ya_existia,
+        'detalle': ('AllConnected ya tenía la incidencia abierta.' if ya_existia
+                    else 'AllConnected registró la incidencia de sin stock.'),
+    }

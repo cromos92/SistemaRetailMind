@@ -22064,9 +22064,18 @@ def reporte_despachos_por_proveedor(request):
     - Total de productos despachados (vendidos, transferidos, etc.)
     - Saldo restante
     - Resumen global de KPIs
-    
+
     NOTA: En una COMPRA, el EMISOR es el proveedor (quien nos vende/factura)
+
+    SCOPING: el universo se acota a las empresas del usuario. Antes esta vista
+    no tenía ningún filtro por empresa, así que cualquier usuario autenticado
+    leía las compras, montos y proveedores de las 4 empresas del holding. El
+    anclaje es el par emisor/receptor del DTE (en una compra el RECEPTOR somos
+    nosotros) más la sucursal: los DTE de compra migrados llegan con
+    `sucursal=NULL`, así que filtrar sólo por sucursal borraría la historia.
     """
+    from app.utils_permisos import ids_empresas_alcance
+
     # Filtros
     proveedor_id = request.GET.get('proveedor_id')
     fecha_inicio = request.GET.get('fecha_inicio')
@@ -22097,6 +22106,14 @@ def reporte_despachos_por_proveedor(request):
     ).exclude(
         tipo_documento__in=TIPOS_DOCUMENTO_EXCLUIDOS
     ).select_related('emisor', 'receptor')
+
+    empresas_alcance = ids_empresas_alcance(request.user)
+    if empresas_alcance is not None:
+        dtes_query = dtes_query.filter(
+            Q(receptor_id__in=empresas_alcance)
+            | Q(emisor_id__in=empresas_alcance)
+            | Q(sucursal__empresa_id__in=empresas_alcance)
+        )
 
     # Excluir facturación interna: DTEs donde el emisor y receptor son la misma empresa.
     # Estos son auto-facturaciones que distorsionan los KPIs de compras a proveedores.
@@ -23987,20 +24004,35 @@ def reporte_fifo_general(request):
 @login_required
 def dashboard_fifo(request):
     """
-    Vista completa del dashboard FIFO
+    Vista completa del dashboard FIFO.
+
+    Valida el acceso a la sucursal de sesión con el MISMO criterio que su
+    hermano `reporte_fifo_general`: la sesión la puede llevar a una sucursal de
+    otra empresa (el cambio de sucursal es un endpoint aparte) y este dashboard
+    expone costo y valorización de inventario. Antes sólo comprobaba que
+    hubiera una sucursal activa, así que la misma familia de vistas aplicaba
+    dos criterios distintos.
     """
+    from app.utils_permisos import puede_ver_sucursal
+
     try:
         sucursal_id = request.session.get('idSucursalActual')
         if not sucursal_id:
             return JsonResponse({'success': False, 'error': 'No hay sucursal activa'})
-        
+
+        if not puede_ver_sucursal(request.user, sucursal_id):
+            logger.warning('dashboard_fifo: usuario %s sin acceso a sucursal %s',
+                           getattr(request.user, 'username', request.user), sucursal_id)
+            return JsonResponse({'success': False, 'error': 'Sin acceso a la sucursal activa'},
+                                status=403)
+
         # Solo renderizar el template, los datos se cargarán via AJAX
         context = {
             'sucursal_id': sucursal_id
         }
-        
+
         return render(request, 'vistas/modulo_dashboards/dashboard_fifo.html', context)
-        
+
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 # ========== VISTAS AJAX PARA DASHBOARD FIFO ==========
@@ -24010,12 +24042,24 @@ def obtener_datos_dashboard_fifo(request):
     """
     API para obtener datos del dashboard FIFO con filtros
     Incluye filtros de tiempo para análisis realista
+
+    Mismo control de acceso que `dashboard_fifo` / `reporte_fifo_general`:
+    bloquear sólo la página y dejar abierta su API sería un candado sin puerta,
+    porque acá viaja el costo y la valorización del inventario.
     """
+    from app.utils_permisos import puede_ver_sucursal
+
     try:
         sucursal_id = request.session.get('idSucursalActual')
         if not sucursal_id:
             return JsonResponse({'success': False, 'error': 'No hay sucursal activa'})
-        
+
+        if not puede_ver_sucursal(request.user, sucursal_id):
+            logger.warning('obtener_datos_dashboard_fifo: usuario %s sin acceso a sucursal %s',
+                           getattr(request.user, 'username', request.user), sucursal_id)
+            return JsonResponse({'success': False, 'error': 'Sin acceso a la sucursal activa'},
+                                status=403)
+
         # Parámetros de filtrado básicos
         filtro_producto = request.GET.get('filtro_producto', '').lower()
         filtro_talla = request.GET.get('filtro_talla', '').lower()
@@ -24397,13 +24441,24 @@ def obtener_datos_dashboard_fifo(request):
 def exportar_dashboard_fifo(request):
     """Exporta el detalle FIFO en CSV respetando TODOS los filtros de la UI
     (antes ignoraba periodo/fechas/antigüedad y el CSV no coincidía con la
-    pantalla). Misma query anotada del dashboard: sin N+1."""
+    pantalla). Misma query anotada del dashboard: sin N+1.
+
+    Mismo control de acceso que `dashboard_fifo`: el CSV lleva costo y
+    valorización, así que una sucursal de sesión ajena se rechaza igual que en
+    la pantalla y en la API."""
     try:
         from datetime import datetime, timedelta
+        from app.utils_permisos import puede_ver_sucursal
 
         sucursal_id = request.session.get('idSucursalActual')
         if not sucursal_id:
             return JsonResponse({'success': False, 'error': 'No hay sucursal activa'})
+
+        if not puede_ver_sucursal(request.user, sucursal_id):
+            logger.warning('exportar_dashboard_fifo: usuario %s sin acceso a sucursal %s',
+                           getattr(request.user, 'username', request.user), sucursal_id)
+            return JsonResponse({'success': False, 'error': 'Sin acceso a la sucursal activa'},
+                                status=403)
 
         # Filtros — el mismo set que obtener_datos_dashboard_fifo
         filtro_producto = request.GET.get('filtro_producto', '').lower()

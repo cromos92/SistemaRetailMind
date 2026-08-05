@@ -117,6 +117,8 @@
 .sub-facturado_externo{background:#e0f2fe;color:#075985;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:600;}
 .sub-cancelado_cliente,.sub-cancelado_sin_stock{background:#fee2e2;color:#991b1b;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:600;}
 .sub-error_stock,.sub-error_dte{background:#fee2e2;color:#991b1b;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:600;}
+.sub-sin_stock{background:#ffedd5;color:#9a3412;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:700;}
+.badge-aviso-pendiente{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;font-size:.65rem;padding:2px 7px;border-radius:12px;font-weight:700;white-space:nowrap;}
 
 /* ── antigüedad ── */
 .age-warn{background:#fef3c7;border-left:3px solid #f59e0b;}
@@ -698,6 +700,50 @@
         <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
         <button class="btn btn-sm fw-bold" style="background:#7c3aed;color:#fff;" onclick="ejecutarReasignacion()">
           <i class="bi bi-check-lg me-1"></i>Reasignar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     MODAL SIN STOCK (avisa a AllConnected)
+     ═══════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modal-sin-stock" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header" style="background:#dc2626;color:#fff;">
+        <h5 class="modal-title"><i class="bi bi-box-seam me-2"></i>Marcar sin stock</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="sin-stock-pedido-id">
+        <p class="mb-2" style="font-size:.85rem;">
+          Pedido <strong id="sin-stock-ticket">—</strong>: confirmás que el producto
+          <strong>no está</strong> en tu sucursal.
+        </p>
+        <div class="alert alert-warning py-2 mb-3" style="font-size:.78rem;">
+          <i class="bi bi-info-circle me-1"></i>
+          Sale de tu cola de preparación (no se le imprime guía ni se puede facturar) y
+          <strong>se avisa a AllConnected</strong>, que decide si reasignar, sustituir o
+          cancelar con el cliente.
+        </div>
+        <label class="form-label fw-bold" style="font-size:.8rem;">Motivo</label>
+        <select id="sin-stock-motivo-rapido" class="form-select form-select-sm mb-2" onchange="document.getElementById('sin-stock-motivo').value = this.value;">
+          <option value="No está en bodega ni en sala">No está en bodega ni en sala</option>
+          <option value="Producto dañado / no vendible">Producto dañado / no vendible</option>
+          <option value="Talla o color equivocado en el sistema">Talla o color equivocado en el sistema</option>
+          <option value="Stock del sistema no coincide con el físico">Stock del sistema no coincide con el físico</option>
+          <option value="">Otro (escribir abajo)</option>
+        </select>
+        <input type="text" id="sin-stock-motivo" class="form-control form-control-sm"
+               value="No está en bodega ni en sala" maxlength="255"
+               placeholder="Detalle para central...">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-danger btn-sm fw-bold" id="btn-sin-stock-ok" onclick="ejecutarSinStock()">
+          <i class="bi bi-send me-1"></i>Marcar y avisar
         </button>
       </div>
     </div>
@@ -1628,6 +1674,69 @@ function marcarListoDespacho(pedidoId, btn){
   .then(data => {
     if(data.ok){ aplicarFiltros(_pagina, true); }
     else { alert('Error: ' + (data.error || 'no se pudo cambiar el sub-estado')); if(btn) btn.disabled = false; }
+  })
+  .catch(err => { alert('Error de conexión: ' + err); if(btn) btn.disabled = false; });
+}
+
+/* ─────────────────────────────────────────────────────
+   Quiebre de stock: marcar en RM + avisar a AllConnected
+   ───────────────────────────────────────────────────── */
+function abrirSinStock(pedidoId, ticketRm){
+  document.getElementById('sin-stock-pedido-id').value = pedidoId;
+  document.getElementById('sin-stock-ticket').textContent = ticketRm || ('#' + pedidoId);
+  const rapido = document.getElementById('sin-stock-motivo-rapido');
+  rapido.selectedIndex = 0;
+  document.getElementById('sin-stock-motivo').value = rapido.value;
+  new bootstrap.Modal(document.getElementById('modal-sin-stock')).show();
+}
+
+function ejecutarSinStock(){
+  const pedidoId = document.getElementById('sin-stock-pedido-id').value;
+  const motivo = document.getElementById('sin-stock-motivo').value.trim();
+  const btn = document.getElementById('btn-sin-stock-ok');
+  const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Avisando...';
+
+  fetch(`/app/ecommerce/pedidos/${pedidoId}/sin-stock/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+    body: JSON.stringify({ motivo: motivo })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if(!data.ok){ alert('Error: ' + (data.error || 'no se pudo marcar')); return; }
+    bootstrap.Modal.getInstance(document.getElementById('modal-sin-stock'))?.hide();
+    // El pedido SIEMPRE queda marcado en RM; el aviso a AC puede fallar y se
+    // reintenta volviendo a apretar el botón (el badge naranja lo recuerda).
+    alert(data.avisado_allconnected
+      ? 'Pedido marcado sin stock. AllConnected fue avisado.'
+      : 'Pedido marcado sin stock, PERO no se pudo avisar a AllConnected:\n'
+        + (data.aviso_detalle || '') + '\n\nVolvé a apretar el botón más tarde para reintentar el aviso.');
+    aplicarFiltros(_pagina, true);
+  })
+  .catch(err => alert('Error de conexión: ' + err))
+  .finally(() => {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send me-1"></i>Marcar y avisar';
+  });
+}
+
+function reactivarSinStock(pedidoId, btn){
+  if(!confirm('¿El producto apareció? El pedido vuelve al flujo de preparación.\n\n' +
+              'La incidencia en AllConnected la cierra central.')) return;
+  const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  if(btn) btn.disabled = true;
+  fetch(`/app/ecommerce/pedidos/${pedidoId}/reactivar/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+    body: JSON.stringify({})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if(data.ok){ aplicarFiltros(_pagina, true); }
+    else { alert('Error: ' + (data.error || 'no se pudo reactivar')); if(btn) btn.disabled = false; }
   })
   .catch(err => { alert('Error de conexión: ' + err); if(btn) btn.disabled = false; });
 }

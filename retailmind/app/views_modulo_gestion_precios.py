@@ -22,7 +22,7 @@ from .models import (
     CambioPrecioPendiente, NotificacionCambioPrecio, HistorialCambioPrecio,
     ParametroGlobal, EmpresaUser, PermisoRol
 )
-from .utils_permisos import usuario_puede_ver_todas_sucursales
+from .utils_permisos import usuario_puede_ver_todas_sucursales, obtener_sucursales_usuario
 from .utils_producto_match import (
     qs_fichas_identidad_otras_sucursales,
     qs_fichas_codigo_otra_identidad,
@@ -1544,10 +1544,16 @@ def listar_atributos(request):
 @require_GET
 @login_required
 def listar_sucursales(request):
-    """Listar todas las sucursales"""
+    """Listar las sucursales a las que el usuario tiene acceso.
+
+    Antes devolvía TODAS las del holding (alias y dirección) a cualquier usuario
+    autenticado, sin importar su empresa. `obtener_sucursales_usuario` mantiene
+    el alcance completo para el rol administrador y para quien tenga el flag
+    `puede_ver_todas_sucursales`, así que para ellos no cambia nada.
+    """
     try:
-        sucursales = Sucursal.objects.all().order_by('alias')
-        
+        sucursales = obtener_sucursales_usuario(request.user)
+
         sucursales_data = []
         for suc in sucursales:
             sucursales_data.append({

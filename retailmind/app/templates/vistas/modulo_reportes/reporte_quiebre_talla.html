@@ -1,0 +1,732 @@
+{% load static %}
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<div class="page-content">
+<div class="container-fluid">
+
+<style>
+  /* ========== NEXO DESIGN SYSTEM (mismas variables que el resto del módulo
+     de reportes — ver reporte_existencias_sucursal.html) ========== */
+  :root {
+    --nexo-primary:       #0066FF;
+    --nexo-primary-dark:  #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary:     #1A1A2E;
+    --nexo-accent:        #00D4AA;
+    --nexo-success:       #00D4AA;
+    --nexo-warning:       #FFB020;
+    --nexo-error:         #FF4D4D;
+    --nexo-gray-900:      #1A1A2E;
+    --nexo-gray-700:      #4A4A5A;
+    --nexo-gray-600:      #6A6A7A;
+    --nexo-gray-500:      #8A8A9A;
+    --nexo-gray-400:      #AAAABC;
+    --nexo-gray-300:      #D1D1D9;
+    --nexo-gray-200:      #E8E8F0;
+    --nexo-gray-100:      #F5F5F7;
+    --nexo-white:         #FFFFFF;
+    --nexo-shadow-sm:     0 1px 2px rgba(26,26,46,.05);
+    --nexo-shadow-md:     0 4px 6px rgba(26,26,46,.1);
+    --nexo-shadow-lg:     0 10px 15px rgba(26,26,46,.1);
+    --nexo-radius-sm:     4px;
+    --nexo-radius-md:     8px;
+    --nexo-radius-lg:     12px;
+    --nexo-radius-xl:     16px;
+    --nexo-transition:    150ms ease;
+  }
+
+  .nexo-container { background: var(--nexo-gray-100); min-height: calc(100vh - 70px); padding-bottom: 40px; }
+
+  /* ── Header ─────────────────────────────────────────── */
+  .nexo-header {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%);
+    color: var(--nexo-white); padding: 24px 40px; position: relative; overflow: hidden;
+  }
+  .nexo-header::before {
+    content: ''; position: absolute; top: -50%; right: -10%;
+    width: 400px; height: 300%;
+    background: linear-gradient(135deg, var(--nexo-accent) 0%, transparent 60%);
+    opacity: .08; transform: rotate(-15deg);
+  }
+  .nexo-header-content { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: center; }
+  .nexo-header h1 { font-size: 1.5rem; font-weight: 700; margin: 0 0 4px; color: var(--nexo-white); display: flex; align-items: center; gap: 12px; }
+  .nexo-header p { font-size: .8rem; color: var(--nexo-gray-300); margin: 0; }
+  .nexo-header-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(0,212,170,.15); border: 1px solid rgba(0,212,170,.3);
+    color: var(--nexo-accent); padding: 8px 16px; border-radius: 9999px;
+    font-size: .8rem; font-weight: 600;
+  }
+
+  /* ── KPI row ────────────────────────────────────────── */
+  .nexo-kpi-row {
+    display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 40px;
+    background: var(--nexo-white); border-bottom: 1px solid var(--nexo-gray-300); align-items: center;
+  }
+  .nexo-kpi-card {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--nexo-gray-100); border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md); padding: 7px 14px 7px 10px;
+    position: relative; overflow: hidden; transition: var(--nexo-transition);
+    flex: 1; min-width: 170px; max-width: 240px;
+  }
+  .nexo-kpi-card:hover { box-shadow: var(--nexo-shadow-md); transform: translateY(-1px); }
+  .nexo-kpi-card::before { content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%; }
+  .nexo-kpi-card.kpi-primary::before { background: var(--nexo-primary); }
+  .nexo-kpi-card.kpi-success::before { background: var(--nexo-success); }
+  .nexo-kpi-card.kpi-warning::before { background: var(--nexo-warning); }
+  .nexo-kpi-card.kpi-error::before   { background: var(--nexo-error); }
+  .nexo-kpi-icon { width: 28px; height: 28px; border-radius: var(--nexo-radius-sm); display: flex; align-items: center; justify-content: center; font-size: .85rem; flex-shrink: 0; }
+  .icon-primary { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+  .icon-success { background: rgba(0,212,170,.1); color: var(--nexo-success); }
+  .icon-warning { background: rgba(255,176,32,.1); color: var(--nexo-warning); }
+  .icon-error   { background: rgba(255,77,77,.1); color: var(--nexo-error); }
+  .nexo-kpi-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .nexo-kpi-label { font-size: .6rem; font-weight: 600; color: var(--nexo-gray-500); text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
+  .nexo-kpi-value { font-size: 1.05rem; font-weight: 700; color: var(--nexo-gray-900); line-height: 1.2; white-space: nowrap; }
+
+  .nexo-kpi-skeleton {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--nexo-gray-100); border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md); padding: 7px 14px 7px 10px;
+    flex: 1; min-width: 170px; max-width: 240px;
+  }
+  .sk-icon { width: 28px; height: 28px; border-radius: var(--nexo-radius-sm); background: var(--nexo-gray-300); flex-shrink: 0; }
+  .sk-body { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+  .sk-label { height: 9px; width: 70%; border-radius: 4px; background: var(--nexo-gray-300); }
+  .sk-value { height: 16px; width: 55%; border-radius: 4px; background: var(--nexo-gray-300); }
+  @keyframes shimmer { 0% { opacity: 1; } 50% { opacity: .45; } 100% { opacity: 1; } }
+  .nexo-kpi-skeleton .sk-icon, .nexo-kpi-skeleton .sk-label, .nexo-kpi-skeleton .sk-value { animation: shimmer 1.4s ease-in-out infinite; }
+
+  /* ── Controles ──────────────────────────────────────── */
+  .nexo-controls {
+    padding: 16px 40px; background: var(--nexo-white);
+    border-bottom: 1px solid var(--nexo-gray-300);
+    display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;
+  }
+  .nexo-control-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 150px; max-width: 200px; }
+  .nexo-control-label { font-size: .65rem; font-weight: 600; color: var(--nexo-gray-700); text-transform: uppercase; letter-spacing: .5px; }
+  .nexo-input, .nexo-select {
+    padding: 8px 12px; border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md); font-size: .8rem; color: var(--nexo-gray-900);
+    background: var(--nexo-white); transition: var(--nexo-transition); width: 100%;
+  }
+  .nexo-input:focus, .nexo-select:focus { outline: none; border-color: var(--nexo-primary); box-shadow: 0 0 0 3px rgba(0,102,255,.1); }
+  .nexo-toggle-row {
+    display: flex; align-items: center; gap: 7px; font-size: .72rem; font-weight: 600;
+    color: var(--nexo-gray-700); text-transform: uppercase; letter-spacing: .4px;
+    cursor: pointer; padding-bottom: 2px; white-space: nowrap;
+  }
+  .nexo-toggle-row input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--nexo-primary); cursor: pointer; }
+
+  /* ── Botones ────────────────────────────────────────── */
+  .nexo-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 8px 16px; border: none; border-radius: var(--nexo-radius-md);
+    font-size: .8rem; font-weight: 600; cursor: pointer;
+    transition: var(--nexo-transition); white-space: nowrap;
+  }
+  .nexo-btn-primary { background: var(--nexo-primary); color: var(--nexo-white); }
+  .nexo-btn-primary:hover { background: var(--nexo-primary-dark); transform: translateY(-1px); box-shadow: var(--nexo-shadow-md); }
+  .nexo-btn:disabled { opacity: .55; cursor: not-allowed; pointer-events: none; }
+  .nexo-btn-group { display: flex; gap: 8px; margin-left: auto; }
+
+  .nexo-content { padding: 20px 40px; }
+
+  /* ── Aviso / metodología ────────────────────────────── */
+  .nexo-avisos {
+    background: rgba(255,176,32,.08); border: 1px solid rgba(255,176,32,.35);
+    border-left: 3px solid var(--nexo-warning);
+    border-radius: var(--nexo-radius-md); padding: 12px 16px; margin-bottom: 16px;
+    font-size: .78rem; color: var(--nexo-gray-700);
+  }
+  .nexo-avisos ul { margin: 6px 0 0; padding-left: 18px; }
+  .nexo-avisos li { margin-bottom: 4px; }
+  .nexo-metodologia {
+    background: var(--nexo-white); border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md); padding: 0; margin-bottom: 16px;
+    font-size: .78rem; color: var(--nexo-gray-700); overflow: hidden;
+  }
+  .nexo-metodologia > summary {
+    cursor: pointer; padding: 10px 16px; font-weight: 700; color: var(--nexo-gray-900);
+    background: var(--nexo-gray-100); list-style: none; user-select: none;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .nexo-metodologia > summary::-webkit-details-marker { display: none; }
+  .nexo-metodologia > div { padding: 14px 16px; line-height: 1.55; }
+  .nexo-metodologia b { color: var(--nexo-gray-900); }
+  .nexo-metodologia ul { padding-left: 18px; margin: 6px 0; }
+
+  /* ── Tarjeta de estilo ──────────────────────────────── */
+  .estilo-card {
+    background: var(--nexo-white); border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-lg); box-shadow: var(--nexo-shadow-sm);
+    margin-bottom: 12px; overflow: hidden;
+  }
+  .estilo-card.critico { border-left: 4px solid var(--nexo-error); }
+  .estilo-card.reponible { border-left: 4px solid var(--nexo-warning); }
+  .estilo-head {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; padding: 12px 16px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--nexo-gray-200);
+  }
+  .estilo-titulo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+  .estilo-articulo { font-size: .95rem; font-weight: 700; color: var(--nexo-gray-900); }
+  .estilo-metricas { display: flex; gap: 16px; flex-wrap: wrap; font-size: .72rem; color: var(--nexo-gray-600); }
+  .estilo-metricas b { display: block; font-size: .9rem; color: var(--nexo-gray-900); font-family: 'JetBrains Mono','Courier New',monospace; }
+
+  .badge-marca { display: inline-flex; padding: 2px 8px; background: var(--nexo-primary-light); color: var(--nexo-primary); border-radius: 9999px; font-size: .68rem; font-weight: 700; white-space: nowrap; }
+  .badge-color { display: inline-flex; padding: 2px 8px; background: var(--nexo-gray-200); color: var(--nexo-gray-700); border-radius: 9999px; font-size: .68rem; font-weight: 700; }
+  .badge-critico { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; background: rgba(255,77,77,.12); color: var(--nexo-error); border-radius: 9999px; font-size: .68rem; font-weight: 700; }
+  .badge-reponible { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; background: rgba(255,176,32,.15); color: #8a5c00; border-radius: 9999px; font-size: .68rem; font-weight: 700; }
+
+  /* ── La curva de tallas ─────────────────────────────── */
+  .curva { display: flex; flex-wrap: wrap; gap: 6px; padding: 14px 16px; }
+  .talla-chip {
+    min-width: 74px; border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md); padding: 6px 8px;
+    text-align: center; background: var(--nexo-gray-100); position: relative;
+  }
+  .talla-chip .t-num { font-size: .85rem; font-weight: 700; color: var(--nexo-gray-900); font-family: 'JetBrains Mono','Courier New',monospace; }
+  .talla-chip .t-linea { font-size: .62rem; color: var(--nexo-gray-600); white-space: nowrap; }
+  .talla-chip .t-linea b { font-family: 'JetBrains Mono','Courier New',monospace; color: var(--nexo-gray-900); }
+  .talla-chip.core { border-color: var(--nexo-primary); box-shadow: inset 0 -2px 0 var(--nexo-primary); }
+  .talla-chip.ok      { background: rgba(0,212,170,.08); }
+  .talla-chip.quiebre { background: rgba(255,77,77,.1); border-color: var(--nexo-error); }
+  .talla-chip.quiebre .t-num { color: var(--nexo-error); }
+  .talla-chip.repone  { background: rgba(255,176,32,.14); border-color: var(--nexo-warning); }
+  .talla-chip.hueco   { background: repeating-linear-gradient(45deg, var(--nexo-gray-100), var(--nexo-gray-100) 5px, var(--nexo-gray-200) 5px, var(--nexo-gray-200) 10px); }
+  .t-flag { display: block; font-size: .58rem; font-weight: 700; margin-top: 2px; }
+  .t-flag.sub  { color: #8a5c00; }
+  .t-flag.cd   { color: #8a5c00; }
+  .t-flag.duda { color: var(--nexo-gray-500); }
+
+  .leyenda { display: flex; flex-wrap: wrap; gap: 14px; padding: 10px 16px; background: var(--nexo-gray-100); border-top: 1px solid var(--nexo-gray-200); font-size: .68rem; color: var(--nexo-gray-600); }
+  .leyenda span { display: inline-flex; align-items: center; gap: 5px; }
+  .leyenda i.sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; border: 1px solid var(--nexo-gray-300); }
+
+  /* ── Paginación / estados ───────────────────────────── */
+  .nexo-pagination {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 20px; background: var(--nexo-white);
+    border: 1px solid var(--nexo-gray-300); border-radius: var(--nexo-radius-lg);
+    flex-wrap: wrap; gap: 10px;
+  }
+  .nexo-pagination-info { font-size: .75rem; color: var(--nexo-gray-600); }
+  .nexo-pagination-controls { display: flex; align-items: center; gap: 6px; }
+  .nexo-pagination-btn {
+    padding: 5px 11px; border: 1px solid var(--nexo-gray-300);
+    background: var(--nexo-white); border-radius: var(--nexo-radius-sm);
+    font-size: .75rem; cursor: pointer; transition: var(--nexo-transition);
+  }
+  .nexo-pagination-btn:hover:not(:disabled) { background: var(--nexo-primary-light); border-color: var(--nexo-primary); }
+  .nexo-pagination-btn.active { background: var(--nexo-primary); color: var(--nexo-white); border-color: var(--nexo-primary); }
+  .nexo-pagination-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  .nexo-empty-state { text-align: center; padding: 50px 20px; color: var(--nexo-gray-500); background: var(--nexo-white); border: 1px solid var(--nexo-gray-300); border-radius: var(--nexo-radius-lg); }
+  .nexo-empty-icon { font-size: 3rem; margin-bottom: 12px; opacity: .5; display: block; }
+  .nexo-empty-title { font-size: 1.05rem; font-weight: 700; color: var(--nexo-gray-700); margin-bottom: 6px; }
+  .nexo-empty-text { font-size: .8rem; max-width: 460px; margin: 0 auto; }
+
+  .nexo-loading-overlay {
+    position: fixed; inset: 0; background: rgba(26,26,46,.85); backdrop-filter: blur(4px);
+    display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 9999;
+  }
+  .nexo-loading-overlay.active { display: flex; }
+  .nexo-loading-content { background: var(--nexo-white); padding: 36px 50px; border-radius: var(--nexo-radius-xl); text-align: center; box-shadow: var(--nexo-shadow-lg); }
+  .nexo-spinner { width: 40px; height: 40px; border: 4px solid var(--nexo-gray-300); border-top-color: var(--nexo-primary); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 14px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { display: inline-block; animation: spin .8s linear infinite; }
+
+  .nexo-toast {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--nexo-error); color: #fff; padding: 12px 28px;
+    border-radius: var(--nexo-radius-md); font-size: .88rem; font-weight: 600;
+    z-index: 10000; box-shadow: var(--nexo-shadow-lg); animation: fadeSlide .25s ease;
+  }
+  @keyframes fadeSlide { from { opacity: 0; top: 5px; } to { opacity: 1; top: 20px; } }
+
+  @media (max-width: 768px) {
+    .nexo-header { padding: 16px 20px; }
+    .nexo-header h1 { font-size: 1.1rem; }
+    .nexo-header-badge { display: none; }
+    .nexo-controls, .nexo-kpi-row, .nexo-content { padding-left: 16px; padding-right: 16px; }
+    .nexo-btn-group { margin-left: 0; width: 100%; }
+    .nexo-btn { flex: 1; }
+    .nexo-kpi-card, .nexo-kpi-skeleton { min-width: 140px; }
+  }
+  @media (max-width: 576px) {
+    .nexo-header-content { flex-direction: column; gap: .5rem; text-align: center; }
+    .nexo-header, .nexo-kpi-row, .nexo-controls, .nexo-content { padding-left: 12px; padding-right: 12px; }
+    .nexo-kpi-card, .nexo-kpi-skeleton { min-width: 100%; }
+    .nexo-controls { flex-direction: column; }
+    .nexo-control-group { min-width: 100%; max-width: 100%; }
+    .nexo-btn-group { margin-left: 0; width: 100%; flex-direction: column; }
+    .nexo-btn { width: 100%; }
+    .talla-chip { min-width: calc(33.333% - 4px); }
+  }
+  @media print {
+    .nexo-controls, .nexo-btn-group, .nexo-pagination, .nexo-header-badge { display: none !important; }
+  }
+</style>
+
+<!-- Loading overlay -->
+<div class="nexo-loading-overlay" id="loadingOverlay">
+  <div class="nexo-loading-content">
+    <div class="nexo-spinner"></div>
+    <div style="font-size:.95rem;font-weight:600;color:var(--nexo-gray-900)">Reconstruyendo curvas de talla…</div>
+    <div style="font-size:.8rem;color:var(--nexo-gray-500);margin-top:4px">Se recorre el kardex para medir disponibilidad</div>
+  </div>
+</div>
+
+<div class="nexo-container mt-0">
+
+  <!-- ── Cabecera ─────────────────────────────────────── -->
+  <div class="nexo-header">
+    <div class="nexo-header-content">
+      <div>
+        <h1><i class="ri-ruler-2-line"></i> Quiebre de Talla por Sucursal</h1>
+        <p>Venta perdida por talla agotada — curva de venta vs. stock por estilo (modelo × color), corregida por disponibilidad</p>
+      </div>
+      <div class="nexo-header-badge">
+        <i class="ri-store-2-line"></i>
+        <span id="badge-sucursal">Selecciona sucursal</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── KPI cards ────────────────────────────────────── -->
+  <div class="nexo-kpi-row" id="kpi-row">
+    <div class="nexo-kpi-skeleton" id="kpi-sk-1"><div class="sk-icon"></div><div class="sk-body"><div class="sk-label"></div><div class="sk-value"></div></div></div>
+    <div class="nexo-kpi-skeleton" id="kpi-sk-2"><div class="sk-icon"></div><div class="sk-body"><div class="sk-label"></div><div class="sk-value"></div></div></div>
+    <div class="nexo-kpi-skeleton" id="kpi-sk-3"><div class="sk-icon"></div><div class="sk-body"><div class="sk-label"></div><div class="sk-value"></div></div></div>
+    <div class="nexo-kpi-skeleton" id="kpi-sk-4"><div class="sk-icon"></div><div class="sk-body"><div class="sk-label"></div><div class="sk-value"></div></div></div>
+    <div class="nexo-kpi-skeleton" id="kpi-sk-5"><div class="sk-icon"></div><div class="sk-body"><div class="sk-label"></div><div class="sk-value"></div></div></div>
+    <div class="nexo-kpi-skeleton" id="kpi-sk-6"><div class="sk-icon"></div><div class="sk-body"><div class="sk-label"></div><div class="sk-value"></div></div></div>
+
+    <div class="nexo-kpi-card kpi-primary" id="kpi-card-1" style="display:none">
+      <div class="nexo-kpi-icon icon-primary"><i class="ri-shirt-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label" title="Estilos (código + marca + color) con venta en el período. Es el universo analizable: sin venta no hay curva.">Estilos analizados</div>
+        <div class="nexo-kpi-value" id="kpi-estilos">0</div>
+      </div>
+    </div>
+    <div class="nexo-kpi-card kpi-error" id="kpi-card-2" style="display:none">
+      <div class="nexo-kpi-icon icon-error"><i class="ri-alarm-warning-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label" title="Estilos con stock > 0 pero con TODAS sus tallas core en cero: se ven sanos en cualquier KPI agregado y en piso de venta están muertos.">Estilos críticos</div>
+        <div class="nexo-kpi-value" id="kpi-criticos">0</div>
+      </div>
+    </div>
+    <div class="nexo-kpi-card kpi-error" id="kpi-card-3" style="display:none">
+      <div class="nexo-kpi-icon icon-error"><i class="ri-close-circle-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label" title="Tallas con venta relevante en el período y stock 0 hoy.">Tallas quebradas</div>
+        <div class="nexo-kpi-value" id="kpi-quebradas">0</div>
+      </div>
+    </div>
+    <div class="nexo-kpi-card kpi-warning" id="kpi-card-4" style="display:none">
+      <div class="nexo-kpi-icon icon-warning"><i class="ri-truck-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label" title="Quiebres que HOY se pueden resolver con un traspaso: la talla existe con stock en una sucursal compradora / centro de distribución.">Reponibles desde CD</div>
+        <div class="nexo-kpi-value" id="kpi-reponibles">0</div>
+      </div>
+    </div>
+    <div class="nexo-kpi-card kpi-success" id="kpi-card-5" style="display:none">
+      <div class="nexo-kpi-icon icon-success"><i class="ri-inbox-unarchive-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label">Unidades en CD</div>
+        <div class="nexo-kpi-value" id="kpi-unidades-cd">0</div>
+      </div>
+    </div>
+    <div class="nexo-kpi-card kpi-warning" id="kpi-card-6" style="display:none">
+      <div class="nexo-kpi-icon icon-warning"><i class="ri-line-chart-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label" title="ESTIMACIÓN, no un dato: venta diaria observada con stock, extrapolada a los días sin stock. Lee siempre el % de disponibilidad junto a la cifra.">Venta perdida (estim.)</div>
+        <div class="nexo-kpi-value" id="kpi-perdidas">0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Controles ────────────────────────────────────── -->
+  <div class="nexo-controls">
+    <div class="nexo-control-group">
+      <label class="nexo-control-label">Sucursal (tienda) <span style="color:var(--nexo-error)">*</span></label>
+      <select class="nexo-select" id="filtro-sucursal"><option value="">— Seleccionar —</option></select>
+    </div>
+    <div class="nexo-control-group">
+      <label class="nexo-control-label">Período (días)</label>
+      <select class="nexo-select" id="filtro-dias">
+        <option value="30">30 días</option>
+        <option value="60">60 días</option>
+        <option value="90" selected>90 días</option>
+        <option value="180">180 días</option>
+        <option value="365">365 días</option>
+      </select>
+    </div>
+    <div class="nexo-control-group">
+      <label class="nexo-control-label" title="% de la venta acumulada de la categoría × marca en esta tienda que define el núcleo de tallas. Se deriva de los datos, no de una lista fija.">Umbral core (%)</label>
+      <input class="nexo-input" type="number" id="filtro-umbral" value="80" min="10" max="100" step="5">
+    </div>
+    <div class="nexo-control-group">
+      <label class="nexo-control-label" title="Unidades mínimas vendidas en el período para que el stock 0 de una talla cuente como quiebre.">Venta mín. para quiebre</label>
+      <input class="nexo-input" type="number" id="filtro-min-venta" value="1" min="1" max="999">
+    </div>
+    <div class="nexo-control-group">
+      <label class="nexo-control-label">Reponer desde</label>
+      <select class="nexo-select" id="filtro-cd"><option value="">Todos los CD a mi alcance</option></select>
+    </div>
+    <label class="nexo-toggle-row" title="Desmarca para ver también los estilos sanos">
+      <input type="checkbox" id="check-solo-quiebres" checked> Sólo con quiebre
+    </label>
+    <div class="nexo-btn-group">
+      <button class="nexo-btn nexo-btn-primary" id="btn-generar" onclick="cargarReporte(1)">
+        <i class="ri-refresh-line"></i> Generar
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Contenido ────────────────────────────────────── -->
+  <div class="nexo-content">
+
+    <details class="nexo-metodologia">
+      <summary><i class="ri-information-line"></i> Cómo se calcula y qué NO se puede concluir de este reporte</summary>
+      <div>
+        <p style="margin:0 0 8px">
+          <b>Estilo</b> = <code>código de artículo normalizado + marca + color</code> (el "modelo × color"
+          del retail de moda). El sistema no tiene un campo "estilo": se deriva. Las fichas duplicadas
+          del mismo código —que en producción existen y sólo difieren en mayúsculas o espacios— se
+          consolidan, porque si no la curva de tallas del modelo aparece partida en dos y ninguna mitad
+          muestra el quiebre. Género y categoría NO entran en la clave (están mal poblados en fichas
+          legacy) pero se muestran como metadato del estilo.
+        </p>
+        <p style="margin:0 0 8px">
+          <b>Talla core</b> = las tallas que acumulan el <span id="met-umbral">80</span>% de la venta de
+          esa <i>categoría × marca</i> en <i>esta</i> tienda. Se deriva de los datos: la 43 puede ser
+          core en una tienda y marginal en otra.
+        </p>
+        <p style="margin:0 0 8px">
+          <b>Quiebre</b> = talla con venta relevante en el período y stock 0 <i>hoy</i>. Una talla que
+          nunca vendió NO se marca como quiebre: eso es surtido faltante, y aparece rayado como
+          <i>hueco de core</i>.
+        </p>
+        <p style="margin:0 0 8px">
+          <b>La trampa de la curva.</b> Si la curva se calculara con la venta cruda, heredaría el propio
+          quiebre: una talla agotada 8 semanas "demuestra" que se vende poco, así que se compra menos y
+          se agota antes. Por eso cada talla trae <b>días con stock</b> reconstruidos del kardex y, bajo
+          <span id="met-pct">60</span>% de disponibilidad, la marca <b>demanda subestimada</b>: esa venta
+          NO es demanda.
+        </p>
+        <b>Limitaciones (léelas antes de comprar con esto):</b>
+        <ul style="margin-bottom:0">
+          <li>La reconstrucción supone que el stock plano y el kardex cuadran. Cuando pasa por valores
+              negativos la talla queda marcada <b>kardex dudoso</b> y ese número no es confiable.</li>
+          <li>La venta ajustada es una extrapolación lineal; con disponibilidades muy bajas (2-3 días)
+              el multiplicador se dispara. Mira siempre el % de disponibilidad al lado.</li>
+          <li>Sólo se analizan estilos <b>con venta</b> en el período. Lo que nunca vendió es stock
+              muerto y se ve en el plan de liquidación, no aquí.</li>
+          <li>No se modela la sustitución entre tallas contiguas, así que la venta perdida estimada es,
+              si acaso, conservadora.</li>
+        </ul>
+      </div>
+    </details>
+
+    <div id="avisos-wrap"></div>
+
+    <div id="estado-inicial">
+      <div class="nexo-empty-state">
+        <span class="nexo-empty-icon">📏</span>
+        <div class="nexo-empty-title">Selecciona una tienda</div>
+        <p class="nexo-empty-text">
+          Elige una sucursal y presiona <strong>Generar</strong>. El reporte muestra, estilo por estilo,
+          qué tallas están quebradas y cuáles de esas se pueden reponer hoy desde el centro de distribución.
+        </p>
+      </div>
+    </div>
+
+    <div id="resultado" style="display:none">
+      <div id="lista-estilos"></div>
+      <div class="nexo-pagination" id="paginacion">
+        <span class="nexo-pagination-info" id="pag-info"></span>
+        <div class="nexo-pagination-controls" id="pag-btns"></div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /nexo-container -->
+
+<script>
+/* ================================================================
+   Estado
+   ================================================================ */
+let ultimaRespuesta = null;
+const PAGE_SIZE = 25;
+
+document.addEventListener('DOMContentLoaded', () => {
+  cargarSucursales();
+  document.getElementById('filtro-umbral').addEventListener('change', () => {
+    document.getElementById('met-umbral').textContent =
+      document.getElementById('filtro-umbral').value || '80';
+  });
+});
+
+/* ================================================================
+   Combos
+   ================================================================ */
+async function cargarSucursales() {
+  try {
+    const data = await fetch('/app/api/reportes/sucursales/', {
+      headers: {'X-Requested-With': 'XMLHttpRequest'}
+    }).then(r => r.json());
+    if (!data.success || !data.sucursales) return;
+    const sel = document.getElementById('filtro-sucursal');
+    const selCd = document.getElementById('filtro-cd');
+    data.sucursales.forEach(s => {
+      const etiqueta = s.nombre || s.alias || `Sucursal ${s.id}`;
+      sel.appendChild(new Option(etiqueta, s.id));
+      selCd.appendChild(new Option(etiqueta, s.id));
+    });
+  } catch (e) { console.error(e); }
+}
+
+/* ================================================================
+   Cargar reporte
+   ================================================================ */
+async function cargarReporte(page) {
+  const btn = document.getElementById('btn-generar');
+  if (btn.disabled) return;
+
+  const sucursalId = document.getElementById('filtro-sucursal').value;
+  if (!sucursalId) { toast('Selecciona una sucursal primero'); return; }
+
+  const params = new URLSearchParams({
+    sucursal_id: sucursalId,
+    dias: document.getElementById('filtro-dias').value,
+    umbral_core: document.getElementById('filtro-umbral').value || 80,
+    min_venta: document.getElementById('filtro-min-venta').value || 1,
+    solo_quiebres: document.getElementById('check-solo-quiebres').checked ? 1 : 0,
+    page: page || 1,
+    page_size: PAGE_SIZE
+  });
+  const cd = document.getElementById('filtro-cd').value;
+  if (cd) params.set('cd_id', cd);
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ri-loader-4-line spin"></i> Consultando...';
+  mostrarLoading(true);
+  mostrarKpis(false);
+
+  try {
+    const resp = await fetch(`/app/api/reportes/quiebre-talla/?${params}`, {
+      headers: {'X-Requested-With': 'XMLHttpRequest'}
+    });
+    const data = await resp.json();
+
+    if (!data.success) { mostrarError(data.error || 'Error al cargar datos'); return; }
+
+    ultimaRespuesta = data;
+    renderKpis(data.resumen);
+    renderAvisos(data.avisos || []);
+    renderEstilos(data.estilos || []);
+    renderPaginacion(data.paginacion || {});
+
+    document.getElementById('badge-sucursal').textContent =
+      `${data.parametros.sucursal} · ${data.parametros.dias_periodo} días`;
+    document.getElementById('met-umbral').textContent = data.parametros.umbral_core;
+    document.getElementById('met-pct').textContent = data.parametros.pct_disponibilidad_minima;
+
+    document.getElementById('estado-inicial').style.display = 'none';
+    document.getElementById('resultado').style.display = '';
+  } catch (e) {
+    console.error(e);
+    mostrarError('Error inesperado al cargar el reporte');
+  } finally {
+    mostrarLoading(false);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ri-refresh-line"></i> Generar';
+  }
+}
+
+/* ================================================================
+   Render
+   ================================================================ */
+function renderKpis(r) {
+  document.getElementById('kpi-estilos').textContent     = num(r.estilos_analizados);
+  document.getElementById('kpi-criticos').textContent    = num(r.estilos_criticos);
+  document.getElementById('kpi-quebradas').textContent   = num(r.tallas_quebradas);
+  document.getElementById('kpi-reponibles').textContent  = num(r.quiebres_reponibles);
+  document.getElementById('kpi-unidades-cd').textContent = num(r.unidades_disponibles_cd);
+  document.getElementById('kpi-perdidas').textContent    = num(Math.round(r.unidades_perdidas_estimadas || 0));
+  mostrarKpis(true);
+}
+
+function renderAvisos(avisos) {
+  const wrap = document.getElementById('avisos-wrap');
+  if (!avisos.length) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = `
+    <div class="nexo-avisos">
+      <b><i class="ri-error-warning-line"></i> Antes de leer los números</b>
+      <ul>${avisos.map(a => `<li>${esc(a)}</li>`).join('')}</ul>
+    </div>`;
+}
+
+function renderEstilos(estilos) {
+  const cont = document.getElementById('lista-estilos');
+  if (!estilos.length) {
+    cont.innerHTML = `
+      <div class="nexo-empty-state">
+        <span class="nexo-empty-icon">✅</span>
+        <div class="nexo-empty-title">Sin quiebres de talla en el período</div>
+        <p class="nexo-empty-text">
+          Ningún estilo con venta en el rango tiene una talla vendida agotada hoy.
+          Desmarca "Sólo con quiebre" para revisar también las curvas sanas.
+        </p>
+      </div>`;
+    return;
+  }
+
+  cont.innerHTML = estilos.map(e => {
+    const clase = e.critico ? 'critico' : (e.reponible ? 'reponible' : '');
+    const badges = [
+      e.critico ? '<span class="badge-critico"><i class="ri-alarm-warning-line"></i> Core en cero</span>' : '',
+      e.reponible ? '<span class="badge-reponible"><i class="ri-truck-line"></i> Reponible desde CD</span>' : '',
+    ].join(' ');
+
+    return `
+    <div class="estilo-card ${clase}">
+      <div class="estilo-head">
+        <div class="estilo-titulo">
+          <span class="estilo-articulo">${esc(e.articulo)}</span>
+          <span class="badge-marca">${esc(e.marca)}</span>
+          <span class="badge-color">${esc(e.color)}</span>
+          ${badges}
+          ${e.fichas > 1 ? `<span class="badge-color" title="Fichas duplicadas del mismo código consolidadas en este estilo">${e.fichas} fichas</span>` : ''}
+        </div>
+        <div class="estilo-metricas">
+          <div>Venta período<b>${num(e.venta_total)}</b></div>
+          <div>Stock actual<b>${num(e.stock_total)}</b></div>
+          <div>Tallas quebradas<b>${num(e.quiebres)}</b></div>
+          <div title="Estimación con corrección por disponibilidad">Venta perdida<b>${num(Math.round(e.unidades_perdidas))}</b></div>
+        </div>
+      </div>
+
+      <div class="curva">${e.curva.map(chipTalla).join('')}</div>
+
+      <div class="leyenda">
+        <span><i class="sw" style="background:rgba(0,212,170,.25)"></i> Con stock</span>
+        <span><i class="sw" style="background:rgba(255,77,77,.35)"></i> Quiebre</span>
+        <span><i class="sw" style="background:rgba(255,176,32,.4)"></i> Quiebre con stock en CD</span>
+        <span><i class="sw" style="border-bottom:2px solid var(--nexo-primary)"></i> Talla core</span>
+        <span>Categoría: ${esc((e.categorias || []).join(', '))} · Género: ${esc((e.generos || []).join(', '))}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function chipTalla(t) {
+  let clase = 'talla-chip';
+  if (t.es_core) clase += ' core';
+  if (t.quiebre && t.stock_cd > 0) clase += ' repone';
+  else if (t.quiebre) clase += ' quiebre';
+  else if (t.core_sin_stock && t.vendidas === 0) clase += ' hueco';
+  else if (t.stock > 0) clase += ' ok';
+
+  const flags = [];
+  if (t.quiebre && t.stock_cd > 0) {
+    const origen = (t.reposicion || []).map(r => `${r.sucursal}: ${r.stock}`).join(' · ');
+    flags.push(`<span class="t-flag cd" title="${esc(origen)}">↔ CD ${num(t.stock_cd)}</span>`);
+  }
+  if (t.demanda_subestimada) {
+    flags.push(`<span class="t-flag sub" title="Sólo ${t.dias_disponible} de ${t.dias_periodo} días con stock: la venta cruda de esta talla NO es demanda. Venta ajustada estimada: ${t.venta_ajustada === null ? 'no estimable' : t.venta_ajustada}">⚠ demanda subestim.</span>`);
+  }
+  if (t.reconstruccion_dudosa) {
+    flags.push('<span class="t-flag duda" title="La reconstrucción desde el kardex pasa por stock negativo: el stock plano y el kardex no cuadran para esta talla.">kardex dudoso</span>');
+  }
+
+  const titulo = `Vendidas: ${t.vendidas} · Stock: ${t.stock} · `
+    + `Días con stock: ${t.dias_disponible}/${t.dias_periodo} (${t.pct_disponible}%)`
+    + (t.venta_ajustada !== null ? ` · Venta ajustada por disponibilidad: ${t.venta_ajustada}` : '');
+
+  return `
+    <div class="${clase}" title="${esc(titulo)}">
+      <div class="t-num">${esc(t.talla)}</div>
+      <div class="t-linea">vta <b>${num(t.vendidas)}</b> · stk <b>${num(t.stock)}</b></div>
+      <div class="t-linea" style="opacity:.75">disp <b>${t.pct_disponible}%</b></div>
+      ${flags.join('')}
+    </div>`;
+}
+
+/* ================================================================
+   Paginación
+   ================================================================ */
+function renderPaginacion(p) {
+  const total = p.total || 0;
+  const totalPags = p.total_paginas || 0;
+  const actual = p.page || 1;
+  const inicio = total ? (actual - 1) * (p.page_size || PAGE_SIZE) + 1 : 0;
+  const fin = Math.min(actual * (p.page_size || PAGE_SIZE), total);
+
+  document.getElementById('pag-info').textContent =
+    total ? `Mostrando ${num(inicio)}–${num(fin)} de ${num(total)} estilos` : 'Sin estilos que mostrar';
+
+  if (totalPags <= 1) { document.getElementById('pag-btns').innerHTML = ''; return; }
+
+  let html = `<button class="nexo-pagination-btn" onclick="cargarReporte(${actual - 1})" ${actual <= 1 ? 'disabled' : ''}>‹</button>`;
+  paginRange(actual, totalPags).forEach(x => {
+    html += x === '…'
+      ? '<span class="nexo-pagination-btn" style="pointer-events:none">…</span>'
+      : `<button class="nexo-pagination-btn ${x === actual ? 'active' : ''}" onclick="cargarReporte(${x})">${x}</button>`;
+  });
+  html += `<button class="nexo-pagination-btn" onclick="cargarReporte(${actual + 1})" ${actual >= totalPags ? 'disabled' : ''}>›</button>`;
+  document.getElementById('pag-btns').innerHTML = html;
+}
+
+function paginRange(actual, total) {
+  if (total <= 7) return Array.from({length: total}, (_, i) => i + 1);
+  const r = [1];
+  if (actual > 3) r.push('…');
+  for (let p = Math.max(2, actual - 1); p <= Math.min(total - 1, actual + 1); p++) r.push(p);
+  if (actual < total - 2) r.push('…');
+  r.push(total);
+  return r;
+}
+
+/* ================================================================
+   UI helpers
+   ================================================================ */
+function mostrarLoading(show) {
+  document.getElementById('loadingOverlay').classList.toggle('active', show);
+}
+function mostrarKpis(loaded) {
+  for (let i = 1; i <= 6; i++) {
+    document.getElementById(`kpi-sk-${i}`).style.display   = loaded ? 'none' : '';
+    document.getElementById(`kpi-card-${i}`).style.display = loaded ? '' : 'none';
+  }
+}
+function mostrarError(msg) {
+  document.getElementById('estado-inicial').innerHTML = `
+    <div class="nexo-empty-state">
+      <span class="nexo-empty-icon">⚠️</span>
+      <div class="nexo-empty-title">Error al cargar datos</div>
+      <p class="nexo-empty-text">${esc(msg)}</p>
+    </div>`;
+  document.getElementById('estado-inicial').style.display = '';
+  document.getElementById('resultado').style.display = 'none';
+}
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'nexo-toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+function num(v) { return (v ?? 0).toLocaleString('es-CL'); }
+function esc(s) {
+  if (s === null || s === undefined || s === '') return '-';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+</script>
+
+{% include 'layout/footer.html' %}
