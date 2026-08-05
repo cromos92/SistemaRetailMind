@@ -119,6 +119,7 @@
 .sub-error_stock,.sub-error_dte{background:#fee2e2;color:#991b1b;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:600;}
 .sub-sin_stock{background:#ffedd5;color:#9a3412;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:700;}
 .badge-aviso-pendiente{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;font-size:.65rem;padding:2px 7px;border-radius:12px;font-weight:700;white-space:nowrap;}
+.badge-central{background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:.65rem;padding:2px 7px;border-radius:12px;font-weight:700;white-space:nowrap;}
 
 /* ── antigüedad ── */
 .age-warn{background:#fef3c7;border-left:3px solid #f59e0b;}
@@ -797,6 +798,9 @@ function traerPedidos(){
         }
         if (se.cerrados_despachados) {
           sync += `<br><small class="text-info"><b>${se.cerrados_despachados}</b> ya despachado(s) por el canal → cerrados como facturados por concepto.</small>`;
+        }
+        if (se.listos_central) {
+          sync += `<br><small class="text-secondary"><b>${se.listos_central}</b> ya preparado(s) en la central (esperan courier/retiro): no son trabajo de tienda.</small>`;
         }
         if (se.sin_pago) {
           sync += `<br><small class="text-warning"><b>${se.sin_pago}</b> sin pago confirmado en el canal (bloqueados para facturar).</small>`;

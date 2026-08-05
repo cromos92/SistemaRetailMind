@@ -183,6 +183,15 @@ class Ticket(models.Model):
         null=True, blank=True,
         help_text='Descuento aplicado por canje de vale de puntos (pesos brutos, IVA incluido)',
     )
+    # Cupón nominativo (ver app/models/fidelizacion.py). Campo aparte de
+    # `descuento` y `descuento_fidelizacion` porque el DTE lo declara como una
+    # línea de descuento global propia y la cuadratura lo cuenta por separado.
+    # El vínculo al cupón está en `CuponCliente.ticket` (related_name
+    # `cupones_descuento`), no hace falta FK acá.
+    descuento_cupon = models.IntegerField(
+        null=True, blank=True,
+        help_text='Descuento aplicado por cupón nominativo (pesos brutos, IVA incluido)',
+    )
     total = models.IntegerField()
     fecha = models.DateField(auto_now=True)
     hora = models.TimeField(auto_now=True)

@@ -68,7 +68,12 @@ ESTADOS_CANAL_CANCELADOS = ('CANCELADO', 'DEVUELTO', 'REEMBOLSADO')
 # paquete ya salió y este módulo no emitió boleta, la venta se documentó POR
 # CONCEPTO fuera de acá → el pedido se cierra como FACTURADO/FACTURADO_EXTERNO
 # (sale de la cola sin doble documento). En prod había ~90 así, de jun-jul.
-ESTADOS_CANAL_DESPACHADOS = ('ENVIADO', 'EN_TRANSITO', 'ENTREGADO')
+ESTADOS_CANAL_DESPACHADOS = ('ENVIADO', 'EN_TRANSITO', 'ENTREGADO', 'COMPLETADO')
+
+# Estados LOGÍSTICOS de AC en los que el pedido ya está preparado por la CENTRAL
+# y espera al courier (o a que el cliente lo retire). NO se cierra —aún no
+# salió— pero sale de la cola de picking de la tienda: no es trabajo suyo.
+ESTADOS_CANAL_LISTO_CENTRAL = ('LISTO_ENVIO', 'LISTO_RETIRO')
 
 # Lookback de la sincronización de estados: qué tan atrás mirar los PENDIENTES
 # locales. 120 días cubre con holgura la cola zombie observada.
@@ -207,6 +212,17 @@ def traer_pedidos_pendientes(rut_empresa: Optional[str] = None,
         logger.exception('Sync de estados AllConnected falló')
         sync_estados = {'ok': False, 'error': str(exc)[:200]}
 
+    # === Devolver a AllConnected los tickets asignados en ESTE pull ===
+    # AC solo guardaba `numero_ticket_rm` en el camino PUSH; los pedidos que
+    # entran por acá le quedaban con el ticket VACÍO, y eso rompe en silencio su
+    # columna "Tienda (RM)" y el comando de cancelaciones (ambos matchean por
+    # ticket). Best-effort: si falla, el pull igual fue exitoso.
+    try:
+        confirmacion = confirmar_tickets_en_allconnected(pedidos)
+    except Exception as exc:  # pragma: no cover — defensivo
+        logger.exception('Confirmación de tickets a AllConnected falló')
+        confirmacion = {'ok': False, 'error': str(exc)[:200], 'actualizados': 0}
+
     detalle = f'{nuevos} nuevos, {ya_existian} ya existían, {len(errores)} con error.'
     if sync_estados.get('cancelados'):
         detalle += f" {sync_estados['cancelados']} pedido(s) cancelados en el canal fueron marcados CANCELADO."
@@ -224,6 +240,7 @@ def traer_pedidos_pendientes(rut_empresa: Optional[str] = None,
         'ya_existian': ya_existian,
         'errores': errores,
         'sync_estados': sync_estados,
+        'tickets_confirmados': confirmacion,
         'desde': (payload.get('desde') if isinstance(payload, dict) else None) or desde,
         'hasta': (payload.get('hasta') if isinstance(payload, dict) else None) or hasta,
         'detalle': detalle,
@@ -312,11 +329,11 @@ def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
     cfg = _config()
     if not cfg['base_url']:
         return {'ok': True, 'configurado': False, 'consultados': 0,
-                'cancelados': 0, 'cerrados_despachados': 0, 'sin_pago': 0,
+                'cancelados': 0, 'cerrados_despachados': 0, 'sin_pago': 0, 'listos_central': 0,
                 'no_encontrados': 0, 'lotes_caidos': 0}
     if not _REQUESTS_OK:
         return {'ok': False, 'error': "Falta el paquete 'requests'.", 'consultados': 0,
-                'cancelados': 0, 'cerrados_despachados': 0, 'sin_pago': 0,
+                'cancelados': 0, 'cerrados_despachados': 0, 'sin_pago': 0, 'listos_central': 0,
                 'no_encontrados': 0, 'lotes_caidos': 0}
 
     desde_dt = timezone.now() - timedelta(days=dias)
@@ -327,7 +344,7 @@ def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
     pendientes = list(qs)
     if not pendientes:
         return {'ok': True, 'configurado': True, 'consultados': 0,
-                'cancelados': 0, 'cerrados_despachados': 0, 'sin_pago': 0,
+                'cancelados': 0, 'cerrados_despachados': 0, 'sin_pago': 0, 'listos_central': 0,
                 'no_encontrados': 0, 'lotes_caidos': 0}
 
     url = f"{cfg['base_url']}{cfg['estados_path']}"
@@ -345,7 +362,7 @@ def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
 
     ahora = timezone.now()
     consultados = cancelados = cerrados_despachados = 0
-    sin_pago = no_encontrados = lotes_caidos = 0
+    sin_pago = no_encontrados = lotes_caidos = listos_central = 0
 
     for i in range(0, len(pendientes), _LOTE_ESTADOS):
         lote = pendientes[i:i + _LOTE_ESTADOS]
@@ -364,7 +381,7 @@ def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
         if r.status_code == 404:
             # AC aún no tiene deployado el endpoint: no es un error del operador.
             return {'ok': True, 'configurado': True, 'consultados': 0,
-                    'cancelados': 0, 'cerrados_despachados': 0, 'sin_pago': 0,
+                    'cancelados': 0, 'cerrados_despachados': 0, 'sin_pago': 0, 'listos_central': 0,
                     'no_encontrados': 0, 'lotes_caidos': 0,
                     'detalle': 'AllConnected aún no expone /app/pedidos/estados/ (deploy pendiente).'}
         if r.status_code != 200:
@@ -387,23 +404,38 @@ def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
                 continue
             consultados += 1
             estado_canal = str(est.get('estado') or '')[:20]
+            estado_logistica = str(est.get('estado_logistica') or '')[:20]
             pedido.estado_canal = estado_canal
+            pedido.estado_logistica_canal = estado_logistica
             pedido.fecha_sync_estado_canal = ahora
-            pedido.save(update_fields=['estado_canal', 'fecha_sync_estado_canal'])
+            pedido.save(update_fields=['estado_canal', 'estado_logistica_canal',
+                                       'fecha_sync_estado_canal'])
 
+            # `despachado` lo calcula AllConnected mirando SUS dos campos de
+            # estado; el fallback local cubre respuestas de versiones viejas
+            # del endpoint (que solo mandaban `estado`).
+            despachado = bool(est.get('despachado')) or (
+                estado_canal in ESTADOS_CANAL_DESPACHADOS
+                or estado_logistica in ESTADOS_CANAL_DESPACHADOS
+            )
             if est.get('cancelado') or estado_canal in ESTADOS_CANAL_CANCELADOS:
                 _marcar_cancelado_por_canal(pedido, estado_canal)
                 cancelados += 1
-            elif estado_canal in ESTADOS_CANAL_DESPACHADOS:
-                _cerrar_facturado_externo(pedido, estado_canal)
+            elif despachado:
+                _cerrar_facturado_externo(pedido, estado_logistica or estado_canal)
                 cerrados_despachados += 1
+            elif est.get('listo_envio') or estado_logistica in ESTADOS_CANAL_LISTO_CENTRAL:
+                # Lo preparó la CENTRAL y espera al courier (o al cliente): no
+                # se cierra —todavía no sale— pero deja de ser trabajo de tienda.
+                listos_central += 1
             elif estado_canal == 'PENDIENTE':
                 sin_pago += 1
 
     logger.info(
         'Sync estados AllConnected: %s consultados, %s cancelados, %s cerrados '
-        'por despacho, %s sin pago, %s no encontrados, %s lotes caídos',
-        consultados, cancelados, cerrados_despachados, sin_pago,
+        'por despacho, %s listos en central, %s sin pago, %s no encontrados, '
+        '%s lotes caídos',
+        consultados, cancelados, cerrados_despachados, listos_central, sin_pago,
         no_encontrados, lotes_caidos,
     )
     return {
@@ -411,9 +443,130 @@ def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
         'consultados': consultados,
         'cancelados': cancelados,
         'cerrados_despachados': cerrados_despachados,
+        'listos_central': listos_central,
         'sin_pago': sin_pago,
         'no_encontrados': no_encontrados,
         'lotes_caidos': lotes_caidos,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Confirmación de tickets asignados (RM → AllConnected)
+# ---------------------------------------------------------------------------
+
+_LOTE_TICKETS = 300
+
+
+def confirmar_tickets_en_allconnected(pedidos_payload=None, pedidos_qs=None) -> dict:
+    """
+    Le informa a AllConnected el ``numero_ticket_rm`` que RM asignó a cada pedido.
+
+    Necesario porque AC solo guarda el ticket cuando ÉL hace el push; los
+    pedidos que RM trae por pull le quedaban con el ticket vacío, y eso rompe su
+    columna "Tienda (RM)" (la task filtra los que no tienen ticket) y el comando
+    `sincronizar_cancelaciones_rm`.
+
+    Args:
+        pedidos_payload: lista de dicts tal como vinieron del pull (se usan sus
+            `canal_origen` + `numero_pedido_canal` para resolver el ticket local).
+        pedidos_qs: alternativa — queryset/iterable de PedidoEcommerce ya
+            resueltos (lo usa el comando de backfill).
+
+    NUNCA lanza. Devuelve {ok, configurado, enviados, actualizados, ya_tenian,
+    conflictos, no_encontrados, detalle}.
+    """
+    from app.models import PedidoEcommerce
+
+    cfg = _config()
+    path = getattr(settings, 'ALLCONNECTED_TICKETS_PATH', '') or '/app/pedidos/confirmar-tickets/'
+    vacio = {'ok': True, 'configurado': bool(cfg['base_url']), 'enviados': 0,
+             'actualizados': 0, 'ya_tenian': 0, 'conflictos': 0, 'no_encontrados': 0,
+             'detalle': ''}
+
+    if not cfg['base_url'] or not _REQUESTS_OK:
+        vacio['ok'] = bool(cfg['base_url'])
+        vacio['detalle'] = 'AllConnected no configurado en este entorno.'
+        return vacio
+
+    if pedidos_qs is not None:
+        pedidos = list(pedidos_qs)
+    else:
+        claves = []
+        for item in (pedidos_payload or []):
+            if not isinstance(item, dict):
+                continue
+            numero = str(item.get('numero_pedido_canal') or '').strip()
+            if numero:
+                claves.append(numero)
+        if not claves:
+            return vacio
+        pedidos = list(
+            PedidoEcommerce.objects
+            .filter(numero_pedido_canal__in=claves)
+            .only('numero_pedido_canal', 'canal_origen', 'numero_ticket_rm')
+        )
+
+    tickets = [
+        {'canal_origen': p.canal_origen,
+         'numero_pedido_canal': (p.numero_pedido_canal or '').strip(),
+         'numero_ticket_rm': p.numero_ticket_rm}
+        for p in pedidos
+        if (p.numero_pedido_canal or '').strip() and p.numero_ticket_rm
+    ]
+    if not tickets:
+        return vacio
+
+    url = f"{cfg['base_url']}{path}"
+    headers = {
+        cfg['header_name']: cfg['api_key'],
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'RetailMind-PedidosPull/1.0',
+    }
+
+    enviados = actualizados = ya_tenian = conflictos = no_encontrados = 0
+    fallos = 0
+    for i in range(0, len(tickets), _LOTE_TICKETS):
+        lote = tickets[i:i + _LOTE_TICKETS]
+        try:
+            r = requests.post(url, json={'tickets': lote}, headers=headers,
+                              timeout=TIMEOUT_AVISO_SEGUNDOS)
+        except requests.RequestException as exc:
+            logger.warning('confirmar_tickets_en_allconnected: lote sin respuesta: %s', exc)
+            fallos += 1
+            continue
+        if r.status_code == 404:
+            return {**vacio, 'ok': False, 'lotes_fallidos': 0, 'deploy_pendiente': True,
+                    'detalle': 'AllConnected todavía no tiene el endpoint de tickets (deploy pendiente).'}
+        if r.status_code != 200:
+            fallos += 1
+            continue
+        try:
+            data = r.json() or {}
+        except ValueError:
+            fallos += 1
+            continue
+        enviados += len(lote)
+        actualizados += int(data.get('actualizados') or 0)
+        ya_tenian += int(data.get('ya_tenian') or 0)
+        conflictos += len(data.get('conflictos') or [])
+        no_encontrados += len(data.get('no_encontrados') or [])
+
+    if actualizados or conflictos:
+        logger.info('Tickets confirmados a AllConnected: %s actualizados, %s ya tenían, '
+                    '%s conflictos, %s no encontrados', actualizados, ya_tenian,
+                    conflictos, no_encontrados)
+    return {
+        'ok': fallos == 0,
+        'configurado': True,
+        'enviados': enviados,
+        'actualizados': actualizados,
+        'ya_tenian': ya_tenian,
+        'conflictos': conflictos,
+        'no_encontrados': no_encontrados,
+        'lotes_fallidos': fallos,
+        'deploy_pendiente': False,
+        'detalle': f'{fallos} lote(s) sin respuesta.' if fallos else '',
     }
 
 

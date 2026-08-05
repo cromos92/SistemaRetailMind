@@ -17,6 +17,7 @@ Este modelo (CuentaPuntos + MovimientoPuntos) es la base que la futura app
 móvil "Paola" / puntos.realsport.cl consumirá vía API REST, sin rediseño.
 """
 from datetime import timedelta
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import models
 from django.utils import timezone
@@ -763,3 +764,250 @@ class CanjeVale(models.Model):
     @property
     def vigente(self):
         return self.estado == 'PENDIENTE' and self.expira_en > timezone.now()
+
+
+# ========== CUPONES DE DESCUENTO NOMINATIVOS ==========
+#
+# Un cupón es un código de descuento que la empresa REGALA a un cliente concreto
+# (no está respaldado por puntos: es margen). Se emite desde el módulo de
+# fidelización sobre la ficha de un cliente y sólo lo puede usar ese cliente,
+# identificándose con su RUT en la caja.
+#
+# Regla de negocio dura (decisión 2026-08-05): en una venta hay UN SOLO
+# beneficio. El cupón NO se combina ni con el descuento manual del cajero ni con
+# un vale de puntos. Esa exclusión vive en `cupon_service.validar_cupon` y NO es
+# un flag configurable a propósito: un checkbox que alguien destilde sería la
+# forma más barata de regalar 5% + 5% + descuento manual sin que nadie se entere.
+
+TIPO_VALOR_CUPON_CHOICES = [
+    ('PORCENTAJE', '% sobre el total'),
+    ('MONTO', 'Monto fijo ($)'),
+]
+
+ESTADO_CUPON_CHOICES = [
+    ('PENDIENTE', 'Pendiente de uso'),
+    ('CANJEADO', 'Canjeado'),
+    ('EXPIRADO', 'Expirado'),
+    ('ANULADO', 'Anulado'),
+]
+
+
+def calcular_descuento_cupon(tipo_valor, valor, tope_descuento, monto):
+    """
+    Descuento en pesos que produce un cupón sobre `monto`.
+
+    Función compartida por la campaña (preview) y el cupón emitido (canje real),
+    para que la plata que se muestra al crear la campaña sea exactamente la que
+    se descuenta en caja. Nunca devuelve más que `monto` (un cupón no deja el
+    total en negativo ni convierte una venta en una devolución).
+    """
+    if not monto or monto <= 0:
+        return 0
+    if tipo_valor == 'MONTO':
+        bruto = int(valor or 0)
+    else:
+        bruto = int(
+            (Decimal(monto) * Decimal(valor or 0) / Decimal(100))
+            .quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+        )
+    if tope_descuento:
+        bruto = min(bruto, int(tope_descuento))
+    return max(0, min(bruto, int(monto)))
+
+
+class CampanaCupon(models.Model):
+    """
+    Plantilla de emisión: define QUÉ descuento se regala y bajo qué condiciones.
+
+    Separada de `CuponCliente` porque emitir cientos de cupones repitiendo los
+    parámetros a mano es inviable, y cambiar la vigencia obligaría a editar cada
+    fila. Misma relación que `ProgramaFidelizacion` ↔ `CuentaPuntos`.
+    """
+
+    nombre = models.CharField(max_length=80)
+    descripcion = models.TextField(blank=True, default='')
+
+    # Alcance por empresa (decisión de negocio): un cupón siempre nace atado a
+    # una cadena y sólo se canjea en sus sucursales. NO nullable.
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.PROTECT,
+        related_name='campanas_cupon',
+    )
+
+    tipo_valor = models.CharField(
+        max_length=12, choices=TIPO_VALOR_CUPON_CHOICES, default='PORCENTAJE',
+    )
+    valor = models.DecimalField(
+        max_digits=7, decimal_places=2,
+        help_text='5.00 = 5% (PORCENTAJE) o $5.000 (MONTO)',
+    )
+    tope_descuento = models.IntegerField(
+        null=True, blank=True,
+        help_text='Techo en pesos del descuento (sólo PORCENTAJE). Vacío = sin techo',
+    )
+    monto_minimo = models.IntegerField(
+        default=0, help_text='Compra mínima en pesos para poder usar el cupón',
+    )
+
+    vigencia_dias = models.IntegerField(
+        default=30, help_text='Días que vive cada cupón desde que se emite',
+    )
+    fecha_inicio = models.DateField(
+        db_index=True, help_text='Desde cuándo se pueden EMITIR cupones',
+    )
+    fecha_fin = models.DateField(
+        db_index=True, help_text='Hasta cuándo se pueden emitir (inclusive)',
+    )
+    activo = models.BooleanField(default=True, db_index=True)
+
+    uno_vivo_por_cliente = models.BooleanField(
+        default=True,
+        help_text='Impide emitir un 2º cupón a un cliente que ya tiene uno sin usar',
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='campanas_cupon_creadas',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-fecha_inicio', 'nombre']
+        verbose_name = 'Campaña de Cupones'
+        verbose_name_plural = 'Campañas de Cupones'
+        indexes = [
+            models.Index(fields=['activo', 'fecha_inicio', 'fecha_fin']),
+            models.Index(fields=['empresa', 'activo']),
+        ]
+
+    def __str__(self):
+        etiqueta = (f"{self.valor}%" if self.tipo_valor == 'PORCENTAJE'
+                    else f"${int(self.valor):,}".replace(',', '.'))
+        return f"{self.nombre} ({etiqueta})"
+
+    @property
+    def vigente(self):
+        """¿Se pueden emitir cupones hoy?"""
+        hoy = timezone.localdate()
+        return self.activo and self.fecha_inicio <= hoy <= self.fecha_fin
+
+    def calcular_descuento(self, monto):
+        """Preview: cuánto descontaría esta campaña sobre `monto`."""
+        return calcular_descuento_cupon(
+            self.tipo_valor, self.valor, self.tope_descuento, monto,
+        )
+
+
+class CuponCliente(models.Model):
+    """
+    Cupón NOMINATIVO de un solo uso. Calcado de `CanjeVale`, con dos diferencias:
+    no está respaldado por puntos (es margen que regala la empresa) y su dueño es
+    parte de la validación, no un dato informativo.
+
+    Al ser de un solo uso, este registro ES el ledger del uso: `ticket`,
+    `monto_descuento`, `canjeado_en` y `usuario_canje` cuentan toda la historia.
+    No hace falta una tabla de usos aparte.
+    """
+
+    campana = models.ForeignKey(
+        CampanaCupon, on_delete=models.PROTECT, related_name='cupones',
+    )
+    cliente = models.ForeignKey(
+        Cliente, on_delete=models.CASCADE, related_name='cupones_descuento',
+    )
+    # RUT denormalizado y NORMALIZADO (sin puntos ni guion): en caja se compara
+    # contra `ticket.cliente_rut` sin join y sin depender del formato que tecleó
+    # el cajero. Es EL gate del cupón — sin esto, el código sería al portador.
+    rut_cliente = models.CharField(max_length=20, db_index=True)
+
+    codigo = models.CharField(
+        max_length=24, unique=True, db_index=True,
+        help_text='Código de un solo uso que el cliente presenta en caja',
+    )
+    empresa = models.ForeignKey(
+        Empresa, on_delete=models.PROTECT, related_name='cupones_cliente',
+        help_text='Copia de campana.empresa: permite validar en caja sin join',
+    )
+
+    # === SNAPSHOT al emitir ===
+    # Si mañana se edita la campaña, los cupones ya entregados NO mutan. Mismo
+    # principio que `CanjeVale.valor_pesos` ("snapshot al generarse").
+    tipo_valor = models.CharField(max_length=12, choices=TIPO_VALOR_CUPON_CHOICES)
+    valor = models.DecimalField(max_digits=7, decimal_places=2)
+    tope_descuento = models.IntegerField(null=True, blank=True)
+    monto_minimo = models.IntegerField(default=0)
+
+    estado = models.CharField(
+        max_length=12, choices=ESTADO_CUPON_CHOICES, default='PENDIENTE',
+        db_index=True,
+    )
+    expira_en = models.DateTimeField(db_index=True)
+
+    # === Datos del canje efectivo (al validarlo en el POS) ===
+    ticket = models.ForeignKey(
+        'app.Ticket', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cupones_descuento',
+    )
+    monto_descuento = models.IntegerField(
+        default=0, help_text='Pesos realmente descontados al canjear',
+    )
+    sucursal_canje = models.ForeignKey(
+        Sucursal, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cupones_canjeados',
+    )
+    usuario_canje = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cupones_canjeados',
+    )
+    canjeado_en = models.DateTimeField(null=True, blank=True)
+
+    idempotency_key = models.CharField(
+        max_length=100, unique=True, null=True, blank=True, db_index=True,
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cupones_emitidos',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Cupón de Cliente'
+        verbose_name_plural = 'Cupones de Clientes'
+        indexes = [
+            models.Index(fields=['estado', 'expira_en']),
+            models.Index(fields=['cliente', 'estado']),
+            models.Index(fields=['rut_cliente', 'estado']),
+        ]
+        constraints = [
+            # Un solo cupón VIVO por cliente y campaña. Los ya canjeados no
+            # cuentan, así que una segunda campaña o una reemisión posterior
+            # siguen siendo posibles.
+            models.UniqueConstraint(
+                fields=['campana', 'cliente'],
+                condition=models.Q(estado='PENDIENTE'),
+                name='uniq_cupon_vivo_por_cliente',
+            ),
+            # Un ticket no puede consumir dos cupones.
+            models.UniqueConstraint(
+                fields=['ticket'],
+                condition=models.Q(estado='CANJEADO'),
+                name='uniq_cupon_canjeado_por_ticket',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.codigo} · {self.estado} · {self.cliente_id}"
+
+    @property
+    def vigente(self):
+        return self.estado == 'PENDIENTE' and self.expira_en > timezone.now()
+
+    def calcular_descuento(self, monto):
+        """Descuento en pesos que aplica este cupón sobre `monto`."""
+        return calcular_descuento_cupon(
+            self.tipo_valor, self.valor, self.tope_descuento, monto,
+        )

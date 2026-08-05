@@ -252,6 +252,11 @@ from .fidelizacion import (  # noqa: F401
     ESTADO_REFERIDO_CHOICES,
     DesafioPromo,
     TIPO_DESAFIO_CHOICES,
+    CampanaCupon,
+    CuponCliente,
+    TIPO_VALOR_CUPON_CHOICES,
+    ESTADO_CUPON_CHOICES,
+    calcular_descuento_cupon,
 )
 
 from .cliente_app import (  # noqa: F401

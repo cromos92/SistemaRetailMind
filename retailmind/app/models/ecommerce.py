@@ -242,6 +242,18 @@ class PedidoEcommerce(models.Model):
         verbose_name='Estado en el canal',
         help_text='Último Pedido.estado reportado por AllConnected (sync de estados)',
     )
+    # AllConnected tiene `estado` y `estado_logistica` en PARALELO (sin máquina
+    # de estados): un pedido despachado suele quedar estado='PREPARANDO' con
+    # estado_logistica='ENVIADO'. Mirar solo `estado_canal` dejaba pedidos ya
+    # enviados en la cola de la tienda (uno de 44 días, diagnóstico 05-ago).
+    estado_logistica_canal = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        verbose_name='Estado logístico en el canal',
+        help_text='Último Pedido.estado_logistica reportado por AllConnected '
+                  '(LISTO_ENVIO/LISTO_RETIRO = lo preparó la central).',
+    )
     fecha_sync_estado_canal = models.DateTimeField(
         null=True, blank=True,
         verbose_name='Última sync de estado canal',

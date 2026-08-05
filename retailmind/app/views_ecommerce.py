@@ -1119,6 +1119,23 @@ _MSG_BLOQUEO_SIN_STOCK = (
 )
 
 
+def _preparado_en_central(pedido):
+    """True si AllConnected ya lo tiene empaquetado esperando courier/retiro.
+
+    Lo preparó la CENTRAL, así que NO es trabajo de picking de la tienda (no se
+    le imprime guía). No se cierra ni se bloquea la facturación: el paquete
+    todavía no salió y puede corresponder boletearlo.
+    """
+    from app.services.allconnected_pedidos_service import ESTADOS_CANAL_LISTO_CENTRAL
+    return (pedido.estado_logistica_canal or '').upper() in ESTADOS_CANAL_LISTO_CENTRAL
+
+
+_MSG_PREPARADO_CENTRAL = (
+    'AllConnected reporta este pedido como ya preparado en la central '
+    '(esperando courier o retiro del cliente): no corresponde prepararlo en tienda.'
+)
+
+
 def _bloqueo_por_estado_canal(pedido):
     """Razón para NO facturar según el último estado sincronizado del canal.
 
@@ -1133,19 +1150,25 @@ def _bloqueo_por_estado_canal(pedido):
         FACTURADO_EXTERNO); boletearlo acá sería doble documento.
       - PENDIENTE → el canal aún no confirma el pago del pedido; boletearlo
         sería facturar una venta que puede no concretarse.
+
+    Mira `estado_canal` Y `estado_logistica_canal` porque en AllConnected son
+    campos PARALELOS: lo habitual es que un despacho mueva solo el logístico y
+    deje `estado` en PREPARANDO (diagnóstico 05-ago).
     """
     from app.services.allconnected_pedidos_service import (
         ESTADOS_CANAL_CANCELADOS, ESTADOS_CANAL_DESPACHADOS,
     )
 
     ec = (pedido.estado_canal or '').upper()
-    if not ec:
+    el = (pedido.estado_logistica_canal or '').upper()
+    if not ec and not el:
         return None
     if ec in ESTADOS_CANAL_CANCELADOS:
         return (f'El canal reporta este pedido como {ec} (AllConnected). '
                 f'No corresponde facturarlo.')
-    if ec in ESTADOS_CANAL_DESPACHADOS:
-        return (f'El canal reporta este pedido como {ec}: ya fue despachado y la '
+    if ec in ESTADOS_CANAL_DESPACHADOS or el in ESTADOS_CANAL_DESPACHADOS:
+        estado_mostrado = el if el in ESTADOS_CANAL_DESPACHADOS else ec
+        return (f'El canal reporta este pedido como {estado_mostrado}: ya fue despachado y la '
                 f'venta se documenta por concepto fuera del módulo. Facturarlo acá '
                 f'generaría doble documento (la sincronización lo cierra sola).')
     if ec == 'PENDIENTE':
@@ -2768,6 +2791,9 @@ def api_imprimir_guia_preparacion(request, pedido_id):
     if pedido.sub_estado in SUB_ESTADOS_BLOQUEADOS_PICKING:
         return JsonResponse({'ok': False, 'error': _MSG_BLOQUEO_SIN_STOCK}, status=409)
 
+    if _preparado_en_central(pedido):
+        return JsonResponse({'ok': False, 'error': _MSG_PREPARADO_CENTRAL}, status=409)
+
     resultado = _registrar_guia_preparacion(pedido, request.user)
     return JsonResponse({'ok': True, **resultado})
 
@@ -2889,6 +2915,7 @@ def api_imprimir_guias_sucursal(request):
 
     from app.services.allconnected_pedidos_service import (
         ESTADOS_CANAL_CANCELADOS, ESTADOS_CANAL_DESPACHADOS,
+        ESTADOS_CANAL_LISTO_CENTRAL,
     )
 
     qs = (
@@ -2904,6 +2931,10 @@ def api_imprimir_guias_sucursal(request):
         # los cierra la sincronización — imprimirles guía sería picking basura.
         .exclude(estado_canal__in=list(ESTADOS_CANAL_CANCELADOS)
                  + list(ESTADOS_CANAL_DESPACHADOS) + ['PENDIENTE'])
+        # Idem los que la CENTRAL ya despachó o dejó listos: el estado logístico
+        # de AllConnected avanza solo, sin tocar `estado` (por eso se mira aparte).
+        .exclude(estado_logistica_canal__in=list(ESTADOS_CANAL_DESPACHADOS)
+                 + list(ESTADOS_CANAL_LISTO_CENTRAL))
         .order_by('fecha_recepcion')  # los más antiguos primero
     )
     if not incluir_reimpresiones:
