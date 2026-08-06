@@ -796,6 +796,29 @@
                                     </div>
                                 </div>
 
+                                <!-- ===== CÓDIGO DE DESCUENTO (cupón nominativo) ===== -->
+                                <div id="cuponCard" class="card shadow-sm mt-2 border-0" style="border-left:3px solid #405189 !important;">
+                                    <div class="card-body py-2 px-3">
+                                        <div class="d-flex align-items-center gap-1 mb-1">
+                                            <i class="ri-coupon-3-line" style="font-size:0.95rem; color:#405189;"></i>
+                                            <span class="fw-semibold" style="font-size:0.82rem;">Código de Descuento</span>
+                                        </div>
+                                        <div class="input-group input-group-sm">
+                                            <input type="text" id="cuponInput" class="form-control form-control-sm"
+                                                   placeholder="Código del cliente (ej: DC-XXXXXXXX)" maxlength="24"
+                                                   style="text-transform:uppercase; letter-spacing:0.5px; font-size:0.78rem;"
+                                                   onkeydown="if(event.key==='Enter'){event.preventDefault();validarCupon();}">
+                                            <button class="btn btn-outline-primary btn-sm" type="button" onclick="validarCupon()" title="Validar código de descuento">
+                                                <i class="ri-search-line"></i> Validar
+                                            </button>
+                                            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="limpiarCupon()" title="Quitar código">
+                                                <i class="ri-close-line"></i>
+                                            </button>
+                                        </div>
+                                        <div id="cuponMsg" class="mt-1" style="font-size:0.75rem; min-height:1.1em;"></div>
+                                    </div>
+                                </div>
+
                                 <!-- ===== MÉTODOS DE PAGO ===== -->
                                 <div class="card shadow-sm mt-2">
                                     <div class="card-header bg-success text-white py-2">
@@ -3897,6 +3920,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let pagosActuales = [];
     let fidelizacionActual = null; // Datos de fidelización del cliente buscado por RUT
     let valeCanjeActual = null;    // Vale de puntos validado { codigo, valor_pesos, cliente_nombre }
+    let cuponActual = null;        // Cupón de descuento validado { codigo, descuento_pesos, cliente_nombre }
     let estadisticasDashboard = {};
     let cotizacionActual = null;  // Variable para cotización cargada
     let cotizacionesVigentes = []; // Lista de cotizaciones vigentes
@@ -4855,6 +4879,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (_vcInput) { _vcInput.value = ''; }
         const _vcMsg = document.getElementById('valeCanjeMsg');
         if (_vcMsg) { _vcMsg.innerHTML = ''; }
+        cuponActual = null;
+        const _cupInput = document.getElementById('cuponInput');
+        if (_cupInput) { _cupInput.value = ''; _cupInput.disabled = false; }
+        const _cupMsg = document.getElementById('cuponMsg');
+        if (_cupMsg) { _cupMsg.innerHTML = ''; }
         
         // Limpiar formularios
         document.getElementById('inputTicket').value = '';
@@ -4937,6 +4966,15 @@ document.addEventListener('DOMContentLoaded', function() {
             limpiarVale();
             return;
         }
+        // Un solo beneficio por venta: si ya hay un cupón aplicado, el vale no
+        // se suma. Se avisa acá para que el cajero sepa cuál tiene que quitar.
+        if (cuponActual) {
+            mostrarNotificacion(
+                'Esta venta ya tiene un código de descuento. Es uno u otro: quite el cupón para usar el vale.',
+                'warning'
+            );
+            return;
+        }
         const codigo = (document.getElementById('valeCanjeInput').value || '').trim().toUpperCase();
         if (!codigo) { mostrarNotificacion('Ingrese el código del vale', 'warning'); return; }
         const msgEl = document.getElementById('valeCanjeMsg');
@@ -4960,6 +4998,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     ${data.cliente_nombre} &middot; Descuento: <strong>$${Number(data.valor_pesos).toLocaleString('es-CL')}</strong>
                 </span>`;
                 actualizarResumenConVale();
+                refrescarExclusionBeneficios();
             } else {
                 valeCanjeActual = null;
                 // El fallback anterior era `Estado: ?`, que no le decía nada al
@@ -4992,6 +5031,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const msg = document.getElementById('valeCanjeMsg');
         if (msg) msg.innerHTML = '';
         actualizarResumenConVale();
+        if (typeof refrescarExclusionBeneficios === 'function') refrescarExclusionBeneficios();
     }
 
     // Los botones y el Enter del vale usan onclick/onkeydown inline, que se
@@ -5020,6 +5060,147 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    // ── Cupón de descuento nominativo ────────────────────────────────────────
+    // Un solo beneficio por venta: el cupón NO se combina con el descuento
+    // manual del cajero ni con un vale de puntos. La exclusión se decide en UN
+    // SOLO lugar (`refrescarExclusionBeneficios`) en vez de que cada control
+    // apague a los otros: con tres controles y 12.800 líneas de template, los
+    // apagados dispersos se desincronizan solos.
+
+    function hayDescuentoManual() {
+        if (!ticketActual || !ticketActual.productos) return false;
+        return ticketActual.productos.some(p => (p.descuento_unitario || 0) > 0);
+    }
+
+    function refrescarExclusionBeneficios() {
+        const dctoManual = hayDescuentoManual();
+        const conCupon = !!cuponActual;
+        const conVale = !!valeCanjeActual;
+
+        // Cupón: bloqueado si hay vale o descuento manual.
+        const cuponInput = document.getElementById('cuponInput');
+        const cuponCard = document.getElementById('cuponCard');
+        const bloquearCupon = conVale || dctoManual;
+        if (cuponInput) cuponInput.disabled = bloquearCupon && !conCupon;
+        if (cuponCard) cuponCard.style.opacity = (bloquearCupon && !conCupon) ? '0.55' : '1';
+
+        // Vale de puntos: bloqueado si hay cupón.
+        const valeInput = document.getElementById('valeCanjeInput');
+        const valeCard = document.getElementById('valeCanjeCard');
+        if (valeInput) valeInput.disabled = conCupon && !conVale;
+        if (valeCard && valeCard.style.display !== 'none') {
+            valeCard.style.opacity = (conCupon && !conVale) ? '0.55' : '1';
+        }
+
+        // Botones de descuento: bloqueados si hay cupón. Se reusa el mismo
+        // patrón que ya aplica a los tickets de cambio/devolución.
+        const btnDctoGlobal = document.querySelector('[onclick="mostrarModalDescuentoGlobal()"]');
+        if (btnDctoGlobal && !esTicketCambio()) {
+            btnDctoGlobal.disabled = conCupon;
+            btnDctoGlobal.title = conCupon
+                ? 'No se puede aplicar descuento manual: la venta tiene un código de descuento'
+                : 'Aplicar descuento distribuido a toda la venta (Ctrl+D)';
+        }
+    }
+
+    function esTicketCambio() {
+        return !!(ticketActual && ticketActual.modulo_origen === 'CAMBIO_DEVOLUCION');
+    }
+
+    function validarCupon() {
+        if (fidelizacionBloqueada()) {
+            mostrarNotificacion(
+                'Los códigos de descuento solo aplican a clientes particulares (no a facturas ni cotizaciones)',
+                'warning'
+            );
+            limpiarCupon();
+            return;
+        }
+        const codigo = (document.getElementById('cuponInput').value || '').trim().toUpperCase();
+        if (!codigo) { mostrarNotificacion('Ingrese el código de descuento', 'warning'); return; }
+
+        // El cupón es NOMINATIVO: sin RUT no hay forma de comprobar que quien lo
+        // presenta sea su dueño, así que se corta acá con un mensaje que dice
+        // exactamente qué hacer (y no un 'código inválido' que confunde).
+        const rut = (document.getElementById('clienteRut').value || '').trim();
+        if (!rut) {
+            mostrarNotificacion('Primero identifique al cliente con su RUT en el paso 2', 'warning');
+            return;
+        }
+
+        const msgEl = document.getElementById('cuponMsg');
+        msgEl.innerHTML = '<span class="text-muted"><i class="ri-loader-2-line"></i> Validando…</span>';
+
+        const total = (ticketActual && ticketActual.totales && ticketActual.totales.total) || 0;
+        const params = new URLSearchParams({
+            monto: total,
+            rut: rut,
+            dcto_manual: hayDescuentoManual() ? '1' : '0',
+            vale: valeCanjeActual ? '1' : '0',
+        });
+        const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        fetch(`/app/api/cupones/validar/${encodeURIComponent(codigo)}/?${params}`, {
+            headers: { 'X-CSRFToken': csrf, 'Accept': 'application/json',
+                       'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.valido) {
+                cuponActual = { codigo: data.codigo,
+                                descuento_pesos: data.descuento_pesos,
+                                cliente_nombre: data.cliente_nombre };
+                msgEl.innerHTML = `<span class="text-success fw-semibold">
+                    <i class="ri-checkbox-circle-line"></i>
+                    ${data.cliente_nombre} &middot; ${data.valor_display || ''}
+                    Descuento: <strong>$${Number(data.descuento_pesos).toLocaleString('es-CL')}</strong>
+                </span>`;
+            } else {
+                cuponActual = null;
+                const motivo = data.motivo || 'No se pudo validar el código.';
+                msgEl.innerHTML = `<span class="text-danger"><i class="ri-error-warning-line"></i> ${motivo}</span>`;
+            }
+            actualizarResumenConCupon();
+            refrescarExclusionBeneficios();
+        })
+        .catch(() => {
+            msgEl.innerHTML = '<span class="text-danger"><i class="ri-wifi-off-line"></i> Error de conexión.</span>';
+        });
+    }
+
+    function limpiarCupon() {
+        cuponActual = null;
+        const inp = document.getElementById('cuponInput');
+        if (inp) inp.value = '';
+        const msg = document.getElementById('cuponMsg');
+        if (msg) msg.innerHTML = '';
+        actualizarResumenConCupon();
+        refrescarExclusionBeneficios();
+    }
+
+    function actualizarResumenConCupon() {
+        const existente = document.getElementById('cuponDescuentoRow');
+        const totalEl = document.getElementById('resumenTotal') || document.getElementById('totalTicketDisplay');
+        if (!totalEl) return;
+        if (existente) existente.remove();
+        if (cuponActual && cuponActual.descuento_pesos > 0) {
+            const row = document.createElement('div');
+            row.id = 'cuponDescuentoRow';
+            row.className = 'd-flex justify-content-between small fw-semibold mt-1';
+            row.style.color = '#405189';
+            row.innerHTML = `<span><i class="ri-coupon-3-line"></i> Desc. Cupón</span>
+                             <span>-$${Number(cuponActual.descuento_pesos).toLocaleString('es-CL')}</span>`;
+            totalEl.parentNode.insertBefore(row, totalEl);
+        }
+    }
+
+    // Los onclick/onkeydown inline se resuelven contra window y este JS vive en
+    // un closure: sin esto, el botón lanza ReferenceError (el mismo bug que ya
+    // dejó los vales de puntos inutilizables en producción).
+    window.validarCupon = validarCupon;
+    window.limpiarCupon = limpiarCupon;
+    // ─────────────────────────────────────────────────────────────────────────
+
     // La fidelización (acumular puntos y canjear vales) es SOLO para clientes
     // particulares. Se apaga en facturas y en ventas que vienen de una
     // cotización — el backend lo rechaza igual (ver venta_fideliza), pero la UI
@@ -5038,12 +5219,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const valeCard = document.getElementById('valeCanjeCard');
         if (valeCard) valeCard.style.display = bloqueada ? 'none' : '';
 
+        // El cupón sigue exactamente la misma regla que el vale: es beneficio
+        // de cliente particular y el backend lo rechaza igual (ver venta_fideliza).
+        const cuponCard = document.getElementById('cuponCard');
+        if (cuponCard) cuponCard.style.display = bloqueada ? 'none' : '';
+
         const aviso = document.getElementById('empresaNoFidelizaAviso');
         if (aviso) {
             if (bloqueada) {
                 aviso.innerHTML = esCotizacion
-                    ? '<i class="ri-file-list-3-line me-1"></i> Venta desde cotización — no acumula ni canjea puntos de fidelización.'
-                    : '<i class="ri-building-line me-1"></i> Venta con factura — no acumula ni canjea puntos de fidelización.';
+                    ? '<i class="ri-file-list-3-line me-1"></i> Venta desde cotización — no acumula puntos ni acepta cupones de descuento.'
+                    : '<i class="ri-building-line me-1"></i> Venta con factura — no acumula puntos ni acepta cupones de descuento.';
                 aviso.style.display = '';
             } else {
                 aviso.style.display = 'none';
@@ -5051,11 +5237,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (bloqueada) {
-            // Un vale ya validado no debe viajar en el payload del cobro.
+            // Un vale o cupón ya validado no debe viajar en el payload del cobro.
             if (valeCanjeActual) limpiarVale();
+            if (cuponActual) limpiarCupon();
             fidelizacionActual = null;
             const fidel = document.getElementById('fidelCard');
             if (fidel) fidel.style.display = 'none';
+        } else {
+            refrescarExclusionBeneficios();
         }
     }
 
@@ -7261,14 +7450,35 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const totales = ticketActual.totales || {};
         const totalPagado = pagosActuales.reduce((sum, pago) => sum + (pago.monto || 0), 0);
-        const saldo = (totales.total || 0) - totalPagado;
+
+        // El cupón y el vale de puntos rebajan el total EN EL BACKEND, así que
+        // el saldo a cobrar debe reflejarlos acá o el cajero cobra de más: el
+        // guard del servidor sólo exige pagado >= total y no detecta el exceso.
+        // Son excluyentes entre sí, pero se suman igual por robustez.
+        const descuentoBeneficio =
+            ((cuponActual && cuponActual.descuento_pesos) || 0) +
+            ((valeCanjeActual && valeCanjeActual.valor_pesos) || 0);
+        const totalNeto = Math.max(0, (totales.total || 0) - descuentoBeneficio);
+        const saldo = totalNeto - totalPagado;
 
         document.getElementById('totalItems').textContent = totales.items || 0;
         document.getElementById('subtotal').textContent = formatearMoneda(totales.subtotal || totales.total || 0);
         document.getElementById('descuento').textContent = '-' + formatearMoneda(totales.descuento || 0);
-        document.getElementById('total').textContent = formatearMoneda(totales.total || 0);
+        document.getElementById('total').textContent = formatearMoneda(totalNeto);
         document.getElementById('pagado').textContent = formatearMoneda(totalPagado);
         document.getElementById('saldo').textContent = formatearMoneda(Math.abs(saldo));
+
+        // Si el cajero aplicó un descuento manual DESPUÉS de validar el cupón,
+        // el backend rechazaría el cobro. Se avisa acá, cuando todavía puede
+        // elegir cuál de los dos quiere.
+        if (cuponActual && hayDescuentoManual()) {
+            const cod = cuponActual.codigo;
+            limpiarCupon();
+            mostrarNotificacion(
+                `Se quitó el código ${cod}: no se puede combinar con un descuento manual.`,
+                'warning'
+            );
+        }
 
         // Mostrar/ocultar línea de descuento con detalle
         const lineaDescuento = document.getElementById('lineaDescuento');
@@ -8699,6 +8909,7 @@ document.addEventListener('DOMContentLoaded', function() {
             referencias: referencias,  // ✅ Array de referencias múltiples
             condicion_pago_dte: tipoDocumento === 'FACTURA_ELECTRONICA' ? obtenerCondicionPagoDTE() : 1,
             codigo_vale_canje: valeCanjeActual ? valeCanjeActual.codigo : null,
+            codigo_cupon_descuento: cuponActual ? cuponActual.codigo : null,
         };
         
         // =========================================================================
@@ -11117,8 +11328,8 @@ body {
                             </h5>
                             <table class="table table-sm table-borderless">
                                 <tr>
-                                    <td class="fw-bold">RUT:</td>
-                                    <td>${credito.trabajador.rut || 'N/A'}</td>
+                                    <td class="fw-bold">Documento:</td>
+                                    <td>${credito.trabajador.documento || 'N/A'}</td>
                                 </tr>
                                 <tr>
                                     <td class="fw-bold">Crédito:</td>

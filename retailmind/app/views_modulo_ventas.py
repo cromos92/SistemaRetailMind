@@ -2223,6 +2223,14 @@ def anular_ticket_pendiente(request):
                         )
             except Exception:
                 logger.exception("Error al reversar gift cards ticket=%s", ticket.correlativo)
+            # El cupón vuelve a estar disponible para el cliente: si la venta se
+            # anuló, el beneficio no se consumió. Un cupón que venció mientras
+            # tanto queda EXPIRADO (no se le regala vigencia extra).
+            try:
+                from .services import cupon_service
+                cupon_service.liberar_cupon(ticket, motivo=f'anulación: {motivo}')
+            except Exception:
+                logger.exception("Error al liberar cupón ticket=%s", ticket.correlativo)
 
         return JsonResponse({
             'success': True,
@@ -4234,11 +4242,95 @@ def registrar_pagos_ticket(request, correlativo):
             ticket.descuento or 0,
         )
 
+    # ── Cupón de descuento nominativo ────────────────────────────────────────
+    # El POS envía el código como campo opcional `codigo_cupon_descuento`. Se
+    # valida sin consumir aquí; el consumo real ocurre después de
+    # `ticket_se_pago` (mismo patrón que el vale de puntos y las gift cards).
+    #
+    # Va ANTES del vale porque son EXCLUYENTES: en una venta hay un solo
+    # beneficio (ni descuento manual, ni vale, ni cupón a la vez).
+    _codigo_cupon = (payload.get('codigo_cupon_descuento') or '').strip().upper()
+    _codigo_vale_pts = (payload.get('codigo_vale_canje') or '').strip().upper()
+    _cupon_descuento = 0
+
+    if _codigo_cupon and _codigo_vale_pts:
+        # Estado que la UI no debería permitir jamás. No se resuelve eligiendo
+        # uno en silencio: si llegó acá, algo se desincronizó y hay que verlo.
+        logger.warning(
+            "Cobro con cupón Y vale a la vez ticket=%s cupon=%s vale=%s usuario=%s",
+            ticket.correlativo, _codigo_cupon, _codigo_vale_pts, request.user.username,
+        )
+        return JsonResponse({
+            'success': False,
+            'error': ('Esta venta tiene un cupón de descuento y un vale de puntos. '
+                      'Es uno u otro: quite uno para continuar.'),
+            'error_tipo': 'BENEFICIOS_EXCLUYENTES',
+        }, status=400)
+
+    if _codigo_cupon:
+        from .services import cupon_service as _cup_svc
+        from .services import fidelizacion_service as _fid_svc
+
+        # Mismo gate que el vale: es beneficio de cliente particular.
+        _fideliza_cup, _motivo_cup = _fid_svc.venta_fideliza(
+            ticket,
+            tipo_documento=payload.get('tipo_documento'),
+            cotizacion=cotizacion_obj,
+        )
+        if not _fideliza_cup:
+            logger.warning(
+                "Cupón rechazado ticket=%s codigo=%s motivo=%s",
+                ticket.correlativo, _codigo_cupon, _motivo_cup,
+            )
+            return JsonResponse({
+                'success': False,
+                'error': ('Los cupones de descuento solo aplican a clientes '
+                          f'particulares ({_motivo_cup}).'),
+                'error_tipo': 'CUPON_NO_APLICA',
+            }, status=400)
+
+        # El chequeo de "descuento manual" se rehace ACÁ, sobre las líneas ya
+        # recalculadas: si sólo confiáramos en la UI, bastaba con validar el
+        # cupón primero y aplicar el descuento después para acumular ambos.
+        _tiene_dcto_manual = ticket.ticket_productos.filter(
+            descuento_unitario__gt=0).exists()
+
+        _info_cupon = _cup_svc.validar_cupon(
+            _codigo_cupon,
+            monto=int(ticket.total or 0),
+            rut_cliente=ticket.cliente_rut,
+            sucursal=ticket.sucursal,
+            tiene_dcto_manual=_tiene_dcto_manual,
+            tiene_vale_puntos=False,   # ya se cortó arriba si venían los dos
+        )
+        if not _info_cupon.get('valido'):
+            logger.warning(
+                "Cupón no válido ticket=%s codigo=%s motivo=%s",
+                ticket.correlativo, _codigo_cupon,
+                _info_cupon.get('motivo_codigo'),
+            )
+            return JsonResponse({
+                'success': False,
+                'error': _info_cupon.get('motivo') or 'Cupón no válido.',
+                'error_tipo': f"CUPON_{_info_cupon.get('motivo_codigo', 'INVALIDO')}",
+            }, status=400)
+
+        _cupon_descuento = int(_info_cupon.get('descuento_pesos') or 0)
+        _cupon_descuento = min(_cupon_descuento, int(ticket.total or 0))
+        ticket.descuento_cupon = _cupon_descuento
+        ticket.total = ticket.total - _cupon_descuento
+        logger.info(
+            "Cupón aplicado ticket=%s codigo=%s descuento=%s nuevo_total=%s",
+            ticket.correlativo, _codigo_cupon, _cupon_descuento, ticket.total,
+        )
+    else:
+        ticket.descuento_cupon = None
+    # ─────────────────────────────────────────────────────────────────────────
+
     # ── Vale de puntos fidelización ──────────────────────────────────────────
     # El POS envía el código del vale (leído/escaneado en paso 3) como campo
     # opcional `codigo_vale_canje`. Se valida sin debitar aquí; el débito real
     # ocurre después de `ticket_se_pago` (mismo patrón que GIFTCARD).
-    _codigo_vale_pts = (payload.get('codigo_vale_canje') or '').strip().upper()
     _vale_descuento_pts = 0
     if _codigo_vale_pts:
         from .services import fidelizacion_service as _fid_svc
@@ -4463,6 +4555,28 @@ def registrar_pagos_ticket(request, correlativo):
                     "Error al consumir gift card en cobro ticket=%s codigo=%s",
                     ticket.correlativo, codigo_gc,
                 )
+
+    # ── Consumir cupón de descuento (después de confirmar el pago) ───────────
+    if ticket_se_pago and _codigo_cupon:
+        from .services import cupon_service as _cup_svc
+        try:
+            _cup_svc.canjear_cupon(
+                _codigo_cupon,
+                ticket=ticket,
+                sucursal=ticket.sucursal,
+                usuario=request.user,
+                monto_descuento=_cupon_descuento,
+            )
+        except _cup_svc.CuponError:
+            # Carrera extrema: la pre-validación debió impedirlo. No se tumba la
+            # venta (ya se cobró); queda en el log para revisión manual. El
+            # descuento SÍ se aplicó, así que el cupón quedaría reutilizable:
+            # por eso el log es warning-con-datos y no un silencio.
+            logger.exception(
+                "Error al consumir cupón ticket=%s codigo=%s descuento=%s",
+                ticket.correlativo, _codigo_cupon, _cupon_descuento,
+            )
+    # ─────────────────────────────────────────────────────────────────────────
 
     # ── Debitar vale de puntos (después de confirmar el pago) ────────────────
     if ticket_se_pago and _codigo_vale_pts:
@@ -7999,6 +8113,12 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         'total_nota_credito': 0,
         'total_descuentos': 0,  # Descuentos aplicados
         'total_descuento_puntos': 0,  # Descuentos por canje de puntos de fidelización
+        # Descuentos por cupón nominativo. Se cuenta aparte de los puntos porque
+        # el pasivo es distinto: el vale consume saldo que el cliente ya ganó, el
+        # cupón es margen que la empresa regala.
+        # OJO: todavía NO se persiste en el modelo Cuadratura (no hay campo
+        # `total_descuento_cupones_teorico`); se ve en la cuadratura del día.
+        'total_descuento_cupones': 0,
         # Documentos
         'total_tickets': 0,
         'total_boletas': 0,
@@ -8046,6 +8166,7 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         cuadratura_data['total_tickets'] += ticket.total or 0
         cuadratura_data['cantidad_tickets'] += 1
         cuadratura_data['total_descuento_puntos'] += ticket.descuento_fidelizacion or 0
+        cuadratura_data['total_descuento_cupones'] += ticket.descuento_cupon or 0
 
         # Procesar pagos del ticket
         for pago in ticket.pagos.all():

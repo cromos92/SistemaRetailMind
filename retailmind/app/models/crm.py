@@ -53,16 +53,44 @@ TIPO_CLIENTE_CHOICES = [
     ('CREDITO_EXTERNO', 'Cliente con Crédito Externo'),
 ]
 
+# Identificación del cliente. Un extranjero sin cédula chilena se identifica con
+# pasaporte, así que el RUT no puede ser el único documento aceptado.
+TIPO_DOCUMENTO_CLIENTE_CHOICES = [
+    ('RUT', 'RUT'),
+    ('PASAPORTE', 'Pasaporte'),
+]
+
 
 class Cliente(models.Model):
     TIPO_CLIENTE_CHOICES = TIPO_CLIENTE_CHOICES
+    TIPO_DOCUMENTO_CHOICES = TIPO_DOCUMENTO_CLIENTE_CHOICES
 
     nombre = models.CharField(max_length=100, verbose_name='Nombre')
     apellido = models.CharField(max_length=100, verbose_name='Apellido')
+    tipo_documento = models.CharField(
+        max_length=15,
+        choices=TIPO_DOCUMENTO_CLIENTE_CHOICES,
+        default='RUT',
+        verbose_name='Tipo de Documento',
+        help_text='Documento con el que se identifica al cliente',
+    )
     rut = models.CharField(
         max_length=20,
         verbose_name='RUT',
         validators=[RUT_REGEX_VALIDATOR],
+        blank=True,
+        null=True,
+    )
+    pasaporte = models.CharField(
+        max_length=30,
+        verbose_name='Pasaporte',
+        blank=True,
+        null=True,
+        help_text='Número de pasaporte para clientes extranjeros sin RUT chileno',
+    )
+    pais_documento = models.CharField(
+        max_length=60,
+        verbose_name='País del Documento',
         blank=True,
         null=True,
     )
@@ -122,6 +150,7 @@ class Cliente(models.Model):
         indexes = [
             models.Index(fields=['nombre', 'apellido']),
             models.Index(fields=['rut']),
+            models.Index(fields=['pasaporte'], name='app_cliente_pasapo_idx'),
             models.Index(fields=['email']),
             models.Index(fields=['tipo_cliente']),
             models.Index(fields=['activo']),
@@ -134,10 +163,27 @@ class Cliente(models.Model):
     def nombre_completo(self):
         return f"{self.nombre} {self.apellido}"
 
+    @property
+    def numero_documento(self):
+        """Número del documento con el que se identifica al cliente (sin etiqueta)."""
+        if self.tipo_documento == 'PASAPORTE':
+            return self.pasaporte or ''
+        return self.rut or ''
+
+    @property
+    def documento_display(self):
+        """Documento listo para mostrar: el RUT tal cual o 'Pasaporte <número>'."""
+        if self.tipo_documento == 'PASAPORTE' and self.pasaporte:
+            pais = f" ({self.pais_documento})" if self.pais_documento else ''
+            return f"Pasaporte {self.pasaporte}{pais}"
+        return self.rut or ''
+
     def clean(self):
         from django.core.exceptions import ValidationError
         if self.rut and not validar_rut_chileno(self.rut):
             raise ValidationError({'rut': 'RUT inválido'})
+        if self.tipo_documento == 'PASAPORTE' and not (self.pasaporte or '').strip():
+            raise ValidationError({'pasaporte': 'Debe indicar el número de pasaporte'})
 
 
 class Proveedor(models.Model):

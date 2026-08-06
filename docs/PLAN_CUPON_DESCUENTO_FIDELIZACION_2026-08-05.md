@@ -328,6 +328,21 @@ Y el simétrico, al validar un vale con un cupón ya aplicado:
 
 ## 4. Fases de implementación
 
+> **ESTADO 2026-08-06 — Fases 1 a 5 escritas, NADA probado ni migrado.**
+> `manage.py check` pasa sin issues. Los tests **no se han corrido nunca** y las
+> migraciones **0205** (modelos) y **0206** (permiso de menú) **no están aplicadas**.
+>
+> **Dónde se crea el código:** menú **Fidelización → Códigos de Descuento**
+> (`/app/fidelizacion/cupones/`). Primero se crea una **campaña** (el 5%, la
+> vigencia, la empresa, el límite por cliente) y después se **emite el cupón** a
+> cada cliente, buscándolo por RUT o nombre.
+>
+> Cambio sobre el diseño original: `uno_vivo_por_cliente` (bool) pasó a ser
+> `limite_por_cliente` con tres opciones — **UNICO** (default: uno por cliente
+> para siempre, cuenta también los ya usados y los vencidos), **VIVO** (sólo
+> impide acumular sin usar) y **SIN_LIMITE**.
+
+
 ### Fase 1 — Modelos + servicio + tests (sin UI) — ✅ CÓDIGO ESCRITO (2026-08-05)
 
 Falta sólo correr la suite (comandos en §7). `manage.py check` pasa sin issues.
@@ -488,18 +503,26 @@ cd c:\Users\cromo\Documents\DjangoProyects\SistemaRetailMind\retailmind
 #    la base de TEST (test_retail), nunca la real.
 python manage.py test app.tests.test_cupones --noinput
 
-# 2. Regresión de fidelización y ventas
+# 2. Regresión: el cobro y la fidelización son lo que más se tocó
 python manage.py test app.tests.test_fidelizacion app.tests.test_ventas --noinput
 
-# 3. Ver el SQL de la migración ANTES de aplicarla
+# 3. Ver el SQL de las migraciones ANTES de aplicarlas
 python manage.py sqlmigrate app 0205
+python manage.py sqlmigrate app 0206
+
+# 4. Recién con los tests en verde, aplicar (ver aviso abajo)
+python manage.py migrate app 0206
 ```
 
 ### ⚠️ Sobre `migrate`
 
 El `.env` local apunta a la **base de producción** (DigitalOcean), así que
-`python manage.py migrate` aplicaría la 0205 **en producción**.
+`python manage.py migrate` aplica **en producción**.
 
-La migración es aditiva y de bajo riesgo (2 tablas nuevas + 1 columna nullable, que en
-PostgreSQL no reescribe la tabla `ticket`), pero **no la corras hasta terminar la Fase 2**:
-mientras el backend del cobro no exista, las tablas no las usa nadie.
+- **0205** es aditiva y de bajo riesgo: 2 tablas nuevas + 1 columna nullable en `ticket`
+  (en PostgreSQL agregar una columna nullable no reescribe la tabla).
+- **0206** sólo inserta una `OpcionMenu` y sus `PermisoRol`; es idempotente.
+
+Mientras no se apliquen, la pantalla de cupones responde error 500 (las tablas no existen)
+y el menú no muestra la opción. El resto del sistema no se ve afectado: el bloque del cupón
+en el cobro sólo corre si el payload trae `codigo_cupon_descuento`.

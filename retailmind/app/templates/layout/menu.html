@@ -70,6 +70,7 @@
 {% puede_ver_opcion_tag 'fidelizacion_cuentas' as permiso_fidelizacion_cuentas %}
 {% puede_ver_opcion_tag 'fidelizacion_programa' as permiso_fidelizacion_programa %}
 {% puede_ver_opcion_tag 'fidelizacion_reporte' as permiso_fidelizacion_reporte %}
+{% puede_ver_opcion_tag 'fidelizacion_cupones' as permiso_fidelizacion_cupones %}
 
 
 <body{% if pos_kiosk %} class="pos-kiosk{% if pos_kiosk_strict %} pos-kiosk-strict{% endif %}"{% endif %}{% if pos_kiosk_strict and request.GET.no_cursor %} data-cursor-hidden="1"{% endif %}>
@@ -2799,6 +2800,13 @@
                                     <li class="nav-item">
                                         <a href="{% url 'modulo_fidelizacion' %}" class="nav-link">
                                             <i class="ri-user-star-line"></i> Clientes y Puntos
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if permiso_fidelizacion_cupones %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'modulo_cupones' %}" class="nav-link">
+                                            <i class="ri-coupon-3-line"></i> Códigos de Descuento
                                         </a>
                                     </li>
                                     {% endif %}

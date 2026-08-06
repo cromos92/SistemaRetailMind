@@ -26,11 +26,85 @@ from .models import (
     CreditoTrabajador, PagoCreditoTrabajador, FirmaCreditoTrabajador,
     Cliente, Empresa, Sucursal, EmpresaUser,
     ESTADO_CREDITO_CHOICES, TIPO_CREDITO_CHOICES, TIPO_BENEFICIARIO_CHOICES,
-    METODO_PAGO_TICKET_CHOICES,
+    METODO_PAGO_TICKET_CHOICES, validar_rut_chileno,
 )
 from .models.permisos import PermisoUsuario
 from .models import PermisoRol
 from .decorators import requiere_permiso
+
+
+def _normalizar_pasaporte(valor):
+    """Normaliza un pasaporte para guardarlo y compararlo: sin espacios y en mayúsculas."""
+    return ''.join(str(valor or '').split()).upper()
+
+
+def _validar_documento_cliente(tipo_documento, rut, pasaporte, excluir_id=None, rut_actual=None):
+    """Valida el documento de identidad de un beneficiario y detecta duplicados.
+
+    Devuelve ``(datos, error)``: ``datos`` es el dict listo para asignar al
+    Cliente (``tipo_documento``/``rut``/``pasaporte``) y ``error`` un mensaje si
+    la validación falla. El documento es opcional (la ficha se puede crear solo
+    con el nombre), pero si viene debe ser consistente con su tipo y no puede
+    estar ya tomado por otro cliente.
+
+    ``rut_actual`` es el RUT que ya tiene guardado la ficha: si no cambió no se
+    le exige dígito verificador válido, para no dejar inéditables las fichas
+    migradas con RUT mal formado.
+    """
+    tipo = (tipo_documento or 'RUT').strip().upper()
+    if tipo not in ('RUT', 'PASAPORTE'):
+        tipo = 'RUT'
+
+    rut = (rut or '').strip()
+    pasaporte = _normalizar_pasaporte(pasaporte)
+
+    if tipo == 'PASAPORTE':
+        # Si se eligió pasaporte el número es obligatorio: si no, la ficha queda
+        # sin ningún documento con el cual identificar al beneficiario.
+        if not pasaporte:
+            return None, 'Debe indicar el número de pasaporte'
+        if not re.match(r'^[A-Z0-9][A-Z0-9\-]{3,29}$', pasaporte):
+            return None, 'El pasaporte debe tener entre 4 y 30 caracteres (letras, números o guion)'
+        duplicado = Cliente.objects.filter(pasaporte__iexact=pasaporte)
+        if excluir_id:
+            duplicado = duplicado.exclude(id=excluir_id)
+        existente = duplicado.first()
+        if existente:
+            return None, f'Ya existe un cliente con pasaporte "{pasaporte}": {existente.nombre_completo}'
+        # Con pasaporte no se arrastra un RUT viejo: el documento vigente es uno solo.
+        return {'tipo_documento': 'PASAPORTE', 'rut': None, 'pasaporte': pasaporte}, None
+
+    if rut:
+        if rut != (rut_actual or '') and not validar_rut_chileno(rut):
+            return None, f'El RUT "{rut}" no es válido'
+        duplicado = Cliente.objects.filter(rut__iexact=rut)
+        if excluir_id:
+            duplicado = duplicado.exclude(id=excluir_id)
+        existente = duplicado.first()
+        if existente:
+            return None, f'Ya existe un cliente con RUT "{rut}": {existente.nombre_completo}'
+
+    return {'tipo_documento': 'RUT', 'rut': rut or None, 'pasaporte': None}, None
+
+
+def _datos_documento(cliente):
+    """Claves de identificación que consume el front (lista, modales, POS)."""
+    if not cliente:
+        return {'tipo_documento': 'RUT', 'rut': '', 'pasaporte': '', 'documento': ''}
+    return {
+        'tipo_documento': cliente.tipo_documento or 'RUT',
+        'rut': cliente.rut or '',
+        'pasaporte': cliente.pasaporte or '',
+        'documento': cliente.documento_display,
+    }
+
+
+def _documento_desde_valores(fila, prefijo='beneficiario__'):
+    """Documento para mostrar a partir de un dict de ``.values()`` (sin instanciar Cliente)."""
+    if (fila.get(f'{prefijo}tipo_documento') or 'RUT') == 'PASAPORTE':
+        pasaporte = fila.get(f'{prefijo}pasaporte') or ''
+        return f'Pasaporte {pasaporte}' if pasaporte else ''
+    return fila.get(f'{prefijo}rut') or ''
 
 
 def _serializar_beneficiario(credito):
@@ -40,12 +114,15 @@ def _serializar_beneficiario(credito):
         return {
             'id': b.id,
             'nombre': b.nombre_completo,
-            'rut': b.rut or '',
             'codigo_vendedor': '',
             'empresa': b.empresa.nombre if b.empresa else '',
             'tipo': credito.tipo_beneficiario,
+            **_datos_documento(b),
         }
-    return {'id': None, 'nombre': 'Sin asignar', 'rut': '', 'codigo_vendedor': '', 'empresa': '', 'tipo': ''}
+    return {
+        'id': None, 'nombre': 'Sin asignar', 'codigo_vendedor': '', 'empresa': '', 'tipo': '',
+        **_datos_documento(None),
+    }
 
 
 def _usuario_puede_ver_creditos_todas_sucursales(user):
@@ -374,7 +451,8 @@ def _calcular_cartera_creditos(alcance_info):
         'id', 'numero_credito', 'estado', 'monto_aprobado', 'monto_solicitado',
         'monto_pagado', 'fecha_vencimiento', 'fecha_solicitud',
         'beneficiario_id', 'beneficiario__nombre', 'beneficiario__apellido',
-        'beneficiario__rut', 'sucursal__alias', 'empresa_origen__nombre',
+        'beneficiario__rut', 'beneficiario__pasaporte', 'beneficiario__tipo_documento',
+        'sucursal__alias', 'empresa_origen__nombre',
     ))
     ids = [f['id'] for f in filas]
 
@@ -446,11 +524,12 @@ def _calcular_cartera_creditos(alcance_info):
             deuda_nativa += deuda
 
         nombre = f"{f['beneficiario__nombre'] or ''} {f['beneficiario__apellido'] or ''}".strip() or 'Sin asignar'
+        documento = _documento_desde_valores(f)
         clave_deudor = f['beneficiario_id'] or f"s/{nombre}"
         d = deudores.setdefault(clave_deudor, {
             'beneficiario_id': f['beneficiario_id'],
             'nombre': nombre,
-            'rut': f['beneficiario__rut'] or '',
+            'rut': documento,
             'documentos': 0,
             'deuda': 0.0,
             'deuda_vencida': 0.0,
@@ -466,7 +545,7 @@ def _calcular_cartera_creditos(alcance_info):
             detalle_vencidos.append({
                 'numero_credito': f['numero_credito'],
                 'beneficiario': nombre,
-                'rut': f['beneficiario__rut'] or '',
+                'rut': documento,
                 'sucursal': f['sucursal__alias'] or '',
                 'deuda': deuda,
                 'dias_vencido': dias_vencido,
@@ -799,7 +878,8 @@ def _queryset_creditos_filtrado(request, data):
         queryset = queryset.filter(
             Q(beneficiario__nombre__icontains=texto) |
             Q(beneficiario__apellido__icontains=texto) |
-            Q(beneficiario__rut__icontains=texto)
+            Q(beneficiario__rut__icontains=texto) |
+            Q(beneficiario__pasaporte__icontains=texto)
         )
 
     if data.get('sucursal_texto'):
@@ -1612,19 +1692,19 @@ def obtener_trabajadores_credito(request):
                 beneficiario=cli,
                 estado__in=['ACTIVO', 'APROBADO']
             ).count()
-            
+
             clientes_data.append({
                 'id': cli.id,
                 'nombre': cli.nombre_completo,
-                'rut': cli.rut or '',
                 'codigo_vendedor': '',
-                'correo': cli.email or '',
                 'creditos_activos': creditos_activos,
                 'empresa': cli.empresa.nombre if cli.empresa else '',
                 'empresa_id': cli.empresa.id if cli.empresa else None,
                 'tipo_cliente': cli.tipo_cliente,
                 'correo': cli.email or '',
+                'pais_documento': cli.pais_documento or '',
                 'fecha_nacimiento': cli.fecha_nacimiento.strftime('%d-%m-%Y') if cli.fecha_nacimiento else '',
+                **_datos_documento(cli),
             })
         
         return JsonResponse({
@@ -1652,21 +1732,23 @@ def crear_trabajador_credito(request):
         fecha_nacimiento = data.get('fecha_nacimiento')
         empresa_id = data.get('empresa_id')
         tipo_cliente = data.get('tipo_cliente', 'EMPLEADO')
-        
+        tipo_documento = data.get('tipo_documento', 'RUT')
+        pasaporte = data.get('pasaporte', '')
+        pais_documento = (data.get('pais_documento') or '').strip()
+
         if not nombre:
             return JsonResponse({
                 'success': False,
                 'error': 'El nombre es requerido'
             }, status=400)
-        
-        if rut:
-            existente = Cliente.objects.filter(rut__iexact=rut).first()
-            if existente:
-                return JsonResponse({
-                    'success': False,
-                    'error': f'Ya existe un cliente con RUT "{rut}": {existente.nombre_completo}'
-                }, status=400)
-        
+
+        documento, error_documento = _validar_documento_cliente(tipo_documento, rut, pasaporte)
+        if error_documento:
+            return JsonResponse({
+                'success': False,
+                'error': error_documento
+            }, status=400)
+
         fecha_nacimiento_parsed = None
         if fecha_nacimiento:
             try:
@@ -1693,27 +1775,28 @@ def crear_trabajador_credito(request):
         cliente = Cliente.objects.create(
             nombre=primer_nombre,
             apellido=apellido,
-            rut=rut or None,
             email=correo or None,
             fecha_nacimiento=fecha_nacimiento_parsed,
             empresa=empresa,
             tipo_cliente=tipo_cliente,
             activo=True,
             created_by=request.user,
+            pais_documento=(pais_documento or None) if documento['tipo_documento'] == 'PASAPORTE' else None,
+            **documento,
         )
-        
+
         return JsonResponse({
             'success': True,
             'message': 'Beneficiario creado exitosamente',
             'trabajador': {
                 'id': cliente.id,
                 'nombre': cliente.nombre_completo,
-                'rut': cliente.rut or '',
                 'codigo_vendedor': '',
                 'correo': cliente.email or '',
                 'sucursales': [],
                 'empresa': cliente.empresa.nombre if cliente.empresa else None,
                 'empresa_id': cliente.empresa.id if cliente.empresa else None,
+                **_datos_documento(cliente),
             }
         })
         
@@ -1760,6 +1843,9 @@ def actualizar_trabajador_credito(request):
         correo = data.get('correo', '').strip()
         fecha_nacimiento = data.get('fecha_nacimiento')
         empresa_id = data.get('empresa_id')
+        tipo_documento = data.get('tipo_documento', cliente.tipo_documento or 'RUT')
+        pasaporte = data.get('pasaporte', '')
+        pais_documento = (data.get('pais_documento') or '').strip()
 
         if not nombre:
             return JsonResponse({
@@ -1767,14 +1853,16 @@ def actualizar_trabajador_credito(request):
                 'error': 'El nombre es requerido'
             }, status=400)
 
-        # Validar RUT único (excluyendo al propio beneficiario)
-        if rut:
-            existente = Cliente.objects.filter(rut__iexact=rut).exclude(id=cliente.id).first()
-            if existente:
-                return JsonResponse({
-                    'success': False,
-                    'error': f'Ya existe otro cliente con RUT "{rut}": {existente.nombre_completo}'
-                }, status=400)
+        # Documento único (RUT o pasaporte), excluyendo al propio beneficiario
+        documento, error_documento = _validar_documento_cliente(
+            tipo_documento, rut, pasaporte,
+            excluir_id=cliente.id, rut_actual=cliente.rut or '',
+        )
+        if error_documento:
+            return JsonResponse({
+                'success': False,
+                'error': error_documento
+            }, status=400)
 
         # Parsear fecha de nacimiento (acepta DD-MM-YYYY)
         fecha_nacimiento_parsed = None
@@ -1801,7 +1889,12 @@ def actualizar_trabajador_credito(request):
 
         cliente.nombre = primer_nombre
         cliente.apellido = apellido
-        cliente.rut = rut or None
+        cliente.tipo_documento = documento['tipo_documento']
+        cliente.rut = documento['rut']
+        cliente.pasaporte = documento['pasaporte']
+        cliente.pais_documento = (
+            (pais_documento or None) if documento['tipo_documento'] == 'PASAPORTE' else None
+        )
         cliente.email = correo or None
         if fecha_nacimiento_parsed:
             cliente.fecha_nacimiento = fecha_nacimiento_parsed
@@ -1813,10 +1906,10 @@ def actualizar_trabajador_credito(request):
             'trabajador': {
                 'id': cliente.id,
                 'nombre': cliente.nombre_completo,
-                'rut': cliente.rut or '',
                 'correo': cliente.email or '',
                 'empresa': cliente.empresa.nombre if cliente.empresa else None,
                 'empresa_id': cliente.empresa.id if cliente.empresa else None,
+                **_datos_documento(cliente),
             }
         })
 
@@ -1835,20 +1928,24 @@ def actualizar_trabajador_credito(request):
 @login_required
 @require_GET
 def validar_codigo_trabajador(request):
-    """Verificar si un RUT de cliente ya existe"""
+    """Verificar si el documento de un cliente (RUT o pasaporte) ya existe"""
     codigo = request.GET.get('codigo', '').strip()
-    
+    tipo = (request.GET.get('tipo_documento') or 'RUT').strip().upper()
+
     if not codigo:
         return JsonResponse({'exists': False})
-    
-    exists = Cliente.objects.filter(rut__iexact=codigo).exists()
-    existente = None
-    if exists:
+
+    if tipo == 'PASAPORTE':
+        c = Cliente.objects.filter(pasaporte__iexact=_normalizar_pasaporte(codigo)).first()
+    else:
         c = Cliente.objects.filter(rut__iexact=codigo).first()
-        existente = {'nombre': c.nombre_completo, 'codigo': c.rut}
-    
+
+    existente = None
+    if c:
+        existente = {'nombre': c.nombre_completo, 'codigo': c.numero_documento}
+
     return JsonResponse({
-        'exists': exists,
+        'exists': bool(c),
         'existente': existente
     })
 
@@ -2100,7 +2197,12 @@ def imprimir_voucher_credito(request, credito_id):
         if not _usuario_puede_acceder_credito(request, credito):
             return JsonResponse({'success': False, 'error': 'No tiene permisos para imprimir este crédito'}, status=403)
 
-        rut_benef     = (credito.beneficiario.rut if credito.beneficiario else '') or 'N/A'
+        beneficiario  = credito.beneficiario
+        # Un beneficiario extranjero se identifica con pasaporte: la etiqueta del
+        # voucher sigue al documento que realmente tiene la ficha.
+        es_pasaporte  = bool(beneficiario and beneficiario.tipo_documento == 'PASAPORTE')
+        label_doc     = 'Pasaporte' if es_pasaporte else 'RUT'
+        rut_benef     = (beneficiario.numero_documento if beneficiario else '') or 'N/A'
         nombre_auth   = credito.autorizado_por.get_full_name() or credito.autorizado_por.username
         valor_cuota   = f"${credito.valor_cuota:,.0f}" if credito.valor_cuota else '-'
         interes_row   = (
@@ -2255,7 +2357,7 @@ body {{
 <div class="stit">Beneficiario</div>
 <div class="grid2">
     <div class="cell"><div class="lbl">Nombre</div><div class="val">{credito.nombre_beneficiario}</div></div>
-    <div class="cell"><div class="lbl">RUT</div><div class="val">{rut_benef}</div></div>
+    <div class="cell"><div class="lbl">{label_doc}</div><div class="val">{rut_benef}</div></div>
     <div class="cell"><div class="lbl">Tipo</div><div class="val">{credito.get_tipo_beneficiario_display()}</div></div>
     <div class="cell"><div class="lbl">Estado</div><div class="val em">{credito.get_estado_display()}</div></div>
 </div>
@@ -2288,7 +2390,7 @@ body {{
 </div>
 <div class="firma-bloque">
     <div class="ftipo">Recibí conforme</div>
-    <div class="fnombre">{credito.nombre_beneficiario}<br><span class="fpeq">RUT: {rut_benef}</span></div>
+    <div class="fnombre">{credito.nombre_beneficiario}<br><span class="fpeq">{label_doc}: {rut_benef}</span></div>
     <div class="flinea">Firma Beneficiario</div>
 </div>
 {aval_bloque}
@@ -2741,7 +2843,7 @@ def _filas_pdf_creditos(queryset):
         base = {
             'numero_credito': credito.numero_credito or '',
             'beneficiario': credito.nombre_beneficiario,
-            'rut': (beneficiario.rut if beneficiario else '') or '',
+            'rut': (beneficiario.documento_display if beneficiario else '') or '',
             'empresa': empresa_beneficiaria,
             'mes_solicitud': _mes_solicitud_label(credito.fecha_solicitud),
         }
@@ -2890,7 +2992,7 @@ def exportar_creditos_pdf(request):
                 f'Acote los filtros para exportarlo completo.', sub_style))
         elementos.append(Spacer(1, 0.25 * cm))
 
-        encabezados = ['N° Crédito', 'Beneficiario', 'RUT Beneficiario', 'Empresa Beneficiaria',
+        encabezados = ['N° Crédito', 'Beneficiario', 'Documento', 'Empresa Beneficiaria',
                        'Monto Usado', 'Mes Solicitud', 'Sucursal Uso', 'N° Boleta', 'Fecha Boleta']
         anchos = [2.7 * cm, 5.2 * cm, 2.4 * cm, 4.4 * cm, 2.4 * cm, 2.6 * cm, 3.4 * cm, 2.2 * cm, 2.0 * cm]
 
@@ -2920,7 +3022,9 @@ def exportar_creditos_pdf(request):
             tabla_datos.append([
                 fila['numero_credito'],
                 Paragraph(fila['beneficiario'] or '', cell_style),
-                fila['rut'],
+                # Paragraph y no texto plano: "Pasaporte XXXXXX" no cabe en una
+                # línea de 2,4 cm y se desbordaba sobre la columna siguiente.
+                Paragraph(fila['rut'] or '', cell_style),
                 Paragraph(fila['empresa'] or '', cell_style),
                 _fmt_clp(fila['monto']) if fila['tipo'] != 'sin_uso' else '-',
                 fila['mes_solicitud'],

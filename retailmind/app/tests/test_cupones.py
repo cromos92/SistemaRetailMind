@@ -149,18 +149,65 @@ class EmisionCuponTest(TestCase):
         self.assertEqual(int(cupon.valor), 5)
         self.assertEqual(cupon.calcular_descuento(10000), 500)
 
-    def test_no_emite_dos_cupones_vivos_al_mismo_cliente(self):
+    # --- límite UNICO: un cupón por cliente para siempre (default) ---
+    def test_unico_no_emite_un_segundo_cupon_al_mismo_cliente(self):
         cupon_service.emitir_cupon(self.campana, self.cliente)
         with self.assertRaises(CuponError) as ctx:
             cupon_service.emitir_cupon(self.campana, self.cliente)
+        self.assertIn('un solo cupón por cliente', str(ctx.exception))
+
+    def test_unico_no_reemite_aunque_el_cliente_ya_lo_haya_usado(self):
+        """La promesa es 'una vez en la vida': usarlo no habilita otro."""
+        cupon = cupon_service.emitir_cupon(self.campana, self.cliente)
+        CuponCliente.objects.filter(pk=cupon.pk).update(
+            estado='CANJEADO', canjeado_en=timezone.now())
+
+        with self.assertRaises(CuponError) as ctx:
+            cupon_service.emitir_cupon(self.campana, self.cliente)
+        self.assertIn('ya recibió el suyo', str(ctx.exception))
+
+    def test_unico_no_reemite_aunque_se_le_haya_vencido(self):
+        cupon = cupon_service.emitir_cupon(self.campana, self.cliente)
+        CuponCliente.objects.filter(pk=cupon.pk).update(
+            expira_en=timezone.now() - timedelta(days=1))
+
+        with self.assertRaises(CuponError) as ctx:
+            cupon_service.emitir_cupon(self.campana, self.cliente)
+        self.assertIn('ya recibió el suyo', str(ctx.exception))
+
+    def test_unico_permite_reemitir_si_el_anterior_fue_anulado(self):
+        """Anular es corregir un error administrativo: no quema la oportunidad."""
+        cupon = cupon_service.emitir_cupon(self.campana, self.cliente)
+        CuponCliente.objects.filter(pk=cupon.pk).update(estado='ANULADO')
+
+        nuevo = cupon_service.emitir_cupon(self.campana, self.cliente)
+        self.assertEqual(nuevo.estado, 'PENDIENTE')
+        self.assertNotEqual(nuevo.codigo, cupon.codigo)
+
+    def test_otra_campana_si_puede_emitirle_al_mismo_cliente(self):
+        """UNICO es por campaña, no un veto global al cliente."""
+        cupon_service.emitir_cupon(self.campana, self.cliente)
+        otra = _campana(self.empresa, nombre='Navidad 10%', valor=10)
+        nuevo = cupon_service.emitir_cupon(otra, self.cliente)
+        self.assertEqual(nuevo.estado, 'PENDIENTE')
+
+    # --- límite VIVO: campañas recurrentes ---
+    def test_vivo_no_emite_dos_sin_usar_a_la_vez(self):
+        recurrente = _campana(self.empresa, nombre='Mensual',
+                              limite_por_cliente='VIVO')
+        cupon_service.emitir_cupon(recurrente, self.cliente)
+        with self.assertRaises(CuponError) as ctx:
+            cupon_service.emitir_cupon(recurrente, self.cliente)
         self.assertIn('ya tiene un cupón sin usar', str(ctx.exception))
 
-    def test_un_cupon_vencido_no_bloquea_la_reemision(self):
-        viejo = cupon_service.emitir_cupon(self.campana, self.cliente)
+    def test_vivo_reemite_cuando_el_anterior_vencio(self):
+        recurrente = _campana(self.empresa, nombre='Mensual',
+                              limite_por_cliente='VIVO')
+        viejo = cupon_service.emitir_cupon(recurrente, self.cliente)
         CuponCliente.objects.filter(pk=viejo.pk).update(
             expira_en=timezone.now() - timedelta(days=1))
 
-        nuevo = cupon_service.emitir_cupon(self.campana, self.cliente)
+        nuevo = cupon_service.emitir_cupon(recurrente, self.cliente)
         viejo.refresh_from_db()
         self.assertEqual(viejo.estado, 'EXPIRADO')
         self.assertEqual(nuevo.estado, 'PENDIENTE')
@@ -394,6 +441,44 @@ class CanjeCuponTest(TestCase):
         self.assertEqual(liberados, 0)
         self.cupon.refresh_from_db()
         self.assertEqual(self.cupon.estado, 'EXPIRADO')
+
+
+class ExclusionConDescuentoManualTest(TestCase):
+    """
+    Regla 4 vista desde el cobro: el backend NO puede confiar en la UI.
+
+    El chequeo se rehace sobre las líneas del ticket, porque de lo contrario
+    bastaba con validar el cupón primero y aplicar el descuento después.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.empresa = crear_empresa()
+        cls.sucursal = crear_sucursal(empresa=cls.empresa)
+        cls.campana = _campana(cls.empresa)
+        cls.cliente = Cliente.objects.create(
+            nombre='Juan', apellido='Pérez', rut='12.345.678-5',
+            email='juan@example.cl',
+        )
+
+    def test_con_descuento_manual_el_cupon_no_aplica(self):
+        cupon = cupon_service.emitir_cupon(self.campana, self.cliente)
+        res = cupon_service.validar_cupon(
+            cupon.codigo, monto=20000, rut_cliente='12.345.678-5',
+            sucursal=self.sucursal, tiene_dcto_manual=True,
+        )
+        self.assertFalse(res['valido'])
+        self.assertEqual(res['motivo_codigo'], 'DCTO_MANUAL')
+
+    def test_sin_descuento_manual_el_mismo_cupon_si_aplica(self):
+        """Contraprueba: el rechazo viene del descuento, no del cupón."""
+        cupon = cupon_service.emitir_cupon(self.campana, self.cliente)
+        res = cupon_service.validar_cupon(
+            cupon.codigo, monto=20000, rut_cliente='12.345.678-5',
+            sucursal=self.sucursal, tiene_dcto_manual=False,
+        )
+        self.assertTrue(res['valido'])
+        self.assertEqual(res['descuento_pesos'], 1000)
 
 
 class ExpiracionTest(TestCase):

@@ -142,11 +142,36 @@ def emitir_cupon(campana, cliente, *, usuario=None, idempotency_key=None):
             if existente:
                 return existente
 
+        # Serializa las emisiones de ESTA campaña. El constraint parcial de BD
+        # sólo cubre "dos vivos a la vez"; el límite UNICO mira también los ya
+        # canjeados, y eso no se puede expresar como constraint (depende de la
+        # configuración de la campaña). El lock da la garantía que falta.
+        # Es backoffice, no el hot path del POS: serializar acá no cuesta nada.
+        campana = CampanaCupon.objects.select_for_update().get(pk=campana.pk)
+
         # Expira lo vencido ANTES de mirar si hay uno vivo: si no, un cupón que
         # caducó hace un mes bloquearía la emisión de uno nuevo para siempre.
         _expirar_cupones_de_cliente(campana, cliente)
 
-        if campana.uno_vivo_por_cliente:
+        if campana.limite_por_cliente == 'UNICO':
+            # "Una vez en la vida": cuenta cualquier cupón previo, usado o no.
+            # Sólo los ANULADOS no cuentan (fueron un error administrativo).
+            previo = CuponCliente.objects.filter(
+                campana=campana, cliente=cliente,
+            ).exclude(estado='ANULADO').first()
+            if previo:
+                detalle = {
+                    'CANJEADO': f'ya lo usó el {timezone.localtime(previo.canjeado_en):%d-%m-%Y}'
+                                if previo.canjeado_en else 'ya lo usó',
+                    'EXPIRADO': 'se le venció sin usarlo',
+                    'PENDIENTE': f'lo tiene sin usar, vence '
+                                 f'{timezone.localtime(previo.expira_en):%d-%m-%Y}',
+                }.get(previo.estado, previo.estado)
+                raise CuponError(
+                    f'Esta campaña entrega un solo cupón por cliente y este cliente '
+                    f'ya recibió el suyo ({previo.codigo}: {detalle}).'
+                )
+        elif campana.limite_por_cliente == 'VIVO':
             vivo = CuponCliente.objects.filter(
                 campana=campana, cliente=cliente, estado='PENDIENTE',
             ).first()

@@ -436,6 +436,20 @@ from .views_modulo_fidelizacion import (
     api_generar_vale_canje,
     api_validar_vale_canje,
 )
+from .views_modulo_cupones import (
+    # Vistas HTML
+    modulo_cupones,
+    # APIs
+    api_listar_campanas,
+    api_guardar_campana,
+    api_toggle_campana,
+    api_buscar_cliente_cupon,
+    api_emitir_cupon,
+    api_emitir_lote_cupones,
+    api_listar_cupones,
+    api_anular_cupon,
+    api_validar_cupon_caja,
+)
 from .views_permisos import (
     # Gestión de permisos por rol
     gestion_permisos,
@@ -1517,6 +1531,20 @@ urlpatterns = [
     # repartidos y CERO canjes. Estas dos rutas cierran ambos cortes.
     path('api/fidelizacion/vale/generar/', api_generar_vale_canje, name='api_generar_vale_canje'),
     path('api/fidelizacion/vale/<str:codigo>/', api_validar_vale_canje, name='api_validar_vale_canje'),
+
+    # ========== CUPONES DE DESCUENTO NOMINATIVOS ==========
+    path('fidelizacion/cupones/', modulo_cupones, name='modulo_cupones'),
+    path('api/cupones/campanas/', api_listar_campanas, name='api_listar_campanas'),
+    path('api/cupones/campana/guardar/', api_guardar_campana, name='api_guardar_campana'),
+    path('api/cupones/campana/<int:campana_id>/toggle/', api_toggle_campana, name='api_toggle_campana'),
+    path('api/cupones/clientes/', api_buscar_cliente_cupon, name='api_buscar_cliente_cupon'),
+    path('api/cupones/emitir/', api_emitir_cupon, name='api_emitir_cupon'),
+    path('api/cupones/emitir-lote/', api_emitir_lote_cupones, name='api_emitir_lote_cupones'),
+    path('api/cupones/', api_listar_cupones, name='api_listar_cupones'),
+    path('api/cupones/<int:cupon_id>/anular/', api_anular_cupon, name='api_anular_cupon'),
+    # Validación desde la caja (permiso de 'ticket_venta', no de administración).
+    # Va al final para que 'validar' no se coma las rutas de arriba.
+    path('api/cupones/validar/<str:codigo>/', api_validar_cupon_caja, name='api_validar_cupon_caja'),
 
     # ========== MÓDULO DE GESTIÓN DE PERMISOS ==========
     # Vista principal de gestión de permisos

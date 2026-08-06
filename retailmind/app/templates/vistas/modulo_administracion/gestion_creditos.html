@@ -1099,7 +1099,7 @@
                                 </div>
                             </div>
                             <div class="col-md-3">
-                                <input type="text" class="form-control nexo-input" id="filtro-trabajador-texto" placeholder="Nombre/RUT beneficiario">
+                                <input type="text" class="form-control nexo-input" id="filtro-trabajador-texto" placeholder="Nombre/RUT/pasaporte beneficiario">
                             </div>
                             <div class="col-md-3">
                                 <input type="text" class="form-control nexo-input" id="filtro-sucursal-texto" placeholder="Sucursal...">
@@ -1609,8 +1609,23 @@
                             <input type="text" class="form-control nexo-input" id="editar-trabajador-nombre" placeholder="Ej: Juan Pérez González">
                         </div>
                         <div class="col-md-6">
+                            <label class="nexo-form-label">Tipo de Documento</label>
+                            <select class="form-select nexo-input" id="editar-trabajador-tipo-documento">
+                                <option value="RUT" selected>RUT</option>
+                                <option value="PASAPORTE">Pasaporte (extranjero sin RUT)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6" id="wrap-editar-trabajador-rut">
                             <label class="nexo-form-label">RUT</label>
                             <input type="text" class="form-control nexo-input" id="editar-trabajador-rut" placeholder="12.345.678-9">
+                        </div>
+                        <div class="col-md-6 d-none" id="wrap-editar-trabajador-pasaporte">
+                            <label class="nexo-form-label">N° de Pasaporte</label>
+                            <input type="text" class="form-control nexo-input" id="editar-trabajador-pasaporte" placeholder="Ej: AB1234567" style="text-transform: uppercase;">
+                        </div>
+                        <div class="col-md-6 d-none" id="wrap-editar-trabajador-pais">
+                            <label class="nexo-form-label">País del Documento</label>
+                            <input type="text" class="form-control nexo-input" id="editar-trabajador-pais-documento" placeholder="Ej: Venezuela">
                         </div>
                         <div class="col-md-6">
                             <label class="nexo-form-label">Correo Electrónico</label>
@@ -1683,8 +1698,27 @@
                             <input type="text" class="form-control nexo-input" id="trabajador-nombre" required placeholder="Ej: Juan Pérez González">
                         </div>
                         <div class="col-md-6">
+                            <label class="nexo-form-label">Tipo de Documento</label>
+                            <select class="form-select nexo-input" id="trabajador-tipo-documento">
+                                <option value="RUT" selected>RUT</option>
+                                <option value="PASAPORTE">Pasaporte (extranjero sin RUT)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6" id="wrap-trabajador-rut">
                             <label class="nexo-form-label">RUT</label>
                             <input type="text" class="form-control nexo-input" id="trabajador-rut" placeholder="12.345.678-9">
+                        </div>
+                        <div class="col-md-6 d-none" id="wrap-trabajador-pasaporte">
+                            <label class="nexo-form-label">N° de Pasaporte</label>
+                            <input type="text" class="form-control nexo-input" id="trabajador-pasaporte" placeholder="Ej: AB1234567" style="text-transform: uppercase;">
+                            <small style="color: var(--nexo-text-muted);">
+                                <i class="ri-information-line me-1"></i>
+                                Se usa cuando el beneficiario no tiene RUT chileno.
+                            </small>
+                        </div>
+                        <div class="col-md-6 d-none" id="wrap-trabajador-pais">
+                            <label class="nexo-form-label">País del Documento</label>
+                            <input type="text" class="form-control nexo-input" id="trabajador-pais-documento" placeholder="Ej: Venezuela">
                         </div>
                         <div class="col-md-6">
                             <label class="nexo-form-label">Correo Electrónico</label>
@@ -2093,7 +2127,7 @@ $(document).ready(function() {
                     let editarOptions = '<option value="">Seleccionar beneficiario...</option>';
 
                     trabajadores.forEach(function(trabajador) {
-                        const ident = trabajador.rut ? ' (' + trabajador.rut + ')' : '';
+                        const ident = trabajador.documento ? ' (' + trabajador.documento + ')' : '';
                         options += `<option value="${trabajador.id}">${trabajador.nombre}${ident}</option>`;
                         filterOptions += `<option value="${trabajador.id}">${trabajador.nombre}</option>`;
                         editarOptions += `<option value="${trabajador.id}">${trabajador.nombre}${ident}</option>`;
@@ -2134,8 +2168,33 @@ $(document).ready(function() {
     // ============ GESTIÓN DE BENEFICIARIOS ============
     let sucursalesDisponibles = [];
 
+    // Un beneficiario extranjero no tiene RUT: se identifica con pasaporte y el
+    // formulario muestra un solo documento a la vez para no guardar los dos.
+    function aplicarTipoDocumento(prefijo) {
+        const esPasaporte = $(`#${prefijo}-tipo-documento`).val() === 'PASAPORTE';
+        $(`#wrap-${prefijo}-rut`).toggleClass('d-none', esPasaporte);
+        $(`#wrap-${prefijo}-pasaporte`).toggleClass('d-none', !esPasaporte);
+        $(`#wrap-${prefijo}-pais`).toggleClass('d-none', !esPasaporte);
+        if (esPasaporte) {
+            $(`#${prefijo}-rut`).val('');
+        } else {
+            $(`#${prefijo}-pasaporte`).val('');
+            $(`#${prefijo}-pais-documento`).val('');
+        }
+    }
+
+    $('#trabajador-tipo-documento').on('change', function() {
+        aplicarTipoDocumento('trabajador');
+    });
+
+    $('#editar-trabajador-tipo-documento').on('change', function() {
+        aplicarTipoDocumento('editar-trabajador');
+    });
+
     function openNuevoTrabajadorModal() {
         $('#form-nuevo-trabajador')[0].reset();
+        $('#trabajador-tipo-documento').val('RUT');
+        aplicarTipoDocumento('trabajador');
         $('#filtro-sucursales-modal').val('');
         $('#badge-empresa-sucursales').hide().find('.text').text('');
         $('#contador-sucursales-seleccionadas').text('0');
@@ -2332,11 +2391,16 @@ $(document).ready(function() {
 
     function crearNuevoTrabajador() {
         const nombre = $('#trabajador-nombre').val().trim();
-        const rut = $('#trabajador-rut').val().trim();
+        const tipoDocumento = $('#trabajador-tipo-documento').val() || 'RUT';
+        const rut = tipoDocumento === 'RUT' ? $('#trabajador-rut').val().trim() : '';
+        const pasaporte = tipoDocumento === 'PASAPORTE'
+            ? $('#trabajador-pasaporte').val().trim().toUpperCase() : '';
+        const paisDocumento = tipoDocumento === 'PASAPORTE'
+            ? $('#trabajador-pais-documento').val().trim() : '';
         const correo = $('#trabajador-correo').val().trim();
         const fechaNacimiento = $('#trabajador-fecha-nacimiento').val();
         const empresaId = $('#trabajador-empresa').val();
-        
+
         // Obtener sucursales seleccionadas
         const sucursalesSeleccionadas = [];
         $('input[name="sucursales"]:checked').each(function() {
@@ -2352,6 +2416,19 @@ $(document).ready(function() {
         if (rut && !/^[\d]{1,2}\.?[\d]{3}\.?[\d]{3}-?[\dkK]$/.test(rut.replace(/\./g, ''))) {
             showError('El formato del RUT no es válido');
             return;
+        }
+
+        // Con pasaporte el número es obligatorio: sin él la ficha queda sin
+        // ningún documento con el cual identificar al beneficiario del crédito.
+        if (tipoDocumento === 'PASAPORTE') {
+            if (!pasaporte) {
+                showError('Debe indicar el número de pasaporte');
+                return;
+            }
+            if (!/^[A-Z0-9][A-Z0-9-]{3,29}$/.test(pasaporte)) {
+                showError('El pasaporte debe tener entre 4 y 30 caracteres (letras, números o guion)');
+                return;
+            }
         }
 
         // Validar correo si se proporciona
@@ -2375,7 +2452,10 @@ $(document).ready(function() {
             contentType: 'application/json',
             data: JSON.stringify({
                 nombre: nombre,
+                tipo_documento: tipoDocumento,
                 rut: rut,
+                pasaporte: pasaporte,
+                pais_documento: paisDocumento,
                 correo: correo,
                 fecha_nacimiento: fechaNacimiento,
                 sucursales: sucursalesSeleccionadas,
@@ -2395,7 +2475,7 @@ $(document).ready(function() {
                         html: `
                             <p>Se ha creado el beneficiario:</p>
                             <strong>${response.trabajador.nombre}</strong><br>
-                            <small style="color: var(--nexo-text-muted);">RUT: ${response.trabajador.rut || 'N/A'}</small>
+                            <small style="color: var(--nexo-text-muted);">${response.trabajador.documento || 'Sin documento'}</small>
                             ${empresaMsg}
                         `,
                         confirmButtonColor: 'var(--nexo-primary)'
@@ -2415,6 +2495,10 @@ $(document).ready(function() {
     // ============ EDITAR BENEFICIARIO ============
     function openEditarTrabajadorModal() {
         $('#form-editar-trabajador')[0].reset();
+        // reset() vuelve el select a RUT pero no reordena los campos visibles:
+        // sin esto quedaría el pasaporte del beneficiario anterior a la vista.
+        $('#editar-trabajador-tipo-documento').val('RUT');
+        aplicarTipoDocumento('editar-trabajador');
         $('#editar-trabajador-id').val('');
         $('#editar-trabajador-empresa').html('<option value="">-- Sin cambios --</option>');
         // Limpiar el selector (compatible con Select2)
@@ -2433,7 +2517,11 @@ $(document).ready(function() {
         if (!trabajadorId) {
             $('#editar-trabajador-id').val('');
             $('#editar-trabajador-nombre').val('');
+            $('#editar-trabajador-tipo-documento').val('RUT');
             $('#editar-trabajador-rut').val('');
+            $('#editar-trabajador-pasaporte').val('');
+            $('#editar-trabajador-pais-documento').val('');
+            aplicarTipoDocumento('editar-trabajador');
             $('#editar-trabajador-correo').val('');
             $('#editar-trabajador-fecha-nacimiento').val('');
             cargarEmpresasParaEditar(null);
@@ -2445,7 +2533,13 @@ $(document).ready(function() {
 
         $('#editar-trabajador-id').val(t.id);
         $('#editar-trabajador-nombre').val(t.nombre || '');
+        // aplicarTipoDocumento() limpia el documento del tipo no elegido, así
+        // que primero se fija el tipo y recién después se cargan los valores.
+        $('#editar-trabajador-tipo-documento').val(t.tipo_documento || 'RUT');
+        aplicarTipoDocumento('editar-trabajador');
         $('#editar-trabajador-rut').val(t.rut || '');
+        $('#editar-trabajador-pasaporte').val(t.pasaporte || '');
+        $('#editar-trabajador-pais-documento').val(t.pais_documento || '');
         $('#editar-trabajador-correo').val(t.correo || '');
         $('#editar-trabajador-fecha-nacimiento').val(t.fecha_nacimiento || '');
         cargarEmpresasParaEditar(t.empresa_id || null);
@@ -2471,7 +2565,12 @@ $(document).ready(function() {
     function actualizarTrabajador() {
         const trabajadorId = $('#editar-trabajador-id').val();
         const nombre = $('#editar-trabajador-nombre').val().trim();
-        const rut = $('#editar-trabajador-rut').val().trim();
+        const tipoDocumento = $('#editar-trabajador-tipo-documento').val() || 'RUT';
+        const rut = tipoDocumento === 'RUT' ? $('#editar-trabajador-rut').val().trim() : '';
+        const pasaporte = tipoDocumento === 'PASAPORTE'
+            ? $('#editar-trabajador-pasaporte').val().trim().toUpperCase() : '';
+        const paisDocumento = tipoDocumento === 'PASAPORTE'
+            ? $('#editar-trabajador-pais-documento').val().trim() : '';
         const correo = $('#editar-trabajador-correo').val().trim();
         const fechaNacimiento = $('#editar-trabajador-fecha-nacimiento').val();
         const empresaId = $('#editar-trabajador-empresa').val();
@@ -2487,6 +2586,16 @@ $(document).ready(function() {
         if (rut && !/^[\d]{1,2}\.?[\d]{3}\.?[\d]{3}-?[\dkK]$/.test(rut.replace(/\./g, ''))) {
             showError('El formato del RUT no es válido');
             return;
+        }
+        if (tipoDocumento === 'PASAPORTE') {
+            if (!pasaporte) {
+                showError('Debe indicar el número de pasaporte');
+                return;
+            }
+            if (!/^[A-Z0-9][A-Z0-9-]{3,29}$/.test(pasaporte)) {
+                showError('El pasaporte debe tener entre 4 y 30 caracteres (letras, números o guion)');
+                return;
+            }
         }
         if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
             showError('El formato del correo no es válido');
@@ -2506,7 +2615,10 @@ $(document).ready(function() {
             data: JSON.stringify({
                 trabajador_id: parseInt(trabajadorId),
                 nombre: nombre,
+                tipo_documento: tipoDocumento,
                 rut: rut,
+                pasaporte: pasaporte,
+                pais_documento: paisDocumento,
                 correo: correo,
                 fecha_nacimiento: fechaNacimiento,
                 empresa_id: empresaId ? parseInt(empresaId) : null
@@ -2522,7 +2634,7 @@ $(document).ready(function() {
                         title: '¡Beneficiario Actualizado!',
                         html: `
                             <strong>${response.trabajador.nombre}</strong><br>
-                            <small style="color: var(--nexo-text-muted);">RUT: ${response.trabajador.rut || 'N/A'}</small>
+                            <small style="color: var(--nexo-text-muted);">${response.trabajador.documento || 'Sin documento'}</small>
                             ${empresaMsg}
                         `,
                         confirmButtonColor: 'var(--nexo-primary)'
@@ -2615,7 +2727,7 @@ $(document).ready(function() {
                 <tr>
                     <td>
                         <div class="fw-semibold">${escapeHtml(d.nombre)}</div>
-                        <div style="color: var(--nexo-text-muted); font-size: 0.7rem;">${escapeHtml(d.rut || 's/RUT')}</div>
+                        <div style="color: var(--nexo-text-muted); font-size: 0.7rem;">${escapeHtml(d.rut || 's/documento')}</div>
                     </td>
                     <td class="text-end">${d.documentos}</td>
                     <td class="text-end fw-semibold">${formatCurrency(d.deuda)}</td>
@@ -2943,7 +3055,7 @@ $(document).ready(function() {
                 <td>
                     <div class="principal">${escapeHtml(credito.trabajador.nombre)}</div>
                     <div class="secundario" title="${escapeHtml(credito.sucursal_direccion || '')}">
-                        ${escapeHtml(credito.trabajador.rut || 's/rut')} · ${escapeHtml(sucursalLabel)}
+                        ${escapeHtml(credito.trabajador.documento || 's/documento')} · ${escapeHtml(sucursalLabel)}
                     </div>
                 </td>
                 <td>
@@ -3406,7 +3518,7 @@ $(document).ready(function() {
                     <table class="table table-borderless table-sm">
                         <tr><td style="color: var(--nexo-text-muted); width: 40%;">Número:</td><td style="font-weight: 600; color: var(--nexo-primary);">${credito.numero_credito}</td></tr>
                         <tr><td style="color: var(--nexo-text-muted);">Beneficiario:</td><td style="font-weight: 500;">${credito.trabajador.nombre}</td></tr>
-                        <tr><td style="color: var(--nexo-text-muted);">RUT:</td><td>${credito.trabajador.rut || 'N/A'}</td></tr>
+                        <tr><td style="color: var(--nexo-text-muted);">Documento:</td><td>${credito.trabajador.documento || 'N/A'}</td></tr>
                         <tr><td style="color: var(--nexo-text-muted);">Tipo:</td><td>${credito.tipo_credito_display}</td></tr>
                         <tr><td style="color: var(--nexo-text-muted);">Estado:</td><td><span class="nexo-badge nexo-badge-${credito.estado.toLowerCase()}">${credito.estado_display}</span></td></tr>
                         <tr><td style="color: var(--nexo-text-muted);">Fecha Solicitud:</td><td>${credito.fecha_solicitud}</td></tr>
@@ -4094,7 +4206,7 @@ $(document).ready(function() {
                         </h6>
                         <table class="table table-borderless table-sm mb-0">
                             <tr><td style="color: var(--nexo-text-muted); width: 40%;">Nombre:</td><td style="font-weight: 500;">${credito.trabajador.nombre}</td></tr>
-                            <tr><td style="color: var(--nexo-text-muted);">RUT:</td><td>${credito.trabajador.rut || 'N/A'}</td></tr>
+                            <tr><td style="color: var(--nexo-text-muted);">Documento:</td><td>${credito.trabajador.documento || 'N/A'}</td></tr>
                         </table>
                     </div>
                 </div>

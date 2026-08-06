@@ -1,0 +1,871 @@
+{% load static %}
+{% load permisos_tags %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<style>
+    .page-content { background:#fff !important; min-height: calc(100vh - 70px); }
+    .card.shadow { border:none; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px rgba(64,81,137,.1); }
+    .module-header {
+        background: linear-gradient(135deg,#405189 0%,#0ab39c 100%); color:white; padding:16px 24px;
+        display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;
+    }
+    .module-header-left { display:flex; align-items:center; gap:14px; }
+    .module-header-icon { width:48px; height:48px; background:rgba(255,255,255,.2); border-radius:12px;
+        display:flex; align-items:center; justify-content:center; font-size:24px; }
+    .module-header-info h5 { margin:0; font-size:18px; font-weight:600; color:white; }
+    .module-header-status { display:flex; align-items:center; gap:6px; font-size:13px; opacity:.9; margin-top:4px; }
+    .status-dot { width:8px; height:8px; background:#4ade80; border-radius:50%; animation:pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.5;} }
+    .module-header-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .module-header-actions .btn { border-radius:10px; font-weight:500; }
+    .pagination-controls { background: linear-gradient(135deg,#f8f9fa,#e9ecef); border-radius:12px; padding:16px; margin-bottom:16px; }
+    .kpi-card { border-radius:12px; border:none; transition:all .3s ease; }
+    .kpi-card:hover { transform: translateY(-4px); box-shadow:0 8px 25px rgba(0,0,0,.15); }
+    .modal-header-nexo { background:linear-gradient(135deg,#405189,#0ab39c); color:white; }
+    .filtro-label { font-size:11px; font-weight:600; color:#6c757d; margin-bottom:2px; display:block; }
+    .req { color:#f06548; }
+    .badge-empresa { font-size:11px; padding:4px 10px; border-radius:12px; background:#eef2ff; color:#405189; font-weight:600; }
+    /* Estados del cupón: mismos colores de estado del resto de los módulos */
+    .estado-badge { font-size:11px; font-weight:700; padding:3px 10px; border-radius:12px; display:inline-block; }
+    .estado-PENDIENTE { background:#e3f2fd; color:#299cdb; }
+    .estado-CANJEADO  { background:#e8f5e9; color:#0ab39c; }
+    .estado-EXPIRADO  { background:#f8f9fa; color:#6c757d; }
+    .estado-ANULADO   { background:#ffe9e5; color:#f06548; }
+    .codigo-cupon { font-family:monospace; font-weight:700; letter-spacing:.5px; color:#405189; }
+    .seccion-titulo { font-size:14px; font-weight:700; color:#405189; display:flex; align-items:center;
+        gap:8px; margin:0 0 12px; padding-bottom:8px; border-bottom:2px solid #e9ecef; }
+    .cliente-item { border:1px solid #e9ecef; border-radius:10px; padding:10px 12px; margin-bottom:6px;
+        cursor:pointer; transition:all .15s ease; }
+    .cliente-item:hover { border-color:#405189; background:#f8f9fa; }
+    .cliente-item.seleccionado { border-color:#0ab39c; background:#e8f5e9; }
+    .cliente-item.bloqueado { opacity:.65; cursor:not-allowed; background:#fff5f5; border-color:#ffd6d0; }
+    .cupon-emitido-box { background:linear-gradient(135deg,#e8f5e9,#c8e6c9); border-radius:12px;
+        padding:20px; text-align:center; border:2px dashed #0ab39c; }
+    .cupon-emitido-codigo { font-family:monospace; font-size:28px; font-weight:800; color:#0ab39c;
+        letter-spacing:2px; }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+        <div class="card shadow">
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon"><i class="ri-coupon-3-line"></i></div>
+                    <div class="module-header-info">
+                        <h5>Códigos de Descuento</h5>
+                        <div class="module-header-status"><span class="status-dot"></span>
+                            Cupones nominativos · un solo uso · no se combinan con otros descuentos
+                        </div>
+                    </div>
+                </div>
+                <div class="module-header-actions">
+                    <a class="btn btn-light" href="{% url 'modulo_fidelizacion' %}">
+                        <i class="ri-user-star-line"></i> Clientes y Puntos
+                    </a>
+                    {% if user|puede_crear_en:'fidelizacion_cupones' %}
+                    <button class="btn btn-success" onclick="abrirModalEmitir()">
+                        <i class="ri-coupon-line"></i> Emitir cupón a cliente
+                    </button>
+                    <button class="btn btn-warning" onclick="abrirModalCampana()">
+                        <i class="ri-add-circle-line"></i> Nueva campaña
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card-body">
+                <!-- ===== KPIs ===== -->
+                <div class="row mb-3">
+                    <div class="col-md-3 col-6 mb-2">
+                        <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb); border-left:4px solid #299cdb;">
+                            <div class="card-body text-center py-2">
+                                <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-campanas">0</h4>
+                                <p class="text-muted mb-0 small">Campañas</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6 mb-2">
+                        <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#fff8e1,#ffecb3); border-left:4px solid #ffbe0b;">
+                            <div class="card-body text-center py-2">
+                                <h4 class="mb-0 fw-bold" style="color:#405189;" id="kpi-emitidos">0</h4>
+                                <p class="text-muted mb-0 small">Cupones emitidos</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6 mb-2">
+                        <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9); border-left:4px solid #0ab39c;">
+                            <div class="card-body text-center py-2">
+                                <h4 class="mb-0 fw-bold" style="color:#0ab39c;" id="kpi-canjeados">0</h4>
+                                <p class="text-muted mb-0 small">Usados <span id="kpi-redencion" class="fw-normal"></span></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6 mb-2">
+                        <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#fff3e0,#ffe0b2); border-left:4px solid #fb8c00;">
+                            <div class="card-body text-center py-2">
+                                <h4 class="mb-0 fw-bold" style="color:#f06548;" id="kpi-regalado">$0</h4>
+                                <p class="text-muted mb-0 small">Descuento entregado</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ===== CAMPAÑAS ===== -->
+                <h6 class="seccion-titulo">
+                    <i class="ri-megaphone-line"></i> Campañas
+                    <span class="text-muted fw-normal" style="font-size:12px;">
+                        — definen el descuento; los cupones se emiten desde acá
+                    </span>
+                </h6>
+                <div class="table-responsive mb-4">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Campaña</th>
+                                <th>Empresa</th>
+                                <th class="text-center">Descuento</th>
+                                <th class="text-center">Por cliente</th>
+                                <th class="text-center">Emisión</th>
+                                <th class="text-center">Vigencia cupón</th>
+                                <th class="text-center">Emitidos</th>
+                                <th class="text-center">Usados</th>
+                                <th class="text-end">Entregado</th>
+                                <th class="text-center">Estado</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-campanas">
+                            <tr><td colspan="11" class="text-center text-muted py-4">Cargando…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- ===== CUPONES EMITIDOS ===== -->
+                <h6 class="seccion-titulo">
+                    <i class="ri-coupon-3-line"></i> Cupones emitidos
+                </h6>
+                <div class="pagination-controls">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-12 col-lg-4">
+                            <label class="filtro-label" for="cup-busqueda">Buscar</label>
+                            <input type="text" id="cup-busqueda" class="form-control"
+                                   placeholder="Código, RUT o nombre del cliente...">
+                        </div>
+                        <div class="col-6 col-lg-3">
+                            <label class="filtro-label" for="cup-campana">Campaña</label>
+                            <select id="cup-campana" class="form-select">
+                                <option value="">Todas</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-lg-2">
+                            <label class="filtro-label" for="cup-estado">Estado</label>
+                            <select id="cup-estado" class="form-select">
+                                <option value="">Todos</option>
+                                {% for valor, label in estado_choices %}
+                                <option value="{{ valor }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6 col-lg-2">
+                            <label class="filtro-label" for="cup-page-size">Por página</label>
+                            <select id="cup-page-size" class="form-select">
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-lg-1">
+                            <button class="btn btn-primary w-100" onclick="cargarCupones(1)">
+                                <i class="ri-search-line"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Código</th>
+                                <th>Cliente</th>
+                                <th>RUT</th>
+                                <th>Campaña</th>
+                                <th class="text-center">Descuento</th>
+                                <th class="text-center">Vence</th>
+                                <th class="text-center">Estado</th>
+                                <th class="text-end">Usado en</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-cupones">
+                            <tr><td colspan="9" class="text-center text-muted py-4">Cargando…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                    <span class="text-muted small" id="cup-info"></span>
+                    <div class="btn-group" id="cup-paginacion"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Modal Campaña ===== -->
+<div class="modal fade" id="modalCampana" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header modal-header-nexo">
+                <h5 class="modal-title"><i class="ri-megaphone-line me-2"></i><span id="mc-titulo">Nueva campaña</span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info d-flex align-items-start py-2">
+                    <i class="ri-information-line me-2 mt-1"></i>
+                    <div class="small">
+                        El cupón <strong>no se combina</strong> con el descuento manual del cajero
+                        ni con un vale de puntos: en una venta hay un solo beneficio.
+                        Sólo lo puede usar el cliente al que se emite, identificándose con su RUT.
+                    </div>
+                </div>
+                <input type="hidden" id="mc-id">
+                <div class="row g-3">
+                    <div class="col-md-7">
+                        <label class="form-label">Nombre de la campaña <span class="req">*</span></label>
+                        <input type="text" id="mc-nombre" class="form-control" placeholder="Ej: Bienvenida 5%">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">Empresa <span class="req">*</span></label>
+                        <select id="mc-empresa" class="form-select">
+                            {% for e in empresas %}
+                            <option value="{{ e.id }}" {% if empresa_actual and e.id == empresa_actual.id %}selected{% endif %}>{{ e.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">El cupón sólo sirve en sucursales de esta empresa.</small>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Tipo de descuento</label>
+                        <select id="mc-tipo" class="form-select" onchange="actualizarPreviewCampana()">
+                            {% for valor, label in tipo_valor_choices %}
+                            <option value="{{ valor }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Valor <span class="req">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text" id="mc-simbolo">%</span>
+                            <input type="number" id="mc-valor" class="form-control" value="5"
+                                   min="0" step="0.01" oninput="actualizarPreviewCampana()">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Tope del descuento <span class="text-muted small">(opcional)</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" id="mc-tope" class="form-control" min="0"
+                                   placeholder="Sin tope" oninput="actualizarPreviewCampana()">
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Compra mínima</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" id="mc-minimo" class="form-control" value="0" min="0">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Vigencia del cupón (días)</label>
+                        <input type="number" id="mc-vigencia" class="form-control" value="30" min="1">
+                        <small class="text-muted">Cuánto dura cada cupón desde que se emite.</small>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Cupones por cliente</label>
+                        <select id="mc-limite" class="form-select">
+                            {% for valor, label in limite_choices %}
+                            <option value="{{ valor }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Emitir desde <span class="req">*</span></label>
+                        <input type="date" id="mc-inicio" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Emitir hasta <span class="req">*</span></label>
+                        <input type="date" id="mc-fin" class="form-control">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="mc-activo" checked>
+                            <label class="form-check-label" for="mc-activo">Campaña activa</label>
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label">Descripción <span class="text-muted small">(interna)</span></label>
+                        <textarea id="mc-descripcion" class="form-control" rows="2"></textarea>
+                    </div>
+
+                    <div class="col-12">
+                        <div class="alert alert-light border mb-0 py-2">
+                            <strong class="small">Ejemplo:</strong>
+                            <span class="small" id="mc-preview">
+                                una compra de $20.000 pagaría $19.000 (descuento $1.000).
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="mc-btn" onclick="guardarCampana()">
+                    <i class="ri-save-line"></i> Guardar campaña
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Modal Emitir Cupón ===== -->
+<div class="modal fade" id="modalEmitir" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header modal-header-nexo">
+                <h5 class="modal-title"><i class="ri-coupon-line me-2"></i>Emitir cupón a un cliente</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="me-form">
+                    <div class="mb-3">
+                        <label class="form-label">Campaña <span class="req">*</span></label>
+                        <select id="me-campana" class="form-select"></select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Cliente <span class="req">*</span></label>
+                        <input type="text" id="me-buscar" class="form-control"
+                               placeholder="Busca por RUT, nombre o email (mínimo 3 caracteres)…"
+                               autocomplete="off">
+                    </div>
+                    <div id="me-resultados" style="max-height:280px; overflow-y:auto;"></div>
+                    <div class="alert alert-warning d-flex align-items-start py-2 mt-2 mb-0" id="me-aviso" style="display:none !important;">
+                        <i class="ri-error-warning-line me-2 mt-1"></i>
+                        <div class="small" id="me-aviso-txt"></div>
+                    </div>
+                </div>
+
+                <!-- Resultado tras emitir -->
+                <div id="me-resultado" style="display:none;">
+                    <div class="cupon-emitido-box">
+                        <div class="text-muted small mb-1">Cupón emitido para</div>
+                        <div class="fw-bold mb-2" id="me-res-cliente"></div>
+                        <div class="cupon-emitido-codigo" id="me-res-codigo"></div>
+                        <div class="text-muted small mt-2">
+                            Descuento <strong id="me-res-valor"></strong> ·
+                            vence el <strong id="me-res-vence"></strong>
+                        </div>
+                    </div>
+                    <div class="alert alert-info small mt-3 mb-0">
+                        <i class="ri-information-line me-1"></i>
+                        El cliente debe presentar este código en caja <strong>e identificarse con su RUT</strong>.
+                        No sirve con cliente genérico ni junto a otro descuento.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal" id="me-btn-cerrar">Cancelar</button>
+                <button type="button" class="btn btn-outline-primary" onclick="copiarCodigo()" id="me-btn-copiar" style="display:none;">
+                    <i class="ri-file-copy-line"></i> Copiar código
+                </button>
+                <button type="button" class="btn btn-success" id="me-btn" onclick="emitirCupon()" disabled>
+                    <i class="ri-coupon-line"></i> Emitir cupón
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<!-- JS del módulo: SIEMPRE después del footer (el footer es quien carga jQuery
+     y los plugins; ponerlo antes rompe la página con "$ is not defined"). -->
+<script>
+const URLS_CUP = {
+    listarCampanas: "{% url 'api_listar_campanas' %}",
+    guardarCampana: "{% url 'api_guardar_campana' %}",
+    toggleCampana:  (id) => `/app/api/cupones/campana/${id}/toggle/`,
+    buscarCliente:  "{% url 'api_buscar_cliente_cupon' %}",
+    emitir:         "{% url 'api_emitir_cupon' %}",
+    listarCupones:  "{% url 'api_listar_cupones' %}",
+    anular:         (id) => `/app/api/cupones/${id}/anular/`,
+};
+
+let modalCampana = null, modalEmitir = null;
+let campanasCache = [];
+let clienteSeleccionado = null;
+let ultimoCodigo = '';
+let cupPage = 1;
+
+function csrf() { return document.querySelector('[name=csrfmiddlewaretoken]').value; }
+function fmt(n) { return '$' + (n||0).toLocaleString('es-CL'); }
+function esc(t) {
+    return String(t == null ? '' : t).replace(/[&<>"']/g, s => (
+        {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]
+    ));
+}
+function aviso(msg, tipo) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({ icon: tipo || 'info', text: msg, confirmButtonColor: '#405189' });
+    } else {
+        alert(msg);
+    }
+}
+
+/* ===================== CAMPAÑAS ===================== */
+function cargarCampanas() {
+    fetch(URLS_CUP.listarCampanas)
+        .then(r => r.json())
+        .then(d => {
+            if (!d.success) return;
+            campanasCache = d.campanas || [];
+            pintarCampanas();
+            pintarKpis(d.resumen || {});
+            llenarSelectoresCampana();
+        })
+        .catch(() => aviso('No se pudieron cargar las campañas.', 'error'));
+}
+
+function pintarKpis(r) {
+    document.getElementById('kpi-campanas').textContent = r.campanas || 0;
+    document.getElementById('kpi-emitidos').textContent = (r.emitidos || 0).toLocaleString('es-CL');
+    document.getElementById('kpi-canjeados').textContent = (r.canjeados || 0).toLocaleString('es-CL');
+    document.getElementById('kpi-regalado').textContent = fmt(r.regalado);
+    // Tasa de redención: el número que dice si la campaña sirvió de algo.
+    const pct = r.emitidos ? Math.round((r.canjeados / r.emitidos) * 100) : 0;
+    document.getElementById('kpi-redencion').textContent = r.emitidos ? `(${pct}%)` : '';
+}
+
+function pintarCampanas() {
+    const tb = document.getElementById('tbody-campanas');
+    if (!campanasCache.length) {
+        tb.innerHTML = `<tr><td colspan="11" class="text-center text-muted py-4">
+            Todavía no hay campañas. Crea una con "Nueva campaña" para poder emitir cupones.
+        </td></tr>`;
+        return;
+    }
+    tb.innerHTML = campanasCache.map(c => `
+        <tr>
+            <td>
+                <div class="fw-semibold">${esc(c.nombre)}</div>
+                ${c.descripcion ? `<small class="text-muted">${esc(c.descripcion)}</small>` : ''}
+            </td>
+            <td><span class="badge-empresa">${esc(c.empresa)}</span></td>
+            <td class="text-center fw-bold" style="color:#0ab39c;">
+                ${esc(c.valor_display)}
+                ${c.tope_descuento ? `<br><small class="text-muted fw-normal">tope ${fmt(c.tope_descuento)}</small>` : ''}
+                ${c.monto_minimo ? `<br><small class="text-muted fw-normal">mín. ${fmt(c.monto_minimo)}</small>` : ''}
+            </td>
+            <td class="text-center"><small>${esc(c.limite_display)}</small></td>
+            <td class="text-center"><small>${c.fecha_inicio} → ${c.fecha_fin}</small></td>
+            <td class="text-center"><small>${c.vigencia_dias} días</small></td>
+            <td class="text-center">${c.emitidos}</td>
+            <td class="text-center fw-semibold" style="color:#0ab39c;">${c.canjeados}</td>
+            <td class="text-end">${fmt(c.regalado)}</td>
+            <td class="text-center">
+                ${c.activo
+                    ? (c.vigente
+                        ? '<span class="estado-badge estado-CANJEADO">Vigente</span>'
+                        : '<span class="estado-badge estado-EXPIRADO">Fuera de fecha</span>')
+                    : '<span class="estado-badge estado-ANULADO">Inactiva</span>'}
+            </td>
+            <td class="text-end text-nowrap">
+                {% if user|puede_crear_en:'fidelizacion_cupones' %}
+                <button class="btn btn-sm btn-outline-success" onclick="abrirModalEmitir(${c.id})" title="Emitir cupón de esta campaña">
+                    <i class="ri-coupon-line"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-primary" onclick="editarCampana(${c.id})" title="Editar">
+                    <i class="ri-pencil-line"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="toggleCampana(${c.id})" title="${c.activo ? 'Desactivar' : 'Activar'}">
+                    <i class="ri-${c.activo ? 'pause' : 'play'}-line"></i>
+                </button>
+                {% endif %}
+            </td>
+        </tr>
+    `).join('');
+}
+
+function llenarSelectoresCampana() {
+    const filtro = document.getElementById('cup-campana');
+    const valorPrevio = filtro.value;
+    filtro.innerHTML = '<option value="">Todas</option>' +
+        campanasCache.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+    filtro.value = valorPrevio;
+
+    // En el modal de emisión sólo tienen sentido las campañas que hoy pueden
+    // emitir: ofrecer una vencida sólo produce un error al final del flujo.
+    const sel = document.getElementById('me-campana');
+    const emitibles = campanasCache.filter(c => c.activo && c.vigente);
+    sel.innerHTML = emitibles.length
+        ? emitibles.map(c => `<option value="${c.id}">${esc(c.nombre)} — ${esc(c.valor_display)}</option>`).join('')
+        : '<option value="">No hay campañas vigentes</option>';
+}
+
+function abrirModalCampana() {
+    document.getElementById('mc-titulo').textContent = 'Nueva campaña';
+    document.getElementById('mc-id').value = '';
+    document.getElementById('mc-nombre').value = '';
+    document.getElementById('mc-descripcion').value = '';
+    document.getElementById('mc-tipo').value = 'PORCENTAJE';
+    document.getElementById('mc-valor').value = 5;
+    document.getElementById('mc-tope').value = '';
+    document.getElementById('mc-minimo').value = 0;
+    document.getElementById('mc-vigencia').value = 30;
+    document.getElementById('mc-limite').value = 'UNICO';
+    document.getElementById('mc-activo').checked = true;
+    document.getElementById('mc-empresa').disabled = false;
+
+    const hoy = new Date();
+    const fin = new Date(); fin.setMonth(fin.getMonth() + 3);
+    document.getElementById('mc-inicio').value = hoy.toISOString().slice(0, 10);
+    document.getElementById('mc-fin').value = fin.toISOString().slice(0, 10);
+
+    actualizarPreviewCampana();
+    modalCampana.show();
+}
+
+function editarCampana(id) {
+    const c = campanasCache.find(x => x.id === id);
+    if (!c) return;
+    document.getElementById('mc-titulo').textContent = 'Editar campaña';
+    document.getElementById('mc-id').value = c.id;
+    document.getElementById('mc-nombre').value = c.nombre;
+    document.getElementById('mc-descripcion').value = c.descripcion || '';
+    document.getElementById('mc-tipo').value = c.tipo_valor;
+    document.getElementById('mc-valor').value = c.valor;
+    document.getElementById('mc-tope').value = c.tope_descuento || '';
+    document.getElementById('mc-minimo').value = c.monto_minimo || 0;
+    document.getElementById('mc-vigencia').value = c.vigencia_dias;
+    document.getElementById('mc-limite').value = c.limite_por_cliente;
+    document.getElementById('mc-activo').checked = c.activo;
+    document.getElementById('mc-inicio').value = c.fecha_inicio;
+    document.getElementById('mc-fin').value = c.fecha_fin;
+    // La empresa define el alcance de los cupones YA emitidos: cambiarla los
+    // dejaría sirviendo en una cadena para la que no se emitieron.
+    document.getElementById('mc-empresa').value = c.empresa_id;
+    document.getElementById('mc-empresa').disabled = true;
+
+    actualizarPreviewCampana();
+    modalCampana.show();
+}
+
+function actualizarPreviewCampana() {
+    const tipo = document.getElementById('mc-tipo').value;
+    const valor = parseFloat(document.getElementById('mc-valor').value) || 0;
+    const tope = parseInt(document.getElementById('mc-tope').value) || 0;
+    document.getElementById('mc-simbolo').textContent = tipo === 'PORCENTAJE' ? '%' : '$';
+
+    const ejemplo = 20000;
+    let dcto = tipo === 'PORCENTAJE' ? Math.round(ejemplo * valor / 100) : valor;
+    if (tope) dcto = Math.min(dcto, tope);
+    dcto = Math.max(0, Math.min(dcto, ejemplo));
+    document.getElementById('mc-preview').textContent =
+        `una compra de ${fmt(ejemplo)} pagaría ${fmt(ejemplo - dcto)} (descuento ${fmt(dcto)}).`;
+}
+
+function guardarCampana() {
+    const btn = document.getElementById('mc-btn');
+    btn.disabled = true;
+    const payload = {
+        id: document.getElementById('mc-id').value || null,
+        nombre: document.getElementById('mc-nombre').value.trim(),
+        descripcion: document.getElementById('mc-descripcion').value.trim(),
+        empresa_id: document.getElementById('mc-empresa').value,
+        tipo_valor: document.getElementById('mc-tipo').value,
+        valor: document.getElementById('mc-valor').value,
+        tope_descuento: document.getElementById('mc-tope').value,
+        monto_minimo: document.getElementById('mc-minimo').value,
+        vigencia_dias: document.getElementById('mc-vigencia').value,
+        fecha_inicio: document.getElementById('mc-inicio').value,
+        fecha_fin: document.getElementById('mc-fin').value,
+        limite_por_cliente: document.getElementById('mc-limite').value,
+        activo: document.getElementById('mc-activo').checked,
+    };
+    fetch(URLS_CUP.guardarCampana, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+        body: JSON.stringify(payload),
+    })
+    .then(r => r.json())
+    .then(d => {
+        btn.disabled = false;
+        if (!d.success) { aviso(d.error || 'No se pudo guardar.', 'error'); return; }
+        modalCampana.hide();
+        aviso('Campaña guardada.', 'success');
+        cargarCampanas();
+    })
+    .catch(() => { btn.disabled = false; aviso('Error de conexión.', 'error'); });
+}
+
+function toggleCampana(id) {
+    fetch(URLS_CUP.toggleCampana(id), {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrf() },
+    })
+    .then(r => r.json())
+    .then(d => { if (d.success) cargarCampanas(); })
+    .catch(() => aviso('Error de conexión.', 'error'));
+}
+
+/* ===================== EMISIÓN ===================== */
+function abrirModalEmitir(campanaId) {
+    clienteSeleccionado = null;
+    ultimoCodigo = '';
+    document.getElementById('me-form').style.display = '';
+    document.getElementById('me-resultado').style.display = 'none';
+    document.getElementById('me-btn').style.display = '';
+    document.getElementById('me-btn').disabled = true;
+    document.getElementById('me-btn-copiar').style.display = 'none';
+    document.getElementById('me-btn-cerrar').textContent = 'Cancelar';
+    document.getElementById('me-buscar').value = '';
+    document.getElementById('me-resultados').innerHTML =
+        '<div class="text-muted small text-center py-3">Escribe al menos 3 caracteres para buscar.</div>';
+    document.getElementById('me-aviso').style.display = 'none';
+
+    llenarSelectoresCampana();
+    if (campanaId) document.getElementById('me-campana').value = campanaId;
+    modalEmitir.show();
+    setTimeout(() => document.getElementById('me-buscar').focus(), 400);
+}
+
+let timerBusqueda = null;
+function buscarClientesCupon() {
+    clearTimeout(timerBusqueda);
+    const q = document.getElementById('me-buscar').value.trim();
+    if (q.length < 3) {
+        document.getElementById('me-resultados').innerHTML =
+            '<div class="text-muted small text-center py-3">Escribe al menos 3 caracteres para buscar.</div>';
+        return;
+    }
+    timerBusqueda = setTimeout(() => {
+        fetch(`${URLS_CUP.buscarCliente}?q=${encodeURIComponent(q)}`)
+            .then(r => r.json())
+            .then(d => pintarClientes(d.clientes || []))
+            .catch(() => aviso('Error de conexión.', 'error'));
+    }, 250);
+}
+
+function pintarClientes(clientes) {
+    const cont = document.getElementById('me-resultados');
+    if (!clientes.length) {
+        cont.innerHTML = `<div class="text-muted small text-center py-3">
+            Sin resultados. El cliente debe existir en el CRM para recibir un cupón.
+        </div>`;
+        return;
+    }
+    cont.innerHTML = clientes.map(c => `
+        <div class="cliente-item ${c.ficha_ok ? '' : 'bloqueado'}"
+             onclick="${c.ficha_ok ? `seleccionarCliente(${c.id}, '${esc(c.nombre).replace(/'/g, "\\'")}')` : ''}"
+             id="cli-${c.id}">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="fw-semibold">${esc(c.nombre)}</div>
+                    <small class="text-muted">
+                        ${esc(c.rut || 'sin RUT')}${c.email ? ' · ' + esc(c.email) : ''}
+                    </small>
+                </div>
+                ${c.ficha_ok
+                    ? '<i class="ri-checkbox-circle-line" style="color:#0ab39c; font-size:20px;"></i>'
+                    : `<span class="badge bg-danger-subtle text-danger" style="font-size:10px;">
+                         Ficha incompleta</span>`}
+            </div>
+            ${c.ficha_ok ? '' : `<div class="small text-danger mt-1">
+                <i class="ri-error-warning-line"></i> Falta: ${esc(c.faltantes.join(', '))}</div>`}
+        </div>
+    `).join('');
+}
+
+function seleccionarCliente(id, nombre) {
+    clienteSeleccionado = { id: id, nombre: nombre };
+    document.querySelectorAll('.cliente-item').forEach(el => el.classList.remove('seleccionado'));
+    const el = document.getElementById('cli-' + id);
+    if (el) el.classList.add('seleccionado');
+    const campanaOk = !!document.getElementById('me-campana').value;
+    document.getElementById('me-btn').disabled = !campanaOk;
+    if (!campanaOk) {
+        document.getElementById('me-aviso-txt').textContent =
+            'No hay campañas vigentes. Crea una o activa alguna antes de emitir.';
+        document.getElementById('me-aviso').style.display = 'flex';
+    }
+}
+
+function emitirCupon() {
+    if (!clienteSeleccionado) return;
+    const campanaId = document.getElementById('me-campana').value;
+    if (!campanaId) return;
+
+    const btn = document.getElementById('me-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ri-loader-4-line"></i> Emitiendo…';
+
+    fetch(URLS_CUP.emitir, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrf(),
+            // Idempotencia: un doble clic no puede quemar dos cupones (con
+            // límite UNICO el segundo sería irrecuperable para el cliente).
+            'Idempotency-Key': `emitir:${campanaId}:${clienteSeleccionado.id}`,
+        },
+        body: JSON.stringify({ campana_id: campanaId, cliente_id: clienteSeleccionado.id }),
+    })
+    .then(r => r.json())
+    .then(d => {
+        btn.innerHTML = '<i class="ri-coupon-line"></i> Emitir cupón';
+        if (!d.success) {
+            btn.disabled = false;
+            document.getElementById('me-aviso-txt').textContent = d.error || 'No se pudo emitir.';
+            document.getElementById('me-aviso').style.display = 'flex';
+            return;
+        }
+        const c = d.cupon;
+        ultimoCodigo = c.codigo;
+        document.getElementById('me-res-cliente').textContent = c.cliente;
+        document.getElementById('me-res-codigo').textContent = c.codigo;
+        document.getElementById('me-res-valor').textContent = c.valor_display;
+        document.getElementById('me-res-vence').textContent = c.expira_en;
+        document.getElementById('me-form').style.display = 'none';
+        document.getElementById('me-resultado').style.display = '';
+        document.getElementById('me-btn').style.display = 'none';
+        document.getElementById('me-btn-copiar').style.display = '';
+        document.getElementById('me-btn-cerrar').textContent = 'Listo';
+        cargarCampanas();
+        cargarCupones(1);
+    })
+    .catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ri-coupon-line"></i> Emitir cupón';
+        aviso('Error de conexión.', 'error');
+    });
+}
+
+function copiarCodigo() {
+    if (!ultimoCodigo) return;
+    navigator.clipboard.writeText(ultimoCodigo)
+        .then(() => aviso('Código copiado: ' + ultimoCodigo, 'success'))
+        .catch(() => aviso('Copia manualmente: ' + ultimoCodigo, 'info'));
+}
+
+/* ===================== CUPONES EMITIDOS ===================== */
+function cargarCupones(page) {
+    cupPage = page || 1;
+    const params = new URLSearchParams({
+        page: cupPage,
+        page_size: document.getElementById('cup-page-size').value,
+        q: document.getElementById('cup-busqueda').value.trim(),
+        campana: document.getElementById('cup-campana').value,
+        estado: document.getElementById('cup-estado').value,
+    });
+    fetch(`${URLS_CUP.listarCupones}?${params}`)
+        .then(r => r.json())
+        .then(d => {
+            if (!d.success) return;
+            pintarCupones(d);
+        })
+        .catch(() => aviso('No se pudieron cargar los cupones.', 'error'));
+}
+
+function pintarCupones(d) {
+    const tb = document.getElementById('tbody-cupones');
+    if (!d.cupones.length) {
+        tb.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">Sin cupones para este filtro.</td></tr>';
+        document.getElementById('cup-info').textContent = '';
+        document.getElementById('cup-paginacion').innerHTML = '';
+        return;
+    }
+    tb.innerHTML = d.cupones.map(c => `
+        <tr>
+            <td><span class="codigo-cupon">${esc(c.codigo)}</span></td>
+            <td>${esc(c.cliente)}</td>
+            <td><small>${esc(c.rut)}</small></td>
+            <td><small>${esc(c.campana)}</small></td>
+            <td class="text-center fw-semibold">${esc(c.valor_display)}</td>
+            <td class="text-center"><small class="${c.vencido ? 'text-danger' : ''}">${c.expira_en}</small></td>
+            <td class="text-center">
+                <span class="estado-badge estado-${c.estado}">${esc(c.estado_display)}</span>
+            </td>
+            <td class="text-end">
+                ${c.ticket ? `<small>Ticket ${esc(c.ticket)}<br>${esc(c.canjeado_en)}</small>` : ''}
+                ${c.monto_descuento ? `<br><strong style="color:#0ab39c;">${fmt(c.monto_descuento)}</strong>` : ''}
+            </td>
+            <td class="text-end">
+                {% if user|puede_eliminar_en:'fidelizacion_cupones' %}
+                ${c.estado === 'PENDIENTE' ? `
+                <button class="btn btn-sm btn-outline-danger" onclick="anularCupon(${c.id}, '${esc(c.codigo)}')" title="Anular">
+                    <i class="ri-close-circle-line"></i>
+                </button>` : ''}
+                {% endif %}
+            </td>
+        </tr>
+    `).join('');
+
+    document.getElementById('cup-info').textContent =
+        `${d.total} cupones · página ${d.page} de ${d.total_pages}`;
+
+    const pag = document.getElementById('cup-paginacion');
+    let html = '';
+    if (d.page > 1) html += `<button class="btn btn-sm btn-outline-primary" onclick="cargarCupones(${d.page - 1})">‹ Anterior</button>`;
+    if (d.page < d.total_pages) html += `<button class="btn btn-sm btn-outline-primary" onclick="cargarCupones(${d.page + 1})">Siguiente ›</button>`;
+    pag.innerHTML = html;
+}
+
+function anularCupon(id, codigo) {
+    const confirmar = (typeof Swal !== 'undefined')
+        ? Swal.fire({
+            icon: 'warning',
+            title: '¿Anular el cupón ' + codigo + '?',
+            text: 'El cliente ya no podrá usarlo. Si la campaña entrega uno por cliente, podrás emitirle otro.',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, anular',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#f06548',
+        }).then(r => r.isConfirmed)
+        : Promise.resolve(confirm('¿Anular el cupón ' + codigo + '?'));
+
+    confirmar.then(ok => {
+        if (!ok) return;
+        fetch(URLS_CUP.anular(id), { method: 'POST', headers: { 'X-CSRFToken': csrf() } })
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success) { aviso(d.error || 'No se pudo anular.', 'error'); return; }
+                cargarCupones(cupPage);
+                cargarCampanas();
+            })
+            .catch(() => aviso('Error de conexión.', 'error'));
+    });
+}
+
+/* ===================== INIT ===================== */
+document.addEventListener('DOMContentLoaded', function () {
+    modalCampana = new bootstrap.Modal(document.getElementById('modalCampana'));
+    modalEmitir  = new bootstrap.Modal(document.getElementById('modalEmitir'));
+
+    document.getElementById('me-buscar').addEventListener('input', buscarClientesCupon);
+    document.getElementById('cup-busqueda').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); cargarCupones(1); }
+    });
+    ['cup-campana', 'cup-estado', 'cup-page-size'].forEach(id => {
+        document.getElementById(id).addEventListener('change', () => cargarCupones(1));
+    });
+
+    cargarCampanas();
+    cargarCupones(1);
+});
+</script>

@@ -3333,6 +3333,23 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
             'valor_dr': _valor_fid_dr,
         })
 
+    # Descuento por cupón nominativo. Mismo tratamiento que el de puntos:
+    # bruto en boleta, neto en factura. En la práctica sólo llega en boletas
+    # (el cupón exige cliente particular), pero la conversión se deja igual
+    # para que un cambio futuro de esa regla no genere un DTE descuadrado.
+    _dscto_cupon = getattr(ticket, 'descuento_cupon', None) or 0
+    if _dscto_cupon > 0:
+        if 'FACTURA' in tipo_dte:
+            _valor_cupon_dr = int(round(Decimal(_dscto_cupon) / Decimal('1.19')))
+        else:
+            _valor_cupon_dr = int(_dscto_cupon)
+        descuentos_recargos.append({
+            'tpo_mov': 'D',
+            'glosa_dr': 'Descuento Cupon',
+            'tpo_valor': '$',
+            'valor_dr': _valor_cupon_dr,
+        })
+
     # Estructura completa para generar TXT
     datos = {
         'documento': documento,

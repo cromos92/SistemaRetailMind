@@ -791,6 +791,16 @@ ESTADO_CUPON_CHOICES = [
     ('ANULADO', 'Anulado'),
 ]
 
+# Cuántos cupones de una campaña puede recibir un mismo cliente.
+# UNICO es el default porque es la promesa típica: "5% por ser cliente nuevo",
+# una vez en la vida. VIVO sirve para campañas recurrentes (ej. un cupón por mes)
+# donde sólo se busca evitar que acumule varios sin usar.
+LIMITE_CUPON_CLIENTE_CHOICES = [
+    ('UNICO', 'Uno por cliente, para siempre'),
+    ('VIVO', 'Uno sin usar a la vez (permite reemitir tras usarlo)'),
+    ('SIN_LIMITE', 'Sin límite'),
+]
+
 
 def calcular_descuento_cupon(tipo_valor, valor, tope_descuento, monto):
     """
@@ -861,9 +871,12 @@ class CampanaCupon(models.Model):
     )
     activo = models.BooleanField(default=True, db_index=True)
 
-    uno_vivo_por_cliente = models.BooleanField(
-        default=True,
-        help_text='Impide emitir un 2º cupón a un cliente que ya tiene uno sin usar',
+    limite_por_cliente = models.CharField(
+        max_length=12,
+        choices=LIMITE_CUPON_CLIENTE_CHOICES,
+        default='UNICO',
+        help_text='UNICO: un solo cupón por cliente en toda la campaña, aunque ya '
+                  'lo haya usado. VIVO: sólo impide acumular varios sin usar.',
     )
 
     created_by = models.ForeignKey(

@@ -180,6 +180,7 @@ from .etiquetas import (  # noqa: F401
 
 from .crm import (  # noqa: F401
     TIPO_CLIENTE_CHOICES,
+    TIPO_DOCUMENTO_CLIENTE_CHOICES,
     ContactoEmpresa,
     Cliente,
     Proveedor,

@@ -90,6 +90,10 @@ URL_PERMISO_MAP = {
     '/app/fidelizacion/configuracion/': 'fidelizacion_programa',
     '/app/fidelizacion/reporte/': 'fidelizacion_reporte',
     '/app/fidelizacion/registrar-cliente/': 'fidelizacion_cuentas',
+    # Va ANTES de '/app/fidelizacion/': el match es por orden del diccionario y
+    # la clave genérica se comería esta URL, dándole a los cupones el permiso
+    # equivocado (cualquiera con acceso a Clientes y Puntos podría emitirlos).
+    '/app/fidelizacion/cupones/': 'fidelizacion_cupones',
     '/app/fidelizacion/': 'fidelizacion_cuentas',
     
     # Documentos
