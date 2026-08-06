@@ -294,6 +294,51 @@ class ListadoYCreditoConPasaporteTest(TestCase):
         self.assertEqual(datos['tipo_documento'], 'PASAPORTE')
         self.assertEqual(datos['rut'], '')
 
+    def _credito(self, **kwargs):
+        defaults = dict(
+            beneficiario=self.cliente,
+            empresa_origen=self.empresa,
+            sucursal=self.sucursal,
+            monto_solicitado=50000,
+            fecha_vencimiento=timezone.localdate() + timedelta(days=30),
+            motivo_solicitud='Anticipo',
+            solicitado_por=self.usuario,
+        )
+        defaults.update(kwargs)
+        return CreditoTrabajador.objects.create(**defaults)
+
+    def test_voucher_de_credito_pendiente_no_revienta(self):
+        """Un crédito PENDIENTE no tiene autorizador ni monto aprobado (nace así
+        cuando quien lo crea no puede aprobar): el voucher igual debe imprimirse."""
+        credito = self._credito(estado='PENDIENTE')
+        resp = self.client.get(f'/app/api/creditos/imprimir-voucher/{credito.id}/')
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode('utf-8')
+        self.assertIn('Pendiente de aprobación', html)
+        self.assertIn('Monto Solicitado', html)
+        self.assertIn('50,000', html)  # cae al monto solicitado
+
+    def test_voucher_de_credito_aprobado_muestra_al_autorizador(self):
+        credito = self._credito(
+            estado='ACTIVO', monto_aprobado=50000,
+            autorizado_por=self.usuario, fecha_aprobacion=timezone.now(),
+        )
+        resp = self.client.get(f'/app/api/creditos/imprimir-voucher/{credito.id}/')
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode('utf-8')
+        self.assertIn('Monto Aprobado', html)
+        self.assertNotIn('Pendiente de aprobación', html)
+        self.assertIn(self.usuario.get_full_name() or self.usuario.username, html)
+
+    def test_voucher_usa_el_pasaporte_del_beneficiario(self):
+        credito = self._credito(estado='ACTIVO', monto_aprobado=50000,
+                                autorizado_por=self.usuario)
+        resp = self.client.get(f'/app/api/creditos/imprimir-voucher/{credito.id}/')
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode('utf-8')
+        self.assertIn('AB1234567', html)
+        self.assertIn('Pasaporte', html)
+
     def test_validar_codigo_encuentra_por_pasaporte(self):
         resp = self.client.get(
             '/app/api/creditos/trabajadores/validar-codigo/',

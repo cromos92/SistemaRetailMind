@@ -2203,7 +2203,17 @@ def imprimir_voucher_credito(request, credito_id):
         es_pasaporte  = bool(beneficiario and beneficiario.tipo_documento == 'PASAPORTE')
         label_doc     = 'Pasaporte' if es_pasaporte else 'RUT'
         rut_benef     = (beneficiario.numero_documento if beneficiario else '') or 'N/A'
-        nombre_auth   = credito.autorizado_por.get_full_name() or credito.autorizado_por.username
+        # Un crédito PENDIENTE todavía no tiene autorizador ni monto aprobado
+        # (nace así cuando quien lo crea no tiene `puede_aprobar`). El voucher
+        # se imprime igual, pero diciendo que la aprobación está pendiente en
+        # vez de reventar con AttributeError/TypeError sobre los campos nulos.
+        aprobado      = credito.autorizado_por is not None
+        nombre_auth   = (
+            (credito.autorizado_por.get_full_name() or credito.autorizado_por.username)
+            if aprobado else 'Pendiente de aprobación'
+        )
+        label_monto   = 'Monto Aprobado' if credito.monto_aprobado is not None else 'Monto Solicitado'
+        monto_voucher = credito.monto_aprobado if credito.monto_aprobado is not None else credito.monto_solicitado
         valor_cuota   = f"${credito.valor_cuota:,.0f}" if credito.valor_cuota else '-'
         interes_row   = (
             f'<div class="cell"><div class="lbl">Interés</div>'
@@ -2211,6 +2221,14 @@ def imprimir_voucher_credito(request, credito_id):
             if credito.tasa_interes > 0 else ''
         )
         sucursal_dir  = credito.sucursal.direccion or ''
+        # Sin aprobación la línea de firma va en blanco: la firma el autorizador
+        # a mano, no se imprime un nombre que todavía nadie asumió.
+        firma_auth    = f'''
+<div class="firma-bloque">
+    <div class="ftipo">{'Autorizado por' if aprobado else 'Autoriza (aprobación pendiente)'}</div>
+    <div class="fnombre">{nombre_auth if aprobado else '&nbsp;'}</div>
+    <div class="flinea">Firma y Timbre</div>
+</div>'''
         aval_bloque   = ''
         if credito.requiere_aval:
             aval_bloque = f'''
@@ -2345,8 +2363,8 @@ body {{
 
 <!-- ══ MONTO ══ -->
 <div class="monto-box">
-    <div class="monto-lbl">Monto Aprobado</div>
-    <div class="monto-val">${credito.monto_aprobado:,.0f}</div>
+    <div class="monto-lbl">{label_monto}</div>
+    <div class="monto-val">${monto_voucher:,.0f}</div>
 </div>
 <div class="monto-saldo">
     <span>Pagado: <strong>${credito.monto_pagado:,.0f}</strong></span>
@@ -2383,11 +2401,7 @@ body {{
 <!-- ══ FIRMAS ══ -->
 <div class="sep"></div>
 <div class="stit">Firmas</div>
-<div class="firma-bloque">
-    <div class="ftipo">Autorizado por</div>
-    <div class="fnombre">{nombre_auth}</div>
-    <div class="flinea">Firma y Timbre</div>
-</div>
+{firma_auth}
 <div class="firma-bloque">
     <div class="ftipo">Recibí conforme</div>
     <div class="fnombre">{credito.nombre_beneficiario}<br><span class="fpeq">{label_doc}: {rut_benef}</span></div>
