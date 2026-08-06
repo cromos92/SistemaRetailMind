@@ -799,6 +799,12 @@ function traerPedidos(){
         if (se.cerrados_despachados) {
           sync += `<br><small class="text-info"><b>${se.cerrados_despachados}</b> ya despachado(s) por el canal → cerrados como facturados por concepto.</small>`;
         }
+        if (se.retenidos_canal) {
+          sync += `<br><small class="text-danger"><b>${se.retenidos_canal}</b> retenido(s) en AllConnected (incidencia abierta): salen del picking y no se facturan.</small>`;
+        }
+        if (se.liberados_canal) {
+          sync += `<br><small class="text-success"><b>${se.liberados_canal}</b> liberado(s) por AllConnected: vuelven al flujo de preparación.</small>`;
+        }
         if (se.listos_central) {
           sync += `<br><small class="text-secondary"><b>${se.listos_central}</b> marcado(s) por el canal como listos para envío (informativo: igual hay que prepararlos).</small>`;
         }

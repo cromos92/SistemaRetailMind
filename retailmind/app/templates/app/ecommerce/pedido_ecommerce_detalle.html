@@ -855,8 +855,36 @@
           <div class="sku-warning">
             <i class="bi bi-exclamation-triangle-fill"></i>
             <div>
-              <strong>Hay productos sin match o sin stock.</strong><br>
-              Usa el buscador en cada ítem rojo para asignarlo a un producto con stock en <strong>{{ sucursal_validacion.alias }}</strong>.
+              <strong>No se puede facturar todavía</strong> — por eso el botón de abajo está deshabilitado.<br>
+              {# Detalle ítem por ítem: antes decía solo "hay productos sin match o
+                 sin stock" y el operador no sabía CUÁL era el problema. #}
+              <ul style="margin:6px 0 0;padding-left:18px;">
+                {% for iv in items_validados %}
+                  {% if not iv.encontrado %}
+                  <li style="font-size:.8rem;">
+                    <code>{{ iv.sku|default:"sin SKU" }}</code>
+                    {% if iv.nombre %} · {{ iv.nombre|truncatechars:38 }}{% endif %} —
+                    {% if iv.stock_insuficiente %}
+                      faltan unidades (pide {{ iv.cantidad_pedida }}, hay {{ iv.stock_disponible }})
+                    {% elif iv.sin_stock %}
+                      sin stock en {{ sucursal_validacion.alias }}
+                    {% else %}
+                      no existe ese SKU en {{ sucursal_validacion.alias }}
+                    {% endif %}
+                  </li>
+                  {% endif %}
+                {% endfor %}
+              </ul>
+              <div style="margin-top:8px;font-size:.8rem;">
+                Opciones: asignar el producto con el buscador del ítem rojo,
+                <strong>reasignar el pedido</strong> a una sucursal con stock, o
+                <strong>marcar sin stock</strong> para que AllConnected lo resuelva.
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-danger mt-2"
+                      style="font-size:.78rem;border-radius:8px;"
+                      onclick="marcarSinStockDetalle()">
+                <i class="bi bi-box-seam me-1"></i>Marcar sin stock y avisar a AllConnected
+              </button>
             </div>
           </div>
           {% endif %}
@@ -910,9 +938,16 @@
 
           <button id="btn-facturar-aqui" class="btn-facturar"
             onclick="facturarDesdeDetalle()"
-            {% if not puede_facturar %}disabled title="Asigna todos los SKUs primero"{% endif %}>
+            {% if not puede_facturar %}disabled title="Resolvé primero el stock: mirá el detalle arriba"{% endif %}>
             <i class="bi bi-receipt fs-5"></i>Facturar ahora
           </button>
+          {% if not puede_facturar %}
+          {# Sin esto el botón deshabilitado no daba NINGUNA señal al hacer clic
+             (reporte del 06-ago: "no muestra spinner ni nada"). #}
+          <div style="text-align:center;font-size:.76rem;color:#b91c1c;margin-top:6px;">
+            <i class="bi bi-lock-fill me-1"></i>Deshabilitado: revisá el aviso de stock más arriba.
+          </div>
+          {% endif %}
 
           <div id="facturar-loading" style="display:none;text-align:center;padding:16px;">
             <div class="spinner-border spinner-border-sm text-success me-2"></div>
@@ -1174,6 +1209,29 @@ function facturarDesdeDetalle() {
 }
 
 /* ── Avanzar sub-estado ──────────────────────────────── */
+/* ── Marcar sin stock desde el detalle (avisa a AllConnected) ── */
+function marcarSinStockDetalle() {
+  const motivo = prompt(
+    'Motivo del quiebre (lo verá central en AllConnected):',
+    'No está en bodega ni en sala');
+  if (motivo === null) return;   // canceló
+  fetch(`/app/ecommerce/pedidos/${PEDIDO_ID}/sin-stock/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+    body: JSON.stringify({ motivo: motivo })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (!data.ok) { alert('Error: ' + (data.error || 'no se pudo marcar')); return; }
+    alert(data.avisado_allconnected
+      ? 'Marcado sin stock. AllConnected fue avisado y lo tomará central.'
+      : 'Marcado sin stock, PERO no se pudo avisar a AllConnected:\n'
+        + (data.aviso_detalle || '') + '\n\nSe reintenta desde el listado.');
+    location.reload();
+  })
+  .catch(err => alert('Error de conexión: ' + err));
+}
+
 function avanzarSubEstado(nuevoSubEstado) {
   if (!confirm(`¿Cambiar sub-estado a "${nuevoSubEstado}"?`)) return;
 

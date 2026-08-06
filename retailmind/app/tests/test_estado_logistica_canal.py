@@ -62,15 +62,67 @@ class SyncEstadoLogisticaTest(TestCase):
             items=[{'sku': '1', 'nombre': 'X', 'cantidad': 1, 'precio_unitario': 10000}],
         )
 
-    def _sync(self, estado, estado_logistica, despachado=False, listo_envio=False):
+    def _sync(self, estado, estado_logistica, despachado=False, listo_envio=False,
+              retenido=False, retencion_tipo='', retencion_motivo=''):
         with mock.patch.object(ac_service.requests, 'post') as m:
             m.return_value = _resp_estados([{
                 'canal_origen': 'PARIS', 'numero_pedido_canal': 'P-1',
                 'estado': estado, 'estado_logistica': estado_logistica,
                 'cancelado': False, 'pagado': True,
                 'despachado': despachado, 'listo_envio': listo_envio,
+                'retenido': retenido, 'retencion_tipo': retencion_tipo,
+                'retencion_motivo': retencion_motivo,
             }])
             return ac_service.sincronizar_estados_pedidos()
+
+    # ── Retención operativa del canal (AC → RM) ─────────────────────────
+
+    def test_retenido_en_el_canal_sale_del_picking(self):
+        """Caso real 06-ago: incidencia SIN_STOCK abierta en AC con
+        bloquea_retailmind=True, y RM seguía mostrando el pedido como trabajo."""
+        p = self._pedido('P-1', sub_estado='ASIGNADO')
+        res = self._sync('PREPARANDO', 'PREPARANDO', retenido=True,
+                         retencion_tipo='SIN_STOCK', retencion_motivo='vendido')
+
+        self.assertEqual(res['retenidos_canal'], 1)
+        p.refresh_from_db()
+        self.assertEqual(p.sub_estado, 'SIN_STOCK')
+        self.assertIn('SIN_STOCK', p.sin_stock_motivo)
+        self.assertIn('vendido', p.sin_stock_motivo)
+        self.assertTrue(p.sin_stock_avisado_ac, 'la incidencia ES de AllConnected')
+
+    def test_retencion_es_idempotente(self):
+        self._pedido('P-1', sub_estado='ASIGNADO')
+        self._sync('PREPARANDO', 'PREPARANDO', retenido=True,
+                   retencion_tipo='SIN_STOCK', retencion_motivo='vendido')
+        res = self._sync('PREPARANDO', 'PREPARANDO', retenido=True,
+                         retencion_tipo='SIN_STOCK', retencion_motivo='vendido')
+        self.assertEqual(res['retenidos_canal'], 0, 'ya estaba retenido')
+
+    def test_liberado_en_el_canal_vuelve_al_flujo(self):
+        p = self._pedido('P-1', sub_estado='ASIGNADO')
+        self._sync('PREPARANDO', 'PREPARANDO', retenido=True,
+                   retencion_tipo='SIN_STOCK', retencion_motivo='vendido')
+        res = self._sync('PREPARANDO', 'PREPARANDO', retenido=False)
+
+        self.assertEqual(res['liberados_canal'], 1)
+        p.refresh_from_db()
+        self.assertEqual(p.sub_estado, 'ASIGNADO')
+        self.assertEqual(p.sin_stock_motivo, '')
+
+    def test_no_libera_lo_que_marco_la_tienda(self):
+        """Si la tienda lo marcó a mano (sin incidencia en AC todavía), el sync
+        NO se lo pisa: `sin_stock_avisado_ac=False` lo protege."""
+        p = self._pedido('P-1', sub_estado='SIN_STOCK')
+        p.sin_stock_motivo = 'no está en sala'
+        p.sin_stock_avisado_ac = False
+        p.save(update_fields=['sin_stock_motivo', 'sin_stock_avisado_ac'])
+
+        res = self._sync('PREPARANDO', 'PREPARANDO', retenido=False)
+        self.assertEqual(res['liberados_canal'], 0)
+        p.refresh_from_db()
+        self.assertEqual(p.sub_estado, 'SIN_STOCK')
+        self.assertEqual(p.sin_stock_motivo, 'no está en sala')
 
     def test_enviado_por_logistica_cierra_el_pedido(self):
         """El caso real: estado=PREPARANDO pero ya salió (logística=ENVIADO)."""

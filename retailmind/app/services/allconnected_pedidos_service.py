@@ -299,6 +299,74 @@ def _cerrar_facturado_externo(pedido, estado_canal):
     )
 
 
+def _aplicar_retencion_canal(pedido, tipo, motivo):
+    """El canal tiene una incidencia ABIERTA que bloquea el ERP → sacar de la cola.
+
+    AllConnected retiene pedidos (sin stock, cacho, datos de envío…) con
+    `bloquea_retailmind=True`, pero eso nunca viajaba de vuelta: RM los seguía
+    mostrando como trabajo pendiente y facturable (caso real 06-ago: dos pedidos
+    con incidencia SIN_STOCK abierta hace días seguían en la cola de PAO4).
+
+    Se reusa el sub-estado SIN_STOCK porque ya bloquea guía y facturación
+    (`SUB_ESTADOS_BLOQUEADOS_PICKING`). El tipo real de la incidencia queda en
+    `sin_stock_motivo` para no perderlo. Idempotente: si ya está marcado, no
+    reescribe ni duplica historial.
+    """
+    from app.models import HistorialPedidoEcommerce
+
+    detalle = f"[{tipo or 'RETENIDO'}] {motivo}".strip()[:255]
+    if pedido.sub_estado == 'SIN_STOCK':
+        if pedido.sin_stock_motivo != detalle or not pedido.sin_stock_avisado_ac:
+            pedido.sin_stock_motivo = detalle
+            pedido.sin_stock_avisado_ac = True   # la incidencia ES de AllConnected
+            pedido.save(update_fields=['sin_stock_motivo', 'sin_stock_avisado_ac'])
+        return False
+
+    sub_estado_anterior = pedido.sub_estado
+    pedido.sub_estado = 'SIN_STOCK'
+    pedido.sin_stock_motivo = detalle
+    pedido.sin_stock_avisado_ac = True
+    pedido.save(update_fields=['sub_estado', 'sin_stock_motivo', 'sin_stock_avisado_ac'])
+    HistorialPedidoEcommerce.objects.create(
+        pedido=pedido,
+        estado_anterior=pedido.estado,
+        estado_nuevo=pedido.estado,
+        sub_estado_anterior=sub_estado_anterior,
+        sub_estado_nuevo='SIN_STOCK',
+        tipo_evento='ERROR',
+        motivo=f'Sync de estados: AllConnected lo tiene retenido — {detalle}',
+    )
+    return True
+
+
+def _liberar_retencion_canal(pedido):
+    """AllConnected ya cerró/liberó la incidencia → vuelve al flujo de picking.
+
+    Sin esto un pedido retenido quedaría trabado para siempre en RM aunque
+    central lo hubiera resuelto. Solo toca los que RM marcó por retención del
+    canal (`sin_stock_avisado_ac=True`): si la tienda lo marcó a mano y todavía
+    no hay incidencia en AC, se respeta su marca.
+    """
+    from app.models import HistorialPedidoEcommerce
+
+    if pedido.sub_estado != 'SIN_STOCK' or not pedido.sin_stock_avisado_ac:
+        return False
+    pedido.sub_estado = 'ASIGNADO'
+    pedido.sin_stock_motivo = ''
+    pedido.sin_stock_avisado_ac = False
+    pedido.save(update_fields=['sub_estado', 'sin_stock_motivo', 'sin_stock_avisado_ac'])
+    HistorialPedidoEcommerce.objects.create(
+        pedido=pedido,
+        estado_anterior=pedido.estado,
+        estado_nuevo=pedido.estado,
+        sub_estado_anterior='SIN_STOCK',
+        sub_estado_nuevo='ASIGNADO',
+        tipo_evento='CAMBIO_ESTADO',
+        motivo='Sync de estados: AllConnected liberó la incidencia — vuelve al flujo.',
+    )
+    return True
+
+
 def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
     """
     Pregunta a AllConnected el estado actual de TODOS los PENDIENTES locales
@@ -330,10 +398,12 @@ def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
     if not cfg['base_url']:
         return {'ok': True, 'configurado': False, 'consultados': 0,
                 'cancelados': 0, 'cerrados_despachados': 0, 'sin_pago': 0, 'listos_central': 0,
+                'retenidos_canal': 0, 'liberados_canal': 0,
                 'no_encontrados': 0, 'lotes_caidos': 0}
     if not _REQUESTS_OK:
         return {'ok': False, 'error': "Falta el paquete 'requests'.", 'consultados': 0,
                 'cancelados': 0, 'cerrados_despachados': 0, 'sin_pago': 0, 'listos_central': 0,
+                'retenidos_canal': 0, 'liberados_canal': 0,
                 'no_encontrados': 0, 'lotes_caidos': 0}
 
     desde_dt = timezone.now() - timedelta(days=dias)
@@ -345,6 +415,7 @@ def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
     if not pendientes:
         return {'ok': True, 'configurado': True, 'consultados': 0,
                 'cancelados': 0, 'cerrados_despachados': 0, 'sin_pago': 0, 'listos_central': 0,
+                'retenidos_canal': 0, 'liberados_canal': 0,
                 'no_encontrados': 0, 'lotes_caidos': 0}
 
     url = f"{cfg['base_url']}{cfg['estados_path']}"
@@ -363,6 +434,7 @@ def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
     ahora = timezone.now()
     consultados = cancelados = cerrados_despachados = 0
     sin_pago = no_encontrados = lotes_caidos = listos_central = 0
+    retenidos_canal = liberados_canal = 0
 
     for i in range(0, len(pendientes), _LOTE_ESTADOS):
         lote = pendientes[i:i + _LOTE_ESTADOS]
@@ -382,6 +454,7 @@ def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
             # AC aún no tiene deployado el endpoint: no es un error del operador.
             return {'ok': True, 'configurado': True, 'consultados': 0,
                     'cancelados': 0, 'cerrados_despachados': 0, 'sin_pago': 0, 'listos_central': 0,
+                'retenidos_canal': 0, 'liberados_canal': 0,
                     'no_encontrados': 0, 'lotes_caidos': 0,
                     'detalle': 'AllConnected aún no expone /app/pedidos/estados/ (deploy pendiente).'}
         if r.status_code != 200:
@@ -424,6 +497,15 @@ def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
             elif despachado:
                 _cerrar_facturado_externo(pedido, estado_logistica or estado_canal)
                 cerrados_despachados += 1
+            elif est.get('retenido'):
+                # AllConnected lo tiene retenido (incidencia que bloquea el ERP):
+                # sale del picking y de la facturación hasta que allá se libere.
+                if _aplicar_retencion_canal(pedido, est.get('retencion_tipo'),
+                                            est.get('retencion_motivo') or 'retenido en el canal'):
+                    retenidos_canal += 1
+            elif _liberar_retencion_canal(pedido):
+                # Estaba retenido por el canal y allá ya lo liberaron.
+                liberados_canal += 1
             elif est.get('listo_envio') or estado_logistica in ESTADOS_CANAL_LISTO_CENTRAL:
                 # Lo preparó la CENTRAL y espera al courier (o al cliente): no
                 # se cierra —todavía no sale— pero deja de ser trabajo de tienda.
@@ -433,10 +515,10 @@ def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
 
     logger.info(
         'Sync estados AllConnected: %s consultados, %s cancelados, %s cerrados '
-        'por despacho, %s listos en central, %s sin pago, %s no encontrados, '
-        '%s lotes caídos',
-        consultados, cancelados, cerrados_despachados, listos_central, sin_pago,
-        no_encontrados, lotes_caidos,
+        'por despacho, %s retenidos por el canal, %s liberados, %s listos en central, '
+        '%s sin pago, %s no encontrados, %s lotes caídos',
+        consultados, cancelados, cerrados_despachados, retenidos_canal, liberados_canal,
+        listos_central, sin_pago, no_encontrados, lotes_caidos,
     )
     return {
         'ok': True, 'configurado': True,
@@ -444,6 +526,8 @@ def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
         'cancelados': cancelados,
         'cerrados_despachados': cerrados_despachados,
         'listos_central': listos_central,
+        'retenidos_canal': retenidos_canal,
+        'liberados_canal': liberados_canal,
         'sin_pago': sin_pago,
         'no_encontrados': no_encontrados,
         'lotes_caidos': lotes_caidos,
