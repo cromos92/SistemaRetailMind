@@ -27,7 +27,10 @@ class Migration(migrations.Migration):
                 ('fecha_inicio', models.DateField(db_index=True, help_text='Desde cuándo se pueden EMITIR cupones')),
                 ('fecha_fin', models.DateField(db_index=True, help_text='Hasta cuándo se pueden emitir (inclusive)')),
                 ('activo', models.BooleanField(db_index=True, default=True)),
-                ('limite_por_cliente', models.CharField(choices=[('UNICO', 'Uno por cliente, para siempre'), ('VIVO', 'Uno sin usar a la vez (permite reemitir tras usarlo)'), ('SIN_LIMITE', 'Sin límite')], default='UNICO', help_text='UNICO: un solo cupón por cliente en toda la campaña, aunque ya lo haya usado. VIVO: sólo impide acumular varios sin usar.', max_length=12)),
+                # NO TOCAR: este archivo ya se aplicó en producción con este
+                # campo. El cambio a `limite_por_cliente` vive en la 0208, que
+                # es lo que mantiene el esquema igual en una BD nueva y en prod.
+                ('uno_vivo_por_cliente', models.BooleanField(default=True, help_text='Impide emitir un 2º cupón a un cliente que ya tiene uno sin usar')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('created_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='campanas_cupon_creadas', to=settings.AUTH_USER_MODEL)),
