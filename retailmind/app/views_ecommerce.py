@@ -1119,21 +1119,19 @@ _MSG_BLOQUEO_SIN_STOCK = (
 )
 
 
-def _preparado_en_central(pedido):
-    """True si AllConnected ya lo tiene empaquetado esperando courier/retiro.
+def _listo_envio_en_canal(pedido):
+    """True si el CANAL marcó el pedido como listo para envío/retiro.
 
-    Lo preparó la CENTRAL, así que NO es trabajo de picking de la tienda (no se
-    le imprime guía). No se cierra ni se bloquea la facturación: el paquete
-    todavía no salió y puede corresponder boletearlo.
+    Es INFORMATIVO y nada más. Se intentó usarlo para sacar el pedido del
+    picking ("lo preparó la central"), pero se verificó en prod (06-ago) que el
+    estado NO significa eso: los pedidos de Paris llegan con
+    `estado_logistica='LISTO_ENVIO'` sin número de tracking y con la bitácora
+    solo en 'En Preparacion' — o sea, el marketplace lo marca por su cuenta
+    mientras la tienda todavía tiene que sacar el producto. Bloquear la guía por
+    este campo dejaba pedidos reales sin poder prepararse.
     """
     from app.services.allconnected_pedidos_service import ESTADOS_CANAL_LISTO_CENTRAL
     return (pedido.estado_logistica_canal or '').upper() in ESTADOS_CANAL_LISTO_CENTRAL
-
-
-_MSG_PREPARADO_CENTRAL = (
-    'AllConnected reporta este pedido como ya preparado en la central '
-    '(esperando courier o retiro del cliente): no corresponde prepararlo en tienda.'
-)
 
 
 def _bloqueo_por_estado_canal(pedido):
@@ -2791,9 +2789,9 @@ def api_imprimir_guia_preparacion(request, pedido_id):
     if pedido.sub_estado in SUB_ESTADOS_BLOQUEADOS_PICKING:
         return JsonResponse({'ok': False, 'error': _MSG_BLOQUEO_SIN_STOCK}, status=409)
 
-    if _preparado_en_central(pedido):
-        return JsonResponse({'ok': False, 'error': _MSG_PREPARADO_CENTRAL}, status=409)
-
+    # OJO: NO se bloquea por `estado_logistica_canal` (LISTO_ENVIO/LISTO_RETIRO).
+    # Ver `_listo_envio_en_canal`: ese estado lo pone el marketplace y no implica
+    # que el producto esté sacado — bloquear acá dejaba pedidos reales sin guía.
     resultado = _registrar_guia_preparacion(pedido, request.user)
     return JsonResponse({'ok': True, **resultado})
 
@@ -2931,10 +2929,11 @@ def api_imprimir_guias_sucursal(request):
         # los cierra la sincronización — imprimirles guía sería picking basura.
         .exclude(estado_canal__in=list(ESTADOS_CANAL_CANCELADOS)
                  + list(ESTADOS_CANAL_DESPACHADOS) + ['PENDIENTE'])
-        # Idem los que la CENTRAL ya despachó o dejó listos: el estado logístico
-        # de AllConnected avanza solo, sin tocar `estado` (por eso se mira aparte).
-        .exclude(estado_logistica_canal__in=list(ESTADOS_CANAL_DESPACHADOS)
-                 + list(ESTADOS_CANAL_LISTO_CENTRAL))
+        # Idem los que YA SALIERON según el estado logístico de AllConnected (ese
+        # campo avanza solo, sin tocar `estado`). NO se excluye LISTO_ENVIO /
+        # LISTO_RETIRO: el marketplace los marca por su cuenta y el producto
+        # igual hay que sacarlo (verificado en prod 06-ago).
+        .exclude(estado_logistica_canal__in=list(ESTADOS_CANAL_DESPACHADOS))
         .order_by('fecha_recepcion')  # los más antiguos primero
     )
     if not incluir_reimpresiones:

@@ -9,8 +9,9 @@ de picking de la tienda (había uno de 44 días con tracking).
 Cubre:
 - el sync cierra como FACTURADO_EXTERNO lo que viene `despachado` (por
   cualquiera de los dos campos de AC);
-- LISTO_ENVIO/LISTO_RETIRO NO se cierra pero cuenta como "preparado en central"
-  y sale del flujo de picking (no se le imprime guía, ni individual ni masiva);
+- LISTO_ENVIO/LISTO_RETIRO NO se cierra y es solo INFORMATIVO: la tienda igual
+  imprime la guía (individual y masiva). Se probó bloquearlo y fue un error —
+  ver `test_guia_SI_se_imprime_con_listo_envio`;
 - la facturación se bloquea por el estado logístico despachado;
 - `confirmar_tickets_en_allconnected` (contrato defensivo del cliente HTTP).
 
@@ -27,7 +28,7 @@ from app.models import ModuloSistema, OpcionMenu, PedidoEcommerce, PermisoRol
 from app.services import allconnected_pedidos_service as ac_service
 from app.views_ecommerce import (
     _bloqueo_por_estado_canal,
-    _preparado_en_central,
+    _listo_envio_en_canal,
     api_imprimir_guia_preparacion,
     api_imprimir_guias_sucursal,
 )
@@ -99,7 +100,7 @@ class SyncEstadoLogisticaTest(TestCase):
         p.refresh_from_db()
         self.assertEqual(p.estado, 'PENDIENTE', 'aún no salió: no se cierra')
         self.assertEqual(p.estado_logistica_canal, 'LISTO_ENVIO')
-        self.assertTrue(_preparado_en_central(p))
+        self.assertTrue(_listo_envio_en_canal(p))
 
     def test_preparando_sigue_siendo_trabajo(self):
         p = self._pedido('P-1')
@@ -108,7 +109,7 @@ class SyncEstadoLogisticaTest(TestCase):
         self.assertEqual(res['listos_central'], 0)
         p.refresh_from_db()
         self.assertEqual(p.estado, 'PENDIENTE')
-        self.assertFalse(_preparado_en_central(p))
+        self.assertFalse(_listo_envio_en_canal(p))
 
 
 class BloqueosPorEstadoLogisticoTest(TestCase):
@@ -144,22 +145,30 @@ class BloqueosPorEstadoLogisticoTest(TestCase):
         self.assertIn('ENVIADO', msg)
 
     def test_facturar_no_se_bloquea_por_listo_envio(self):
-        """Preparado en central pero sin salir: boletearlo puede corresponder."""
+        """LISTO_ENVIO nunca bloqueó la facturación (y sigue sin hacerlo)."""
         self.pedido.estado_logistica_canal = 'LISTO_ENVIO'
         self.pedido.save(update_fields=['estado_logistica_canal'])
         self.assertIsNone(_bloqueo_por_estado_canal(self.pedido))
 
-    def test_guia_bloqueada_si_lo_preparo_la_central(self):
+    def test_guia_SI_se_imprime_con_listo_envio(self):
+        """REGRESIÓN (06-ago): LISTO_ENVIO NO puede bloquear la guía.
+
+        Se creyó que ese estado significaba "lo preparó la central", pero en prod
+        los pedidos de Paris llegan con LISTO_ENVIO sin tracking y con la bitácora
+        solo en 'En Preparacion': el producto sigue sin sacarse. Bloquear la guía
+        dejó pedidos reales sin poder prepararse en tienda.
+        """
         self.pedido.estado_logistica_canal = 'LISTO_ENVIO'
         self.pedido.save(update_fields=['estado_logistica_canal'])
         response = self._guia()
-        self.assertEqual(response.status_code, 409)
-        self.assertIn('central', json.loads(response.content)['error'])
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(json.loads(response.content)['ok'])
 
     def test_guia_ok_sin_estado_logistico(self):
         self.assertEqual(self._guia().status_code, 200)
 
-    def test_masiva_excluye_los_preparados_en_central(self):
+    def test_masiva_INCLUYE_los_listo_envio(self):
+        """Misma regresión, del lado de la impresión masiva por sucursal."""
         self.pedido.estado_logistica_canal = 'LISTO_RETIRO'
         self.pedido.save(update_fields=['estado_logistica_canal'])
         request = RequestFactory().post('/app/ecommerce/pedidos/imprimir-guias-sucursal/',
@@ -168,6 +177,17 @@ class BloqueosPorEstadoLogisticoTest(TestCase):
         request.session = {'idSucursalActual': self.sucursal.id}
         response = api_imprimir_guias_sucursal(request)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(json.loads(response.content)['total'], 1)
+
+    def test_masiva_excluye_los_ya_despachados(self):
+        """Lo que SÍ debe excluirse: los que el canal reporta ya enviados."""
+        self.pedido.estado_logistica_canal = 'ENVIADO'
+        self.pedido.save(update_fields=['estado_logistica_canal'])
+        request = RequestFactory().post('/app/ecommerce/pedidos/imprimir-guias-sucursal/',
+                                        data='{}', content_type='application/json')
+        request.user = self.user
+        request.session = {'idSucursalActual': self.sucursal.id}
+        response = api_imprimir_guias_sucursal(request)
         self.assertEqual(json.loads(response.content)['total'], 0)
 
 

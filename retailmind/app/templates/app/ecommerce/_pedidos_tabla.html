@@ -84,7 +84,7 @@
                   <br><span class="badge-sin-pago" title="AllConnected reporta el pedido SIN PAGO confirmado: no imprimir guía ni facturar hasta que el canal lo confirme (se actualiza con Traer pedidos)"><i class="bi bi-cash-coin me-1"></i>Sin pago canal</span>
                 {% endif %}
                 {% if p.estado_logistica_canal == 'LISTO_ENVIO' or p.estado_logistica_canal == 'LISTO_RETIRO' %}
-                  <br><span class="badge-central" title="AllConnected lo reporta preparado en la CENTRAL, esperando courier o retiro del cliente: no es trabajo de picking de tienda"><i class="bi bi-box2-heart me-1"></i>Preparado en central</span>
+                  <br><span class="badge-central" title="Estado logístico que reporta el canal (informativo). OJO: Paris lo marca por su cuenta y NO significa que el producto esté sacado — igual hay que prepararlo."><i class="bi bi-truck me-1"></i>Canal: listo p/envío</span>
                 {% endif %}
                 {% if p.sub_estado == 'SIN_STOCK' and not p.sin_stock_avisado_ac %}
                   {# El aviso a AllConnected falló: el pedido está marcado acá pero central NO lo sabe. #}

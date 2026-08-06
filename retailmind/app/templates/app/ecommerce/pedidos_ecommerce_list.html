@@ -800,7 +800,7 @@ function traerPedidos(){
           sync += `<br><small class="text-info"><b>${se.cerrados_despachados}</b> ya despachado(s) por el canal → cerrados como facturados por concepto.</small>`;
         }
         if (se.listos_central) {
-          sync += `<br><small class="text-secondary"><b>${se.listos_central}</b> ya preparado(s) en la central (esperan courier/retiro): no son trabajo de tienda.</small>`;
+          sync += `<br><small class="text-secondary"><b>${se.listos_central}</b> marcado(s) por el canal como listos para envío (informativo: igual hay que prepararlos).</small>`;
         }
         if (se.sin_pago) {
           sync += `<br><small class="text-warning"><b>${se.sin_pago}</b> sin pago confirmado en el canal (bloqueados para facturar).</small>`;
