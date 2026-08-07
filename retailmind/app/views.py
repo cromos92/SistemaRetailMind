@@ -31202,6 +31202,19 @@ def anular_factura_dte(request):
                     dte.estado_dte = 'ANULADO'
                     dte.save(update_fields=['estado_dte'])
 
+                # El cupón nominativo vuelve al cliente: esta venta se acreditó
+                # por completo. Va SOLO en la rama de anulación total (una NC
+                # parcial no devuelve el beneficio: la venta sigue viva por el
+                # resto). Best-effort: no puede tumbar la emisión de la NC.
+                try:
+                    from .views_modulo_ventas import _liberar_cupon_de_venta
+                    for _tk in Ticket.objects.filter(folio_dte=dte.numero_documento):
+                        _liberar_cupon_de_venta(
+                            _tk, f'NC total #{nc.numero_documento} sobre DTE #{dte.numero_documento}')
+                except Exception:
+                    logger.exception(
+                        "Error al liberar cupón por NC total dte=%s", dte.numero_documento)
+
     # 6. Construir datos para TXT NC
     from collections import defaultdict
     iva_calculado = int(nc.monto_con_iva - nc.monto_neto)

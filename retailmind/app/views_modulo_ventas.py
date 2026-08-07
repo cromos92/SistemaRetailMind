@@ -2089,6 +2089,35 @@ def validar_rut_cliente(request):
     })
 
 
+def _liberar_cupon_de_venta(ticket, motivo):
+    """
+    Devuelve al cliente el cupón que consumió una venta que se anuló.
+
+    Existe como helper porque hay CUATRO rutas que dejan una venta sin efecto y
+    cada una llegó por su lado: `anular_ticket_pendiente` —la única que llamaba a
+    `liberar_cupon`, y que exige estado PENDIENTE, en el cual jamás hay un cupón
+    canjeado (el canje ocurre recién al pasar a PAGADO), o sea que la reversa era
+    código inalcanzable—, `anular_documento_venta`, `eliminar_documento_venta`
+    (la anulación desde cuadratura) y `anular_factura_dte` (la que emite la NC).
+
+    Sin esto el cupón queda CANJEADO sobre una venta que ya no existe y, con una
+    campaña de límite UNICO, el cliente no puede recibir otro nunca más.
+
+    Best-effort e idempotente: nunca lanza (corre dentro de flujos de anulación
+    que no debe tumbar) y re-anular no libera dos veces. Un cupón que venció
+    mientras tanto queda EXPIRADO, no se le regala vigencia extra.
+    """
+    if ticket is None:
+        return 0
+    try:
+        from .services import cupon_service
+        return cupon_service.liberar_cupon(ticket, motivo=motivo)
+    except Exception:
+        logger.exception(
+            "Error al liberar cupón ticket=%s", getattr(ticket, 'correlativo', None))
+        return 0
+
+
 @login_required
 @require_POST
 @csrf_exempt
@@ -2224,13 +2253,8 @@ def anular_ticket_pendiente(request):
             except Exception:
                 logger.exception("Error al reversar gift cards ticket=%s", ticket.correlativo)
             # El cupón vuelve a estar disponible para el cliente: si la venta se
-            # anuló, el beneficio no se consumió. Un cupón que venció mientras
-            # tanto queda EXPIRADO (no se le regala vigencia extra).
-            try:
-                from .services import cupon_service
-                cupon_service.liberar_cupon(ticket, motivo=f'anulación: {motivo}')
-            except Exception:
-                logger.exception("Error al liberar cupón ticket=%s", ticket.correlativo)
+            # anuló, el beneficio no se consumió.
+            _liberar_cupon_de_venta(ticket, f'anulación: {motivo}')
 
         return JsonResponse({
             'success': True,
@@ -2726,6 +2750,13 @@ def construir_ticket_data(ticket):
             'items': total_items,
             'subtotal': subtotal,
             'descuento': ticket.descuento or 0,
+            # Descuentos de cabecera: no están en ninguna línea, se aplican al
+            # total al cobrar. Sin exponerlos, el comprobante térmico imprime un
+            # TOTAL más bajo que la suma de sus propias líneas y sin ninguna
+            # glosa que lo explique — el cliente reclama y el cajero no tiene qué
+            # mostrarle.
+            'descuento_cupon': ticket.descuento_cupon or 0,
+            'descuento_fidelizacion': ticket.descuento_fidelizacion or 0,
             'total': ticket.total
         }
     }
@@ -2975,14 +3006,26 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
     )
     total_real_lineas = suma_items_brutos - descuento_real_lineas
 
+    # Descuentos de CABECERA: no viven en ninguna línea del ticket, se aplican
+    # sobre el total al cobrar (ver registrar_pagos_ticket). Son excluyentes
+    # entre sí por regla de negocio, pero se suman igual para que agregar un
+    # tercero no vuelva a romper esta función.
+    #   - descuento_fidelizacion → vale de puntos
+    #   - descuento_cupon        → cupón nominativo
+    # Omitir uno acá tiene tres consecuencias encadenadas, todas de plata: falsa
+    # alarma de desfase, `ticket.total` reescrito al bruto en la BD, y el DTE
+    # emitido por más de lo que el cliente pagó.
+    descuento_vale = int(ticket.descuento_fidelizacion or 0)
+    descuento_cupon = int(getattr(ticket, 'descuento_cupon', None) or 0)
+    descuentos_cabecera = descuento_vale + descuento_cupon
+
     # Si ticket.total está sincronizado con las líneas, lo respetamos. Si no,
     # usamos el cálculo autoritativo basado en las líneas (y logeamos el desfase
     # para diagnosticar flujos mal cerrados). Esta comparación es en base a las
-    # líneas de producto (bruto - descuento de línea), sin el vale de
-    # fidelización, que se resta aparte más abajo — comparar contra
-    # ticket.total (que sí ya tiene el vale restado, ver registrar_pagos_ticket)
-    # generaría una falsa alarma de desfase en cada venta pagada con vale.
-    ticket_total_guardado = int(ticket.total or 0) + int(ticket.descuento_fidelizacion or 0)
+    # líneas de producto (bruto - descuento de línea), sumando de vuelta los
+    # descuentos de cabecera — ticket.total ya los tiene restados, así que sin
+    # eso habría una falsa alarma de desfase en cada venta con vale o cupón.
+    ticket_total_guardado = int(ticket.total or 0) + descuentos_cabecera
     if ticket_total_guardado != total_real_lineas and total_real_lineas > 0:
         logger.warning(
             "Desfase ticket.total vs suma de lineas. ticket_id=%s, total_guardado=%s, "
@@ -2992,22 +3035,21 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
             total_real_lineas,
         )
         # Reconciliar también en DB para que el resto del flujo (resumen, cuadratura) use el valor correcto.
-        ticket.total = total_real_lineas - int(ticket.descuento_fidelizacion or 0)
+        ticket.total = total_real_lineas - descuentos_cabecera
         ticket.descuento = descuento_real_lineas
         if hasattr(ticket, 'subTotal'):
             ticket.subTotal = suma_items_brutos
         ticket.save(update_fields=['total', 'descuento', 'subTotal'] if hasattr(ticket, 'subTotal') else ['total', 'descuento'])
 
-    # El DTE debe reflejar lo efectivamente cobrado: si parte del ticket se
-    # pagó con vale de fidelización (ticket.descuento_fidelizacion), ese monto
-    # nunca llegó como pago en efectivo/tarjeta (Dte_Detalle_Pago), así que se
-    # resta acá igual que el descuento por línea — si no, el DTE queda emitido
-    # por un monto mayor a la suma real de Dte_Detalle_Pago.
-    descuento_vale = int(ticket.descuento_fidelizacion or 0)
-    total_dte = total_real_lineas - descuento_vale
+    # El DTE debe reflejar lo efectivamente cobrado: la parte pagada con vale de
+    # puntos o rebajada por un cupón nunca llegó como pago en efectivo/tarjeta
+    # (Dte_Detalle_Pago), así que se resta acá igual que el descuento por línea.
+    # Si no, el DTE queda emitido por un monto mayor a la suma real de sus
+    # propios Dte_Detalle_Pago — y se declara IVA de plata que no entró.
+    total_dte = total_real_lineas - descuentos_cabecera
 
     total_con_iva = Decimal(total_dte)
-    descuento = Decimal(descuento_real_lineas + descuento_vale)
+    descuento = Decimal(descuento_real_lineas + descuentos_cabecera)
 
     # Descomponer el total para obtener neto e IVA
     # Total = Neto + IVA, donde IVA = Neto * 0.19
@@ -3451,29 +3493,56 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
             )
             descuento_efectivo = descuento_items  # solo líneas; no arrastrar stale
 
-            if descuento_efectivo > 0:
-                # Boleta (39/41): DscRcgGlobal en monto IVA-inclusive — la sección
-                # tabla 4 va DESPUÉS de las observaciones (formato Acepta oficial).
-                # Factura (33/34): DscRcgGlobal en monto NETO — tabla 3, antes de
-                # referencias. El monto_item de cada línea usa precio completo neto
-                # para que sum(items) - dcto_neto = monto_neto del header.
+            # Boleta (39/41): DscRcgGlobal en monto IVA-inclusive — la sección
+            # tabla 4 va DESPUÉS de las observaciones (formato Acepta oficial).
+            # Factura (33/34): DscRcgGlobal en monto NETO — tabla 3, antes de
+            # referencias. El monto_item de cada línea usa precio completo neto
+            # para que sum(items) - dcto_neto = monto_neto del header.
+            def _valor_dr(monto_bruto):
                 if es_boleta:
-                    valor_dr = descuento_efectivo  # IVA-inclusive
-                else:
-                    valor_dr = int(round(Decimal(descuento_efectivo) / Decimal('1.19')))  # neto
+                    return int(monto_bruto)  # IVA-inclusive
+                return int(round(Decimal(monto_bruto) / Decimal('1.19')))  # neto
 
-                datos_txt['descuentos_recargos'] = [{
+            # Los descuentos de CABECERA (vale de puntos, cupón nominativo) ya
+            # están restados del header (`total`/`neto`), pero el detalle va a
+            # precio completo: si no se declaran también como DscRcgGlobal, el
+            # documento queda con sum(detalle) != MntTotal y Acepta lo timbra por
+            # el monto bruto — se declara IVA de plata que nunca se cobró y la
+            # boleta que se lleva el cliente dice más de lo que pagó.
+            descuentos_recargos_txt = []
+            if descuento_efectivo > 0:
+                descuentos_recargos_txt.append({
                     'tpo_mov': 'D',
                     'glosa_dr': 'Descuento',
                     'tpo_valor': '$',
-                    'valor_dr': valor_dr,
-                }]
+                    'valor_dr': _valor_dr(descuento_efectivo),
+                })
+            if descuento_vale > 0:
+                descuentos_recargos_txt.append({
+                    'tpo_mov': 'D',
+                    'glosa_dr': 'Descuento Puntos Fidelizacion',
+                    'tpo_valor': '$',
+                    'valor_dr': _valor_dr(descuento_vale),
+                })
+            if descuento_cupon > 0:
+                descuentos_recargos_txt.append({
+                    'tpo_mov': 'D',
+                    'glosa_dr': 'Descuento Cupon',
+                    'tpo_valor': '$',
+                    'valor_dr': _valor_dr(descuento_cupon),
+                })
+
+            if descuentos_recargos_txt:
+                datos_txt['descuentos_recargos'] = descuentos_recargos_txt
                 logger.debug(
-                    "TXT %s con descuento global: ticket_id=%s, descuento_efectivo=%s, valor_dr=%s, tipo_valor=%s",
+                    "TXT %s con descuento global: ticket_id=%s, lineas=%s, vale=%s, "
+                    "cupon=%s, glosas=%s, tipo_valor=%s",
                     'Boleta' if es_boleta else 'Factura',
                     ticket.id,
                     descuento_efectivo,
-                    valor_dr,
+                    descuento_vale,
+                    descuento_cupon,
+                    [d['glosa_dr'] for d in descuentos_recargos_txt],
                     'IVA-incl' if es_boleta else 'neto',
                 )
                 # monto_total ya es correcto (int(total) = ticket.total = monto
@@ -6407,8 +6476,17 @@ def anular_documento_venta(request):
                 # Anular ticket
                 documento.estado = 'ANULADO'
                 documento.save()
-                
+
+                # El cupón vuelve al cliente: la venta que lo consumió ya no existe.
+                _liberar_cupon_de_venta(documento, 'anulación de documento de venta')
+
                 # Devolver stock si estaba pagado
+                # ⚠️ RAMA MUERTA (bug pre-existente, NO corregido acá A PROPÓSITO):
+                # el estado se pisa con 'ANULADO' tres líneas más arriba, así que
+                # esta condición nunca es True y este endpoint jamás devolvió
+                # stock. Habilitarla cambia el inventario de forma retroactiva y
+                # exige verificar antes que no duplique con las otras rutas de
+                # anulación (eliminar_documento_venta / anular_factura_dte).
                 if documento.estado == 'PAGADO':
                     for tp in documento.ticket_productos.all():
                         if tp.ProductoTalla is None:
@@ -6612,6 +6690,11 @@ def eliminar_documento_venta(request):
                 if ticket_vinculado.estado != 'ANULADO':
                     ticket_vinculado.estado = 'ANULADO'
                     ticket_vinculado.save(update_fields=['estado'])
+                    # El cupón vuelve al cliente. Va dentro del `if` para que
+                    # eliminar dos veces el mismo documento no toque un cupón que
+                    # el cliente ya volvió a usar en otra venta.
+                    _liberar_cupon_de_venta(
+                        ticket_vinculado, 'eliminación de documento desde cuadratura')
             else:
                 # Caso 2: DTE sin ticket vinculado (factura emitida directa,
                 # NC, etc.). Devolvemos por Dte_Productos.

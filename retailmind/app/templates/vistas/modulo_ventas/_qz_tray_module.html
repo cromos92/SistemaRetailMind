@@ -296,10 +296,17 @@ function _generarEscPosVenta(td) {
     const descuento = tot.descuento || td.descuento || 0;
     const total     = tot.total     || td.total     || 0;
     const iva       = Math.round(total - total/1.19);
+    // Descuentos de cabecera (cupón nominativo / vale de puntos): no están en
+    // las líneas ni en `descuento`, pero SÍ están restados del total. Sin
+    // imprimirlos, el comprobante muestra un TOTAL que no cuadra con nada.
+    const dctoCupon = tot.descuento_cupon         || td.descuento_cupon         || 0;
+    const dctoPtos  = tot.descuento_fidelizacion  || td.descuento_fidelizacion  || 0;
 
-    if (descuento > 0) {
+    if (descuento > 0 || dctoCupon > 0 || dctoPtos > 0) {
         c.push(_col2('Subtotal s/desc:', _clp(subtotal)));
-        c.push(_col2('Descuento:', '-'+_clp(descuento)));
+        if (descuento > 0) c.push(_col2('Descuento:', '-'+_clp(descuento)));
+        if (dctoCupon > 0) c.push(_col2('Desc. Cupon:', '-'+_clp(dctoCupon)));
+        if (dctoPtos  > 0) c.push(_col2('Desc. Puntos:', '-'+_clp(dctoPtos)));
         c.push(_sep('-'));
     }
     c.push(_col2('IVA incluido (19%):', _clp(iva), 14));

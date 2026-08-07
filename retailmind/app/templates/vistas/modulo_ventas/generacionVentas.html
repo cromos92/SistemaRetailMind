@@ -718,6 +718,13 @@
                                                     <span class="pos-mini-label text-warning"><i class="ri-price-tag-3-line"></i> Dcto.</span>
                                                     <strong class="text-warning" id="descuento">-$0</strong>
                                                 </div>
+                                                <!-- Cupón / vale de puntos: el beneficio se resta al total en el
+                                                     backend, así que sin esta línea el cajero ve bajar el total
+                                                     sin saber por qué. -->
+                                                <div class="pos-resumen-mini-cell" id="lineaBeneficio" style="display: none;">
+                                                    <span class="pos-mini-label" id="beneficioLabel"><i class="ri-coupon-3-line"></i> Cupón</span>
+                                                    <strong id="beneficioMonto" style="color:#405189">-$0</strong>
+                                                </div>
                                                 <div class="pos-resumen-mini-cell">
                                                     <span class="pos-mini-label">Total</span>
                                                     <strong class="text-primary" id="total">$0</strong>
@@ -7376,8 +7383,27 @@ document.addEventListener('DOMContentLoaded', function() {
         guardarEstadoPOS();
     }
 
+    // ── Total neto a cobrar: ÚNICO punto de verdad del checkout ──────────────
+    // El cupón y el vale de puntos rebajan el total EN EL BACKEND (al cobrar),
+    // así que `ticketActual.totales.total` siempre viene BRUTO. Las tres
+    // funciones que deciden cuánto cobrar tienen que restarlo o el cajero queda
+    // atrapado: cobrar el monto correcto se rechaza con "Pago Incompleto", y el
+    // atajo de monto exacto (F4) cobra de más justo el valor del beneficio —
+    // exceso que el servidor acepta en silencio (su guard sólo rechaza pagos
+    // INSUFICIENTES), dejando la caja con un sobrante sin explicación.
+    // Son excluyentes entre sí, pero se suman igual por robustez.
+    function descuentoBeneficioActual() {
+        return ((cuponActual && cuponActual.descuento_pesos) || 0) +
+               ((valeCanjeActual && valeCanjeActual.valor_pesos) || 0);
+    }
+
+    function totalNetoACobrar() {
+        const bruto = (ticketActual && ticketActual.totales && ticketActual.totales.total) || 0;
+        return Math.max(0, bruto - descuentoBeneficioActual());
+    }
+
     function validarPagos() {
-        const total = ticketActual?.totales?.total || 0;
+        const total = totalNetoACobrar();
         const totalPagado = pagosActuales.reduce((sum, pago) => sum + (pago.monto || 0), 0);
         const saldo = total - totalPagado;
 
@@ -7451,14 +7477,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const totales = ticketActual.totales || {};
         const totalPagado = pagosActuales.reduce((sum, pago) => sum + (pago.monto || 0), 0);
 
-        // El cupón y el vale de puntos rebajan el total EN EL BACKEND, así que
-        // el saldo a cobrar debe reflejarlos acá o el cajero cobra de más: el
-        // guard del servidor sólo exige pagado >= total y no detecta el exceso.
-        // Son excluyentes entre sí, pero se suman igual por robustez.
-        const descuentoBeneficio =
-            ((cuponActual && cuponActual.descuento_pesos) || 0) +
-            ((valeCanjeActual && valeCanjeActual.valor_pesos) || 0);
-        const totalNeto = Math.max(0, (totales.total || 0) - descuentoBeneficio);
+        // Mismo cálculo que usan validarPagos() y calcularSaldoPendiente(): lo
+        // que se muestra y lo que se cobra tienen que salir de la misma función.
+        const descuentoBeneficio = descuentoBeneficioActual();
+        const totalNeto = totalNetoACobrar();
         const saldo = totalNeto - totalPagado;
 
         document.getElementById('totalItems').textContent = totales.items || 0;
@@ -7478,6 +7500,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 `Se quitó el código ${cod}: no se puede combinar con un descuento manual.`,
                 'warning'
             );
+        }
+
+        // Línea del beneficio (cupón o vale de puntos). El total que se muestra
+        // ya viene rebajado, así que sin esta línea el cajero no tiene forma de
+        // explicarle al cliente de dónde salió la diferencia.
+        const lineaBeneficio = document.getElementById('lineaBeneficio');
+        if (lineaBeneficio) {
+            if (descuentoBeneficio > 0) {
+                lineaBeneficio.style.display = '';
+                const labelEl = document.getElementById('beneficioLabel');
+                const montoEl = document.getElementById('beneficioMonto');
+                if (labelEl) {
+                    labelEl.innerHTML = cuponActual
+                        ? '<i class="ri-coupon-3-line"></i> Cupón'
+                        : '<i class="ri-gift-line"></i> Puntos';
+                }
+                if (montoEl) montoEl.textContent = '-' + formatearMoneda(descuentoBeneficio);
+            } else {
+                lineaBeneficio.style.display = 'none';
+            }
         }
 
         // Mostrar/ocultar línea de descuento con detalle
@@ -7522,7 +7564,13 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!alertaExceso) {
                 alertaExceso = document.createElement('div');
                 alertaExceso.id = 'alertaPagosExceden';
-                const resumenCard = saldoElement.closest('.card-body');
+                // `saldoElement` nunca existió: leer un identificador no
+                // declarado lanza ReferenceError (no undefined), y la excepción
+                // abortaba actualizarResumenVenta() justo acá — se perdía el
+                // aviso de exceso, el toast de F4, el guardado del borrador y el
+                // cierre del modal de pago.
+                const saldoElement = document.getElementById('saldo');
+                const resumenCard = saldoElement && saldoElement.closest('.card-body');
                 if (resumenCard) resumenCard.appendChild(alertaExceso);
             }
             alertaExceso.className = 'alert alert-danger py-1 px-2 mt-2 mb-0 border-danger';
@@ -7544,7 +7592,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function calcularSaldoPendiente() {
         if (!ticketActual) return 0;
-        const total = ticketActual.totales?.total || 0;
+        // Neto, no bruto: alimenta F4 "Pago Rápido", "monto exacto" y el tope de
+        // confirmarPago(). Con el total bruto, esos tres atajos cobran de más
+        // exactamente el valor del cupón/vale.
+        const total = totalNetoACobrar();
         const pagado = pagosActuales.reduce((sum, pago) => sum + (pago.monto || 0), 0);
         return Math.max(0, total - pagado);
     }
