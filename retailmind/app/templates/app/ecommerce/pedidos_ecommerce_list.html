@@ -260,9 +260,15 @@
           <i class="bi bi-cloud-download me-1"></i>Traer pedidos
         </button>
         {% if sucursal_sesion_obj %}
+        {# PDF por defecto: funciona en cualquier navegador. QZ queda al lado
+           para las cajas donde ya está configurado (imprime de un clic). #}
+        <button class="btn btn-light btn-sm fw-bold" id="btn-guias-pdf-suc" onclick="abrirGuiasPdfSucursal()"
+                title="Abre en PDF (80mm) la guía de preparación de TODOS los pedidos por preparar de tu sucursal">
+          <i class="bi bi-file-earmark-pdf me-1"></i>Guías de mi sucursal
+        </button>
         <button class="btn btn-outline-light btn-sm" id="btn-imprimir-guias-suc" onclick="imprimirGuiasSucursal()"
-                title="Imprime la guía de preparación de TODOS los pedidos por preparar de tu sucursal (los que aún no tienen guía impresa)">
-          <i class="bi bi-printer-fill me-1"></i>Imprimir guías de mi sucursal
+                title="Impresión directa por QZ Tray (sin diálogo). Requiere QZ configurado en esta sucursal.">
+          <i class="bi bi-printer-fill"></i>
         </button>
         {% endif %}
         {% if sucursal_sesion_obj %}
@@ -521,8 +527,8 @@
       <i class="bi bi-receipt me-1"></i>Facturar
     </button>
     <button class="btn btn-outline-light btn-sm" id="btn-imprimir-guias" onclick="imprimirGuiasSeleccionadas()"
-            title="Imprimir guías de preparación de los seleccionados (marca En Preparación)">
-      <i class="bi bi-printer me-1"></i>Guías
+            title="Impresión directa por QZ Tray de los seleccionados (marca En Preparación)">
+      <i class="bi bi-printer me-1"></i>Guías QZ
     </button>
     <button class="btn-distribuir" onclick="abrirDistribucion()">
       <i class="bi bi-diagram-3 me-1"></i>Distribuir
@@ -702,6 +708,32 @@
         <button class="btn btn-sm fw-bold" style="background:#7c3aed;color:#fff;" onclick="ejecutarReasignacion()">
           <i class="bi bi-check-lg me-1"></i>Reasignar
         </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     VISOR DE LA GUÍA EN PDF (80mm) — mismo enfoque que AllConnected
+     ═══════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modal-guia-pdf" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header" style="background:#1e293b;color:#fff;">
+        <h5 class="modal-title"><i class="bi bi-file-earmark-pdf me-2"></i><span id="modal-guia-pdf-titulo">Guía de preparación</span></h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0" style="background:#334155;">
+        <iframe id="visor-guia-pdf" src="about:blank" style="width:100%;height:70vh;border:0;"></iframe>
+      </div>
+      <div class="modal-footer justify-content-between">
+        <small class="text-muted">Papel térmico 80mm · el pedido queda en <strong>En Preparación</strong></small>
+        <div>
+          <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+          <button class="btn btn-dark btn-sm fw-bold" onclick="imprimirVisorPdf()">
+            <i class="bi bi-printer me-1"></i>Imprimir
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -1686,6 +1718,63 @@ function marcarListoDespacho(pedidoId, btn){
     else { alert('Error: ' + (data.error || 'no se pudo cambiar el sub-estado')); if(btn) btn.disabled = false; }
   })
   .catch(err => { alert('Error de conexión: ' + err); if(btn) btn.disabled = false; });
+}
+
+/* ─────────────────────────────────────────────────────
+   Guía de preparación en PDF (80mm) — no requiere QZ Tray
+   Se abre en un visor con botón Imprimir, igual que en
+   AllConnected, para que el papel salga siempre igual.
+   ───────────────────────────────────────────────────── */
+function _visorPdf(url, titulo){
+  const iframe = document.getElementById('visor-guia-pdf');
+  const modalEl = document.getElementById('modal-guia-pdf');
+  document.getElementById('modal-guia-pdf-titulo').textContent = titulo || 'Guía de preparación';
+  iframe.src = url;
+  const modal = new bootstrap.Modal(modalEl);
+  modal.show();
+  // Al cerrar se libera el object URL (si no, el blob queda en memoria).
+  modalEl.addEventListener('hidden.bs.modal', function _limpiar(){
+    if (iframe.src.startsWith('blob:')) URL.revokeObjectURL(iframe.src);
+    iframe.src = 'about:blank';
+    modalEl.removeEventListener('hidden.bs.modal', _limpiar);
+    aplicarFiltros(_pagina, true);   // refresca sub-estados (pasaron a En Preparación)
+  });
+}
+
+function imprimirVisorPdf(){
+  const iframe = document.getElementById('visor-guia-pdf');
+  try {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+  } catch(e) {
+    alert('Si no se abrió el diálogo de impresión, usá el botón de imprimir del visor.');
+  }
+}
+
+async function _pedirPdf(url, titulo){
+  const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  try {
+    const r = await fetch(url, { method: 'POST', headers: { 'X-CSRFToken': csrfToken } });
+    if (!r.ok) {
+      // El backend responde JSON cuando rechaza (409/404): mostrar el motivo.
+      let msg = 'No se pudo generar la guía.';
+      try { const j = await r.json(); msg = j.error || msg; } catch(e) {}
+      alert(msg);
+      return;
+    }
+    const blob = await r.blob();
+    _visorPdf(URL.createObjectURL(blob), titulo);
+  } catch(e) {
+    alert('Error de conexión: ' + e);
+  }
+}
+
+function abrirGuiaPdf(pedidoId){
+  _pedirPdf(`/app/ecommerce/pedidos/${pedidoId}/guia-pdf/`, 'Guía de preparación');
+}
+
+function abrirGuiasPdfSucursal(){
+  _pedirPdf("{% url 'api_guias_pdf_sucursal' %}", 'Guías de mi sucursal');
 }
 
 /* ─────────────────────────────────────────────────────

@@ -801,6 +801,40 @@ LIMITE_CUPON_CLIENTE_CHOICES = [
     ('SIN_LIMITE', 'Sin límite'),
 ]
 
+ORIGEN_CUPON_CHOICES = [
+    ('EMITIDO', 'Emitido al cliente'),
+    ('PUBLICO', 'Canje de código público'),
+]
+
+# Alfabeto permitido en un código público. Sin espacios ni símbolos: el cajero
+# lo teclea a mano y el cliente lo dicta por teléfono. Se admiten letras y
+# dígitos para que el nombre de la campaña quepa dentro del código.
+_CODIGO_PUBLICO_PERMITIDO = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-'
+
+
+def normalizar_codigo_publico(valor):
+    """
+    Normaliza un código público tecleado a mano: MAYÚSCULAS, sin espacios ni
+    acentos, y sólo caracteres del alfabeto permitido.
+
+    Devuelve `None` cuando queda vacío — NO cadena vacía. `codigo_publico` es
+    `unique`, y en Postgres dos NULL no colisionan pero dos `''` sí: guardar la
+    cadena vacía haría que la segunda campaña nominativa reventara con
+    IntegrityError.
+    """
+    import unicodedata
+
+    bruto = (valor or '').strip().upper()
+    if not bruto:
+        return None
+    # 'GISÉ' -> 'GISE' (el cajero no va a tipear tildes en un código)
+    bruto = ''.join(
+        c for c in unicodedata.normalize('NFD', bruto)
+        if unicodedata.category(c) != 'Mn'
+    )
+    limpio = ''.join(c for c in bruto if c in _CODIGO_PUBLICO_PERMITIDO)
+    return limpio or None
+
 
 def calcular_descuento_cupon(tipo_valor, valor, tope_descuento, monto):
     """
@@ -836,6 +870,25 @@ class CampanaCupon(models.Model):
 
     nombre = models.CharField(max_length=80)
     descripcion = models.TextField(blank=True, default='')
+
+    # === Código público (campaña de código único compartido) ===
+    # Si está poblado, la campaña deja de emitir cupones uno por uno: se publica
+    # UN código (ej. "GISE2438") y cualquier cliente lo presenta en caja. El
+    # límite `limite_por_cliente` sigue mandando, así que con UNICO cada RUT lo
+    # usa una sola vez.
+    #
+    # Vacío (None) = campaña NOMINATIVA clásica: se emite desde la ficha y cada
+    # cliente recibe su propio DC-XXXXXXXX. Los dos modos conviven.
+    #
+    # Es `null` y no `''` en el vacío a propósito: con unique=True, dos campañas
+    # nominativas con cadena vacía chocarían entre sí (en Postgres los NULL no
+    # colisionan). Ver `normalizar_codigo_publico`.
+    codigo_publico = models.CharField(
+        max_length=20, unique=True, null=True, blank=True, db_index=True,
+        help_text='Código único que se publica y cualquier cliente presenta en '
+                  'caja (ej. GISE2438). Vacío = campaña nominativa (un código '
+                  'distinto por cliente).',
+    )
 
     # Alcance por empresa (decisión de negocio): un cupón siempre nace atado a
     # una cadena y sólo se canjea en sus sucursales. NO nullable.
@@ -906,6 +959,11 @@ class CampanaCupon(models.Model):
         hoy = timezone.localdate()
         return self.activo and self.fecha_inicio <= hoy <= self.fecha_fin
 
+    @property
+    def es_codigo_publico(self):
+        """¿Esta campaña usa un código único compartido en vez de emitir uno a uno?"""
+        return bool(self.codigo_publico)
+
     def calcular_descuento(self, monto):
         """Preview: cuánto descontaría esta campaña sobre `monto`."""
         return calcular_descuento_cupon(
@@ -936,8 +994,20 @@ class CuponCliente(models.Model):
     rut_cliente = models.CharField(max_length=20, db_index=True)
 
     codigo = models.CharField(
-        max_length=24, unique=True, db_index=True,
+        max_length=32, unique=True, db_index=True,
         help_text='Código de un solo uso que el cliente presenta en caja',
+    )
+
+    # De dónde salió esta fila:
+    #   EMITIDO → se le entregó al cliente por adelantado (flujo nominativo).
+    #   PUBLICO → nació EN EL CANJE, cuando el cliente presentó el código
+    #             compartido de la campaña. La fila ES el registro de ese uso:
+    #             sin ella no habría forma de saber que ese RUT ya lo usó.
+    # En PUBLICO, `codigo` guarda el código realmente consumido
+    # ("GISE2438-XK7M"): el sufijo existe sólo para respetar el unique.
+    origen = models.CharField(
+        max_length=10, choices=ORIGEN_CUPON_CHOICES, default='EMITIDO',
+        db_index=True,
     )
     empresa = models.ForeignKey(
         Empresa, on_delete=models.PROTECT, related_name='cupones_cliente',

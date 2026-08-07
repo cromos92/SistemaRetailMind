@@ -257,7 +257,10 @@ from .fidelizacion import (  # noqa: F401
     CuponCliente,
     TIPO_VALOR_CUPON_CHOICES,
     ESTADO_CUPON_CHOICES,
+    LIMITE_CUPON_CLIENTE_CHOICES,
+    ORIGEN_CUPON_CHOICES,
     calcular_descuento_cupon,
+    normalizar_codigo_publico,
 )
 
 from .cliente_app import (  # noqa: F401

@@ -3509,6 +3509,15 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
             # documento queda con sum(detalle) != MntTotal y Acepta lo timbra por
             # el monto bruto — se declara IVA de plata que nunca se cobró y la
             # boleta que se lleva el cliente dice más de lo que pagó.
+            # En un ticket de cambio la línea sintética "DIFERENCIA DE CAMBIO"
+            # ya vale `ticket.total`, o sea con los descuentos de cabecera YA
+            # restados: declararlos otra vez acá los aplicaría dos veces.
+            # (El cobro además rechaza el cupón en esos tickets; este guard es
+            # la segunda barrera, y cubre los vales heredados.)
+            if es_ticket_cambio:
+                descuento_vale = 0
+                descuento_cupon = 0
+
             descuentos_recargos_txt = []
             if descuento_efectivo > 0:
                 descuentos_recargos_txt.append({
@@ -4339,6 +4348,19 @@ def registrar_pagos_ticket(request, correlativo):
     if _codigo_cupon:
         from .services import cupon_service as _cup_svc
         from .services import fidelizacion_service as _fid_svc
+
+        # Un ticket de cambio/devolución no admite cupón: su total ES la
+        # diferencia a cobrar y el TXT la emite como una única línea sintética
+        # "DIFERENCIA DE CAMBIO" tomada de `ticket.total`. Si además se
+        # declarara el cupón como descuento global, el documento quedaría con
+        # el descuento restado dos veces y Acepta lo rechazaría.
+        if ticket.modulo_origen == 'CAMBIO_DEVOLUCION':
+            return JsonResponse({
+                'success': False,
+                'error': ('Los cupones de descuento no aplican a cambios ni '
+                          'devoluciones, sólo a ventas nuevas.'),
+                'error_tipo': 'CUPON_NO_APLICA',
+            }, status=400)
 
         # Mismo gate que el vale: es beneficio de cliente particular.
         _fideliza_cup, _motivo_cup = _fid_svc.venta_fideliza(
@@ -6518,6 +6540,17 @@ def anular_documento_venta(request):
                 
                 documento.estado_dte = 'ANULADO'
                 documento.save()
+
+                # En "Documentos de Ventas" una boleta del POS se lista como
+                # DTE, así que anularla por acá es el camino natural del
+                # supervisor. El ticket se resuelve ACOTADO POR SUCURSAL:
+                # `folio_dte` no es único entre empresas del holding.
+                ticket_del_dte = Ticket.objects.filter(
+                    sucursal_id=documento.sucursal_id,
+                    folio_dte=documento.numero_documento,
+                ).first()
+                _liberar_cupon_de_venta(
+                    ticket_del_dte, 'anulación de DTE de venta')
 
         return JsonResponse({
             'success': True,

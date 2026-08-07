@@ -35,6 +35,10 @@
     .estado-EXPIRADO  { background:#f8f9fa; color:#6c757d; }
     .estado-ANULADO   { background:#ffe9e5; color:#f06548; }
     .codigo-cupon { font-family:monospace; font-weight:700; letter-spacing:.5px; color:#405189; }
+    /* Código público de la campaña: se lee de lejos porque es lo que se publica */
+    .cupon-codigo-publico { display:inline-block; font-family:monospace; font-weight:700;
+        letter-spacing:1px; font-size:12px; padding:2px 10px; border-radius:8px;
+        background:#eef2ff; color:#405189; border:1px dashed #405189; }
     .seccion-titulo { font-size:14px; font-weight:700; color:#405189; display:flex; align-items:center;
         gap:8px; margin:0 0 12px; padding-bottom:8px; border-bottom:2px solid #e9ecef; }
     .cliente-item { border:1px solid #e9ecef; border-radius:10px; padding:10px 12px; margin-bottom:6px;
@@ -248,6 +252,23 @@
                         <small class="text-muted">El cupón sólo sirve en sucursales de esta empresa.</small>
                     </div>
 
+                    <!-- ===== Modo de la campaña ===== -->
+                    <div class="col-12">
+                        <div class="border rounded p-2" style="background:#f8f9fb;">
+                            <label class="form-label mb-1">
+                                Código público <span class="text-muted small">(opcional)</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="ri-megaphone-line"></i></span>
+                                <input type="text" id="mc-codigo-publico" class="form-control text-uppercase"
+                                       placeholder="Ej: GISE2438 — déjalo vacío para emitir uno por cliente"
+                                       maxlength="20" autocomplete="off"
+                                       oninput="actualizarModoCampana()">
+                            </div>
+                            <div class="small mt-2" id="mc-modo-aviso"></div>
+                        </div>
+                    </div>
+
                     <div class="col-md-4">
                         <label class="form-label">Tipo de descuento</label>
                         <select id="mc-tipo" class="form-select" onchange="actualizarPreviewCampana()">
@@ -287,7 +308,7 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Cupones por cliente</label>
-                        <select id="mc-limite" class="form-select">
+                        <select id="mc-limite" class="form-select" onchange="actualizarModoCampana()">
                             {% for valor, label in limite_choices %}
                             <option value="{{ valor }}">{{ label }}</option>
                             {% endfor %}
@@ -464,6 +485,11 @@ function pintarCampanas() {
         <tr>
             <td>
                 <div class="fw-semibold">${esc(c.nombre)}</div>
+                ${c.es_codigo_publico
+                    ? `<div class="cupon-codigo-publico mt-1" title="Código público: cualquier cliente lo presenta en caja">
+                           <i class="ri-megaphone-line"></i> ${esc(c.codigo_publico)}
+                       </div>`
+                    : ''}
                 ${c.descripcion ? `<small class="text-muted">${esc(c.descripcion)}</small>` : ''}
             </td>
             <td><span class="badge-empresa">${esc(c.empresa)}</span></td>
@@ -487,9 +513,13 @@ function pintarCampanas() {
             </td>
             <td class="text-end text-nowrap">
                 {% if user|puede_crear_en:'fidelizacion_cupones' %}
-                <button class="btn btn-sm btn-outline-success" onclick="abrirModalEmitir(${c.id})" title="Emitir cupón de esta campaña">
-                    <i class="ri-coupon-line"></i>
-                </button>
+                ${c.es_codigo_publico
+                    ? `<button class="btn btn-sm btn-outline-primary" onclick="copiarCodigoPublico('${esc(c.codigo_publico)}')" title="Copiar el código para publicarlo">
+                           <i class="ri-file-copy-line"></i>
+                       </button>`
+                    : `<button class="btn btn-sm btn-outline-success" onclick="abrirModalEmitir(${c.id})" title="Emitir cupón de esta campaña">
+                           <i class="ri-coupon-line"></i>
+                       </button>`}
                 <button class="btn btn-sm btn-outline-primary" onclick="editarCampana(${c.id})" title="Editar">
                     <i class="ri-pencil-line"></i>
                 </button>
@@ -511,11 +541,14 @@ function llenarSelectoresCampana() {
 
     // En el modal de emisión sólo tienen sentido las campañas que hoy pueden
     // emitir: ofrecer una vencida sólo produce un error al final del flujo.
+    // Las de CÓDIGO PÚBLICO tampoco van: ahí no se emite nada, el cliente
+    // presenta el código directamente en caja.
     const sel = document.getElementById('me-campana');
-    const emitibles = campanasCache.filter(c => c.activo && c.vigente);
+    const emitibles = campanasCache.filter(
+        c => c.activo && c.vigente && !c.es_codigo_publico);
     sel.innerHTML = emitibles.length
         ? emitibles.map(c => `<option value="${c.id}">${esc(c.nombre)} — ${esc(c.valor_display)}</option>`).join('')
-        : '<option value="">No hay campañas vigentes</option>';
+        : '<option value="">No hay campañas nominativas vigentes</option>';
 }
 
 function abrirModalCampana() {
@@ -531,12 +564,15 @@ function abrirModalCampana() {
     document.getElementById('mc-limite').value = 'UNICO';
     document.getElementById('mc-activo').checked = true;
     document.getElementById('mc-empresa').disabled = false;
+    document.getElementById('mc-codigo-publico').value = '';
+    document.getElementById('mc-codigo-publico').disabled = false;
 
     const hoy = new Date();
     const fin = new Date(); fin.setMonth(fin.getMonth() + 3);
     document.getElementById('mc-inicio').value = hoy.toISOString().slice(0, 10);
     document.getElementById('mc-fin').value = fin.toISOString().slice(0, 10);
 
+    actualizarModoCampana();
     actualizarPreviewCampana();
     modalCampana.show();
 }
@@ -562,8 +598,58 @@ function editarCampana(id) {
     document.getElementById('mc-empresa').value = c.empresa_id;
     document.getElementById('mc-empresa').disabled = true;
 
+    // Cambiar de modo con cupones ya en la calle dejaría al cliente con un
+    // código que deja de servir: el backend lo rechaza y acá se bloquea el campo
+    // para no ofrecerlo siquiera.
+    const cp = document.getElementById('mc-codigo-publico');
+    cp.value = c.codigo_publico || '';
+    cp.disabled = (c.emitidos || 0) > 0;
+
+    actualizarModoCampana();
     actualizarPreviewCampana();
     modalCampana.show();
+}
+
+// Explica en el propio modal qué cambia según haya o no código público. Es la
+// diferencia más grande del módulo (con código NO se emite nada) y sin decirlo
+// acá el usuario crea la campaña y después busca el botón de emitir.
+function actualizarModoCampana() {
+    const input = document.getElementById('mc-codigo-publico');
+    const aviso = document.getElementById('mc-modo-aviso');
+    if (!input || !aviso) return;
+
+    const codigo = (input.value || '').trim().toUpperCase();
+    const limite = document.getElementById('mc-limite');
+    const vigencia = document.getElementById('mc-vigencia');
+
+    if (codigo) {
+        const etiquetaLimite = limite && limite.value === 'UNICO'
+            ? 'Cada cliente lo puede usar <strong>una sola vez</strong>.'
+            : 'Revisa "Cupones por cliente" para limitar cuántas veces lo usa cada cliente.';
+        aviso.innerHTML = `
+            <span class="text-primary fw-semibold">
+                <i class="ri-checkbox-circle-line"></i> Campaña de código público
+            </span><br>
+            <span class="text-muted">
+                Publicas <strong>${esc(codigo)}</strong> y cualquier cliente lo dicta en caja.
+                <strong>No hay que emitir cupones uno por uno.</strong>
+                ${etiquetaLimite}
+                Se exige RUT con ficha de cliente: así se controla el tope y se mide la campaña.
+            </span>`;
+        // La vigencia en días es de un cupón emitido; acá manda la fecha de
+        // término de la campaña.
+        if (vigencia) vigencia.disabled = true;
+    } else {
+        aviso.innerHTML = `
+            <span class="text-secondary fw-semibold">
+                <i class="ri-user-line"></i> Campaña nominativa
+            </span><br>
+            <span class="text-muted">
+                Se emite un código distinto a cada cliente (DC-XXXXXXXX) desde el
+                botón <em>Emitir cupón</em>, y sólo sirve para esa persona.
+            </span>`;
+        if (vigencia) vigencia.disabled = false;
+    }
 }
 
 function actualizarPreviewCampana() {
@@ -596,6 +682,7 @@ function guardarCampana() {
         fecha_inicio: document.getElementById('mc-inicio').value,
         fecha_fin: document.getElementById('mc-fin').value,
         limite_por_cliente: document.getElementById('mc-limite').value,
+        codigo_publico: document.getElementById('mc-codigo-publico').value,
         activo: document.getElementById('mc-activo').checked,
     };
     fetch(URLS_CUP.guardarCampana, {
@@ -761,6 +848,13 @@ function copiarCodigo() {
     navigator.clipboard.writeText(ultimoCodigo)
         .then(() => aviso('Código copiado: ' + ultimoCodigo, 'success'))
         .catch(() => aviso('Copia manualmente: ' + ultimoCodigo, 'info'));
+}
+
+function copiarCodigoPublico(codigo) {
+    if (!codigo) return;
+    navigator.clipboard.writeText(codigo)
+        .then(() => aviso('Código copiado: ' + codigo, 'success'))
+        .catch(() => aviso('Copia manualmente: ' + codigo, 'info'));
 }
 
 /* ===================== CUPONES EMITIDOS ===================== */

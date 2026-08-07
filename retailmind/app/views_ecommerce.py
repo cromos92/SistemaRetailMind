@@ -2796,6 +2796,41 @@ def api_imprimir_guia_preparacion(request, pedido_id):
     return JsonResponse({'ok': True, **resultado})
 
 
+def _pedidos_para_guias(sucursal, incluir_reimpresiones=False):
+    """Pedidos por preparar de una sucursal (queryset, sin tope aplicado).
+
+    Compartido por la impresión masiva ESC/POS y por el PDF: si divergieran, un
+    canal imprimiría pedidos que el otro no, y nadie lo notaría.
+    """
+    from app.services.allconnected_pedidos_service import (
+        ESTADOS_CANAL_CANCELADOS, ESTADOS_CANAL_DESPACHADOS,
+    )
+
+    qs = (
+        PedidoEcommerce.objects
+        .select_related('sucursal', 'sucursal__empresa')
+        .filter(
+            sucursal=sucursal,
+            estado='PENDIENTE',
+            sub_estado__in=['ASIGNADO', 'EN_PREPARACION'],
+        )
+        # Bloqueados por el estado del canal quedan FUERA del lote: sin pago
+        # confirmado (PENDIENTE) no se saca stock, y cancelados/despachados
+        # los cierra la sincronización — imprimirles guía sería picking basura.
+        .exclude(estado_canal__in=list(ESTADOS_CANAL_CANCELADOS)
+                 + list(ESTADOS_CANAL_DESPACHADOS) + ['PENDIENTE'])
+        # Idem los que YA SALIERON según el estado logístico de AllConnected (ese
+        # campo avanza solo, sin tocar `estado`). NO se excluye LISTO_ENVIO /
+        # LISTO_RETIRO: el marketplace los marca por su cuenta y el producto
+        # igual hay que sacarlo (verificado en prod 06-ago).
+        .exclude(estado_logistica_canal__in=list(ESTADOS_CANAL_DESPACHADOS))
+        .order_by('fecha_recepcion')  # los más antiguos primero
+    )
+    if not incluir_reimpresiones:
+        qs = qs.filter(fecha_impresion_guia__isnull=True)
+    return qs
+
+
 def _registrar_guia_preparacion(pedido, user):
     """Registra la impresión de la guía de un pedido y arma su print_data.
 
@@ -2911,33 +2946,7 @@ def api_imprimir_guias_sucursal(request):
     except (json.JSONDecodeError, ValueError):
         pass
 
-    from app.services.allconnected_pedidos_service import (
-        ESTADOS_CANAL_CANCELADOS, ESTADOS_CANAL_DESPACHADOS,
-        ESTADOS_CANAL_LISTO_CENTRAL,
-    )
-
-    qs = (
-        PedidoEcommerce.objects
-        .select_related('sucursal', 'sucursal__empresa')
-        .filter(
-            sucursal=sucursal,
-            estado='PENDIENTE',
-            sub_estado__in=['ASIGNADO', 'EN_PREPARACION'],
-        )
-        # Bloqueados por el estado del canal quedan FUERA del lote: sin pago
-        # confirmado (PENDIENTE) no se saca stock, y cancelados/despachados
-        # los cierra la sincronización — imprimirles guía sería picking basura.
-        .exclude(estado_canal__in=list(ESTADOS_CANAL_CANCELADOS)
-                 + list(ESTADOS_CANAL_DESPACHADOS) + ['PENDIENTE'])
-        # Idem los que YA SALIERON según el estado logístico de AllConnected (ese
-        # campo avanza solo, sin tocar `estado`). NO se excluye LISTO_ENVIO /
-        # LISTO_RETIRO: el marketplace los marca por su cuenta y el producto
-        # igual hay que sacarlo (verificado en prod 06-ago).
-        .exclude(estado_logistica_canal__in=list(ESTADOS_CANAL_DESPACHADOS))
-        .order_by('fecha_recepcion')  # los más antiguos primero
-    )
-    if not incluir_reimpresiones:
-        qs = qs.filter(fecha_impresion_guia__isnull=True)
+    qs = _pedidos_para_guias(sucursal, incluir_reimpresiones)
 
     pedidos = list(qs[:MAX_GUIAS_MASIVAS + 1])
     truncado = len(pedidos) > MAX_GUIAS_MASIVAS
@@ -2960,6 +2969,134 @@ def api_imprimir_guias_sucursal(request):
         'sucursal': sucursal.nombre or sucursal.alias or '',
         'guias': guias,
     })
+
+
+# ---------------------------------------------------------------------------
+# Guía de preparación en PDF térmico 80mm (no necesita QZ Tray)
+# ---------------------------------------------------------------------------
+
+def _ctx_guia_pdf(pedido):
+    """Contexto de UN pedido para `generar_guia_preparacion_pdf`.
+
+    La talla y el stock salen de la validación contra la sucursal del pedido
+    (el JSON del canal no siempre trae talla), así que la guía muestra el dato
+    del ERP —que es el que la vendedora va a buscar al estante—.
+    """
+    empresa = getattr(pedido.sucursal, 'empresa', None)
+    validados = []
+    try:
+        validados = _validar_items_pedido(pedido, sucursal=pedido.sucursal)
+    except Exception:  # pragma: no cover - la guía se imprime igual
+        logger.exception('No se pudo validar stock para la guía de %s', pedido.numero_ticket_rm)
+
+    items = []
+    for iv in (validados or pedido.items or []):
+        pt = iv.get('producto_talla') if isinstance(iv, dict) else None
+        items.append({
+            'sku': str(iv.get('sku') or ''),
+            'nombre': (iv.get('producto_nombre_rm') or iv.get('nombre')
+                       or iv.get('descripcion') or 'Ítem'),
+            'talla': str(getattr(pt, 'talla', '') or iv.get('talla') or ''),
+            'cantidad': iv.get('cantidad_pedida') or iv.get('cantidad') or 1,
+            'stock_disponible': iv.get('stock_disponible'),
+            'encontrado': iv.get('encontrado', True),
+        })
+
+    return {
+        'numero_ticket_rm': pedido.numero_ticket_rm,
+        'canal_origen': pedido.get_canal_origen_display() if pedido.canal_origen else '',
+        'numero_pedido_canal': pedido.numero_pedido_canal or '',
+        'folio_despacho': pedido.correlativo or '',
+        'fecha': timezone.localtime(pedido.fecha_recepcion).strftime('%d/%m/%Y %H:%M')
+                 if pedido.fecha_recepcion else '',
+        'cliente': pedido.cliente_nombre or '',
+        'direccion_envio': (pedido.direccion_envio or '')[:120],
+        'sucursal': {
+            'empresa': (getattr(empresa, 'razon_social', '') or getattr(empresa, 'nombre', '') or '') if empresa else '',
+            'alias': pedido.sucursal.nombre or pedido.sucursal.alias or '',
+            'direccion': pedido.sucursal.direccion or '',
+        },
+        'items': items,
+    }
+
+
+def _responder_guia_pdf(pedidos, nombre_archivo):
+    """Arma el PDF de una o varias guías y lo devuelve inline para imprimir."""
+    from django.http import HttpResponse
+
+    from app.services.pdf_guia_preparacion import generar_guia_preparacion_pdf
+
+    contenido = generar_guia_preparacion_pdf([_ctx_guia_pdf(p) for p in pedidos])
+    response = HttpResponse(contenido, content_type='application/pdf')
+    # inline: se abre en el visor del navegador y se imprime desde ahí (no baja
+    # un archivo que después hay que buscar en Descargas).
+    response['Content-Disposition'] = f'inline; filename="{nombre_archivo}"'
+    return response
+
+
+@login_required
+@csrf_exempt
+def api_guia_preparacion_pdf(request, pedido_id):
+    """GET|POST /app/ecommerce/pedidos/<id>/guia-pdf/
+
+    Igual que `api_imprimir_guia_preparacion` (registra la impresión y pasa
+    ASIGNADO→EN_PREPARACION) pero devuelve el PDF térmico en vez de comandos
+    ESC/POS: funciona en cualquier navegador, sin QZ Tray instalado.
+    """
+    denegado = _verificar_permiso_ecommerce(request, 'puede_editar')
+    if denegado:
+        return denegado
+
+    pedido = get_object_or_404(
+        PedidoEcommerce.objects.select_related('sucursal', 'sucursal__empresa'),
+        id=pedido_id, estado='PENDIENTE',
+    )
+
+    bloqueo_canal = _bloqueo_por_estado_canal(pedido)
+    if bloqueo_canal:
+        return JsonResponse({'ok': False, 'error': bloqueo_canal}, status=409)
+    if pedido.sub_estado in SUB_ESTADOS_BLOQUEADOS_PICKING:
+        return JsonResponse({'ok': False, 'error': _MSG_BLOQUEO_SIN_STOCK}, status=409)
+
+    _registrar_guia_preparacion(pedido, request.user)
+    return _responder_guia_pdf([pedido], f'guia-{pedido.numero_ticket_rm}.pdf')
+
+
+@login_required
+@csrf_exempt
+def api_guias_pdf_sucursal(request):
+    """GET|POST /app/ecommerce/pedidos/guias-pdf-sucursal/
+
+    Un solo PDF con TODAS las guías por preparar de la sucursal activa (una
+    página por pedido). Mismo criterio de selección que la impresión masiva por
+    QZ, y registra cada impresión igual.
+    """
+    denegado = _verificar_permiso_ecommerce(request, 'puede_editar')
+    if denegado:
+        return denegado
+
+    sucursal, err = _get_session_sucursal(request)
+    if err:
+        return err
+
+    incluir_reimpresiones = str(
+        request.GET.get('incluir_reimpresiones') or ''
+    ).lower() in ('1', 'true', 'si', 'sí')
+
+    pedidos = list(_pedidos_para_guias(sucursal, incluir_reimpresiones)[:MAX_GUIAS_MASIVAS])
+    if not pedidos:
+        return JsonResponse({
+            'ok': False,
+            'error': 'No hay pedidos por preparar en esta sucursal.'
+                     + ('' if incluir_reimpresiones else ' Agregá ?incluir_reimpresiones=1 '
+                        'para reimprimir los que ya tienen guía.'),
+        }, status=404)
+
+    for pedido in pedidos:
+        _registrar_guia_preparacion(pedido, request.user)
+
+    alias = (sucursal.alias or sucursal.nombre or 'sucursal').replace(' ', '_')
+    return _responder_guia_pdf(pedidos, f'guias-{alias}.pdf')
 
 
 # ---------------------------------------------------------------------------

@@ -459,7 +459,12 @@
           <div class="ticket-hero-hint">
             <i class="bi bi-info-circle me-1"></i>Muestra este numero en caja para facturar
             <div class="d-inline-flex gap-1 ms-2">
-              <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#93c5fd;font-size:.68rem;padding:2px 7px;border-radius:6px;border:1px solid rgba(255,255,255,.2);" onclick="imprimirGuiaPreparacion()" title="Imprimir por impresora termica (QZ Tray)">
+              {% if pedido.estado == 'PENDIENTE' %}
+              <button class="btn btn-sm" style="background:rgba(255,255,255,.22);color:#fff;font-size:.68rem;padding:2px 7px;border-radius:6px;border:1px solid rgba(255,255,255,.3);" onclick="abrirGuiaPdfDetalle()" title="Guia de preparacion en PDF 80mm (no necesita QZ Tray)">
+                <i class="bi bi-file-earmark-pdf me-1"></i>Guia PDF
+              </button>
+              {% endif %}
+              <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#93c5fd;font-size:.68rem;padding:2px 7px;border-radius:6px;border:1px solid rgba(255,255,255,.2);" onclick="imprimirGuiaPreparacion()" title="Impresion directa por QZ Tray (requiere QZ configurado)">
                 <i class="bi bi-printer me-1"></i>Termica
               </button>
               {% if pedido.dte %}
@@ -1209,6 +1214,32 @@ function facturarDesdeDetalle() {
 }
 
 /* ── Avanzar sub-estado ──────────────────────────────── */
+/* ── Guía de preparación en PDF (80mm), sin QZ Tray ─────────── */
+function abrirGuiaPdfDetalle() {
+  fetch(`/app/ecommerce/pedidos/${PEDIDO_ID}/guia-pdf/`, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': CSRF_TOKEN }
+  })
+  .then(async r => {
+    if (!r.ok) {
+      let msg = 'No se pudo generar la guía.';
+      try { const j = await r.json(); msg = j.error || msg; } catch(e) {}
+      alert(msg);
+      return null;
+    }
+    return r.blob();
+  })
+  .then(blob => {
+    if (!blob) return;
+    // Se abre en pestaña nueva: el visor del navegador ya trae Imprimir.
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (!win) { alert('El navegador bloqueó la ventana. Permití las ventanas emergentes para imprimir la guía.'); return; }
+    setTimeout(() => location.reload(), 1200);   // refleja el paso a En Preparación
+  })
+  .catch(err => alert('Error de conexión: ' + err));
+}
+
 /* ── Marcar sin stock desde el detalle (avisa a AllConnected) ── */
 function marcarSinStockDetalle() {
   const motivo = prompt(

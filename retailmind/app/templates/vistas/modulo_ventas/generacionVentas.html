@@ -803,7 +803,12 @@
                                     </div>
                                 </div>
 
-                                <!-- ===== CÓDIGO DE DESCUENTO (cupón nominativo) ===== -->
+                                <!-- ===== CÓDIGO DE DESCUENTO ===== -->
+                                <!-- Acepta los dos tipos y el cajero no tiene que
+                                     distinguirlos: el nominativo del cliente
+                                     (DC-XXXXXXXX) y el código público de una
+                                     campaña (ej. GISE2438). El backend resuelve
+                                     cuál es (`cupon_service.resolver_codigo`). -->
                                 <div id="cuponCard" class="card shadow-sm mt-2 border-0" style="border-left:3px solid #405189 !important;">
                                     <div class="card-body py-2 px-3">
                                         <div class="d-flex align-items-center gap-1 mb-1">
@@ -812,7 +817,7 @@
                                         </div>
                                         <div class="input-group input-group-sm">
                                             <input type="text" id="cuponInput" class="form-control form-control-sm"
-                                                   placeholder="Código del cliente (ej: DC-XXXXXXXX)" maxlength="24"
+                                                   placeholder="Código del cliente o de la promoción" maxlength="32"
                                                    style="text-transform:uppercase; letter-spacing:0.5px; font-size:0.78rem;"
                                                    onkeydown="if(event.key==='Enter'){event.preventDefault();validarCupon();}">
                                             <button class="btn btn-outline-primary btn-sm" type="button" onclick="validarCupon()" title="Validar código de descuento">
@@ -11891,7 +11896,11 @@ body {
     function _autoAjustarCreditoExterno() {
         if (!creditoExternoActivo) return;
         const idxCredExt = pagosActuales.findIndex(p => p.metodo_pago === 'CREDITO_EXTERNO');
-        const totalTicket = ticketActual?.totales?.total || 0;
+        // NETO, no bruto: esta función corre DENTRO de actualizarResumenVenta(),
+        // así que con el total bruto volvía a inflar el pago en cada repintado y
+        // el mismo resumen lo declaraba "EXCESO DE PAGO" — la venta con cupón
+        // quedaba imposible de cerrar.
+        const totalTicket = totalNetoACobrar();
         const pagadoSinCredExt = pagosActuales.reduce((sum, p, i) => {
             return i === idxCredExt ? sum : sum + (p.monto || 0);
         }, 0);
@@ -11924,8 +11933,9 @@ body {
 
         const idxCredExt = pagosActuales.findIndex(p => p.metodo_pago === 'CREDITO_EXTERNO');
 
-        // Calcular saldo SIN el pago de crédito externo
-        const totalTicket = ticketActual?.totales?.total || 0;
+        // Calcular saldo SIN el pago de crédito externo (sobre el total NETO:
+        // el cupón / vale ya rebajaron lo que hay que cobrar).
+        const totalTicket = totalNetoACobrar();
         const pagadoSinCredExt = pagosActuales.reduce((sum, p, i) => {
             return i === idxCredExt ? sum : sum + (p.monto || 0);
         }, 0);

@@ -1184,7 +1184,25 @@ def normalizar_detalle_para_tipo(detalle, totales, tipo_numerico):
     tol = max(2, len(detalle) * 2)
     if abs(suma_actual - objetivo) <= tol:
         return detalle  # ya está en la base correcta
-    if otra_base <= 0 or abs(suma_actual - otra_base) > tol:
+
+    # Bases desde las que SÍ sabemos escalar:
+    #   - `otra_base`: el clásico neto <-> con IVA.
+    #   - las dos anteriores MÁS el descuento global de cabecera: el detalle
+    #     viene BRUTO, sin restarle un descuento que sí está en el cabezal.
+    #     Pasa en la NC de una venta pagada con cupón o con vale de puntos: el
+    #     beneficio es de cabecera (`Ticket.descuento_cupon` /
+    #     `descuento_fidelizacion`) y nunca se materializa en las líneas, pero
+    #     el detalle de la NC se copia de `Dte_Productos`, que guarda el precio
+    #     de lista. Sin reconocer esa base la función se abstenía y el TXT salía
+    #     con sum(detalle) != MntNeto: Acepta lo rechaza y la NC queda emitida
+    #     en BD sin poder timbrarse.
+    descuento_global = int(totales.get('descuento_global') or 0)
+    bases = [otra_base]
+    if descuento_global > 0:
+        bases.append(objetivo + descuento_global)
+        bases.append(otra_base + descuento_global)
+
+    if not any(b > 0 and abs(suma_actual - b) <= tol for b in bases):
         return detalle  # base no reconocida -> no tocar
 
     factor = Decimal(str(objetivo)) / Decimal(str(suma_actual))

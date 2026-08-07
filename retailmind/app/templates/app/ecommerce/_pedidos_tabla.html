@@ -122,7 +122,11 @@
                     {% if p.estado == 'PENDIENTE' %}Facturar{% else %}Ver{% endif %}
                   </a>
                   {% if p.estado == 'PENDIENTE' and p.sub_estado != 'RECIBIDO' and p.sub_estado != 'SIN_STOCK' %}
-                  <button class="btn btn-sm btn-outline-dark" style="font-size:.68rem;padding:1px 6px;" onclick="imprimirGuiaPedido({{ p.id }}, this)" title="Imprimir guía de preparación{% if p.sub_estado == 'ASIGNADO' %} (marca En Preparación){% else %} (reimprimir){% endif %}">
+                  {# PDF por defecto (no necesita QZ Tray); el botón térmico va al lado. #}
+                  <button class="btn btn-sm btn-outline-dark" style="font-size:.68rem;padding:1px 6px;" onclick="abrirGuiaPdf({{ p.id }})" title="Guía de preparación en PDF 80mm{% if p.sub_estado == 'ASIGNADO' %} (marca En Preparación){% else %} (reimprimir){% endif %}">
+                    <i class="bi bi-file-earmark-pdf"></i>
+                  </button>
+                  <button class="btn btn-sm btn-outline-secondary" style="font-size:.68rem;padding:1px 6px;" onclick="imprimirGuiaPedido({{ p.id }}, this)" title="Impresión directa por QZ Tray (requiere QZ configurado)">
                     <i class="bi bi-printer"></i>
                   </button>
                   {% endif %}

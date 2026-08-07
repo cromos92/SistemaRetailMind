@@ -405,6 +405,112 @@ class ReversaDelCuponTest(_BaseCuponPOS):
         self.assertEqual(self.cupon.estado, 'EXPIRADO')
 
 
+class NotaCreditoSobreVentaConCuponTest(_BaseCuponPOS):
+    """
+    Al hacer el DTE consistente, la NC hereda un cabezal YA neto del cupón
+    mientras su detalle se copia de `Dte_Productos`, que guarda el precio de
+    lista. Si el detalle no se escala, sum(detalle) != MntNeto y Acepta rechaza
+    el TXT: la venta anulada no se puede acreditar ante el SII.
+    """
+
+    def test_normalizar_detalle_reconoce_la_base_bruta_con_descuento_global(self):
+        from app.views_modulo_documentos import normalizar_detalle_para_tipo
+
+        # Boleta de $19.990 con cupón de $1.000 -> DTE por $18.990.
+        # La NC hereda neto 15.958 y descuento global 1.000, pero su detalle
+        # viene del precio de lista ($19.990).
+        detalle = [{'cantidad': 1, 'precio_unitario': 19990, 'monto_item': 19990}]
+        totales = {'monto_neto': 15958, 'monto_total': 18990,
+                   'descuento_global': 1000}
+
+        normalizar_detalle_para_tipo(detalle, totales, 61)
+
+        self.assertEqual(sum(d['monto_item'] for d in detalle), 15958)
+
+    def test_normalizar_no_toca_un_detalle_ya_correcto(self):
+        from app.views_modulo_documentos import normalizar_detalle_para_tipo
+
+        detalle = [{'cantidad': 1, 'precio_unitario': 15958, 'monto_item': 15958}]
+        totales = {'monto_neto': 15958, 'monto_total': 18990,
+                   'descuento_global': 1000}
+
+        normalizar_detalle_para_tipo(detalle, totales, 61)
+        self.assertEqual(detalle[0]['monto_item'], 15958)
+
+    def test_normalizar_sigue_sin_tocar_una_base_desconocida(self):
+        """El guard conservador no se debilitó: base rara -> no se toca."""
+        from app.views_modulo_documentos import normalizar_detalle_para_tipo
+
+        detalle = [{'cantidad': 1, 'precio_unitario': 7777, 'monto_item': 7777}]
+        totales = {'monto_neto': 15958, 'monto_total': 18990,
+                   'descuento_global': 1000}
+
+        normalizar_detalle_para_tipo(detalle, totales, 61)
+        self.assertEqual(detalle[0]['monto_item'], 7777)
+
+
+class FacturaConCuponTest(_BaseCuponPOS):
+    """
+    La rama FACTURA del TXT lleva los montos en NETO (/1.19) y la cuadratura la
+    hace `cuadrar_detalle_neto`, que ahora puede recibir varias líneas de
+    descuento. En la práctica el cupón no llega a facturas (lo bloquea
+    `venta_fideliza`), pero la conversión existe y tiene que cuadrar.
+    """
+
+    def test_factura_con_descuento_de_cabecera_cuadra_detalle_contra_neto(self):
+        ticket = self._ticket_pendiente(correlativo=20, precio=10000, cantidad=2)
+        ticket.descuento_cupon = 1000
+        ticket.total = 19000
+        ticket.estado = 'PAGADO'
+        ticket.cliente_nombre = 'Comercial Test'
+        ticket.save()
+
+        dte = generar_dte_desde_ticket(
+            ticket, 'FACTURA_ELECTRONICA', self.usuario)
+
+        self.assertEqual(int(dte.monto_con_iva), 19000)
+        # neto + iva reconstruyen el total del documento
+        iva = int(dte.monto_con_iva) - int(dte.monto_neto)
+        self.assertEqual(int(dte.monto_neto) + iva, 19000)
+        contenido = (dte.archivo_txt_data or {}).get('contenido', '')
+        self.assertIn('Descuento Cupon', contenido)
+
+
+class TicketDeCambioTest(_BaseCuponPOS):
+    """
+    En un ticket de cambio todo el monto viaja en una línea sintética
+    "DIFERENCIA DE CAMBIO" que YA vale `ticket.total`. Declarar además el cupón
+    como descuento global lo restaría dos veces.
+    """
+
+    def test_el_cobro_rechaza_el_cupon_en_un_ticket_de_cambio(self):
+        ticket = self._ticket_pendiente(correlativo=30)
+        Ticket.objects.filter(pk=ticket.pk).update(
+            modulo_origen='CAMBIO_DEVOLUCION')
+
+        resp = self._cobrar(ticket, 18990, codigo_cupon=self.cupon.codigo)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json().get('error_tipo'), 'CUPON_NO_APLICA')
+        self.cupon.refresh_from_db()
+        self.assertEqual(self.cupon.estado, 'PENDIENTE')
+
+    def test_el_txt_de_un_cambio_no_declara_descuento_de_cabecera(self):
+        """Segunda barrera: aunque el campo venga poblado, el TXT lo ignora."""
+        ticket = self._ticket_pendiente(correlativo=31)
+        Ticket.objects.filter(pk=ticket.pk).update(
+            modulo_origen='CAMBIO_DEVOLUCION')
+        ticket.refresh_from_db()
+        ticket.descuento_cupon = 1000
+        ticket.total = 18990
+        ticket.estado = 'PAGADO'
+        ticket.save()
+
+        dte = generar_dte_desde_ticket(
+            ticket, 'BOLETA_ELECTRONICA', self.usuario)
+        contenido = (dte.archivo_txt_data or {}).get('contenido', '')
+        self.assertNotIn('Descuento Cupon', contenido)
+
+
 class ComprobanteTermicoTest(_BaseCuponPOS):
     """
     El comprobante 80mm imprimía el TOTAL ya descontado sin ninguna línea que

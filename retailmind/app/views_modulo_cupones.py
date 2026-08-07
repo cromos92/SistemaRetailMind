@@ -20,7 +20,10 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 
 from .decorators import requiere_permiso, requiere_alguno_de_los_permisos
-from .models import CampanaCupon, Cliente, CuponCliente, Empresa, EmpresaUser
+from .models import (
+    CampanaCupon, Cliente, CuponCliente, Empresa, EmpresaUser,
+    normalizar_codigo_publico,
+)
 from .services import cupon_service
 from .services.cupon_service import CuponError
 from .utils_permisos import usuario_puede_ver_todas_sucursales
@@ -91,6 +94,8 @@ def _serializar_campana(c):
         'id': c.id,
         'nombre': c.nombre,
         'descripcion': c.descripcion,
+        'codigo_publico': c.codigo_publico or '',
+        'es_codigo_publico': c.es_codigo_publico,
         'empresa_id': c.empresa_id,
         'empresa': c.empresa.nombre if c.empresa else '',
         'tipo_valor': c.tipo_valor,
@@ -152,6 +157,7 @@ def modulo_cupones(request):
         'tipo_valor_choices': CampanaCupon._meta.get_field('tipo_valor').choices,
         'limite_choices': CampanaCupon._meta.get_field('limite_por_cliente').choices,
         'estado_choices': CuponCliente._meta.get_field('estado').choices,
+        'origen_choices': CuponCliente._meta.get_field('origen').choices,
     }
     return render(request, 'vistas/modulo_fidelizacion/cupones.html', context)
 
@@ -225,6 +231,48 @@ def api_guardar_campana(request):
                             status=400)
     campana.nombre = nombre
     campana.descripcion = (data.get('descripcion') or '').strip()
+
+    # --- Código público: define el MODO de la campaña ---
+    # Con código → se publica uno solo y cualquier cliente lo presenta en caja.
+    # Sin código → nominativa: se emite uno distinto a cada cliente.
+    codigo_publico = normalizar_codigo_publico(data.get('codigo_publico'))
+    if codigo_publico:
+        if len(codigo_publico) < 4:
+            return JsonResponse(
+                {'success': False,
+                 'error': 'El código debe tener al menos 4 caracteres.'},
+                status=400)
+        # Guardrail: si choca con un cupón nominativo ya emitido, en caja
+        # `resolver_codigo` le daría prioridad al cupón individual y este código
+        # nunca funcionaría. Mejor no dejar crearlo.
+        if CuponCliente.objects.filter(codigo=codigo_publico).exists():
+            return JsonResponse(
+                {'success': False,
+                 'error': f'El código {codigo_publico} choca con un cupón ya '
+                          f'emitido. Elige otro.'},
+                status=400)
+        choque = CampanaCupon.objects.filter(codigo_publico=codigo_publico)
+        if campana.pk:
+            choque = choque.exclude(pk=campana.pk)
+        if choque.exists():
+            return JsonResponse(
+                {'success': False,
+                 'error': f'Ya existe otra campaña con el código {codigo_publico}.'},
+                status=400)
+
+    # Cambiar de modo con cupones ya emitidos deja al cliente con un código en la
+    # mano que dejaría de servir (o al revés). Se bloquea; para eso está crear
+    # una campaña nueva.
+    if campana.pk and bool(campana.codigo_publico) != bool(codigo_publico):
+        if campana.cupones.exists():
+            return JsonResponse(
+                {'success': False,
+                 'error': 'Esta campaña ya tiene cupones emitidos o canjeados: no '
+                          'se puede cambiar entre código público y nominativa. '
+                          'Crea una campaña nueva.'},
+                status=400)
+
+    campana.codigo_publico = codigo_publico
 
     tipo_valor = (data.get('tipo_valor') or 'PORCENTAJE').upper()
     if tipo_valor not in dict(CampanaCupon._meta.get_field('tipo_valor').choices):

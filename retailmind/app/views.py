@@ -29913,6 +29913,13 @@ def construir_ticket_data(ticket):
             'items': total_items,
             'subtotal': subtotal,
             'descuento': ticket.descuento or 0,
+            # Mismas claves que la versión de `views_modulo_ventas` (son dos
+            # implementaciones del MISMO contrato JSON): el renderizador térmico
+            # las lee para imprimir la glosa del cupón / vale. Sin ellas, un
+            # ticket ya cobrado servido por esta versión vuelve a imprimir un
+            # TOTAL que no cuadra con la suma de sus líneas.
+            'descuento_cupon': ticket.descuento_cupon or 0,
+            'descuento_fidelizacion': ticket.descuento_fidelizacion or 0,
             'total': ticket.total
         }
     }
@@ -31202,15 +31209,32 @@ def anular_factura_dte(request):
                     dte.estado_dte = 'ANULADO'
                     dte.save(update_fields=['estado_dte'])
 
-                # El cupón nominativo vuelve al cliente: esta venta se acreditó
-                # por completo. Va SOLO en la rama de anulación total (una NC
-                # parcial no devuelve el beneficio: la venta sigue viva por el
-                # resto). Best-effort: no puede tumbar la emisión de la NC.
+            # ── El cupón nominativo vuelve al cliente ────────────────────────
+            # Sólo cuando la venta se acreditó POR COMPLETO: una NC parcial no
+            # devuelve el beneficio, la venta sigue viva por el resto.
+            #
+            # Va fuera de la rama `not usa_productos_afectados` a propósito: el
+            # wizard de Gestión DTE anula mandando `productos_afectados`, así
+            # que anclarlo ahí lo dejaba inalcanzable por el camino real —
+            # exactamente el defecto que este arreglo vino a cerrar.
+            #
+            # El ticket se busca ACOTADO POR SUCURSAL: `Ticket.folio_dte` no es
+            # único (la misma serie se repite por empresa, y hay folios
+            # duplicados históricos entre sucursales de un mismo RUT). Sin el
+            # scope, anular la boleta #5000 de una cadena liberaba el cupón de
+            # una venta VIVA con folio 5000 de otra.
+            if es_anulacion_total:
                 try:
                     from .views_modulo_ventas import _liberar_cupon_de_venta
-                    for _tk in Ticket.objects.filter(folio_dte=dte.numero_documento):
+                    tickets_venta = Ticket.objects.filter(
+                        sucursal_id=dte.sucursal_id,
+                        folio_dte=dte.numero_documento,
+                    )
+                    for _tk in tickets_venta:
                         _liberar_cupon_de_venta(
-                            _tk, f'NC total #{nc.numero_documento} sobre DTE #{dte.numero_documento}')
+                            _tk,
+                            f'NC total #{nc.numero_documento} sobre DTE #{dte.numero_documento}',
+                        )
                 except Exception:
                     logger.exception(
                         "Error al liberar cupón por NC total dte=%s", dte.numero_documento)
