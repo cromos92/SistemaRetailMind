@@ -38,11 +38,43 @@ class GeneradorPdfTest(TestCase):
             'direccion_envio': 'Av. Siempre Viva 742',
             'sucursal': {'empresa': 'Comercial Nick SpA', 'alias': 'NICK1',
                          'direccion': 'Av. Principal 100'},
-            'items': [{'sku': '4831874', 'nombre': 'ZAPATILLAS CHAMPION', 'talla': '42',
-                       'cantidad': 2, 'stock_disponible': 5, 'encontrado': True}],
+            'items': [{'sku': '4831874', 'articulo': 'HP6010',
+                       'nombre': 'ZAPATILLAS VS PACE 2', 'marca': 'ADIDAS',
+                       'color': 'WHITE', 'talla': '42', 'cantidad': 2,
+                       'precio': 44990, 'precio_lista': 59990, 'pct_descuento': 25.0,
+                       'stock_disponible': 5, 'encontrado': True}],
         }
         base.update(extra)
         return base
+
+    def test_imprime_marca_color_talla_sku_y_precio(self):
+        """Lo que pidió la tienda: identificar el artículo exacto en el estante
+        y poder explicar el precio si el cliente pregunta."""
+        import reportlab.rl_config as rc
+        rc.pageCompression = 0          # sin comprimir para poder leer el texto
+        try:
+            pdf = generar_guia_preparacion_pdf([self._ctx()]).decode('latin-1')
+        finally:
+            rc.pageCompression = 1
+        for esperado in ('ADIDAS', 'ZAPATILLAS VS PACE 2', 'TALLA', '42',
+                         'COLOR', 'WHITE', 'SKU', '4831874', 'HP6010'):
+            self.assertIn(esperado, pdf, f'falta {esperado!r} en la guía')
+        self.assertIn('44.990', pdf, 'precio unitario pagado')
+        self.assertIn('59.990', pdf, 'precio de lista cuando hubo descuento')
+        self.assertIn('25%', pdf, 'porcentaje de descuento')
+        self.assertIn('Valor del pedido', pdf)
+
+    def test_sin_descuento_no_muestra_precio_lista(self):
+        ctx = self._ctx()
+        ctx['items'][0].update({'precio_lista': 0, 'pct_descuento': None})
+        import reportlab.rl_config as rc
+        rc.pageCompression = 0
+        try:
+            pdf = generar_guia_preparacion_pdf([ctx]).decode('latin-1')
+        finally:
+            rc.pageCompression = 1
+        self.assertIn('44.990', pdf)
+        self.assertNotIn('antes', pdf, 'sin descuento no se imprime "antes $X"')
 
     def test_genera_pdf_valido_de_80mm(self):
         pdf = generar_guia_preparacion_pdf([self._ctx()])

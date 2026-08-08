@@ -861,8 +861,6 @@
             <i class="bi bi-exclamation-triangle-fill"></i>
             <div>
               <strong>No se puede facturar todavía</strong> — por eso el botón de abajo está deshabilitado.<br>
-              {# Detalle ítem por ítem: antes decía solo "hay productos sin match o
-                 sin stock" y el operador no sabía CUÁL era el problema. #}
               <ul style="margin:6px 0 0;padding-left:18px;">
                 {% for iv in items_validados %}
                   {% if not iv.encontrado %}
@@ -947,8 +945,6 @@
             <i class="bi bi-receipt fs-5"></i>Facturar ahora
           </button>
           {% if not puede_facturar %}
-          {# Sin esto el botón deshabilitado no daba NINGUNA señal al hacer clic
-             (reporte del 06-ago: "no muestra spinner ni nada"). #}
           <div style="text-align:center;font-size:.76rem;color:#b91c1c;margin-top:6px;">
             <i class="bi bi-lock-fill me-1"></i>Deshabilitado: revisá el aviso de stock más arriba.
           </div>

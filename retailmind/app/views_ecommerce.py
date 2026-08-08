@@ -2989,15 +2989,33 @@ def _ctx_guia_pdf(pedido):
     except Exception:  # pragma: no cover - la guía se imprime igual
         logger.exception('No se pudo validar stock para la guía de %s', pedido.numero_ticket_rm)
 
+    def _atributo(prod, campo):
+        """Valor de un atributo del producto (atributo1=marca, atributo2=color)."""
+        opcion = getattr(prod, campo, None) if prod else None
+        return (getattr(opcion, 'valor', '') or '').strip()
+
     items = []
     for iv in (validados or pedido.items or []):
         pt = iv.get('producto_talla') if isinstance(iv, dict) else None
+        prod = getattr(pt, 'producto', None)
+        # Precio: el que pagó el cliente en el canal; si el de lista de RM es
+        # mayor, la diferencia es el descuento y se imprime para que la tienda
+        # pueda explicarlo si el cliente pregunta.
+        precio = iv.get('precio_canal') or iv.get('precio_unitario') or 0
+        precio_lista = iv.get('precio_rm') or 0
+        descuento = iv.get('descuento_canal') or 0
         items.append({
             'sku': str(iv.get('sku') or ''),
+            'articulo': (getattr(prod, 'articulo', '') or '').strip(),
             'nombre': (iv.get('producto_nombre_rm') or iv.get('nombre')
                        or iv.get('descripcion') or 'Ítem'),
+            'marca': _atributo(prod, 'atributo1'),
+            'color': _atributo(prod, 'atributo2'),
             'talla': str(getattr(pt, 'talla', '') or iv.get('talla') or ''),
             'cantidad': iv.get('cantidad_pedida') or iv.get('cantidad') or 1,
+            'precio': int(precio or 0),
+            'precio_lista': int(precio_lista or 0) if descuento and descuento > 0 else 0,
+            'pct_descuento': iv.get('pct_descuento') if descuento and descuento > 0 else None,
             'stock_disponible': iv.get('stock_disponible'),
             'encontrado': iv.get('encontrado', True),
         })

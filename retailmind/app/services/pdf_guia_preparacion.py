@@ -58,15 +58,23 @@ def _estilos():
         'valor': ParagraphStyle('valor', fontName='Helvetica', fontSize=8.5, leading=10),
         'seccion': ParagraphStyle('seccion', fontName='Helvetica-Bold', fontSize=9.5,
                                   alignment=TA_LEFT, leading=11, spaceBefore=2, spaceAfter=1),
-        'prod': ParagraphStyle('prod', fontName='Helvetica-Bold', fontSize=10, leading=12),
-        'prod_meta': ParagraphStyle('prod_meta', fontName='Helvetica', fontSize=8, leading=9.5,
-                                    textColor=colors.HexColor('#333333')),
+        'prod': ParagraphStyle('prod', fontName='Helvetica-Bold', fontSize=10, leading=11.5),
+        # Talla y color van más grandes que el resto de la metadata: son el dato
+        # que evita sacar el producto equivocado del estante.
+        'variante': ParagraphStyle('variante', fontName='Helvetica', fontSize=9.5, leading=11.5,
+                                   spaceBefore=0.5),
+        'prod_meta': ParagraphStyle('prod_meta', fontName='Helvetica', fontSize=7.5, leading=9,
+                                    textColor=colors.HexColor('#444444')),
+        'precio': ParagraphStyle('precio', fontName='Helvetica', fontSize=8.5, leading=10.5,
+                                 spaceBefore=0.5),
         'cant': ParagraphStyle('cant', fontName='Helvetica-Bold', fontSize=13,
                                alignment=TA_CENTER, leading=15),
         'casilla': ParagraphStyle('casilla', fontName='Helvetica', fontSize=15,
                                   alignment=TA_CENTER, leading=16),
         'total': ParagraphStyle('total', fontName='Helvetica-Bold', fontSize=11,
                                 alignment=TA_CENTER, leading=13),
+        'total_sub': ParagraphStyle('total_sub', fontName='Helvetica', fontSize=9,
+                                    alignment=TA_CENTER, leading=11),
         'pie': ParagraphStyle('pie', fontName='Helvetica-Bold', fontSize=8.5,
                               alignment=TA_CENTER, leading=11),
         'firma': ParagraphStyle('firma', fontName='Helvetica', fontSize=8,
@@ -75,6 +83,14 @@ def _estilos():
                                  alignment=TA_LEFT, leading=10,
                                  textColor=colors.HexColor('#B91C1C')),
     }
+
+
+def _clp(valor):
+    """Monto en pesos con separador de miles (1234567 → $1.234.567)."""
+    try:
+        return '$' + f'{int(valor):,}'.replace(',', '.')
+    except (TypeError, ValueError):
+        return '$0'
 
 
 def _txt(valor, limite=None):
@@ -217,49 +233,82 @@ def _bloque_pedido(ctx, ancho, st):
 
     items = ctx.get('items') or []
     total_unidades = 0
+    total_pedido = 0
     for i, it in enumerate(items):
         cant = int(it.get('cantidad') or 1)
         total_unidades += cant
+        precio = int(it.get('precio') or 0)
+        total_pedido += precio * cant
 
+        # Línea 1: MARCA + nombre del artículo, en negrita y grande (es lo
+        # primero que la vendedora busca en el estante).
+        titulo = _txt(it.get('nombre') or 'Ítem', 52)
+        marca = _txt(it.get('marca'), 22)
+        celda = [Paragraph(f'<b>{marca}</b> {titulo}'.strip() if marca else f'<b>{titulo}</b>',
+                           st['prod'])]
+
+        # Línea 2: TALLA y COLOR destacados — definen CUÁL de todas sacar.
+        variante = []
+        if it.get('talla'):
+            variante.append(f"TALLA <b>{_txt(it['talla'], 12)}</b>")
+        if it.get('color'):
+            variante.append(f"COLOR <b>{_txt(it['color'], 18)}</b>")
+        if variante:
+            celda.append(Paragraph(' · '.join(variante), st['variante']))
+
+        # Línea 3: identificadores y stock, en chico (solo se leen si hay dudas).
         meta = []
         if it.get('sku'):
-            meta.append(f"SKU {_txt(it['sku'], 20)}")
-        if it.get('talla'):
-            meta.append(f"TALLA {_txt(it['talla'], 12)}")
+            meta.append(f"SKU {_txt(it['sku'], 18)}")
+        if it.get('articulo'):
+            meta.append(f"Art. {_txt(it['articulo'], 18)}")
         if it.get('stock_disponible') is not None:
-            meta.append(f"stock sist.: {int(it['stock_disponible'])}")
-
-        celda_izq = [Paragraph(_txt(it.get('nombre') or 'Ítem', 60), st['prod'])]
+            meta.append(f"stock {int(it['stock_disponible'])}")
         if meta:
-            celda_izq.append(Paragraph(' · '.join(meta), st['prod_meta']))
+            celda.append(Paragraph(' · '.join(meta), st['prod_meta']))
+
+        # Línea 4: precio unitario y descuento, si lo hubo.
+        if precio:
+            precio_txt = f"<b>{_clp(precio)}</b> c/u"
+            if cant > 1:
+                precio_txt += f" · total {_clp(precio * cant)}"
+            if it.get('precio_lista'):
+                pct = it.get('pct_descuento')
+                pct_txt = f" (-{pct:.0f}%)" if pct else ''
+                precio_txt += (f'  <font color="#B91C1C">antes '
+                               f'{_clp(it["precio_lista"])}{pct_txt}</font>')
+            celda.append(Paragraph(precio_txt, st['precio']))
+
         if not it.get('encontrado', True):
-            celda_izq.append(Paragraph('⚠ SIN STOCK SUFICIENTE EN EL SISTEMA', st['alerta']))
+            celda.append(Paragraph('⚠ SIN STOCK SUFICIENTE EN EL SISTEMA', st['alerta']))
 
         fila = Table(
-            [[Paragraph('☐', st['casilla']), Paragraph(f'{cant}', st['cant']), celda_izq]],
-            colWidths=[ancho * 0.11, ancho * 0.13, ancho * 0.76],
+            [[Paragraph('☐', st['casilla']), Paragraph(f'{cant}', st['cant']), celda]],
+            colWidths=[ancho * 0.10, ancho * 0.12, ancho * 0.78],
         )
         fila.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 1),
-            ('TOPPADDING', (0, 0), (-1, -1), 1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+            ('TOPPADDING', (0, 0), (-1, -1), 1.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
         ]))
         els.append(fila)
         if i < len(items) - 1:
-            els.append(Spacer(1, 0.8 * mm))
-            els.append(_linea(ancho, 0.3, '#999999'))
-            els.append(Spacer(1, 0.8 * mm))
+            els.append(Spacer(1, 1 * mm))
+            els.append(_linea(ancho, 0.4, '#888888'))
+            els.append(Spacer(1, 1 * mm))
 
     els.append(Spacer(1, 1.5 * mm))
     els.append(_linea(ancho, 1.2))
     els.append(Spacer(1, 1.5 * mm))
 
-    # ── Total de unidades (lo que la tienda tiene que contar) ───
-    caja = Table(
-        [[Paragraph(f"TOTAL A SACAR: {total_unidades} "
-                    f"{'UNIDAD' if total_unidades == 1 else 'UNIDADES'}", st['total'])]],
-        colWidths=[ancho],
-    )
+    # ── Totales: unidades a contar y monto del pedido ───────────
+    filas_total = [[Paragraph(
+        f"TOTAL A SACAR: {total_unidades} "
+        f"{'UNIDAD' if total_unidades == 1 else 'UNIDADES'}", st['total'])]]
+    if total_pedido:
+        filas_total.append([Paragraph(
+            f"Valor del pedido: {_clp(total_pedido)}", st['total_sub'])])
+    caja = Table(filas_total, colWidths=[ancho])
     caja.setStyle(TableStyle([
         ('BOX', (0, 0), (-1, -1), 1.2, colors.black),
         ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
