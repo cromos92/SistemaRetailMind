@@ -538,6 +538,106 @@ class SugerirProveedorTest(BaseRequerimientos):
         self.assertEqual(self.client.get(self.url).status_code, 400)
 
 
+class BuscarComprasTest(BaseRequerimientos):
+    """El buscador con el que quien revisa identifica QUÉ factura reclamar."""
+
+    def setUp(self):
+        super().setUp()
+        self.url = reverse('api_buscar_compras_requerimiento')
+        self.otro_proveedor = crear_empresa(
+            nombre='Segundo Proveedor', rut='79.444.444-4', esProveedor=True)
+
+    def _compra(self, proveedor, numero, fecha, cantidad=4, costo=25000):
+        dte = Dte.objects.create(
+            emisor=proveedor, receptor=self.empresa, sucursal=self.sucursal,
+            tipo_documento='FACTURA ELECTRONICA', numero_documento=numero,
+            fecha_emision=fecha, fecha_vencimiento=fecha + timedelta(days=30),
+            tipo_transaccion='COMPRA', monto_neto=100000, monto_con_iva=119000,
+            estado_pago='PENDIENTE', estado_dte='EMITIDO',
+            responsable='Test', diasCredito=30, bultos=1, unidades_productos=cantidad,
+        )
+        Dte_Productos.objects.create(
+            dte=dte, productoTalla=self.producto_talla,
+            descripcion='ZAPATILLA RUNNING', costo=costo, precio=costo,
+            stock=cantidad,
+        )
+        return dte
+
+    def test_busca_por_sku_y_ordena_de_la_mas_nueva_a_la_mas_vieja(self):
+        self._compra(self.proveedor, 8000, date(2026, 1, 5))
+        self._compra(self.otro_proveedor, 9100, date(2026, 6, 20))
+
+        resp = self.client.get(self.url, {'q': str(self.producto_talla.sku)})
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        compras = resp.json()['compras']
+        self.assertEqual(len(compras), 2)
+        self.assertEqual(compras[0]['numero_documento'], 9100)
+        self.assertEqual(compras[0]['proveedor'], 'Segundo Proveedor')
+        self.assertEqual(compras[1]['numero_documento'], 8000)
+
+    def test_busca_por_nombre_de_articulo(self):
+        self._compra(self.proveedor, 8842, date(2026, 5, 10))
+
+        resp = self.client.get(self.url, {'q': 'RUNNING'})
+
+        compras = resp.json()['compras']
+        self.assertEqual(len(compras), 1)
+        self.assertEqual(compras[0]['numero_documento'], 8842)
+        self.assertEqual(compras[0]['cantidad'], 4)
+        self.assertEqual(compras[0]['costo_unitario'], 25000)
+
+    def test_ignora_ventas_solo_devuelve_compras(self):
+        venta = Dte.objects.create(
+            emisor=self.empresa, receptor=self.proveedor, sucursal=self.sucursal,
+            tipo_documento='BOLETA ELECTRONICA', numero_documento=777,
+            fecha_emision=date(2026, 7, 1), fecha_vencimiento=date(2026, 7, 1),
+            tipo_transaccion='VENTA', monto_neto=1000, monto_con_iva=1190,
+            estado_pago='PAGADO', estado_dte='EMITIDO',
+            responsable='Test', diasCredito=0, bultos=1, unidades_productos=1,
+        )
+        Dte_Productos.objects.create(
+            dte=venta, productoTalla=self.producto_talla,
+            descripcion='ZAPATILLA RUNNING', costo=0, precio=39990, stock=1)
+
+        resp = self.client.get(self.url, {'q': str(self.producto_talla.sku)})
+
+        self.assertEqual(resp.json()['compras'], [])
+
+    def test_consulta_muy_corta_rechazada(self):
+        self.assertEqual(self.client.get(self.url, {'q': 'a'}).status_code, 400)
+
+    def test_sin_resultados_responde_lista_vacia(self):
+        resp = self.client.get(self.url, {'q': 'NO_EXISTE_ESTE_ARTICULO'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['compras'], [])
+
+    def test_usuario_acotado_no_ve_compras_de_otra_empresa(self):
+        otra_empresa = crear_empresa(nombre='Holding Ajeno', rut='78.777.777-7')
+        ajeno = Dte.objects.create(
+            emisor=self.proveedor, receptor=otra_empresa, sucursal=None,
+            tipo_documento='FACTURA ELECTRONICA', numero_documento=5555,
+            fecha_emision=date(2026, 4, 1), fecha_vencimiento=date(2026, 5, 1),
+            tipo_transaccion='COMPRA', monto_neto=1000, monto_con_iva=1190,
+            estado_pago='PENDIENTE', estado_dte='EMITIDO',
+            responsable='Test', diasCredito=30, bultos=1, unidades_productos=1,
+        )
+        Dte_Productos.objects.create(
+            dte=ajeno, productoTalla=self.producto_talla,
+            descripcion='ZAPATILLA RUNNING', costo=1, precio=1, stock=1)
+        self._compra(self.proveedor, 8842, date(2026, 5, 10))
+
+        vendedor = crear_usuario(username='vend_compras', rol='vendedor', email='vc@test.com')
+        crear_empresa_user(vendedor, self.empresa, self.sucursal)
+        self.client.force_login(vendedor)
+
+        numeros = {c['numero_documento']
+                   for c in self.client.get(self.url, {'q': str(self.producto_talla.sku)}).json()['compras']}
+
+        self.assertIn(8842, numeros)
+        self.assertNotIn(5555, numeros)
+
+
 class ExportarAlcanceTest(BaseRequerimientos):
     """El export bajaba TODOS los requerimientos del holding a cualquier usuario."""
 

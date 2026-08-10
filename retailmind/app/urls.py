@@ -379,6 +379,7 @@ from .views_modulo_requerimientos import (
     exportar_requerimientos,
     descargar_formato_requerimiento,
     sugerir_proveedor_por_sku,
+    buscar_compras_producto,
     obtener_tipos_foto,
 )
 from .views_modulo_giftcards import (
@@ -1467,6 +1468,7 @@ urlpatterns = [
     # APIs de utilidades
     path('api/requerimientos/<int:requerimiento_id>/formato-pdf/', descargar_formato_requerimiento, name='api_formato_pdf_requerimiento'),
     path('api/requerimientos/sugerir-proveedor/', sugerir_proveedor_por_sku, name='api_sugerir_proveedor_requerimiento'),
+    path('api/requerimientos/buscar-compras/', buscar_compras_producto, name='api_buscar_compras_requerimiento'),
     path('api/requerimientos/buscar-producto/', buscar_producto_sku, name='api_buscar_producto_requerimiento'),
     path('api/requerimientos/buscar-ticket/', buscar_ticket_por_folio, name='api_buscar_ticket_requerimiento'),
     path('api/requerimientos/buscar-cliente/', buscar_cliente_por_rut, name='api_buscar_cliente_requerimiento'),

@@ -316,6 +316,59 @@ class PermisosCambiosTest(TestCase):
         self.assertNotEqual(response.json().get('code'), 'ADMIN_REQUIRED')
         self.assertNotEqual(response.status_code, 403)
 
+    def test_aprobacion_normal_acepta_codigo_jefe_local_de_otra_empresa(self):
+        """El código de un jefe de local sirve para cambios normales de cualquier empresa."""
+        otra_empresa = crear_empresa(nombre='Empresa Jefe Ajeno', rut='76.333.333-3')
+        otra_sucursal = crear_sucursal(empresa=otra_empresa, alias='SUC-JEFE-AJENA')
+        jefe_ajeno = crear_usuario(username='jefe-ajeno', rol='jefe_local')
+        crear_empresa_user(jefe_ajeno, otra_empresa, otra_sucursal)
+        codigo = self._codigo_de(jefe_ajeno, '777888')
+
+        response = self._post_aprobar(codigo.codigo)
+
+        self.assertNotEqual(response.status_code, 403)
+        self.assertNotIn(
+            response.json().get('code'),
+            ('CROSS_COMPANY_AUTH', 'INVALID_AUTHORIZER', 'ADMIN_REQUIRED'),
+        )
+        registro = RegistroAutorizacion.objects.filter(
+            cambio_devolucion=self.cambio,
+            usuario_autorizador=jefe_ajeno,
+            exitoso=True,
+        ).first()
+        if registro is not None:
+            self.assertTrue(registro.es_cross_branch)
+            self.assertTrue(registro.requiere_revision)
+
+    def test_fuera_de_plazo_rechaza_codigo_admin_de_otra_empresa(self):
+        """La excepción de plazo sigue exigiendo un administrador de la MISMA empresa."""
+        self._marcar_fuera_de_plazo(autorizado_por=None)
+        otra_empresa = crear_empresa(nombre='Empresa Admin Ajeno FP', rut='76.444.444-4')
+        otra_sucursal = crear_sucursal(empresa=otra_empresa, alias='SUC-ADM-FP')
+        admin_ajeno = crear_usuario(username='admin-ajeno-fp', rol='administrador')
+        crear_empresa_user(admin_ajeno, otra_empresa, otra_sucursal)
+        codigo = self._codigo_de(admin_ajeno, '888999')
+
+        response = self._post_aprobar(codigo.codigo)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()['code'], 'CROSS_COMPANY_AUTH')
+        codigo.refresh_from_db()
+        self.cambio.refresh_from_db()
+        self.assertFalse(codigo.usado)
+        self.assertEqual(self.cambio.estado, 'SOLICITADO')
+
+    def test_aprobacion_normal_rechaza_codigo_de_rol_no_supervisor(self):
+        """Un código generado por un rol sin atribuciones (vendedor) no aprueba cambios."""
+        codigo = self._codigo_de(self.operador, '999000')
+
+        response = self._post_aprobar(codigo.codigo)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()['code'], 'INVALID_AUTHORIZER')
+        codigo.refresh_from_db()
+        self.assertFalse(codigo.usado)
+
     @override_settings(CSRF_FAILURE_VIEW='django.views.csrf.csrf_failure')
     def test_crear_cambio_rechaza_post_sin_csrf(self):
         csrf_client = Client(enforce_csrf_checks=True)

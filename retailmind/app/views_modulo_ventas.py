@@ -17314,21 +17314,40 @@ def aprobar_cambio_generar_ticket(request):
                 ),
             }, status=403)
 
+        # Cambios normales: el código debe ser de un administrador o jefe de
+        # local (mismo criterio que para poder generar el código del navbar).
+        if not requiere_admin and not (
+            _usuario_es_administrador_activo(usuario_autorizador)
+            or getattr(usuario_autorizador, 'rol', '') == 'jefe_local'
+        ):
+            return JsonResponse({
+                'success': False,
+                'code': 'INVALID_AUTHORIZER',
+                'error': 'El código debe ser de un administrador o de un jefe de local',
+            }, status=403)
+
         asignacion_autorizador = EmpresaUser.objects.filter(
             user=usuario_autorizador,
             empresa_id=cambio.sucursal.empresa_id,
             status=True,
         ).select_related('sucursal').order_by('-active').first()
-        if not asignacion_autorizador:
-            return JsonResponse({
-                'success': False,
-                'code': 'CROSS_COMPANY_AUTH',
-                'error': (
-                    'El administrador debe pertenecer a la misma empresa'
-                    if requiere_admin else
-                    'El usuario que autoriza debe pertenecer a la misma empresa'
-                ),
-            }, status=403)
+        es_cross_company = asignacion_autorizador is None
+        if es_cross_company:
+            # La excepción de plazo sigue amarrada a la empresa: solo un
+            # administrador de la MISMA empresa puede firmarla.
+            if requiere_admin:
+                return JsonResponse({
+                    'success': False,
+                    'code': 'CROSS_COMPANY_AUTH',
+                    'error': 'El administrador debe pertenecer a la misma empresa',
+                }, status=403)
+            # Cambio normal: el código de admin/jefe de local vale aunque sea de
+            # otra empresa. Su asignación de origen se conserva solo para
+            # auditoría y la aprobación queda marcada para revisión gerencial.
+            asignacion_autorizador = EmpresaUser.objects.filter(
+                user=usuario_autorizador,
+                status=True,
+            ).select_related('sucursal').order_by('-active').first()
 
         # Verificar estado
         if cambio.estado not in ('SOLICITADO', 'APROBADO'):
@@ -17415,14 +17434,20 @@ def aprobar_cambio_generar_ticket(request):
                 exitoso=True,
                 cambio_devolucion=cambio,
                 sucursal_solicitante=cambio.sucursal,
-                sucursal_autorizador=asignacion_autorizador.sucursal,
+                sucursal_autorizador=(
+                    asignacion_autorizador.sucursal if asignacion_autorizador else None
+                ),
                 es_cross_branch=bool(
-                    asignacion_autorizador.sucursal_id
-                    and asignacion_autorizador.sucursal_id != cambio.sucursal_id
+                    es_cross_company
+                    or (asignacion_autorizador
+                        and asignacion_autorizador.sucursal_id
+                        and asignacion_autorizador.sucursal_id != cambio.sucursal_id)
                 ),
                 requiere_revision=bool(
-                    asignacion_autorizador.sucursal_id
-                    and asignacion_autorizador.sucursal_id != cambio.sucursal_id
+                    es_cross_company
+                    or (asignacion_autorizador
+                        and asignacion_autorizador.sucursal_id
+                        and asignacion_autorizador.sucursal_id != cambio.sucursal_id)
                 ),
                 datos_adicionales={
                     'cambio_id': cambio.id,
@@ -17445,7 +17470,9 @@ def aprobar_cambio_generar_ticket(request):
             campos_autorizacion = ['registro_autorizacion', 'requiere_autorizacion']
             if autorizacion_previa is None:
                 cambio.autorizado_por_usuario = usuario_autorizador
-                cambio.sucursal_autorizador = asignacion_autorizador.sucursal
+                cambio.sucursal_autorizador = (
+                    asignacion_autorizador.sucursal if asignacion_autorizador else None
+                )
                 campos_autorizacion += ['autorizado_por_usuario', 'sucursal_autorizador']
             cambio.registro_autorizacion = registro_autorizacion
             cambio.requiere_autorizacion = bool(requiere_admin or autorizacion_previa)

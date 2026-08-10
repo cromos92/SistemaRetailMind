@@ -249,6 +249,7 @@
                                         <th scope="col">Estado</th>
                                         <th scope="col">Producto</th>
                                         <th scope="col">Cliente</th>
+                                        <th scope="col">Proveedor</th>
                                         <th scope="col">Sucursal</th>
                                         <th scope="col">Fotos</th>
                                         <th scope="col">Días</th>
@@ -257,7 +258,7 @@
                                 </thead>
                                 <tbody id="tabla-requerimientos">
                                     <tr>
-                                        <td colspan="9" class="text-center py-5">
+                                        <td colspan="10" class="text-center py-5">
                                             <div class="spinner-border text-primary" role="status">
                                                 <span class="visually-hidden">Cargando...</span>
                                             </div>
@@ -375,7 +376,7 @@ function mostrarRequerimientos(requerimientos) {
     if (requerimientos.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="9" class="text-center text-muted">
+                <td colspan="10" class="text-center text-muted">
                     <div class="py-4">
                         <i class="ri-inbox-line fs-1 d-block mb-2"></i>
                         No se encontraron requerimientos
@@ -409,6 +410,9 @@ function mostrarRequerimientos(requerimientos) {
                 </div>
             </td>
             <td>${req.cliente_nombre || '<span class="text-muted">Stock tienda</span>'}</td>
+            <td>${req.proveedor
+                ? `<span class="badge badge-soft-info">${req.proveedor}</span>`
+                : '<span class="badge badge-soft-warning"><i class="ri-error-warning-line me-1"></i>sin proveedor</span>'}</td>
             <td><span class="badge badge-soft-secondary">${req.sucursal}</span></td>
             <td class="text-center">
                 ${req.cantidad_fotos > 0 ?
@@ -425,14 +429,20 @@ function mostrarRequerimientos(requerimientos) {
                 </span>
             </td>
             <td>
-                <div class="hstack gap-2">
+                <div class="hstack gap-1">
                     <a href="/app/requerimientos/${req.id}/" class="btn btn-sm btn-soft-primary" title="Ver detalle">
                         <i class="ri-eye-line"></i>
                     </a>
-                    ${req.requiere_recordatorio ? 
+                    ${!req.proveedor || !req.tiene_factura_compra ?
+                        `<a href="/app/requerimientos/${req.id}/?completar=1" class="btn btn-sm btn-warning"
+                            title="Falta ${!req.proveedor ? 'asignar proveedor' : 'la factura de compra'}">
+                            <i class="ri-edit-2-line"></i>
+                        </a>`
+                    : ''}
+                    ${req.requiere_recordatorio ?
                         `<button class="btn btn-sm btn-soft-warning" onclick="enviarRecordatorioRapido(${req.id})" title="Enviar recordatorio">
                             <i class="ri-mail-send-line"></i>
-                        </button>` 
+                        </button>`
                     : ''}
                 </div>
             </td>

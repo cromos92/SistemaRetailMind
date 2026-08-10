@@ -2036,6 +2036,89 @@ def sugerir_proveedor_por_sku(request):
     })
 
 
+@login_required
+@require_GET
+def buscar_compras_producto(request):
+    """Historial de compras de un producto, para identificar QUÉ factura reclamar.
+
+    `sugerir-proveedor` devuelve solo la última compra, y eso no alcanza: un
+    mismo modelo se compra varias veces, a veces a proveedores distintos, y el
+    par que falló pertenece a una partida concreta. Acá se listan las compras
+    del producto —fecha, proveedor, documento, cantidad y costo— para que quien
+    revisa elija la que corresponde en vez de adivinar.
+
+    Busca por SKU exacto o por texto del artículo/descripción.
+    """
+    consulta = (request.GET.get('q') or '').strip()
+    if len(consulta) < 2:
+        return JsonResponse({
+            'success': False,
+            'error': 'Ingrese al menos 2 caracteres (SKU o nombre del artículo)'
+        }, status=400)
+
+    try:
+        limite = min(int(request.GET.get('limite', 40)), 100)
+    except (TypeError, ValueError):
+        limite = 40
+
+    # SKU exacto primero: es lo que se tipea el 90% de las veces y evita traer
+    # medio catálogo cuando el código es también un texto frecuente.
+    tallas = Producto_Talla.objects.none()
+    if consulta.isdigit():
+        tallas = Producto_Talla.objects.filter(sku=int(consulta))
+    if not tallas.exists():
+        tallas = Producto_Talla.objects.filter(
+            Q(producto__articulo__icontains=consulta) |
+            Q(producto__descripcion__icontains=consulta)
+        )[:400]
+
+    ids_tallas = list(tallas.values_list('id', flat=True))
+    if not ids_tallas:
+        return JsonResponse({'success': True, 'compras': [], 'total': 0})
+
+    lineas = (
+        Dte_Productos.objects
+        .filter(productoTalla_id__in=ids_tallas, dte__tipo_transaccion='COMPRA')
+        .select_related('dte', 'dte__emisor', 'dte__sucursal',
+                        'productoTalla', 'productoTalla__producto')
+    )
+
+    # Mismo criterio de alcance que los reportes: la compra histórica viene con
+    # sucursal NULL, así que anclar solo en `sucursal` la haría desaparecer.
+    from .utils_permisos import ids_empresas_alcance, ids_sucursales_alcance
+    empresas_ids = ids_empresas_alcance(request.user)
+    if empresas_ids is not None:
+        sucursales_ids = ids_sucursales_alcance(request.user) or []
+        lineas = lineas.filter(
+            Q(dte__receptor_id__in=empresas_ids) |
+            Q(dte__sucursal_id__in=sucursales_ids)
+        )
+
+    lineas = lineas.order_by('-dte__fecha_emision', '-dte__id')[:limite]
+
+    compras = []
+    for linea in lineas:
+        dte = linea.dte
+        talla = linea.productoTalla
+        compras.append({
+            'dte_id': dte.id,
+            'fecha': dte.fecha_emision.strftime('%Y-%m-%d') if dte.fecha_emision else '',
+            'fecha_texto': dte.fecha_emision.strftime('%d/%m/%Y') if dte.fecha_emision else '',
+            'numero_documento': dte.numero_documento,
+            'tipo_documento': dte.get_tipo_documento_display(),
+            'proveedor_id': dte.emisor_id,
+            'proveedor': dte.emisor.nombre if dte.emisor_id else '',
+            'sucursal': dte.sucursal.alias if dte.sucursal_id else '—',
+            'sku': talla.sku if talla else '',
+            'articulo': talla.producto.articulo if talla and talla.producto_id else linea.descripcion,
+            'talla': talla.talla if talla else '',
+            'cantidad': linea.stock,
+            'costo_unitario': linea.costo or 0,
+        })
+
+    return JsonResponse({'success': True, 'compras': compras, 'total': len(compras)})
+
+
 # ========== API TIPOS DE FOTO ==========
 
 @login_required

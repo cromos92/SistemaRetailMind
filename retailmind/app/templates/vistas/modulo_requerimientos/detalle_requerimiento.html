@@ -238,7 +238,30 @@
                 <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body py-3">
-                <h6 class="req-bloque-titulo"><i class="ri-building-line"></i>Proveedor y respaldo de compra</h6>
+                <h6 class="req-bloque-titulo">
+                    <i class="ri-building-line"></i>Proveedor y respaldo de compra
+                    <button type="button" class="btn btn-primary btn-sm ms-auto py-0 px-2" style="font-size:.72rem" onclick="alternarBuscadorCompras()">
+                        <i class="ri-search-2-line me-1"></i><span id="ed-btn-buscador-txt">Buscar en compras</span>
+                    </button>
+                </h6>
+
+                <!-- Buscador de compras: panel EN LÍNEA, no un modal anidado.
+                     Bootstrap 5 no apila modales y el segundo backdrop deja la
+                     pantalla negra al cerrar. -->
+                <div id="ed-buscador-compras" class="req-resumen mb-3" style="display:none;">
+                    <div class="input-group input-group-sm mb-2">
+                        <span class="input-group-text bg-white"><i class="ri-search-line"></i></span>
+                        <input type="text" class="form-control" id="ed-busqueda-compras"
+                               placeholder="SKU o nombre del artículo (ej: 418284 o PLATAFORM)"
+                               onkeydown="if(event.key==='Enter'){event.preventDefault();buscarCompras();}">
+                        <button class="btn btn-primary" type="button" onclick="buscarCompras()">Buscar</button>
+                    </div>
+                    <div class="text-muted mb-2" style="font-size:.7rem">
+                        <i class="ri-information-line me-1"></i>Muestra en qué facturas de compra entró este producto. Haz clic en una fila para usarla.
+                    </div>
+                    <div id="ed-resultado-compras" style="max-height:230px;overflow-y:auto"></div>
+                </div>
+
                 <div class="row g-2 mb-3">
                     <div class="col-md-6">
                         <label class="form-label small mb-0">Proveedor</label>
@@ -401,7 +424,18 @@ document.addEventListener('DOMContentLoaded', cargarRequerimiento);
 function cargarRequerimiento() {
     fetch(`/app/api/requerimientos/${requerimientoId}/`)
         .then(r => r.json())
-        .then(data => { if (data.success) { datosRequerimiento = data.requerimiento; mostrarRequerimiento(data.requerimiento); } })
+        .then(data => {
+            if (!data.success) return;
+            datosRequerimiento = data.requerimiento;
+            mostrarRequerimiento(data.requerimiento);
+            // Llegando desde el listado con "falta el proveedor", el modal se
+            // abre solo: evita el paso de buscar dónde estaba la acción.
+            if (new URLSearchParams(window.location.search).get('completar') === '1'
+                && data.requerimiento.permisos.puede_editar) {
+                history.replaceState(null, '', window.location.pathname);
+                abrirModalEditar();
+            }
+        })
         .catch(() => Swal.fire('Error', 'No se pudo cargar', 'error'));
 }
 
@@ -483,12 +517,18 @@ function mostrarRequerimiento(r) {
     $('motivo').textContent = r.motivo;
     $('descripcion-problema').textContent = r.descripcion_problema || '-';
 
-    // Proveedor (unificado)
+    // Proveedor. Se muestra la tarjeta SIEMPRE: cuando falta, es justamente
+    // cuando hay que verlo y actuar, no cuando conviene esconderlo.
+    $('card-proveedor').style.display = 'block';
     if (r.proveedor.id) {
-        $('card-proveedor').style.display = 'block';
         $('proveedor-nombre').textContent = r.proveedor.nombre;
         $('proveedor-email').textContent = r.correo_proveedor_destino || r.proveedor.correo || 'Sin correo configurado';
         mostrarSeguimientoProveedor(r);
+    } else {
+        $('proveedor-nombre').innerHTML = '<span class="text-warning"><i class="ri-error-warning-line me-1"></i>Sin asignar</span>';
+        $('proveedor-email').innerHTML = r.permisos.puede_editar
+            ? '<a href="javascript:void(0)" onclick="abrirModalEditar()">Asignar proveedor y factura</a>'
+            : 'Lo asigna quien revisa el requerimiento';
     }
 
     mostrarAccionesDisponibles(r);
@@ -692,6 +732,89 @@ function aplicarProveedorSugerido(id, factura, fecha) {
     document.getElementById('ed-proveedor').value = id;
     if (!document.getElementById('ed-factura').value) document.getElementById('ed-factura').value = factura;
     if (!document.getElementById('ed-fecha-factura').value) document.getElementById('ed-fecha-factura').value = fecha;
+}
+
+// === BUSCADOR DE COMPRAS ===
+
+function alternarBuscadorCompras() {
+    const panel = document.getElementById('ed-buscador-compras');
+    const abierto = panel.style.display !== 'none';
+    panel.style.display = abierto ? 'none' : 'block';
+    document.getElementById('ed-btn-buscador-txt').textContent = abierto ? 'Buscar en compras' : 'Ocultar buscador';
+
+    if (!abierto) {
+        const campo = document.getElementById('ed-busqueda-compras');
+        // Arranca con el SKU del requerimiento: es la búsqueda que se quiere
+        // el 90% de las veces, y así el panel abre con resultados a la vista.
+        if (!campo.value) campo.value = datosRequerimiento.sku || '';
+        campo.focus();
+        if (campo.value) buscarCompras();
+    }
+}
+
+function buscarCompras() {
+    const q = document.getElementById('ed-busqueda-compras').value.trim();
+    const caja = document.getElementById('ed-resultado-compras');
+    if (q.length < 2) {
+        caja.innerHTML = '<div class="text-muted small">Escriba al menos 2 caracteres.</div>';
+        return;
+    }
+    caja.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+
+    fetch(`/app/api/requerimientos/buscar-compras/?q=${encodeURIComponent(q)}`)
+        .then(r => r.json())
+        .then(d => {
+            if (!d.success) {
+                caja.innerHTML = `<div class="text-danger small">${d.error || 'Error en la búsqueda'}</div>`;
+                return;
+            }
+            if (!d.compras.length) {
+                caja.innerHTML = `<div class="alert alert-warning border-0 py-2 px-2 mb-0 small">
+                    <i class="ri-information-line me-1"></i>No hay compras registradas para "${q}".
+                    Puede escribir el N° de factura a mano más abajo.</div>`;
+                return;
+            }
+            caja.innerHTML = `
+                <table class="table table-sm table-hover align-middle mb-0" style="font-size:.75rem">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Fecha</th><th>Proveedor</th><th>Documento</th>
+                            <th>Producto</th><th class="text-end">Cant.</th><th class="text-end">Costo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${d.compras.map((c, i) => `
+                            <tr style="cursor:pointer" onclick="usarCompra(${i})" title="Usar esta factura">
+                                <td class="text-nowrap">${c.fecha_texto}</td>
+                                <td>${c.proveedor}</td>
+                                <td class="text-nowrap"><span class="badge badge-soft-primary">${c.tipo_documento} N°${c.numero_documento}</span></td>
+                                <td>${c.articulo}${c.talla ? ` <span class="text-muted">(${c.talla})</span>` : ''}<br>
+                                    <span class="text-muted">SKU ${c.sku}</span></td>
+                                <td class="text-end">${c.cantidad}</td>
+                                <td class="text-end">$${(c.costo_unitario || 0).toLocaleString('es-CL')}</td>
+                            </tr>`).join('')}
+                    </tbody>
+                </table>`;
+            comprasEncontradas = d.compras;
+        })
+        .catch(() => { caja.innerHTML = '<div class="text-danger small">Error al buscar compras</div>'; });
+}
+
+let comprasEncontradas = [];
+
+function usarCompra(indice) {
+    const c = comprasEncontradas[indice];
+    if (!c) return;
+    document.getElementById('ed-proveedor').value = c.proveedor_id || '';
+    document.getElementById('ed-factura').value = c.numero_documento || '';
+    document.getElementById('ed-fecha-factura').value = c.fecha || '';
+    alternarBuscadorCompras();
+    Swal.fire({
+        icon: 'success',
+        title: 'Factura seleccionada',
+        text: `${c.proveedor} · ${c.tipo_documento} N°${c.numero_documento}`,
+        timer: 1600, showConfirmButton: false,
+    });
 }
 
 function buscarClienteEnEdicion() {
