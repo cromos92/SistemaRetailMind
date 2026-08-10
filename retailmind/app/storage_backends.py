@@ -30,11 +30,79 @@ logger = logging.getLogger('app')
 _cache_storage = None
 
 
+def _storage_local():
+    """Storage del disco local (MEDIA_ROOT), servido por /media/."""
+    from django.core.files.storage import FileSystemStorage
+    return FileSystemStorage(location=settings.MEDIA_ROOT,
+                             base_url=settings.MEDIA_URL)
+
+
 def _construir_spaces_storage():
-    """Instancia de S3Boto3Storage apuntando a la carpeta de RetailMind."""
+    """Storage de Spaces que SIGUE leyendo del disco local en la transición.
+
+    Al activar Spaces, las fotos ya cargadas siguen viviendo en el disco del
+    contenedor. Si el storage mirara únicamente el bucket, todas esas fotos
+    aparecerían rotas de golpe (la ficha mostraba literalmente "Error").
+
+    Por eso la lectura es **local primero**: si el archivo está en disco se
+    sirve desde ahí —que es exactamente lo que pasaba antes— y si no está, se
+    va al bucket. La escritura, en cambio, va SIEMPRE a Spaces. Así:
+
+    - las fotos viejas se siguen viendo, sin migrar nada;
+    - las nuevas nacen en el bucket y sobreviven al deploy;
+    - cuando el deploy borre el disco, las que ya se subieron con
+      `subir_fotos_requerimientos_spaces` se sirven solas desde el bucket.
+
+    Además evita una llamada HEAD a S3 por cada foto que se muestra: el
+    chequeo local es de disco.
+    """
     from storages.backends.s3boto3 import S3Boto3Storage
 
-    return S3Boto3Storage(
+    class EvidenciaSpacesStorage(S3Boto3Storage):
+
+        def _respaldo_local(self):
+            return _storage_local()
+
+        def existe_en_bucket(self, name):
+            """Solo el bucket, ignorando el respaldo local.
+
+            `exists()` mira primero el disco, así que no sirve para saber si
+            una foto YA se migró: el comando de subida se saltaría todas las
+            que todavía están locales.
+            """
+            return S3Boto3Storage.exists(self, name)
+
+        def exists(self, name):
+            return self._respaldo_local().exists(name) or super().exists(name)
+
+        def url(self, name, *args, **kwargs):
+            local = self._respaldo_local()
+            if local.exists(name):
+                return local.url(name)
+            return super().url(name, *args, **kwargs)
+
+        def _open(self, name, mode='rb'):
+            local = self._respaldo_local()
+            if local.exists(name):
+                return local.open(name, mode)
+            return super()._open(name, mode)
+
+        def size(self, name):
+            local = self._respaldo_local()
+            if local.exists(name):
+                return local.size(name)
+            return super().size(name)
+
+        def delete(self, name):
+            local = self._respaldo_local()
+            if local.exists(name):
+                local.delete(name)
+            try:
+                super().delete(name)
+            except Exception:
+                logger.warning('No se pudo borrar %s del Space', name)
+
+    return EvidenciaSpacesStorage(
         bucket_name=settings.SPACES_BUCKET,
         endpoint_url=settings.SPACES_ENDPOINT,
         access_key=settings.SPACES_ACCESS_KEY,

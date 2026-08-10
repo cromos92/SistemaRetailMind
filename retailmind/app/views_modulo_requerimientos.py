@@ -83,10 +83,12 @@ def usuario_puede_realizar_accion(user, requerimiento, accion):
         if requerimiento.sucursal != empresa_user.sucursal:
             return False
         
-        # Acciones permitidas para supervisor
+        # Acciones permitidas para supervisor. 'editar' está incluido porque
+        # completar datos que faltan (proveedor, factura, RUT del cliente) es
+        # justamente el trabajo de quien revisa, no del que creó el ticket.
         acciones_permitidas = [
             'ver', 'revisar', 'aprobar_simple', 'rechazar_simple',
-            'comentar', 'escalar', 'asignar'
+            'comentar', 'escalar', 'asignar', 'editar'
         ]
         if accion in acciones_permitidas:
             return True
@@ -197,9 +199,12 @@ def crear_requerimiento_vista(request):
 def detalle_requerimiento_vista(request, requerimiento_id):
     """Vista de detalle de un requerimiento"""
     requerimiento = get_object_or_404(Requerimiento, id=requerimiento_id)
-    
+
     context = {
         'requerimiento': requerimiento,
+        # Para el modal de completar datos: quien revisa asigna el proveedor
+        # que la tienda no tiene cómo saber.
+        'proveedores': Empresa.objects.filter(esProveedor=True).order_by('nombre'),
     }
     return render(request, 'vistas/modulo_requerimientos/detalle_requerimiento.html', context)
 
@@ -629,6 +634,10 @@ def detalle_requerimiento(request, requerimiento_id):
                     requerimiento.dte_compra.fecha_emision.strftime('%d/%m/%Y')
                     if requerimiento.dte_compra_id and requerimiento.dte_compra.fecha_emision
                     else '')),
+            # ISO para el <input type="date"> del modal de edición
+            'fecha_factura_compra_iso': (
+                requerimiento.fecha_factura_compra.strftime('%Y-%m-%d')
+                if requerimiento.fecha_factura_compra else ''),
 
             # Documento
             'tipo_documento': requerimiento.tipo_documento or '',
@@ -653,7 +662,10 @@ def detalle_requerimiento(request, requerimiento_id):
             'condicion_producto': requerimiento.get_condicion_producto_display() if requerimiento.condicion_producto else '',
             'condicion_producto_codigo': requerimiento.condicion_producto or '',
             'producto_esperado': requerimiento.producto_esperado or '',
-            'notas_internas': requerimiento.notas_internas or '' if rol_usuario in ['administrador'] else '',
+            # Las ve quien puede completar el requerimiento: si no, el modal de
+            # edición las mandaría vacías y borraría lo que escribió otro.
+            'notas_internas': (requerimiento.notas_internas or ''
+                               if rol_usuario in ('administrador', 'jefe_local') else ''),
             'fotos_completas': requerimiento.fotos_completas,
             'max_fotos': requerimiento.max_fotos,
 
@@ -718,6 +730,7 @@ def detalle_requerimiento(request, requerimiento_id):
                 'puede_registrar_respuesta': usuario_puede_realizar_accion(request.user, requerimiento, 'registrar_respuesta_proveedor'),
                 'puede_completar': usuario_puede_realizar_accion(request.user, requerimiento, 'completar'),
                 'puede_cancelar': usuario_puede_realizar_accion(request.user, requerimiento, 'cancelar'),
+                'puede_ver_notas': rol_usuario in ('administrador', 'jefe_local'),
             },
             'rol_usuario': rol_usuario,
         }
@@ -818,6 +831,134 @@ def actualizar_estado_requerimiento(request, requerimiento_id):
             'success': False,
             'error': f'Error al actualizar estado: {str(e)}'
         }, status=500)
+
+
+CAMPOS_EDITABLES_ANALISTA = {
+    # Lo que la tienda no tiene cómo saber y completa quien revisa
+    'proveedor_id': 'Proveedor',
+    'numero_factura_compra': 'N° factura de compra',
+    'fecha_factura_compra': 'Fecha factura de compra',
+    # Correcciones de lo cargado en tienda
+    'cantidad': 'Cantidad',
+    'prioridad': 'Prioridad',
+    'subtipo': 'Subtipo',
+    'severidad_defecto': 'Severidad',
+    'condicion_producto': 'Condición del producto',
+    'producto_esperado': 'Producto esperado',
+    'motivo': 'Motivo',
+    'descripcion_problema': 'Detalle del problema',
+    'cliente_nombre': 'Nombre del cliente',
+    'cliente_rut': 'RUT del cliente',
+    'cliente_telefono': 'Teléfono del cliente',
+    'cliente_email': 'Email del cliente',
+    'notas_internas': 'Notas internas',
+}
+
+
+@login_required
+@require_POST
+def editar_requerimiento(request, requerimiento_id):
+    """Completar/corregir un requerimiento ya creado.
+
+    Existe porque el reclamo nace incompleto por diseño: la tienda sabe qué
+    falló y tiene el producto en la mano, pero NO sabe a qué proveedor se le
+    compró ni con qué factura — eso lo averigua quien revisa. Sin esta vista,
+    un requerimiento al que le falta la factura queda muerto: no había forma
+    de completarlo desde ninguna pantalla.
+
+    Deja rastro en el historial de qué campos cambiaron y con qué valores.
+    """
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Cuerpo inválido'}, status=400)
+
+    requerimiento = get_object_or_404(
+        Requerimiento.objects.select_related('proveedor', 'sucursal'),
+        id=requerimiento_id,
+    )
+
+    rol_usuario = obtener_rol_usuario(request.user)
+    if rol_usuario == 'administrador':
+        pass  # puede completar cualquier requerimiento
+    elif rol_usuario == 'jefe_local':
+        empresa_user = EmpresaUser.objects.filter(user=request.user).first()
+        if not empresa_user or empresa_user.sucursal_id != requerimiento.sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'Solo puede editar requerimientos de su sucursal'
+            }, status=403)
+    else:
+        # El creador puede corregir lo suyo mientras nadie lo haya tomado
+        if not (requerimiento.usuario_creador_id == request.user.id
+                and requerimiento.estado == 'PENDIENTE'):
+            return JsonResponse({
+                'success': False,
+                'error': 'No tiene permisos para editar este requerimiento'
+            }, status=403)
+
+    if requerimiento.estado in ('COMPLETADO', 'CANCELADO'):
+        return JsonResponse({
+            'success': False,
+            'error': f'El requerimiento está {requerimiento.get_estado_display()} y ya no se edita'
+        }, status=400)
+
+    cambios = []
+    with transaction.atomic():
+        for campo, etiqueta in CAMPOS_EDITABLES_ANALISTA.items():
+            if campo not in data:
+                continue
+            valor = data.get(campo)
+
+            if campo == 'proveedor_id':
+                nuevo = Empresa.objects.filter(id=valor).first() if valor else None
+                if nuevo != requerimiento.proveedor:
+                    anterior = requerimiento.proveedor.nombre if requerimiento.proveedor else '—'
+                    requerimiento.proveedor = nuevo
+                    cambios.append(f'{etiqueta}: {anterior} → {nuevo.nombre if nuevo else "—"}')
+                continue
+
+            if campo == 'cantidad':
+                try:
+                    valor = max(1, int(valor))
+                except (TypeError, ValueError):
+                    continue
+            elif campo == 'fecha_factura_compra':
+                valor = valor or None
+            elif isinstance(valor, str):
+                valor = valor.strip() or None
+
+            anterior = getattr(requerimiento, campo)
+            if str(anterior or '') == str(valor or ''):
+                continue
+            setattr(requerimiento, campo, valor)
+            # Las notas internas no se copian al historial: pueden traer
+            # información que no corresponde repetir en la bitácora visible.
+            if campo == 'notas_internas':
+                cambios.append(f'{etiqueta}: actualizada')
+            else:
+                cambios.append(f'{etiqueta}: {anterior or "—"} → {valor or "—"}')
+
+        if not cambios:
+            return JsonResponse({
+                'success': True,
+                'message': 'No hubo cambios que guardar',
+                'cambios': [],
+            })
+
+        requerimiento.save()
+        HistorialRequerimiento.objects.create(
+            requerimiento=requerimiento,
+            accion='DATOS_ACTUALIZADOS',
+            comentario=' · '.join(cambios)[:2000],
+            usuario=request.user,
+        )
+
+    return JsonResponse({
+        'success': True,
+        'message': f'{len(cambios)} dato(s) actualizado(s)',
+        'cambios': cambios,
+    })
 
 
 @login_required

@@ -25,10 +25,27 @@ MEDIA_TEMPORAL = tempfile.mkdtemp(prefix='req_fmt_media_')
 
 
 class MediaAisladaMixin:
-    """Redirige MEDIA_ROOT a un temporal y lo borra al terminar la clase."""
+    """Aísla los archivos de prueba en un temporal.
+
+    No basta con `override_settings(MEDIA_ROOT=...)`: el storage del campo se
+    resuelve al importar el modelo, así que si el entorno trae credenciales de
+    Spaces (el `.env` de trabajo las tiene) los tests suben las fotos de prueba
+    al bucket REAL. Por eso se reemplaza el storage del campo, no el setting.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from django.core.files.storage import FileSystemStorage
+        from app.models import FotoRequerimiento
+
+        cls._campo_imagen = FotoRequerimiento._meta.get_field('imagen')
+        cls._storage_original = cls._campo_imagen.storage
+        cls._campo_imagen.storage = FileSystemStorage(location=MEDIA_TEMPORAL)
 
     @classmethod
     def tearDownClass(cls):
+        cls._campo_imagen.storage = cls._storage_original
         super().tearDownClass()
         shutil.rmtree(MEDIA_TEMPORAL, ignore_errors=True)
 
@@ -184,7 +201,7 @@ class FormatoPdfTest(MediaAisladaMixin, BaseRequerimientos):
         resp_descarga = self.client.get(url, {'descargar': '1'})
         self.assertIn('attachment', resp_descarga['Content-Disposition'])
 
-    def _adjuntar_foto(self, req, imagen_bytes, nombre='foto.jpg', orden=1):
+    def _adjuntar_foto(self, req, imagen_bytes, nombre='foto_test.jpg', orden=1):
         from django.core.files.uploadedfile import SimpleUploadedFile
         from app.models import FotoRequerimiento
         return FotoRequerimiento.objects.create(
@@ -349,6 +366,89 @@ class RespuestaProveedorTest(BaseRequerimientos):
         req.refresh_from_db()
         self.assertIsNotNone(req.fecha_respuesta_proveedor)
         self.assertEqual(req.estado, 'RECHAZADO')
+
+
+class EditarRequerimientoTest(BaseRequerimientos):
+    """Completar lo que la tienda no sabe: proveedor y factura de compra."""
+
+    def setUp(self):
+        super().setUp()
+        self.req = self._crear_requerimiento(proveedor=None, cliente_rut='')
+        self.url = reverse('api_editar_requerimiento', args=[self.req.id])
+
+    def _editar(self, payload):
+        return self.client.post(self.url, data=json.dumps(payload),
+                                content_type='application/json')
+
+    def test_administrador_completa_proveedor_y_factura(self):
+        resp = self._editar({
+            'proveedor_id': self.proveedor.id,
+            'numero_factura_compra': '8842',
+            'fecha_factura_compra': '2026-05-10',
+        })
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.proveedor_id, self.proveedor.id)
+        self.assertEqual(self.req.numero_factura_compra, '8842')
+        self.assertEqual(self.req.fecha_factura_compra, date(2026, 5, 10))
+
+    def test_deja_rastro_en_el_historial(self):
+        self._editar({'numero_factura_compra': '8842', 'cliente_rut': '12.345.678-9'})
+
+        hist = self.req.historial.filter(accion='DATOS_ACTUALIZADOS').first()
+        self.assertIsNotNone(hist)
+        self.assertIn('8842', hist.comentario)
+        self.assertIn('12.345.678-9', hist.comentario)
+        self.assertEqual(hist.usuario, self.admin)
+
+    def test_no_guarda_ni_registra_si_no_cambio_nada(self):
+        self._editar({'motivo': self.req.motivo, 'cantidad': self.req.cantidad})
+
+        self.assertFalse(self.req.historial.filter(accion='DATOS_ACTUALIZADOS').exists())
+
+    def test_campos_no_listados_se_ignoran(self):
+        """Un payload malicioso no puede cambiar estado ni sucursal."""
+        estado_previo = self.req.estado
+        self._editar({'estado': 'COMPLETADO', 'sucursal_id': 999, 'sku': 'HACKEADO'})
+
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.estado, estado_previo)
+        self.assertEqual(self.req.sucursal_id, self.sucursal.id)
+        self.assertNotEqual(self.req.sku, 'HACKEADO')
+
+    def test_completado_ya_no_se_edita(self):
+        self.req.estado = 'COMPLETADO'
+        self.req.save(update_fields=['estado'])
+
+        resp = self._editar({'numero_factura_compra': '9999'})
+
+        self.assertEqual(resp.status_code, 400)
+        self.req.refresh_from_db()
+        self.assertIsNone(self.req.numero_factura_compra)
+
+    def test_vendedor_ajeno_no_puede_editar(self):
+        otro = crear_usuario(username='vend_ajeno', rol='vendedor', email='v@test.com')
+        crear_empresa_user(otro, self.empresa, self.sucursal)
+        self.client.force_login(otro)
+
+        resp = self._editar({'numero_factura_compra': '9999'})
+
+        self.assertEqual(resp.status_code, 403)
+
+    def test_jefe_local_edita_solo_su_sucursal(self):
+        jefe = crear_usuario(username='jefe_fmt', rol='jefe_local', email='j@test.com')
+        crear_empresa_user(jefe, self.empresa, self.sucursal)
+        self.client.force_login(jefe)
+        self.assertEqual(self._editar({'numero_factura_compra': '111'}).status_code, 200)
+
+        ajena = crear_sucursal(empresa=self.empresa, alias='OTRA-SUC')
+        req_ajeno = self._crear_requerimiento(sucursal=ajena, producto_talla=None)
+        resp = self.client.post(
+            reverse('api_editar_requerimiento', args=[req_ajeno.id]),
+            data=json.dumps({'numero_factura_compra': '222'}),
+            content_type='application/json')
+        self.assertEqual(resp.status_code, 403)
 
 
 class StorageEvidenciasTest(TestCase):

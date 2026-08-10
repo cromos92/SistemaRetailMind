@@ -1,0 +1,127 @@
+{% comment %}
+Estilos compartidos por los modales del módulo de Requerimientos.
+
+Reusa el gradiente y los tokens que ya existen en el proyecto
+(ESTILOS_MODULOS.md: #405189 → #0ab39c · nexo-design-system.css: --nexo-*),
+para que estos modales no parezcan de otro sistema.
+{% endcomment %}
+<style>
+    /* ===== Cabecera y pie comunes ===== */
+    .req-modal .modal-content {
+        border: none;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 20px 45px rgba(26, 26, 46, .22);
+    }
+    .req-modal-header {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        color: #fff;
+        padding: 14px 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border: none;
+    }
+    .req-modal-icon {
+        width: 40px; height: 40px; flex: 0 0 40px;
+        background: rgba(255, 255, 255, .2);
+        border-radius: 11px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 20px;
+    }
+    .req-modal-header h6 { margin: 0; font-weight: 600; font-size: 15px; color: #fff; }
+    .req-modal-header .req-modal-sub { font-size: 12px; opacity: .85; margin-top: 1px; }
+    .req-modal-footer {
+        background: var(--nexo-gray-100, #f5f5f7);
+        border-top: 1px solid var(--nexo-border-light, #d1d1d9);
+        padding: 10px 16px;
+        display: flex; align-items: center; gap: 8px;
+    }
+
+    /* ===== Pasos del asistente ===== */
+    .req-steps { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+    .req-step {
+        display: flex; align-items: center; gap: 6px;
+        padding: 4px 10px; border-radius: 999px;
+        font-size: 11.5px; font-weight: 600;
+        background: rgba(255, 255, 255, .16); color: rgba(255, 255, 255, .85);
+        transition: all .2s ease;
+    }
+    .req-step.activo { background: #fff; color: #405189; }
+    .req-step.listo { background: rgba(255, 255, 255, .32); color: #fff; }
+    .req-step-num {
+        width: 17px; height: 17px; border-radius: 50%;
+        background: rgba(255, 255, 255, .35);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 10px;
+    }
+    .req-step.activo .req-step-num { background: #405189; color: #fff; }
+    .req-step-txt { display: inline; }
+    .req-paso { display: none; }
+    .req-paso.activo { display: block; animation: reqFade .25s ease; }
+    @keyframes reqFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    /* ===== Bloques de contenido ===== */
+    .req-bloque {
+        border: 1px solid var(--nexo-border-light, #d1d1d9);
+        border-radius: 12px;
+        padding: 14px 16px;
+        margin-bottom: 12px;
+        background: #fff;
+    }
+    .req-bloque-titulo {
+        font-size: 12px; font-weight: 700; letter-spacing: .3px;
+        text-transform: uppercase; color: #405189;
+        margin: 0 0 10px; display: flex; align-items: center; gap: 6px;
+    }
+    .req-modal .form-label { font-size: 12px; font-weight: 500; color: var(--nexo-text-secondary, #4a4a5a); margin-bottom: 3px; }
+    .req-modal .form-control, .req-modal .form-select { font-size: 13.5px; border-radius: 8px; }
+    .req-modal .form-control:focus, .req-modal .form-select:focus {
+        border-color: #405189;
+        box-shadow: 0 0 0 3px rgba(64, 81, 137, .12);
+    }
+
+    /* ===== Tarjetas de tipo ===== */
+    .tipo-card-inner {
+        cursor: pointer; height: 100%;
+        border: 2px solid var(--nexo-border-light, #d1d1d9) !important;
+        border-radius: 12px;
+        transition: all .18s ease;
+        background: #fff;
+    }
+    .tipo-card-inner:hover { border-color: #405189 !important; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(64, 81, 137, .14); }
+    .tipo-card-inner.selected {
+        border-color: #405189 !important;
+        background: linear-gradient(135deg, rgba(64, 81, 137, .07) 0%, rgba(10, 179, 156, .07) 100%);
+        box-shadow: 0 0 0 3px rgba(64, 81, 137, .15);
+    }
+    .tipo-card-inner i { font-size: 1.55rem; }
+
+    /* ===== Origen (segmentado) ===== */
+    .req-origen .btn { border-radius: 10px !important; font-size: 12.5px; padding: 8px 10px; }
+    .req-origen .btn-check:checked + .btn {
+        background: #405189; border-color: #405189; color: #fff;
+    }
+
+    /* ===== Fotos ===== */
+    .foto-slot-card {
+        border: 2px dashed var(--nexo-border-light, #d1d1d9);
+        border-radius: 12px; transition: all .18s ease; background: #fff;
+    }
+    .foto-slot-card:hover { border-color: #405189; }
+    .foto-slot-card.has-foto { border-style: solid; border-color: #0ab39c; background: rgba(10, 179, 156, .05); }
+    .foto-slot-card.falta { border-color: #f06548; }
+
+    /* ===== Resumen lateral ===== */
+    .req-resumen { background: var(--nexo-gray-100, #f5f5f7); border-radius: 12px; padding: 12px 14px; }
+    .req-resumen dt { font-size: 11px; color: var(--nexo-text-muted, #8a8a9a); font-weight: 500; }
+    .req-resumen dd { font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--nexo-text-primary, #1a1a2e); }
+
+    @media (max-width: 768px) {
+        .req-step-txt { display: none; }
+        .req-modal-header { padding: 12px 14px; }
+        .req-bloque { padding: 12px; }
+        .req-modal-footer { flex-wrap: wrap; }
+        .req-modal-footer .btn { flex: 1 1 auto; }
+    }
+</style>

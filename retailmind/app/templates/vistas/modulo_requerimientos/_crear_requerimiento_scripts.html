@@ -9,6 +9,83 @@ let documentoEncontrado = null;
 let productosDocumento = [];
 let tipoSeleccionado = '';
 
+// ========== ASISTENTE POR PASOS ==========
+let pasoActual = 1;
+const TOTAL_PASOS = 3;
+
+const AYUDA_PASO = {
+    1: 'Elige qué pasó con el producto',
+    2: 'Identifica el producto reclamado',
+    3: 'Adjunta la evidencia y describe el problema',
+};
+
+function irAPaso(destino) {
+    if (destino < 1 || destino > TOTAL_PASOS) return;
+
+    // Solo se valida al AVANZAR: volver atrás nunca debe bloquearse.
+    if (destino > pasoActual && !validarPaso(pasoActual)) return;
+
+    pasoActual = destino;
+    document.querySelectorAll('.req-paso').forEach(p => p.classList.remove('activo'));
+    document.getElementById(`req-paso-${destino}`).classList.add('activo');
+
+    document.querySelectorAll('.req-step').forEach(s => {
+        const n = parseInt(s.dataset.paso, 10);
+        s.classList.toggle('activo', n === destino);
+        s.classList.toggle('listo', n < destino);
+    });
+
+    document.getElementById('btn-paso-atras').style.display = destino > 1 ? 'inline-block' : 'none';
+    document.getElementById('btn-paso-siguiente').style.display = destino < TOTAL_PASOS ? 'inline-block' : 'none';
+    document.getElementById('btn-guardar').style.display = destino === TOTAL_PASOS ? 'inline-block' : 'none';
+    document.getElementById('req-paso-ayuda').textContent = AYUDA_PASO[destino] || '';
+
+    const cuerpo = document.querySelector('#modalCrearRequerimiento .modal-body');
+    if (cuerpo) cuerpo.scrollTop = 0;
+}
+
+function avisarCampo(id, mensaje) {
+    const campo = document.getElementById(id);
+    if (campo) {
+        campo.classList.add('is-invalid');
+        campo.focus();
+        campo.addEventListener('input', () => campo.classList.remove('is-invalid'), { once: true });
+    }
+    Swal.fire({ icon: 'warning', title: 'Falta un dato', text: mensaje, confirmButtonColor: '#405189' });
+    return false;
+}
+
+function validarPaso(paso) {
+    if (paso === 1) {
+        if (!tipoSeleccionado) {
+            document.getElementById('tipo-error').style.display = 'block';
+            return false;
+        }
+        return true;
+    }
+    if (paso === 2) {
+        if (!document.getElementById('sku').value.trim()) {
+            return avisarCampo('sku', 'Indique el SKU del producto reclamado.');
+        }
+        if (!document.getElementById('nombre_producto').value.trim()) {
+            return avisarCampo('nombre_producto', 'Indique el nombre del producto.');
+        }
+        return true;
+    }
+    if (paso === 3) {
+        const esCliente = document.getElementById('origen').value === 'CLIENTE';
+        if (esCliente && !document.getElementById('cliente_nombre').value.trim()) {
+            return avisarCampo('cliente_nombre',
+                'Indique el nombre del cliente. Si el producto se detectó en tienda, cambie el origen en el paso 1.');
+        }
+        if (!document.getElementById('motivo').value.trim()) {
+            return avisarCampo('motivo', 'Describa brevemente el motivo del requerimiento.');
+        }
+        return true;
+    }
+    return true;
+}
+
 // ========== SELECCION DE TIPO ==========
 
 function seleccionarTipo(card) {
@@ -21,8 +98,6 @@ function seleccionarTipo(card) {
     document.querySelectorAll('.tipo-card .tipo-card-inner').forEach(c => c.classList.remove('selected'));
     card.querySelector('.tipo-card-inner').classList.add('selected');
 
-    // Mostrar contenido del formulario
-    document.getElementById('contenido-formulario').style.display = 'block';
     document.getElementById('bloque-origen').style.display = 'block';
 
     // Mostrar/ocultar secciones condicionales
@@ -30,11 +105,6 @@ function seleccionarTipo(card) {
 
     // Cargar tipos de foto requeridos
     cargarTiposFoto(tipo);
-
-    // Scroll suave al contenido
-    setTimeout(() => {
-        document.getElementById('contenido-formulario').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
 }
 
 function actualizarSeccionesCondicionales(tipo) {
@@ -72,15 +142,9 @@ function cambiarOrigen(origen) {
     document.getElementById('origen').value = origen;
     const esStock = origen === 'STOCK';
 
-    // El nombre del cliente deja de ser obligatorio solo en el caso de bodega.
-    const nombreCliente = document.getElementById('cliente_nombre');
-    if (esStock) {
-        nombreCliente.removeAttribute('required');
-    } else {
-        nombreCliente.setAttribute('required', 'required');
-    }
     document.getElementById('badge-cliente-opcional').style.display = esStock ? 'inline-block' : 'none';
     document.getElementById('aviso-cliente-stock').style.display = esStock ? 'block' : 'none';
+    document.getElementById('cliente-obligatorio').style.display = esStock ? 'none' : 'inline';
 }
 
 // ========== FOTOS GUIADAS ==========
@@ -125,18 +189,23 @@ function renderizarSlotsFoto(tiposFoto) {
         const col = document.createElement('div');
         col.className = 'col-6 col-lg-4';
         col.id = `slot-${tf.codigo}`;
+        // La guía completa va en el tooltip, no impresa bajo cada tarjeta:
+        // seis párrafos de instrucciones convertían la sección en un muro de
+        // texto y tapaban lo único accionable, que es el botón de la foto.
         col.innerHTML = `
-            <div class="foto-slot-card text-center p-2" id="slotcard-${tf.codigo}">
+            <div class="foto-slot-card text-center p-2" id="slotcard-${tf.codigo}" title="${tf.descripcion_guia}">
                 <div id="placeholder-${tf.codigo}">
-                    <i class="${tf.icono} text-muted" style="font-size:1.5rem"></i>
+                    <i class="${tf.icono} text-muted" style="font-size:1.6rem"></i>
                 </div>
                 <div id="preview-slot-${tf.codigo}" style="display:none;">
-                    <img class="img-fluid rounded" style="max-height:100px;object-fit:cover;width:100%" id="img-slot-${tf.codigo}">
+                    <img class="img-fluid rounded" style="max-height:96px;object-fit:cover;width:100%" id="img-slot-${tf.codigo}">
                 </div>
-                <div class="small fw-semibold mt-1" style="font-size:.72rem;line-height:1.2">${tf.nombre}</div>
-                <div class="text-muted mt-1" style="font-size:.65rem;line-height:1.2" title="${tf.descripcion_guia}">${tf.descripcion_guia.substring(0,60)}${tf.descripcion_guia.length>60?'...':''}</div>
-                ${tf.es_obligatorio ? '<span class="badge bg-danger mt-1" style="font-size:.55rem">Obligatoria</span>' : '<span class="badge bg-light text-muted mt-1" style="font-size:.55rem">Opcional</span>'}
-                <input type="file" class="form-control form-control-sm mt-1" id="input-${tf.codigo}" name="foto_${tf.codigo}" accept="image/*" onchange="previsualizarFotoSlot(this,'${tf.codigo}')" style="font-size:.7rem">
+                <div class="fw-semibold mt-1 d-flex align-items-center justify-content-center gap-1" style="font-size:.72rem;line-height:1.15">
+                    <span>${tf.nombre}</span>
+                    ${tf.es_obligatorio ? '<span class="badge bg-danger" style="font-size:.5rem">REQ</span>' : ''}
+                    <i class="ri-question-line text-muted" style="font-size:.75rem" title="${tf.descripcion_guia}"></i>
+                </div>
+                <input type="file" class="form-control form-control-sm mt-1" id="input-${tf.codigo}" name="foto_${tf.codigo}" accept="image/*" capture="environment" onchange="previsualizarFotoSlot(this,'${tf.codigo}')" style="font-size:.7rem">
                 <button type="button" class="btn btn-sm btn-outline-danger mt-1 w-100 py-0" style="display:none;font-size:.7rem" id="btn-quitar-${tf.codigo}" onclick="limpiarFotoSlot('${tf.codigo}')"><i class="ri-close-line"></i> Quitar</button>
             </div>
         `;
@@ -320,14 +389,15 @@ function cargarDocumento(doc) {
     document.getElementById('doc-productos-info').textContent = `${doc.productos.length} producto(s)`;
     document.getElementById('info-documento').style.display = 'block';
 
-    // Auto-rellenar datos del documento. `tipo_documento` ahora es un <select>
-    // con opciones fijas: si el DTE trae una glosa distinta hay que agregarla,
-    // o la selección quedaría vacía y se perdería el dato.
-    const selTipoDoc = document.getElementById('tipo_documento');
+    // El tipo de documento se muestra en un <select> de opciones fijas: si el
+    // DTE trae una glosa distinta se agrega al vuelo, o la selección quedaría
+    // vacía y se perdería el dato al guardar.
+    const selTipoDoc = document.getElementById('tipo_documento_visible');
     if (doc.tipo_dte && !Array.from(selTipoDoc.options).some(o => o.value === doc.tipo_dte)) {
         selTipoDoc.add(new Option(doc.tipo_dte, doc.tipo_dte));
     }
     selTipoDoc.value = doc.tipo_dte || '';
+    document.getElementById('tipo_documento').value = doc.tipo_dte || '';
     document.getElementById('numero_boleta').value = doc.folio_dte || doc.correlativo;
     document.getElementById('fecha_compra').value = doc.fecha;
 
@@ -396,10 +466,10 @@ function sugerirProveedor(sku) {
                 document.getElementById('fecha_factura_compra').value = data.compra.fecha_emision || '';
                 document.getElementById('dte_compra_id').value = data.compra.dte_id || '';
             }
-            aviso.innerHTML = `<i class="ri-lightbulb-flash-line me-1"></i>Última compra de este SKU: ` +
-                `<strong>${data.proveedor.nombre}</strong> — ${data.compra.tipo_documento} ` +
+            aviso.innerHTML = `<i class="ri-lightbulb-flash-line me-1"></i>Detectado: ` +
+                `<strong>${data.proveedor.nombre}</strong> — última compra ${data.compra.tipo_documento} ` +
                 `N°${data.compra.numero_documento} del ${data.compra.fecha_emision}. ` +
-                `<span class="text-muted">Puede cambiarlo si corresponde a otra partida.</span>`;
+                `<span class="text-muted">Lo confirma quien revise el requerimiento.</span>`;
             aviso.style.display = 'block';
         })
         .catch(() => { aviso.style.display = 'none'; });
@@ -427,6 +497,7 @@ function limpiarDocumento() {
     document.getElementById('seccion-producto-documento').style.display = 'none';
     document.getElementById('entrada-manual-producto').style.display = 'block';
     document.getElementById('tipo_documento').value = '';
+    document.getElementById('tipo_documento_visible').value = '';
     document.getElementById('numero_boleta').value = '';
     document.getElementById('fecha_compra').value = '';
     document.getElementById('sku').value = '';
@@ -505,12 +576,16 @@ function buscarProducto() {
 // ========== ENVIAR FORMULARIO ==========
 document.getElementById('form-requerimiento').addEventListener('submit', function(e) {
     e.preventDefault();
+    intentarCrear();
+});
 
-    // Validar tipo seleccionado
-    if (!tipoSeleccionado) {
-        document.getElementById('tipo-error').style.display = 'block';
-        document.getElementById('tipo-cards').scrollIntoView({ behavior: 'smooth' });
-        return;
+function intentarCrear() {
+    // Se revalidan TODOS los pasos: el usuario pudo volver atrás y vaciar algo.
+    for (let paso = 1; paso <= TOTAL_PASOS; paso++) {
+        if (!validarPaso(paso)) {
+            if (paso !== pasoActual) irAPaso(paso);
+            return;
+        }
     }
 
     // Validar límite total de fotos (el backend también lo aplica)
@@ -541,7 +616,12 @@ document.getElementById('form-requerimiento').addEventListener('submit', functio
     }
 
     enviarFormulario();
-});
+}
+
+function restaurarBotonGuardar(btn) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ri-check-line me-1"></i>Crear requerimiento';
+}
 
 function enviarFormulario() {
     const form = document.getElementById('form-requerimiento');
@@ -571,15 +651,13 @@ function enviarFormulario() {
             });
         } else {
             Swal.fire('Error', data.error || 'No se pudo crear el requerimiento', 'error');
-            btnGuardar.disabled = false;
-            btnGuardar.innerHTML = '<i class="ri-save-line me-1"></i> Crear Requerimiento';
+            restaurarBotonGuardar(btnGuardar);
         }
     })
     .catch(error => {
         console.error('Error:', error);
         Swal.fire('Error', 'Error al crear el requerimiento', 'error');
-        btnGuardar.disabled = false;
-        btnGuardar.innerHTML = '<i class="ri-save-line me-1"></i> Crear Requerimiento';
+        restaurarBotonGuardar(btnGuardar);
     });
 }
 
@@ -703,14 +781,24 @@ function guardarNuevoCliente() {
 
 // ========== INICIALIZACION ==========
 document.addEventListener('DOMContentLoaded', function() {
-    $('#proveedor_id').select2({
-        theme: 'bootstrap-5',
-        placeholder: 'Buscar proveedor...',
-        allowClear: true,
-        language: {
-            noResults: function() { return 'No se encontraron proveedores'; },
-            searching: function() { return 'Buscando...'; }
-        }
-    });
+    // Select2 lo carga el footer. `dropdownParent` es imprescindible dentro de
+    // un modal: si no, el desplegable se dibuja detrás del backdrop y no se
+    // puede escribir en el buscador.
+    if (window.jQuery && jQuery.fn.select2) {
+        const opciones = {
+            theme: 'bootstrap-5',
+            placeholder: 'Se detecta automáticamente',
+            allowClear: true,
+            language: {
+                noResults: function() { return 'No se encontraron proveedores'; },
+                searching: function() { return 'Buscando...'; }
+            }
+        };
+        const modal = document.getElementById('modalCrearRequerimiento');
+        if (modal) opciones.dropdownParent = jQuery(modal);
+        jQuery('#proveedor_id').select2(opciones);
+    }
+
+    irAPaso(1);
 });
 </script>

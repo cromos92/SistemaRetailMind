@@ -5,6 +5,7 @@
 {% csrf_token %}
 
 {% include 'vistas/modulo_requerimientos/_crear_requerimiento_assets.html' %}
+{% include 'vistas/modulo_requerimientos/_estilos_modales.html' %}
 
 <style>
     .cursor-pointer {
@@ -304,6 +305,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 history.replaceState(null, '', window.location.pathname);
             }
         });
+        // Reabrir siempre desde el paso 1: si no, el asistente aparece en el
+        // paso 3 del intento anterior y descoloca.
+        modalEl.addEventListener('show.bs.modal', function() {
+            if (typeof irAPaso === 'function') irAPaso(1);
+        });
     }
 });
 
@@ -601,14 +607,23 @@ function filtrarSinRespuesta() {
 
 <!-- Modal crear requerimiento -->
 <!-- backdrop estático: un clic fuera del modal no descarta el formulario a medio llenar -->
-<div class="modal fade" id="modalCrearRequerimiento" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+<div class="modal fade req-modal" id="modalCrearRequerimiento" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header py-2 bg-primary text-white">
-                <h6 class="modal-title"><i class="ri-add-circle-line me-1"></i>Nuevo Requerimiento</h6>
-                <button type="button" class="btn-close btn-close-white btn-sm" data-bs-dismiss="modal"></button>
+        <div class="modal-content">
+            <div class="req-modal-header">
+                <div class="req-modal-icon"><i class="ri-add-circle-line"></i></div>
+                <div>
+                    <h6>Nuevo requerimiento</h6>
+                    <div class="req-modal-sub">Reclamo a proveedor por producto fallado, error de despacho o garantía</div>
+                </div>
+                <div class="req-steps">
+                    <span class="req-step activo" data-paso="1"><span class="req-step-num">1</span><span class="req-step-txt">Qué pasó</span></span>
+                    <span class="req-step" data-paso="2"><span class="req-step-num">2</span><span class="req-step-txt">Producto</span></span>
+                    <span class="req-step" data-paso="3"><span class="req-step-num">3</span><span class="req-step-txt">Evidencia</span></span>
+                </div>
+                <button type="button" class="btn-close btn-close-white btn-sm ms-2" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-2">
+            <div class="modal-body p-3">
                 {% include 'vistas/modulo_requerimientos/_crear_requerimiento_form.html' with modo_embebido=True %}
             </div>
         </div>
@@ -617,8 +632,5 @@ function filtrarSinRespuesta() {
 
 {% include 'vistas/modulo_requerimientos/_crear_requerimiento_scripts.html' %}
 
-{# `page-content` y `container-fluid` ya se cierran arriba (antes del modal).
-   Los dos </div> que había acá cerraban de más `main-content` y
-   `layout-wrapper`, dejando el footer fuera del wrapper del layout. #}
 {% include '../../layout/footer.html' %}
 

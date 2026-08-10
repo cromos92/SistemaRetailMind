@@ -44,7 +44,7 @@ class Command(BaseCommand):
             )
 
         remoto = storage_evidencias()
-        if isinstance(remoto, FileSystemStorage):
+        if isinstance(remoto, FileSystemStorage) or not hasattr(remoto, 'existe_en_bucket'):
             raise CommandError(
                 'El storage de evidencias resolvió a disco local. '
                 'Falta instalar django-storages/boto3 (pip install -r requirements.txt).'
@@ -79,7 +79,10 @@ class Command(BaseCommand):
                     f'  PERDIDA  {foto.requerimiento.numero_requerimiento}  {nombre}'))
                 continue
 
-            if remoto.exists(nombre):
+            # `existe_en_bucket` y no `exists`: este último mira primero el
+            # disco local (respaldo de la transición) y diría que sí para
+            # TODAS las fotos aún sin migrar.
+            if remoto.existe_en_bucket(nombre):
                 omitidas_ya_estan += 1
                 continue
 
