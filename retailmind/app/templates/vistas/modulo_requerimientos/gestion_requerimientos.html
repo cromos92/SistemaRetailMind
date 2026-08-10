@@ -393,12 +393,16 @@ function mostrarRequerimientos(requerimientos) {
             <td>
                 <div class="d-flex align-items-center">
                     <div class="flex-grow-1">
-                        <h6 class="fs-14 mb-1">${req.nombre_producto}</h6>
-                        <p class="text-muted mb-0 small">SKU: ${req.sku}</p>
+                        <h6 class="fs-14 mb-1">${req.nombre_producto}
+                            ${req.cantidad > 1 ? `<span class="badge bg-soft-primary text-primary">x${req.cantidad}</span>` : ''}
+                        </h6>
+                        <p class="text-muted mb-0 small">SKU: ${req.sku}
+                            ${req.tiene_factura_compra ? '' : '<span class="badge badge-soft-warning ms-1" title="El proveedor suele exigir la factura de compra">sin factura</span>'}
+                        </p>
                     </div>
                 </div>
             </td>
-            <td>${req.cliente_nombre}</td>
+            <td>${req.cliente_nombre || '<span class="text-muted">Stock tienda</span>'}</td>
             <td><span class="badge badge-soft-secondary">${req.sucursal}</span></td>
             <td class="text-center">
                 ${req.cantidad_fotos > 0 ?
@@ -613,10 +617,8 @@ function filtrarSinRespuesta() {
 
 {% include 'vistas/modulo_requerimientos/_crear_requerimiento_scripts.html' %}
 
-    </div>
-    <!-- container-fluid -->
-</div>
-<!-- page-content -->
-
+{# `page-content` y `container-fluid` ya se cierran arriba (antes del modal).
+   Los dos </div> que había acá cerraban de más `main-content` y
+   `layout-wrapper`, dejando el footer fuera del wrapper del layout. #}
 {% include '../../layout/footer.html' %}
 

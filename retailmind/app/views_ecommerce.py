@@ -3022,6 +3022,13 @@ def _ctx_guia_pdf(pedido):
 
     return {
         'numero_ticket_rm': pedido.numero_ticket_rm,
+        # Totales del PEDIDO (los mismos que muestra el listado). No se recalculan
+        # sumando líneas: en la práctica casi nunca coinciden —hay despacho,
+        # descuentos de nivel pedido y canales que mandan líneas incompletas— y
+        # ver dos cifras distintas para lo mismo confunde a la tienda.
+        'total_pedido': int(pedido.total or 0),
+        'costo_envio': int(pedido.costo_envio or 0),
+        'descuento_pedido': int(pedido.descuento or 0),
         'canal_origen': pedido.get_canal_origen_display() if pedido.canal_origen else '',
         'numero_pedido_canal': pedido.numero_pedido_canal or '',
         'folio_despacho': pedido.correlativo or '',

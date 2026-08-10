@@ -1,5 +1,5 @@
-<!-- Select2 JS -->
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<!-- Select2 lo carga layout/footer.html DESPUÉS de jQuery. Cargarlo acá lanzaba
+     "jQuery is not defined" en consola (este parcial se incluye antes del footer). -->
 
 <script>
 let contadorFotosAdicionales = 0;
@@ -23,6 +23,7 @@ function seleccionarTipo(card) {
 
     // Mostrar contenido del formulario
     document.getElementById('contenido-formulario').style.display = 'block';
+    document.getElementById('bloque-origen').style.display = 'block';
 
     // Mostrar/ocultar secciones condicionales
     actualizarSeccionesCondicionales(tipo);
@@ -63,6 +64,23 @@ function actualizarSeccionesCondicionales(tipo) {
         document.getElementById('condicion_producto').removeAttribute('name');
         document.getElementById('condicion_producto_garantia').setAttribute('name', 'condicion_producto');
     }
+}
+
+// ========== ORIGEN (con o sin cliente) ==========
+
+function cambiarOrigen(origen) {
+    document.getElementById('origen').value = origen;
+    const esStock = origen === 'STOCK';
+
+    // El nombre del cliente deja de ser obligatorio solo en el caso de bodega.
+    const nombreCliente = document.getElementById('cliente_nombre');
+    if (esStock) {
+        nombreCliente.removeAttribute('required');
+    } else {
+        nombreCliente.setAttribute('required', 'required');
+    }
+    document.getElementById('badge-cliente-opcional').style.display = esStock ? 'inline-block' : 'none';
+    document.getElementById('aviso-cliente-stock').style.display = esStock ? 'block' : 'none';
 }
 
 // ========== FOTOS GUIADAS ==========
@@ -302,8 +320,14 @@ function cargarDocumento(doc) {
     document.getElementById('doc-productos-info').textContent = `${doc.productos.length} producto(s)`;
     document.getElementById('info-documento').style.display = 'block';
 
-    // Auto-rellenar datos del documento
-    document.getElementById('tipo_documento').value = doc.tipo_dte;
+    // Auto-rellenar datos del documento. `tipo_documento` ahora es un <select>
+    // con opciones fijas: si el DTE trae una glosa distinta hay que agregarla,
+    // o la selección quedaría vacía y se perdería el dato.
+    const selTipoDoc = document.getElementById('tipo_documento');
+    if (doc.tipo_dte && !Array.from(selTipoDoc.options).some(o => o.value === doc.tipo_dte)) {
+        selTipoDoc.add(new Option(doc.tipo_dte, doc.tipo_dte));
+    }
+    selTipoDoc.value = doc.tipo_dte || '';
     document.getElementById('numero_boleta').value = doc.folio_dte || doc.correlativo;
     document.getElementById('fecha_compra').value = doc.fecha;
 
@@ -341,7 +365,44 @@ function seleccionarProductoDocumento() {
         const prod = productosDocumento[idx];
         document.getElementById('sku').value = prod.sku;
         document.getElementById('nombre_producto').value = prod.nombre;
+        if (prod.cantidad) document.getElementById('cantidad').value = prod.cantidad;
+        sugerirProveedor(prod.sku);
     }
+}
+
+// ========== PROVEEDOR SUGERIDO POR SKU ==========
+// La tienda no tiene por qué saber a qué proveedor se le compró: el dato está
+// en la última factura de COMPRA del SKU, y de paso trae el respaldo que el
+// proveedor va a exigir.
+function sugerirProveedor(sku) {
+    if (!sku) return;
+    const aviso = document.getElementById('aviso-proveedor-sugerido');
+
+    fetch(`/app/api/requerimientos/sugerir-proveedor/?sku=${encodeURIComponent(sku)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) { aviso.style.display = 'none'; return; }
+
+            const select = document.getElementById('proveedor_id');
+            // Solo autocompleta si el usuario no eligió proveedor a mano.
+            if (!select.value) {
+                select.value = data.proveedor.id;
+                if (window.jQuery && jQuery(select).data('select2')) {
+                    jQuery(select).trigger('change');
+                }
+            }
+            if (!document.getElementById('numero_factura_compra').value) {
+                document.getElementById('numero_factura_compra').value = data.compra.numero_documento || '';
+                document.getElementById('fecha_factura_compra').value = data.compra.fecha_emision || '';
+                document.getElementById('dte_compra_id').value = data.compra.dte_id || '';
+            }
+            aviso.innerHTML = `<i class="ri-lightbulb-flash-line me-1"></i>Última compra de este SKU: ` +
+                `<strong>${data.proveedor.nombre}</strong> — ${data.compra.tipo_documento} ` +
+                `N°${data.compra.numero_documento} del ${data.compra.fecha_emision}. ` +
+                `<span class="text-muted">Puede cambiarlo si corresponde a otra partida.</span>`;
+            aviso.style.display = 'block';
+        })
+        .catch(() => { aviso.style.display = 'none'; });
 }
 
 function toggleManual() {
@@ -370,6 +431,11 @@ function limpiarDocumento() {
     document.getElementById('fecha_compra').value = '';
     document.getElementById('sku').value = '';
     document.getElementById('nombre_producto').value = '';
+    document.getElementById('cantidad').value = '1';
+    document.getElementById('numero_factura_compra').value = '';
+    document.getElementById('fecha_factura_compra').value = '';
+    document.getElementById('dte_compra_id').value = '';
+    document.getElementById('aviso-proveedor-sugerido').style.display = 'none';
     documentoEncontrado = null;
     productosDocumento = [];
     documentosEncontrados = [];
@@ -419,6 +485,7 @@ function buscarProducto() {
         .then(data => {
             if (data.success) {
                 document.getElementById('nombre_producto').value = data.producto.nombre;
+                sugerirProveedor(sku);
                 Swal.fire('Exito', 'Producto encontrado', 'success');
             } else {
                 Swal.fire({

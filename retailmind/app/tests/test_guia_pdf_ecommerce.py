@@ -62,7 +62,69 @@ class GeneradorPdfTest(TestCase):
         self.assertIn('44.990', pdf, 'precio unitario pagado')
         self.assertIn('59.990', pdf, 'precio de lista cuando hubo descuento')
         self.assertIn('25%', pdf, 'porcentaje de descuento')
-        self.assertIn('Valor del pedido', pdf)
+        self.assertIn('Total del pedido', pdf)
+
+        # El SKU/artículo va PRIMERO (es por donde arranca la vendedora) y
+        # después marca, talla y precio. Si alguien reordena el bloque, esto lo
+        # caza: el orden es una decisión de uso, no estética.
+        self.assertLess(pdf.find('4831874'), pdf.find('ADIDAS'),
+                        'el SKU debe imprimirse antes que la marca')
+        self.assertLess(pdf.find('ADIDAS'), pdf.find('TALLA'))
+        self.assertLess(pdf.find('TALLA'), pdf.find('44.990'))
+
+    def _texto(self, ctx):
+        """PDF sin comprimir, para poder buscar el texto impreso."""
+        import reportlab.rl_config as rc
+        rc.pageCompression = 0
+        try:
+            return generar_guia_preparacion_pdf([ctx]).decode('latin-1')
+        finally:
+            rc.pageCompression = 1
+
+    def test_imprime_el_total_del_pedido_no_la_suma_de_lineas(self):
+        """REGRESIÓN (10-ago): la guía mostraba la suma de las líneas y el
+        listado el total del pedido — dos cifras distintas para lo mismo.
+        En prod 5 de 6 pedidos no cuadran (despacho, descuentos, líneas
+        incompletas del canal), así que manda el total del pedido."""
+        ctx = self._ctx(total_pedido=19980, costo_envio=3990, descuento_pedido=0)
+        ctx['items'] = [{'sku': '1', 'nombre': 'PROD', 'cantidad': 1, 'precio': 15990}]
+        pdf = self._texto(ctx)
+        self.assertIn('19.980', pdf, 'debe imprimir el total del pedido')
+        self.assertIn('Total del pedido', pdf)
+        # Y explica de dónde sale la diferencia, en vez de dejar una resta rota.
+        self.assertIn('despacho', pdf)
+        self.assertIn('15.990', pdf, 'el desglose muestra cuánto suman los ítems')
+
+    def test_desglosa_descuento_y_despacho(self):
+        ctx = self._ctx(total_pedido=79291, costo_envio=5500, descuento_pedido=8199)
+        ctx['items'] = [{'sku': '1', 'nombre': 'PROD', 'cantidad': 1, 'precio': 81990}]
+        pdf = self._texto(ctx)
+        self.assertIn('79.291', pdf)
+        self.assertIn('despacho', pdf)
+        self.assertIn('desc.', pdf)
+
+    def test_linea_incompleta_del_canal_se_muestra_como_otros(self):
+        """Caso Paris: sin despacho ni descuento y la línea igual no cuadra."""
+        ctx = self._ctx(total_pedido=29980, costo_envio=0, descuento_pedido=0)
+        ctx['items'] = [{'sku': '1', 'nombre': 'PROD', 'cantidad': 1, 'precio': 24990}]
+        pdf = self._texto(ctx)
+        self.assertIn('29.980', pdf)
+        self.assertIn('otros', pdf)
+
+    def test_si_cuadra_no_imprime_desglose(self):
+        ctx = self._ctx(total_pedido=12990, costo_envio=0, descuento_pedido=0)
+        ctx['items'] = [{'sku': '1', 'nombre': 'PROD', 'cantidad': 1, 'precio': 12990}]
+        pdf = self._texto(ctx)
+        self.assertIn('12.990', pdf)
+        self.assertNotIn('otros', pdf, 'sin diferencia no hay nada que explicar')
+
+    def test_la_casilla_no_sale_rellena(self):
+        """REGRESIÓN: con el carácter '☐' ReportLab caía a ZapfDingbats 'n',
+        que es un cuadrado NEGRO relleno — el papel salía como si todas las
+        líneas ya estuvieran marcadas. Ahora la casilla se dibuja."""
+        pdf = self._texto(self._ctx())
+        self.assertNotIn('ZapfDingbats', pdf,
+                         'la casilla no debe depender de una fuente de símbolos')
 
     def test_sin_descuento_no_muestra_precio_lista(self):
         ctx = self._ctx()

@@ -28,7 +28,51 @@
                     <tr>
                         <td style="padding:26px 24px;">
                             <p style="margin:0 0 6px;">Estimado proveedor <strong>{{ requerimiento.proveedor.nombre }}</strong>,</p>
-                            <p style="margin:0 0 18px;">Se ha generado un requerimiento que requiere de su atención y respuesta.</p>
+                            <p style="margin:0 0 14px;">Se ha generado un requerimiento que requiere de su atención y respuesta.</p>
+
+                            <!-- Ficha de decisión: los datos con los que el proveedor
+                                 resuelve, juntos y arriba. Antes había que leer 4
+                                 tablas distintas para reunirlos. -->
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;border:1px solid #d7dced;border-radius:6px;">
+                                <tr>
+                                    <td style="padding:12px 14px;font-size:14px;background-color:#f7f9fd;">
+                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
+                                            <tr>
+                                                <td style="padding:3px 0;"><span style="color:#666666;">Producto:</span> <strong>{{ requerimiento.sku }}</strong> — {{ requerimiento.nombre_producto }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:3px 0;"><span style="color:#666666;">Cantidad reclamada:</span> <strong>{{ requerimiento.cantidad }}</strong></td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:3px 0;"><span style="color:#666666;">Factura de compra:</span>
+                                                    {% if requerimiento.numero_factura_compra %}<strong>N° {{ requerimiento.numero_factura_compra }}</strong>{% if requerimiento.fecha_factura_compra %} del {{ requerimiento.fecha_factura_compra|date:"d/m/Y" }}{% endif %}
+                                                    {% elif requerimiento.dte_compra %}<strong>N° {{ requerimiento.dte_compra.numero_documento }}</strong> del {{ requerimiento.dte_compra.fecha_emision|date:"d/m/Y" }}
+                                                    {% else %}<span style="color:#a15c00;">no registrada</span>{% endif %}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:3px 0;"><span style="color:#666666;">Problema:</span> {{ requerimiento.get_tipo_display }}{% if requerimiento.subtipo_display %} · {{ requerimiento.subtipo_display }}{% endif %}{% if requerimiento.severidad_defecto %} · {{ requerimiento.get_severidad_defecto_display }}{% endif %}</td>
+                                            </tr>
+                                            {% if fecha_limite_respuesta %}
+                                            <tr>
+                                                <td style="padding:3px 0;"><span style="color:#666666;">Respuesta esperada antes del:</span> <strong>{{ fecha_limite_respuesta|date:"d/m/Y" }}</strong></td>
+                                            </tr>
+                                            {% endif %}
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            {% if lleva_formato_pdf %}
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
+                                <tr>
+                                    <td style="background-color:#e7f3ff;border-left:4px solid #405189;padding:12px 14px;border-radius:4px;font-size:14px;">
+                                        📄 <strong>Se adjunta el formato del requerimiento en PDF</strong>, con toda la información y la evidencia fotográfica.
+                                        Su última página tiene una sección <strong>“Respuesta del Proveedor”</strong>: puede completarla y devolverla respondiendo este correo.
+                                    </td>
+                                </tr>
+                            </table>
+                            {% endif %}
 
                             {% if mensaje_adicional %}
                             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
@@ -75,6 +119,10 @@
                                     <td style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Producto:</td>
                                     <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">{{ requerimiento.nombre_producto }}</td>
                                 </tr>
+                                <tr>
+                                    <td style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Cantidad:</td>
+                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;"><strong>{{ requerimiento.cantidad }}</strong></td>
+                                </tr>
                                 {% if requerimiento.tipo_documento %}
                                 <tr>
                                     <td style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Documento:</td>
@@ -96,7 +144,7 @@
                                 {% if requerimiento.subtipo %}
                                 <tr>
                                     <td width="150" style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Subtipo:</td>
-                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">{{ requerimiento.subtipo }}</td>
+                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">{{ requerimiento.subtipo_display }}</td>
                                 </tr>
                                 {% endif %}
                                 {% if requerimiento.severidad_defecto %}
@@ -120,6 +168,16 @@
                             </table>
                             {% endif %}
 
+                            {% if requerimiento.origen == 'STOCK' %}
+                            <!-- Sin cliente: es merma detectada en la tienda -->
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+                                <tr>
+                                    <td style="background-color:#f8f9fa;border-left:4px solid #878a99;padding:12px 14px;border-radius:4px;font-size:14px;">
+                                        <strong>Producto detectado en stock de la tienda.</strong> No hubo venta a cliente final: la falla se identificó en mercadería en sala o bodega.
+                                    </td>
+                                </tr>
+                            </table>
+                            {% else %}
                             <!-- Cliente -->
                             <h3 style="color:#405189;font-size:15px;margin:0 0 8px;padding-bottom:5px;border-bottom:2px solid #f0f0f0;">👤 Datos del Cliente</h3>
                             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;margin-bottom:20px;">
@@ -140,6 +198,7 @@
                                 </tr>
                                 {% endif %}
                             </table>
+                            {% endif %}
 
                             <!-- Problema -->
                             <h3 style="color:#405189;font-size:15px;margin:0 0 8px;padding-bottom:5px;border-bottom:2px solid #f0f0f0;">❗ Descripción del Problema</h3>
@@ -167,18 +226,32 @@
                             </table>
                             {% endif %}
 
-                            <!-- Solicitud de respuesta -->
+                            <!-- Solicitud de respuesta.
+                                 Los mailto: llevan el N° de requerimiento en el asunto:
+                                 así la respuesta vuelve identificable y el analista la
+                                 registra sin tener que adivinar a qué caso corresponde. -->
                             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
                                 <tr>
                                     <td style="background-color:#e7f3ff;padding:18px;border-radius:8px;text-align:center;font-size:14px;">
                                         <h3 style="color:#405189;margin:0 0 8px;font-size:16px;">¿Procede este requerimiento?</h3>
-                                        <p style="margin:0 0 8px;">Por favor revise la información y las fotos adjuntas, y responda indicando si:</p>
-                                        <table role="presentation" align="center" cellpadding="0" cellspacing="0" style="text-align:left;font-size:14px;">
-                                            <tr><td style="padding:2px 0;">✔️ <strong>Aprueba</strong> el cambio/devolución/garantía</td></tr>
-                                            <tr><td style="padding:2px 0;">✖️ <strong>Rechaza</strong> el requerimiento con justificación</td></tr>
-                                            <tr><td style="padding:2px 0;">❓ <strong>Requiere más información</strong> para decidir</td></tr>
+                                        <p style="margin:0 0 12px;">Responda con una de estas tres opciones{% if fecha_limite_respuesta %}, idealmente antes del <strong>{{ fecha_limite_respuesta|date:"d/m/Y" }}</strong>{% endif %}:</p>
+                                        <table role="presentation" align="center" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                                <td style="padding:0 4px;">
+                                                    <a href="mailto:{{ usuario.email }}?subject=APRUEBA%20{{ requerimiento.numero_requerimiento }}%20-%20SKU%20{{ requerimiento.sku }}&amp;body=Aprobamos%20el%20requerimiento.%20N%C2%B0%20de%20autorizaci%C3%B3n%3A%20"
+                                                       style="display:inline-block;background-color:#0ab39c;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:6px;font-weight:600;font-size:13px;">✔️ Aprobar</a>
+                                                </td>
+                                                <td style="padding:0 4px;">
+                                                    <a href="mailto:{{ usuario.email }}?subject=RECHAZA%20{{ requerimiento.numero_requerimiento }}%20-%20SKU%20{{ requerimiento.sku }}&amp;body=Rechazamos%20el%20requerimiento.%20Motivo%3A%20"
+                                                       style="display:inline-block;background-color:#f06548;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:6px;font-weight:600;font-size:13px;">✖️ Rechazar</a>
+                                                </td>
+                                                <td style="padding:0 4px;">
+                                                    <a href="mailto:{{ usuario.email }}?subject=INFO%20{{ requerimiento.numero_requerimiento }}%20-%20SKU%20{{ requerimiento.sku }}&amp;body=Necesitamos%20la%20siguiente%20informaci%C3%B3n%3A%20"
+                                                       style="display:inline-block;background-color:#405189;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:6px;font-weight:600;font-size:13px;">❓ Pedir info</a>
+                                                </td>
+                                            </tr>
                                         </table>
-                                        <p style="margin:10px 0 0;"><strong>Puede responder directamente a este correo.</strong></p>
+                                        <p style="margin:12px 0 0;font-size:13px;color:#666666;">También puede responder directamente a este correo{% if lleva_formato_pdf %} o devolver el PDF adjunto con la última página completada{% endif %}.</p>
                                     </td>
                                 </tr>
                             </table>
@@ -188,7 +261,7 @@
                             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;margin-bottom:20px;">
                                 <tr>
                                     <td width="150" style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Empresa:</td>
-                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">{{ empresa.nombre }}</td>
+                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">{{ empresa.nombre }}{% if empresa.rut %} — RUT {{ empresa.rut }}{% endif %}</td>
                                 </tr>
                                 <tr>
                                     <td style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Responsable:</td>

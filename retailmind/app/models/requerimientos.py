@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from django.conf import settings
+from ..storage_backends import storage_evidencias
 from .organizacion import Empresa, Sucursal
 from .catalogo import Producto_Talla
 
@@ -30,6 +31,11 @@ SUBTIPO_ERROR_CHOICES = [
     ('COLOR_INCORRECTO', 'Color Incorrecto'),
     ('CANTIDAD_INCORRECTA', 'Cantidad Incorrecta'),
     ('OTRO_ERROR', 'Otro Error'),
+]
+
+ORIGEN_REQUERIMIENTO_CHOICES = [
+    ('CLIENTE', 'Reclamo de un cliente'),
+    ('STOCK', 'Detectado en stock / bodega (sin cliente)'),
 ]
 
 ESTADO_REQUERIMIENTO_CHOICES = [
@@ -83,6 +89,24 @@ class TipoFotoRequerimiento(models.Model):
         obligatorio = "Obligatoria" if self.es_obligatorio else "Opcional"
         return f"{self.nombre} ({obligatorio})"
 
+    @classmethod
+    def tipos_para(cls, tipo_requerimiento, solo_obligatorios=False):
+        """Tipos de foto aplicables a un tipo de requerimiento, ya ordenados.
+
+        El filtrado de `tipos_requerimiento` (JSONField) se hace en Python y no
+        con `__contains`: ese lookup solo existe en PostgreSQL y hacía estallar
+        cualquier flujo del módulo en otros backends (la suite de tests, por
+        ejemplo, no podía ni crear un requerimiento). La tabla tiene menos de
+        20 filas, así que traerla entera es más barato que el operador JSON.
+        """
+        qs = cls.objects.filter(activo=True)
+        if solo_obligatorios:
+            qs = qs.filter(es_obligatorio=True)
+        return [
+            tf for tf in qs.order_by('orden')
+            if tipo_requerimiento in (tf.tipos_requerimiento or [])
+        ]
+
 
 class Requerimiento(models.Model):
     """
@@ -110,6 +134,16 @@ class Requerimiento(models.Model):
         max_length=30,
         choices=ESTADO_REQUERIMIENTO_CHOICES,
         default='PENDIENTE'
+    )
+    origen = models.CharField(
+        max_length=10,
+        choices=ORIGEN_REQUERIMIENTO_CHOICES,
+        default='CLIENTE',
+        help_text=(
+            "CLIENTE: lo reclama un cliente final (lo ideal, hay documento y "
+            "persona detrás). STOCK: la tienda detecta la falla en mercadería "
+            "sin vender, por lo que no hay cliente al que exigirle datos."
+        )
     )
 
     # === SUCURSAL Y USUARIO ===
@@ -151,6 +185,34 @@ class Requerimiento(models.Model):
         max_length=255,
         help_text="Nombre del producto"
     )
+    cantidad = models.PositiveIntegerField(
+        default=1,
+        help_text="Unidades reclamadas. El proveedor necesita este dato para su NC."
+    )
+
+    # === RESPALDO DE COMPRA AL PROVEEDOR ===
+    # Es lo que el proveedor exige para aceptar una garantía: la factura con la
+    # que ESE producto le fue comprado. La boleta de venta al cliente (más
+    # abajo) le sirve para la fecha, pero no para identificar la partida.
+    dte_compra = models.ForeignKey(
+        'app.Dte',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='requerimientos_garantia',
+        help_text="Factura de compra al proveedor, cuando está en el sistema"
+    )
+    numero_factura_compra = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="N° de la factura de compra (permite tipearlo si no está en el sistema)"
+    )
+    fecha_factura_compra = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Fecha de la factura de compra al proveedor"
+    )
 
     # === DOCUMENTO DE VENTA ===
     numero_boleta = models.CharField(
@@ -180,7 +242,8 @@ class Requerimiento(models.Model):
     )
     cliente_nombre = models.CharField(
         max_length=255,
-        help_text="Nombre completo del cliente"
+        blank=True,
+        help_text="Nombre completo del cliente. Vacío solo si origen='STOCK'."
     )
     cliente_telefono = models.CharField(
         max_length=20,
@@ -389,6 +452,19 @@ class Requerimiento(models.Model):
         super().save(*args, **kwargs)
 
     @property
+    def subtipo_display(self):
+        """Etiqueta legible del subtipo.
+
+        `subtipo` es un CharField libre (el valor depende del tipo principal),
+        así que no hay `get_subtipo_display`. Sin esto el correo al proveedor
+        imprimía el código crudo: "DESPEGUE_SUELA".
+        """
+        if not self.subtipo:
+            return ''
+        etiquetas = dict(SUBTIPO_DEFECTO_CHOICES + SUBTIPO_ERROR_CHOICES)
+        return etiquetas.get(self.subtipo, self.subtipo.replace('_', ' ').title())
+
+    @property
     def dias_transcurridos(self):
         """Calcula dias desde la creacion"""
         delta = timezone.now() - self.fecha_creacion
@@ -445,11 +521,8 @@ class Requerimiento(models.Model):
 
     def verificar_fotos_completas(self):
         """Verifica si todas las fotos obligatorias estan presentes"""
-        tipos_obligatorios = TipoFotoRequerimiento.objects.filter(
-            activo=True,
-            es_obligatorio=True,
-            tipos_requerimiento__contains=[self.tipo],
-        )
+        tipos_obligatorios = TipoFotoRequerimiento.tipos_para(
+            self.tipo, solo_obligatorios=True)
         fotos_subidas = set(
             self.fotos.filter(tipo_foto__isnull=False)
             .values_list('tipo_foto__codigo', flat=True)
@@ -473,6 +546,7 @@ class FotoRequerimiento(models.Model):
     )
     imagen = models.ImageField(
         upload_to='requerimientos/fotos/%Y/%m/%d/',
+        storage=storage_evidencias,
         help_text="Foto del producto o problema"
     )
     tipo_foto = models.ForeignKey(

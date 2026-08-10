@@ -17,7 +17,6 @@ from django.db import transaction
 from django.core.mail import send_mail, EmailMessage, EmailMultiAlternatives
 from django.core.validators import validate_email
 from django.conf import settings
-from django.core.files.storage import default_storage
 from django.template.loader import render_to_string
 import json
 import os
@@ -30,11 +29,22 @@ from .models import (
     Producto, Producto_Talla, Sucursal, EmpresaUser, Empresa,
     Requerimiento, FotoRequerimiento, HistorialRequerimiento,
     TipoFotoRequerimiento, MAX_FOTOS_POR_TIPO,
-    ESTADO_REQUERIMIENTO_CHOICES,
+    ESTADO_REQUERIMIENTO_CHOICES, TIPO_REQUERIMIENTO_CHOICES,
+    ORIGEN_REQUERIMIENTO_CHOICES,
     Ticket, Dte, Dte_Productos
+)
+from .services.pdf_requerimiento_proveedor import (
+    generar_pdf_requerimiento, nombre_archivo_pdf,
 )
 
 logger = logging.getLogger('app')
+
+# Tope de adjuntos del correo al proveedor. El PDF del formato ya lleva las
+# fotos incrustadas y reescaladas; las originales van ADEMÁS solo si caben.
+# Sin esto, 8 fotos de celular (~35MB) hacen fallar el envío entero: Gmail y
+# MailerSend cortan cerca de los 25MB.
+MAX_ADJUNTOS_MB = int(os.environ.get('REQUERIMIENTOS_MAX_ADJUNTOS_MB', '12'))
+PLAZO_RESPUESTA_DIAS = int(os.environ.get('REQUERIMIENTOS_PLAZO_RESPUESTA_DIAS', '7'))
 
 
 # ========== SISTEMA DE PERMISOS ==========
@@ -214,14 +224,42 @@ def crear_requerimiento(request):
             data = request.POST
         
         # Validar datos requeridos
-        campos_requeridos = ['tipo', 'sku', 'nombre_producto', 'cliente_nombre', 'motivo']
+        campos_requeridos = ['tipo', 'sku', 'nombre_producto', 'motivo']
         for campo in campos_requeridos:
             if not data.get(campo):
                 return JsonResponse({
                     'success': False,
                     'error': f'El campo {campo} es requerido'
                 }, status=400)
-        
+
+        if data.get('tipo') not in dict(TIPO_REQUERIMIENTO_CHOICES):
+            return JsonResponse({
+                'success': False,
+                'error': f"Tipo de requerimiento no válido: {data.get('tipo')}"
+            }, status=400)
+
+        # Origen: sin cliente solo se acepta cuando la falla se detectó en el
+        # stock de la tienda (merma de bodega). En un reclamo de cliente el
+        # nombre sigue siendo obligatorio: es el dato con el que el proveedor
+        # y la propia tienda rastrean el caso.
+        origen = data.get('origen') or 'CLIENTE'
+        if origen not in dict(ORIGEN_REQUERIMIENTO_CHOICES):
+            origen = 'CLIENTE'
+        if origen == 'CLIENTE' and not data.get('cliente_nombre'):
+            return JsonResponse({
+                'success': False,
+                'error': 'El nombre del cliente es requerido cuando el requerimiento '
+                         'nace de un reclamo. Si el producto se detectó en bodega, '
+                         'marque el origen como "Detectado en stock".'
+            }, status=400)
+
+        try:
+            cantidad = int(data.get('cantidad') or 1)
+        except (TypeError, ValueError):
+            cantidad = 1
+        if cantidad < 1:
+            cantidad = 1
+
         # Obtener sucursal actual
         sucursal_id = request.session.get('idSucursalActual')
         if not sucursal_id:
@@ -229,9 +267,25 @@ def crear_requerimiento(request):
                 'success': False,
                 'error': 'No se ha seleccionado una sucursal'
             }, status=400)
-        
-        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
-        
+
+        # La sucursal viene de la sesión: hay que verificar que sea del alcance
+        # del usuario o un requerimiento puede quedar cargado a otra empresa.
+        sucursal = Sucursal.objects.filter(
+            id=sucursal_id, empresa__empresauser__user=request.user
+        ).first()
+        if not sucursal:
+            return JsonResponse({
+                'success': False,
+                'error': 'La sucursal activa no pertenece a su usuario. '
+                         'Vuelva a seleccionar sucursal.'
+            }, status=403)
+
+        dte_compra = None
+        if data.get('dte_compra_id'):
+            dte_compra = Dte.objects.filter(
+                id=data.get('dte_compra_id'), tipo_transaccion='COMPRA'
+            ).first()
+
         # Buscar producto_talla por SKU
         producto_talla = None
         try:
@@ -246,16 +300,21 @@ def crear_requerimiento(request):
             requerimiento = Requerimiento.objects.create(
                 tipo=tipo_req,
                 subtipo=data.get('subtipo', '') or None,
+                origen=origen,
                 sucursal=sucursal,
                 usuario_creador=request.user,
                 producto_talla=producto_talla,
                 sku=data.get('sku'),
                 nombre_producto=data.get('nombre_producto'),
+                cantidad=cantidad,
+                dte_compra=dte_compra,
+                numero_factura_compra=data.get('numero_factura_compra', '') or None,
+                fecha_factura_compra=data.get('fecha_factura_compra') or None,
                 numero_boleta=data.get('numero_boleta', ''),
                 tipo_documento=data.get('tipo_documento', ''),
                 fecha_compra=data.get('fecha_compra') if data.get('fecha_compra') else None,
                 cliente_rut=data.get('cliente_rut', ''),
-                cliente_nombre=data.get('cliente_nombre'),
+                cliente_nombre=data.get('cliente_nombre', '') or '',
                 cliente_telefono=data.get('cliente_telefono', ''),
                 cliente_email=data.get('cliente_email', ''),
                 motivo=data.get('motivo'),
@@ -284,9 +343,21 @@ def crear_requerimiento(request):
                 tipos_foto_db = {
                     tf.codigo: tf for tf in TipoFotoRequerimiento.objects.filter(activo=True)
                 }
-                for key in request.FILES:
+                # Las guiadas van PRIMERO: `request.FILES` no garantiza orden y
+                # el corte por `max_fotos` estaba descartando fotos obligatorias
+                # cuando el usuario adjuntaba muchas adicionales.
+                claves = sorted(
+                    request.FILES.keys(),
+                    key=lambda k: (0 if k.startswith('foto_FOTO_') else 1, k),
+                )
+                for key in claves:
                     if orden_counter > max_fotos:
-                        break
+                        logger.info(
+                            'Requerimiento %s: se omitió la foto %s por superar el '
+                            'máximo de %s para el tipo %s',
+                            requerimiento.numero_requerimiento, key, max_fotos, tipo_req,
+                        )
+                        continue
                     tipo_foto_obj = None
                     if key.startswith('foto_FOTO_'):
                         codigo = key.replace('foto_', '', 1)
@@ -320,8 +391,9 @@ def crear_requerimiento(request):
             'requerimiento_id': requerimiento.id,
             'numero_requerimiento': requerimiento.numero_requerimiento
         })
-        
+
     except Exception as e:
+        logger.exception('Error al crear requerimiento (usuario %s)', request.user)
         return JsonResponse({
             'success': False,
             'error': f'Error al crear requerimiento: {str(e)}'
@@ -432,6 +504,11 @@ def listar_requerimientos(request):
                 'sucursal': req.sucursal.alias,
                 'sku': req.sku,
                 'nombre_producto': req.nombre_producto,
+                'cantidad': req.cantidad,
+                'origen_codigo': req.origen,
+                # Bandera de triage para el analista: sin factura de compra la
+                # mayoría de los proveedores no cursa la garantía.
+                'tiene_factura_compra': bool(req.numero_factura_compra or req.dte_compra_id),
                 'cliente_nombre': req.cliente_nombre,
                 'fecha_creacion': req.fecha_creacion.strftime('%d/%m/%Y %H:%M'),
                 'dias_transcurridos': req.dias_transcurridos,
@@ -538,7 +615,21 @@ def detalle_requerimiento(request, requerimiento_id):
             # Producto
             'sku': requerimiento.sku,
             'nombre_producto': requerimiento.nombre_producto,
-            
+            'cantidad': requerimiento.cantidad,
+
+            # Origen y respaldo de compra
+            'origen': requerimiento.get_origen_display(),
+            'origen_codigo': requerimiento.origen,
+            'numero_factura_compra': requerimiento.numero_factura_compra or (
+                str(requerimiento.dte_compra.numero_documento)
+                if requerimiento.dte_compra_id else ''),
+            'fecha_factura_compra': (
+                requerimiento.fecha_factura_compra.strftime('%d/%m/%Y')
+                if requerimiento.fecha_factura_compra else (
+                    requerimiento.dte_compra.fecha_emision.strftime('%d/%m/%Y')
+                    if requerimiento.dte_compra_id and requerimiento.dte_compra.fecha_emision
+                    else '')),
+
             # Documento
             'tipo_documento': requerimiento.tipo_documento or '',
             'numero_boleta': requerimiento.numero_boleta or '',
@@ -555,7 +646,8 @@ def detalle_requerimiento(request, requerimiento_id):
             'descripcion_problema': requerimiento.descripcion_problema or '',
 
             # Clasificacion de defecto
-            'subtipo': requerimiento.subtipo or '',
+            'subtipo': requerimiento.subtipo_display,
+            'subtipo_codigo': requerimiento.subtipo or '',
             'severidad_defecto': requerimiento.get_severidad_defecto_display() if requerimiento.severidad_defecto else '',
             'severidad_defecto_codigo': requerimiento.severidad_defecto or '',
             'condicion_producto': requerimiento.get_condicion_producto_display() if requerimiento.condicion_producto else '',
@@ -603,10 +695,7 @@ def detalle_requerimiento(request, requerimiento_id):
                     'icono': tf.icono,
                     'es_obligatorio': tf.es_obligatorio,
                 }
-                for tf in TipoFotoRequerimiento.objects.filter(
-                    activo=True,
-                    tipos_requerimiento__contains=[requerimiento.tipo],
-                ).order_by('orden')
+                for tf in TipoFotoRequerimiento.tipos_para(requerimiento.tipo)
             ],
 
             # Relacionados
@@ -792,33 +881,69 @@ def enviar_a_proveedor(request, requerimiento_id):
     mensaje_adicional = (data.get('mensaje') or '').strip()
     es_reenvio = bool(data.get('es_reenvio')) or requerimiento.correo_enviado_proveedor
 
-    # Fotos adjuntables (existentes en storage)
+    # Fotos adjuntables (existentes en el storage DEL CAMPO, que puede ser
+    # Spaces y no el default: `default_storage` miraría el disco local).
     fotos_adjuntables = [
         foto for foto in requerimiento.fotos.all()
-        if foto.imagen and default_storage.exists(foto.imagen.name)
+        if foto.imagen and foto.imagen.storage.exists(foto.imagen.name)
     ]
+    fotos_registradas = requerimiento.fotos.count()
+
+    # Formato propio de RetailMind: el documento formal que el proveedor
+    # archiva y responde. Lleva las fotos incrustadas y reescaladas, así que
+    # va SIEMPRE aunque las originales no quepan como adjunto.
+    pdf_bytes = None
+    try:
+        pdf_bytes = generar_pdf_requerimiento(
+            requerimiento, usuario=request.user, plazo_dias=PLAZO_RESPUESTA_DIAS,
+        )
+    except Exception:
+        # Si el formato falla, el correo igual sale: perder el envío por un
+        # problema de maquetación sería peor que mandarlo sin el PDF.
+        logger.exception('No se pudo generar el formato PDF del requerimiento %s',
+                         requerimiento.id)
 
     context = {
         'requerimiento': requerimiento,
         'fotos': requerimiento.fotos.all(),
         'cantidad_fotos_adjuntas': len(fotos_adjuntables),
+        'fotos_no_disponibles': fotos_registradas - len(fotos_adjuntables),
         'usuario': request.user,
         'empresa': requerimiento.sucursal.empresa,
         'mensaje_adicional': mensaje_adicional,
         'es_reenvio': es_reenvio,
+        'lleva_formato_pdf': pdf_bytes is not None,
+        'plazo_respuesta_dias': PLAZO_RESPUESTA_DIAS,
+        'fecha_limite_respuesta': timezone.localdate() + timedelta(days=PLAZO_RESPUESTA_DIAS),
     }
 
-    prefijo = 'RECORDATORIO - ' if es_reenvio else ''
-    asunto = f'{prefijo}Requerimiento de {requerimiento.get_tipo_display()} - {requerimiento.numero_requerimiento}'
+    # Asunto filtrable por el proveedor: sin SKU ni factura no puede buscarlo
+    # en su bandeja ni cruzarlo con su sistema.
+    prefijo = 'RECORDATORIO · ' if es_reenvio else ''
+    referencia_compra = requerimiento.numero_factura_compra or (
+        str(requerimiento.dte_compra.numero_documento) if requerimiento.dte_compra_id else '')
+    partes_asunto = [
+        f'[{requerimiento.get_tipo_display().upper()}]',
+        requerimiento.numero_requerimiento,
+        f'SKU {requerimiento.sku}',
+    ]
+    if referencia_compra:
+        partes_asunto.append(f'FAC {referencia_compra}')
+    partes_asunto.append(requerimiento.sucursal.empresa.nombre)
+    asunto = prefijo + ' · '.join(partes_asunto)
 
     html_message = render_to_string('emails/requerimiento_proveedor.html', context)
     texto_plano = (
         f'Requerimiento {requerimiento.numero_requerimiento} - {requerimiento.get_tipo_display()}\n'
         f'Proveedor: {requerimiento.proveedor.nombre}\n'
-        f'Producto: {requerimiento.sku} - {requerimiento.nombre_producto}\n'
+        f'Producto: {requerimiento.sku} - {requerimiento.nombre_producto} '
+        f'(cantidad: {requerimiento.cantidad})\n'
+        f'{("Factura de compra: " + referencia_compra) if referencia_compra else "Sin factura de compra registrada"}\n'
         f'Motivo: {requerimiento.motivo}\n'
         f'{("Mensaje: " + mensaje_adicional) if mensaje_adicional else ""}\n'
-        f'Se adjuntan {len(fotos_adjuntables)} foto(s). Por favor responda indicando si procede.\n'
+        f'{"Se adjunta el formato del requerimiento en PDF con la evidencia fotográfica. " if pdf_bytes else ""}'
+        f'Se adjuntan {len(fotos_adjuntables)} foto(s) en su resolución original.\n'
+        f'Por favor responda indicando si procede.\n'
         f'Contacto: {request.user.get_full_name()} - {requerimiento.sucursal.empresa.nombre}'
     )
 
@@ -838,11 +963,36 @@ def enviar_a_proveedor(request, requerimiento_id):
     )
     email.attach_alternative(html_message, 'text/html')
 
+    # 1) El formato propio (siempre primero: es el documento del reclamo)
+    if pdf_bytes:
+        email.attach(nombre_archivo_pdf(requerimiento), pdf_bytes, 'application/pdf')
+
+    # 2) Las fotos originales, mientras quepan en el presupuesto de adjuntos.
+    #    Se leen por el storage del campo y no por `.path`: con almacenamiento
+    #    remoto `.path` lanza NotImplementedError y el envío se caía entero.
+    presupuesto = MAX_ADJUNTOS_MB * 1024 * 1024 - len(pdf_bytes or b'')
+    fotos_omitidas = []
+    fotos_enviadas = 0
     for foto in fotos_adjuntables:
         try:
-            email.attach_file(foto.imagen.path)
+            with foto.imagen.storage.open(foto.imagen.name, 'rb') as fh:
+                contenido = fh.read()
         except Exception as e:
-            logger.warning("Error al adjuntar foto de requerimiento %s: %s", requerimiento.id, e)
+            logger.warning("Error al leer foto de requerimiento %s: %s", requerimiento.id, e)
+            continue
+        if len(contenido) > presupuesto:
+            fotos_omitidas.append(foto.imagen.name)
+            continue
+        presupuesto -= len(contenido)
+        email.attach(os.path.basename(foto.imagen.name), contenido)
+        fotos_enviadas += 1
+
+    if fotos_omitidas:
+        logger.info(
+            'Requerimiento %s: %s foto(s) no se adjuntaron en original por el tope '
+            'de %sMB (van igual dentro del PDF)',
+            requerimiento.id, len(fotos_omitidas), MAX_ADJUNTOS_MB,
+        )
 
     try:
         email.send(fail_silently=False)
@@ -870,7 +1020,12 @@ def enviar_a_proveedor(request, requerimiento_id):
             accion='RECORDATORIO_ENVIADO' if es_reenvio else 'ENVIADO_A_PROVEEDOR',
             estado_anterior=estado_anterior,
             estado_nuevo='ESPERANDO_RESPUESTA',
-            comentario=f'Correo enviado a {requerimiento.proveedor.nombre} ({correo_destino}) - Intento #{requerimiento.intentos_envio}',
+            comentario=(
+                f'Correo enviado a {requerimiento.proveedor.nombre} ({correo_destino}) '
+                f'- Intento #{requerimiento.intentos_envio} '
+                f'- {"con" if pdf_bytes else "SIN"} formato PDF '
+                f'- {fotos_enviadas} foto(s) adjuntas'
+            ),
             usuario=request.user
         )
 
@@ -894,7 +1049,8 @@ def enviar_a_proveedor(request, requerimiento_id):
                 f'por {request.user.get_full_name()}.\n'
                 f'Producto: {requerimiento.sku} - {requerimiento.nombre_producto}\n'
                 f'Motivo: {requerimiento.motivo}\n'
-                f'Fotos adjuntadas al proveedor: {len(fotos_adjuntables)} (esta copia no incluye fotos).'
+                f'Formato PDF adjuntado: {"si" if pdf_bytes else "NO"}\n'
+                f'Fotos adjuntadas al proveedor: {fotos_enviadas} (esta copia no incluye adjuntos).'
             )
             email_copia = EmailMultiAlternatives(
                 subject=f'[COPIA] {asunto} → {correo_destino}',
@@ -916,7 +1072,14 @@ def enviar_a_proveedor(request, requerimiento_id):
             # La copia es de control: su falla no revierte el envío al proveedor
             logger.exception("Error al enviar copia-resumen del requerimiento %s a %s", requerimiento.id, correo_copia)
 
-    mensaje_out = f'Requerimiento enviado a {requerimiento.proveedor.nombre} ({correo_destino}) con {len(fotos_adjuntables)} foto(s)'
+    mensaje_out = (
+        f'Requerimiento enviado a {requerimiento.proveedor.nombre} ({correo_destino})'
+        f'{" con el formato PDF" if pdf_bytes else " SIN el formato PDF (revisar logs)"}'
+        f' y {fotos_enviadas} foto(s) adjuntas'
+    )
+    if fotos_omitidas:
+        mensaje_out += (f'. {len(fotos_omitidas)} foto(s) superaron el tope de '
+                        f'{MAX_ADJUNTOS_MB}MB y van solo dentro del PDF')
     if copia_enviada:
         mensaje_out += f'. Copia-resumen enviada a {correo_copia}'
     elif correo_copia:
@@ -929,7 +1092,9 @@ def enviar_a_proveedor(request, requerimiento_id):
         'correo_destino': correo_destino,
         'copia_enviada': copia_enviada,
         'correo_copia': correo_copia or '',
-        'fotos_adjuntas': len(fotos_adjuntables),
+        'fotos_adjuntas': fotos_enviadas,
+        'fotos_omitidas': len(fotos_omitidas),
+        'formato_pdf_adjunto': bool(pdf_bytes),
     })
 
 
@@ -965,11 +1130,25 @@ def registrar_respuesta_proveedor(request, requerimiento_id):
                 'error': 'Decisión debe ser APROBADO o RECHAZADO'
             }, status=400)
         
+        # Fecha real de la respuesta: el modal la pide y hasta ahora se
+        # descartaba (siempre se guardaba el instante del registro, que puede
+        # ser días después de que el proveedor contestó).
+        fecha_respuesta = timezone.now()
+        if data.get('fecha_respuesta'):
+            try:
+                parseada = datetime.strptime(data['fecha_respuesta'][:16], '%Y-%m-%dT%H:%M')
+                fecha_respuesta = timezone.make_aware(parseada)
+            except (ValueError, TypeError):
+                pass  # formato inesperado: se deja el instante actual
+
         with transaction.atomic():
             requerimiento.respuesta_proveedor = respuesta
-            requerimiento.fecha_respuesta_proveedor = timezone.now()
+            requerimiento.fecha_respuesta_proveedor = fecha_respuesta
             requerimiento.decision_proveedor = decision
-            requerimiento.estado = 'APROBADO' if decision == 'APROBADO' else 'RECHAZADO'
+            # PARCIAL es una aprobación acotada (el proveedor acepta parte del
+            # reclamo): dejarlo como RECHAZADO cerraba el caso sin poder
+            # tramitar lo que sí aprobó.
+            requerimiento.estado = 'RECHAZADO' if decision == 'RECHAZADO' else 'APROBADO'
             requerimiento.fecha_resolucion = timezone.now()
             
             # Motivo visible al usuario
@@ -1509,7 +1688,22 @@ def exportar_requerimientos(request):
         requerimientos = Requerimiento.objects.select_related(
             'sucursal', 'usuario_creador', 'proveedor'
         ).all()
-        
+
+        # MISMO alcance que el listado: sin esto cualquier usuario logueado
+        # descargaba los requerimientos de todas las empresas del holding.
+        rol_usuario = obtener_rol_usuario(request.user)
+        if rol_usuario == 'jefe_local':
+            empresa_user = EmpresaUser.objects.filter(user=request.user).first()
+            if empresa_user and empresa_user.sucursal:
+                requerimientos = requerimientos.filter(sucursal=empresa_user.sucursal)
+            else:
+                requerimientos = requerimientos.none()
+        elif rol_usuario != 'administrador':
+            requerimientos = requerimientos.filter(
+                Q(usuario_creador=request.user) |
+                Q(sucursal__in=obtener_sucursales_usuario(request.user))
+            )
+
         # Aplicar filtros
         if estado:
             requerimientos = requerimientos.filter(estado=estado)
@@ -1535,8 +1729,9 @@ def exportar_requerimientos(request):
         
         # Encabezados
         headers = [
-            'Número', 'Tipo', 'Estado', 'Prioridad', 'Sucursal', 'SKU', 'Producto',
-            'Cliente', 'Boleta', 'Fecha Creación', 'Días', 'Proveedor', 'Estado Proveedor'
+            'Número', 'Tipo', 'Estado', 'Prioridad', 'Origen', 'Sucursal', 'SKU', 'Producto',
+            'Cantidad', 'Cliente', 'Boleta', 'Factura Compra', 'Fecha Creación', 'Días',
+            'Proveedor', 'Estado Proveedor', 'Decisión Proveedor', 'Días sin Respuesta'
         ]
         
         # Estilo para encabezados
@@ -1551,19 +1746,26 @@ def exportar_requerimientos(request):
         
         # Escribir datos
         for row, req in enumerate(requerimientos, 2):
+            factura = req.numero_factura_compra or (
+                str(req.dte_compra.numero_documento) if req.dte_compra_id else '')
             ws.cell(row=row, column=1, value=req.numero_requerimiento)
             ws.cell(row=row, column=2, value=req.get_tipo_display())
             ws.cell(row=row, column=3, value=req.get_estado_display())
             ws.cell(row=row, column=4, value=req.get_prioridad_display())
-            ws.cell(row=row, column=5, value=req.sucursal.alias)
-            ws.cell(row=row, column=6, value=req.sku)
-            ws.cell(row=row, column=7, value=req.nombre_producto)
-            ws.cell(row=row, column=8, value=req.cliente_nombre)
-            ws.cell(row=row, column=9, value=req.numero_boleta or '')
-            ws.cell(row=row, column=10, value=req.fecha_creacion.strftime('%d/%m/%Y'))
-            ws.cell(row=row, column=11, value=req.dias_transcurridos)
-            ws.cell(row=row, column=12, value=req.proveedor.nombre if req.proveedor else '')
-            ws.cell(row=row, column=13, value='Enviado' if req.correo_enviado_proveedor else 'No enviado')
+            ws.cell(row=row, column=5, value=req.get_origen_display())
+            ws.cell(row=row, column=6, value=req.sucursal.alias)
+            ws.cell(row=row, column=7, value=req.sku)
+            ws.cell(row=row, column=8, value=req.nombre_producto)
+            ws.cell(row=row, column=9, value=req.cantidad)
+            ws.cell(row=row, column=10, value=req.cliente_nombre)
+            ws.cell(row=row, column=11, value=req.numero_boleta or '')
+            ws.cell(row=row, column=12, value=factura)
+            ws.cell(row=row, column=13, value=req.fecha_creacion.strftime('%d/%m/%Y'))
+            ws.cell(row=row, column=14, value=req.dias_transcurridos)
+            ws.cell(row=row, column=15, value=req.proveedor.nombre if req.proveedor else '')
+            ws.cell(row=row, column=16, value='Enviado' if req.correo_enviado_proveedor else 'No enviado')
+            ws.cell(row=row, column=17, value=req.decision_proveedor or '')
+            ws.cell(row=row, column=18, value=req.dias_sin_respuesta)
         
         # Ajustar ancho de columnas
         for column in ws.columns:
@@ -1594,6 +1796,105 @@ def exportar_requerimientos(request):
         }, status=500)
 
 
+# ========== FORMATO PROPIO (PDF) ==========
+
+@login_required
+@require_GET
+def descargar_formato_requerimiento(request, requerimiento_id):
+    """Formato RetailMind del requerimiento en PDF.
+
+    Es el MISMO documento que se adjunta al correo del proveedor, así que el
+    analista puede revisarlo antes de enviar (y la tienda imprimirlo para el
+    archivador). `?descargar=1` fuerza la descarga; por defecto abre en el
+    navegador.
+    """
+    requerimiento = get_object_or_404(
+        Requerimiento.objects.select_related(
+            'sucursal', 'sucursal__empresa', 'proveedor', 'producto_talla',
+            'producto_talla__producto', 'usuario_creador', 'dte_compra',
+        ),
+        id=requerimiento_id,
+    )
+
+    if not usuario_puede_realizar_accion(request.user, requerimiento, 'ver'):
+        return JsonResponse({
+            'success': False,
+            'error': 'No tiene permisos para ver este requerimiento'
+        }, status=403)
+
+    try:
+        pdf = generar_pdf_requerimiento(
+            requerimiento, usuario=request.user, plazo_dias=PLAZO_RESPUESTA_DIAS,
+        )
+    except Exception as e:
+        logger.exception('Error al generar el formato PDF del requerimiento %s',
+                         requerimiento_id)
+        return JsonResponse({
+            'success': False,
+            'error': f'No se pudo generar el formato: {e}'
+        }, status=500)
+
+    disposicion = 'attachment' if request.GET.get('descargar') else 'inline'
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = (
+        f'{disposicion}; filename="{nombre_archivo_pdf(requerimiento)}"')
+    return response
+
+
+@login_required
+@require_GET
+def sugerir_proveedor_por_sku(request):
+    """Proveedor y factura de compra más recientes de un SKU.
+
+    La tienda no sabe a qué proveedor reclamarle y por eso el campo llegaba
+    vacío al analista. El dato ya está en el sistema: la última factura de
+    COMPRA que incluyó ese SKU. Devuelve además el N° y la fecha del documento,
+    que es exactamente el respaldo que el proveedor exige.
+    """
+    sku = (request.GET.get('sku') or '').strip()
+    if not sku:
+        return JsonResponse({'success': False, 'error': 'SKU es requerido'}, status=400)
+
+    from .utils_producto_match import producto_talla_por_sku
+    producto_talla = producto_talla_por_sku(
+        sku, sucursal_id=request.session.get('idSucursalActual'))
+    if not producto_talla:
+        return JsonResponse({
+            'success': False,
+            'error': 'El SKU no existe en el sistema'
+        }, status=404)
+
+    linea = (
+        Dte_Productos.objects
+        .filter(productoTalla=producto_talla, dte__tipo_transaccion='COMPRA')
+        .select_related('dte', 'dte__emisor')
+        .order_by('-dte__fecha_emision', '-dte__id')
+        .first()
+    )
+    if not linea or not linea.dte.emisor_id:
+        return JsonResponse({
+            'success': False,
+            'error': 'No hay compras registradas de este SKU'
+        }, status=404)
+
+    dte = linea.dte
+    return JsonResponse({
+        'success': True,
+        'proveedor': {
+            'id': dte.emisor_id,
+            'nombre': dte.emisor.nombre,
+            'rut': dte.emisor.rut,
+        },
+        'compra': {
+            'dte_id': dte.id,
+            'numero_documento': dte.numero_documento,
+            'tipo_documento': dte.get_tipo_documento_display(),
+            'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d') if dte.fecha_emision else '',
+            'costo_unitario': linea.costo or 0,
+        },
+    })
+
+
 # ========== API TIPOS DE FOTO ==========
 
 @login_required
@@ -1604,10 +1905,7 @@ def obtener_tipos_foto(request):
     if not tipo:
         return JsonResponse({'success': False, 'error': 'Tipo es requerido'}, status=400)
 
-    tipos_foto = TipoFotoRequerimiento.objects.filter(
-        activo=True,
-        tipos_requerimiento__contains=[tipo],
-    ).order_by('orden')
+    tipos_foto = TipoFotoRequerimiento.tipos_para(tipo)
 
     return JsonResponse({
         'success': True,

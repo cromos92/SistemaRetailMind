@@ -15,6 +15,9 @@ Pillow==11.1.0
 openpyxl==3.1.5
 reportlab==4.4.3
 num2words==0.5.14
+# Ver nota en requirements.txt: evidencia de requerimientos en Spaces.
+django-storages==1.14.4
+boto3==1.35.36
 numpy>=1.26,<3
 transbank-pos-sdk==1.0.1
 pyserial==3.5

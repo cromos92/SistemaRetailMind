@@ -44,6 +44,19 @@
                     <div class="col-4 col-md-2"><div class="tipo-card" data-tipo="OTROS" onclick="seleccionarTipo(this)"><div class="tipo-card-inner rounded text-center p-2"><i class="ri-more-line text-dark"></i><div class="small fw-semibold mt-1" style="font-size:.7rem;line-height:1.2">Otros</div></div></div></div>
                 </div>
                 <div id="tipo-error" class="text-danger small mt-1" style="display:none;">Seleccione un tipo</div>
+
+                <!-- Origen: define si hay cliente al que pedirle datos. Sin esto
+                     no se podía registrar una falla detectada en bodega. -->
+                <div class="mt-2 pt-2 border-top" id="bloque-origen" style="display:none;">
+                    <label class="form-label mb-1">¿Cómo se detectó? <span class="text-danger">*</span></label>
+                    <input type="hidden" id="origen" name="origen" value="CLIENTE">
+                    <div class="btn-group btn-group-sm w-100" role="group">
+                        <input type="radio" class="btn-check" name="origen_radio" id="origen-cliente" value="CLIENTE" checked onchange="cambiarOrigen('CLIENTE')">
+                        <label class="btn btn-outline-primary" for="origen-cliente"><i class="ri-user-line me-1"></i>Lo reclama un cliente</label>
+                        <input type="radio" class="btn-check" name="origen_radio" id="origen-stock" value="STOCK" onchange="cambiarOrigen('STOCK')">
+                        <label class="btn btn-outline-primary" for="origen-stock"><i class="ri-archive-line me-1"></i>Detectado en stock / bodega</label>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -166,9 +179,29 @@
                                 </div>
                             </div>
 
-                            <input type="hidden" id="tipo_documento" name="tipo_documento">
-                            <input type="hidden" id="numero_boleta" name="numero_boleta">
-                            <input type="hidden" id="fecha_compra" name="fecha_compra">
+                            <!-- Ingreso manual del documento: si la búsqueda por folio
+                                 no encuentra nada, antes el dato se perdía (los campos
+                                 eran hidden y solo se llenaban desde la búsqueda). -->
+                            <div class="row g-2 mb-2" id="bloque-documento-manual">
+                                <div class="col-md-4">
+                                    <label class="form-label">Tipo de documento</label>
+                                    <select class="form-select form-select-sm" id="tipo_documento" name="tipo_documento">
+                                        <option value="">Sin documento</option>
+                                        <option value="Boleta">Boleta</option>
+                                        <option value="Factura">Factura</option>
+                                        <option value="Guia">Guía de despacho</option>
+                                        <option value="Ticket">Ticket interno</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">N° documento</label>
+                                    <input type="text" class="form-control form-control-sm" id="numero_boleta" name="numero_boleta" placeholder="N° boleta / factura">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Fecha de compra</label>
+                                    <input type="date" class="form-control form-control-sm" id="fecha_compra" name="fecha_compra">
+                                </div>
+                            </div>
 
                             <hr class="my-2">
 
@@ -200,16 +233,39 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Cantidad + respaldo de compra: es lo que el proveedor
+                                 exige para aceptar la garantía. Se autocompleta con la
+                                 última factura de compra del SKU. -->
+                            <div class="row g-2 mt-1">
+                                <div class="col-md-2">
+                                    <label class="form-label">Cantidad <span class="text-danger">*</span></label>
+                                    <input type="number" class="form-control form-control-sm" id="cantidad" name="cantidad" value="1" min="1" step="1">
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label">Factura de compra al proveedor</label>
+                                    <input type="text" class="form-control form-control-sm" id="numero_factura_compra" name="numero_factura_compra" placeholder="N° factura">
+                                    <input type="hidden" id="dte_compra_id" name="dte_compra_id">
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label">Fecha de la factura</label>
+                                    <input type="date" class="form-control form-control-sm" id="fecha_factura_compra" name="fecha_factura_compra">
+                                </div>
+                            </div>
+                            <div id="aviso-proveedor-sugerido" class="alert alert-info border-0 py-1 px-2 mt-2 mb-0 small" style="display:none;"></div>
                         </div>
                     </div>
 
                     <!-- Cliente -->
                     <div class="card border-0 shadow-sm mb-2">
                         <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                            <h6 class="card-title mb-0 small"><span class="badge bg-primary rounded-pill me-1" style="font-size:.6rem">3</span> Cliente</h6>
+                            <h6 class="card-title mb-0 small"><span class="badge bg-primary rounded-pill me-1" style="font-size:.6rem">3</span> Cliente <span class="badge bg-soft-secondary text-secondary ms-1" id="badge-cliente-opcional" style="font-size:.6rem;display:none">Opcional</span></h6>
                             <button type="button" class="btn btn-soft-success btn-sm py-0 px-2" style="font-size:.75rem" onclick="abrirModalCrearCliente()"><i class="ri-user-add-line me-1"></i>Nuevo</button>
                         </div>
                         <div class="card-body">
+                            <div class="alert alert-warning border-0 py-1 px-2 mb-2 small" id="aviso-cliente-stock" style="display:none;">
+                                <i class="ri-information-line me-1"></i>Sin cliente: se enviará como falla detectada en tienda. Si hay un cliente afectado, cámbielo arriba — el proveedor resuelve más rápido con esos datos.
+                            </div>
                             <div class="row g-2">
                                 <div class="col-md-4">
                                     <label class="form-label">RUT</label>

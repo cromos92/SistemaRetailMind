@@ -8,10 +8,15 @@ PDF, que abre en cualquier navegador (mismo enfoque que usa AllConnected en
 `system/shipping/services/pdf_generator.py`, para que el formato le resulte
 familiar al personal de tienda).
 
-Diferencia deliberada con el PDF de AllConnected: acá NO van precios ni totales.
-Es un documento de PICKING —qué sacar y cuánto— y mezclarlo con montos invita a
-confundirlo con la boleta. Lleva casilla por línea, SKU, talla, stock del
-sistema y el total de unidades a sacar.
+Es un documento de PICKING: casilla por línea, SKU/artículo destacados, marca,
+talla, color, stock del sistema y el total de UNIDADES a sacar. Va rotulado "NO
+VÁLIDO COMO BOLETA" para que no se confunda con el documento tributario.
+
+Sobre los montos: el papel muestra el precio de cada línea y el TOTAL DEL PEDIDO
+tal como lo ve el listado (`PedidoEcommerce.total`), NO la suma de las líneas.
+En prod casi ningún pedido cuadra —despacho, descuentos de nivel pedido y
+canales que mandan la línea incompleta— y ver dos cifras distintas para lo mismo
+confundía a la tienda; por eso cuando difieren se imprime el desglose.
 
 Un `PageBreak` por pedido: un solo PDF sirve para el lote de toda la sucursal.
 """
@@ -33,9 +38,9 @@ from xml.sax.saxutils import escape as _xml_escape
 logger = logging.getLogger('app')
 
 # Papel térmico estándar de las tiendas. 80mm ≈ 226.77pt (mismo ancho que el
-# PDF de AllConnected). El alto se estima por contenido: si queda corto,
-# ReportLab pasa a una página nueva —nunca recorta—, así que se prefiere
-# subestimar antes que hacer avanzar 70cm de papel en cada impresión.
+# PDF de AllConnected). El alto se mide del contenido y se verifica contando las
+# páginas del PDF generado (ver `generar_guia_preparacion_pdf`): quedarse corto
+# parte cada guía en dos hojas y pasarse hace avanzar papel de más.
 ANCHO_PAPEL_MM = 80
 MARGEN_MM = 3.5
 ALTO_MINIMO_MM = 120
@@ -58,7 +63,9 @@ def _estilos():
         'valor': ParagraphStyle('valor', fontName='Helvetica', fontSize=8.5, leading=10),
         'seccion': ParagraphStyle('seccion', fontName='Helvetica-Bold', fontSize=9.5,
                                   alignment=TA_LEFT, leading=11, spaceBefore=2, spaceAfter=1),
-        'prod': ParagraphStyle('prod', fontName='Helvetica-Bold', fontSize=10, leading=11.5),
+        # SKU + artículo: el dato más grande de la línea, arriba de todo.
+        'ident': ParagraphStyle('ident', fontName='Helvetica-Bold', fontSize=12.5, leading=14),
+        'prod': ParagraphStyle('prod', fontName='Helvetica', fontSize=9.5, leading=11),
         # Talla y color van más grandes que el resto de la metadata: son el dato
         # que evita sacar el producto equivocado del estante.
         'variante': ParagraphStyle('variante', fontName='Helvetica', fontSize=9.5, leading=11.5,
@@ -75,6 +82,9 @@ def _estilos():
                                 alignment=TA_CENTER, leading=13),
         'total_sub': ParagraphStyle('total_sub', fontName='Helvetica', fontSize=9,
                                     alignment=TA_CENTER, leading=11),
+        'desglose': ParagraphStyle('desglose', fontName='Helvetica', fontSize=7.5,
+                                   alignment=TA_CENTER, leading=9,
+                                   textColor=colors.HexColor('#444444')),
         'pie': ParagraphStyle('pie', fontName='Helvetica-Bold', fontSize=8.5,
                               alignment=TA_CENTER, leading=11),
         'firma': ParagraphStyle('firma', fontName='Helvetica', fontSize=8,
@@ -99,6 +109,23 @@ def _txt(valor, limite=None):
     if limite and len(s) > limite:
         s = s[:limite - 1] + '…'
     return _xml_escape(s)
+
+
+def _casilla(lado=4.2 * mm):
+    """Casilla VACÍA para ticar a mano, dibujada como recuadro.
+
+    No se usa el carácter '☐': Helvetica no lo tiene y ReportLab lo sustituye
+    por ZapfDingbats 'n', que es un cuadrado NEGRO RELLENO — o sea el papel sale
+    con todas las líneas como si ya estuvieran marcadas. Dibujarla como tabla
+    con borde es independiente de la fuente y de la impresora.
+    """
+    c = Table([['']], colWidths=[lado], rowHeights=[lado])
+    c.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 0.9, colors.black),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    return c
 
 
 def _linea(ancho, grosor=0.8, color='#000000'):
@@ -233,21 +260,33 @@ def _bloque_pedido(ctx, ancho, st):
 
     items = ctx.get('items') or []
     total_unidades = 0
-    total_pedido = 0
+    suma_items = 0
     for i, it in enumerate(items):
         cant = int(it.get('cantidad') or 1)
         total_unidades += cant
         precio = int(it.get('precio') or 0)
-        total_pedido += precio * cant
+        suma_items += precio * cant
 
-        # Línea 1: MARCA + nombre del artículo, en negrita y grande (es lo
-        # primero que la vendedora busca en el estante).
+        celda = []
+
+        # Línea 1: SKU y ARTÍCULO, lo más grande y arriba de todo. Son los
+        # códigos con los que se busca en el sistema y los que vienen impresos
+        # en la etiqueta de la caja, así que la vendedora arranca por ahí.
+        ident = []
+        if it.get('sku'):
+            ident.append(f"SKU {_txt(it['sku'], 18)}")
+        if it.get('articulo'):
+            ident.append(_txt(it['articulo'], 20))
+        if ident:
+            celda.append(Paragraph(' · '.join(ident), st['ident']))
+
+        # Línea 2: MARCA + nombre del artículo.
         titulo = _txt(it.get('nombre') or 'Ítem', 52)
         marca = _txt(it.get('marca'), 22)
-        celda = [Paragraph(f'<b>{marca}</b> {titulo}'.strip() if marca else f'<b>{titulo}</b>',
-                           st['prod'])]
+        celda.append(Paragraph(f'<b>{marca}</b> {titulo}'.strip() if marca else f'<b>{titulo}</b>',
+                               st['prod']))
 
-        # Línea 2: TALLA y COLOR destacados — definen CUÁL de todas sacar.
+        # Línea 3: TALLA y COLOR destacados — definen CUÁL de todas sacar.
         variante = []
         if it.get('talla'):
             variante.append(f"TALLA <b>{_txt(it['talla'], 12)}</b>")
@@ -256,18 +295,12 @@ def _bloque_pedido(ctx, ancho, st):
         if variante:
             celda.append(Paragraph(' · '.join(variante), st['variante']))
 
-        # Línea 3: identificadores y stock, en chico (solo se leen si hay dudas).
-        meta = []
-        if it.get('sku'):
-            meta.append(f"SKU {_txt(it['sku'], 18)}")
-        if it.get('articulo'):
-            meta.append(f"Art. {_txt(it['articulo'], 18)}")
+        # Línea 4: stock del sistema, en chico (solo se lee si hay dudas).
         if it.get('stock_disponible') is not None:
-            meta.append(f"stock {int(it['stock_disponible'])}")
-        if meta:
-            celda.append(Paragraph(' · '.join(meta), st['prod_meta']))
+            celda.append(Paragraph(f"stock sistema: {int(it['stock_disponible'])}",
+                                   st['prod_meta']))
 
-        # Línea 4: precio unitario y descuento, si lo hubo.
+        # Línea 5: precio unitario y descuento, si lo hubo.
         if precio:
             precio_txt = f"<b>{_clp(precio)}</b> c/u"
             if cant > 1:
@@ -283,7 +316,7 @@ def _bloque_pedido(ctx, ancho, st):
             celda.append(Paragraph('⚠ SIN STOCK SUFICIENTE EN EL SISTEMA', st['alerta']))
 
         fila = Table(
-            [[Paragraph('☐', st['casilla']), Paragraph(f'{cant}', st['cant']), celda]],
+            [[_casilla(), Paragraph(f'{cant}', st['cant']), celda]],
             colWidths=[ancho * 0.10, ancho * 0.12, ancho * 0.78],
         )
         fila.setStyle(TableStyle([
@@ -302,18 +335,40 @@ def _bloque_pedido(ctx, ancho, st):
     els.append(Spacer(1, 1.5 * mm))
 
     # ── Totales: unidades a contar y monto del pedido ───────────
+    # El monto que manda es el TOTAL DEL PEDIDO (el mismo del listado y el que
+    # pagó el cliente), NO la suma de las líneas: difieren casi siempre por
+    # despacho, descuentos de nivel pedido o líneas incompletas del canal.
+    # Cuando difieren se imprime el desglose, así el número cuadra a la vista.
+    total_pedido = int(ctx.get('total_pedido') or 0) or suma_items
     filas_total = [[Paragraph(
         f"TOTAL A SACAR: {total_unidades} "
         f"{'UNIDAD' if total_unidades == 1 else 'UNIDADES'}", st['total'])]]
     if total_pedido:
         filas_total.append([Paragraph(
-            f"Valor del pedido: {_clp(total_pedido)}", st['total_sub'])])
+            f"Total del pedido: {_clp(total_pedido)}", st['total_sub'])])
     caja = Table(filas_total, colWidths=[ancho])
     caja.setStyle(TableStyle([
         ('BOX', (0, 0), (-1, -1), 1.2, colors.black),
         ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
     ]))
     els.append(caja)
+
+    envio = int(ctx.get('costo_envio') or 0)
+    descuento_pedido = int(ctx.get('descuento_pedido') or 0)
+    if total_pedido and total_pedido != suma_items:
+        partes = [f"ítems {_clp(suma_items)}"]
+        if envio:
+            partes.append(f"despacho {_clp(envio)}")
+        if descuento_pedido:
+            partes.append(f"desc. -{_clp(descuento_pedido)}")
+        # Lo que no explican envío ni descuento: típicamente el canal mandó la
+        # línea incompleta. Se muestra como "otros" en vez de dejar una resta
+        # que no cierra.
+        otros = total_pedido - (suma_items + envio - descuento_pedido)
+        if otros:
+            partes.append(f"otros {_clp(otros)}")
+        els.append(Spacer(1, 1 * mm))
+        els.append(Paragraph(' + '.join(partes), st['desglose']))
 
     # ── Pie ─────────────────────────────────────────────────────
     els.append(Spacer(1, 2.5 * mm))

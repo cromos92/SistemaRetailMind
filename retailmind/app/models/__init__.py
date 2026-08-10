@@ -166,6 +166,7 @@ from .requerimientos import (  # noqa: F401
     SUBTIPO_DEFECTO_CHOICES,
     SUBTIPO_ERROR_CHOICES,
     ESTADO_REQUERIMIENTO_CHOICES,
+    ORIGEN_REQUERIMIENTO_CHOICES,
     MAX_FOTOS_POR_TIPO,
     TipoFotoRequerimiento,
     Requerimiento,

@@ -542,6 +542,28 @@ DJANGO_REDIS_IGNORE_EXCEPTIONS = True
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# ========== EVIDENCIA EN DIGITALOCEAN SPACES (opcional) ==========
+# MEDIA_ROOT vive en el disco del contenedor, que es efímero: cada deploy se
+# lleva las fotos. Para la evidencia de requerimientos —que es la prueba del
+# reclamo al proveedor— eso no sirve, así que puede apuntarse a un Space.
+#
+# Se activa SOLO si están definidas SPACES_ACCESS_KEY y SPACES_SECRET_KEY; si
+# no, todo sigue guardándose en MEDIA_ROOT (local y tests no cambian).
+# Alcance actual: únicamente FotoRequerimiento.imagen (ver app/storage_backends.py).
+SPACES_ACCESS_KEY = os.environ.get('SPACES_ACCESS_KEY', '').strip()
+SPACES_SECRET_KEY = os.environ.get('SPACES_SECRET_KEY', '').strip()
+SPACES_BUCKET = os.environ.get('SPACES_BUCKET', 'media-ecommerce').strip()
+SPACES_REGION = os.environ.get('SPACES_REGION', 'sfo3').strip()
+SPACES_ENDPOINT = os.environ.get(
+    'SPACES_ENDPOINT', f'https://{SPACES_REGION}.digitaloceanspaces.com').strip()
+# Carpeta propia dentro del bucket, para no mezclarse con lo del ecommerce.
+SPACES_PREFIJO = os.environ.get('SPACES_PREFIJO', 'retailmind').strip('/ ')
+# 'private' entrega URLs firmadas con vencimiento (la evidencia puede traer
+# datos del cliente). Cambiar a 'public-read' solo si se necesita URL fija.
+SPACES_ACL = os.environ.get('SPACES_ACL', 'private').strip()
+SPACES_URL_EXPIRA_SEGUNDOS = int(os.environ.get('SPACES_URL_EXPIRA_SEGUNDOS', '3600'))
+SPACES_HABILITADO = bool(SPACES_ACCESS_KEY and SPACES_SECRET_KEY)
+
 # ========== QZ TRAY — IMPRESIÓN TÉRMICA SILENCIOSA ==========
 # Generar con: openssl req -newkey rsa:2048 -nodes -keyout private-key.pem
 #              -x509 -days 3650 -out digital-certificate.txt

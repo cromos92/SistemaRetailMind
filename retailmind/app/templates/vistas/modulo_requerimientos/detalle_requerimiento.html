@@ -60,7 +60,9 @@
                         <div class="row g-1">
                             <div class="col-md-6">
                                 <div class="dt-label">Producto</div>
-                                <div class="dt-value"><span id="nombre-producto">-</span> <small class="text-muted" id="sku"></small></div>
+                                <div class="dt-value"><span id="nombre-producto">-</span> <small class="text-muted" id="sku"></small>
+                                    <span class="badge bg-soft-primary text-primary ms-1" id="badge-cantidad"></span>
+                                </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="dt-label">Sucursal</div>
@@ -92,6 +94,17 @@
                             <div class="col-md-3">
                                 <div class="dt-label">Documento</div>
                                 <div class="dt-value"><span id="tipo-documento">-</span> <span id="numero-boleta"></span> <small class="text-muted" id="fecha-compra"></small></div>
+                            </div>
+                        </div>
+                        <hr class="my-1">
+                        <div class="row g-1">
+                            <div class="col-md-4">
+                                <div class="dt-label">Origen</div>
+                                <div class="dt-value" id="origen-requerimiento">-</div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="dt-label">Factura de compra al proveedor</div>
+                                <div class="dt-value" id="factura-compra">-</div>
                             </div>
                         </div>
                     </div>
@@ -292,6 +305,12 @@ function mostrarRequerimiento(r) {
     $('numero-boleta').textContent = r.numero_boleta ? `N°${r.numero_boleta}` : '';
     $('fecha-compra').textContent = r.fecha_compra || '';
 
+    $('badge-cantidad').textContent = r.cantidad > 1 ? `${r.cantidad} unidades` : '';
+    $('origen-requerimiento').textContent = r.origen || '-';
+    $('factura-compra').innerHTML = r.numero_factura_compra
+        ? `N°${r.numero_factura_compra}${r.fecha_factura_compra ? ` <small class="text-muted">${r.fecha_factura_compra}</small>` : ''}`
+        : '<span class="text-danger">Sin registrar</span>';
+
     $('motivo').textContent = r.motivo;
     $('descripcion-problema').textContent = r.descripcion_problema || '-';
 
@@ -409,6 +428,10 @@ function mostrarAccionesDisponibles(r) {
     if (['administrador','jefe_local'].includes(r.rol_usuario) && (r.transiciones_permitidas||[]).length)
         h += `<button class="btn btn-soft-primary btn-sm w-100" onclick="cambiarEstado()"><i class="ri-refresh-line me-1"></i>Cambiar Estado</button>`;
 
+    // Formato propio: el MISMO PDF que se adjunta al correo del proveedor.
+    // Verlo antes de enviar es lo que evita mandar un reclamo incompleto.
+    h += `<a href="/app/api/requerimientos/${r.id}/formato-pdf/" target="_blank" class="btn btn-soft-info btn-sm w-100"><i class="ri-file-pdf-line me-1"></i>Ver formato PDF</a>`;
+
     h += `<a href="/app/requerimientos/" class="btn btn-soft-secondary btn-sm w-100"><i class="ri-arrow-left-line me-1"></i>Volver</a>`;
     c.innerHTML = h;
 }
@@ -486,8 +509,11 @@ function abrirModalEnvioProveedor(esReenvio) {
     const copiaSugerida = d.correo_copia_default || '';
     const nFotos = (d.fotos || []).length;
     const avisoFotos = nFotos > 0
-        ? `<i class="ri-attachment-2 me-1"></i>${nFotos} foto(s) se adjuntarán al correo del proveedor. La copia de control NO lleva fotos.`
-        : `<i class="ri-error-warning-line me-1"></i>Este requerimiento no tiene fotos: el correo irá sin adjuntos.`;
+        ? `<i class="ri-attachment-2 me-1"></i>Se adjuntará el <strong>formato PDF</strong> (con las ${nFotos} foto(s) incrustadas) más las fotos originales. La copia de control NO lleva adjuntos.`
+        : `<i class="ri-error-warning-line me-1"></i>Este requerimiento <strong>no tiene fotos</strong>: el formato irá sin evidencia y el proveedor puede rechazarlo por eso.`;
+    const avisoFactura = d.numero_factura_compra
+        ? ''
+        : `<div class="alert alert-warning py-1 px-2 mb-2 small"><i class="ri-error-warning-line me-1"></i>Sin <strong>factura de compra</strong> registrada: la mayoría de los proveedores la exige para cursar la garantía.</div>`;
 
     Swal.fire({
         title: esReenvio ? 'Re-enviar al Proveedor' : 'Enviar a Proveedor',
@@ -495,8 +521,10 @@ function abrirModalEnvioProveedor(esReenvio) {
         html: `
         <div class="text-start small">
             <p class="mb-1"><strong>Proveedor:</strong> ${d.proveedor.nombre}</p>
-            <p class="mb-1"><strong>Producto:</strong> ${d.sku} — ${d.nombre_producto}</p>
+            <p class="mb-1"><strong>Producto:</strong> ${d.sku} — ${d.nombre_producto} <span class="badge bg-soft-primary text-primary">${d.cantidad} und</span></p>
             <p class="mb-2"><strong>Motivo:</strong> ${d.motivo}</p>
+            ${avisoFactura}
+            <p class="mb-2"><a href="/app/api/requerimientos/${requerimientoId}/formato-pdf/" target="_blank"><i class="ri-file-pdf-line me-1"></i>Revisar el formato PDF antes de enviar</a></p>
             <div class="mb-2">
                 <label class="form-label small mb-0 fw-semibold">Correo del proveedor <span class="text-danger">*</span></label>
                 <input type="email" id="swal-correo-destino" class="form-control form-control-sm" value="${correoSugerido}" placeholder="proveedor@correo.cl">
@@ -564,7 +592,12 @@ function guardarRespuestaProveedor() {
 
     fetch(`/app/api/requerimientos/${requerimientoId}/respuesta-proveedor/`, {
         method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
-        body: JSON.stringify({ decision:dec, respuesta:resp, motivo:mot })
+        // La fecha se venía pidiendo y descartando: el backend siempre guardaba
+        // el instante del registro, no cuándo respondió el proveedor.
+        body: JSON.stringify({
+            decision:dec, respuesta:resp, motivo:mot,
+            fecha_respuesta: document.getElementById('fecha-respuesta-proveedor').value || null,
+        })
     }).then(r=>r.json()).then(d => {
         if (d.success) { bootstrap.Modal.getInstance(document.getElementById('modalRegistrarRespuesta')).hide(); Swal.fire(dec==='APROBADO'?'Aprobado':'Procesado',`El cliente vera: "${mot}"`,'success'); cargarRequerimiento(); }
         else Swal.fire('Error',d.error,'error');
