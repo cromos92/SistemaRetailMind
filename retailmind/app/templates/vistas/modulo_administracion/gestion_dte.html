@@ -4041,7 +4041,10 @@
     async function anularDocumento(dteId, numeroDoc, tipoDocumento, montoOriginal, ncAcumulado) {
         const esBoleta = tipoDocumento.toUpperCase().includes('BOLETA');
         const nombreDoc = esBoleta ? 'Boleta Electrónica' : 'Factura Electrónica';
-        const montoRestante = montoOriginal - (ncAcumulado || 0);
+        // monto_con_iva puede venir con decimales (DTEs guardados como neto*1.19
+        // sin redondear: 28.740 → 34200.6). Sin redondear aquí, el total NC
+        // (que sí se redondea) "excedía" el saldo por fracciones de peso.
+        const montoRestante = Math.round(montoOriginal || 0) - Math.round(ncAcumulado || 0);
         const tieneNCPrevias = (ncAcumulado || 0) > 0;
         const fmtCLP = (n) => '$' + Math.round(n).toLocaleString('es-CL');
         // Escapa texto libre antes de insertarlo en innerHTML / Swal html.

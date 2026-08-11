@@ -2692,8 +2692,11 @@ def editar_dte_traspaso_api(request):
                 Producto_Talla.objects.filter(id=talla.id).update(stock=F('stock') - cantidad)
 
             # ── FASE 4: Actualizar totales del DTE ──
+            # IVA redondeado a peso entero (half-up): sin esto el DTE editado
+            # quedaba con decimales (neto 28.740 → 34.200,60) y las NC
+            # posteriores, que sí redondean, "excedían" el saldo por centavos.
             subtotal_decimal = Decimal(str(subtotal_neto))
-            iva = subtotal_decimal * Decimal('0.19')
+            iva = (subtotal_decimal * Decimal('0.19')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
             total_con_iva = subtotal_decimal + iva
 
             registro = (
@@ -8090,7 +8093,7 @@ def validar_campos_proveedor(data):
 from django.utils.dateparse import parse_date
 import json
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from django.db.models import ProtectedError
 from django.db.models import Sum, Count, Case, When, IntegerField, Value, F, Max
 from django.utils import timezone
@@ -26658,7 +26661,10 @@ def emitir_dte_concepto(request):
                 iva = Decimal('0')
                 total_con_iva = subtotal_decimal
             else:
-                iva = subtotal_decimal * Decimal('0.19')
+                # IVA redondeado a peso entero (half-up): evita guardar el DTE
+                # con decimales que después descuadran contra las NC (que sí
+                # redondean su total).
+                iva = (subtotal_decimal * Decimal('0.19')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
                 total_con_iva = subtotal_decimal + iva
 
             numero_documento = obtener_siguiente_correlativo(sucursal, tipo_documento)
@@ -27897,9 +27903,12 @@ def emitir_dte(request):
             
             logger.debug("Validacion de stock OK para emitir_dte: subtotal=%s unidades=%s", subtotal_neto, total_unidades)
             
-            # Calcular IVA y total
+            # Calcular IVA y total. El IVA se redondea a peso entero (half-up,
+            # igual que Math.round del front): sin esto el DTE quedaba con
+            # decimales (neto 28.740 → 34.200,60) y las NC posteriores, que sí
+            # redondean, "excedían" el saldo por fracciones de peso.
             subtotal_decimal = Decimal(str(subtotal_neto))
-            iva = subtotal_decimal * Decimal('0.19')
+            iva = (subtotal_decimal * Decimal('0.19')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
             total_con_iva = subtotal_decimal + iva
             logger.debug("Calculos emitir_dte: neto=%s iva=%s total=%s", subtotal_decimal, iva, total_con_iva)
             
@@ -30163,7 +30172,7 @@ def anular_factura_dte(request):
          línea conceptual (sin productoTalla) con el SKU en la descripción.
     """
     import json as _json
-    from decimal import Decimal
+    from decimal import Decimal, ROUND_HALF_UP
     from datetime import date
     from .views_modulo_documentos import generar_txt_nota_credito_acepta, limpiar_texto, calcular_montos_nc, normalizar_detalle_para_tipo, base_lineas_dte, monto_real_linea_dte
 
@@ -30440,8 +30449,13 @@ def anular_factura_dte(request):
         estado_dte__in=['EMITIDO', 'ACEPTADO']
     ).aggregate(total=Sum('monto_con_iva'))['total'] or 0
 
-    monto_original = int(dte.monto_con_iva)
-    monto_restante = monto_original - int(total_nc_previas)
+    # `monto_con_iva` puede traer decimales (DTEs guardados como neto*1.19 sin
+    # redondear, ej. traspaso neto 28.740 → 34.200,60). Truncar con int() dejaba
+    # el saldo 1 peso bajo el total que calcula calcular_montos_nc (que sí
+    # redondea) y una NC por el 100% del documento quedaba imposible de emitir.
+    total_nc_previas = int(Decimal(total_nc_previas).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+    monto_original = int(Decimal(dte.monto_con_iva or 0).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+    monto_restante = monto_original - total_nc_previas
 
     if monto_restante <= 0:
         return JsonResponse({
@@ -30695,7 +30709,8 @@ def anular_factura_dte(request):
             es_nota_credito=True,
             estado_dte__in=['EMITIDO', 'ACEPTADO'],
         ).aggregate(total=Sum('monto_con_iva'))['total'] or 0
-        if (monto_original - int(_nc_previas_lock)) <= 0:
+        _nc_previas_lock = int(Decimal(_nc_previas_lock).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+        if (monto_original - _nc_previas_lock) <= 0:
             transaction.set_rollback(True)
             return JsonResponse({
                 'error': f'El documento ya tiene NC por el monto total (${monto_original:,}). No se puede generar otra NC.'

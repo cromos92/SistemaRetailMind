@@ -20,7 +20,7 @@ modo MONTO reusa el patrón "corrige montos" de `anular_factura_dte`
 """
 import json
 import logging
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
 from django.db.models import Sum, Q
@@ -278,12 +278,18 @@ def saldo_documento(dte_original, excluir_devolucion_id=None):
     concurrentes no puedan sumar más que el documento. `excluir_devolucion_id`
     omite la propia reserva al re-validar en la aprobación.
     """
-    monto_original = int(dte_original.monto_con_iva or 0)
-    total_nc_previas = int(Dte.objects.filter(
+    # Redondeo half-up en vez de int() (que trunca): `monto_con_iva` puede
+    # traer decimales (DTEs guardados como neto*1.19 sin redondear, ej.
+    # 28.740 → 34.200,60) y truncar dejaba el saldo 1 peso bajo el total de
+    # una devolución por el 100% del documento.
+    monto_original = int(Decimal(dte_original.monto_con_iva or 0).quantize(
+        Decimal('1'), rounding=ROUND_HALF_UP))
+    total_nc_previas = int(Decimal(Dte.objects.filter(
         documento_afectado=dte_original,
         es_nota_credito=True,
         estado_dte__in=['EMITIDO', 'ACEPTADO'],
-    ).aggregate(t=Sum('monto_con_iva'))['t'] or 0)
+    ).aggregate(t=Sum('monto_con_iva'))['t'] or 0).quantize(
+        Decimal('1'), rounding=ROUND_HALF_UP))
 
     resv_qs = DevolucionGarantia.objects.filter(
         dte_original=dte_original, estado__in=ESTADOS_RESERVA,
