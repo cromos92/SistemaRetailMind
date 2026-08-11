@@ -59,6 +59,20 @@ CONCEPTOS_AJUSTE = (
     'CORRECCION_STOCK',
 )
 
+# Marca del SALDO DE APERTURA de la migración Laravel (≈2026-01-22).
+#
+# Ese saldo se cargó como ``INGRESO_INICIAL`` con la fecha de la carga, no la de
+# la llegada real del stock. NO es una recepción: es la foto inicial con la que
+# arranca el kardex de RetailMind. Los movimientos legacy ANTERIORES (referencia
+# ``MIG:<id>``) también se importaron, así que si la apertura se cuenta como
+# entrada el mismo stock queda sumado dos veces y ``SUM(cantidad)`` deja de
+# cuadrar contra ``Producto_Talla.stock``.
+#
+# Todo cálculo de SALDOS debe excluirla (queda absorbida en el saldo inicial);
+# los cálculos de FLUJO BRUTO ("todo lo que entró alguna vez") pueden incluirla.
+REF_SALDO_INICIAL_SINTETICO = 'MIGRACION_LARAVEL'
+
+
 # Pérdidas y salidas sin contraparte comercial.
 CONCEPTOS_PERDIDA = (
     'PERDIDA_ROBO',

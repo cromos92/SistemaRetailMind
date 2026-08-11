@@ -6286,12 +6286,28 @@ def _saldos_periodo(productos_ids, sucursales_ids, filtro_fecha):
     Medición contra prod (jul-2026): PANAMA JACK filtrado desde 2026-07-01
     daba Recib. 0 vs Rest. 368, o sea el 100% del stock como fantasma.
 
+    SALDO DE APERTURA DE LA MIGRACIÓN: se excluye (ver
+    ``REF_SALDO_INICIAL_SINTETICO``). Esa carga entró como ``INGRESO_INICIAL``
+    fechada ≈2026-01-22, pero el kardex legacy ANTERIOR también se migró, así
+    que contarla como entrada suma el mismo stock dos veces. Al excluirla queda
+    absorbida en el saldo inicial, que es lo que realmente es: la foto de
+    arranque. Medición contra prod (ago-2026): 1066-1-CA en PAO2, período desde
+    2026-01-01 → la apertura (+7) caía DENTRO de la ventana y el rebobinado
+    daba Original 0 con Actual 6, cuando el kardex legacy cerraba 2025 en 7.
+    Sin el arreglo, cualquier ventana que cruce la fecha de corte da originales
+    en 0 o negativos.
+
     Todo se atribuye a la sucursal DUEÑA del SKU, igual que ``_mapa_entrada``.
     """
+    from app.constants_kardex import REF_SALDO_INICIAL_SINTETICO
+
     base = Movimientos_Producto.objects.filter(
         ProductoTalla__producto_id__in=productos_ids,
         ProductoTalla__producto__sucursal_id__in=sucursales_ids,
         estado='COMPLETADO',
+    ).exclude(
+        concepto='INGRESO_INICIAL',
+        referencia_externa=REF_SALDO_INICIAL_SINTETICO,
     )
 
     def _agrupar(queryset, absoluto):

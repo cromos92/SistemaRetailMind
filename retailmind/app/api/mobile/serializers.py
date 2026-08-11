@@ -158,7 +158,7 @@ CONCEPTOS_INGRESO_MERCADERIA = (
 # El saldo de apertura de la migración Laravel entró como INGRESO_INICIAL con
 # la fecha de la carga (~2026-01-22), no la llegada real: se excluye o toda
 # etiqueta antigua parecería "recién ingresada".
-REF_SALDO_INICIAL_SINTETICO = 'MIGRACION_LARAVEL'
+from app.constants_kardex import REF_SALDO_INICIAL_SINTETICO  # noqa: E402
 
 
 def fecha_ingreso_producto(producto):

@@ -824,7 +824,9 @@ CONCEPTOS_RECEPCION_STOCK = (
 # Estos movimientos NO son recepciones reales y aplanan la antigüedad, así que
 # se excluyen del cálculo de fechas; para esos SKU se usa `fecha_creacion`, que
 # sí refleja la antigüedad real (corregida desde los movimientos migrados).
-REF_SALDO_INICIAL_SINTETICO = 'MIGRACION_LARAVEL'
+# La marca vive en constants_kardex porque los reportes de saldo la necesitan
+# igual (si la apertura se cuenta como entrada, el stock se suma dos veces).
+from app.constants_kardex import REF_SALDO_INICIAL_SINTETICO  # noqa: E402
 
 
 # Conceptos que cuentan como ENTRADA REAL de mercadería a las tiendas de la
