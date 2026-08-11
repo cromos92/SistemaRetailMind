@@ -829,6 +829,22 @@
             <input type="date" id="filtro-fecha-hasta" class="nexo-input">
         </div>
 
+        <!-- Las fechas NO recortan que articulos salen, solo los movimientos.
+             Sin este filtro, "marca X + desde 01/01" lista todo el catalogo de
+             la marca aunque no se haya movido nada. -->
+        <div class="nexo-control-group" style="min-width: 190px; max-width: 230px;">
+            <label class="nexo-control-label"
+                   title="Las fechas Desde/Hasta recortan los MOVIMIENTOS, no la lista de artículos. Usa esto para dejar fuera el catálogo que no se movió en el período.">
+                <i class="ri-filter-3-line"></i> Mostrar <i class="ri-question-line"></i>
+            </label>
+            <select id="filtro-mostrar" class="nexo-select">
+                <option value="todo" selected>Todos los artículos</option>
+                <option value="entro">Solo lo que entró en el período</option>
+                <option value="entro_queda">Lo que entró y todavía queda</option>
+                <option value="queda">Solo lo que todavía queda</option>
+            </select>
+        </div>
+
         <div class="nexo-control-group" style="min-width: 100px; max-width: 120px;">
             <label class="nexo-control-label"><i class="ri-list-ordered"></i> Limite</label>
             <select id="filtro-limite" class="nexo-select">
@@ -978,6 +994,7 @@ async function cargarReporte() {
     const fechaDesde = document.getElementById('filtro-fecha-desde').value;
     const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
     const soloTiendas = document.getElementById('filtro-solo-tiendas').checked;
+    const mostrar = document.getElementById('filtro-mostrar').value;
 
     const tieneFiltro = marcaId || deptId || busqueda.length >= 3 || fechaDesde || fechaHasta;
 
@@ -1021,6 +1038,7 @@ async function cargarReporte() {
         if (fechaDesde) params.append('fecha_desde', fechaDesde);
         if (fechaHasta) params.append('fecha_hasta', fechaHasta);
         params.append('solo_tiendas', soloTiendas ? 'true' : 'false');
+        params.append('mostrar', mostrar);
         params.append('sin_filtro', 'true');
 
         if (params.toString()) url += '?' + params.toString();
@@ -1368,6 +1386,7 @@ function exportarExcel() {
     const fechaDesde = document.getElementById('filtro-fecha-desde').value;
     const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
     const soloTiendas = document.getElementById('filtro-solo-tiendas').checked;
+    const mostrar = document.getElementById('filtro-mostrar').value;
 
     let url = '/app/api/exportar-movimientos-sucursal-excel/';
     const params = new URLSearchParams();
@@ -1379,6 +1398,7 @@ function exportarExcel() {
     if (fechaDesde) params.append('fecha_desde', fechaDesde);
     if (fechaHasta) params.append('fecha_hasta', fechaHasta);
     params.append('solo_tiendas', soloTiendas ? 'true' : 'false');
+    params.append('mostrar', mostrar);
     params.append('sin_filtro', 'true');
 
     if (params.toString()) url += '?' + params.toString();
@@ -1415,6 +1435,7 @@ function limpiarFiltros() {
     document.getElementById('filtro-fecha-desde').value = '';
     document.getElementById('filtro-fecha-hasta').value = '';
     document.getElementById('filtro-solo-tiendas').checked = true;
+    document.getElementById('filtro-mostrar').value = 'todo';
     datosCompletos = [];
     datosFiltrados = [];
     paginaActual = 1;

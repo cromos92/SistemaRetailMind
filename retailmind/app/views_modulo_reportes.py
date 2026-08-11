@@ -6166,13 +6166,22 @@ def _mapas_movimientos_sucursal(productos_ids, sucursales_ids, filtro_fecha):
     recibidos, traspasos enviados y ventas. Los sets de conceptos viven en
     app.constants_kardex para que todos los reportes cuenten lo mismo.
     Nota: los traspasos legacy de una sola pierna (TRASPASO_SUCURSAL/BODEGA/
-    VITRINA) se clasifican por signo."""
+    VITRINA) se clasifican por signo.
+
+    Excluye el saldo de apertura de la migración por el mismo motivo que
+    ``_saldos_periodo`` (ver ``REF_SALDO_INICIAL_SINTETICO``). Además de ser un
+    doble conteo, si un lado lo cuenta y el otro no, el desglose del tooltip
+    deja de sumar: la UI muestra ``Entró: N (compras · traspasos · otras)``
+    donde N sale de ``_saldos_periodo`` y los sumandos de aquí. Con la apertura
+    incluida solo aquí, un SKU cargado por la migración dentro de la ventana
+    mostraba ``Entró: 0 (compras 7 …)``."""
     from app.constants_kardex import (
         CONCEPTOS_ABASTECIMIENTO,
         CONCEPTOS_TRASPASO_ENTRADA,
         CONCEPTOS_TRASPASO_LEGACY,
         CONCEPTOS_TRASPASO_SALIDA,
         CONCEPTOS_VENTA,
+        REF_SALDO_INICIAL_SINTETICO,
     )
 
     conceptos_compras = CONCEPTOS_ABASTECIMIENTO + (
@@ -6184,6 +6193,9 @@ def _mapas_movimientos_sucursal(productos_ids, sucursales_ids, filtro_fecha):
         ProductoTalla__producto_id__in=productos_ids,
         estado='COMPLETADO',
         **filtro_fecha,
+    ).exclude(
+        concepto='INGRESO_INICIAL',
+        referencia_externa=REF_SALDO_INICIAL_SINTETICO,
     )
 
     def _mapa(queryset, campo_sucursal):
@@ -6337,6 +6349,33 @@ def _saldos_periodo(productos_ids, sucursales_ids, filtro_fecha):
     return entradas, salidas, posterior
 
 
+# Modos del filtro "Mostrar" del reporte de movimientos por sucursal.
+# Las fechas Desde/Hasta NO recortan qué artículos aparecen —solo recortan los
+# movimientos—, así que sin esto un filtro por marca lista TODO el catálogo de
+# esa marca aunque no se haya movido nada en el período.
+MOSTRAR_MOVIMIENTOS_CHOICES = ('todo', 'entro', 'entro_queda', 'queda')
+
+
+# NOTA: helper interno, NO es una vista (se invoca con args posicionales).
+def _productos_con_entrada(productos_qs, filtro_fecha):
+    """IDs de productos que recibieron mercadería DENTRO de la ventana.
+
+    Se aplica ANTES del ``limite`` para que el tope de filas se gaste en
+    artículos relevantes y no en catálogo quieto. Excluye el saldo de apertura
+    de la migración por lo mismo que el resto del reporte: no es una llegada
+    real (ver ``REF_SALDO_INICIAL_SINTETICO``).
+    """
+    from app.constants_kardex import REF_SALDO_INICIAL_SINTETICO
+
+    return (Movimientos_Producto.objects
+            .filter(ProductoTalla__producto__in=productos_qs,
+                    estado='COMPLETADO', cantidad__gt=0, **filtro_fecha)
+            .exclude(concepto='INGRESO_INICIAL',
+                     referencia_externa=REF_SALDO_INICIAL_SINTETICO)
+            .values_list('ProductoTalla__producto_id', flat=True)
+            .distinct())
+
+
 # NOTA: helper interno, NO es una vista (se invoca con args posicionales, ver
 # el comentario de _mapas_movimientos_sucursal).
 def _sucursales_reporte_movimientos(user, solo_tiendas):
@@ -6421,6 +6460,9 @@ def obtener_reporte_movimientos_sucursal(request):
         # Por defecto el reporte es de TIENDAS: las bodegas proveedoras/CD
         # abastecen, no venden, y sus columnas solo ensuciaban la comparación.
         solo_tiendas = request.GET.get('solo_tiendas', 'true') != 'false'
+        mostrar = request.GET.get('mostrar', 'todo')
+        if mostrar not in MOSTRAR_MOVIMIENTOS_CHOICES:
+            mostrar = 'todo'
 
         tiene_filtro = any([marca_id, departamento_id, busqueda, fecha_desde, fecha_hasta])
 
@@ -6454,6 +6496,21 @@ def obtener_reporte_movimientos_sucursal(request):
                 'debug': {'total_productos': 0, 'total_sucursales': 0},
             })
 
+        # ========== PARSEAR FILTRO DE FECHAS ==========
+        # Va ANTES de la query de productos porque el modo "mostrar" lo necesita
+        # para acotar el universo antes de aplicar el límite.
+        filtro_fecha = {}
+        if fecha_desde:
+            try:
+                filtro_fecha['fecha__gte'] = datetime.strptime(fecha_desde, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        if fecha_hasta:
+            try:
+                filtro_fecha['fecha__lte'] = datetime.strptime(fecha_hasta, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
         # ========== QUERY 1: PRODUCTOS BASE (con filtros) ==========
         queryset = Producto.objects.filter(
             sucursal_id__in=sucursales_ids,
@@ -6482,8 +6539,15 @@ def obtener_reporte_movimientos_sucursal(request):
                 Q(atributo2__valor__icontains=busqueda)
             )
 
+        # "Solo lo que entró": se acota ACÁ, antes del límite, o el tope de
+        # filas se gasta listando catálogo que no se movió en el período.
+        if mostrar in ('entro', 'entro_queda'):
+            queryset = queryset.filter(
+                id__in=_productos_con_entrada(queryset, filtro_fecha)
+            )
+
         queryset = queryset.order_by('atributo1__valor', 'articulo')
-        
+
         if limite:
             queryset = queryset[:limite]
         
@@ -6502,18 +6566,8 @@ def obtener_reporte_movimientos_sucursal(request):
                 'debug': {'total_productos': 0, 'total_sucursales': len(sucursales_list)}
             })
         
-        # ========== PARSEAR FILTRO DE FECHAS ==========
-        filtro_fecha = {}
-        if fecha_desde:
-            try:
-                filtro_fecha['fecha__gte'] = datetime.strptime(fecha_desde, '%Y-%m-%d').date()
-            except ValueError:
-                pass
-        if fecha_hasta:
-            try:
-                filtro_fecha['fecha__lte'] = datetime.strptime(fecha_hasta, '%Y-%m-%d').date()
-            except ValueError:
-                pass
+        # (El filtro de fechas ya se parseó arriba: el modo "mostrar" lo
+        # necesita antes de aplicar el límite.)
 
         # ========== QUERIES 2/4: MAPAS AGREGADOS POR TIPO DE FLUJO ==========
         # Compras/abastecimiento y traspasos recibidos van SEPARADOS (antes se
@@ -6662,6 +6716,12 @@ def obtener_reporte_movimientos_sucursal(request):
 
             total_inicial = total_compras + total_tin
 
+            # "y todavía queda": se filtra ACÁ y no en la query de productos
+            # porque con fecha_hasta "Actual" es el saldo al cierre, no el stock
+            # de hoy: un SKU puede tener 0 hoy y saldo positivo al cierre.
+            if mostrar in ('queda', 'entro_queda') and total_restante <= 0:
+                continue
+
             # Solo incluir productos con datos
             if stock_por_sucursal or total_inicial > 0 or total_restante > 0:
                 datos_reporte.append({
@@ -6736,6 +6796,9 @@ def exportar_movimientos_sucursal_excel(request):
         fecha_desde = request.GET.get('fecha_desde', '').strip()
         fecha_hasta = request.GET.get('fecha_hasta', '').strip()
         solo_tiendas = request.GET.get('solo_tiendas', 'true') != 'false'
+        mostrar = request.GET.get('mostrar', 'todo')
+        if mostrar not in MOSTRAR_MOVIMIENTOS_CHOICES:
+            mostrar = 'todo'
 
         # Parsear filtro de fechas
         filtro_fecha = {}
@@ -6787,9 +6850,15 @@ def exportar_movimientos_sucursal_excel(request):
                 Q(atributo1__valor__icontains=busqueda) |
                 Q(atributo2__valor__icontains=busqueda)
             )
-        
+
+        # Mismo modo "mostrar" que la pantalla, o el Excel trae otro universo.
+        if mostrar in ('entro', 'entro_queda'):
+            queryset = queryset.filter(
+                id__in=_productos_con_entrada(queryset, filtro_fecha)
+            )
+
         queryset = queryset.order_by('atributo1__valor', 'articulo')
-        
+
         if limite:
             queryset = queryset[:int(limite)]
         
@@ -6926,6 +6995,9 @@ def exportar_movimientos_sucursal_excel(request):
                 return saldo_ini_prod[suc_id] + ent_prod.get(suc_id, 0)
 
             total_original = sum(_original(s.id) for s in sucursales_list)
+
+            if mostrar in ('queda', 'entro_queda') and total_restante <= 0:
+                continue
 
             if (total_compras > 0 or total_tin > 0 or total_tout > 0
                     or total_restante > 0 or total_vendido > 0
