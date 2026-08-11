@@ -427,6 +427,45 @@
                 </div>
             </div>
 
+            <!-- Referencias comerciales opcionales (Orden de Compra 801 / HES) -->
+            <div id="referenciasComercialesContainer" style="display:none;" class="mt-3">
+                <div class="card border-primary">
+                    <div class="card-header bg-primary bg-opacity-10 py-2 d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0 small fw-bold"><i class="bi bi-link-45deg me-1"></i>Referencias Comerciales (Orden de Compra / HES)</h6>
+                        <span class="badge bg-secondary small">Opcional</span>
+                    </div>
+                    <div class="card-body py-2">
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <label class="form-label small mb-1 fw-bold"><i class="bi bi-cart3 me-1"></i>Orden de Compra (801)</label>
+                                <div class="row g-2">
+                                    <div class="col-7">
+                                        <input type="text" id="refOcFolio" class="form-control form-control-sm" maxlength="100" placeholder="N° OC (ej: OC-12345)">
+                                    </div>
+                                    <div class="col-5">
+                                        <input type="date" id="refOcFecha" class="form-control form-control-sm" title="Fecha OC (opcional)">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small mb-1 fw-bold"><i class="bi bi-clipboard-data me-1"></i>HES - Hoja de Entrada de Servicios</label>
+                                <div class="row g-2">
+                                    <div class="col-7">
+                                        <input type="text" id="refHesFolio" class="form-control form-control-sm" maxlength="100" placeholder="N° HES (ej: 1000123456)">
+                                    </div>
+                                    <div class="col-5">
+                                        <input type="date" id="refHesFecha" class="form-control form-control-sm" title="Fecha HES (opcional)">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <small class="text-muted mt-1 d-block">
+                            <i class="bi bi-info-circle me-1"></i>Se incluyen en el TXT de Acepta como referencias SII (TpoDocRef 801 / HES). Si no indica fecha se usa la fecha de emisión.
+                        </small>
+                    </div>
+                </div>
+            </div>
+
             <!-- Info según tipo -->
             <div class="row mt-2">
                 <div class="col-12">
@@ -737,6 +776,13 @@ function esBoleta() {
     return selectedTipoDocumento === 'BOLETA ELECTRONICA';
 }
 
+// Referencias comerciales (OC 801 / HES): aplican a factura, factura exenta y
+// guía. La boleta no lleva referencias y en NC/ND la referencia obligatoria es
+// al documento que corrigen.
+function permiteReferenciaComercial() {
+    return ['FACTURA ELECTRONICA', 'FACTURA EXENTA', 'GUIA'].includes(selectedTipoDocumento);
+}
+
 // ========== PASO 1: CONFIGURACIÓN ==========
 
 // Selección de tipo de documento
@@ -754,6 +800,8 @@ document.querySelectorAll('.method-selector[data-tipo]').forEach(el => {
 
         const requiereReferencia = esNotaCredito() || esNotaDebito();
         ncContainer.style.display = requiereReferencia ? 'block' : 'none';
+        document.getElementById('referenciasComercialesContainer').style.display =
+            permiteReferenciaComercial() ? 'block' : 'none';
         infoExenta.style.display = esExenta() ? 'block' : 'none';
         infoNC.style.display = requiereReferencia ? 'block' : 'none';
         infoBoleta.style.display = esBoleta() ? 'block' : 'none';
@@ -1080,6 +1128,19 @@ document.getElementById('btnEmitir').addEventListener('click', function() {
         'GUIA': 'Guía de Despacho Electrónica'
     };
 
+    // Referencias comerciales (OC/HES) para el resumen de confirmación
+    let refsResumen = '';
+    if (permiteReferenciaComercial()) {
+        const partesRefs = [];
+        const ocFolioResumen = document.getElementById('refOcFolio').value.trim();
+        const hesFolioResumen = document.getElementById('refHesFolio').value.trim();
+        if (ocFolioResumen) partesRefs.push(`OC ${ocFolioResumen}`);
+        if (hesFolioResumen) partesRefs.push(`HES ${hesFolioResumen}`);
+        if (partesRefs.length) {
+            refsResumen = `<p class="mb-0"><strong>Referencias:</strong> ${partesRefs.join(' · ')}</p>`;
+        }
+    }
+
     // Construir HTML de conceptos para resumen
     let conceptosHTML = '';
     conceptos.forEach((c, i) => {
@@ -1105,6 +1166,7 @@ document.getElementById('btnEmitir').addEventListener('click', function() {
                         <p class="mb-1"><strong>Tipo:</strong> ${tipoTextos[selectedTipoDocumento]}</p>
                         <p class="mb-1"><strong>Receptor:</strong> ${receptorTexto}</p>
                         <p class="mb-0"><strong>Fecha:</strong> ${document.getElementById('fechaEmision').value}</p>
+                        ${refsResumen}
                     </div>
                 </div>
                 <div class="card mb-3">
@@ -1169,6 +1231,30 @@ function procesarEmision(conceptos) {
             fecha: document.getElementById('fechaRef').value,
             razon: document.getElementById('razonRef').value
         };
+    }
+
+    // Referencias comerciales opcionales (Orden de Compra 801 / HES).
+    // Solo se envían para los tipos donde el contenedor está visible, así un
+    // folio tipeado antes de cambiar a NC/boleta no viaja por accidente.
+    if (permiteReferenciaComercial()) {
+        const refsComerciales = [];
+        const ocFolio = document.getElementById('refOcFolio').value.trim();
+        const hesFolio = document.getElementById('refHesFolio').value.trim();
+        if (ocFolio) {
+            refsComerciales.push({
+                tipo_documento: '801',
+                folio: ocFolio,
+                fecha: document.getElementById('refOcFecha').value || null
+            });
+        }
+        if (hesFolio) {
+            refsComerciales.push({
+                tipo_documento: 'HES',
+                folio: hesFolio,
+                fecha: document.getElementById('refHesFecha').value || null
+            });
+        }
+        if (refsComerciales.length) data.referencias_comerciales = refsComerciales;
     }
 
     $.ajax({

@@ -3812,14 +3812,17 @@ def construir_datos_txt_desde_dte(dte):
         'referencias': []
     }
 
-    # Referencia comercial estructurada (Orden de Compra 801 / Nota de Pedido 802).
-    # El generador de TXT consume las claves tipo_documento/folio/fecha/razon.
+    # Referencia comercial estructurada (Orden de Compra 801 / Nota de Pedido
+    # 802 / HES). El generador de TXT consume las claves
+    # tipo_documento/folio/fecha/razon.
     if dte.referencia_tipo and dte.referencia_folio:
+        razones_ref = {'801': 'ORDEN DE COMPRA', '802': 'NOTA DE PEDIDO', 'HES': 'HES'}
+        tipo_ref = str(dte.referencia_tipo).upper()
         datos['referencias'] = [{
             'tipo_documento': dte.referencia_tipo,
             'folio': dte.referencia_folio,
             'fecha': (dte.referencia_fecha or dte.fecha_emision).strftime('%Y-%m-%d'),
-            'razon': 'ORDEN DE COMPRA' if str(dte.referencia_tipo) == '801' else 'NOTA DE PEDIDO',
+            'razon': razones_ref.get(tipo_ref, tipo_ref),
         }]
 
     datos['detalle'] = construir_detalle_txt_desde_dte_productos(

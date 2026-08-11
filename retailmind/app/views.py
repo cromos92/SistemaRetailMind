@@ -26602,6 +26602,28 @@ def emitir_dte_concepto(request):
                 'error': 'Nota de Crédito/Débito requiere referencia a documento original'
             }, status=400)
 
+        # Referencias comerciales opcionales (Orden de Compra 801 / Nota de
+        # Pedido 802 / HES). Viajan al TXT Acepta como TpoDocRef|FolioRef|FchRef.
+        # La boleta (39) no lleva referencias, así que ahí se ignoran.
+        RAZONES_REF_COMERCIAL = {
+            '801': 'ORDEN DE COMPRA',
+            '802': 'NOTA DE PEDIDO',
+            'HES': 'HES',
+        }
+        refs_comerciales = []
+        if not es_boleta:
+            for ref_com in (data.get('referencias_comerciales') or []):
+                tipo_ref = str(ref_com.get('tipo_documento', '')).strip().upper()
+                folio_ref_com = str(ref_com.get('folio', '')).strip()
+                if tipo_ref not in RAZONES_REF_COMERCIAL or not folio_ref_com:
+                    continue
+                refs_comerciales.append({
+                    'tipo_documento': tipo_ref,
+                    'folio': folio_ref_com[:100],
+                    'fecha': str(ref_com.get('fecha') or fecha_emision),
+                    'razon': RAZONES_REF_COMERCIAL[tipo_ref],
+                })
+
         sucursal_id = request.session.get('idSucursalActual')
         empresa_id = request.session.get('idEmpresaActual')
 
@@ -26652,17 +26674,35 @@ def emitir_dte_concepto(request):
 
             es_nc = tipo_documento == 'NOTA DE CREDITO'
 
+            # Referencias del TXT Acepta: la referencia obligatoria de NC/ND al
+            # documento que corrigen + las referencias comerciales opcionales
+            # (OC 801 / HES). Con al menos una, `referencias` guarda la lista
+            # JSON que consume construir_datos_txt_desde_dte; sin ninguna queda
+            # la glosa descriptiva de siempre.
+            refs_txt = []
             if es_nc_nd and referencia:
-                referencias_json = json.dumps([{
+                refs_txt.append({
                     'tipo_documento': int(referencia.get('tipo_documento', 33)),
                     'folio': str(referencia.get('folio', '')),
                     'fecha': str(referencia.get('fecha', '')),
                     'razon': str(referencia.get('razon', '1')),
-                }])
+                })
+            refs_txt.extend(refs_comerciales)
+
+            if refs_txt:
+                referencias_json = json.dumps(refs_txt)
             else:
                 referencias_json = f"DTE por concepto (sin mercadería)"
                 if observaciones:
                     referencias_json += f". {observaciones}"
+
+            # Espejo estructurado (Dte.referencia_*): primera referencia
+            # comercial, con prioridad a la Orden de Compra. Lo consumen los
+            # reportes/APIs que leen referencia_tipo/folio/fecha.
+            ref_principal = next(
+                (r for r in refs_comerciales if r['tipo_documento'] == '801'),
+                refs_comerciales[0] if refs_comerciales else None,
+            )
 
             doc_afectado = None
             if es_nc_nd and referencia:
@@ -26690,6 +26730,9 @@ def emitir_dte_concepto(request):
                 unidades_productos=0,
                 tipo_transaccion='VENTA',
                 referencias=referencias_json,
+                referencia_tipo=ref_principal['tipo_documento'] if ref_principal else None,
+                referencia_folio=ref_principal['folio'] if ref_principal else None,
+                referencia_fecha=parse_date(ref_principal['fecha']) if ref_principal else None,
                 sucursal=sucursal,
                 es_nota_credito=es_nc,
                 documento_afectado=doc_afectado,
