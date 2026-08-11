@@ -453,6 +453,8 @@ function _generarEscPosEcommerce(td) {
         c.push('*** NO VALIDO COMO BOLETA ***' + _N);
         c.push(_EP.BOLD_OFF);
         c.push('Preparado por: ______________________' + _N);
+        c.push('Fecha Boleta:  ______________________' + _N);
+        if (suc.direccion) c.push(('Direccion: ' + String(suc.direccion)).substring(0, _COLS) + _N);
     } else {
         c.push('*** PEDIDO ECOMMERCE ***' + _N);
     }

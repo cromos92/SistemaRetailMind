@@ -375,6 +375,11 @@ def _bloque_pedido(ctx, ancho, st):
     els.append(Paragraph('*** NO VÁLIDO COMO BOLETA ***', st['pie']))
     els.append(Spacer(1, 2 * mm))
     els.append(Paragraph('Preparado por: ______________________', st['firma']))
+    # Al emitir la boleta la tienda anota su fecha a mano sobre este papel; la
+    # dirección de la sucursal va impresa para no copiarla cada vez.
+    els.append(Paragraph('Fecha Boleta: _______________________', st['firma']))
+    if suc.get('direccion'):
+        els.append(Paragraph(f"Dirección: {_txt(suc['direccion'], 60)}", st['firma']))
     return els
 
 
