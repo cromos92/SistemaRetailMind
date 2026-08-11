@@ -6321,6 +6321,35 @@ def _saldos_periodo(productos_ids, sucursales_ids, filtro_fecha):
     return entradas, salidas, posterior
 
 
+# NOTA: helper interno, NO es una vista (se invoca con args posicionales, ver
+# el comentario de _mapas_movimientos_sucursal).
+def _sucursales_reporte_movimientos(user, solo_tiendas):
+    """Sucursales visibles en el reporte de movimientos por sucursal.
+
+    Con ``solo_tiendas`` se dejan fuera las bodegas proveedoras / centros de
+    distribución (EDEL, GILD y compañía). Se replica la property
+    ``Sucursal.es_compradora`` —que es Python puro, no una columna— para poder
+    decidirlo en memoria sobre las sucursales ya cargadas.
+
+    Excluir una sucursal la saca del reporte COMPLETO, no solo de sus columnas:
+    cada ``Producto`` pertenece a una sola sucursal, así que sus filas, sus
+    totales y sus KPI desaparecen juntos. Es justo lo que se quiere —el total
+    debe cuadrar con lo que se ve— pero significa que el stock que duerme en
+    bodega no está escondido en ninguna columna: no está.
+
+    Devuelve ``(visibles, cantidad_ocultas)``.
+    """
+    empresas_usuario = EmpresaUser.objects.filter(
+        user=user,
+        status=True
+    ).values_list('empresa_id', flat=True)
+    todas = list(Sucursal.objects.filter(empresa_id__in=empresas_usuario).order_by('alias'))
+    if not solo_tiendas:
+        return todas, 0
+    visibles = [s for s in todas if not s.es_compradora]
+    return visibles, len(todas) - len(visibles)
+
+
 @login_required
 def ver_reporte_movimientos_sucursal(request):
     """
@@ -6373,9 +6402,12 @@ def obtener_reporte_movimientos_sucursal(request):
         sin_filtro = request.GET.get('sin_filtro', 'false') == 'true'
         fecha_desde = request.GET.get('fecha_desde', '').strip()
         fecha_hasta = request.GET.get('fecha_hasta', '').strip()
+        # Por defecto el reporte es de TIENDAS: las bodegas proveedoras/CD
+        # abastecen, no venden, y sus columnas solo ensuciaban la comparación.
+        solo_tiendas = request.GET.get('solo_tiendas', 'true') != 'false'
 
         tiene_filtro = any([marca_id, departamento_id, busqueda, fecha_desde, fecha_hasta])
-        
+
         if not tiene_filtro and not sin_filtro:
             return JsonResponse({
                 'success': False,
@@ -6383,17 +6415,29 @@ def obtener_reporte_movimientos_sucursal(request):
                 'error': 'Por favor selecciona al menos un filtro: Marca, Departamento o busca un artículo.',
                 'sugerencia': 'Usa los filtros para optimizar la consulta.'
             })
-        
+
         # ========== OBTENER SUCURSALES DEL USUARIO ==========
-        empresas_usuario = EmpresaUser.objects.filter(
-            user=request.user,
-            status=True
-        ).values_list('empresa_id', flat=True)
-        sucursales = Sucursal.objects.filter(empresa_id__in=empresas_usuario).order_by('alias')
-        sucursales_list = list(sucursales)
+        sucursales_list, bodegas_ocultas = _sucursales_reporte_movimientos(
+            request.user, solo_tiendas
+        )
         sucursales_ids = [s.id for s in sucursales_list]
         sucursales_map = {s.id: s.alias for s in sucursales_list}
-        
+
+        if not sucursales_ids:
+            return JsonResponse({
+                'success': True,
+                'datos': [],
+                'sucursales': [],
+                'periodo': {'activo': bool(fecha_desde or fecha_hasta),
+                            'desde': fecha_desde or None, 'hasta': fecha_hasta or None},
+                'bodegas_ocultas': bodegas_ocultas,
+                'error_visible': (
+                    'Todas tus sucursales son bodegas proveedoras. Desmarca '
+                    '"Solo tiendas" para verlas.' if bodegas_ocultas else None
+                ),
+                'debug': {'total_productos': 0, 'total_sucursales': 0},
+            })
+
         # ========== QUERY 1: PRODUCTOS BASE (con filtros) ==========
         queryset = Producto.objects.filter(
             sucursal_id__in=sucursales_ids,
@@ -6436,6 +6480,9 @@ def obtener_reporte_movimientos_sucursal(request):
                 'success': True,
                 'datos': [],
                 'sucursales': [{'id': s.id, 'alias': s.alias} for s in sucursales_list],
+                'periodo': {'activo': bool(fecha_desde or fecha_hasta),
+                            'desde': fecha_desde or None, 'hasta': fecha_hasta or None},
+                'bodegas_ocultas': bodegas_ocultas,
                 'debug': {'total_productos': 0, 'total_sucursales': len(sucursales_list)}
             })
         
@@ -6516,6 +6563,7 @@ def obtener_reporte_movimientos_sucursal(request):
             total_vendido = 0
             total_entradas = total_salidas = total_saldo_inicial = 0
             total_stock_hoy = 0
+            total_stock_original = 0
 
             sucursales_con_datos = (
                 set(compras_producto) | set(tin_producto) | set(tout_producto)
@@ -6543,11 +6591,21 @@ def obtener_reporte_movimientos_sucursal(request):
                 restante = stock_hoy - post_producto.get(suc_id, 0)
                 saldo_inicial = restante - (entradas - salidas)
 
+                # Las dos columnas que muestra la UI. "Original" cambia de
+                # definición según haya período: sin fechas es todo lo que
+                # entró alguna vez; con fechas, el saldo del día "Desde".
+                # "Actual" es el stock de hoy, o el saldo al cierre si se
+                # filtró por fechas.
+                stock_original = saldo_inicial if periodo_activo else inicial
+                stock_actual = restante
+
                 if (inicial or restante or vendido or traspasos_out
                         or entradas or salidas or saldo_inicial):
                     suc_alias = sucursales_map[suc_id]
                     stock_por_sucursal[suc_alias] = {
                         'sucursal_id': suc_id,
+                        'stock_original': stock_original,
+                        'stock_actual': stock_actual,
                         'inicial': inicial,
                         'compras': compras,
                         'traspasos_in': traspasos_in,
@@ -6573,6 +6631,7 @@ def obtener_reporte_movimientos_sucursal(request):
                     total_salidas += salidas
                     total_saldo_inicial += saldo_inicial
                     total_stock_hoy += stock_hoy
+                    total_stock_original += stock_original
 
             total_inicial = total_compras + total_tin
 
@@ -6586,6 +6645,8 @@ def obtener_reporte_movimientos_sucursal(request):
                     'costo': float(producto.costo) if producto.costo else 0,
                     'precio_venta': float(producto.precioventa) if producto.precioventa else 0,
                     'sucursales': stock_por_sucursal,
+                    'total_stock_original': total_stock_original,
+                    'total_stock_actual': total_restante,
                     'total_inicial': total_inicial,
                     'total_compras': total_compras,
                     'total_traspasos_in': total_tin,
@@ -6604,9 +6665,10 @@ def obtener_reporte_movimientos_sucursal(request):
             'success': True,
             'datos': datos_reporte,
             'sucursales': sucursales_data,
-            # La UI cambia de columnas según esto: sin período muestra
-            # "Recib./Desp./Rest.(hoy)"; con período muestra el kardex
-            # "S.Ini/Entradas/Salidas/S.Fin", que sí cuadra.
+            'bodegas_ocultas': bodegas_ocultas,
+            # La UI muestra siempre dos columnas (Original / Actual); esto solo
+            # cambia QUÉ significa "Original": sin período es todo lo recibido
+            # alguna vez, con período es el saldo del día "Desde".
             'periodo': {
                 'activo': periodo_activo,
                 'desde': fecha_desde or None,
@@ -6646,6 +6708,7 @@ def exportar_movimientos_sucursal_excel(request):
         limite = request.GET.get('limite')
         fecha_desde = request.GET.get('fecha_desde', '').strip()
         fecha_hasta = request.GET.get('fecha_hasta', '').strip()
+        solo_tiendas = request.GET.get('solo_tiendas', 'true') != 'false'
 
         # Parsear filtro de fechas
         filtro_fecha = {}
@@ -6660,16 +6723,14 @@ def exportar_movimientos_sucursal_excel(request):
             except ValueError:
                 pass
 
-        # Obtener sucursales del usuario
-        empresas_usuario = EmpresaUser.objects.filter(
-            user=request.user,
-            status=True
-        ).values_list('empresa_id', flat=True)
-        sucursales = Sucursal.objects.filter(empresa_id__in=empresas_usuario).order_by('alias')
-        sucursales_list = list(sucursales)
+        # Obtener sucursales del usuario (mismo criterio que la vista web: con
+        # `solo_tiendas` las bodegas proveedoras quedan fuera del export).
+        sucursales_list, bodegas_ocultas = _sucursales_reporte_movimientos(
+            request.user, solo_tiendas
+        )
         sucursales_ids = [s.id for s in sucursales_list]
         sucursales_map = {s.id: s.alias for s in sucursales_list}
-        
+
         # QUERY 1: Productos base
         queryset = Producto.objects.filter(
             sucursal_id__in=sucursales_ids,
@@ -6688,8 +6749,11 @@ def exportar_movimientos_sucursal_excel(request):
             queryset = queryset.filter(atributo1_id=marca_id)
 
         if departamento_id:
-            queryset = queryset.filter(categoria_id=departamento_id)
-        
+            # Árbol v1.2: un padre incluye sus hijas, igual que la vista web.
+            # Sin esto el Excel traía menos filas que la pantalla al elegir un
+            # departamento padre.
+            queryset = queryset.filter(categoria_id__in=_expandir_categoria_ids(departamento_id))
+
         if busqueda:
             queryset = queryset.filter(
                 Q(articulo__icontains=busqueda) |
@@ -6759,44 +6823,34 @@ def exportar_movimientos_sucursal_excel(request):
         
         # Título
         ws.merge_cells('A1:F1')
-        ws['A1'] = (
-            "MOVIMIENTOS POR SUCURSAL — KARDEX DEL PERÍODO: Saldo inicial · "
-            "Entradas · Salidas · Saldo final"
-            if periodo_activo else
-            "MOVIMIENTOS POR SUCURSAL — Compras · Traspasos IN/OUT · Stock actual · Vendido"
-        )
+        ws['A1'] = "STOCK ORIGINAL VS STOCK ACTUAL POR SUCURSAL"
         ws['A1'].font = Font(bold=True, color="FFFFFF", size=14)
         ws['A1'].fill = header_fill
 
         # Info
         leyenda_periodo = (
             f" | Período {fecha_desde or 'inicio'} → {fecha_hasta or 'hoy'}"
-            " | Saldo inicial + Entradas − Salidas = Saldo final"
+            " | Original = saldo del día Desde; Actual = saldo al cierre"
             if periodo_activo else
-            " | Sin filtro de fechas: Rest. es el stock de HOY"
+            " | Original = todo lo recibido alguna vez; Actual = stock de HOY"
         )
+        leyenda_bodegas = (f" | {bodegas_ocultas} bodega(s) proveedora(s) excluida(s)"
+                           if bodegas_ocultas else "")
         ws['A2'] = (f"Generado: {timezone.now().strftime('%d/%m/%Y %H:%M')} | "
-                    f"{len(productos_list)} productos{leyenda_periodo}")
+                    f"{len(productos_list)} productos{leyenda_periodo}{leyenda_bodegas}")
         ws['A2'].font = Font(italic=True, size=9)
 
-        # Headers fila 4
+        # Headers fila 4. Por sucursal solo van las dos columnas que muestra la
+        # pantalla; el desglose de movimientos (entradas/salidas/traspasos) se
+        # conserva a nivel de TOTAL para no perder la trazabilidad del período.
         row = 4
         headers = ['Artículo', 'Marca', 'Color', 'Departamento', 'Costo', 'Precio Venta']
 
-        sucursales_nombres = [s.alias for s in sucursales_list]
-        if periodo_activo:
-            for suc in sucursales_nombres:
-                headers.extend([f'{suc} S.Ini', f'{suc} Ent.', f'{suc} Sal.',
-                                f'{suc} S.Fin'])
-            headers.extend(['TOTAL S.Ini', 'TOTAL Ent.', 'TOTAL Sal.',
-                            'TOTAL S.Fin', 'VENDIDO'])
-        else:
-            for suc in sucursales_nombres:
-                headers.extend([f'{suc} Comp.', f'{suc} T.IN', f'{suc} T.OUT',
-                                f'{suc} Rest.'])
-            headers.extend(['TOTAL Comp.', 'TOTAL T.IN', 'TOTAL T.OUT',
-                            'TOTAL Rest.', 'VENDIDO'])
-        
+        for suc in [s.alias for s in sucursales_list]:
+            headers.extend([f'{suc} Original', f'{suc} Actual'])
+        headers.extend(['TOTAL Original', 'TOTAL Actual', 'TOTAL Entradas',
+                        'TOTAL Salidas', 'VENDIDO'])
+
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=row, column=col, value=header)
             cell.font = header_font
@@ -6836,7 +6890,15 @@ def exportar_movimientos_sucursal_excel(request):
             total_restante = sum(saldo_fin_prod.values())
             total_entradas = sum(ent_prod.values())
             total_salidas = sum(sal_prod.values())
-            total_saldo_ini = sum(saldo_ini_prod.values())
+
+            # Misma definición que la API: con período "original" es el saldo
+            # del día Desde; sin período, todo lo que entró alguna vez.
+            def _original(suc_id):
+                if periodo_activo:
+                    return saldo_ini_prod[suc_id]
+                return compras_prod.get(suc_id, 0) + tin_prod.get(suc_id, 0)
+
+            total_original = sum(_original(s.id) for s in sucursales_list)
 
             if (total_compras > 0 or total_tin > 0 or total_tout > 0
                     or total_restante > 0 or total_vendido > 0
@@ -6869,20 +6931,10 @@ def exportar_movimientos_sucursal_excel(request):
 
                 # Datos por sucursal (desde los mapas, sin queries)
                 for suc in sucursales_list:
-                    valores_suc = (
-                        (
-                            (saldo_ini_prod[suc.id], restante_fill),
-                            (ent_prod.get(suc.id, 0), inicial_fill),
-                            (sal_prod.get(suc.id, 0), inicial_fill),
-                            (saldo_fin_prod[suc.id], restante_fill),
-                        ) if periodo_activo else (
-                            (compras_prod.get(suc.id, 0), inicial_fill),
-                            (tin_prod.get(suc.id, 0), inicial_fill),
-                            (tout_prod.get(suc.id, 0), restante_fill),
-                            (stock_prod.get(suc.id, 0), restante_fill),
-                        )
-                    )
-                    for valor, relleno in valores_suc:
+                    for valor, relleno in (
+                        (_original(suc.id), inicial_fill),
+                        (saldo_fin_prod[suc.id], restante_fill),
+                    ):
                         celda = ws.cell(row=row, column=col, value=valor)
                         celda.border = border
                         celda.fill = relleno
@@ -6891,19 +6943,11 @@ def exportar_movimientos_sucursal_excel(request):
 
                 # Totales
                 for valor, color_fuente in (
-                    (
-                        (total_saldo_ini, None),
-                        (total_entradas, None),
-                        (total_salidas, None),
-                        (total_restante, None),
-                        (total_vendido, 'CC0000'),
-                    ) if periodo_activo else (
-                        (total_compras, None),
-                        (total_tin, None),
-                        (total_tout, None),
-                        (total_restante, None),
-                        (total_vendido, 'CC0000'),
-                    )
+                    (total_original, None),
+                    (total_restante, None),
+                    (total_entradas, None),
+                    (total_salidas, None),
+                    (total_vendido, 'CC0000'),
                 ):
                     celda = ws.cell(row=row, column=col, value=valor)
                     celda.border = border

@@ -798,14 +798,28 @@ def check_movimientos_sucursal(res, oraculos, fx, ctx):
     restante_api = sum(_num(d.get('total_restante')) for d in datos)
     empresas = EmpresaUser.objects.filter(user=ctx.usuario, status=True) \
         .values_list('empresa_id', flat=True)
+    # El reporte trae `solo_tiendas=true` por defecto, así que el oráculo tiene
+    # que excluir las bodegas proveedoras/CD o compara peras con manzanas.
+    # `es_compradora` es una property de Python: se replica su definición.
     ora = Producto_Talla.objects.filter(
         producto__sucursal__empresa_id__in=empresas,
         producto__excluir_de_analitica=False,
         producto__atributo1_id=fx['marca_top'],
+    ).exclude(
+        Q(producto__sucursal__es_centro_distribucion=True)
+        | Q(producto__sucursal__tipo_sucursal='CENTRO_DISTRIBUCION')
     ).aggregate(s=Sum('stock'))['s'] or 0
     out.append(C('restante_vs_stock_oraculo', _cerca(restante_api, ora, 2.0),
                  f'{ora:,}', f'{int(restante_api):,}',
-                 'marca top; tolerancia 2% (filas sin datos se omiten)'))
+                 'marca top, solo tiendas; tolerancia 2% (filas sin datos se omiten)'))
+    # Ninguna bodega proveedora debe aparecer como columna.
+    cds = set(Sucursal.objects.filter(
+        Q(empresa_id__in=empresas)
+        & (Q(es_centro_distribucion=True) | Q(tipo_sucursal='CENTRO_DISTRIBUCION'))
+    ).values_list('alias', flat=True))
+    filtradas = {s for d in datos for s in (d.get('sucursales') or {})} & cds
+    out.append(C('sin_bodegas_proveedoras', not filtradas,
+                 '0 bodegas en columnas', sorted(filtradas)[:6] or '0'))
     censo = oraculos['censo']
     hijas_nombres = set(Categoria.objects.filter(id__in=censo['hijas_ids'])
                         .values_list('nombre', flat=True))
