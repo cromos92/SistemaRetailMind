@@ -1,23 +1,38 @@
 """
 _diag_saldo_apertura_migracion.py  --  SOLO LECTURA
 
-Demuestra por que el reporte "Stock Original vs Stock Actual"
-(/app/reportes/movimientos-sucursal/) mostraba Original=0 en SKU que SI tenian
-stock antes del periodo.
+Reproduce fuera del navegador las columnas del reporte
+"Stock Original vs Stock Actual" (/app/reportes/movimientos-sucursal/) y muestra
+el doble conteo del saldo de apertura de la migracion Laravel.
 
-Causa: el saldo de apertura de la migracion Laravel entro como INGRESO_INICIAL
-con referencia_externa='MIGRACION_LARAVEL' y fecha ~2026-01-22. El kardex legacy
-ANTERIOR tambien se migro, asi que ese stock esta contado dos veces:
+EL PROBLEMA DE DATOS
+--------------------
+En Movimientos_Producto conviven dos origenes que se pisan:
 
-    SUM(todos los movimientos)  !=  Producto_Talla.stock
+  1. el kardex legacy importado (2022-2025), referencia_externa='MIG:<id>'
+  2. el SALDO DE APERTURA de la migracion: concepto='INGRESO_INICIAL' con
+     referencia_externa='MIGRACION_LARAVEL', fechado ~2026-01-22
 
-Como el saldo del periodo se reconstruye rebobinando el stock de hoy
-(saldo_inicial = stock_hoy - (entradas - salidas)), cualquier ventana que cruce
-la fecha de corte se come la apertura como "entrada" y deja el original en 0 o
-negativo.
+La apertura NO es una recepcion: es la foto de arranque, y YA INCLUYE el saldo
+que dejaron los movimientos legacy. Por eso
 
-El fix excluye la apertura de entradas/salidas/posterior en `_saldos_periodo`.
-Este script compara ambos calculos.
+    SUM(cantidad de todos los movimientos)  !=  Producto_Talla.stock
+
+y la diferencia es justo la apertura. La columna "kardex-stock" de abajo lo
+mide fila por fila.
+
+LO QUE MUESTRA EL REPORTE
+-------------------------
+No hay fotos historicas de stock en ninguna tabla, asi que el saldo se
+reconstruye rebobinando el stock de HOY contra el kardex:
+
+    Actual   = stock_hoy - (movimientos posteriores a "hasta")
+    ya_tenia = Actual - (entradas - salidas) del periodo
+    Original = ya_tenia + entradas          <- todo lo que tuvo disponible
+    Salio    = Original - Actual = salidas  <- identidad, no aproximacion
+
+La apertura se excluye de entradas/salidas/posterior: si no, "ya_tenia" sale 0
+y el desglose miente (diria que llego en el periodo cuando ya estaba ahi).
 
 Uso:
     python _diag_saldo_apertura_migracion.py
@@ -52,13 +67,14 @@ productos = list(productos)
 prod_ids = [p.id for p in productos]
 
 if not prod_ids:
-    print('Sin productos para marca "%s"%s' % (MARCA, ' / ' + ARTICULO if ARTICULO else ''))
+    print('Sin productos para marca "%s"%s'
+          % (MARCA, ' / ' + ARTICULO if ARTICULO else ''))
     sys.exit(0)
 
-print('MARCA "%s"%s | periodo desde %s | %d productos-sucursal\n'
+print('MARCA "%s"%s | periodo desde %s (sin "hasta") | %d productos-sucursal\n'
       % (MARCA, ' / ' + ARTICULO if ARTICULO else '', DESDE, len(prod_ids)))
 
-# --- stock real de hoy ------------------------------------------------------
+# --- stock real de hoy: la unica verdad conocida ----------------------------
 stock = defaultdict(int)
 for r in (Producto_Talla.objects.filter(producto_id__in=prod_ids)
           .values('producto_id').annotate(s=Sum('stock'))):
@@ -74,53 +90,66 @@ def _sumar(qs):
 
 base = Movimientos_Producto.objects.filter(
     ProductoTalla__producto_id__in=prod_ids, estado='COMPLETADO')
-apertura_qs = base.filter(concepto='INGRESO_INICIAL',
-                          referencia_externa=REF_SALDO_INICIAL_SINTETICO)
+# Mismo criterio que _saldos_periodo() en views_modulo_reportes.py.
 sin_apertura = base.exclude(concepto='INGRESO_INICIAL',
                             referencia_externa=REF_SALDO_INICIAL_SINTETICO)
 
-apertura = _sumar(apertura_qs)
-todo = _sumar(base)
-ent_antes = _sumar(base.filter(fecha__gte=DESDE, cantidad__gt=0))
-ent_despues = _sumar(sin_apertura.filter(fecha__gte=DESDE, cantidad__gt=0))
-sal = _sumar(base.filter(fecha__gte=DESDE, cantidad__lt=0))
+apertura = _sumar(base.filter(concepto='INGRESO_INICIAL',
+                              referencia_externa=REF_SALDO_INICIAL_SINTETICO))
+kardex_total = _sumar(base)
+entradas = _sumar(sin_apertura.filter(fecha__gte=DESDE, cantidad__gt=0))
+salidas = _sumar(sin_apertura.filter(fecha__gte=DESDE, cantidad__lt=0))
 
-print('%-22s %-8s %7s %8s %9s %9s %9s'
-      % ('ARTICULO', 'SUCURSAL', 'stock', 'apertura', 'kardex', 'ORIG.antes', 'ORIG.fix'))
+print('%-20s %-8s %8s %7s %7s %9s %7s %7s'
+      % ('ARTICULO', 'SUCURSAL', 'apertura', 'k-stock',
+         'yatenia', 'ORIGINAL', 'ACTUAL', 'SALIO'))
 print('-' * 82)
 
-tot = {'stock': 0, 'kardex': 0, 'antes': 0, 'fix': 0, 'apertura': 0}
+tot = defaultdict(int)
 descuadre = 0
-for p in sorted(productos, key=lambda x: (x.articulo, x.sucursal.alias)):
-    st = stock.get(p.id, 0)
+filas = 0
+for p in sorted(productos, key=lambda x: (x.articulo, x.sucursal.alias or '')):
+    actual = stock.get(p.id, 0)
+    ent = entradas.get(p.id, 0)
+    sal = abs(salidas.get(p.id, 0))
+    ya_tenia = actual - (ent - sal)
+    original = ya_tenia + ent
     ap = apertura.get(p.id, 0)
-    kx = todo.get(p.id, 0)
-    s = abs(sal.get(p.id, 0))
-    antes = st - (ent_antes.get(p.id, 0) - s)
-    fix = st - (ent_despues.get(p.id, 0) - s)
-    tot['stock'] += st
-    tot['kardex'] += kx
-    tot['antes'] += antes
-    tot['fix'] += fix
+    gap = kardex_total.get(p.id, 0) - actual
+
     tot['apertura'] += ap
-    if kx != st:
+    tot['gap'] += gap
+    tot['ya'] += ya_tenia
+    tot['orig'] += original
+    tot['act'] += actual
+    tot['salio'] += original - actual
+    if gap:
         descuadre += 1
-    if ARTICULO or st or ap:
-        print('%-22s %-8s %7d %8d %9d %9d %9d'
-              % (p.articulo[:22], (p.sucursal.alias or '?')[:8], st, ap, kx, antes, fix))
+    if ARTICULO or actual or ap:
+        filas += 1
+        print('%-20s %-8s %8d %7d %7d %9d %7d %7d'
+              % (p.articulo[:20], (p.sucursal.alias or '?')[:8],
+                 ap, gap, ya_tenia, original, actual, original - actual))
 
 print('-' * 82)
-print('%-31s %7d %8d %9d %9d %9d'
-      % ('TOTAL', tot['stock'], tot['apertura'], tot['kardex'], tot['antes'], tot['fix']))
+print('%-29s %8d %7d %7d %9d %7d %7d'
+      % ('TOTAL (%d filas)' % filas, tot['apertura'], tot['gap'],
+         tot['ya'], tot['orig'], tot['act'], tot['salio']))
 
-print('\nLECTURA:')
-print('  stock      = Producto_Talla.stock de HOY (la verdad)')
-print('  apertura   = INGRESO_INICIAL con referencia MIGRACION_LARAVEL')
-print('  kardex     = SUM(cantidad) de TODOS los movimientos')
-print('  ORIG.antes = stock - (entradas - salidas) contando la apertura  [BUG]')
-print('  ORIG.fix   = idem excluyendo la apertura                       [FIX]')
-print('\n%d de %d filas tienen kardex != stock (doble conteo de la apertura).'
-      % (descuadre, len(productos)))
-print('Diferencia kardex - stock = %d (deberia ser ~= apertura = %d).'
-      % (tot['kardex'] - tot['stock'], tot['apertura']))
+print('\nCOLUMNAS')
+print('  apertura = INGRESO_INICIAL con referencia MIGRACION_LARAVEL')
+print('  k-stock  = SUM(todos los movimientos) - stock real  <- el doble conteo')
+print('  yatenia  = saldo al %s (rebobinado desde el stock de hoy)' % DESDE)
+print('  ORIGINAL = yatenia + entradas del periodo   <- columna del reporte')
+print('  ACTUAL   = stock de hoy                     <- columna del reporte')
+print('  SALIO    = ORIGINAL - ACTUAL, debe ser igual a las salidas del periodo')
+
+print('\n%d de %d filas tienen kardex != stock.' % (descuadre, len(productos)))
+print('Suma de esa diferencia = %d | suma de la apertura = %d'
+      % (tot['gap'], tot['apertura']))
+print('Si ambos numeros se parecen, el descuadre ES la apertura contada dos veces.')
+if tot['salio'] < 0:
+    print('\nOJO: SALIO total dio NEGATIVO (%d). Eso ya no lo explica la apertura:'
+          '\nes descuadre entre Producto_Talla.stock y Movimientos_Producto.'
+          % tot['salio'])
 print('\nFIN (solo lectura).')

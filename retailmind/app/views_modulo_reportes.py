@@ -6598,21 +6598,32 @@ def obtener_reporte_movimientos_sucursal(request):
                 inicial = compras + traspasos_in  # compat con la UI actual
 
                 # Kardex del período. Sin filtro de fechas `posterior` es 0 y
-                # `restante` sigue siendo el stock de hoy (comportamiento
-                # histórico intacto). Con filtro, `restante` pasa a ser el saldo
-                # al cierre de la ventana y aparece el saldo inicial.
+                # `restante` sigue siendo el stock de hoy. Con filtro, `restante`
+                # pasa a ser el saldo al cierre de la ventana y `saldo_inicial`
+                # el del día "Desde" (lo que la sucursal YA TENÍA).
                 stock_hoy = stock_producto.get(suc_id, 0)
                 entradas = ent_producto.get(suc_id, 0)
                 salidas = sal_producto.get(suc_id, 0)
                 restante = stock_hoy - post_producto.get(suc_id, 0)
                 saldo_inicial = restante - (entradas - salidas)
 
-                # Las dos columnas que muestra la UI. "Original" cambia de
-                # definición según haya período: sin fechas es todo lo que
-                # entró alguna vez; con fechas, el saldo del día "Desde".
-                # "Actual" es el stock de hoy, o el saldo al cierre si se
-                # filtró por fechas.
-                stock_original = saldo_inicial if periodo_activo else inicial
+                # Las dos columnas que muestra la UI.
+                #
+                # "Original" = TODO lo que la sucursal tuvo disponible: lo que
+                # ya tenía al inicio más lo que le llegó. Una misma fórmula
+                # sirve para los dos modos: sin filtro de fechas `saldo_inicial`
+                # es ~0 y `entradas` es todo lo que entró alguna vez.
+                #
+                # La propiedad que hace legible el reporte:
+                #     Original − Actual
+                #   = (saldo_ini + entradas) − (saldo_ini + entradas − salidas)
+                #   = salidas
+                # o sea la diferencia entre ambas columnas es EXACTAMENTE lo que
+                # salió (ventas + traspasos + mermas + ajustes). Definir
+                # "Original" como el saldo inicial pelado dejaba filas en 0 con
+                # stock a la vista (la mercadería llegó dentro del período) y
+                # KPI de "salió" negativos.
+                stock_original = saldo_inicial + entradas
                 stock_actual = restante
 
                 if (inicial or restante or vendido or traspasos_out
@@ -6845,10 +6856,12 @@ def exportar_movimientos_sucursal_excel(request):
 
         # Info
         leyenda_periodo = (
-            f" | Período {fecha_desde or 'inicio'} → {fecha_hasta or 'hoy'}"
-            " | Original = saldo del día Desde; Actual = saldo al cierre"
-            if periodo_activo else
-            " | Original = todo lo recibido alguna vez; Actual = stock de HOY"
+            (f" | Período {fecha_desde or 'inicio'} → {fecha_hasta or 'hoy'}"
+             " | Original = lo que tenía al inicio + lo que entró"
+             " | Actual = saldo al cierre"
+             if periodo_activo else
+             " | Original = todo lo que tuvo alguna vez | Actual = stock de HOY")
+            + " | Original − Actual = todo lo que salió"
         )
         leyenda_bodegas = (f" | {bodegas_ocultas} bodega(s) proveedora(s) excluida(s)"
                            if bodegas_ocultas else "")
@@ -6907,12 +6920,10 @@ def exportar_movimientos_sucursal_excel(request):
             total_entradas = sum(ent_prod.values())
             total_salidas = sum(sal_prod.values())
 
-            # Misma definición que la API: con período "original" es el saldo
-            # del día Desde; sin período, todo lo que entró alguna vez.
+            # Misma definición que la API: lo que la sucursal tuvo disponible,
+            # o sea el saldo al inicio más todo lo que entró en el período.
             def _original(suc_id):
-                if periodo_activo:
-                    return saldo_ini_prod[suc_id]
-                return compras_prod.get(suc_id, 0) + tin_prod.get(suc_id, 0)
+                return saldo_ini_prod[suc_id] + ent_prod.get(suc_id, 0)
 
             total_original = sum(_original(s.id) for s in sucursales_list)
 

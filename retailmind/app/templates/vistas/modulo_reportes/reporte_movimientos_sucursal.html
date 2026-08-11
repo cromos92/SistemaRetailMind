@@ -732,16 +732,15 @@
                     <i class="ri-exchange-line"></i>
                     Stock Original vs Stock Actual por Sucursal
                 </h1>
-                <p>Cuánto stock tenía cada sucursal y cuánto le queda hoy</p>
-                <!-- "Original" cambia de significado segun haya filtro de fechas:
-                     sin fechas es todo lo recibido; con fechas, el saldo del dia
-                     "Desde". Lo decide el backend (campo stock_original). -->
+                <p>Cuánto stock tuvo disponible cada sucursal y cuánto le queda</p>
+                <!-- "Original" = saldo al inicio + entradas del periodo, asi la
+                     resta contra "Actual" da exactamente las salidas. Lo calcula
+                     el backend (campo stock_original). -->
                 <p style="font-size:.72rem; opacity:.75; margin-top:2px;" id="leyenda-modo">
-                    <b>Original</b> = todo lo que entró alguna vez ·
-                    <b>Actual</b> = stock de hoy · La diferencia es lo que salió: ventas,
-                    traspasos a otras sucursales, mermas y ajustes ·
-                    <b>Filtra por fechas</b> para que “Original” pase a ser el stock que
-                    había el día “Desde”.
+                    <b>Original</b> = todo lo que la sucursal tuvo disponible ·
+                    <b>Actual</b> = lo que le queda · La diferencia entre ambas es
+                    <b>exactamente lo que salió</b>: ventas, traspasos a otras sucursales,
+                    mermas y ajustes · <b>Filtra por fechas</b> para acotarlo a un período.
                 </p>
             </div>
             <div class="nexo-header-badge">
@@ -758,11 +757,12 @@
             <div class="nexo-kpi-label">Total Artículos</div>
             <div class="nexo-kpi-value" id="kpi-articulos">-</div>
         </div>
-        <!-- Sin fechas: todo lo recibido alguna vez. Con fechas: el saldo del
-             dia "Desde", reconstruido rebobinando el stock de hoy contra el
-             kardex (no hay snapshots historicos en BD). -->
+        <!-- Todo lo que la sucursal tuvo disponible: lo que ya tenia al inicio
+             del periodo mas lo que le entro. El saldo inicial se reconstruye
+             rebobinando el stock de hoy contra el kardex (no hay snapshots
+             historicos en BD). -->
         <div class="nexo-kpi-card kpi-success" id="kpi-card-original"
-             title="Sin filtro de fechas: todo lo que entró alguna vez (compras + traspasos recibidos). Con filtro: el stock que había el día Desde.">
+             title="Todo lo que la sucursal tuvo disponible: lo que ya tenía al inicio del período más lo que le entró (compras, traspasos recibidos, devoluciones y ajustes). Sin filtro de fechas, es todo lo que tuvo alguna vez.">
             <div class="nexo-kpi-icon icon-success"><i class="ri-inbox-archive-line"></i></div>
             <div class="nexo-kpi-label" id="kpi-label-original">Stock Original</div>
             <div class="nexo-kpi-value" id="kpi-original">-</div>
@@ -780,10 +780,11 @@
             <div class="nexo-kpi-label" id="kpi-label-restante">Stock Actual (hoy)</div>
             <div class="nexo-kpi-value" id="kpi-restante">-</div>
         </div>
-        <!-- Puente entre las dos columnas: Original - Actual = todo lo que
-             salió, no solo lo vendido. Evita la lectura de que "falta stock". -->
+        <!-- Puente entre las dos columnas. Con Original = tenia + entro, esta
+             resta es EXACTAMENTE las salidas del periodo, no solo lo vendido.
+             Un negativo aqui solo puede ser descuadre kardex vs stock real. -->
         <div class="nexo-kpi-card kpi-primary" id="kpi-card-diferencia"
-             title="Original − Actual. Incluye ventas, traspasos enviados a otras sucursales, mermas, ajustes y devoluciones. Si es negativo, entró más de lo que había al inicio.">
+             title="Original − Actual. Es exactamente todo lo que salió: ventas, traspasos enviados a otras sucursales, mermas y ajustes. Si sale negativo, hay descuadre entre el kardex y el stock real.">
             <div class="nexo-kpi-icon icon-primary"><i class="ri-arrow-left-right-line"></i></div>
             <div class="nexo-kpi-label">Salió (Original − Actual)</div>
             <div class="nexo-kpi-value" id="kpi-diferencia">-</div>
@@ -1115,7 +1116,7 @@ function actualizarKPIs(datos) {
     // Solo cambian las etiquetas: el numero ya viene con la definicion correcta
     // desde el backend (stock_original / stock_actual).
     document.getElementById('kpi-label-original').textContent = periodo.activo
-        ? 'Stock Original (al inicio)' : 'Stock Original (todo lo recibido)';
+        ? 'Stock Original (tenía + entró)' : 'Stock Original (todo lo que tuvo)';
     document.getElementById('kpi-label-restante').textContent = periodo.activo
         ? 'Stock Actual (al cierre)' : 'Stock Actual (hoy)';
     document.getElementById('kpi-label-vendido').textContent = periodo.activo
@@ -1126,30 +1127,28 @@ function actualizarKPIs(datos) {
           '(su stock no está sumado en ninguna columna)'
         : '';
 
+    // Original − Actual = salidas, así que un negativo NO es una salida
+    // negativa: es drift entre Producto_Talla.stock y Movimientos_Producto
+    // (kardex con más movimiento del que respalda el stock real).
+    const alertaDrift = (totalOriginal - totalActual) < 0
+        ? ` · <b style="color:var(--nexo-warning);">“Salió” dio negativo ` +
+          `(${formatearNumero(totalOriginal - totalActual)}): hay descuadre entre ` +
+          `el kardex y el stock real en este tramo.</b>`
+        : '';
+
     const leyenda = document.getElementById('leyenda-modo');
-    if (leyenda && periodo.activo) {
-        // Un stock original NEGATIVO no es un error de calculo: significa que el
-        // kardex registra mas movimiento neto del que respalda el stock real,
-        // o sea drift entre Producto_Talla.stock y Movimientos_Producto.
-        const alertaDrift = totalOriginal < 0
-            ? ` · <b style="color:var(--nexo-warning);">Stock original negativo ` +
-              `(${formatearNumero(totalOriginal)}): el kardex registra más ` +
-              `movimiento del que respalda el stock real en ese tramo.</b>`
-            : '';
-        leyenda.innerHTML =
-            `<b>Período ${periodo.desde || 'inicio'} → ${periodo.hasta || 'hoy'}</b>: ` +
-            '“Original” es el stock que había el día <b>Desde</b> y “Actual” el que ' +
-            'quedó al cierre. El saldo se reconstruye rebobinando el stock de hoy ' +
-            'contra los movimientos (el sistema no guarda fotos históricas de stock). ' +
-            '“Vendido” es bruto: no descuenta devoluciones ni anulaciones.' +
+    const alcance = periodo.activo
+        ? `<b>Período ${periodo.desde || 'inicio'} → ${periodo.hasta || 'hoy'}</b>: ` +
+          '<b>Original</b> = lo que la sucursal ya tenía el día “Desde” <b>más</b> ' +
+          'lo que le entró en el período · <b>Actual</b> = lo que quedó al cierre'
+        : '<b>Original</b> = todo lo que la sucursal tuvo disponible alguna vez · ' +
+          '<b>Actual</b> = stock de <b>hoy</b>';
+    if (leyenda) {
+        leyenda.innerHTML = alcance +
+            ' · La diferencia entre ambas columnas es <b>exactamente lo que salió</b>: ' +
+            'ventas, traspasos a otras sucursales, mermas y ajustes · “Vendido” es ' +
+            'bruto (no descuenta devoluciones ni anulaciones)' +
             alertaDrift + notaBodegas;
-    } else if (leyenda) {
-        leyenda.innerHTML = '<b>Original</b> = todo lo que entró alguna vez ' +
-            '(compras + traspasos recibidos) · <b>Actual</b> = stock de <b>hoy</b> · ' +
-            'La diferencia es todo lo que salió: ventas, traspasos a otras sucursales, ' +
-            'mermas y ajustes · “Vendido” es bruto (no descuenta devoluciones ni ' +
-            'anulaciones) · <b>Filtra por fechas</b> para que “Original” sea el stock ' +
-            'que había el día “Desde”.' + notaBodegas;
     }
 }
 
@@ -1223,8 +1222,8 @@ function renderizarTabla() {
     html += `<th class="th-total" colspan="${nSub}">TOTAL</th></tr><tr>`;
 
     const tituloOrig = periodo.activo
-        ? 'Stock que tenía la sucursal el día Desde'
-        : 'Todo lo que entró alguna vez: compras + traspasos recibidos';
+        ? 'Todo lo que la sucursal tuvo disponible: lo que ya tenía el día Desde más lo que le entró en el período'
+        : 'Todo lo que la sucursal tuvo disponible alguna vez';
     const tituloAct = periodo.activo
         ? 'Stock que quedó al cierre del período'
         : 'Stock de hoy';
@@ -1240,13 +1239,15 @@ function renderizarTabla() {
         '<td><span class="stock-badge stock-empty">-</span></td>'.repeat(nSub);
 
     function celdas(d, etiqueta) {
-        const tipOrig = periodo.activo
-            ? `Stock al inicio del período en ${etiqueta}. En el período entraron `
-              + `${d.entradas || 0} y salieron ${d.salidas || 0} unidades.`
-            : `Compras: ${d.compras || 0} · Traspasos recibidos: ${d.traspasos_in || 0}`;
-        const tipAct = `Vendido: ${d.vendido || 0} · Traspasos enviados: `
-            + `${d.traspasos_out || 0} · Otras salidas (mermas, ajustes, cambios): `
-            + `${d.otros_salidas || 0}`
+        // Original = ya tenia + entro. Se muestran los dos sumandos para que
+        // un "0 -> 3" se lea como "llego dentro del periodo" y no como error.
+        const yaTenia = (d.stock_original || 0) - (d.entradas || 0);
+        const tipOrig = `Ya tenía: ${yaTenia} · Entró: ${d.entradas || 0}`
+            + ` (compras ${d.compras || 0} · traspasos recibidos ${d.traspasos_in || 0}`
+            + ` · otras entradas ${d.otros_entradas || 0})`;
+        const tipAct = `Salió ${d.salidas || 0} en ${etiqueta}: vendido `
+            + `${d.vendido || 0} · traspasos enviados ${d.traspasos_out || 0}`
+            + ` · otras salidas (mermas, ajustes, cambios) ${d.otros_salidas || 0}`
             + (periodo.activo ? ` · Stock de hoy: ${d.stock_hoy || 0}` : '');
         return `
             <td><span class="stock-badge stock-inicial" title="${tipOrig}">${d.stock_original || 0}</span></td>
