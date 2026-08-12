@@ -27,10 +27,12 @@ from app.views_ecommerce import (
     api_asignar_ticket_rm,
     api_cambiar_sub_estado,
     api_estado_pedidos_batch,
+    api_facturar_pedido_individual,
     api_imprimir_guia_preparacion,
+    facturar_ecommerce_masivo,
 )
 
-from .factories import crear_sucursal, crear_usuario
+from .factories import crear_sucursal, crear_usuario, crear_vendedor
 
 
 class _BasePickingTest(TestCase):
@@ -182,6 +184,84 @@ class SubEstadoTimestampsTest(_BasePickingTest):
         self.assertEqual(response.status_code, 400)
         self.pedido.refresh_from_db()
         self.assertEqual(self.pedido.sub_estado, 'ASIGNADO')
+
+
+class FacturarRequiereGuiaTest(_BasePickingTest):
+    """La boleta va DESPUÉS del picking: sin guía impresa no se factura.
+
+    El DTE descuenta stock, así que emitirlo antes de que alguien fuera a buscar
+    el producto documenta una venta que la tienda todavía no preparó.
+    """
+
+    def setUp(self):
+        super().setUp()
+        PermisoRol.objects.filter(
+            rol=self.user.rol, opcion_menu=self.opcion,
+        ).update(puede_crear=True)
+        # La vista resuelve el vendedor de internet ANTES de los guards: sin él
+        # el 400 taparía lo que este test quiere probar.
+        crear_vendedor(nombre='Venta Internet', empresa=self.sucursal.empresa,
+                       codigo_vendedor=1000)
+
+    def _facturar(self):
+        request = RequestFactory().post(
+            f'/app/ecommerce/pedidos/{self.pedido.id}/facturar/',
+            data=json.dumps({'tipo_documento': 'BOLETA_ELECTRONICA'}),
+            content_type='application/json',
+        )
+        request.user = self.user
+        request.session = {'idSucursalActual': self.sucursal.id}
+        return api_facturar_pedido_individual(request, self.pedido.id)
+
+    def _imprimir_guia(self):
+        return self._post_json(
+            api_imprimir_guia_preparacion,
+            f'/app/ecommerce/pedidos/{self.pedido.id}/imprimir-guia/',
+            pedido_id=self.pedido.id,
+        )
+
+    def test_sin_guia_impresa_no_factura(self):
+        response = self._facturar()
+        self.assertEqual(response.status_code, 409)
+        data = json.loads(response.content)
+        self.assertIn('guía de preparación', data['error'])
+        self.assertTrue(data['requiere_guia'])
+
+        self.pedido.refresh_from_db()
+        self.assertEqual(self.pedido.estado, 'PENDIENTE')
+        self.assertIsNone(self.pedido.dte_id)
+        self.assertIsNone(self.pedido.ticket_id)
+
+    def test_con_guia_impresa_el_gate_deja_pasar(self):
+        self.assertEqual(self._imprimir_guia().status_code, 200)
+        self.pedido.refresh_from_db()
+        self.assertIsNotNone(self.pedido.fecha_impresion_guia)
+
+        response = self._facturar()
+        # Ya no bloquea por guía: el pedido de prueba no tiene productos reales
+        # en la sucursal, así que ahora muere en la validación de stock (400).
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Stock insuficiente', json.loads(response.content)['error'])
+
+    def test_masivo_rechaza_el_que_no_tiene_guia(self):
+        request = RequestFactory().post(
+            '/app/api/ecommerce/facturar-masivo/',
+            data=json.dumps({'pedido_ids': [self.pedido.id],
+                             'tipo_documento': 'BOLETA_ELECTRONICA'}),
+            content_type='application/json',
+        )
+        request.user = self.user
+        request.session = {'idSucursalActual': self.sucursal.id}
+        data = json.loads(facturar_ecommerce_masivo(request).content)
+
+        self.assertFalse(data['ok'])
+        self.assertEqual(data['fallidos'], 1)
+        self.assertEqual(data['exitosos'], 0)
+        self.assertIn('guía de preparación', data['resultados'][0]['error'])
+
+        self.pedido.refresh_from_db()
+        self.assertEqual(self.pedido.estado, 'PENDIENTE')
+        self.assertIsNone(self.pedido.dte_id)
 
 
 @override_settings(RETAILMIND_API_KEY='test-key')

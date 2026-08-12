@@ -4513,6 +4513,106 @@ def registrar_pagos_ticket(request, correlativo):
                 }, status=400)
     # ─────────────────────────────────────────────────────────────────────────────────
 
+    # ── Pre-validación de stock de TODO el ticket ────────────────────────────
+    # Corre ANTES de escribir pagos, del candado y del canje de vale/gift card:
+    # es la única operación que puede abortar el cobro y aquí todavía no se
+    # escribió nada, así que el 400 sale con el ticket intacto (antes revertía
+    # el estado a mano y dejaba pagos ya escritos).
+    #
+    # AGREGADA POR TALLA: el POS crea varias líneas del mismo SKU (NxM, precio
+    # modificado) y validar línea a línea dejaba pasar un 2x1 con stock 1.
+    # Consulta fresca a propósito: `ticket.ticket_productos.all()` devuelve el
+    # caché del prefetch de la carga del ticket y no ve líneas escritas durante
+    # este mismo request.
+    if ticket.estado == 'PAGADO' and ticket.modulo_origen != 'CAMBIO_DEVOLUCION':
+        _requerido_por_talla = {}
+        _tallas_ticket = {}
+        faltantes = []
+        for tp in Ticket_Productos.objects.filter(idTicket=ticket).select_related('ProductoTalla'):
+            if tp.ProductoTalla_id is None:
+                continue
+            _requerido_por_talla[tp.ProductoTalla_id] = (
+                _requerido_por_talla.get(tp.ProductoTalla_id, 0) + tp.stock
+            )
+            _tallas_ticket[tp.ProductoTalla_id] = tp.ProductoTalla
+        for _talla_id, _requerido in _requerido_por_talla.items():
+            _disponible = _tallas_ticket[_talla_id].stock_sucursal(ticket.sucursal_id)
+            if _disponible < _requerido:
+                faltantes.append({
+                    'sku': str(_tallas_ticket[_talla_id].sku),
+                    'stock_disponible': _disponible,
+                    'stock_requerido': _requerido,
+                })
+        if faltantes:
+            logger.warning(
+                "Cobro abortado antes de tocar pagos/stock ticket=%s faltantes=%s",
+                ticket.correlativo, faltantes,
+            )
+            detalle = ', '.join(
+                f"SKU {f['sku']} (disp. {f['stock_disponible']}, req. {f['stock_requerido']})"
+                for f in faltantes
+            )
+            return JsonResponse({
+                'success': False,
+                'error': f'Stock insuficiente en {len(faltantes)} producto(s): {detalle}',
+                'error_tipo': 'STOCK_INSUFICIENTE',
+                'sku': faltantes[0]['sku'],
+                'stock_disponible': faltantes[0]['stock_disponible'],
+                'stock_requerido': faltantes[0]['stock_requerido'],
+                'faltantes': faltantes,
+            }, status=400)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    # ── Candado anti doble cobro (compare-and-set atómico) ──────────────────
+    # El guard de estado del inicio lee el ticket ANTES de que el otro POST
+    # commitee PAGADO, así que dos cobros simultáneos (doble click / reintento
+    # del front con timeout) pasaban ambos y el stock se descontaba dos veces:
+    # 25 tickets medidos en prod jun→ago-2026, created_at idéntico al segundo.
+    # El UPDATE condicional es atómico en PostgreSQL: exactamente UNO gana.
+    # Va ANTES del bloque de pagos a propósito: más abajo el perdedor borraría
+    # los TicketDetallePago del ganador (delete de ids_existentes) y con ellos
+    # la TransaccionPOS por CASCADE — eso sí descuadra el arqueo de caja.
+    ticket_se_pago = False
+    if ticket.estado == 'PAGADO':
+        ticket_se_pago = Ticket.objects.filter(
+            id=ticket.id, estado='PENDIENTE'
+        ).update(estado='PAGADO') == 1
+        if not ticket_se_pago:
+            _ticket_bd = Ticket.objects.get(id=ticket.id)
+            logger.warning(
+                "Cobro duplicado ignorado ticket=%s usuario=%s estado_real=%s",
+                ticket.correlativo, request.user.username, _ticket_bd.estado,
+            )
+            if _ticket_bd.estado != 'PAGADO':
+                # Cambió a ANULADO/DEVUELTO en el intertanto: no hay cobro válido.
+                return JsonResponse({
+                    'success': False,
+                    'error': (f'El ticket #{correlativo} cambió de estado y no puede '
+                              f'cobrarse (estado: {_ticket_bd.estado}).'),
+                    'error_tipo': 'COBRO_NO_COMPLETADO',
+                    'estado': _ticket_bd.estado,
+                }, status=409)
+            # El otro POST ya cobró este ticket: responder éxito SIN escribir
+            # nada, con la misma forma que la respuesta normal, para que el POS
+            # no muestre error ni reintente. Se adjunta el DTE si ya se emitió.
+            respuesta_dup = {
+                'success': True,
+                'ticket': construir_ticket_data(_ticket_bd),
+                'cobro_duplicado_ignorado': True,
+            }
+            _dte_dup = Dte.objects.filter(
+                sucursal_id=ticket.sucursal_id,
+                referencias__icontains=f'TICKET-{ticket.correlativo}',
+            ).order_by('-id').first()
+            if _dte_dup:
+                respuesta_dup['dte_generado'] = {
+                    'id': _dte_dup.id,
+                    'numero': _dte_dup.numero_documento,
+                    'tipo': _dte_dup.tipo_documento,
+                }
+            return JsonResponse(respuesta_dup)
+    # ─────────────────────────────────────────────────────────────────────────
+
     # Procesar pagos (sin transaction.atomic anidado para evitar TransactionManagementError)
     for pago in pagos:
         pago_id = pago.get('id')
@@ -4567,61 +4667,14 @@ def registrar_pagos_ticket(request, correlativo):
     if ids_existentes:
         TicketDetallePago.objects.filter(id__in=ids_existentes, ticket=ticket).delete()
     
-    # Verificar si el ticket cambió de PENDIENTE a PAGADO
-    estado_anterior_obj = Ticket.objects.get(id=ticket.id)
-    estado_anterior = estado_anterior_obj.estado
-    ticket_se_pago = (estado_anterior == 'PENDIENTE' and ticket.estado == 'PAGADO')
-
+    # `ticket_se_pago` viene del compare-and-set de más arriba (el read-then-
+    # write que vivía aquí era la ventana de carrera del doble cobro). Este
+    # save persiste totales/descuentos; el estado ya lo escribió el UPDATE.
     ticket.save()
 
-    # ── Pre-validación de stock de TODO el ticket ────────────────────────────
-    # Va ANTES de consumir el vale de puntos y la gift card a propósito: es la
-    # única de las tres operaciones que puede abortar el cobro, y no consume
-    # nada. Cuando estaba después, un ticket sin stock devolvía 400 y dejaba el
-    # ticket en PENDIENTE, pero el vale ya estaba canjeado y el saldo de la
-    # gift card ya descontado (esta vista corre sin `transaction.atomic` global
-    # a propósito, así que no hay rollback que lo deshaga): el cliente perdía
-    # sus puntos y su gift card por una venta que nunca se cobró.
-    #
-    # El bucle de descuento de más abajo valida y consume talla por talla: si
-    # el tercer producto no tenía stock, los dos primeros YA habían consumido
-    # sus lotes FIFO. Validar el ticket completo primero convierte ese caso en
-    # "no se tocó nada" en vez de "se consumió a medias".
-    if ticket_se_pago and ticket.modulo_origen != 'CAMBIO_DEVOLUCION':
-        faltantes = []
-        for tp in ticket.ticket_productos.all():
-            if tp.ProductoTalla is None:
-                continue
-            disponible = tp.ProductoTalla.stock_sucursal(ticket.sucursal_id)
-            if disponible < tp.stock:
-                faltantes.append({
-                    'sku': str(tp.ProductoTalla.sku),
-                    'stock_disponible': disponible,
-                    'stock_requerido': tp.stock,
-                })
-
-        if faltantes:
-            primero = faltantes[0]
-            logger.warning(
-                "Cobro abortado antes de tocar stock/vales ticket=%s faltantes=%s",
-                ticket.correlativo, faltantes,
-            )
-            ticket.estado = 'PENDIENTE'
-            ticket.save()
-            detalle = ', '.join(
-                f"SKU {f['sku']} (disp. {f['stock_disponible']}, req. {f['stock_requerido']})"
-                for f in faltantes
-            )
-            return JsonResponse({
-                'success': False,
-                'error': f'Stock insuficiente en {len(faltantes)} producto(s): {detalle}',
-                'error_tipo': 'STOCK_INSUFICIENTE',
-                'sku': primero['sku'],
-                'stock_disponible': primero['stock_disponible'],
-                'stock_requerido': primero['stock_requerido'],
-                'faltantes': faltantes,
-            }, status=400)
-    # ─────────────────────────────────────────────────────────────────────────
+    # (La pre-validación de stock del ticket completo se movió ANTES del bloque
+    # de pagos y del candado anti doble cobro: así el 400 de stock insuficiente
+    # sale sin haber escrito nada — ni pagos, ni estado, ni vale/gift card.)
 
     # ===== GIFT CARD: descontar saldo por cada pago con método GIFTCARD =====
     # Se procesa con su propia transacción + lock (el servicio lo maneja) y es
@@ -4702,9 +4755,14 @@ def registrar_pagos_ticket(request, correlativo):
         logger.debug("Iniciando descuento de stock ticket=%s", ticket.correlativo)
 
         # La pre-validación de stock del ticket completo ya corrió más arriba
-        # (antes de consumir vale de puntos / gift card). Las verificaciones
-        # por talla de este bucle se conservan como red de seguridad ante una
+        # (antes de pagos, candado y vale/gift card). Las verificaciones por
+        # talla de este bucle se conservan como red de seguridad ante una
         # venta concurrente que se lleve el stock en el intertanto.
+
+        # Si alguna talla ya consumió, el ticket NO puede volver a PENDIENTE:
+        # reabrir el candado permitiría un re-cobro que descuenta de nuevo lo
+        # ya consumido (la carrera original, pero con más daño).
+        hubo_consumo = False
 
         for tp in ticket.ticket_productos.all():
             # Saltar ítems sin ProductoTalla (pendientes de despacho)
@@ -4737,19 +4795,33 @@ def registrar_pagos_ticket(request, correlativo):
                     stock_antes,
                     tp.stock,
                 )
-                # Revertir estado del ticket a PENDIENTE
-                ticket.estado = 'PENDIENTE'
-                ticket.save()
+                # Revertir a PENDIENTE SOLO si aún no se consumió nada: si una
+                # talla anterior ya bajó stock, reabrir el candado permitiría
+                # un re-cobro que la descuenta de nuevo. En ese caso el ticket
+                # queda PAGADO a medias y marcado para revisión manual.
+                if not hubo_consumo:
+                    ticket.estado = 'PENDIENTE'
+                    ticket.save(update_fields=['estado'])
+                else:
+                    logger.error(
+                        "Consumo PARCIAL: ticket queda PAGADO para no reabrir el "
+                        "candado ticket=%s sku_fallido=%s",
+                        ticket.correlativo, tp.ProductoTalla.sku,
+                    )
                 return JsonResponse({
-                    'success': False, 
+                    'success': False,
                     'error': error_msg,
                     'error_tipo': 'STOCK_INSUFICIENTE',
                     'sku': str(tp.ProductoTalla.sku),
                     'stock_disponible': stock_antes,
-                    'stock_requerido': tp.stock
+                    'stock_requerido': tp.stock,
+                    'requiere_revision': hubo_consumo
                 }, status=400)
             
-            # Intentar consumir stock FIFO
+            # Intentar consumir stock FIFO. Se marca ANTES de llamar: si la
+            # llamada muere a medias no sabemos qué alcanzó a bajar, y el lado
+            # seguro es NO reabrir el candado.
+            hubo_consumo = True
             try:
                 # Consumir stock FIFO (esto crea automáticamente el movimiento de EGRESO)
                 # ✅ No pasar referencia_externa para que consumir_stock_fifo use DTE si está disponible
@@ -15789,6 +15861,201 @@ def listar_cambios_devoluciones(request):
         })
 
 
+# Estados en los que un cambio ya "consumió" unidades de la venta original.
+ESTADOS_CAMBIO_VIGENTES = [
+    'SOLICITADO', 'APROBADO', 'EJECUTADO',
+    'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE', 'COMPLETADO',
+]
+
+# Estados en los que el cambio ya generó su ticket de reemplazo.
+ESTADOS_CAMBIO_CON_TICKET_NUEVO = [
+    'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE', 'COMPLETADO',
+]
+
+
+def _ticket_raiz_cambio(ticket):
+    """Sube por la cadena de cambios hasta el ticket de la venta original.
+
+    El `ticket_nuevo` de un cambio es un comprobante del delta (línea negativa por
+    lo devuelto + positiva por lo entregado), no un reemplazo de la venta.
+    """
+    actual = ticket
+    visitados = set()
+
+    while actual and actual.id not in visitados:
+        visitados.add(actual.id)
+        cambio = CambioDevolucion.objects.filter(
+            ticket_nuevo=actual
+        ).select_related('ticket_original').order_by('fecha_solicitud').first()
+
+        if cambio and cambio.ticket_original and cambio.ticket_original_id not in visitados:
+            actual = cambio.ticket_original
+        else:
+            break
+
+    return actual
+
+
+def _cadena_cambios_ticket(ticket_raiz):
+    """Devuelve (tickets, cambios) de toda la cadena que cuelga del ticket raíz.
+
+    `tickets` trae la venta original más los tickets de reemplazo ya generados;
+    `cambios` trae todos los cambios de la cadena, en cualquier estado.
+    """
+    tickets = {ticket_raiz.id: ticket_raiz}
+    cambios = {}
+    pendientes = [ticket_raiz.id]
+
+    while pendientes:
+        cambios_qs = CambioDevolucion.objects.filter(
+            ticket_original_id__in=pendientes
+        ).select_related('ticket_nuevo').prefetch_related(
+            'detalles__producto_original__ProductoTalla__producto',
+            'detalles__producto_nuevo__producto',
+        )
+        pendientes = []
+
+        for cambio in cambios_qs:
+            if cambio.id in cambios:
+                continue
+            cambios[cambio.id] = cambio
+
+            nuevo = cambio.ticket_nuevo
+            if (nuevo and nuevo.id not in tickets
+                    and cambio.estado in ESTADOS_CAMBIO_CON_TICKET_NUEVO):
+                tickets[nuevo.id] = nuevo
+                pendientes.append(nuevo.id)
+
+    cambios_ordenados = sorted(cambios.values(), key=lambda c: c.fecha_solicitud)
+    return list(tickets.values()), cambios_ordenados
+
+
+def _describir_producto_talla(producto_talla):
+    """Texto corto de un Producto_Talla para mostrarlo en el historial."""
+    if not producto_talla:
+        return ''
+    articulo = producto_talla.producto.articulo if producto_talla.producto else ''
+    talla = producto_talla.talla or ''
+    return f'{articulo} T{talla}'.strip() if talla else articulo
+
+
+def _productos_cambio_data(tickets, cambios):
+    """Productos cambiables de toda la cadena, con su procedencia.
+
+    Incluye las líneas de la venta original y también los artículos que entraron
+    como reemplazo en cambios anteriores, para que se puedan volver a cambiar.
+    """
+    cambio_por_ticket_nuevo = {c.ticket_nuevo_id: c for c in cambios if c.ticket_nuevo_id}
+
+    lineas_por_ticket = {}
+    ids_lineas = []
+    for ticket in tickets:
+        lineas = list(ticket.ticket_productos.filter(precio__gt=0, stock__gt=0)
+                      .select_related('ProductoTalla__producto'))
+        lineas_por_ticket[ticket.id] = lineas
+        ids_lineas.extend(linea.id for linea in lineas)
+
+    # Una sola consulta para saber qué se cambió de cada línea (antes era N+1).
+    cantidad_cambiada = {}
+    cambios_por_linea = {}
+    if ids_lineas:
+        detalles = CambioDevolucionDetalle.objects.filter(
+            producto_original_id__in=ids_lineas,
+            cambio_devolucion__estado__in=ESTADOS_CAMBIO_VIGENTES,
+        ).select_related('cambio_devolucion', 'producto_nuevo__producto')
+
+        for detalle in detalles:
+            linea_id = detalle.producto_original_id
+            cantidad_cambiada[linea_id] = cantidad_cambiada.get(linea_id, 0) + (detalle.cantidad_original or 0)
+            cambio = detalle.cambio_devolucion
+            cambios_por_linea.setdefault(linea_id, []).append({
+                'numero_operacion': cambio.numero_operacion,
+                'estado': cambio.get_estado_display(),
+                'fecha': timezone.localtime(cambio.fecha_solicitud).strftime('%d/%m/%Y'),
+                'cantidad': detalle.cantidad_original or 0,
+                'reemplazo': _describir_producto_talla(detalle.producto_nuevo),
+            })
+
+    productos_data = []
+    disponibles_count = 0
+
+    for ticket in tickets:
+        cambio_origen = cambio_por_ticket_nuevo.get(ticket.id)
+
+        for linea in lineas_por_ticket[ticket.id]:
+            if linea.ProductoTalla is None:
+                continue  # ítems sin SKU (pendientes de despacho) no se cambian
+
+            ya_cambiada = cantidad_cambiada.get(linea.id, 0)
+            disponible = max(0, linea.stock - ya_cambiada)
+            if disponible > 0:
+                disponibles_count += 1
+
+            descuento = linea.descuento_unitario or 0
+            precio_pagado = linea.precio - descuento
+            producto = linea.ProductoTalla.producto
+
+            productos_data.append({
+                'id': linea.id,
+                'sku': linea.ProductoTalla.sku,
+                'articulo': producto.articulo if producto else (linea.descripcion_linea or ''),
+                'descripcion': producto.descripcion if producto else (linea.descripcion_linea or ''),
+                'talla': linea.ProductoTalla.talla,
+                'cantidad_original': linea.stock,
+                'cantidad_ya_cambiada': ya_cambiada,
+                'cantidad_disponible': disponible,
+                'precio_unitario': float(precio_pagado),
+                'precio_lista': float(linea.precio),
+                'descuento_unitario': float(descuento),
+                'tiene_descuento': descuento > 0,
+                'subtotal': float(precio_pagado * linea.stock),
+                'ya_cambiado': disponible == 0,
+                # Procedencia: distingue lo vendido de lo que entró por un cambio previo
+                'origen': 'CAMBIO' if cambio_origen else 'VENTA',
+                'es_reemplazo': bool(cambio_origen),
+                'origen_cambio': cambio_origen.numero_operacion if cambio_origen else None,
+                'origen_cambio_fecha': (
+                    timezone.localtime(cambio_origen.fecha_solicitud).strftime('%d/%m/%Y')
+                    if cambio_origen else None
+                ),
+                'ticket_id': ticket.id,
+                'ticket_correlativo': ticket.correlativo,
+                'cambios_linea': cambios_por_linea.get(linea.id, []),
+            })
+
+    return productos_data, disponibles_count
+
+
+def _historial_cambios_data(cambios):
+    """Historial de la cadena, con el detalle de qué se cambió por qué."""
+    historial = []
+
+    for cambio in cambios:
+        detalles = []
+        for detalle in cambio.detalles.all():
+            origen = detalle.producto_original.ProductoTalla if detalle.producto_original_id else None
+            detalles.append({
+                'de': _describir_producto_talla(origen),
+                'de_sku': origen.sku if origen else '',
+                'a': _describir_producto_talla(detalle.producto_nuevo),
+                'a_sku': detalle.producto_nuevo.sku if detalle.producto_nuevo_id else '',
+                'cantidad': detalle.cantidad_original or 0,
+            })
+
+        historial.append({
+            'numero_operacion': cambio.numero_operacion,
+            'tipo_operacion': cambio.get_tipo_operacion_display(),
+            'estado': cambio.get_estado_display(),
+            'estado_codigo': cambio.estado,
+            'fecha_solicitud': timezone.localtime(cambio.fecha_solicitud).strftime('%d/%m/%Y'),
+            'diferencia_monto': float(cambio.diferencia_monto or 0),
+            'ticket_nuevo': cambio.ticket_nuevo.correlativo if cambio.ticket_nuevo_id else None,
+            'detalles': detalles,
+        })
+
+    return historial
+
+
 @login_required
 @require_POST
 def crear_cambio_devolucion(request):
@@ -15837,10 +16104,18 @@ def crear_cambio_devolucion(request):
         if documento_tipo == 'DTE':
             # Buscar DTE y crear ticket asociado si no existe
             try:
-                dte_original = Dte.objects.select_related('receptor', 'vendedor', 'sucursal').get(
-                    numero_documento=documento_numero
-                )
-                
+                # El folio NO es único entre empresas del holding, así que un
+                # `.get()` por número revienta con MultipleObjectsReturned.
+                dte_original = Dte.objects.select_related('receptor', 'vendedor', 'sucursal').filter(
+                    numero_documento=documento_numero,
+                    sucursal=sucursal,
+                    tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
+                ).order_by('-fecha_emision', '-id').first()
+
+                if not dte_original:
+                    raise Dte.DoesNotExist
+
+
                 # Primero: intentar encontrar el ticket ORIGINAL del POS (tiene descuentos correctos)
                 if dte_original.referencias and 'TICKET-' in dte_original.referencias:
                     try:
@@ -15948,6 +16223,13 @@ def crear_cambio_devolucion(request):
                     'error': 'Solo se pueden procesar cambios de tickets pagados'
                 })
         
+        # Un cambio anterior NO reemplaza la venta: se trabaja siempre sobre el
+        # ticket original y se aceptan además las líneas de reemplazo que dejaron
+        # los cambios ya ejecutados (para poder cambiar de nuevo ese artículo).
+        ticket_original = _ticket_raiz_cambio(ticket_original)
+        tickets_cadena, _cambios_cadena = _cadena_cambios_ticket(ticket_original)
+        ids_tickets_cadena = [t.id for t in tickets_cadena]
+
         # Verificar plazo (30 días por defecto)
         from datetime import timedelta
         fecha_base_plazo = None
@@ -16031,14 +16313,14 @@ def crear_cambio_devolucion(request):
         
         # Validar que no existan cambios con obligaciones financieras pendientes para este ticket
         cambios_con_pago_pendiente = CambioDevolucion.objects.filter(
-            ticket_original=ticket_original,
+            ticket_original_id__in=ids_tickets_cadena,
             estado__in=['EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE']
         ).first()
-        
+
         if not cambios_con_pago_pendiente:
             # También verificar el patrón legacy: COMPLETADO pero ticket_nuevo PENDIENTE
             cambios_con_pago_pendiente = CambioDevolucion.objects.filter(
-                ticket_original=ticket_original,
+                ticket_original_id__in=ids_tickets_cadena,
                 estado='COMPLETADO',
                 ticket_nuevo__estado='PENDIENTE'
             ).first()
@@ -16056,7 +16338,7 @@ def crear_cambio_devolucion(request):
         # condonada. El admin ya perdonó ese cobro, así que dejamos re-cambiar pero avisando.
         if not data.get('aceptar_recambio_condonado'):
             cambio_condonado = CambioDevolucion.objects.filter(
-                ticket_original=ticket_original,
+                ticket_original_id__in=ids_tickets_cadena,
                 diferencia_condonada=True,
                 estado='COMPLETADO'
             ).order_by('-fecha_condonacion').first()
@@ -16099,7 +16381,7 @@ def crear_cambio_devolucion(request):
                     break  # No iterar productos para cambios por concepto
                 try:
                     ticket_producto = Ticket_Productos.objects.get(
-                        idTicket=ticket_original,
+                        idTicket_id__in=ids_tickets_cadena,
                         id=item['ticket_producto_id']
                     )
                     cantidad_cambio = item.get('cantidad', 0)
@@ -16204,7 +16486,7 @@ def crear_cambio_devolucion(request):
                 # Buscar producto original en el ticket
                 try:
                     ticket_producto = Ticket_Productos.objects.get(
-                        idTicket=ticket_original,
+                        idTicket_id__in=ids_tickets_cadena,
                         id=item['ticket_producto_id']
                     )
                 except Ticket_Productos.DoesNotExist:
@@ -18319,74 +18601,19 @@ def buscar_documento_cambio(request):
                         es_pendiente_despacho=dp.es_pendiente_despacho,
                     )
                 
-            # 🔄 SEGUIR LA CADENA DE CAMBIOS HASTA EL TICKET MÁS RECIENTE
-            # Incluye COMPLETADO y estados ejecutados con ticket_nuevo existente
-            ticket_actual = ticket_referencia
-            tickets_visitados = set()
+            # Un cambio anterior NO reemplaza la venta: su `ticket_nuevo` solo trae
+            # el delta (lo devuelto en negativo + lo entregado). Se muestra la venta
+            # completa MÁS los artículos de reemplazo, así lo que no se cambió sigue
+            # disponible y lo ya cambiado se puede volver a cambiar.
+            ticket_referencia = _ticket_raiz_cambio(ticket_referencia)
             ticket_original_correlativo = ticket_referencia.correlativo
 
-            while ticket_actual.id not in tickets_visitados:
-                tickets_visitados.add(ticket_actual.id)
+            tickets_cadena, cambios_cadena = _cadena_cambios_ticket(ticket_referencia)
+            productos_data, productos_disponibles_count = _productos_cambio_data(
+                tickets_cadena, cambios_cadena
+            )
+            cambios_anteriores = _historial_cambios_data(cambios_cadena)
 
-                cambio_siguiente = CambioDevolucion.objects.filter(
-                    ticket_original=ticket_actual,
-                    estado__in=['COMPLETADO', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE'],
-                    ticket_nuevo__isnull=False
-                ).order_by('-fecha_ejecucion', '-fecha_completado').first()
-
-                if cambio_siguiente and cambio_siguiente.ticket_nuevo:
-                    ticket_actual = cambio_siguiente.ticket_nuevo
-                else:
-                    break
-
-            ticket_referencia = ticket_actual  # Usar el ticket más reciente
-            fue_redirigido_dte = (ticket_referencia.correlativo != ticket_original_correlativo)
-            
-            # Obtener productos del ticket (con IDs correctos de Ticket_Productos)
-            # ✅ CORREGIDO: Mostrar TODOS los productos, incluyendo los ya cambiados
-            # ❌ EXCLUIR productos con precio negativo (ítems de devolución de cambios anteriores)
-            productos_data = []
-            productos_disponibles_count = 0
-            
-            for tp in ticket_referencia.ticket_productos.filter(precio__gt=0, stock__gt=0):
-                # Verificar si ya fue cambiado/devuelto
-                cantidad_ya_cambiada = CambioDevolucionDetalle.objects.filter(
-                    producto_original=tp,
-                    cambio_devolucion__estado__in=['SOLICITADO', 'APROBADO', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE', 'COMPLETADO']
-                ).aggregate(
-                    total=Sum('cantidad_original')
-                )['total'] or 0
-                
-                cantidad_disponible = max(0, tp.stock - cantidad_ya_cambiada)
-                
-                if cantidad_disponible > 0:
-                    productos_disponibles_count += 1
-                
-                # ✅ Incluir TODOS los productos (disponibles y ya cambiados)
-                if tp.ProductoTalla:
-                    descuento = tp.descuento_unitario or 0
-                    precio_pagado = tp.precio - descuento
-                    
-                    productos_data.append({
-                        'id': tp.id,
-                        'sku': tp.ProductoTalla.sku,
-                        'articulo': tp.ProductoTalla.producto.articulo if tp.ProductoTalla.producto else (tp.descripcion_linea or ''),
-                        'descripcion': tp.ProductoTalla.producto.descripcion if tp.ProductoTalla.producto else (tp.descripcion_linea or ''),
-                        'talla': tp.ProductoTalla.talla,
-                        'cantidad_original': tp.stock,
-                        'cantidad_ya_cambiada': cantidad_ya_cambiada,
-                        'cantidad_disponible': cantidad_disponible,
-                        'precio_unitario': float(precio_pagado),
-                        'precio_lista': float(tp.precio),
-                        'descuento_unitario': float(descuento),
-                        'tiene_descuento': descuento > 0,
-                        'subtotal': float(precio_pagado * tp.stock),
-                        'ya_cambiado': cantidad_disponible == 0,
-                    })
-                else:
-                    # Ítems pendientes de despacho no aplican para cambios/devoluciones
-                    pass
-            
             return JsonResponse({
                 'success': True,
                 'documento': {
@@ -18395,8 +18622,8 @@ def buscar_documento_cambio(request):
                     'numero_documento': dte.numero_documento,
                     'tipo_documento': dte.tipo_documento,
                     'correlativo': ticket_referencia.correlativo,
-                    'correlativo_original': ticket_original_correlativo if fue_redirigido_dte else ticket_referencia.correlativo,
-                    'fue_redirigido': fue_redirigido_dte,
+                    'correlativo_original': ticket_original_correlativo,
+                    'fue_redirigido': False,
                     'fecha': dte.fecha_emision.strftime('%d/%m/%Y'),
                     'total': float(dte.monto_con_iva),
                     'vendedor': dte.vendedor.nombre if dte.vendedor else 'Sin vendedor',
@@ -18407,6 +18634,8 @@ def buscar_documento_cambio(request):
                     'dias_transcurridos': (timezone.localdate() - dte.fecha_emision).days,
                     'productos': productos_data,
                     'productos_disponibles': productos_disponibles_count,
+                    'cambios_anteriores': cambios_anteriores,
+                    'tiene_cambios_previos': bool(cambios_anteriores),
                     'puede_cambiar': productos_disponibles_count > 0,
                 }
             })
@@ -18501,34 +18730,11 @@ def buscar_documento_cambio(request):
                     'error': f'Ticket de Cambio #{numero_ticket} no encontrado. Verifique el número del ticket y la sucursal.'
                 })
             
-            # Seguir la cadena de cambios hasta el ticket más reciente
-            # Incluye COMPLETADO y estados ejecutados con ticket_nuevo existente
-            ticket_actual = ticket
-            tickets_visitados = set()
+            # Subir a la venta original: el ticket de cambio solo trae el delta
             ticket_original_correlativo = ticket.correlativo
-
-            while ticket_actual.id not in tickets_visitados:
-                tickets_visitados.add(ticket_actual.id)
-
-                cambio_siguiente = CambioDevolucion.objects.filter(
-                    ticket_original=ticket_actual,
-                    estado__in=['COMPLETADO', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE'],
-                    ticket_nuevo__isnull=False
-                ).order_by('-fecha_ejecucion', '-fecha_completado').first()
-
-                if cambio_siguiente and cambio_siguiente.ticket_nuevo:
-                    logger.debug(
-                        "Redirigiendo ticket de cambio %s al ticket siguiente %s: estado=%s",
-                        ticket_actual.correlativo,
-                        cambio_siguiente.ticket_nuevo.correlativo,
-                        cambio_siguiente.estado,
-                    )
-                    ticket_actual = cambio_siguiente.ticket_nuevo
-                else:
-                    break
-
-            fue_redirigido = (ticket_actual.correlativo != ticket_original_correlativo)
-            ticket = ticket_actual
+            ticket_raiz = _ticket_raiz_cambio(ticket)
+            fue_redirigido = (ticket_raiz.id != ticket.id)
+            ticket = ticket_raiz
 
             # Verificar estado y plazo - permitir PAGADO y PENDIENTE (tickets de cambio pueden estar pendientes)
             if ticket.estado not in ('PAGADO', 'PENDIENTE'):
@@ -18541,66 +18747,20 @@ def buscar_documento_cambio(request):
             fecha_limite = ticket.fecha + timedelta(days=30) if ticket.fecha else timezone.localdate() + timedelta(days=30)
             dentro_del_plazo = timezone.localdate() <= fecha_limite
 
-            # Obtener productos disponibles
-            # Filtrar precio > 0 para excluir ítems de devolución (precio negativo) de cambios anteriores
-            productos_data = []
-            productos_disponibles_count = 0
+            # Productos de toda la cadena (venta original + reemplazos de cambios previos)
+            tickets_cadena, cambios_cadena = _cadena_cambios_ticket(ticket)
+            productos_data, productos_disponibles_count = _productos_cambio_data(
+                tickets_cadena, cambios_cadena
+            )
+            cambios_anteriores = _historial_cambios_data(cambios_cadena)
 
-            for tp in ticket.ticket_productos.filter(precio__gt=0, stock__gt=0):
-                if tp.ProductoTalla is None:
-                    continue
-
-                cantidad_ya_cambiada = CambioDevolucionDetalle.objects.filter(
-                    producto_original=tp,
-                    cambio_devolucion__estado__in=['SOLICITADO', 'APROBADO', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE', 'COMPLETADO']
-                ).aggregate(
-                    total=Sum('cantidad_original')
-                )['total'] or 0
-
-                cantidad_disponible = max(0, tp.stock - cantidad_ya_cambiada)
-
-                if cantidad_disponible > 0:
-                    productos_disponibles_count += 1
-
-                # Incluir TODOS los productos (disponibles y ya cambiados) para visibilidad
-                descuento = tp.descuento_unitario or 0
-                precio_pagado = tp.precio - descuento
-
-                productos_data.append({
-                    'id': tp.id,
-                    'sku': tp.ProductoTalla.sku,
-                    'articulo': tp.ProductoTalla.producto.articulo if tp.ProductoTalla.producto else (tp.descripcion_linea or ''),
-                    'descripcion': tp.ProductoTalla.producto.descripcion if tp.ProductoTalla.producto else (tp.descripcion_linea or ''),
-                    'talla': tp.ProductoTalla.talla,
-                    'cantidad_original': tp.stock,
-                    'cantidad_ya_cambiada': cantidad_ya_cambiada,
-                    'cantidad_disponible': cantidad_disponible,
-                    'precio_unitario': float(precio_pagado),
-                    'precio_lista': float(tp.precio),
-                    'descuento_unitario': float(descuento),
-                    'tiene_descuento': descuento > 0,
-                    'subtotal': float(precio_pagado * tp.stock),
-                    'ya_cambiado': cantidad_disponible == 0,
-                })
-
-            # Obtener cambios anteriores
-            cambios_anteriores = []
-            for cambio in ticket.cambios_devoluciones.all():
-                cambios_anteriores.append({
-                    'numero_operacion': cambio.numero_operacion,
-                    'tipo_operacion': cambio.get_tipo_operacion_display(),
-                    'estado': cambio.get_estado_display(),
-                    'fecha_solicitud': cambio.fecha_solicitud.strftime('%d/%m/%Y'),
-                    'diferencia_monto': float(cambio.diferencia_monto),
-                })
-            
             return JsonResponse({
                 'success': True,
                 'documento': {
                     'id': ticket.id,
                     'tipo': 'TICKET_CAMBIO',
                     'correlativo': ticket.correlativo,
-                    'correlativo_original': ticket_original_correlativo if fue_redirigido else ticket.correlativo,
+                    'correlativo_original': ticket_original_correlativo,
                     'fue_redirigido': fue_redirigido,
                     'fecha': ticket.fecha.strftime('%d/%m/%Y'),
                     'hora': ticket.hora.strftime('%H:%M') if ticket.hora else '',
@@ -18615,10 +18775,11 @@ def buscar_documento_cambio(request):
                     'productos': productos_data,
                     'productos_disponibles': productos_disponibles_count,
                     'cambios_anteriores': cambios_anteriores,
+                    'tiene_cambios_previos': bool(cambios_anteriores),
                     'puede_cambiar': productos_disponibles_count > 0,
                 }
             })
-        
+
         else:
             # Buscar Ticket (lógica existente)
             return buscar_ticket_para_cambio_original(request, numero, fecha_compra, sucursal_id)
@@ -18654,112 +18815,45 @@ def buscar_ticket_para_cambio_original(request, correlativo, fecha_compra, sucur
             'error': f'Ticket #{correlativo} no encontrado' + (f' para la fecha {fecha_compra}' if fecha_compra else '')
         })
     
-    # 🔄 SEGUIR LA CADENA DE CAMBIOS HASTA EL TICKET MÁS RECIENTE
-    ticket_actual = ticket
-    tickets_visitados = set()  # Para evitar loops infinitos
-    
-    while ticket_actual.id not in tickets_visitados:
-        tickets_visitados.add(ticket_actual.id)
-        
-        # Buscar si este ticket tiene cambios completados que generaron un nuevo ticket
-        cambio_completado = CambioDevolucion.objects.filter(
-            ticket_original=ticket_actual,
-            estado='COMPLETADO',
-            ticket_nuevo__isnull=False
-        ).order_by('-fecha_completado').first()
-        
-        if cambio_completado and cambio_completado.ticket_nuevo:
-            ticket_actual = cambio_completado.ticket_nuevo
-        else:
-            # No hay más cambios, este es el ticket actual
-            break
-    
-    # Si el ticket cambió, informar al usuario
-    if ticket_actual.correlativo != correlativo:
-        ticket = ticket_actual  # Usar el ticket más reciente
-    
-    # Llamar a la función original con toda la lógica
+    # La respuesta resuelve sola la cadena de cambios (ver
+    # buscar_ticket_para_cambio_response): siempre se trabaja sobre la venta original.
     return buscar_ticket_para_cambio_response(ticket, request)
 
 
 def buscar_ticket_para_cambio_response(ticket, request):
     """Genera la respuesta con datos del ticket para cambio"""
+    # Si lo buscado es el comprobante de un cambio, subir a la venta original: ese
+    # ticket solo trae el delta y por sí solo esconde el resto de la compra.
+    ticket_buscado = ticket
+    ticket = _ticket_raiz_cambio(ticket)
+
     # Verificar que esté pagado
     if ticket.estado != 'PAGADO':
         return JsonResponse({
             'success': False,
             'error': 'Solo se pueden procesar cambios de tickets pagados'
         })
-    
+
     # Verificar plazo
     from datetime import timedelta
     fecha_limite = ticket.fecha + timedelta(days=30)
     dentro_del_plazo = timezone.localdate() <= fecha_limite
-    
-    # Obtener productos del ticket
-    # ✅ CORREGIDO: Mostrar TODOS los productos, incluyendo los ya cambiados
-    # ❌ EXCLUIR productos con precio negativo (ítems de devolución de cambios anteriores)
-    productos_data = []
-    productos_disponibles_count = 0
-    
-    for tp in ticket.ticket_productos.filter(precio__gt=0, stock__gt=0):
-        cantidad_ya_cambiada = CambioDevolucionDetalle.objects.filter(
-            producto_original=tp,
-            cambio_devolucion__estado__in=['SOLICITADO', 'APROBADO', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE', 'COMPLETADO']
-        ).aggregate(
-            total=Sum('cantidad_original')
-        )['total'] or 0
-        
-        cantidad_disponible = max(0, tp.stock - cantidad_ya_cambiada)
-        
-        if cantidad_disponible > 0:
-            productos_disponibles_count += 1
-        
-        # ✅ Incluir TODOS los productos (disponibles y ya cambiados), omitir ítems sin SKU
-        if tp.ProductoTalla is None:
-            continue
-        
-        descuento = tp.descuento_unitario or 0
-        precio_pagado = tp.precio - descuento
-        
-        productos_data.append({
-            'id': tp.id,
-            'sku': tp.ProductoTalla.sku,
-            'articulo': tp.ProductoTalla.producto.articulo if tp.ProductoTalla.producto else (tp.descripcion_linea or ''),
-            'descripcion': tp.ProductoTalla.producto.descripcion if tp.ProductoTalla.producto else (tp.descripcion_linea or ''),
-            'talla': tp.ProductoTalla.talla,
-            'cantidad_original': tp.stock,
-            'cantidad_ya_cambiada': cantidad_ya_cambiada,
-            'cantidad_disponible': cantidad_disponible,
-            'precio_unitario': float(precio_pagado),
-            'precio_lista': float(tp.precio),
-            'descuento_unitario': float(descuento),
-            'tiene_descuento': descuento > 0,
-            'subtotal': float(precio_pagado * tp.stock),
-            'ya_cambiado': cantidad_disponible == 0,
-        })
-    
-    # Obtener cambios anteriores
-    cambios_anteriores = []
-    for cambio in ticket.cambios_devoluciones.all():
-        cambios_anteriores.append({
-            'numero_operacion': cambio.numero_operacion,
-            'tipo_operacion': cambio.get_tipo_operacion_display(),
-            'estado': cambio.get_estado_display(),
-            'fecha_solicitud': cambio.fecha_solicitud.strftime('%d/%m/%Y'),
-            'diferencia_monto': float(cambio.diferencia_monto),
-        })
-    
-    # Verificar si hubo redirección
-    ticket_original_buscado = request.GET.get('correlativo') if hasattr(request, 'GET') else None
-    fue_redirigido = (ticket_original_buscado and 
-                     str(ticket.correlativo) != str(ticket_original_buscado))
-    
+
+    # Productos de toda la cadena: la venta original + lo que entró por cambios previos
+    tickets_cadena, cambios_cadena = _cadena_cambios_ticket(ticket)
+    productos_data, productos_disponibles_count = _productos_cambio_data(
+        tickets_cadena, cambios_cadena
+    )
+    cambios_anteriores = _historial_cambios_data(cambios_cadena)
+
+    # Se avisa solo si hubo que subir desde el comprobante de un cambio
+    fue_redirigido = ticket_buscado.id != ticket.id
+
     ticket_data = {
         'id': ticket.id,
         'tipo': 'TICKET',
         'correlativo': ticket.correlativo,
-        'correlativo_original': ticket_original_buscado if fue_redirigido else ticket.correlativo,
+        'correlativo_original': ticket_buscado.correlativo,
         'fue_redirigido': fue_redirigido,
         'fecha': ticket.fecha.strftime('%d/%m/%Y'),
         'hora': ticket.hora.strftime('%H:%M') if ticket.hora else '',
@@ -18777,9 +18871,10 @@ def buscar_ticket_para_cambio_response(ticket, request):
         'productos': productos_data,
         'productos_disponibles': productos_disponibles_count,
         'cambios_anteriores': cambios_anteriores,
+        'tiene_cambios_previos': bool(cambios_anteriores),
         'puede_cambiar': productos_disponibles_count > 0,
     }
-    
+
     return JsonResponse({
         'success': True,
         'documento': ticket_data

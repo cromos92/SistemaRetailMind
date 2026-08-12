@@ -25,9 +25,9 @@
         <tbody>
           {% for p in pedidos %}
           {% if p.id in pedidos_sin_stock_ids %}
-          <tr data-pedido-id="{{ p.id }}" data-estado="{{ p.estado }}" data-sin-stock="1" class="row-sin-stock">
+          <tr data-pedido-id="{{ p.id }}" data-estado="{{ p.estado }}" data-sin-stock="1" data-guia="{% if p.fecha_impresion_guia %}1{% else %}0{% endif %}" class="row-sin-stock">
           {% else %}
-          <tr data-pedido-id="{{ p.id }}" data-estado="{{ p.estado }}">
+          <tr data-pedido-id="{{ p.id }}" data-estado="{{ p.estado }}" data-guia="{% if p.fecha_impresion_guia %}1{% else %}0{% endif %}">
           {% endif %}
             <td style="text-align:center;">
               {% if p.estado == 'PENDIENTE' %}
@@ -85,6 +85,10 @@
                 {% endif %}
                 {% if p.estado_logistica_canal == 'LISTO_ENVIO' or p.estado_logistica_canal == 'LISTO_RETIRO' %}
                   <br><span class="badge-central" title="Estado logístico que reporta el canal (informativo). OJO: Paris lo marca por su cuenta y NO significa que el producto esté sacado — igual hay que prepararlo."><i class="bi bi-truck me-1"></i>Canal: listo p/envío</span>
+                {% endif %}
+                {% if not p.fecha_impresion_guia and p.sub_estado != 'SIN_STOCK' %}
+                  {# Sin guía impresa no hubo picking: facturar está bloqueado. #}
+                  <br><span class="badge-sin-guia" title="Guía de preparación NO impresa: no se puede facturar hasta imprimirla (botón PDF o térmica)"><i class="bi bi-printer me-1"></i>Sin guía</span>
                 {% endif %}
                 {% if p.sub_estado == 'SIN_STOCK' and not p.sin_stock_avisado_ac %}
                   {# El aviso a AllConnected falló: el pedido está marcado acá pero central NO lo sabe. #}

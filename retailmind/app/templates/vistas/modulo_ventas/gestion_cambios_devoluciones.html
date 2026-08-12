@@ -3945,6 +3945,22 @@ function _beepCambio(ok) {
     } catch (e) { /* audio no disponible */ }
 }
 
+// Ubica la línea del documento por SKU. Un mismo SKU puede aparecer dos veces
+// (la venta original y un reemplazo de cambio previo): gana la que tenga unidades
+// disponibles, si no el escaneo caería siempre en la línea ya agotada.
+function indiceProductoPorSku(sku) {
+    if (!ticketActual || !ticketActual.productos) {
+        return -1;
+    }
+    const skuNorm = String(sku).toUpperCase();
+    const coincide = (p) => p.sku && String(p.sku).toUpperCase() === skuNorm;
+
+    const conDisponible = ticketActual.productos.findIndex(
+        p => coincide(p) && (p.cantidad_disponible || 0) > 0
+    );
+    return conDisponible !== -1 ? conDisponible : ticketActual.productos.findIndex(coincide);
+}
+
 function escanearProducto() {
     const inputSku = $('#input-escanear-sku');
     const sku = inputSku.val().trim().toUpperCase();
@@ -3960,12 +3976,12 @@ function escanearProducto() {
     }
     
     console.log('🔍 Escaneando SKU:', sku);
-    
+
     // Buscar el producto en el ticket actual
-    const productoEncontrado = ticketActual.productos.find(p => 
-        p.sku && String(p.sku).toUpperCase() === sku
-    );
-    
+    const idxEncontrado = indiceProductoPorSku(sku);
+    const productoEncontrado = idxEncontrado !== -1 ? ticketActual.productos[idxEncontrado] : undefined;
+
+
     if (!productoEncontrado) {
         // Producto NO está en el ticket - ALERTA
         Swal.fire({
@@ -4101,7 +4117,7 @@ function eliminarProductoEscaneado(sku) {
     delete productosEscaneados[sku];
     
     if (ticketActual && ticketActual.productos) {
-        const index = ticketActual.productos.findIndex(p => p.sku && String(p.sku).toUpperCase() === sku);
+        const index = indiceProductoPorSku(sku);
         if (index !== -1) {
             $(`#check-producto-${index}`).prop('checked', false).prop('disabled', true).data('scan-validated', false);
             $(`#cantidad-producto-${index}`).val(1).prop('disabled', true);
@@ -4198,10 +4214,21 @@ function verDetalleDocumento() {
             const diffClass = diff > 0 ? 'text-danger' : (diff < 0 ? 'text-success' : '');
             const diffSign = diff > 0 ? '+' : '';
 
+            // Qué se entregó y qué se llevó en ese cambio
+            const detalle = (c.detalles || []).map(function(d) {
+                if (d.de && d.a) {
+                    return `${d.de} → <strong>${d.a}</strong>`;
+                }
+                return d.de ? `Devuelto: ${d.de}` : (d.a ? `Entregado: ${d.a}` : '');
+            }).filter(Boolean).join('<br>');
+
             tbodyHistorial.append(`
                 <tr>
                     <td><code>${c.numero_operacion || '-'}</code></td>
-                    <td>${c.tipo_operacion || '-'}</td>
+                    <td>
+                        ${c.tipo_operacion || '-'}
+                        ${detalle ? `<div><small class="text-muted">${detalle}</small></div>` : ''}
+                    </td>
                     <td><span class="badge ${estadoClase}">${c.estado}</span></td>
                     <td>${c.fecha_solicitud || '-'}</td>
                     <td class="text-end ${diffClass} fw-bold">${diffSign}$${formatearNumero(Math.abs(diff))}</td>
@@ -4265,10 +4292,8 @@ function aplicarProductosEscaneados() {
     
     let productosAplicados = 0;
     Object.entries(productosEscaneados).forEach(([sku, data]) => {
-        const index = ticketActual.productos.findIndex(p => 
-            p.sku && String(p.sku).toUpperCase() === sku
-        );
-        
+        const index = indiceProductoPorSku(sku);
+
         if (index !== -1) {
             const checkbox = $(`#check-producto-${index}`);
             checkbox.data('scan-validated', true).prop('disabled', false).prop('checked', true);
@@ -4290,6 +4315,16 @@ function aplicarProductosEscaneados() {
     if (productosAplicados > 0) {
         mostrarToast('success', `${productosAplicados} producto(s) aplicado(s) desde el escaneo`);
     }
+}
+
+// Escapa texto que se inyecta dentro de un atributo HTML (title, data-*)
+function escaparAtributo(texto) {
+    return String(texto == null ? '' : texto)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
 }
 
 // Función debounce para optimizar búsquedas
@@ -5058,28 +5093,41 @@ function buscarDocumentoParaCambio(event) {
                     
                     if (response.documento.fue_redirigido) {
                         Swal.fire({
-                            icon: 'success',
-                            title: '🔄 Ticket Actualizado',
+                            icon: 'info',
+                            title: '🔄 Se cargó la venta original',
                             html: `
-                                <p>El ticket <strong>#${response.documento.correlativo_original}</strong> ya tiene cambios.</p>
-                                <p>Se cargó automáticamente el <strong>Ticket #${response.documento.correlativo}</strong></p>
+                                <p>El <strong>#${response.documento.correlativo_original}</strong> es el comprobante de un cambio,
+                                no la venta.</p>
+                                <p>Se cargó la venta original <strong>#${response.documento.correlativo}</strong>
+                                con todos sus productos.</p>
                             `,
                             confirmButtonText: 'Entendido',
-                            timer: 4000,
+                            timer: 5000,
                             timerProgressBar: true
                         });
                     }
-                    
+
                     const cambiosAnteriores = response.documento.cambios_anteriores || [];
                     const cambiosPendientes = cambiosAnteriores.filter(c => c.estado === 'Solicitado' || c.estado === 'Aprobado');
-                    
-                    if (cambiosPendientes.length > 0 && !response.documento.fue_redirigido) {
+
+                    if (cambiosPendientes.length > 0) {
+                        Swal.fire({
+                            toast: true,
+                            position: 'top-end',
+                            icon: 'warning',
+                            title: `${cambiosPendientes.length} cambio(s) sin cerrar en este documento`,
+                            text: 'Revise el historial antes de continuar',
+                            showConfirmButton: false,
+                            timer: 5000,
+                            timerProgressBar: true
+                        });
+                    } else if (cambiosAnteriores.length > 0 && !response.documento.fue_redirigido) {
                         Swal.fire({
                             toast: true,
                             position: 'top-end',
                             icon: 'info',
-                            title: `${cambiosAnteriores.length} cambio(s) anterior(es) detectado(s)`,
-                            text: `${response.documento.productos.length} producto(s) disponible(s) para cambio`,
+                            title: `Este documento ya tuvo ${cambiosAnteriores.length} cambio(s)`,
+                            text: `Quedan ${response.documento.productos_disponibles} producto(s) disponible(s)`,
                             showConfirmButton: false,
                             timer: 4000,
                             timerProgressBar: true
@@ -5599,22 +5647,48 @@ function cargarProductosOriginales() {
     
     ticketActual.productos.forEach((producto, index) => {
         console.log(`  Producto ${index}:`, producto);
-        
-        // Determinar badge de cambios anteriores
+
+        // Qué pasó con esta línea en cambios anteriores (en qué se convirtió)
+        const detalleCambios = (producto.cambios_linea || [])
+            .map(c => `${c.numero_operacion}${c.reemplazo ? ' → ' + c.reemplazo : ''}`)
+            .join(' | ');
+
         let badgeCambiosAnteriores = '';
         if (producto.cantidad_ya_cambiada > 0) {
-            badgeCambiosAnteriores = `<span class="badge bg-warning text-dark ms-1" title='${producto.cantidad_ya_cambiada} unidad(es) ya cambiada(s)'>
+            const tituloCambiado = escaparAtributo(
+                `${producto.cantidad_ya_cambiada} unidad(es) ya cambiada(s)` +
+                (detalleCambios ? `. ${detalleCambios}` : '')
+            );
+            badgeCambiosAnteriores = `<span class="badge bg-warning text-dark ms-1" title="${tituloCambiado}">
                 ⚠️ ${producto.cantidad_ya_cambiada} cambiado
             </span>`;
         }
 
+        // Procedencia: separa lo vendido de lo que entró como reemplazo en un cambio previo
+        let badgeOrigen = '';
+        let notaOrigen = '';
+        if (producto.es_reemplazo) {
+            const tituloOrigen = escaparAtributo(
+                `Entró como reemplazo en el cambio ${producto.origen_cambio || ''}` +
+                (producto.origen_cambio_fecha ? ` del ${producto.origen_cambio_fecha}` : '')
+            );
+            badgeOrigen = `<span class="badge bg-info ms-1" title="${tituloOrigen}">
+                <i class="ri-repeat-2-line"></i> De cambio previo
+            </span>`;
+            notaOrigen = `<div><small class="text-info" style="font-size:0.7rem;">
+                Reemplazo de ${producto.origen_cambio || 'un cambio anterior'}${producto.origen_cambio_fecha ? ' · ' + producto.origen_cambio_fecha : ''}
+            </small></div>`;
+        } else if (detalleCambios) {
+            notaOrigen = `<div><small class="text-muted" style="font-size:0.7rem;">${detalleCambios}</small></div>`;
+        }
+
         const tallaText = producto.talla ? ` <span class="badge bg-light text-dark border">${producto.talla}</span>` : '';
-        
+
         tbody.append(`
             <tr class="producto-row-pendiente" id="fila-producto-${index}">
                 <td class="text-center">
-                    <input type='checkbox' class="form-check-input check-producto" 
-                           id='check-producto-${index}' 
+                    <input type='checkbox' class="form-check-input check-producto"
+                           id='check-producto-${index}'
                            data-index='${index}'
                            data-sku='${producto.sku || ''}'
                            disabled
@@ -5624,8 +5698,9 @@ function cargarProductosOriginales() {
                 <td class="columna-sku-validacion" style="display: none;">${producto.sku || '-'}</td>
                 <td>
                     <div class="d-flex align-items-center gap-1 flex-wrap">
-                        <span>${producto.articulo || '-'}</span>${tallaText}${badgeCambiosAnteriores}
+                        <span>${producto.articulo || '-'}</span>${tallaText}${badgeOrigen}${badgeCambiosAnteriores}
                     </div>
+                    ${notaOrigen}
                 </td>
                 <td class="text-center">
                     <strong class="${producto.cantidad_ya_cambiada > 0 ? 'text-warning' : ''}">${producto.cantidad_disponible || 0}</strong>

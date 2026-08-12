@@ -1118,6 +1118,27 @@ _MSG_BLOQUEO_SIN_STOCK = (
     'producto apareció.'
 )
 
+# Facturar es el ÚLTIMO paso: la boleta se emite cuando el producto ya está
+# sacado del estante. Sin guía impresa no hubo picking, así que el DTE saldría
+# por una venta que nadie preparó (y el kardex descuenta igual).
+_MSG_BLOQUEO_SIN_GUIA = (
+    'Falta imprimir la guía de preparación de este pedido. Imprímela '
+    '(botón "Guía PDF" o "Térmica") y factura después de sacar el producto.'
+)
+
+
+def _bloqueo_por_guia_no_impresa(pedido):
+    """Razón para NO facturar cuando la guía de preparación nunca se imprimió.
+
+    Devuelve un string de error o None. Imprimir la guía es lo que sella
+    ``fecha_impresion_guia`` (individual, masiva por sucursal, PDF o térmica) y
+    lo que mueve el pedido a EN_PREPARACION, así que ese campo es el único
+    rastro de que la tienda fue a buscar el producto antes de emitir el DTE.
+    """
+    if pedido.fecha_impresion_guia:
+        return None
+    return _MSG_BLOQUEO_SIN_GUIA
+
 
 def _listo_envio_en_canal(pedido):
     """True si el CANAL marcó el pedido como listo para envío/retiro.
@@ -1647,7 +1668,12 @@ def pedido_ecommerce_detalle(request, pedido_id):
     sucursal_validacion = sucursal_sesion or pedido.sucursal
     items_validados = _validar_items_pedido(pedido, sucursal=sucursal_validacion)
     context['items_validados'] = items_validados
-    context['puede_facturar'] = bool(pedido.items) and all(iv['encontrado'] for iv in items_validados)
+    context['stock_ok_facturar'] = bool(pedido.items) and all(iv['encontrado'] for iv in items_validados)
+    # La guía impresa es requisito para facturar (mismo gate que el endpoint):
+    # sin picking no se emite el DTE. `puede_facturar` manda las dos cosas para
+    # que el botón nunca quede habilitado sobre algo que el backend rechaza.
+    context['guia_impresa'] = bool(pedido.fecha_impresion_guia)
+    context['puede_facturar'] = context['stock_ok_facturar'] and context['guia_impresa']
     context['sucursal_sesion'] = sucursal_sesion
     context['sucursal_validacion'] = sucursal_validacion
 
@@ -1807,6 +1833,11 @@ def api_facturar_pedido_individual(request, pedido_id):
     # Quiebre de stock reportado a AllConnected: no facturar hasta resolverlo.
     if pedido.sub_estado in SUB_ESTADOS_BLOQUEADOS_PICKING:
         return JsonResponse({'ok': False, 'error': _MSG_BLOQUEO_SIN_STOCK}, status=409)
+
+    # Sin guía impresa no hubo picking: la boleta iría por delante del producto.
+    bloqueo_guia = _bloqueo_por_guia_no_impresa(pedido)
+    if bloqueo_guia:
+        return JsonResponse({'ok': False, 'error': bloqueo_guia, 'requiere_guia': True}, status=409)
 
     # Validar items contra la sucursal de sesión: todos deben existir Y tener stock suficiente
     items_val = _validar_items_pedido(pedido, sucursal=sucursal)
@@ -2348,10 +2379,12 @@ def facturar_ecommerce_masivo(request):
 
     for pedido in pedidos:
         # El estado del CANAL manda: cancelado o sin pago confirmado no se factura.
-        # Idem un quiebre de stock ya reportado a AllConnected.
+        # Idem un quiebre de stock ya reportado a AllConnected, o un pedido al
+        # que nunca se le imprimió la guía (no pasó por picking).
         bloqueo_canal = (
             _bloqueo_por_estado_canal(pedido)
             or (_MSG_BLOQUEO_SIN_STOCK if pedido.sub_estado in SUB_ESTADOS_BLOQUEADOS_PICKING else None)
+            or _bloqueo_por_guia_no_impresa(pedido)
         )
         if bloqueo_canal:
             resultados.append({

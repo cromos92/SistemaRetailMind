@@ -120,6 +120,7 @@
 .sub-sin_stock{background:#ffedd5;color:#9a3412;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:700;}
 .badge-aviso-pendiente{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;font-size:.65rem;padding:2px 7px;border-radius:12px;font-weight:700;white-space:nowrap;}
 .badge-central{background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:.65rem;padding:2px 7px;border-radius:12px;font-weight:700;white-space:nowrap;}
+.badge-sin-guia{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;font-size:.65rem;padding:2px 7px;border-radius:12px;font-weight:700;white-space:nowrap;}
 
 /* ── antigüedad ── */
 .age-warn{background:#fef3c7;border-left:3px solid #f59e0b;}
@@ -1136,6 +1137,24 @@ function getSeleccionados(){
 function confirmarFacturacionMasiva(){
   const ids = getSeleccionados();
   if(!ids.length){ alert('Selecciona al menos un pedido.'); return; }
+
+  /* Sin guía de preparación impresa el backend rechaza la facturación (409):
+     avisar acá evita mandar un lote que vuelve entero en rojo. Solo se puede
+     mirar lo que está en pantalla — los seleccionados en otras páginas los
+     corta el backend y salen en el modal de resultados. */
+  const sinGuia = ids.filter(id => {
+    const fila = document.querySelector(`tr[data-pedido-id="${id}"]`);
+    return fila && fila.dataset.guia === '0';
+  });
+  if(sinGuia.length){
+    alert(
+      `${sinGuia.length} de los ${ids.length} pedidos seleccionados NO tienen la guía de `
+      + 'preparación impresa y no se pueden facturar.\n\n'
+      + 'Imprimí primero las guías ("Guías QZ" o el botón PDF de cada fila): la boleta '
+      + 'va después de sacar el producto.'
+    );
+    return;
+  }
 
   const tipoDocEl = document.querySelector('input[name="bb-tipo-doc"]:checked');
   const tipoDocLabel = tipoDocEl ? tipoDocEl.parentElement.querySelector('label[for="'+tipoDocEl.id+'"]')?.textContent.trim() : 'Boleta Electr.';

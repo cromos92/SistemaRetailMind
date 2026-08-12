@@ -475,6 +475,15 @@
         font-size: 0.6rem;
     }
 
+    /* Fila de totales por tienda al pie de la tabla */
+    .fila-total td {
+        background: var(--nexo-gray-100) !important;
+        border-top: 2px solid var(--nexo-gray-300);
+        font-weight: 700;
+        position: sticky;
+        bottom: 0;
+    }
+
     /* ========== PAGINACIÓN ========== */
     .nexo-pagination {
         display: flex;
@@ -1191,12 +1200,21 @@ function renderizarTabla() {
         return;
     }
     
-    // Obtener sucursales únicas
-    const sucursalesSet = new Set();
+    // Totales por tienda sobre TODO el set filtrado (no solo la pagina):
+    // alimentan la fila TOTALES y deciden que sucursales se muestran.
+    const totalesSuc = {};
     datosFiltrados.forEach(item => {
-        Object.keys(item.sucursales || {}).forEach(suc => sucursalesSet.add(suc));
+        Object.entries(item.sucursales || {}).forEach(([suc, d]) => {
+            if (!totalesSuc[suc]) totalesSuc[suc] = { orig: 0, act: 0 };
+            totalesSuc[suc].orig += d.stock_original || 0;
+            totalesSuc[suc].act  += d.stock_actual   || 0;
+        });
     });
-    const sucursalesList = Array.from(sucursalesSet).sort();
+    // Sucursal que queda en Original 0 y Actual 0 con estos filtros -> fuera
+    // de la tabla (y el Excel hace lo mismo en el backend).
+    const sucursalesList = Object.keys(totalesSuc)
+        .filter(s => totalesSuc[s].orig || totalesSuc[s].act)
+        .sort();
     
     // Calcular paginación
     const totalRegistros = datosFiltrados.length;
@@ -1312,7 +1330,24 @@ function renderizarTabla() {
         }, 'todas las sucursales');
         html += `</tr>`;
     });
-    
+
+    // Fila TOTALES por tienda: suma TODO el set filtrado, no solo la pagina
+    // visible, para que cuadre con los KPI de arriba.
+    let granOrig = 0, granAct = 0;
+    datosFiltrados.forEach(it => {
+        granOrig += it.total_stock_original || 0;
+        granAct  += it.total_stock_actual   || 0;
+    });
+    html += `<tr class="fila-total">
+        <td colspan="5" style="text-align:right !important;">TOTALES (${formatearNumero(totalRegistros)} artículos)</td>`;
+    sucursalesList.forEach(suc => {
+        const t = totalesSuc[suc];
+        html += `<td><span class="stock-badge stock-inicial" title="Total Original de ${suc}">${formatearNumero(t.orig)}</span></td>`
+              + `<td><span class="stock-badge stock-restante" title="Total Actual de ${suc}">${formatearNumero(t.act)}</span></td>`;
+    });
+    html += `<td><span class="stock-badge stock-inicial">${formatearNumero(granOrig)}</span></td>`
+          + `<td><span class="stock-badge stock-restante">${formatearNumero(granAct)}</span></td></tr>`;
+
     html += `</tbody></table></div>`;
     
     // Paginación

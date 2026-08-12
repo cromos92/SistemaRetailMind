@@ -6938,26 +6938,14 @@ def exportar_movimientos_sucursal_excel(request):
                     f"{len(productos_list)} productos{leyenda_periodo}{leyenda_bodegas}")
         ws['A2'].font = Font(italic=True, size=9)
 
-        # Headers fila 4. Por sucursal solo van las dos columnas que muestra la
-        # pantalla; el desglose de movimientos (entradas/salidas/traspasos) se
-        # conserva a nivel de TOTAL para no perder la trazabilidad del período.
-        row = 4
-        headers = ['Artículo', 'Marca', 'Color', 'Departamento', 'Costo', 'Precio Venta']
+        # ===== PASADA 1: calcular filas y totales por tienda =====
+        # Todo en memoria antes de escribir, para poder (a) ocultar las
+        # sucursales que quedan en Original 0 y Actual 0 con estos filtros
+        # —igual que la tabla web— y (b) cerrar con la fila TOTALES.
+        filas_export = []
+        tot_suc = {s.id: [0, 0] for s in sucursales_list}  # suc_id -> [orig, act]
+        tot_glob = [0, 0, 0, 0, 0]  # original, actual, entradas, salidas, vendido
 
-        for suc in [s.alias for s in sucursales_list]:
-            headers.extend([f'{suc} Original', f'{suc} Actual'])
-        headers.extend(['TOTAL Original', 'TOTAL Actual', 'TOTAL Entradas',
-                        'TOTAL Salidas', 'VENDIDO'])
-
-        for col, header in enumerate(headers, 1):
-            cell = ws.cell(row=row, column=col, value=header)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.border = border
-            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        
-        # Datos (sin queries adicionales)
-        row = 5
         for producto in productos_list:
             prod_id = producto.id
             compras_prod = compras_map.get(prod_id, {})
@@ -6966,7 +6954,6 @@ def exportar_movimientos_sucursal_excel(request):
             stock_prod = stock_map.get(prod_id, {})
             ventas_prod = ventas_map.get(prod_id, {})
 
-            # Calcular totales
             total_compras = sum(compras_prod.values())
             total_tin = sum(tin_prod.values())
             total_tout = sum(tout_prod.values())
@@ -6989,74 +6976,146 @@ def exportar_movimientos_sucursal_excel(request):
             total_entradas = sum(ent_prod.values())
             total_salidas = sum(sal_prod.values())
 
-            # Misma definición que la API: lo que la sucursal tuvo disponible,
-            # o sea el saldo al inicio más todo lo que entró en el período.
-            def _original(suc_id):
-                return saldo_ini_prod[suc_id] + ent_prod.get(suc_id, 0)
-
-            total_original = sum(_original(s.id) for s in sucursales_list)
+            # Misma definición que la API: Original = lo que la sucursal tuvo
+            # disponible (saldo al inicio + lo que entró en el período).
+            valores_suc = {
+                suc.id: (saldo_ini_prod[suc.id] + ent_prod.get(suc.id, 0),
+                         saldo_fin_prod[suc.id])
+                for suc in sucursales_list
+            }
+            total_original = sum(v[0] for v in valores_suc.values())
 
             if mostrar in ('queda', 'entro_queda') and total_restante <= 0:
                 continue
 
-            if (total_compras > 0 or total_tin > 0 or total_tout > 0
+            if not (total_compras > 0 or total_tin > 0 or total_tout > 0
                     or total_restante > 0 or total_vendido > 0
                     or total_entradas > 0 or total_salidas > 0):
-                col = 1
+                continue
 
-                ws.cell(row=row, column=col, value=producto.articulo).border = border
-                col += 1
-                ws.cell(row=row, column=col, value=producto.atributo1.valor if producto.atributo1 else '-').border = border
-                col += 1
-                ws.cell(row=row, column=col, value=producto.atributo2.valor if producto.atributo2 else '-').border = border
-                col += 1
-                ws.cell(row=row, column=col, value=producto.categoria.nombre if producto.categoria else '-').border = border
-                col += 1
+            for sid, (v_orig, v_act) in valores_suc.items():
+                tot_suc[sid][0] += v_orig
+                tot_suc[sid][1] += v_act
+            tot_glob[0] += total_original
+            tot_glob[1] += total_restante
+            tot_glob[2] += total_entradas
+            tot_glob[3] += total_salidas
+            tot_glob[4] += total_vendido
+            filas_export.append((producto, valores_suc, total_original,
+                                 total_restante, total_entradas,
+                                 total_salidas, total_vendido))
 
-                costo_val = float(producto.costo) if producto.costo else 0
-                cell_costo = ws.cell(row=row, column=col, value=costo_val)
-                cell_costo.border = border
-                cell_costo.number_format = '"$"#,##0'
-                cell_costo.alignment = Alignment(horizontal='right')
-                col += 1
+        # Sucursal sin nada en Original NI en Actual -> fuera del Excel.
+        sucursales_visibles = [s for s in sucursales_list
+                               if tot_suc[s.id][0] or tot_suc[s.id][1]]
+        ocultas = len(sucursales_list) - len(sucursales_visibles)
+        if ocultas:
+            ws['A3'] = (f"{ocultas} sucursal(es) sin datos para estos filtros "
+                        "(Original 0 y Actual 0): ocultas")
+            ws['A3'].font = Font(italic=True, size=9)
 
-                precio_val = float(producto.precioventa) if producto.precioventa else 0
-                cell_precio = ws.cell(row=row, column=col, value=precio_val)
-                cell_precio.border = border
-                cell_precio.number_format = '"$"#,##0'
-                cell_precio.alignment = Alignment(horizontal='right')
-                cell_precio.font = Font(bold=True, color="00875A")
-                col += 1
+        # Headers fila 4. Por sucursal solo van las dos columnas que muestra la
+        # pantalla; el desglose de movimientos (entradas/salidas) se conserva a
+        # nivel de TOTAL para no perder la trazabilidad del período.
+        row = 4
+        headers = ['Artículo', 'Marca', 'Color', 'Departamento', 'Costo', 'Precio Venta']
 
-                # Datos por sucursal (desde los mapas, sin queries)
-                for suc in sucursales_list:
-                    for valor, relleno in (
-                        (_original(suc.id), inicial_fill),
-                        (saldo_fin_prod[suc.id], restante_fill),
-                    ):
-                        celda = ws.cell(row=row, column=col, value=valor)
-                        celda.border = border
-                        celda.fill = relleno
-                        celda.alignment = Alignment(horizontal='center')
-                        col += 1
+        for suc in [s.alias for s in sucursales_visibles]:
+            headers.extend([f'{suc} Original', f'{suc} Actual'])
+        headers.extend(['TOTAL Original', 'TOTAL Actual', 'TOTAL Entradas',
+                        'TOTAL Salidas', 'VENDIDO'])
 
-                # Totales
-                for valor, color_fuente in (
-                    (total_original, None),
-                    (total_restante, None),
-                    (total_entradas, None),
-                    (total_salidas, None),
-                    (total_vendido, 'CC0000'),
-                ):
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=row, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.border = border
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        
+        # ===== PASADA 2: escribir filas (ya calculadas y filtradas) =====
+        row = 5
+        for (producto, valores_suc, total_original, total_restante,
+             total_entradas, total_salidas, total_vendido) in filas_export:
+            col = 1
+
+            ws.cell(row=row, column=col, value=producto.articulo).border = border
+            col += 1
+            ws.cell(row=row, column=col, value=producto.atributo1.valor if producto.atributo1 else '-').border = border
+            col += 1
+            ws.cell(row=row, column=col, value=producto.atributo2.valor if producto.atributo2 else '-').border = border
+            col += 1
+            ws.cell(row=row, column=col, value=producto.categoria.nombre if producto.categoria else '-').border = border
+            col += 1
+
+            costo_val = float(producto.costo) if producto.costo else 0
+            cell_costo = ws.cell(row=row, column=col, value=costo_val)
+            cell_costo.border = border
+            cell_costo.number_format = '"$"#,##0'
+            cell_costo.alignment = Alignment(horizontal='right')
+            col += 1
+
+            precio_val = float(producto.precioventa) if producto.precioventa else 0
+            cell_precio = ws.cell(row=row, column=col, value=precio_val)
+            cell_precio.border = border
+            cell_precio.number_format = '"$"#,##0'
+            cell_precio.alignment = Alignment(horizontal='right')
+            cell_precio.font = Font(bold=True, color="00875A")
+            col += 1
+
+            # Datos por sucursal (solo las visibles)
+            for suc in sucursales_visibles:
+                for valor, relleno in zip(valores_suc[suc.id],
+                                          (inicial_fill, restante_fill)):
                     celda = ws.cell(row=row, column=col, value=valor)
                     celda.border = border
-                    celda.fill = total_fill
-                    celda.font = (Font(bold=True, color=color_fuente)
-                                  if color_fuente else Font(bold=True))
+                    celda.fill = relleno
                     celda.alignment = Alignment(horizontal='center')
                     col += 1
 
-                row += 1
+            # Totales de la fila
+            for valor, color_fuente in (
+                (total_original, None),
+                (total_restante, None),
+                (total_entradas, None),
+                (total_salidas, None),
+                (total_vendido, 'CC0000'),
+            ):
+                celda = ws.cell(row=row, column=col, value=valor)
+                celda.border = border
+                celda.fill = total_fill
+                celda.font = (Font(bold=True, color=color_fuente)
+                              if color_fuente else Font(bold=True))
+                celda.alignment = Alignment(horizontal='center')
+                col += 1
+
+            row += 1
+
+        # ===== FILA TOTALES POR TIENDA =====
+        if filas_export:
+            celda = ws.cell(row=row, column=1, value='TOTALES')
+            celda.font = header_font
+            celda.fill = header_fill
+            celda.border = border
+            for col in range(2, 7):
+                c = ws.cell(row=row, column=col, value='')
+                c.fill = header_fill
+                c.border = border
+            col = 7
+            for suc in sucursales_visibles:
+                for valor in tot_suc[suc.id]:
+                    celda = ws.cell(row=row, column=col, value=valor)
+                    celda.border = border
+                    celda.fill = total_fill
+                    celda.font = Font(bold=True)
+                    celda.alignment = Alignment(horizontal='center')
+                    col += 1
+            for i, valor in enumerate(tot_glob):
+                celda = ws.cell(row=row, column=col, value=valor)
+                celda.border = border
+                celda.fill = total_fill
+                celda.font = Font(bold=True, color='CC0000') if i == 4 else Font(bold=True)
+                celda.alignment = Alignment(horizontal='center')
+                col += 1
         
         # Ajustar anchos
         ws.column_dimensions['A'].width = 35

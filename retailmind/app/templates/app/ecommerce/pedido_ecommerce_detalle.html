@@ -519,7 +519,7 @@
         <div class="rm-card-header">
           <div class="rm-card-header-title"><i class="bi bi-box-seam"></i>Productos del pedido</div>
           {% if pedido.estado == 'PENDIENTE' %}
-            {% if puede_facturar %}
+            {% if stock_ok_facturar %}
               <span style="font-size:.72rem;color:#15803d;font-weight:700;display:flex;align-items:center;gap:5px;">
                 <i class="bi bi-check-circle-fill"></i>Todos los SKUs encontrados
               </span>
@@ -856,7 +856,7 @@
         </div>
         <div class="rm-card-body">
 
-          {% if not puede_facturar %}
+          {% if not stock_ok_facturar %}
           <div class="sku-warning">
             <i class="bi bi-exclamation-triangle-fill"></i>
             <div>
@@ -891,6 +891,25 @@
             </div>
           </div>
           {% endif %}
+
+          {# La boleta va DESPUÉS del picking: sin guía impresa el pedido nunca
+             se fue a buscar al estante. Mismo gate que el endpoint de facturar. #}
+          <div class="sku-warning" id="aviso-guia-pendiente"
+               style="{% if guia_impresa %}display:none;{% endif %}">
+            <i class="bi bi-printer-fill"></i>
+            <div>
+              <strong>Falta imprimir la guía de preparación</strong> — el botón de abajo
+              está deshabilitado hasta que la imprimas.<br>
+              <div style="margin-top:4px;font-size:.8rem;">
+                Imprimí la guía, andá a buscar el producto y recién ahí facturá.
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-dark mt-2"
+                      style="font-size:.78rem;border-radius:8px;"
+                      onclick="abrirGuiaPdfDetalle()">
+                <i class="bi bi-file-earmark-pdf me-1"></i>Imprimir guía (PDF 80mm)
+              </button>
+            </div>
+          </div>
 
           <div class="mb-3">
             <label class="info-label d-block mb-1">Tipo de Documento</label>
@@ -941,14 +960,18 @@
 
           <button id="btn-facturar-aqui" class="btn-facturar"
             onclick="facturarDesdeDetalle()"
-            {% if not puede_facturar %}disabled title="Resolvé primero el stock: mirá el detalle arriba"{% endif %}>
+            {% if not puede_facturar %}disabled title="{% if not stock_ok_facturar %}Resolvé primero el stock: mirá el detalle arriba{% else %}Imprimí la guía de preparación antes de facturar{% endif %}"{% endif %}>
             <i class="bi bi-receipt fs-5"></i>Facturar ahora
           </button>
-          {% if not puede_facturar %}
-          <div style="text-align:center;font-size:.76rem;color:#b91c1c;margin-top:6px;">
-            <i class="bi bi-lock-fill me-1"></i>Deshabilitado: revisá el aviso de stock más arriba.
+          <div id="motivo-bloqueo-facturar"
+               style="text-align:center;font-size:.76rem;color:#b91c1c;margin-top:6px;{% if puede_facturar %}display:none;{% endif %}">
+            <i class="bi bi-lock-fill me-1"></i>
+            {% if not stock_ok_facturar %}
+              Deshabilitado: revisá el aviso de stock más arriba.
+            {% else %}
+              Deshabilitado: primero imprimí la guía de preparación.
+            {% endif %}
           </div>
-          {% endif %}
 
           <div id="facturar-loading" style="display:none;text-align:center;padding:16px;">
             <div class="spinner-border spinner-border-sm text-success me-2"></div>
@@ -1001,6 +1024,9 @@
 <script>
 const PEDIDO_ID = {{ pedido.id }};
 const CSRF_TOKEN = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+/* Guía de preparación impresa: requisito para facturar (el backend lo exige
+   igual; esto solo mantiene el botón coherente sin recargar la página). */
+let _guiaImpresa = {{ guia_impresa|yesno:"true,false" }};
 let searchTimers = {};
 
 /* ── Buscador por item ───────────────────────────────── */
@@ -1071,12 +1097,43 @@ function seleccionarProducto(idx, ptId, sku, nombre, stock) {
 
 function verificarTodosMatcheados() {
   const faltantes = document.querySelectorAll('.match-fail');
-  const btn = document.getElementById('btn-facturar-aqui');
   const alerta = document.querySelector('#card-facturar .sku-warning');
-  if (!faltantes.length) {
-    if (btn) { btn.disabled = false; btn.title = ''; }
-    if (alerta) alerta.style.display = 'none';
+  if (!faltantes.length && alerta) alerta.style.display = 'none';
+  actualizarBotonFacturar();
+}
+
+/* Estado del botón "Facturar ahora": exige stock resuelto Y guía impresa
+   (mismo criterio que `api_facturar_pedido_individual`, que rechaza con 409). */
+function actualizarBotonFacturar() {
+  const btn = document.getElementById('btn-facturar-aqui');
+  if (!btn) return;
+  const faltantes = document.querySelectorAll('.match-fail').length;
+  const motivo = document.getElementById('motivo-bloqueo-facturar');
+  let texto = '';
+  if (faltantes) {
+    texto = 'Deshabilitado: revisá el aviso de stock más arriba.';
+    btn.title = 'Resolvé primero el stock: mirá el detalle arriba';
+  } else if (!_guiaImpresa) {
+    texto = 'Deshabilitado: primero imprimí la guía de preparación.';
+    btn.title = 'Imprimí la guía de preparación antes de facturar';
+  } else {
+    btn.title = '';
   }
+  btn.disabled = !!texto;
+  if (motivo) {
+    motivo.style.display = texto ? '' : 'none';
+    if (texto) motivo.innerHTML = '<i class="bi bi-lock-fill me-1"></i>' + texto;
+  }
+}
+
+/* La guía se acaba de imprimir (PDF o térmica): libera el botón sin esperar
+   el reload — al reimprimir un pedido que ya está EN_PREPARACION el backend
+   no transiciona y la página no se recarga sola. */
+function marcarGuiaImpresaEnUI() {
+  _guiaImpresa = true;
+  const aviso = document.getElementById('aviso-guia-pendiente');
+  if (aviso) aviso.style.display = 'none';
+  actualizarBotonFacturar();
 }
 
 /* ── Toggle panel factura electrónica ───────────────── */
@@ -1227,6 +1284,9 @@ function abrirGuiaPdfDetalle() {
   })
   .then(blob => {
     if (!blob) return;
+    // El backend ya selló la impresión al responder el PDF: liberá el botón de
+    // facturar aunque el navegador bloquee la pestaña o no haya reload.
+    marcarGuiaImpresaEnUI();
     // Se abre en pestaña nueva: el visor del navegador ya trae Imprimir.
     const url = URL.createObjectURL(blob);
     const win = window.open(url, '_blank');
@@ -1448,6 +1508,8 @@ async function imprimirGuiaPreparacion() {
         return;
     }
     if (!data.ok) { alert('Error: ' + (data.error || 'no se pudo registrar la guía')); return; }
+    // Guía registrada: habilita facturar (el backend ya la da por impresa).
+    marcarGuiaImpresaEnUI();
 
     const ok = await imprimirConQZ(data.print_data);
     if (ok) {
