@@ -6611,7 +6611,12 @@ def obtener_reporte_movimientos_sucursal(request):
         # _mapas_movimientos_sucursal.)
 
         # ========== PROCESAR RESULTADOS (sin queries adicionales) ==========
-        datos_reporte = []
+        # CONSOLIDADO POR ARTÍCULO: el catálogo duplica cada artículo por
+        # sucursal (una fila `Producto` por tienda), así que sin agrupar el
+        # mismo modelo salía en N filas, cada una con datos solo en su propia
+        # columna. Clave de identidad: articulo + marca + color + departamento
+        # (la misma del catálogo). Duplicados DENTRO de una sucursal se suman.
+        agrupados = {}
 
         for producto in productos_list:
             prod_id = producto.id
@@ -6716,19 +6721,22 @@ def obtener_reporte_movimientos_sucursal(request):
 
             total_inicial = total_compras + total_tin
 
-            # "y todavía queda": se filtra ACÁ y no en la query de productos
-            # porque con fecha_hasta "Actual" es el saldo al cierre, no el stock
-            # de hoy: un SKU puede tener 0 hoy y saldo positivo al cierre.
-            if mostrar in ('queda', 'entro_queda') and total_restante <= 0:
+            # Solo incluir productos con datos
+            if not (stock_por_sucursal or total_inicial > 0 or total_restante > 0):
                 continue
 
-            # Solo incluir productos con datos
-            if stock_por_sucursal or total_inicial > 0 or total_restante > 0:
-                datos_reporte.append({
+            marca_val = producto.atributo1.valor if producto.atributo1 else 'Sin Marca'
+            color_val = producto.atributo2.valor if producto.atributo2 else '-'
+            depto_val = producto.categoria.nombre if producto.categoria else '-'
+            clave = (producto.articulo, marca_val, color_val, depto_val)
+
+            fila = agrupados.get(clave)
+            if fila is None:
+                agrupados[clave] = {
                     'articulo': producto.articulo,
-                    'marca': producto.atributo1.valor if producto.atributo1 else 'Sin Marca',
-                    'color': producto.atributo2.valor if producto.atributo2 else '-',
-                    'departamento': producto.categoria.nombre if producto.categoria else '-',
+                    'marca': marca_val,
+                    'color': color_val,
+                    'departamento': depto_val,
                     'costo': float(producto.costo) if producto.costo else 0,
                     'precio_venta': float(producto.precioventa) if producto.precioventa else 0,
                     'sucursales': stock_por_sucursal,
@@ -6744,7 +6752,44 @@ def obtener_reporte_movimientos_sucursal(request):
                     'total_entradas': total_entradas,
                     'total_salidas': total_salidas,
                     'total_stock_hoy': total_stock_hoy,
-                })
+                }
+            else:
+                # Mismo artículo en otra sucursal: se fusiona en la MISMA fila.
+                # Costo/precio pueden variar entre tiendas -> se muestra el mayor.
+                fila['costo'] = max(fila['costo'],
+                                    float(producto.costo) if producto.costo else 0)
+                fila['precio_venta'] = max(fila['precio_venta'],
+                                           float(producto.precioventa) if producto.precioventa else 0)
+                for alias, datos_suc in stock_por_sucursal.items():
+                    previo = fila['sucursales'].get(alias)
+                    if previo is None:
+                        fila['sucursales'][alias] = datos_suc
+                    else:
+                        # Duplicado dentro de la misma sucursal: sumar campo a campo.
+                        for campo, valor in datos_suc.items():
+                            if campo != 'sucursal_id':
+                                previo[campo] = previo.get(campo, 0) + valor
+                fila['total_stock_original'] += total_stock_original
+                fila['total_stock_actual'] += total_restante
+                fila['total_inicial'] += total_inicial
+                fila['total_compras'] += total_compras
+                fila['total_traspasos_in'] += total_tin
+                fila['total_traspasos_out'] += total_tout
+                fila['total_restante'] += total_restante
+                fila['total_vendido'] += total_vendido
+                fila['total_saldo_inicial'] += total_saldo_inicial
+                fila['total_entradas'] += total_entradas
+                fila['total_salidas'] += total_salidas
+                fila['total_stock_hoy'] += total_stock_hoy
+
+        # "y todavía queda" se decide DESPUÉS de consolidar: si el artículo
+        # tiene saldo en cualquier sucursal, la fila completa se muestra
+        # (filtrar por fila-producto botaba las sucursales en cero del mismo
+        # artículo y desarmaba la consolidación).
+        datos_reporte = [
+            f for f in agrupados.values()
+            if not (mostrar in ('queda', 'entro_queda') and f['total_restante'] <= 0)
+        ]
 
         sucursales_data = [{'id': s.id, 'alias': s.alias} for s in sucursales_list]
 
@@ -6939,12 +6984,12 @@ def exportar_movimientos_sucursal_excel(request):
         ws['A2'].font = Font(italic=True, size=9)
 
         # ===== PASADA 1: calcular filas y totales por tienda =====
-        # Todo en memoria antes de escribir, para poder (a) ocultar las
-        # sucursales que quedan en Original 0 y Actual 0 con estos filtros
-        # —igual que la tabla web— y (b) cerrar con la fila TOTALES.
-        filas_export = []
-        tot_suc = {s.id: [0, 0] for s in sucursales_list}  # suc_id -> [orig, act]
-        tot_glob = [0, 0, 0, 0, 0]  # original, actual, entradas, salidas, vendido
+        # Todo en memoria antes de escribir, para poder (a) CONSOLIDAR POR
+        # ARTÍCULO (el catálogo duplica cada artículo por sucursal: sin esto la
+        # misma zapatilla salía en N filas, una por tienda), (b) ocultar las
+        # sucursales que quedan en Original 0 y Actual 0 —igual que la tabla
+        # web— y (c) cerrar con la fila TOTALES.
+        agrupados_xls = {}
 
         for producto in productos_list:
             prod_id = producto.id
@@ -6985,29 +7030,73 @@ def exportar_movimientos_sucursal_excel(request):
             }
             total_original = sum(v[0] for v in valores_suc.values())
 
-            if mostrar in ('queda', 'entro_queda') and total_restante <= 0:
-                continue
-
             if not (total_compras > 0 or total_tin > 0 or total_tout > 0
                     or total_restante > 0 or total_vendido > 0
                     or total_entradas > 0 or total_salidas > 0):
                 continue
 
-            for sid, (v_orig, v_act) in valores_suc.items():
+            marca_val = producto.atributo1.valor if producto.atributo1 else '-'
+            color_val = producto.atributo2.valor if producto.atributo2 else '-'
+            depto_val = producto.categoria.nombre if producto.categoria else '-'
+            clave = (producto.articulo, marca_val, color_val, depto_val)
+
+            fila = agrupados_xls.get(clave)
+            if fila is None:
+                agrupados_xls[clave] = {
+                    'articulo': producto.articulo,
+                    'marca': marca_val,
+                    'color': color_val,
+                    'departamento': depto_val,
+                    'costo': float(producto.costo) if producto.costo else 0,
+                    'precio': float(producto.precioventa) if producto.precioventa else 0,
+                    'valores_suc': {sid: [v[0], v[1]] for sid, v in valores_suc.items()},
+                    # original, actual, entradas, salidas, vendido
+                    'totales': [total_original, total_restante, total_entradas,
+                                total_salidas, total_vendido],
+                }
+            else:
+                fila['costo'] = max(fila['costo'],
+                                    float(producto.costo) if producto.costo else 0)
+                fila['precio'] = max(fila['precio'],
+                                     float(producto.precioventa) if producto.precioventa else 0)
+                for sid, (v_orig, v_act) in valores_suc.items():
+                    acumulado = fila['valores_suc'].setdefault(sid, [0, 0])
+                    acumulado[0] += v_orig
+                    acumulado[1] += v_act
+                for i, v in enumerate((total_original, total_restante, total_entradas,
+                                       total_salidas, total_vendido)):
+                    fila['totales'][i] += v
+
+        # "y todavía queda" se decide DESPUÉS de consolidar (mismo criterio que
+        # la vista web): si el artículo tiene saldo en alguna sucursal, la fila
+        # completa va al Excel.
+        filas_export = [
+            f for f in agrupados_xls.values()
+            if not (mostrar in ('queda', 'entro_queda') and f['totales'][1] <= 0)
+        ]
+
+        # Totales por tienda (sobre las filas que realmente van al archivo).
+        tot_suc = {s.id: [0, 0] for s in sucursales_list}  # suc_id -> [orig, act]
+        tot_glob = [0, 0, 0, 0, 0]  # original, actual, entradas, salidas, vendido
+        for f in filas_export:
+            for sid, (v_orig, v_act) in f['valores_suc'].items():
                 tot_suc[sid][0] += v_orig
                 tot_suc[sid][1] += v_act
-            tot_glob[0] += total_original
-            tot_glob[1] += total_restante
-            tot_glob[2] += total_entradas
-            tot_glob[3] += total_salidas
-            tot_glob[4] += total_vendido
-            filas_export.append((producto, valores_suc, total_original,
-                                 total_restante, total_entradas,
-                                 total_salidas, total_vendido))
+            for i, v in enumerate(f['totales']):
+                tot_glob[i] += v
 
         # Sucursal sin nada en Original NI en Actual -> fuera del Excel.
         sucursales_visibles = [s for s in sucursales_list
                                if tot_suc[s.id][0] or tot_suc[s.id][1]]
+
+        # Reescribir la línea de info con el conteo CONSOLIDADO (el de arriba
+        # se escribió con las filas de catálogo, que vienen duplicadas por
+        # sucursal y ya no corresponden a las filas del archivo).
+        ws['A2'] = (f"Generado: {timezone.now().strftime('%d/%m/%Y %H:%M')} | "
+                    f"{len(filas_export)} artículos (consolidado por artículo)"
+                    f"{leyenda_periodo}{leyenda_bodegas}")
+        ws['A2'].font = Font(italic=True, size=9)
+
         ocultas = len(sucursales_list) - len(sucursales_visibles)
         if ocultas:
             ws['A3'] = (f"{ocultas} sucursal(es) sin datos para estos filtros "
@@ -7032,30 +7121,27 @@ def exportar_movimientos_sucursal_excel(request):
             cell.border = border
             cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         
-        # ===== PASADA 2: escribir filas (ya calculadas y filtradas) =====
+        # ===== PASADA 2: escribir filas (ya consolidadas y filtradas) =====
         row = 5
-        for (producto, valores_suc, total_original, total_restante,
-             total_entradas, total_salidas, total_vendido) in filas_export:
+        for f in filas_export:
             col = 1
 
-            ws.cell(row=row, column=col, value=producto.articulo).border = border
+            ws.cell(row=row, column=col, value=f['articulo']).border = border
             col += 1
-            ws.cell(row=row, column=col, value=producto.atributo1.valor if producto.atributo1 else '-').border = border
+            ws.cell(row=row, column=col, value=f['marca']).border = border
             col += 1
-            ws.cell(row=row, column=col, value=producto.atributo2.valor if producto.atributo2 else '-').border = border
+            ws.cell(row=row, column=col, value=f['color']).border = border
             col += 1
-            ws.cell(row=row, column=col, value=producto.categoria.nombre if producto.categoria else '-').border = border
+            ws.cell(row=row, column=col, value=f['departamento']).border = border
             col += 1
 
-            costo_val = float(producto.costo) if producto.costo else 0
-            cell_costo = ws.cell(row=row, column=col, value=costo_val)
+            cell_costo = ws.cell(row=row, column=col, value=f['costo'])
             cell_costo.border = border
             cell_costo.number_format = '"$"#,##0'
             cell_costo.alignment = Alignment(horizontal='right')
             col += 1
 
-            precio_val = float(producto.precioventa) if producto.precioventa else 0
-            cell_precio = ws.cell(row=row, column=col, value=precio_val)
+            cell_precio = ws.cell(row=row, column=col, value=f['precio'])
             cell_precio.border = border
             cell_precio.number_format = '"$"#,##0'
             cell_precio.alignment = Alignment(horizontal='right')
@@ -7064,7 +7150,7 @@ def exportar_movimientos_sucursal_excel(request):
 
             # Datos por sucursal (solo las visibles)
             for suc in sucursales_visibles:
-                for valor, relleno in zip(valores_suc[suc.id],
+                for valor, relleno in zip(f['valores_suc'].get(suc.id, (0, 0)),
                                           (inicial_fill, restante_fill)):
                     celda = ws.cell(row=row, column=col, value=valor)
                     celda.border = border
@@ -7073,18 +7159,12 @@ def exportar_movimientos_sucursal_excel(request):
                     col += 1
 
             # Totales de la fila
-            for valor, color_fuente in (
-                (total_original, None),
-                (total_restante, None),
-                (total_entradas, None),
-                (total_salidas, None),
-                (total_vendido, 'CC0000'),
-            ):
+            for i, valor in enumerate(f['totales']):
                 celda = ws.cell(row=row, column=col, value=valor)
                 celda.border = border
                 celda.fill = total_fill
-                celda.font = (Font(bold=True, color=color_fuente)
-                              if color_fuente else Font(bold=True))
+                celda.font = (Font(bold=True, color='CC0000') if i == 4
+                              else Font(bold=True))
                 celda.alignment = Alignment(horizontal='center')
                 col += 1
 

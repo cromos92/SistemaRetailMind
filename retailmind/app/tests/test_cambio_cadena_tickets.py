@@ -7,9 +7,11 @@ de la venta quedaban inalcanzables. El `ticket_nuevo` de un cambio es un
 comprobante de delta (línea negativa por lo devuelto + positiva por lo entregado),
 no un reemplazo de la venta.
 """
+import json
 from datetime import timedelta
 
-from django.test import TestCase
+from django.test import Client, TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from app.models import (
@@ -33,8 +35,8 @@ from app.views_modulo_ventas import (
 )
 
 
-class CadenaCambiosTicketTests(TestCase):
-    """Reproduce la venta de 3 pares con un cambio de talla sobre uno de ellos."""
+class _VentaConCambioMixin:
+    """Arma la venta de 3 pares y sabe ejecutarle un cambio de talla."""
 
     def setUp(self):
         self.user = crear_usuario(username='vendedor_cambios')
@@ -115,7 +117,9 @@ class CadenaCambiosTicketTests(TestCase):
         )
         return cambio, ticket_delta
 
-    # ---------- tests ----------
+
+class CadenaCambiosTicketTests(_VentaConCambioMixin, TestCase):
+    """Comportamiento de los helpers que arman la pantalla."""
 
     def test_venta_sin_cambios_muestra_todos_sus_productos(self):
         tickets, cambios = _cadena_cambios_ticket(self.venta)
@@ -223,6 +227,17 @@ class CadenaCambiosTicketTests(TestCase):
         self.assertEqual(registro['detalles'][0]['de'], 'JR7874 T9,0')
         self.assertEqual(registro['detalles'][0]['a'], 'JR7874 T9,5')
 
+    def test_no_se_cuelan_lineas_de_una_venta_ajena(self):
+        """La cadena acota qué líneas son cambiables: otra venta no entra."""
+        otra_venta = self._crear_ticket(correlativo=999001, total=69990)
+        self._crear_linea(otra_venta, self.pt_club, 69990)
+
+        tickets, cambios = _cadena_cambios_ticket(self.venta)
+        productos, _ = _productos_cambio_data(tickets, cambios)
+
+        self.assertNotIn(otra_venta.id, [t.id for t in tickets])
+        self.assertNotIn(otra_venta.id, {p['ticket_id'] for p in productos})
+
     def test_cadena_no_se_cuelga_con_referencias_circulares(self):
         """Un ticket_nuevo que apunta de vuelta al original no debe colgar el bucle."""
         cambio, ticket_delta = self._cambiar_talla(self.linea_league, self.pt_league_95, 96990)
@@ -246,3 +261,176 @@ class CadenaCambiosTicketTests(TestCase):
         self.assertEqual({t.id for t in tickets}, {self.venta.id, ticket_delta.id})
         self.assertEqual(len(cambios), 2)
         self.assertEqual(_ticket_raiz_cambio(ticket_delta).id, self.venta.id)
+
+
+class CambioSobreReemplazoViaHttpTests(_VentaConCambioMixin, TestCase):
+    """Recorre las vistas HTTP reales, no solo los helpers.
+
+    Es el camino que importa: crear un cambio sobre el artículo que entró como
+    reemplazo exige que la validación acepte líneas de otro ticket de la cadena.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from app.models import EmpresaUser
+
+        EmpresaUser.objects.get_or_create(
+            user=self.user, empresa=self.empresa,
+            defaults={'sucursal': self.sucursal, 'status': True, 'active': True},
+        )
+        self.client = Client()
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['idSucursalActual'] = self.sucursal.id
+        session.save()
+
+        self.cambio_previo, self.ticket_delta = self._cambiar_talla(
+            self.linea_league, self.pt_league_95, 96990)
+        self.linea_reemplazo = self.ticket_delta.ticket_productos.get(
+            ProductoTalla=self.pt_league_95)
+
+    def _buscar(self):
+        respuesta = self.client.get(
+            reverse('buscar_documento_cambio'),
+            {'numero': self.venta.correlativo, 'tipo_documento': 'ticket'},
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        return json.loads(respuesta.content)
+
+    def _crear(self, ticket_producto_id, producto_nuevo, cantidad=1):
+        return self.client.post(
+            reverse('crear_cambio_devolucion'),
+            data=json.dumps({
+                'documento_numero': self.venta.correlativo,
+                'documento_tipo': 'TICKET',
+                'tipo_operacion': 'CAMBIO_SIMPLE',
+                'motivo_principal': 'TALLA_INCORRECTA',
+                'productos': [{
+                    'ticket_producto_id': ticket_producto_id,
+                    'cantidad': cantidad,
+                    'producto_nuevo_id': producto_nuevo.id,
+                    'cantidad_nueva': 1,
+                    'precio_nuevo': producto_nuevo.producto.precioventa,
+                    'condicion_producto': 'PERFECTO',
+                }],
+            }),
+            content_type='application/json',
+        )
+
+    def test_la_busqueda_devuelve_la_venta_completa_y_el_historial(self):
+        data = self._buscar()
+
+        self.assertTrue(data['success'])
+        documento = data['documento']
+        self.assertEqual(documento['correlativo'], self.venta.correlativo)
+        self.assertEqual(len(documento['productos']), 4)
+        self.assertEqual(documento['productos_disponibles'], 3)
+        self.assertTrue(documento['tiene_cambios_previos'])
+        self.assertEqual(documento['cambios_anteriores'][0]['detalles'][0]['a'], 'JR7874 T9,5')
+
+    def test_buscar_el_comprobante_de_cambio_avisa_y_carga_la_venta(self):
+        respuesta = self.client.get(
+            reverse('buscar_documento_cambio'),
+            {'numero': self.ticket_delta.correlativo, 'tipo_documento': 'ticket'},
+        )
+        documento = json.loads(respuesta.content)['documento']
+
+        self.assertTrue(documento['fue_redirigido'])
+        self.assertEqual(documento['correlativo'], self.venta.correlativo)
+        self.assertEqual(documento['correlativo_original'], self.ticket_delta.correlativo)
+
+    def test_se_puede_cambiar_un_par_que_nadie_toco(self):
+        """Lo que el bug bloqueaba: el resto de la venta seguía cambiable."""
+        _, pt_otra_talla = crear_producto_con_talla(
+            self.sucursal, articulo='JR5912', talla='9.0', sku=4833548, precioventa=69990)
+
+        respuesta = self._crear(self.linea_club.id, pt_otra_talla)
+        cuerpo = json.loads(respuesta.content)
+
+        self.assertTrue(cuerpo.get('success'), cuerpo)
+        detalle = CambioDevolucionDetalle.objects.exclude(
+            cambio_devolucion=self.cambio_previo).get()
+        self.assertEqual(detalle.producto_original_id, self.linea_club.id)
+
+    def test_se_puede_volver_a_cambiar_el_articulo_del_cambio_previo(self):
+        """La línea vive en el ticket del cambio, no en la venta."""
+        _, pt_league_100 = crear_producto_con_talla(
+            self.sucursal, articulo='JR7874', talla='10,0', sku=4831785, precioventa=96990)
+
+        respuesta = self._crear(self.linea_reemplazo.id, pt_league_100)
+        cuerpo = json.loads(respuesta.content)
+
+        self.assertTrue(cuerpo.get('success'), cuerpo)
+        nuevo = CambioDevolucion.objects.exclude(id=self.cambio_previo.id).get()
+        self.assertEqual(nuevo.ticket_original_id, self.venta.id)
+        self.assertEqual(nuevo.detalles.get().producto_original_id, self.linea_reemplazo.id)
+
+    def test_una_linea_de_otra_venta_sigue_rechazada(self):
+        """Ampliar a la cadena no puede volverse una puerta abierta."""
+        otra_venta = self._crear_ticket(correlativo=999002, total=69990)
+        linea_ajena = self._crear_linea(otra_venta, self.pt_copa, 69990)
+
+        respuesta = self._crear(linea_ajena.id, self.pt_league_95)
+
+        self.assertNotEqual(respuesta.status_code, 500)
+        self.assertFalse(json.loads(respuesta.content).get('success'))
+        self.assertEqual(CambioDevolucion.objects.count(), 1)  # solo el previo
+
+    def test_buscando_por_folio_del_dte_tambien_sale_la_venta_completa(self):
+        """El camino real del vendedor: teclea el folio de la boleta, no el ticket."""
+        from app.models import Dte, Dte_Productos, Empresa
+
+        receptor = Empresa.objects.create(
+            nombre='Cliente', rut='11.111.111-1', razon_social='Cliente',
+            nombre_fantasia='Cliente', giro='Particular', direccion='Calle 1',
+            comuna='Santiago', ciudad='Santiago', esProveedor=False,
+        )
+        boleta = Dte.objects.create(
+            emisor=self.empresa, receptor=receptor, numero_documento='287170',
+            tipo_documento='BOLETA ELECTRONICA', monto_con_iva=236970, monto_neto=199134,
+            descuento=0, estado_pago='PAGADO', estado_dte='EMITIDO',
+            responsable=self.user.username, fecha_emision=timezone.localdate(),
+            fecha_vencimiento=timezone.localdate(), diasCredito=0, bultos=0,
+            unidades_productos=3, tipo_transaccion='VENTA_PUBLICO', sucursal=self.sucursal,
+            es_nota_credito=False, hora=timezone.localtime().time(),
+            vendedor=self.vendedor,
+            referencias=f'TICKET-{self.venta.correlativo}',
+        )
+        for pt, precio in ((self.pt_club, 69990), (self.pt_league_90, 96990),
+                           (self.pt_copa, 69990)):
+            Dte_Productos.objects.create(
+                dte=boleta, productoTalla=pt, descripcion=pt.producto.articulo,
+                costo=0, sobreprecio=0, precio=precio, stock=1, activo=True,
+            )
+
+        respuesta = self.client.get(
+            reverse('buscar_documento_cambio'),
+            {'numero': '287170', 'tipo_documento': 'dte'},
+        )
+        documento = json.loads(respuesta.content)['documento']
+
+        # Antes salía 1 sola línea: la talla de reemplazo del cambio anterior
+        self.assertEqual(len(documento['productos']), 4)
+        self.assertEqual(documento['productos_disponibles'], 3)
+        self.assertTrue(documento['tiene_cambios_previos'])
+        self.assertEqual(documento['correlativo'], self.venta.correlativo)
+        reemplazo = next(p for p in documento['productos'] if p['sku'] == 4831784)
+        self.assertTrue(reemplazo['es_reemplazo'])
+        self.assertEqual(reemplazo['origen_cambio'], 'CD-TEST-0001')
+
+    def test_un_cobro_pendiente_en_la_cadena_bloquea_un_cambio_nuevo(self):
+        """El guard financiero debe mirar toda la cadena, no solo la venta.
+
+        El cobro quedó pendiente sobre el ticket del cambio anterior: si el guard
+        solo mirara la venta, no lo vería y dejaría encadenar cambios impagos.
+        """
+        _, pt_cara = crear_producto_con_talla(
+            self.sucursal, articulo='JR7874', talla='11,0', sku=4831786, precioventa=120000)
+        self._cambiar_talla(self.linea_reemplazo, pt_cara, 120000,
+                            estado='EJECUTADO_COBRO_PENDIENTE', numero='CD-TEST-PEND')
+
+        respuesta = self._crear(self.linea_club.id, self.pt_league_95)
+        cuerpo = json.loads(respuesta.content)
+
+        self.assertFalse(cuerpo.get('success'))
+        self.assertIn('NO se cobró', cuerpo.get('error', ''))
