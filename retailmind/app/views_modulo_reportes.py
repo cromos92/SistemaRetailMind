@@ -6376,6 +6376,42 @@ def _productos_con_entrada(productos_qs, filtro_fecha):
             .distinct())
 
 
+# NOTA: helper interno, NO es una vista (se invoca con args posicionales).
+def _clave_articulo(producto):
+    """Clave de consolidación del reporte: articulo + marca + color + depto."""
+    return (
+        producto.articulo,
+        producto.atributo1.valor if producto.atributo1 else 'Sin Marca',
+        producto.atributo2.valor if producto.atributo2 else '-',
+        producto.categoria.nombre if producto.categoria else '-',
+    )
+
+
+# NOTA: helper interno, NO es una vista (se invoca con args posicionales).
+def _recortar_cola_articulo(productos_list, limite):
+    """Deja fuera el artículo que quedó PARTIDO por el ``limite``.
+
+    El límite recorta filas de catálogo (una por sucursal) ANTES de
+    consolidar: si el corte cae a mitad de un artículo, la fila consolidada
+    mostraría solo algunas sucursales pero se leería como el total del
+    artículo. Se descarta la cola que comparte la clave de la última fila,
+    así todo lo que se muestra es un artículo COMPLETO. Si el corte entero es
+    un solo artículo (límite menor que sus variantes) no se recorta: partido
+    es mejor que vacío.
+
+    Devuelve ``(lista, limite_alcanzado)``.
+    """
+    if not limite or len(productos_list) < limite:
+        return productos_list, False
+    ultima = _clave_articulo(productos_list[-1])
+    recorte = len(productos_list)
+    while recorte > 0 and _clave_articulo(productos_list[recorte - 1]) == ultima:
+        recorte -= 1
+    if recorte > 0:
+        productos_list = productos_list[:recorte]
+    return productos_list, True
+
+
 # NOTA: helper interno, NO es una vista (se invoca con args posicionales, ver
 # el comentario de _mapas_movimientos_sucursal).
 def _sucursales_reporte_movimientos(user, solo_tiendas):
@@ -6546,13 +6582,18 @@ def obtener_reporte_movimientos_sucursal(request):
                 id__in=_productos_con_entrada(queryset, filtro_fecha)
             )
 
-        queryset = queryset.order_by('atributo1__valor', 'articulo')
+        # Desempate estable a propósito: las filas del mismo artículo deben
+        # venir CONTIGUAS y en orden determinista, o el límite corta distinto
+        # entre la web y el Excel (Postgres no garantiza orden entre empates).
+        queryset = queryset.order_by('atributo1__valor', 'articulo',
+                                     'atributo2__valor', 'categoria__nombre', 'id')
 
         if limite:
             queryset = queryset[:limite]
-        
+
         # Obtener IDs de productos para las siguientes queries
         productos_list = list(queryset)
+        productos_list, limite_alcanzado = _recortar_cola_articulo(productos_list, limite)
         productos_ids = [p.id for p in productos_list]
         
         if not productos_ids:
@@ -6725,10 +6766,10 @@ def obtener_reporte_movimientos_sucursal(request):
             if not (stock_por_sucursal or total_inicial > 0 or total_restante > 0):
                 continue
 
-            marca_val = producto.atributo1.valor if producto.atributo1 else 'Sin Marca'
-            color_val = producto.atributo2.valor if producto.atributo2 else '-'
-            depto_val = producto.categoria.nombre if producto.categoria else '-'
-            clave = (producto.articulo, marca_val, color_val, depto_val)
+            clave = _clave_articulo(producto)
+            _, marca_val, color_val, depto_val = clave
+            costo_prod = float(producto.costo) if producto.costo else 0
+            precio_prod = float(producto.precioventa) if producto.precioventa else 0
 
             fila = agrupados.get(clave)
             if fila is None:
@@ -6737,8 +6778,12 @@ def obtener_reporte_movimientos_sucursal(request):
                     'marca': marca_val,
                     'color': color_val,
                     'departamento': depto_val,
-                    'costo': float(producto.costo) if producto.costo else 0,
-                    'precio_venta': float(producto.precioventa) if producto.precioventa else 0,
+                    'costo': costo_prod,
+                    'precio_venta': precio_prod,
+                    # Mínimos para delatar divergencia de precios entre tiendas
+                    # (liquidación por tienda, drift del sync de precios).
+                    'costo_min': costo_prod,
+                    'precio_min': precio_prod,
                     'sucursales': stock_por_sucursal,
                     'total_stock_original': total_stock_original,
                     'total_stock_actual': total_restante,
@@ -6755,11 +6800,14 @@ def obtener_reporte_movimientos_sucursal(request):
                 }
             else:
                 # Mismo artículo en otra sucursal: se fusiona en la MISMA fila.
-                # Costo/precio pueden variar entre tiendas -> se muestra el mayor.
-                fila['costo'] = max(fila['costo'],
-                                    float(producto.costo) if producto.costo else 0)
-                fila['precio_venta'] = max(fila['precio_venta'],
-                                           float(producto.precioventa) if producto.precioventa else 0)
+                # Costo/precio pueden variar entre tiendas -> se muestra el
+                # mayor y se guarda el menor (no-cero) para avisar en la UI.
+                fila['costo'] = max(fila['costo'], costo_prod)
+                fila['precio_venta'] = max(fila['precio_venta'], precio_prod)
+                if costo_prod:
+                    fila['costo_min'] = min(fila['costo_min'] or costo_prod, costo_prod)
+                if precio_prod:
+                    fila['precio_min'] = min(fila['precio_min'] or precio_prod, precio_prod)
                 for alias, datos_suc in stock_por_sucursal.items():
                     previo = fila['sucursales'].get(alias)
                     if previo is None:
@@ -6769,6 +6817,13 @@ def obtener_reporte_movimientos_sucursal(request):
                         for campo, valor in datos_suc.items():
                             if campo != 'sucursal_id':
                                 previo[campo] = previo.get(campo, 0) + valor
+                        # otros_* son derivados CLAMPEADOS con max(...,0): sumar
+                        # los clamps infla el desglose. Se recalculan sobre lo
+                        # fusionado (mismo criterio que el JS en la col. TOTAL).
+                        previo['otros_entradas'] = max(
+                            previo['entradas'] - previo['compras'] - previo['traspasos_in'], 0)
+                        previo['otros_salidas'] = max(
+                            previo['salidas'] - previo['traspasos_out'] - previo['vendido'], 0)
                 fila['total_stock_original'] += total_stock_original
                 fila['total_stock_actual'] += total_restante
                 fila['total_inicial'] += total_inicial
@@ -6782,13 +6837,15 @@ def obtener_reporte_movimientos_sucursal(request):
                 fila['total_salidas'] += total_salidas
                 fila['total_stock_hoy'] += total_stock_hoy
 
-        # "y todavía queda" se decide DESPUÉS de consolidar: si el artículo
-        # tiene saldo en cualquier sucursal, la fila completa se muestra
-        # (filtrar por fila-producto botaba las sucursales en cero del mismo
-        # artículo y desarmaba la consolidación).
+        # "y todavía queda" se decide DESPUÉS de consolidar y POR EXISTENCIA,
+        # no por la suma neta: un saldo NEGATIVO por drift kardex-vs-stock en
+        # una tienda cancelaría el stock real de otra y escondería la fila
+        # completa. Basta que quede saldo positivo en ALGUNA sucursal.
         datos_reporte = [
             f for f in agrupados.values()
-            if not (mostrar in ('queda', 'entro_queda') and f['total_restante'] <= 0)
+            if not (mostrar in ('queda', 'entro_queda')
+                    and not any(d.get('restante', 0) > 0
+                                for d in f['sucursales'].values()))
         ]
 
         sucursales_data = [{'id': s.id, 'alias': s.alias} for s in sucursales_list]
@@ -6798,6 +6855,9 @@ def obtener_reporte_movimientos_sucursal(request):
             'datos': datos_reporte,
             'sucursales': sucursales_data,
             'bodegas_ocultas': bodegas_ocultas,
+            # True si el límite dejó artículos fuera (se recortó a artículos
+            # COMPLETOS, así que lo mostrado es consistente pero no es todo).
+            'limite_alcanzado': limite_alcanzado,
             # La UI muestra siempre dos columnas (Original / Actual); esto solo
             # cambia QUÉ significa "Original": sin período es todo lo recibido
             # alguna vez, con período es el saldo del día "Desde".
@@ -6837,7 +6897,12 @@ def exportar_movimientos_sucursal_excel(request):
         marca_id = request.GET.get('marca_id')
         departamento_id = request.GET.get('departamento_id')
         busqueda = request.GET.get('busqueda', '').strip()
-        limite = request.GET.get('limite')
+        # Mismo parseo que la vista web: 'limite=0' significa SIN límite (antes
+        # el string '0' era truthy y producía queryset[:0] -> archivo vacío).
+        try:
+            limite = int(request.GET.get('limite') or 0) or None
+        except (TypeError, ValueError):
+            limite = None
         fecha_desde = request.GET.get('fecha_desde', '').strip()
         fecha_hasta = request.GET.get('fecha_hasta', '').strip()
         solo_tiendas = request.GET.get('solo_tiendas', 'true') != 'false'
@@ -6902,12 +6967,15 @@ def exportar_movimientos_sucursal_excel(request):
                 id__in=_productos_con_entrada(queryset, filtro_fecha)
             )
 
-        queryset = queryset.order_by('atributo1__valor', 'articulo')
+        # Mismo orden determinista que la vista web (mismo corte del límite).
+        queryset = queryset.order_by('atributo1__valor', 'articulo',
+                                     'atributo2__valor', 'categoria__nombre', 'id')
 
         if limite:
-            queryset = queryset[:int(limite)]
-        
+            queryset = queryset[:limite]
+
         productos_list = list(queryset)
+        productos_list, limite_alcanzado = _recortar_cola_articulo(productos_list, limite)
         productos_ids = [p.id for p in productos_list]
         
         # QUERY 2/4: mapas por tipo de flujo (mismo helper que la vista API)
@@ -7030,15 +7098,15 @@ def exportar_movimientos_sucursal_excel(request):
             }
             total_original = sum(v[0] for v in valores_suc.values())
 
-            if not (total_compras > 0 or total_tin > 0 or total_tout > 0
-                    or total_restante > 0 or total_vendido > 0
-                    or total_entradas > 0 or total_salidas > 0):
+            # DISTINTO DE CERO, no "> 0": un saldo negativo por drift también
+            # es dato — la web lo muestra y el Excel debe traer las mismas filas.
+            if not any((total_compras, total_tin, total_tout, total_restante,
+                        total_vendido, total_entradas, total_salidas)):
                 continue
 
-            marca_val = producto.atributo1.valor if producto.atributo1 else '-'
-            color_val = producto.atributo2.valor if producto.atributo2 else '-'
-            depto_val = producto.categoria.nombre if producto.categoria else '-'
-            clave = (producto.articulo, marca_val, color_val, depto_val)
+            # Misma clave (y mismo rótulo 'Sin Marca') que la vista web.
+            clave = _clave_articulo(producto)
+            _, marca_val, color_val, depto_val = clave
 
             fila = agrupados_xls.get(clave)
             if fila is None:
@@ -7067,34 +7135,41 @@ def exportar_movimientos_sucursal_excel(request):
                                        total_salidas, total_vendido)):
                     fila['totales'][i] += v
 
-        # "y todavía queda" se decide DESPUÉS de consolidar (mismo criterio que
-        # la vista web): si el artículo tiene saldo en alguna sucursal, la fila
-        # completa va al Excel.
+        # "y todavía queda" se decide DESPUÉS de consolidar y POR EXISTENCIA
+        # (saldo positivo en ALGUNA sucursal), igual que la vista web: la suma
+        # neta dejaba que un negativo por drift escondiera stock real.
         filas_export = [
             f for f in agrupados_xls.values()
-            if not (mostrar in ('queda', 'entro_queda') and f['totales'][1] <= 0)
+            if not (mostrar in ('queda', 'entro_queda')
+                    and not any(v[1] > 0 for v in f['valores_suc'].values()))
         ]
 
         # Totales por tienda (sobre las filas que realmente van al archivo).
         tot_suc = {s.id: [0, 0] for s in sucursales_list}  # suc_id -> [orig, act]
         tot_glob = [0, 0, 0, 0, 0]  # original, actual, entradas, salidas, vendido
+        suc_con_datos = set()
         for f in filas_export:
             for sid, (v_orig, v_act) in f['valores_suc'].items():
                 tot_suc[sid][0] += v_orig
                 tot_suc[sid][1] += v_act
+                if v_orig or v_act:
+                    suc_con_datos.add(sid)
             for i, v in enumerate(f['totales']):
                 tot_glob[i] += v
 
-        # Sucursal sin nada en Original NI en Actual -> fuera del Excel.
-        sucursales_visibles = [s for s in sucursales_list
-                               if tot_suc[s.id][0] or tot_suc[s.id][1]]
+        # Visible si ALGUNA fila tiene valor distinto de cero en la sucursal
+        # (decidir por la suma escondía la columna cuando positivos y negativos
+        # cancelaban exacto, y la fila TOTAL dejaba de cuadrar con lo visible).
+        sucursales_visibles = [s for s in sucursales_list if s.id in suc_con_datos]
 
         # Reescribir la línea de info con el conteo CONSOLIDADO (el de arriba
         # se escribió con las filas de catálogo, que vienen duplicadas por
         # sucursal y ya no corresponden a las filas del archivo).
+        leyenda_limite = (" | LÍMITE ALCANZADO: se exportaron solo los primeros "
+                          "artículos completos" if limite_alcanzado else "")
         ws['A2'] = (f"Generado: {timezone.now().strftime('%d/%m/%Y %H:%M')} | "
                     f"{len(filas_export)} artículos (consolidado por artículo)"
-                    f"{leyenda_periodo}{leyenda_bodegas}")
+                    f"{leyenda_periodo}{leyenda_bodegas}{leyenda_limite}")
         ws['A2'].font = Font(italic=True, size=9)
 
         ocultas = len(sucursales_list) - len(sucursales_visibles)

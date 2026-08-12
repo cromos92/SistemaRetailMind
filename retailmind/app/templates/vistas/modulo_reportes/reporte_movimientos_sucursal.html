@@ -919,6 +919,9 @@ let sucursalesDisponibles = [];
 //   activo=true  -> saldo del dia "Desde"         |  Actual = saldo al cierre
 let periodo = { activo: false, desde: null, hasta: null };
 let bodegasOcultas = 0;
+// True cuando el limite dejo articulos fuera (el backend recorta a articulos
+// COMPLETOS, asi que lo visible es consistente pero no es todo el universo).
+let limiteAlcanzado = false;
 
 // Paginacion
 let paginaActual = 1;
@@ -1069,6 +1072,7 @@ async function cargarReporte() {
             sucursalesDisponibles = data.sucursales || [];
             periodo = data.periodo || { activo: false };
             bodegasOcultas = data.bodegas_ocultas || 0;
+            limiteAlcanzado = data.limite_alcanzado || false;
             paginaActual = 1;
 
             const badge = document.getElementById('badge-sucursales');
@@ -1170,12 +1174,29 @@ function actualizarKPIs(datos) {
           'lo que le entró en el período · <b>Actual</b> = lo que quedó al cierre'
         : '<b>Original</b> = todo lo que la sucursal tuvo disponible alguna vez · ' +
           '<b>Actual</b> = stock de <b>hoy</b>';
+
+    // Avisos de alcance: cosas que cambian QUE universo se esta viendo.
+    let notasAlcance = '';
+    if (limiteAlcanzado) {
+        notasAlcance += ' · <b style="color:var(--nexo-warning);">Límite alcanzado:</b> ' +
+            'se muestran solo los primeros artículos completos — sube el límite para ver todos';
+    }
+    const modoMostrar = document.getElementById('filtro-mostrar').value;
+    if (modoMostrar === 'entro' || modoMostrar === 'entro_queda') {
+        notasAlcance += ' · Solo aparecen las tiendas con <b>entradas en el período</b>: ' +
+            'el stock del artículo en otras tiendas no está sumado';
+    }
+    if (periodo.activo) {
+        notasAlcance += ' · En el TOTAL por artículo, lo traspasado entre tiendas ' +
+            'dentro del período cuenta en origen y destino';
+    }
+
     if (leyenda) {
         leyenda.innerHTML = alcance +
             ' · La diferencia entre ambas columnas es <b>exactamente lo que salió</b>: ' +
             'ventas, traspasos a otras sucursales, mermas y ajustes · “Vendido” es ' +
             'bruto (no descuenta devoluciones ni anulaciones)' +
-            alertaDrift + notaBodegas;
+            alertaDrift + notaBodegas + notasAlcance;
     }
 }
 
@@ -1205,15 +1226,18 @@ function renderizarTabla() {
     const totalesSuc = {};
     datosFiltrados.forEach(item => {
         Object.entries(item.sucursales || {}).forEach(([suc, d]) => {
-            if (!totalesSuc[suc]) totalesSuc[suc] = { orig: 0, act: 0 };
+            if (!totalesSuc[suc]) totalesSuc[suc] = { orig: 0, act: 0, conDatos: false };
             totalesSuc[suc].orig += d.stock_original || 0;
             totalesSuc[suc].act  += d.stock_actual   || 0;
+            // Visible si ALGUNA celda trae valor: decidir por la suma escondia
+            // la columna cuando positivos y negativos cancelaban justo en 0.
+            if (d.stock_original || d.stock_actual) totalesSuc[suc].conDatos = true;
         });
     });
-    // Sucursal que queda en Original 0 y Actual 0 con estos filtros -> fuera
-    // de la tabla (y el Excel hace lo mismo en el backend).
+    // Sucursal sin ningun valor con estos filtros -> fuera de la tabla
+    // (y el Excel hace lo mismo en el backend).
     const sucursalesList = Object.keys(totalesSuc)
-        .filter(s => totalesSuc[s].orig || totalesSuc[s].act)
+        .filter(s => totalesSuc[s].conDatos)
         .sort();
     
     // Calcular paginación
@@ -1298,8 +1322,8 @@ function renderizarTabla() {
                 <td class="td-articulo" title="${producto.articulo}">${producto.articulo}</td>
                 <td class="td-marca">${producto.marca}</td>
                 <td class="td-color">${producto.color}</td>
-                <td class="td-costo">${formatearMoneda(producto.costo)}</td>
-                <td class="td-precio">${formatearMoneda(producto.precio_venta)}</td>
+                <td class="td-costo"${tipDivergencia(producto.costo_min, producto.costo, 'Costo')}>${formatearMoneda(producto.costo)}</td>
+                <td class="td-precio"${tipDivergencia(producto.precio_min, producto.precio_venta, 'Precio')}>${formatearMoneda(producto.precio_venta)}</td>
         `;
 
         sucursalesList.forEach(suc => {
@@ -1443,6 +1467,13 @@ function exportarExcel() {
 }
 
 // ========== HELPERS ==========
+// Se muestra el precio MAYOR entre tiendas; si el menor difiere, se avisa en
+// el title (liquidacion por tienda o drift del sync de precios).
+function tipDivergencia(minimo, mayor, rotulo) {
+    if (!minimo || !mayor || minimo === mayor) return '';
+    return ` title="${rotulo} difiere entre tiendas: $${formatearNumero(minimo)} – $${formatearNumero(mayor)} (se muestra el mayor)" style="text-decoration: underline dotted;"`;
+}
+
 function formatearNumero(num) {
     if (!num) return '0';
     return parseFloat(num).toLocaleString('es-CL', {
@@ -1477,6 +1508,7 @@ function limpiarFiltros() {
 
     periodo = { activo: false, desde: null, hasta: null };
     bodegasOcultas = 0;
+    limiteAlcanzado = false;
     document.getElementById('kpi-articulos').textContent = '-';
     document.getElementById('kpi-original').textContent = '-';
     document.getElementById('kpi-restante').textContent = '-';

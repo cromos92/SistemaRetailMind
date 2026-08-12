@@ -4573,8 +4573,9 @@ function generarBotonesAccion(cambio) {
         `);
         if (cambio.ticket_nuevo && cambio.ticket_nuevo.correlativo) {
             botones.push(`
-                <a href="/app/ventas/?ticket=${cambio.ticket_nuevo.correlativo}" class="btn btn-warning btn-sm px-2" title='Ir al POS para cobrar'>
-                    <i class="ri-money-dollar-circle-line me-1"></i>Cobrar
+                <a href="/app/pos-dashboard/" class="btn btn-warning btn-sm px-2"
+                   title="Ir al POS y recuperar el ticket pendiente #${cambio.ticket_nuevo.correlativo} para cobrar">
+                    <i class="ri-money-dollar-circle-line me-1"></i>Cobrar en POS #${cambio.ticket_nuevo.correlativo}
                 </a>
             `);
         }
@@ -4610,9 +4611,13 @@ function generarBotonesAccion(cambio) {
             </span>
         `);
         if (cambio.ticket_nuevo && cambio.ticket_nuevo.correlativo) {
+            // OJO: /app/ventas/ NO existe (daba 404 y dejaba la operación sin salida).
+            // El POS vive en /app/pos-dashboard/ y no lee el ticket por querystring:
+            // hay que recuperarlo desde el listado de tickets pendientes.
             botones.push(`
-                <a href="/app/ventas/?ticket=${cambio.ticket_nuevo.correlativo}" class="btn btn-info btn-sm px-2" title='Ir al POS para procesar devolución'>
-                    <i class="ri-refund-line me-1"></i>Devolver
+                <a href="/app/pos-dashboard/" class="btn btn-info btn-sm px-2"
+                   title="Ir al POS y recuperar el ticket pendiente #${cambio.ticket_nuevo.correlativo} para devolver la plata">
+                    <i class="ri-refund-line me-1"></i>Devolver en POS #${cambio.ticket_nuevo.correlativo}
                 </a>
             `);
         }
@@ -6843,6 +6848,27 @@ function crearCambioDevolucion(event) {
         }
     });
     
+    // ── En este módulo NO se devuelve dinero: siempre tiene que salir algo ──
+    // Sin producto de salida la operación queda debiéndole plata al cliente, se
+    // atasca en "Devolución Pendiente" y bloquea cualquier cambio posterior sobre
+    // esa venta. Es un error de digitación frecuente, así que se corta acá.
+    if (productosNuevos.length === 0) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Falta el producto que se lleva el cliente',
+            html: `Registraste lo que <strong>entra a bodega</strong>, pero no lo que
+                   <strong>sale</strong>.
+                   <hr>
+                   <p class="mb-1">En este módulo no se devuelve dinero: el cliente
+                   siempre se lleva otro producto.</p>
+                   <p class="small text-muted mb-0">Si de verdad hay que devolverle
+                   plata, la operación va por <strong>Devolución Garantía</strong>.</p>`,
+            confirmButtonText: 'Agregar producto de salida',
+            confirmButtonColor: '#e67e22',
+        });
+        return;
+    }
+
     // ── Aviso (no bloqueante) si no se seleccionó ningún producto original ──
     // Un cambio/devolución normalmente incluye al menos un producto del documento
     // original. Informamos claramente pero permitimos continuar si el usuario insiste.
@@ -7469,7 +7495,7 @@ function mostrarDetalleCambio(data) {
                     <i class="ri-money-dollar-circle-line"></i> 
                     <strong>Cobro pendiente</strong> - Ticket: #${cambio.ticket_nuevo?.correlativo || '-'}
                 </small>
-                ${cambio.ticket_nuevo ? `<a href="/app/ventas/?ticket=${cambio.ticket_nuevo.correlativo}" class="btn btn-sm btn-warning ms-auto"><i class="ri-money-dollar-circle-line me-1"></i>Cobrar</a>` : ''}
+                ${cambio.ticket_nuevo ? `<a href="/app/pos-dashboard/" class="btn btn-sm btn-warning ms-auto" title="Recuperar el ticket pendiente #${cambio.ticket_nuevo.correlativo} en el POS"><i class="ri-money-dollar-circle-line me-1"></i>Cobrar en POS #${cambio.ticket_nuevo.correlativo}</a>` : ''}
                 ${acciones.puede_solicitar_revertir ? `<button class="btn btn-sm btn-outline-danger" onclick='revertirCambio(${cambio.id})'>
                     <i class="ri-arrow-go-back-line"></i> Revertir
                 </button>` : ''}
@@ -7484,7 +7510,7 @@ function mostrarDetalleCambio(data) {
                     <i class="ri-refund-line"></i> 
                     <strong>Devolución pendiente</strong> - Ticket: #${cambio.ticket_nuevo?.correlativo || '-'}
                 </small>
-                ${cambio.ticket_nuevo ? `<a href="/app/ventas/?ticket=${cambio.ticket_nuevo.correlativo}" class="btn btn-sm btn-info ms-auto"><i class="ri-refund-line me-1"></i>Devolver</a>` : ''}
+                ${cambio.ticket_nuevo ? `<a href="/app/pos-dashboard/" class="btn btn-sm btn-info ms-auto" title="Recuperar el ticket pendiente #${cambio.ticket_nuevo.correlativo} en el POS"><i class="ri-refund-line me-1"></i>Devolver en POS #${cambio.ticket_nuevo.correlativo}</a>` : ''}
                 ${acciones.puede_solicitar_revertir ? `<button class="btn btn-sm btn-outline-danger" onclick='revertirCambio(${cambio.id})'>
                     <i class="ri-arrow-go-back-line"></i> Revertir
                 </button>` : ''}

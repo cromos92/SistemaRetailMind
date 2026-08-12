@@ -16087,7 +16087,22 @@ def crear_cambio_devolucion(request):
                 'success': False,
                 'error': 'Debe incluir al menos un producto'
             })
-        
+
+        # En este módulo NO se devuelve dinero: toda operación tiene que entregar
+        # algo a cambio. Sin producto de salida la operación nace debiéndole plata
+        # al cliente, queda en "Devolución Pendiente" y además bloquea cualquier
+        # cambio posterior sobre esa venta (así quedó atascada CD-7-202608-0014).
+        # Las devoluciones de dinero van por Devolución Garantía.
+        if tipo_operacion not in ('CAMBIO_CONCEPTO', 'DEVOLUCION_CONCEPTO'):
+            if not any(item.get('producto_nuevo_id') for item in productos_cambio):
+                return JsonResponse({
+                    'success': False,
+                    'code': 'SIN_PRODUCTO_SALIDA',
+                    'error': 'Falta registrar el producto que se lleva el cliente. '
+                             'En este módulo no se devuelve dinero: si el cliente no '
+                             'se lleva nada, la operación va por Devolución Garantía.',
+                }, status=400)
+
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         if not sucursal_id:
             return JsonResponse({

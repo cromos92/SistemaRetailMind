@@ -297,22 +297,32 @@ class CambioSobreReemplazoViaHttpTests(_VentaConCambioMixin, TestCase):
         self.assertEqual(respuesta.status_code, 200)
         return json.loads(respuesta.content)
 
-    def _crear(self, ticket_producto_id, producto_nuevo, cantidad=1):
+    def _crear(self, ticket_producto_id, producto_nuevo=None, cantidad=1,
+               tipo_operacion=None):
+        """POST a la vista real. Sin `producto_nuevo` es una devolución pura."""
+        item = {
+            'ticket_producto_id': ticket_producto_id,
+            'cantidad': cantidad,
+            'condicion_producto': 'PERFECTO',
+        }
+        if producto_nuevo is not None:
+            item.update({
+                'producto_nuevo_id': producto_nuevo.id,
+                'cantidad_nueva': 1,
+                'precio_nuevo': producto_nuevo.producto.precioventa,
+            })
+
+        if tipo_operacion is None:
+            tipo_operacion = 'CAMBIO_SIMPLE' if producto_nuevo is not None else 'DEVOLUCION_TOTAL'
+
         return self.client.post(
             reverse('crear_cambio_devolucion'),
             data=json.dumps({
                 'documento_numero': self.venta.correlativo,
                 'documento_tipo': 'TICKET',
-                'tipo_operacion': 'CAMBIO_SIMPLE',
+                'tipo_operacion': tipo_operacion,
                 'motivo_principal': 'TALLA_INCORRECTA',
-                'productos': [{
-                    'ticket_producto_id': ticket_producto_id,
-                    'cantidad': cantidad,
-                    'producto_nuevo_id': producto_nuevo.id,
-                    'cantidad_nueva': 1,
-                    'precio_nuevo': producto_nuevo.producto.precioventa,
-                    'condicion_producto': 'PERFECTO',
-                }],
+                'productos': [item],
             }),
             content_type='application/json',
         )
@@ -417,6 +427,39 @@ class CambioSobreReemplazoViaHttpTests(_VentaConCambioMixin, TestCase):
         reemplazo = next(p for p in documento['productos'] if p['sku'] == 4831784)
         self.assertTrue(reemplazo['es_reemplazo'])
         self.assertEqual(reemplazo['origen_cambio'], 'CD-TEST-0001')
+
+    def test_no_se_puede_crear_una_operacion_sin_producto_de_salida(self):
+        """En este módulo no se devuelve dinero: siempre tiene que salir algo.
+
+        Es el error que dejó CD-7-202608-0014 atascada: el vendedor registró lo que
+        entraba y nada que saliera, así que la operación nació debiéndole plata al
+        cliente y bloqueó la venta entera.
+        """
+        respuesta = self._crear(self.linea_club.id, producto_nuevo=None)
+        cuerpo = json.loads(respuesta.content)
+
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertFalse(cuerpo.get('success'))
+        self.assertEqual(cuerpo.get('code'), 'SIN_PRODUCTO_SALIDA')
+        self.assertEqual(CambioDevolucion.objects.count(), 1)  # solo el cambio previo
+
+    def test_el_bloqueo_no_depende_de_la_etiqueta_que_mande_el_front(self):
+        """Aunque el front diga CAMBIO_SIMPLE, sin salida no pasa."""
+        respuesta = self._crear(self.linea_club.id, producto_nuevo=None,
+                                tipo_operacion='CAMBIO_SIMPLE')
+
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertEqual(json.loads(respuesta.content).get('code'), 'SIN_PRODUCTO_SALIDA')
+
+    def test_un_cambio_normal_sigue_funcionando(self):
+        """El bloqueo no puede estorbar la operación de todos los días."""
+        _, pt_otra_talla = crear_producto_con_talla(
+            self.sucursal, articulo='JR5912', talla='9.0', sku=4833548, precioventa=69990)
+
+        respuesta = self._crear(self.linea_club.id, pt_otra_talla)
+
+        self.assertTrue(json.loads(respuesta.content).get('success'))
+        self.assertEqual(CambioDevolucion.objects.count(), 2)
 
     def test_un_cobro_pendiente_en_la_cadena_bloquea_un_cambio_nuevo(self):
         """El guard financiero debe mirar toda la cadena, no solo la venta.
