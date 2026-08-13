@@ -374,6 +374,16 @@
         text-overflow: ellipsis;
     }
 
+    .td-descripcion {
+        text-align: left !important;
+        font-size: 0.7rem;
+        color: var(--nexo-gray-700);
+        max-width: 220px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
     .td-marca {
         text-align: left !important;
         font-size: 0.7rem;
@@ -719,6 +729,7 @@
         .nexo-table { font-size: 0.7rem; }
         .nexo-table th, .nexo-table td { padding: 0.375rem 0.5rem; white-space: nowrap; }
         .td-articulo { max-width: 100px; }
+        .td-descripcion { max-width: 120px; font-size: 0.65rem; }
         .td-marca, .td-color { font-size: 0.65rem; }
         .nexo-pagination-controls { flex-wrap: wrap; justify-content: center; }
     }
@@ -840,17 +851,19 @@
 
         <!-- Las fechas NO recortan que articulos salen, solo los movimientos.
              Sin este filtro, "marca X + desde 01/01" lista todo el catalogo de
-             la marca aunque no se haya movido nada. -->
-        <div class="nexo-control-group" style="min-width: 190px; max-width: 230px;">
+             la marca aunque no se haya movido nada.
+             Default = "queda": un articulo con Original 24 y Actual 0 se vendio
+             entero y solo tapa lo que todavia hay que gestionar. -->
+        <div class="nexo-control-group" style="min-width: 190px; max-width: 240px;">
             <label class="nexo-control-label"
-                   title="Las fechas Desde/Hasta recortan los MOVIMIENTOS, no la lista de artículos. Usa esto para dejar fuera el catálogo que no se movió en el período.">
+                   title="Por defecto NO se listan los agotados (Actual 0). Elige “Todos los artículos” para verlos. Las fechas Desde/Hasta recortan los MOVIMIENTOS, no la lista de artículos.">
                 <i class="ri-filter-3-line"></i> Mostrar <i class="ri-question-line"></i>
             </label>
             <select id="filtro-mostrar" class="nexo-select">
-                <option value="todo" selected>Todos los artículos</option>
-                <option value="entro">Solo lo que entró en el período</option>
+                <option value="queda" selected>Solo lo que todavía queda</option>
                 <option value="entro_queda">Lo que entró y todavía queda</option>
-                <option value="queda">Solo lo que todavía queda</option>
+                <option value="entro">Solo lo que entró en el período</option>
+                <option value="todo">Todos los artículos (incluye agotados)</option>
             </select>
         </div>
 
@@ -876,6 +889,18 @@
                    title="Deja fuera las bodegas proveedoras / centros de distribución (EDEL, GILD, etc.). También se excluyen de los totales, los KPI y el Excel.">
                 <input type="checkbox" id="filtro-solo-tiendas" checked onchange="cargarReporte()">
                 <span>Solo tiendas</span>
+            </label>
+        </div>
+
+        <!-- Columna opcional: la descripcion es texto largo y ensancha la
+             tabla, asi que va apagada salvo que la pidan. Vale para la
+             pantalla Y para el Excel. -->
+        <div class="nexo-control-group" style="min-width: 170px; max-width: 190px;">
+            <label class="nexo-control-label"><i class="ri-text"></i> Columnas</label>
+            <label class="nexo-check-tiendas"
+                   title="Agrega la columna Descripción (el modelo) a la tabla y al Excel. Apagada por defecto porque ensancha la tabla.">
+                <input type="checkbox" id="filtro-descripcion" onchange="cargarReporte()">
+                <span>Descripción</span>
             </label>
         </div>
 
@@ -922,6 +947,10 @@ let bodegasOcultas = 0;
 // True cuando el limite dejo articulos fuera (el backend recorta a articulos
 // COMPLETOS, asi que lo visible es consistente pero no es todo el universo).
 let limiteAlcanzado = false;
+// Columna Descripcion: la refleja la RESPUESTA, no el checkbox. Al paginar se
+// re-renderiza sin volver a pedir datos, y leer el check en vivo pintaria una
+// columna vacia sobre filas que se trajeron sin descripcion.
+let mostrarDescripcion = false;
 
 // Paginacion
 let paginaActual = 1;
@@ -1007,6 +1036,7 @@ async function cargarReporte() {
     const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
     const soloTiendas = document.getElementById('filtro-solo-tiendas').checked;
     const mostrar = document.getElementById('filtro-mostrar').value;
+    const conDescripcion = document.getElementById('filtro-descripcion').checked;
 
     const tieneFiltro = marcaId || deptId || busqueda.length >= 3 || fechaDesde || fechaHasta;
 
@@ -1051,6 +1081,7 @@ async function cargarReporte() {
         if (fechaHasta) params.append('fecha_hasta', fechaHasta);
         params.append('solo_tiendas', soloTiendas ? 'true' : 'false');
         params.append('mostrar', mostrar);
+        if (conDescripcion) params.append('incluir_descripcion', 'true');
         params.append('sin_filtro', 'true');
 
         if (params.toString()) url += '?' + params.toString();
@@ -1073,6 +1104,7 @@ async function cargarReporte() {
             periodo = data.periodo || { activo: false };
             bodegasOcultas = data.bodegas_ocultas || 0;
             limiteAlcanzado = data.limite_alcanzado || false;
+            mostrarDescripcion = data.incluir_descripcion === true;
             paginaActual = 1;
 
             const badge = document.getElementById('badge-sucursales');
@@ -1186,6 +1218,13 @@ function actualizarKPIs(datos) {
         notasAlcance += ' · Solo aparecen las tiendas con <b>entradas en el período</b>: ' +
             'el stock del artículo en otras tiendas no está sumado';
     }
+    // Hay que decirlo: con los agotados fuera, "Original" y "Vendido" dejan de
+    // ser el total del universo filtrado y solo cubren lo que aun tiene stock.
+    if (modoMostrar === 'queda' || modoMostrar === 'entro_queda') {
+        notasAlcance += ' · <b>Agotados fuera:</b> no se listan los artículos que ' +
+            'quedaron en Actual 0 — “Original” y “Vendido” solo cuentan lo que ' +
+            'todavía tiene stock (elige <b>“Todos los artículos”</b> para verlos)';
+    }
     if (periodo.activo) {
         notasAlcance += ' · En el TOTAL por artículo, lo traspasado entre tiendas ' +
             'dentro del período cuenta en origen y destino';
@@ -1207,10 +1246,18 @@ function renderizarTabla() {
     if (!datosFiltrados || datosFiltrados.length === 0) {
         // Si hay bodegas fuera del reporte hay que decirlo: si no, un resultado
         // vacio se lee como "no hay stock" cuando en realidad esta en bodega.
-        const pista = bodegasOcultas
+        // Un vacio con el modo "queda" casi siempre significa "todo agotado",
+        // no "no existe": sin avisarlo se lee como que el filtro no encontro nada.
+        const modoVacio = document.getElementById('filtro-mostrar').value;
+        let pista = bodegasOcultas
             ? `<br><small>Hay ${bodegasOcultas} bodega(s) proveedora(s) fuera del reporte. ` +
               `Desmarca <strong>"Solo tiendas"</strong> para incluirlas.</small>`
             : '';
+        if (modoVacio === 'queda' || modoVacio === 'entro_queda') {
+            pista += `<br><small>Se están ocultando los artículos <strong>agotados</strong> ` +
+                     `(Actual 0). Cambia <strong>Mostrar</strong> a "Todos los artículos" ` +
+                     `si querías verlos.</small>`;
+        }
         contenido.innerHTML = `
             <div class="nexo-empty-state">
                 <div class="nexo-empty-icon">📦</div>
@@ -1265,6 +1312,7 @@ function renderizarTabla() {
                     <thead>
                         <tr>
                             <th style="text-align: left;" rowspan="2">Artículo</th>
+                            ${mostrarDescripcion ? '<th style="text-align: left;" rowspan="2">Descripción</th>' : ''}
                             <th style="text-align: left;" rowspan="2">Marca</th>
                             <th style="text-align: left;" rowspan="2">Color</th>
                             <th style="text-align: right;" rowspan="2">Costo</th>
@@ -1319,9 +1367,10 @@ function renderizarTabla() {
     datosPagina.forEach(producto => {
         html += `
             <tr>
-                <td class="td-articulo" title="${producto.articulo}">${producto.articulo}</td>
-                <td class="td-marca">${producto.marca}</td>
-                <td class="td-color">${producto.color}</td>
+                <td class="td-articulo" title="${esc(producto.articulo)}">${esc(producto.articulo)}</td>
+                ${mostrarDescripcion ? `<td class="td-descripcion" title="${esc(producto.descripcion)}">${esc(producto.descripcion) || '<span class="stock-badge stock-empty">-</span>'}</td>` : ''}
+                <td class="td-marca">${esc(producto.marca)}</td>
+                <td class="td-color">${esc(producto.color)}</td>
                 <td class="td-costo"${tipDivergencia(producto.costo_min, producto.costo, 'Costo')}>${formatearMoneda(producto.costo)}</td>
                 <td class="td-precio"${tipDivergencia(producto.precio_min, producto.precio_venta, 'Precio')}>${formatearMoneda(producto.precio_venta)}</td>
         `;
@@ -1363,7 +1412,7 @@ function renderizarTabla() {
         granAct  += it.total_stock_actual   || 0;
     });
     html += `<tr class="fila-total">
-        <td colspan="5" style="text-align:right !important;">TOTALES (${formatearNumero(totalRegistros)} artículos)</td>`;
+        <td colspan="${mostrarDescripcion ? 6 : 5}" style="text-align:right !important;">TOTALES (${formatearNumero(totalRegistros)} artículos)</td>`;
     sucursalesList.forEach(suc => {
         const t = totalesSuc[suc];
         html += `<td><span class="stock-badge stock-inicial" title="Total Original de ${suc}">${formatearNumero(t.orig)}</span></td>`
@@ -1446,6 +1495,7 @@ function exportarExcel() {
     const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
     const soloTiendas = document.getElementById('filtro-solo-tiendas').checked;
     const mostrar = document.getElementById('filtro-mostrar').value;
+    const conDescripcion = document.getElementById('filtro-descripcion').checked;
 
     let url = '/app/api/exportar-movimientos-sucursal-excel/';
     const params = new URLSearchParams();
@@ -1458,6 +1508,7 @@ function exportarExcel() {
     if (fechaHasta) params.append('fecha_hasta', fechaHasta);
     params.append('solo_tiendas', soloTiendas ? 'true' : 'false');
     params.append('mostrar', mostrar);
+    if (conDescripcion) params.append('incluir_descripcion', 'true');
     params.append('sin_filtro', 'true');
 
     if (params.toString()) url += '?' + params.toString();
@@ -1467,6 +1518,18 @@ function exportarExcel() {
 }
 
 // ========== HELPERS ==========
+// Los textos del catalogo (articulo, descripcion) llegan tal cual los tipeo el
+// usuario y se interpolan en HTML y dentro de title="...": una comilla doble o
+// un < en la descripcion rompia la celda entera.
+function esc(txt) {
+    if (txt === null || txt === undefined) return '';
+    return String(txt)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
 // Se muestra el precio MAYOR entre tiendas; si el menor difiere, se avisa en
 // el title (liquidacion por tienda o drift del sync de precios).
 function tipDivergencia(minimo, mayor, rotulo) {
@@ -1501,7 +1564,8 @@ function limpiarFiltros() {
     document.getElementById('filtro-fecha-desde').value = '';
     document.getElementById('filtro-fecha-hasta').value = '';
     document.getElementById('filtro-solo-tiendas').checked = true;
-    document.getElementById('filtro-mostrar').value = 'todo';
+    document.getElementById('filtro-mostrar').value = 'queda';
+    document.getElementById('filtro-descripcion').checked = false;
     datosCompletos = [];
     datosFiltrados = [];
     paginaActual = 1;
@@ -1509,6 +1573,7 @@ function limpiarFiltros() {
     periodo = { activo: false, desde: null, hasta: null };
     bodegasOcultas = 0;
     limiteAlcanzado = false;
+    mostrarDescripcion = false;
     document.getElementById('kpi-articulos').textContent = '-';
     document.getElementById('kpi-original').textContent = '-';
     document.getElementById('kpi-restante').textContent = '-';

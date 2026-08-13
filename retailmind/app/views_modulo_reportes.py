@@ -6377,6 +6377,51 @@ def _productos_con_entrada(productos_qs, filtro_fecha):
 
 
 # NOTA: helper interno, NO es una vista (se invoca con args posicionales).
+def _articulos_con_stock(sucursales_ids):
+    """Subquery con los ``articulo`` que TODAVÍA tienen unidades en las tiendas.
+
+    Prefiltro GRUESO para los modos "…y todavía queda": se aplica ANTES del
+    ``limite`` para que el tope de filas no se gaste listando agotados que
+    después se descartan igual (con límite 500 y una marca grande, el corte
+    caía entero sobre catálogo vendido y la pantalla quedaba casi vacía
+    avisando "límite alcanzado").
+
+    Filtra por ``articulo`` y no por la clave completa de consolidación
+    (articulo+marca+color+depto) a propósito: así es un SUPERCONJUNTO de lo que
+    va a quedar y nunca borra la fila de una sucursal agotada de un artículo
+    que sí tiene stock en otra —esa fila aporta su columna "Original" y el
+    filtro fino, por existencia real, corre igual después de consolidar—.
+
+    Solo vale sin ``fecha_hasta``: con corte de período el saldo al cierre se
+    rebobina desde el stock de HOY, y un artículo hoy en 0 pudo tener unidades
+    en esa fecha.
+    """
+    return (Producto_Talla.objects
+            .filter(stock__gt=0, producto__sucursal_id__in=sucursales_ids)
+            .values('producto__articulo'))
+
+
+# NOTA: helper interno, NO es una vista (se invoca con args posicionales).
+def _campos_only_movimientos(incluir_descripcion):
+    """Campos del ``.only()`` de la query de productos del reporte.
+
+    ``descripcion`` es una columna OPCIONAL de la pantalla y del Excel: solo se
+    trae cuando la piden. Y cuando la piden tiene que ir declarada acá sí o sí
+    — si se lee un campo diferido Django dispara una query POR PRODUCTO.
+    """
+    campos = [
+        'id', 'articulo', 'costo', 'precioventa', 'sucursal_id',
+        'atributo1__id', 'atributo1__valor',
+        'atributo2__id', 'atributo2__valor',
+        'categoria__id', 'categoria__nombre',
+        'sucursal__id', 'sucursal__alias',
+    ]
+    if incluir_descripcion:
+        campos.insert(2, 'descripcion')
+    return campos
+
+
+# NOTA: helper interno, NO es una vista (se invoca con args posicionales).
 def _clave_articulo(producto):
     """Clave de consolidación del reporte: articulo + marca + color + depto."""
     return (
@@ -6496,9 +6541,15 @@ def obtener_reporte_movimientos_sucursal(request):
         # Por defecto el reporte es de TIENDAS: las bodegas proveedoras/CD
         # abastecen, no venden, y sus columnas solo ensuciaban la comparación.
         solo_tiendas = request.GET.get('solo_tiendas', 'true') != 'false'
-        mostrar = request.GET.get('mostrar', 'todo')
+        # Por defecto NO se listan los agotados: un artículo con Original 24 y
+        # Actual 0 ya se vendió entero y solo tapa lo que todavía hay que
+        # gestionar. Se ve con "Todos los artículos" en el filtro Mostrar.
+        mostrar = request.GET.get('mostrar', 'queda')
         if mostrar not in MOSTRAR_MOVIMIENTOS_CHOICES:
-            mostrar = 'todo'
+            mostrar = 'queda'
+        # Columna OPCIONAL, apagada por defecto: la descripción es texto largo
+        # y ensancha la tabla. Solo se consulta y viaja cuando la piden.
+        incluir_descripcion = request.GET.get('incluir_descripcion', 'false') == 'true'
 
         tiene_filtro = any([marca_id, departamento_id, busqueda, fecha_desde, fecha_hasta])
 
@@ -6554,11 +6605,7 @@ def obtener_reporte_movimientos_sucursal(request):
         ).select_related(
             'atributo1', 'atributo2', 'categoria', 'sucursal'
         ).only(
-            'id', 'articulo', 'costo', 'precioventa', 'sucursal_id',
-            'atributo1__id', 'atributo1__valor',
-            'atributo2__id', 'atributo2__valor',
-            'categoria__id', 'categoria__nombre',
-            'sucursal__id', 'sucursal__alias'
+            *_campos_only_movimientos(incluir_descripcion)
         )
 
         if marca_id:
@@ -6581,6 +6628,12 @@ def obtener_reporte_movimientos_sucursal(request):
             queryset = queryset.filter(
                 id__in=_productos_con_entrada(queryset, filtro_fecha)
             )
+
+        # "…y todavía queda": mismo motivo, se acota antes del límite. Es un
+        # prefiltro grueso por artículo; el fino (existencia real en alguna
+        # sucursal) corre igual después de consolidar. Ver _articulos_con_stock.
+        if mostrar in ('queda', 'entro_queda') and not fecha_hasta:
+            queryset = queryset.filter(articulo__in=_articulos_con_stock(sucursales_ids))
 
         # Desempate estable a propósito: las filas del mismo artículo deben
         # venir CONTIGUAS y en orden determinista, o el límite corta distinto
@@ -6798,12 +6851,20 @@ def obtener_reporte_movimientos_sucursal(request):
                     'total_salidas': total_salidas,
                     'total_stock_hoy': total_stock_hoy,
                 }
+                if incluir_descripcion:
+                    # La descripción (el modelo) NO entra en la clave de
+                    # consolidación: se toma la primera no vacía del grupo.
+                    agrupados[clave]['descripcion'] = producto.descripcion or ''
             else:
                 # Mismo artículo en otra sucursal: se fusiona en la MISMA fila.
                 # Costo/precio pueden variar entre tiendas -> se muestra el
                 # mayor y se guarda el menor (no-cero) para avisar en la UI.
                 fila['costo'] = max(fila['costo'], costo_prod)
                 fila['precio_venta'] = max(fila['precio_venta'], precio_prod)
+                # Si la primera sucursal traía la descripción vacía, la rellena
+                # la siguiente que sí la tenga (el catálogo migrado tiene huecos).
+                if incluir_descripcion and not fila['descripcion'] and producto.descripcion:
+                    fila['descripcion'] = producto.descripcion
                 if costo_prod:
                     fila['costo_min'] = min(fila['costo_min'] or costo_prod, costo_prod)
                 if precio_prod:
@@ -6866,6 +6927,10 @@ def obtener_reporte_movimientos_sucursal(request):
                 'desde': fecha_desde or None,
                 'hasta': fecha_hasta or None,
             },
+            # Lo decide el backend, no el checkbox: la tabla se re-renderiza al
+            # paginar SIN volver a pedir datos, y leer el check en vivo pintaría
+            # una columna vacía para filas que se trajeron sin descripción.
+            'incluir_descripcion': incluir_descripcion,
             'debug': {
                 'total_productos': len(datos_reporte),
                 'total_sucursales': len(sucursales_data),
@@ -6906,9 +6971,12 @@ def exportar_movimientos_sucursal_excel(request):
         fecha_desde = request.GET.get('fecha_desde', '').strip()
         fecha_hasta = request.GET.get('fecha_hasta', '').strip()
         solo_tiendas = request.GET.get('solo_tiendas', 'true') != 'false'
-        mostrar = request.GET.get('mostrar', 'todo')
+        # Mismo default que la pantalla: sin agotados (ver la vista API).
+        mostrar = request.GET.get('mostrar', 'queda')
         if mostrar not in MOSTRAR_MOVIMIENTOS_CHOICES:
-            mostrar = 'todo'
+            mostrar = 'queda'
+        # Columna opcional, apagada por defecto (igual que la pantalla).
+        incluir_descripcion = request.GET.get('incluir_descripcion', 'false') == 'true'
 
         # Parsear filtro de fechas
         filtro_fecha = {}
@@ -6938,11 +7006,7 @@ def exportar_movimientos_sucursal_excel(request):
         ).select_related(
             'atributo1', 'atributo2', 'categoria', 'sucursal'
         ).only(
-            'id', 'articulo', 'costo', 'precioventa', 'sucursal_id',
-            'atributo1__id', 'atributo1__valor',
-            'atributo2__id', 'atributo2__valor',
-            'categoria__id', 'categoria__nombre',
-            'sucursal__id', 'sucursal__alias'
+            *_campos_only_movimientos(incluir_descripcion)
         )
 
         if marca_id:
@@ -6966,6 +7030,9 @@ def exportar_movimientos_sucursal_excel(request):
             queryset = queryset.filter(
                 id__in=_productos_con_entrada(queryset, filtro_fecha)
             )
+
+        if mostrar in ('queda', 'entro_queda') and not fecha_hasta:
+            queryset = queryset.filter(articulo__in=_articulos_con_stock(sucursales_ids))
 
         # Mismo orden determinista que la vista web (mismo corte del límite).
         queryset = queryset.order_by('atributo1__valor', 'articulo',
@@ -7030,8 +7097,8 @@ def exportar_movimientos_sucursal_excel(request):
             bottom=Side(style='thin')
         )
         
-        # Título
-        ws.merge_cells('A1:F1')
+        # Título (abarca las columnas fijas: 6, o 7 si va la descripción)
+        ws.merge_cells('A1:G1' if incluir_descripcion else 'A1:F1')
         ws['A1'] = "STOCK ORIGINAL VS STOCK ACTUAL POR SUCURSAL"
         ws['A1'].font = Font(bold=True, color="FFFFFF", size=14)
         ws['A1'].fill = header_fill
@@ -7112,6 +7179,9 @@ def exportar_movimientos_sucursal_excel(request):
             if fila is None:
                 agrupados_xls[clave] = {
                     'articulo': producto.articulo,
+                    # Fuera de la clave de consolidación (igual que la web):
+                    # primera descripción no vacía del grupo. Solo si la piden.
+                    'descripcion': (producto.descripcion or '') if incluir_descripcion else '',
                     'marca': marca_val,
                     'color': color_val,
                     'departamento': depto_val,
@@ -7127,6 +7197,8 @@ def exportar_movimientos_sucursal_excel(request):
                                     float(producto.costo) if producto.costo else 0)
                 fila['precio'] = max(fila['precio'],
                                      float(producto.precioventa) if producto.precioventa else 0)
+                if incluir_descripcion and not fila['descripcion'] and producto.descripcion:
+                    fila['descripcion'] = producto.descripcion
                 for sid, (v_orig, v_act) in valores_suc.items():
                     acumulado = fila['valores_suc'].setdefault(sid, [0, 0])
                     acumulado[0] += v_orig
@@ -7182,7 +7254,16 @@ def exportar_movimientos_sucursal_excel(request):
         # pantalla; el desglose de movimientos (entradas/salidas) se conserva a
         # nivel de TOTAL para no perder la trazabilidad del período.
         row = 4
-        headers = ['Artículo', 'Marca', 'Color', 'Departamento', 'Costo', 'Precio Venta']
+        headers = ['Artículo']
+        anchos_fijos = [35]
+        if incluir_descripcion:
+            headers.append('Descripción')
+            anchos_fijos.append(40)
+        headers.extend(['Marca', 'Color', 'Departamento', 'Costo', 'Precio Venta'])
+        anchos_fijos.extend([18, 15, 18, 13, 13])
+        # Columnas fijas antes del bloque por sucursal (los índices de la fila
+        # TOTALES y de los anchos se derivan de acá, no de números pelados).
+        n_fijas = len(headers)
 
         for suc in [s.alias for s in sucursales_visibles]:
             headers.extend([f'{suc} Original', f'{suc} Actual'])
@@ -7203,6 +7284,9 @@ def exportar_movimientos_sucursal_excel(request):
 
             ws.cell(row=row, column=col, value=f['articulo']).border = border
             col += 1
+            if incluir_descripcion:
+                ws.cell(row=row, column=col, value=f['descripcion']).border = border
+                col += 1
             ws.cell(row=row, column=col, value=f['marca']).border = border
             col += 1
             ws.cell(row=row, column=col, value=f['color']).border = border
@@ -7251,11 +7335,11 @@ def exportar_movimientos_sucursal_excel(request):
             celda.font = header_font
             celda.fill = header_fill
             celda.border = border
-            for col in range(2, 7):
+            for col in range(2, n_fijas + 1):
                 c = ws.cell(row=row, column=col, value='')
                 c.fill = header_fill
                 c.border = border
-            col = 7
+            col = n_fijas + 1
             for suc in sucursales_visibles:
                 for valor in tot_suc[suc.id]:
                     celda = ws.cell(row=row, column=col, value=valor)
@@ -7272,15 +7356,11 @@ def exportar_movimientos_sucursal_excel(request):
                 celda.alignment = Alignment(horizontal='center')
                 col += 1
         
-        # Ajustar anchos
-        ws.column_dimensions['A'].width = 35
-        ws.column_dimensions['B'].width = 18
-        ws.column_dimensions['C'].width = 15
-        ws.column_dimensions['D'].width = 18
-        ws.column_dimensions['E'].width = 13
-        ws.column_dimensions['F'].width = 13
+        # Ajustar anchos (mismo orden que `headers`)
+        for i, ancho in enumerate(anchos_fijos, 1):
+            ws.column_dimensions[get_column_letter(i)].width = ancho
 
-        for col in range(7, len(headers) + 1):
+        for col in range(n_fijas + 1, len(headers) + 1):
             ws.column_dimensions[get_column_letter(col)].width = 10
         
         # Preparar respuesta

@@ -1,0 +1,1112 @@
+{
+ "generado": "2026-08-13T11:47:34.009973-04:00",
+ "modo": "APPLY",
+ "plan": [
+  {
+   "familia": "3054",
+   "sucursal": "EDEL",
+   "color": "BLANCO",
+   "tramo": "34-41",
+   "codigo_destino": "3054-01/1",
+   "destino_id": 137651,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 23,
+   "unidades": 3,
+   "fuentes": [
+    31904,
+    31914,
+    137652
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "EDEL",
+   "color": "BLANCO",
+   "tramo": "26-33",
+   "codigo_destino": "3054-01/2",
+   "destino_id": 137652,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 8,
+   "unidades": 0,
+   "fuentes": [
+    31904
+   ],
+   "precio_destino": 21990,
+   "precio_lista": 21990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "EDEL",
+   "color": "NEGRO",
+   "tramo": "34-41",
+   "codigo_destino": "3054-02/1",
+   "destino_id": null,
+   "creado": true,
+   "renombrado_desde": "",
+   "tallas_movidas": 33,
+   "unidades": 1,
+   "fuentes": [
+    31909,
+    31920,
+    31925
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "EDEL",
+   "color": "NEGRO",
+   "tramo": "26-33",
+   "codigo_destino": "3054-02/2",
+   "destino_id": 31935,
+   "creado": false,
+   "renombrado_desde": "305400",
+   "tallas_movidas": 28,
+   "unidades": 0,
+   "fuentes": [
+    31909,
+    31920,
+    31925
+   ],
+   "precio_destino": 19990,
+   "precio_lista": 21990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "EDEL",
+   "color": "NEGRO",
+   "tramo": "22-25",
+   "codigo_destino": "3054-02/3",
+   "destino_id": 31925,
+   "creado": false,
+   "renombrado_desde": "3054-02",
+   "tallas_movidas": 12,
+   "unidades": 0,
+   "fuentes": [
+    31909,
+    31920,
+    31930
+   ],
+   "precio_destino": 19990,
+   "precio_lista": 19990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO1",
+   "color": "BLANCO",
+   "tramo": "34-41",
+   "codigo_destino": "3054-01/1",
+   "destino_id": 137658,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 13,
+   "unidades": 7,
+   "fuentes": [
+    31905,
+    31915,
+    137659
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO1",
+   "color": "BLANCO",
+   "tramo": "26-33",
+   "codigo_destino": "3054-01/2",
+   "destino_id": 137659,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 0,
+   "unidades": 0,
+   "fuentes": [],
+   "precio_destino": 21990,
+   "precio_lista": 21990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO1",
+   "color": "NEGRO",
+   "tramo": "34-41",
+   "codigo_destino": "3054-02/1",
+   "destino_id": 31926,
+   "creado": false,
+   "renombrado_desde": "3054-02",
+   "tallas_movidas": 23,
+   "unidades": 14,
+   "fuentes": [
+    31910,
+    31923
+   ],
+   "precio_destino": 19990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO1",
+   "color": "NEGRO",
+   "tramo": "26-33",
+   "codigo_destino": "3054-02/2",
+   "destino_id": 31936,
+   "creado": false,
+   "renombrado_desde": "305400",
+   "tallas_movidas": 5,
+   "unidades": 2,
+   "fuentes": [
+    31910,
+    31923
+   ],
+   "precio_destino": 19990,
+   "precio_lista": 21990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO1",
+   "color": "NEGRO",
+   "tramo": "22-25",
+   "codigo_destino": "3054-02/3",
+   "destino_id": 31931,
+   "creado": false,
+   "renombrado_desde": "30540",
+   "tallas_movidas": 3,
+   "unidades": 2,
+   "fuentes": [
+    31910
+   ],
+   "precio_destino": 19990,
+   "precio_lista": 19990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO1",
+   "color": "NEGRO",
+   "tramo": "sin tramo",
+   "codigo_destino": "3054-02/0",
+   "destino_id": 31919,
+   "creado": false,
+   "renombrado_desde": "3054",
+   "tallas_movidas": 1,
+   "unidades": 0,
+   "fuentes": [
+    31923
+   ],
+   "precio_destino": 12990,
+   "precio_lista": 0
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO2",
+   "color": "BLANCO",
+   "tramo": "34-41",
+   "codigo_destino": "3054-01/1",
+   "destino_id": 137657,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 21,
+   "unidades": 7,
+   "fuentes": [
+    31906,
+    31916
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO2",
+   "color": "BLANCO",
+   "tramo": "26-33",
+   "codigo_destino": "3054-01/2",
+   "destino_id": 31906,
+   "creado": false,
+   "renombrado_desde": "3054",
+   "tallas_movidas": 0,
+   "unidades": 0,
+   "fuentes": [],
+   "precio_destino": 21990,
+   "precio_lista": 21990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO2",
+   "color": "NEGRO",
+   "tramo": "34-41",
+   "codigo_destino": "3054-02/1",
+   "destino_id": 31924,
+   "creado": false,
+   "renombrado_desde": "3054",
+   "tallas_movidas": 13,
+   "unidades": 7,
+   "fuentes": [
+    31911,
+    31927
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO2",
+   "color": "NEGRO",
+   "tramo": "26-33",
+   "codigo_destino": "3054-02/2",
+   "destino_id": 31937,
+   "creado": false,
+   "renombrado_desde": "305400",
+   "tallas_movidas": 21,
+   "unidades": 36,
+   "fuentes": [
+    31911,
+    31927
+   ],
+   "precio_destino": 19990,
+   "precio_lista": 21990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO2",
+   "color": "NEGRO",
+   "tramo": "22-25",
+   "codigo_destino": "3054-02/3",
+   "destino_id": 31927,
+   "creado": false,
+   "renombrado_desde": "3054-02",
+   "tallas_movidas": 7,
+   "unidades": 18,
+   "fuentes": [
+    31911,
+    31932
+   ],
+   "precio_destino": 19990,
+   "precio_lista": 19990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO3",
+   "color": "BLANCO",
+   "tramo": "34-41",
+   "codigo_destino": "3054-01/1",
+   "destino_id": 31917,
+   "creado": false,
+   "renombrado_desde": "3054",
+   "tallas_movidas": 5,
+   "unidades": 0,
+   "fuentes": [
+    31907
+   ],
+   "precio_destino": 21990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO3",
+   "color": "NEGRO",
+   "tramo": "34-41",
+   "codigo_destino": "3054-02/1",
+   "destino_id": null,
+   "creado": true,
+   "renombrado_desde": "",
+   "tallas_movidas": 32,
+   "unidades": 44,
+   "fuentes": [
+    31912,
+    31921,
+    31928
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO3",
+   "color": "NEGRO",
+   "tramo": "26-33",
+   "codigo_destino": "3054-02/2",
+   "destino_id": 31938,
+   "creado": false,
+   "renombrado_desde": "305400",
+   "tallas_movidas": 25,
+   "unidades": 58,
+   "fuentes": [
+    31912,
+    31921,
+    31928
+   ],
+   "precio_destino": 19990,
+   "precio_lista": 21990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO3",
+   "color": "NEGRO",
+   "tramo": "22-25",
+   "codigo_destino": "3054-02/3",
+   "destino_id": 31928,
+   "creado": false,
+   "renombrado_desde": "3054-02",
+   "tallas_movidas": 10,
+   "unidades": 19,
+   "fuentes": [
+    31912,
+    31921,
+    31933
+   ],
+   "precio_destino": 19990,
+   "precio_lista": 19990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO4",
+   "color": "BLANCO",
+   "tramo": "34-41",
+   "codigo_destino": "3054-01/1",
+   "destino_id": 137660,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 15,
+   "unidades": 3,
+   "fuentes": [
+    31908,
+    31918,
+    137661
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO4",
+   "color": "BLANCO",
+   "tramo": "26-33",
+   "codigo_destino": "3054-01/2",
+   "destino_id": 137661,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 1,
+   "unidades": 1,
+   "fuentes": [
+    31908
+   ],
+   "precio_destino": 21990,
+   "precio_lista": 21990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO4",
+   "color": "NEGRO",
+   "tramo": "34-41",
+   "codigo_destino": "3054-02/1",
+   "destino_id": null,
+   "creado": true,
+   "renombrado_desde": "",
+   "tallas_movidas": 27,
+   "unidades": 20,
+   "fuentes": [
+    31913,
+    31922,
+    31929
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO4",
+   "color": "NEGRO",
+   "tramo": "26-33",
+   "codigo_destino": "3054-02/2",
+   "destino_id": 31939,
+   "creado": false,
+   "renombrado_desde": "305400",
+   "tallas_movidas": 22,
+   "unidades": 39,
+   "fuentes": [
+    31913,
+    31922,
+    31929
+   ],
+   "precio_destino": 19990,
+   "precio_lista": 21990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PAO4",
+   "color": "NEGRO",
+   "tramo": "22-25",
+   "codigo_destino": "3054-02/3",
+   "destino_id": 31929,
+   "creado": false,
+   "renombrado_desde": "3054-02",
+   "tallas_movidas": 7,
+   "unidades": 7,
+   "fuentes": [
+    31913,
+    31922,
+    31934
+   ],
+   "precio_destino": 19990,
+   "precio_lista": 19990
+  },
+  {
+   "familia": "3054",
+   "sucursal": "PA00",
+   "color": "BLANCO",
+   "tramo": "34-41",
+   "codigo_destino": "3054-01/1",
+   "destino_id": 138202,
+   "creado": false,
+   "renombrado_desde": "3054",
+   "tallas_movidas": 0,
+   "unidades": 0,
+   "fuentes": [],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "2918",
+   "sucursal": "EDEL",
+   "color": "NEGRO",
+   "tramo": "34-38",
+   "codigo_destino": "2918-02/1",
+   "destino_id": 28715,
+   "creado": false,
+   "renombrado_desde": "2918",
+   "tallas_movidas": 10,
+   "unidades": 0,
+   "fuentes": [
+    28702,
+    28719
+   ],
+   "precio_destino": 34990,
+   "precio_lista": 34990
+  },
+  {
+   "familia": "2918",
+   "sucursal": "EDEL",
+   "color": "NEGRO",
+   "tramo": "30-33",
+   "codigo_destino": "2918-02/2",
+   "destino_id": null,
+   "creado": true,
+   "renombrado_desde": "",
+   "tallas_movidas": 8,
+   "unidades": 0,
+   "fuentes": [
+    28702,
+    28719
+   ],
+   "precio_destino": 29990,
+   "precio_lista": 29990
+  },
+  {
+   "familia": "2918",
+   "sucursal": "EDEL",
+   "color": "NEGRO",
+   "tramo": "22-29",
+   "codigo_destino": "2918-02/3",
+   "destino_id": 28719,
+   "creado": false,
+   "renombrado_desde": "2918",
+   "tallas_movidas": 4,
+   "unidades": 0,
+   "fuentes": [
+    28702
+   ],
+   "precio_destino": 34990,
+   "precio_lista": 26990
+  },
+  {
+   "familia": "2918",
+   "sucursal": "PAO1",
+   "color": "NEGRO",
+   "tramo": "34-38",
+   "codigo_destino": "2918-02/1",
+   "destino_id": 28716,
+   "creado": false,
+   "renombrado_desde": "2918",
+   "tallas_movidas": 10,
+   "unidades": 4,
+   "fuentes": [
+    28703,
+    28720
+   ],
+   "precio_destino": 34990,
+   "precio_lista": 34990
+  },
+  {
+   "familia": "2918",
+   "sucursal": "PAO1",
+   "color": "NEGRO",
+   "tramo": "30-33",
+   "codigo_destino": "2918-02/2",
+   "destino_id": null,
+   "creado": true,
+   "renombrado_desde": "",
+   "tallas_movidas": 8,
+   "unidades": 9,
+   "fuentes": [
+    28703,
+    28720
+   ],
+   "precio_destino": 29990,
+   "precio_lista": 29990
+  },
+  {
+   "familia": "2918",
+   "sucursal": "PAO1",
+   "color": "NEGRO",
+   "tramo": "22-29",
+   "codigo_destino": "2918-02/3",
+   "destino_id": 28720,
+   "creado": false,
+   "renombrado_desde": "2918",
+   "tallas_movidas": 2,
+   "unidades": 0,
+   "fuentes": [
+    28703
+   ],
+   "precio_destino": 34990,
+   "precio_lista": 26990
+  },
+  {
+   "familia": "2918",
+   "sucursal": "PAO2",
+   "color": "NEGRO",
+   "tramo": "34-38",
+   "codigo_destino": "2918-02/1",
+   "destino_id": 28717,
+   "creado": false,
+   "renombrado_desde": "2918",
+   "tallas_movidas": 11,
+   "unidades": 15,
+   "fuentes": [
+    28704,
+    28721
+   ],
+   "precio_destino": 34990,
+   "precio_lista": 34990
+  },
+  {
+   "familia": "2918",
+   "sucursal": "PAO2",
+   "color": "NEGRO",
+   "tramo": "30-33",
+   "codigo_destino": "2918-02/2",
+   "destino_id": null,
+   "creado": true,
+   "renombrado_desde": "",
+   "tallas_movidas": 8,
+   "unidades": 19,
+   "fuentes": [
+    28704,
+    28721
+   ],
+   "precio_destino": 29990,
+   "precio_lista": 29990
+  },
+  {
+   "familia": "2918",
+   "sucursal": "PAO2",
+   "color": "NEGRO",
+   "tramo": "22-29",
+   "codigo_destino": "2918-02/3",
+   "destino_id": 28721,
+   "creado": false,
+   "renombrado_desde": "2918",
+   "tallas_movidas": 4,
+   "unidades": 0,
+   "fuentes": [
+    28704
+   ],
+   "precio_destino": 34990,
+   "precio_lista": 26990
+  },
+  {
+   "familia": "2918",
+   "sucursal": "PAO3",
+   "color": "NEGRO",
+   "tramo": "34-38",
+   "codigo_destino": "2918-02/1",
+   "destino_id": 28718,
+   "creado": false,
+   "renombrado_desde": "2918",
+   "tallas_movidas": 10,
+   "unidades": 21,
+   "fuentes": [
+    28705,
+    28722
+   ],
+   "precio_destino": 34990,
+   "precio_lista": 34990
+  },
+  {
+   "familia": "2918",
+   "sucursal": "PAO3",
+   "color": "NEGRO",
+   "tramo": "30-33",
+   "codigo_destino": "2918-02/2",
+   "destino_id": null,
+   "creado": true,
+   "renombrado_desde": "",
+   "tallas_movidas": 8,
+   "unidades": 25,
+   "fuentes": [
+    28705,
+    28722
+   ],
+   "precio_destino": 29990,
+   "precio_lista": 29990
+  },
+  {
+   "familia": "2918",
+   "sucursal": "PAO3",
+   "color": "NEGRO",
+   "tramo": "22-29",
+   "codigo_destino": "2918-02/3",
+   "destino_id": 28705,
+   "creado": false,
+   "renombrado_desde": "2918",
+   "tallas_movidas": 12,
+   "unidades": 32,
+   "fuentes": [
+    28722
+   ],
+   "precio_destino": 34990,
+   "precio_lista": 26990
+  },
+  {
+   "familia": "2918",
+   "sucursal": "PAO3",
+   "color": "NEGRO",
+   "tramo": "sin tramo",
+   "codigo_destino": "2918-02/0",
+   "destino_id": 28722,
+   "creado": false,
+   "renombrado_desde": "2918",
+   "tallas_movidas": 0,
+   "unidades": 0,
+   "fuentes": [],
+   "precio_destino": 34990,
+   "precio_lista": 0
+  },
+  {
+   "familia": "2918",
+   "sucursal": "PAO4",
+   "color": "NEGRO",
+   "tramo": "34-38",
+   "codigo_destino": "2918-02/1",
+   "destino_id": null,
+   "creado": true,
+   "renombrado_desde": "",
+   "tallas_movidas": 11,
+   "unidades": 18,
+   "fuentes": [
+    28706,
+    28723
+   ],
+   "precio_destino": 34990,
+   "precio_lista": 34990
+  },
+  {
+   "familia": "2918",
+   "sucursal": "PAO4",
+   "color": "NEGRO",
+   "tramo": "30-33",
+   "codigo_destino": "2918-02/2",
+   "destino_id": null,
+   "creado": true,
+   "renombrado_desde": "",
+   "tallas_movidas": 8,
+   "unidades": 22,
+   "fuentes": [
+    28706,
+    28723
+   ],
+   "precio_destino": 29990,
+   "precio_lista": 29990
+  },
+  {
+   "familia": "2918",
+   "sucursal": "PAO4",
+   "color": "NEGRO",
+   "tramo": "22-29",
+   "codigo_destino": "2918-02/3",
+   "destino_id": 28723,
+   "creado": false,
+   "renombrado_desde": "2918",
+   "tallas_movidas": 2,
+   "unidades": 0,
+   "fuentes": [
+    28706
+   ],
+   "precio_destino": 34990,
+   "precio_lista": 26990
+  },
+  {
+   "familia": "3334",
+   "sucursal": "EDEL",
+   "color": "BLANCO",
+   "tramo": "20-44",
+   "codigo_destino": "3334-01",
+   "destino_id": 33725,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 7,
+   "unidades": 0,
+   "fuentes": [
+    33713
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3334",
+   "sucursal": "EDEL",
+   "color": "CHAROL",
+   "tramo": "20-44",
+   "codigo_destino": "3334-20",
+   "destino_id": 33735,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 14,
+   "unidades": 60,
+   "fuentes": [
+    33702,
+    33720
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3334",
+   "sucursal": "EDEL",
+   "color": "NEGRO",
+   "tramo": "20-44",
+   "codigo_destino": "3334-02",
+   "destino_id": 33730,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 13,
+   "unidades": 4,
+   "fuentes": [
+    33707,
+    33718
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3334",
+   "sucursal": "PAO1",
+   "color": "BLANCO",
+   "tramo": "20-44",
+   "codigo_destino": "3334-01",
+   "destino_id": 33726,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 7,
+   "unidades": 1,
+   "fuentes": [
+    33714
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3334",
+   "sucursal": "PAO1",
+   "color": "CHAROL",
+   "tramo": "20-44",
+   "codigo_destino": "3334-20",
+   "destino_id": 33736,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 14,
+   "unidades": 7,
+   "fuentes": [
+    33703,
+    33721
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3334",
+   "sucursal": "PAO1",
+   "color": "NEGRO",
+   "tramo": "20-44",
+   "codigo_destino": "3334-02",
+   "destino_id": 33731,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 7,
+   "unidades": 11,
+   "fuentes": [
+    33708
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3334",
+   "sucursal": "PAO2",
+   "color": "BLANCO",
+   "tramo": "20-44",
+   "codigo_destino": "3334-01",
+   "destino_id": 33727,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 7,
+   "unidades": 0,
+   "fuentes": [
+    33715
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3334",
+   "sucursal": "PAO2",
+   "color": "CHAROL",
+   "tramo": "20-44",
+   "codigo_destino": "3334-20",
+   "destino_id": 33737,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 14,
+   "unidades": 16,
+   "fuentes": [
+    33704,
+    33722
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3334",
+   "sucursal": "PAO2",
+   "color": "NEGRO",
+   "tramo": "20-44",
+   "codigo_destino": "3334-02",
+   "destino_id": 33732,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 7,
+   "unidades": 18,
+   "fuentes": [
+    33709
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3334",
+   "sucursal": "PAO3",
+   "color": "BLANCO",
+   "tramo": "20-44",
+   "codigo_destino": "3334-01",
+   "destino_id": 33728,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 7,
+   "unidades": 1,
+   "fuentes": [
+    33716
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3334",
+   "sucursal": "PAO3",
+   "color": "CHAROL",
+   "tramo": "20-44",
+   "codigo_destino": "3334-20",
+   "destino_id": 33738,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 14,
+   "unidades": 23,
+   "fuentes": [
+    33705,
+    33723
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3334",
+   "sucursal": "PAO3",
+   "color": "NEGRO",
+   "tramo": "20-44",
+   "codigo_destino": "3334-02",
+   "destino_id": 33733,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 7,
+   "unidades": 14,
+   "fuentes": [
+    33710
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3334",
+   "sucursal": "PAO4",
+   "color": "BLANCO",
+   "tramo": "20-44",
+   "codigo_destino": "3334-01",
+   "destino_id": 33729,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 7,
+   "unidades": 0,
+   "fuentes": [
+    33717
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3334",
+   "sucursal": "PAO4",
+   "color": "CHAROL",
+   "tramo": "20-44",
+   "codigo_destino": "3334-20",
+   "destino_id": 33739,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 14,
+   "unidades": 5,
+   "fuentes": [
+    33706,
+    33724
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  },
+  {
+   "familia": "3334",
+   "sucursal": "PAO4",
+   "color": "NEGRO",
+   "tramo": "20-44",
+   "codigo_destino": "3334-02",
+   "destino_id": 33734,
+   "creado": false,
+   "renombrado_desde": "",
+   "tallas_movidas": 13,
+   "unidades": 22,
+   "fuentes": [
+    33711,
+    33719
+   ],
+   "precio_destino": 24990,
+   "precio_lista": 24990
+  }
+ ],
+ "precios_pendientes": [
+  [
+   "3054",
+   "EDEL",
+   "3054-02/2",
+   "26-33",
+   "19,990",
+   "21,990"
+  ],
+  [
+   "3054",
+   "PAO1",
+   "3054-02/1",
+   "34-41",
+   "19,990",
+   "24,990"
+  ],
+  [
+   "3054",
+   "PAO1",
+   "3054-02/2",
+   "26-33",
+   "19,990",
+   "21,990"
+  ],
+  [
+   "3054",
+   "PAO2",
+   "3054-02/2",
+   "26-33",
+   "19,990",
+   "21,990"
+  ],
+  [
+   "3054",
+   "PAO3",
+   "3054-01/1",
+   "34-41",
+   "21,990",
+   "24,990"
+  ],
+  [
+   "3054",
+   "PAO3",
+   "3054-02/2",
+   "26-33",
+   "19,990",
+   "21,990"
+  ],
+  [
+   "3054",
+   "PAO4",
+   "3054-02/2",
+   "26-33",
+   "19,990",
+   "21,990"
+  ],
+  [
+   "2918",
+   "EDEL",
+   "2918-02/3",
+   "22-29",
+   "34,990",
+   "26,990"
+  ],
+  [
+   "2918",
+   "PAO1",
+   "2918-02/3",
+   "22-29",
+   "34,990",
+   "26,990"
+  ],
+  [
+   "2918",
+   "PAO2",
+   "2918-02/3",
+   "22-29",
+   "34,990",
+   "26,990"
+  ],
+  [
+   "2918",
+   "PAO3",
+   "2918-02/3",
+   "22-29",
+   "34,990",
+   "26,990"
+  ],
+  [
+   "2918",
+   "PAO4",
+   "2918-02/3",
+   "22-29",
+   "34,990",
+   "26,990"
+  ]
+ ]
+}
