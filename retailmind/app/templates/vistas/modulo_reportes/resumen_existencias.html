@@ -1447,14 +1447,26 @@ function renderizarResumen(datos, tipoAgrupacion) {
             : '';
         const hint = clickeable ? '<span class="ver-detalle-hint">👁 Ver detalle</span>' : '';
 
+        // Stock que existe en la sucursal pero no entra al análisis por la marca
+        // de la ficha del producto. Se declara junto al número para que nadie tenga
+        // que adivinar por qué una sucursal muestra 10 unidades teniendo 7.910.
+        const ocultos = item.ocultos_pares || 0;
+        const notaOcultos = ocultos > 0
+            ? `<div style="font-size:11.5px; font-weight:600; color: var(--nexo-gray-500, #6b7280); margin-top:2px;"
+                    title="Productos marcados «excluir de analítica» en su ficha (bolsas, envíos, ajustes). Se gestionan en Gestión de Productos.">
+                   + ${formatearNumero(ocultos)} u excluidas de analítica</div>`
+            : '';
+        const filaVacia = item.total_pares === 0 && ocultos > 0;
+
         html += `
-            <tr${trAttrs}>
+            <tr${trAttrs}${filaVacia ? ' style="opacity:.75;"' : ''}>
                 <td class="td-entidad">
                     <span class="icon">${iconoEntidad}</span>
                     ${entidad}${hint}
+                    ${filaVacia ? '<span style="font-size:11px; font-weight:700; color: var(--nexo-gray-500, #6b7280);"> · sin stock analítico</span>' : ''}
                 </td>
                 <td>${detalle}</td>
-                <td class="td-numero">${formatearNumero(item.total_pares)}</td>
+                <td class="td-numero">${formatearNumero(item.total_pares)}${notaOcultos}</td>
                 <td class="td-numero">$${formatearNumero(item.total_costo)}</td>
                 <td class="td-numero">$${formatearNumero(item.total_precio_interno)}</td>
                 <td class="td-numero">$${formatearNumero(item.total_precio_venta)}</td>
@@ -1841,7 +1853,7 @@ async function buscarArticulosModal() {
             return;
         }
 
-        pintarArticulosModal(data.items || []);
+        pintarArticulosModal(data.items || [], data);
     } catch (e) {
         console.error(e);
         lista.innerHTML = '<div class="nexo-modal-empty">Error de conexión al buscar artículos.</div>';
@@ -1851,7 +1863,7 @@ async function buscarArticulosModal() {
 // Cache de items mostrados en el modal: id -> objeto producto
 let articulosCacheModal = {};
 
-function pintarArticulosModal(items) {
+function pintarArticulosModal(items, meta) {
     const lista = document.getElementById('modal-articulos-lista');
     if (!lista) return;
 
@@ -1862,14 +1874,39 @@ function pintarArticulosModal(items) {
         lista.innerHTML = '<div class="nexo-modal-empty">No se encontraron artículos con los filtros indicados.</div>';
         return;
     }
-    lista.innerHTML = items.map(p => {
+
+    // El corte del servidor era invisible: se devolvían 50 de 111 sin ninguna señal
+    // y el usuario leía esa lista como si fuera el universo completo.
+    let avisoTruncado = '';
+    if (meta && meta.truncado) {
+        avisoTruncado = `
+            <div style="padding:8px 12px; margin-bottom:8px; border-radius:8px;
+                        background: var(--nexo-warning-bg, #fff7e6); color: var(--nexo-warning-text, #8a5a00);
+                        font-size:12.5px; font-weight:600;">
+                Mostrando los ${formatearNumero(meta.limite || items.length)} de mayor stock,
+                de ${formatearNumero(meta.total_encontrados)} coincidencias.
+                Afina la búsqueda o filtra por sucursal para ver el resto.
+            </div>`;
+    }
+    lista.innerHTML = avisoTruncado + items.map(p => {
         const checked = excluidosSet.has(p.id) ? 'checked' : '';
+        // Un producto con la marca de su ficha YA está fuera del reporte. Antes se
+        // pintaba igual que cualquier otro, con la casilla vacía, así que parecía
+        // que sus unidades estaban contando: marcarlo no movía ningún total.
+        const yaFuera = p.excluido_en_ficha === true;
+        const badge = yaFuera
+            ? `<span style="display:inline-block; font-size:11px; font-weight:700; padding:1px 7px;
+                     border-radius:9px; background:var(--nexo-gray-200, #e5e7eb);
+                     color:var(--nexo-gray-600, #4b5563); margin-left:6px;"
+                     title="Marcado &quot;excluir de analítica&quot; en la ficha del producto. No cuenta en este reporte, pases lo que pases por aquí. Se cambia en Gestión de Productos.">
+                     Ya fuera del reporte</span>`
+            : '';
         return `
-            <label class="nexo-articulo-item" for="excl-${p.id}">
-                <input type="checkbox" id="excl-${p.id}" ${checked}
+            <label class="nexo-articulo-item" for="excl-${p.id}" ${yaFuera ? 'style="opacity:.72;"' : ''}>
+                <input type="checkbox" id="excl-${p.id}" ${checked} ${yaFuera && !checked ? 'disabled' : ''}
                     onchange="toggleExclusion(${p.id}, this.checked)">
                 <div class="info">
-                    <div class="titulo">${escapeHtml(p.articulo)} <span style="color: var(--nexo-gray-500); font-weight: 400;">— ${escapeHtml(p.descripcion || '')}</span></div>
+                    <div class="titulo">${escapeHtml(p.articulo)} <span style="color: var(--nexo-gray-500); font-weight: 400;">— ${escapeHtml(p.descripcion || '')}</span>${badge}</div>
                     <div class="meta">${escapeHtml(p.sucursal || '-')} · ${escapeHtml(p.empresa || '-')}</div>
                 </div>
                 <div class="stock">Stock: ${formatearNumero(p.stock_total || 0)}</div>

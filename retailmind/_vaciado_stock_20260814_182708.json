@@ -1,0 +1,17 @@
+{
+ "fecha": "2026-08-14T18:27:08.192536-04:00",
+ "referencia": "VACIADO-20260814_182708",
+ "sucursales": [
+  {
+   "id": 11,
+   "alias": "EDEL FALLADOS"
+  },
+  {
+   "id": 8,
+   "alias": "NICK3"
+  }
+ ],
+ "tallas": [],
+ "lotes": [],
+ "movimientos_creados": []
+}

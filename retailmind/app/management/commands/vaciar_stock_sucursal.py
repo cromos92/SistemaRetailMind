@@ -44,6 +44,11 @@ class Command(BaseCommand):
             help='Alias exacto o id de la sucursal a vaciar (repetible)',
         )
         parser.add_argument(
+            '--producto', action='append', default=[], type=int,
+            help='Id de Producto a vaciar dentro de esa sucursal (repetible). '
+                 'Sin esto se vacía la sucursal COMPLETA.',
+        )
+        parser.add_argument(
             '--aplicar', action='store_true',
             help='Ejecuta de verdad (sin esto es dry-run)',
         )
@@ -71,19 +76,24 @@ class Command(BaseCommand):
 
         sucursales = [self._resolver_sucursal(ref) for ref in opts['sucursal']]
         aplicar = opts['aplicar']
+        productos_ids = opts['producto'] or None
 
+        alcance = (f'SOLO productos {productos_ids}' if productos_ids else 'sucursal COMPLETA')
         self.stdout.write(self.style.MIGRATE_HEADING(
-            f"{'APLICANDO' if aplicar else 'DRY-RUN (nada se modifica)'} — vaciado de stock"
+            f"{'APLICANDO' if aplicar else 'DRY-RUN (nada se modifica)'} — vaciado de stock ({alcance})"
         ))
 
         resumen = []
         for s in sucursales:
             tallas = Producto_Talla.objects.filter(producto__sucursal=s).exclude(stock=0)
+            lotes = LoteProducto.objects.filter(
+                producto_talla__producto__sucursal=s, activo=True, cantidad_disponible__gt=0)
+            if productos_ids:
+                tallas = tallas.filter(producto_id__in=productos_ids)
+                lotes = lotes.filter(producto_talla__producto_id__in=productos_ids)
             pos = tallas.filter(stock__gt=0).aggregate(
                 n=Count('id'), u=Sum('stock'), v=Sum(F('stock') * F('producto__costo')))
             neg = tallas.filter(stock__lt=0).aggregate(n=Count('id'), u=Sum('stock'))
-            lotes = LoteProducto.objects.filter(
-                producto_talla__producto__sucursal=s, activo=True, cantidad_disponible__gt=0)
             resumen.append((s, tallas, pos, neg, lotes.count()))
             self.stdout.write(
                 f"  {s.alias} (id {s.id}): {pos['n'] or 0} tallas con {pos['u'] or 0} unidades "
@@ -91,6 +101,13 @@ class Command(BaseCommand):
                 f"{neg['n'] or 0} tallas negativas ({neg['u'] or 0} u) a subir a 0; "
                 f"{lotes.count()} lotes FIFO activos a agotar"
             )
+            if productos_ids:
+                for f in tallas.values('producto_id', 'producto__articulo').annotate(
+                        u=Sum('stock')).order_by('-u'):
+                    self.stdout.write(
+                        f"      · {f['producto_id']} {(f['producto__articulo'] or '')[:32]:<32} "
+                        f"{f['u']:>7} u"
+                    )
 
         if not aplicar:
             self.stdout.write(self.style.WARNING(
@@ -120,18 +137,26 @@ class Command(BaseCommand):
         with transaction.atomic():
             for s, _tallas, _pos, _neg, _nlotes in resumen:
                 # Lock de las filas a tocar (el POS puede estar vendiendo en paralelo)
-                tallas = list(
+                tallas_qs = (
                     Producto_Talla.objects.select_for_update()
                     .filter(producto__sucursal=s).exclude(stock=0)
                     .select_related('producto')
                 )
+                lotes_qs = LoteProducto.objects.filter(
+                    producto_talla__producto__sucursal=s, activo=True, cantidad_disponible__gt=0
+                )
+                if productos_ids:
+                    tallas_qs = tallas_qs.filter(producto_id__in=productos_ids)
+                    lotes_qs = lotes_qs.filter(producto_talla__producto_id__in=productos_ids)
+
+                tallas = list(tallas_qs)
                 pt_ids = [pt.id for pt in tallas]
 
-                # Snapshot de lotes ANTES de tocarlos (todos los de la sucursal
+                # Snapshot de lotes ANTES de tocarlos (todos los del alcance
                 # con disponible, tengan o no stock plano)
-                for lote in LoteProducto.objects.filter(
-                    producto_talla__producto__sucursal=s, activo=True, cantidad_disponible__gt=0
-                ).values('id', 'producto_talla_id', 'cantidad_disponible', 'activo', 'agotado'):
+                for lote in lotes_qs.values(
+                    'id', 'producto_talla_id', 'cantidad_disponible', 'activo', 'agotado'
+                ):
                     snapshot['lotes'].append(lote)
 
                 # Tallas que YA tienen kardex (a las demás con stock>0 se les crea
@@ -201,21 +226,26 @@ class Command(BaseCommand):
                 Producto_Talla.objects.filter(id__in=pt_ids).update(stock=0)
 
                 # Lotes FIFO a 0 (equivale a consumirlos todos: el objetivo es 0)
-                LoteProducto.objects.filter(
-                    producto_talla__producto__sucursal=s, activo=True, cantidad_disponible__gt=0
-                ).update(cantidad_disponible=0, agotado=True)
+                lotes_qs.update(cantidad_disponible=0, agotado=True)
 
         ruta = os.path.join(opts['snapshot_dir'], f'_vaciado_stock_{ts}.json')
         with open(ruta, 'w', encoding='utf-8') as f:
             json.dump(snapshot, f, ensure_ascii=False, indent=1)
 
-        # Verificación final
+        # Verificación final (acotada al mismo alcance que se vació: con
+        # --producto no debe contar como "resto" el stock de los demás artículos)
         for s, *_ in resumen:
-            restante = Producto_Talla.objects.filter(
-                producto__sucursal=s).exclude(stock=0).count()
-            lotes_rest = LoteProducto.objects.filter(
+            restante_qs = Producto_Talla.objects.filter(
+                producto__sucursal=s).exclude(stock=0)
+            lotes_rest_qs = LoteProducto.objects.filter(
                 producto_talla__producto__sucursal=s, activo=True, cantidad_disponible__gt=0
-            ).count()
+            )
+            if productos_ids:
+                restante_qs = restante_qs.filter(producto_id__in=productos_ids)
+                lotes_rest_qs = lotes_rest_qs.filter(
+                    producto_talla__producto_id__in=productos_ids)
+            restante = restante_qs.count()
+            lotes_rest = lotes_rest_qs.count()
             marca = self.style.SUCCESS('OK') if restante == 0 and lotes_rest == 0 \
                 else self.style.ERROR(f'QUEDAN {restante} tallas / {lotes_rest} lotes')
             self.stdout.write(f'  {s.alias}: {marca}')

@@ -1,0 +1,29 @@
+{
+ "fecha": "2026-08-14T18:34:53.165589-04:00",
+ "referencia": "VACIADO-20260814_183453",
+ "sucursales": [
+  {
+   "id": 12,
+   "alias": "IMP"
+  }
+ ],
+ "tallas": [
+  {
+   "pt_id": 606013,
+   "sku": 4836353,
+   "stock_antes": 10
+  }
+ ],
+ "lotes": [
+  {
+   "id": 45030,
+   "producto_talla_id": 606013,
+   "cantidad_disponible": 10,
+   "activo": true,
+   "agotado": false
+  }
+ ],
+ "movimientos_creados": [
+  3099654
+ ]
+}

@@ -1,0 +1,22 @@
+{
+ "fecha": "2026-08-14T18:35:00.541231-04:00",
+ "modo": "incluir",
+ "estado_aplicado": false,
+ "sucursales": [
+  {
+   "id": 12,
+   "alias": "IMP"
+  },
+  {
+   "id": 10,
+   "alias": "PA00"
+  }
+ ],
+ "productos_marcados": [
+  42343,
+  81742,
+  42346,
+  42355,
+  81722
+ ]
+}

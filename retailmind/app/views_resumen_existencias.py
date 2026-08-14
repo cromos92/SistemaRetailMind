@@ -10,7 +10,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_GET
 from decimal import Decimal
 from datetime import datetime, date
-from django.db.models import Sum, Q, F, Value, IntegerField
+from django.db.models import Sum, Q, F, Value, IntegerField, OuterRef, Subquery
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 import json
@@ -83,14 +83,19 @@ def calcular_stock_historico(talla, sucursal_id, fecha_corte):
     return max(0, stock_historico)
 
 
-def _aggregar_por_sucursal_actual(empresas_usuario, marca_id=None, categoria_id=None, excluir_ids=None):
+def _aggregar_por_sucursal_actual(empresas_usuario, marca_id=None, categoria_id=None,
+                                  excluir_ids=None, excluidos_de_analitica=False):
     """
     Agregación SQL optimizada del inventario ACTUAL agrupado por sucursal.
     Ejecuta UNA sola query y devuelve un dict {sucursal_id: {pares, costo, p_interno, p_venta}}.
+
+    `excluidos_de_analitica=True` invierte el filtro y devuelve justamente el stock
+    que el reporte descarta, para poder DECLARARLO en pantalla en vez de hacerlo
+    desaparecer (en IMP eso es el 99,9% de la sucursal y en PA00 el 100%).
     """
     talla_qs = Producto_Talla.objects.filter(
         producto__sucursal__empresa_id__in=empresas_usuario,
-        producto__excluir_de_analitica=False,
+        producto__excluir_de_analitica=excluidos_de_analitica,
         stock__gt=0,
     )
     if marca_id:
@@ -123,14 +128,18 @@ def _aggregar_por_sucursal_actual(empresas_usuario, marca_id=None, categoria_id=
     }
 
 
-def _aggregar_por_sucursal_historico(empresas_usuario, fecha_corte, marca_id=None, categoria_id=None, excluir_ids=None):
+def _aggregar_por_sucursal_historico(empresas_usuario, fecha_corte, marca_id=None,
+                                     categoria_id=None, excluir_ids=None,
+                                     excluidos_de_analitica=False):
     """
     Agregación optimizada del inventario HISTÓRICO agrupado por sucursal.
     Ejecuta 3 queries (tallas + ingresos + egresos) y arma todo en Python con dicts.
+
+    Ver `_aggregar_por_sucursal_actual` para `excluidos_de_analitica`.
     """
     talla_qs = Producto_Talla.objects.filter(
         producto__sucursal__empresa_id__in=empresas_usuario,
-        producto__excluir_de_analitica=False,
+        producto__excluir_de_analitica=excluidos_de_analitica,
     )
     if marca_id:
         talla_qs = talla_qs.filter(producto__atributo1_id=marca_id)
@@ -370,6 +379,12 @@ def _calcular_totales_excluidos(empresas_usuario, excluir_ids, fecha_corte=None,
     Respeta la fecha de corte histórica: si es histórico, reconstruye el stock a esa
     fecha con la misma lógica de reversión de movimientos que el resto del reporte.
 
+    OJO `excluir_de_analitica=False`: mide el delta REAL que el usuario ve bajar en
+    el total. Sin ese filtro, marcar en el modal un producto que ya estaba fuera por
+    la marca de su ficha (p.ej. BOLSA REAL, 2.200 u) anunciaba "2.200 unidades
+    excluidas" mientras el total no se movía ni un par — y esa cifra fantasma se
+    imprimía además en el Excel y el PDF.
+
     Devuelve un dict {pares, costo, precio_interno, precio_venta, articulos}.
     """
     vacio = {'pares': 0, 'costo': 0, 'precio_interno': 0, 'precio_venta': 0, 'articulos': 0}
@@ -378,6 +393,7 @@ def _calcular_totales_excluidos(empresas_usuario, excluir_ids, fecha_corte=None,
 
     talla_qs = Producto_Talla.objects.filter(
         producto__sucursal__empresa_id__in=empresas_usuario,
+        producto__excluir_de_analitica=False,
         producto_id__in=excluir_ids,
     )
 
@@ -504,10 +520,23 @@ def obtener_resumen_existencias(request):
                 empresas_usuario, fecha_corte,
                 marca_id=marca_id, categoria_id=categoria_id, excluir_ids=excluir_ids,
             )
+            # Mismo cálculo pero del stock que la marca de ficha deja fuera. No se
+            # le pasa `excluir_ids` a propósito: lo que ya está oculto por la ficha
+            # no se vuelve a descontar por el modal.
+            ocultos_por_suc = _aggregar_por_sucursal_historico(
+                empresas_usuario, fecha_corte,
+                marca_id=marca_id, categoria_id=categoria_id,
+                excluidos_de_analitica=True,
+            )
         else:
             agg_por_suc = _aggregar_por_sucursal_actual(
                 empresas_usuario,
                 marca_id=marca_id, categoria_id=categoria_id, excluir_ids=excluir_ids,
+            )
+            ocultos_por_suc = _aggregar_por_sucursal_actual(
+                empresas_usuario,
+                marca_id=marca_id, categoria_id=categoria_id,
+                excluidos_de_analitica=True,
             )
 
         # Cargar metadata de las sucursales que tienen agregados
@@ -523,8 +552,18 @@ def obtener_resumen_existencias(request):
 
         for sucursal in sucursales:
             bucket = agg_por_suc.get(sucursal.id)
+            oculto = ocultos_por_suc.get(sucursal.id) or {}
+            ocultos_pares = int(oculto.get('pares') or 0)
+
+            # Una sucursal sin stock visible pero CON stock oculto por la marca de
+            # ficha ya no se salta: se emite igual con total 0 y el detalle de lo
+            # oculto. Antes PA00 (4.740 u, 100% marcadas) desaparecía de la tabla,
+            # del Excel y del PDF sin dejar rastro, indistinguible de una sucursal
+            # vacía. Una sucursal genuinamente sin nada sigue sin aparecer.
             if not bucket or bucket['pares'] <= 0:
-                continue
+                if ocultos_pares <= 0:
+                    continue
+                bucket = {'pares': 0, 'costo': 0, 'p_interno': 0, 'p_venta': 0}
 
             total_pares = int(bucket['pares'])
             total_costo = int(bucket['costo'])
@@ -541,6 +580,11 @@ def obtener_resumen_existencias(request):
                 'total_costo': float(total_costo),
                 'total_precio_interno': float(total_p_interno),
                 'total_precio_venta': float(total_p_venta),
+                # Stock real que existe en la sucursal pero NO entra al análisis
+                # por la marca `excluir_de_analitica` de la ficha del producto.
+                'ocultos_pares': ocultos_pares,
+                'ocultos_costo': float(int(oculto.get('costo') or 0)),
+                'ocultos_precio_venta': float(int(oculto.get('p_venta') or 0)),
             })
 
             emp_id = sucursal.empresa_id
@@ -568,6 +612,20 @@ def obtener_resumen_existencias(request):
             'costo': sum(s['total_costo'] for s in resumen_sucursales),
             'precio_interno': sum(s['total_precio_interno'] for s in resumen_sucursales),
             'precio_venta': sum(s['total_precio_venta'] for s in resumen_sucursales),
+        }
+
+        # Stock existente que la marca de ficha deja fuera del análisis. Se publica
+        # para que la pantalla pueda decirlo en vez de que el usuario vea 10 unidades
+        # en una sucursal que tiene 7.910 sin ninguna explicación.
+        totales_ocultos_flag = {
+            'pares': sum(s['ocultos_pares'] for s in resumen_sucursales),
+            'costo': sum(s['ocultos_costo'] for s in resumen_sucursales),
+            'precio_venta': sum(s['ocultos_precio_venta'] for s in resumen_sucursales),
+            'sucursales': sum(1 for s in resumen_sucursales if s['ocultos_pares'] > 0),
+            'sucursales_sin_stock_visible': [
+                s['sucursal'] for s in resumen_sucursales
+                if s['total_pares'] == 0 and s['ocultos_pares'] > 0
+            ],
         }
 
         # Serializar resumen por empresa ordenado por nombre
@@ -608,8 +666,9 @@ def obtener_resumen_existencias(request):
             'agrupar_por': 'sucursal',
             'excluir_articulos_count': len(excluir_ids),
             'totales_excluidos': totales_excluidos,
+            'totales_ocultos_flag': totales_ocultos_flag,
         })
-        
+
     except Exception as e:
         logger.exception("Error en resumen de existencias")
         return JsonResponse({
@@ -1938,47 +1997,68 @@ def listar_articulos_para_excluir(request):
         productos = []
         seen_ids = set()
 
+        # Stock por producto vía subquery: permite ordenar por stock EN LA BASE
+        # (antes se ordenaba alfabéticamente y el corte de 50 se comía justo los
+        # artículos de mayor volumen, que son los que interesa excluir). Se usa
+        # subquery y no annotate+Sum para no multiplicar filas al hacer join con
+        # producto_talla en la búsqueda por SKU.
+        stock_subq = (
+            Producto_Talla.objects
+            .filter(producto_id=OuterRef('pk'))
+            .values('producto_id')
+            .annotate(t=Sum('stock'))
+            .values('t')[:1]
+        )
+        base_qs = base_qs.annotate(
+            stock_total=Coalesce(Subquery(stock_subq), Value(0, output_field=IntegerField()))
+        )
+
+        LIMITE = 50
+        total_encontrados = 0
+
         if q:
-            buscar_qs = base_qs.filter(
+            listado_qs = base_qs.filter(
                 Q(articulo__icontains=q)
                 | Q(descripcion__icontains=q)
                 | Q(producto_talla__sku__icontains=q)
-            ).distinct().order_by('articulo')[:50]
-            for p in buscar_qs:
-                if p.id in seen_ids:
-                    continue
-                seen_ids.add(p.id)
-                productos.append(p)
-        elif not ids_solicitados:
-            # Sin búsqueda y sin ids puntuales: devolvemos los primeros 50
-            for p in base_qs.order_by('articulo')[:50]:
-                if p.id in seen_ids:
-                    continue
-                seen_ids.add(p.id)
-                productos.append(p)
+            ).distinct()
+        else:
+            listado_qs = base_qs
 
-        # Anexar IDs explícitamente solicitados (los excluidos actuales)
+        # El listado se arma SIEMPRE. Antes vivía en un `elif not ids_solicitados`,
+        # así que bastaba con tener una exclusión guardada en el navegador (el front
+        # manda `ids` en ese caso) para que el catálogo no se listara nunca; y como
+        # el rescate de esos ids hereda el filtro de sucursal, elegir una sucursal
+        # donde no vivieran las exclusiones devolvía la lista VACÍA.
+        total_encontrados = listado_qs.count()
+        for p in listado_qs.order_by('-stock_total', 'articulo')[:LIMITE]:
+            if p.id in seen_ids:
+                continue
+            seen_ids.add(p.id)
+            productos.append(p)
+
+        # Anexar IDs explícitamente solicitados (los excluidos actuales).
+        # OJO: se consultan SIN el filtro de sucursal — son exclusiones que el
+        # usuario ya tiene puestas y deben poder verse (y quitarse) aunque esté
+        # mirando otra sucursal.
         if ids_solicitados:
             faltantes = [i for i in ids_solicitados if i not in seen_ids]
             if faltantes:
-                for p in base_qs.filter(id__in=faltantes):
+                extra_qs = (
+                    Producto.objects
+                    .filter(sucursal__empresa_id__in=empresas_usuario, id__in=faltantes)
+                    .select_related('sucursal', 'sucursal__empresa')
+                    .annotate(
+                        stock_total=Coalesce(
+                            Subquery(stock_subq), Value(0, output_field=IntegerField())
+                        )
+                    )
+                )
+                for p in extra_qs:
                     if p.id in seen_ids:
                         continue
                     seen_ids.add(p.id)
                     productos.append(p)
-
-        # Calcular stock total de cada producto en su sucursal
-        productos_ids = [p.id for p in productos]
-        stock_por_producto = {}
-        if productos_ids:
-            agg = (
-                Producto_Talla.objects
-                .filter(producto_id__in=productos_ids)
-                .values('producto_id')
-                .annotate(total=Sum('stock'))
-            )
-            for row in agg:
-                stock_por_producto[row['producto_id']] = max(0, row['total'] or 0)
 
         items = []
         for p in productos:
@@ -1989,14 +2069,20 @@ def listar_articulos_para_excluir(request):
                 'sucursal_id': p.sucursal_id,
                 'sucursal': p.sucursal.alias if p.sucursal else '-',
                 'empresa': p.sucursal.empresa.nombre if p.sucursal and p.sucursal.empresa else '-',
-                'stock_total': stock_por_producto.get(p.id, 0),
+                'stock_total': max(0, getattr(p, 'stock_total', 0) or 0),
+                # Sin esto el modal no podía distinguir un producto que YA está
+                # fuera del reporte por la marca de su ficha: se mostraba con la
+                # casilla vacía, como si estuviera contando.
+                'excluido_en_ficha': p.excluir_de_analitica,
             })
 
         return JsonResponse({
             'success': True,
             'items': items,
             'total': len(items),
-            'limite': 50,
+            'total_encontrados': total_encontrados,
+            'truncado': total_encontrados > LIMITE,
+            'limite': LIMITE,
         })
     except Exception as e:
         logger.exception("Error en listar_articulos_para_excluir")

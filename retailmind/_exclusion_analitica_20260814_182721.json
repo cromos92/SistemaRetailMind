@@ -1,0 +1,16 @@
+{
+ "fecha": "2026-08-14T18:27:21.196762-04:00",
+ "modo": "excluir",
+ "estado_aplicado": true,
+ "sucursales": [
+  {
+   "id": 11,
+   "alias": "EDEL FALLADOS"
+  },
+  {
+   "id": 8,
+   "alias": "NICK3"
+  }
+ ],
+ "productos_marcados": []
+}
