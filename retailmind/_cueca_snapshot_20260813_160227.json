@@ -1,0 +1,2434 @@
+{
+ "fecha": "2026-08-13T16:02:26.610903-04:00",
+ "productos": [
+  {
+   "id": 31909,
+   "articulo": "3054-CONSOLIDADO-31909",
+   "descripcion": "CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": true,
+   "sucursal_id": 1,
+   "precioventa": 21990
+  },
+  {
+   "id": 139116,
+   "articulo": "3054-02/1",
+   "descripcion": "ZAPATO CUECA 34/41",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 1,
+   "precioventa": 24990
+  },
+  {
+   "id": 31935,
+   "articulo": "3054-02/2",
+   "descripcion": "ZAPATO CUECA 26/33",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 1,
+   "precioventa": 21990
+  },
+  {
+   "id": 31904,
+   "articulo": "3054-CONSOLIDADO-31904",
+   "descripcion": "CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 442,
+   "excluir_de_analitica": true,
+   "sucursal_id": 1,
+   "precioventa": 21990
+  },
+  {
+   "id": 31926,
+   "articulo": "3054-02/1",
+   "descripcion": "ZAPATO CUECA 34/41",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 2,
+   "precioventa": 24990
+  },
+  {
+   "id": 31931,
+   "articulo": "3054-02/3",
+   "descripcion": "ZAPATO CUECA 22/25",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 2,
+   "precioventa": 19990
+  },
+  {
+   "id": 31905,
+   "articulo": "3054-CONSOLIDADO-31905",
+   "descripcion": "CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 442,
+   "excluir_de_analitica": true,
+   "sucursal_id": 2,
+   "precioventa": 21990
+  },
+  {
+   "id": 31910,
+   "articulo": "3054-CONSOLIDADO-31910",
+   "descripcion": "CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": true,
+   "sucursal_id": 2,
+   "precioventa": 21990
+  },
+  {
+   "id": 31906,
+   "articulo": "3054-01/2",
+   "descripcion": "ZAPATO CUECA 26/33",
+   "atributo1_id": 23,
+   "atributo2_id": 442,
+   "excluir_de_analitica": false,
+   "sucursal_id": 3,
+   "precioventa": 21990
+  },
+  {
+   "id": 31924,
+   "articulo": "3054-02/1",
+   "descripcion": "ZAPATO CUECA 34/41",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 3,
+   "precioventa": 24990
+  },
+  {
+   "id": 31937,
+   "articulo": "3054-02/2",
+   "descripcion": "ZAPATO CUECA 26/33",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 3,
+   "precioventa": 21990
+  },
+  {
+   "id": 31927,
+   "articulo": "3054-02/3",
+   "descripcion": "ZAPATO CUECA 22/25",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 3,
+   "precioventa": 19990
+  },
+  {
+   "id": 31911,
+   "articulo": "3054-CONSOLIDADO-31911",
+   "descripcion": "CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": true,
+   "sucursal_id": 3,
+   "precioventa": 21990
+  },
+  {
+   "id": 31917,
+   "articulo": "3054-01/1",
+   "descripcion": "ZAPATO CUECA 34/41",
+   "atributo1_id": 23,
+   "atributo2_id": 442,
+   "excluir_de_analitica": false,
+   "sucursal_id": 4,
+   "precioventa": 24990
+  },
+  {
+   "id": 139117,
+   "articulo": "3054-02/1",
+   "descripcion": "ZAPATO CUECA 34/41",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 4,
+   "precioventa": 24990
+  },
+  {
+   "id": 31938,
+   "articulo": "3054-02/2",
+   "descripcion": "ZAPATO CUECA 26/33",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 4,
+   "precioventa": 21990
+  },
+  {
+   "id": 139118,
+   "articulo": "3054-02/1",
+   "descripcion": "ZAPATO CUECA 34/41",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 5,
+   "precioventa": 24990
+  },
+  {
+   "id": 31939,
+   "articulo": "3054-02/2",
+   "descripcion": "ZAPATO CUECA 26/33",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 5,
+   "precioventa": 21990
+  },
+  {
+   "id": 31928,
+   "articulo": "3054-02/3",
+   "descripcion": "ZAPATO CUECA 22/25",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 4,
+   "precioventa": 19990
+  },
+  {
+   "id": 31907,
+   "articulo": "3054-CONSOLIDADO-31907",
+   "descripcion": "CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 442,
+   "excluir_de_analitica": true,
+   "sucursal_id": 4,
+   "precioventa": 21990
+  },
+  {
+   "id": 31912,
+   "articulo": "3054-CONSOLIDADO-31912",
+   "descripcion": "CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": true,
+   "sucursal_id": 4,
+   "precioventa": 21990
+  },
+  {
+   "id": 31925,
+   "articulo": "3054-02/3",
+   "descripcion": "ZAPATO CUECA 22/25",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 1,
+   "precioventa": 19990
+  },
+  {
+   "id": 31929,
+   "articulo": "3054-02/3",
+   "descripcion": "ZAPATO CUECA 22/25",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 5,
+   "precioventa": 19990
+  },
+  {
+   "id": 31908,
+   "articulo": "3054-CONSOLIDADO-31908",
+   "descripcion": "CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 442,
+   "excluir_de_analitica": true,
+   "sucursal_id": 5,
+   "precioventa": 21990
+  },
+  {
+   "id": 31913,
+   "articulo": "3054-CONSOLIDADO-31913",
+   "descripcion": "CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": true,
+   "sucursal_id": 5,
+   "precioventa": 21990
+  },
+  {
+   "id": 137657,
+   "articulo": "3054-01/1",
+   "descripcion": "ZAPATO CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 442,
+   "excluir_de_analitica": false,
+   "sucursal_id": 3,
+   "precioventa": 24990
+  },
+  {
+   "id": 137658,
+   "articulo": "3054-01/1",
+   "descripcion": "ZAPATO CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 442,
+   "excluir_de_analitica": false,
+   "sucursal_id": 2,
+   "precioventa": 24990
+  },
+  {
+   "id": 137659,
+   "articulo": "3054-01/2",
+   "descripcion": "ZAPATO CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 442,
+   "excluir_de_analitica": false,
+   "sucursal_id": 2,
+   "precioventa": 21990
+  },
+  {
+   "id": 137660,
+   "articulo": "3054-01/1",
+   "descripcion": "ZAPATO CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 442,
+   "excluir_de_analitica": false,
+   "sucursal_id": 5,
+   "precioventa": 24990
+  },
+  {
+   "id": 137661,
+   "articulo": "3054-01/2",
+   "descripcion": "ZAPATO CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 442,
+   "excluir_de_analitica": false,
+   "sucursal_id": 5,
+   "precioventa": 21990
+  },
+  {
+   "id": 138202,
+   "articulo": "3054-01/1",
+   "descripcion": "ZAPATO CUECA 34/41",
+   "atributo1_id": 23,
+   "atributo2_id": 442,
+   "excluir_de_analitica": false,
+   "sucursal_id": 10,
+   "precioventa": 24990
+  },
+  {
+   "id": 31936,
+   "articulo": "3054-02/2",
+   "descripcion": "ZAPATO CUECA 26/33",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 2,
+   "precioventa": 21990
+  },
+  {
+   "id": 137651,
+   "articulo": "3054-01/1",
+   "descripcion": "ZAPATO CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 442,
+   "excluir_de_analitica": false,
+   "sucursal_id": 1,
+   "precioventa": 24990
+  },
+  {
+   "id": 137652,
+   "articulo": "3054-01/2",
+   "descripcion": "ZAPATO CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 442,
+   "excluir_de_analitica": false,
+   "sucursal_id": 1,
+   "precioventa": 21990
+  },
+  {
+   "id": 31915,
+   "articulo": "3054-CONSOLIDADO-31915",
+   "descripcion": "CUECA TAREA 34/41",
+   "atributo1_id": 406,
+   "atributo2_id": 442,
+   "excluir_de_analitica": true,
+   "sucursal_id": 2,
+   "precioventa": 21990
+  },
+  {
+   "id": 31914,
+   "articulo": "3054-CONSOLIDADO-31914",
+   "descripcion": "CUECA TAREA 34/41",
+   "atributo1_id": 406,
+   "atributo2_id": 442,
+   "excluir_de_analitica": true,
+   "sucursal_id": 1,
+   "precioventa": 24990
+  },
+  {
+   "id": 31920,
+   "articulo": "3054-CONSOLIDADO-31920",
+   "descripcion": "CUECA TAREA 22/25",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": true,
+   "sucursal_id": 1,
+   "precioventa": 19990
+  },
+  {
+   "id": 31930,
+   "articulo": "3054-CONSOLIDADO-31930",
+   "descripcion": "ZAPATO CUECA",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": true,
+   "sucursal_id": 1,
+   "precioventa": 19990
+  },
+  {
+   "id": 31923,
+   "articulo": "3054-CONSOLIDADO-31923",
+   "descripcion": "CUECA TAREA 34/41",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": true,
+   "sucursal_id": 2,
+   "precioventa": 24990
+  },
+  {
+   "id": 31916,
+   "articulo": "3054-CONSOLIDADO-31916",
+   "descripcion": "CUECA TAREA 34/41",
+   "atributo1_id": 406,
+   "atributo2_id": 442,
+   "excluir_de_analitica": true,
+   "sucursal_id": 3,
+   "precioventa": 24990
+  },
+  {
+   "id": 31932,
+   "articulo": "3054-CONSOLIDADO-31932",
+   "descripcion": "ZAPATO CUECA",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": true,
+   "sucursal_id": 3,
+   "precioventa": 19990
+  },
+  {
+   "id": 31933,
+   "articulo": "3054-CONSOLIDADO-31933",
+   "descripcion": "ZAPATO CUECA",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": true,
+   "sucursal_id": 4,
+   "precioventa": 19990
+  },
+  {
+   "id": 31934,
+   "articulo": "3054-CONSOLIDADO-31934",
+   "descripcion": "ZAPATO CUECA",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": true,
+   "sucursal_id": 5,
+   "precioventa": 19990
+  },
+  {
+   "id": 31919,
+   "articulo": "3054",
+   "descripcion": "VESTIR 22/25",
+   "atributo1_id": 406,
+   "atributo2_id": 443,
+   "excluir_de_analitica": false,
+   "sucursal_id": 2,
+   "precioventa": 12990
+  },
+  {
+   "id": 31921,
+   "articulo": "3054-CONSOLIDADO-31921",
+   "descripcion": "CUECA TAREA 22/25",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": true,
+   "sucursal_id": 4,
+   "precioventa": 19990
+  },
+  {
+   "id": 31918,
+   "articulo": "3054-CONSOLIDADO-31918",
+   "descripcion": "CUECA TAREA 34/41",
+   "atributo1_id": 406,
+   "atributo2_id": 442,
+   "excluir_de_analitica": true,
+   "sucursal_id": 5,
+   "precioventa": 21990
+  },
+  {
+   "id": 31922,
+   "articulo": "3054-CONSOLIDADO-31922",
+   "descripcion": "CUECA TAREA 22/25",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": true,
+   "sucursal_id": 5,
+   "precioventa": 19990
+  }
+ ],
+ "tallas": [
+  {
+   "id": 148625,
+   "producto_id": 31906
+  },
+  {
+   "id": 148638,
+   "producto_id": 31906
+  },
+  {
+   "id": 148653,
+   "producto_id": 31906
+  },
+  {
+   "id": 148664,
+   "producto_id": 31906
+  },
+  {
+   "id": 148672,
+   "producto_id": 31906
+  },
+  {
+   "id": 148683,
+   "producto_id": 31906
+  },
+  {
+   "id": 148696,
+   "producto_id": 31906
+  },
+  {
+   "id": 148700,
+   "producto_id": 31906
+  },
+  {
+   "id": 148737,
+   "producto_id": 31917
+  },
+  {
+   "id": 148780,
+   "producto_id": 31917
+  },
+  {
+   "id": 148815,
+   "producto_id": 31917
+  },
+  {
+   "id": 148817,
+   "producto_id": 31917
+  },
+  {
+   "id": 148846,
+   "producto_id": 31917
+  },
+  {
+   "id": 148885,
+   "producto_id": 31917
+  },
+  {
+   "id": 148899,
+   "producto_id": 31917
+  },
+  {
+   "id": 148713,
+   "producto_id": 31917
+  },
+  {
+   "id": 148753,
+   "producto_id": 31917
+  },
+  {
+   "id": 148770,
+   "producto_id": 31917
+  },
+  {
+   "id": 148794,
+   "producto_id": 31917
+  },
+  {
+   "id": 148865,
+   "producto_id": 31917
+  },
+  {
+   "id": 148592,
+   "producto_id": 31919
+  },
+  {
+   "id": 148720,
+   "producto_id": 31924
+  },
+  {
+   "id": 148726,
+   "producto_id": 31924
+  },
+  {
+   "id": 148741,
+   "producto_id": 31924
+  },
+  {
+   "id": 148761,
+   "producto_id": 31924
+  },
+  {
+   "id": 148763,
+   "producto_id": 31924
+  },
+  {
+   "id": 148786,
+   "producto_id": 31924
+  },
+  {
+   "id": 148800,
+   "producto_id": 31924
+  },
+  {
+   "id": 148809,
+   "producto_id": 31924
+  },
+  {
+   "id": 148821,
+   "producto_id": 31924
+  },
+  {
+   "id": 148832,
+   "producto_id": 31924
+  },
+  {
+   "id": 148852,
+   "producto_id": 31924
+  },
+  {
+   "id": 148856,
+   "producto_id": 31924
+  },
+  {
+   "id": 148879,
+   "producto_id": 31924
+  },
+  {
+   "id": 148889,
+   "producto_id": 31924
+  },
+  {
+   "id": 148903,
+   "producto_id": 31924
+  },
+  {
+   "id": 148716,
+   "producto_id": 31924
+  },
+  {
+   "id": 148734,
+   "producto_id": 31924
+  },
+  {
+   "id": 148747,
+   "producto_id": 31924
+  },
+  {
+   "id": 148773,
+   "producto_id": 31924
+  },
+  {
+   "id": 148793,
+   "producto_id": 31924
+  },
+  {
+   "id": 148839,
+   "producto_id": 31924
+  },
+  {
+   "id": 148864,
+   "producto_id": 31924
+  },
+  {
+   "id": 148870,
+   "producto_id": 31924
+  },
+  {
+   "id": 148897,
+   "producto_id": 31924
+  },
+  {
+   "id": 148953,
+   "producto_id": 31924
+  },
+  {
+   "id": 148957,
+   "producto_id": 31924
+  },
+  {
+   "id": 148967,
+   "producto_id": 31924
+  },
+  {
+   "id": 148981,
+   "producto_id": 31924
+  },
+  {
+   "id": 148909,
+   "producto_id": 31925
+  },
+  {
+   "id": 148915,
+   "producto_id": 31925
+  },
+  {
+   "id": 148920,
+   "producto_id": 31925
+  },
+  {
+   "id": 148924,
+   "producto_id": 31925
+  },
+  {
+   "id": 148597,
+   "producto_id": 31925
+  },
+  {
+   "id": 148604,
+   "producto_id": 31925
+  },
+  {
+   "id": 148610,
+   "producto_id": 31925
+  },
+  {
+   "id": 148617,
+   "producto_id": 31925
+  },
+  {
+   "id": 148599,
+   "producto_id": 31925
+  },
+  {
+   "id": 148602,
+   "producto_id": 31925
+  },
+  {
+   "id": 148612,
+   "producto_id": 31925
+  },
+  {
+   "id": 148615,
+   "producto_id": 31925
+  },
+  {
+   "id": 148986,
+   "producto_id": 31925
+  },
+  {
+   "id": 148990,
+   "producto_id": 31925
+  },
+  {
+   "id": 148995,
+   "producto_id": 31925
+  },
+  {
+   "id": 148999,
+   "producto_id": 31925
+  },
+  {
+   "id": 148960,
+   "producto_id": 31926
+  },
+  {
+   "id": 148961,
+   "producto_id": 31926
+  },
+  {
+   "id": 148969,
+   "producto_id": 31926
+  },
+  {
+   "id": 148972,
+   "producto_id": 31926
+  },
+  {
+   "id": 148975,
+   "producto_id": 31926
+  },
+  {
+   "id": 148978,
+   "producto_id": 31926
+  },
+  {
+   "id": 148983,
+   "producto_id": 31926
+  },
+  {
+   "id": 148964,
+   "producto_id": 31926
+  },
+  {
+   "id": 148718,
+   "producto_id": 31926
+  },
+  {
+   "id": 148749,
+   "producto_id": 31926
+  },
+  {
+   "id": 148774,
+   "producto_id": 31926
+  },
+  {
+   "id": 148796,
+   "producto_id": 31926
+  },
+  {
+   "id": 148837,
+   "producto_id": 31926
+  },
+  {
+   "id": 148867,
+   "producto_id": 31926
+  },
+  {
+   "id": 148876,
+   "producto_id": 31926
+  },
+  {
+   "id": 148894,
+   "producto_id": 31926
+  },
+  {
+   "id": 148721,
+   "producto_id": 31926
+  },
+  {
+   "id": 148724,
+   "producto_id": 31926
+  },
+  {
+   "id": 148746,
+   "producto_id": 31926
+  },
+  {
+   "id": 148758,
+   "producto_id": 31926
+  },
+  {
+   "id": 148768,
+   "producto_id": 31926
+  },
+  {
+   "id": 148779,
+   "producto_id": 31926
+  },
+  {
+   "id": 148798,
+   "producto_id": 31926
+  },
+  {
+   "id": 148812,
+   "producto_id": 31926
+  },
+  {
+   "id": 148826,
+   "producto_id": 31926
+  },
+  {
+   "id": 148829,
+   "producto_id": 31926
+  },
+  {
+   "id": 148845,
+   "producto_id": 31926
+  },
+  {
+   "id": 148861,
+   "producto_id": 31926
+  },
+  {
+   "id": 148882,
+   "producto_id": 31926
+  },
+  {
+   "id": 148887,
+   "producto_id": 31926
+  },
+  {
+   "id": 148908,
+   "producto_id": 31926
+  },
+  {
+   "id": 148910,
+   "producto_id": 31927
+  },
+  {
+   "id": 148916,
+   "producto_id": 31927
+  },
+  {
+   "id": 148917,
+   "producto_id": 31927
+  },
+  {
+   "id": 148921,
+   "producto_id": 31927
+  },
+  {
+   "id": 148595,
+   "producto_id": 31927
+  },
+  {
+   "id": 148606,
+   "producto_id": 31927
+  },
+  {
+   "id": 148608,
+   "producto_id": 31927
+  },
+  {
+   "id": 148985,
+   "producto_id": 31927
+  },
+  {
+   "id": 148992,
+   "producto_id": 31927
+  },
+  {
+   "id": 148994,
+   "producto_id": 31927
+  },
+  {
+   "id": 149001,
+   "producto_id": 31927
+  },
+  {
+   "id": 148596,
+   "producto_id": 31928
+  },
+  {
+   "id": 148605,
+   "producto_id": 31928
+  },
+  {
+   "id": 148600,
+   "producto_id": 31928
+  },
+  {
+   "id": 148601,
+   "producto_id": 31928
+  },
+  {
+   "id": 148613,
+   "producto_id": 31928
+  },
+  {
+   "id": 148614,
+   "producto_id": 31928
+  },
+  {
+   "id": 148911,
+   "producto_id": 31928
+  },
+  {
+   "id": 148913,
+   "producto_id": 31928
+  },
+  {
+   "id": 148918,
+   "producto_id": 31928
+  },
+  {
+   "id": 148922,
+   "producto_id": 31928
+  },
+  {
+   "id": 148987,
+   "producto_id": 31928
+  },
+  {
+   "id": 148991,
+   "producto_id": 31928
+  },
+  {
+   "id": 148996,
+   "producto_id": 31928
+  },
+  {
+   "id": 149000,
+   "producto_id": 31928
+  },
+  {
+   "id": 148594,
+   "producto_id": 31929
+  },
+  {
+   "id": 148609,
+   "producto_id": 31929
+  },
+  {
+   "id": 148598,
+   "producto_id": 31929
+  },
+  {
+   "id": 148603,
+   "producto_id": 31929
+  },
+  {
+   "id": 148611,
+   "producto_id": 31929
+  },
+  {
+   "id": 148616,
+   "producto_id": 31929
+  },
+  {
+   "id": 148912,
+   "producto_id": 31929
+  },
+  {
+   "id": 148914,
+   "producto_id": 31929
+  },
+  {
+   "id": 148919,
+   "producto_id": 31929
+  },
+  {
+   "id": 148993,
+   "producto_id": 31929
+  },
+  {
+   "id": 148923,
+   "producto_id": 31929
+  },
+  {
+   "id": 148988,
+   "producto_id": 31931
+  },
+  {
+   "id": 148989,
+   "producto_id": 31931
+  },
+  {
+   "id": 148997,
+   "producto_id": 31931
+  },
+  {
+   "id": 148998,
+   "producto_id": 31931
+  },
+  {
+   "id": 148593,
+   "producto_id": 31931
+  },
+  {
+   "id": 148607,
+   "producto_id": 31931
+  },
+  {
+   "id": 148618,
+   "producto_id": 31931
+  },
+  {
+   "id": 148591,
+   "producto_id": 31931
+  },
+  {
+   "id": 149005,
+   "producto_id": 31935
+  },
+  {
+   "id": 149006,
+   "producto_id": 31935
+  },
+  {
+   "id": 149014,
+   "producto_id": 31935
+  },
+  {
+   "id": 149016,
+   "producto_id": 31935
+  },
+  {
+   "id": 149023,
+   "producto_id": 31935
+  },
+  {
+   "id": 149025,
+   "producto_id": 31935
+  },
+  {
+   "id": 149033,
+   "producto_id": 31935
+  },
+  {
+   "id": 149035,
+   "producto_id": 31935
+  },
+  {
+   "id": 148626,
+   "producto_id": 31935
+  },
+  {
+   "id": 148630,
+   "producto_id": 31935
+  },
+  {
+   "id": 148637,
+   "producto_id": 31935
+  },
+  {
+   "id": 148644,
+   "producto_id": 31935
+  },
+  {
+   "id": 148645,
+   "producto_id": 31935
+  },
+  {
+   "id": 148646,
+   "producto_id": 31935
+  },
+  {
+   "id": 148660,
+   "producto_id": 31935
+  },
+  {
+   "id": 148661,
+   "producto_id": 31935
+  },
+  {
+   "id": 148668,
+   "producto_id": 31935
+  },
+  {
+   "id": 148675,
+   "producto_id": 31935
+  },
+  {
+   "id": 148676,
+   "producto_id": 31935
+  },
+  {
+   "id": 148677,
+   "producto_id": 31935
+  },
+  {
+   "id": 148691,
+   "producto_id": 31935
+  },
+  {
+   "id": 148692,
+   "producto_id": 31935
+  },
+  {
+   "id": 148702,
+   "producto_id": 31935
+  },
+  {
+   "id": 148707,
+   "producto_id": 31935
+  },
+  {
+   "id": 148628,
+   "producto_id": 31935
+  },
+  {
+   "id": 148635,
+   "producto_id": 31935
+  },
+  {
+   "id": 148648,
+   "producto_id": 31935
+  },
+  {
+   "id": 148658,
+   "producto_id": 31935
+  },
+  {
+   "id": 148927,
+   "producto_id": 31935
+  },
+  {
+   "id": 148928,
+   "producto_id": 31935
+  },
+  {
+   "id": 148933,
+   "producto_id": 31935
+  },
+  {
+   "id": 148934,
+   "producto_id": 31935
+  },
+  {
+   "id": 148940,
+   "producto_id": 31935
+  },
+  {
+   "id": 148941,
+   "producto_id": 31935
+  },
+  {
+   "id": 148945,
+   "producto_id": 31935
+  },
+  {
+   "id": 148949,
+   "producto_id": 31935
+  },
+  {
+   "id": 149004,
+   "producto_id": 31936
+  },
+  {
+   "id": 149008,
+   "producto_id": 31936
+  },
+  {
+   "id": 149013,
+   "producto_id": 31936
+  },
+  {
+   "id": 149018,
+   "producto_id": 31936
+  },
+  {
+   "id": 149022,
+   "producto_id": 31936
+  },
+  {
+   "id": 149027,
+   "producto_id": 31936
+  },
+  {
+   "id": 149032,
+   "producto_id": 31936
+  },
+  {
+   "id": 149037,
+   "producto_id": 31936
+  },
+  {
+   "id": 148656,
+   "producto_id": 31936
+  },
+  {
+   "id": 148680,
+   "producto_id": 31936
+  },
+  {
+   "id": 148694,
+   "producto_id": 31936
+  },
+  {
+   "id": 148708,
+   "producto_id": 31936
+  },
+  {
+   "id": 148619,
+   "producto_id": 31936
+  },
+  {
+   "id": 149002,
+   "producto_id": 31937
+  },
+  {
+   "id": 149009,
+   "producto_id": 31937
+  },
+  {
+   "id": 149012,
+   "producto_id": 31937
+  },
+  {
+   "id": 149019,
+   "producto_id": 31937
+  },
+  {
+   "id": 149021,
+   "producto_id": 31937
+  },
+  {
+   "id": 149028,
+   "producto_id": 31937
+  },
+  {
+   "id": 149031,
+   "producto_id": 31937
+  },
+  {
+   "id": 149038,
+   "producto_id": 31937
+  },
+  {
+   "id": 148631,
+   "producto_id": 31937
+  },
+  {
+   "id": 148633,
+   "producto_id": 31937
+  },
+  {
+   "id": 148650,
+   "producto_id": 31937
+  },
+  {
+   "id": 148654,
+   "producto_id": 31937
+  },
+  {
+   "id": 148665,
+   "producto_id": 31937
+  },
+  {
+   "id": 148671,
+   "producto_id": 31937
+  },
+  {
+   "id": 148673,
+   "producto_id": 31937
+  },
+  {
+   "id": 148678,
+   "producto_id": 31937
+  },
+  {
+   "id": 148686,
+   "producto_id": 31937
+  },
+  {
+   "id": 148689,
+   "producto_id": 31937
+  },
+  {
+   "id": 148699,
+   "producto_id": 31937
+  },
+  {
+   "id": 148706,
+   "producto_id": 31937
+  },
+  {
+   "id": 148926,
+   "producto_id": 31937
+  },
+  {
+   "id": 148929,
+   "producto_id": 31937
+  },
+  {
+   "id": 148932,
+   "producto_id": 31937
+  },
+  {
+   "id": 148938,
+   "producto_id": 31937
+  },
+  {
+   "id": 148942,
+   "producto_id": 31937
+  },
+  {
+   "id": 148948,
+   "producto_id": 31937
+  },
+  {
+   "id": 148952,
+   "producto_id": 31937
+  },
+  {
+   "id": 148935,
+   "producto_id": 31937
+  },
+  {
+   "id": 148688,
+   "producto_id": 31937
+  },
+  {
+   "id": 148621,
+   "producto_id": 31938
+  },
+  {
+   "id": 148624,
+   "producto_id": 31938
+  },
+  {
+   "id": 148640,
+   "producto_id": 31938
+  },
+  {
+   "id": 148641,
+   "producto_id": 31938
+  },
+  {
+   "id": 148655,
+   "producto_id": 31938
+  },
+  {
+   "id": 148662,
+   "producto_id": 31938
+  },
+  {
+   "id": 148629,
+   "producto_id": 31938
+  },
+  {
+   "id": 148634,
+   "producto_id": 31938
+  },
+  {
+   "id": 148649,
+   "producto_id": 31938
+  },
+  {
+   "id": 148657,
+   "producto_id": 31938
+  },
+  {
+   "id": 148670,
+   "producto_id": 31938
+  },
+  {
+   "id": 148684,
+   "producto_id": 31938
+  },
+  {
+   "id": 148685,
+   "producto_id": 31938
+  },
+  {
+   "id": 148693,
+   "producto_id": 31938
+  },
+  {
+   "id": 148698,
+   "producto_id": 31938
+  },
+  {
+   "id": 148705,
+   "producto_id": 31938
+  },
+  {
+   "id": 149003,
+   "producto_id": 31938
+  },
+  {
+   "id": 149007,
+   "producto_id": 31938
+  },
+  {
+   "id": 149015,
+   "producto_id": 31938
+  },
+  {
+   "id": 149017,
+   "producto_id": 31938
+  },
+  {
+   "id": 149024,
+   "producto_id": 31938
+  },
+  {
+   "id": 148925,
+   "producto_id": 31938
+  },
+  {
+   "id": 148930,
+   "producto_id": 31938
+  },
+  {
+   "id": 148931,
+   "producto_id": 31938
+  },
+  {
+   "id": 148936,
+   "producto_id": 31938
+  },
+  {
+   "id": 148939,
+   "producto_id": 31938
+  },
+  {
+   "id": 148943,
+   "producto_id": 31938
+  },
+  {
+   "id": 148946,
+   "producto_id": 31938
+  },
+  {
+   "id": 148950,
+   "producto_id": 31938
+  },
+  {
+   "id": 149026,
+   "producto_id": 31938
+  },
+  {
+   "id": 149034,
+   "producto_id": 31938
+  },
+  {
+   "id": 149036,
+   "producto_id": 31938
+  },
+  {
+   "id": 148697,
+   "producto_id": 31938
+  },
+  {
+   "id": 148620,
+   "producto_id": 31939
+  },
+  {
+   "id": 148622,
+   "producto_id": 31939
+  },
+  {
+   "id": 148639,
+   "producto_id": 31939
+  },
+  {
+   "id": 148643,
+   "producto_id": 31939
+  },
+  {
+   "id": 148651,
+   "producto_id": 31939
+  },
+  {
+   "id": 148636,
+   "producto_id": 31939
+  },
+  {
+   "id": 148647,
+   "producto_id": 31939
+  },
+  {
+   "id": 148659,
+   "producto_id": 31939
+  },
+  {
+   "id": 148666,
+   "producto_id": 31939
+  },
+  {
+   "id": 148667,
+   "producto_id": 31939
+  },
+  {
+   "id": 148669,
+   "producto_id": 31939
+  },
+  {
+   "id": 148679,
+   "producto_id": 31939
+  },
+  {
+   "id": 148682,
+   "producto_id": 31939
+  },
+  {
+   "id": 148687,
+   "producto_id": 31939
+  },
+  {
+   "id": 148690,
+   "producto_id": 31939
+  },
+  {
+   "id": 148703,
+   "producto_id": 31939
+  },
+  {
+   "id": 148704,
+   "producto_id": 31939
+  },
+  {
+   "id": 149010,
+   "producto_id": 31939
+  },
+  {
+   "id": 149011,
+   "producto_id": 31939
+  },
+  {
+   "id": 149020,
+   "producto_id": 31939
+  },
+  {
+   "id": 148951,
+   "producto_id": 31939
+  },
+  {
+   "id": 148937,
+   "producto_id": 31939
+  },
+  {
+   "id": 148944,
+   "producto_id": 31939
+  },
+  {
+   "id": 148947,
+   "producto_id": 31939
+  },
+  {
+   "id": 149029,
+   "producto_id": 31939
+  },
+  {
+   "id": 149030,
+   "producto_id": 31939
+  },
+  {
+   "id": 149039,
+   "producto_id": 31939
+  },
+  {
+   "id": 148627,
+   "producto_id": 31939
+  },
+  {
+   "id": 602793,
+   "producto_id": 137651
+  },
+  {
+   "id": 602794,
+   "producto_id": 137651
+  },
+  {
+   "id": 602795,
+   "producto_id": 137651
+  },
+  {
+   "id": 602796,
+   "producto_id": 137651
+  },
+  {
+   "id": 602797,
+   "producto_id": 137651
+  },
+  {
+   "id": 602798,
+   "producto_id": 137651
+  },
+  {
+   "id": 148709,
+   "producto_id": 137651
+  },
+  {
+   "id": 148754,
+   "producto_id": 137651
+  },
+  {
+   "id": 148788,
+   "producto_id": 137651
+  },
+  {
+   "id": 148790,
+   "producto_id": 137651
+  },
+  {
+   "id": 148834,
+   "producto_id": 137651
+  },
+  {
+   "id": 148854,
+   "producto_id": 137651
+  },
+  {
+   "id": 148875,
+   "producto_id": 137651
+  },
+  {
+   "id": 148730,
+   "producto_id": 137651
+  },
+  {
+   "id": 148731,
+   "producto_id": 137651
+  },
+  {
+   "id": 148744,
+   "producto_id": 137651
+  },
+  {
+   "id": 148757,
+   "producto_id": 137651
+  },
+  {
+   "id": 148766,
+   "producto_id": 137651
+  },
+  {
+   "id": 148783,
+   "producto_id": 137651
+  },
+  {
+   "id": 148804,
+   "producto_id": 137651
+  },
+  {
+   "id": 148814,
+   "producto_id": 137651
+  },
+  {
+   "id": 148824,
+   "producto_id": 137651
+  },
+  {
+   "id": 148828,
+   "producto_id": 137651
+  },
+  {
+   "id": 148849,
+   "producto_id": 137651
+  },
+  {
+   "id": 148859,
+   "producto_id": 137651
+  },
+  {
+   "id": 148884,
+   "producto_id": 137651
+  },
+  {
+   "id": 148893,
+   "producto_id": 137651
+  },
+  {
+   "id": 148906,
+   "producto_id": 137651
+  },
+  {
+   "id": 602803,
+   "producto_id": 137651
+  },
+  {
+   "id": 602799,
+   "producto_id": 137652
+  },
+  {
+   "id": 602800,
+   "producto_id": 137652
+  },
+  {
+   "id": 602801,
+   "producto_id": 137652
+  },
+  {
+   "id": 602802,
+   "producto_id": 137652
+  },
+  {
+   "id": 148623,
+   "producto_id": 137652
+  },
+  {
+   "id": 148642,
+   "producto_id": 137652
+  },
+  {
+   "id": 148652,
+   "producto_id": 137652
+  },
+  {
+   "id": 148663,
+   "producto_id": 137652
+  },
+  {
+   "id": 148674,
+   "producto_id": 137652
+  },
+  {
+   "id": 148681,
+   "producto_id": 137652
+  },
+  {
+   "id": 148695,
+   "producto_id": 137652
+  },
+  {
+   "id": 148701,
+   "producto_id": 137652
+  },
+  {
+   "id": 602816,
+   "producto_id": 137657
+  },
+  {
+   "id": 602817,
+   "producto_id": 137657
+  },
+  {
+   "id": 602818,
+   "producto_id": 137657
+  },
+  {
+   "id": 602819,
+   "producto_id": 137657
+  },
+  {
+   "id": 602820,
+   "producto_id": 137657
+  },
+  {
+   "id": 602821,
+   "producto_id": 137657
+  },
+  {
+   "id": 148715,
+   "producto_id": 137657
+  },
+  {
+   "id": 148752,
+   "producto_id": 137657
+  },
+  {
+   "id": 148772,
+   "producto_id": 137657
+  },
+  {
+   "id": 148792,
+   "producto_id": 137657
+  },
+  {
+   "id": 148840,
+   "producto_id": 137657
+  },
+  {
+   "id": 148863,
+   "producto_id": 137657
+  },
+  {
+   "id": 148871,
+   "producto_id": 137657
+  },
+  {
+   "id": 148727,
+   "producto_id": 137657
+  },
+  {
+   "id": 148742,
+   "producto_id": 137657
+  },
+  {
+   "id": 148762,
+   "producto_id": 137657
+  },
+  {
+   "id": 148764,
+   "producto_id": 137657
+  },
+  {
+   "id": 148787,
+   "producto_id": 137657
+  },
+  {
+   "id": 148801,
+   "producto_id": 137657
+  },
+  {
+   "id": 148810,
+   "producto_id": 137657
+  },
+  {
+   "id": 148822,
+   "producto_id": 137657
+  },
+  {
+   "id": 148833,
+   "producto_id": 137657
+  },
+  {
+   "id": 148853,
+   "producto_id": 137657
+  },
+  {
+   "id": 148857,
+   "producto_id": 137657
+  },
+  {
+   "id": 148880,
+   "producto_id": 137657
+  },
+  {
+   "id": 148890,
+   "producto_id": 137657
+  },
+  {
+   "id": 148904,
+   "producto_id": 137657
+  },
+  {
+   "id": 602823,
+   "producto_id": 137658
+  },
+  {
+   "id": 602824,
+   "producto_id": 137658
+  },
+  {
+   "id": 602822,
+   "producto_id": 137658
+  },
+  {
+   "id": 602825,
+   "producto_id": 137658
+  },
+  {
+   "id": 602826,
+   "producto_id": 137658
+  },
+  {
+   "id": 602827,
+   "producto_id": 137658
+  },
+  {
+   "id": 148717,
+   "producto_id": 137658
+  },
+  {
+   "id": 148748,
+   "producto_id": 137658
+  },
+  {
+   "id": 148775,
+   "producto_id": 137658
+  },
+  {
+   "id": 148795,
+   "producto_id": 137658
+  },
+  {
+   "id": 148868,
+   "producto_id": 137658
+  },
+  {
+   "id": 148745,
+   "producto_id": 137658
+  },
+  {
+   "id": 148778,
+   "producto_id": 137658
+  },
+  {
+   "id": 148811,
+   "producto_id": 137658
+  },
+  {
+   "id": 148825,
+   "producto_id": 137658
+  },
+  {
+   "id": 148844,
+   "producto_id": 137658
+  },
+  {
+   "id": 148881,
+   "producto_id": 137658
+  },
+  {
+   "id": 148907,
+   "producto_id": 137658
+  },
+  {
+   "id": 602832,
+   "producto_id": 137658
+  },
+  {
+   "id": 602828,
+   "producto_id": 137659
+  },
+  {
+   "id": 602829,
+   "producto_id": 137659
+  },
+  {
+   "id": 602830,
+   "producto_id": 137659
+  },
+  {
+   "id": 602831,
+   "producto_id": 137659
+  },
+  {
+   "id": 148711,
+   "producto_id": 137660
+  },
+  {
+   "id": 148750,
+   "producto_id": 137660
+  },
+  {
+   "id": 148776,
+   "producto_id": 137660
+  },
+  {
+   "id": 148740,
+   "producto_id": 137660
+  },
+  {
+   "id": 148785,
+   "producto_id": 137660
+  },
+  {
+   "id": 148805,
+   "producto_id": 137660
+  },
+  {
+   "id": 148838,
+   "producto_id": 137660
+  },
+  {
+   "id": 148842,
+   "producto_id": 137660
+  },
+  {
+   "id": 148873,
+   "producto_id": 137660
+  },
+  {
+   "id": 148808,
+   "producto_id": 137660
+  },
+  {
+   "id": 148820,
+   "producto_id": 137660
+  },
+  {
+   "id": 148878,
+   "producto_id": 137660
+  },
+  {
+   "id": 148851,
+   "producto_id": 137660
+  },
+  {
+   "id": 602836,
+   "producto_id": 137660
+  },
+  {
+   "id": 602837,
+   "producto_id": 137660
+  },
+  {
+   "id": 602838,
+   "producto_id": 137660
+  },
+  {
+   "id": 602839,
+   "producto_id": 137660
+  },
+  {
+   "id": 602840,
+   "producto_id": 137660
+  },
+  {
+   "id": 602841,
+   "producto_id": 137660
+  },
+  {
+   "id": 602846,
+   "producto_id": 137660
+  },
+  {
+   "id": 148902,
+   "producto_id": 137660
+  },
+  {
+   "id": 148632,
+   "producto_id": 137661
+  },
+  {
+   "id": 602842,
+   "producto_id": 137661
+  },
+  {
+   "id": 602843,
+   "producto_id": 137661
+  },
+  {
+   "id": 602844,
+   "producto_id": 137661
+  },
+  {
+   "id": 602845,
+   "producto_id": 137661
+  },
+  {
+   "id": 606046,
+   "producto_id": 138202
+  },
+  {
+   "id": 148710,
+   "producto_id": 139116
+  },
+  {
+   "id": 148735,
+   "producto_id": 139116
+  },
+  {
+   "id": 148755,
+   "producto_id": 139116
+  },
+  {
+   "id": 148789,
+   "producto_id": 139116
+  },
+  {
+   "id": 148791,
+   "producto_id": 139116
+  },
+  {
+   "id": 148835,
+   "producto_id": 139116
+  },
+  {
+   "id": 148855,
+   "producto_id": 139116
+  },
+  {
+   "id": 148874,
+   "producto_id": 139116
+  },
+  {
+   "id": 148898,
+   "producto_id": 139116
+  },
+  {
+   "id": 148722,
+   "producto_id": 139116
+  },
+  {
+   "id": 148729,
+   "producto_id": 139116
+  },
+  {
+   "id": 148743,
+   "producto_id": 139116
+  },
+  {
+   "id": 148756,
+   "producto_id": 139116
+  },
+  {
+   "id": 148765,
+   "producto_id": 139116
+  },
+  {
+   "id": 148782,
+   "producto_id": 139116
+  },
+  {
+   "id": 148803,
+   "producto_id": 139116
+  },
+  {
+   "id": 148813,
+   "producto_id": 139116
+  },
+  {
+   "id": 148823,
+   "producto_id": 139116
+  },
+  {
+   "id": 148827,
+   "producto_id": 139116
+  },
+  {
+   "id": 148848,
+   "producto_id": 139116
+  },
+  {
+   "id": 148858,
+   "producto_id": 139116
+  },
+  {
+   "id": 148883,
+   "producto_id": 139116
+  },
+  {
+   "id": 148892,
+   "producto_id": 139116
+  },
+  {
+   "id": 148905,
+   "producto_id": 139116
+  },
+  {
+   "id": 148959,
+   "producto_id": 139116
+  },
+  {
+   "id": 148962,
+   "producto_id": 139116
+  },
+  {
+   "id": 148963,
+   "producto_id": 139116
+  },
+  {
+   "id": 148968,
+   "producto_id": 139116
+  },
+  {
+   "id": 148971,
+   "producto_id": 139116
+  },
+  {
+   "id": 148974,
+   "producto_id": 139116
+  },
+  {
+   "id": 148977,
+   "producto_id": 139116
+  },
+  {
+   "id": 148980,
+   "producto_id": 139116
+  },
+  {
+   "id": 148982,
+   "producto_id": 139116
+  },
+  {
+   "id": 148886,
+   "producto_id": 139117
+  },
+  {
+   "id": 148891,
+   "producto_id": 139117
+  },
+  {
+   "id": 148900,
+   "producto_id": 139117
+  },
+  {
+   "id": 148954,
+   "producto_id": 139117
+  },
+  {
+   "id": 148956,
+   "producto_id": 139117
+  },
+  {
+   "id": 148965,
+   "producto_id": 139117
+  },
+  {
+   "id": 148970,
+   "producto_id": 139117
+  },
+  {
+   "id": 148973,
+   "producto_id": 139117
+  },
+  {
+   "id": 148976,
+   "producto_id": 139117
+  },
+  {
+   "id": 148979,
+   "producto_id": 139117
+  },
+  {
+   "id": 148984,
+   "producto_id": 139117
+  },
+  {
+   "id": 148714,
+   "producto_id": 139117
+  },
+  {
+   "id": 148733,
+   "producto_id": 139117
+  },
+  {
+   "id": 148736,
+   "producto_id": 139117
+  },
+  {
+   "id": 148771,
+   "producto_id": 139117
+  },
+  {
+   "id": 148797,
+   "producto_id": 139117
+  },
+  {
+   "id": 148836,
+   "producto_id": 139117
+  },
+  {
+   "id": 148866,
+   "producto_id": 139117
+  },
+  {
+   "id": 148869,
+   "producto_id": 139117
+  },
+  {
+   "id": 148896,
+   "producto_id": 139117
+  },
+  {
+   "id": 148723,
+   "producto_id": 139117
+  },
+  {
+   "id": 148728,
+   "producto_id": 139117
+  },
+  {
+   "id": 148738,
+   "producto_id": 139117
+  },
+  {
+   "id": 148760,
+   "producto_id": 139117
+  },
+  {
+   "id": 148767,
+   "producto_id": 139117
+  },
+  {
+   "id": 148781,
+   "producto_id": 139117
+  },
+  {
+   "id": 148802,
+   "producto_id": 139117
+  },
+  {
+   "id": 148816,
+   "producto_id": 139117
+  },
+  {
+   "id": 148818,
+   "producto_id": 139117
+  },
+  {
+   "id": 148831,
+   "producto_id": 139117
+  },
+  {
+   "id": 148847,
+   "producto_id": 139117
+  },
+  {
+   "id": 148860,
+   "producto_id": 139117
+  },
+  {
+   "id": 148712,
+   "producto_id": 139118
+  },
+  {
+   "id": 148732,
+   "producto_id": 139118
+  },
+  {
+   "id": 148751,
+   "producto_id": 139118
+  },
+  {
+   "id": 148777,
+   "producto_id": 139118
+  },
+  {
+   "id": 148719,
+   "producto_id": 139118
+  },
+  {
+   "id": 148725,
+   "producto_id": 139118
+  },
+  {
+   "id": 148739,
+   "producto_id": 139118
+  },
+  {
+   "id": 148759,
+   "producto_id": 139118
+  },
+  {
+   "id": 148769,
+   "producto_id": 139118
+  },
+  {
+   "id": 148784,
+   "producto_id": 139118
+  },
+  {
+   "id": 148806,
+   "producto_id": 139118
+  },
+  {
+   "id": 148841,
+   "producto_id": 139118
+  },
+  {
+   "id": 148843,
+   "producto_id": 139118
+  },
+  {
+   "id": 148872,
+   "producto_id": 139118
+  },
+  {
+   "id": 148895,
+   "producto_id": 139118
+  },
+  {
+   "id": 148799,
+   "producto_id": 139118
+  },
+  {
+   "id": 148807,
+   "producto_id": 139118
+  },
+  {
+   "id": 148819,
+   "producto_id": 139118
+  },
+  {
+   "id": 148830,
+   "producto_id": 139118
+  },
+  {
+   "id": 148850,
+   "producto_id": 139118
+  },
+  {
+   "id": 148862,
+   "producto_id": 139118
+  },
+  {
+   "id": 148877,
+   "producto_id": 139118
+  },
+  {
+   "id": 148888,
+   "producto_id": 139118
+  },
+  {
+   "id": 148901,
+   "producto_id": 139118
+  },
+  {
+   "id": 148955,
+   "producto_id": 139118
+  },
+  {
+   "id": 148958,
+   "producto_id": 139118
+  },
+  {
+   "id": 148966,
+   "producto_id": 139118
+  }
+ ],
+ "creadas": []
+}

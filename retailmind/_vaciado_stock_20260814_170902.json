@@ -1,0 +1,7699 @@
+{
+ "fecha": "2026-08-14T17:09:02.827113-04:00",
+ "referencia": "VACIADO-20260814_170902",
+ "sucursales": [
+  {
+   "id": 11,
+   "alias": "EDEL FALLADOS"
+  },
+  {
+   "id": 8,
+   "alias": "NICK3"
+  }
+ ],
+ "tallas": [
+  {
+   "pt_id": 385595,
+   "sku": 4723249,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 546005,
+   "sku": 428631,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 545938,
+   "sku": 335991,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 391695,
+   "sku": 4409702,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 16028,
+   "sku": 4708315,
+   "stock_antes": -40
+  },
+  {
+   "pt_id": 16034,
+   "sku": 4708313,
+   "stock_antes": -40
+  },
+  {
+   "pt_id": 16035,
+   "sku": 4708312,
+   "stock_antes": -20
+  },
+  {
+   "pt_id": 545880,
+   "sku": 297251,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 117691,
+   "sku": 252070024763,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 248112,
+   "sku": 4743986,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 248115,
+   "sku": 4743987,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 248120,
+   "sku": 4743988,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 248123,
+   "sku": 4743989,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 122781,
+   "sku": 427701,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 132282,
+   "sku": 4708637,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 137015,
+   "sku": 4714256,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 126111,
+   "sku": 4411663,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 126880,
+   "sku": 318511,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 564107,
+   "sku": 333016,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 564111,
+   "sku": 333019,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 195870,
+   "sku": 4731473,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 352842,
+   "sku": 333515,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 240735,
+   "sku": 4728634,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 294120,
+   "sku": 335847,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 309614,
+   "sku": 4727164,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 325691,
+   "sku": 4745859,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 565228,
+   "sku": 345645,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 128064,
+   "sku": 112741,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 341476,
+   "sku": 4415824,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 341862,
+   "sku": 4714797,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 352599,
+   "sku": 313704,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 352700,
+   "sku": 318964,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 354911,
+   "sku": 4423483,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 382545,
+   "sku": 4412809,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 545876,
+   "sku": 349041,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 545884,
+   "sku": 264791,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 545914,
+   "sku": 310471,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 545915,
+   "sku": 310481,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 546017,
+   "sku": 372421,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 134126,
+   "sku": 4716249,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 154585,
+   "sku": 372834,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 157902,
+   "sku": 4741066,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 572012,
+   "sku": 410611,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 572026,
+   "sku": 421782,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 164418,
+   "sku": 242163,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 166904,
+   "sku": 344243,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 58221,
+   "sku": 4731509,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 58267,
+   "sku": 318378,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 220667,
+   "sku": 307821,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 220671,
+   "sku": 382031,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 222202,
+   "sku": 372813,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 580669,
+   "sku": 372081,
+   "stock_antes": 48
+  },
+  {
+   "pt_id": 462448,
+   "sku": 4406028,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 584871,
+   "sku": 368671,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 584872,
+   "sku": 368673,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 587151,
+   "sku": 408101,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 236728,
+   "sku": 282322,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 250273,
+   "sku": 4700710,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 250301,
+   "sku": 4700700,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 250302,
+   "sku": 4700701,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 429443,
+   "sku": 4743929,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 429452,
+   "sku": 4743930,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 429453,
+   "sku": 4743931,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 429462,
+   "sku": 4743923,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 429463,
+   "sku": 4743924,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 429472,
+   "sku": 4743925,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 60539,
+   "sku": 283931,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 60540,
+   "sku": 283932,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 60543,
+   "sku": 283933,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 60544,
+   "sku": 283934,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 27541,
+   "sku": 120373,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 27553,
+   "sku": 1082110,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 54502,
+   "sku": 277153,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 54788,
+   "sku": 277249,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 58270,
+   "sku": 318374,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 60061,
+   "sku": 261059,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 106443,
+   "sku": 106070022116,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 327725,
+   "sku": 318383,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 64432,
+   "sku": 323004,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 467101,
+   "sku": 193483,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 468950,
+   "sku": 4725193,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 64473,
+   "sku": 3592511,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 547621,
+   "sku": 164551,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 416642,
+   "sku": 1001184,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 24902,
+   "sku": 4745677,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 123715,
+   "sku": 262921,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 223982,
+   "sku": 429521,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 226672,
+   "sku": 406071,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 308693,
+   "sku": 321001,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 424558,
+   "sku": 217471,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 424598,
+   "sku": 310801,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 511459,
+   "sku": 318611,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 6763,
+   "sku": 4727499,
+   "stock_antes": 5
+  },
+  {
+   "pt_id": 278463,
+   "sku": 133010073006,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 278464,
+   "sku": 133010173003,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 348451,
+   "sku": 358931,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 356631,
+   "sku": 4693897,
+   "stock_antes": 6
+  },
+  {
+   "pt_id": 356719,
+   "sku": 4425394,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 403403,
+   "sku": 4413934,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 66652,
+   "sku": 305825,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 335599,
+   "sku": 4702482,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 335642,
+   "sku": 4702490,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 507983,
+   "sku": 4691560,
+   "stock_antes": -4
+  },
+  {
+   "pt_id": 511524,
+   "sku": 4691938,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 404525,
+   "sku": 4413175,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 274058,
+   "sku": 4706253,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 125460,
+   "sku": 1001182,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 223926,
+   "sku": 1001016,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 392167,
+   "sku": 351071,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 545955,
+   "sku": 352631,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 545987,
+   "sku": 349521,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 32715,
+   "sku": 4747297,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 8826,
+   "sku": 379041,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 126812,
+   "sku": 1418025,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 167159,
+   "sku": 4750599,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 315078,
+   "sku": 381803,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 412089,
+   "sku": 337873,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 412088,
+   "sku": 337878,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 506997,
+   "sku": 254596,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 8513,
+   "sku": 4416472,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 8522,
+   "sku": 4416473,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 8525,
+   "sku": 4416474,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 8534,
+   "sku": 4416475,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 8540,
+   "sku": 4416476,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 8546,
+   "sku": 4416477,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 421150,
+   "sku": 416781,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 421153,
+   "sku": 416782,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 421175,
+   "sku": 416784,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 421176,
+   "sku": 416785,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 421188,
+   "sku": 416786,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 71888,
+   "sku": 124891,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 9607,
+   "sku": 331941,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 558124,
+   "sku": 4722210,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 558151,
+   "sku": 4722213,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 362909,
+   "sku": 205528,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 104318,
+   "sku": 4726172,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 122748,
+   "sku": 4417040,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 196702,
+   "sku": 368080041031,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 231674,
+   "sku": 301328,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 231679,
+   "sku": 3013210,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 332827,
+   "sku": 296265,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 332830,
+   "sku": 296266,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 339452,
+   "sku": 3429516,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 339451,
+   "sku": 342959,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 417495,
+   "sku": 4414924,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 426561,
+   "sku": 205506,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 426568,
+   "sku": 205508,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 464710,
+   "sku": 340602,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 464713,
+   "sku": 340604,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 485830,
+   "sku": 310255,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 485834,
+   "sku": 310256,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 517027,
+   "sku": 337544,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 517017,
+   "sku": 337548,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 57341,
+   "sku": 3023311,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 273188,
+   "sku": 305628,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 339498,
+   "sku": 3454811,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 352220,
+   "sku": 247983,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 373058,
+   "sku": 388243,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 377600,
+   "sku": 300883,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 421068,
+   "sku": 4167611,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 468162,
+   "sku": 4417262,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 494386,
+   "sku": 2584310,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 494751,
+   "sku": 420523,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 495933,
+   "sku": 3062116,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 557235,
+   "sku": 299925,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 576557,
+   "sku": 1454612,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 577040,
+   "sku": 4417274,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 76926,
+   "sku": 4414837,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 566627,
+   "sku": 4701772,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 41828,
+   "sku": 389911,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 42631,
+   "sku": 4698049,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 148409,
+   "sku": 216584,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 376473,
+   "sku": 221501,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 580439,
+   "sku": 271961,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 315973,
+   "sku": 240292,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 462376,
+   "sku": 4417246,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 271551,
+   "sku": 4700522,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 319011,
+   "sku": 267991,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 430969,
+   "sku": 193529,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 468429,
+   "sku": 4693042,
+   "stock_antes": 12
+  },
+  {
+   "pt_id": 46401,
+   "sku": 277145,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 416248,
+   "sku": 104396,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 416250,
+   "sku": 104397,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 416257,
+   "sku": 104398,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 416258,
+   "sku": 104399,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 416268,
+   "sku": 1043910,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 103518,
+   "sku": 419070021745,
+   "stock_antes": 6
+  },
+  {
+   "pt_id": 198920,
+   "sku": 426070042182,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 318991,
+   "sku": 420070091089,
+   "stock_antes": 6
+  },
+  {
+   "pt_id": 381496,
+   "sku": 285383,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 499678,
+   "sku": 180278,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 499679,
+   "sku": 180279,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 499684,
+   "sku": 1802710,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 550189,
+   "sku": 4739758,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 550191,
+   "sku": 4739759,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 550178,
+   "sku": 4739721,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 550188,
+   "sku": 4739722,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 550190,
+   "sku": 4739723,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 314948,
+   "sku": 276958,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 314941,
+   "sku": 276951,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 314947,
+   "sku": 2769514,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 23476,
+   "sku": 108087,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 23481,
+   "sku": 108089,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 23997,
+   "sku": 120591,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 24002,
+   "sku": 120595,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 101089,
+   "sku": 157070021326,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 329013,
+   "sku": 4740649,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 329020,
+   "sku": 4740651,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 535525,
+   "sku": 115381,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 535528,
+   "sku": 115383,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 119512,
+   "sku": 115443,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 220677,
+   "sku": 362333,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 222431,
+   "sku": 318294,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 246296,
+   "sku": 409421,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 551644,
+   "sku": 4692421,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 584088,
+   "sku": 354454,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 584095,
+   "sku": 354463,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 23464,
+   "sku": 108066,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 27560,
+   "sku": 120382,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 29813,
+   "sku": 120709,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 44833,
+   "sku": 104523,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 69147,
+   "sku": 123070001590,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 74414,
+   "sku": 393932,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 74707,
+   "sku": 359171,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 100601,
+   "sku": 111601,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 249511,
+   "sku": 4710134,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 254554,
+   "sku": 354615,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 269965,
+   "sku": 426070006689,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 273947,
+   "sku": 4410803,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 296535,
+   "sku": 4408482,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 314973,
+   "sku": 276963,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 328119,
+   "sku": 426070099742,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 328946,
+   "sku": 4740626,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 329158,
+   "sku": 4402806,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 329229,
+   "sku": 4402825,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 334165,
+   "sku": 4736206,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 361885,
+   "sku": 271991,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 368823,
+   "sku": 291749,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 376373,
+   "sku": 221601,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 426449,
+   "sku": 1744614,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 426554,
+   "sku": 283014,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 463316,
+   "sku": 168789,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 468461,
+   "sku": 4410981,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 512166,
+   "sku": 2226411,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 528253,
+   "sku": 121938,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 355000,
+   "sku": 366854,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 464219,
+   "sku": 354415,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 465272,
+   "sku": 4745477,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 489648,
+   "sku": 2854914,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 534567,
+   "sku": 1000513,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 549613,
+   "sku": 4405694,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 558003,
+   "sku": 364654,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 384155,
+   "sku": 414141,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 87222,
+   "sku": 4743938,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 87238,
+   "sku": 4743934,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 87245,
+   "sku": 4743935,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 88456,
+   "sku": 4743948,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 88457,
+   "sku": 4743949,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 88465,
+   "sku": 4743943,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 88466,
+   "sku": 4743944,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 88506,
+   "sku": 4743953,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 88513,
+   "sku": 4743954,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 88514,
+   "sku": 4743955,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 88772,
+   "sku": 4743974,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 88779,
+   "sku": 4743975,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 88780,
+   "sku": 4743976,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 88787,
+   "sku": 4743968,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 88795,
+   "sku": 4743970,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 88796,
+   "sku": 4743971,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 88803,
+   "sku": 4743972,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 89279,
+   "sku": 301345,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 89245,
+   "sku": 316103,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 90914,
+   "sku": 4421969,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 90971,
+   "sku": 194821,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 49393,
+   "sku": 4422806,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 49402,
+   "sku": 2202710,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 91621,
+   "sku": 4689536,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 91655,
+   "sku": 140974,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 52081,
+   "sku": 241354,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 92272,
+   "sku": 133010020192,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 5346,
+   "sku": 4404008,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 5347,
+   "sku": 4404009,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 94076,
+   "sku": 4703498,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 48319,
+   "sku": 4692281,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 48320,
+   "sku": 4692282,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 168060,
+   "sku": 4742698,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 415606,
+   "sku": 110401,
+   "stock_antes": -2
+  },
+  {
+   "pt_id": 415615,
+   "sku": 110402,
+   "stock_antes": -4
+  },
+  {
+   "pt_id": 415622,
+   "sku": 110403,
+   "stock_antes": -5
+  },
+  {
+   "pt_id": 415634,
+   "sku": 110404,
+   "stock_antes": -3
+  },
+  {
+   "pt_id": 415641,
+   "sku": 1104010,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 505652,
+   "sku": 245458,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 253445,
+   "sku": 290312,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 97900,
+   "sku": 4711597,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 8054,
+   "sku": 4751485,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 8063,
+   "sku": 4751486,
+   "stock_antes": 6
+  },
+  {
+   "pt_id": 8073,
+   "sku": 4751488,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 250457,
+   "sku": 4721294,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 392751,
+   "sku": 4691843,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 538377,
+   "sku": 4729967,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 538384,
+   "sku": 4729968,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 538385,
+   "sku": 4729969,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 538392,
+   "sku": 4729970,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 538393,
+   "sku": 4729971,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 56924,
+   "sku": 252070014535,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 118133,
+   "sku": 374491,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 118134,
+   "sku": 374551,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 150389,
+   "sku": 134010000313,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 164948,
+   "sku": 420070035519,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 70134,
+   "sku": 4712963,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 97519,
+   "sku": 322905,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 246851,
+   "sku": 4708104,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 252155,
+   "sku": 4720426,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 313985,
+   "sku": 418232,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 333396,
+   "sku": 169215,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 368692,
+   "sku": 4697105,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 369237,
+   "sku": 168823,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 577402,
+   "sku": 4401421,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 473710,
+   "sku": 4711107,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 486364,
+   "sku": 4716869,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 500987,
+   "sku": 4692648,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 534507,
+   "sku": 4425668,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 119154,
+   "sku": 4416922,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 538352,
+   "sku": 4729960,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 538361,
+   "sku": 4729963,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 538368,
+   "sku": 4729964,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 538369,
+   "sku": 4729965,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 223892,
+   "sku": 4415208,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 225645,
+   "sku": 4421923,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 510215,
+   "sku": 4417438,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 215133,
+   "sku": 4687430,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 216323,
+   "sku": 4407256,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 223377,
+   "sku": 427331,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 545946,
+   "sku": 350691,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 22842,
+   "sku": 120443,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 206028,
+   "sku": 158092,
+   "stock_antes": -4
+  },
+  {
+   "pt_id": 225835,
+   "sku": 4421810,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 285633,
+   "sku": 4711783,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 422828,
+   "sku": 4421035,
+   "stock_antes": 50
+  },
+  {
+   "pt_id": 428333,
+   "sku": 325043,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 126701,
+   "sku": 4728426,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 162506,
+   "sku": 4687034,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 225617,
+   "sku": 4692165,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 226671,
+   "sku": 4698817,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 227207,
+   "sku": 406811,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 227202,
+   "sku": 4410738,
+   "stock_antes": 6
+  },
+  {
+   "pt_id": 249140,
+   "sku": 4743897,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 249145,
+   "sku": 4743898,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 249147,
+   "sku": 4743899,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 249152,
+   "sku": 4743900,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 249155,
+   "sku": 4743901,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 249199,
+   "sku": 4743911,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 249202,
+   "sku": 4743912,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 249229,
+   "sku": 4743917,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 249232,
+   "sku": 4743918,
+   "stock_antes": -1
+  },
+  {
+   "pt_id": 256406,
+   "sku": 133010162007,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 266884,
+   "sku": 422231,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 267064,
+   "sku": 4410797,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 267072,
+   "sku": 4418794,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 274554,
+   "sku": 4418528,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 276209,
+   "sku": 312505,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 277497,
+   "sku": 315634,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 281436,
+   "sku": 314875,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 287048,
+   "sku": 4698402,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 294824,
+   "sku": 370043,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 299983,
+   "sku": 372155,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 301639,
+   "sku": 404706,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 304128,
+   "sku": 413822,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 311201,
+   "sku": 4733170,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 312311,
+   "sku": 373546,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 315733,
+   "sku": 1466810,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 318601,
+   "sku": 4415053,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 319966,
+   "sku": 4714581,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 320831,
+   "sku": 278632,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 322786,
+   "sku": 4734641,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 322791,
+   "sku": 4734642,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 322798,
+   "sku": 4734643,
+   "stock_antes": 5
+  },
+  {
+   "pt_id": 322804,
+   "sku": 4734644,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 322813,
+   "sku": 4734645,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 322814,
+   "sku": 4734646,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 324386,
+   "sku": 379331,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 324322,
+   "sku": 404070096398,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 328403,
+   "sku": 404070099900,
+   "stock_antes": 8
+  },
+  {
+   "pt_id": 332673,
+   "sku": 4417225,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 337631,
+   "sku": 339622,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 337663,
+   "sku": 339643,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 337675,
+   "sku": 339674,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 338763,
+   "sku": 427506,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 341039,
+   "sku": 4714760,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 341290,
+   "sku": 4714764,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 341150,
+   "sku": 367431,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 341156,
+   "sku": 366301,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 342177,
+   "sku": 354884,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 345743,
+   "sku": 197791,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 349613,
+   "sku": 355263,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 351711,
+   "sku": 408891,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 353929,
+   "sku": 298712,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 354860,
+   "sku": 297754,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 357680,
+   "sku": 326101,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 357684,
+   "sku": 186001,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 359960,
+   "sku": 4415222,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 362879,
+   "sku": 420073,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 365731,
+   "sku": 394411,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 367076,
+   "sku": 4706322,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 374291,
+   "sku": 4715159,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 376744,
+   "sku": 371541,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 376745,
+   "sku": 371542,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 378164,
+   "sku": 410601,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 380657,
+   "sku": 4705576,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 387693,
+   "sku": 4404521,
+   "stock_antes": 10
+  },
+  {
+   "pt_id": 389647,
+   "sku": 4705690,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 389648,
+   "sku": 4705692,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 389655,
+   "sku": 4705691,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 389656,
+   "sku": 4705694,
+   "stock_antes": 5
+  },
+  {
+   "pt_id": 389663,
+   "sku": 4705693,
+   "stock_antes": 8
+  },
+  {
+   "pt_id": 389664,
+   "sku": 4705696,
+   "stock_antes": 7
+  },
+  {
+   "pt_id": 389671,
+   "sku": 4705695,
+   "stock_antes": 6
+  },
+  {
+   "pt_id": 389672,
+   "sku": 4705697,
+   "stock_antes": 6
+  },
+  {
+   "pt_id": 392570,
+   "sku": 4414585,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 392588,
+   "sku": 4697267,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 403005,
+   "sku": 4412876,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 417304,
+   "sku": 327931,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 434605,
+   "sku": 4698300,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 452076,
+   "sku": 4403199,
+   "stock_antes": 7
+  },
+  {
+   "pt_id": 464487,
+   "sku": 4687951,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 465772,
+   "sku": 316823,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 469061,
+   "sku": 4410975,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 496263,
+   "sku": 295213,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 496503,
+   "sku": 132341,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 496539,
+   "sku": 132363,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 499114,
+   "sku": 4421036,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 499473,
+   "sku": 4730499,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 500019,
+   "sku": 567897,
+   "stock_antes": 6
+  },
+  {
+   "pt_id": 500020,
+   "sku": 567890,
+   "stock_antes": 12
+  },
+  {
+   "pt_id": 500028,
+   "sku": 567891,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 500029,
+   "sku": 567892,
+   "stock_antes": 9
+  },
+  {
+   "pt_id": 500036,
+   "sku": 567894,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 500037,
+   "sku": 567896,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 502463,
+   "sku": 283156,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 502331,
+   "sku": 283125,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 503580,
+   "sku": 305351,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 504365,
+   "sku": 302563,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 506582,
+   "sku": 4421033,
+   "stock_antes": 8
+  },
+  {
+   "pt_id": 508033,
+   "sku": 4421031,
+   "stock_antes": 12
+  },
+  {
+   "pt_id": 509690,
+   "sku": 4416267,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 510080,
+   "sku": 4402577,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 513733,
+   "sku": 4420480,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 516936,
+   "sku": 106311,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 516940,
+   "sku": 410041,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 518058,
+   "sku": 230042,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 519323,
+   "sku": 1103017,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 530965,
+   "sku": 237864,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 530987,
+   "sku": 370204,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 545783,
+   "sku": 368511,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 545909,
+   "sku": 326141,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 546033,
+   "sku": 417781,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 547645,
+   "sku": 4410801,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 556799,
+   "sku": 416801,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 556816,
+   "sku": 4411122,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 557243,
+   "sku": 172138,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 557275,
+   "sku": 4689517,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 557495,
+   "sku": 1714913,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 559172,
+   "sku": 222205,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 559073,
+   "sku": 322239,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 565567,
+   "sku": 340294,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 565571,
+   "sku": 340297,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 566577,
+   "sku": 4421052,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 508107,
+   "sku": 4417452,
+   "stock_antes": 12
+  },
+  {
+   "pt_id": 225444,
+   "sku": 406691,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 546815,
+   "sku": 215301,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 19731,
+   "sku": 420812,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 48783,
+   "sku": 4694616,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 194503,
+   "sku": 4711561,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 301590,
+   "sku": 375263,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 452923,
+   "sku": 350651,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 511329,
+   "sku": 4691939,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 587382,
+   "sku": 4728937,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 420953,
+   "sku": 4728218,
+   "stock_antes": 5
+  },
+  {
+   "pt_id": 357549,
+   "sku": 4401261,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 370280,
+   "sku": 317063,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 225608,
+   "sku": 417991,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 127915,
+   "sku": 4423754,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 127925,
+   "sku": 156361,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 535813,
+   "sku": 1000403,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 540871,
+   "sku": 351951,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 499102,
+   "sku": 4409705,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 541058,
+   "sku": 351921,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 557613,
+   "sku": 4402257,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 117221,
+   "sku": 102051,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 38791,
+   "sku": 415021,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 40483,
+   "sku": 397171,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 323773,
+   "sku": 4742876,
+   "stock_antes": 15
+  },
+  {
+   "pt_id": 50497,
+   "sku": 4728274,
+   "stock_antes": 5
+  },
+  {
+   "pt_id": 91814,
+   "sku": 4423752,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 285727,
+   "sku": 318521,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 376356,
+   "sku": 428371,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 323441,
+   "sku": 4742877,
+   "stock_antes": -25
+  },
+  {
+   "pt_id": 47012,
+   "sku": 4412268,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 443787,
+   "sku": 4724395,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 47000,
+   "sku": 4412261,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 47009,
+   "sku": 4412266,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 285713,
+   "sku": 285301,
+   "stock_antes": 11
+  },
+  {
+   "pt_id": 416337,
+   "sku": 4717299,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 22814,
+   "sku": 361791,
+   "stock_antes": -5
+  },
+  {
+   "pt_id": 556592,
+   "sku": 4417920,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 571648,
+   "sku": 399631,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 571987,
+   "sku": 328071,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 192773,
+   "sku": 132255,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 192777,
+   "sku": 132258,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 192781,
+   "sku": 132259,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 120822,
+   "sku": 154522,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 120823,
+   "sku": 154523,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 120831,
+   "sku": 154525,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 120824,
+   "sku": 154529,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 106442,
+   "sku": 106070022116,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 22750,
+   "sku": 107979,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 260233,
+   "sku": 133013663143,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 524402,
+   "sku": 279468,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 274248,
+   "sku": 4424485,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 66651,
+   "sku": 305825,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 544024,
+   "sku": 412284,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 544161,
+   "sku": 3920616,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 33154,
+   "sku": 152205,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 91954,
+   "sku": 248003,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 515935,
+   "sku": 381734,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 421158,
+   "sku": 416788,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 421159,
+   "sku": 416789,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 421169,
+   "sku": 4167810,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 421183,
+   "sku": 4167811,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 421184,
+   "sku": 4167812,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 20415,
+   "sku": 154531,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 20421,
+   "sku": 154533,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 121211,
+   "sku": 152567,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 121212,
+   "sku": 152568,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 426569,
+   "sku": 205509,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 56812,
+   "sku": 261264,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 90137,
+   "sku": 344522,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 576896,
+   "sku": 345393,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 376676,
+   "sku": 230003,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 80629,
+   "sku": 154544,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 349881,
+   "sku": 1987110,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 417292,
+   "sku": 328141,
+   "stock_antes": 5
+  },
+  {
+   "pt_id": 512491,
+   "sku": 279579,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 512496,
+   "sku": 2795710,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 512500,
+   "sku": 2795711,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 512505,
+   "sku": 2795712,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 71008,
+   "sku": 106070016047,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 314950,
+   "sku": 276952,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 320432,
+   "sku": 419070009224,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 298441,
+   "sku": 322683,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 361600,
+   "sku": 1802211,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 518176,
+   "sku": 230059,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 556460,
+   "sku": 2299616,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 369081,
+   "sku": 279519,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 392608,
+   "sku": 366862,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 518242,
+   "sku": 237764,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 51595,
+   "sku": 420070013647,
+   "stock_antes": 5
+  },
+  {
+   "pt_id": 92080,
+   "sku": 133010120175,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 496502,
+   "sku": 132347,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 496504,
+   "sku": 132348,
+   "stock_antes": 7
+  },
+  {
+   "pt_id": 496505,
+   "sku": 132342,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 496509,
+   "sku": 132349,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 496516,
+   "sku": 1323410,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 496517,
+   "sku": 132344,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 496518,
+   "sku": 132345,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 570490,
+   "sku": 322191,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 97585,
+   "sku": 322924,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 97592,
+   "sku": 322925,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 97598,
+   "sku": 322926,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 578385,
+   "sku": 4402364,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 578387,
+   "sku": 4402365,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 89366,
+   "sku": 316119,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 255500,
+   "sku": 133010161017,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 266261,
+   "sku": 331675,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 266276,
+   "sku": 331683,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 266282,
+   "sku": 331684,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 9099,
+   "sku": 151157,
+   "stock_antes": 38
+  },
+  {
+   "pt_id": 9137,
+   "sku": 152676,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 9138,
+   "sku": 152677,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 9145,
+   "sku": 152678,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 9146,
+   "sku": 152679,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 192738,
+   "sku": 139771,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 192742,
+   "sku": 139772,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 192743,
+   "sku": 139773,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 192723,
+   "sku": 190905,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 192724,
+   "sku": 190906,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 192731,
+   "sku": 190909,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 256407,
+   "sku": 133010162007,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 257638,
+   "sku": 108791,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 259622,
+   "sku": 133013563009,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 259621,
+   "sku": 133013463002,
+   "stock_antes": 3
+  },
+  {
+   "pt_id": 260065,
+   "sku": 133013563122,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 274262,
+   "sku": 4424491,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 276205,
+   "sku": 312502,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 276208,
+   "sku": 312504,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 278485,
+   "sku": 133010073020,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 378132,
+   "sku": 372491,
+   "stock_antes": 8
+  },
+  {
+   "pt_id": 381176,
+   "sku": 2300222,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 381177,
+   "sku": 2300223,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 381195,
+   "sku": 2300225,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 391696,
+   "sku": 197861,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 391697,
+   "sku": 197867,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 391702,
+   "sku": 197868,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 391703,
+   "sku": 197869,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 391712,
+   "sku": 1978610,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 468585,
+   "sku": 4687803,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 496262,
+   "sku": 295212,
+   "stock_antes": 1
+  },
+  {
+   "pt_id": 496535,
+   "sku": 132361,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 500018,
+   "sku": 567897,
+   "stock_antes": 10
+  },
+  {
+   "pt_id": 500021,
+   "sku": 567890,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 500027,
+   "sku": 567891,
+   "stock_antes": 14
+  },
+  {
+   "pt_id": 500030,
+   "sku": 567892,
+   "stock_antes": 4
+  },
+  {
+   "pt_id": 500035,
+   "sku": 567894,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 544967,
+   "sku": 456789,
+   "stock_antes": 2
+  },
+  {
+   "pt_id": 544970,
+   "sku": 456791,
+   "stock_antes": 14
+  },
+  {
+   "pt_id": 557496,
+   "sku": 1714913,
+   "stock_antes": 1
+  }
+ ],
+ "lotes": [
+  {
+   "id": 32918,
+   "producto_talla_id": 510080,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 28312,
+   "producto_talla_id": 117221,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 19468,
+   "producto_talla_id": 329229,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 1788,
+   "producto_talla_id": 452076,
+   "cantidad_disponible": 7,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27690,
+   "producto_talla_id": 496503,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 14668,
+   "producto_talla_id": 338763,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 6102,
+   "producto_talla_id": 58270,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 1147,
+   "producto_talla_id": 547621,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3508,
+   "producto_talla_id": 464713,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 9186,
+   "producto_talla_id": 464710,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 12939,
+   "producto_talla_id": 421175,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8408,
+   "producto_talla_id": 421188,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29418,
+   "producto_talla_id": 421153,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 19657,
+   "producto_talla_id": 5346,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8347,
+   "producto_talla_id": 5347,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 21437,
+   "producto_talla_id": 220667,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 9982,
+   "producto_talla_id": 285727,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 37877,
+   "producto_talla_id": 421068,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4359,
+   "producto_talla_id": 416642,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10304,
+   "producto_talla_id": 502463,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3780,
+   "producto_talla_id": 577402,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32391,
+   "producto_talla_id": 339452,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 26374,
+   "producto_talla_id": 549613,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4411,
+   "producto_talla_id": 226672,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 25432,
+   "producto_talla_id": 462448,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 19792,
+   "producto_talla_id": 362879,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10891,
+   "producto_talla_id": 339451,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29190,
+   "producto_talla_id": 378164,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8049,
+   "producto_talla_id": 546005,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 28460,
+   "producto_talla_id": 546033,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 31180,
+   "producto_talla_id": 285713,
+   "cantidad_disponible": 11,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4138,
+   "producto_talla_id": 308693,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10662,
+   "producto_talla_id": 223377,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 38602,
+   "producto_talla_id": 391695,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 5209,
+   "producto_talla_id": 535813,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 13349,
+   "producto_talla_id": 499102,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 6265,
+   "producto_talla_id": 227207,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 37856,
+   "producto_talla_id": 329158,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 11572,
+   "producto_talla_id": 494751,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3786,
+   "producto_talla_id": 125460,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24474,
+   "producto_talla_id": 376356,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32603,
+   "producto_talla_id": 357549,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 11087,
+   "producto_talla_id": 122781,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 21466,
+   "producto_talla_id": 421176,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 30279,
+   "producto_talla_id": 337631,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 41169,
+   "producto_talla_id": 223982,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 15897,
+   "producto_talla_id": 314973,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 31624,
+   "producto_talla_id": 222431,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 11789,
+   "producto_talla_id": 314948,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 40204,
+   "producto_talla_id": 547645,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29686,
+   "producto_talla_id": 273947,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27859,
+   "producto_talla_id": 469061,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 30095,
+   "producto_talla_id": 267064,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 14057,
+   "producto_talla_id": 126880,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 34772,
+   "producto_talla_id": 227202,
+   "cantidad_disponible": 6,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4427,
+   "producto_talla_id": 54788,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 36969,
+   "producto_talla_id": 254554,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16600,
+   "producto_talla_id": 416258,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 39190,
+   "producto_talla_id": 416248,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 19899,
+   "producto_talla_id": 246296,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 25474,
+   "producto_talla_id": 546017,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 22629,
+   "producto_talla_id": 304128,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 38420,
+   "producto_talla_id": 376373,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 22206,
+   "producto_talla_id": 119512,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33596,
+   "producto_talla_id": 117691,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 35016,
+   "producto_talla_id": 22842,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 38957,
+   "producto_talla_id": 557243,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27722,
+   "producto_talla_id": 580439,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 39930,
+   "producto_talla_id": 103518,
+   "cantidad_disponible": 6,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4847,
+   "producto_talla_id": 416268,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 39659,
+   "producto_talla_id": 535528,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 7140,
+   "producto_talla_id": 535525,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 5369,
+   "producto_talla_id": 557495,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 34681,
+   "producto_talla_id": 416257,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3993,
+   "producto_talla_id": 328403,
+   "cantidad_disponible": 8,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 41211,
+   "producto_talla_id": 46401,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 100,
+   "producto_talla_id": 500020,
+   "cantidad_disponible": 12,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16756,
+   "producto_talla_id": 500028,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 13867,
+   "producto_talla_id": 500019,
+   "cantidad_disponible": 6,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 40313,
+   "producto_talla_id": 500029,
+   "cantidad_disponible": 9,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24161,
+   "producto_talla_id": 23481,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4530,
+   "producto_talla_id": 500036,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24976,
+   "producto_talla_id": 69147,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 18976,
+   "producto_talla_id": 23997,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27424,
+   "producto_talla_id": 500037,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24578,
+   "producto_talla_id": 44833,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27495,
+   "producto_talla_id": 74414,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3878,
+   "producto_talla_id": 24002,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10764,
+   "producto_talla_id": 56924,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32754,
+   "producto_talla_id": 106443,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 15744,
+   "producto_talla_id": 416250,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8067,
+   "producto_talla_id": 101089,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 20531,
+   "producto_talla_id": 368823,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27998,
+   "producto_talla_id": 559073,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29365,
+   "producto_talla_id": 559172,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 40284,
+   "producto_talla_id": 530965,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 36387,
+   "producto_talla_id": 519323,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 976,
+   "producto_talla_id": 518058,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 13425,
+   "producto_talla_id": 154585,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4203,
+   "producto_talla_id": 496539,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 36808,
+   "producto_talla_id": 496263,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 6084,
+   "producto_talla_id": 236728,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 34872,
+   "producto_talla_id": 60539,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27718,
+   "producto_talla_id": 60540,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 9586,
+   "producto_talla_id": 60543,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8003,
+   "producto_talla_id": 60544,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10093,
+   "producto_talla_id": 27541,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 31346,
+   "producto_talla_id": 27553,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 6468,
+   "producto_talla_id": 54502,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 1558,
+   "producto_talla_id": 60061,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3768,
+   "producto_talla_id": 64432,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 5441,
+   "producto_talla_id": 467101,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 7316,
+   "producto_talla_id": 64473,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27205,
+   "producto_talla_id": 278463,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24933,
+   "producto_talla_id": 278464,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 7142,
+   "producto_talla_id": 66652,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10039,
+   "producto_talla_id": 324322,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 36305,
+   "producto_talla_id": 276209,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 30217,
+   "producto_talla_id": 256406,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8539,
+   "producto_talla_id": 8826,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 5342,
+   "producto_talla_id": 506997,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24246,
+   "producto_talla_id": 9607,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 37269,
+   "producto_talla_id": 369237,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24975,
+   "producto_talla_id": 333396,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24916,
+   "producto_talla_id": 362909,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 18781,
+   "producto_talla_id": 164948,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 6220,
+   "producto_talla_id": 150389,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29525,
+   "producto_talla_id": 196702,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 11433,
+   "producto_talla_id": 231679,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 11521,
+   "producto_talla_id": 253445,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 19729,
+   "producto_talla_id": 426561,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4272,
+   "producto_talla_id": 426568,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4370,
+   "producto_talla_id": 517017,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16847,
+   "producto_talla_id": 57341,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 18825,
+   "producto_talla_id": 273188,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 34016,
+   "producto_talla_id": 92272,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 22192,
+   "producto_talla_id": 377600,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 25614,
+   "producto_talla_id": 494386,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10752,
+   "producto_talla_id": 557235,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32689,
+   "producto_talla_id": 576557,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8155,
+   "producto_talla_id": 49402,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 26076,
+   "producto_talla_id": 558003,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 36214,
+   "producto_talla_id": 489648,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33548,
+   "producto_talla_id": 148409,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 11580,
+   "producto_talla_id": 376473,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27928,
+   "producto_talla_id": 355000,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 34112,
+   "producto_talla_id": 528253,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 38884,
+   "producto_talla_id": 430969,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8467,
+   "producto_talla_id": 512166,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29642,
+   "producto_talla_id": 198920,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 23276,
+   "producto_talla_id": 318991,
+   "cantidad_disponible": 6,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 1729,
+   "producto_talla_id": 381496,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 12425,
+   "producto_talla_id": 499678,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32349,
+   "producto_talla_id": 499679,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32403,
+   "producto_talla_id": 499684,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 38032,
+   "producto_talla_id": 426449,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 31306,
+   "producto_talla_id": 269965,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16694,
+   "producto_talla_id": 361885,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24347,
+   "producto_talla_id": 23476,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24131,
+   "producto_talla_id": 328119,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 7871,
+   "producto_talla_id": 220677,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 26179,
+   "producto_talla_id": 584088,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 19083,
+   "producto_talla_id": 296535,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 18005,
+   "producto_talla_id": 23464,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 11569,
+   "producto_talla_id": 27560,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4401,
+   "producto_talla_id": 29813,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32166,
+   "producto_talla_id": 341156,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29771,
+   "producto_talla_id": 516940,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 39231,
+   "producto_talla_id": 464219,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 1442,
+   "producto_talla_id": 572026,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 28954,
+   "producto_talla_id": 225444,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27510,
+   "producto_talla_id": 47012,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 13177,
+   "producto_talla_id": 382545,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 1335,
+   "producto_talla_id": 404525,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 26605,
+   "producto_talla_id": 403403,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 26901,
+   "producto_talla_id": 452923,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 9680,
+   "producto_talla_id": 557613,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8399,
+   "producto_talla_id": 40483,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 17199,
+   "producto_talla_id": 541058,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 17022,
+   "producto_talla_id": 540871,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 13792,
+   "producto_talla_id": 392570,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 18653,
+   "producto_talla_id": 76926,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10269,
+   "producto_talla_id": 318601,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4235,
+   "producto_talla_id": 359960,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 31587,
+   "producto_talla_id": 463316,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 7015,
+   "producto_talla_id": 266884,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29395,
+   "producto_talla_id": 421150,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 5281,
+   "producto_talla_id": 222202,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8717,
+   "producto_talla_id": 47009,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 7330,
+   "producto_talla_id": 509690,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32346,
+   "producto_talla_id": 8525,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 337,
+   "producto_talla_id": 8522,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33967,
+   "producto_talla_id": 8513,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 23818,
+   "producto_talla_id": 8534,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 23339,
+   "producto_talla_id": 8540,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 34014,
+   "producto_talla_id": 8546,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 17052,
+   "producto_talla_id": 468162,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 36334,
+   "producto_talla_id": 424598,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3513,
+   "producto_talla_id": 426554,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 13773,
+   "producto_talla_id": 216323,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8697,
+   "producto_talla_id": 546815,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 26044,
+   "producto_talla_id": 166904,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29996,
+   "producto_talla_id": 352220,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 31872,
+   "producto_talla_id": 315973,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 1844,
+   "producto_talla_id": 495933,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 38796,
+   "producto_talla_id": 332673,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16813,
+   "producto_talla_id": 332827,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 12959,
+   "producto_talla_id": 517027,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16974,
+   "producto_talla_id": 223926,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 13503,
+   "producto_talla_id": 485834,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 12376,
+   "producto_talla_id": 508107,
+   "cantidad_disponible": 12,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 6058,
+   "producto_talla_id": 468461,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 34064,
+   "producto_talla_id": 417495,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32731,
+   "producto_talla_id": 556592,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29085,
+   "producto_talla_id": 566577,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 21308,
+   "producto_talla_id": 580669,
+   "cantidad_disponible": 48,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 20528,
+   "producto_talla_id": 422828,
+   "cantidad_disponible": 50,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 28010,
+   "producto_talla_id": 508033,
+   "cantidad_disponible": 12,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 28145,
+   "producto_talla_id": 506582,
+   "cantidad_disponible": 8,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 15530,
+   "producto_talla_id": 499114,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 28941,
+   "producto_talla_id": 341476,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 6790,
+   "producto_talla_id": 231674,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 19841,
+   "producto_talla_id": 38791,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 20419,
+   "producto_talla_id": 485830,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4137,
+   "producto_talla_id": 428333,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 11482,
+   "producto_talla_id": 327725,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 36476,
+   "producto_talla_id": 314941,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 37544,
+   "producto_talla_id": 119154,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3324,
+   "producto_talla_id": 351711,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24941,
+   "producto_talla_id": 513733,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 39411,
+   "producto_talla_id": 510215,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10636,
+   "producto_talla_id": 223892,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 14100,
+   "producto_talla_id": 354911,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 34689,
+   "producto_talla_id": 126812,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 5937,
+   "producto_talla_id": 315733,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 26583,
+   "producto_talla_id": 577040,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 40434,
+   "producto_talla_id": 91814,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27032,
+   "producto_talla_id": 392167,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29746,
+   "producto_talla_id": 162506,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8445,
+   "producto_talla_id": 464487,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29077,
+   "producto_talla_id": 89245,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 19718,
+   "producto_talla_id": 52081,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33563,
+   "producto_talla_id": 91621,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 2090,
+   "producto_talla_id": 225645,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 21956,
+   "producto_talla_id": 225608,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 25846,
+   "producto_talla_id": 392751,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29146,
+   "producto_talla_id": 225835,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 7861,
+   "producto_talla_id": 41828,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 23075,
+   "producto_talla_id": 225617,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8401,
+   "producto_talla_id": 48319,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 20362,
+   "producto_talla_id": 353929,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8850,
+   "producto_talla_id": 530987,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 6218,
+   "producto_talla_id": 511524,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 12935,
+   "producto_talla_id": 462376,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24982,
+   "producto_talla_id": 215133,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10338,
+   "producto_talla_id": 267072,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 2248,
+   "producto_talla_id": 556816,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16308,
+   "producto_talla_id": 332830,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 26797,
+   "producto_talla_id": 468429,
+   "cantidad_disponible": 12,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3871,
+   "producto_talla_id": 556799,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 17627,
+   "producto_talla_id": 274554,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 30227,
+   "producto_talla_id": 74707,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 13480,
+   "producto_talla_id": 58267,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 14307,
+   "producto_talla_id": 557275,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 388,
+   "producto_talla_id": 49393,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16350,
+   "producto_talla_id": 301590,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 15971,
+   "producto_talla_id": 551644,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 34058,
+   "producto_talla_id": 271551,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4552,
+   "producto_talla_id": 335642,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 2649,
+   "producto_talla_id": 503580,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3497,
+   "producto_talla_id": 345743,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 21732,
+   "producto_talla_id": 226671,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4711,
+   "producto_talla_id": 424558,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24018,
+   "producto_talla_id": 392588,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24100,
+   "producto_talla_id": 335599,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 40512,
+   "producto_talla_id": 511329,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 30250,
+   "producto_talla_id": 500987,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4749,
+   "producto_talla_id": 314947,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3125,
+   "producto_talla_id": 48320,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 25406,
+   "producto_talla_id": 534507,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 37394,
+   "producto_talla_id": 389647,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16357,
+   "producto_talla_id": 42631,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3539,
+   "producto_talla_id": 94076,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 12512,
+   "producto_talla_id": 505652,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 28499,
+   "producto_talla_id": 97900,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 18323,
+   "producto_talla_id": 473710,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 14402,
+   "producto_talla_id": 285633,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27922,
+   "producto_talla_id": 274058,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33245,
+   "producto_talla_id": 356719,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27430,
+   "producto_talla_id": 337663,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24596,
+   "producto_talla_id": 337675,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 20976,
+   "producto_talla_id": 374291,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 39793,
+   "producto_talla_id": 249511,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 15034,
+   "producto_talla_id": 389648,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 12105,
+   "producto_talla_id": 389655,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10470,
+   "producto_talla_id": 389656,
+   "cantidad_disponible": 5,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 28708,
+   "producto_talla_id": 389663,
+   "cantidad_disponible": 8,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 7988,
+   "producto_talla_id": 389664,
+   "cantidad_disponible": 7,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 1241,
+   "producto_talla_id": 389671,
+   "cantidad_disponible": 6,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 23103,
+   "producto_talla_id": 389672,
+   "cantidad_disponible": 6,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 23867,
+   "producto_talla_id": 403005,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32816,
+   "producto_talla_id": 434605,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 6132,
+   "producto_talla_id": 134126,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27395,
+   "producto_talla_id": 127915,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 14857,
+   "producto_talla_id": 127925,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8355,
+   "producto_talla_id": 126111,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3906,
+   "producto_talla_id": 132282,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27229,
+   "producto_talla_id": 356631,
+   "cantidad_disponible": 6,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 20496,
+   "producto_talla_id": 341862,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 17001,
+   "producto_talla_id": 319966,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 17181,
+   "producto_talla_id": 137015,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4220,
+   "producto_talla_id": 250457,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 40734,
+   "producto_talla_id": 566627,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 34719,
+   "producto_talla_id": 380657,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 5802,
+   "producto_talla_id": 416337,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 36289,
+   "producto_talla_id": 341290,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 36165,
+   "producto_talla_id": 558151,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 9827,
+   "producto_talla_id": 104318,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 31798,
+   "producto_talla_id": 468950,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32250,
+   "producto_talla_id": 97519,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4583,
+   "producto_talla_id": 387693,
+   "cantidad_disponible": 10,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 40666,
+   "producto_talla_id": 558124,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 17418,
+   "producto_talla_id": 71888,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 36954,
+   "producto_talla_id": 6763,
+   "cantidad_disponible": 5,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3546,
+   "producto_talla_id": 341039,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10933,
+   "producto_talla_id": 70134,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 22279,
+   "producto_talla_id": 122748,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 1450,
+   "producto_talla_id": 252155,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 38661,
+   "producto_talla_id": 385595,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 2689,
+   "producto_talla_id": 240735,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 23451,
+   "producto_talla_id": 246851,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 30289,
+   "producto_talla_id": 89279,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 17227,
+   "producto_talla_id": 348451,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 21801,
+   "producto_talla_id": 126701,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 818,
+   "producto_talla_id": 365731,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 9170,
+   "producto_talla_id": 538361,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 14343,
+   "producto_talla_id": 538385,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 14449,
+   "producto_talla_id": 538384,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 14941,
+   "producto_talla_id": 538377,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 9120,
+   "producto_talla_id": 587382,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 21467,
+   "producto_talla_id": 329013,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 9284,
+   "producto_talla_id": 367076,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 25595,
+   "producto_talla_id": 329020,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 14090,
+   "producto_talla_id": 249155,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 30132,
+   "producto_talla_id": 87245,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16885,
+   "producto_talla_id": 88506,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16173,
+   "producto_talla_id": 88514,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8643,
+   "producto_talla_id": 249152,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 11853,
+   "producto_talla_id": 88513,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 38655,
+   "producto_talla_id": 87238,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 40032,
+   "producto_talla_id": 550190,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 20465,
+   "producto_talla_id": 550178,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 1015,
+   "producto_talla_id": 550189,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 40559,
+   "producto_talla_id": 443787,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 40324,
+   "producto_talla_id": 323773,
+   "cantidad_disponible": 15,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33293,
+   "producto_talla_id": 550188,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 2672,
+   "producto_talla_id": 550191,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 20944,
+   "producto_talla_id": 248120,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 39992,
+   "producto_talla_id": 248112,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 37180,
+   "producto_talla_id": 248123,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 39334,
+   "producto_talla_id": 248115,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 35075,
+   "producto_talla_id": 322814,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32133,
+   "producto_talla_id": 322804,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29699,
+   "producto_talla_id": 322798,
+   "cantidad_disponible": 5,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32085,
+   "producto_talla_id": 322791,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 11101,
+   "producto_talla_id": 322786,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 5006,
+   "producto_talla_id": 322813,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 26063,
+   "producto_talla_id": 287048,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32713,
+   "producto_talla_id": 311201,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27011,
+   "producto_talla_id": 499473,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 11074,
+   "producto_talla_id": 309614,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 39668,
+   "producto_talla_id": 368692,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 17965,
+   "producto_talla_id": 486364,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 12964,
+   "producto_talla_id": 420953,
+   "cantidad_disponible": 5,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 39151,
+   "producto_talla_id": 194503,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 18803,
+   "producto_talla_id": 90914,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33867,
+   "producto_talla_id": 334165,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 7299,
+   "producto_talla_id": 465272,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 19615,
+   "producto_talla_id": 50497,
+   "cantidad_disponible": 5,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33825,
+   "producto_talla_id": 24902,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27741,
+   "producto_talla_id": 47000,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 22617,
+   "producto_talla_id": 157902,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 12018,
+   "producto_talla_id": 325691,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 13421,
+   "producto_talla_id": 48783,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 20793,
+   "producto_talla_id": 328946,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 36914,
+   "producto_talla_id": 195870,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33771,
+   "producto_talla_id": 58221,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24351,
+   "producto_talla_id": 32715,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 22921,
+   "producto_talla_id": 8054,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 5544,
+   "producto_talla_id": 167159,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 34869,
+   "producto_talla_id": 8063,
+   "cantidad_disponible": 6,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 220,
+   "producto_talla_id": 357680,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 838,
+   "producto_talla_id": 324386,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 1220,
+   "producto_talla_id": 545938,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 2560,
+   "producto_talla_id": 294824,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 2671,
+   "producto_talla_id": 164418,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3115,
+   "producto_talla_id": 504365,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3207,
+   "producto_talla_id": 587151,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4309,
+   "producto_talla_id": 545946,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4928,
+   "producto_talla_id": 572012,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 5935,
+   "producto_talla_id": 516936,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 6151,
+   "producto_talla_id": 352842,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 6337,
+   "producto_talla_id": 545915,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 6509,
+   "producto_talla_id": 301639,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 6651,
+   "producto_talla_id": 545909,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8562,
+   "producto_talla_id": 313985,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8751,
+   "producto_talla_id": 357684,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8875,
+   "producto_talla_id": 19731,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 9873,
+   "producto_talla_id": 352599,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10363,
+   "producto_talla_id": 123715,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10497,
+   "producto_talla_id": 534567,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 11138,
+   "producto_talla_id": 545884,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 11206,
+   "producto_talla_id": 545987,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 11979,
+   "producto_talla_id": 352700,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 12300,
+   "producto_talla_id": 564107,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 12561,
+   "producto_talla_id": 281436,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 14487,
+   "producto_talla_id": 384155,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 14657,
+   "producto_talla_id": 564111,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 14769,
+   "producto_talla_id": 545955,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 15851,
+   "producto_talla_id": 545914,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16017,
+   "producto_talla_id": 584871,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16207,
+   "producto_talla_id": 349613,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16814,
+   "producto_talla_id": 502331,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 17647,
+   "producto_talla_id": 545783,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 17655,
+   "producto_talla_id": 376745,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 17805,
+   "producto_talla_id": 376744,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 17834,
+   "producto_talla_id": 320831,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 17835,
+   "producto_talla_id": 412089,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 18087,
+   "producto_talla_id": 342177,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 19132,
+   "producto_talla_id": 370280,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 19656,
+   "producto_talla_id": 465772,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 19845,
+   "producto_talla_id": 128064,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 20190,
+   "producto_talla_id": 299983,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 20885,
+   "producto_talla_id": 354860,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 21069,
+   "producto_talla_id": 91655,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 22477,
+   "producto_talla_id": 584095,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 23906,
+   "producto_talla_id": 565228,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24273,
+   "producto_talla_id": 339498,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 24986,
+   "producto_talla_id": 545876,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 25418,
+   "producto_talla_id": 220671,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 25683,
+   "producto_talla_id": 373058,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 25813,
+   "producto_talla_id": 511459,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 26883,
+   "producto_talla_id": 584872,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27972,
+   "producto_talla_id": 341150,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29027,
+   "producto_talla_id": 90971,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 30077,
+   "producto_talla_id": 118133,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 30397,
+   "producto_talla_id": 545880,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 31110,
+   "producto_talla_id": 315078,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33062,
+   "producto_talla_id": 277497,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33120,
+   "producto_talla_id": 294120,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33355,
+   "producto_talla_id": 565571,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33669,
+   "producto_talla_id": 417304,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 34812,
+   "producto_talla_id": 100601,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 34971,
+   "producto_talla_id": 319011,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 36364,
+   "producto_talla_id": 412088,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 36690,
+   "producto_talla_id": 312311,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 37628,
+   "producto_talla_id": 118134,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 39757,
+   "producto_talla_id": 565567,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 1127,
+   "producto_talla_id": 578385,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32869,
+   "producto_talla_id": 578387,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 25672,
+   "producto_talla_id": 71008,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16515,
+   "producto_talla_id": 51595,
+   "cantidad_disponible": 5,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 36290,
+   "producto_talla_id": 9099,
+   "cantidad_disponible": 38,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 38925,
+   "producto_talla_id": 192723,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 40960,
+   "producto_talla_id": 378132,
+   "cantidad_disponible": 8,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32185,
+   "producto_talla_id": 361600,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 31486,
+   "producto_talla_id": 260065,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 38668,
+   "producto_talla_id": 259621,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 28600,
+   "producto_talla_id": 500027,
+   "cantidad_disponible": 14,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 5398,
+   "producto_talla_id": 256407,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 18114,
+   "producto_talla_id": 500018,
+   "cantidad_disponible": 10,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4835,
+   "producto_talla_id": 192731,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 6980,
+   "producto_talla_id": 500035,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 543,
+   "producto_talla_id": 500021,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 35595,
+   "producto_talla_id": 192781,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 21486,
+   "producto_talla_id": 9138,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 20011,
+   "producto_talla_id": 496509,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 25011,
+   "producto_talla_id": 496504,
+   "cantidad_disponible": 7,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32141,
+   "producto_talla_id": 320432,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 22492,
+   "producto_talla_id": 571648,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16767,
+   "producto_talla_id": 274248,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 36130,
+   "producto_talla_id": 274262,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32098,
+   "producto_talla_id": 468585,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4165,
+   "producto_talla_id": 496505,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 1765,
+   "producto_talla_id": 426569,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29171,
+   "producto_talla_id": 259622,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 13610,
+   "producto_talla_id": 20421,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 5615,
+   "producto_talla_id": 314950,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 1936,
+   "producto_talla_id": 512500,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 26979,
+   "producto_talla_id": 512505,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29253,
+   "producto_talla_id": 298441,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3575,
+   "producto_talla_id": 518176,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 15325,
+   "producto_talla_id": 391696,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 35105,
+   "producto_talla_id": 496502,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 28947,
+   "producto_talla_id": 421169,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8787,
+   "producto_talla_id": 421158,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 34970,
+   "producto_talla_id": 421184,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 25100,
+   "producto_talla_id": 421183,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 28153,
+   "producto_talla_id": 421159,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 669,
+   "producto_talla_id": 56812,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 766,
+   "producto_talla_id": 9146,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 1685,
+   "producto_talla_id": 66651,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 1845,
+   "producto_talla_id": 80629,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 2653,
+   "producto_talla_id": 89366,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3162,
+   "producto_talla_id": 512496,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3197,
+   "producto_talla_id": 392608,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 3853,
+   "producto_talla_id": 544161,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4126,
+   "producto_talla_id": 192742,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 4142,
+   "producto_talla_id": 381176,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 5476,
+   "producto_talla_id": 417292,
+   "cantidad_disponible": 5,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 5988,
+   "producto_talla_id": 544970,
+   "cantidad_disponible": 14,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 7179,
+   "producto_talla_id": 518242,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8619,
+   "producto_talla_id": 496535,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 8749,
+   "producto_talla_id": 570490,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 9030,
+   "producto_talla_id": 192773,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 9625,
+   "producto_talla_id": 496517,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 9980,
+   "producto_talla_id": 349881,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10285,
+   "producto_talla_id": 9137,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10324,
+   "producto_talla_id": 22750,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10583,
+   "producto_talla_id": 120824,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 10936,
+   "producto_talla_id": 260233,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 12128,
+   "producto_talla_id": 97592,
+   "cantidad_disponible": 3,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 12762,
+   "producto_talla_id": 192724,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 12913,
+   "producto_talla_id": 20415,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 13463,
+   "producto_talla_id": 571987,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 13719,
+   "producto_talla_id": 90137,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 14662,
+   "producto_talla_id": 496516,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 15147,
+   "producto_talla_id": 106442,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 15159,
+   "producto_talla_id": 192743,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 15521,
+   "producto_talla_id": 524402,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16543,
+   "producto_talla_id": 391697,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 16611,
+   "producto_talla_id": 276205,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 17200,
+   "producto_talla_id": 369081,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 18056,
+   "producto_talla_id": 515935,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 18233,
+   "producto_talla_id": 120822,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 19133,
+   "producto_talla_id": 9145,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 20110,
+   "producto_talla_id": 496262,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 21111,
+   "producto_talla_id": 391702,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 21738,
+   "producto_talla_id": 97585,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 22075,
+   "producto_talla_id": 557496,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 22304,
+   "producto_talla_id": 121212,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 22625,
+   "producto_talla_id": 381177,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 25707,
+   "producto_talla_id": 391703,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 26132,
+   "producto_talla_id": 376676,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 26224,
+   "producto_talla_id": 381195,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 26422,
+   "producto_talla_id": 257638,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 26451,
+   "producto_talla_id": 192777,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27018,
+   "producto_talla_id": 544967,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27566,
+   "producto_talla_id": 91954,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27579,
+   "producto_talla_id": 496518,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29635,
+   "producto_talla_id": 512491,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29758,
+   "producto_talla_id": 92080,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 29872,
+   "producto_talla_id": 266276,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 30953,
+   "producto_talla_id": 556460,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 31162,
+   "producto_talla_id": 391712,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 32974,
+   "producto_talla_id": 33154,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33212,
+   "producto_talla_id": 120831,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33265,
+   "producto_talla_id": 576896,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33632,
+   "producto_talla_id": 97598,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33719,
+   "producto_talla_id": 276208,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33776,
+   "producto_talla_id": 121211,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 35178,
+   "producto_talla_id": 500030,
+   "cantidad_disponible": 4,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 36166,
+   "producto_talla_id": 255500,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 37215,
+   "producto_talla_id": 192738,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 37454,
+   "producto_talla_id": 266282,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 37914,
+   "producto_talla_id": 544024,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 38182,
+   "producto_talla_id": 120823,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 38342,
+   "producto_talla_id": 266261,
+   "cantidad_disponible": 1,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 39950,
+   "producto_talla_id": 278485,
+   "cantidad_disponible": 2,
+   "activo": true,
+   "agotado": false
+  }
+ ],
+ "movimientos_creados": [
+  3098902,
+  3098903,
+  3098904,
+  3098905,
+  3098906,
+  3098907,
+  3098908,
+  3098909,
+  3098910,
+  3098911,
+  3098912,
+  3098913,
+  3098914,
+  3098915,
+  3098916,
+  3098917,
+  3098918,
+  3098919,
+  3098920,
+  3098921,
+  3098922,
+  3098923,
+  3098924,
+  3098925,
+  3098926,
+  3098927,
+  3098928,
+  3098929,
+  3098930,
+  3098931,
+  3098932,
+  3098933,
+  3098934,
+  3098935,
+  3098936,
+  3098937,
+  3098938,
+  3098939,
+  3098940,
+  3098941,
+  3098942,
+  3098943,
+  3098944,
+  3098945,
+  3098946,
+  3098947,
+  3098948,
+  3098949,
+  3098950,
+  3098951,
+  3098952,
+  3098953,
+  3098954,
+  3098955,
+  3098956,
+  3098957,
+  3098958,
+  3098959,
+  3098960,
+  3098961,
+  3098962,
+  3098963,
+  3098964,
+  3098965,
+  3098966,
+  3098967,
+  3098968,
+  3098969,
+  3098970,
+  3098971,
+  3098972,
+  3098973,
+  3098974,
+  3098975,
+  3098976,
+  3098977,
+  3098978,
+  3098979,
+  3098980,
+  3098981,
+  3098982,
+  3098983,
+  3098984,
+  3098985,
+  3098986,
+  3098987,
+  3098988,
+  3098989,
+  3098990,
+  3098991,
+  3098992,
+  3098993,
+  3098994,
+  3098995,
+  3098996,
+  3098997,
+  3098998,
+  3098999,
+  3099000,
+  3099001,
+  3099002,
+  3099003,
+  3099004,
+  3099005,
+  3099006,
+  3099007,
+  3099008,
+  3099009,
+  3099010,
+  3099011,
+  3099012,
+  3099013,
+  3099014,
+  3099015,
+  3099016,
+  3099017,
+  3099018,
+  3099019,
+  3099020,
+  3099021,
+  3099022,
+  3099023,
+  3099024,
+  3099025,
+  3099026,
+  3099027,
+  3099028,
+  3099029,
+  3099030,
+  3099031,
+  3099032,
+  3099033,
+  3099034,
+  3099035,
+  3099036,
+  3099037,
+  3099038,
+  3099039,
+  3099040,
+  3099041,
+  3099042,
+  3099043,
+  3099044,
+  3099045,
+  3099046,
+  3099047,
+  3099048,
+  3099049,
+  3099050,
+  3099051,
+  3099052,
+  3099053,
+  3099054,
+  3099055,
+  3099056,
+  3099057,
+  3099058,
+  3099059,
+  3099060,
+  3099061,
+  3099062,
+  3099063,
+  3099064,
+  3099065,
+  3099066,
+  3099067,
+  3099068,
+  3099069,
+  3099070,
+  3099071,
+  3099072,
+  3099073,
+  3099074,
+  3099075,
+  3099076,
+  3099077,
+  3099078,
+  3099079,
+  3099080,
+  3099081,
+  3099082,
+  3099083,
+  3099084,
+  3099085,
+  3099086,
+  3099087,
+  3099088,
+  3099089,
+  3099090,
+  3099091,
+  3099092,
+  3099093,
+  3099094,
+  3099095,
+  3099096,
+  3099097,
+  3099098,
+  3099099,
+  3099100,
+  3099101,
+  3099102,
+  3099103,
+  3099104,
+  3099105,
+  3099106,
+  3099107,
+  3099108,
+  3099109,
+  3099110,
+  3099111,
+  3099112,
+  3099113,
+  3099114,
+  3099115,
+  3099116,
+  3099117,
+  3099118,
+  3099119,
+  3099120,
+  3099121,
+  3099122,
+  3099123,
+  3099124,
+  3099125,
+  3099126,
+  3099127,
+  3099128,
+  3099129,
+  3099130,
+  3099131,
+  3099132,
+  3099133,
+  3099134,
+  3099135,
+  3099136,
+  3099137,
+  3099138,
+  3099139,
+  3099140,
+  3099141,
+  3099142,
+  3099143,
+  3099144,
+  3099145,
+  3099146,
+  3099147,
+  3099148,
+  3099149,
+  3099150,
+  3099151,
+  3099152,
+  3099153,
+  3099154,
+  3099155,
+  3099156,
+  3099157,
+  3099158,
+  3099159,
+  3099160,
+  3099161,
+  3099162,
+  3099163,
+  3099164,
+  3099165,
+  3099166,
+  3099167,
+  3099168,
+  3099169,
+  3099170,
+  3099171,
+  3099172,
+  3099173,
+  3099174,
+  3099175,
+  3099176,
+  3099177,
+  3099178,
+  3099179,
+  3099180,
+  3099181,
+  3099182,
+  3099183,
+  3099184,
+  3099185,
+  3099186,
+  3099187,
+  3099188,
+  3099189,
+  3099190,
+  3099191,
+  3099192,
+  3099193,
+  3099194,
+  3099195,
+  3099196,
+  3099197,
+  3099198,
+  3099199,
+  3099200,
+  3099201,
+  3099202,
+  3099203,
+  3099204,
+  3099205,
+  3099206,
+  3099207,
+  3099208,
+  3099209,
+  3099210,
+  3099211,
+  3099212,
+  3099213,
+  3099214,
+  3099215,
+  3099216,
+  3099217,
+  3099218,
+  3099219,
+  3099220,
+  3099221,
+  3099222,
+  3099223,
+  3099224,
+  3099225,
+  3099226,
+  3099227,
+  3099228,
+  3099229,
+  3099230,
+  3099231,
+  3099232,
+  3099233,
+  3099234,
+  3099235,
+  3099236,
+  3099237,
+  3099238,
+  3099239,
+  3099240,
+  3099241,
+  3099242,
+  3099243,
+  3099244,
+  3099245,
+  3099246,
+  3099247,
+  3099248,
+  3099249,
+  3099250,
+  3099251,
+  3099252,
+  3099253,
+  3099254,
+  3099255,
+  3099256,
+  3099257,
+  3099258,
+  3099259,
+  3099260,
+  3099261,
+  3099262,
+  3099263,
+  3099264,
+  3099265,
+  3099266,
+  3099267,
+  3099268,
+  3099269,
+  3099270,
+  3099271,
+  3099272,
+  3099273,
+  3099274,
+  3099275,
+  3099276,
+  3099277,
+  3099278,
+  3099279,
+  3099280,
+  3099281,
+  3099282,
+  3099283,
+  3099284,
+  3099285,
+  3099286,
+  3099287,
+  3099288,
+  3099289,
+  3099290,
+  3099291,
+  3099292,
+  3099293,
+  3099294,
+  3099295,
+  3099296,
+  3099297,
+  3099298,
+  3099299,
+  3099300,
+  3099301,
+  3099302,
+  3099303,
+  3099304,
+  3099305,
+  3099306,
+  3099307,
+  3099308,
+  3099309,
+  3099310,
+  3099311,
+  3099312,
+  3099313,
+  3099314,
+  3099315,
+  3099316,
+  3099317,
+  3099318,
+  3099319,
+  3099320,
+  3099321,
+  3099322,
+  3099323,
+  3099324,
+  3099325,
+  3099326,
+  3099327,
+  3099328,
+  3099329,
+  3099330,
+  3099331,
+  3099332,
+  3099333,
+  3099334,
+  3099335,
+  3099336,
+  3099337,
+  3099338,
+  3099339,
+  3099340,
+  3099341,
+  3099342,
+  3099343,
+  3099344,
+  3099345,
+  3099346,
+  3099347,
+  3099348,
+  3099349,
+  3099350,
+  3099351,
+  3099352,
+  3099353,
+  3099354,
+  3099355,
+  3099356,
+  3099357,
+  3099358,
+  3099359,
+  3099360,
+  3099361,
+  3099362,
+  3099363,
+  3099364,
+  3099365,
+  3099366,
+  3099367,
+  3099368,
+  3099369,
+  3099370,
+  3099371,
+  3099372,
+  3099373,
+  3099374,
+  3099375,
+  3099376,
+  3099377,
+  3099378,
+  3099379,
+  3099380,
+  3099381,
+  3099382,
+  3099383,
+  3099384,
+  3099385,
+  3099386,
+  3099387,
+  3099388,
+  3099389,
+  3099390,
+  3099391,
+  3099392,
+  3099393,
+  3099394,
+  3099395,
+  3099396,
+  3099397,
+  3099398,
+  3099399,
+  3099400,
+  3099401,
+  3099402,
+  3099403,
+  3099404,
+  3099405,
+  3099406,
+  3099407,
+  3099408,
+  3099409,
+  3099410,
+  3099411,
+  3099412,
+  3099413,
+  3099414,
+  3099415,
+  3099416,
+  3099417,
+  3099418,
+  3099419,
+  3099420,
+  3099421,
+  3099422,
+  3099423,
+  3099424,
+  3099425,
+  3099426,
+  3099427,
+  3099428,
+  3099429,
+  3099430,
+  3099431,
+  3099432,
+  3099433,
+  3099434,
+  3099435,
+  3099436,
+  3099437,
+  3099438,
+  3099439,
+  3099440,
+  3099441,
+  3099442,
+  3099443,
+  3099444,
+  3099445,
+  3099446,
+  3099447,
+  3099448,
+  3099449,
+  3099450,
+  3099451,
+  3099452,
+  3099453,
+  3099454,
+  3099455,
+  3099456,
+  3099457,
+  3099458,
+  3099459,
+  3099460,
+  3099461,
+  3099462,
+  3099463,
+  3099464,
+  3099465,
+  3099466,
+  3099467,
+  3099468,
+  3099469,
+  3099470,
+  3099471,
+  3099472,
+  3099473,
+  3099474,
+  3099475,
+  3099476,
+  3099477,
+  3099478,
+  3099479,
+  3099480,
+  3099481,
+  3099482,
+  3099483,
+  3099484,
+  3099485,
+  3099486,
+  3099487,
+  3099488,
+  3099489,
+  3099490,
+  3099491,
+  3099492,
+  3099493,
+  3099494,
+  3099495,
+  3099496,
+  3099497,
+  3099498,
+  3099499,
+  3099500,
+  3099501,
+  3099502,
+  3099503,
+  3099504,
+  3099505,
+  3099506,
+  3099507,
+  3099508,
+  3099509,
+  3099510,
+  3099511,
+  3099512,
+  3099513,
+  3099514,
+  3099515,
+  3099516,
+  3099517
+ ]
+}

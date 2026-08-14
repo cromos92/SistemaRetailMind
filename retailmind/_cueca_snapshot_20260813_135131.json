@@ -1,0 +1,282 @@
+{
+ "fecha": "2026-08-13T13:51:30.993379-04:00",
+ "productos": [
+  {
+   "id": 18171,
+   "articulo": "1800",
+   "descripcion": "BOTIN HUASO",
+   "atributo1_id": 39,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 1,
+   "precioventa": 19990
+  },
+  {
+   "id": 18172,
+   "articulo": "1800",
+   "descripcion": "BOTIN HUASO",
+   "atributo1_id": 39,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 2,
+   "precioventa": 19990
+  },
+  {
+   "id": 18173,
+   "articulo": "1800",
+   "descripcion": "BOTIN HUASO",
+   "atributo1_id": 39,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 3,
+   "precioventa": 19990
+  },
+  {
+   "id": 18174,
+   "articulo": "1800",
+   "descripcion": "BOTIN HUASO",
+   "atributo1_id": 39,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 4,
+   "precioventa": 19990
+  },
+  {
+   "id": 18178,
+   "articulo": "1800",
+   "descripcion": "BOTIN HUASO",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 1,
+   "precioventa": 19990
+  },
+  {
+   "id": 18179,
+   "articulo": "1800",
+   "descripcion": "BOTIN HUASO",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 2,
+   "precioventa": 19990
+  },
+  {
+   "id": 18180,
+   "articulo": "1800",
+   "descripcion": "BOTIN HUASO",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 3,
+   "precioventa": 19990
+  },
+  {
+   "id": 18181,
+   "articulo": "1800",
+   "descripcion": "BOTIN HUASO",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 4,
+   "precioventa": 19990
+  },
+  {
+   "id": 18182,
+   "articulo": "1800",
+   "descripcion": "BOTIN HUASO",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 5,
+   "precioventa": 19990
+  }
+ ],
+ "tallas": [
+  {
+   "id": 78480,
+   "producto_id": 18171
+  },
+  {
+   "id": 78493,
+   "producto_id": 18171
+  },
+  {
+   "id": 78503,
+   "producto_id": 18171
+  },
+  {
+   "id": 78504,
+   "producto_id": 18171
+  },
+  {
+   "id": 78518,
+   "producto_id": 18171
+  },
+  {
+   "id": 78529,
+   "producto_id": 18171
+  },
+  {
+   "id": 78494,
+   "producto_id": 18172
+  },
+  {
+   "id": 78506,
+   "producto_id": 18172
+  },
+  {
+   "id": 78481,
+   "producto_id": 18173
+  },
+  {
+   "id": 78495,
+   "producto_id": 18173
+  },
+  {
+   "id": 78497,
+   "producto_id": 18173
+  },
+  {
+   "id": 78505,
+   "producto_id": 18173
+  },
+  {
+   "id": 78520,
+   "producto_id": 18173
+  },
+  {
+   "id": 78530,
+   "producto_id": 18173
+  },
+  {
+   "id": 78519,
+   "producto_id": 18174
+  },
+  {
+   "id": 78523,
+   "producto_id": 18174
+  },
+  {
+   "id": 78482,
+   "producto_id": 18178
+  },
+  {
+   "id": 78488,
+   "producto_id": 18178
+  },
+  {
+   "id": 78498,
+   "producto_id": 18178
+  },
+  {
+   "id": 78509,
+   "producto_id": 18178
+  },
+  {
+   "id": 78513,
+   "producto_id": 18178
+  },
+  {
+   "id": 78525,
+   "producto_id": 18178
+  },
+  {
+   "id": 78485,
+   "producto_id": 18179
+  },
+  {
+   "id": 78491,
+   "producto_id": 18179
+  },
+  {
+   "id": 78501,
+   "producto_id": 18179
+  },
+  {
+   "id": 78512,
+   "producto_id": 18179
+  },
+  {
+   "id": 78516,
+   "producto_id": 18179
+  },
+  {
+   "id": 78528,
+   "producto_id": 18179
+  },
+  {
+   "id": 78486,
+   "producto_id": 18180
+  },
+  {
+   "id": 78487,
+   "producto_id": 18180
+  },
+  {
+   "id": 78502,
+   "producto_id": 18180
+  },
+  {
+   "id": 78508,
+   "producto_id": 18180
+  },
+  {
+   "id": 78517,
+   "producto_id": 18180
+  },
+  {
+   "id": 78524,
+   "producto_id": 18180
+  },
+  {
+   "id": 78483,
+   "producto_id": 18181
+  },
+  {
+   "id": 78489,
+   "producto_id": 18181
+  },
+  {
+   "id": 78499,
+   "producto_id": 18181
+  },
+  {
+   "id": 78510,
+   "producto_id": 18181
+  },
+  {
+   "id": 78514,
+   "producto_id": 18181
+  },
+  {
+   "id": 78526,
+   "producto_id": 18181
+  },
+  {
+   "id": 78490,
+   "producto_id": 18182
+  },
+  {
+   "id": 78500,
+   "producto_id": 18182
+  },
+  {
+   "id": 78511,
+   "producto_id": 18182
+  },
+  {
+   "id": 78515,
+   "producto_id": 18182
+  },
+  {
+   "id": 78484,
+   "producto_id": 18182
+  },
+  {
+   "id": 78527,
+   "producto_id": 18182
+  }
+ ],
+ "creadas": []
+}

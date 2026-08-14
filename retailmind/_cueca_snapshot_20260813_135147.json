@@ -1,0 +1,688 @@
+{
+ "fecha": "2026-08-13T13:51:46.621159-04:00",
+ "productos": [
+  {
+   "id": 138481,
+   "articulo": "9700-02",
+   "descripcion": "CUECA VARON",
+   "atributo1_id": 23,
+   "atributo2_id": 441,
+   "excluir_de_analitica": false,
+   "sucursal_id": 1,
+   "precioventa": 39990
+  },
+  {
+   "id": 138561,
+   "articulo": "9700-02",
+   "descripcion": "CUECA VARON",
+   "atributo1_id": 23,
+   "atributo2_id": 441,
+   "excluir_de_analitica": false,
+   "sucursal_id": 4,
+   "precioventa": 39990
+  },
+  {
+   "id": 138563,
+   "articulo": "9700-02",
+   "descripcion": "CUECA VARON",
+   "atributo1_id": 23,
+   "atributo2_id": 441,
+   "excluir_de_analitica": false,
+   "sucursal_id": 5,
+   "precioventa": 39990
+  },
+  {
+   "id": 138669,
+   "articulo": "9700-02",
+   "descripcion": "CUECA VARON",
+   "atributo1_id": 23,
+   "atributo2_id": 441,
+   "excluir_de_analitica": false,
+   "sucursal_id": 3,
+   "precioventa": 39990
+  },
+  {
+   "id": 138734,
+   "articulo": "9700-02",
+   "descripcion": "CUECA VARON",
+   "atributo1_id": 23,
+   "atributo2_id": 441,
+   "excluir_de_analitica": false,
+   "sucursal_id": 2,
+   "precioventa": 39990
+  },
+  {
+   "id": 73105,
+   "articulo": "9700",
+   "descripcion": "BOTA CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 1,
+   "precioventa": 39990
+  },
+  {
+   "id": 73107,
+   "articulo": "9700",
+   "descripcion": "BOTA CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 3,
+   "precioventa": 39990
+  },
+  {
+   "id": 73108,
+   "articulo": "9700",
+   "descripcion": "BOTA CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 4,
+   "precioventa": 39990
+  },
+  {
+   "id": 73109,
+   "articulo": "9700",
+   "descripcion": "BOTA CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 5,
+   "precioventa": 39990
+  },
+  {
+   "id": 73106,
+   "articulo": "9700",
+   "descripcion": "BOTA CUECA",
+   "atributo1_id": 23,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 2,
+   "precioventa": 39990
+  },
+  {
+   "id": 73110,
+   "articulo": "9700",
+   "descripcion": "BOTA CUECA",
+   "atributo1_id": 39,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 1,
+   "precioventa": 39990
+  },
+  {
+   "id": 73111,
+   "articulo": "9700",
+   "descripcion": "BOTA CUECA",
+   "atributo1_id": 39,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 2,
+   "precioventa": 39990
+  },
+  {
+   "id": 73112,
+   "articulo": "9700",
+   "descripcion": "BOTA CUECA",
+   "atributo1_id": 39,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 3,
+   "precioventa": 39990
+  },
+  {
+   "id": 73113,
+   "articulo": "9700",
+   "descripcion": "BOTA CUECA",
+   "atributo1_id": 39,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 4,
+   "precioventa": 39990
+  },
+  {
+   "id": 73114,
+   "articulo": "9700",
+   "descripcion": "BOTA CUECA",
+   "atributo1_id": 39,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 5,
+   "precioventa": 39990
+  },
+  {
+   "id": 73115,
+   "articulo": "9700",
+   "descripcion": "BOTA CUECA",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 1,
+   "precioventa": 39990
+  },
+  {
+   "id": 73116,
+   "articulo": "9700",
+   "descripcion": "BOTA CUECA",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 2,
+   "precioventa": 39990
+  },
+  {
+   "id": 73117,
+   "articulo": "9700",
+   "descripcion": "BOTA CUECA",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 3,
+   "precioventa": 39990
+  },
+  {
+   "id": 73118,
+   "articulo": "9700",
+   "descripcion": "BOTA CUECA",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 4,
+   "precioventa": 39990
+  },
+  {
+   "id": 73119,
+   "articulo": "9700",
+   "descripcion": "BOTA CUECA",
+   "atributo1_id": 406,
+   "atributo2_id": 453,
+   "excluir_de_analitica": false,
+   "sucursal_id": 5,
+   "precioventa": 39990
+  }
+ ],
+ "tallas": [
+  {
+   "id": 324647,
+   "producto_id": 73105
+  },
+  {
+   "id": 324671,
+   "producto_id": 73105
+  },
+  {
+   "id": 324725,
+   "producto_id": 73105
+  },
+  {
+   "id": 324733,
+   "producto_id": 73105
+  },
+  {
+   "id": 324689,
+   "producto_id": 73105
+  },
+  {
+   "id": 324698,
+   "producto_id": 73105
+  },
+  {
+   "id": 324651,
+   "producto_id": 73106
+  },
+  {
+   "id": 324693,
+   "producto_id": 73106
+  },
+  {
+   "id": 324697,
+   "producto_id": 73106
+  },
+  {
+   "id": 324718,
+   "producto_id": 73106
+  },
+  {
+   "id": 324735,
+   "producto_id": 73106
+  },
+  {
+   "id": 324650,
+   "producto_id": 73107
+  },
+  {
+   "id": 324670,
+   "producto_id": 73107
+  },
+  {
+   "id": 324692,
+   "producto_id": 73107
+  },
+  {
+   "id": 324696,
+   "producto_id": 73107
+  },
+  {
+   "id": 324717,
+   "producto_id": 73107
+  },
+  {
+   "id": 324734,
+   "producto_id": 73107
+  },
+  {
+   "id": 324649,
+   "producto_id": 73108
+  },
+  {
+   "id": 324669,
+   "producto_id": 73108
+  },
+  {
+   "id": 324691,
+   "producto_id": 73108
+  },
+  {
+   "id": 324695,
+   "producto_id": 73108
+  },
+  {
+   "id": 324716,
+   "producto_id": 73108
+  },
+  {
+   "id": 324668,
+   "producto_id": 73109
+  },
+  {
+   "id": 324690,
+   "producto_id": 73109
+  },
+  {
+   "id": 324694,
+   "producto_id": 73109
+  },
+  {
+   "id": 324715,
+   "producto_id": 73109
+  },
+  {
+   "id": 324641,
+   "producto_id": 73110
+  },
+  {
+   "id": 324664,
+   "producto_id": 73110
+  },
+  {
+   "id": 324688,
+   "producto_id": 73110
+  },
+  {
+   "id": 324699,
+   "producto_id": 73110
+  },
+  {
+   "id": 324726,
+   "producto_id": 73110
+  },
+  {
+   "id": 324727,
+   "producto_id": 73110
+  },
+  {
+   "id": 324667,
+   "producto_id": 73111
+  },
+  {
+   "id": 324652,
+   "producto_id": 73112
+  },
+  {
+   "id": 324666,
+   "producto_id": 73112
+  },
+  {
+   "id": 324653,
+   "producto_id": 73113
+  },
+  {
+   "id": 324665,
+   "producto_id": 73113
+  },
+  {
+   "id": 324648,
+   "producto_id": 73114
+  },
+  {
+   "id": 324677,
+   "producto_id": 73114
+  },
+  {
+   "id": 324719,
+   "producto_id": 73114
+  },
+  {
+   "id": 324642,
+   "producto_id": 73115
+  },
+  {
+   "id": 324655,
+   "producto_id": 73115
+  },
+  {
+   "id": 324662,
+   "producto_id": 73115
+  },
+  {
+   "id": 324675,
+   "producto_id": 73115
+  },
+  {
+   "id": 324679,
+   "producto_id": 73115
+  },
+  {
+   "id": 324683,
+   "producto_id": 73115
+  },
+  {
+   "id": 324703,
+   "producto_id": 73115
+  },
+  {
+   "id": 324707,
+   "producto_id": 73115
+  },
+  {
+   "id": 324710,
+   "producto_id": 73115
+  },
+  {
+   "id": 324721,
+   "producto_id": 73115
+  },
+  {
+   "id": 324730,
+   "producto_id": 73115
+  },
+  {
+   "id": 324739,
+   "producto_id": 73115
+  },
+  {
+   "id": 324644,
+   "producto_id": 73116
+  },
+  {
+   "id": 324656,
+   "producto_id": 73116
+  },
+  {
+   "id": 324659,
+   "producto_id": 73116
+  },
+  {
+   "id": 324673,
+   "producto_id": 73116
+  },
+  {
+   "id": 324680,
+   "producto_id": 73116
+  },
+  {
+   "id": 324685,
+   "producto_id": 73116
+  },
+  {
+   "id": 324700,
+   "producto_id": 73116
+  },
+  {
+   "id": 324705,
+   "producto_id": 73116
+  },
+  {
+   "id": 324713,
+   "producto_id": 73116
+  },
+  {
+   "id": 324722,
+   "producto_id": 73116
+  },
+  {
+   "id": 324728,
+   "producto_id": 73116
+  },
+  {
+   "id": 324736,
+   "producto_id": 73116
+  },
+  {
+   "id": 324646,
+   "producto_id": 73117
+  },
+  {
+   "id": 324654,
+   "producto_id": 73117
+  },
+  {
+   "id": 324663,
+   "producto_id": 73117
+  },
+  {
+   "id": 324672,
+   "producto_id": 73117
+  },
+  {
+   "id": 324678,
+   "producto_id": 73117
+  },
+  {
+   "id": 324687,
+   "producto_id": 73117
+  },
+  {
+   "id": 324704,
+   "producto_id": 73117
+  },
+  {
+   "id": 324709,
+   "producto_id": 73117
+  },
+  {
+   "id": 324712,
+   "producto_id": 73117
+  },
+  {
+   "id": 324720,
+   "producto_id": 73117
+  },
+  {
+   "id": 324732,
+   "producto_id": 73117
+  },
+  {
+   "id": 324740,
+   "producto_id": 73117
+  },
+  {
+   "id": 324657,
+   "producto_id": 73118
+  },
+  {
+   "id": 324660,
+   "producto_id": 73118
+  },
+  {
+   "id": 324676,
+   "producto_id": 73118
+  },
+  {
+   "id": 324681,
+   "producto_id": 73118
+  },
+  {
+   "id": 324684,
+   "producto_id": 73118
+  },
+  {
+   "id": 324701,
+   "producto_id": 73118
+  },
+  {
+   "id": 324708,
+   "producto_id": 73118
+  },
+  {
+   "id": 324711,
+   "producto_id": 73118
+  },
+  {
+   "id": 324723,
+   "producto_id": 73118
+  },
+  {
+   "id": 324731,
+   "producto_id": 73118
+  },
+  {
+   "id": 324737,
+   "producto_id": 73118
+  },
+  {
+   "id": 324643,
+   "producto_id": 73118
+  },
+  {
+   "id": 324645,
+   "producto_id": 73119
+  },
+  {
+   "id": 324674,
+   "producto_id": 73119
+  },
+  {
+   "id": 324682,
+   "producto_id": 73119
+  },
+  {
+   "id": 324686,
+   "producto_id": 73119
+  },
+  {
+   "id": 324702,
+   "producto_id": 73119
+  },
+  {
+   "id": 324706,
+   "producto_id": 73119
+  },
+  {
+   "id": 324714,
+   "producto_id": 73119
+  },
+  {
+   "id": 324729,
+   "producto_id": 73119
+  },
+  {
+   "id": 324661,
+   "producto_id": 73119
+  },
+  {
+   "id": 324724,
+   "producto_id": 73119
+  },
+  {
+   "id": 324658,
+   "producto_id": 73119
+  },
+  {
+   "id": 324738,
+   "producto_id": 73119
+  },
+  {
+   "id": 607498,
+   "producto_id": 138481
+  },
+  {
+   "id": 607499,
+   "producto_id": 138481
+  },
+  {
+   "id": 607500,
+   "producto_id": 138481
+  },
+  {
+   "id": 607501,
+   "producto_id": 138481
+  },
+  {
+   "id": 607974,
+   "producto_id": 138561
+  },
+  {
+   "id": 607975,
+   "producto_id": 138561
+  },
+  {
+   "id": 607976,
+   "producto_id": 138561
+  },
+  {
+   "id": 607977,
+   "producto_id": 138561
+  },
+  {
+   "id": 607984,
+   "producto_id": 138563
+  },
+  {
+   "id": 607985,
+   "producto_id": 138563
+  },
+  {
+   "id": 607986,
+   "producto_id": 138563
+  },
+  {
+   "id": 607987,
+   "producto_id": 138563
+  },
+  {
+   "id": 608854,
+   "producto_id": 138669
+  },
+  {
+   "id": 609223,
+   "producto_id": 138669
+  },
+  {
+   "id": 609224,
+   "producto_id": 138669
+  },
+  {
+   "id": 609225,
+   "producto_id": 138669
+  },
+  {
+   "id": 609162,
+   "producto_id": 138734
+  },
+  {
+   "id": 609163,
+   "producto_id": 138734
+  },
+  {
+   "id": 609164,
+   "producto_id": 138734
+  },
+  {
+   "id": 609165,
+   "producto_id": 138734
+  }
+ ],
+ "creadas": []
+}

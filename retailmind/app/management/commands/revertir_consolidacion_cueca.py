@@ -74,14 +74,14 @@ class Command(BaseCommand):
             for p in snap['productos']:
                 fila = Producto.objects.filter(id=p['id']).values(
                     'articulo', 'descripcion', 'atributo1_id',
-                    'excluir_de_analitica').first()
+                    'excluir_de_analitica', 'precioventa').first()
                 if fila is None:
                     self.stdout.write(self.style.WARNING(
                         '  ficha id=%s ya no existe' % p['id']))
                     continue
                 cambios = {}
                 for campo in ('articulo', 'descripcion', 'atributo1_id',
-                              'excluir_de_analitica'):
+                              'excluir_de_analitica', 'precioventa'):
                     if fila[campo] != p[campo]:
                         cambios[campo] = p[campo]
                 if cambios:
@@ -90,13 +90,16 @@ class Command(BaseCommand):
                         Producto.objects.filter(id=p['id']).update(**cambios)
             self.stdout.write('  fichas restauradas (codigo/marca/exclusion): %d' % rest)
 
-            # 3) fichas creadas por la consolidacion: borrar solo si quedaron vacias
-            #    Se detectan por convencion de codigo (base-cc/n) + no estar en la
-            #    snapshot. El borrado es seguro: sin tallas no hay stock, kardex
-            #    ni ventas colgando (todo eso vive en Producto_Talla).
-            creadas = Producto.objects.filter(
-                articulo__iregex=r'^(3054|2918|3334)-\d{2}(/\d)?$'
-            ).exclude(id__in=ids_snap)
+            # 3) fichas creadas por la consolidacion: borrar solo si quedaron vacias.
+            #    Se toman de la LISTA EXPLICITA que el propio comando guardo en la
+            #    snapshot (`creadas`), no de un regex adivinado: un regex podia
+            #    barrer fichas de otras familias o de corridas ajenas.
+            ids_creadas = snap.get('creadas') or []
+            if not ids_creadas:
+                self.stdout.write(self.style.WARNING(
+                    '  la snapshot no trae lista de fichas creadas (¿snapshot vieja?): '
+                    'no se borrara ninguna ficha nueva'))
+            creadas = Producto.objects.filter(id__in=ids_creadas).exclude(id__in=ids_snap)
             borradas, con_tallas = [], []
             for p in creadas:
                 if Producto_Talla.objects.filter(producto_id=p.id).exists():

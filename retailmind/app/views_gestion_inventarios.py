@@ -444,8 +444,12 @@ def crear_inventario(request):
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'})
     except ValidationError as e:
+        # Capturar la excepción DENTRO de @transaction.atomic cancela el rollback:
+        # la toma vacía quedaba igual en BD como BORRADOR. Hay que marcarlo a mano.
+        transaction.set_rollback(True)
         return JsonResponse({'success': False, 'error': '; '.join(e.messages)})
     except Exception as e:
+        transaction.set_rollback(True)
         logger.error(f"Error al crear inventario: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
 
