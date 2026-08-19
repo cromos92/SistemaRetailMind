@@ -560,10 +560,21 @@
         color: var(--nexo-gray-500);
     }
 
+    /* Mismo look que la columna Original de Inicial vs Restante */
+    .stock-inicial {
+        background: rgba(0, 212, 170, 0.1);
+        color: var(--nexo-success);
+    }
+
     /* ========== SUCURSAL HEADERS ========== */
     .th-sucursal {
         background: var(--nexo-primary-light) !important;
         color: var(--nexo-primary-dark) !important;
+    }
+
+    .th-inicial {
+        background: rgba(0, 212, 170, 0.12) !important;
+        color: #00a884 !important;
     }
 
     .th-total {
@@ -1371,15 +1382,30 @@ function inicializarDataTable(sucursales) {
             render: (row, type) => {
                 const stock = (row.stock_por_sucursal && row.stock_por_sucursal[suc.id]) || 0;
                 if (type === 'display') {
-                    if (!stock) return '<span class="text-muted">-</span>';
-                    return `<span class="stock-badge ${getStockClass(stock)}">${stock}</span>`;
+                    // Original por sucursal en el tooltip: misma fórmula que
+                    // Inicial vs Restante (Original − Actual = todo lo que salió).
+                    const orig = (row.original_por_sucursal && row.original_por_sucursal[suc.id]) || 0;
+                    const tip = `Original: ${orig} · Salió: ${orig - stock}`;
+                    if (!stock && !orig) return '<span class="text-muted">-</span>';
+                    if (!stock) return `<span class="text-muted" title="${tip}">-</span>`;
+                    return `<span class="stock-badge ${getStockClass(stock)}" title="${tip}">${stock}</span>`;
                 }
                 return stock;
             }
         });
     });
 
-    // Total + Estado
+    // Original + Total + Estado
+    columns.push({
+        data: 'total_stock_original', title: 'Original',
+        render: (d, type) => {
+            if (type === 'display') {
+                return `<span class="stock-badge stock-inicial" title="Todo lo que las sucursales tuvieron disponible: stock actual + todo lo que salió (ventas, traspasos, mermas). Mismo cálculo que el reporte Inicial vs Restante.">${formatearNumero(d || 0)}</span>`;
+            }
+            return d || 0;
+        },
+        className: 'text-center th-inicial'
+    });
     columns.push({
         data: 'total_stock', title: 'Total',
         render: (d, type) => {
