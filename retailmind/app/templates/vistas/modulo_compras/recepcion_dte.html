@@ -1748,7 +1748,7 @@
                                     <thead>
                                         <tr>
                                             <th>DTE</th>
-                                            <th>Origen</th>
+                                            <th>Origen &rarr; Destino</th>
                                             <th>Producto</th>
                                             <th class="text-center" title="Unidades documentadas en el DTE">Esperado</th>
                                             <th class="text-center" title="Unidades que sí ingresaron al stock del destino">Recibido</th>
@@ -2502,6 +2502,7 @@
                                     <div class="col-md-3"><small class="text-muted">Tipo:</small> <strong id="verDteTipo">-</strong></div>
                                     <div class="col-md-3"><small class="text-muted">Emisor:</small> <strong id="verDteEmisor">-</strong></div>
                                     <div class="col-md-3"><small class="text-muted">Origen:</small> <strong id="verDteOrigen">-</strong></div>
+                                    <div class="col-md-3"><small class="text-muted">Destino (bodega):</small> <strong id="verDteDestino">-</strong></div>
                                     <div class="col-md-3"><small class="text-muted">Fecha Emisión:</small> <strong id="verDteFechaEmision">-</strong></div>
                                     <div class="col-md-3"><small class="text-muted">Fecha Recepción:</small> <strong id="verDteFechaRecepcion">-</strong></div>
                                     <div class="col-md-3"><small class="text-muted">Estado:</small> <strong id="verDteEstado">-</strong></div>
@@ -3639,6 +3640,18 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
             ? `<br><small class="text-success"><i class="bi bi-receipt-cutoff me-1"></i>NC ${ncsUnicas.map(n => '#' + _escapeHtmlDte(n)).join(', ')}</small>`
             : (primera.tipo_regularizacion ? `<br><small class="text-muted">${_escapeHtmlDte(primera.tipo_regularizacion)}</small>` : '');
 
+        // Bodega destino del traspaso. Faltaba por completo en este panel: el
+        // emisor veía su propia sucursal y la razón social del receptor, que en
+        // un traspaso interno suele ser la MISMA empresa, así que no había forma
+        // de saber a qué tienda se despachó sin abrir el DTE.
+        const destinoAlias = primera.sucursal_destino || '-';
+        const flujoDestino = destinoAlias === '-'
+            ? '<br><small class="text-muted fst-italic" title="El documento no tiene movimiento de salida con sucursal destino">sin destino registrado</small>'
+            : `<div class="mt-1 small">
+                   <i class="bi bi-arrow-right text-muted me-1"></i><strong>${_escapeHtmlDte(destinoAlias)}</strong>
+                   ${(primera.empresa_destino && primera.empresa_destino !== primera.emisor) ? `<br><span class="text-muted ms-3">${_escapeHtmlDte(primera.empresa_destino)}</span>` : ''}
+               </div>`;
+
         // Ayuda por rol: una vez por documento, no una vez por talla.
         const rolHint = !g.pendientes.length ? '' : (primera.soy_emisor
             ? '<div class="small text-muted mt-1"><i class="bi bi-info-circle me-1"></i>Sos el <strong>origen</strong>: corregí si despachaste completo, o emití NC por lo no entregado.</div>'
@@ -3655,6 +3668,7 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
                 <td>
                     <strong>${_escapeHtmlDte(primera.sucursal_origen || '-')}</strong>${rolBadge}
                     <br><small class="text-muted">${_escapeHtmlDte(primera.emisor || '-')}</small>
+                    ${flujoDestino}
                 </td>
                 <td>
                     <div class="fw-semibold">${lineas.length} línea(s) con diferencia</div>
@@ -3820,9 +3834,11 @@ function abrirDetalleRegularizarDTE(key) {
     $('#detalleRegCabecera').html(`
         <div class="row g-2 small">
             <div class="col-md-3"><span class="text-muted">Origen:</span> <strong>${_escapeHtmlDte(primera.sucursal_origen || '-')}</strong></div>
+            <div class="col-md-3"><span class="text-muted">Destino (bodega):</span> <strong>${_escapeHtmlDte(primera.sucursal_destino || '-')}</strong></div>
+            <div class="col-md-3"><span class="text-muted">Emisión:</span> <strong>${fecha}</strong></div>
             <div class="col-md-3"><span class="text-muted">Emisor:</span> <strong>${_escapeHtmlDte(primera.emisor || '-')}</strong></div>
             <div class="col-md-3"><span class="text-muted">Receptor:</span> <strong>${_escapeHtmlDte(primera.receptor || '-')}</strong></div>
-            <div class="col-md-3"><span class="text-muted">Emisión:</span> <strong>${fecha}</strong></div>
+            <div class="col-md-3"><span class="text-muted">Empresa destino:</span> <strong>${_escapeHtmlDte(primera.empresa_destino || '-')}</strong></div>
             <div class="col-12 mt-1">
                 <span class="badge bg-light text-dark border">${lineas.length} línea(s)</span>
                 <span class="badge bg-danger">${g.faltante} u. faltante</span>
@@ -6499,6 +6515,9 @@ function verDTERecepcionado(dteId) {
             $('#verDteEmisor').text(dte.emisor);
             $('#verDteReceptor').text(dte.receptor);
             $('#verDteOrigen').text(dte.sucursal_origen);
+            // La bodega destino no se mostraba: en un traspaso entre sucursales
+            // de la misma empresa, "Receptor" (razón social) no dice a dónde fue.
+            $('#verDteDestino').text(dte.sucursal_destino || '-');
             $('#verDteFechaEmision').text(dte.fecha_emision ? new Date(dte.fecha_emision).toLocaleDateString('es-CL') : '-');
             $('#verDteFechaRecepcion').text(dte.fecha_recepcion ? new Date(dte.fecha_recepcion).toLocaleDateString('es-CL') : '-');
             

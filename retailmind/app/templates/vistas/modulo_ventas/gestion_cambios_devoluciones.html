@@ -608,6 +608,14 @@
         background: linear-gradient(90deg, var(--nexo-success) 0%, rgba(0, 212, 170, 0.4) 100%);
     }
 
+    /* Un paso ya completado es clickeable: tocarlo vuelve hasta ese paso */
+    .wizard-step.completed,
+    .wizard-step.completed .wizard-circle { cursor: pointer; }
+    .wizard-step.completed:hover .wizard-circle {
+        box-shadow: 0 0 0 5px rgba(0, 212, 170, 0.25);
+        transform: scale(1.08);
+    }
+
     /* ========== NAV TABS POS ========== */
     .nav-tabs-pos {
         border-bottom: 2px solid var(--nexo-gray-300);
@@ -1312,18 +1320,25 @@
     #detalle-historial {
         scroll-behavior: smooth;
     }
+    /* 10px: con 4px el scrollbar era inagarrable con el dedo o el mouse del POS */
     #detalle-historial::-webkit-scrollbar,
     #detalle-historial-scroll::-webkit-scrollbar {
-        width: 4px;
+        width: 10px;
     }
     #detalle-historial::-webkit-scrollbar-track,
     #detalle-historial-scroll::-webkit-scrollbar-track {
         background: #0d1117;
+        border-radius: 8px;
     }
     #detalle-historial::-webkit-scrollbar-thumb,
     #detalle-historial-scroll::-webkit-scrollbar-thumb {
-        background: #2a3045;
-        border-radius: 4px;
+        background: #3a4258;
+        border-radius: 8px;
+        border: 2px solid #0d1117;
+    }
+    #detalle-historial-scroll::-webkit-scrollbar-thumb:hover,
+    #detalle-historial-scroll::-webkit-scrollbar-thumb:active {
+        background: #0d6efd;
     }
     
     /* ========== MODAL NUEVO CAMBIO - NAV BAR FIJO (flex item) ========== */
@@ -2153,11 +2168,197 @@
         min-height: 30px;
     }
 
-    /* Scrollbar sutil global para modales POS */
-    .modal-body::-webkit-scrollbar { width: 5px; }
+    /* Scrollbar del cuerpo de modales: visible y agarrable (antes 5px, invisible en táctil) */
+    .modal-body::-webkit-scrollbar { width: 10px; }
     .modal-body::-webkit-scrollbar-track { background: transparent; }
-    .modal-body::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
-    .modal-body::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
+    .modal-body::-webkit-scrollbar-thumb {
+        background: rgba(26,26,46,0.28);
+        border-radius: 8px;
+        border: 2px solid transparent;
+        background-clip: content-box;
+    }
+    .modal-body::-webkit-scrollbar-thumb:hover,
+    .modal-body::-webkit-scrollbar-thumb:active { background-color: rgba(26,26,46,0.5); }
+
+    /* ================================================================
+       POS UX 15" — SCROLL TÁCTIL + DRAG-SCROLL + TOUCH TARGETS
+       ================================================================ */
+
+    /* ---- Áreas de scroll internas (.sa-scroll): alto flexible por vh
+       en vez de px fijos, para aprovechar la pantalla de 15" y crecer
+       en monitores más grandes ---- */
+    .sa-scroll {
+        overflow-y: auto;
+        overscroll-behavior: contain;       /* el scroll no "escapa" al modal */
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        scrollbar-color: #94a3b8 #eef1f5;
+        position: relative;
+    }
+    .sa-xs { max-height: clamp(96px, 16vh, 220px); }
+    .sa-md { max-height: clamp(140px, 24vh, 360px); }
+    .sa-lg { max-height: clamp(200px, 30vh, 460px); }
+    .sa-xl { max-height: clamp(280px, 44vh, 560px); }
+
+    .sa-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+    .sa-scroll::-webkit-scrollbar-track { background: #eef1f5; border-radius: 8px; }
+    .sa-scroll::-webkit-scrollbar-thumb {
+        background: #94a3b8;
+        border-radius: 8px;
+        border: 2px solid #eef1f5;
+    }
+    .sa-scroll::-webkit-scrollbar-thumb:hover,
+    .sa-scroll::-webkit-scrollbar-thumb:active { background: var(--nexo-primary); }
+
+    /* Indicador "hay más contenido abajo": franja degradada sticky al borde
+       inferior, sólo mientras quede contenido por ver (clase puesta por JS) */
+    .sa-scroll::after {
+        content: '';
+        display: block;
+        position: sticky;
+        bottom: 0;
+        height: 0;
+        margin-top: 0;
+        background: linear-gradient(to bottom, rgba(26,26,46,0), rgba(26,26,46,0.18));
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+    .sa-scroll.can-scroll-down::after {
+        height: 22px;
+        margin-top: -22px;
+        opacity: 1;
+    }
+
+    /* Variante para paneles oscuros (detalle / NC) */
+    .sa-dark { scrollbar-color: #3a4258 #161b27; }
+    .sa-dark::-webkit-scrollbar-track { background: #161b27; }
+    .sa-dark::-webkit-scrollbar-thumb { background: #3a4258; border-color: #161b27; }
+    .sa-dark.can-scroll-down::after { background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.55)); }
+
+    /* ---- Drag-to-scroll: arrastrar con el click mantenido (JS) ---- */
+    .drag-scrollable { cursor: grab; }
+    .drag-scrollable.is-dragging {
+        cursor: grabbing;
+        user-select: none;
+        -webkit-user-select: none;
+        scroll-behavior: auto;
+    }
+
+    /* Tablas anchas: scroll horizontal contenido en su propio panel,
+       sin aplastar columnas hasta lo ilegible */
+    .table-responsive { overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+    #tabla-cambios { min-width: 900px; }
+    #card-tickets-pendientes table { min-width: 720px; }
+
+    /* ---- Stepper de cantidad − / + (táctil y con mouse) ---- */
+    .qty-stepper {
+        display: inline-flex;
+        align-items: stretch;
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        overflow: hidden;
+        background: var(--nexo-white);
+    }
+    .qty-stepper .qty-btn {
+        border: none;
+        background: var(--nexo-gray-100);
+        color: var(--nexo-primary);
+        width: 34px;
+        min-height: 36px;
+        font-size: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.15s;
+        flex-shrink: 0;
+        padding: 0;
+    }
+    .qty-stepper .qty-btn:hover { background: var(--nexo-primary-light); }
+    .qty-stepper .qty-btn:active { background: var(--nexo-primary); color: #fff; }
+    .qty-stepper .qty-input {
+        width: 46px;
+        border: none;
+        border-left: 1px solid var(--nexo-gray-300);
+        border-right: 1px solid var(--nexo-gray-300);
+        text-align: center;
+        font-weight: 700;
+        font-size: 0.92rem;
+        border-radius: 0;
+        appearance: textfield;
+        -moz-appearance: textfield;
+        min-height: 36px;
+        padding: 0 2px;
+    }
+    .qty-stepper .qty-input::-webkit-outer-spin-button,
+    .qty-stepper .qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .qty-stepper .qty-input:disabled { background: var(--nexo-gray-100); }
+    .qty-stepper:has(.qty-input:disabled) { opacity: 0.5; }
+    .qty-stepper:has(.qty-input:disabled) .qty-btn { cursor: not-allowed; color: var(--nexo-gray-500); }
+
+    /* ---- Checklist en vivo del paso 2 (qué falta para continuar) ---- */
+    .checklist-paso2 { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+    .clk-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 9px;
+        border-radius: var(--nexo-radius-full);
+        font-size: 0.72rem;
+        font-weight: 700;
+        background: rgba(255,176,32,0.12);
+        color: #B87C00;
+        border: 1px solid rgba(255,176,32,0.45);
+        white-space: nowrap;
+        transition: all 0.2s;
+    }
+    .clk-chip i { font-size: 0.8rem; }
+    .clk-chip.ok {
+        background: rgba(0,212,170,0.12);
+        color: #00866A;
+        border-color: rgba(0,212,170,0.45);
+    }
+    .clk-chip.neutro {
+        background: rgba(138,138,154,0.1);
+        color: var(--nexo-gray-500);
+        border-color: rgba(138,138,154,0.3);
+    }
+
+    /* ---- Chip tipo de operación + leyenda de diferencia en la barra flotante ---- */
+    #floating-action-bar .fab-chip-tipo {
+        background: #eef2ff;
+        color: #4338ca;
+        border: 1px solid #c7d2fe;
+    }
+    #fab-diff-caption { font-weight: 600; font-size: 0.7rem; opacity: 0.85; }
+
+    /* ================================================================
+       PANTALLAS TÁCTILES: objetivos ≥ 40-44px y sin hover pegajoso
+       ================================================================ */
+    @media (pointer: coarse) {
+        .btn { min-height: 44px; }
+        .btn-sm { min-height: 40px; padding-top: 0.35rem; padding-bottom: 0.35rem; }
+        .form-control, .form-select { min-height: 44px; }
+        .form-control-sm, .form-select-sm { min-height: 40px; }
+        .input-group-sm .input-group-text { min-height: 40px; }
+        .form-check-input.check-producto { width: 1.5em; height: 1.5em; }
+        .btn-close { padding: 0.75rem; }
+        .qty-stepper .qty-btn { width: 44px; min-height: 44px; }
+        .qty-stepper .qty-input { width: 52px; min-height: 44px; font-size: 1rem; }
+        .nav-tabs-pos .nav-item .nav-link { padding: 0.55rem 0.8rem; font-size: 0.8rem; }
+        .pagination-sm .page-link { padding: 0.5rem 0.8rem; font-size: 0.85rem; }
+        #tabla-cambios .btn-action { min-width: 44px; min-height: 40px; }
+        .sa-scroll::-webkit-scrollbar { width: 14px; }
+        .modal-body::-webkit-scrollbar { width: 14px; }
+        .table-nexo tbody td { padding-top: 0.6rem; padding-bottom: 0.6rem; }
+    }
+    @media (hover: none) {
+        .btn-nexo-primary:hover, .btn-nexo-success:hover,
+        #floating-action-bar .fab-btn-primary:hover,
+        #btn-siguiente:hover, #btn-continuar-inline:hover,
+        .card-stats-nexo:hover { transform: none; }
+    }
 </style>
 
 <!-- ============================================================== -->
@@ -2702,7 +2903,19 @@
                         <span class="badge bg-primary"><i class="ri-file-text-line me-1"></i><span id="ctx-documento-numero">-</span></span>
                         <small><strong id="ctx-documento-cliente">-</strong></small>
                         <small class="text-muted"><i class="ri-calendar-line me-1"></i><span id="ctx-documento-fecha">-</span></small>
-                        <small class="ms-auto"><i class="ri-time-line me-1"></i><span id="ctx-documento-plazo">-</span></small>
+                        <small><i class="ri-time-line me-1"></i><span id="ctx-documento-plazo">-</span></small>
+                        <!-- Checklist en vivo: qué falta para poder continuar al resumen -->
+                        <div class="checklist-paso2 ms-auto" id="checklist-paso2">
+                            <span class="clk-chip" id="clk-motivo" title="Seleccione el motivo principal del cambio/devolución">
+                                <i class="ri-error-warning-line"></i> Motivo
+                            </span>
+                            <span class="clk-chip" id="clk-devuelve" title="Productos escaneados que el cliente devuelve">
+                                <i class="ri-arrow-go-back-line"></i> Devuelve <b id="clk-devuelve-n">0</b>
+                            </span>
+                            <span class="clk-chip" id="clk-entrega" title="Productos nuevos que el cliente se lleva (solo cambios)">
+                                <i class="ri-shopping-bag-3-line"></i> Entrega <b id="clk-entrega-n">0</b>
+                            </span>
+                        </div>
                     </div>
                     <div class="row g-3">
                         <div class="col-12">
@@ -2768,7 +2981,7 @@
                                         <i class="ri-refresh-line"></i> Re-aplicar
                                     </button>
                                 </div>
-                                <div class="table-responsive" style="max-height: 100px; overflow-y: auto;">
+                                <div class="table-responsive sa-scroll sa-xs">
                                     <table class="table table-sm table-striped mb-0">
                                         <thead class="table-dark sticky-top" style="font-size: 0.75rem;">
                                             <tr>
@@ -2794,7 +3007,7 @@
                             <h6 class="mb-0 small"><i class="ri-shopping-bag-line text-primary"></i> Productos a Devolver/Cambiar <small class="text-muted">(escanee cada producto para seleccionarlo)</small></h6>
                             <span class="badge bg-info" id="badge-productos-seleccionados">0 seleccionados</span>
                         </div>
-                        <div class="table-responsive" style="max-height: 180px; overflow-y: auto;">
+                        <div class="table-responsive sa-scroll sa-lg">
                             <table class="table table-sm table-hover mb-0">
                                 <thead class="table-light sticky-top" style="font-size: 0.8rem;">
                                     <tr>
@@ -2805,7 +3018,7 @@
                                         <th>Artículo / Talla</th>
                                         <th class="text-center">Disp.</th>
                                         <th class="text-end">Precio</th>
-                                        <th width="70" class="text-center">Cant.</th>
+                                        <th width="120" class="text-center">Cant.</th>
                                         <th>Condición</th>
                                     </tr>
                                 </thead>
@@ -2883,7 +3096,7 @@
                                     </button>
                                 </div>
                                 <!-- Tabla de resultados -->
-                                <div class="table-responsive" style="max-height:200px; overflow-y:auto;">
+                                <div class="table-responsive sa-scroll sa-lg">
                                     <table class="table table-sm table-hover align-middle mb-0" id="tabla-busqueda-productos" style="font-size:0.82rem;">
                                         <thead class="table-light" style="position:sticky;top:0;z-index:1;">
                                             <tr>
@@ -2914,7 +3127,7 @@
                                 <span class="small"><i class="ri-shopping-bag-3-line"></i> Productos a Entregar</span>
                             </div>
                             <div class="card-body p-0">
-                                <div class="table-responsive" style="max-height: 130px; overflow-y: auto;">
+                                <div class="table-responsive sa-scroll sa-md">
                                     <table class="table table-sm table-hover mb-0">
                                         <thead class="table-light sticky-top" style="font-size: 0.8rem;">
                                             <tr>
@@ -2924,8 +3137,8 @@
                                                 <th class="text-center">Talla</th>
                                                 <th class="text-center">Stock</th>
                                                 <th class="text-end">Precio</th>
-                                                <th class="text-center" width="60">Cant.</th>
-                                                <th class="text-center" width="40"></th>
+                                                <th class="text-center" width="120">Cant.</th>
+                                                <th class="text-center" width="50"></th>
                                             </tr>
                                         </thead>
                                         <tbody id="tbody-productos-nuevos" style="font-size: 0.85rem;">
@@ -3031,6 +3244,12 @@
                         <span class="fab-chip fab-chip-diff cero" id="fab-chip-diff">
                             <i class="ri-exchange-dollar-line"></i>
                             Diferencia: <strong id="fab-diff">$0</strong>
+                            <span id="fab-diff-caption"></span>
+                        </span>
+                        <span class="fab-chip fab-chip-tipo" id="fab-chip-tipo" style="display:none;"
+                              title="Tipo de operación detectado según los productos seleccionados">
+                            <i class="ri-price-tag-3-line"></i>
+                            <strong id="fab-tipo-texto">—</strong>
                         </span>
                     </div>
                     <div class="fab-buttons">
@@ -3282,7 +3501,7 @@
                         </span>
                         <span class="badge bg-secondary" id="detalle-historial-count">0 eventos</span>
                     </div>
-                    <div style="max-height:150px; overflow-y:auto; padding:8px 12px;" id="detalle-historial-scroll">
+                    <div class="sa-scroll sa-md sa-dark" style="padding:8px 12px;" id="detalle-historial-scroll">
                         <div id="detalle-historial"></div>
                     </div>
                 </div>
@@ -3341,7 +3560,7 @@
                             <div class="bg-danger text-white py-1 px-2 d-flex align-items-center" style="font-size:.78rem;">
                                 <i class="ri-arrow-left-line me-1"></i><strong>Devueltos</strong>
                             </div>
-                            <div class="table-responsive" style="max-height:155px; overflow-y:auto;">
+                            <div class="table-responsive sa-scroll sa-md">
                                 <table class="table table-sm mb-0" style="font-size:.78rem;">
                                     <thead class="table-light sticky-top">
                                         <tr>
@@ -3363,7 +3582,7 @@
                             <div class="bg-success text-white py-1 px-2 d-flex align-items-center" style="font-size:.78rem;">
                                 <i class="ri-arrow-right-line me-1"></i><strong>Nuevos</strong>
                             </div>
-                            <div class="table-responsive" style="max-height:155px; overflow-y:auto;">
+                            <div class="table-responsive sa-scroll sa-md">
                                 <table class="table table-sm mb-0" style="font-size:.78rem;">
                                     <thead class="table-light sticky-top">
                                         <tr>
@@ -3492,9 +3711,9 @@
 
 <!-- Modal: Ver Detalle del Documento -->
 <div class="modal fade" id="modalDetalleDocumento" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header bg-info">
+            <div class="modal-header bg-nexo-primary">
                 <h5 class="modal-title text-white"><i class="ri-file-list-3-line me-1"></i> Detalle del Documento</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
@@ -3508,7 +3727,9 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <p class="mb-2"><strong>Documento:</strong> <span id="detalle-doc-numero">-</span></p>
-                                <p class="mb-2"><strong>Fecha:</strong> <span id="detalle-doc-fecha">-</span></p>
+                                {% comment %} id renombrado: chocaba con #detalle-doc-fecha del
+                                   modal Detalle de Cambio y la fecha se escribia alla {% endcomment %}
+                                <p class="mb-2"><strong>Fecha:</strong> <span id="doc-modal-fecha">-</span></p>
                                 <p class="mb-2"><strong>Cliente:</strong> <span id="detalle-doc-cliente">-</span></p>
                             </div>
                             <div class="col-md-6">
@@ -3526,7 +3747,7 @@
                         <strong>Productos del Documento</strong>
                     </div>
                     <div class="card-body">
-                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <div class="table-responsive sa-scroll sa-xl">
                             <table class="table table-sm table-hover">
                                 <thead class="table-light sticky-top">
                                     <tr>
@@ -3552,7 +3773,7 @@
                         <span class="badge bg-warning text-dark ms-2" id="badge-historial-cambios-count">0</span>
                     </div>
                     <div class="card-body p-0">
-                        <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                        <div class="table-responsive sa-scroll sa-lg">
                             <table class="table table-sm table-hover mb-0">
                                 <thead class="table-light sticky-top">
                                     <tr>
@@ -3661,12 +3882,14 @@
     </div>
 </div>
 
-<div class="modal fade" id="modalLoading" tabindex="-1" data-backdrop="static" data-keyboard="false">
+{% comment %} data-bs-*: los atributos data-backdrop/data-keyboard eran de Bootstrap 4
+   y en BS5 se ignoraban — el usuario podia cerrar el "Procesando..." con un click fuera {% endcomment %}
+<div class="modal fade" id="modalLoading" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-body text-center">
                 <div class="spinner-border text-primary" role="status">
-                    <span class="sr-only">Cargando...</span>
+                    <span class="visually-hidden">Cargando...</span>
                 </div>
                 <p class="mt-2" id="loading-message">Procesando...</p>
             </div>
@@ -3833,6 +4056,16 @@ function configurarEventos() {
     $('#select-motivo-principal').on('change', function() {
         actualizarEstadoBotonVerResumen();
         actualizarFloatingBar();
+    });
+
+    // Stepper clickeable: tocar un paso completado retrocede hasta él
+    // (reusa pasoAnterior para no duplicar la lógica de estado de cada paso)
+    $('#wizard-stepper').on('click', '.wizard-step.completed', function() {
+        const objetivo = parseInt($(this).data('step'), 10);
+        let tope = 4;
+        while (pasoActual > objetivo && tope-- > 0) {
+            pasoAnterior();
+        }
     });
 
     // Products can only be selected via scanning - no manual "select all"
@@ -4139,7 +4372,7 @@ function verDetalleDocumento() {
     
     // Llenar información del documento
     $('#detalle-doc-numero').text(ticketActual.correlativo || '-');
-    $('#detalle-doc-fecha').text(ticketActual.fecha || '-');
+    $('#doc-modal-fecha').text(ticketActual.fecha || '-');
     $('#detalle-doc-cliente').text(ticketActual.cliente_nombre || ticketActual.cliente || 'Cliente General');
     $('#detalle-doc-total').text('$' + formatearNumero(ticketActual.total || 0));
     $('#detalle-doc-vendedor').text(ticketActual.vendedor || '-');
@@ -5465,6 +5698,9 @@ function siguientePaso(event) {
         $('#ctx-documento-plazo').text(ticketActual.dentro_del_plazo ? 'Dentro del plazo' : 'Fuera de plazo');
         $('#paso-seleccionar-productos').show();
         $('#btn-continuar-inline').removeClass('show-animated').hide();
+        // Arrancar el paso 2 desde arriba (el paso 1 pudo quedar scrolleado)
+        const mbPaso2 = document.querySelector('#modalNuevoCambio .modal-body');
+        if (mbPaso2) mbPaso2.scrollTop = 0;
         cargarProductosOriginales();
         setTimeout(() => $('#input-escanear-sku').focus(), 200);
         $('#btn-siguiente').removeClass('show-animated')
@@ -5715,16 +5951,21 @@ function cargarProductosOriginales() {
                     $${formatearNumero(producto.precio_unitario || 0)}
                     ${producto.tiene_descuento ? `<br><small class="text-danger" style="font-size:0.65rem;"><del>$${formatearNumero(producto.precio_lista)}</del></small>` : ''}
                 </td>
-                <td>
-                    <input type='number' class="form-control form-control-sm" 
-                           id='cantidad-producto-${index}' 
-                           min='1' 
-                           max='${producto.cantidad_disponible || 1}' 
-                           value='1' 
-                           disabled
-                           style="min-width:60px; min-height:36px;"
-                           onchange='validarCantidadProducto(${index})'
-                           oninput='validarCantidadProducto(${index})'>
+                <td class="text-center">
+                    <div class="qty-stepper" id="qty-stepper-${index}">
+                        <button type="button" class="qty-btn" tabindex="-1" title="Restar 1"
+                                onclick="ajustarCantidadProducto(${index}, -1)"><i class="ri-subtract-line"></i></button>
+                        <input type='number' class="qty-input"
+                               id='cantidad-producto-${index}'
+                               min='1'
+                               max='${producto.cantidad_disponible || 1}'
+                               value='1'
+                               disabled
+                               onchange='validarCantidadProducto(${index})'
+                               oninput='validarCantidadProducto(${index})'>
+                        <button type="button" class="qty-btn" tabindex="-1" title="Sumar 1"
+                                onclick="ajustarCantidadProducto(${index}, 1)"><i class="ri-add-line"></i></button>
+                    </div>
                 </td>
                 <td>
                     <select class="form-control form-control-sm" id='condicion-${index}' disabled style="min-height:36px;">
@@ -5810,6 +6051,32 @@ function validarCantidadProducto(index) {
     
     // Actualizar vista previa
     actualizarVistaPreviaTotales();
+}
+
+// Botones − / + del stepper de cantidad (producto original a devolver).
+// El input sigue siendo la fuente de verdad: aquí solo se ajusta y se
+// delega en validarCantidadProducto, igual que al tipear.
+function ajustarCantidadProducto(index, delta) {
+    const $input = $(`#cantidad-producto-${index}`);
+    if (!$input.length) return;
+    if ($input.prop('disabled')) {
+        mostrarToast('warning', 'Escanee el producto para habilitar la cantidad');
+        return;
+    }
+    const max = parseInt($input.attr('max'), 10) || 1;
+    let valor = (parseInt($input.val(), 10) || 1) + delta;
+    valor = Math.max(1, Math.min(max, valor));
+    $input.val(valor);
+    validarCantidadProducto(index);
+}
+
+// Botones − / + del stepper de cantidad (producto nuevo a entregar)
+function ajustarCantidadProductoNuevo(index, delta) {
+    const producto = productosNuevos[index];
+    if (!producto) return;
+    const objetivo = (producto.cantidad || 1) + delta;
+    if (objetivo < 1) return;
+    cambiarCantidadProductoNuevo(index, objetivo);
 }
 
 // Función para actualizar vista previa de totales en el paso 2
@@ -5941,6 +6208,28 @@ function actualizarEstadoBotonVerResumen() {
             $motivo.removeClass('border-warning');
         }
     }
+
+    actualizarChecklistPaso2();
+}
+
+// Checklist en vivo del paso 2 (chips en la barra de contexto): el cajero ve
+// de un vistazo qué requisito ya cumplió y qué falta, sin esperar al SweetAlert.
+function actualizarChecklistPaso2() {
+    if (typeof pasoActual === 'undefined' || pasoActual !== 2) return;
+
+    const motivoOk = !!$('#select-motivo-principal').val();
+    const nDevuelve = $('.check-producto:checked').length;
+    const nEntrega = (typeof productosNuevos !== 'undefined') ? productosNuevos.length : 0;
+    const esCambio = tipoOperacionDetectada === 'CAMBIO_SIMPLE' || tipoOperacionDetectada === 'CAMBIO_CON_DIFERENCIA';
+
+    $('#clk-motivo').toggleClass('ok', motivoOk);
+    $('#clk-devuelve').toggleClass('ok', nDevuelve > 0);
+    $('#clk-devuelve-n').text(nDevuelve);
+    $('#clk-entrega-n').text(nEntrega);
+    // "Entrega" queda neutro cuando es devolución pura: ahí no se exige producto nuevo
+    $('#clk-entrega')
+        .toggleClass('ok', nEntrega > 0)
+        .toggleClass('neutro', nEntrega === 0 && !esCambio && nDevuelve > 0);
 }
 
 // ─── FLOATING ACTION BAR ──────────────────────────────────────────────────────
@@ -6028,12 +6317,25 @@ function actualizarFabResumen() {
     if (diff > 0) {
         $chipDiff.addClass('positivo');
         $('#fab-diff').text('+$' + formatearNumero(diff));
+        $('#fab-diff-caption').text('· cliente paga');
     } else if (diff < 0) {
         $chipDiff.addClass('negativo');
         $('#fab-diff').text('-$' + formatearNumero(Math.abs(diff)));
+        $('#fab-diff-caption').text('· se devuelve al cliente');
     } else {
         $chipDiff.addClass('cero');
         $('#fab-diff').text('$0');
+        $('#fab-diff-caption').text('');
+    }
+
+    // Tipo de operación en vivo: que el cajero sepa QUÉ está armando
+    // (cambio simple, cambio con diferencia o devolución) antes del resumen.
+    const $chipTipo = $('#fab-chip-tipo');
+    if (tipoOperacionDetectada) {
+        $('#fab-tipo-texto').text(TIPO_OPERACION_LABELS[tipoOperacionDetectada] || tipoOperacionDetectada.replace(/_/g, ' '));
+        $chipTipo.show();
+    } else {
+        $chipTipo.hide();
     }
 }
 
@@ -6423,15 +6725,20 @@ function actualizarTablaProductosNuevos() {
                     </div>
                     ${producto.precio_venta > precioOriginal ? `<small class="text-success">+$${formatearNumero(producto.precio_venta - precioOriginal)}</small>` : ''}
                 </td>
-                <td>
-                    <input type='number' class="form-control form-control-sm" 
-                           min='1' max='${producto.stock_disponible}' 
-                           value='${producto.cantidad}'
-                           onchange='cambiarCantidadProductoNuevo(${index}, this.value)'
-                           style="width: 70px;">
+                <td class="text-center">
+                    <div class="qty-stepper">
+                        <button type="button" class="qty-btn" tabindex="-1" title="Restar 1"
+                                onclick="ajustarCantidadProductoNuevo(${index}, -1)"><i class="ri-subtract-line"></i></button>
+                        <input type='number' class="qty-input"
+                               min='1' max='${producto.stock_disponible}'
+                               value='${producto.cantidad}'
+                               onchange='cambiarCantidadProductoNuevo(${index}, this.value)'>
+                        <button type="button" class="qty-btn" tabindex="-1" title="Sumar 1"
+                                onclick="ajustarCantidadProductoNuevo(${index}, 1)"><i class="ri-add-line"></i></button>
+                    </div>
                 </td>
-                <td>
-                    <button class="btn btn-sm btn-danger" onclick='eliminarProductoNuevo(${index})' title='Eliminar producto'>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-outline-danger" onclick='eliminarProductoNuevo(${index})' title='Quitar de la lista'>
                         <i class="ri-delete-bin-line"></i>
                     </button>
                 </td>
@@ -9646,6 +9953,98 @@ function marcarRevisado(cambioId) {
         }
     });
 }
+
+// ================================================================
+// POS SCROLL UX: drag-to-scroll con el mouse + indicador "hay más"
+// El táctil scrollea nativo; esto cubre el mouse del POS y hace
+// visible dónde queda contenido oculto en las áreas .sa-scroll.
+// ================================================================
+(function initPosScrollUX() {
+    const SA_SELECTOR = '.sa-scroll';
+    const DRAG_SELECTOR = '.sa-scroll, .table-responsive, .modal-body';
+    const INTERACTIVE = 'input, textarea, select, button, a, label, [onclick], [data-bs-toggle]';
+
+    function evaluarArea(el) {
+        const scrollable = el.scrollHeight - el.clientHeight > 4;
+        const alFondo = el.scrollTop + el.clientHeight >= el.scrollHeight - 6;
+        el.classList.toggle('can-scroll-down', scrollable && !alFondo);
+        el.classList.toggle('drag-scrollable', scrollable || el.scrollWidth - el.clientWidth > 4);
+    }
+
+    function refreshScrollHints() {
+        document.querySelectorAll(SA_SELECTOR).forEach(evaluarArea);
+    }
+    window.refreshScrollHints = refreshScrollHints;
+
+    // Scroll dentro de un área: recalcular su indicador (fase captura,
+    // porque el evento scroll no burbujea)
+    document.addEventListener('scroll', function(e) {
+        const el = e.target;
+        if (el && el.classList && el.classList.contains('sa-scroll')) evaluarArea(el);
+    }, true);
+
+    window.addEventListener('resize', debounce(refreshScrollHints, 200));
+    $(document).on('shown.bs.modal', function() { setTimeout(refreshScrollHints, 150); });
+
+    // Las tablas se repueblan por JS en muchos flujos distintos: observar el DOM
+    // es más robusto que instrumentar cada render.
+    const observer = new MutationObserver(debounce(refreshScrollHints, 150));
+    observer.observe(document.body, { childList: true, subtree: true });
+    setTimeout(refreshScrollHints, 400);
+
+    // --- Drag-to-scroll con click mantenido (solo mouse) ---
+    let dragEl = null, startX = 0, startY = 0, startLeft = 0, startTop = 0, moved = false;
+
+    document.addEventListener('mousedown', function(e) {
+        if (e.button !== 0) return;
+        if (e.target.closest(INTERACTIVE)) return;   // no interferir con controles
+        const el = e.target.closest(DRAG_SELECTOR);
+        if (!el) return;
+        const puedeY = el.scrollHeight - el.clientHeight > 4;
+        const puedeX = el.scrollWidth - el.clientWidth > 4;
+        if (!puedeY && !puedeX) return;
+        dragEl = el;
+        moved = false;
+        startX = e.clientX;
+        startY = e.clientY;
+        startLeft = el.scrollLeft;
+        startTop = el.scrollTop;
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (!dragEl) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        // Umbral de 6px: un click normal nunca se convierte en drag
+        if (!moved && Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        if (!moved) {
+            moved = true;
+            dragEl.classList.add('is-dragging', 'drag-scrollable');
+        }
+        dragEl.scrollLeft = startLeft - dx;
+        dragEl.scrollTop = startTop - dy;
+        e.preventDefault();
+    });
+
+    document.addEventListener('mouseup', function() {
+        if (!dragEl) return;
+        const el = dragEl;
+        const huboDrag = moved;
+        dragEl = null;
+        moved = false;
+        el.classList.remove('is-dragging');
+        if (huboDrag) {
+            // Tragarse el click fantasma que dispara el mismo mouseup del drag.
+            // En window (no document) con captura: corre ANTES que cualquier
+            // otro listener de captura de la página y no choca con ellos.
+            const swallow = function(ev) { ev.stopPropagation(); ev.preventDefault(); };
+            window.addEventListener('click', swallow, { capture: true, once: true });
+            setTimeout(function() {
+                window.removeEventListener('click', swallow, { capture: true });
+            }, 100);
+        }
+    });
+})();
 
 </script>
 

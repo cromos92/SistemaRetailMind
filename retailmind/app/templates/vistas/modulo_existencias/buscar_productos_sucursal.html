@@ -318,16 +318,89 @@ kbd.sc {
 .pos-select-sm:focus { border-color: var(--np-primary) !important; box-shadow: 0 0 0 2px rgba(0,102,255,.1) !important; outline: none; }
 
 /* ===== Tabla POS ===== */
+/* Shell: contiene la tabla scrolleable + los indicadores de scroll (sombra
+   lateral y pastilla "Desliza"), que NO deben desplazarse con el contenido. */
+.pos-table-shell {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
 .pos-table-wrap {
     flex: 1;
     overflow-y: auto;
     overflow-x: auto;
     min-height: 0;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    cursor: grab;
 }
-.pos-table-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
-.pos-table-wrap::-webkit-scrollbar-track { background: var(--np-gray-100); }
-.pos-table-wrap::-webkit-scrollbar-thumb { background: var(--np-gray-300); border-radius: 3px; }
-.pos-table-wrap::-webkit-scrollbar-thumb:hover { background: var(--np-gray-500); }
+.pos-table-wrap.dragging {
+    cursor: grabbing;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Scrollbars anchos y visibles: operables con el dedo o el mouse */
+.pos-table-wrap::-webkit-scrollbar,
+#mtTablaWrap::-webkit-scrollbar { width: 12px; height: 12px; }
+.pos-table-wrap::-webkit-scrollbar-track,
+#mtTablaWrap::-webkit-scrollbar-track { background: var(--np-gray-100); border-radius: 8px; }
+.pos-table-wrap::-webkit-scrollbar-thumb,
+#mtTablaWrap::-webkit-scrollbar-thumb {
+    background: var(--np-gray-300);
+    border-radius: 8px;
+    border: 3px solid var(--np-gray-100);
+    min-height: 40px;
+}
+.pos-table-wrap::-webkit-scrollbar-thumb:hover,
+.pos-table-wrap::-webkit-scrollbar-thumb:active,
+#mtTablaWrap::-webkit-scrollbar-thumb:hover,
+#mtTablaWrap::-webkit-scrollbar-thumb:active { background: var(--np-primary); }
+.pos-table-wrap, #mtTablaWrap {
+    scrollbar-width: thin;
+    scrollbar-color: var(--np-gray-300) var(--np-gray-100);
+}
+
+/* Sombra derecha: indica que hay más columnas hacia ese lado */
+.pos-table-shell::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 14px;               /* no tapar el scrollbar horizontal */
+    width: 22px;
+    background: linear-gradient(-90deg, rgba(26,26,46,.16), transparent);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .2s ease;
+    z-index: 12;
+}
+.pos-table-shell.scroll-r::after { opacity: 1; }
+
+/* Pastilla "Desliza": se muestra hasta que el usuario descubre el scroll */
+.scroll-hint-pill {
+    position: absolute;
+    right: 16px;
+    bottom: 22px;
+    z-index: 13;
+    display: none;
+    align-items: center;
+    gap: .4rem;
+    background: var(--np-gray-900);
+    color: #fff;
+    border-radius: 9999px;
+    padding: .45rem .95rem;
+    font-size: .78rem;
+    font-weight: 600;
+    box-shadow: var(--np-shadow-md);
+    pointer-events: none;
+    opacity: .92;
+    animation: hint-nudge 1.6s ease-in-out infinite;
+}
+.pos-table-shell.scroll-r.show-hint .scroll-hint-pill { display: inline-flex; }
+@keyframes hint-nudge { 0%,100% { transform: translateX(0); } 50% { transform: translateX(6px); } }
 
 .pos-table {
     width: 100%;
@@ -360,9 +433,25 @@ kbd.sc {
     min-height: var(--pos-row-h);
 }
 .pos-table tbody tr { transition: background var(--np-t); }
+/* La fila completa abre el detalle de tallas (solo en la tabla principal) */
+#productosTableBody tr { cursor: pointer; }
 .pos-table tbody tr:hover { background: var(--np-primary-lt); }
 .pos-table tbody tr:hover td { color: var(--np-gray-900); }
+.pos-table tbody tr:active { background: var(--np-primary-lt); }
 .pos-table tbody tr:last-child td { border-bottom: none; }
+
+/* Columnas fijas: foto + artículo quedan visibles al desplazarse a la derecha */
+.pos-table th.tc-foto, .pos-table td.tc-foto { position: sticky; left: 0; z-index: 5; }
+.pos-table th.tc-art,  .pos-table td.tc-art  { position: sticky; left: 86px; z-index: 5; }
+.pos-table thead th.tc-foto, .pos-table thead th.tc-art { z-index: 11; }
+.pos-table tbody td.tc-foto, .pos-table tbody td.tc-art { background: var(--np-white); }
+.pos-table tbody tr:hover td.tc-foto, .pos-table tbody tr:hover td.tc-art,
+.pos-table tbody tr:active td.tc-foto, .pos-table tbody tr:active td.tc-art { background: var(--np-primary-lt); }
+/* Al haber columnas ocultas a la izquierda, la columna fija proyecta sombra */
+.pos-table-shell.scroll-l .pos-table td.tc-art,
+.pos-table-shell.scroll-l .pos-table th.tc-art {
+    box-shadow: 10px 0 12px -8px rgba(26,26,46,.28);
+}
 
 /* Column sizing */
 .tc-foto  { width: 86px; min-width: 86px; max-width: 86px; padding: 6px !important; text-align: center; }
@@ -541,8 +630,11 @@ kbd.sc {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-wrap: wrap;
     gap: 0.25rem;
     padding: 0.5rem;
+    margin: 0;
+    list-style: none;
     background: var(--np-gray-100);
     border-top: 1px solid var(--np-gray-200);
     flex-shrink: 0;
@@ -701,6 +793,15 @@ kbd.sc {
 #mtBody tr:last-child { background: var(--np-primary-lt); }
 #mtBody td, #mtHead th { padding: .4rem .55rem; font-size: .8125rem; }
 #mtBody .cls-esp, #mtBody .cls-cat { margin-left: .25rem; }
+/* La matriz también se arrastra y fija la columna Sucursal al desplazarse */
+#mtTablaWrap { cursor: grab; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+#mtTablaWrap.dragging { cursor: grabbing; user-select: none; -webkit-user-select: none; }
+#mtTablaWrap .pos-table th:first-child,
+#mtTablaWrap .pos-table td:first-child { position: sticky; left: 0; z-index: 5; background: var(--np-white); }
+#mtTablaWrap .pos-table thead th:first-child { z-index: 11; }
+#mtBody tr.sin-stock td:first-child { background: #f5f5f7; }
+#mtBody tr:last-child td:first-child { background: var(--np-primary-lt); }
+#mtBody tr:hover td:first-child { background: var(--np-primary-lt); }
 .talla-big { font-weight: 700; font-size: 1rem; color: var(--np-gray-900); }
 .sku-mono {
     font-family: 'SF Mono','Consolas',monospace;
@@ -751,29 +852,119 @@ kbd.sc {
     .talla-chip .tc-t { font-size: .5625rem; }
     .talla-chip .tc-s { font-size: .5rem; }
 }
-@media screen and (max-width: 768px) {
+/* ===== Vista tarjeta (tablet vertical / móvil): la tabla se vuelve cards ===== */
+@media screen and (max-width: 767.98px) {
     .pos-search-row { flex-wrap: wrap; }
     .pos-search-wrap { order: -1; flex-basis: 100%; }
     .modal-stats-row { grid-template-columns: repeat(2,1fr); }
     .modal-summary { grid-template-columns: repeat(3,1fr); }
+
+    /* Solo la tabla principal: la matriz del modal (#mtTablaWrap) mantiene
+       su formato tabla, sus columnas dependen de las tallas del artículo. */
+    #tablaWrapper .pos-table { min-width: 0; width: 100%; display: block; }
+    #tablaWrapper .pos-table thead { display: none; }
+    #tablaWrapper .pos-table tbody { display: block; }
+    #tablaWrapper .pos-table tbody tr {
+        display: grid;
+        grid-template-columns: 92px minmax(0,1.2fr) minmax(0,1fr);
+        grid-template-areas:
+            "foto   art    art"
+            "foto   desc   desc"
+            "foto   marca  color"
+            "clasif clasif clasif"
+            "talla  talla  talla"
+            "stock  precio suc"
+            "act    act    act";
+        gap: .3rem .6rem;
+        align-items: start;
+        margin: .55rem;
+        padding: .7rem;
+        background: var(--np-white);
+        border: 1px solid var(--np-gray-200);
+        border-radius: 12px;
+        box-shadow: var(--np-shadow-sm);
+    }
+    #tablaWrapper .pos-table tbody td {
+        display: block;
+        border-bottom: none;
+        padding: 0;
+        font-size: var(--pos-font-sm);
+    }
+    /* En vista tarjeta no hay columnas fijas */
+    #tablaWrapper .pos-table td.tc-foto, #tablaWrapper .pos-table td.tc-art { position: static; }
+    .pos-table-shell.scroll-l .pos-table td.tc-art { box-shadow: none; }
+    #tablaWrapper .pos-table tbody td:nth-child(1)  { grid-area: foto; }
+    #tablaWrapper .pos-table tbody td:nth-child(2)  { grid-area: art; }
+    #tablaWrapper .pos-table tbody td:nth-child(3)  { grid-area: desc; }
+    #tablaWrapper .pos-table tbody td:nth-child(4)  { grid-area: marca;  text-align: left; }
+    #tablaWrapper .pos-table tbody td:nth-child(5)  { grid-area: color;  text-align: left; }
+    #tablaWrapper .pos-table tbody td:nth-child(6)  { grid-area: clasif; }
+    #tablaWrapper .pos-table tbody td:nth-child(7)  { grid-area: talla; }
+    #tablaWrapper .pos-table tbody td:nth-child(8)  { grid-area: stock;  text-align: left; }
+    #tablaWrapper .pos-table tbody td:nth-child(9)  { grid-area: precio; text-align: left; }
+    #tablaWrapper .pos-table tbody td:nth-child(10) { grid-area: suc;    text-align: right; }
+    #tablaWrapper .pos-table tbody td:nth-child(11) { grid-area: act; }
+    .tc-foto { width: auto; min-width: 0; max-width: none; padding: 0 !important; }
+    .tc-foto img.producto-portada-img { width: 92px; height: 92px; }
+    .tc-art, .tc-desc, .tc-clasif, .tc-talla, .tc-stock, .tc-price, .tc-suc, .tc-act { min-width: 0; max-width: none; }
+    .desc-cell { max-width: none; white-space: normal; }
+    .attr-pill { max-width: none; }
+    .cls-cat { max-width: none; white-space: normal; }
+    .tallas-grid { max-width: none; justify-content: flex-start; margin: 0; }
+    #tablaWrapper .pos-table tbody td:nth-child(8)::before {
+        content: 'Stock total';
+        display: block;
+        font-size: .625rem;
+        color: var(--np-gray-500);
+        text-transform: uppercase;
+        letter-spacing: .4px;
+        margin-bottom: .15rem;
+    }
+    .tc-price > div { align-items: flex-start !important; }
+    .tc-act .d-flex { flex-direction: row !important; }
+    .tc-act .btn-detalle { flex: 1; justify-content: center; }
+    /* Sin overflow horizontal en cards: fuera sombras y hint */
+    .pos-table-shell::after { display: none; }
+    .scroll-hint-pill { display: none !important; }
+    .pos-results-bar { padding: .5rem .6rem; }
+    .pos-controls { width: 100%; }
+    .pos-controls .pos-select-sm { flex: 1; }
 }
 
-@media (max-width: 576px) {
-    .busqueda-header { flex-direction: column; gap: 0.5rem; }
-    .busqueda-header .form-control { width: 100%; }
-    .busqueda-header .btn { width: 100%; }
-    .resultado-producto { flex-direction: column; gap: 0.5rem; }
-    .resultado-producto .producto-img { width: 50px; height: 50px; }
-    .resultado-producto .producto-info { font-size: 0.813rem; }
-    .resultado-producto .producto-stock { font-size: 0.875rem; }
-    .filtros-busqueda .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+/* ===== Táctil (dedo): targets grandes estilo kiosco, feedback sin hover ===== */
+@media (pointer: coarse) {
+    .pos-search-input { min-height: 52px; font-size: 1.0625rem; }
+    .pos-btn { min-height: 52px; }
+    .pos-btn-icon { min-width: 52px; }
+    .pos-chip { min-height: 42px; padding: 8px 16px; font-size: .875rem; }
+    .pos-filters-body .form-select { min-height: 46px; font-size: .9375rem; }
+    .select2-container--default .select2-selection--single { height: 46px !important; }
+    .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 44px !important; font-size: .875rem !important; }
+    .select2-container--default .select2-selection--single .select2-selection__arrow { height: 44px !important; }
+    .select2-container--default .select2-results__option { padding: .7rem .9rem !important; font-size: .9375rem !important; }
+    .pos-select-sm { min-height: 44px; }
+    .pos-table tbody td { padding-top: .7rem; padding-bottom: .7rem; }
+    .btn-detalle { min-height: 44px; font-size: .8125rem; padding: .5rem .9rem; justify-content: center; }
+    .talla-chip { min-width: 36px; padding: 4px 7px; }
+    .talla-chip .tc-t { font-size: .75rem; }
+    .talla-chip .tc-s { font-size: .6875rem; }
+    .pos-pg-btn { min-width: 46px; height: 46px; font-size: .9375rem; }
+    #mtBody td, #mtHead th { padding: .6rem .7rem; }
+    /* El mouse no existe: nada de grab ni de estados hover fantasma */
+    .pos-table-wrap, #mtTablaWrap { cursor: auto; }
+    .pos-table tbody tr:hover { background: transparent; }
+    .pos-table tbody tr:hover td.tc-foto, .pos-table tbody tr:hover td.tc-art { background: var(--np-white); }
+    .pos-table tbody tr:active { background: var(--np-primary-lt); }
+    .pos-table tbody tr:active td.tc-foto, .pos-table tbody tr:active td.tc-art { background: var(--np-primary-lt); }
+    .btn-detalle:active { transform: scale(.96); }
+    .pos-btn:active { transform: scale(.97); }
+    .pos-pg-btn:active { background: var(--np-primary); border-color: var(--np-primary); color: #fff; }
+    .pos-table-wrap::-webkit-scrollbar, #mtTablaWrap::-webkit-scrollbar { width: 14px; height: 14px; }
 }
 
-@media (max-width: 480px) {
-    .resultados-grid { gap: 0.5rem; }
-    .resultado-producto { padding: 0.5rem; }
-    .sucursal-selector { flex-direction: column; }
-    .sucursal-selector .btn { width: 100%; }
+/* Táctil + angosto: en vista tarjeta manda el gap del grid, no el padding */
+@media (pointer: coarse) and (max-width: 767.98px) {
+    #tablaWrapper .pos-table tbody td { padding: 0; }
 }
 </style>
 
@@ -976,7 +1167,8 @@ kbd.sc {
                 </div>
 
                 <!-- Tabla -->
-                <div class="pos-table-wrap" id="tablaWrapper" style="display:none;">
+                <div class="pos-table-shell" id="tablaShell" style="display:none;">
+                <div class="pos-table-wrap" id="tablaWrapper">
                     <table class="pos-table">
                         <thead>
                             <tr>
@@ -996,6 +1188,10 @@ kbd.sc {
                         <tbody id="productosTableBody"></tbody>
                     </table>
                 </div>
+                <div class="scroll-hint-pill">
+                    <i class="bi bi-arrow-left-right"></i> Desliza para ver más
+                </div>
+                </div><!-- /pos-table-shell -->
 
                 <!-- Sin resultados -->
                 <div id="sinResultados" class="pos-empty" style="display:none;">
@@ -1173,7 +1369,7 @@ $(document).ready(function () {
     /* ---------- Select2 ---------- */
     function initSelect2() {
         if ($('#sucursal_select').data('select2')) {
-            $('#sucursal_select,#marca_select,#color_select,#genero_select,#categoria_select').select2('destroy');
+            $('#sucursal_select,#marca_select,#color_select,#genero_select,#categoria_select,#especialidad_select').select2('destroy');
         }
         const cfg = {
             allowClear: true,
@@ -1188,6 +1384,7 @@ $(document).ready(function () {
         $('#color_select').select2({ ...cfg, placeholder: 'Todos los colores' });
         $('#genero_select').select2({ ...cfg, placeholder: 'Todos los géneros' });
         $('#categoria_select').select2({ ...cfg, placeholder: 'Todas las categorías' });
+        $('#especialidad_select').select2({ ...cfg, placeholder: 'Todas las especialidades' });
 
         $('.select2-container').css('width', '100%');
     }
@@ -1296,7 +1493,7 @@ $(document).ready(function () {
     function setEstadoInicial() {
         $('#estadoInicial').show();
         $('#loadingProductos').hide();
-        $('#tablaWrapper').hide();
+        $('#tablaShell').hide();
         $('#sinResultados').hide();
         $('#resultsBar').hide();
         $('#paginacionContainer').hide();
@@ -1305,22 +1502,27 @@ $(document).ready(function () {
     function setLoading() {
         $('#estadoInicial').hide();
         $('#loadingProductos').show();
-        $('#tablaWrapper').hide();
+        $('#tablaShell').hide();
         $('#sinResultados').hide();
     }
 
     function setResultados() {
         $('#estadoInicial').hide();
         $('#loadingProductos').hide();
-        $('#tablaWrapper').show();
+        $('#tablaShell').show();
         $('#sinResultados').hide();
         $('#resultsBar').show();
+        // Al cambiar de página se vuelve al inicio de la lista y se recalculan
+        // las sombras/hint de scroll (la tabla recién se hizo visible).
+        const wrapEl = document.getElementById('tablaWrapper');
+        if (wrapEl) wrapEl.scrollTop = 0;
+        setTimeout(updateScrollHints, 30);
     }
 
     function setSinResultados() {
         $('#estadoInicial').hide();
         $('#loadingProductos').hide();
-        $('#tablaWrapper').hide();
+        $('#tablaShell').hide();
         $('#sinResultados').show();
         $('#resultsBar').show();
     }
@@ -1728,6 +1930,103 @@ $(document).ready(function () {
         $('#mtBody').html(body);
         $('#mtTablaWrap').show();
     }
+
+    /* ---------- Scroll intuitivo: arrastrar con el mouse ----------
+       En touch el paneo ya es nativo (no se interfiere); con mouse la tabla
+       se arrastra como en un touch, con inercia al soltar. */
+    let dragSuppressUntil = 0;
+    let dragSuppressEl = null;
+
+    // Capture en window: corre ANTES que el lightbox de fotos (capture en
+    // document) y que los handlers delegados, así el click fantasma que el
+    // navegador dispara al soltar un arrastre no abre modales ni fotos.
+    window.addEventListener('click', function (e) {
+        if (Date.now() < dragSuppressUntil && dragSuppressEl && dragSuppressEl.contains(e.target)) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true);
+
+    function enableDragScroll(el) {
+        if (!el || el.__dragScroll) return;
+        el.__dragScroll = true;
+
+        let down = false, moved = false;
+        let startX = 0, startY = 0, startL = 0, startT = 0;
+        let lastX = 0, lastTime = 0, velX = 0, rafId = null;
+
+        el.addEventListener('pointerdown', function (e) {
+            if (e.pointerType !== 'mouse' || e.button !== 0) return;
+            down = true; moved = false;
+            startX = e.clientX; startY = e.clientY;
+            startL = el.scrollLeft; startT = el.scrollTop;
+            lastX = e.clientX; lastTime = performance.now(); velX = 0;
+            if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+        });
+
+        window.addEventListener('pointermove', function (e) {
+            if (!down) return;
+            const dx = e.clientX - startX, dy = e.clientY - startY;
+            if (!moved && Math.abs(dx) + Math.abs(dy) > 6) {
+                moved = true;
+                el.classList.add('dragging');
+                if (window.getSelection) window.getSelection().removeAllRanges();
+            }
+            if (!moved) return;
+            el.scrollLeft = startL - dx;
+            el.scrollTop  = startT - dy;
+            const now = performance.now();
+            if (now - lastTime > 0) velX = (e.clientX - lastX) / (now - lastTime);
+            lastX = e.clientX; lastTime = now;
+        });
+
+        function endDrag() {
+            if (!down) return;
+            down = false;
+            el.classList.remove('dragging');
+            if (!moved) return;
+            dragSuppressUntil = Date.now() + 250;
+            dragSuppressEl = el;
+            // Inercia suave al soltar
+            let v = velX * 14;
+            (function glide() {
+                v *= 0.92;
+                if (Math.abs(v) < 0.4) { rafId = null; return; }
+                el.scrollLeft -= v;
+                rafId = requestAnimationFrame(glide);
+            })();
+        }
+        window.addEventListener('pointerup', endDrag);
+        window.addEventListener('pointercancel', endDrag);
+    }
+
+    enableDragScroll(document.getElementById('tablaWrapper'));
+    enableDragScroll(document.getElementById('mtTablaWrap'));
+
+    /* ---------- Indicadores de scroll horizontal (sombra + pastilla) ---------- */
+    const tablaShellEl = document.getElementById('tablaShell');
+    const tablaWrapEl  = document.getElementById('tablaWrapper');
+    let hintDescubierto = false;
+
+    function updateScrollHints() {
+        if (!tablaShellEl || !tablaWrapEl) return;
+        const canL = tablaWrapEl.scrollLeft > 4;
+        const canR = tablaWrapEl.scrollLeft + tablaWrapEl.clientWidth < tablaWrapEl.scrollWidth - 4;
+        tablaShellEl.classList.toggle('scroll-l', canL);
+        tablaShellEl.classList.toggle('scroll-r', canR);
+        if (canL) hintDescubierto = true;  // ya descubrió cómo desplazarse
+        tablaShellEl.classList.toggle('show-hint', canR && !hintDescubierto);
+    }
+    if (tablaWrapEl) tablaWrapEl.addEventListener('scroll', updateScrollHints, { passive: true });
+    window.addEventListener('resize', updateScrollHints);
+
+    /* ---------- Fila completa clickeable (target grande para touch) ----------
+       Tocar cualquier parte de la fila abre el detalle de tallas. Botones y
+       fotos reales mantienen su acción propia (el lightbox corta el evento). */
+    $(document).on('click', '#productosTableBody tr', function (e) {
+        if ($(e.target).closest('button, a, select, input').length) return;
+        $(this).find('.btn-ver-tallas').trigger('click');
+    });
 
     /* ---------- Utilidades de escape ---------- */
     function escHtml(str) {

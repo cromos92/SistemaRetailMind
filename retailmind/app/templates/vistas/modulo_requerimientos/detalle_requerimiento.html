@@ -891,8 +891,8 @@ function pintarFotos(r) {
         const fs = porTipo[tf.codigo] || [];
         html += `<div class="col-6 col-md-4 col-xl-3">
             <div class="foto-titulo" title="${reqEsc(tf.descripcion_guia || tf.nombre)}">
-                <i class="${tf.icono}"></i>${reqEsc(tf.nombre)}
-                ${tf.es_obligatorio ? '<span class="badge bg-danger ms-1" style="font-size:.5rem">REQ</span>' : ''}
+                <i class="${tf.icono}"></i><span class="texto">${reqEsc(tf.nombre)}</span>
+                ${tf.es_obligatorio ? '<span class="badge bg-danger" style="font-size:.5rem">REQ</span>' : ''}
             </div>
             ${fs.length
                 ? agregarCelda(fs[0], tf.nombre, tf.es_obligatorio)
@@ -904,7 +904,7 @@ function pintarFotos(r) {
     Object.values(porTipo).flat().forEach(f => {
         const titulo = f.tipo_foto_nombre || 'Foto adicional';
         html += `<div class="col-6 col-md-4 col-xl-3">
-            <div class="foto-titulo"><i class="${f.tipo_foto_icono || 'ri-image-line'}"></i>${reqEsc(titulo)}</div>
+            <div class="foto-titulo"><i class="${f.tipo_foto_icono || 'ri-image-line'}"></i><span class="texto">${reqEsc(titulo)}</span></div>
             ${agregarCelda(f, titulo, false)}
         </div>`;
     });

@@ -174,11 +174,73 @@ def _sucursal_destino_traspaso(dte):
     llamadores deben tratar ese None como fail-closed (403), nunca como
     "permitido": antes, un DTE sin movimiento de salida se saltaba el guard
     entero.
+
+    OJO: más abajo existía una SEGUNDA definición de esta misma función que,
+    por ser la última del módulo, era la que realmente usaban todos los
+    llamadores. Se fusionaron en esta: se conserva el filtro estricto de aquella
+    (`sucursal_destino__isnull=False`, para no devolver None por un movimiento
+    de salida sin destino cuando hay otro que sí lo tiene) y el contrato
+    fail-closed documentado acá.
     """
     if not dte:
         return None
-    mov_salida = dte.dte_movimientos.filter(concepto='TRASPASO_SALIDA').first()
+    mov_salida = (
+        dte.dte_movimientos
+        .filter(concepto='TRASPASO_SALIDA', sucursal_destino__isnull=False)
+        .select_related('sucursal_destino')
+        .first()
+    )
     return mov_salida.sucursal_destino if mov_salida else None
+
+
+def destinos_traspaso_por_dte(dte_ids):
+    """Sucursal destino de VARIOS traspasos, en UNA sola query.
+
+    Versión batch de `_sucursal_destino_traspaso`, para listados: preguntarle el
+    destino a cada línea por separado era una query por fila (una factura de 30
+    tallas = 30 round-trips de ~220ms).
+
+    Devuelve {dte_id: {'id', 'alias', 'empresa'}}. Se prefiere TRASPASO_SALIDA
+    —el movimiento que define el destino— y solo si no hay se cae a
+    TRASPASO_ENTRADA, que en un traspaso apunta a la misma sucursal.
+    """
+    if not dte_ids:
+        return {}
+
+    destinos = {}
+    filas = (
+        Movimientos_Producto.objects
+        .filter(
+            dte_id__in=list(dte_ids),
+            concepto__in=['TRASPASO_SALIDA', 'TRASPASO_ENTRADA'],
+            sucursal_destino__isnull=False,
+        )
+        .select_related('sucursal_destino__empresa')
+        .values(
+            'dte_id', 'concepto',
+            'sucursal_destino_id',
+            'sucursal_destino__alias',
+            # `nombre` y no `razon_social`: es el mismo campo con el que viajan
+            # `emisor` y `receptor`, así el frontend puede compararlos para no
+            # repetir la empresa cuando el traspaso es interno.
+            'sucursal_destino__empresa__nombre',
+        )
+    )
+    for fila in filas:
+        dte_id = fila['dte_id']
+        es_salida = fila['concepto'] == 'TRASPASO_SALIDA'
+        # Se pisa solo cuando llega la SALIDA y lo guardado era provisorio.
+        if dte_id in destinos and (not es_salida or not destinos[dte_id]['_provisorio']):
+            continue
+        destinos[dte_id] = {
+            'id': fila['sucursal_destino_id'],
+            'alias': fila['sucursal_destino__alias'] or '-',
+            'empresa': fila['sucursal_destino__empresa__nombre'] or '',
+            '_provisorio': not es_salida,
+        }
+    for valor in destinos.values():
+        valor.pop('_provisorio', None)
+    return destinos
 
 
 def _validar_destino_traspaso(dte, sucursal_sesion_id):
@@ -4227,7 +4289,11 @@ def obtener_productos_regularizar(request):
             'producto_talla',
             'producto_talla__producto',
             'producto_talla__producto__sucursal',
-            'dte_producto'
+            'dte_producto',
+            # Destino guardado en la propia recepción. Las filas anteriores al
+            # fix de 2026-07 lo tienen en NULL, de ahí el fallback por DTE.
+            'sucursal_destino',
+            'sucursal_destino__empresa',
         ).prefetch_related('dte__dte_movimientos').distinct().order_by('-id', '-fecha_recepcion')
         
         if proveedor_filtro:
@@ -4298,6 +4364,14 @@ def obtener_productos_regularizar(request):
         # Todas las líneas con problema de los DTEs de esta página.
         lineas_pagina = queryset.filter(dte_id__in=dte_ids_pagina).order_by('dte_id', 'id')
 
+        # Destino de cada documento de la página, de una sola vez. Antes el rol
+        # "soy receptor" se resolvía con un .exists() POR LÍNEA sobre
+        # dte_movimientos (y el .filter() invalidaba el prefetch), o sea una
+        # query por talla con problema. Además el destino nunca se enviaba al
+        # frontend: el panel Regularizar mostraba solo el origen, así que el
+        # emisor veía "EDEL → ?" y no sabía a qué tienda había despachado.
+        destinos_por_dte = destinos_traspaso_por_dte(dte_ids_pagina)
+
         productos = []
         for recepcion in lineas_pagina:
             producto_nombre = 'Sin producto'
@@ -4321,16 +4395,28 @@ def obtener_productos_regularizar(request):
             # SOY EMISOR si el DTE fue emitido por mi sucursal
             soy_emisor = (recepcion.dte and str(recepcion.dte.sucursal_id) == str(sucursal_id))
             
-            # SOY RECEPTOR si:
-            # - Tengo movimientos de ENTRADA donde yo soy el destino, O
-            # - El producto pertenece a mi inventario PERO yo NO soy el emisor
-            tiene_movimiento_entrada = False
-            if recepcion.dte:
-                tiene_movimiento_entrada = recepcion.dte.dte_movimientos.filter(
-                    concepto__in=['TRASPASO_ENTRADA', 'TRASPASO_SALIDA'],
-                    sucursal_destino_id=sucursal_id
-                ).exists()
-            
+            # Destino del traspaso: primero el que quedó guardado en la propia
+            # recepción; si es una fila vieja (NULL), el del documento.
+            destino_dte = destinos_por_dte.get(recepcion.dte_id) or {}
+            if recepcion.sucursal_destino_id:
+                sucursal_destino = recepcion.sucursal_destino.alias or '-'
+                sucursal_destino_id = recepcion.sucursal_destino_id
+                empresa_destino = (
+                    recepcion.sucursal_destino.empresa.nombre
+                    if recepcion.sucursal_destino.empresa else ''
+                )
+            else:
+                sucursal_destino = destino_dte.get('alias', '-')
+                sucursal_destino_id = destino_dte.get('id')
+                empresa_destino = destino_dte.get('empresa', '')
+
+            # SOY RECEPTOR si el destino del traspaso es mi sucursal y no soy yo
+            # quien lo emitió. Sale del mapa de arriba: antes era un .exists()
+            # por línea.
+            tiene_movimiento_entrada = (
+                sucursal_destino_id is not None
+                and str(sucursal_destino_id) == str(sucursal_id)
+            )
             soy_receptor = tiene_movimiento_entrada and not soy_emisor
             
             if recepcion.dte and logger.isEnabledFor(logging.DEBUG):
@@ -4426,6 +4512,9 @@ def obtener_productos_regularizar(request):
                 'receptor': receptor_nombre,
                 'sucursal_origen': sucursal_origen,
                 'sucursal_origen_id': sucursal_origen_id,
+                'sucursal_destino': sucursal_destino,
+                'sucursal_destino_id': sucursal_destino_id,
+                'empresa_destino': empresa_destino,
                 # NUEVO: Información de precios para cálculo de NC
                 'precio_unitario': precio_unitario,
                 # NUEVO: Determinar ROL del usuario actual
@@ -4631,6 +4720,7 @@ def exportar_productos_regularizar_pdf(request):
         queryset = queryset.select_related(
             'dte', 'dte__emisor', 'dte__sucursal',
             'producto_talla', 'producto_talla__producto',
+            'sucursal_destino',
         ).distinct().order_by('-id', '-fecha_recepcion')
 
         if proveedor_filtro:
@@ -4718,13 +4808,21 @@ def exportar_productos_regularizar_pdf(request):
         filtros_aplicados.append(f"Generado: {timezone.localtime().strftime('%d/%m/%Y %H:%M')}")
         elements.append(Paragraph("  |  ".join(filtros_aplicados), sub_style))
 
-        col_labels = ['DTE', 'Tipo', 'Fecha', 'Origen', 'Producto / Motivo', 'SKU',
+        # La columna decía solo "Origen" y las filas normales imprimían solo eso:
+        # el destino aparecía únicamente en los rechazados en frío. Quien recibe
+        # el PDF necesita saber a qué bodega iba cada documento.
+        col_labels = ['DTE', 'Tipo', 'Fecha', 'Origen → Destino', 'Producto / Motivo', 'SKU',
                       'Talla', 'Esp.', 'Recib.', 'Falt.', 'Sobr.', 'Estado']
         col_widths = [1.8 * cm, 1.7 * cm, 1.7 * cm, 2.5 * cm, 6.5 * cm, 2.3 * cm,
                       1.3 * cm, 1.0 * cm, 1.1 * cm, 1.0 * cm, 1.0 * cm, 2.4 * cm]
 
         table_data = [col_labels]
         cold_row_indices = []  # filas de rechazados en frío, para resaltarlas
+
+        # Destino por documento, en una sola query para todo el reporte.
+        destinos_pdf = destinos_traspaso_por_dte(
+            set(queryset.values_list('dte_id', flat=True))
+        )
 
         # 1) Rechazados en frío al tope.
         for dte in cold_dtes:
@@ -4754,12 +4852,19 @@ def exportar_productos_regularizar_pdf(request):
             sku = str(r.producto_talla.sku) if r.producto_talla else '-'
             talla = r.producto_talla.talla if r.producto_talla else '-'
             origen = r.dte.sucursal.alias if r.dte and r.dte.sucursal else '-'
+            if r.sucursal_destino_id:
+                destino_alias = r.sucursal_destino.alias or '-'
+            else:
+                destino_alias = (destinos_pdf.get(r.dte_id) or {}).get('alias', '-')
             estado_display = r.get_estado_display() if hasattr(r, 'get_estado_display') else r.estado
             row = [
                 str(r.dte.numero_documento) if r.dte else '-',
                 Paragraph(r.dte.tipo_documento if r.dte else '-', cell_style),
                 r.dte.fecha_emision.strftime('%d/%m/%Y') if (r.dte and r.dte.fecha_emision) else '-',
-                Paragraph(origen, cell_style),
+                Paragraph(
+                    f"{origen}<br/><font size=6 color='grey'>&#8594; {destino_alias}</font>",
+                    cell_style,
+                ),
                 Paragraph((articulo or '-')[:80], cell_style),
                 sku,
                 talla,
@@ -7896,6 +8001,7 @@ def obtener_detalle_dte_recepcionado(request):
             }, status=400)
         
         dte = Dte.objects.select_related('emisor', 'receptor', 'sucursal').get(id=dte_id)
+        destino_dte = _sucursal_destino_traspaso(dte)
         
         # Obtener productos recepcionados
         from .models import Productos_Recepcionados
@@ -7974,6 +8080,11 @@ def obtener_detalle_dte_recepcionado(request):
                 'emisor': dte.emisor.nombre if dte.emisor else '-',
                 'receptor': dte.receptor.nombre if dte.receptor else '-',
                 'sucursal_origen': dte.sucursal.alias if dte.sucursal else '-',
+                # El modal mostraba origen y empresa receptora, pero no la
+                # BODEGA destino: en un traspaso interno entre sucursales de la
+                # misma empresa eso dejaba al usuario sin saber a dónde iba.
+                'sucursal_destino': destino_dte.alias if destino_dte else '-',
+                'sucursal_destino_id': destino_dte.id if destino_dte else None,
                 'referencias': dte.referencias or '',
                 'motivo_rechazo': dte.motivo_rechazo or '',
             },
@@ -16891,20 +17002,6 @@ def _dte_es_post_recepcion(dte):
     if getattr(dte, 'fecha_recepcion', None) is not None:
         return True
     return getattr(dte, 'estado_dte', None) in _ESTADOS_POST_RECEPCION
-
-
-def _sucursal_destino_traspaso(dte):
-    """
-    Retorna la Sucursal destino del traspaso asociado al DTE, mirando
-    el primer Movimientos_Producto TRASPASO_SALIDA con sucursal_destino.
-    """
-    mov = (
-        Movimientos_Producto.objects
-        .filter(dte=dte, concepto='TRASPASO_SALIDA', sucursal_destino__isnull=False)
-        .select_related('sucursal_destino')
-        .first()
-    )
-    return mov.sucursal_destino if mov else None
 
 
 def _diagnostico_nc(nc):

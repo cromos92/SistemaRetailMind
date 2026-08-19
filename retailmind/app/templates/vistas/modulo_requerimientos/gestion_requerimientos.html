@@ -181,7 +181,7 @@
                                 <th>Producto</th>
                                 <th>Cliente</th>
                                 <th>Proveedor</th>
-                                <th class="d-none d-xl-table-cell">Sucursal</th>
+                                <th class="d-none d-xxl-table-cell">Sucursal</th>
                                 <th class="text-center">Evidencia</th>
                                 <th class="text-center">Antigüedad</th>
                                 <th class="text-end">Acciones</th>
@@ -408,7 +408,7 @@ function mostrarRequerimientos(requerimientos) {
             <td data-col="Proveedor">${req.proveedor
                 ? `<span class="text-truncate d-inline-block" style="max-width:140px" title="${reqEsc(req.proveedor)}">${reqEsc(req.proveedor)}</span>`
                 : '<span class="text-danger" style="font-size:.75rem"><i class="ri-error-warning-line me-1"></i>sin asignar</span>'}</td>
-            <td data-col="Sucursal" class="d-none d-xl-table-cell"><span class="badge badge-soft-secondary">${reqEsc(req.sucursal)}</span></td>
+            <td data-col="Sucursal" class="d-none d-xxl-table-cell"><span class="badge badge-soft-secondary">${reqEsc(req.sucursal)}</span></td>
             <td data-col="Evidencia" class="text-center">
                 ${req.cantidad_fotos > 0
                     ? `<span class="badge ${req.fotos_completas ? 'badge-soft-success' : 'badge-soft-warning'}"

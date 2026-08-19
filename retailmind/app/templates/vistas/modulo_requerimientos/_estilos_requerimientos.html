@@ -119,6 +119,21 @@ nexo-design-system.css --nexo-*). No se inventa nada nuevo.
 }
 .req-num { font-weight: 600; font-size: .8rem; }
 
+/* La columna de acciones queda ANCLADA a la derecha.
+   Medido con la pantalla renderizada a 1366x768 (15" real, que es el equipo
+   de tienda): con el menu lateral quedan ~1116px utiles y las 10 columnas no
+   entran, asi que "Acciones" —lo unico accionable de la fila— caia fuera de
+   la pantalla y no habia forma de saber que estaba ahi. */
+.req-tabla th:last-child,
+.req-tabla td:last-child {
+    position: sticky; right: 0; z-index: 2;
+    background: #fff;
+    box-shadow: -7px 0 9px -7px rgba(26, 26, 46, .18);
+}
+.req-tabla thead th:last-child { z-index: 4; background: #f3f6f9; }
+.req-tabla tbody tr:hover td:last-child { background: #f8f9fc; }
+.req-tabla tbody tr.req-fila-alerta td:last-child { background: #fdf4f2; }
+
 /* ══════════ KPIs compactos ══════════ */
 .req-kpi {
     border: 1px solid #e9eaef; border-radius: 10px; background: #fff;
@@ -183,9 +198,19 @@ nexo-design-system.css --nexo-*). No se inventa nada nuevo.
 }
 .foto-titulo {
     font-size: .68rem; font-weight: 600; color: #5b5e6b;
-    display: flex; align-items: center; gap: 3px; margin-bottom: 3px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: flex; align-items: flex-start; gap: 3px; margin-bottom: 3px;
+    /* Los nombres de los tipos de foto son largos ("Foto del defecto / falla
+       (primer plano)") y en una tarjeta de ~150px se cortaban a la mitad,
+       tapando ademas el badge REQ. Se dejan bajar a dos lineas, con alto
+       minimo para que las tarjetas de la fila queden alineadas. */
+    white-space: normal; line-height: 1.25; min-height: 2.5em;
 }
+.foto-titulo span.texto {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.foto-titulo i { flex: 0 0 auto; margin-top: 1px; }
+.foto-titulo .badge { flex: 0 0 auto; align-self: flex-start; }
 
 /* ══════════ Visor de fotos (zoom adaptativo) ══════════ */
 .req-visor {
@@ -242,6 +267,7 @@ nexo-design-system.css --nexo-*). No se inventa nada nuevo.
    acciones entren sin scroll. No afecta a monitores grandes. */
 @media (max-width: 1600px) {
     .page-content .container-fluid { padding-left: .75rem; padding-right: .75rem; }
+    .req-tabla .req-producto { max-width: 180px; }
     .req-kpi { padding: .45rem .6rem; }
     .req-kpi-valor { font-size: 1.1rem; }
     .req-kpi-icono { width: 28px; height: 28px; flex-basis: 28px; font-size: .9rem; }
@@ -262,6 +288,9 @@ nexo-design-system.css --nexo-*). No se inventa nada nuevo.
    Una tabla de 10 columnas en un teléfono es scroll horizontal infinito.
    Cada fila se convierte en una ficha con su etiqueta al costado. */
 @media (max-width: 767.98px) {
+    .req-tabla th:last-child, .req-tabla td:last-child {
+        position: static; box-shadow: none;
+    }
     .req-tabla thead { display: none; }
     .req-tabla, .req-tabla tbody, .req-tabla tr, .req-tabla td { display: block; width: 100%; }
     .req-tabla tr {
