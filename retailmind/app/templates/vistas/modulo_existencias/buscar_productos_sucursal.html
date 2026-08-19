@@ -456,6 +456,8 @@ kbd.sc {
 /* Column sizing */
 .tc-foto  { width: 86px; min-width: 86px; max-width: 86px; padding: 6px !important; text-align: center; }
 .tc-foto img.producto-portada-img { width: 72px; height: 72px; border-radius: 8px; object-fit: cover; background: var(--np-gray-100, #F5F5F7); border: 1px solid var(--np-gray-300, #D1D1D9); }
+/* Sin drag nativo de imagen: rompía el drag-to-scroll al partir sobre la foto */
+.producto-portada-img { -webkit-user-drag: none; }
 .tc-art   { min-width: 130px; max-width: 170px; }
 .tc-desc  { min-width: 150px; max-width: 210px; }
 .tc-attr  { min-width: 80px;  text-align: center; }
@@ -797,11 +799,20 @@ kbd.sc {
 #mtTablaWrap { cursor: grab; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 #mtTablaWrap.dragging { cursor: grabbing; user-select: none; -webkit-user-select: none; }
 #mtTablaWrap .pos-table th:first-child,
-#mtTablaWrap .pos-table td:first-child { position: sticky; left: 0; z-index: 5; background: var(--np-white); }
-#mtTablaWrap .pos-table thead th:first-child { z-index: 11; }
+#mtTablaWrap .pos-table td:first-child { position: sticky; left: 0; z-index: 5; }
+#mtTablaWrap .pos-table tbody td:first-child { background: var(--np-white); }
+/* El th del encabezado conserva el gradiente oscuro: un fondo blanco aquí lo
+   dejaba blanco sobre blanco (el color:#fff del thead sigue aplicando) */
+#mtTablaWrap .pos-table thead th:first-child {
+    z-index: 11;
+    background: linear-gradient(135deg, var(--np-gray-900) 0%, #2d2d44 100%);
+}
 #mtBody tr.sin-stock td:first-child { background: #f5f5f7; }
 #mtBody tr:last-child td:first-child { background: var(--np-primary-lt); }
-#mtBody tr:hover td:first-child { background: var(--np-primary-lt); }
+/* Solo con mouse real: en touch el :hover queda pegado tras el tap */
+@media (hover: hover) {
+    #mtBody tr:hover td:first-child { background: var(--np-primary-lt); }
+}
 .talla-big { font-weight: 700; font-size: 1rem; color: var(--np-gray-900); }
 .sku-mono {
     font-family: 'SF Mono','Consolas',monospace;
@@ -888,8 +899,17 @@ kbd.sc {
         display: block;
         border-bottom: none;
         padding: 0;
+        min-height: 0;   /* el min-height de fila (44px) inflaba cada celda de la card */
         font-size: var(--pos-font-sm);
     }
+    /* Feedback al presionar: la card entera, no celdas sueltas. Sin regla
+       :hover con ID aquí — le ganaría a la neutralización del bloque coarse
+       y volvería el hover fantasma en touch. */
+    #tablaWrapper .pos-table tbody tr:active { background: var(--np-primary-lt); }
+    #tablaWrapper .pos-table tbody tr:hover td.tc-foto,
+    #tablaWrapper .pos-table tbody tr:hover td.tc-art,
+    #tablaWrapper .pos-table tbody tr:active td.tc-foto,
+    #tablaWrapper .pos-table tbody tr:active td.tc-art { background: transparent; }
     /* En vista tarjeta no hay columnas fijas */
     #tablaWrapper .pos-table td.tc-foto, #tablaWrapper .pos-table td.tc-art { position: static; }
     .pos-table-shell.scroll-l .pos-table td.tc-art { box-shadow: none; }
@@ -953,6 +973,7 @@ kbd.sc {
     /* El mouse no existe: nada de grab ni de estados hover fantasma */
     .pos-table-wrap, #mtTablaWrap { cursor: auto; }
     .pos-table tbody tr:hover { background: transparent; }
+    .pos-table tbody tr:hover td { color: var(--np-gray-700); }
     .pos-table tbody tr:hover td.tc-foto, .pos-table tbody tr:hover td.tc-art { background: var(--np-white); }
     .pos-table tbody tr:active { background: var(--np-primary-lt); }
     .pos-table tbody tr:active td.tc-foto, .pos-table tbody tr:active td.tc-art { background: var(--np-primary-lt); }
@@ -1424,9 +1445,11 @@ $(document).ready(function () {
         if (e.which === 13) { e.preventDefault(); paginaActual = 1; buscarProductos(); }
     });
 
-    /* ---------- Auto-buscar al cambiar filtros (solo si ya buscamos) ---------- */
+    /* ---------- Auto-buscar al cambiar filtros (solo si ya buscamos) ----------
+       Solo 'change': Select2 ya dispara change nativo en cada select/clear;
+       escuchar también select2:select duplicaba el AJAX en cada selección. */
     $('#sucursal_select,#marca_select,#color_select,#genero_select,#categoria_select,#especialidad_select')
-        .on('select2:select select2:clear change', function () {
+        .on('change', function () {
             if (Object.keys(ultimosFiltros).length > 0) { paginaActual = 1; buscarProductos(); }
         });
 
@@ -1470,6 +1493,10 @@ $(document).ready(function () {
 
     /* ---------- Limpiar (botón + Esc) ---------- */
     function limpiar() {
+        // Resetear el estado ANTES de los trigger('change'): con ultimosFiltros
+        // aún poblado, cada change relanzaba una búsqueda sin criterios.
+        paginaActual = 1;
+        ultimosFiltros = {};
         $('#filtrosForm')[0].reset();
         $('#solo_con_stock').prop('checked', false);
         $('.pos-chip').removeClass('active');
@@ -1477,8 +1504,6 @@ $(document).ready(function () {
         $('#ordenarSelect').val('');
         $('#search_input').val('').focus();
         setEstadoInicial();
-        paginaActual = 1;
-        ultimosFiltros = {};
     }
     $('#btnLimpiar').on('click', limpiar);
 
@@ -1662,7 +1687,7 @@ $(document).ready(function () {
             const dataAttr = escAttr(JSON.stringify(p));
 
             const fotoUrl = p.foto_portada_url || '{% static "images/producto_placeholder.svg" %}';
-            const fotoHtml = `<img class="producto-portada-img" src="${escAttr(fotoUrl)}" alt="" loading="lazy" onerror="this.src='{% static "images/producto_placeholder.svg" %}';">`;
+            const fotoHtml = `<img class="producto-portada-img" src="${escAttr(fotoUrl)}" alt="" loading="lazy" draggable="false" onerror="this.src='{% static "images/producto_placeholder.svg" %}';">`;
 
             tbody.append(`
                 <tr>
@@ -1957,6 +1982,10 @@ $(document).ready(function () {
 
         el.addEventListener('pointerdown', function (e) {
             if (e.pointerType !== 'mouse' || e.button !== 0) return;
+            // Ignorar los scrollbars nativos del contenedor: Chromium no entrega
+            // el pointerup de esa interacción y el estado quedaría pegado.
+            const r = el.getBoundingClientRect();
+            if (e.clientX - r.left >= el.clientWidth || e.clientY - r.top >= el.clientHeight) return;
             down = true; moved = false;
             startX = e.clientX; startY = e.clientY;
             startL = el.scrollLeft; startT = el.scrollTop;
@@ -1964,8 +1993,20 @@ $(document).ready(function () {
             if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
         });
 
+        // El drag nativo de imágenes/selecciones aborta los pointermove
+        el.addEventListener('dragstart', function (e) {
+            if (down) e.preventDefault();
+        });
+
         window.addEventListener('pointermove', function (e) {
             if (!down) return;
+            // pointerup perdido (Alt-Tab a mitad del arrastre, scrollbar, etc.):
+            // si el botón ya no está presionado, abortar sin inercia ni supresión.
+            if ((e.buttons & 1) === 0) {
+                down = false; moved = false;
+                el.classList.remove('dragging');
+                return;
+            }
             const dx = e.clientX - startX, dy = e.clientY - startY;
             if (!moved && Math.abs(dx) + Math.abs(dy) > 6) {
                 moved = true;
@@ -1987,6 +2028,9 @@ $(document).ready(function () {
             if (!moved) return;
             dragSuppressUntil = Date.now() + 250;
             dragSuppressEl = el;
+            // La velocidad caduca: arrastrar rápido, frenar en seco y soltar
+            // después no debe disparar inercia con la velocidad vieja.
+            if (performance.now() - lastTime > 80) velX = 0;
             // Inercia suave al soltar
             let v = velX * 14;
             (function glide() {
@@ -2019,6 +2063,11 @@ $(document).ready(function () {
     }
     if (tablaWrapEl) tablaWrapEl.addEventListener('scroll', updateScrollHints, { passive: true });
     window.addEventListener('resize', updateScrollHints);
+    // El ancho útil también cambia al colapsar/expandir el menú lateral
+    // (no dispara resize de window): observar el propio contenedor.
+    if (window.ResizeObserver && tablaWrapEl) {
+        new ResizeObserver(updateScrollHints).observe(tablaWrapEl);
+    }
 
     /* ---------- Fila completa clickeable (target grande para touch) ----------
        Tocar cualquier parte de la fila abre el detalle de tallas. Botones y
