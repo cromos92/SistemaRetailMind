@@ -3,7 +3,7 @@ from django.utils import timezone
 from django.conf import settings
 from ..storage_backends import storage_evidencias
 from .organizacion import Empresa, Sucursal
-from .catalogo import Producto_Talla
+from .catalogo import Producto_Talla  # noqa: F401  (usado por los FK de abajo)
 
 TIPO_REQUERIMIENTO_CHOICES = [
     ('PRODUCTO_FALLADO', 'Producto Fallado / Defectuoso'),
@@ -38,15 +38,51 @@ ORIGEN_REQUERIMIENTO_CHOICES = [
     ('STOCK', 'Detectado en stock / bodega (sin cliente)'),
 ]
 
+# El requerimiento pasa por DOS aprobaciones distintas y hasta ahora ambas
+# caían en el mismo par APROBADO/RECHAZADO: no se distinguía "la empresa
+# decidió no reclamarlo" de "el proveedor lo rechazó". Son cosas opuestas —
+# la primera es una decisión propia, la segunda es plata que se pierde— y
+# mezclarlas hacía imposible medir cuánto rechaza cada proveedor.
+#
+#   tienda crea ─▶ PENDIENTE ─▶ EN_REVISION ─┬─▶ VALIDADO ──▶ ESPERANDO_RESPUESTA ─┬─▶ APROBADO
+#                                            │                                     └─▶ RECHAZADO
+#                                            └─▶ RECHAZADO_INTERNO
+#
 ESTADO_REQUERIMIENTO_CHOICES = [
-    ('PENDIENTE', 'Pendiente'),
-    ('EN_REVISION', 'En Revision'),
-    ('ESPERANDO_RESPUESTA', 'Esperando Respuesta Proveedor'),
-    ('APROBADO', 'Aprobado por Proveedor'),
-    ('RECHAZADO', 'Rechazado por Proveedor'),
-    ('EN_PROCESO', 'En Proceso de Resolucion'),
+    ('PENDIENTE', 'Pendiente de revision'),
+    ('EN_REVISION', 'En revision'),
+    ('VALIDADO', 'Validado (listo para el proveedor)'),
+    ('RECHAZADO_INTERNO', 'Rechazado internamente'),
+    ('ESPERANDO_RESPUESTA', 'Esperando respuesta del proveedor'),
+    ('APROBADO', 'Aprobado por el proveedor'),
+    ('RECHAZADO', 'Rechazado por el proveedor'),
+    ('EN_PROCESO', 'En proceso de resolucion'),
     ('COMPLETADO', 'Completado'),
     ('CANCELADO', 'Cancelado'),
+]
+
+# Agrupación para la UI: qué etapa del circuito está viviendo el caso. Es lo
+# que permite que el listado ofrezca "en la empresa" vs "en el proveedor" sin
+# que el usuario tenga que memorizar los 10 estados.
+ETAPA_POR_ESTADO = {
+    'PENDIENTE': 'EMPRESA',
+    'EN_REVISION': 'EMPRESA',
+    'VALIDADO': 'EMPRESA',
+    'ESPERANDO_RESPUESTA': 'PROVEEDOR',
+    'APROBADO': 'RESOLUCION',
+    'RECHAZADO': 'RESOLUCION',
+    'EN_PROCESO': 'RESOLUCION',
+    'RECHAZADO_INTERNO': 'CERRADO',
+    'COMPLETADO': 'CERRADO',
+    'CANCELADO': 'CERRADO',
+}
+
+# Estados en los que el caso ya no avanza solo: nadie espera nada de él.
+ESTADOS_CERRADOS = ('COMPLETADO', 'CANCELADO', 'RECHAZADO_INTERNO')
+
+DECISION_INTERNA_CHOICES = [
+    ('APROBADO', 'Procede: se reclama al proveedor'),
+    ('RECHAZADO', 'No procede: no se reclama'),
 ]
 
 MAX_FOTOS_POR_TIPO = {
@@ -58,6 +94,83 @@ MAX_FOTOS_POR_TIPO = {
     'CONSULTA': 3,
     'OTROS': 3,
 }
+
+
+class DocumentoCompraLegacy(models.Model):
+    """N° de factura de compra recuperado del sistema anterior (Laravel).
+
+    Vive en SU PROPIA TABLA a propósito. El dato sirve para una sola cosa:
+    decirle al proveedor con qué factura se le compró el producto que se le
+    está reclamando. Escribirlo dentro de `Movimientos_Producto` —en el FK
+    `dte` o en `observaciones`— cambiaría lo que ven el kardex, el costeo
+    FIFO, la tarjeta de movimientos y los reportes de compras, que hoy
+    cuadran. Acá no toca nada: ninguna otra vista lee esta tabla.
+
+    Se llena con `manage.py backfill_documento_movimientos_laravel`, que
+    relee `movimiento_productos.N_documento` del MySQL legacy — la columna
+    que la migración leía pero nunca guardaba.
+
+    Es descartable: `DELETE FROM app_documentocompralegacy` deja el sistema
+    exactamente como estaba.
+    """
+    producto_talla = models.ForeignKey(
+        Producto_Talla,
+        on_delete=models.CASCADE,
+        related_name='documentos_compra_legacy',
+        null=True, blank=True,
+    )
+    sku = models.CharField(
+        max_length=100,
+        help_text="SKU denormalizado: el buscador entra por acá"
+    )
+    numero_documento = models.CharField(
+        max_length=50,
+        help_text="N° tal como lo escribió el sistema anterior"
+    )
+    fecha_movimiento = models.DateField(
+        null=True, blank=True,
+        help_text="Fecha del ingreso en el kardex legacy"
+    )
+    cantidad = models.IntegerField(default=0)
+    costo = models.IntegerField(default=0)
+    concepto = models.CharField(max_length=50, blank=True, null=True)
+    marca_legacy = models.CharField(
+        max_length=100, blank=True, null=True,
+        help_text="Marca que traía el movimiento: pista del proveedor"
+    )
+    sucursal = models.ForeignKey(
+        Sucursal, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='documentos_compra_legacy',
+    )
+    # Si la cabecera del documento SÍ está en el sistema, se deja anotada.
+    # Es informativo y vive solo acá: no se toca el DTE ni el movimiento.
+    dte = models.ForeignKey(
+        'app.Dte', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='documentos_compra_legacy',
+    )
+    proveedor = models.ForeignKey(
+        Empresa, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='documentos_compra_legacy',
+    )
+    # PK del Movimientos_Producto de origen. Es un entero suelto y no un FK
+    # para que esta tabla no le agregue ni una restricción al kardex.
+    movimiento_origen_id = models.BigIntegerField(
+        unique=True,
+        help_text="Movimiento del que se recuperó el dato (evita duplicar)"
+    )
+    fecha_carga = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Documento de compra legacy'
+        verbose_name_plural = 'Documentos de compra legacy'
+        indexes = [
+            models.Index(fields=['sku']),
+            models.Index(fields=['producto_talla', '-fecha_movimiento']),
+            models.Index(fields=['numero_documento']),
+        ]
+
+    def __str__(self):
+        return f"N° {self.numero_documento} · SKU {self.sku}"
 
 
 class TipoFotoRequerimiento(models.Model):
@@ -299,6 +412,32 @@ class Requerimiento(models.Model):
         help_text="Producto/talla/color que se esperaba recibir (para errores de despacho)"
     )
 
+    # === DECISION INTERNA (paso previo al proveedor) ===
+    # Quien revisa decide primero si el reclamo procede. Antes esta decisión
+    # no se guardaba en ninguna parte: se marcaba el estado y listo, así que
+    # no había forma de saber quién la tomó ni por qué.
+    decision_interna = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        choices=DECISION_INTERNA_CHOICES,
+        help_text="Decisión de la empresa antes de escalar al proveedor"
+    )
+    motivo_decision_interna = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Por qué se validó o se rechazó internamente"
+    )
+    fecha_decision_interna = models.DateTimeField(blank=True, null=True)
+    usuario_decision_interna = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='requerimientos_decididos',
+        help_text="Quién tomó la decisión interna"
+    )
+
     # === PROVEEDOR Y RESPUESTA ===
     proveedor = models.ForeignKey(
         Empresa,
@@ -501,9 +640,56 @@ class Requerimiento(models.Model):
         )
 
     @property
+    def etapa(self):
+        """En qué tramo del circuito está: EMPRESA, PROVEEDOR, RESOLUCION o CERRADO."""
+        return ETAPA_POR_ESTADO.get(self.estado, 'EMPRESA')
+
+    @property
+    def esta_cerrado(self):
+        return self.estado in ESTADOS_CERRADOS
+
+    @property
+    def tiene_respaldo_compra(self):
+        """¿Está identificada la factura con la que se le compró al proveedor?
+
+        Es el dato que la mayoría de los proveedores exige para cursar una
+        garantía, y el que la tienda no tiene cómo saber.
+        """
+        return bool(self.numero_factura_compra or self.dte_compra_id)
+
+    @property
+    def faltantes_para_enviar(self):
+        """Lista legible de lo que impide mandarle el caso al proveedor.
+
+        Una sola fuente de verdad para el botón del detalle, el badge del
+        listado y el aviso del modal de envío: antes cada pantalla decidía por
+        su cuenta qué era "estar completo" y se contradecían entre sí.
+        """
+        faltantes = []
+        if not self.proveedor_id:
+            faltantes.append('proveedor')
+        if not self.tiene_respaldo_compra:
+            faltantes.append('factura de compra')
+        # `.all()` y no `.exists()`: en el listado las fotos vienen con
+        # prefetch_related y `.exists()` dispara igual una consulta por fila.
+        if not len(self.fotos.all()):
+            faltantes.append('fotos')
+        elif not self.fotos_completas and self.tipo in (
+                'PRODUCTO_FALLADO', 'GARANTIA', 'ERROR_DESPACHO'):
+            faltantes.append('fotos obligatorias')
+        return faltantes
+
+    @property
+    def listo_para_proveedor(self):
+        return not self.faltantes_para_enviar
+
+    @property
     def nivel_urgencia(self):
         """Retorna nivel de urgencia segun dias transcurridos"""
-        if self.estado in ['COMPLETADO', 'RECHAZADO', 'CANCELADO']:
+        # RECHAZADO (por el proveedor) NO está cerrado: la tienda todavía
+        # tiene que resolverlo con el cliente, y marcarlo como cerrado lo
+        # sacaba de los tableros de urgencia justo cuando hay que actuar.
+        if self.esta_cerrado:
             return 'CERRADO'
 
         dias = self.dias_transcurridos

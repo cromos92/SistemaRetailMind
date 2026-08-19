@@ -1013,12 +1013,31 @@ de incluirlo: productosProblemas (array), tabActual (string).
 // productoSeleccionado y tabActual definidas por el template padre.
 
 // ===== Regularización masiva por DTE (1 NC con N líneas) =====
-function abrirModalRegularizarDTE(dteNumero) {
-    const productosDTE = (window.productosProblemas || []).filter(p => String(p.dte_numero) === String(dteNumero));
+/**
+ * NC única por todo el documento.
+ *
+ * `key` es el dte_id (clave de agrupación de la bandeja "Por regularizar").
+ * Se resuelve primero contra window.regularizarGrupos porque ahí están TODAS
+ * las líneas del documento: la paginación es por documento, no por línea.
+ *
+ * Antes se filtraba window.productosProblemas por NÚMERO de documento. Eso
+ * tenía dos filos: el folio se repite entre empresas (PAO4 reusó folios de
+ * PAO3), y con paginación por línea el documento llegaba partido, así que la
+ * NC salía por las líneas de la página actual y nada avisaba del resto.
+ */
+function abrirModalRegularizarDTE(key) {
+    const grupo = (window.regularizarGrupos || new Map()).get(String(key));
+    const productosDTE = grupo && grupo.length
+        ? grupo
+        : (window.productosProblemas || []).filter(
+            p => String(p.dte_id) === String(key) || String(p.dte_numero) === String(key)
+        );
     if (!productosDTE.length) {
-        Swal.fire('Sin datos', 'No se encontraron productos para este DTE en la página actual.', 'info');
+        Swal.fire('Sin datos', 'No se encontraron productos para este DTE.', 'info');
         return;
     }
+    const dteId = productosDTE[0].dte_id || null;
+    const dteNumero = productosDTE[0].dte_numero || key;
 
     const pendientes = productosDTE.filter(p => {
         const e = String(p.estado || '').toUpperCase();
@@ -1086,10 +1105,10 @@ function abrirModalRegularizarDTE(dteNumero) {
     $('#motivoNCMasiva').val('');
 
     new bootstrap.Modal(document.getElementById('modalRegularizarDTE')).show();
-    $('#btnProcesarDTE').off('click').on('click', () => procesarRegularizacionDTE(dteNumero, pendientes));
+    $('#btnProcesarDTE').off('click').on('click', () => procesarRegularizacionDTE(dteNumero, pendientes, dteId));
 }
 
-function procesarRegularizacionDTE(dteNumero, productosDTE) {
+function procesarRegularizacionDTE(dteNumero, productosDTE, dteId) {
     const motivo = ($('#motivoNCMasiva').val() || '').trim();
     if (!motivo) {
         Swal.fire('Motivo requerido', 'Debes ingresar el motivo de la Nota de Crédito.', 'warning');
@@ -1131,7 +1150,7 @@ function procesarRegularizacionDTE(dteNumero, productosDTE) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             credentials: 'same-origin',
-            body: JSON.stringify({ dte_numero: dteNumero, productos_ids: productosIds, motivo }),
+            body: JSON.stringify({ dte_numero: dteNumero, dte_id: dteId || null, productos_ids: productosIds, motivo }),
         })
             .then(r => r.json())
             .then(data => {

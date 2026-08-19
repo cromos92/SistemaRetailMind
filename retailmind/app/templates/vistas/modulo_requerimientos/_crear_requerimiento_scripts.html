@@ -461,15 +461,23 @@ function sugerirProveedor(sku) {
                     jQuery(select).trigger('change');
                 }
             }
-            if (!document.getElementById('numero_factura_compra').value) {
-                document.getElementById('numero_factura_compra').value = data.compra.numero_documento || '';
-                document.getElementById('fecha_factura_compra').value = data.compra.fecha_emision || '';
-                document.getElementById('dte_compra_id').value = data.compra.dte_id || '';
+            // `compra` puede venir NULL: cuando el proveedor se dedujo por la
+            // MARCA del producto no hay ninguna compra detrás. Leerlo sin
+            // comprobar tiraba un TypeError y el aviso nunca aparecía.
+            const compra = data.compra;
+            if (compra && !document.getElementById('numero_factura_compra').value) {
+                document.getElementById('numero_factura_compra').value = compra.numero_documento || '';
+                document.getElementById('fecha_factura_compra').value = compra.fecha_emision || '';
+                document.getElementById('dte_compra_id').value = compra.dte_id || '';
             }
-            aviso.innerHTML = `<i class="ri-lightbulb-flash-line me-1"></i>Detectado: ` +
-                `<strong>${data.proveedor.nombre}</strong> — última compra ${data.compra.tipo_documento} ` +
-                `N°${data.compra.numero_documento} del ${data.compra.fecha_emision}. ` +
-                `<span class="text-muted">Lo confirma quien revise el requerimiento.</span>`;
+            aviso.innerHTML = compra
+                ? `<i class="ri-lightbulb-flash-line me-1"></i>Detectado: ` +
+                  `<strong>${data.proveedor.nombre}</strong> — última compra ${compra.tipo_documento} ` +
+                  `N°${compra.numero_documento} del ${compra.fecha_emision}. ` +
+                  `<span class="text-muted">Lo confirma quien revise el requerimiento.</span>`
+                : `<i class="ri-lightbulb-flash-line me-1"></i>Proveedor probable: ` +
+                  `<strong>${data.proveedor.nombre}</strong>. ` +
+                  `<span class="text-muted">${data.aviso || 'Sin compra registrada: lo confirma quien revise.'}</span>`;
             aviso.style.display = 'block';
         })
         .catch(() => { aviso.style.display = 'none'; });

@@ -1,0 +1,282 @@
+{% comment %}
+Lógica compartida por el LISTADO y el DETALLE de Requerimientos.
+
+Antes cada plantilla tenía su propia copia de los colores de estado y de los
+íconos por tipo, y ya se habían separado entre sí. Acá viven una sola vez,
+junto al visor de fotos que las dos pantallas necesitan.
+
+Sin dependencias nuevas: jQuery/vanilla y el SweetAlert2 que ya carga el
+layout, como el resto del proyecto.
+{% endcomment %}
+<script>
+/* ══════════ Estados ══════════
+   El mismo diccionario que el backend, con su ícono. Si se agrega un estado
+   en models/requerimientos.py hay que agregarlo acá y en el CSS. */
+const REQ_ESTADOS = {
+    PENDIENTE:           { label: 'Pendiente',            icono: 'ri-inbox-line' },
+    EN_REVISION:         { label: 'En revisión',          icono: 'ri-search-eye-line' },
+    VALIDADO:            { label: 'Validado',             icono: 'ri-shield-check-line' },
+    RECHAZADO_INTERNO:   { label: 'Rechazado interno',    icono: 'ri-indeterminate-circle-line' },
+    ESPERANDO_RESPUESTA: { label: 'Esperando proveedor',  icono: 'ri-mail-send-line' },
+    APROBADO:            { label: 'Aprobado proveedor',   icono: 'ri-checkbox-circle-line' },
+    RECHAZADO:           { label: 'Rechazado proveedor',  icono: 'ri-close-circle-line' },
+    EN_PROCESO:          { label: 'En proceso',           icono: 'ri-loader-4-line' },
+    COMPLETADO:          { label: 'Completado',           icono: 'ri-check-double-line' },
+    CANCELADO:           { label: 'Cancelado',            icono: 'ri-forbid-line' },
+};
+
+const REQ_TIPOS = {
+    PRODUCTO_FALLADO: { color: 'danger',    icono: 'ri-error-warning-line' },
+    ERROR_DESPACHO:   { color: 'warning',   icono: 'ri-exchange-line' },
+    GARANTIA:         { color: 'info',      icono: 'ri-shield-check-line' },
+    DEVOLUCION:       { color: 'primary',   icono: 'ri-arrow-go-back-line' },
+    RECLAMO:          { color: 'secondary', icono: 'ri-chat-delete-line' },
+    CONSULTA:         { color: 'success',   icono: 'ri-questionnaire-line' },
+    OTROS:            { color: 'dark',      icono: 'ri-more-line' },
+};
+
+/* Texto plano dentro de HTML generado. Los motivos y nombres de cliente los
+   escribe un usuario: sin escapar, un `<` rompe la tabla (o algo peor). */
+function reqEsc(txt) {
+    if (txt === null || txt === undefined) return '';
+    return String(txt).replace(/[&<>"']/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+}
+
+function reqPillEstado(codigo, etiqueta) {
+    const cfg = REQ_ESTADOS[codigo] || { label: etiqueta || codigo, icono: 'ri-circle-line' };
+    return `<span class="req-pill req-pill-${reqEsc(codigo)}" title="${reqEsc(etiqueta || cfg.label)}">
+        <i class="${cfg.icono}"></i>${reqEsc(cfg.label)}</span>`;
+}
+
+function reqBadgeTipo(codigo, etiqueta) {
+    const c = REQ_TIPOS[codigo] || { color: 'secondary', icono: 'ri-file-line' };
+    return `<span class="badge badge-soft-${c.color}"><i class="${c.icono} me-1"></i>${reqEsc(etiqueta || codigo)}</span>`;
+}
+
+/* ══════════ El circuito, dibujado ══════════
+   Cuatro pasos: la tienda levanta → la empresa decide → el proveedor decide →
+   se cierra. Marca dónde está el caso y si alguno terminó en rechazo. */
+function reqFlujo(estado) {
+    const pasos = [
+        { clave: 'CREADO',    txt: 'Tienda',    icono: 'ri-store-2-line' },
+        { clave: 'VALIDACION', txt: 'Empresa',  icono: 'ri-user-star-line' },
+        { clave: 'PROVEEDOR', txt: 'Proveedor', icono: 'ri-building-line' },
+        { clave: 'CIERRE',    txt: 'Cierre',    icono: 'ri-flag-line' },
+    ];
+    const avance = {
+        PENDIENTE:           { indice: 1, fallo: null },
+        EN_REVISION:         { indice: 1, fallo: null },
+        VALIDADO:            { indice: 2, fallo: null },
+        RECHAZADO_INTERNO:   { indice: 1, fallo: 'VALIDACION' },
+        ESPERANDO_RESPUESTA: { indice: 2, fallo: null },
+        APROBADO:            { indice: 3, fallo: null },
+        RECHAZADO:           { indice: 3, fallo: 'PROVEEDOR' },
+        EN_PROCESO:          { indice: 3, fallo: null },
+        COMPLETADO:          { indice: 3, fallo: null },
+        CANCELADO:           { indice: 0, fallo: 'CIERRE' },
+    }[estado] || { indice: 0, fallo: null };
+
+    return `<div class="req-flujo">` + pasos.map((p, i) => {
+        let clase = '';
+        if (p.clave === avance.fallo) clase = 'fallo';
+        else if (i < avance.indice) clase = 'hecho';
+        else if (i === avance.indice) clase = 'actual';
+        return `<span class="req-flujo-paso ${clase}"><i class="${p.icono}"></i>${p.txt}</span>`;
+    }).join('') + `</div>`;
+}
+
+/* Chip con lo que le falta al caso para poder salir al proveedor. */
+function reqChipFaltantes(faltantes) {
+    if (!faltantes || !faltantes.length) return '';
+    return `<span class="req-falta" title="No se puede enviar al proveedor sin esto">
+        <i class="ri-error-warning-line"></i>falta ${reqEsc(faltantes.join(' y '))}</span>`;
+}
+
+/* ══════════ Visor de fotos con zoom adaptativo ══════════
+   Reemplaza el `target="_blank"` por foto: revisar la evidencia de un reclamo
+   eran 6 pestañas del navegador y ninguna forma de acercarse al defecto, que
+   es justamente lo único que importa mirar.
+
+   - Rueda del mouse y pinza en táctil hacen zoom sobre el punto apuntado.
+   - Arrastrar desplaza cuando la imagen no cabe.
+   - ← → cambian de foto, +/- acercan, 0 reencuadra, Esc cierra.
+   - Doble clic alterna entre "ver completa" y 200%. */
+const ReqVisor = (function () {
+    let fotos = [], indice = 0, escala = 1, x = 0, y = 0;
+    let arrastrando = false, inicio = { x: 0, y: 0 }, pinchInicial = null;
+    let raiz = null;
+
+    const MIN = 0.4, MAX = 6;
+
+    function construir() {
+        if (raiz) return raiz;
+        raiz = document.createElement('div');
+        raiz.className = 'req-visor';
+        raiz.innerHTML = `
+            <div class="req-visor-barra">
+                <button class="req-visor-btn" data-accion="anterior" title="Anterior (←)"><i class="ri-arrow-left-s-line"></i></button>
+                <button class="req-visor-btn" data-accion="siguiente" title="Siguiente (→)"><i class="ri-arrow-right-s-line"></i></button>
+                <div class="flex-grow-1 min-w-0">
+                    <p class="req-visor-titulo text-truncate" data-rol="titulo"></p>
+                    <div class="req-visor-sub text-truncate" data-rol="sub"></div>
+                </div>
+                <button class="req-visor-btn" data-accion="alejar" title="Alejar (-)"><i class="ri-zoom-out-line"></i></button>
+                <span class="req-visor-zoom" data-rol="zoom">100%</span>
+                <button class="req-visor-btn" data-accion="acercar" title="Acercar (+)"><i class="ri-zoom-in-line"></i></button>
+                <button class="req-visor-btn" data-accion="encajar" title="Reencuadrar (0)"><i class="ri-fullscreen-exit-line"></i></button>
+                <a class="req-visor-btn" data-rol="descargar" target="_blank" rel="noopener" title="Abrir original"><i class="ri-external-link-line"></i></a>
+                <button class="req-visor-btn" data-accion="cerrar" title="Cerrar (Esc)"><i class="ri-close-line"></i></button>
+            </div>
+            <div class="req-visor-lienzo" data-rol="lienzo"><img alt="" data-rol="img"></div>
+            <div class="req-visor-tiras" data-rol="tiras"></div>`;
+        document.body.appendChild(raiz);
+
+        raiz.addEventListener('click', e => {
+            const btn = e.target.closest('[data-accion]');
+            if (!btn) return;
+            ({
+                anterior: () => mover(-1), siguiente: () => mover(1),
+                acercar: () => zoom(1.25), alejar: () => zoom(0.8),
+                encajar: encajar, cerrar: cerrar,
+            })[btn.dataset.accion]();
+        });
+
+        const lienzo = raiz.querySelector('[data-rol="lienzo"]');
+        // Clic en el fondo (no en la imagen) cierra, como cualquier visor.
+        lienzo.addEventListener('click', e => { if (e.target === lienzo) cerrar(); });
+        lienzo.addEventListener('dblclick', () => { escala > 1.2 ? encajar() : zoom(2 / escala); });
+
+        lienzo.addEventListener('wheel', e => {
+            e.preventDefault();
+            zoom(e.deltaY < 0 ? 1.15 : 0.87, e);
+        }, { passive: false });
+
+        lienzo.addEventListener('mousedown', e => {
+            arrastrando = true; inicio = { x: e.clientX - x, y: e.clientY - y };
+            lienzo.classList.add('arrastrando');
+        });
+        window.addEventListener('mousemove', e => {
+            if (!arrastrando) return;
+            x = e.clientX - inicio.x; y = e.clientY - inicio.y; aplicar();
+        });
+        window.addEventListener('mouseup', () => {
+            arrastrando = false; lienzo.classList.remove('arrastrando');
+        });
+
+        // Táctil: un dedo desplaza, dos dedos hacen zoom.
+        lienzo.addEventListener('touchstart', e => {
+            if (e.touches.length === 2) {
+                pinchInicial = { dist: distancia(e.touches), escala: escala };
+            } else if (e.touches.length === 1) {
+                arrastrando = true;
+                inicio = { x: e.touches[0].clientX - x, y: e.touches[0].clientY - y };
+            }
+        }, { passive: true });
+        lienzo.addEventListener('touchmove', e => {
+            if (e.touches.length === 2 && pinchInicial) {
+                e.preventDefault();
+                const factor = distancia(e.touches) / pinchInicial.dist;
+                escala = Math.min(MAX, Math.max(MIN, pinchInicial.escala * factor));
+                aplicar();
+            } else if (arrastrando && e.touches.length === 1) {
+                x = e.touches[0].clientX - inicio.x;
+                y = e.touches[0].clientY - inicio.y;
+                aplicar();
+            }
+        }, { passive: false });
+        lienzo.addEventListener('touchend', e => {
+            if (e.touches.length < 2) pinchInicial = null;
+            if (!e.touches.length) arrastrando = false;
+        }, { passive: true });
+
+        document.addEventListener('keydown', e => {
+            if (!raiz.classList.contains('abierto')) return;
+            const acciones = {
+                Escape: cerrar, ArrowLeft: () => mover(-1), ArrowRight: () => mover(1),
+                '+': () => zoom(1.25), '=': () => zoom(1.25), '-': () => zoom(0.8), '0': encajar,
+            };
+            if (acciones[e.key]) { e.preventDefault(); acciones[e.key](); }
+        });
+
+        return raiz;
+    }
+
+    function distancia(touches) {
+        return Math.hypot(touches[0].clientX - touches[1].clientX,
+                          touches[0].clientY - touches[1].clientY);
+    }
+
+    function aplicar() {
+        const img = raiz.querySelector('[data-rol="img"]');
+        img.style.transform = `translate(${x}px, ${y}px) scale(${escala})`;
+        raiz.querySelector('[data-rol="zoom"]').textContent = Math.round(escala * 100) + '%';
+    }
+
+    function zoom(factor, evento) {
+        const previa = escala;
+        escala = Math.min(MAX, Math.max(MIN, escala * factor));
+        // Zoom hacia donde apunta el cursor, no hacia el centro: acercarse al
+        // defecto en una esquina de la foto no debería exigir después
+        // arrastrar a ciegas hasta encontrarlo.
+        if (evento) {
+            const caja = raiz.querySelector('[data-rol="lienzo"]').getBoundingClientRect();
+            const px = evento.clientX - caja.left - caja.width / 2;
+            const py = evento.clientY - caja.top - caja.height / 2;
+            const razon = escala / previa;
+            x = px - (px - x) * razon;
+            y = py - (py - y) * razon;
+        }
+        aplicar();
+    }
+
+    function encajar() { escala = 1; x = 0; y = 0; aplicar(); }
+
+    function pintar() {
+        const foto = fotos[indice];
+        if (!foto) return;
+        const img = raiz.querySelector('[data-rol="img"]');
+        img.src = foto.url;
+        img.alt = foto.titulo || 'Foto del requerimiento';
+        raiz.querySelector('[data-rol="titulo"]').textContent =
+            `${foto.titulo || 'Foto'} · ${indice + 1} de ${fotos.length}`;
+        raiz.querySelector('[data-rol="sub"]').textContent =
+            [foto.descripcion, foto.fecha].filter(Boolean).join(' · ');
+        raiz.querySelector('[data-rol="descargar"]').href = foto.url;
+
+        raiz.querySelectorAll('[data-accion="anterior"], [data-accion="siguiente"]')
+            .forEach(b => { b.disabled = fotos.length < 2; });
+
+        raiz.querySelector('[data-rol="tiras"]').innerHTML = fotos.length > 1
+            ? fotos.map((f, i) => `<img src="${reqEsc(f.url)}" class="${i === indice ? 'activa' : ''}"
+                 alt="${reqEsc(f.titulo || '')}" onclick="ReqVisor.ir(${i})">`).join('')
+            : '';
+        encajar();
+    }
+
+    function mover(paso) {
+        if (fotos.length < 2) return;
+        indice = (indice + paso + fotos.length) % fotos.length;
+        pintar();
+    }
+
+    function cerrar() {
+        if (raiz) raiz.classList.remove('abierto');
+        document.body.style.overflow = '';
+    }
+
+    return {
+        abrir(listaFotos, desde) {
+            fotos = (listaFotos || []).filter(f => f && f.url);
+            if (!fotos.length) return;
+            indice = Math.max(0, Math.min(desde || 0, fotos.length - 1));
+            construir().classList.add('abierto');
+            document.body.style.overflow = 'hidden';
+            pintar();
+        },
+        ir(i) { indice = i; pintar(); },
+        cerrar,
+    };
+})();
+</script>

@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import transaction
 import json
+import logging
 from decimal import Decimal
 
 from .models import (
@@ -20,6 +21,87 @@ from .models import (
     Ticket_Productos, Dte_Productos, PermisoRol
 )
 from .services.historial_precios import registrar_cambios_precio
+from .utils_producto_match import (
+    qs_fichas_identidad_de,
+    qs_fichas_identidad_todas_sucursales,
+)
+
+logger = logging.getLogger('app')
+
+
+# ========== UTILIDAD: TRASPASOS EN TRÁNSITO ==========
+
+# Estados de DTE que ya no despachan nada: no cuentan como mercadería viajando.
+_ESTADOS_DTE_MUERTOS = ['CANCELADO', 'ANULADO']
+
+
+def traspasos_en_transito_por_producto(producto_ids, limite=5):
+    """Traspasos EMITIDOS y AÚN NO RECEPCIONADOS que contienen estas fichas.
+
+    Editar un producto no mueve una sola unidad de stock, pero sí cambia lo que
+    la sucursal destino ve en /app/recepcion-dte/: esa pantalla arma cada línea
+    leyendo el producto VIVO (articulo / descripcion / marca / color) vía
+    `Dte_Productos.productoTalla__producto`, NO el texto que quedó congelado en
+    `Dte_Productos.descripcion` al emitir la guía. Si el artículo se renombra o
+    se le cambia el color mientras la mercadería viaja, el papel que trae el
+    chofer y la pantalla del receptor dejan de decir lo mismo.
+
+    Por eso la edición NO se bloquea —renombrar es legítimo y el vínculo es por
+    FK, así que la guía se sigue pudiendo recepcionar— pero sí avisa. Es el
+    mismo universo que sí bloquea el borrado en
+    `_detectar_bloqueos_eliminacion_producto` (TRASPASO_EN_TRANSITO).
+
+    Devuelve None cuando no hay nada en tránsito, para que el caller pueda
+    omitir la clave del JSON sin ruido.
+    """
+    if not producto_ids:
+        return None
+
+    movimientos = (
+        Movimientos_Producto.objects
+        .filter(
+            ProductoTalla__producto_id__in=list(producto_ids),
+            concepto='TRASPASO_SALIDA',
+            tipo_movimiento='EGRESO',
+            estado='COMPLETADO',
+            dte__tipo_transaccion='TRASPASO',
+            dte__fecha_recepcion__isnull=True,
+        )
+        .exclude(dte__estado_dte__in=_ESTADOS_DTE_MUERTOS)
+        .select_related('dte', 'sucursal_origen', 'sucursal_destino')
+    )
+
+    documentos = {}
+    destinos = set()
+    unidades = 0
+    for mov in movimientos:
+        # TRASPASO_SALIDA se guarda con cantidad negativa (es un egreso).
+        unidades += abs(int(mov.cantidad or 0))
+        if mov.sucursal_destino:
+            destinos.add(mov.sucursal_destino.alias or f'Sucursal {mov.sucursal_destino_id}')
+        dte = mov.dte
+        if not dte or dte.id in documentos:
+            continue
+        documentos[dte.id] = {
+            'dte_id': dte.id,
+            'numero_documento': dte.numero_documento,
+            'tipo_documento': dte.tipo_documento,
+            'fecha_emision': dte.fecha_emision.strftime('%d/%m/%Y') if dte.fecha_emision else '',
+            'origen': mov.sucursal_origen.alias if mov.sucursal_origen else '-',
+            'destino': mov.sucursal_destino.alias if mov.sucursal_destino else '-',
+        }
+
+    if not documentos:
+        return None
+
+    return {
+        'total_documentos': len(documentos),
+        'unidades': unidades,
+        'sucursales_destino': sorted(destinos),
+        'documentos': sorted(
+            documentos.values(), key=lambda d: d['dte_id'], reverse=True
+        )[:limite],
+    }
 
 
 # ========== UTILIDAD: OBTENER PRODUCTO DESDE TALLA ==========
@@ -163,11 +245,21 @@ def actualizar_producto(request, producto_id):
     
     Comportamiento:
     - Actualiza el producto seleccionado
-    - Busca TODOS los productos con el mismo artículo en TODAS las sucursales
+    - Busca sus fichas GEMELAS en todas las bodegas: misma identidad completa
+      (código + marca + color + género + categoría), NO solo el mismo código
     - Actualiza descripción, categoría, atributos y precios en todos ellos
     - Registra historial de cambios de precio
     - Actualiza lotes FIFO activos con el nuevo precio
     """
+    if not _tiene_permiso_editar_gestion_producto(request):
+        # Mismo permiso que ya exige el ajuste de stock de este módulo. Sin
+        # este gate, cualquier usuario logueado de cualquier empresa podía
+        # renombrar y re-precear el artículo en TODAS las bodegas.
+        return JsonResponse({
+            'success': False,
+            'error': 'No tienes permiso para editar productos.'
+        }, status=403)
+
     try:
         producto = get_object_or_404(Producto.objects.select_related('sucursal'), id=producto_id)
         
@@ -175,6 +267,12 @@ def actualizar_producto(request, producto_id):
         articulo_anterior = producto.articulo
         precio_anterior = producto.precioventa
         sucursal_origen = producto.sucursal
+        # Identidad ANTERIOR: con ella se ubican las fichas gemelas de las otras
+        # bodegas, que todavía no fueron renombradas.
+        identidad_anterior = (
+            producto.atributo1_id, producto.atributo2_id,
+            producto.atributo3_id, producto.categoria_id,
+        )
         
         # Parsear datos según el método
         if request.method == 'PUT':
@@ -242,11 +340,16 @@ def actualizar_producto(request, producto_id):
             else:
                 atributos[f'atributo{i}'] = None
         
-        # ========== BUSCAR TODOS LOS PRODUCTOS CON MISMO ARTÍCULO ==========
+        # ========== BUSCAR LAS FICHAS GEMELAS (IDENTIDAD COMPLETA) ==========
+        # Un producto se identifica por código + marca + color + género +
+        # categoría (utils_producto_match). Propagar solo por `articulo` —como
+        # se hacía— alcanzaba a OTRAS variantes del mismo código (otro color,
+        # otro género) y a otras empresas, y les reescribía atributos y precios:
+        # es la misma clave floja que dejó unas zapatillas a precio de guante
+        # (ver `qs_fichas_identidad_otras_sucursales`).
         if propagar_sucursales:
-            # Buscar por artículo original (antes de cambiar)
-            productos_a_actualizar = Producto.objects.filter(
-                articulo=articulo_anterior
+            productos_a_actualizar = qs_fichas_identidad_todas_sucursales(
+                articulo_anterior, *identidad_anterior
             ).select_related('sucursal')
         else:
             # Solo el producto actual
@@ -254,6 +357,7 @@ def actualizar_producto(request, producto_id):
         
         productos_actualizados = 0
         sucursales_afectadas = set()
+        ids_actualizados = []
         lotes_totales_actualizados = 0
         historial_registrado = False
         
@@ -289,6 +393,7 @@ def actualizar_producto(request, producto_id):
             
             prod.save()
             productos_actualizados += 1
+            ids_actualizados.append(prod.id)
             
             if prod.sucursal:
                 sucursales_afectadas.add(prod.sucursal.alias)
@@ -323,7 +428,19 @@ def actualizar_producto(request, producto_id):
             mensaje = f'Producto actualizado en {productos_actualizados} sucursales: {", ".join(sorted(sucursales_afectadas))}'
         else:
             mensaje = 'Producto actualizado exitosamente'
-        
+
+        # Mercadería viajando: el destino verá el dato NUEVO al recepcionar,
+        # aunque su guía impresa diga el anterior. No bloquea; deja rastro.
+        transito = traspasos_en_transito_por_producto(ids_actualizados)
+        if transito:
+            logger.warning(
+                "Producto editado con traspasos en tránsito: usuario=%s articulo='%s'->'%s' "
+                "fichas=%s documentos=%s unidades=%s destinos=%s",
+                request.user.username, articulo_anterior, articulo,
+                productos_actualizados, transito['total_documentos'],
+                transito['unidades'], ', '.join(transito['sucursales_destino']),
+            )
+
         return JsonResponse({
             'success': True,
             'message': mensaje,
@@ -338,6 +455,7 @@ def actualizar_producto(request, producto_id):
                 'lotes_actualizados': lotes_totales_actualizados,
                 'historial_registrado': historial_registrado
             },
+            'traspasos_en_transito': transito,
             'precio_cambio': precio_anterior != precioventa
         })
         
@@ -1178,6 +1296,12 @@ def actualizar_productos_masivo(request):
     automáticamente los nuevos atributos del producto.
     Las cantidades, precios y fechas almacenadas en cada movimiento permanecen intactas.
     """
+    if not _tiene_permiso_editar_gestion_producto(request):
+        return JsonResponse({
+            'success': False,
+            'error': 'No tienes permiso para editar productos.'
+        }, status=403)
+
     try:
         data = json.loads(request.body)
         producto_ids = data.get('producto_ids', [])
@@ -1196,10 +1320,20 @@ def actualizar_productos_masivo(request):
             return JsonResponse({'success': False, 'error': 'Productos no encontrados'}, status=404)
 
         if propagar:
-            articulos = list(productos_base.values_list('articulo', flat=True).distinct())
-            productos = Producto.objects.filter(articulo__in=articulos).select_related('sucursal')
+            # Identidad completa (código + marca + color + género + categoría).
+            # Con `articulo__in` a secas, editar la variante NEGRA del código
+            # arrastraba a la BLANCA y a las fichas de las otras empresas.
+            productos = qs_fichas_identidad_de(productos_base).select_related('sucursal')
         else:
             productos = productos_base
+
+        # MATERIALIZAR AQUÍ, no más abajo: el filtro de identidad se arma con
+        # marca/color/género/categoría y este mismo endpoint pisa esos campos.
+        # Si el queryset se re-evaluara después del bucle (como hacían el bloque
+        # de especialidades y el conteo de tallas), ya no encontraría las fichas
+        # que acaba de reescribir y las especialidades no se aplicarían a nadie.
+        productos = list(productos)
+        prod_ids_afectados = [p.id for p in productos]
 
         update_kwargs = {}
         campos_aplicados = []
@@ -1330,7 +1464,7 @@ def actualizar_productos_masivo(request):
         # ── Aplicar especialidades en bloque ──
         if esp_modo:
             from .models import ProductoAtributoValor
-            prod_ids_all = list(productos.values_list('id', flat=True))
+            prod_ids_all = list(prod_ids_afectados)
             ids_sel = [o.id for o in esp_opciones]
             if esp_modo == 'reemplazar':
                 ProductoAtributoValor.objects.filter(
@@ -1351,10 +1485,22 @@ def actualizar_productos_masivo(request):
                     ProductoAtributoValor.objects.bulk_create(nuevos)
 
         talla_ids = list(
-            Producto_Talla.objects.filter(producto__in=productos).values_list('id', flat=True)
+            Producto_Talla.objects.filter(
+                producto_id__in=prod_ids_afectados
+            ).values_list('id', flat=True)
         )
         movimientos_afectados = Movimientos_Producto.objects.filter(ProductoTalla_id__in=talla_ids).count()
         tickets_afectados = Ticket_Productos.objects.filter(ProductoTalla_id__in=talla_ids).count()
+
+        transito = traspasos_en_transito_por_producto(prod_ids_afectados)
+        if transito:
+            logger.warning(
+                "Edición masiva con traspasos en tránsito: usuario=%s fichas=%s "
+                "campos=%s documentos=%s unidades=%s destinos=%s",
+                request.user.username, count, ', '.join(campos_aplicados),
+                transito['total_documentos'], transito['unidades'],
+                ', '.join(transito['sucursales_destino']),
+            )
 
         return JsonResponse({
             'success': True,
@@ -1366,7 +1512,8 @@ def actualizar_productos_masivo(request):
                 'lotes_actualizados': lotes_total,
                 'movimientos_vinculados': movimientos_afectados,
                 'tickets_vinculados': tickets_afectados,
-            }
+            },
+            'traspasos_en_transito': transito,
         })
 
     except json.JSONDecodeError:
@@ -1389,8 +1536,9 @@ def preview_edicion_masiva(request):
         productos_base = Producto.objects.filter(id__in=producto_ids).select_related('sucursal')
 
         if propagar:
-            articulos = list(productos_base.values_list('articulo', flat=True).distinct())
-            productos = Producto.objects.filter(articulo__in=articulos).select_related('sucursal')
+            # Misma clave que aplica la edición: identidad completa, no el
+            # código pelado (si no, el preview mentía sobre el alcance real).
+            productos = qs_fichas_identidad_de(productos_base).select_related('sucursal')
         else:
             productos = productos_base
 
@@ -1416,6 +1564,9 @@ def preview_edicion_masiva(request):
                 'total_movimientos': movimientos,
                 'total_tickets': tickets,
                 'total_dtes': dtes,
+                # Mercadería ya despachada y aún sin recepcionar: lo que se
+                # edite acá es lo que verá el receptor en recepcion-dte.
+                'traspasos_en_transito': traspasos_en_transito_por_producto(prod_ids),
             }
         })
     except Exception as e:

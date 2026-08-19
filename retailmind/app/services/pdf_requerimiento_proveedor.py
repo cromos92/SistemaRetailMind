@@ -491,6 +491,21 @@ def generar_pdf_requerimiento(requerimiento, *, usuario=None, plazo_dias=7) -> b
         els.append(Spacer(1, 1.5 * mm))
         els.append(Paragraph('<b>Detalle:</b> ' + _txt(requerimiento.descripcion_problema),
                              st['texto']))
+
+    # Validación interna: deja constancia en el documento de que la empresa
+    # revisó y autorizó el reclamo antes de enviarlo. Al proveedor le importa
+    # —no es un reclamo automático— y a la empresa le sirve de trazabilidad.
+    if requerimiento.decision_interna == 'APROBADO':
+        autoriza = (requerimiento.usuario_decision_interna.get_full_name()
+                    if requerimiento.usuario_decision_interna_id else '')
+        els.append(Spacer(1, 1.5 * mm))
+        els.append(Paragraph(
+            '<b>Validado internamente</b> por ' + _txt(autoriza or 'la administración') +
+            (f' el {_fecha(timezone.localtime(requerimiento.fecha_decision_interna))}'
+             if requerimiento.fecha_decision_interna else '') +
+            (': ' + _txt(requerimiento.motivo_decision_interna, 220)
+             if requerimiento.motivo_decision_interna else ''),
+            st['texto']))
     els.append(Spacer(1, 4 * mm))
 
     # ── Evidencia ────────────────────────────────────────────────────────

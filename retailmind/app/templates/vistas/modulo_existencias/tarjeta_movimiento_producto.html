@@ -4,53 +4,219 @@
 {% include '../../layout/menu.html' %}
 
 <style>
-/* ===== Tarjeta de Movimiento — Vida completa del producto ===== */
+/* =====================================================================
+   Tarjeta de Movimiento del Producto
+   Orden de lectura: 1) Artículo → 2) Tallas en todas las sucursales
+                     3) Llegadas → 4) Historial de vida
+   ===================================================================== */
+
+/* ---------- Header del módulo ---------- */
 .tm-header {
     background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
-    border-radius: 12px;
+    border-radius: 16px;
     color: #fff;
-    padding: 1.25rem 1.5rem;
-    box-shadow: 0 4px 12px rgba(64, 81, 137, 0.25);
+    padding: 1.15rem 1.5rem;
+    box-shadow: 0 4px 20px rgba(64, 81, 137, .18);
 }
-.tm-header h4 { color: #fff; margin: 0; font-weight: 700; }
-.tm-header .tm-sub { color: rgba(255,255,255,.85); font-size: .875rem; }
+.tm-header h4 { color: #fff; margin: 0; font-weight: 700; font-size: 1.15rem; }
+.tm-header .tm-sub { color: rgba(255,255,255,.85); font-size: .85rem; margin-top: .15rem; }
+.tm-header-icon {
+    width: 48px; height: 48px; background: rgba(255,255,255,.2); border-radius: 12px;
+    display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0;
+}
 
-/* Buscador */
-.tm-search-card { border: none; box-shadow: var(--nexo-shadow-sm, 0 1px 2px rgba(26,26,46,.05)); border-radius: 12px; }
+/* ---------- Card genérica del módulo ---------- */
+.tm-card {
+    border: none; border-radius: 14px; background: #fff;
+    box-shadow: 0 2px 10px rgba(26,26,46,.06);
+}
+.tm-card-title {
+    display: flex; align-items: center; gap: .6rem;
+    font-weight: 700; color: #1A1A2E; font-size: 1rem; margin: 0;
+}
+.tm-step {
+    width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: #fff; font-size: .78rem; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.tm-card-hint { font-size: .78rem; color: #8A8A9A; margin: .2rem 0 0 2.1rem; }
 
-/* KPI cards */
-.tm-kpi {
-    border: none; border-radius: 12px; overflow: hidden;
+/* ---------- Buscador ---------- */
+#inputSku { font-size: 1.05rem; font-weight: 600; letter-spacing: .01em; }
+#listaAyudaProductos .list-group-item-action:hover { background: #eef1f8; }
+
+/* ---------- 1. Ficha del artículo ---------- */
+.tm-ficha {
+    border-radius: 16px; overflow: hidden; background: #fff;
+    box-shadow: 0 2px 10px rgba(26,26,46,.06);
+    border-top: 4px solid #405189;
+}
+.tm-ficha-top { display: flex; flex-wrap: wrap; gap: 1rem; padding: 1.1rem 1.35rem; }
+.tm-ficha-avatar {
+    width: 62px; height: 62px; border-radius: 14px; flex-shrink: 0;
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: #fff; font-size: 1.7rem;
+    display: flex; align-items: center; justify-content: center;
+}
+.tm-ficha-nombre { font-size: 1.3rem; font-weight: 800; color: #1A1A2E; line-height: 1.2; margin: 0; }
+.tm-ficha-codigo {
+    font-family: 'SF Mono','Consolas',monospace; font-size: .95rem; font-weight: 700;
+    background: #eef1f8; color: #405189; border-radius: 7px; padding: .12rem .5rem;
+}
+.tm-attr {
+    display: inline-flex; align-items: center; gap: .3rem;
+    background: #f5f5f7; color: #4A4A5A; border-radius: 999px;
+    padding: .18rem .65rem; font-size: .78rem; font-weight: 600;
+}
+.tm-attr i { color: #8A8A9A; font-size: .85rem; }
+.tm-precio-box { text-align: right; margin-left: auto; }
+.tm-precio-lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: #8A8A9A; font-weight: 700; }
+.tm-precio-val { font-size: 1.6rem; font-weight: 800; color: #0ab39c; line-height: 1.1; }
+.tm-costo-val { font-size: .82rem; color: #8A8A9A; font-weight: 600; }
+
+/* Fila de métricas dentro de la ficha */
+.tm-metricas {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    border-top: 1px solid #eef0f4; background: #fbfcfe;
+}
+.tm-metrica { padding: .75rem 1rem; border-right: 1px solid #eef0f4; }
+.tm-metrica:last-child { border-right: none; }
+.tm-metrica-lbl {
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .05em;
+    color: #8A8A9A; font-weight: 700; display: flex; align-items: center; gap: .3rem;
+}
+.tm-metrica-val { font-size: 1.35rem; font-weight: 800; color: #1A1A2E; line-height: 1.15; }
+.tm-metrica-sub { font-size: .74rem; color: #8A8A9A; }
+.tm-metrica-val.ok   { color: #0ab39c; }
+.tm-metrica-val.warn { color: #f7b84b; }
+.tm-metrica-val.bad  { color: #f06548; }
+
+/* ---------- Navegación entre secciones ---------- */
+.tm-nav {
+    position: sticky; top: 70px; z-index: 20;
+    background: rgba(255,255,255,.94); backdrop-filter: blur(6px);
+    border: 1px solid #eef0f4; border-radius: 12px;
+    padding: .45rem .55rem; display: flex; flex-wrap: wrap; gap: .35rem; align-items: center;
     box-shadow: 0 2px 8px rgba(26,26,46,.06);
-    transition: transform .2s ease, box-shadow .2s ease;
 }
-.tm-kpi:hover { transform: translateY(-3px); box-shadow: 0 8px 18px rgba(26,26,46,.12); }
-.tm-kpi .tm-kpi-icon {
-    width: 46px; height: 46px; border-radius: 10px;
-    display: flex; align-items: center; justify-content: center; font-size: 1.4rem;
+.tm-nav-btn {
+    border: 1px solid transparent; background: transparent; border-radius: 9px;
+    padding: .35rem .8rem; font-size: .82rem; font-weight: 600; color: #4A4A5A;
+    display: inline-flex; align-items: center; gap: .4rem; transition: all .18s ease;
 }
-.tm-kpi .tm-kpi-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: #8A8A9A; font-weight: 600; }
-.tm-kpi .tm-kpi-value { font-size: 1.55rem; font-weight: 700; line-height: 1.1; color: #1A1A2E; }
+.tm-nav-btn:hover { background: #eef1f8; color: #405189; }
+.tm-nav-btn.active { background: #405189; color: #fff; box-shadow: 0 2px 8px rgba(64,81,137,.3); }
+.tm-nav-btn .tm-nav-n {
+    width: 18px; height: 18px; border-radius: 6px; background: rgba(0,0,0,.08);
+    font-size: .68rem; display: inline-flex; align-items: center; justify-content: center; font-weight: 700;
+}
+.tm-nav-btn.active .tm-nav-n { background: rgba(255,255,255,.25); }
+.tm-seccion { scroll-margin-top: 130px; }
 
-/* Distribución por bodega */
-.tm-bodega-card {
-    border: 1px solid #eef0f4; border-radius: 12px; padding: 1rem 1.1rem; height: 100%;
-    transition: box-shadow .2s ease, transform .2s ease; background: #fff;
+/* ---------- 2. Matriz talla × sucursal ---------- */
+.tm-talla-resumen { display: flex; flex-wrap: wrap; gap: .4rem; }
+.tm-talla-tot {
+    border: 1px solid #e3e6ee; border-radius: 10px; padding: .3rem .55rem;
+    text-align: center; min-width: 58px; background: #fff; cursor: pointer;
+    transition: all .15s ease;
 }
-.tm-bodega-card:hover { box-shadow: 0 6px 16px rgba(26,26,46,.08); transform: translateY(-2px); }
-.tm-bodega-card.is-cd { border-color: #cfe9e2; background: linear-gradient(180deg,#f4fdfa 0%,#ffffff 60%); }
-.tm-bodega-card.is-actual { border-color: #405189; box-shadow: 0 0 0 2px rgba(64,81,137,.12); }
-.tm-bodega-name { font-weight: 700; color: #1A1A2E; }
-.tm-bodega-stock { font-size: 1.7rem; font-weight: 800; color: #405189; line-height: 1; }
-.tm-talla-chip {
-    display: inline-flex; align-items: center; gap: .25rem;
-    background: #f1f3f8; color: #4A4A5A; border-radius: 999px;
-    padding: .12rem .55rem; font-size: .74rem; font-weight: 600; margin: .12rem;
-}
-.tm-talla-chip .tm-talla-n { color: #405189; font-weight: 700; }
-.tm-talla-chip.is-zero { opacity: .45; }
+.tm-talla-tot:hover { border-color: #405189; transform: translateY(-2px); }
+.tm-talla-tot.activa { border-color: #405189; background: #eef1f8; box-shadow: 0 0 0 2px rgba(64,81,137,.15); }
+.tm-talla-tot.vacia { opacity: .45; }
+.tm-talla-tot .t { font-size: .72rem; font-weight: 700; color: #8A8A9A; text-transform: uppercase; }
+.tm-talla-tot .n { font-size: 1.05rem; font-weight: 800; color: #1A1A2E; line-height: 1.1; }
 
-/* Timeline */
+.tm-matriz-wrap {
+    border: 1px solid #eef0f4; border-radius: 12px; overflow: auto; max-height: 62vh;
+}
+table.tm-matriz { margin: 0; border-collapse: separate; border-spacing: 0; width: 100%; }
+table.tm-matriz th, table.tm-matriz td { padding: .45rem .55rem; font-size: .82rem; white-space: nowrap; }
+table.tm-matriz thead th {
+    position: sticky; top: 0; z-index: 3; background: #f3f6f9; color: #405189;
+    font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+    text-align: center; border-bottom: 2px solid #e3e6ee; cursor: pointer;
+}
+table.tm-matriz thead th:hover { background: #e8edf6; }
+table.tm-matriz thead th.tm-col-suc,
+table.tm-matriz tbody td.tm-col-suc,
+table.tm-matriz tfoot td.tm-col-suc {
+    position: sticky; left: 0; z-index: 2; background: #fff; text-align: left;
+    border-right: 2px solid #eef0f4; min-width: 168px;
+}
+table.tm-matriz thead th.tm-col-suc { z-index: 4; background: #f3f6f9; }
+table.tm-matriz tbody tr:hover td { background: #f7f9fc; }
+table.tm-matriz tbody tr:hover td.tm-col-suc { background: #f7f9fc; }
+table.tm-matriz tbody td { text-align: center; border-bottom: 1px solid #f2f4f8; }
+table.tm-matriz tfoot td {
+    position: sticky; bottom: 0; z-index: 2; background: #f3f6f9; font-weight: 800;
+    color: #405189; text-align: center; border-top: 2px solid #e3e6ee;
+}
+table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: #f3f6f9; text-align: left; }
+.tm-col-activa { box-shadow: inset 3px 0 0 #405189, inset -3px 0 0 #405189; }
+
+/* Celda de stock: mapa de calor */
+.tm-cel {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 34px; height: 26px; border-radius: 7px;
+    font-weight: 700; font-size: .82rem; cursor: pointer; transition: transform .12s ease;
+}
+.tm-cel:hover { transform: scale(1.12); }
+.tm-cel.n0 { background: #f5f5f7; color: #c9c9d3; font-weight: 500; }
+.tm-cel.n1 { background: rgba(10,179,156,.14); color: #0a8a78; }
+.tm-cel.n2 { background: rgba(10,179,156,.30); color: #077a69; }
+.tm-cel.n3 { background: rgba(10,179,156,.55); color: #05564a; }
+.tm-cel.n4 { background: #0ab39c; color: #fff; }
+
+.tm-suc-nombre { font-weight: 700; color: #1A1A2E; }
+.tm-suc-total { font-weight: 800; color: #405189; }
+.tm-tag {
+    display: inline-block; border-radius: 999px; padding: .05rem .45rem;
+    font-size: .66rem; font-weight: 700; margin-left: .3rem; vertical-align: middle;
+}
+.tm-tag-cd    { background: #e8f7f2; color: #0a8a78; }
+.tm-tag-aqui  { background: #e9f0ff; color: #405189; }
+.tm-fila-cero td { opacity: .55; }
+
+/* ---------- 3. Llegadas ---------- */
+.tm-llegadas { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: .85rem; }
+.tm-llegada {
+    border: 1px solid #eef0f4; border-left: 4px solid #0ab39c; border-radius: 12px;
+    background: #fff; padding: .8rem .95rem; transition: box-shadow .18s ease, transform .18s ease;
+}
+.tm-llegada:hover { box-shadow: 0 8px 18px rgba(26,26,46,.09); transform: translateY(-2px); }
+.tm-llegada-top { display: flex; align-items: flex-start; gap: .6rem; }
+.tm-llegada-ico {
+    width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1rem;
+}
+.tm-llegada-titulo { font-weight: 700; color: #1A1A2E; font-size: .92rem; line-height: 1.25; }
+.tm-llegada-fecha { font-size: .76rem; color: #8A8A9A; }
+.tm-llegada-uds { text-align: right; margin-left: auto; }
+.tm-llegada-uds .n { font-size: 1.5rem; font-weight: 800; color: #0ab39c; line-height: 1; }
+.tm-llegada-uds .u { font-size: .68rem; color: #8A8A9A; text-transform: uppercase; font-weight: 700; }
+.tm-llegada-ruta {
+    display: flex; flex-wrap: wrap; align-items: center; gap: .35rem;
+    font-size: .8rem; color: #4A4A5A; margin: .6rem 0 .45rem;
+}
+.tm-llegada-ruta .b { font-weight: 700; color: #1A1A2E; }
+.tm-llegada-meta { font-size: .74rem; color: #8A8A9A; display: flex; flex-wrap: wrap; gap: .7rem; }
+.tm-lt {
+    display: inline-flex; align-items: baseline; gap: .22rem;
+    background: #f5f5f7; border-radius: 7px; padding: .1rem .45rem;
+    font-size: .74rem; font-weight: 600; color: #4A4A5A;
+}
+.tm-lt b { color: #0ab39c; font-size: .8rem; }
+.tm-dias {
+    font-size: .68rem; font-weight: 700; border-radius: 999px; padding: .1rem .5rem;
+    background: #f5f5f7; color: #8A8A9A; white-space: nowrap;
+}
+.tm-dias.reciente { background: #e8f7f2; color: #0a8a78; }
+
+/* ---------- 4. Historial de vida ---------- */
+.tm-tabs .nav-link { font-weight: 600; color: #6c757d; border: none; border-bottom: 2px solid transparent; }
+.tm-tabs .nav-link.active { color: #405189; border-bottom-color: #405189; background: transparent; }
+
 .tm-timeline { position: relative; padding-left: 2rem; margin-top: .5rem; }
 .tm-timeline::before {
     content: ''; position: absolute; left: 11px; top: 4px; bottom: 4px;
@@ -62,130 +228,122 @@
     border-radius: 50%; display: flex; align-items: center; justify-content: center;
     color: #fff; font-size: .8rem; box-shadow: 0 0 0 4px #fff, 0 2px 5px rgba(0,0,0,.12);
 }
-.tm-tl-body { background: #fff; border: 1px solid #eef0f4; border-radius: 10px; padding: .55rem .8rem; }
+.tm-tl-body { background: #fff; border: 1px solid #eef0f4; border-radius: 10px; padding: .55rem .8rem; transition: box-shadow .15s ease; }
+.tm-tl-item:hover .tm-tl-body { box-shadow: 0 6px 14px rgba(26,26,46,.10); }
 .tm-tl-title { font-weight: 700; color: #1A1A2E; font-size: .9rem; }
 .tm-tl-meta { font-size: .78rem; color: #8A8A9A; }
 .tm-tl-detail { font-size: .82rem; color: #4A4A5A; }
-
-/* Filtros del kardex */
-.tm-filter-bar {
-    display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
-}
-.tm-filter-bar select, .tm-filter-bar input { min-width: 130px; }
-
-/* Tabla kardex */
-#tablaMovimientos td, #tablaMovimientos th { vertical-align: middle; }
-.tm-badge-entrada { background: #e8f7f2; color: #0a9; }
-.tm-badge-salida { background: #fdecec; color: #e14b4b; }
-.tm-badge-traspaso { background: #fff4d6; color: #b8860b; }
-.tm-badge-ajuste { background: #e9f0ff; color: #405189; }
-
-/* Estados vacíos */
-.tm-empty { text-align: center; color: #8A8A9A; padding: 3rem 1rem; }
-.tm-empty i { font-size: 3rem; opacity: .4; display: block; margin-bottom: .5rem; }
-
-/* Tabs */
-.tm-tabs .nav-link { font-weight: 600; color: #6c757d; }
-.tm-tabs .nav-link.active { color: #405189; }
-
-/* ===== Upgrade visual: kardex agrupado + línea de vida ===== */
-/* Separador de mes en la línea de vida */
 .tm-tl-sep { position: relative; text-align: left; margin: .35rem 0 .9rem -2rem; padding-left: 2rem; }
 .tm-tl-sep span {
     display: inline-block; background: #405189; color: #fff;
     font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
     border-radius: 999px; padding: .18rem .7rem; box-shadow: 0 2px 6px rgba(64,81,137,.25);
 }
-.tm-tl-body { transition: box-shadow .15s ease; }
-.tm-tl-item:hover .tm-tl-body { box-shadow: 0 6px 14px rgba(26,26,46,.10); }
 .tm-tl-fecha-chip {
     background: #f1f3f8; color: #4A4A5A; border-radius: 6px;
     padding: .08rem .45rem; font-size: .72rem; font-weight: 600; white-space: nowrap;
 }
 
-/* Kardex: fila separadora de serie (bodega · talla) */
+/* Kardex */
+.tm-filter-bar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.tm-filter-bar select, .tm-filter-bar input { min-width: 130px; }
+#tablaMovimientos td, #tablaMovimientos th { vertical-align: middle; }
+#panelKardex .table-responsive { max-height: 65vh; }
+#tablaMovimientos thead th {
+    position: sticky; top: 0; z-index: 5; background: #f3f6f9;
+    font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: #405189;
+}
+.tm-badge-entrada  { background: #e8f7f2; color: #0a9; }
+.tm-badge-salida   { background: #fdecec; color: #e14b4b; }
+.tm-badge-traspaso { background: #fff4d6; color: #b8860b; }
 .tm-serie-row td {
     background: linear-gradient(90deg, #eef1f8 0%, #f7f9fc 100%) !important;
     font-weight: 700; color: #405189; font-size: .8rem;
     border-top: 2px solid #d8dce8 !important; padding: .45rem .75rem !important;
 }
-/* Fila de saldo de apertura (lo anterior al rango consultado) */
 .tm-apertura-row td {
     background: #fbfcfe !important; font-style: italic; color: #5a5a6a;
     border-bottom: 1px dashed #d8dce8 !important;
 }
-/* Fila de totales del conjunto filtrado */
 .tm-total-row td {
     background: #f3f6f9 !important; font-weight: 700; color: #405189;
     border-top: 2px solid #d8dce8 !important;
 }
-/* Saldo como chip; negativo en rojo */
 .tm-saldo {
     display: inline-block; min-width: 44px; text-align: center;
     background: #eef1f8; color: #1A1A2E; font-weight: 700;
     border-radius: 6px; padding: .1rem .45rem;
 }
 .tm-saldo.neg { background: #fdecec; color: #e14b4b; }
-/* Encabezado pegajoso dentro del scroll del kardex */
-#panelKardex .table-responsive { max-height: 65vh; }
-#tablaMovimientos thead th {
-    position: sticky; top: 0; z-index: 5; background: #f3f6f9;
-    font-size: .7rem; text-transform: uppercase; letter-spacing: .04em;
+
+/* ---------- Estados ---------- */
+.tm-empty { text-align: center; color: #8A8A9A; padding: 2.5rem 1rem; }
+.tm-empty i { font-size: 3rem; opacity: .4; display: block; margin-bottom: .5rem; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 991px) {
+    .tm-metricas { grid-template-columns: repeat(3, 1fr); }
+    .tm-metrica:nth-child(3) { border-right: none; }
+    .tm-nav { top: 60px; }
+}
+@media (max-width: 575px) {
+    .tm-metricas { grid-template-columns: repeat(2, 1fr); }
+    .tm-precio-box { margin-left: 0; text-align: left; }
+    .tm-llegadas { grid-template-columns: 1fr; }
+    .tm-nav-btn span.tm-nav-txt { display: none; }
 }
 </style>
 
 <div class="page-content">
     <div class="container-fluid">
 
-        <!-- Encabezado -->
-        <div class="row mb-3">
-            <div class="col-12">
-                <div class="tm-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-                    <div>
-                        <h4><i class="ri-route-line me-2"></i>Tarjeta de Movimiento del Producto</h4>
-                        <div class="tm-sub">Vida completa del producto en todas las bodegas — nacimiento, traspasos, ventas y stock actual</div>
-                    </div>
-                    <ol class="breadcrumb m-0 bg-transparent p-0" style="--bs-breadcrumb-divider-color:rgba(255,255,255,.6);">
-                        <li class="breadcrumb-item"><a href="/app/home/" class="text-white-50">Inicio</a></li>
-                        <li class="breadcrumb-item text-white-50">Existencias</li>
-                        <li class="breadcrumb-item active text-white">Tarjeta de Movimiento</li>
-                    </ol>
+        <!-- ================= Encabezado ================= -->
+        <div class="tm-header d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="tm-header-icon"><i class="ri-route-line"></i></div>
+                <div>
+                    <h4>Tarjeta de Movimiento del Producto</h4>
+                    <div class="tm-sub">Artículo · tallas en todas las sucursales · llegadas · historial de vida</div>
                 </div>
             </div>
+            <ol class="breadcrumb m-0 bg-transparent p-0" style="--bs-breadcrumb-divider-color:rgba(255,255,255,.6);">
+                <li class="breadcrumb-item"><a href="/app/home/" class="text-white-50">Inicio</a></li>
+                <li class="breadcrumb-item text-white-50">Existencias</li>
+                <li class="breadcrumb-item active text-white">Tarjeta de Movimiento</li>
+            </ol>
         </div>
 
-        <!-- Buscador -->
-        <div class="row mb-3">
-            <div class="col-12">
-                <div class="card tm-search-card">
-                    <div class="card-body">
-                        <div class="row g-3 align-items-end">
-                            <div class="col-lg-4 col-md-6 position-relative">
-                                <label class="form-label fw-semibold mb-1">SKU o código de artículo</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-white"><i class="ri-search-line text-muted"></i></span>
-                                    <input type="text" id="inputSku" class="form-control" placeholder="Escanee o escriba SKU / código..." autocomplete="off" autofocus>
-                                </div>
-                                <div id="listaAyudaProductos" class="list-group position-absolute shadow mt-1" style="z-index:1050; display:none; max-height:320px; overflow-y:auto; width:100%;"></div>
-                            </div>
-                            <div class="col-lg-2 col-md-3 col-6">
-                                <label class="form-label fw-semibold mb-1">Desde</label>
-                                <input type="date" id="inputFechaDesde" class="form-control">
-                            </div>
-                            <div class="col-lg-2 col-md-3 col-6">
-                                <label class="form-label fw-semibold mb-1">Hasta</label>
-                                <input type="date" id="inputFechaHasta" class="form-control">
-                            </div>
-                            <div class="col-lg-2 col-md-6">
-                                <button class="btn btn-primary w-100" onclick="buscarMovimientos()">
-                                    <i class="ri-search-line me-1"></i> Ver vida del producto
-                                </button>
-                            </div>
-                            <div class="col-lg-2 col-md-6 text-lg-end">
-                                <button class="btn btn-outline-success w-100 w-lg-auto" onclick="exportarExcel()" id="btnExportar" style="display:none;">
-                                    <i class="ri-file-excel-2-line me-1"></i> Exportar
-                                </button>
-                            </div>
+        <!-- ================= Buscador ================= -->
+        <div class="card tm-card mb-3">
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+                    <div class="col-lg-5 col-md-12 position-relative">
+                        <label class="form-label fw-semibold mb-1">
+                            <i class="ri-barcode-line me-1 text-primary"></i>SKU, código o nombre del artículo
+                        </label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text bg-white"><i class="ri-search-line text-muted"></i></span>
+                            <input type="text" id="inputSku" class="form-control" placeholder="Escanee o escriba…" autocomplete="off" autofocus>
+                            <button class="btn btn-primary px-4" onclick="buscarMovimientos()">Buscar</button>
+                        </div>
+                        <div id="listaAyudaProductos" class="list-group position-absolute shadow mt-1" style="z-index:1050; display:none; max-height:340px; overflow-y:auto; width:100%;"></div>
+                    </div>
+                    <div class="col-lg-2 col-md-3 col-6">
+                        <label class="form-label fw-semibold mb-1">Desde</label>
+                        <input type="date" id="inputFechaDesde" class="form-control">
+                    </div>
+                    <div class="col-lg-2 col-md-3 col-6">
+                        <label class="form-label fw-semibold mb-1">Hasta</label>
+                        <input type="date" id="inputFechaHasta" class="form-control">
+                    </div>
+                    <div class="col-lg-3 col-md-6">
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-light border flex-fill" onclick="limpiarFechas()" title="Ver toda la historia del producto">
+                                <i class="ri-history-line me-1"></i> Toda la historia
+                            </button>
+                            <button class="btn btn-outline-success" onclick="exportarExcel()" id="btnExportar" style="display:none;" title="Exportar el kardex que se está viendo">
+                                <i class="ri-file-excel-2-line"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -195,151 +353,215 @@
         <!-- Loader -->
         <div id="tmLoader" class="text-center py-5" style="display:none;">
             <div class="spinner-border text-primary" role="status"></div>
-            <p class="text-muted mt-2 mb-0">Reconstruyendo la vida del producto...</p>
+            <p class="text-muted mt-2 mb-0">Reconstruyendo la vida del producto…</p>
         </div>
 
         <!-- Estado inicial -->
-        <div id="tmInicial" class="card tm-search-card">
+        <div id="tmInicial" class="card tm-card">
             <div class="card-body tm-empty">
                 <i class="ri-barcode-line"></i>
-                <h5 class="text-muted">Busque un producto para ver su historia completa</h5>
-                <p class="mb-0">Ingrese un SKU o código de artículo. Verá su recorrido por todas las bodegas: dónde nació, cada traspaso, cada venta y cuánto queda hoy en cada sucursal.</p>
+                <h5 class="text-muted">Busque un artículo para ver su tarjeta</h5>
+                <p class="mb-0">Verá en este orden: <strong>1)</strong> la ficha del artículo,
+                   <strong>2)</strong> qué tallas hay en cada sucursal, <strong>3)</strong> cuándo llegó cada partida
+                   y <strong>4)</strong> todo su historial de vida.</p>
             </div>
         </div>
 
-        <!-- ===== RESULTADOS ===== -->
+        <!-- ================= RESULTADOS ================= -->
         <div id="tmResultados" style="display:none;">
 
-            <!-- Info del producto -->
-            <div class="row mb-3">
-                <div class="col-12">
-                    <div class="card border-0" style="box-shadow:var(--nexo-shadow-sm,0 1px 2px rgba(26,26,46,.05)); border-radius:12px;">
-                        <div class="card-body">
-                            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
-                                <div>
-                                    <h5 class="mb-1 fw-bold" id="pDescripcion">-</h5>
-                                    <div class="text-muted">
-                                        Código <span class="fw-semibold text-dark" id="pArticulo">-</span>
-                                        <span class="mx-2">·</span> <span id="pMarca">-</span>
-                                        <span class="mx-2">·</span> <span id="pColor">-</span>
-                                        <span class="mx-2">·</span> <span id="pCategoria">-</span>
-                                    </div>
-                                </div>
-                                <div class="text-end">
-                                    <div class="text-muted small">Precio venta</div>
-                                    <div class="fs-4 fw-bold text-success" id="pPrecio">-</div>
-                                </div>
-                            </div>
+            <!-- ---------- 1. FICHA DEL ARTÍCULO ---------- -->
+            <div class="tm-ficha mb-3 tm-seccion" id="secArticulo">
+                <div class="tm-ficha-top">
+                    <div class="tm-ficha-avatar"><i class="ri-price-tag-3-line"></i></div>
+                    <div class="flex-grow-1" style="min-width:240px;">
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                            <span class="tm-ficha-codigo" id="pArticulo">-</span>
+                            <h3 class="tm-ficha-nombre" id="pDescripcion">-</h3>
                         </div>
+                        <div class="d-flex flex-wrap gap-1">
+                            <span class="tm-attr"><i class="ri-award-line"></i><span id="pMarca">-</span></span>
+                            <span class="tm-attr"><i class="ri-palette-line"></i><span id="pColor">-</span></span>
+                            <span class="tm-attr"><i class="ri-folder-2-line"></i><span id="pCategoria">-</span></span>
+                            <span class="tm-attr"><i class="ri-hashtag"></i><span id="pSkus">-</span> SKU</span>
+                        </div>
+                    </div>
+                    <div class="tm-precio-box">
+                        <div class="tm-precio-lbl">Precio venta</div>
+                        <div class="tm-precio-val" id="pPrecio">-</div>
+                        <div class="tm-costo-val">Costo <span id="pCosto">-</span></div>
+                    </div>
+                </div>
+                <div class="tm-metricas">
+                    <div class="tm-metrica">
+                        <div class="tm-metrica-lbl"><i class="ri-stack-line"></i> Stock hoy</div>
+                        <div class="tm-metrica-val" id="mStock">0</div>
+                        <div class="tm-metrica-sub" id="mStockSub">-</div>
+                    </div>
+                    <div class="tm-metrica">
+                        <div class="tm-metrica-lbl"><i class="ri-store-3-line"></i> Sucursales con stock</div>
+                        <div class="tm-metrica-val" id="mSucursales">0</div>
+                        <div class="tm-metrica-sub" id="mSucursalesSub">-</div>
+                    </div>
+                    <div class="tm-metrica">
+                        <div class="tm-metrica-lbl"><i class="ri-ruler-line"></i> Tallas con stock</div>
+                        <div class="tm-metrica-val" id="mTallas">0</div>
+                        <div class="tm-metrica-sub" id="mTallasSub">-</div>
+                    </div>
+                    <div class="tm-metrica">
+                        <div class="tm-metrica-lbl"><i class="ri-inbox-archive-line"></i> Última llegada</div>
+                        <div class="tm-metrica-val" id="mLlegada">-</div>
+                        <div class="tm-metrica-sub" id="mLlegadaSub">-</div>
+                    </div>
+                    <div class="tm-metrica">
+                        <div class="tm-metrica-lbl"><i class="ri-shopping-bag-3-line"></i> Última venta</div>
+                        <div class="tm-metrica-val" id="mVenta">-</div>
+                        <div class="tm-metrica-sub" id="mVentaSub">-</div>
                     </div>
                 </div>
             </div>
 
-            <!-- KPIs -->
-            <div class="row g-3 mb-3" id="tmKpis">
-                <div class="col-xl-3 col-md-6">
-                    <div class="card tm-kpi h-100"><div class="card-body d-flex align-items-center gap-3">
-                        <div class="tm-kpi-icon" style="background:#e9f0ff;color:#405189;"><i class="ri-stack-line"></i></div>
-                        <div><div class="tm-kpi-label">Stock actual total</div><div class="tm-kpi-value" id="kpiStock">0</div>
-                        <div class="small text-muted" id="kpiBodegas">en 0 bodegas</div></div>
-                    </div></div>
-                </div>
-                <div class="col-xl-3 col-md-6">
-                    <div class="card tm-kpi h-100"><div class="card-body d-flex align-items-center gap-3">
-                        <div class="tm-kpi-icon" style="background:#e8f7f2;color:#0a9;"><i class="ri-login-circle-line"></i></div>
-                        <div><div class="tm-kpi-label">Total entradas</div><div class="tm-kpi-value text-success" id="kpiEntradas">0</div></div>
-                    </div></div>
-                </div>
-                <div class="col-xl-3 col-md-6">
-                    <div class="card tm-kpi h-100"><div class="card-body d-flex align-items-center gap-3">
-                        <div class="tm-kpi-icon" style="background:#fdecec;color:#e14b4b;"><i class="ri-logout-circle-line"></i></div>
-                        <div><div class="tm-kpi-label">Total salidas</div><div class="tm-kpi-value text-danger" id="kpiSalidas">0</div>
-                        <div class="small text-muted" id="kpiVendido">0 vendidos</div></div>
-                    </div></div>
-                </div>
-                <div class="col-xl-3 col-md-6">
-                    <div class="card tm-kpi h-100"><div class="card-body d-flex align-items-center gap-3">
-                        <div class="tm-kpi-icon" style="background:#fff4d6;color:#b8860b;"><i class="ri-truck-line"></i></div>
-                        <div><div class="tm-kpi-label">Traspasos entre bodegas</div><div class="tm-kpi-value" id="kpiTraspasos">0</div>
-                        <div class="small text-muted" id="kpiRango">-</div></div>
-                    </div></div>
+            <!-- ---------- Navegación entre secciones ---------- -->
+            <div class="tm-nav mb-3" id="tmNav">
+                <button class="tm-nav-btn active" data-goto="secArticulo">
+                    <span class="tm-nav-n">1</span> <span class="tm-nav-txt">Artículo</span>
+                </button>
+                <button class="tm-nav-btn" data-goto="secTallas">
+                    <span class="tm-nav-n">2</span> <span class="tm-nav-txt">Tallas por sucursal</span>
+                </button>
+                <button class="tm-nav-btn" data-goto="secLlegadas">
+                    <span class="tm-nav-n">3</span> <span class="tm-nav-txt">Llegadas</span>
+                </button>
+                <button class="tm-nav-btn" data-goto="secHistorial">
+                    <span class="tm-nav-n">4</span> <span class="tm-nav-txt">Historial de vida</span>
+                </button>
+                <span class="ms-auto small text-muted d-none d-lg-inline" id="tmRangoInfo"></span>
+            </div>
+
+            <!-- ---------- 2. TALLAS EN TODAS LAS SUCURSALES ---------- -->
+            <div class="card tm-card mb-3 tm-seccion" id="secTallas">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                        <div>
+                            <h5 class="tm-card-title"><span class="tm-step">2</span> Tallas en todas las sucursales</h5>
+                            <div class="tm-card-hint">Stock de hoy. Haga clic en una celda para ver el kardex de esa bodega y talla.</div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-3 align-items-center">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" id="chkOcultarSucVacias" checked>
+                                <label class="form-check-label small" for="chkOcultarSucVacias">Ocultar sucursales en cero</label>
+                            </div>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" id="chkOcultarTallasVacias">
+                                <label class="form-check-label small" for="chkOcultarTallasVacias">Ocultar tallas sin stock</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="avisoMiSucursal"></div>
+
+                    <div class="mb-3">
+                        <div class="text-muted small fw-semibold mb-1">Total por talla (todas las sucursales)</div>
+                        <div class="tm-talla-resumen" id="resumenTallas"></div>
+                    </div>
+
+                    <div class="tm-matriz-wrap">
+                        <table class="tm-matriz" id="tablaMatriz">
+                            <thead><tr id="matrizHead"></tr></thead>
+                            <tbody id="matrizBody"></tbody>
+                            <tfoot><tr id="matrizFoot"></tr></tfoot>
+                        </table>
+                    </div>
+                    <div class="small text-muted mt-2" id="matrizNota"></div>
                 </div>
             </div>
 
-            <!-- Distribución por bodega -->
-            <div class="row mb-3">
-                <div class="col-12">
-                    <div class="card border-0" style="box-shadow:var(--nexo-shadow-sm,0 1px 2px rgba(26,26,46,.05)); border-radius:12px;">
-                        <div class="card-header bg-white border-0 pb-0">
-                            <h5 class="card-title mb-0"><i class="ri-store-3-line me-2 text-primary"></i>Distribución de stock por bodega <span class="text-muted small">(hoy)</span></h5>
+            <!-- ---------- 3. LLEGADAS ---------- -->
+            <div class="card tm-card mb-3 tm-seccion" id="secLlegadas">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                        <div>
+                            <h5 class="tm-card-title"><span class="tm-step">3</span> Llegadas de mercadería</h5>
+                            <div class="tm-card-hint">Cada vez que entró producto a una bodega, con las tallas que vinieron.</div>
                         </div>
-                        <div class="card-body">
-                            <div class="row g-3" id="distribucionBodegas"></div>
+                        <div class="btn-group btn-group-sm" id="filtroLlegadas" role="group">
+                            <button type="button" class="btn btn-outline-primary active" data-tipo="">Todas</button>
+                            <button type="button" class="btn btn-outline-primary" data-tipo="COMPRA">Compras</button>
+                            <button type="button" class="btn btn-outline-primary" data-tipo="TRASPASO">Traspasos</button>
+                            <button type="button" class="btn btn-outline-primary" data-tipo="OTROS">Otros</button>
                         </div>
+                    </div>
+                    <div class="tm-llegadas" id="listaLlegadas"></div>
+                    <div class="text-center mt-3" id="masLlegadasBox" style="display:none;">
+                        <button class="btn btn-light border btn-sm" onclick="mostrarMasLlegadas()">
+                            <i class="ri-arrow-down-line me-1"></i> Ver más llegadas
+                            <span class="text-muted" id="masLlegadasResto"></span>
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <!-- Tabs: Timeline / Kardex -->
-            <div class="row">
-                <div class="col-12">
-                    <div class="card border-0" style="box-shadow:var(--nexo-shadow-sm,0 1px 2px rgba(26,26,46,.05)); border-radius:12px;">
-                        <div class="card-header bg-white border-0">
-                            <ul class="nav nav-tabs card-header-tabs tm-tabs" role="tablist">
-                                <li class="nav-item"><button class="nav-link active" data-tab="timeline"><i class="ri-time-line me-1"></i>Línea de vida</button></li>
-                                <li class="nav-item"><button class="nav-link" data-tab="kardex"><i class="ri-table-line me-1"></i>Kardex detallado</button></li>
-                            </ul>
+            <!-- ---------- 4. HISTORIAL DE VIDA ---------- -->
+            <div class="card tm-card tm-seccion" id="secHistorial">
+                <div class="card-body">
+                    <div class="mb-2">
+                        <h5 class="tm-card-title"><span class="tm-step">4</span> Historial de vida</h5>
+                        <div class="tm-card-hint">La línea de tiempo resume los hitos; el kardex muestra movimiento por movimiento.</div>
+                    </div>
+
+                    <ul class="nav nav-tabs tm-tabs mb-3" role="tablist">
+                        <li class="nav-item"><button class="nav-link active" data-tab="timeline"><i class="ri-time-line me-1"></i>Línea de vida</button></li>
+                        <li class="nav-item"><button class="nav-link" data-tab="kardex"><i class="ri-table-line me-1"></i>Kardex detallado</button></li>
+                    </ul>
+
+                    <!-- Panel Línea de vida -->
+                    <div id="panelTimeline">
+                        <div id="timelineAviso"></div>
+                        <div class="tm-timeline" id="timelineContainer"></div>
+                    </div>
+
+                    <!-- Panel Kardex -->
+                    <div id="panelKardex" style="display:none;">
+                        <div class="tm-filter-bar mb-3">
+                            <select id="filtroBodega" class="form-select form-select-sm"><option value="">Todas las bodegas</option></select>
+                            <select id="filtroTalla" class="form-select form-select-sm"><option value="">Todas las tallas</option></select>
+                            <select id="filtroTipo" class="form-select form-select-sm">
+                                <option value="">Todos los tipos</option>
+                                <option value="INGRESO">Ingresos</option>
+                                <option value="EGRESO">Egresos</option>
+                                <option value="TRASPASO">Traspasos</option>
+                                <option value="AJUSTE">Ajustes</option>
+                                <option value="DEVOLUCION">Devoluciones</option>
+                                <option value="PERDIDA">Pérdidas</option>
+                            </select>
+                            <button class="btn btn-sm btn-light border" onclick="limpiarFiltrosKardex()">
+                                <i class="ri-filter-off-line me-1"></i>Limpiar
+                            </button>
+                            <div class="form-check form-switch mb-0 ms-1">
+                                <input class="form-check-input" type="checkbox" id="chkAgrupar" checked>
+                                <label class="form-check-label small" for="chkAgrupar">Agrupar por bodega · talla</label>
+                            </div>
+                            <span class="text-muted small ms-auto" id="kardexContador"></span>
                         </div>
-                        <div class="card-body">
-
-                            <!-- Panel Timeline -->
-                            <div id="panelTimeline">
-                                <div id="timelineAviso"></div>
-                                <div class="tm-timeline" id="timelineContainer"></div>
-                            </div>
-
-                            <!-- Panel Kardex -->
-                            <div id="panelKardex" style="display:none;">
-                                <div class="tm-filter-bar mb-3">
-                                    <select id="filtroBodega" class="form-select form-select-sm"><option value="">Todas las bodegas</option></select>
-                                    <select id="filtroTalla" class="form-select form-select-sm"><option value="">Todas las tallas</option></select>
-                                    <select id="filtroTipo" class="form-select form-select-sm">
-                                        <option value="">Todos los tipos</option>
-                                        <option value="INGRESO">Ingresos</option>
-                                        <option value="EGRESO">Egresos</option>
-                                        <option value="TRASPASO">Traspasos</option>
-                                        <option value="AJUSTE">Ajustes</option>
-                                        <option value="DEVOLUCION">Devoluciones</option>
-                                        <option value="PERDIDA">Pérdidas</option>
-                                    </select>
-                                    <div class="form-check form-switch mb-0 ms-1">
-                                        <input class="form-check-input" type="checkbox" id="chkAgrupar" checked>
-                                        <label class="form-check-label small" for="chkAgrupar">Agrupar por bodega · talla</label>
-                                    </div>
-                                    <span class="text-muted small ms-auto" id="kardexContador"></span>
-                                </div>
-                                <div class="alert alert-light border small mb-3 py-2">
-                                    <i class="ri-information-line me-1 text-primary"></i>
-                                    El <strong>saldo</strong> es acumulado por cada combinación de <strong>bodega + talla</strong> (cada SKU lleva su propia cuenta). Filtre por bodega y talla para leer una serie limpia.
-                                </div>
-                                <div id="kardexAvisos"></div>
-                                <div class="table-responsive">
-                                    <table class="table table-hover align-middle mb-0" id="tablaMovimientos">
-                                        <thead class="table-light">
-                                            <tr>
-                                                <th>Fecha</th><th>Hora</th><th>Bodega</th><th>Talla</th>
-                                                <th>Tipo</th><th>Concepto</th>
-                                                <th class="text-end">Entrada</th><th class="text-end">Salida</th>
-                                                <th class="text-end" title="Saldo acumulado real de la serie (bodega · talla) después de ese movimiento">Saldo serie</th>
-                                                <th class="text-end">Costo</th><th class="text-end">Precio</th>
-                                                <th>Origen → Destino</th><th>Responsable</th><th>Referencia</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="tbodyMovimientos"></tbody>
-                                    </table>
-                                </div>
-                            </div>
-
+                        <div class="alert alert-light border small mb-3 py-2">
+                            <i class="ri-information-line me-1 text-primary"></i>
+                            El <strong>saldo</strong> es acumulado por cada combinación de <strong>bodega + talla</strong> (cada SKU lleva su propia cuenta). Filtre por bodega y talla para leer una serie limpia.
+                        </div>
+                        <div id="kardexAvisos"></div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" id="tablaMovimientos">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Fecha</th><th>Hora</th><th>Bodega</th><th>Talla</th>
+                                        <th>Tipo</th><th>Concepto</th>
+                                        <th class="text-end">Entrada</th><th class="text-end">Salida</th>
+                                        <th class="text-end" title="Saldo acumulado real de la serie (bodega · talla) después de ese movimiento">Saldo serie</th>
+                                        <th class="text-end">Costo</th><th class="text-end">Precio</th>
+                                        <th>Origen → Destino</th><th>Responsable</th><th>Referencia</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyMovimientos"></tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -355,9 +577,15 @@
 <script>
 const CSRF_TOKEN = '{{ csrf_token }}';
 const SUCURSAL_ACTUAL_ID = {{ sucursal_id|default:"null" }};
+
 let movimientosData = [];
 let movimientosFiltrados = [];      // lo que se está viendo (y lo que se exporta)
 let aperturasData = [];             // saldo previo por serie cuando hay filtro "Desde"
+let distribucionData = [];          // stock actual por bodega (base de la matriz)
+let llegadasData = [];
+let llegadasTipo = '';              // filtro activo de la sección Llegadas
+let llegadasVisibles = 12;          // paginación simple de las tarjetas de llegada
+let tallaActiva = '';               // columna resaltada en la matriz
 let rangoConsultado = { desde: '', hasta: '' };
 let ayudaTimer = null;
 let ayudaAbortController = null;
@@ -371,7 +599,38 @@ function escapeHtml(value) {
     }[char]));
 }
 
+/* Las tallas chilenas son texto ('7,5', '38', 'XL'): numéricas en orden natural
+   primero y las alfabéticas al final. Espejo de utils_tallas.clave_orden_talla. */
+function ordenarTallas(tallas) {
+    const num = t => {
+        const v = parseFloat(String(t).replace(',', '.'));
+        return isNaN(v) ? null : v;
+    };
+    return tallas.slice().sort((a, b) => {
+        const na = num(a), nb = num(b);
+        if (na !== null && nb !== null) return na - nb;
+        if (na !== null) return -1;
+        if (nb !== null) return 1;
+        return String(a).localeCompare(String(b));
+    });
+}
+
+function textoDias(dias) {
+    if (dias === null || dias === undefined) return '';
+    if (dias <= 0) return 'hoy';
+    if (dias === 1) return 'ayer';
+    if (dias < 30) return `hace ${dias} días`;
+    if (dias < 365) return `hace ${Math.round(dias / 30)} meses`;
+    return `hace ${(dias / 365).toFixed(1)} años`;
+}
+
 /* ================= Búsqueda principal ================= */
+function limpiarFechas() {
+    document.getElementById('inputFechaDesde').value = '';
+    document.getElementById('inputFechaHasta').value = '';
+    if (document.getElementById('inputSku').value.trim()) buscarMovimientos();
+}
+
 function buscarMovimientos() {
     const sku = document.getElementById('inputSku').value.trim();
     if (!sku) { document.getElementById('inputSku').focus(); return; }
@@ -396,15 +655,24 @@ function buscarMovimientos() {
         }
         movimientosData = data.movimientos;
         aperturasData = data.aperturas || [];
+        distribucionData = data.distribucion || [];
+        llegadasData = data.llegadas || [];
+        llegadasVisibles = 12;
+        tallaActiva = '';
         rangoConsultado = data.rango || { desde: desde, hasta: hasta };
-        renderProducto(data.producto, data.resumen);
-        renderKpis(data.producto, data.resumen);
-        renderDistribucion(data.distribucion, data.sucursal_actual_id);
+
+        renderFicha(data.producto, data.resumen, data.distribucion);
+        renderRangoInfo(data.resumen);
+        renderMatriz();
+        renderLlegadas();
         renderTimeline(data.timeline, data.timeline_omitidos);
         poblarFiltros(data.filtros);
         renderTabla(movimientosData);
+
         document.getElementById('tmResultados').style.display = '';
         document.getElementById('btnExportar').style.display = '';
+        // URL compartible: quien reciba el enlace abre la misma tarjeta.
+        history.replaceState(null, '', `?sku=${encodeURIComponent(sku)}`);
     }).catch(e => {
         document.getElementById('tmLoader').style.display = 'none';
         document.getElementById('tmInicial').style.display = '';
@@ -451,58 +719,288 @@ function buscarAyudaProductos() {
     }, 250);
 }
 
-/* ================= Render: producto / KPIs ================= */
-function renderProducto(p, r) {
+/* ================= 1. Ficha del artículo ================= */
+function renderFicha(p, r, dist) {
     document.getElementById('pDescripcion').textContent = p.descripcion || p.articulo;
     document.getElementById('pArticulo').textContent = p.articulo;
     document.getElementById('pMarca').textContent = p.marca;
     document.getElementById('pColor').textContent = p.color;
     document.getElementById('pCategoria').textContent = p.categoria;
+    document.getElementById('pSkus').textContent = p.num_skus;
     document.getElementById('pPrecio').textContent = fmtMoneda(p.precio_venta);
+    document.getElementById('pCosto').textContent = fmtMoneda(p.costo);
+
+    // Stock
+    document.getElementById('mStock').textContent = fmtNum(r.stock_actual);
+    document.getElementById('mStock').className = 'tm-metrica-val ' + (r.stock_actual > 0 ? 'ok' : 'bad');
+    document.getElementById('mStockSub').textContent = `${fmtNum(r.total_vendido)} vendidos en el período`;
+
+    // Sucursales con stock (de las que tienen registro del artículo)
+    const conStock = (dist || []).filter(b => b.stock_total > 0).length;
+    document.getElementById('mSucursales').textContent = conStock;
+    document.getElementById('mSucursalesSub').textContent = `de ${(dist || []).length} con ficha del artículo`;
+
+    // Tallas con stock
+    const totalPorTalla = totalesPorTalla();
+    const tallasTotales = Object.keys(totalPorTalla).length;
+    const tallasConStock = Object.values(totalPorTalla).filter(n => n > 0).length;
+    document.getElementById('mTallas').textContent = tallasConStock;
+    document.getElementById('mTallas').className = 'tm-metrica-val ' +
+        (tallasConStock === 0 ? 'bad' : (tallasConStock < tallasTotales / 2 ? 'warn' : 'ok'));
+    document.getElementById('mTallasSub').textContent = `de ${tallasTotales} tallas del artículo`;
+
+    // Última llegada
+    const elLleg = document.getElementById('mLlegada');
+    if (r.ultima_llegada) {
+        elLleg.textContent = r.ultima_llegada;
+        elLleg.className = 'tm-metrica-val ' + (r.ultima_llegada_dias <= 30 ? 'ok' : '');
+        document.getElementById('mLlegadaSub').textContent =
+            `${textoDias(r.ultima_llegada_dias)} · ${r.ultima_llegada_bodega}`;
+    } else {
+        elLleg.textContent = '—';
+        elLleg.className = 'tm-metrica-val';
+        document.getElementById('mLlegadaSub').textContent = 'Sin llegadas en el período';
+    }
+
+    // Última venta
+    const elVta = document.getElementById('mVenta');
+    if (r.ultima_venta) {
+        elVta.textContent = r.ultima_venta;
+        elVta.className = 'tm-metrica-val ' +
+            (r.ultima_venta_dias <= 30 ? 'ok' : (r.ultima_venta_dias <= 90 ? 'warn' : 'bad'));
+        document.getElementById('mVentaSub').textContent = textoDias(r.ultima_venta_dias);
+    } else {
+        elVta.textContent = '—';
+        elVta.className = 'tm-metrica-val bad';
+        document.getElementById('mVentaSub').textContent = 'Sin ventas en el período';
+    }
 }
 
-function renderKpis(p, r) {
-    document.getElementById('kpiStock').textContent = fmtNum(r.stock_actual);
-    document.getElementById('kpiBodegas').textContent = `en ${p.num_bodegas} bodega(s) · ${p.num_skus} SKU(s)`;
-    document.getElementById('kpiEntradas').textContent = '+' + fmtNum(r.total_entradas);
-    document.getElementById('kpiSalidas').textContent = '−' + fmtNum(r.total_salidas);
-    document.getElementById('kpiVendido').textContent = fmtNum(r.total_vendido) + ' vendidos';
-    document.getElementById('kpiTraspasos').textContent = fmtNum(r.traspasos);
-    document.getElementById('kpiRango').textContent =
-        (r.primer_movimiento && r.primer_movimiento !== '-') ? `${r.primer_movimiento} → ${r.ultimo_movimiento}` : 'Sin movimientos';
+function renderRangoInfo(r) {
+    const rango = (rangoConsultado.desde || rangoConsultado.hasta)
+        ? `${rangoConsultado.desde || 'inicio'} → ${rangoConsultado.hasta || 'hoy'}`
+        : 'toda la historia';
+    document.getElementById('tmRangoInfo').textContent =
+        `${fmtNum(r.total_movimientos)} movimientos · ${rango}`;
 }
 
-/* ================= Render: distribución por bodega ================= */
-function renderDistribucion(dist, sucursalActualId) {
-    const cont = document.getElementById('distribucionBodegas');
-    if (!dist || !dist.length) {
-        cont.innerHTML = '<div class="col-12 tm-empty py-3"><i class="ri-inbox-line"></i>Sin bodegas con este producto</div>';
+/* ================= 2. Matriz talla × sucursal ================= */
+function totalesPorTalla() {
+    const totales = {};
+    distribucionData.forEach(b => {
+        b.tallas.forEach(t => { totales[t.talla] = (totales[t.talla] || 0) + (t.stock || 0); });
+    });
+    return totales;
+}
+
+function claseCelda(n) {
+    if (n <= 0) return 'n0';
+    if (n <= 2) return 'n1';
+    if (n <= 5) return 'n2';
+    if (n <= 12) return 'n3';
+    return 'n4';
+}
+
+function renderMatriz() {
+    const cont = document.getElementById('matrizBody');
+    if (!distribucionData.length) {
+        document.getElementById('matrizHead').innerHTML = '';
+        document.getElementById('matrizFoot').innerHTML = '';
+        cont.innerHTML = '<tr><td class="tm-empty"><i class="ri-inbox-line"></i>Sin bodegas con este artículo</td></tr>';
+        document.getElementById('resumenTallas').innerHTML = '';
         return;
     }
-    cont.innerHTML = dist.map(b => {
-        const esActual = sucursalActualId != null && String(b.bodega_id) === String(sucursalActualId);
-        const chips = b.tallas.map(t =>
-            `<span class="tm-talla-chip ${t.stock <= 0 ? 'is-zero' : ''}">${escapeHtml(t.talla)} <span class="tm-talla-n">${t.stock}</span></span>`
-        ).join('');
+
+    const ocultarSucVacias = document.getElementById('chkOcultarSucVacias').checked;
+    const ocultarTallasVacias = document.getElementById('chkOcultarTallasVacias').checked;
+    const totales = totalesPorTalla();
+
+    let tallas = ordenarTallas(Object.keys(totales));
+    if (ocultarTallasVacias) tallas = tallas.filter(t => (totales[t] || 0) > 0);
+
+    let filas = distribucionData;
+    const sucVacias = distribucionData.filter(b => (b.stock_total || 0) <= 0).length;
+    if (ocultarSucVacias) filas = filas.filter(b => (b.stock_total || 0) > 0);
+
+    // --- Resumen: una pastilla por talla con el total de todas las sucursales
+    document.getElementById('resumenTallas').innerHTML = tallas.map(t => {
+        const n = totales[t] || 0;
+        return `<div class="tm-talla-tot ${n === 0 ? 'vacia' : ''} ${tallaActiva === t ? 'activa' : ''}"
+                     data-talla="${escapeHtml(t)}" title="Talla ${escapeHtml(t)}: ${n} u en total">
+                    <div class="t">${escapeHtml(t)}</div><div class="n">${n}</div>
+                </div>`;
+    }).join('') || '<span class="text-muted small">Sin tallas con stock</span>';
+
+    // --- Encabezado
+    let head = '<th class="tm-col-suc">Sucursal</th>';
+    tallas.forEach(t => {
+        head += `<th data-talla="${escapeHtml(t)}" class="${tallaActiva === t ? 'tm-col-activa' : ''}"
+                     title="Ver solo la talla ${escapeHtml(t)}">${escapeHtml(t)}</th>`;
+    });
+    head += '<th style="border-left:2px solid #e3e6ee;">Total</th>';
+    document.getElementById('matrizHead').innerHTML = head;
+
+    // --- Cuerpo
+    let body = '';
+    filas.forEach(b => {
+        const esActual = SUCURSAL_ACTUAL_ID != null && String(b.bodega_id) === String(SUCURSAL_ACTUAL_ID);
+        const porTalla = {};
+        b.tallas.forEach(t => { porTalla[t.talla] = (porTalla[t.talla] || 0) + (t.stock || 0); });
+
+        let fila = `<td class="tm-col-suc" data-bodega="${b.bodega_id}" title="Ver el kardex completo de ${escapeHtml(b.bodega)}">
+            <span class="tm-suc-nombre">${escapeHtml(b.bodega)}</span>
+            ${b.es_cd ? '<span class="tm-tag tm-tag-cd">CD</span>' : ''}
+            ${esActual ? '<span class="tm-tag tm-tag-aqui">aquí</span>' : ''}
+        </td>`;
+        tallas.forEach(t => {
+            const n = porTalla[t] || 0;
+            fila += `<td class="${tallaActiva === t ? 'tm-col-activa' : ''}">
+                <span class="tm-cel ${claseCelda(n)}" data-bodega="${b.bodega_id}" data-talla="${escapeHtml(t)}"
+                      title="${escapeHtml(b.bodega)} · talla ${escapeHtml(t)}: ${n} u — clic para ver su kardex">${n}</span>
+            </td>`;
+        });
+        fila += `<td style="border-left:2px solid #eef0f4;"><span class="tm-suc-total">${fmtNum(b.stock_total)}</span></td>`;
+        body += `<tr class="${b.stock_total <= 0 ? 'tm-fila-cero' : ''}">${fila}</tr>`;
+    });
+    cont.innerHTML = body || '<tr><td class="tm-empty">Ninguna sucursal tiene stock de este artículo</td></tr>';
+
+    // --- Pie con los totales
+    let foot = '<td class="tm-col-suc">TOTAL</td>';
+    let gran = 0;
+    tallas.forEach(t => {
+        const n = totales[t] || 0;
+        gran += n;
+        foot += `<td class="${tallaActiva === t ? 'tm-col-activa' : ''}">${n}</td>`;
+    });
+    foot += `<td style="border-left:2px solid #e3e6ee;">${fmtNum(gran)}</td>`;
+    document.getElementById('matrizFoot').innerHTML = foot;
+
+    // --- Nota de lo que se está ocultando
+    const notas = [];
+    if (ocultarSucVacias && sucVacias) notas.push(`${sucVacias} sucursal(es) en cero ocultas`);
+    if (ocultarTallasVacias) {
+        const tallasVacias = Object.values(totales).filter(n => n <= 0).length;
+        if (tallasVacias) notas.push(`${tallasVacias} talla(s) sin stock ocultas`);
+    }
+    document.getElementById('matrizNota').textContent = notas.length ? notas.join(' · ') : '';
+
+    renderAvisoMiSucursal(totales);
+}
+
+/* "En mi sucursal falta la 38, pero hay 12 en otras": la pregunta más común
+   del mesón. Solo se muestra si la sesión tiene sucursal actual. */
+function renderAvisoMiSucursal(totales) {
+    const caja = document.getElementById('avisoMiSucursal');
+    caja.innerHTML = '';
+    if (SUCURSAL_ACTUAL_ID == null) return;
+
+    const mia = distribucionData.find(b => String(b.bodega_id) === String(SUCURSAL_ACTUAL_ID));
+    if (!mia) return;
+
+    const porTalla = {};
+    mia.tallas.forEach(t => { porTalla[t.talla] = (porTalla[t.talla] || 0) + (t.stock || 0); });
+
+    const faltan = ordenarTallas(Object.keys(totales))
+        .filter(t => (porTalla[t] || 0) <= 0 && (totales[t] || 0) > 0);
+    if (!faltan.length) return;
+
+    const chips = faltan.map(t =>
+        `<span class="tm-lt"><b>${escapeHtml(t)}</b> ${totales[t]} u en otras</span>`
+    ).join(' ');
+    caja.innerHTML = `<div class="alert alert-warning py-2 small mb-3">
+        <i class="ri-error-warning-line me-1"></i>
+        En <strong>${escapeHtml(mia.bodega)}</strong> no queda stock de
+        <strong>${faltan.length}</strong> talla(s) que sí hay en otras sucursales:
+        <div class="d-flex flex-wrap gap-1 mt-2">${chips}</div>
+    </div>`;
+}
+
+/* Clic en la matriz → salta al kardex ya filtrado. */
+function irAlKardex(bodegaId, talla) {
+    document.getElementById('filtroBodega').value = bodegaId ? String(bodegaId) : '';
+    document.getElementById('filtroTalla').value = talla || '';
+    document.getElementById('filtroTipo').value = '';
+    activarTab('kardex');
+    aplicarFiltrosKardex();
+    document.getElementById('secHistorial').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ================= 3. Llegadas ================= */
+function llegadasFiltradas() {
+    if (!llegadasTipo) return llegadasData;
+    if (llegadasTipo === 'OTROS') {
+        return llegadasData.filter(l => l.tipo !== 'COMPRA' && l.tipo !== 'TRASPASO');
+    }
+    return llegadasData.filter(l => l.tipo === llegadasTipo);
+}
+
+function renderLlegadas() {
+    const cont = document.getElementById('listaLlegadas');
+    const lista = llegadasFiltradas();
+
+    if (!lista.length) {
+        cont.innerHTML = `<div class="tm-empty" style="grid-column:1/-1;">
+            <i class="ri-inbox-unarchive-line"></i>Sin llegadas registradas para este filtro</div>`;
+        document.getElementById('masLlegadasBox').style.display = 'none';
+        return;
+    }
+
+    cont.innerHTML = lista.slice(0, llegadasVisibles).map(l => {
+        const chips = l.tallas.map(t =>
+            `<span class="tm-lt">${escapeHtml(t.talla)} <b>${t.cantidad}</b></span>`
+        ).join(' ');
+        const origen = l.origen
+            ? `<span><i class="ri-arrow-left-line text-muted"></i> desde <span class="b">${escapeHtml(l.origen)}</span></span>`
+            : '';
+        const doc = l.documento
+            ? `<span><i class="ri-file-text-line me-1"></i>${escapeHtml(l.documento)}</span>` : '';
+        const resp = (l.responsable && l.responsable !== 'Sistema')
+            ? `<span><i class="ri-user-line me-1"></i>${escapeHtml(l.responsable)}</span>` : '';
+        const costo = l.costo_unitario
+            ? `<span><i class="ri-price-tag-3-line me-1"></i>costo ${fmtMoneda(l.costo_unitario)}</span>` : '';
+
         return `
-        <div class="col-xl-3 col-md-4 col-sm-6">
-            <div class="tm-bodega-card ${b.es_cd ? 'is-cd' : ''} ${esActual ? 'is-actual' : ''}">
-                <div class="d-flex justify-content-between align-items-start mb-1">
-                    <div class="tm-bodega-name">
-                        <i class="ri-store-3-line me-1 text-muted"></i>${escapeHtml(b.bodega)}
-                        ${esActual ? '<span class="badge bg-primary-subtle text-primary ms-1">Aquí</span>' : ''}
+        <div class="tm-llegada" style="border-left-color:${l.color};">
+            <div class="tm-llegada-top">
+                <div class="tm-llegada-ico" style="background:${l.color};"><i class="${l.icono}"></i></div>
+                <div style="min-width:0;">
+                    <div class="tm-llegada-titulo">${escapeHtml(l.titulo)}</div>
+                    <div class="tm-llegada-fecha">
+                        ${escapeHtml(l.fecha)}${l.hora ? ' · ' + escapeHtml(l.hora) : ''}
+                        <span class="tm-dias ${l.dias !== null && l.dias <= 30 ? 'reciente' : ''}">${textoDias(l.dias)}</span>
                     </div>
-                    ${b.es_cd ? '<span class="badge bg-success-subtle text-success">CD</span>' : ''}
                 </div>
-                <div class="tm-bodega-stock">${fmtNum(b.stock_total)}</div>
-                <div class="text-muted small mb-2">unidades</div>
-                <div>${chips}</div>
+                <div class="tm-llegada-uds">
+                    <div class="n">+${fmtNum(l.unidades)}</div>
+                    <div class="u">unidades</div>
+                </div>
+            </div>
+            <div class="tm-llegada-ruta">
+                <span><i class="ri-store-3-line text-muted"></i> llegó a <span class="b">${escapeHtml(l.bodega)}</span></span>
+                ${origen}
+            </div>
+            <div class="d-flex flex-wrap gap-1 mb-2">${chips}</div>
+            <div class="tm-llegada-meta">${doc}${resp}${costo}</div>
+            <div class="mt-2">
+                <button class="btn btn-sm btn-light border py-0 px-2" style="font-size:.72rem;"
+                        onclick="irAlKardex(${l.bodega_id}, '')">
+                    <i class="ri-table-line me-1"></i>Ver kardex de ${escapeHtml(l.bodega)}
+                </button>
             </div>
         </div>`;
     }).join('');
+
+    const resto = lista.length - llegadasVisibles;
+    document.getElementById('masLlegadasBox').style.display = resto > 0 ? '' : 'none';
+    document.getElementById('masLlegadasResto').textContent = resto > 0 ? `(${resto} más)` : '';
 }
 
-/* ================= Render: timeline ================= */
+function mostrarMasLlegadas() {
+    llegadasVisibles += 12;
+    renderLlegadas();
+}
+
+/* ================= 4. Línea de vida ================= */
 function renderTimeline(timeline, omitidos) {
     const cont = document.getElementById('timelineContainer');
     const avisoBox = document.getElementById('timelineAviso');
@@ -514,7 +1012,6 @@ function renderTimeline(timeline, omitidos) {
         cont.innerHTML = '<div class="tm-empty"><i class="ri-time-line"></i>Sin hitos para el rango seleccionado</div>';
         return;
     }
-    // Línea de vida con separadores de mes y tarjetas coloreadas por tipo de hito.
     const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                    'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
     let html = '';
@@ -542,7 +1039,7 @@ function renderTimeline(timeline, omitidos) {
     cont.innerHTML = html;
 }
 
-/* ================= Filtros del kardex ================= */
+/* ================= 4. Kardex ================= */
 function poblarFiltros(filtros) {
     const selBodega = document.getElementById('filtroBodega');
     const selTalla = document.getElementById('filtroTalla');
@@ -564,7 +1061,7 @@ function aplicarFiltrosKardex() {
     const fb = document.getElementById('filtroBodega').value;
     const ft = document.getElementById('filtroTalla').value;
     const fTipo = document.getElementById('filtroTipo').value;
-    let filtrados = movimientosData.filter(m =>
+    const filtrados = movimientosData.filter(m =>
         (!fb || String(m.bodega_id) === fb) &&
         (!ft || m.talla === ft) &&
         coincideTipo(m, fTipo)
@@ -572,7 +1069,13 @@ function aplicarFiltrosKardex() {
     renderTabla(filtrados);
 }
 
-/* ================= Render: tabla kardex ================= */
+function limpiarFiltrosKardex() {
+    document.getElementById('filtroBodega').value = '';
+    document.getElementById('filtroTalla').value = '';
+    document.getElementById('filtroTipo').value = '';
+    aplicarFiltrosKardex();
+}
+
 function tipoBadge(m) {
     if (m.es_traspaso) return 'tm-badge-traspaso';
     if (m.es_entrada) return 'tm-badge-entrada';
@@ -606,7 +1109,7 @@ function filaApertura(a, colspanIzq) {
 }
 
 /* Avisos del kardex: apertura y filtros que rompen la continuidad de la serie. */
-function renderAvisosKardex(movimientos) {
+function renderAvisosKardex() {
     const caja = document.getElementById('kardexAvisos');
     if (!caja) return;
     let html = '';
@@ -629,7 +1132,7 @@ function renderTabla(movimientos) {
     const tbody = document.getElementById('tbodyMovimientos');
     const agrupar = document.getElementById('chkAgrupar').checked;
     movimientosFiltrados = movimientos;   // lo que se exporta
-    renderAvisosKardex(movimientos);
+    renderAvisosKardex();
     const entradas = movimientos.filter(m => m.cantidad > 0).reduce((s, m) => s + m.cantidad, 0);
     const salidas = movimientos.filter(m => m.cantidad < 0).reduce((s, m) => s + Math.abs(m.cantidad), 0);
     document.getElementById('kardexContador').textContent =
@@ -769,6 +1272,15 @@ function exportarExcel() {
     URL.revokeObjectURL(a.href);
 }
 
+/* ================= Tabs e interacciones ================= */
+function activarTab(tab) {
+    document.querySelectorAll('.tm-tabs .nav-link').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === tab);
+    });
+    document.getElementById('panelTimeline').style.display = tab === 'timeline' ? '' : 'none';
+    document.getElementById('panelKardex').style.display = tab === 'kardex' ? '' : 'none';
+}
+
 /* ================= Eventos ================= */
 document.getElementById('inputSku').addEventListener('keydown', e => { if (e.key === 'Enter') { ocultarListaAyuda(); buscarMovimientos(); } });
 document.getElementById('inputSku').addEventListener('input', buscarAyudaProductos);
@@ -782,19 +1294,70 @@ document.getElementById('listaAyudaProductos').addEventListener('click', e => {
 document.addEventListener('click', e => {
     if (!e.target.closest('#inputSku') && !e.target.closest('#listaAyudaProductos')) ocultarListaAyuda();
 });
+
+/* Matriz: celda → kardex de esa bodega+talla; nombre de sucursal → toda la bodega;
+   encabezado o pastilla de talla → resalta la columna. */
+document.getElementById('tablaMatriz').addEventListener('click', e => {
+    const celda = e.target.closest('.tm-cel');
+    if (celda) { irAlKardex(celda.dataset.bodega, celda.dataset.talla); return; }
+    const suc = e.target.closest('td.tm-col-suc[data-bodega]');
+    if (suc) { irAlKardex(suc.dataset.bodega, ''); return; }
+    const th = e.target.closest('thead th[data-talla]');
+    if (th) { tallaActiva = (tallaActiva === th.dataset.talla) ? '' : th.dataset.talla; renderMatriz(); }
+});
+document.getElementById('resumenTallas').addEventListener('click', e => {
+    const chip = e.target.closest('[data-talla]');
+    if (!chip) return;
+    tallaActiva = (tallaActiva === chip.dataset.talla) ? '' : chip.dataset.talla;
+    renderMatriz();
+});
+document.getElementById('chkOcultarSucVacias').addEventListener('change', renderMatriz);
+document.getElementById('chkOcultarTallasVacias').addEventListener('change', renderMatriz);
+
+/* Llegadas: filtro por tipo */
+document.getElementById('filtroLlegadas').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-tipo]');
+    if (!btn) return;
+    document.querySelectorAll('#filtroLlegadas button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    llegadasTipo = btn.dataset.tipo;
+    llegadasVisibles = 12;
+    renderLlegadas();
+});
+
+/* Kardex: filtros */
 document.getElementById('filtroBodega').addEventListener('change', aplicarFiltrosKardex);
 document.getElementById('filtroTalla').addEventListener('change', aplicarFiltrosKardex);
 document.getElementById('filtroTipo').addEventListener('change', aplicarFiltrosKardex);
 document.getElementById('chkAgrupar').addEventListener('change', aplicarFiltrosKardex);
 
-/* Tabs */
+/* Tabs del historial */
 document.querySelectorAll('.tm-tabs .nav-link').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('.tm-tabs .nav-link').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const tab = btn.dataset.tab;
-        document.getElementById('panelTimeline').style.display = tab === 'timeline' ? '' : 'none';
-        document.getElementById('panelKardex').style.display = tab === 'kardex' ? '' : 'none';
-    });
+    btn.addEventListener('click', () => activarTab(btn.dataset.tab));
 });
+
+/* Navegación entre secciones + resaltado de la sección visible */
+document.getElementById('tmNav').addEventListener('click', e => {
+    const btn = e.target.closest('.tm-nav-btn');
+    if (!btn) return;
+    document.getElementById(btn.dataset.goto).scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+if ('IntersectionObserver' in window) {
+    const observador = new IntersectionObserver(entradas => {
+        entradas.filter(en => en.isIntersecting).forEach(en => {
+            document.querySelectorAll('.tm-nav-btn').forEach(b =>
+                b.classList.toggle('active', b.dataset.goto === en.target.id));
+        });
+    }, { rootMargin: '-140px 0px -60% 0px', threshold: 0 });
+    ['secArticulo', 'secTallas', 'secLlegadas', 'secHistorial']
+        .forEach(id => { const el = document.getElementById(id); if (el) observador.observe(el); });
+}
+
+/* Enlace directo: /app/tarjeta-movimiento/?sku=12345 abre la tarjeta al entrar. */
+(function cargarDesdeUrl() {
+    const skuUrl = new URLSearchParams(window.location.search).get('sku');
+    if (!skuUrl) return;
+    document.getElementById('inputSku').value = skuUrl;
+    buscarMovimientos();
+})();
 </script>

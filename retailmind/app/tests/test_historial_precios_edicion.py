@@ -12,7 +12,9 @@ import json
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from app.models import HistorialCambioPrecio
+from app.models import (
+    HistorialCambioPrecio, ModuloSistema, OpcionMenu, PermisoRol,
+)
 from app.services.historial_precios import registrar_cambios_precio
 from .factories import (
     crear_empresa,
@@ -27,6 +29,23 @@ from .factories import (
 STATICFILES_STORAGE_TEST = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
 
+def habilitar_permiso_edicion_productos(rol='administrador'):
+    """Los endpoints de edicion exigen `gestion_producto.puede_editar`.
+
+    En una BD de test recien creada no existe ningun PermisoRol, asi que sin
+    esto la edicion responde 403 antes de llegar a la logica.
+    """
+    modulo, _ = ModuloSistema.objects.get_or_create(
+        codigo='existencias', defaults={'nombre': 'Existencias', 'orden': 5})
+    opcion, _ = OpcionMenu.objects.get_or_create(
+        codigo='gestion_producto',
+        defaults={'modulo': modulo, 'nombre': 'Gestion Producto', 'orden': 1})
+    PermisoRol.objects.update_or_create(
+        rol=rol, opcion_menu=opcion,
+        defaults={'puede_ver': True, 'puede_crear': True, 'puede_editar': True})
+    return opcion
+
+
 @override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)
 class HistorialPreciosEdicionTest(TestCase):
     def setUp(self):
@@ -34,6 +53,7 @@ class HistorialPreciosEdicionTest(TestCase):
         self.sucursal = crear_sucursal(empresa=self.empresa, alias='SUC-HIST')
         self.admin = crear_usuario(username='admin-historial', rol='administrador')
         crear_empresa_user(self.admin, self.empresa, self.sucursal)
+        habilitar_permiso_edicion_productos(rol='administrador')
 
         self.producto, self.talla = crear_producto_con_talla(
             self.sucursal, articulo='ZAPHIST01', sku=9100001,

@@ -31,6 +31,7 @@ from .models import (
     Compras, Compras_Producto, Compras_Producto_Talla,
     CONCEPTO_MOVIMIENTO_CHOICES, TIPO_MOVIMIENTO_CHOICES,
 )
+from .utils_tallas import clave_orden_talla
 
 logger = logging.getLogger('app')
 
@@ -222,7 +223,7 @@ def api_tarjeta_movimiento(request):
         .filter(ProductoTalla_id__in=pt_ids)
         .select_related(
             'ProductoTalla', 'ProductoTalla__producto', 'ProductoTalla__producto__sucursal',
-            'sucursal_origen', 'sucursal_destino', 'dte', 'ticket',
+            'sucursal_origen', 'sucursal_destino', 'dte', 'dte__emisor', 'ticket',
         )
     )
     if fecha_desde:
@@ -313,6 +314,12 @@ def api_tarjeta_movimiento(request):
                 if m.dte else None
             ),
             'ticket_correlativo': m.ticket.correlativo if m.ticket else None,
+            # Proveedor solo en documentos de COMPRA: en un traspaso o una venta
+            # el emisor es la propia empresa y ponerlo como "origen" confunde.
+            'proveedor': (
+                m.dte.emisor.nombre
+                if m.dte and m.dte.tipo_transaccion == 'COMPRA' and m.dte.emisor else ''
+            ),
         })
 
     # 5) Info consolidada del producto (usa la variante de referencia para atributos).
@@ -358,14 +365,17 @@ def api_tarjeta_movimiento(request):
             'talla': pt.talla,
             'stock': pt.stock or 0,
         })
+    # Tiendas primero y, dentro de cada grupo, las que más stock tienen: en la
+    # matriz talla × sucursal se lee de arriba hacia abajo "dónde hay".
     distribucion_list = sorted(
-        distribucion.values(), key=lambda d: (not d['es_cd'], d['bodega'])
+        distribucion.values(), key=lambda d: (d['es_cd'], -d['stock_total'], d['bodega'])
     )
     for d in distribucion_list:
-        d['tallas'].sort(key=lambda t: t['talla'])
+        # Orden natural de tallas ('7,5' antes que '38', y las letras al final).
+        d['tallas'].sort(key=lambda t: clave_orden_talla(t['talla']))
 
     # 7) Tallas y bodegas disponibles para poblar los filtros del frontend.
-    tallas_disponibles = sorted({pt.talla for pt in productos_talla})
+    tallas_disponibles = sorted({pt.talla for pt in productos_talla}, key=clave_orden_talla)
     bodegas_disponibles = [
         {'id': d['bodega_id'], 'alias': d['bodega']} for d in distribucion_list
     ]
@@ -377,6 +387,11 @@ def api_tarjeta_movimiento(request):
     timeline_total = len(timeline_full)
     timeline = timeline_full[-_TIMELINE_MAX:] if timeline_total > _TIMELINE_MAX else timeline_full
     timeline_omitidos = timeline_total - len(timeline)
+
+    # 8.b) LLEGADAS: cada vez que entró mercadería a una bodega, agrupada por
+    #      evento (fecha + bodega + documento) con su desglose de tallas. Es la
+    #      pregunta que más se hace en tienda: "¿cuándo llegó y qué tallas vinieron?".
+    llegadas = _construir_llegadas(movimientos_data)
 
     # 9) Resumen global.
     #    Entradas/salidas EXCLUYEN traspasos: un traspaso interno es una salida
@@ -405,6 +420,13 @@ def api_tarjeta_movimiento(request):
     saldo_apertura_total = sum(a['saldo'] for a in aperturas)
     saldo_final_total = sum(saldos_por_serie.values())
 
+    # Última llegada y última venta: los dos datos que resumen si el artículo
+    # sigue vivo (llega mercadería) y si rota (se vende).
+    hoy = timezone.localdate()
+    ultima_llegada = llegadas[0] if llegadas else None
+    ventas = [m for m in movimientos_data if m['concepto'].startswith('VENTA')]
+    ultima_venta = ventas[-1] if ventas else None
+
     resumen = {
         'total_movimientos': len(movimientos_data),
         'total_entradas': total_entradas,
@@ -416,6 +438,13 @@ def api_tarjeta_movimiento(request):
         'saldo_final': saldo_final_total,
         'primer_movimiento': movimientos_data[0]['fecha'] if movimientos_data else '-',
         'ultimo_movimiento': movimientos_data[-1]['fecha'] if movimientos_data else '-',
+        'num_llegadas': len(llegadas),
+        'unidades_llegadas': sum(l['unidades'] for l in llegadas),
+        'ultima_llegada': ultima_llegada['fecha'] if ultima_llegada else '',
+        'ultima_llegada_dias': _dias_desde(ultima_llegada['fecha_iso'], hoy) if ultima_llegada else None,
+        'ultima_llegada_bodega': ultima_llegada['bodega'] if ultima_llegada else '',
+        'ultima_venta': ultima_venta['fecha'] if ultima_venta else '',
+        'ultima_venta_dias': _dias_desde(ultima_venta['fecha_iso'], hoy) if ultima_venta else None,
     }
 
     return JsonResponse({
@@ -424,6 +453,7 @@ def api_tarjeta_movimiento(request):
         'movimientos': movimientos_data,
         'aperturas': aperturas,
         'distribucion': distribucion_list,
+        'llegadas': llegadas,
         'timeline': timeline,
         'timeline_omitidos': timeline_omitidos,
         'resumen': resumen,
@@ -434,6 +464,115 @@ def api_tarjeta_movimiento(request):
         },
         'sucursal_actual_id': sucursal_actual_id,
     })
+
+
+def _dias_desde(fecha_iso, hoy):
+    """Días transcurridos entre `fecha_iso` (YYYY-MM-DD) y hoy. None si no parsea."""
+    if not fecha_iso:
+        return None
+    try:
+        fecha = datetime.strptime(fecha_iso, '%Y-%m-%d').date()
+    except (TypeError, ValueError):
+        return None
+    return (hoy - fecha).days
+
+
+# Cómo se presenta cada tipo de llegada. Clave = concepto del movimiento.
+# (tipo para el filtro, título, icono, color)
+_LLEGADAS_PRESENTACION = {
+    'RECEPCION_COMPRA':        ('COMPRA', 'Recepción de compra', 'ri-inbox-archive-line', '#0ab39c'),
+    'REPOSICION_STOCK':        ('COMPRA', 'Reposición de stock', 'ri-refresh-line', '#0ab39c'),
+    'INGRESO_INICIAL':         ('INICIAL', 'Carga inicial del sistema', 'ri-seedling-line', '#405189'),
+    'INGRESO_MANUAL':          ('MANUAL', 'Ingreso manual', 'ri-edit-box-line', '#405189'),
+    'DEVOLUCION_CLIENTE':      ('DEVOLUCION', 'Devolución de cliente', 'ri-arrow-go-back-line', '#299cdb'),
+    'DEVOLUCION_NC':           ('DEVOLUCION', 'Devolución por nota de crédito', 'ri-arrow-go-back-line', '#299cdb'),
+    'DEVOLUCION_NC_POST_RECEPCION': ('DEVOLUCION', 'Devolución NC tras recepción', 'ri-arrow-go-back-line', '#299cdb'),
+    'CAMBIO_PRODUCTO_ENTRADA': ('DEVOLUCION', 'Cambio de producto (entrada)', 'ri-swap-line', '#299cdb'),
+    'AJUSTE_POSITIVO':         ('AJUSTE', 'Ajuste positivo', 'ri-scales-3-line', '#f7b84b'),
+    'AJUSTE_INVENTARIO_ENTRADA': ('AJUSTE', 'Sobrante de inventario', 'ri-scales-3-line', '#f7b84b'),
+    'CORRECCION_STOCK':        ('AJUSTE', 'Corrección de stock', 'ri-scales-3-line', '#f7b84b'),
+    'SOBRANTE_INGRESO':        ('AJUSTE', 'Sobrante aceptado', 'ri-scales-3-line', '#f7b84b'),
+    'RECEPCION_SOBRANTE':      ('AJUSTE', 'Sobrante en recepción', 'ri-scales-3-line', '#f7b84b'),
+    'DONACION_RECIBIDA':       ('OTRO', 'Donación recibida', 'ri-gift-line', '#299cdb'),
+}
+_LLEGADA_TRASPASO = ('TRASPASO', 'Traspaso recibido', 'ri-truck-line', '#f7b84b')
+_LLEGADA_DEFAULT = ('OTRO', '', 'ri-add-circle-line', '#299cdb')
+
+
+def _construir_llegadas(movimientos_data):
+    """
+    "Llegadas": cada vez que ENTRÓ mercadería a una bodega, como un solo evento.
+
+    Un movimiento por talla no sirve para responder "¿cuándo llegó?": una
+    recepción de 40 pares genera 8 movimientos. Aquí se agrupan por
+    (fecha · bodega · concepto · documento · origen) y se devuelve el desglose
+    por talla dentro del evento, ordenado del más reciente al más antiguo.
+
+    Se excluyen las ventas (nunca son llegadas) y los movimientos con cantidad
+    0 (registros documentales como REASIGNACION_DESTINO).
+    """
+    hoy = timezone.localdate()
+    grupos = {}
+
+    for m in movimientos_data:
+        if m['cantidad'] <= 0 or m['concepto'].startswith('VENTA'):
+            continue
+
+        if m['es_traspaso']:
+            tipo, titulo, icono, color = _LLEGADA_TRASPASO
+        else:
+            tipo, titulo, icono, color = _LLEGADAS_PRESENTACION.get(
+                m['concepto'], _LLEGADA_DEFAULT
+            )
+        titulo = titulo or m['concepto_display']
+
+        documento = (
+            f"DTE #{m['dte_folio']}" if m['dte_folio']
+            else f"Ticket #{m['ticket_correlativo']}" if m['ticket_correlativo']
+            else (m['referencia'] or '')
+        )
+        # De dónde vino: proveedor en las compras, sucursal emisora en traspasos.
+        origen = m['proveedor'] or (
+            m['sucursal_origen'] if m['sucursal_origen'] not in ('-', '') else ''
+        )
+
+        clave = (m['fecha_iso'], m['bodega_id'], m['concepto'], documento, origen)
+        grupo = grupos.get(clave)
+        if grupo is None:
+            grupo = grupos[clave] = {
+                'fecha': m['fecha'],
+                'fecha_iso': m['fecha_iso'],
+                'hora': m['hora'],
+                'dias': _dias_desde(m['fecha_iso'], hoy),
+                'tipo': tipo,
+                'titulo': titulo,
+                'icono': icono,
+                'color': color,
+                'bodega': m['bodega'],
+                'bodega_id': m['bodega_id'],
+                'origen': origen,
+                'documento': documento,
+                'responsable': m['responsable'],
+                'unidades': 0,
+                'costo_total': 0,
+                'tallas': {},
+            }
+        grupo['unidades'] += m['cantidad']
+        grupo['costo_total'] += (m['costo'] or 0) * m['cantidad']
+        grupo['tallas'][m['talla']] = grupo['tallas'].get(m['talla'], 0) + m['cantidad']
+
+    llegadas = []
+    for g in grupos.values():
+        tallas = sorted(g.pop('tallas').items(), key=lambda par: clave_orden_talla(par[0]))
+        costo_total = g.pop('costo_total')
+        g['tallas'] = [{'talla': t, 'cantidad': c} for t, c in tallas]
+        g['num_tallas'] = len(tallas)
+        g['costo_unitario'] = round(costo_total / g['unidades']) if g['unidades'] else 0
+        llegadas.append(g)
+
+    # Más reciente primero: en tienda se pregunta por lo último que llegó.
+    llegadas.sort(key=lambda l: (l['fecha_iso'], l['hora']), reverse=True)
+    return llegadas
 
 
 def _construir_timeline(movimientos_data):

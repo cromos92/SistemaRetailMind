@@ -6,614 +6,207 @@
 
 {% include 'vistas/modulo_requerimientos/_crear_requerimiento_assets.html' %}
 {% include 'vistas/modulo_requerimientos/_estilos_modales.html' %}
-
-<style>
-    .cursor-pointer {
-        cursor: pointer;
-        transition: transform 0.2s ease;
-    }
-    .cursor-pointer:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-
-    @media (max-width: 768px) {
-        .req-header { flex-direction: column; gap: 0.5rem; }
-        .req-header .btn { width: 100%; }
-        .req-filters .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
-        .req-stats { flex-direction: column; gap: 0.5rem; }
-        .nav-tabs-custom { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        .nav-tabs-custom .nav-link { white-space: nowrap; font-size: 0.8rem; padding: 0.5rem 0.75rem; }
-        .card-body .row.g-3 > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
-    }
-    @media (max-width: 576px) {
-        .tabla-requerimientos { font-size: 0.75rem; }
-        .req-actions .btn { width: 100%; }
-        .table.align-middle th, .table.align-middle td { font-size: 0.75rem; padding: 0.4rem 0.5rem; }
-        .card-header .hstack { flex-wrap: wrap; }
-        .card-header .btn { width: 100%; }
-    }
-</style>
+{% include 'vistas/modulo_requerimientos/_estilos_requerimientos.html' %}
 
 <div class="page-content">
     <div class="container-fluid">
-        
-        <!-- Título de la página -->
-        <div class="row">
-            <div class="col-12">
-                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                    <h4 class="mb-sm-0">Gestión de Requerimientos</h4>
-                    <div class="page-title-right">
-                        <ol class="breadcrumb m-0">
-                            <li class="breadcrumb-item"><a href="{% url 'verHome' %}">Inicio</a></li>
-                            <li class="breadcrumb-item active">Requerimientos</li>
-                        </ol>
-                    </div>
-                </div>
+
+        <!-- Encabezado en una sola línea: en un notebook de 15" el
+             page-title-box de dos filas se comía la primera fila de la tabla. -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+            <div class="d-flex align-items-center gap-2">
+                <h4 class="mb-0 fs-5">Requerimientos</h4>
+                <span class="text-muted small d-none d-md-inline">Reclamos a proveedor por producto fallado, garantía o error de despacho</span>
+            </div>
+            <div class="hstack gap-1">
+                <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalCrearRequerimiento">
+                    <i class="ri-add-fill me-1"></i>Nuevo
+                </button>
+                <button type="button" class="btn btn-soft-secondary btn-sm" onclick="alternarFiltros()" id="btn-filtros">
+                    <i class="ri-filter-3-line me-1"></i>Filtros
+                </button>
+                <button type="button" class="btn btn-soft-secondary btn-sm" onclick="exportarRequerimientos()" title="Exportar a Excel">
+                    <i class="ri-file-excel-2-line"></i>
+                </button>
             </div>
         </div>
 
-        <!-- Alertas de Seguimiento (solo para Admin/Supervisor) -->
-        <div class="row" id="alertas-seguimiento" style="display:none;">
-            <div class="col-12">
-                <div class="alert alert-warning alert-border-left alert-dismissible fade show" role="alert">
-                    <i class="ri-alarm-warning-line me-2 align-middle fs-16"></i>
-                    <strong>¡Atención!</strong> Hay <span id="count-sin-respuesta" class="fw-bold">0</span> requerimiento(s) esperando respuesta del proveedor por más de 7 días.
-                    <button type="button" class="btn btn-sm btn-warning ms-3" onclick="filtrarSinRespuesta()">
-                        <i class="ri-eye-line me-1"></i>Ver Requerimientos
-                    </button>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            </div>
-        </div>
+        <!-- Avisos de gestión. Se pintan solos según lo que devuelvan las
+             estadísticas: sin respuesta del proveedor y casos incompletos. -->
+        <div id="avisos-gestion" class="mb-2"></div>
 
-        <!-- KPIs compactos -->
-        <div class="row g-2 mb-2">
-            <div class="col-6 col-md-3">
-                <div class="card card-animate mb-0">
-                    <div class="card-body py-2 px-3">
-                        <div class="d-flex align-items-center justify-content-between">
-                            <div>
-                                <p class="text-uppercase fw-medium text-muted mb-0" style="font-size:.7rem">Total</p>
-                                <h4 class="fs-5 fw-semibold mb-0"><span id="total-requerimientos">0</span></h4>
-                            </div>
-                            <span class="avatar-xs"><span class="avatar-title bg-soft-info rounded"><i class="bx bx-file text-info"></i></span></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="card card-animate mb-0 cursor-pointer" onclick="filtrarPorEstado('PENDIENTE')">
-                    <div class="card-body py-2 px-3">
-                        <div class="d-flex align-items-center justify-content-between">
-                            <div>
-                                <p class="text-uppercase fw-medium text-muted mb-0" style="font-size:.7rem">Pendientes</p>
-                                <h4 class="fs-5 fw-semibold mb-0"><span id="pendientes">0</span></h4>
-                            </div>
-                            <span class="avatar-xs"><span class="avatar-title bg-soft-warning rounded"><i class="bx bx-time text-warning"></i></span></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="card card-animate mb-0 cursor-pointer" onclick="filtrarPorEstado('ESPERANDO_RESPUESTA')">
-                    <div class="card-body py-2 px-3">
-                        <div class="d-flex align-items-center justify-content-between">
-                            <div>
-                                <p class="text-uppercase fw-medium text-muted mb-0" style="font-size:.7rem">Esperando</p>
-                                <h4 class="fs-5 fw-semibold text-primary mb-0"><span id="esperando-proveedor">0</span></h4>
-                            </div>
-                            <span class="avatar-xs"><span class="avatar-title bg-soft-primary rounded"><i class="bx bx-mail-send text-primary"></i></span></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="card card-animate mb-0 cursor-pointer" onclick="filtrarAprobados()">
-                    <div class="card-body py-2 px-3">
-                        <div class="d-flex align-items-center justify-content-between">
-                            <div>
-                                <p class="text-uppercase fw-medium text-muted mb-0" style="font-size:.7rem">Aprobados</p>
-                                <h4 class="fs-5 fw-semibold text-success mb-0"><span id="aprobados">0</span></h4>
-                            </div>
-                            <span class="avatar-xs"><span class="avatar-title bg-soft-success rounded"><i class="bx bx-check-circle text-success"></i></span></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Rol del usuario -->
         <input type="hidden" id="rol-usuario" value="{{ rol_usuario }}">
 
-        <!-- Tabla de requerimientos -->
-        <div class="row">
-            <div class="col-lg-12">
-                <div class="card">
-                    <div class="card-header py-2">
-                        <div class="d-flex align-items-center justify-content-between">
-                            <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalCrearRequerimiento">
-                                <i class="ri-add-fill me-1"></i>Nuevo
-                            </button>
+        <!-- ══════════ KPIs por ETAPA ══════════
+             La pregunta real del que gestiona no es "cuántos hay" sino
+             "quién tiene la pelota". Antes los KPIs mezclaban estado y
+             etapa: "Pendientes" contaba solo PENDIENTE y dejaba fuera los
+             que estaban en revisión, que también están esperando a alguien. -->
+        <div class="row g-2 mb-2">
+            <div class="col-6 col-lg-3">
+                <div class="req-kpi" id="kpi-empresa" onclick="filtrarPorEtapa('EMPRESA', this)" title="Casos que dependen de la empresa: revisar, completar datos o validar">
+                    <div>
+                        <p class="req-kpi-label">En la empresa</p>
+                        <p class="req-kpi-valor text-dark" id="kpi-valor-empresa">0</p>
+                    </div>
+                    <span class="req-kpi-icono" style="background:rgba(64,81,137,.12);color:#405189"><i class="ri-user-star-line"></i></span>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="req-kpi" id="kpi-proveedor" onclick="filtrarPorEtapa('PROVEEDOR', this)" title="Enviados al proveedor, esperando su respuesta">
+                    <div>
+                        <p class="req-kpi-label">En el proveedor</p>
+                        <p class="req-kpi-valor text-primary" id="kpi-valor-proveedor">0</p>
+                    </div>
+                    <span class="req-kpi-icono" style="background:rgba(0,102,255,.12);color:#0066FF"><i class="ri-building-line"></i></span>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="req-kpi" id="kpi-resolucion" onclick="filtrarPorEtapa('RESOLUCION', this)" title="El proveedor ya respondió: falta resolver con el cliente">
+                    <div>
+                        <p class="req-kpi-label">Por resolver</p>
+                        <p class="req-kpi-valor text-success" id="kpi-valor-resolucion">0</p>
+                    </div>
+                    <span class="req-kpi-icono" style="background:rgba(10,179,156,.13);color:#0ab39c"><i class="ri-check-double-line"></i></span>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="req-kpi" id="kpi-incompletos" onclick="filtrarIncompletos(this)" title="Les falta el proveedor o la factura de compra: no se pueden enviar">
+                    <div>
+                        <p class="req-kpi-label">Sin datos para enviar</p>
+                        <p class="req-kpi-valor text-danger" id="kpi-valor-incompletos">0</p>
+                    </div>
+                    <span class="req-kpi-icono" style="background:rgba(240,101,72,.12);color:#f06548"><i class="ri-error-warning-line"></i></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-0">
+            <!-- Filtros: plegados por defecto para no robarle alto a la tabla -->
+            <div class="card-body border-bottom border-bottom-dashed py-2" id="filtros-section" style="display:none;">
+                <form id="form-filtros">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-6 col-md-4 col-xl-3">
+                            <label class="form-label small mb-1">Búsqueda</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-white"><i class="ri-search-line"></i></span>
+                                <input type="text" class="form-control" id="filtro-busqueda" placeholder="N° req, SKU, cliente, RUT, boleta">
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <label class="form-label small mb-1">Estado</label>
+                            <select class="form-select form-select-sm" id="filtro-estado" name="estado">
+                                <option value="">Todos</option>
+                                <optgroup label="En la empresa">
+                                    <option value="PENDIENTE">Pendiente de revisión</option>
+                                    <option value="EN_REVISION">En revisión</option>
+                                    <option value="VALIDADO">Validado</option>
+                                </optgroup>
+                                <optgroup label="En el proveedor">
+                                    <option value="ESPERANDO_RESPUESTA">Esperando respuesta</option>
+                                </optgroup>
+                                <optgroup label="Respondidos">
+                                    <option value="APROBADO">Aprobado por proveedor</option>
+                                    <option value="RECHAZADO">Rechazado por proveedor</option>
+                                    <option value="EN_PROCESO">En proceso</option>
+                                </optgroup>
+                                <optgroup label="Cerrados">
+                                    <option value="COMPLETADO">Completado</option>
+                                    <option value="RECHAZADO_INTERNO">Rechazado internamente</option>
+                                    <option value="CANCELADO">Cancelado</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <label class="form-label small mb-1">Tipo</label>
+                            <select class="form-select form-select-sm" id="filtro-tipo" name="tipo">
+                                <option value="">Todos</option>
+                                <option value="PRODUCTO_FALLADO">Producto fallado</option>
+                                <option value="GARANTIA">Garantía</option>
+                                <option value="ERROR_DESPACHO">Error de despacho</option>
+                                <option value="DEVOLUCION">Devolución</option>
+                                <option value="RECLAMO">Reclamo</option>
+                                <option value="CONSULTA">Consulta técnica</option>
+                                <option value="OTROS">Otros</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <label class="form-label small mb-1">Prioridad</label>
+                            <select class="form-select form-select-sm" id="filtro-prioridad" name="prioridad">
+                                <option value="">Todas</option>
+                                <option value="URGENTE">Urgente</option>
+                                <option value="ALTA">Alta</option>
+                                <option value="MEDIA">Media</option>
+                                <option value="BAJA">Baja</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <label class="form-label small mb-1">Desde</label>
+                            <input type="date" class="form-control form-control-sm" id="filtro-fecha-inicio">
+                        </div>
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <label class="form-label small mb-1">Hasta</label>
+                            <input type="date" class="form-control form-control-sm" id="filtro-fecha-fin">
+                        </div>
+                        <div class="col-12 col-xl-auto">
                             <div class="hstack gap-1">
-                                <button type="button" class="btn btn-soft-info btn-sm" onclick="filtrarRequerimientos()"><i class="ri-filter-3-line me-1"></i>Filtrar</button>
-                                <button type="button" class="btn btn-soft-success btn-sm" onclick="exportarRequerimientos()"><i class="ri-file-excel-2-line me-1"></i>Excel</button>
+                                <button type="submit" class="btn btn-primary btn-sm"><i class="ri-search-line me-1"></i>Buscar</button>
+                                <button type="button" class="btn btn-soft-danger btn-sm" onclick="limpiarFiltros()"><i class="ri-close-line me-1"></i>Limpiar</button>
                             </div>
                         </div>
                     </div>
+                </form>
+            </div>
 
-                    <!-- Filtros -->
-                    <div class="card-body border-bottom border-bottom-dashed" id="filtros-section" style="display: none;">
-                        <form id="form-filtros">
-                            <div class="row g-3">
-                                <div class="col-xl-2 col-sm-6">
-                                    <div>
-                                        <label class="form-label mb-0">Estado</label>
-                                        <select class="form-select" id="filtro-estado" name="estado">
-                                            <option value="">Todos</option>
-                                            <option value="PENDIENTE">Pendiente</option>
-                                            <option value="EN_REVISION">En Revision</option>
-                                            <option value="ESPERANDO_RESPUESTA">Esperando Proveedor</option>
-                                            <option value="APROBADO">Aprobado</option>
-                                            <option value="RECHAZADO">Rechazado</option>
-                                            <option value="EN_PROCESO">En Proceso</option>
-                                            <option value="COMPLETADO">Completado</option>
-                                            <option value="CANCELADO">Cancelado</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="col-xl-2 col-sm-6">
-                                    <div>
-                                        <label class="form-label mb-0">Tipo</label>
-                                        <select class="form-select" id="filtro-tipo" name="tipo">
-                                            <option value="">Todos</option>
-                                            <option value="PRODUCTO_FALLADO">Producto Fallado</option>
-                                            <option value="ERROR_DESPACHO">Error de Despacho</option>
-                                            <option value="GARANTIA">Garantia</option>
-                                            <option value="DEVOLUCION">Devolucion</option>
-                                            <option value="RECLAMO">Reclamo</option>
-                                            <option value="CONSULTA">Consulta Tecnica</option>
-                                            <option value="OTROS">Otros</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="col-xl-3 col-sm-6">
-                                    <div>
-                                        <label class="form-label mb-0">Búsqueda</label>
-                                        <input type="text" class="form-control" id="filtro-busqueda" placeholder="N° Req, SKU, Cliente...">
-                                    </div>
-                                </div>
-                                <div class="col-xl-2 col-sm-6">
-                                    <div>
-                                        <label class="form-label mb-0">Alertas</label>
-                                        <select class="form-select" id="filtro-sin-respuesta" name="sin_respuesta">
-                                            <option value="">Todas</option>
-                                            <option value="true">Sin Respuesta +7d</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="col-xl-3 col-sm-12">
-                                    <div class="hstack gap-2 mt-4">
-                                        <button type="submit" class="btn btn-primary w-100">
-                                            <i class="ri-search-line me-1"></i> Buscar
-                                        </button>
-                                        <button type="button" class="btn btn-soft-danger w-100" onclick="limpiarFiltros()">
-                                            <i class="ri-close-line me-1"></i> Limpiar
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </form>
+            <div class="card-body p-0">
+                <!-- Tabs por estado con su contador -->
+                <ul class="nav nav-tabs nav-tabs-custom nav-primary px-2 pt-2" role="tablist" id="tabs-estado">
+                    <li class="nav-item"><a class="nav-link active" href="javascript:void(0);" data-estado="" onclick="filtroRapido('', this)">Todos <span class="badge bg-secondary ms-1" id="tab-todos">0</span></a></li>
+                    <li class="nav-item"><a class="nav-link" href="javascript:void(0);" data-estado="PENDIENTE" onclick="filtroRapido('PENDIENTE', this)">Pendientes <span class="badge bg-warning ms-1" id="tab-PENDIENTE">0</span></a></li>
+                    <li class="nav-item"><a class="nav-link" href="javascript:void(0);" data-estado="EN_REVISION" onclick="filtroRapido('EN_REVISION', this)">En revisión <span class="badge bg-info ms-1" id="tab-EN_REVISION">0</span></a></li>
+                    <li class="nav-item"><a class="nav-link" href="javascript:void(0);" data-estado="VALIDADO" onclick="filtroRapido('VALIDADO', this)">Validados <span class="badge bg-success ms-1" id="tab-VALIDADO">0</span></a></li>
+                    <li class="nav-item"><a class="nav-link" href="javascript:void(0);" data-estado="ESPERANDO_RESPUESTA" onclick="filtroRapido('ESPERANDO_RESPUESTA', this)">Esperando <span class="badge bg-primary ms-1" id="tab-ESPERANDO_RESPUESTA">0</span></a></li>
+                    <li class="nav-item"><a class="nav-link" href="javascript:void(0);" data-estado="APROBADO" onclick="filtroRapido('APROBADO', this)">Aprobados <span class="badge bg-success ms-1" id="tab-APROBADO">0</span></a></li>
+                    <li class="nav-item"><a class="nav-link" href="javascript:void(0);" data-estado="RECHAZADO" onclick="filtroRapido('RECHAZADO', this)">Rechazados <span class="badge bg-danger ms-1" id="tab-RECHAZADO">0</span></a></li>
+                    <li class="nav-item"><a class="nav-link" href="javascript:void(0);" data-estado="COMPLETADO" onclick="filtroRapido('COMPLETADO', this)">Completados <span class="badge bg-secondary ms-1" id="tab-COMPLETADO">0</span></a></li>
+                </ul>
+
+                <div class="req-tabla-wrap">
+                    <table class="table req-tabla align-middle">
+                        <thead>
+                            <tr>
+                                <th style="width:2px"></th>
+                                <th>Requerimiento</th>
+                                <th>Estado</th>
+                                <th>Producto</th>
+                                <th>Cliente</th>
+                                <th>Proveedor</th>
+                                <th class="d-none d-xl-table-cell">Sucursal</th>
+                                <th class="text-center">Evidencia</th>
+                                <th class="text-center">Antigüedad</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-requerimientos">
+                            <tr><td colspan="10" class="text-center py-5">
+                                <div class="spinner-border text-primary spinner-border-sm"></div>
+                                <p class="mt-2 text-muted small mb-0">Cargando requerimientos...</p>
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 px-3 py-2 border-top">
+                    <div class="text-muted small">
+                        Mostrando <span class="fw-semibold" id="showing-count">0</span> de <span class="fw-semibold" id="total-count">0</span>
                     </div>
-
-                    <div class="card-body">
-                        <!-- Tabs de filtro rapido -->
-                        <ul class="nav nav-tabs nav-tabs-custom nav-primary mb-3" role="tablist">
-                            <li class="nav-item">
-                                <a class="nav-link active" href="javascript:void(0);" onclick="filtroRapido('', this)">
-                                    Todos
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="javascript:void(0);" onclick="filtroRapido('PENDIENTE', this)">
-                                    Pendientes <span class="badge bg-warning ms-1" id="tab-pendiente">0</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="javascript:void(0);" onclick="filtroRapido('EN_REVISION', this)">
-                                    En Revision <span class="badge bg-info ms-1" id="tab-revision">0</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="javascript:void(0);" onclick="filtroRapido('ESPERANDO_RESPUESTA', this)">
-                                    Esperando <span class="badge bg-primary ms-1" id="tab-esperando">0</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="javascript:void(0);" onclick="filtroRapido('APROBADO', this)">
-                                    Aprobados <span class="badge bg-success ms-1" id="tab-aprobado">0</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="javascript:void(0);" onclick="filtroRapido('COMPLETADO', this)">
-                                    Completados <span class="badge bg-success ms-1" id="tab-completado">0</span>
-                                </a>
-                            </li>
-                        </ul>
-                        <div class="table-responsive">
-                            <table class="table align-middle table-nowrap mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th scope="col">N° Requerimiento</th>
-                                        <th scope="col">Tipo</th>
-                                        <th scope="col">Estado</th>
-                                        <th scope="col">Producto</th>
-                                        <th scope="col">Cliente</th>
-                                        <th scope="col">Proveedor</th>
-                                        <th scope="col">Sucursal</th>
-                                        <th scope="col">Fotos</th>
-                                        <th scope="col">Días</th>
-                                        <th scope="col">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tabla-requerimientos">
-                                    <tr>
-                                        <td colspan="10" class="text-center py-5">
-                                            <div class="spinner-border text-primary" role="status">
-                                                <span class="visually-hidden">Cargando...</span>
-                                            </div>
-                                            <p class="mt-2 text-muted">Cargando requerimientos...</p>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- Paginación -->
-                        <div class="d-flex justify-content-between align-items-center mt-3">
-                            <div class="flex-shrink-0">
-                                <div class="text-muted">
-                                    Mostrando <span class="fw-semibold" id="showing-count">0</span> de <span class="fw-semibold" id="total-count">0</span> resultados
-                                </div>
-                            </div>
-                            <ul class="pagination pagination-separated pagination-sm mb-0" id="pagination">
-                            </ul>
-                        </div>
-                    </div>
+                    <ul class="pagination pagination-separated pagination-sm mb-0" id="pagination"></ul>
                 </div>
             </div>
         </div>
 
     </div>
 </div>
-
-<script>
-let paginaActual = 1;
-let filtrosActuales = {};
-
-// Cargar datos al iniciar
-document.addEventListener('DOMContentLoaded', function() {
-    cargarEstadisticas();
-    cargarRequerimientos();
-    const modalEl = document.getElementById('modalCrearRequerimiento');
-    if (new URLSearchParams(window.location.search).get('panel') === 'crear' && modalEl) {
-        new bootstrap.Modal(modalEl).show();
-    }
-    // Al cerrar el modal, limpiar ?panel=crear para que un F5 no lo reabra
-    if (modalEl) {
-        modalEl.addEventListener('hidden.bs.modal', function() {
-            if (new URLSearchParams(window.location.search).get('panel') === 'crear') {
-                history.replaceState(null, '', window.location.pathname);
-            }
-        });
-        // Reabrir siempre desde el paso 1: si no, el asistente aparece en el
-        // paso 3 del intento anterior y descoloca.
-        modalEl.addEventListener('show.bs.modal', function() {
-            if (typeof irAPaso === 'function') irAPaso(1);
-        });
-    }
-});
-
-// Cargar estadísticas
-function cargarEstadisticas() {
-    fetch('/app/api/requerimientos/estadisticas/')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Total de requerimientos
-                document.getElementById('total-requerimientos').textContent = data.estadisticas.total;
-                
-                // Pendientes (solo PENDIENTE)
-                document.getElementById('pendientes').textContent = 
-                    data.estadisticas.por_estado.PENDIENTE?.cantidad || 0;
-                
-                // Esperando Respuesta del Proveedor
-                document.getElementById('esperando-proveedor').textContent = 
-                    data.estadisticas.por_estado.ESPERANDO_RESPUESTA?.cantidad || 0;
-                
-                // Aprobados
-                document.getElementById('aprobados').textContent =
-                    data.estadisticas.por_estado.APROBADO?.cantidad || 0;
-
-                // Actualizar badges de tabs
-                const pe = data.estadisticas.por_estado;
-                document.getElementById('tab-pendiente').textContent = pe.PENDIENTE?.cantidad || 0;
-                document.getElementById('tab-revision').textContent = pe.EN_REVISION?.cantidad || 0;
-                document.getElementById('tab-esperando').textContent = pe.ESPERANDO_RESPUESTA?.cantidad || 0;
-                document.getElementById('tab-aprobado').textContent = pe.APROBADO?.cantidad || 0;
-                document.getElementById('tab-completado').textContent = pe.COMPLETADO?.cantidad || 0;
-            }
-        })
-        .catch(error => console.error('Error al cargar estadisticas:', error));
-}
-
-// Cargar requerimientos
-function cargarRequerimientos(pagina = 1) {
-    const params = new URLSearchParams({
-        page: pagina,
-        ...filtrosActuales
-    });
-
-    fetch(`/app/api/requerimientos/listar/?${params}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                mostrarRequerimientos(data.requerimientos);
-                actualizarPaginacion(data.pagination);
-                paginaActual = pagina;
-            }
-        })
-        .catch(error => {
-            console.error('Error al cargar requerimientos:', error);
-            Swal.fire('Error', 'No se pudieron cargar los requerimientos', 'error');
-        });
-}
-
-// Mostrar requerimientos en la tabla
-function mostrarRequerimientos(requerimientos) {
-    const tbody = document.getElementById('tabla-requerimientos');
-    
-    if (requerimientos.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="10" class="text-center text-muted">
-                    <div class="py-4">
-                        <i class="ri-inbox-line fs-1 d-block mb-2"></i>
-                        No se encontraron requerimientos
-                    </div>
-                </td>
-            </tr>
-        `;
-        return;
-    }
-
-    tbody.innerHTML = requerimientos.map(req => `
-        <tr ${req.requiere_recordatorio ? 'class="table-danger"' : ''}>
-            <td>
-                <a href="/app/requerimientos/${req.id}/" class="fw-medium link-primary">
-                    ${req.numero_requerimiento}
-                </a>
-                ${req.nivel_urgencia === 'CRITICA' ? '<br><span class="badge bg-danger"><i class="ri-alarm-warning-line me-1"></i>CRÍTICO</span>' : ''}
-            </td>
-            <td>${obtenerBadgeTipo(req.tipo_codigo, req.tipo)}</td>
-            <td>${obtenerBadgeEstado(req.estado_codigo, req.estado)}</td>
-            <td>
-                <div class="d-flex align-items-center">
-                    <div class="flex-grow-1">
-                        <h6 class="fs-14 mb-1">${req.nombre_producto}
-                            ${req.cantidad > 1 ? `<span class="badge bg-soft-primary text-primary">x${req.cantidad}</span>` : ''}
-                        </h6>
-                        <p class="text-muted mb-0 small">SKU: ${req.sku}
-                            ${req.tiene_factura_compra ? '' : '<span class="badge badge-soft-warning ms-1" title="El proveedor suele exigir la factura de compra">sin factura</span>'}
-                        </p>
-                    </div>
-                </div>
-            </td>
-            <td>${req.cliente_nombre || '<span class="text-muted">Stock tienda</span>'}</td>
-            <td>${req.proveedor
-                ? `<span class="badge badge-soft-info">${req.proveedor}</span>`
-                : '<span class="badge badge-soft-warning"><i class="ri-error-warning-line me-1"></i>sin proveedor</span>'}</td>
-            <td><span class="badge badge-soft-secondary">${req.sucursal}</span></td>
-            <td class="text-center">
-                ${req.cantidad_fotos > 0 ?
-                    `<span class="badge ${req.fotos_completas ? 'bg-success' : 'bg-warning'}">
-                        <i class="ri-image-line me-1"></i>${req.cantidad_fotos}
-                    </span>
-                    ${!req.fotos_completas && ['PRODUCTO_FALLADO','GARANTIA','ERROR_DESPACHO'].includes(req.tipo_codigo) ?
-                        '<br><small class="text-warning">Incompletas</small>' : ''}`
-                : '<span class="text-muted">-</span>'}
-            </td>
-            <td>
-                <span class="badge ${req.dias_transcurridos > 7 ? 'badge-soft-danger' : req.dias_transcurridos > 3 ? 'badge-soft-warning' : 'badge-soft-success'}">
-                    ${req.dias_transcurridos} días
-                </span>
-            </td>
-            <td>
-                <div class="hstack gap-1">
-                    <a href="/app/requerimientos/${req.id}/" class="btn btn-sm btn-soft-primary" title="Ver detalle">
-                        <i class="ri-eye-line"></i>
-                    </a>
-                    ${!req.proveedor || !req.tiene_factura_compra ?
-                        `<a href="/app/requerimientos/${req.id}/?completar=1" class="btn btn-sm btn-warning"
-                            title="Falta ${!req.proveedor ? 'asignar proveedor' : 'la factura de compra'}">
-                            <i class="ri-edit-2-line"></i>
-                        </a>`
-                    : ''}
-                    ${req.requiere_recordatorio ?
-                        `<button class="btn btn-sm btn-soft-warning" onclick="enviarRecordatorioRapido(${req.id})" title="Enviar recordatorio">
-                            <i class="ri-mail-send-line"></i>
-                        </button>`
-                    : ''}
-                </div>
-            </td>
-        </tr>
-    `).join('');
-}
-
-// Obtener badge de estado
-function obtenerBadgeEstado(codigo, nombre) {
-    const badges = {
-        'PENDIENTE': 'warning',
-        'EN_REVISION': 'info',
-        'ESPERANDO_RESPUESTA': 'primary',
-        'APROBADO': 'success',
-        'RECHAZADO': 'danger',
-        'EN_PROCESO': 'info',
-        'COMPLETADO': 'success',
-        'CANCELADO': 'secondary'
-    };
-    const color = badges[codigo] || 'secondary';
-    return `<span class="badge badge-soft-${color}">${nombre}</span>`;
-}
-
-// Obtener badge de tipo con icono y color
-function obtenerBadgeTipo(codigo, nombre) {
-    const config = {
-        'PRODUCTO_FALLADO': { color: 'danger', icon: 'ri-error-warning-line' },
-        'ERROR_DESPACHO': { color: 'warning', icon: 'ri-exchange-line' },
-        'GARANTIA': { color: 'info', icon: 'ri-shield-check-line' },
-        'DEVOLUCION': { color: 'primary', icon: 'ri-arrow-go-back-line' },
-        'RECLAMO': { color: 'secondary', icon: 'ri-chat-delete-line' },
-        'CONSULTA': { color: 'success', icon: 'ri-questionnaire-line' },
-        'OTROS': { color: 'dark', icon: 'ri-more-line' },
-    };
-    const c = config[codigo] || { color: 'secondary', icon: 'ri-file-line' };
-    return `<span class="badge badge-soft-${c.color}"><i class="${c.icon} me-1"></i>${nombre}</span>`;
-}
-
-// Actualizar paginación
-function actualizarPaginacion(pagination) {
-    document.getElementById('showing-count').textContent = pagination.total_items > 0 ? 
-        ((pagination.current_page - 1) * 20 + 1) + '-' + Math.min(pagination.current_page * 20, pagination.total_items) : 
-        0;
-    document.getElementById('total-count').textContent = pagination.total_items;
-
-    const paginationEl = document.getElementById('pagination');
-    let html = '';
-
-    if (pagination.has_previous) {
-        html += `<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargarRequerimientos(${pagination.current_page - 1})">Anterior</a></li>`;
-    }
-
-    for (let i = 1; i <= pagination.total_pages; i++) {
-        if (i === pagination.current_page) {
-            html += `<li class="page-item active"><a class="page-link" href="javascript:void(0);">${i}</a></li>`;
-        } else if (Math.abs(i - pagination.current_page) <= 2 || i === 1 || i === pagination.total_pages) {
-            html += `<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargarRequerimientos(${i})">${i}</a></li>`;
-        }
-    }
-
-    if (pagination.has_next) {
-        html += `<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargarRequerimientos(${pagination.current_page + 1})">Siguiente</a></li>`;
-    }
-
-    paginationEl.innerHTML = html;
-}
-
-// Filtrar requerimientos
-function filtrarRequerimientos() {
-    const section = document.getElementById('filtros-section');
-    section.style.display = section.style.display === 'none' ? 'block' : 'none';
-}
-
-// Form submit
-document.getElementById('form-filtros').addEventListener('submit', function(e) {
-    e.preventDefault();
-    filtrosActuales = {
-        estado: document.getElementById('filtro-estado').value,
-        tipo: document.getElementById('filtro-tipo').value,
-        busqueda: document.getElementById('filtro-busqueda').value,
-        sin_respuesta: document.getElementById('filtro-sin-respuesta').value,
-    };
-    cargarRequerimientos(1);
-});
-
-// Limpiar filtros
-function limpiarFiltros() {
-    document.getElementById('form-filtros').reset();
-    filtrosActuales = {};
-    cargarRequerimientos(1);
-}
-
-// Exportar requerimientos
-function exportarRequerimientos() {
-    const params = new URLSearchParams(filtrosActuales);
-    window.location.href = `/app/api/requerimientos/exportar/?${params}`;
-}
-
-// Enviar recordatorio rápido desde la tabla
-function enviarRecordatorioRapido(requerimientoId) {
-    Swal.fire({
-        title: 'Enviar Recordatorio',
-        text: '¿Enviar recordatorio al proveedor?',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, enviar',
-        cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#f7b84b'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            fetch(`/app/api/requerimientos/${requerimientoId}/enviar-proveedor/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({})
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    Swal.fire('Enviado', 'Recordatorio enviado al proveedor', 'success');
-                    cargarRequerimientos(paginaActual);
-                } else {
-                    Swal.fire('Error', data.error, 'error');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                Swal.fire('Error', 'Error al enviar recordatorio', 'error');
-            });
-        }
-    });
-}
-
-// Filtrar por estado específico (click en tarjetas)
-function filtrarPorEstado(estado) {
-    filtrosActuales = { estado: estado };
-    document.getElementById('filtro-estado').value = estado;
-    document.getElementById('filtros-section').style.display = 'block';
-    cargarRequerimientos(1);
-}
-
-// Filtrar aprobados
-function filtrarAprobados() {
-    filtrarPorEstado('APROBADO');
-}
-
-// Filtro rapido desde tabs
-function filtroRapido(estado, tab) {
-    // Actualizar tabs activos
-    document.querySelectorAll('.nav-tabs-custom .nav-link').forEach(t => t.classList.remove('active'));
-    if (tab) tab.classList.add('active');
-
-    filtrosActuales = estado ? { estado: estado } : {};
-    document.getElementById('filtro-estado').value = estado;
-    cargarRequerimientos(1);
-}
-
-// Filtrar requerimientos sin respuesta > 7 dias
-function filtrarSinRespuesta() {
-    filtrosActuales = {
-        estado: 'ESPERANDO_RESPUESTA',
-        sin_respuesta: 'true'
-    };
-    document.getElementById('filtro-estado').value = 'ESPERANDO_RESPUESTA';
-    document.getElementById('filtro-sin-respuesta').value = 'true';
-    document.getElementById('filtros-section').style.display = 'block';
-    cargarRequerimientos(1);
-}
-</script>
 
 <!-- Modal crear requerimiento -->
 <!-- backdrop estático: un clic fuera del modal no descarta el formulario a medio llenar -->
@@ -640,7 +233,349 @@ function filtrarSinRespuesta() {
     </div>
 </div>
 
+{% include 'vistas/modulo_requerimientos/_scripts_requerimientos.html' %}
+
+<script>
+let paginaActual = 1;
+let filtrosActuales = {};
+let plazoRespuestaDias = 7;
+
+document.addEventListener('DOMContentLoaded', function () {
+    cargarEstadisticas();
+    cargarRequerimientos();
+
+    const params = new URLSearchParams(window.location.search);
+
+    // Llegar acá rebotado por falta de permisos merece una explicación, no
+    // un listado vacío sin contexto.
+    if (params.get('sin_acceso') === '1') {
+        Swal.fire({
+            icon: 'info',
+            title: 'Sin acceso a ese requerimiento',
+            text: 'Pertenece a otra sucursal o empresa. Si necesita verlo, pídaselo a un administrador.',
+        });
+        history.replaceState(null, '', window.location.pathname);
+    }
+
+    const modalEl = document.getElementById('modalCrearRequerimiento');
+    if (params.get('panel') === 'crear' && modalEl) {
+        new bootstrap.Modal(modalEl).show();
+    }
+    if (modalEl) {
+        // Al cerrar el modal, limpiar ?panel=crear para que un F5 no lo reabra
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            if (new URLSearchParams(window.location.search).get('panel') === 'crear') {
+                history.replaceState(null, '', window.location.pathname);
+            }
+        });
+        // Reabrir siempre desde el paso 1: si no, el asistente aparece en el
+        // paso 3 del intento anterior y descoloca.
+        modalEl.addEventListener('show.bs.modal', function () {
+            if (typeof irAPaso === 'function') irAPaso(1);
+        });
+    }
+
+    // Buscar mientras se escribe, sin castigar cada tecla con una consulta.
+    let temporizador;
+    document.getElementById('filtro-busqueda').addEventListener('input', function () {
+        clearTimeout(temporizador);
+        temporizador = setTimeout(() => aplicarFiltrosDesdeFormulario(), 400);
+    });
+
+    document.getElementById('form-filtros').addEventListener('submit', function (e) {
+        e.preventDefault();
+        aplicarFiltrosDesdeFormulario();
+    });
+});
+
+// ══════════ Datos ══════════
+
+function cargarEstadisticas() {
+    fetch('/app/api/requerimientos/estadisticas/')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return;
+            const e = data.estadisticas;
+            const pe = e.por_estado || {};
+            const et = e.por_etapa || {};
+            plazoRespuestaDias = e.plazo_respuesta_dias || 7;
+
+            document.getElementById('kpi-valor-empresa').textContent = et.EMPRESA || 0;
+            document.getElementById('kpi-valor-proveedor').textContent = et.PROVEEDOR || 0;
+            document.getElementById('kpi-valor-resolucion').textContent = et.RESOLUCION || 0;
+            document.getElementById('kpi-valor-incompletos').textContent = e.incompletos || 0;
+
+            document.getElementById('tab-todos').textContent = e.total || 0;
+            ['PENDIENTE', 'EN_REVISION', 'VALIDADO', 'ESPERANDO_RESPUESTA',
+             'APROBADO', 'RECHAZADO', 'COMPLETADO'].forEach(c => {
+                const el = document.getElementById('tab-' + c);
+                if (el) el.textContent = (pe[c] && pe[c].cantidad) || 0;
+            });
+
+            pintarAvisos(e);
+        })
+        .catch(err => console.error('Error al cargar estadisticas:', err));
+}
+
+function pintarAvisos(e) {
+    const caja = document.getElementById('avisos-gestion');
+    let html = '';
+
+    if (e.sin_respuesta_7dias > 0) {
+        html += `<div class="alert alert-danger alert-border-left d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-2">
+            <i class="ri-alarm-warning-line fs-16"></i>
+            <span class="flex-grow-1 small"><strong>${e.sin_respuesta_7dias}</strong> requerimiento(s) llevan más de ${plazoRespuestaDias} días
+                sin respuesta del proveedor.</span>
+            <button type="button" class="btn btn-sm btn-danger" onclick="filtrarSinRespuesta()">Ver cuáles</button>
+        </div>`;
+    }
+    if (e.incompletos > 0) {
+        html += `<div class="alert alert-warning alert-border-left d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-0">
+            <i class="ri-error-warning-line fs-16"></i>
+            <span class="flex-grow-1 small"><strong>${e.incompletos}</strong> requerimiento(s) no se pueden enviar:
+                les falta el proveedor o la factura de compra.</span>
+            <button type="button" class="btn btn-sm btn-warning" onclick="filtrarIncompletos()">Completar</button>
+        </div>`;
+    }
+    caja.innerHTML = html;
+}
+
+function cargarRequerimientos(pagina = 1) {
+    const params = new URLSearchParams({ page: pagina, ...filtrosActuales });
+    const tbody = document.getElementById('tabla-requerimientos');
+    tbody.innerHTML = `<tr><td colspan="10" class="text-center py-4">
+        <div class="spinner-border text-primary spinner-border-sm"></div></td></tr>`;
+
+    fetch(`/app/api/requerimientos/listar/?${params}`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) throw new Error(data.error || 'Error');
+            mostrarRequerimientos(data.requerimientos);
+            actualizarPaginacion(data.pagination);
+            paginaActual = pagina;
+        })
+        .catch(error => {
+            console.error('Error al cargar requerimientos:', error);
+            tbody.innerHTML = `<tr><td colspan="10" class="text-center text-muted py-4">
+                <i class="ri-wifi-off-line fs-3 d-block mb-1"></i>No se pudieron cargar los requerimientos
+                <div><button class="btn btn-sm btn-soft-primary mt-2" onclick="cargarRequerimientos(${pagina})">Reintentar</button></div>
+            </td></tr>`;
+        });
+}
+
+// ══════════ Tabla ══════════
+
+function mostrarRequerimientos(requerimientos) {
+    const tbody = document.getElementById('tabla-requerimientos');
+
+    if (!requerimientos.length) {
+        const hayFiltros = Object.values(filtrosActuales).some(Boolean);
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center text-muted py-5">
+            <i class="ri-inbox-line fs-1 d-block mb-2 opacity-50"></i>
+            ${hayFiltros
+                ? 'Ningún requerimiento coincide con estos filtros.<div><button class="btn btn-sm btn-soft-primary mt-2" onclick="limpiarFiltros()">Quitar filtros</button></div>'
+                : 'Todavía no hay requerimientos cargados.'}
+        </td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = requerimientos.map(req => {
+        const alerta = req.requiere_recordatorio || req.nivel_urgencia === 'CRITICA';
+        const dias = req.dias_transcurridos;
+        const colorDias = dias > 14 ? 'danger' : dias > 7 ? 'warning' : 'success';
+
+        return `
+        <tr class="${alerta ? 'req-fila-alerta' : ''}">
+            <td class="p-0 d-none d-md-table-cell"><span class="req-etapa req-etapa-${req.etapa}" title="Etapa: ${req.etapa}"></span></td>
+            <td data-col="N°">
+                <a href="/app/requerimientos/${req.id}/" class="req-num link-primary d-block">${reqEsc(req.numero_requerimiento)}</a>
+                <div class="mt-1">${reqBadgeTipo(req.tipo_codigo, req.tipo)}</div>
+            </td>
+            <td data-col="Estado">
+                ${reqPillEstado(req.estado_codigo, req.estado)}
+                ${req.faltantes && req.faltantes.length ? `<div class="mt-1">${reqChipFaltantes(req.faltantes)}</div>` : ''}
+                ${req.requiere_recordatorio ? `<div class="mt-1"><span class="req-falta"><i class="ri-alarm-warning-line"></i>sin respuesta hace ${req.dias_sin_respuesta}d</span></div>` : ''}
+            </td>
+            <td data-col="Producto" class="req-producto">
+                <div class="req-nombre">${reqEsc(req.nombre_producto)}</div>
+                <div class="text-muted" style="font-size:.7rem">
+                    SKU ${reqEsc(req.sku)}${req.cantidad > 1 ? ` · <span class="fw-semibold">${req.cantidad} und</span>` : ''}
+                </div>
+            </td>
+            <td data-col="Cliente">${req.cliente_nombre
+                ? reqEsc(req.cliente_nombre)
+                : '<span class="text-muted" style="font-size:.75rem"><i class="ri-store-2-line me-1"></i>Stock tienda</span>'}</td>
+            <td data-col="Proveedor">${req.proveedor
+                ? `<span class="text-truncate d-inline-block" style="max-width:140px" title="${reqEsc(req.proveedor)}">${reqEsc(req.proveedor)}</span>`
+                : '<span class="text-danger" style="font-size:.75rem"><i class="ri-error-warning-line me-1"></i>sin asignar</span>'}</td>
+            <td data-col="Sucursal" class="d-none d-xl-table-cell"><span class="badge badge-soft-secondary">${reqEsc(req.sucursal)}</span></td>
+            <td data-col="Evidencia" class="text-center">
+                ${req.cantidad_fotos > 0
+                    ? `<span class="badge ${req.fotos_completas ? 'badge-soft-success' : 'badge-soft-warning'}"
+                             title="${req.fotos_completas ? 'Fotos obligatorias completas' : 'Faltan fotos obligatorias'}">
+                        <i class="ri-image-line me-1"></i>${req.cantidad_fotos}/${req.max_fotos}</span>`
+                    : '<span class="badge badge-soft-danger" title="Sin fotos: el proveedor puede rechazarlo"><i class="ri-image-off-line"></i></span>'}
+            </td>
+            <td data-col="Antigüedad" class="text-center">
+                <span class="badge badge-soft-${colorDias}">${dias}d</span>
+            </td>
+            <td data-col="" class="text-end">
+                <div class="hstack gap-1 justify-content-end">
+                    <a href="/app/requerimientos/${req.id}/" class="btn btn-sm btn-soft-primary" title="Ver detalle"><i class="ri-eye-line"></i></a>
+                    ${req.faltantes && req.faltantes.length
+                        ? `<a href="/app/requerimientos/${req.id}/?completar=1" class="btn btn-sm btn-warning"
+                              title="Falta ${reqEsc(req.faltantes.join(' y '))}"><i class="ri-edit-2-line"></i></a>`
+                        : ''}
+                    ${req.requiere_recordatorio
+                        ? `<button class="btn btn-sm btn-soft-danger" onclick="enviarRecordatorioRapido(${req.id}, '${reqEsc(req.numero_requerimiento)}')"
+                              title="Enviar recordatorio al proveedor"><i class="ri-mail-send-line"></i></button>`
+                        : ''}
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function actualizarPaginacion(pagination) {
+    const desde = pagination.total_items > 0 ? (pagination.current_page - 1) * 20 + 1 : 0;
+    const hasta = Math.min(pagination.current_page * 20, pagination.total_items);
+    document.getElementById('showing-count').textContent = pagination.total_items > 0 ? `${desde}-${hasta}` : '0';
+    document.getElementById('total-count').textContent = pagination.total_items;
+
+    let html = '';
+    if (pagination.has_previous) {
+        html += `<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargarRequerimientos(${pagination.current_page - 1})">‹</a></li>`;
+    }
+    for (let i = 1; i <= pagination.total_pages; i++) {
+        if (i === pagination.current_page) {
+            html += `<li class="page-item active"><a class="page-link" href="javascript:void(0);">${i}</a></li>`;
+        } else if (Math.abs(i - pagination.current_page) <= 2 || i === 1 || i === pagination.total_pages) {
+            html += `<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargarRequerimientos(${i})">${i}</a></li>`;
+        }
+    }
+    if (pagination.has_next) {
+        html += `<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargarRequerimientos(${pagination.current_page + 1})">›</a></li>`;
+    }
+    document.getElementById('pagination').innerHTML = html;
+}
+
+// ══════════ Filtros ══════════
+
+function alternarFiltros() {
+    const s = document.getElementById('filtros-section');
+    const abierto = s.style.display !== 'none';
+    s.style.display = abierto ? 'none' : 'block';
+    document.getElementById('btn-filtros').classList.toggle('btn-primary', !abierto);
+    document.getElementById('btn-filtros').classList.toggle('btn-soft-secondary', abierto);
+    if (!abierto) document.getElementById('filtro-busqueda').focus();
+}
+
+function aplicarFiltrosDesdeFormulario() {
+    filtrosActuales = {
+        estado: document.getElementById('filtro-estado').value,
+        tipo: document.getElementById('filtro-tipo').value,
+        prioridad: document.getElementById('filtro-prioridad').value,
+        busqueda: document.getElementById('filtro-busqueda').value,
+        fecha_inicio: document.getElementById('filtro-fecha-inicio').value,
+        fecha_fin: document.getElementById('filtro-fecha-fin').value,
+    };
+    sincronizarTab(filtrosActuales.estado);
+    marcarKpiActivo(null);
+    cargarRequerimientos(1);
+}
+
+function limpiarFiltros() {
+    document.getElementById('form-filtros').reset();
+    filtrosActuales = {};
+    sincronizarTab('');
+    marcarKpiActivo(null);
+    cargarRequerimientos(1);
+}
+
+function filtroRapido(estado, tab) {
+    document.querySelectorAll('#tabs-estado .nav-link').forEach(t => t.classList.remove('active'));
+    if (tab) tab.classList.add('active');
+    filtrosActuales = estado ? { estado } : {};
+    document.getElementById('filtro-estado').value = estado;
+    marcarKpiActivo(null);
+    cargarRequerimientos(1);
+}
+
+function sincronizarTab(estado) {
+    document.querySelectorAll('#tabs-estado .nav-link').forEach(t => {
+        t.classList.toggle('active', (t.dataset.estado || '') === (estado || ''));
+    });
+}
+
+function marcarKpiActivo(id) {
+    document.querySelectorAll('.req-kpi').forEach(k => k.classList.toggle('activo', k.id === id));
+}
+
+function filtrarPorEtapa(etapa, tarjeta) {
+    filtrosActuales = { etapa };
+    document.getElementById('filtro-estado').value = '';
+    sincronizarTab('');
+    marcarKpiActivo(tarjeta ? tarjeta.id : null);
+    cargarRequerimientos(1);
+}
+
+function filtrarIncompletos(tarjeta) {
+    filtrosActuales = { incompletos: 'true' };
+    document.getElementById('filtro-estado').value = '';
+    sincronizarTab('');
+    marcarKpiActivo(tarjeta ? tarjeta.id : 'kpi-incompletos');
+    cargarRequerimientos(1);
+}
+
+function filtrarSinRespuesta() {
+    filtrosActuales = { estado: 'ESPERANDO_RESPUESTA', sin_respuesta: 'true' };
+    document.getElementById('filtro-estado').value = 'ESPERANDO_RESPUESTA';
+    sincronizarTab('ESPERANDO_RESPUESTA');
+    marcarKpiActivo('kpi-proveedor');
+    cargarRequerimientos(1);
+}
+
+// ══════════ Acciones ══════════
+
+function exportarRequerimientos() {
+    // `filtrosActuales` ya trae todo lo aplicado (estado, etapa, incompletos,
+    // búsqueda, fechas...). El backend ahora los respeta todos, así que el
+    // Excel baja exactamente lo que está en pantalla.
+    const params = new URLSearchParams(
+        Object.entries(filtrosActuales).filter(([, v]) => v));
+    window.location.href = `/app/api/requerimientos/exportar/?${params}`;
+}
+
+function enviarRecordatorioRapido(requerimientoId, numero) {
+    Swal.fire({
+        title: 'Enviar recordatorio',
+        html: `Se le reenviará el requerimiento <strong>${numero}</strong> al proveedor,
+               con el formato PDF y las fotos.`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, enviar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#405189',
+        showLoaderOnConfirm: true,
+        preConfirm: () => fetch(`/app/api/requerimientos/${requerimientoId}/enviar-proveedor/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+            body: JSON.stringify({ es_reenvio: true }),
+        }).then(r => r.json()).then(d => {
+            if (!d.success) throw new Error(d.error);
+            return d;
+        }).catch(e => Swal.showValidationMessage(e.message)),
+        allowOutsideClick: () => !Swal.isLoading(),
+    }).then(r => {
+        if (r.isConfirmed && r.value) {
+            Swal.fire('Enviado', r.value.message, 'success');
+            cargarRequerimientos(paginaActual);
+            cargarEstadisticas();
+        }
+    });
+}
+</script>
+
 {% include 'vistas/modulo_requerimientos/_crear_requerimiento_scripts.html' %}
 
 {% include '../../layout/footer.html' %}
-

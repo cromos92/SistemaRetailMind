@@ -367,6 +367,7 @@ from .views_modulo_requerimientos import (
     detalle_requerimiento,
     editar_requerimiento,
     actualizar_estado_requerimiento,
+    decidir_requerimiento,
     enviar_a_proveedor,
     registrar_respuesta_proveedor,
     completar_requerimiento,
@@ -380,6 +381,7 @@ from .views_modulo_requerimientos import (
     descargar_formato_requerimiento,
     sugerir_proveedor_por_sku,
     buscar_compras_producto,
+    buscar_dte_compra_por_numero,
     obtener_tipos_foto,
 )
 from .views_modulo_giftcards import (
@@ -1461,6 +1463,7 @@ urlpatterns = [
     path('api/requerimientos/<int:requerimiento_id>/', detalle_requerimiento, name='api_detalle_requerimiento'),
     path('api/requerimientos/<int:requerimiento_id>/editar/', editar_requerimiento, name='api_editar_requerimiento'),
     path('api/requerimientos/<int:requerimiento_id>/actualizar-estado/', actualizar_estado_requerimiento, name='api_actualizar_estado_requerimiento'),
+    path('api/requerimientos/<int:requerimiento_id>/decidir/', decidir_requerimiento, name='api_decidir_requerimiento'),
     path('api/requerimientos/<int:requerimiento_id>/enviar-proveedor/', enviar_a_proveedor, name='api_enviar_a_proveedor'),
     path('api/requerimientos/<int:requerimiento_id>/respuesta-proveedor/', registrar_respuesta_proveedor, name='api_registrar_respuesta_proveedor'),
     path('api/requerimientos/<int:requerimiento_id>/completar/', completar_requerimiento, name='api_completar_requerimiento'),
@@ -1469,6 +1472,7 @@ urlpatterns = [
     path('api/requerimientos/<int:requerimiento_id>/formato-pdf/', descargar_formato_requerimiento, name='api_formato_pdf_requerimiento'),
     path('api/requerimientos/sugerir-proveedor/', sugerir_proveedor_por_sku, name='api_sugerir_proveedor_requerimiento'),
     path('api/requerimientos/buscar-compras/', buscar_compras_producto, name='api_buscar_compras_requerimiento'),
+    path('api/requerimientos/buscar-factura/', buscar_dte_compra_por_numero, name='api_buscar_factura_requerimiento'),
     path('api/requerimientos/buscar-producto/', buscar_producto_sku, name='api_buscar_producto_requerimiento'),
     path('api/requerimientos/buscar-ticket/', buscar_ticket_por_folio, name='api_buscar_ticket_requerimiento'),
     path('api/requerimientos/buscar-cliente/', buscar_cliente_por_rut, name='api_buscar_cliente_requerimiento'),

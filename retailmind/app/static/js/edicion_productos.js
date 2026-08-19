@@ -409,6 +409,13 @@ function guardarProductoBase() {
                         htmlMsg += `<div class="small text-muted"><i class="bi bi-layers me-1"></i>${sync.lotes_actualizados} lote(s) FIFO actualizados</div>`;
                     }
                 }
+                if (data.traspasos_en_transito) {
+                    const t = data.traspasos_en_transito;
+                    htmlMsg += `<div class="small text-warning-emphasis mt-2">
+                        <i class="bi bi-truck me-1"></i>${t.total_documentos} guia(s) en transito
+                        (${t.unidades} und): el destino vera el dato nuevo al recepcionar.
+                    </div>`;
+                }
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'success',
@@ -440,23 +447,88 @@ function guardarProductoBase() {
         });
     };
 
-    if (propagar && typeof Swal !== 'undefined') {
-        const sucursal = $('#editSucursalBadge').text() || 'todas las bodegas';
+    if (typeof Swal === 'undefined') {
+        guardar();
+        return;
+    }
+
+    // Antes de escribir, pedir el ALCANCE REAL al backend: cuantas fichas y
+    // bodegas toca la edicion con la identidad completa del producto (codigo +
+    // marca + color + genero + categoria) y si hay mercaderia despachada sin
+    // recepcionar. Un "se aplica en todas las bodegas" generico no dice nada:
+    // el numero si.
+    fetch('/app/productos/preview-edicion-masiva/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            producto_ids: [productoId],
+            propagar_sucursales: propagar
+        })
+    })
+    .then(r => r.json())
+    .catch(() => ({ success: false }))
+    .then(data => {
+        const imp = (data && data.success) ? data.impacto : null;
+        const transito = imp ? imp.traspasos_en_transito : null;
+
+        // Sin propagacion y sin mercaderia viajando no hay nada que advertir.
+        if (!propagar && !transito) {
+            guardar();
+            return;
+        }
+
+        let html = '';
+        if (propagar) {
+            const bodegas = (imp && imp.sucursales && imp.sucursales.length)
+                ? imp.sucursales.map(b => `<span class="badge bg-secondary ms-1">${b}</span>`).join('')
+                : '';
+            const nFichas = imp ? imp.productos_total : '?';
+            html += `<div class="text-start">
+                Se reescribiran <strong>${nFichas}</strong> ficha(s) del articulo
+                <em>"${articulo}"</em>${bodegas ? ' en:' : '.'} ${bodegas}
+                <div class="small text-muted mt-1">
+                    Solo alcanza a la MISMA variante (mismo codigo, marca, color, genero y categoria).
+                    Se sincronizan precio, descripcion, categoria y atributos.
+                </div>
+            </div>`;
+        }
+
+        if (transito) {
+            const docs = (transito.documentos || [])
+                .map(d => `<li>${d.tipo_documento} N&deg; ${d.numero_documento} &rarr; ${d.destino} (${d.fecha_emision})</li>`)
+                .join('');
+            html += `<div class="alert alert-warning text-start mt-3 mb-0" style="font-size:.85rem;">
+                <div class="fw-bold mb-1"><i class="bi bi-truck me-1"></i>Hay mercaderia despachada sin recepcionar</div>
+                <strong>${transito.total_documentos}</strong> documento(s) y
+                <strong>${transito.unidades}</strong> unidad(es) viajando hacia
+                ${(transito.sucursales_destino || []).join(', ') || 'otras bodegas'}.
+                <div class="small mt-1">
+                    La pantalla de <strong>Recepcion DTE</strong> lee la ficha viva: el receptor vera
+                    el dato NUEVO aunque su guia impresa diga el anterior. La guia se puede
+                    recepcionar igual (el vinculo es por SKU), y ahi quedara marcada como
+                    &laquo;ficha editada&raquo;.
+                </div>
+                ${docs ? `<ul class="mb-0 mt-1 ps-3">${docs}</ul>` : ''}
+            </div>`;
+        }
+
         Swal.fire({
-            icon: 'question',
-            title: 'Confirmar cambios globales',
-            html: `Los cambios se aplicarán en <strong>todas las bodegas</strong> donde exista el artículo <em>"${articulo}"</em>.<br><small class="text-muted">Precio, descripción, categoría y atributos se sincronizarán.</small>`,
+            icon: transito ? 'warning' : 'question',
+            title: transito ? 'Hay despachos en transito' : 'Confirmar cambios globales',
+            html: html,
+            width: transito ? 640 : 520,
             showCancelButton: true,
-            confirmButtonColor: '#0d6efd',
+            confirmButtonColor: transito ? '#f0a500' : '#0d6efd',
             cancelButtonColor: '#6c757d',
-            confirmButtonText: '<i class="bi bi-save me-1"></i>Guardar en todas',
+            confirmButtonText: '<i class="bi bi-save me-1"></i>Guardar de todas formas',
             cancelButtonText: 'Cancelar'
         }).then(result => {
             if (result.isConfirmed) guardar();
         });
-    } else {
-        guardar();
-    }
+    });
 }
 
 // ========== FUNCIONES DE AJUSTE DE STOCK ==========

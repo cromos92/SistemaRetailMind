@@ -480,6 +480,7 @@ def recepciones_pendientes_api(request):
 
             resumen_tallas = {}
             detalle_completo = []
+            lineas_editadas_doc = 0
             # Saldo por talla de NC aún no descontadas: se va consumiendo entre
             # las líneas que comparten la misma productoTalla para no imputar
             # la misma unidad acreditada a dos líneas distintas.
@@ -514,11 +515,22 @@ def recepciones_pendientes_api(request):
                 marca = producto.atributo1.valor if (producto and producto.atributo1) else ''
                 color = producto.atributo2.valor if (producto and producto.atributo2) else ''
 
+                # Snapshot de la línea al emitir vs. ficha viva: si no calzan,
+                # el artículo se editó con la mercadería ya despachada.
+                descripcion_documento = (detalle.descripcion or '').strip()
+                ficha_editada = _ficha_editada_tras_emitir(descripcion_documento, producto)
+                if ficha_editada:
+                    lineas_editadas_doc += 1
+
                 detalle_completo.append({
                     'dte_producto_id': detalle.id,  # ID del registro Dte_Productos
                     'sku': producto_talla.sku if producto_talla else '-',
                     'descripcion': producto.descripcion if producto else '',
                     'articulo': articulo,
+                    # Lo que decía el documento cuando se emitió (lo que trae
+                    # impreso el chofer). Solo difiere si editaron la ficha.
+                    'descripcion_documento': descripcion_documento,
+                    'ficha_editada': ficha_editada,
                     'marca': marca,
                     'color': color,
                     'talla': talla,
@@ -553,6 +565,8 @@ def recepciones_pendientes_api(request):
                 ],
                 'detalle': detalle_completo,
                 'total_unidades': total_unidades_doc,
+                # Líneas cuyo producto se renombró/editó después de emitir.
+                'lineas_editadas': lineas_editadas_doc,
                 # Unidades con NC que el documento AÚN cuenta (0 cuando todas
                 # las NC ya redujeron las líneas). El neto es lo que realmente
                 # corresponde ingresar a stock.
@@ -712,6 +726,32 @@ def historial_recepciones_api(request):
             'success': False,
             'error': f'Error al obtener historial: {str(e)}'
         }, status=500)
+
+
+def _ficha_editada_tras_emitir(descripcion_documento, producto):
+    """¿La ficha cambió de nombre DESPUÉS de emitirse la guía?
+
+    La línea del DTE guarda un snapshot del texto al emitir
+    (`Dte_Productos.descripcion`, típicamente "ARTICULO - Talla NN"), pero esta
+    pantalla arma la fila leyendo el producto VIVO por FK. Si alguien edita el
+    artículo mientras la mercadería viaja, el receptor ve el nombre NUEVO y su
+    guía impresa dice el ANTERIOR, sin ninguna señal de que cambió.
+
+    Se compara contra el código Y la descripción actuales porque no todos los
+    flujos snapshotean el mismo campo; basta que uno calce para considerar que
+    la ficha no se tocó. Falso-negativo antes que falso-positivo: un aviso de
+    más en cada línea sería ruido puro.
+    """
+    from .utils_producto_match import normalizar_articulo
+
+    doc = normalizar_articulo(descripcion_documento)
+    if not doc or not producto:
+        return False
+    for campo in (producto.articulo, producto.descripcion):
+        actual = normalizar_articulo(campo)
+        if actual and actual in doc:
+            return False
+    return True
 
 
 @login_required
@@ -1062,8 +1102,13 @@ def confirmar_recepcion_api(request):
                     # combinacion (articulo + sucursal + 4 atributos) elegimos el
                     # mas antiguo por id y logueamos warning. Evita que el DTE
                     # falle con MultipleObjectsReturned.
+                    # `iexact` y no `=`: las fichas legacy de la migración
+                    # Laravel traen el mismo código en otra caja ('zap-777' vs
+                    # 'ZAP-777'). Con igualdad exacta, la recepción no las
+                    # encontraba y creaba una ficha DUPLICADA en la tienda,
+                    # partiendo el histórico y los SKU del artículo en dos.
                     producto_destino_qs = Producto.objects.filter(
-                        articulo=producto_origen.articulo,
+                        articulo__iexact=(producto_origen.articulo or '').strip(),
                         sucursal=sucursal_destino,
                         atributo1=producto_origen.atributo1,
                         atributo2=producto_origen.atributo2,
@@ -4217,19 +4262,44 @@ def obtener_productos_regularizar(request):
         rechazados_dte = base_stats_qs.filter(dte__estado_dte='RECHAZADO').count()
         dtes_con_problemas = queryset.values('dte').distinct().count()
 
-        # Paginación: antes había un slice duro [:100] que ocultaba registros en
-        # modo "Ver todas las sucursales". Ahora paginamos para que el usuario
-        # pueda navegar todos los resultados sin perderlos.
+        # Paginación POR DOCUMENTO (no por línea).
+        #
+        # Antes se paginaba de a 25 *líneas*: una factura con 30 tallas con
+        # problema quedaba partida en dos páginas. Eso rompía dos cosas:
+        #   1. La lectura: la misma factura se repetía una fila por talla y la
+        #      cabecera del documento se veía N veces.
+        #   2. La plata: "Regularizar DTE completo (1 NC)" arma la nota con las
+        #      líneas que el front tiene cargadas (window.productosProblemas),
+        #      o sea SOLO las de la página actual → NC por media factura, sin
+        #      aviso de que faltaban líneas.
+        #
+        # Ahora la página es un conjunto de DTEs y viajan TODAS sus líneas.
         try:
             pagina = max(int(request.GET.get('pagina', 1) or 1), 1)
         except (TypeError, ValueError):
             pagina = 1
-        page_size = 25
-        paginator = Paginator(queryset, page_size)
+
+        # Un DTE por fila, del más nuevo al más antiguo. GROUP BY dte_id colapsa
+        # las filas duplicadas que introducen los joins de sucursal_filter.
+        dte_ids_ordenados = [
+            row['dte_id']
+            for row in (
+                queryset.order_by()
+                .values('dte_id')
+                .annotate(_fecha=Max('dte__fecha_emision'), _ultimo=Max('id'))
+                .order_by('-_fecha', '-_ultimo')
+            )
+        ]
+        page_size = 25  # documentos por página
+        paginator = Paginator(dte_ids_ordenados, page_size)
         page_obj = paginator.get_page(pagina)
+        dte_ids_pagina = list(page_obj.object_list)
+
+        # Todas las líneas con problema de los DTEs de esta página.
+        lineas_pagina = queryset.filter(dte_id__in=dte_ids_pagina).order_by('dte_id', 'id')
 
         productos = []
-        for recepcion in page_obj.object_list:
+        for recepcion in lineas_pagina:
             producto_nombre = 'Sin producto'
             if recepcion.producto_talla and recepcion.producto_talla.producto:
                 producto_nombre = recepcion.producto_talla.producto.articulo
@@ -4373,6 +4443,11 @@ def obtener_productos_regularizar(request):
                 'regularizado_por': recepcion.regularizado_por or None,
             })
 
+        # Respetar el orden de la página (documento más nuevo primero). La query
+        # de líneas vuelve ordenada por dte_id, que no es el orden cronológico.
+        orden_dte = {dte_id: i for i, dte_id in enumerate(dte_ids_pagina)}
+        productos.sort(key=lambda pr: (orden_dte.get(pr['dte_id'], 10 ** 9), pr['id']))
+
         # ── Rechazados "en frío" (sin Productos_Recepcionados) ───────────────
         # Para los tabs 'rechazado' y 'todos' incluimos también los DTEs que
         # fueron rechazados ANTES de iniciar cualquier recepción. Esos viven
@@ -4442,7 +4517,11 @@ def obtener_productos_regularizar(request):
             'pagination': {
                 'page': page_obj.number,
                 'total_pages': paginator.num_pages,
+                # total_items cuenta DOCUMENTOS (la unidad de paginación);
+                # total_lineas mantiene el conteo de líneas con problema.
                 'total_items': paginator.count,
+                'total_lineas': total_queryset,
+                'unidad': 'documentos',
                 'page_size': page_size,
             },
             'estadisticas': {
@@ -6855,10 +6934,11 @@ def regularizar_dte_masivo(request):
         
         data = json.loads(request.body or '{}')
         dte_numero = data.get('dte_numero')
+        dte_id = data.get('dte_id')
         productos_ids = data.get('productos_ids', [])
         motivo = data.get('motivo', '')
         
-        if not dte_numero or not productos_ids or not motivo:
+        if not (dte_numero or dte_id) or not productos_ids or not motivo:
             return JsonResponse({
                 'success': False,
                 'error': 'Faltan datos requeridos (DTE, productos o motivo)'
@@ -6875,11 +6955,17 @@ def regularizar_dte_masivo(request):
             # select_for_update(of=('self',)) bloquea solo las filas de
             # Productos_Recepcionados (no las tablas de select_related, que
             # además son nullable y romperían el FOR UPDATE).
+            #
+            # Se acota por dte_id cuando el front lo manda: el folio NO es único
+            # (PAO4 reusó folios de PAO3 con el mismo RUT), así que filtrar solo
+            # por numero_documento puede mezclar líneas de dos documentos
+            # distintos en la misma NC.
+            filtro_dte = {'dte_id': dte_id} if dte_id else {'dte__numero_documento': dte_numero}
             recepciones = Productos_Recepcionados.objects.select_for_update(
                 of=('self',)
             ).filter(
                 id__in=productos_ids,
-                dte__numero_documento=dte_numero,
+                **filtro_dte,
             ).select_related('dte', 'dte_producto', 'producto_talla', 'producto_talla__producto')
 
             if not recepciones.exists():
@@ -7223,62 +7309,148 @@ def regularizar_dte_masivo(request):
 @requiere_permiso('recepcion_dte', 'puede_aprobar')
 @require_http_methods(["POST"])
 def anular_regularizacion_dte(request):
-    """Anula una regularización hecha por error (receptor puede cancelar antes de que emisor resuelva)"""
+    """
+    "Llegó todo": cierra las diferencias de UN documento afirmando que la
+    mercadería sí está, y sube al stock del destino lo que se había declarado
+    faltante o dañado.
+
+    Es la contrapartida de haber marcado el problema por error (la bodega
+    "anuló" líneas que en realidad sí se despacharon / sí llegaron). Las
+    unidades en disputa están en limbo: el origen ya las descontó al emitir el
+    traspaso y el destino nunca las sumó. Esto las aterriza en el destino y deja
+    las líneas en RECEPCIONADO_OK.
+
+    Lo puede ejecutar cualquiera de los dos lados (origen o destino), porque el
+    resultado es el mismo: las unidades entran al stock del destino.
+
+    Bloquea (sin tocar nada) si:
+      - El usuario no pertenece al origen ni al destino del traspaso.
+      - Hay NC o ajuste vigente sobre el DTE: esa NC ya devolvió el valor (y en
+        guías, el stock) al origen; sumar además al destino duplicaría unidades
+        y dejaría la NC en el SII sin contrapartida. Hay que anular la NC
+        primero.
+      - No queda ninguna línea con problema abierto que cerrar.
+
+    NO toca líneas con solicitud de regularización en curso ni ya REGULARIZADAS:
+    esas se resuelven por su propio flujo.
+    """
     try:
         from .models import Productos_Recepcionados, Movimientos_Producto, Producto_Talla
-        
+
         data = json.loads(request.body or '{}')
+        dte_id = data.get('dte_id')
         dte_numero = data.get('dte_numero')
         productos_ids = data.get('productos_ids', [])
-        motivo = data.get('motivo', '')
-        
-        if not dte_numero or not productos_ids or not motivo:
+        motivo = (data.get('motivo') or '').strip()
+
+        if not (dte_id or dte_numero) or not motivo:
             return JsonResponse({
                 'success': False,
-                'error': 'Faltan datos requeridos'
+                'error': 'Faltan datos requeridos (documento y motivo).'
             }, status=400)
-        
+
         usuario = request.user.username
         hoy = timezone.now()
-        sucursal_id = request.session.get('idSucursalActual')
-        
-        with transaction.atomic():
-            recepciones = Productos_Recepcionados.objects.filter(
-                id__in=productos_ids,
-                estado__in=['EN_REGULARIZACION', 'FALTANTE', 'RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO']
-            ).select_related('dte', 'producto_talla', 'producto_talla__producto')
-            
-            if not recepciones.exists():
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+
+        try:
+            dte = (
+                Dte.objects.select_related('sucursal')
+                .get(id=dte_id) if dte_id else
+                Dte.objects.select_related('sucursal').filter(numero_documento=dte_numero).order_by('-id').first()
+            )
+        except Dte.DoesNotExist:
+            dte = None
+        if not dte:
+            return JsonResponse({'success': False, 'error': 'No se encontró el documento.'}, status=404)
+
+        # ── Gate de rol ─────────────────────────────────────────────────────
+        # Solo origen o destino del traspaso. Antes no se validaba nada: con el
+        # permiso puesto, cualquier sucursal podía cerrar diferencias de un
+        # documento ajeno y meterle stock a otra bodega.
+        movimiento_salida = dte.dte_movimientos.filter(concepto='TRASPASO_SALIDA').first()
+        sucursal_destino = movimiento_salida.sucursal_destino if movimiento_salida else None
+        ve_todas = (
+            request.user.is_superuser
+            or PermisoUsuario.usuario_ve_todas_sucursales(request.user)
+        )
+        if not ve_todas:
+            if not sucursal_id:
+                return JsonResponse({'success': False, 'error': 'No hay sucursal activa en la sesión.'}, status=400)
+            es_origen = str(dte.sucursal_id) == str(sucursal_id)
+            es_destino = bool(sucursal_destino) and str(sucursal_destino.id) == str(sucursal_id)
+            if not (es_origen or es_destino):
                 return JsonResponse({
                     'success': False,
-                    'error': 'No se encontraron productos para anular'
+                    'error': 'Solo el origen o el destino de este traspaso pueden cerrarlo.'
+                }, status=403)
+
+        if not sucursal_destino:
+            return JsonResponse({
+                'success': False,
+                'error': 'El documento no tiene un movimiento de traspaso con sucursal destino; no se puede determinar dónde ingresar la mercadería.'
+            }, status=400)
+
+        # ── Gate de NC / ajuste vigente ─────────────────────────────────────
+        # Mismo criterio que rehabilitar_dte_rechazado_api: cualquier documento
+        # hijo no anulado bloquea. Sumar al destino con la NC viva duplica.
+        nc_vigente = (
+            Dte.objects.filter(documento_afectado=dte)
+            .exclude(estado_dte__in=['CANCELADO', 'ANULADO'])
+            .order_by('-id')
+            .first()
+        )
+        if nc_vigente:
+            etiqueta = 'NC' if nc_vigente.es_nota_credito else 'Ajuste'
+            return JsonResponse({
+                'success': False,
+                'error': (
+                    f'No se puede cerrar: el documento ya tiene {etiqueta} '
+                    f'#{nc_vigente.numero_documento} vigente. Si la mercadería sí está, '
+                    f'anulá primero esa {etiqueta} en Gestión de DTE; de lo contrario el '
+                    'stock quedaría duplicado.'
+                ),
+            }, status=400)
+
+        with transaction.atomic():
+            recepciones = list(
+                Productos_Recepcionados.objects
+                .select_for_update(of=('self',))
+                .filter(
+                    dte=dte,
+                    estado__in=['EN_REGULARIZACION', 'FALTANTE', 'RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO'],
+                )
+                .select_related('dte', 'producto_talla', 'producto_talla__producto')
+            )
+            # Acotado al documento: si el front manda ids, se usan como subset,
+            # nunca como fuente (evita cerrar líneas de otro DTE).
+            if productos_ids:
+                ids_pedidos = {str(x) for x in productos_ids}
+                recepciones = [r for r in recepciones if str(r.id) in ids_pedidos]
+
+            if not recepciones:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No quedan líneas con diferencia abierta en este documento.'
                 }, status=404)
-            
+
             productos_anulados = []
             stock_actualizado = 0
-            
+
             for recepcion in recepciones:
                 # Cantidad que se había marcado como problema
                 cantidad_problema = recepcion.cantidad_faltante + recepcion.cantidad_danada
-                
+
                 if cantidad_problema <= 0:
                     continue
-                
-                # IMPORTANTE: Actualizar stock en DESTINO (ya que los productos "llegaron bien")
-                # Necesitamos buscar o crear el producto en la sucursal destino
+
                 producto_origen = recepcion.producto_talla
                 dte_original = recepcion.dte
-                
-                # Obtener sucursal destino del movimiento
-                movimiento = dte_original.dte_movimientos.filter(
-                    concepto='TRASPASO_SALIDA'
-                ).first()
-                sucursal_destino = movimiento.sucursal_destino if movimiento else None
-                
+
                 if sucursal_destino and producto_origen:
                     # Buscar el producto en sucursal destino (por SKU)
                     try:
-                        talla_destino = Producto_Talla.objects.get(
+                        talla_destino = Producto_Talla.objects.select_for_update().get(
                             sku=producto_origen.sku,
                             producto__sucursal=sucursal_destino
                         )
@@ -7286,7 +7458,7 @@ def anular_regularizacion_dte(request):
                         # Si no existe, crearlo (igual que en confirmar_recepcion)
                         from .models import Producto
                         producto_origen_obj = producto_origen.producto
-                        
+
                         producto_destino, _ = Producto.objects.get_or_create(
                             articulo=producto_origen_obj.articulo,
                             sucursal=sucursal_destino,
@@ -7305,28 +7477,27 @@ def anular_regularizacion_dte(request):
                                 'guia_talla': producto_origen_obj.guia_talla
                             }
                         )
-                        
+
                         talla_destino = Producto_Talla.objects.create(
                             producto=producto_destino,
                             talla=producto_origen.talla,
                             sku=producto_origen.sku,
                             stock=0
                         )
-                    
+
                     # Actualizar stock en destino
                     stock_antes = talla_destino.stock
-                    talla_destino.stock += cantidad_problema
-                    talla_destino.save()
+                    Producto_Talla.objects.filter(id=talla_destino.id).update(stock=F('stock') + cantidad_problema)
                     stock_actualizado += cantidad_problema
                     logger.info(
-                        "Stock agregado al anular regularizacion: sucursal=%s sku=%s cantidad=%s stock_antes=%s stock_despues=%s",
+                        "Stock agregado al cerrar diferencias (llego todo): sucursal=%s sku=%s cantidad=%s stock_antes=%s stock_despues=%s",
                         sucursal_destino.alias,
                         producto_origen.sku,
                         cantidad_problema,
                         stock_antes,
-                        talla_destino.stock,
+                        stock_antes + cantidad_problema,
                     )
-                    
+
                     # Crear movimiento de INGRESO en destino
                     Movimientos_Producto.objects.create(
                         dte=dte_original,
@@ -7341,48 +7512,59 @@ def anular_regularizacion_dte(request):
                         tipo_movimiento='INGRESO',
                         estado='COMPLETADO',
                         responsable=usuario,
-                        observaciones=f'Anulación de regularización DTE #{dte_numero}. {motivo}'
+                        fecha=hoy.date(),
+                        hora=hoy.time(),
+                        observaciones=f'Cierre "llegó todo" DTE #{dte.numero_documento}. {motivo}'
                     )
-                
-                # Actualizar recepción
-                recepcion.cantidad_recepcionada = recepcion.cantidad_esperada
+
+                # Actualizar recepción. (No se toca `cantidad_recepcionada`: ese
+                # campo no existe en el modelo, asignarlo era un atributo
+                # fantasma que nunca se guardaba. Lo recibido vive en
+                # stockArribado.)
                 recepcion.cantidad_faltante = 0
                 recepcion.cantidad_danada = 0
                 recepcion.stockArribado = recepcion.cantidad_esperada
                 recepcion.estado = 'RECEPCIONADO_OK'
-                recepcion.observaciones = (recepcion.observaciones or '') + f"\n[{hoy.strftime('%Y-%m-%d %H:%M')}] ANULADO - Regularización cancelada. {motivo}"
+                recepcion.observaciones = (recepcion.observaciones or '') + f"\n[{hoy.strftime('%Y-%m-%d %H:%M')}] LLEGÓ TODO - diferencia cerrada por {usuario}. {motivo}"
                 recepcion.save()
-                
+
                 productos_anulados.append({
                     'producto': producto_origen.producto.articulo if producto_origen else '-',
+                    'sku': producto_origen.sku if producto_origen else '-',
                     'talla': producto_origen.talla if producto_origen else '-',
                     'cantidad': cantidad_problema
                 })
-            
+
             # Cierre canónico: tras marcar líneas OK, recalcular el DTE (antes no
             # se recalculaba y podía quedar atascado en PARCIAL sin líneas problema).
-            for _dte in Dte.objects.filter(id__in={r.dte_id for r in recepciones if r.dte_id}):
-                _recalcular_estado_dte(_dte)
+            _recalcular_estado_dte(dte)
 
             logger.info(
-                "Regularizacion DTE anulada: dte_numero=%s productos=%s unidades=%s",
-                dte_numero,
+                "Diferencias cerradas (llego todo): dte=%s numero=%s productos=%s unidades=%s usuario=%s",
+                dte.id,
+                dte.numero_documento,
                 len(productos_anulados),
                 stock_actualizado,
+                usuario,
             )
-            
+
             return JsonResponse({
                 'success': True,
-                'message': f'Regularización anulada. {len(productos_anulados)} producto(s) actualizados como OK.',
+                'message': (
+                    f'{len(productos_anulados)} línea(s) cerradas como recibidas. '
+                    f'{stock_actualizado} unidad(es) ingresaron al stock de {sucursal_destino.alias}.'
+                ),
                 'productos_anulados': len(productos_anulados),
-                'stock_actualizado': stock_actualizado
+                'stock_actualizado': stock_actualizado,
+                'detalle': productos_anulados,
+                'sucursal_destino': sucursal_destino.alias,
             })
-        
+
     except Exception as e:
         logger.exception("Error en anular_regularizacion_dte")
         return JsonResponse({
             'success': False,
-            'error': f'Error al anular: {str(e)}'
+            'error': f'Error al cerrar las diferencias: {str(e)}'
         }, status=500)
 
 
@@ -17430,11 +17612,12 @@ def api_crear_skus_destino(request, dte_id):
                     })
                     continue
 
-                # Reusar Producto existente en destino si hay coincidencia
-                # exacta de articulo + atributos (igual criterio que
-                # confirmar_recepcion_api). Si no, crear uno nuevo.
+                # Reusar Producto existente en destino si coincide articulo +
+                # atributos (igual criterio que confirmar_recepcion_api, que
+                # compara el codigo con iexact para no duplicar fichas legacy
+                # que traen el mismo codigo en otra caja). Si no, crear uno.
                 producto_destino_qs = Producto.objects.filter(
-                    articulo=producto_origen.articulo,
+                    articulo__iexact=(producto_origen.articulo or '').strip(),
                     sucursal=sucursal_destino,
                     atributo1=producto_origen.atributo1,
                     atributo2=producto_origen.atributo2,

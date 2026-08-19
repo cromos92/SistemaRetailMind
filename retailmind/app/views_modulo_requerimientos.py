@@ -9,7 +9,10 @@ from django.http import JsonResponse, Http404, HttpResponseBadRequest, HttpRespo
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
-from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg
+from django.db.models import (
+    Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg,
+    Case, When, Value, IntegerField,
+)
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -30,8 +33,9 @@ from .models import (
     Requerimiento, FotoRequerimiento, HistorialRequerimiento,
     TipoFotoRequerimiento, MAX_FOTOS_POR_TIPO,
     ESTADO_REQUERIMIENTO_CHOICES, TIPO_REQUERIMIENTO_CHOICES,
-    ORIGEN_REQUERIMIENTO_CHOICES,
-    Ticket, Dte, Dte_Productos
+    ORIGEN_REQUERIMIENTO_CHOICES, ETAPA_POR_ESTADO, ESTADOS_CERRADOS,
+    Ticket, Dte, Dte_Productos, Movimientos_Producto, LoteProducto,
+    DocumentoCompraLegacy,
 )
 from .services.pdf_requerimiento_proveedor import (
     generar_pdf_requerimiento, nombre_archivo_pdf,
@@ -57,48 +61,55 @@ def obtener_rol_usuario(user):
     return 'vendedor'  # Por defecto
 
 
+# Acciones que un jefe de local puede ejercer sobre los requerimientos de SU
+# sucursal. 'editar' está incluido porque completar los datos que faltan
+# (proveedor, factura, RUT del cliente) es justamente el trabajo de quien
+# revisa, no del que creó el ticket. 'validar'/'rechazar_interno' son la
+# primera aprobación del circuito: decidir si el reclamo procede.
+ACCIONES_JEFE_LOCAL = frozenset({
+    'ver', 'revisar', 'validar', 'rechazar_interno',
+    'aprobar_simple', 'rechazar_simple', 'comentar', 'escalar', 'asignar',
+    'editar', 'completar', 'cancelar',
+})
+
+# Reservadas al administrador: son las que hablan con el proveedor o cierran
+# el caso con su respuesta.
+ACCIONES_SOLO_ADMIN = frozenset({
+    'enviar_proveedor', 'registrar_respuesta_proveedor',
+})
+
+
 def usuario_puede_realizar_accion(user, requerimiento, accion):
     """
     Valida si el usuario puede realizar una acción sobre el requerimiento
-    
+
     Roles:
     - administrador: Puede hacer TODO
-    - jefe_local (Supervisor): Puede gestionar su sucursal
+    - jefe_local (Supervisor): valida/rechaza y completa datos de SU sucursal,
+      pero no le escribe al proveedor
     - cajero/vendedor: Solo puede ver y crear
     """
     rol = obtener_rol_usuario(user)
-    
+
     # Administrador puede todo
     if rol == 'administrador':
         return True
-    
+
     # Jefe Local (Supervisor)
     if rol == 'jefe_local':
         # Obtener sucursal del usuario
         empresa_user = EmpresaUser.objects.filter(user=user).first()
         if not empresa_user or not empresa_user.sucursal:
             return False
-        
+
         # Solo puede gestionar requerimientos de su sucursal
         if requerimiento.sucursal != empresa_user.sucursal:
             return False
-        
-        # Acciones permitidas para supervisor. 'editar' está incluido porque
-        # completar datos que faltan (proveedor, factura, RUT del cliente) es
-        # justamente el trabajo de quien revisa, no del que creó el ticket.
-        acciones_permitidas = [
-            'ver', 'revisar', 'aprobar_simple', 'rechazar_simple',
-            'comentar', 'escalar', 'asignar', 'editar'
-        ]
-        if accion in acciones_permitidas:
-            return True
-        
-        # NO puede enviar a proveedor ni aprobar casos complejos
-        if accion in ['enviar_proveedor', 'registrar_respuesta_proveedor']:
+
+        if accion in ACCIONES_SOLO_ADMIN:
             return False
-        
-        return False
-    
+        return accion in ACCIONES_JEFE_LOCAL
+
     # Cajero/Vendedor
     if rol in ['cajero', 'vendedor']:
         # Solo puede ver sus propios requerimientos y crear nuevos
@@ -108,9 +119,9 @@ def usuario_puede_realizar_accion(user, requerimiento, accion):
             return requerimiento.usuario_creador == user or requerimiento.sucursal in obtener_sucursales_usuario(user)
         if accion == 'editar' or accion == 'cancelar':
             return requerimiento.usuario_creador == user and requerimiento.estado == 'PENDIENTE'
-        
+
         return False
-    
+
     return False
 
 
@@ -121,15 +132,41 @@ def obtener_sucursales_usuario(user):
     )
 
 
+# El circuito real, en orden:
+#   la tienda crea → alguien lo revisa → la empresa decide si procede →
+#   si procede se le manda al proveedor → el proveedor decide → se cierra.
+#
+# APROBADO/RECHAZADO son la decisión DEL PROVEEDOR y por eso solo se llega a
+# ellos desde ESPERANDO_RESPUESTA: antes se podía saltar desde EN_REVISION y
+# quedaba un caso marcado "Aprobado por Proveedor" que el proveedor nunca vio.
 TRANSICIONES_PERMITIDAS = {
-    'PENDIENTE': ['EN_REVISION', 'ESPERANDO_RESPUESTA', 'CANCELADO'],
-    'EN_REVISION': ['ESPERANDO_RESPUESTA', 'APROBADO', 'RECHAZADO', 'CANCELADO'],
-    'ESPERANDO_RESPUESTA': ['APROBADO', 'RECHAZADO'],
+    'PENDIENTE': ['EN_REVISION', 'VALIDADO', 'RECHAZADO_INTERNO', 'CANCELADO'],
+    'EN_REVISION': ['VALIDADO', 'RECHAZADO_INTERNO', 'ESPERANDO_RESPUESTA', 'CANCELADO'],
+    'VALIDADO': ['ESPERANDO_RESPUESTA', 'RECHAZADO_INTERNO', 'EN_PROCESO',
+                 'COMPLETADO', 'CANCELADO'],
+    # Vuelve a revisión cuando el proveedor pide más antecedentes en vez de
+    # resolver: el caso sigue vivo y hay que completarlo y reenviarlo.
+    'ESPERANDO_RESPUESTA': ['APROBADO', 'RECHAZADO', 'EN_REVISION'],
     'APROBADO': ['EN_PROCESO', 'COMPLETADO'],
+    # Que el proveedor rechace no cierra el caso hacia el cliente: la tienda
+    # todavía tiene que resolverlo (asumirlo, devolver el dinero, etc.).
+    'RECHAZADO': ['EN_PROCESO', 'COMPLETADO'],
     'EN_PROCESO': ['COMPLETADO'],
-    'RECHAZADO': [],
+    'RECHAZADO_INTERNO': ['EN_REVISION'],  # reapertura si aparecen antecedentes
     'COMPLETADO': [],
     'CANCELADO': [],
+}
+
+# Estados a los que NO se llega escribiendo el estado a mano: exigen su propia
+# acción porque cada una guarda datos que el cambio de estado genérico no pide
+# (motivo de la decisión, respuesta del proveedor, correo enviado…).
+ESTADOS_CON_ACCION_PROPIA = {
+    'ESPERANDO_RESPUESTA': 'Use la acción "Enviar a proveedor"',
+    'APROBADO': 'Use la acción "Registrar respuesta del proveedor"',
+    'RECHAZADO': 'Use la acción "Registrar respuesta del proveedor"',
+    'VALIDADO': 'Use la acción "Validar" para dejar constancia del motivo',
+    'RECHAZADO_INTERNO': 'Use la acción "Rechazar" para dejar constancia del motivo',
+    'COMPLETADO': 'Use la acción "Completar" para registrar la resolución',
 }
 
 
@@ -198,7 +235,18 @@ def crear_requerimiento_vista(request):
 @login_required
 def detalle_requerimiento_vista(request, requerimiento_id):
     """Vista de detalle de un requerimiento"""
-    requerimiento = get_object_or_404(Requerimiento, id=requerimiento_id)
+    requerimiento = get_object_or_404(
+        Requerimiento.objects.select_related('sucursal', 'usuario_creador'),
+        id=requerimiento_id,
+    )
+
+    # La página no validaba nada: cualquier usuario logueado podía abrir el
+    # detalle de otra empresa. La API sí filtraba, así que la pantalla cargaba
+    # vacía sin decir por qué.
+    if not usuario_puede_realizar_accion(request.user, requerimiento, 'ver'):
+        logger.warning('Acceso denegado al requerimiento %s por usuario %s',
+                       requerimiento_id, request.user)
+        return redirect(f"{reverse('modulo_requerimientos')}?sin_acceso=1")
 
     context = {
         'requerimiento': requerimiento,
@@ -424,6 +472,9 @@ def listar_requerimientos(request):
         page = int(request.GET.get('page', 1))
         page_size = int(request.GET.get('page_size', 20))
         
+        etapa = request.GET.get('etapa')  # EMPRESA / PROVEEDOR / RESOLUCION / CERRADO
+        incompletos = request.GET.get('incompletos')  # sin proveedor o sin factura
+
         # Query base
         requerimientos = Requerimiento.objects.select_related(
             'sucursal', 'usuario_creador', 'proveedor', 'producto_talla', 'asignado_a'
@@ -479,10 +530,29 @@ def listar_requerimientos(request):
                 Q(numero_boleta__icontains=busqueda)
             )
         
+        # Etapa del circuito: "quién tiene la pelota" es la pregunta real del
+        # analista, y no se contestaba sin conocer los 10 estados de memoria.
+        if etapa:
+            estados_etapa = [e for e, et in ETAPA_POR_ESTADO.items() if et == etapa]
+            if estados_etapa:
+                requerimientos = requerimientos.filter(estado__in=estados_etapa)
+
+        # Bandeja de "les falta algo para poder salir": sin proveedor asignado
+        # o sin la factura de compra que el proveedor exige.
+        if incompletos == 'true':
+            requerimientos = requerimientos.filter(
+                Q(proveedor__isnull=True) |
+                (Q(numero_factura_compra__isnull=True) | Q(numero_factura_compra=''))
+                & Q(dte_compra__isnull=True)
+            ).exclude(estado__in=ESTADOS_CERRADOS)
+
         # Filtros especiales de seguimiento
         if sin_respuesta == 'true':
             # Requerimientos esperando proveedor sin respuesta > 7 días
-            fecha_limite = timezone.now() - timedelta(days=7)
+            # Mismo plazo que el aviso y las estadisticas: con la env var en
+            # otro valor, el boton "Ver cuales" traia un conjunto distinto al
+            # que el propio aviso acababa de contar.
+            fecha_limite = timezone.now() - timedelta(days=PLAZO_RESPUESTA_DIAS)
             requerimientos = requerimientos.filter(
                 estado='ESPERANDO_RESPUESTA',
                 fecha_envio_proveedor__lt=fecha_limite,
@@ -513,7 +583,13 @@ def listar_requerimientos(request):
                 'origen_codigo': req.origen,
                 # Bandera de triage para el analista: sin factura de compra la
                 # mayoría de los proveedores no cursa la garantía.
-                'tiene_factura_compra': bool(req.numero_factura_compra or req.dte_compra_id),
+                'tiene_factura_compra': req.tiene_respaldo_compra,
+                'etapa': req.etapa,
+                'decision_interna': req.decision_interna or '',
+                'decision_proveedor': req.decision_proveedor or '',
+                # Lo que le impide salir al proveedor, calculado en el modelo
+                # para que listado, detalle y modal digan exactamente lo mismo.
+                'faltantes': req.faltantes_para_enviar,
                 'cliente_nombre': req.cliente_nombre,
                 'fecha_creacion': req.fecha_creacion.strftime('%d/%m/%Y %H:%M'),
                 'dias_transcurridos': req.dias_transcurridos,
@@ -546,6 +622,83 @@ def listar_requerimientos(request):
             'success': False,
             'error': f'Error al obtener requerimientos: {str(e)}'
         }, status=500)
+
+
+def _siguiente_paso(requerimiento, permisos):
+    """Qué corresponde hacer ahora con este requerimiento, en una frase.
+
+    Devuelve ``{titulo, detalle, accion, tono}``. La pantalla lo muestra
+    arriba de todo: sin esto el usuario ve ocho botones y ninguno le dice
+    cuál es el que toca.
+    """
+    estado = requerimiento.estado
+    faltantes = requerimiento.faltantes_para_enviar
+
+    if estado in ESTADOS_CERRADOS:
+        return {
+            'titulo': f'Caso cerrado — {requerimiento.get_estado_display()}',
+            'detalle': requerimiento.motivo_resolucion or requerimiento.resolucion or '',
+            'accion': None, 'tono': 'secondary',
+        }
+
+    if estado in ('PENDIENTE', 'EN_REVISION'):
+        if faltantes:
+            return {
+                'titulo': f'Falta {" y ".join(faltantes)}',
+                'detalle': 'Complete los datos que la tienda no puede saber antes de decidir.',
+                'accion': 'editar' if permisos.get('puede_editar') else None,
+                'tono': 'warning',
+            }
+        if permisos.get('puede_validar'):
+            return {
+                'titulo': 'Listo para decidir',
+                'detalle': 'Están el proveedor, la factura y las fotos: valide si procede reclamarlo.',
+                'accion': 'decidir', 'tono': 'primary',
+            }
+        return {
+            'titulo': 'Esperando revisión',
+            'detalle': 'Un administrador o el jefe de local debe validar el caso.',
+            'accion': None, 'tono': 'info',
+        }
+
+    if estado == 'VALIDADO':
+        if permisos.get('puede_enviar_proveedor'):
+            return {
+                'titulo': 'Validado: falta enviarlo al proveedor',
+                'detalle': f'Se le enviará a {requerimiento.proveedor.nombre}.' if requerimiento.proveedor else '',
+                'accion': 'enviar', 'tono': 'primary',
+            }
+        return {
+            'titulo': 'Validado, a la espera del envío',
+            'detalle': 'Solo un administrador puede enviarlo al proveedor.',
+            'accion': None, 'tono': 'info',
+        }
+
+    if estado == 'ESPERANDO_RESPUESTA':
+        dias = requerimiento.dias_sin_respuesta
+        vencido = dias > PLAZO_RESPUESTA_DIAS
+        return {
+            'titulo': (f'Sin respuesta hace {dias} día(s)' if vencido
+                       else f'Enviado al proveedor hace {dias} día(s)'),
+            'detalle': ('Ya pasó el plazo: corresponde recordatorio o registrar lo que respondió.'
+                        if vencido else 'Registre la respuesta apenas conteste.'),
+            'accion': 'respuesta' if permisos.get('puede_registrar_respuesta') else None,
+            'tono': 'danger' if vencido else 'info',
+        }
+
+    if estado in ('APROBADO', 'RECHAZADO', 'EN_PROCESO'):
+        aprobado = estado == 'APROBADO'
+        return {
+            'titulo': ('El proveedor aprobó: falta resolverlo con el cliente' if aprobado
+                       else 'El proveedor rechazó: falta cerrar el caso'
+                       if estado == 'RECHAZADO' else 'En proceso de resolución'),
+            'detalle': requerimiento.motivo_resolucion or '',
+            'accion': 'completar' if permisos.get('puede_completar') else None,
+            'tono': 'success' if aprobado else 'warning',
+        }
+
+    return {'titulo': requerimiento.get_estado_display(), 'detalle': '',
+            'accion': None, 'tono': 'secondary'}
 
 
 @login_required
@@ -686,7 +839,25 @@ def detalle_requerimiento(request, requerimiento_id):
             'respuesta_proveedor': requerimiento.respuesta_proveedor or '',
             'fecha_respuesta_proveedor': requerimiento.fecha_respuesta_proveedor.strftime('%d/%m/%Y %H:%M') if requerimiento.fecha_respuesta_proveedor else '',
             'decision_proveedor': requerimiento.decision_proveedor or '',
-            
+
+            # Decisión interna (la de la empresa, previa al proveedor)
+            'decision_interna': requerimiento.decision_interna or '',
+            'motivo_decision_interna': requerimiento.motivo_decision_interna or '',
+            'fecha_decision_interna': (
+                requerimiento.fecha_decision_interna.strftime('%d/%m/%Y %H:%M')
+                if requerimiento.fecha_decision_interna else ''),
+            'usuario_decision_interna': (
+                requerimiento.usuario_decision_interna.get_full_name()
+                if requerimiento.usuario_decision_interna_id else ''),
+
+            # Etapa y bloqueos: lo que la pantalla necesita para decir qué
+            # falta y quién tiene la pelota, sin recalcularlo en el navegador.
+            'etapa': requerimiento.etapa,
+            'esta_cerrado': requerimiento.esta_cerrado,
+            'faltantes': requerimiento.faltantes_para_enviar,
+            'listo_para_proveedor': requerimiento.listo_para_proveedor,
+
+
             # Resolución
             'resolucion': requerimiento.resolucion or '',
             'motivo_resolucion': requerimiento.motivo_resolucion or '',
@@ -724,6 +895,8 @@ def detalle_requerimiento(request, requerimiento_id):
             'permisos': {
                 'puede_editar': usuario_puede_realizar_accion(request.user, requerimiento, 'editar'),
                 'puede_revisar': usuario_puede_realizar_accion(request.user, requerimiento, 'revisar'),
+                'puede_validar': usuario_puede_realizar_accion(request.user, requerimiento, 'validar'),
+                'puede_rechazar_interno': usuario_puede_realizar_accion(request.user, requerimiento, 'rechazar_interno'),
                 'puede_aprobar': usuario_puede_realizar_accion(request.user, requerimiento, 'aprobar_simple'),
                 'puede_rechazar': usuario_puede_realizar_accion(request.user, requerimiento, 'rechazar_simple'),
                 'puede_enviar_proveedor': usuario_puede_realizar_accion(request.user, requerimiento, 'enviar_proveedor'),
@@ -734,6 +907,11 @@ def detalle_requerimiento(request, requerimiento_id):
             },
             'rol_usuario': rol_usuario,
         }
+        # La pantalla no tiene que deducir el siguiente paso a punta de ifs:
+        # el backend, que es quien conoce las transiciones y los permisos,
+        # dice cuál es la acción que corresponde ahora.
+        requerimiento_data['siguiente_paso'] = _siguiente_paso(
+            requerimiento, requerimiento_data['permisos'])
         
         return JsonResponse({
             'success': True,
@@ -765,42 +943,62 @@ def actualizar_estado_requerimiento(request, requerimiento_id):
         
         requerimiento = get_object_or_404(Requerimiento, id=requerimiento_id)
         estado_anterior = requerimiento.estado
-        
+
         # Validar permisos según estado y rol
         rol_usuario = obtener_rol_usuario(request.user)
-        
+
         # Validar que la transición sea permitida
         if not puede_cambiar_estado(estado_anterior, nuevo_estado):
+            etiquetas = dict(ESTADO_REQUERIMIENTO_CHOICES)
             return JsonResponse({
                 'success': False,
-                'error': f'No se puede cambiar de {estado_anterior} a {nuevo_estado}'
+                'error': (f'No se puede pasar de "{etiquetas.get(estado_anterior, estado_anterior)}" '
+                          f'a "{etiquetas.get(nuevo_estado, nuevo_estado)}"')
             }, status=400)
-        
+
+        # Hay estados que exigen su propia acción porque guardan datos que este
+        # endpoint no pide (el motivo de la decisión, la respuesta del
+        # proveedor, el correo enviado). Permitirlos acá dejaba casos marcados
+        # "Aprobado por el proveedor" sin una sola línea de respuesta.
+        if nuevo_estado in ESTADOS_CON_ACCION_PROPIA:
+            return JsonResponse({
+                'success': False,
+                'error': ESTADOS_CON_ACCION_PROPIA[nuevo_estado],
+            }, status=400)
+
         # Validar permisos por rol
         if rol_usuario == 'jefe_local':
-            # Supervisor solo puede aprobar/rechazar casos simples de su sucursal
+            # Supervisor solo puede gestionar casos de su sucursal
             empresa_user = EmpresaUser.objects.filter(user=request.user).first()
-            if empresa_user and empresa_user.sucursal != requerimiento.sucursal:
+            if not empresa_user or empresa_user.sucursal != requerimiento.sucursal:
                 return JsonResponse({
                     'success': False,
                     'error': 'Solo puede gestionar requerimientos de su sucursal'
                 }, status=403)
-            
-            # Supervisor NO puede marcar como ESPERANDO_RESPUESTA (enviar a proveedor)
-            if nuevo_estado == 'ESPERANDO_RESPUESTA':
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Solo administradores pueden enviar a proveedor'
-                }, status=403)
-        
+
         elif rol_usuario in ['cajero', 'vendedor']:
-            # Vendedores solo pueden cancelar sus propios req pendientes
-            if not (requerimiento.usuario_creador == request.user and nuevo_estado == 'CANCELADO'):
+            # Vendedores solo pueden cancelar sus propios req PENDIENTES. Sin
+            # el chequeo de estado podían cancelar uno ya validado por el jefe
+            # de local y tirar abajo esa decisión.
+            if not (requerimiento.usuario_creador == request.user
+                    and nuevo_estado == 'CANCELADO'
+                    and estado_anterior == 'PENDIENTE'):
                 return JsonResponse({
                     'success': False,
-                    'error': 'No tiene permisos para cambiar el estado'
+                    'error': 'Solo puede cancelar un requerimiento propio que siga pendiente'
                 }, status=403)
-        
+
+        elif rol_usuario != 'administrador':
+            # Cierre por defecto. Antes cualquier rol que no fuera jefe_local,
+            # cajero o vendedor —incluido un rol nuevo o mal escrito— caía por
+            # el hueco de los elif y cambiaba el estado de cualquier
+            # requerimiento de cualquier empresa.
+            return JsonResponse({
+                'success': False,
+                'error': f'El rol "{rol_usuario}" no tiene permisos sobre requerimientos'
+            }, status=403)
+
+
         with transaction.atomic():
             requerimiento.estado = nuevo_estado
             
@@ -831,6 +1029,106 @@ def actualizar_estado_requerimiento(request, requerimiento_id):
             'success': False,
             'error': f'Error al actualizar estado: {str(e)}'
         }, status=500)
+
+
+@login_required
+@require_POST
+def decidir_requerimiento(request, requerimiento_id):
+    """Primera aprobación del circuito: la que toma la empresa, no el proveedor.
+
+    La tienda levanta el caso; quien revisa decide si procede reclamárselo al
+    proveedor (VALIDADO) o si se cierra acá (RECHAZADO_INTERNO). Antes esta
+    decisión no existía como acción: se marcaba APROBADO —la etiqueta que dice
+    "Aprobado por el proveedor"— y el caso quedaba mintiendo, además de
+    perderse quién decidió y por qué.
+    """
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Cuerpo inválido'}, status=400)
+
+    decision = (data.get('decision') or '').upper()
+    motivo = (data.get('motivo') or '').strip()
+
+    if decision not in ('APROBADO', 'RECHAZADO'):
+        return JsonResponse({
+            'success': False,
+            'error': 'La decisión debe ser APROBADO o RECHAZADO'
+        }, status=400)
+    if not motivo:
+        return JsonResponse({
+            'success': False,
+            'error': 'Indique el motivo: queda en el historial y es lo que se '
+                     'le explica a la tienda que levantó el caso.'
+        }, status=400)
+
+    requerimiento = get_object_or_404(
+        Requerimiento.objects.select_related('proveedor', 'sucursal'),
+        id=requerimiento_id,
+    )
+
+    accion_permiso = 'validar' if decision == 'APROBADO' else 'rechazar_interno'
+    if not usuario_puede_realizar_accion(request.user, requerimiento, accion_permiso):
+        return JsonResponse({
+            'success': False,
+            'error': 'No tiene permisos para decidir sobre este requerimiento'
+        }, status=403)
+
+    nuevo_estado = 'VALIDADO' if decision == 'APROBADO' else 'RECHAZADO_INTERNO'
+    estado_anterior = requerimiento.estado
+
+    if not puede_cambiar_estado(estado_anterior, nuevo_estado):
+        return JsonResponse({
+            'success': False,
+            'error': f'El requerimiento está "{requerimiento.get_estado_display()}" '
+                     f'y ya pasó la etapa de validación interna'
+        }, status=400)
+
+    # Validar sin proveedor asignado deja el caso en un callejón: el estado
+    # dice "listo para el proveedor" y no hay a quién mandárselo.
+    if decision == 'APROBADO' and not requerimiento.proveedor_id:
+        return JsonResponse({
+            'success': False,
+            'error': 'Asigne el proveedor antes de validar: sin proveedor el '
+                     'requerimiento no se le puede enviar a nadie.',
+            'falta': 'proveedor',
+        }, status=400)
+
+    with transaction.atomic():
+        requerimiento.estado = nuevo_estado
+        requerimiento.decision_interna = decision
+        requerimiento.motivo_decision_interna = motivo
+        requerimiento.fecha_decision_interna = timezone.now()
+        requerimiento.usuario_decision_interna = request.user
+        if not requerimiento.asignado_a:
+            requerimiento.asignado_a = request.user
+        if decision == 'RECHAZADO':
+            # Se cierra acá: la resolución visible es la propia decisión.
+            requerimiento.fecha_resolucion = timezone.now()
+            requerimiento.motivo_resolucion = motivo
+        requerimiento.save()
+
+        HistorialRequerimiento.objects.create(
+            requerimiento=requerimiento,
+            accion='VALIDADO_INTERNAMENTE' if decision == 'APROBADO' else 'RECHAZADO_INTERNAMENTE',
+            estado_anterior=estado_anterior,
+            estado_nuevo=nuevo_estado,
+            comentario=motivo[:2000],
+            usuario=request.user,
+        )
+
+    faltantes = requerimiento.faltantes_para_enviar
+    return JsonResponse({
+        'success': True,
+        'message': ('Requerimiento validado: ya se puede enviar al proveedor'
+                    if decision == 'APROBADO'
+                    else 'Requerimiento rechazado internamente'),
+        'nuevo_estado': requerimiento.get_estado_display(),
+        'nuevo_estado_codigo': nuevo_estado,
+        # El validador se entera acá mismo de lo que le falta al caso para
+        # poder salir, en vez de descubrirlo al intentar enviarlo.
+        'faltantes': faltantes,
+    })
 
 
 CAMPOS_EDITABLES_ANALISTA = {
@@ -993,6 +1291,17 @@ def enviar_a_proveedor(request, requerimiento_id):
             'error': 'El requerimiento no tiene proveedor asignado'
         }, status=400)
 
+    # Un caso cerrado no se le manda a nadie. Sin esta guarda se podía
+    # "enviar" un requerimiento CANCELADO y quedaba resucitado en
+    # ESPERANDO_RESPUESTA.
+    ESTADOS_ENVIABLES = ('PENDIENTE', 'EN_REVISION', 'VALIDADO', 'ESPERANDO_RESPUESTA')
+    if requerimiento.estado not in ESTADOS_ENVIABLES:
+        return JsonResponse({
+            'success': False,
+            'error': f'El requerimiento está "{requerimiento.get_estado_display()}" '
+                     f'y ya no corresponde enviarlo al proveedor'
+        }, status=400)
+
     # Correo destino: manual > correoVendedor > email > correoIntercambio
     correo_destino = (data.get('correo_destino') or '').strip() or _correo_proveedor(requerimiento.proveedor)
     if not correo_destino:
@@ -1044,10 +1353,35 @@ def enviar_a_proveedor(request, requerimiento_id):
         logger.exception('No se pudo generar el formato PDF del requerimiento %s',
                          requerimiento.id)
 
+    # Las fotos se leen y se presupuestan ANTES de armar el correo: el texto
+    # decía "se adjuntan N fotos" con las fotos *adjuntables*, pero el tope de
+    # MB podía dejar varias afuera y el proveedor recibía la promesa de una
+    # evidencia que no venía.
+    presupuesto = MAX_ADJUNTOS_MB * 1024 * 1024 - len(pdf_bytes or b'')
+    adjuntos_fotos = []      # [(nombre, contenido)] que realmente se envían
+    fotos_omitidas = []      # no cupieron: van igual dentro del PDF
+    for foto in fotos_adjuntables:
+        try:
+            with foto.imagen.storage.open(foto.imagen.name, 'rb') as fh:
+                contenido = fh.read()
+        except Exception as e:
+            logger.warning("Error al leer foto de requerimiento %s: %s", requerimiento.id, e)
+            continue
+        if len(contenido) > presupuesto:
+            fotos_omitidas.append(foto.imagen.name)
+            continue
+        presupuesto -= len(contenido)
+        adjuntos_fotos.append((os.path.basename(foto.imagen.name), contenido))
+
+    fotos_enviadas = len(adjuntos_fotos)
+
     context = {
         'requerimiento': requerimiento,
         'fotos': requerimiento.fotos.all(),
-        'cantidad_fotos_adjuntas': len(fotos_adjuntables),
+        'cantidad_fotos_adjuntas': fotos_enviadas,
+        # Solo en el PDF: no cupieron como adjunto pero sí van incrustadas.
+        'fotos_solo_en_pdf': len(fotos_omitidas) if pdf_bytes else 0,
+        # Su archivo ya no está en el servidor: no van en ninguna parte.
         'fotos_no_disponibles': fotos_registradas - len(fotos_adjuntables),
         'usuario': request.user,
         'empresa': requerimiento.sucursal.empresa,
@@ -1108,25 +1442,11 @@ def enviar_a_proveedor(request, requerimiento_id):
     if pdf_bytes:
         email.attach(nombre_archivo_pdf(requerimiento), pdf_bytes, 'application/pdf')
 
-    # 2) Las fotos originales, mientras quepan en el presupuesto de adjuntos.
-    #    Se leen por el storage del campo y no por `.path`: con almacenamiento
-    #    remoto `.path` lanza NotImplementedError y el envío se caía entero.
-    presupuesto = MAX_ADJUNTOS_MB * 1024 * 1024 - len(pdf_bytes or b'')
-    fotos_omitidas = []
-    fotos_enviadas = 0
-    for foto in fotos_adjuntables:
-        try:
-            with foto.imagen.storage.open(foto.imagen.name, 'rb') as fh:
-                contenido = fh.read()
-        except Exception as e:
-            logger.warning("Error al leer foto de requerimiento %s: %s", requerimiento.id, e)
-            continue
-        if len(contenido) > presupuesto:
-            fotos_omitidas.append(foto.imagen.name)
-            continue
-        presupuesto -= len(contenido)
-        email.attach(os.path.basename(foto.imagen.name), contenido)
-        fotos_enviadas += 1
+    # 2) Las fotos originales que entraron en el presupuesto, ya leídas más
+    #    arriba (por el storage del campo y no por `.path`: con almacenamiento
+    #    remoto `.path` lanza NotImplementedError y el envío se caía entero).
+    for nombre_archivo, contenido in adjuntos_fotos:
+        email.attach(nombre_archivo, contenido)
 
     if fotos_omitidas:
         logger.info(
@@ -1270,7 +1590,17 @@ def registrar_respuesta_proveedor(request, requerimiento_id):
                 'success': False,
                 'error': 'Decisión debe ser APROBADO o RECHAZADO'
             }, status=400)
-        
+
+        # Solo se registra la respuesta de un requerimiento que efectivamente
+        # se envió. Sin esta guarda se podía cerrar como "Aprobado por el
+        # proveedor" un caso que nunca salió de la tienda.
+        if requerimiento.estado != 'ESPERANDO_RESPUESTA':
+            return JsonResponse({
+                'success': False,
+                'error': (f'El requerimiento está "{requerimiento.get_estado_display()}". '
+                          f'Solo se registra la respuesta de un caso enviado al proveedor.')
+            }, status=400)
+
         # Fecha real de la respuesta: el modal la pide y hasta ahora se
         # descartaba (siempre se guardaba el instante del registro, que puede
         # ser días después de que el proveedor contestó).
@@ -1306,7 +1636,8 @@ def registrar_respuesta_proveedor(request, requerimiento_id):
                 accion='RESPUESTA_PROVEEDOR_REGISTRADA',
                 estado_anterior='ESPERANDO_RESPUESTA',
                 estado_nuevo=requerimiento.estado,
-                comentario=f'Proveedor {requerimiento.proveedor.nombre} respondió: {decision} - {respuesta[:100]}...',
+                comentario=(f'Proveedor {requerimiento.proveedor.nombre if requerimiento.proveedor_id else "(sin proveedor)"} '
+                            f'respondió: {decision} - {respuesta[:100]}...'),
                 usuario=request.user
             )
         
@@ -1327,21 +1658,40 @@ def registrar_respuesta_proveedor(request, requerimiento_id):
 @login_required
 @require_POST
 def completar_requerimiento(request, requerimiento_id):
-    """Completar un requerimiento"""
+    """Cerrar el requerimiento con su resolución final.
+
+    Esta vista no validaba NADA: ni permisos ni estado. Cualquier usuario
+    logueado podía cerrar como COMPLETADO el requerimiento de otra empresa,
+    incluso uno recién creado que nunca se revisó.
+    """
     try:
         data = json.loads(request.body)
-        
+
         resolucion = data.get('resolucion')
-        
+
         if not resolucion:
             return JsonResponse({
                 'success': False,
                 'error': 'La resolución es requerida'
             }, status=400)
-        
-        requerimiento = get_object_or_404(Requerimiento, id=requerimiento_id)
+
+        requerimiento = get_object_or_404(
+            Requerimiento.objects.select_related('sucursal'), id=requerimiento_id)
         estado_anterior = requerimiento.estado
-        
+
+        if not usuario_puede_realizar_accion(request.user, requerimiento, 'completar'):
+            return JsonResponse({
+                'success': False,
+                'error': 'No tiene permisos para completar este requerimiento'
+            }, status=403)
+
+        if not puede_cambiar_estado(estado_anterior, 'COMPLETADO'):
+            return JsonResponse({
+                'success': False,
+                'error': (f'El requerimiento está "{requerimiento.get_estado_display()}" '
+                          f'y desde ahí no se puede completar')
+            }, status=400)
+
         with transaction.atomic():
             requerimiento.resolucion = resolucion
             requerimiento.fecha_resolucion = timezone.now()
@@ -1745,12 +2095,22 @@ def obtener_estadisticas_requerimientos(request):
         # Filtrar por sucursal si no es admin
         requerimientos = Requerimiento.objects.all()
         
+        # MISMO alcance que `listar_requerimientos`: el jefe de local ve su
+        # SUCURSAL en la tabla, pero los KPI y los contadores de las pestañas
+        # sumaban toda la EMPRESA, así que mostraban números que al hacer clic
+        # no se podían abrir.
         rol_usuario = obtener_rol_usuario(request.user)
-        if rol_usuario != 'administrador':
-            sucursales_usuario = Sucursal.objects.filter(
-                empresa__empresauser__user=request.user
+        if rol_usuario == 'jefe_local':
+            empresa_user = EmpresaUser.objects.filter(user=request.user).first()
+            if empresa_user and empresa_user.sucursal:
+                requerimientos = requerimientos.filter(sucursal=empresa_user.sucursal)
+            else:
+                requerimientos = requerimientos.none()
+        elif rol_usuario != 'administrador':
+            requerimientos = requerimientos.filter(
+                Q(usuario_creador=request.user) |
+                Q(sucursal__in=obtener_sucursales_usuario(request.user))
             )
-            requerimientos = requerimientos.filter(sucursal__in=sucursales_usuario)
         
         # Estadísticas generales
         total = requerimientos.count()
@@ -1787,21 +2147,40 @@ def obtener_estadisticas_requerimientos(request):
             })
         
         # Contadores especiales de seguimiento
-        fecha_limite_7dias = timezone.now() - timedelta(days=7)
+        fecha_limite = timezone.now() - timedelta(days=PLAZO_RESPUESTA_DIAS)
         sin_respuesta_7dias = requerimientos.filter(
             estado='ESPERANDO_RESPUESTA',
-            fecha_envio_proveedor__lt=fecha_limite_7dias,
+            fecha_envio_proveedor__lt=fecha_limite,
             fecha_respuesta_proveedor__isnull=True
         ).count()
-        
+
+        # Agregados por etapa: es lo que el KPI debe mostrar. "Pendientes" a
+        # secas no distinguía un caso recién creado de uno esperando al
+        # proveedor hace tres semanas.
+        por_etapa = {}
+        for nombre_etapa in ('EMPRESA', 'PROVEEDOR', 'RESOLUCION', 'CERRADO'):
+            estados_etapa = [e for e, et in ETAPA_POR_ESTADO.items() if et == nombre_etapa]
+            por_etapa[nombre_etapa] = requerimientos.filter(
+                estado__in=estados_etapa).count()
+
+        # Bandeja "les falta algo": no pueden salir al proveedor tal como están.
+        incompletos = requerimientos.exclude(estado__in=ESTADOS_CERRADOS).filter(
+            Q(proveedor__isnull=True) |
+            (Q(numero_factura_compra__isnull=True) | Q(numero_factura_compra=''))
+            & Q(dte_compra__isnull=True)
+        ).count()
+
         return JsonResponse({
             'success': True,
             'estadisticas': {
                 'total': total,
                 'por_estado': por_estado,
                 'por_tipo': por_tipo,
+                'por_etapa': por_etapa,
                 'recientes': recientes_data,
                 'sin_respuesta_7dias': sin_respuesta_7dias,
+                'incompletos': incompletos,
+                'plazo_respuesta_dias': PLAZO_RESPUESTA_DIAS,
             }
         })
         
@@ -1819,9 +2198,16 @@ def exportar_requerimientos(request):
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment
         
-        # Filtros
+        # Filtros. Deben ser LOS MISMOS que los del listado: el botón de Excel
+        # manda todo lo que hay puesto en pantalla, y al ignorar la mitad el
+        # archivo bajaba más filas de las que el usuario estaba viendo.
         estado = request.GET.get('estado')
         tipo = request.GET.get('tipo')
+        prioridad = request.GET.get('prioridad')
+        busqueda = request.GET.get('busqueda', '')
+        etapa = request.GET.get('etapa')
+        incompletos = request.GET.get('incompletos')
+        sin_respuesta = request.GET.get('sin_respuesta')
         fecha_inicio = request.GET.get('fecha_inicio')
         fecha_fin = request.GET.get('fecha_fin')
         
@@ -1850,6 +2236,31 @@ def exportar_requerimientos(request):
             requerimientos = requerimientos.filter(estado=estado)
         if tipo:
             requerimientos = requerimientos.filter(tipo=tipo)
+        if prioridad:
+            requerimientos = requerimientos.filter(prioridad=prioridad)
+        if busqueda:
+            requerimientos = requerimientos.filter(
+                Q(numero_requerimiento__icontains=busqueda) |
+                Q(sku__icontains=busqueda) |
+                Q(cliente_nombre__icontains=busqueda) |
+                Q(cliente_rut__icontains=busqueda) |
+                Q(numero_boleta__icontains=busqueda)
+            )
+        if etapa:
+            estados_etapa = [e for e, et in ETAPA_POR_ESTADO.items() if et == etapa]
+            if estados_etapa:
+                requerimientos = requerimientos.filter(estado__in=estados_etapa)
+        if incompletos == 'true':
+            requerimientos = requerimientos.exclude(estado__in=ESTADOS_CERRADOS).filter(
+                Q(proveedor__isnull=True) |
+                (Q(dte_compra__isnull=True)
+                 & (Q(numero_factura_compra__isnull=True) | Q(numero_factura_compra='')))
+            )
+        if sin_respuesta == 'true':
+            requerimientos = requerimientos.filter(
+                estado='ESPERANDO_RESPUESTA',
+                fecha_envio_proveedor__lt=timezone.now() - timedelta(days=PLAZO_RESPUESTA_DIAS),
+                fecha_respuesta_proveedor__isnull=True)
         if fecha_inicio:
             try:
                 dt_inicio = timezone.make_aware(datetime.strptime(fecha_inicio, '%Y-%m-%d'))
@@ -1862,7 +2273,7 @@ def exportar_requerimientos(request):
                 requerimientos = requerimientos.filter(fecha_creacion__lte=dt_fin)
             except (ValueError, TypeError):
                 pass
-        
+
         # Crear workbook
         wb = openpyxl.Workbook()
         ws = wb.active
@@ -1870,9 +2281,10 @@ def exportar_requerimientos(request):
         
         # Encabezados
         headers = [
-            'Número', 'Tipo', 'Estado', 'Prioridad', 'Origen', 'Sucursal', 'SKU', 'Producto',
-            'Cantidad', 'Cliente', 'Boleta', 'Factura Compra', 'Fecha Creación', 'Días',
-            'Proveedor', 'Estado Proveedor', 'Decisión Proveedor', 'Días sin Respuesta'
+            'Número', 'Tipo', 'Estado', 'Etapa', 'Prioridad', 'Origen', 'Sucursal', 'SKU',
+            'Producto', 'Cantidad', 'Cliente', 'Boleta', 'Factura Compra', 'Fecha Creación',
+            'Días', 'Decisión Interna', 'Motivo Decisión Interna', 'Proveedor',
+            'Estado Proveedor', 'Decisión Proveedor', 'Días sin Respuesta'
         ]
         
         # Estilo para encabezados
@@ -1892,21 +2304,24 @@ def exportar_requerimientos(request):
             ws.cell(row=row, column=1, value=req.numero_requerimiento)
             ws.cell(row=row, column=2, value=req.get_tipo_display())
             ws.cell(row=row, column=3, value=req.get_estado_display())
-            ws.cell(row=row, column=4, value=req.get_prioridad_display())
-            ws.cell(row=row, column=5, value=req.get_origen_display())
-            ws.cell(row=row, column=6, value=req.sucursal.alias)
-            ws.cell(row=row, column=7, value=req.sku)
-            ws.cell(row=row, column=8, value=req.nombre_producto)
-            ws.cell(row=row, column=9, value=req.cantidad)
-            ws.cell(row=row, column=10, value=req.cliente_nombre)
-            ws.cell(row=row, column=11, value=req.numero_boleta or '')
-            ws.cell(row=row, column=12, value=factura)
-            ws.cell(row=row, column=13, value=req.fecha_creacion.strftime('%d/%m/%Y'))
-            ws.cell(row=row, column=14, value=req.dias_transcurridos)
-            ws.cell(row=row, column=15, value=req.proveedor.nombre if req.proveedor else '')
-            ws.cell(row=row, column=16, value='Enviado' if req.correo_enviado_proveedor else 'No enviado')
-            ws.cell(row=row, column=17, value=req.decision_proveedor or '')
-            ws.cell(row=row, column=18, value=req.dias_sin_respuesta)
+            ws.cell(row=row, column=4, value=req.etapa)
+            ws.cell(row=row, column=5, value=req.get_prioridad_display())
+            ws.cell(row=row, column=6, value=req.get_origen_display())
+            ws.cell(row=row, column=7, value=req.sucursal.alias)
+            ws.cell(row=row, column=8, value=req.sku)
+            ws.cell(row=row, column=9, value=req.nombre_producto)
+            ws.cell(row=row, column=10, value=req.cantidad)
+            ws.cell(row=row, column=11, value=req.cliente_nombre)
+            ws.cell(row=row, column=12, value=req.numero_boleta or '')
+            ws.cell(row=row, column=13, value=factura)
+            ws.cell(row=row, column=14, value=req.fecha_creacion.strftime('%d/%m/%Y'))
+            ws.cell(row=row, column=15, value=req.dias_transcurridos)
+            ws.cell(row=row, column=16, value=req.decision_interna or '')
+            ws.cell(row=row, column=17, value=req.motivo_decision_interna or '')
+            ws.cell(row=row, column=18, value=req.proveedor.nombre if req.proveedor else '')
+            ws.cell(row=row, column=19, value='Enviado' if req.correo_enviado_proveedor else 'No enviado')
+            ws.cell(row=row, column=20, value=req.decision_proveedor or '')
+            ws.cell(row=row, column=21, value=req.dias_sin_respuesta)
         
         # Ajustar ancho de columnas
         for column in ws.columns:
@@ -1982,70 +2397,274 @@ def descargar_formato_requerimiento(request, requerimiento_id):
     return response
 
 
+# ========== BÚSQUEDA DEL RESPALDO DE COMPRA ==========
+#
+# El proveedor exige la factura con la que se le compró el producto, y ese
+# dato es el que más se pierde. Buscarlo solo en las LÍNEAS de los DTE de
+# compra deja ciego al analista en dos escenarios muy frecuentes:
+#
+#   1. DTE de compra sin líneas — buena parte de las compras cargadas solo
+#      como cabecera (monto y proveedor, sin detalle de productos).
+#   2. Datos migrados desde Laravel — el kardex trae el ingreso del producto,
+#      pero la migración NO copió el N° de documento: `referencia_externa`
+#      quedó ocupada con "MIG:<id de MySQL>" y el FK al DTE quedó vacío.
+#
+# Por eso la búsqueda cruza CUATRO fuentes y marca de cuál salió cada
+# candidato, en vez de decir "no hay compras registradas" y dejar al usuario
+# tecleando el número de memoria.
+
+# Conceptos de kardex que significan "esta unidad entró comprada" (no por
+# traspaso, ni por devolución de un cliente, ni por ajuste de inventario).
+CONCEPTOS_INGRESO_COMPRA = (
+    'RECEPCION_COMPRA', 'INGRESO_INICIAL', 'INGRESO_MANUAL', 'REPOSICION_STOCK',
+)
+
+# Cuánta confianza da cada fuente para elegir la factura correcta.
+CONFIANZA_FUENTE = {
+    'LINEA_DTE': 'ALTA',        # el documento dice explícitamente este SKU
+    'LOTE': 'ALTA',             # el lote FIFO quedó apuntando al documento
+    # El sistema anterior anotaba la factura EN el movimiento del producto al
+    # crearlo, así que el número es tan bueno como el de una línea de DTE.
+    'LEGACY': 'ALTA',
+    'KARDEX_DTE': 'MEDIA',      # el movimiento apunta al DTE, sin línea de detalle
+    'KARDEX_SIN_DOC': 'BAJA',   # hay ingreso pero el documento se perdió
+    'CABECERA_PROVEEDOR': 'BAJA',  # compra del proveedor en fecha cercana
+}
+
+
+def _tallas_de_consulta(consulta):
+    """Producto_Talla que matchean un SKU exacto o un texto del artículo.
+
+    Devuelve una LISTA y no un queryset: la versión anterior retornaba un
+    queryset ya rebanado (`[:400]`) y cualquier `.first()` posterior reventaba
+    con "Cannot reorder a query once a slice has been taken" — un 500 en la
+    búsqueda por texto, que es el camino más usado con productos legacy.
+    """
+    campos = ('producto', 'producto__atributo1')
+    if consulta.isdigit():
+        try:
+            exactas = list(Producto_Talla.objects.filter(sku=int(consulta))
+                           .select_related(*campos)[:400])
+        except (ValueError, OverflowError):
+            exactas = []
+        if exactas:
+            return exactas
+    return list(
+        Producto_Talla.objects
+        .filter(Q(producto__articulo__icontains=consulta) |
+                Q(producto__descripcion__icontains=consulta))
+        .select_related(*campos)[:400]
+    )
+
+
+def _filtro_alcance_dte(queryset, user, prefijo='dte__'):
+    """Acota a las empresas/sucursales del usuario.
+
+    La compra histórica viene con `sucursal` NULL, así que anclar solo en
+    sucursal la haría desaparecer: se acepta también por empresa receptora.
+    """
+    from .utils_permisos import ids_empresas_alcance, ids_sucursales_alcance
+    empresas_ids = ids_empresas_alcance(user)
+    if empresas_ids is None:
+        return queryset
+    sucursales_ids = ids_sucursales_alcance(user) or []
+    return queryset.filter(
+        Q(**{f'{prefijo}receptor_id__in': empresas_ids}) |
+        Q(**{f'{prefijo}sucursal_id__in': sucursales_ids})
+    )
+
+
+def _candidato(fuente, *, dte=None, fecha=None, proveedor_id=None, proveedor='',
+               sucursal='—', sku='', articulo='', talla='', cantidad=None,
+               costo=0, nota=''):
+    """Normaliza un hallazgo de cualquiera de las cuatro fuentes."""
+    return {
+        'fuente': fuente,
+        'confianza': CONFIANZA_FUENTE.get(fuente, 'BAJA'),
+        'dte_id': dte.id if dte else None,
+        'numero_documento': dte.numero_documento if dte else '',
+        'tipo_documento': dte.get_tipo_documento_display() if dte else '',
+        'fecha': fecha.strftime('%Y-%m-%d') if fecha else '',
+        'fecha_texto': fecha.strftime('%d/%m/%Y') if fecha else '',
+        'proveedor_id': proveedor_id,
+        'proveedor': proveedor,
+        'sucursal': sucursal,
+        'sku': sku,
+        'articulo': articulo,
+        'talla': talla,
+        'cantidad': cantidad,
+        'costo_unitario': costo or 0,
+        'nota': nota,
+    }
+
+
 @login_required
 @require_GET
 def sugerir_proveedor_por_sku(request):
-    """Proveedor y factura de compra más recientes de un SKU.
+    """Proveedor y factura de compra más probables para un SKU.
 
-    La tienda no sabe a qué proveedor reclamarle y por eso el campo llegaba
-    vacío al analista. El dato ya está en el sistema: la última factura de
-    COMPRA que incluyó ese SKU. Devuelve además el N° y la fecha del documento,
-    que es exactamente el respaldo que el proveedor exige.
+    La tienda no sabe a qué proveedor reclamarle y por eso el campo llega
+    vacío al analista. Se busca en el mismo orden de confianza que el buscador
+    completo, así que ahora también responde con datos migrados desde Laravel
+    (antes devolvía "no hay compras registradas" para todo el catálogo
+    histórico) y, en última instancia, propone el proveedor por la MARCA.
     """
     sku = (request.GET.get('sku') or '').strip()
     if not sku:
         return JsonResponse({'success': False, 'error': 'SKU es requerido'}, status=400)
+    # `Requerimiento.sku` es texto libre y `Producto_Talla.sku` es numerico:
+    # un SKU alfanumerico llegaba al ORM y devolvia 500 en vez de "no existe".
+    if not sku.isdigit():
+        return JsonResponse({
+            'success': False,
+            'error': f'"{sku}" no es un SKU del catálogo (debe ser numérico)'
+        }, status=404)
 
     from .utils_producto_match import producto_talla_por_sku
     producto_talla = producto_talla_por_sku(
-        sku, sucursal_id=request.session.get('idSucursalActual'))
+        sku, sucursal_id=request.session.get('idSucursalActual'),
+        select_related=['producto', 'producto__atributo1'])
     if not producto_talla:
         return JsonResponse({
             'success': False,
             'error': 'El SKU no existe en el sistema'
         }, status=404)
 
+    # 1) Línea de DTE de compra: la fuente que nombra el SKU.
+    # Mismo alcance que el buscador completo: sin esto la sugerencia filtraba
+    # proveedor, N° de factura y costo de compras de OTRA empresa del holding.
     linea = (
-        Dte_Productos.objects
-        .filter(productoTalla=producto_talla, dte__tipo_transaccion='COMPRA')
-        .select_related('dte', 'dte__emisor')
+        _filtro_alcance_dte(
+            Dte_Productos.objects
+            .filter(productoTalla=producto_talla, dte__tipo_transaccion='COMPRA')
+            .select_related('dte', 'dte__emisor'),
+            request.user)
         .order_by('-dte__fecha_emision', '-dte__id')
         .first()
     )
-    if not linea or not linea.dte.emisor_id:
+    if linea and linea.dte.emisor_id:
+        dte = linea.dte
         return JsonResponse({
-            'success': False,
-            'error': 'No hay compras registradas de este SKU'
-        }, status=404)
+            'success': True,
+            'fuente': 'LINEA_DTE',
+            'confianza': 'ALTA',
+            'proveedor': {'id': dte.emisor_id, 'nombre': dte.emisor.nombre,
+                          'rut': dte.emisor.rut},
+            'compra': {
+                'dte_id': dte.id,
+                'numero_documento': dte.numero_documento,
+                'tipo_documento': dte.get_tipo_documento_display(),
+                'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d') if dte.fecha_emision else '',
+                'costo_unitario': linea.costo or 0,
+            },
+        })
 
-    dte = linea.dte
+    # 2) Lote FIFO con documento: cuando el DTE existe pero sin líneas.
+    lote = (
+        _filtro_alcance_dte(
+            LoteProducto.objects
+            .filter(producto_talla=producto_talla, dte__isnull=False,
+                    dte__tipo_transaccion='COMPRA')
+            .select_related('dte', 'dte__emisor'),
+            request.user)
+        .order_by('-fecha_ingreso')
+        .first()
+    )
+    if lote and lote.dte.emisor_id:
+        dte = lote.dte
+        return JsonResponse({
+            'success': True,
+            'fuente': 'LOTE',
+            'confianza': 'ALTA',
+            'proveedor': {'id': dte.emisor_id, 'nombre': dte.emisor.nombre,
+                          'rut': dte.emisor.rut},
+            'compra': {
+                'dte_id': dte.id,
+                'numero_documento': dte.numero_documento,
+                'tipo_documento': dte.get_tipo_documento_display(),
+                'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d') if dte.fecha_emision else '',
+                'costo_unitario': lote.costo_unitario or 0,
+            },
+        })
+
+    # 3) Kardex con DTE asociado (ingreso por compra sin línea de detalle).
+    mov = (
+        _filtro_alcance_dte(
+            Movimientos_Producto.objects
+            .filter(ProductoTalla=producto_talla, dte__isnull=False,
+                    dte__tipo_transaccion='COMPRA')
+            .select_related('dte', 'dte__emisor'),
+            request.user)
+        .order_by('-fecha', '-hora')
+        .first()
+    )
+    if mov and mov.dte.emisor_id:
+        dte = mov.dte
+        return JsonResponse({
+            'success': True,
+            'fuente': 'KARDEX_DTE',
+            'confianza': 'MEDIA',
+            'proveedor': {'id': dte.emisor_id, 'nombre': dte.emisor.nombre,
+                          'rut': dte.emisor.rut},
+            'compra': {
+                'dte_id': dte.id,
+                'numero_documento': dte.numero_documento,
+                'tipo_documento': dte.get_tipo_documento_display(),
+                'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d') if dte.fecha_emision else '',
+                'costo_unitario': mov.costo or 0,
+            },
+        })
+
+    # 4) Último recurso: el proveedor de la MARCA. No da la factura, pero al
+    #    menos evita que el analista tenga que adivinar a quién reclamarle.
+    proveedor_marca = _proveedor_por_marca(producto_talla)
+    if proveedor_marca:
+        return JsonResponse({
+            'success': True,
+            'fuente': 'MARCA',
+            'confianza': 'BAJA',
+            'proveedor': {'id': proveedor_marca.id, 'nombre': proveedor_marca.nombre,
+                          'rut': proveedor_marca.rut},
+            'compra': None,
+            'aviso': ('Sugerido por la marca del producto, no por una compra. '
+                      'Confirme la factura en el buscador.'),
+        })
+
     return JsonResponse({
-        'success': True,
-        'proveedor': {
-            'id': dte.emisor_id,
-            'nombre': dte.emisor.nombre,
-            'rut': dte.emisor.rut,
-        },
-        'compra': {
-            'dte_id': dte.id,
-            'numero_documento': dte.numero_documento,
-            'tipo_documento': dte.get_tipo_documento_display(),
-            'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d') if dte.fecha_emision else '',
-            'costo_unitario': linea.costo or 0,
-        },
-    })
+        'success': False,
+        'error': 'No hay compras registradas de este SKU en ninguna fuente'
+    }, status=404)
+
+
+def _proveedor_por_marca(producto_talla):
+    """Proveedor cuyo nombre coincide con la marca del producto.
+
+    En este catálogo la marca ES el proveedor casi siempre (NIKE → NIKE DE
+    CHILE S.A.). No es prueba de nada, pero cuando no hay ni una compra
+    rastreable es mejor que dejar el campo vacío.
+    """
+    producto = getattr(producto_talla, 'producto', None)
+    marca = getattr(getattr(producto, 'atributo1', None), 'valor', None) if producto else None
+    if not marca or len(marca.strip()) < 3:
+        return None
+    marca = marca.strip()
+    return (
+        Empresa.objects.filter(esProveedor=True)
+        .filter(Q(nombre__istartswith=marca) | Q(nombre__icontains=marca))
+        .order_by('nombre')
+        .first()
+    )
 
 
 @login_required
 @require_GET
 def buscar_compras_producto(request):
-    """Historial de compras de un producto, para identificar QUÉ factura reclamar.
+    """Dónde entró este producto, cruzando las cuatro fuentes disponibles.
 
-    `sugerir-proveedor` devuelve solo la última compra, y eso no alcanza: un
-    mismo modelo se compra varias veces, a veces a proveedores distintos, y el
-    par que falló pertenece a una partida concreta. Acá se listan las compras
-    del producto —fecha, proveedor, documento, cantidad y costo— para que quien
-    revisa elija la que corresponde en vez de adivinar.
+    Un mismo modelo se compra varias veces, a veces a proveedores distintos, y
+    el par que falló pertenece a una partida concreta. Acá se listan los
+    candidatos —fecha, proveedor, documento, cantidad y costo— con la fuente y
+    la confianza de cada uno, para que quien revisa elija en vez de adivinar.
 
     Busca por SKU exacto o por texto del artículo/descripción.
     """
@@ -2057,66 +2676,349 @@ def buscar_compras_producto(request):
         }, status=400)
 
     try:
-        limite = min(int(request.GET.get('limite', 40)), 100)
+        # `max(1, ...)`: un `limite` negativo del query string llegaba al
+        # slice del queryset y Django respondía 500.
+        limite = max(1, min(int(request.GET.get('limite', 40)), 100))
     except (TypeError, ValueError):
         limite = 40
 
-    # SKU exacto primero: es lo que se tipea el 90% de las veces y evita traer
-    # medio catálogo cuando el código es también un texto frecuente.
-    tallas = Producto_Talla.objects.none()
-    if consulta.isdigit():
-        tallas = Producto_Talla.objects.filter(sku=int(consulta))
-    if not tallas.exists():
-        tallas = Producto_Talla.objects.filter(
-            Q(producto__articulo__icontains=consulta) |
-            Q(producto__descripcion__icontains=consulta)
-        )[:400]
-
-    ids_tallas = list(tallas.values_list('id', flat=True))
+    tallas = _tallas_de_consulta(consulta)
+    ids_tallas = [t.id for t in tallas]
     if not ids_tallas:
-        return JsonResponse({'success': True, 'compras': [], 'total': 0})
+        return JsonResponse({
+            'success': True, 'compras': [], 'total': 0,
+            'diagnostico': {
+                'mensaje': f'Ningún producto del catálogo coincide con "{consulta}".',
+                'sugerencia': 'Pruebe con el SKU exacto o con parte del nombre del artículo.',
+            },
+        })
 
-    lineas = (
+    candidatos = []
+    vistos_dte = set()          # dte_id ya incorporado (la fuente más confiable gana)
+    fechas_ingreso = []         # para acotar la búsqueda por cabecera
+    proveedores_detectados = {}
+
+    # ── Fuente 1: líneas de DTE de compra ────────────────────────────────
+    lineas = _filtro_alcance_dte(
         Dte_Productos.objects
         .filter(productoTalla_id__in=ids_tallas, dte__tipo_transaccion='COMPRA')
         .select_related('dte', 'dte__emisor', 'dte__sucursal',
-                        'productoTalla', 'productoTalla__producto')
-    )
+                        'productoTalla', 'productoTalla__producto'),
+        request.user,
+    ).order_by('-dte__fecha_emision', '-dte__id')[:limite]
 
-    # Mismo criterio de alcance que los reportes: la compra histórica viene con
-    # sucursal NULL, así que anclar solo en `sucursal` la haría desaparecer.
-    from .utils_permisos import ids_empresas_alcance, ids_sucursales_alcance
-    empresas_ids = ids_empresas_alcance(request.user)
-    if empresas_ids is not None:
-        sucursales_ids = ids_sucursales_alcance(request.user) or []
-        lineas = lineas.filter(
-            Q(dte__receptor_id__in=empresas_ids) |
-            Q(dte__sucursal_id__in=sucursales_ids)
-        )
-
-    lineas = lineas.order_by('-dte__fecha_emision', '-dte__id')[:limite]
-
-    compras = []
     for linea in lineas:
-        dte = linea.dte
-        talla = linea.productoTalla
-        compras.append({
-            'dte_id': dte.id,
-            'fecha': dte.fecha_emision.strftime('%Y-%m-%d') if dte.fecha_emision else '',
-            'fecha_texto': dte.fecha_emision.strftime('%d/%m/%Y') if dte.fecha_emision else '',
-            'numero_documento': dte.numero_documento,
-            'tipo_documento': dte.get_tipo_documento_display(),
-            'proveedor_id': dte.emisor_id,
-            'proveedor': dte.emisor.nombre if dte.emisor_id else '',
-            'sucursal': dte.sucursal.alias if dte.sucursal_id else '—',
-            'sku': talla.sku if talla else '',
-            'articulo': talla.producto.articulo if talla and talla.producto_id else linea.descripcion,
-            'talla': talla.talla if talla else '',
-            'cantidad': linea.stock,
-            'costo_unitario': linea.costo or 0,
+        dte, talla = linea.dte, linea.productoTalla
+        vistos_dte.add(dte.id)
+        if dte.emisor_id:
+            proveedores_detectados[dte.emisor_id] = dte.emisor.nombre
+        if dte.fecha_emision:
+            fechas_ingreso.append(dte.fecha_emision)
+        candidatos.append(_candidato(
+            'LINEA_DTE', dte=dte, fecha=dte.fecha_emision,
+            proveedor_id=dte.emisor_id,
+            proveedor=dte.emisor.nombre if dte.emisor_id else '',
+            sucursal=dte.sucursal.alias if dte.sucursal_id else '—',
+            sku=talla.sku if talla else '',
+            articulo=(talla.producto.articulo if talla and talla.producto_id
+                      else linea.descripcion),
+            talla=talla.talla if talla else '',
+            cantidad=linea.stock, costo=linea.costo or 0,
+            nota='El documento detalla este SKU',
+        ))
+
+    # ── Fuente 2: lotes FIFO con documento ───────────────────────────────
+    lotes = _filtro_alcance_dte(
+        LoteProducto.objects
+        .filter(producto_talla_id__in=ids_tallas, dte__isnull=False,
+                dte__tipo_transaccion='COMPRA')
+        .select_related('dte', 'dte__emisor', 'dte__sucursal',
+                        'producto_talla', 'producto_talla__producto'),
+        request.user,
+    ).order_by('-fecha_ingreso')[:limite]
+
+    for lote in lotes:
+        dte, talla = lote.dte, lote.producto_talla
+        if dte.id in vistos_dte:
+            continue
+        vistos_dte.add(dte.id)
+        if dte.emisor_id:
+            proveedores_detectados[dte.emisor_id] = dte.emisor.nombre
+        if dte.fecha_emision:
+            fechas_ingreso.append(dte.fecha_emision)
+        candidatos.append(_candidato(
+            'LOTE', dte=dte, fecha=dte.fecha_emision,
+            proveedor_id=dte.emisor_id,
+            proveedor=dte.emisor.nombre if dte.emisor_id else '',
+            sucursal=dte.sucursal.alias if dte.sucursal_id else '—',
+            sku=talla.sku if talla else '',
+            articulo=talla.producto.articulo if talla and talla.producto_id else '',
+            talla=talla.talla if talla else '',
+            cantidad=lote.cantidad_inicial, costo=lote.costo_unitario or 0,
+            nota='Lote FIFO ligado a este documento',
+        ))
+
+    # ── Fuente 3: N° recuperado del sistema anterior ─────────────────────
+    # La migración desde Laravel leía `movimiento_productos.N_documento` y no
+    # lo guardaba. `backfill_documento_movimientos_laravel` lo rescata en su
+    # propia tabla —sin tocar el kardex ni los DTE, para no mover ningún
+    # reporte— y acá se ofrece como candidato. Para el proveedor, el número
+    # ES la respuesta, exista o no la cabecera en el sistema.
+    #
+    # Va ANTES del kardex a propósito: los movimientos ya rescatados no deben
+    # repetirse como "ingreso sin documento" dos filas más abajo.
+    legacy = (
+        DocumentoCompraLegacy.objects
+        .filter(producto_talla_id__in=ids_tallas)
+        .select_related('dte', 'proveedor', 'sucursal')
+        .order_by('-fecha_movimiento')[:limite]
+    )
+    movimientos_rescatados = set()
+    for doc in legacy:
+        movimientos_rescatados.add(doc.movimiento_origen_id)
+        if doc.dte_id and doc.dte_id in vistos_dte:
+            continue
+        if doc.dte_id:
+            vistos_dte.add(doc.dte_id)
+        if doc.proveedor_id:
+            proveedores_detectados[doc.proveedor_id] = doc.proveedor.nombre
+        if doc.fecha_movimiento:
+            fechas_ingreso.append(doc.fecha_movimiento)
+
+        candidato = _candidato(
+            'LEGACY', dte=doc.dte, fecha=doc.fecha_movimiento,
+            proveedor_id=doc.proveedor_id,
+            proveedor=doc.proveedor.nombre if doc.proveedor_id else (doc.marca_legacy or ''),
+            sucursal=doc.sucursal.alias if doc.sucursal_id else '—',
+            sku=doc.sku, cantidad=doc.cantidad, costo=doc.costo,
+            nota=('N° recuperado del sistema anterior' if not doc.dte_id
+                  else 'N° del sistema anterior, con su documento identificado'),
+        )
+        # El número se muestra SIEMPRE, haya o no cabecera en la BD: es
+        # exactamente el dato que el proveedor pide.
+        candidato['numero_documento'] = doc.numero_documento
+        if not doc.dte_id:
+            candidato['tipo_documento'] = 'Factura de compra'
+        candidatos.append(candidato)
+
+    # ── Fuente 4: kardex (ingresos que no quedaron rescatados) ───────────
+    movimientos = (
+        Movimientos_Producto.objects
+        .filter(ProductoTalla_id__in=ids_tallas,
+                concepto__in=CONCEPTOS_INGRESO_COMPRA,
+                cantidad__gt=0)
+        .select_related('dte', 'dte__emisor', 'sucursal_destino', 'sucursal_origen',
+                        'ProductoTalla', 'ProductoTalla__producto')
+    )
+    # Mismo alcance que las otras fuentes. El kardex no cuelga de un DTE, así
+    # que se acota por la sucursal del movimiento: sin esto un usuario de una
+    # empresa veía los ingresos de otra.
+    from .utils_permisos import ids_sucursales_alcance
+    sucursales_alcance = ids_sucursales_alcance(request.user)
+    if sucursales_alcance is not None:
+        movimientos = movimientos.filter(
+            Q(sucursal_destino_id__in=sucursales_alcance) |
+            Q(sucursal_origen_id__in=sucursales_alcance)
+        )
+    # Los que SÍ apuntan a un DTE van primero: ordenando solo por fecha, el
+    # corte por `limite` dejaba fuera justamente los movimientos rastreables
+    # cuando había cientos de ingresos sin documento más nuevos.
+    movimientos = movimientos.annotate(
+        _sin_dte=Case(When(dte__isnull=True, then=Value(1)), default=Value(0),
+                      output_field=IntegerField())
+    ).order_by('_sin_dte', '-fecha', '-hora')[:limite]
+
+    movimientos_sin_documento = 0
+    for mov in movimientos:
+        # Si su N° ya se rescató arriba, repetirlo acá como "sin documento"
+        # sería mostrar dos veces la misma unidad y contradecirse.
+        if mov.id in movimientos_rescatados:
+            continue
+        talla = mov.ProductoTalla
+        # La sucursal del ingreso: destino si existe, si no origen (el mismo
+        # criterio que usa el reporte de movimientos).
+        sucursal = mov.sucursal_destino or mov.sucursal_origen
+        if mov.dte_id and mov.dte.tipo_transaccion == 'COMPRA':
+            if mov.dte_id in vistos_dte:
+                continue
+            vistos_dte.add(mov.dte_id)
+            if mov.dte.emisor_id:
+                proveedores_detectados[mov.dte.emisor_id] = mov.dte.emisor.nombre
+            if mov.dte.fecha_emision:
+                fechas_ingreso.append(mov.dte.fecha_emision)
+            candidatos.append(_candidato(
+                'KARDEX_DTE', dte=mov.dte, fecha=mov.dte.fecha_emision or mov.fecha,
+                proveedor_id=mov.dte.emisor_id,
+                proveedor=mov.dte.emisor.nombre if mov.dte.emisor_id else '',
+                sucursal=sucursal.alias if sucursal else '—',
+                sku=talla.sku if talla else '',
+                articulo=talla.producto.articulo if talla and talla.producto_id else '',
+                talla=talla.talla if talla else '',
+                cantidad=mov.cantidad, costo=mov.costo or 0,
+                nota='El movimiento apunta al documento (sin línea de detalle)',
+            ))
+            continue
+
+        # Ingreso sin FK al DTE: no da la factura, pero sí la FECHA y la
+        # SUCURSAL en que entró, que es lo que permite ubicar la compra del
+        # proveedor más abajo. El N° recuperado del sistema anterior se busca
+        # aparte (fuente 4), en su propia tabla.
+        if mov.fecha:
+            fechas_ingreso.append(mov.fecha)
+        movimientos_sin_documento += 1
+        migrado = (mov.referencia_externa or '').startswith('MIG:')
+        candidatos.append(_candidato(
+            'KARDEX_SIN_DOC', fecha=mov.fecha,
+            sucursal=sucursal.alias if sucursal else '—',
+            sku=talla.sku if talla else '',
+            articulo=talla.producto.articulo if talla and talla.producto_id else '',
+            talla=talla.talla if talla else '',
+            cantidad=mov.cantidad, costo=mov.costo or 0,
+            nota=('Ingreso migrado del sistema anterior: la migración no trajo '
+                  'el N° de documento' if migrado
+                  else f'Ingreso por {mov.get_concepto_display()} sin documento asociado'),
+        ))
+
+    # ── Fuente 5: compras del proveedor en fechas cercanas ───────────────
+    # Cuando el ingreso existe pero perdió el documento, la factura suele ser
+    # una de las compras que ese proveedor emitió alrededor de esa fecha.
+    if movimientos_sin_documento and fechas_ingreso:
+        proveedor_id = request.GET.get('proveedor_id')
+        ids_proveedor = ([int(proveedor_id)] if proveedor_id and proveedor_id.isdigit()
+                         else list(proveedores_detectados.keys()))
+        if not ids_proveedor:
+            proveedor_marca = _proveedor_por_marca(tallas[0] if tallas else None)
+            if proveedor_marca:
+                ids_proveedor = [proveedor_marca.id]
+
+        if ids_proveedor:
+            # Ventana alrededor del ingreso MÁS RECIENTE. Usar min()/max()
+            # global abría un rango de años y devolvía las compras más nuevas
+            # del proveedor, que no tienen nada que ver con este producto.
+            referencia = max(fechas_ingreso)
+            desde = referencia - timedelta(days=45)
+            hasta = referencia + timedelta(days=45)
+            cabeceras = _filtro_alcance_dte(
+                Dte.objects.filter(
+                    tipo_transaccion='COMPRA',
+                    emisor_id__in=ids_proveedor,
+                    fecha_emision__range=(desde, hasta),
+                ).exclude(id__in=vistos_dte)
+                .select_related('emisor', 'sucursal'),
+                request.user, prefijo='',
+            ).order_by('-fecha_emision')[:15]
+
+            for dte in cabeceras:
+                candidatos.append(_candidato(
+                    'CABECERA_PROVEEDOR', dte=dte, fecha=dte.fecha_emision,
+                    proveedor_id=dte.emisor_id,
+                    proveedor=dte.emisor.nombre if dte.emisor_id else '',
+                    sucursal=dte.sucursal.alias if dte.sucursal_id else '—',
+                    cantidad=dte.unidades_productos, costo=0,
+                    nota='Compra del proveedor en fecha cercana al ingreso — verifique',
+                ))
+
+    # Más confiable primero y, dentro de cada nivel, lo más reciente.
+    orden_confianza = {'ALTA': 0, 'MEDIA': 1, 'BAJA': 2}
+    candidatos.sort(
+        key=lambda c: (orden_confianza.get(c['confianza'], 3), -_orden_fecha(c['fecha'])))
+    candidatos = candidatos[:limite]
+
+    diagnostico = _diagnostico_busqueda(candidatos, movimientos_sin_documento, consulta)
+
+    return JsonResponse({
+        'success': True,
+        'compras': candidatos,
+        'total': len(candidatos),
+        'diagnostico': diagnostico,
+    })
+
+
+def _orden_fecha(fecha_iso):
+    """Fecha ISO como entero para ordenar descendente sin parsear."""
+    return int((fecha_iso or '0000-00-00').replace('-', ''))
+
+
+def _diagnostico_busqueda(candidatos, sin_documento, consulta):
+    """Explica QUÉ se encontró y qué hacer, en vez de una lista muda."""
+    if not candidatos:
+        return {
+            'mensaje': f'No hay ningún ingreso registrado para "{consulta}".',
+            'sugerencia': ('Escriba el N° de factura a mano si lo tiene en el '
+                           'documento físico, o valide el caso sin respaldo '
+                           'dejando la razón en las notas internas.'),
+            'nivel': 'warning',
+        }
+    # Lo que cuenta es tener el NÚMERO, no que exista la cabecera en la BD:
+    # al proveedor se le manda el número. Mirar solo `dte_id` hacía que el
+    # buscador dijera "ninguno conserva el N°" con el número en pantalla.
+    con_documento = [c for c in candidatos if c['numero_documento']]
+    if not con_documento:
+        return {
+            'mensaje': (f'Hay {sin_documento} ingreso(s) de este producto, pero '
+                        f'ninguno conserva el N° de documento.'),
+            'sugerencia': ('Son datos traídos del sistema anterior: use la fecha '
+                           'del ingreso para ubicar la factura del proveedor.'),
+            'nivel': 'warning',
+        }
+    altas = [c for c in con_documento if c['confianza'] == 'ALTA']
+    if altas:
+        return {
+            'mensaje': f'{len(altas)} factura(s) de compra identificadas para este producto.',
+            'sugerencia': 'Elija la partida que corresponde a la unidad que falló.',
+            'nivel': 'success',
+        }
+    return {
+        'mensaje': 'No hay un documento que detalle el SKU; estos son los más probables.',
+        'sugerencia': 'Verifique contra el documento físico antes de reclamarlo.',
+        'nivel': 'info',
+    }
+
+
+@login_required
+@require_GET
+def buscar_dte_compra_por_numero(request):
+    """Valida un N° de factura de compra tipeado a mano.
+
+    El analista suele tener el número en el documento físico. Antes lo
+    escribía a ciegas y nadie comprobaba que existiera ni de qué proveedor
+    era; con esto, si el DTE está en el sistema, quedan enlazados el
+    proveedor, la fecha y el documento de una sola vez.
+    """
+    numero = (request.GET.get('numero') or '').strip()
+    if not numero.isdigit():
+        return JsonResponse({
+            'success': False,
+            'error': 'Ingrese el número de documento (solo dígitos)'
+        }, status=400)
+
+    dtes = _filtro_alcance_dte(
+        Dte.objects.filter(numero_documento=int(numero), tipo_transaccion='COMPRA')
+        .select_related('emisor', 'sucursal'),
+        request.user, prefijo='',
+    ).order_by('-fecha_emision')[:10]
+
+    if not dtes:
+        return JsonResponse({
+            'success': True, 'encontrados': [],
+            'aviso': (f'No hay ninguna factura de compra N° {numero} en el sistema. '
+                      f'Puede usarla igual: se guardará como dato tipeado.'),
         })
 
-    return JsonResponse({'success': True, 'compras': compras, 'total': len(compras)})
+    return JsonResponse({
+        'success': True,
+        'encontrados': [{
+            'dte_id': d.id,
+            'numero_documento': d.numero_documento,
+            'tipo_documento': d.get_tipo_documento_display(),
+            'fecha': d.fecha_emision.strftime('%Y-%m-%d') if d.fecha_emision else '',
+            'fecha_texto': d.fecha_emision.strftime('%d/%m/%Y') if d.fecha_emision else '',
+            'proveedor_id': d.emisor_id,
+            'proveedor': d.emisor.nombre if d.emisor_id else '',
+            'sucursal': d.sucursal.alias if d.sucursal_id else '—',
+            'monto': int(d.monto_con_iva or 0),
+        } for d in dtes],
+    })
 
 
 # ========== API TIPOS DE FOTO ==========

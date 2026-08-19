@@ -162,8 +162,13 @@ class EnviarAProveedorTest(TestCase):
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
 )
 class ActualizarEstadoJefeLocalTest(TestCase):
-    """El chequeo histórico comparaba contra 'ESPERANDO_PROVEEDOR' (estado
-    inexistente) y nunca se disparaba; ahora bloquea ESPERANDO_RESPUESTA."""
+    """Nadie llega a ESPERANDO_RESPUESTA escribiendo el estado a mano.
+
+    Antes el bloqueo era solo para jefe_local (403). Ahora ese estado tiene
+    su propia acción —"Enviar a proveedor"—, que es la única que deja el
+    rastro del correo enviado, así que el cambio genérico lo rechaza para
+    todos con 400 y explica cuál es la acción correcta.
+    """
 
     def setUp(self):
         self.empresa = crear_empresa(nombre='Holding Estado Test')
@@ -183,35 +188,137 @@ class ActualizarEstadoJefeLocalTest(TestCase):
         self.url = reverse('api_actualizar_estado_requerimiento', args=[self.req.id])
         self.client.force_login(self.jefe)
 
-    def test_jefe_local_no_puede_marcar_esperando_respuesta(self):
-        resp = self.client.post(
-            self.url,
-            data=json.dumps({'estado': 'ESPERANDO_RESPUESTA'}),
+    def _post(self, estado):
+        return self.client.post(
+            self.url, data=json.dumps({'estado': estado}),
             content_type='application/json',
         )
 
-        self.assertEqual(resp.status_code, 403)
+    def test_no_se_salta_a_esperando_respuesta_desde_pendiente(self):
+        """Sin pasar por revisión no se le manda nada al proveedor."""
+        resp = self._post('ESPERANDO_RESPUESTA')
+
+        self.assertEqual(resp.status_code, 400)
         self.req.refresh_from_db()
         self.assertEqual(self.req.estado, 'PENDIENTE')
 
+    def test_jefe_local_no_puede_marcar_esperando_respuesta(self):
+        """Aun siendo una transición válida, exige la acción de envío.
+
+        Es la única que registra el correo, el destinatario y los adjuntos;
+        marcando el estado a mano el caso quedaba "enviado" sin que saliera
+        ningún correo.
+        """
+        self.req.estado = 'EN_REVISION'
+        self.req.save(update_fields=['estado'])
+
+        resp = self._post('ESPERANDO_RESPUESTA')
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('Enviar a proveedor', resp.json()['error'])
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.estado, 'EN_REVISION')
+
     def test_jefe_local_si_puede_pasar_a_en_revision(self):
-        resp = self.client.post(
-            self.url,
-            data=json.dumps({'estado': 'EN_REVISION'}),
-            content_type='application/json',
-        )
+        resp = self._post('EN_REVISION')
 
         self.assertEqual(resp.status_code, 200)
         self.req.refresh_from_db()
         self.assertEqual(self.req.estado, 'EN_REVISION')
 
     def test_transicion_invalida_rechazada(self):
-        resp = self.client.post(
-            self.url,
-            data=json.dumps({'estado': 'COMPLETADO'}),
-            content_type='application/json',
-        )
+        resp = self._post('COMPLETADO')
 
         self.assertEqual(resp.status_code, 400)
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.estado, 'PENDIENTE')
+
+    def test_no_se_puede_saltar_a_aprobado_sin_pasar_por_el_proveedor(self):
+        """APROBADO significa 'lo aprobó el proveedor'.
+
+        Se llegaba ahí desde EN_REVISION, y quedaban casos marcados como
+        aprobados por un proveedor que nunca los vio.
+        """
+        self.req.estado = 'EN_REVISION'
+        self.req.save(update_fields=['estado'])
+
+        resp = self._post('APROBADO')
+
+        self.assertEqual(resp.status_code, 400)
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.estado, 'EN_REVISION')
+
+
+class DecisionInternaTest(TestCase):
+    """La primera aprobación: la que toma la empresa antes del proveedor."""
+
+    def setUp(self):
+        self.empresa = crear_empresa(nombre='Holding Decision')
+        self.sucursal = crear_sucursal(empresa=self.empresa, alias='SUC-DEC')
+        self.proveedor = crear_empresa(
+            nombre='Proveedor Decision', rut='79.888.888-8', esProveedor=True)
+        self.jefe = crear_usuario(username='jefe_dec', rol='jefe_local')
+        crear_empresa_user(self.jefe, self.empresa, self.sucursal)
+
+        self.req = Requerimiento.objects.create(
+            tipo='GARANTIA', sucursal=self.sucursal, usuario_creador=self.jefe,
+            sku='4321', nombre_producto='Zapatilla Test',
+            cliente_nombre='Cliente Decision', motivo='Suela despegada',
+            proveedor=self.proveedor,
+        )
+        self.url = reverse('api_decidir_requerimiento', args=[self.req.id])
+        self.client.force_login(self.jefe)
+
+    def _decidir(self, **payload):
+        return self.client.post(self.url, data=json.dumps(payload),
+                                content_type='application/json')
+
+    def test_validar_deja_el_caso_listo_para_el_proveedor(self):
+        resp = self._decidir(decision='APROBADO', motivo='Falla de fábrica dentro de garantía')
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.estado, 'VALIDADO')
+        self.assertEqual(self.req.decision_interna, 'APROBADO')
+        self.assertEqual(self.req.usuario_decision_interna, self.jefe)
+        self.assertIsNotNone(self.req.fecha_decision_interna)
+
+    def test_rechazo_interno_no_se_confunde_con_el_del_proveedor(self):
+        resp = self._decidir(decision='RECHAZADO', motivo='Daño por uso, no procede')
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.estado, 'RECHAZADO_INTERNO')
+        self.assertEqual(self.req.decision_interna, 'RECHAZADO')
+        # El campo del proveedor queda intacto: él nunca opinó.
+        self.assertFalse(self.req.decision_proveedor)
+
+    def test_motivo_obligatorio(self):
+        resp = self._decidir(decision='APROBADO', motivo='   ')
+
+        self.assertEqual(resp.status_code, 400)
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.estado, 'PENDIENTE')
+
+    def test_no_se_valida_sin_proveedor_asignado(self):
+        """VALIDADO dice 'listo para el proveedor': sin proveedor es mentira."""
+        self.req.proveedor = None
+        self.req.save(update_fields=['proveedor'])
+
+        resp = self._decidir(decision='APROBADO', motivo='Procede')
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json().get('falta'), 'proveedor')
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.estado, 'PENDIENTE')
+
+    def test_vendedor_no_puede_decidir(self):
+        vendedor = crear_usuario(username='vend_dec', rol='vendedor', email='vd@test.com')
+        crear_empresa_user(vendedor, self.empresa, self.sucursal)
+        self.client.force_login(vendedor)
+
+        resp = self._decidir(decision='APROBADO', motivo='Procede')
+
+        self.assertEqual(resp.status_code, 403)
         self.req.refresh_from_db()
         self.assertEqual(self.req.estado, 'PENDIENTE')

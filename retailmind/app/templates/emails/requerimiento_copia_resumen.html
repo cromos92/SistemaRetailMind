@@ -95,10 +95,37 @@
                                     <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">{{ requerimiento.cliente_nombre }}{% if requerimiento.cliente_rut %} · {{ requerimiento.cliente_rut }}{% endif %}</td>
                                 </tr>
                                 <tr>
+                                    <td style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Factura de compra:</td>
+                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">
+                                        {% if requerimiento.numero_factura_compra %}N° {{ requerimiento.numero_factura_compra }}{% if requerimiento.fecha_factura_compra %} del {{ requerimiento.fecha_factura_compra|date:"d/m/Y" }}{% endif %}
+                                        {% else %}<span style="color:#a15c00;">no registrada</span>{% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
                                     <td style="padding:7px 0;color:#666666;font-weight:600;vertical-align:top;">Motivo:</td>
                                     <td style="padding:7px 0;">{{ requerimiento.motivo }}</td>
                                 </tr>
                             </table>
+
+                            {% if requerimiento.decision_interna %}
+                            <!-- La decisión que tomó la empresa antes de escalar. Es la
+                                 trazabilidad de quién autorizó reclamarle al proveedor. -->
+                            <h3 style="color:#405189;font-size:15px;margin:0 0 8px;padding-bottom:5px;border-bottom:2px solid #f0f0f0;">✅ Validación interna</h3>
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;margin-bottom:20px;">
+                                <tr>
+                                    <td width="160" style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Decisión:</td>
+                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">{{ requerimiento.get_decision_interna_display }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:7px 0;color:#666666;font-weight:600;border-bottom:1px solid #f5f5f5;">Autorizó:</td>
+                                    <td style="padding:7px 0;border-bottom:1px solid #f5f5f5;">{{ requerimiento.usuario_decision_interna.get_full_name|default:"—" }}{% if requerimiento.fecha_decision_interna %} · {{ requerimiento.fecha_decision_interna|date:"d/m/Y H:i" }}{% endif %}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:7px 0;color:#666666;font-weight:600;vertical-align:top;">Motivo:</td>
+                                    <td style="padding:7px 0;">{{ requerimiento.motivo_decision_interna }}</td>
+                                </tr>
+                            </table>
+                            {% endif %}
 
                             {% if mensaje_adicional %}
                             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">

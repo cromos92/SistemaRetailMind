@@ -4087,7 +4087,8 @@
                                         <div class="form-check mb-2">
                                             <input class="form-check-input" type="checkbox" id="chkPropagar" checked>
                                             <label class="form-check-label" for="chkPropagar" style="font-size:.76rem; cursor:pointer;">
-                                                Aplicar también a las mismas referencias <strong>en otras bodegas</strong>
+                                                Aplicar también a la <strong>misma variante en otras bodegas</strong>
+                                                <span class="text-muted d-block" style="font-size:.7rem;">Mismo código, marca, color, género y categoría</span>
                                             </label>
                                         </div>
                                         <div class="d-flex gap-2">
@@ -4147,7 +4148,7 @@
                             </div>
                         </div>
                         <div class="small text-muted mt-1" style="font-size:.72rem;">
-                            <i class="bi bi-globe2 me-1"></i>Los cambios se aplican a la selección en <strong>todas las bodegas</strong>. Para excluir de analítica usa el icono <i class="bi bi-bar-chart-line"></i> de cada fila.
+                            <i class="bi bi-globe2 me-1"></i>Los cambios se aplican a la selección en <strong>todas las bodegas</strong>, solo sobre la <strong>misma variante</strong> (mismo código, marca, color, género y categoría). Para excluir de analítica usa el icono <i class="bi bi-bar-chart-line"></i> de cada fila.
                         </div>
                     </div>
                     
@@ -16477,7 +16478,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
 </script>
 
 <!-- ========== SCRIPT DE EDICIÓN DE PRODUCTOS ========== -->
-<script src="{% static 'js/edicion_productos.js' %}?v=202604281209"></script>
+<script src="{% static 'js/edicion_productos.js' %}?v=202608191200"></script>
 
 <!-- SortableJS: reordenar tallas en el modal de Guía de Talla (se inicializa en shown.bs.modal) -->
 <script src="{% static 'libs/sortablejs/Sortable.min.js' %}"></script>

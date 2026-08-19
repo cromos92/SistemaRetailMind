@@ -4,187 +4,199 @@
 {% csrf_token %}
 
 {% include 'vistas/modulo_requerimientos/_estilos_modales.html' %}
-
-<style>
-.dt-label{font-size:.75rem;color:#878a99;margin-bottom:2px}
-.dt-value{font-weight:600;font-size:.85rem;margin-bottom:0}
-.dt-card{border:0;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:.5rem}
-.dt-card .card-header{padding:.4rem .75rem;background:#fff;border-bottom:1px solid #f0f0f0}
-.dt-card .card-body{padding:.5rem .75rem}
-.dt-card .card-title{font-size:.8rem;margin-bottom:0}
-.hist-item{padding:.35rem 0;border-bottom:1px solid #f5f5f5;font-size:.8rem}
-.hist-item:last-child{border:0}
-.foto-grid img{border-radius:6px;cursor:pointer;transition:transform .2s}
-.foto-grid img:hover{transform:scale(1.02)}
-
-@media (max-width: 768px) {
-    .requerimiento-detail .row > [class*="col-lg-"] { flex: 0 0 100%; max-width: 100%; }
-    .requerimiento-timeline { padding-left: 1rem; }
-    .requerimiento-info { font-size: 0.875rem; }
-    .requerimiento-actions { flex-wrap: wrap; gap: 0.5rem; }
-    .requerimiento-actions .btn { flex: 1 1 auto; }
-    .dt-card .card-body .row > [class*="col-md-"] { flex: 0 0 50%; max-width: 50%; }
-    .dt-card .card-body .row > .col-md-2,
-    .dt-card .card-body .row > .col-md-3 { flex: 0 0 50%; max-width: 50%; }
-}
-@media (max-width: 576px) {
-    .requerimiento-detail-card { padding: 0.75rem; }
-    .requerimiento-badge { font-size: 0.688rem; }
-    .requerimiento-table { font-size: 0.75rem; }
-    .dt-card .card-body .row > [class*="col-md-"] { flex: 0 0 100%; max-width: 100%; }
-    .dt-value { font-size: 0.8rem; }
-    .dt-label { font-size: 0.7rem; }
-    .hist-item { font-size: 0.75rem; }
-    .foto-grid .row > [class*="col-"] { flex: 0 0 50%; max-width: 50%; }
-}
-</style>
+{% include 'vistas/modulo_requerimientos/_estilos_requerimientos.html' %}
 
 <div class="page-content">
     <div class="container-fluid">
-        <!-- Header compacto -->
-        <div class="d-flex align-items-center justify-content-between mb-2">
-            <div class="d-flex align-items-center gap-2">
-                <a href="{% url 'modulo_requerimientos' %}" class="btn btn-soft-secondary btn-sm"><i class="ri-arrow-left-line"></i></a>
-                <h5 class="mb-0" id="numero-requerimiento" style="font-size:1rem">Cargando...</h5>
-                <span class="badge" id="badge-tipo"></span>
-                <span class="badge" id="badge-estado"></span>
-                <span class="badge" id="badge-prioridad"></span>
+
+        <!-- ══════════ Encabezado ══════════
+             Identidad del caso + el circuito dibujado. Con esto se entiende
+             en qué punto está sin tener que leer el historial. -->
+        <div class="card dt-card mb-2">
+            <div class="card-body py-2">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <a href="{% url 'modulo_requerimientos' %}" class="btn btn-soft-secondary btn-sm" title="Volver al listado">
+                        <i class="ri-arrow-left-line"></i>
+                    </a>
+                    <h5 class="mb-0 fs-6" id="numero-requerimiento">Cargando...</h5>
+                    <span id="badge-tipo"></span>
+                    <span id="badge-estado"></span>
+                    <span class="badge" id="badge-prioridad"></span>
+                    <span class="badge badge-soft-secondary" id="badge-origen"></span>
+                    <div class="ms-auto d-flex align-items-center gap-2">
+                        <span class="text-muted" style="font-size:.72rem" id="fecha-creacion-txt"></span>
+                        <span class="badge" id="dias-transcurridos">0</span>
+                    </div>
+                </div>
+                <div class="mt-2" id="flujo-estados"></div>
             </div>
-            <span class="badge fs-6" id="dias-transcurridos">0</span>
         </div>
 
+        <!-- Siguiente paso: lo calcula el backend, que es quien conoce las
+             transiciones y los permisos. Antes había ocho botones y ninguno
+             decía cuál era el que tocaba. -->
+        <div id="siguiente-paso" class="mb-2"></div>
+
         <div class="row g-2">
-            <!-- COL IZQUIERDA -->
-            <div class="col-lg-8">
-                <!-- Info principal: Producto + Cliente + Documento (una sola card) -->
+            <!-- ══════════ COLUMNA PRINCIPAL ══════════ -->
+            <div class="col-xl-8">
+
+                <!-- Producto y respaldo de compra -->
                 <div class="card dt-card">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <h6 class="card-title"><i class="ri-shopping-bag-line me-1"></i>Producto y respaldo de compra</h6>
+                        <button class="btn btn-soft-primary btn-sm py-0 px-2" id="btn-editar-inline"
+                                style="font-size:.7rem;display:none" onclick="abrirModalEditar()">
+                            <i class="ri-edit-2-line me-1"></i>Completar
+                        </button>
+                    </div>
                     <div class="card-body">
-                        <div class="row g-1">
+                        <div class="row g-2">
                             <div class="col-md-6">
                                 <div class="dt-label">Producto</div>
-                                <div class="dt-value"><span id="nombre-producto">-</span> <small class="text-muted" id="sku"></small>
-                                    <span class="badge bg-soft-primary text-primary ms-1" id="badge-cantidad"></span>
+                                <div class="dt-value" id="nombre-producto">-</div>
+                                <div class="text-muted" style="font-size:.72rem">
+                                    SKU <span id="sku"></span><span id="badge-cantidad"></span>
                                 </div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-6 col-md-3">
                                 <div class="dt-label">Sucursal</div>
                                 <div class="dt-value" id="sucursal">-</div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-6 col-md-3">
                                 <div class="dt-label">Creado por</div>
                                 <div class="dt-value" id="usuario-creador">-</div>
                             </div>
                         </div>
-                        <hr class="my-1">
-                        <div class="row g-1">
-                            <div class="col-md-3">
-                                <div class="dt-label">Cliente</div>
-                                <div class="dt-value" id="cliente-nombre">-</div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="dt-label">RUT</div>
-                                <div class="dt-value" id="cliente-rut">-</div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="dt-label">Telefono</div>
-                                <div class="dt-value" id="cliente-telefono">-</div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="dt-label">Email</div>
-                                <div class="dt-value" id="cliente-email" style="word-break:break-all">-</div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="dt-label">Documento</div>
-                                <div class="dt-value"><span id="tipo-documento">-</span> <span id="numero-boleta"></span> <small class="text-muted" id="fecha-compra"></small></div>
-                            </div>
-                        </div>
-                        <hr class="my-1">
-                        <div class="row g-1">
-                            <div class="col-md-4">
-                                <div class="dt-label">Origen</div>
-                                <div class="dt-value" id="origen-requerimiento">-</div>
-                            </div>
-                            <div class="col-md-4">
+                        <hr class="my-2">
+                        <div class="row g-2">
+                            <!-- La factura de compra es EL dato que el proveedor
+                                 exige, así que ocupa el lugar principal y grita
+                                 cuando falta. -->
+                            <div class="col-md-6">
                                 <div class="dt-label">Factura de compra al proveedor</div>
                                 <div class="dt-value" id="factura-compra">-</div>
                             </div>
+                            <div class="col-md-6">
+                                <div class="dt-label">Documento de venta al cliente</div>
+                                <div class="dt-value" id="documento-venta">-</div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Clasificacion defecto (condicional) -->
-                <div class="card dt-card" id="card-clasificacion-defecto" style="display:none;">
-                    <div class="card-header" style="background:rgba(244,106,106,.08)"><h6 class="card-title"><i class="ri-error-warning-line me-1 text-danger"></i>Clasificacion</h6></div>
+                <!-- Cliente -->
+                <div class="card dt-card" id="card-cliente">
+                    <div class="card-header"><h6 class="card-title"><i class="ri-user-line me-1"></i>Cliente</h6></div>
                     <div class="card-body">
-                        <div class="row g-1">
-                            <div class="col-md-4" id="col-subtipo" style="display:none"><div class="dt-label">Subtipo</div><div class="dt-value" id="detalle-subtipo">-</div></div>
-                            <div class="col-md-4" id="col-severidad" style="display:none"><div class="dt-label">Severidad</div><div class="dt-value" id="detalle-severidad">-</div></div>
-                            <div class="col-md-4" id="col-condicion" style="display:none"><div class="dt-label">Condicion</div><div class="dt-value" id="detalle-condicion">-</div></div>
-                            <div class="col-md-6" id="col-producto-esperado" style="display:none"><div class="dt-label">Producto Esperado</div><div class="dt-value" id="detalle-producto-esperado">-</div></div>
+                        <div class="row g-2" id="datos-cliente">
+                            <div class="col-md-4">
+                                <div class="dt-label">Nombre</div>
+                                <div class="dt-value" id="cliente-nombre">-</div>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <div class="dt-label">RUT</div>
+                                <div class="dt-value" id="cliente-rut">-</div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="dt-label">Teléfono</div>
+                                <div class="dt-value" id="cliente-telefono">-</div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="dt-label">Email</div>
+                                <div class="dt-value" id="cliente-email">-</div>
+                            </div>
                         </div>
+                        <div id="aviso-sin-cliente" style="display:none"></div>
                     </div>
                 </div>
 
-                <!-- Descripcion -->
+                <!-- Clasificación del defecto (condicional) -->
+                <div class="card dt-card" id="card-clasificacion-defecto" style="display:none;">
+                    <div class="card-header"><h6 class="card-title"><i class="ri-error-warning-line me-1 text-danger"></i>Clasificación del problema</h6></div>
+                    <div class="card-body">
+                        <div class="row g-2" id="grilla-clasificacion"></div>
+                    </div>
+                </div>
+
+                <!-- Descripción -->
                 <div class="card dt-card">
-                    <div class="card-header"><h6 class="card-title"><i class="ri-file-text-line me-1"></i>Descripcion</h6></div>
+                    <div class="card-header"><h6 class="card-title"><i class="ri-file-text-line me-1"></i>Qué pasó</h6></div>
                     <div class="card-body">
                         <div class="dt-label">Motivo</div>
-                        <p class="small mb-1" id="motivo">-</p>
-                        <div class="dt-label mt-1">Detalle</div>
-                        <p class="small mb-0" id="descripcion-problema">-</p>
-                    </div>
-                </div>
-
-                <!-- Resolucion (condicional) -->
-                <div class="card dt-card" id="card-resolucion" style="display:none;">
-                    <div class="card-body p-0">
-                        <div class="alert mb-0 rounded-0" id="alert-resolucion" style="border-radius:6px !important">
-                            <strong id="titulo-resolucion"></strong>
-                            <p class="small mb-0 mt-1" id="motivo-resolucion-texto"></p>
-                            <small class="text-muted" id="fecha-resolucion-texto"></small>
+                        <p class="mb-2" style="font-size:.84rem" id="motivo">-</p>
+                        <div id="bloque-detalle-problema">
+                            <div class="dt-label">Detalle</div>
+                            <p class="mb-0 text-muted" style="font-size:.82rem" id="descripcion-problema">-</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Fotos -->
+                <!-- Evidencia fotográfica -->
                 <div class="card dt-card" id="card-fotos" style="display:none;">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <h6 class="card-title"><i class="ri-image-line me-1"></i>Fotos <span class="badge ms-1" id="badge-fotos-completitud"></span></h6>
+                        <h6 class="card-title">
+                            <i class="ri-camera-line me-1"></i>Evidencia
+                            <span class="badge ms-1" id="badge-fotos-completitud"></span>
+                        </h6>
+                        <button class="btn btn-soft-primary btn-sm py-0 px-2" style="font-size:.7rem"
+                                onclick="abrirVisorDesde(0)" id="btn-ver-fotos">
+                            <i class="ri-fullscreen-line me-1"></i>Ver en grande
+                        </button>
                     </div>
-                    <div class="card-body foto-grid">
+                    <div class="card-body">
                         <div class="row g-2" id="fotos-container"></div>
                     </div>
                 </div>
 
                 <!-- Historial -->
                 <div class="card dt-card">
-                    <div class="card-header"><h6 class="card-title"><i class="ri-history-line me-1"></i>Historial</h6></div>
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="card-title"><i class="ri-history-line me-1"></i>Historial</h6>
+                        <span class="text-muted" style="font-size:.7rem" id="contador-historial"></span>
+                    </div>
                     <div class="card-body" id="historial-container">
                         <div class="text-center text-muted py-2"><div class="spinner-border spinner-border-sm"></div></div>
                     </div>
                 </div>
             </div>
 
-            <!-- COL DERECHA -->
-            <div class="col-lg-4">
-                <!-- Acciones -->
-                <div class="card dt-card">
-                    <div class="card-header" style="background:rgba(0,102,255,.06)"><h6 class="card-title"><i class="ri-settings-3-line me-1"></i>Acciones</h6></div>
-                    <div class="card-body">
-                        <div id="acciones-container" class="d-grid gap-1">
-                            <div class="text-center text-muted py-2"><div class="spinner-border spinner-border-sm"></div></div>
+            <!-- ══════════ COLUMNA LATERAL ══════════ -->
+            <div class="col-xl-4">
+                <div class="dt-sticky">
+                    <!-- Acciones -->
+                    <div class="card dt-card">
+                        <div class="card-header"><h6 class="card-title"><i class="ri-flashlight-line me-1"></i>Acciones</h6></div>
+                        <div class="card-body">
+                            <div id="acciones-container" class="d-grid gap-1">
+                                <div class="text-center text-muted py-2"><div class="spinner-border spinner-border-sm"></div></div>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Proveedor + Seguimiento (unificado) -->
-                <div class="card dt-card" id="card-proveedor" style="display:none;">
-                    <div class="card-header"><h6 class="card-title"><i class="ri-building-line me-1"></i>Proveedor</h6></div>
-                    <div class="card-body">
-                        <div class="dt-value mb-1" id="proveedor-nombre">-</div>
-                        <small class="text-muted" id="proveedor-email">-</small>
-                        <div id="info-seguimiento-proveedor" class="mt-2"></div>
+                    <!-- Decisiones tomadas: la de la empresa y la del proveedor,
+                         separadas. Antes se confundían en un solo estado. -->
+                    <div class="card dt-card" id="card-decisiones" style="display:none;">
+                        <div class="card-header"><h6 class="card-title"><i class="ri-scales-3-line me-1"></i>Decisiones</h6></div>
+                        <div class="card-body" id="decisiones-container"></div>
+                    </div>
+
+                    <!-- Proveedor y seguimiento -->
+                    <div class="card dt-card" id="card-proveedor">
+                        <div class="card-header"><h6 class="card-title"><i class="ri-building-line me-1"></i>Proveedor</h6></div>
+                        <div class="card-body">
+                            <div class="dt-value" id="proveedor-nombre">-</div>
+                            <div class="text-muted text-break" style="font-size:.72rem" id="proveedor-email">-</div>
+                            <div id="info-seguimiento-proveedor"></div>
+                        </div>
+                    </div>
+
+                    <!-- Notas internas -->
+                    <div class="card dt-card" id="card-notas" style="display:none;">
+                        <div class="card-header"><h6 class="card-title"><i class="ri-sticky-note-line me-1"></i>Notas internas</h6></div>
+                        <div class="card-body">
+                            <p class="mb-0 text-muted" style="font-size:.8rem;white-space:pre-wrap" id="notas-internas"></p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -192,7 +204,365 @@
     </div>
 </div>
 
-<!-- Modal Cambiar Estado -->
+<!-- ══════════════════════════ MODALES ══════════════════════════ -->
+
+<!-- ── Decidir: la aprobación de la empresa, previa al proveedor ── -->
+<div class="modal fade req-modal" id="modalDecidir" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="req-modal-header">
+                <div class="req-modal-icon"><i class="ri-scales-3-line"></i></div>
+                <div>
+                    <h6>Decisión de la empresa</h6>
+                    <div class="req-modal-sub">¿Corresponde reclamárselo al proveedor?</div>
+                </div>
+                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-3">
+                <div id="dec-resumen" class="req-resumen mb-3"></div>
+
+                <label class="form-label">Decisión <span class="text-danger">*</span></label>
+                <div class="row g-2 mb-3 req-origen">
+                    <div class="col-6">
+                        <input type="radio" class="btn-check" name="decision_interna_radio" id="di-aprobado" value="APROBADO">
+                        <label class="btn btn-outline-success w-100 btn-sm text-start" for="di-aprobado">
+                            <i class="ri-check-line me-1"></i><strong>Procede</strong>
+                            <div class="small opacity-75" style="font-size:.68rem">Se le reclama al proveedor</div>
+                        </label>
+                    </div>
+                    <div class="col-6">
+                        <input type="radio" class="btn-check" name="decision_interna_radio" id="di-rechazado" value="RECHAZADO">
+                        <label class="btn btn-outline-danger w-100 btn-sm text-start" for="di-rechazado">
+                            <i class="ri-close-line me-1"></i><strong>No procede</strong>
+                            <div class="small opacity-75" style="font-size:.68rem">Se cierra sin reclamar</div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mb-0">
+                    <label class="form-label">Motivo <span class="text-danger">*</span></label>
+                    <textarea class="form-control form-control-sm" id="dec-motivo" rows="3"
+                              placeholder="Ej: la falla es de fabricación y está dentro del plazo de garantía"></textarea>
+                    <small class="text-muted" style="font-size:.7rem">
+                        Queda en el historial y es lo que se le explica a la tienda que levantó el caso.
+                    </small>
+                </div>
+            </div>
+            <div class="req-modal-footer justify-content-end">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="guardarDecision()">
+                    <i class="ri-check-line me-1"></i>Registrar decisión
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Completar / corregir datos ──
+     El requerimiento nace incompleto a propósito: la tienda sabe qué falló,
+     pero no a qué proveedor se le compró ni con qué factura. Acá lo completa
+     quien revisa, antes de enviarlo. -->
+<div class="modal fade req-modal" id="modalEditarDatos" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered">
+        <div class="modal-content">
+            <div class="req-modal-header">
+                <div class="req-modal-icon"><i class="ri-edit-2-line"></i></div>
+                <div>
+                    <h6>Completar datos</h6>
+                    <div class="req-modal-sub">Lo que la tienda no puede saber lo completa quien revisa</div>
+                </div>
+                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-3">
+                <!-- Checklist de lo que falta: el usuario ve de entrada qué
+                     campos bloquean el envío, en vez de recorrer el formulario. -->
+                <div id="ed-checklist" class="mb-3"></div>
+
+                <h6 class="req-bloque-titulo">
+                    <i class="ri-building-line"></i>Proveedor y respaldo de compra
+                    <button type="button" class="btn btn-primary btn-sm ms-auto py-0 px-2" style="font-size:.72rem" onclick="alternarBuscadorCompras()">
+                        <i class="ri-search-2-line me-1"></i><span id="ed-btn-buscador-txt">Buscar la factura</span>
+                    </button>
+                </h6>
+
+                <!-- Buscador de compras: panel EN LÍNEA, no un modal anidado.
+                     Bootstrap 5 no apila modales y el segundo backdrop deja la
+                     pantalla negra al cerrar. -->
+                <div id="ed-buscador-compras" class="req-resumen mb-3" style="display:none;">
+                    <ul class="nav nav-pills nav-sm mb-2" style="font-size:.75rem">
+                        <li class="nav-item"><a class="nav-link active py-1 px-2" href="javascript:void(0)"
+                            onclick="cambiarPestanaBuscador('producto', this)">Por producto</a></li>
+                        <li class="nav-item"><a class="nav-link py-1 px-2" href="javascript:void(0)"
+                            onclick="cambiarPestanaBuscador('numero', this)">Por N° de factura</a></li>
+                    </ul>
+
+                    <div id="buscador-por-producto">
+                        <div class="input-group input-group-sm mb-2">
+                            <span class="input-group-text bg-white"><i class="ri-search-line"></i></span>
+                            <input type="text" class="form-control" id="ed-busqueda-compras"
+                                   placeholder="SKU o nombre del artículo (ej: 418284 o PLATAFORM)"
+                                   onkeydown="if(event.key==='Enter'){event.preventDefault();buscarCompras();}">
+                            <button class="btn btn-primary" type="button" onclick="buscarCompras()">Buscar</button>
+                        </div>
+                        <div class="text-muted mb-2" style="font-size:.7rem">
+                            <i class="ri-information-line me-1"></i>Busca en las líneas de las facturas de compra,
+                            en los lotes FIFO y en el kardex — incluidos los ingresos traídos del sistema anterior.
+                            Haz clic en una fila para usarla.
+                        </div>
+                    </div>
+
+                    <div id="buscador-por-numero" style="display:none">
+                        <div class="input-group input-group-sm mb-2">
+                            <span class="input-group-text bg-white"><i class="ri-file-list-3-line"></i></span>
+                            <input type="text" class="form-control" id="ed-busqueda-numero" inputmode="numeric"
+                                   placeholder="N° de la factura de compra (ej: 84512)"
+                                   onkeydown="if(event.key==='Enter'){event.preventDefault();buscarPorNumeroFactura();}">
+                            <button class="btn btn-primary" type="button" onclick="buscarPorNumeroFactura()">Verificar</button>
+                        </div>
+                        <div class="text-muted mb-2" style="font-size:.7rem">
+                            <i class="ri-information-line me-1"></i>Si tienes la factura física, escribe su número:
+                            se comprueba contra el sistema y se completa solo el proveedor y la fecha.
+                        </div>
+                    </div>
+
+                    <div id="ed-resultado-compras" style="max-height:260px;overflow-y:auto"></div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small mb-0">Proveedor <span class="text-danger">*</span></label>
+                        <select class="form-select form-select-sm" id="ed-proveedor">
+                            <option value="">Sin asignar</option>
+                            {% for proveedor in proveedores %}
+                            <option value="{{ proveedor.id }}">{{ proveedor.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted" id="ed-proveedor-sugerido" style="font-size:.7rem"></small>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-0">N° factura de compra</label>
+                        <input type="text" class="form-control form-control-sm" id="ed-factura" placeholder="Ej: 84512">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-0">Fecha factura</label>
+                        <input type="date" class="form-control form-control-sm" id="ed-fecha-factura">
+                    </div>
+                </div>
+
+                <h6 class="req-bloque-titulo"><i class="ri-shopping-bag-line"></i>Producto y clasificación</h6>
+                <div class="row g-2 mb-3">
+                    <div class="col-4 col-md-2">
+                        <label class="form-label small mb-0">Cantidad</label>
+                        <input type="number" class="form-control form-control-sm" id="ed-cantidad" min="1" step="1">
+                    </div>
+                    <div class="col-8 col-md-3">
+                        <label class="form-label small mb-0">Prioridad</label>
+                        <select class="form-select form-select-sm" id="ed-prioridad">
+                            <option value="BAJA">Baja</option>
+                            <option value="MEDIA">Media</option>
+                            <option value="ALTA">Alta</option>
+                            <option value="URGENTE">Urgente</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small mb-0">Severidad</label>
+                        <select class="form-select form-select-sm" id="ed-severidad">
+                            <option value="">Sin definir</option>
+                            <option value="LEVE">Leve — estético, no afecta el uso</option>
+                            <option value="MODERADO">Moderado — afecta el uso parcialmente</option>
+                            <option value="GRAVE">Grave — producto inutilizable</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-0">Condición</label>
+                        <select class="form-select form-select-sm" id="ed-condicion">
+                            <option value="">Sin definir</option>
+                            <option value="NUEVO_SIN_USO">Nuevo sin uso</option>
+                            <option value="USADO_POCO">Usado poco tiempo</option>
+                            <option value="USADO_NORMAL">Uso normal</option>
+                        </select>
+                    </div>
+                </div>
+
+                <h6 class="req-bloque-titulo">
+                    <i class="ri-user-line"></i>Cliente
+                    <span class="badge bg-secondary ms-2" id="ed-badge-origen" style="font-size:.6rem"></span>
+                </h6>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-0">RUT</label>
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control" id="ed-cliente-rut" placeholder="12345678-9">
+                            <button class="btn btn-outline-info" type="button" onclick="buscarClienteEnEdicion()" title="Buscar en la ficha de clientes"><i class="ri-search-line"></i></button>
+                        </div>
+                        <small id="ed-rut-aviso" style="font-size:.68rem"></small>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small mb-0">Nombre</label>
+                        <input type="text" class="form-control form-control-sm" id="ed-cliente-nombre">
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label small mb-0">Teléfono</label>
+                        <input type="text" class="form-control form-control-sm" id="ed-cliente-telefono">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-0">Email</label>
+                        <input type="email" class="form-control form-control-sm" id="ed-cliente-email">
+                    </div>
+                </div>
+
+                <h6 class="req-bloque-titulo"><i class="ri-file-text-line"></i>Descripción</h6>
+                <div class="mb-2">
+                    <label class="form-label small mb-0">Motivo</label>
+                    <textarea class="form-control form-control-sm" id="ed-motivo" rows="2"></textarea>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small mb-0">Detalle del problema</label>
+                    <textarea class="form-control form-control-sm" id="ed-descripcion" rows="2"></textarea>
+                </div>
+                <div class="mb-0" id="ed-bloque-notas">
+                    <label class="form-label small mb-0">Notas internas <small class="text-muted">(no se envían al proveedor)</small></label>
+                    <textarea class="form-control form-control-sm" id="ed-notas" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="req-modal-footer justify-content-end">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="guardarEdicion()"><i class="ri-save-line me-1"></i>Guardar cambios</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Enviar al proveedor ──
+     Era un SweetAlert con HTML dentro: en un notebook de 15" el diálogo
+     quedaba más alto que la pantalla y el botón de enviar caía fuera. -->
+<div class="modal fade req-modal" id="modalEnviarProveedor" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+        <div class="modal-content">
+            <div class="req-modal-header">
+                <div class="req-modal-icon"><i class="ri-mail-send-line"></i></div>
+                <div>
+                    <h6 id="env-titulo">Enviar al proveedor</h6>
+                    <div class="req-modal-sub">Se envía el formato PDF con la evidencia y las fotos originales</div>
+                </div>
+                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-3">
+                <div id="env-resumen" class="req-resumen mb-3"></div>
+                <div id="env-avisos"></div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-md-6">
+                        <label class="form-label small mb-0">Correo del proveedor <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control form-control-sm" id="env-correo-destino" placeholder="proveedor@correo.cl">
+                        <small class="text-muted" id="env-cc" style="font-size:.7rem"></small>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small mb-0">Copia de control</label>
+                        <input type="email" class="form-control form-control-sm" id="env-correo-copia" placeholder="copia@miempresa.cl">
+                        <small class="text-muted" style="font-size:.7rem">Recibe un resumen sin fotos que certifica el envío.</small>
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small mb-0">Mensaje adicional <small class="text-muted">(opcional)</small></label>
+                    <textarea class="form-control form-control-sm" id="env-mensaje" rows="2"
+                              placeholder="Texto que se incluirá en el cuerpo del correo..."></textarea>
+                </div>
+                <a href="#" id="env-link-pdf" target="_blank" class="btn btn-soft-info btn-sm w-100">
+                    <i class="ri-file-pdf-line me-1"></i>Revisar el formato PDF antes de enviar
+                </a>
+            </div>
+            <div class="req-modal-footer justify-content-end">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" id="env-btn-enviar" onclick="confirmarEnvioProveedor()">
+                    <i class="ri-send-plane-line me-1"></i>Enviar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Respuesta del proveedor ── -->
+<div class="modal fade req-modal" id="modalRegistrarRespuesta" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="req-modal-header">
+                <div class="req-modal-icon"><i class="ri-mail-check-line"></i></div>
+                <div>
+                    <h6>Respuesta del proveedor</h6>
+                    <div class="req-modal-sub">Lo que contestó, y qué se le dice al cliente</div>
+                </div>
+                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-3">
+                <label class="form-label">Decisión <span class="text-danger">*</span></label>
+                <div class="row g-2 mb-3 req-origen">
+                    <div class="col-4">
+                        <input type="radio" class="btn-check" name="decision_radio" id="dec-aprobado" value="APROBADO" onchange="document.getElementById('decision-proveedor').value='APROBADO'">
+                        <label class="btn btn-outline-success w-100 btn-sm" for="dec-aprobado"><i class="ri-check-line me-1"></i>Aprobado</label>
+                    </div>
+                    <div class="col-4">
+                        <input type="radio" class="btn-check" name="decision_radio" id="dec-parcial" value="PARCIAL" onchange="document.getElementById('decision-proveedor').value='PARCIAL'">
+                        <label class="btn btn-outline-warning w-100 btn-sm" for="dec-parcial"><i class="ri-contrast-2-line me-1"></i>Parcial</label>
+                    </div>
+                    <div class="col-4">
+                        <input type="radio" class="btn-check" name="decision_radio" id="dec-rechazado" value="RECHAZADO" onchange="document.getElementById('decision-proveedor').value='RECHAZADO'">
+                        <label class="btn btn-outline-danger w-100 btn-sm" for="dec-rechazado"><i class="ri-close-line me-1"></i>Rechazado</label>
+                    </div>
+                </div>
+                <input type="hidden" id="decision-proveedor">
+
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label">Respuesta textual del proveedor <span class="text-danger">*</span></label>
+                        <textarea class="form-control form-control-sm" id="respuesta-proveedor-text" rows="3" placeholder="Copie lo que respondió (registro interno)"></textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Motivo para el cliente <span class="text-danger">*</span></label>
+                        <textarea class="form-control form-control-sm" id="motivo-usuario" rows="3" placeholder="Esto es lo que verá el vendedor y el cliente"></textarea>
+                    </div>
+                </div>
+                <div class="mt-2 mb-0">
+                    <label class="form-label">Fecha en que respondió</label>
+                    <input type="datetime-local" class="form-control form-control-sm" id="fecha-respuesta-proveedor" style="max-width:260px">
+                    <small class="text-muted" style="font-size:.7rem">Si contestó hace días, corrija la fecha: de ahí sale el tiempo de respuesta.</small>
+                </div>
+            </div>
+            <div class="req-modal-footer justify-content-end">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success btn-sm" onclick="guardarRespuestaProveedor()"><i class="ri-save-line me-1"></i>Registrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Completar (resolución final) ── -->
+<div class="modal fade req-modal" id="modalCompletar" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="req-modal-header">
+                <div class="req-modal-icon"><i class="ri-check-double-line"></i></div>
+                <div>
+                    <h6>Cerrar el requerimiento</h6>
+                    <div class="req-modal-sub">Cómo terminó resolviéndose con el cliente</div>
+                </div>
+                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-3">
+                <label class="form-label">Resolución final <span class="text-danger">*</span></label>
+                <textarea class="form-control form-control-sm" id="comp-resolucion" rows="3"
+                          placeholder="Ej: el proveedor cursó la NC y se le entregó un par nuevo al cliente"></textarea>
+                <small class="text-muted" style="font-size:.7rem">Queda como cierre del caso: el requerimiento ya no se edita.</small>
+            </div>
+            <div class="req-modal-footer justify-content-end">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success btn-sm" onclick="guardarCompletar()"><i class="ri-check-line me-1"></i>Completar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Cambiar estado (transiciones válidas) ── -->
 <div class="modal fade req-modal" id="modalCambiarEstado" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -222,210 +592,38 @@
     </div>
 </div>
 
-<!-- Modal Completar / Corregir datos.
-     El requerimiento nace incompleto a propósito: la tienda sabe qué falló,
-     pero no a qué proveedor se le compró ni con qué factura. Acá lo completa
-     quien revisa, antes de enviarlo. -->
-<div class="modal fade req-modal" id="modalEditarDatos" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
-        <div class="modal-content">
-            <div class="req-modal-header">
-                <div class="req-modal-icon"><i class="ri-edit-2-line"></i></div>
-                <div>
-                    <h6>Completar datos</h6>
-                    <div class="req-modal-sub">Lo que la tienda no puede saber lo completa quien revisa</div>
-                </div>
-                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body py-3">
-                <h6 class="req-bloque-titulo">
-                    <i class="ri-building-line"></i>Proveedor y respaldo de compra
-                    <button type="button" class="btn btn-primary btn-sm ms-auto py-0 px-2" style="font-size:.72rem" onclick="alternarBuscadorCompras()">
-                        <i class="ri-search-2-line me-1"></i><span id="ed-btn-buscador-txt">Buscar en compras</span>
-                    </button>
-                </h6>
-
-                <!-- Buscador de compras: panel EN LÍNEA, no un modal anidado.
-                     Bootstrap 5 no apila modales y el segundo backdrop deja la
-                     pantalla negra al cerrar. -->
-                <div id="ed-buscador-compras" class="req-resumen mb-3" style="display:none;">
-                    <div class="input-group input-group-sm mb-2">
-                        <span class="input-group-text bg-white"><i class="ri-search-line"></i></span>
-                        <input type="text" class="form-control" id="ed-busqueda-compras"
-                               placeholder="SKU o nombre del artículo (ej: 418284 o PLATAFORM)"
-                               onkeydown="if(event.key==='Enter'){event.preventDefault();buscarCompras();}">
-                        <button class="btn btn-primary" type="button" onclick="buscarCompras()">Buscar</button>
-                    </div>
-                    <div class="text-muted mb-2" style="font-size:.7rem">
-                        <i class="ri-information-line me-1"></i>Muestra en qué facturas de compra entró este producto. Haz clic en una fila para usarla.
-                    </div>
-                    <div id="ed-resultado-compras" style="max-height:230px;overflow-y:auto"></div>
-                </div>
-
-                <div class="row g-2 mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label small mb-0">Proveedor</label>
-                        <select class="form-select form-select-sm" id="ed-proveedor">
-                            <option value="">Sin asignar</option>
-                            {% for proveedor in proveedores %}
-                            <option value="{{ proveedor.id }}">{{ proveedor.nombre }}</option>
-                            {% endfor %}
-                        </select>
-                        <small class="text-muted" id="ed-proveedor-sugerido" style="font-size:.7rem"></small>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small mb-0">N° factura de compra</label>
-                        <input type="text" class="form-control form-control-sm" id="ed-factura">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small mb-0">Fecha factura</label>
-                        <input type="date" class="form-control form-control-sm" id="ed-fecha-factura">
-                    </div>
-                </div>
-
-                <h6 class="req-bloque-titulo"><i class="ri-shopping-bag-line"></i>Producto y clasificación</h6>
-                <div class="row g-2 mb-3">
-                    <div class="col-md-2">
-                        <label class="form-label small mb-0">Cantidad</label>
-                        <input type="number" class="form-control form-control-sm" id="ed-cantidad" min="1" step="1">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small mb-0">Prioridad</label>
-                        <select class="form-select form-select-sm" id="ed-prioridad">
-                            <option value="BAJA">Baja</option>
-                            <option value="MEDIA">Media</option>
-                            <option value="ALTA">Alta</option>
-                            <option value="URGENTE">Urgente</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small mb-0">Severidad</label>
-                        <select class="form-select form-select-sm" id="ed-severidad">
-                            <option value="">Sin definir</option>
-                            <option value="LEVE">Leve - Estetico</option>
-                            <option value="MODERADO">Moderado</option>
-                            <option value="GRAVE">Grave - Inutilizable</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small mb-0">Condición</label>
-                        <select class="form-select form-select-sm" id="ed-condicion">
-                            <option value="">Sin definir</option>
-                            <option value="NUEVO_SIN_USO">Nuevo</option>
-                            <option value="USADO_POCO">Poco uso</option>
-                            <option value="USADO_NORMAL">Uso normal</option>
-                        </select>
-                    </div>
-                </div>
-
-                <h6 class="req-bloque-titulo"><i class="ri-user-line"></i>Cliente</h6>
-                <div class="row g-2 mb-3">
-                    <div class="col-md-3">
-                        <label class="form-label small mb-0">RUT</label>
-                        <div class="input-group input-group-sm">
-                            <input type="text" class="form-control" id="ed-cliente-rut" placeholder="12345678-9">
-                            <button class="btn btn-outline-info" type="button" onclick="buscarClienteEnEdicion()" title="Buscar en la ficha de clientes"><i class="ri-search-line"></i></button>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small mb-0">Nombre</label>
-                        <input type="text" class="form-control form-control-sm" id="ed-cliente-nombre">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label small mb-0">Teléfono</label>
-                        <input type="text" class="form-control form-control-sm" id="ed-cliente-telefono">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small mb-0">Email</label>
-                        <input type="email" class="form-control form-control-sm" id="ed-cliente-email">
-                    </div>
-                </div>
-
-                <h6 class="req-bloque-titulo"><i class="ri-file-text-line"></i>Descripción</h6>
-                <div class="mb-2">
-                    <label class="form-label small mb-0">Motivo</label>
-                    <textarea class="form-control form-control-sm" id="ed-motivo" rows="2"></textarea>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label small mb-0">Detalle del problema</label>
-                    <textarea class="form-control form-control-sm" id="ed-descripcion" rows="2"></textarea>
-                </div>
-                <div class="mb-0" id="ed-bloque-notas">
-                    <label class="form-label small mb-0">Notas internas <small class="text-muted">(no se envían al proveedor)</small></label>
-                    <textarea class="form-control form-control-sm" id="ed-notas" rows="2"></textarea>
-                </div>
-            </div>
-            <div class="req-modal-footer justify-content-end">
-                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary btn-sm" onclick="guardarEdicion()"><i class="ri-save-line me-1"></i>Guardar cambios</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Respuesta Proveedor -->
-<div class="modal fade req-modal" id="modalRegistrarRespuesta" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="req-modal-header">
-                <div class="req-modal-icon"><i class="ri-mail-check-line"></i></div>
-                <div>
-                    <h6>Respuesta del proveedor</h6>
-                    <div class="req-modal-sub">Lo que contestó, y qué se le dice al cliente</div>
-                </div>
-                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body py-3">
-                <label class="form-label">Decisión <span class="text-danger">*</span></label>
-                <div class="row g-2 mb-3 req-origen">
-                    <div class="col-4">
-                        <input type="radio" class="btn-check" name="decision_radio" id="dec-aprobado" value="APROBADO" onchange="document.getElementById('decision-proveedor').value='APROBADO'">
-                        <label class="btn btn-outline-success w-100 btn-sm" for="dec-aprobado"><i class="ri-check-line me-1"></i>Aprobado</label>
-                    </div>
-                    <div class="col-4">
-                        <input type="radio" class="btn-check" name="decision_radio" id="dec-parcial" value="PARCIAL" onchange="document.getElementById('decision-proveedor').value='PARCIAL'">
-                        <label class="btn btn-outline-warning w-100 btn-sm" for="dec-parcial"><i class="ri-contrast-2-line me-1"></i>Parcial</label>
-                    </div>
-                    <div class="col-4">
-                        <input type="radio" class="btn-check" name="decision_radio" id="dec-rechazado" value="RECHAZADO" onchange="document.getElementById('decision-proveedor').value='RECHAZADO'">
-                        <label class="btn btn-outline-danger w-100 btn-sm" for="dec-rechazado"><i class="ri-close-line me-1"></i>Rechazado</label>
-                    </div>
-                </div>
-                <input type="hidden" id="decision-proveedor">
-
-                <div class="mb-2">
-                    <label class="form-label">Respuesta textual del proveedor <span class="text-danger">*</span></label>
-                    <textarea class="form-control form-control-sm" id="respuesta-proveedor-text" rows="2" placeholder="Copie lo que respondió (registro interno)"></textarea>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label">Motivo para el cliente <span class="text-danger">*</span></label>
-                    <textarea class="form-control form-control-sm" id="motivo-usuario" rows="2" placeholder="Esto es lo que verá el vendedor y el cliente"></textarea>
-                </div>
-                <div class="mb-0">
-                    <label class="form-label">Fecha en que respondió</label>
-                    <input type="datetime-local" class="form-control form-control-sm" id="fecha-respuesta-proveedor">
-                    <small class="text-muted" style="font-size:.7rem">Si contestó hace días, corrija la fecha: de ahí sale el tiempo de respuesta.</small>
-                </div>
-            </div>
-            <div class="req-modal-footer justify-content-end">
-                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-success btn-sm" onclick="guardarRespuestaProveedor()"><i class="ri-save-line me-1"></i>Registrar</button>
-            </div>
-        </div>
-    </div>
-</div>
+{% include 'vistas/modulo_requerimientos/_scripts_requerimientos.html' %}
 
 <script>
 const requerimientoId = {{ requerimiento.id }};
+const CSRF = '{{ csrf_token }}';
 let datosRequerimiento = null;
+let fotosVisor = [];
+let comprasEncontradas = [];
 
 document.addEventListener('DOMContentLoaded', cargarRequerimiento);
 
+function $id(id) { return document.getElementById(id); }
+
+function api(url, opciones) {
+    return fetch(url, opciones).then(r => r.json());
+}
+
+function post(url, cuerpo) {
+    return api(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify(cuerpo || {}),
+    });
+}
+
 function cargarRequerimiento() {
-    fetch(`/app/api/requerimientos/${requerimientoId}/`)
-        .then(r => r.json())
+    api(`/app/api/requerimientos/${requerimientoId}/`)
         .then(data => {
-            if (!data.success) return;
+            if (!data.success) {
+                Swal.fire('Sin acceso', data.error || 'No se pudo cargar', 'error');
+                return;
+            }
             datosRequerimiento = data.requerimiento;
             mostrarRequerimiento(data.requerimiento);
             // Llegando desde el listado con "falta el proveedor", el modal se
@@ -436,262 +634,453 @@ function cargarRequerimiento() {
                 abrirModalEditar();
             }
         })
-        .catch(() => Swal.fire('Error', 'No se pudo cargar', 'error'));
+        .catch(() => Swal.fire('Error', 'No se pudo cargar el requerimiento', 'error'));
 }
 
-function cE(c) { return { 'PENDIENTE':'warning','EN_REVISION':'info','ESPERANDO_RESPUESTA':'primary','APROBADO':'success','RECHAZADO':'danger','EN_PROCESO':'info','COMPLETADO':'success','CANCELADO':'secondary' }[c]||'secondary'; }
-function cP(c) { return { 'BAJA':'success','MEDIA':'info','ALTA':'warning','URGENTE':'danger' }[c]||'secondary'; }
-function cU(c) { return { 'NORMAL':'success','MEDIA':'info','ALTA':'warning','CRITICA':'danger','CERRADO':'secondary' }[c]||'secondary'; }
+function cP(c) { return { BAJA: 'success', MEDIA: 'info', ALTA: 'warning', URGENTE: 'danger' }[c] || 'secondary'; }
+function cU(c) { return { NORMAL: 'success', MEDIA: 'info', ALTA: 'warning', CRITICA: 'danger', CERRADO: 'secondary' }[c] || 'secondary'; }
 
-const tipoCfg = {
-    'PRODUCTO_FALLADO':{ color:'danger', icon:'ri-error-warning-line' },
-    'ERROR_DESPACHO':{ color:'warning', icon:'ri-exchange-line' },
-    'GARANTIA':{ color:'info', icon:'ri-shield-check-line' },
-    'DEVOLUCION':{ color:'primary', icon:'ri-arrow-go-back-line' },
-    'RECLAMO':{ color:'secondary', icon:'ri-chat-delete-line' },
-    'CONSULTA':{ color:'success', icon:'ri-questionnaire-line' },
-    'OTROS':{ color:'dark', icon:'ri-more-line' },
-};
-
-// Recuadro para una foto. El `onerror` mostraba literalmente la palabra
-// "Error", que es lo que se veía cuando el archivo ya no estaba en el
-// servidor; ahora explica qué pasó y no rompe la grilla.
-function celdaFoto(foto, reqId, titulo) {
-    return `<a href="${foto.url}" target="_blank" rel="noopener" title="${titulo}">
-        <img src="${foto.url}" class="img-fluid rounded border" alt="${titulo}"
-             style="max-height:140px;object-fit:cover;width:100%"
-             onerror="this.parentElement.outerHTML=fotoNoDisponible()">
-    </a>`;
-}
-
-function celdaVacia(icono, texto) {
-    return `<div class="bg-light rounded border border-dashed text-center text-muted d-flex flex-column align-items-center justify-content-center"
-                 style="min-height:110px">
-        <i class="${icono} fs-4"></i>
-        <div style="font-size:.7rem">${texto}</div>
-    </div>`;
-}
-
-function fotoNoDisponible() {
-    return `<div class="bg-light rounded border text-center text-muted d-flex flex-column align-items-center justify-content-center p-2"
-                 style="min-height:110px">
-        <i class="ri-image-off-line fs-4"></i>
-        <div style="font-size:.68rem;line-height:1.2">Imagen no disponible<br>en el servidor</div>
-    </div>`;
-}
+// ══════════ Pintado ══════════
 
 function mostrarRequerimiento(r) {
-    const $ = id => document.getElementById(id);
-    $('numero-requerimiento').textContent = r.numero_requerimiento;
+    $id('numero-requerimiento').textContent = r.numero_requerimiento;
+    $id('badge-tipo').innerHTML = reqBadgeTipo(r.tipo_codigo, r.tipo);
+    $id('badge-estado').innerHTML = reqPillEstado(r.estado_codigo, r.estado);
+    $id('badge-prioridad').className = `badge badge-soft-${cP(r.prioridad_codigo)}`;
+    $id('badge-prioridad').textContent = r.prioridad;
+    $id('badge-origen').innerHTML = r.origen_codigo === 'STOCK'
+        ? '<i class="ri-store-2-line me-1"></i>Detectado en tienda'
+        : '<i class="ri-user-line me-1"></i>Reclamo de cliente';
+    $id('fecha-creacion-txt').textContent = `Creado el ${r.fecha_creacion}`;
+    $id('dias-transcurridos').textContent = `${r.dias_transcurridos}d`;
+    $id('dias-transcurridos').className = `badge badge-soft-${cU(r.nivel_urgencia)}`;
+    $id('flujo-estados').innerHTML = reqFlujo(r.estado_codigo);
 
-    const tc = tipoCfg[r.tipo_codigo] || {color:'secondary',icon:'ri-file-line'};
-    $('badge-tipo').className = `badge badge-soft-${tc.color}`;
-    $('badge-tipo').innerHTML = `<i class="${tc.icon} me-1"></i>${r.tipo}`;
-    $('badge-estado').className = `badge badge-soft-${cE(r.estado_codigo)}`;
-    $('badge-estado').textContent = r.estado;
-    $('badge-prioridad').className = `badge badge-soft-${cP(r.prioridad_codigo)}`;
-    $('badge-prioridad').textContent = r.prioridad;
-    $('dias-transcurridos').textContent = `${r.dias_transcurridos}d`;
-    $('dias-transcurridos').className = `badge badge-soft-${cU(r.nivel_urgencia)} fs-6`;
+    pintarSiguientePaso(r);
 
-    $('nombre-producto').textContent = r.nombre_producto;
-    $('sku').textContent = `(${r.sku})`;
-    $('sucursal').textContent = r.sucursal.nombre;
-    $('usuario-creador').textContent = r.usuario_creador || '-';
+    // ── Producto y respaldo ──
+    $id('nombre-producto').textContent = r.nombre_producto;
+    $id('sku').textContent = r.sku;
+    $id('badge-cantidad').innerHTML = r.cantidad > 1
+        ? ` · <span class="fw-semibold text-primary">${r.cantidad} unidades</span>` : '';
+    $id('sucursal').textContent = r.sucursal.nombre;
+    $id('usuario-creador').textContent = r.usuario_creador || '—';
 
-    $('cliente-nombre').textContent = r.cliente_nombre;
-    $('cliente-rut').textContent = r.cliente_rut || '-';
-    $('cliente-telefono').textContent = r.cliente_telefono || '-';
-    $('cliente-email').textContent = r.cliente_email || '-';
+    $id('factura-compra').innerHTML = r.numero_factura_compra
+        ? `<span class="text-success"><i class="ri-checkbox-circle-fill me-1"></i>N° ${reqEsc(r.numero_factura_compra)}</span>
+           ${r.fecha_factura_compra ? `<small class="text-muted ms-1">${reqEsc(r.fecha_factura_compra)}</small>` : ''}`
+        : `<span class="text-danger"><i class="ri-error-warning-fill me-1"></i>Sin registrar</span>
+           ${r.permisos.puede_editar ? ' <a href="javascript:void(0)" onclick="abrirModalEditar(true)" style="font-size:.75rem">buscarla</a>' : ''}`;
 
-    $('tipo-documento').textContent = r.tipo_documento || '-';
-    $('numero-boleta').textContent = r.numero_boleta ? `N°${r.numero_boleta}` : '';
-    $('fecha-compra').textContent = r.fecha_compra || '';
+    $id('documento-venta').innerHTML = r.numero_boleta
+        ? `${reqEsc(r.tipo_documento || 'Documento')} N° ${reqEsc(r.numero_boleta)}
+           ${r.fecha_compra ? `<small class="text-muted ms-1">${reqEsc(r.fecha_compra)}</small>` : ''}`
+        : '<span class="dt-value vacio">Sin documento de venta</span>';
 
-    $('badge-cantidad').textContent = r.cantidad > 1 ? `${r.cantidad} unidades` : '';
-    $('origen-requerimiento').textContent = r.origen || '-';
-    $('factura-compra').innerHTML = r.numero_factura_compra
-        ? `N°${r.numero_factura_compra}${r.fecha_factura_compra ? ` <small class="text-muted">${r.fecha_factura_compra}</small>` : ''}`
-        : '<span class="text-danger">Sin registrar</span>';
+    $id('btn-editar-inline').style.display = r.permisos.puede_editar ? '' : 'none';
 
-    $('motivo').textContent = r.motivo;
-    $('descripcion-problema').textContent = r.descripcion_problema || '-';
-
-    // Proveedor. Se muestra la tarjeta SIEMPRE: cuando falta, es justamente
-    // cuando hay que verlo y actuar, no cuando conviene esconderlo.
-    $('card-proveedor').style.display = 'block';
-    if (r.proveedor.id) {
-        $('proveedor-nombre').textContent = r.proveedor.nombre;
-        $('proveedor-email').textContent = r.correo_proveedor_destino || r.proveedor.correo || 'Sin correo configurado';
-        mostrarSeguimientoProveedor(r);
+    // ── Cliente ──
+    if (r.origen_codigo === 'STOCK' && !r.cliente_nombre) {
+        $id('datos-cliente').style.display = 'none';
+        $id('aviso-sin-cliente').style.display = '';
+        $id('aviso-sin-cliente').innerHTML = `<div class="alert alert-light border py-2 px-3 mb-0 small">
+            <i class="ri-store-2-line me-1"></i>Falla detectada en mercadería de la tienda: no hubo venta ni cliente afectado.</div>`;
     } else {
-        $('proveedor-nombre').innerHTML = '<span class="text-warning"><i class="ri-error-warning-line me-1"></i>Sin asignar</span>';
-        $('proveedor-email').innerHTML = r.permisos.puede_editar
-            ? '<a href="javascript:void(0)" onclick="abrirModalEditar()">Asignar proveedor y factura</a>'
+        // Se reponen SIEMPRE: si el caso nació sin cliente y después se le
+        // completaron los datos, la tarjeta quedaba pegada en "no hubo
+        // cliente afectado" aunque el nombre ya estuviera cargado.
+        $id('datos-cliente').style.display = '';
+        $id('aviso-sin-cliente').style.display = 'none';
+        // reqEsc: nombre y RUT los tipea un usuario y acá van por innerHTML.
+        $id('cliente-nombre').innerHTML = reqEsc(r.cliente_nombre) || '<span class="vacio">Sin nombre</span>';
+        $id('cliente-rut').innerHTML = reqEsc(r.cliente_rut) || '<span class="vacio">—</span>';
+        $id('cliente-telefono').innerHTML = r.cliente_telefono
+            ? `<a href="tel:${reqEsc(r.cliente_telefono)}">${reqEsc(r.cliente_telefono)}</a>`
+            : '<span class="vacio">—</span>';
+        $id('cliente-email').innerHTML = r.cliente_email
+            ? `<a href="mailto:${reqEsc(r.cliente_email)}" class="text-break">${reqEsc(r.cliente_email)}</a>`
+            : '<span class="vacio">—</span>';
+    }
+
+    // ── Clasificación ──
+    const clasif = [
+        ['Subtipo', r.subtipo],
+        ['Severidad', r.severidad_defecto],
+        ['Condición del producto', r.condicion_producto],
+        ['Producto esperado', r.producto_esperado],
+    ].filter(([, v]) => v);
+    if (clasif.length) {
+        $id('card-clasificacion-defecto').style.display = '';
+        $id('grilla-clasificacion').innerHTML = clasif.map(([k, v]) => `
+            <div class="col-6 col-md-3"><div class="dt-label">${k}</div><div class="dt-value">${reqEsc(v)}</div></div>`).join('');
+    } else {
+        $id('card-clasificacion-defecto').style.display = 'none';
+    }
+
+    // ── Descripción ──
+    $id('motivo').textContent = r.motivo || '—';
+    if (r.descripcion_problema) {
+        $id('bloque-detalle-problema').style.display = '';
+        $id('descripcion-problema').textContent = r.descripcion_problema;
+    } else {
+        $id('bloque-detalle-problema').style.display = 'none';
+    }
+
+    // ── Notas internas ──
+    if (r.permisos.puede_ver_notas && r.notas_internas) {
+        $id('card-notas').style.display = '';
+        $id('notas-internas').textContent = r.notas_internas;
+    } else {
+        $id('card-notas').style.display = 'none';
+    }
+
+    pintarProveedor(r);
+    pintarDecisiones(r);
+    pintarFotos(r);
+    pintarHistorial(r);
+    pintarAcciones(r);
+}
+
+function pintarSiguientePaso(r) {
+    const p = r.siguiente_paso || {};
+    const acciones = {
+        editar:    { txt: 'Completar datos', icono: 'ri-edit-2-line', fn: 'abrirModalEditar()' },
+        decidir:   { txt: 'Validar o rechazar', icono: 'ri-scales-3-line', fn: 'abrirModalDecidir()' },
+        enviar:    { txt: 'Enviar al proveedor', icono: 'ri-mail-send-line', fn: 'abrirModalEnvio(false)' },
+        respuesta: { txt: 'Registrar respuesta', icono: 'ri-mail-check-line', fn: 'abrirModalRespuestaProveedor()' },
+        completar: { txt: 'Completar', icono: 'ri-check-double-line', fn: 'abrirModalCompletar()' },
+    };
+    const accion = acciones[p.accion];
+    $id('siguiente-paso').innerHTML = `
+        <div class="alert alert-${p.tono || 'secondary'} d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-0">
+            <i class="ri-guide-line fs-16"></i>
+            <div class="flex-grow-1">
+                <strong style="font-size:.85rem">${reqEsc(p.titulo || '')}</strong>
+                ${p.detalle ? `<div style="font-size:.76rem" class="opacity-75">${reqEsc(p.detalle)}</div>` : ''}
+            </div>
+            ${accion ? `<button class="btn btn-sm btn-${p.tono === 'warning' ? 'warning' : 'primary'}" onclick="${accion.fn}">
+                <i class="${accion.icono} me-1"></i>${accion.txt}</button>` : ''}
+        </div>`;
+}
+
+function pintarProveedor(r) {
+    if (r.proveedor.id) {
+        $id('proveedor-nombre').textContent = r.proveedor.nombre;
+        $id('proveedor-email').textContent = r.correo_proveedor_destino || r.proveedor.correo || 'Sin correo configurado';
+    } else {
+        $id('proveedor-nombre').innerHTML = '<span class="text-danger"><i class="ri-error-warning-line me-1"></i>Sin asignar</span>';
+        $id('proveedor-email').innerHTML = r.permisos.puede_editar
+            ? '<a href="javascript:void(0)" onclick="abrirModalEditar(true)">Buscar el proveedor y la factura</a>'
             : 'Lo asigna quien revisa el requerimiento';
     }
 
-    mostrarAccionesDisponibles(r);
-
-    // Resolucion
-    if (r.motivo_resolucion && ['APROBADO','RECHAZADO','COMPLETADO'].includes(r.estado_codigo)) {
-        $('card-resolucion').style.display = 'block';
-        $('alert-resolucion').className = `alert ${r.estado_codigo==='RECHAZADO'?'alert-warning':'alert-success'} mb-0`;
-        $('titulo-resolucion').innerHTML = r.estado_codigo==='RECHAZADO'?'<i class="ri-close-circle-line me-1"></i>Rechazado':'<i class="ri-checkbox-circle-line me-1"></i>Aprobado';
-        $('motivo-resolucion-texto').textContent = r.motivo_resolucion;
-        $('fecha-resolucion-texto').textContent = r.fecha_resolucion;
+    const caja = $id('info-seguimiento-proveedor');
+    if (!r.correo_enviado_proveedor) {
+        caja.innerHTML = r.proveedor.id
+            ? '<div class="text-muted mt-2" style="font-size:.72rem"><i class="ri-time-line me-1"></i>Todavía no se le ha enviado nada.</div>'
+            : '';
+        return;
     }
 
-    // Clasificacion defecto
-    if (['PRODUCTO_FALLADO','ERROR_DESPACHO','GARANTIA'].includes(r.tipo_codigo)) {
-        let show = false;
-        if (r.subtipo) { $('col-subtipo').style.display='block'; $('detalle-subtipo').textContent=r.subtipo.replace(/_/g,' '); show=true; }
-        if (r.severidad_defecto) { $('col-severidad').style.display='block'; $('detalle-severidad').textContent=r.severidad_defecto; show=true; }
-        if (r.condicion_producto) { $('col-condicion').style.display='block'; $('detalle-condicion').textContent=r.condicion_producto; show=true; }
-        if (r.producto_esperado) { $('col-producto-esperado').style.display='block'; $('detalle-producto-esperado').textContent=r.producto_esperado; show=true; }
-        if (show) $('card-clasificacion-defecto').style.display='block';
-    }
+    let h = `<hr class="my-2"><div style="font-size:.75rem">
+        <div class="d-flex justify-content-between"><span class="text-muted">Enviado</span><span>${reqEsc(r.fecha_envio_proveedor)}</span></div>
+        <div class="d-flex justify-content-between"><span class="text-muted">Intentos</span><span class="badge badge-soft-info">${r.intentos_envio || 0}</span></div>`;
 
-    // Fotos
-    if (r.fotos && r.fotos.length > 0) {
-        $('card-fotos').style.display = 'block';
-        const bc = $('badge-fotos-completitud');
-        if (r.fotos_completas) { bc.className='badge bg-success ms-1'; bc.textContent='Completas'; }
-        else if (['PRODUCTO_FALLADO','GARANTIA','ERROR_DESPACHO'].includes(r.tipo_codigo)) { bc.className='badge bg-warning ms-1'; bc.textContent='Incompletas'; }
-        else bc.textContent='';
-
-        const tipos = r.tipos_foto_requeridos||[];
-        const byTipo = {};
-        r.fotos.forEach(f => { const k=f.tipo_foto_codigo||'SIN'; if(!byTipo[k])byTipo[k]=[]; byTipo[k].push(f); });
-        let h = '';
-        tipos.forEach(tf => {
-            if (tf.codigo==='FOTO_ADICIONAL') return;
-            const fs = byTipo[tf.codigo]||[];
-            h += `<div class="col-6 col-md-4">
-                <div class="dt-label"><i class="${tf.icono} me-1"></i>${tf.nombre} ${tf.es_obligatorio?'<span class="badge bg-danger" style="font-size:.5rem">Req</span>':''}</div>`;
-            h += fs.length ? celdaFoto(fs[0], r.id, tf.nombre) : celdaVacia(tf.icono, 'Sin foto');
-            h += '</div>';
-            delete byTipo[tf.codigo];
-        });
-        Object.values(byTipo).flat().forEach(f => {
-            h += `<div class="col-6 col-md-4"><div class="dt-label"><i class="${f.tipo_foto_icono||'ri-image-line'} me-1"></i>${f.tipo_foto_nombre||'Foto'}</div>
-            ${celdaFoto(f, r.id, f.tipo_foto_nombre||'Foto')}</div>`;
-        });
-        $('fotos-container').innerHTML = h;
+    if (!r.fecha_respuesta_proveedor) {
+        const d = r.dias_sin_respuesta || 0;
+        const col = d > 14 ? 'danger' : d > 7 ? 'warning' : 'info';
+        h += `<div class="alert alert-${col} py-1 px-2 mt-2 mb-0" style="font-size:.75rem">
+                <i class="ri-time-line me-1"></i>${d} día(s) sin respuesta</div>`;
+    } else {
+        h += `<div class="d-flex justify-content-between mt-1"><span class="text-muted">Respondió</span><span>${reqEsc(r.fecha_respuesta_proveedor)}</span></div>`;
     }
-
-    // Historial
-    if (r.historial.length) {
-        $('historial-container').innerHTML = r.historial.map(h => `
-            <div class="hist-item">
-                <div class="d-flex justify-content-between">
-                    <span class="fw-semibold">${h.accion}</span>
-                    <small class="text-muted">${h.fecha}</small>
-                </div>
-                ${h.estado_anterior ? `<small class="text-muted">${h.estado_anterior} → ${h.estado_nuevo}</small>` : ''}
-                ${h.comentario ? `<div class="small text-muted">${h.comentario}</div>` : ''}
-                <small class="text-muted">${h.usuario}</small>
-            </div>
-        `).join('');
-    }
+    caja.innerHTML = h + '</div>';
 }
 
-function mostrarAccionesDisponibles(r) {
-    const c = document.getElementById('acciones-container');
-    let h = '';
+function pintarDecisiones(r) {
+    const bloques = [];
+
+    if (r.decision_interna) {
+        const ok = r.decision_interna === 'APROBADO';
+        bloques.push(`
+            <div class="mb-2">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="badge badge-soft-${ok ? 'success' : 'danger'}">
+                        <i class="ri-${ok ? 'check' : 'close'}-line me-1"></i>${ok ? 'Procede' : 'No procede'}</span>
+                    <span class="dt-label mb-0">La empresa</span>
+                </div>
+                <div style="font-size:.78rem">${reqEsc(r.motivo_decision_interna || '')}</div>
+                <div class="text-muted" style="font-size:.7rem">${reqEsc(r.usuario_decision_interna)} · ${reqEsc(r.fecha_decision_interna)}</div>
+            </div>`);
+    }
+
+    if (r.decision_proveedor) {
+        const mapa = { APROBADO: ['success', 'Aprobado'], PARCIAL: ['warning', 'Aprobado parcial'], RECHAZADO: ['danger', 'Rechazado'] };
+        const [color, texto] = mapa[r.decision_proveedor] || ['secondary', r.decision_proveedor];
+        bloques.push(`
+            <div>
+                ${bloques.length ? '<hr class="my-2">' : ''}
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="badge badge-soft-${color}">${texto}</span>
+                    <span class="dt-label mb-0">El proveedor</span>
+                </div>
+                <div style="font-size:.78rem">${reqEsc(r.respuesta_proveedor || '')}</div>
+                ${r.motivo_resolucion ? `<div class="alert alert-light border py-1 px-2 mt-1 mb-0" style="font-size:.74rem">
+                    <strong>Para el cliente:</strong> ${reqEsc(r.motivo_resolucion)}</div>` : ''}
+                <div class="text-muted mt-1" style="font-size:.7rem">${reqEsc(r.fecha_respuesta_proveedor)}</div>
+            </div>`);
+    }
+
+    if (r.resolucion) {
+        bloques.push(`
+            <div>
+                ${bloques.length ? '<hr class="my-2">' : ''}
+                <div class="dt-label">Resolución final</div>
+                <div style="font-size:.78rem">${reqEsc(r.resolucion)}</div>
+                <div class="text-muted" style="font-size:.7rem">${reqEsc(r.fecha_resolucion)}</div>
+            </div>`);
+    }
+
+    $id('card-decisiones').style.display = bloques.length ? '' : 'none';
+    $id('decisiones-container').innerHTML = bloques.join('');
+}
+
+function pintarFotos(r) {
+    const fotos = r.fotos || [];
+    if (!fotos.length) {
+        $id('card-fotos').style.display = 'none';
+        return;
+    }
+    $id('card-fotos').style.display = '';
+
+    const bc = $id('badge-fotos-completitud');
+    if (r.fotos_completas) {
+        bc.className = 'badge badge-soft-success ms-1';
+        bc.textContent = `${fotos.length} · completas`;
+    } else if (['PRODUCTO_FALLADO', 'GARANTIA', 'ERROR_DESPACHO'].includes(r.tipo_codigo)) {
+        bc.className = 'badge badge-soft-warning ms-1';
+        bc.textContent = `${fotos.length} · faltan obligatorias`;
+    } else {
+        bc.className = 'badge badge-soft-secondary ms-1';
+        bc.textContent = fotos.length;
+    }
+
+    // Las fotos van al visor en el mismo orden en que se muestran, para que
+    // ← → recorran lo que el usuario está viendo.
+    fotosVisor = [];
+    const tipos = r.tipos_foto_requeridos || [];
+    const porTipo = {};
+    fotos.forEach(f => {
+        const k = f.tipo_foto_codigo || 'SIN';
+        (porTipo[k] = porTipo[k] || []).push(f);
+    });
+
+    let html = '';
+    const agregarCelda = (foto, titulo, obligatoria) => {
+        const i = fotosVisor.length;
+        fotosVisor.push({ url: foto.url, titulo, descripcion: foto.descripcion, fecha: foto.fecha });
+        return `<div class="foto-celda ${obligatoria ? 'req-obligatoria' : ''}" onclick="abrirVisorDesde(${i})">
+                    <img src="${reqEsc(foto.url)}" alt="${reqEsc(titulo)}" loading="lazy"
+                         onerror="this.parentElement.innerHTML='<div class=\\'foto-slot-vacio\\'><i class=\\'ri-image-off-line fs-4\\'></i>No disponible<br>en el servidor</div>'">
+                    <span class="foto-lupa"><i class="ri-zoom-in-line"></i></span>
+                </div>`;
+    };
+
+    tipos.forEach(tf => {
+        if (tf.codigo === 'FOTO_ADICIONAL') return;
+        const fs = porTipo[tf.codigo] || [];
+        html += `<div class="col-6 col-md-4 col-xl-3">
+            <div class="foto-titulo" title="${reqEsc(tf.descripcion_guia || tf.nombre)}">
+                <i class="${tf.icono}"></i>${reqEsc(tf.nombre)}
+                ${tf.es_obligatorio ? '<span class="badge bg-danger ms-1" style="font-size:.5rem">REQ</span>' : ''}
+            </div>
+            ${fs.length
+                ? agregarCelda(fs[0], tf.nombre, tf.es_obligatorio)
+                : `<div class="foto-slot-vacio"><i class="${tf.icono} fs-4 mb-1"></i>Sin foto</div>`}
+        </div>`;
+        delete porTipo[tf.codigo];
+    });
+
+    Object.values(porTipo).flat().forEach(f => {
+        const titulo = f.tipo_foto_nombre || 'Foto adicional';
+        html += `<div class="col-6 col-md-4 col-xl-3">
+            <div class="foto-titulo"><i class="${f.tipo_foto_icono || 'ri-image-line'}"></i>${reqEsc(titulo)}</div>
+            ${agregarCelda(f, titulo, false)}
+        </div>`;
+    });
+
+    $id('fotos-container').innerHTML = html;
+    $id('btn-ver-fotos').style.display = fotosVisor.length ? '' : 'none';
+}
+
+function abrirVisorDesde(indice) { ReqVisor.abrir(fotosVisor, indice); }
+
+function pintarHistorial(r) {
+    const h = r.historial || [];
+    $id('contador-historial').textContent = h.length ? `${h.length} evento(s)` : '';
+    if (!h.length) {
+        $id('historial-container').innerHTML = '<div class="text-muted small">Sin movimientos registrados.</div>';
+        return;
+    }
+    const hitos = ['ENVIADO_A_PROVEEDOR', 'RESPUESTA_PROVEEDOR_REGISTRADA',
+                   'VALIDADO_INTERNAMENTE', 'RECHAZADO_INTERNAMENTE', 'COMPLETADO', 'CREADO'];
+    $id('historial-container').innerHTML = h.map(ev => `
+        <div class="hist-item ${hitos.includes(ev.accion) ? 'hito' : ''}">
+            <div class="d-flex justify-content-between gap-2">
+                <span class="fw-semibold">${reqEsc(ev.accion.replace(/_/g, ' '))}</span>
+                <small class="text-muted text-nowrap">${reqEsc(ev.fecha)}</small>
+            </div>
+            ${ev.estado_anterior ? `<div class="text-muted" style="font-size:.7rem">${reqEsc(ev.estado_anterior)} → ${reqEsc(ev.estado_nuevo)}</div>` : ''}
+            ${ev.comentario ? `<div class="text-muted" style="font-size:.75rem">${reqEsc(ev.comentario)}</div>` : ''}
+            ${ev.usuario ? `<div class="text-muted" style="font-size:.7rem"><i class="ri-user-line me-1"></i>${reqEsc(ev.usuario)}</div>` : ''}
+        </div>`).join('');
+}
+
+// ══════════ Acciones disponibles ══════════
+
+function pintarAcciones(r) {
     const p = r.permisos;
+    const estado = r.estado_codigo;
+    const btns = [];
 
-    // Completar datos va PRIMERO cuando falta algo para poder enviar: sin
-    // proveedor asignado el botón de envío ni siquiera aparece, y antes no
-    // había ninguna pantalla desde donde arreglarlo.
-    if (p.puede_editar) {
-        const falta = [];
-        if (!r.proveedor.id) falta.push('proveedor');
-        if (!r.numero_factura_compra) falta.push('factura de compra');
-        const estilo = falta.length ? 'btn-warning' : 'btn-soft-primary';
-        const texto = falta.length ? `Completar datos (falta ${falta.join(' y ')})` : 'Editar datos';
-        h += `<button class="btn ${estilo} btn-sm w-100" onclick="abrirModalEditar()"><i class="ri-edit-2-line me-1"></i>${texto}</button>`;
+    // Completar datos primero cuando falta algo: sin proveedor asignado no se
+    // puede ni validar ni enviar.
+    if (p.puede_editar && !r.esta_cerrado) {
+        const falta = r.faltantes || [];
+        btns.push(`<button class="btn ${falta.length ? 'btn-warning' : 'btn-soft-primary'} btn-sm"
+            onclick="abrirModalEditar()"><i class="ri-edit-2-line me-1"></i>${
+            falta.length ? `Completar (falta ${reqEsc(falta.join(' y '))})` : 'Editar datos'}</button>`);
     }
 
-    // Tomar el caso: deja constancia de quién lo está viendo antes de que
-    // pasen días sin que nadie sepa si alguien lo agarró.
-    if (r.estado_codigo === 'PENDIENTE' && (r.transiciones_permitidas || []).includes('EN_REVISION')
-        && ['administrador','jefe_local'].includes(r.rol_usuario))
-        h += `<button class="btn btn-soft-info btn-sm w-100" onclick="tomarEnRevision()"><i class="ri-eye-line me-1"></i>Tomar en revisión</button>`;
-
-    if (['PENDIENTE','EN_REVISION'].includes(r.estado_codigo) && p.puede_enviar_proveedor && r.proveedor.id)
-        h += `<button class="btn btn-primary btn-sm w-100" onclick="enviarAProveedorMejorado()"><i class="ri-mail-send-line me-1"></i>Enviar a Proveedor</button>`;
-
-    if (['PENDIENTE','EN_REVISION'].includes(r.estado_codigo) && p.puede_enviar_proveedor && !r.proveedor.id)
-        h += `<button class="btn btn-outline-primary btn-sm w-100" disabled title="Asigne el proveedor en Completar datos"><i class="ri-mail-send-line me-1"></i>Enviar a Proveedor</button>`;
-
-    if (r.estado_codigo==='ESPERANDO_RESPUESTA' && p.puede_registrar_respuesta) {
-        h += `<button class="btn btn-success btn-sm w-100" onclick="abrirModalRespuestaProveedor()"><i class="ri-file-edit-line me-1"></i>Registrar Respuesta</button>`;
-        h += `<button class="btn btn-soft-warning btn-sm w-100" onclick="reenviarCorreoProveedor()"><i class="ri-mail-send-line me-1"></i>Re-enviar</button>`;
+    if (estado === 'PENDIENTE' && (r.transiciones_permitidas || []).includes('EN_REVISION')
+        && ['administrador', 'jefe_local'].includes(r.rol_usuario)) {
+        btns.push(`<button class="btn btn-soft-info btn-sm" onclick="tomarEnRevision()">
+            <i class="ri-eye-line me-1"></i>Tomar en revisión</button>`);
     }
 
-    if (r.estado_codigo==='APROBADO')
-        h += `<button class="btn btn-primary btn-sm w-100" onclick="marcarEnProceso()"><i class="ri-play-line me-1"></i>Iniciar Proceso</button>`;
-    if (['APROBADO','EN_PROCESO'].includes(r.estado_codigo) && p.puede_completar)
-        h += `<button class="btn btn-success btn-sm w-100" onclick="completarRequerimiento()"><i class="ri-check-double-line me-1"></i>Completar</button>`;
+    // Decisión de la empresa
+    if (['PENDIENTE', 'EN_REVISION'].includes(estado) && (p.puede_validar || p.puede_rechazar_interno)) {
+        btns.push(`<button class="btn btn-primary btn-sm" onclick="abrirModalDecidir()">
+            <i class="ri-scales-3-line me-1"></i>Validar o rechazar</button>`);
+    }
+
+    // Envío al proveedor
+    if (['PENDIENTE', 'EN_REVISION', 'VALIDADO'].includes(estado)) {
+        if (p.puede_enviar_proveedor && r.proveedor.id) {
+            btns.push(`<button class="btn btn-${estado === 'VALIDADO' ? 'primary' : 'soft-primary'} btn-sm"
+                onclick="abrirModalEnvio(false)"><i class="ri-mail-send-line me-1"></i>Enviar al proveedor</button>`);
+        } else if (p.puede_enviar_proveedor) {
+            btns.push(`<button class="btn btn-outline-primary btn-sm" disabled
+                title="Asigne el proveedor en Completar datos"><i class="ri-mail-send-line me-1"></i>Enviar al proveedor</button>`);
+        } else if (['administrador', 'jefe_local'].includes(r.rol_usuario)) {
+            btns.push(`<button class="btn btn-outline-secondary btn-sm" disabled
+                title="Solo un administrador puede escribirle al proveedor"><i class="ri-lock-line me-1"></i>Enviar al proveedor</button>`);
+        }
+    }
+
+    if (estado === 'ESPERANDO_RESPUESTA' && p.puede_registrar_respuesta) {
+        btns.push(`<button class="btn btn-success btn-sm" onclick="abrirModalRespuestaProveedor()">
+            <i class="ri-mail-check-line me-1"></i>Registrar respuesta</button>`);
+        btns.push(`<button class="btn btn-soft-warning btn-sm" onclick="abrirModalEnvio(true)">
+            <i class="ri-mail-send-line me-1"></i>Re-enviar recordatorio</button>`);
+    }
+
+    if (estado === 'APROBADO' && (r.transiciones_permitidas || []).includes('EN_PROCESO')) {
+        btns.push(`<button class="btn btn-soft-primary btn-sm" onclick="marcarEnProceso()">
+            <i class="ri-play-line me-1"></i>Iniciar proceso</button>`);
+    }
+
+    if (p.puede_completar && (r.transiciones_permitidas || []).includes('COMPLETADO')) {
+        btns.push(`<button class="btn btn-success btn-sm" onclick="abrirModalCompletar()">
+            <i class="ri-check-double-line me-1"></i>Completar</button>`);
+    }
 
     // Puente a Devolución por Garantía: cuando el proveedor ya respondió
-    // (aprobó o rechazó), el jefe de local puede decidir devolver el
-    // dinero directamente sin retipear folio/RUT/nombre del cliente.
-    if (['APROBADO','RECHAZADO'].includes(r.estado_codigo) && ['administrador','jefe_local'].includes(r.rol_usuario)) {
+    // (aprobó o rechazó), el jefe de local puede decidir devolver el dinero
+    // directamente sin retipear folio/RUT/nombre del cliente.
+    if (['APROBADO', 'RECHAZADO'].includes(estado) && ['administrador', 'jefe_local'].includes(r.rol_usuario)) {
         const qs = new URLSearchParams({
-            requerimiento_id: r.id || '',
-            folio: r.numero_boleta || '',
-            rut: r.cliente_rut || '',
-            nombre: r.cliente_nombre || '',
-            telefono: r.cliente_telefono || '',
-            email: r.cliente_email || '',
-            motivo: `Garantía: ${r.motivo || ''}`,
+            requerimiento_id: r.id || '', folio: r.numero_boleta || '', rut: r.cliente_rut || '',
+            nombre: r.cliente_nombre || '', telefono: r.cliente_telefono || '',
+            email: r.cliente_email || '', motivo: `Garantía: ${r.motivo || ''}`,
         });
-        h += `<a href="/app/devolucion-garantia/?${qs.toString()}" class="btn btn-warning btn-sm w-100" target="_blank"><i class="ri-refund-2-line me-1"></i>Generar devolución de dinero</a>`;
+        btns.push(`<a href="/app/devolucion-garantia/?${qs}" target="_blank" class="btn btn-soft-warning btn-sm">
+            <i class="ri-refund-2-line me-1"></i>Devolver el dinero</a>`);
     }
-
-    if (['administrador','jefe_local'].includes(r.rol_usuario) && (r.transiciones_permitidas||[]).length)
-        h += `<button class="btn btn-soft-primary btn-sm w-100" onclick="cambiarEstado()"><i class="ri-refresh-line me-1"></i>Cambiar Estado</button>`;
 
     // Formato propio: el MISMO PDF que se adjunta al correo del proveedor.
     // Verlo antes de enviar es lo que evita mandar un reclamo incompleto.
-    h += `<a href="/app/api/requerimientos/${r.id}/formato-pdf/" target="_blank" class="btn btn-soft-info btn-sm w-100"><i class="ri-file-pdf-line me-1"></i>Ver formato PDF</a>`;
+    btns.push(`<a href="/app/api/requerimientos/${r.id}/formato-pdf/" target="_blank" class="btn btn-soft-info btn-sm">
+        <i class="ri-file-pdf-line me-1"></i>Ver formato PDF</a>`);
 
-    // Cancelar: el permiso existía en el backend pero no había ningún botón,
-    // así que un requerimiento creado por error no se podía cerrar nunca.
-    if (p.puede_cancelar && (r.transiciones_permitidas || []).includes('CANCELADO'))
-        h += `<button class="btn btn-soft-danger btn-sm w-100" onclick="cancelarRequerimiento()"><i class="ri-close-circle-line me-1"></i>Cancelar requerimiento</button>`;
-
-    h += `<a href="/app/requerimientos/" class="btn btn-soft-secondary btn-sm w-100"><i class="ri-arrow-left-line me-1"></i>Volver</a>`;
-    c.innerHTML = h;
-}
-
-function mostrarSeguimientoProveedor(r) {
-    if (!r.correo_enviado_proveedor) return;
-    const c = document.getElementById('info-seguimiento-proveedor');
-    let h = `<hr class="my-1"><div class="small">
-        <div class="d-flex justify-content-between"><span class="text-muted">Enviado:</span><span>${r.fecha_envio_proveedor}</span></div>
-        <div class="d-flex justify-content-between"><span class="text-muted">Intentos:</span><span class="badge bg-info">${r.intentos_envio||0}</span></div>`;
-
-    if (!r.fecha_respuesta_proveedor) {
-        const d = r.dias_sin_respuesta||0;
-        const col = d>14?'danger':d>7?'warning':'success';
-        h += `<div class="alert alert-${col} py-1 px-2 mt-1 mb-0 small"><i class="ri-time-line me-1"></i>${d}d sin respuesta</div>`;
-    } else {
-        h += `<div class="alert alert-success py-1 px-2 mt-1 mb-0 small"><i class="ri-checkbox-circle-fill me-1"></i>Respondio ${r.fecha_respuesta_proveedor}</div>`;
-        if (r.decision_proveedor) h += `<div class="mt-1"><span class="dt-label">Decision:</span> <span class="fw-semibold">${r.decision_proveedor}</span></div>`;
-        if (r.respuesta_proveedor) h += `<div class="mt-1"><span class="dt-label">Respuesta:</span><div class="small">${r.respuesta_proveedor}</div></div>`;
+    // Solo si queda alguna transicion que ESTE endpoint pueda ejecutar. En
+    // EN_PROCESO la unica salida es COMPLETADO, que tiene su propia accion:
+    // el modal abria con la unica opcion deshabilitada y no habia forma de
+    // enviarlo.
+    const ESTADOS_CON_ACCION_PROPIA = ['ESPERANDO_RESPUESTA', 'APROBADO', 'RECHAZADO',
+                                       'VALIDADO', 'RECHAZADO_INTERNO', 'COMPLETADO'];
+    const transicionesLibres = (r.transiciones_permitidas || [])
+        .filter(c => !ESTADOS_CON_ACCION_PROPIA.includes(c));
+    if (['administrador', 'jefe_local'].includes(r.rol_usuario) && transicionesLibres.length) {
+        btns.push(`<button class="btn btn-soft-secondary btn-sm" onclick="cambiarEstado()">
+            <i class="ri-refresh-line me-1"></i>Cambiar estado</button>`);
     }
-    h += '</div>';
-    c.innerHTML = h;
+
+    if (p.puede_cancelar && (r.transiciones_permitidas || []).includes('CANCELADO')) {
+        btns.push(`<button class="btn btn-soft-danger btn-sm" onclick="cancelarRequerimiento()">
+            <i class="ri-close-circle-line me-1"></i>Cancelar requerimiento</button>`);
+    }
+
+    $id('acciones-container').innerHTML = btns.join('');
 }
 
-// === COMPLETAR / CORREGIR DATOS ===
+// ══════════ Decisión interna ══════════
 
-function abrirModalEditar() {
+function abrirModalDecidir() {
     const r = datosRequerimiento;
-    const v = (id, val) => { document.getElementById(id).value = val || ''; };
+    const falta = r.faltantes || [];
+    $id('dec-resumen').innerHTML = `
+        <dl class="mb-0">
+            <dt>Producto</dt><dd>${reqEsc(r.sku)} — ${reqEsc(r.nombre_producto)} (${r.cantidad} und)</dd>
+            <dt>Proveedor</dt><dd>${r.proveedor.nombre
+                ? reqEsc(r.proveedor.nombre)
+                : '<span class="text-danger">sin asignar</span>'}</dd>
+            <dt>Factura de compra</dt><dd>${r.numero_factura_compra
+                ? 'N° ' + reqEsc(r.numero_factura_compra)
+                : '<span class="text-danger">sin registrar</span>'}</dd>
+        </dl>
+        ${falta.length ? `<div class="alert alert-warning py-1 px-2 mt-2 mb-0" style="font-size:.74rem">
+            <i class="ri-error-warning-line me-1"></i>Falta <strong>${reqEsc(falta.join(' y '))}</strong>.
+            Para validar hace falta al menos el proveedor.</div>` : ''}`;
+
+    document.querySelectorAll('input[name="decision_interna_radio"]').forEach(i => { i.checked = false; });
+    $id('dec-motivo').value = '';
+    new bootstrap.Modal($id('modalDecidir')).show();
+}
+
+function guardarDecision() {
+    const elegido = document.querySelector('input[name="decision_interna_radio"]:checked');
+    const motivo = $id('dec-motivo').value.trim();
+    if (!elegido) { Swal.fire('', 'Elija si el requerimiento procede o no', 'warning'); return; }
+    if (!motivo) { Swal.fire('', 'Escriba el motivo de la decisión', 'warning'); return; }
+
+    post(`/app/api/requerimientos/${requerimientoId}/decidir/`, { decision: elegido.value, motivo })
+        .then(d => {
+            if (!d.success) { Swal.fire('No se pudo registrar', d.error, 'error'); return; }
+            bootstrap.Modal.getInstance($id('modalDecidir')).hide();
+            const pendiente = (d.faltantes || []).length
+                ? `<br><span class="text-warning">Antes de enviarlo falta: ${d.faltantes.join(' y ')}</span>` : '';
+            Swal.fire({ icon: 'success', title: 'Decisión registrada', html: d.message + pendiente });
+            cargarRequerimiento();
+        })
+        .catch(() => Swal.fire('Error', 'No se pudo registrar la decisión', 'error'));
+}
+
+// ══════════ Completar / corregir datos ══════════
+
+function abrirModalEditar(abrirBuscador) {
+    const r = datosRequerimiento;
+    const v = (id, val) => { $id(id).value = val || ''; };
 
     v('ed-proveedor', r.proveedor.id || '');
     v('ed-factura', r.numero_factura_compra);
@@ -707,43 +1096,68 @@ function abrirModalEditar() {
     v('ed-motivo', r.motivo);
     v('ed-descripcion', r.descripcion_problema);
     v('ed-notas', r.notas_internas);
+    $id('ed-rut-aviso').textContent = '';
+
+    $id('ed-badge-origen').textContent = r.origen_codigo === 'STOCK'
+        ? 'Opcional — detectado en tienda' : 'Reclamo de cliente';
+
     // Sin permiso para verlas, el campo ni se muestra ni se envía: mandarlo
     // vacío borraría lo que escribió el administrador.
-    document.getElementById('ed-bloque-notas').style.display = r.permisos.puede_ver_notas ? 'block' : 'none';
+    $id('ed-bloque-notas').style.display = r.permisos.puede_ver_notas ? 'block' : 'none';
+
+    // Checklist de bloqueos arriba del formulario
+    const falta = r.faltantes || [];
+    $id('ed-checklist').innerHTML = falta.length
+        ? `<div class="alert alert-warning py-2 px-3 mb-0" style="font-size:.78rem">
+             <i class="ri-error-warning-line me-1"></i>Para poder enviarlo al proveedor falta:
+             <strong>${reqEsc(falta.join(', '))}</strong>.</div>`
+        : `<div class="alert alert-success py-2 px-3 mb-0" style="font-size:.78rem">
+             <i class="ri-checkbox-circle-line me-1"></i>El requerimiento tiene todo lo necesario para enviarse.</div>`;
 
     // Si no hay proveedor asignado, se ofrece el de la última compra del SKU
-    const pista = document.getElementById('ed-proveedor-sugerido');
+    const pista = $id('ed-proveedor-sugerido');
     pista.textContent = '';
     if (!r.proveedor.id && r.sku) {
-        fetch(`/app/api/requerimientos/sugerir-proveedor/?sku=${encodeURIComponent(r.sku)}`)
-            .then(res => res.json())
+        api(`/app/api/requerimientos/sugerir-proveedor/?sku=${encodeURIComponent(r.sku)}`)
             .then(d => {
                 if (!d.success) return;
-                pista.innerHTML = `<a href="javascript:void(0)" onclick="aplicarProveedorSugerido(${d.proveedor.id},'${d.compra.numero_documento}','${d.compra.fecha_emision}')">` +
-                    `Usar ${d.proveedor.nombre} (factura N°${d.compra.numero_documento} del ${d.compra.fecha_emision})</a>`;
+                const compra = d.compra;
+                const etiqueta = compra
+                    ? `Usar ${reqEsc(d.proveedor.nombre)} (factura N°${compra.numero_documento} del ${compra.fecha_emision})`
+                    : `Usar ${reqEsc(d.proveedor.nombre)} — sugerido por la marca`;
+                pista.innerHTML = `<a href="javascript:void(0)" onclick="aplicarProveedorSugerido(${d.proveedor.id},
+                    '${compra ? compra.numero_documento : ''}', '${compra ? compra.fecha_emision : ''}')">${etiqueta}</a>
+                    ${d.confianza === 'BAJA' ? ' <span class="badge badge-soft-warning" style="font-size:.6rem">verificar</span>' : ''}`;
             })
             .catch(() => {});
     }
 
-    new bootstrap.Modal(document.getElementById('modalEditarDatos')).show();
+    // Panel de búsqueda cerrado salvo que se entre expresamente a buscar
+    const panel = $id('ed-buscador-compras');
+    panel.style.display = 'none';
+    $id('ed-btn-buscador-txt').textContent = 'Buscar la factura';
+    $id('ed-resultado-compras').innerHTML = '';
+
+    new bootstrap.Modal($id('modalEditarDatos')).show();
+    if (abrirBuscador) setTimeout(alternarBuscadorCompras, 350);
 }
 
 function aplicarProveedorSugerido(id, factura, fecha) {
-    document.getElementById('ed-proveedor').value = id;
-    if (!document.getElementById('ed-factura').value) document.getElementById('ed-factura').value = factura;
-    if (!document.getElementById('ed-fecha-factura').value) document.getElementById('ed-fecha-factura').value = fecha;
+    $id('ed-proveedor').value = id;
+    if (factura && !$id('ed-factura').value) $id('ed-factura').value = factura;
+    if (fecha && !$id('ed-fecha-factura').value) $id('ed-fecha-factura').value = fecha;
 }
 
-// === BUSCADOR DE COMPRAS ===
+// ══════════ Buscador de la factura de compra ══════════
 
 function alternarBuscadorCompras() {
-    const panel = document.getElementById('ed-buscador-compras');
+    const panel = $id('ed-buscador-compras');
     const abierto = panel.style.display !== 'none';
     panel.style.display = abierto ? 'none' : 'block';
-    document.getElementById('ed-btn-buscador-txt').textContent = abierto ? 'Buscar en compras' : 'Ocultar buscador';
+    $id('ed-btn-buscador-txt').textContent = abierto ? 'Buscar la factura' : 'Ocultar buscador';
 
     if (!abierto) {
-        const campo = document.getElementById('ed-busqueda-compras');
+        const campo = $id('ed-busqueda-compras');
         // Arranca con el SKU del requerimiento: es la búsqueda que se quiere
         // el 90% de las veces, y así el panel abre con resultados a la vista.
         if (!campo.value) campo.value = datosRequerimiento.sku || '';
@@ -752,30 +1166,51 @@ function alternarBuscadorCompras() {
     }
 }
 
+function cambiarPestanaBuscador(cual, tab) {
+    document.querySelectorAll('#ed-buscador-compras .nav-link').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    $id('buscador-por-producto').style.display = cual === 'producto' ? '' : 'none';
+    $id('buscador-por-numero').style.display = cual === 'numero' ? '' : 'none';
+    $id('ed-resultado-compras').innerHTML = '';
+    $id(cual === 'producto' ? 'ed-busqueda-compras' : 'ed-busqueda-numero').focus();
+}
+
+const INSIGNIA_FUENTE = {
+    LINEA_DTE:          ['success', 'La factura detalla el SKU'],
+    LOTE:               ['success', 'Lote FIFO ligado al documento'],
+    LEGACY:             ['success', 'N° del sistema anterior'],
+    KARDEX_DTE:         ['info',    'Movimiento ligado al documento'],
+    KARDEX_SIN_DOC:     ['warning', 'Ingreso sin documento'],
+    CABECERA_PROVEEDOR: ['secondary', 'Compra del proveedor en fecha cercana'],
+};
+
 function buscarCompras() {
-    const q = document.getElementById('ed-busqueda-compras').value.trim();
-    const caja = document.getElementById('ed-resultado-compras');
+    const q = $id('ed-busqueda-compras').value.trim();
+    const caja = $id('ed-resultado-compras');
     if (q.length < 2) {
         caja.innerHTML = '<div class="text-muted small">Escriba al menos 2 caracteres.</div>';
         return;
     }
     caja.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
 
-    fetch(`/app/api/requerimientos/buscar-compras/?q=${encodeURIComponent(q)}`)
-        .then(r => r.json())
+    api(`/app/api/requerimientos/buscar-compras/?q=${encodeURIComponent(q)}`)
         .then(d => {
             if (!d.success) {
-                caja.innerHTML = `<div class="text-danger small">${d.error || 'Error en la búsqueda'}</div>`;
+                caja.innerHTML = `<div class="text-danger small">${reqEsc(d.error || 'Error en la búsqueda')}</div>`;
                 return;
             }
-            if (!d.compras.length) {
-                caja.innerHTML = `<div class="alert alert-warning border-0 py-2 px-2 mb-0 small">
-                    <i class="ri-information-line me-1"></i>No hay compras registradas para "${q}".
-                    Puede escribir el N° de factura a mano más abajo.</div>`;
-                return;
-            }
-            caja.innerHTML = `
-                <table class="table table-sm table-hover align-middle mb-0" style="font-size:.75rem">
+            comprasEncontradas = d.compras || [];
+            const diag = d.diagnostico || {};
+            const aviso = diag.mensaje
+                ? `<div class="alert alert-${diag.nivel || 'info'} border-0 py-1 px-2 mb-2" style="font-size:.72rem">
+                     <i class="ri-information-line me-1"></i>${reqEsc(diag.mensaje)}
+                     ${diag.sugerencia ? `<div class="opacity-75">${reqEsc(diag.sugerencia)}</div>` : ''}</div>`
+                : '';
+
+            if (!comprasEncontradas.length) { caja.innerHTML = aviso; return; }
+
+            caja.innerHTML = aviso + `
+                <table class="table table-sm table-hover align-middle mb-0" style="font-size:.72rem">
                     <thead class="table-light">
                         <tr>
                             <th>Fecha</th><th>Proveedor</th><th>Documento</th>
@@ -783,59 +1218,173 @@ function buscarCompras() {
                         </tr>
                     </thead>
                     <tbody>
-                        ${d.compras.map((c, i) => `
-                            <tr style="cursor:pointer" onclick="usarCompra(${i})" title="Usar esta factura">
-                                <td class="text-nowrap">${c.fecha_texto}</td>
-                                <td>${c.proveedor}</td>
-                                <td class="text-nowrap"><span class="badge badge-soft-primary">${c.tipo_documento} N°${c.numero_documento}</span></td>
-                                <td>${c.articulo}${c.talla ? ` <span class="text-muted">(${c.talla})</span>` : ''}<br>
-                                    <span class="text-muted">SKU ${c.sku}</span></td>
-                                <td class="text-end">${c.cantidad}</td>
-                                <td class="text-end">$${(c.costo_unitario || 0).toLocaleString('es-CL')}</td>
-                            </tr>`).join('')}
+                        ${comprasEncontradas.map((c, i) => {
+                            const [color, titulo] = INSIGNIA_FUENTE[c.fuente] || ['secondary', ''];
+                            // Basta con que haya NÚMERO: es lo único que el
+                            // proveedor pide. Exigir además la cabecera en la
+                            // BD dejaba sin elegir justo las facturas
+                            // recuperadas del sistema anterior.
+                            const usable = !!(c.dte_id || c.numero_documento);
+                            return `<tr style="cursor:${usable ? 'pointer' : 'default'}" ${usable ? `onclick="usarCompra(${i})"` : ''}
+                                        title="${reqEsc(c.nota || titulo)}">
+                                <td class="text-nowrap">${reqEsc(c.fecha_texto) || '—'}</td>
+                                <td>${reqEsc(c.proveedor) || '<span class="text-muted">—</span>'}</td>
+                                <td class="text-nowrap">${c.numero_documento
+                                    ? `<span class="badge badge-soft-primary">${reqEsc(c.tipo_documento)} N°${c.numero_documento}</span>`
+                                    : '<span class="text-muted">sin documento</span>'}
+                                    <div><span class="badge badge-soft-${color}" style="font-size:.58rem">${reqEsc(titulo)}</span></div>
+                                </td>
+                                <td>${reqEsc(c.articulo || '')}${c.talla ? ` <span class="text-muted">(${reqEsc(c.talla)})</span>` : ''}
+                                    ${c.sku ? `<br><span class="text-muted">SKU ${reqEsc(c.sku)}</span>` : ''}</td>
+                                <td class="text-end">${c.cantidad != null ? c.cantidad : '—'}</td>
+                                <td class="text-end">${c.costo_unitario ? '$' + c.costo_unitario.toLocaleString('es-CL') : '—'}</td>
+                            </tr>`;
+                        }).join('')}
                     </tbody>
                 </table>`;
-            comprasEncontradas = d.compras;
         })
         .catch(() => { caja.innerHTML = '<div class="text-danger small">Error al buscar compras</div>'; });
 }
 
-let comprasEncontradas = [];
+function buscarPorNumeroFactura() {
+    const numero = $id('ed-busqueda-numero').value.trim();
+    const caja = $id('ed-resultado-compras');
+    if (!/^\d+$/.test(numero)) {
+        caja.innerHTML = '<div class="text-muted small">Escriba solo el número del documento.</div>';
+        return;
+    }
+    caja.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+
+    api(`/app/api/requerimientos/buscar-factura/?numero=${encodeURIComponent(numero)}`)
+        .then(d => {
+            if (!d.success) {
+                caja.innerHTML = `<div class="text-danger small">${reqEsc(d.error)}</div>`;
+                return;
+            }
+            if (!d.encontrados.length) {
+                // No encontrarla no bloquea: se puede usar igual el número
+                // tipeado, que es lo que hay en el documento físico.
+                caja.innerHTML = `<div class="alert alert-warning border-0 py-2 px-2 mb-0" style="font-size:.74rem">
+                    <i class="ri-information-line me-1"></i>${reqEsc(d.aviso)}
+                    <div class="mt-2"><button class="btn btn-sm btn-warning" onclick="usarNumeroTipeado('${reqEsc(numero)}')">
+                        Usar el N° ${reqEsc(numero)} de todos modos</button></div></div>`;
+                return;
+            }
+            comprasEncontradas = d.encontrados.map(x => ({ ...x, fuente: 'LINEA_DTE' }));
+            caja.innerHTML = `
+                <div class="alert alert-success border-0 py-1 px-2 mb-2" style="font-size:.72rem">
+                    <i class="ri-checkbox-circle-line me-1"></i>${d.encontrados.length} factura(s) de compra con ese número. Haz clic para usarla.
+                </div>
+                <table class="table table-sm table-hover align-middle mb-0" style="font-size:.72rem">
+                    <thead class="table-light"><tr><th>Fecha</th><th>Proveedor</th><th>Documento</th><th>Sucursal</th><th class="text-end">Monto</th></tr></thead>
+                    <tbody>${d.encontrados.map((c, i) => `
+                        <tr style="cursor:pointer" onclick="usarCompra(${i})">
+                            <td class="text-nowrap">${reqEsc(c.fecha_texto)}</td>
+                            <td>${reqEsc(c.proveedor)}</td>
+                            <td class="text-nowrap"><span class="badge badge-soft-primary">${reqEsc(c.tipo_documento)} N°${c.numero_documento}</span></td>
+                            <td>${reqEsc(c.sucursal)}</td>
+                            <td class="text-end">$${(c.monto || 0).toLocaleString('es-CL')}</td>
+                        </tr>`).join('')}</tbody>
+                </table>`;
+        })
+        .catch(() => { caja.innerHTML = '<div class="text-danger small">Error al verificar la factura</div>'; });
+}
+
+function usarNumeroTipeado(numero) {
+    $id('ed-factura').value = numero;
+    alternarBuscadorCompras();
+    Swal.fire({ icon: 'info', title: 'N° guardado', text: 'Recuerde completar el proveedor y la fecha.', timer: 2000, showConfirmButton: false });
+}
 
 function usarCompra(indice) {
     const c = comprasEncontradas[indice];
-    if (!c) return;
-    document.getElementById('ed-proveedor').value = c.proveedor_id || '';
-    document.getElementById('ed-factura').value = c.numero_documento || '';
-    document.getElementById('ed-fecha-factura').value = c.fecha || '';
+    if (!c || !c.numero_documento) return;
+
+    const select = $id('ed-proveedor');
+    const previo = select.value;
+
+    if (c.proveedor_id) {
+        // El emisor del documento puede no estar marcado como proveedor en su
+        // ficha, y entonces no existe como <option>. Asignar el value a secas
+        // dejaba el select VACÍO y "Guardar cambios" mandaba proveedor_id
+        // nulo: elegir una factura terminaba BORRANDO el proveedor que ya
+        // estaba puesto. Se inserta la opción que falta.
+        if (!select.querySelector(`option[value="${c.proveedor_id}"]`)) {
+            const opcion = document.createElement('option');
+            opcion.value = c.proveedor_id;
+            opcion.textContent = (c.proveedor || `Proveedor #${c.proveedor_id}`) +
+                ' (emisor del documento)';
+            select.appendChild(opcion);
+        }
+        select.value = String(c.proveedor_id);
+    }
+
+    $id('ed-factura').value = c.numero_documento;
+    $id('ed-fecha-factura').value = c.fecha || '';
     alternarBuscadorCompras();
+
+    // Sin proveedor identificado el número igual sirve, pero hay que avisar
+    // que falta elegirlo a mano: si no, se guarda a medias sin que se note.
+    const faltaProveedor = !select.value;
     Swal.fire({
-        icon: 'success',
-        title: 'Factura seleccionada',
-        text: `${c.proveedor} · ${c.tipo_documento} N°${c.numero_documento}`,
-        timer: 1600, showConfirmButton: false,
+        icon: faltaProveedor ? 'info' : 'success',
+        title: `Factura N° ${reqEsc(c.numero_documento)}`,
+        html: faltaProveedor
+            ? 'Número cargado. <strong>Falta elegir el proveedor</strong> en la lista.'
+            : reqEsc(`${c.proveedor || ''} · ${c.tipo_documento || 'Factura de compra'}`),
+        timer: faltaProveedor ? 3500 : 1800,
+        showConfirmButton: false,
     });
+    if (previo && !select.value) select.value = previo;  // nunca perder lo que había
 }
 
 function buscarClienteEnEdicion() {
-    const rut = document.getElementById('ed-cliente-rut').value.trim();
-    if (!rut) { Swal.fire('', 'Ingrese un RUT', 'warning'); return; }
+    const rut = $id('ed-cliente-rut').value.trim();
+    const aviso = $id('ed-rut-aviso');
+    if (!rut) { aviso.innerHTML = '<span class="text-warning">Ingrese un RUT</span>'; return; }
 
-    fetch(`/app/api/requerimientos/buscar-cliente/?rut=${encodeURIComponent(rut)}`)
-        .then(r => r.json())
+    api(`/app/api/requerimientos/buscar-cliente/?rut=${encodeURIComponent(rut)}`)
         .then(d => {
-            if (!d.success) { Swal.fire('', 'No existe un cliente con ese RUT', 'info'); return; }
-            document.getElementById('ed-cliente-nombre').value = d.cliente.nombre || '';
-            document.getElementById('ed-cliente-telefono').value = d.cliente.telefono || '';
-            document.getElementById('ed-cliente-email').value = d.cliente.email || '';
+            if (!d.success) {
+                aviso.innerHTML = '<span class="text-muted">No existe un cliente con ese RUT</span>';
+                return;
+            }
+            $id('ed-cliente-nombre').value = d.cliente.nombre || '';
+            $id('ed-cliente-telefono').value = d.cliente.telefono || '';
+            $id('ed-cliente-email').value = d.cliente.email || '';
+            aviso.innerHTML = '<span class="text-success"><i class="ri-check-line"></i> Datos del cliente cargados</span>';
         })
-        .catch(() => Swal.fire('Error', 'Error al buscar cliente', 'error'));
+        .catch(() => { aviso.innerHTML = '<span class="text-danger">Error al buscar</span>'; });
 }
 
 function guardarEdicion() {
-    const g = id => document.getElementById(id).value.trim();
+    const g = id => $id(id).value.trim();
+
+    // Quitar el proveedor es una acción destructiva (deja el requerimiento sin
+    // a quién reclamarle) y casi siempre es un accidente del select, no una
+    // decisión. Se confirma antes de mandarlo.
+    const proveedorElegido = $id('ed-proveedor').value;
+    if (!proveedorElegido && datosRequerimiento.proveedor.id) {
+        Swal.fire({
+            icon: 'warning',
+            title: '¿Quitar el proveedor?',
+            html: `El requerimiento quedaría sin proveedor asignado
+                   (ahora es <strong>${reqEsc(datosRequerimiento.proveedor.nombre)}</strong>)
+                   y no se podrá enviar.`,
+            showCancelButton: true,
+            confirmButtonText: 'Sí, quitarlo',
+            cancelButtonText: 'Volver',
+            confirmButtonColor: '#f06548',
+        }).then(r => { if (r.isConfirmed) enviarEdicion(); });
+        return;
+    }
+    enviarEdicion();
+}
+
+function enviarEdicion() {
+    const g = id => $id(id).value.trim();
     const payload = {
-        proveedor_id: document.getElementById('ed-proveedor').value || null,
+        proveedor_id: $id('ed-proveedor').value || null,
         numero_factura_compra: g('ed-factura'),
         fecha_factura_compra: g('ed-fecha-factura'),
         cantidad: g('ed-cantidad'),
@@ -849,23 +1398,152 @@ function guardarEdicion() {
         motivo: g('ed-motivo'),
         descripcion_problema: g('ed-descripcion'),
     };
-    if (datosRequerimiento.permisos.puede_ver_notas) {
-        payload.notas_internas = g('ed-notas');
-    }
+    if (datosRequerimiento.permisos.puede_ver_notas) payload.notas_internas = g('ed-notas');
 
-    fetch(`/app/api/requerimientos/${requerimientoId}/editar/`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
-        body: JSON.stringify(payload),
-    }).then(r => r.json()).then(d => {
-        if (!d.success) { Swal.fire('Error', d.error, 'error'); return; }
-        bootstrap.Modal.getInstance(document.getElementById('modalEditarDatos')).hide();
-        Swal.fire({icon: 'success', title: 'Datos actualizados', text: d.message, timer: 1800, showConfirmButton: false});
-        cargarRequerimiento();
-    }).catch(() => Swal.fire('Error', 'No se pudo guardar', 'error'));
+    post(`/app/api/requerimientos/${requerimientoId}/editar/`, payload)
+        .then(d => {
+            if (!d.success) { Swal.fire('Error', d.error, 'error'); return; }
+            bootstrap.Modal.getInstance($id('modalEditarDatos')).hide();
+            Swal.fire({
+                icon: 'success', title: 'Datos actualizados', text: d.message,
+                timer: 1800, showConfirmButton: false,
+            });
+            cargarRequerimiento();
+        })
+        .catch(() => Swal.fire('Error', 'No se pudo guardar', 'error'));
 }
 
-// === ACCIONES ===
+// ══════════ Envío al proveedor ══════════
+
+let esReenvioActual = false;
+
+function abrirModalEnvio(esReenvio) {
+    const d = datosRequerimiento;
+    esReenvioActual = !!esReenvio;
+
+    $id('env-titulo').textContent = esReenvio ? 'Re-enviar al proveedor' : 'Enviar al proveedor';
+    $id('env-btn-enviar').innerHTML = `<i class="ri-send-plane-line me-1"></i>${esReenvio ? 'Re-enviar' : 'Enviar'}`;
+    $id('env-correo-destino').value = d.correo_proveedor_destino || d.proveedor.correo || '';
+    $id('env-correo-copia').value = d.correo_copia_default || '';
+    $id('env-mensaje').value = '';
+    $id('env-link-pdf').href = `/app/api/requerimientos/${requerimientoId}/formato-pdf/`;
+    $id('env-cc').textContent = d.proveedor.correo_administrador
+        ? `Con copia (CC) a ${d.proveedor.correo_administrador}` : '';
+
+    $id('env-resumen').innerHTML = `
+        <dl class="mb-0">
+            <dt>Proveedor</dt><dd>${reqEsc(d.proveedor.nombre)}</dd>
+            <dt>Producto</dt><dd>${reqEsc(d.sku)} — ${reqEsc(d.nombre_producto)} (${d.cantidad} und)</dd>
+            <dt>Motivo</dt><dd class="fw-normal">${reqEsc(d.motivo)}</dd>
+        </dl>`;
+
+    const nFotos = (d.fotos || []).length;
+    let avisos = '';
+    if (!d.numero_factura_compra) {
+        avisos += `<div class="alert alert-warning py-1 px-2 mb-2" style="font-size:.75rem">
+            <i class="ri-error-warning-line me-1"></i>Sin <strong>factura de compra</strong>:
+            la mayoría de los proveedores la exige para cursar la garantía.</div>`;
+    }
+    avisos += nFotos > 0
+        ? `<div class="alert alert-info py-1 px-2 mb-2" style="font-size:.75rem">
+             <i class="ri-attachment-2 me-1"></i>Se adjunta el <strong>formato PDF</strong>
+             (con las ${nFotos} foto(s) incrustadas) más las fotos originales.
+             La copia de control no lleva adjuntos.</div>`
+        : `<div class="alert alert-danger py-1 px-2 mb-2" style="font-size:.75rem">
+             <i class="ri-error-warning-line me-1"></i>Este requerimiento <strong>no tiene fotos</strong>:
+             el formato irá sin evidencia y el proveedor puede rechazarlo por eso.</div>`;
+    $id('env-avisos').innerHTML = avisos;
+
+    new bootstrap.Modal($id('modalEnviarProveedor')).show();
+}
+
+function confirmarEnvioProveedor() {
+    const destino = $id('env-correo-destino').value.trim();
+    const copia = $id('env-correo-copia').value.trim();
+    const emailRe = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+    if (!emailRe.test(destino)) { Swal.fire('', 'Ingrese un correo de proveedor válido', 'warning'); return; }
+    if (copia && !emailRe.test(copia)) { Swal.fire('', 'El correo de copia no es válido', 'warning'); return; }
+
+    const btn = $id('env-btn-enviar');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando...';
+
+    post(`/app/api/requerimientos/${requerimientoId}/enviar-proveedor/`, {
+        correo_destino: destino,
+        correo_copia: copia,
+        mensaje: $id('env-mensaje').value.trim(),
+        es_reenvio: esReenvioActual,
+    }).then(d => {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="ri-send-plane-line me-1"></i>${esReenvioActual ? 'Re-enviar' : 'Enviar'}`;
+        if (!d.success) { Swal.fire('No se pudo enviar', d.error, 'error'); return; }
+        bootstrap.Modal.getInstance($id('modalEnviarProveedor')).hide();
+        Swal.fire('Enviado', d.message, 'success');
+        cargarRequerimiento();
+    }).catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ri-send-plane-line me-1"></i>Enviar';
+        Swal.fire('Error', 'No se pudo enviar el correo', 'error');
+    });
+}
+
+// ══════════ Respuesta del proveedor ══════════
+
+function abrirModalRespuestaProveedor() {
+    // `toISOString` devuelve UTC: en Chile eso adelanta la hora varias horas y
+    // el campo aparecía con una hora que el usuario no tipeó.
+    const ahora = new Date();
+    const local = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000);
+    $id('fecha-respuesta-proveedor').value = local.toISOString().slice(0, 16);
+    $id('decision-proveedor').value = '';
+    $id('respuesta-proveedor-text').value = '';
+    $id('motivo-usuario').value = '';
+    document.querySelectorAll('input[name="decision_radio"]').forEach(r => { r.checked = false; });
+    new bootstrap.Modal($id('modalRegistrarRespuesta')).show();
+}
+
+function guardarRespuestaProveedor() {
+    const dec = $id('decision-proveedor').value;
+    const resp = $id('respuesta-proveedor-text').value.trim();
+    const mot = $id('motivo-usuario').value.trim();
+    if (!dec) { Swal.fire('', 'Elija la decisión del proveedor', 'warning'); return; }
+    if (!resp || !mot) { Swal.fire('', 'Complete la respuesta y el motivo para el cliente', 'warning'); return; }
+
+    post(`/app/api/requerimientos/${requerimientoId}/respuesta-proveedor/`, {
+        decision: dec, respuesta: resp, motivo: mot,
+        // La fecha se venía pidiendo y descartando: el backend siempre guardaba
+        // el instante del registro, no cuándo respondió el proveedor.
+        fecha_respuesta: $id('fecha-respuesta-proveedor').value || null,
+    }).then(d => {
+        if (!d.success) { Swal.fire('Error', d.error, 'error'); return; }
+        bootstrap.Modal.getInstance($id('modalRegistrarRespuesta')).hide();
+        Swal.fire(dec === 'RECHAZADO' ? 'Rechazo registrado' : 'Respuesta registrada',
+                  `El cliente verá: "${mot}"`, 'success');
+        cargarRequerimiento();
+    }).catch(() => Swal.fire('Error', 'No se pudo registrar la respuesta', 'error'));
+}
+
+// ══════════ Cierre y cambios de estado ══════════
+
+function abrirModalCompletar() {
+    $id('comp-resolucion').value = '';
+    new bootstrap.Modal($id('modalCompletar')).show();
+}
+
+function guardarCompletar() {
+    const resolucion = $id('comp-resolucion').value.trim();
+    if (!resolucion) { Swal.fire('', 'Describa cómo se resolvió', 'warning'); return; }
+
+    post(`/app/api/requerimientos/${requerimientoId}/completar/`, { resolucion })
+        .then(d => {
+            if (!d.success) { Swal.fire('Error', d.error, 'error'); return; }
+            bootstrap.Modal.getInstance($id('modalCompletar')).hide();
+            Swal.fire('Completado', d.message, 'success');
+            cargarRequerimiento();
+        })
+        .catch(() => Swal.fire('Error', 'No se pudo completar', 'error'));
+}
+
 function cambiarEstado() {
     const r = datosRequerimiento;
     const permitidas = (r && r.transiciones_permitidas) || [];
@@ -874,31 +1552,48 @@ function cambiarEstado() {
         return;
     }
     const labels = (r && r.estados_labels) || {};
-    document.getElementById('nuevo-estado').innerHTML =
-        permitidas.map(c => `<option value="${c}">${labels[c] || c}</option>`).join('');
-    new bootstrap.Modal(document.getElementById('modalCambiarEstado')).show();
+    // Los estados con acción propia se ofrecen desactivados y explicados: si
+    // no, el usuario los elige y recibe un error sin entender por qué.
+    const conAccionPropia = {
+        ESPERANDO_RESPUESTA: 'use "Enviar al proveedor"',
+        APROBADO: 'use "Registrar respuesta"',
+        RECHAZADO: 'use "Registrar respuesta"',
+        VALIDADO: 'use "Validar o rechazar"',
+        RECHAZADO_INTERNO: 'use "Validar o rechazar"',
+        COMPLETADO: 'use "Completar"',
+    };
+    $id('nuevo-estado').innerHTML = permitidas.map(c => {
+        const nota = conAccionPropia[c];
+        return `<option value="${c}" ${nota ? 'disabled' : ''}>${reqEsc(labels[c] || c)}${nota ? ` — ${nota}` : ''}</option>`;
+    }).join('');
+    $id('comentario-estado').value = '';
+    new bootstrap.Modal($id('modalCambiarEstado')).show();
 }
 
 function guardarEstado() {
-    fetch(`/app/api/requerimientos/${requerimientoId}/actualizar-estado/`, {
-        method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
-        body: JSON.stringify({ estado: document.getElementById('nuevo-estado').value, comentario: document.getElementById('comentario-estado').value })
-    }).then(r=>r.json()).then(d => {
-        if (d.success) { Swal.fire('OK','Estado actualizado','success'); bootstrap.Modal.getInstance(document.getElementById('modalCambiarEstado')).hide(); cargarRequerimiento(); }
-        else Swal.fire('Error',d.error,'error');
-    }).catch(()=>Swal.fire('Error','Error al actualizar','error'));
+    const estado = $id('nuevo-estado').value;
+    if (!estado) { Swal.fire('', 'Elija un estado', 'warning'); return; }
+    post(`/app/api/requerimientos/${requerimientoId}/actualizar-estado/`, {
+        estado, comentario: $id('comentario-estado').value.trim(),
+    }).then(d => {
+        if (!d.success) { Swal.fire('Error', d.error, 'error'); return; }
+        bootstrap.Modal.getInstance($id('modalCambiarEstado')).hide();
+        Swal.fire({ icon: 'success', title: 'Estado actualizado', timer: 1400, showConfirmButton: false });
+        cargarRequerimiento();
+    }).catch(() => Swal.fire('Error', 'No se pudo actualizar el estado', 'error'));
 }
 
 function cambiarEstadoRapido(estado, comentario) {
-    fetch(`/app/api/requerimientos/${requerimientoId}/actualizar-estado/`, {
-        method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
-        body: JSON.stringify({ estado, comentario })
-    }).then(r=>r.json()).then(d => { if(d.success){Swal.fire('OK',d.message||'Actualizado','success');cargarRequerimiento();}else Swal.fire('Error',d.error,'error'); })
-    .catch(()=>Swal.fire('Error','Error','error'));
+    post(`/app/api/requerimientos/${requerimientoId}/actualizar-estado/`, { estado, comentario })
+        .then(d => {
+            if (!d.success) { Swal.fire('Error', d.error, 'error'); return; }
+            Swal.fire({ icon: 'success', title: d.message || 'Actualizado', timer: 1400, showConfirmButton: false });
+            cargarRequerimiento();
+        })
+        .catch(() => Swal.fire('Error', 'No se pudo actualizar', 'error'));
 }
 
-function marcarEnProceso() { cambiarEstadoRapido('EN_PROCESO','Iniciando proceso de resolucion'); }
-
+function marcarEnProceso() { cambiarEstadoRapido('EN_PROCESO', 'Iniciando proceso de resolución'); }
 function tomarEnRevision() { cambiarEstadoRapido('EN_REVISION', 'Tomado para revisión'); }
 
 function cancelarRequerimiento() {
@@ -917,121 +1612,6 @@ function cancelarRequerimiento() {
     }).then(res => {
         if (res.isConfirmed) cambiarEstadoRapido('CANCELADO', res.value);
     });
-}
-
-function completarRequerimiento() {
-    Swal.fire({ title:'Completar', input:'textarea', inputLabel:'Resolucion final', inputPlaceholder:'Describa...', showCancelButton:true, confirmButtonText:'Completar',
-        inputValidator: v => { if(!v) return 'Ingrese resolucion'; }
-    }).then(r => {
-        if (r.isConfirmed) {
-            fetch(`/app/api/requerimientos/${requerimientoId}/completar/`, {
-                method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
-                body: JSON.stringify({ resolucion: r.value })
-            }).then(r=>r.json()).then(d => { if(d.success){Swal.fire('OK',d.message,'success');cargarRequerimiento();}else Swal.fire('Error',d.error,'error'); });
-        }
-    });
-}
-
-function abrirModalEnvioProveedor(esReenvio) {
-    const d = datosRequerimiento;
-    const correoSugerido = d.correo_proveedor_destino || d.proveedor.correo || '';
-    const copiaSugerida = d.correo_copia_default || '';
-    const nFotos = (d.fotos || []).length;
-    const avisoFotos = nFotos > 0
-        ? `<i class="ri-attachment-2 me-1"></i>Se adjuntará el <strong>formato PDF</strong> (con las ${nFotos} foto(s) incrustadas) más las fotos originales. La copia de control NO lleva adjuntos.`
-        : `<i class="ri-error-warning-line me-1"></i>Este requerimiento <strong>no tiene fotos</strong>: el formato irá sin evidencia y el proveedor puede rechazarlo por eso.`;
-    const avisoFactura = d.numero_factura_compra
-        ? ''
-        : `<div class="alert alert-warning py-1 px-2 mb-2 small"><i class="ri-error-warning-line me-1"></i>Sin <strong>factura de compra</strong> registrada: la mayoría de los proveedores la exige para cursar la garantía.</div>`;
-
-    Swal.fire({
-        title: esReenvio ? 'Re-enviar al Proveedor' : 'Enviar a Proveedor',
-        width: '640px',
-        html: `
-        <div class="text-start small">
-            <p class="mb-1"><strong>Proveedor:</strong> ${d.proveedor.nombre}</p>
-            <p class="mb-1"><strong>Producto:</strong> ${d.sku} — ${d.nombre_producto} <span class="badge bg-soft-primary text-primary">${d.cantidad} und</span></p>
-            <p class="mb-2"><strong>Motivo:</strong> ${d.motivo}</p>
-            ${avisoFactura}
-            <p class="mb-2"><a href="/app/api/requerimientos/${requerimientoId}/formato-pdf/" target="_blank"><i class="ri-file-pdf-line me-1"></i>Revisar el formato PDF antes de enviar</a></p>
-            <div class="mb-2">
-                <label class="form-label small mb-0 fw-semibold">Correo del proveedor <span class="text-danger">*</span></label>
-                <input type="email" id="swal-correo-destino" class="form-control form-control-sm" value="${correoSugerido}" placeholder="proveedor@correo.cl">
-                ${d.proveedor.correo_administrador ? `<small class="text-muted">Se enviará con copia (CC) a ${d.proveedor.correo_administrador}</small>` : ''}
-            </div>
-            <div class="mb-2">
-                <label class="form-label small mb-0 fw-semibold">Copia de control (resumen sin fotos)</label>
-                <input type="email" id="swal-correo-copia" class="form-control form-control-sm" value="${copiaSugerida}" placeholder="copia@miempresa.cl">
-                <small class="text-muted">Recibe un resumen para certificar que el envío al proveedor se realizó.</small>
-            </div>
-            <div class="mb-2">
-                <label class="form-label small mb-0 fw-semibold">Mensaje adicional (opcional)</label>
-                <textarea id="swal-mensaje" class="form-control form-control-sm" rows="2" placeholder="Texto que se incluirá en el correo al proveedor..."></textarea>
-            </div>
-            <div class="alert ${nFotos > 0 ? 'alert-info' : 'alert-warning'} py-1 px-2 mb-0 small">${avisoFotos}</div>
-        </div>`,
-        showCancelButton: true,
-        confirmButtonText: esReenvio ? 'Re-enviar' : 'Enviar',
-        confirmButtonColor: '#0066FF',
-        showLoaderOnConfirm: true,
-        preConfirm: () => {
-            const destino = document.getElementById('swal-correo-destino').value.trim();
-            const copia = document.getElementById('swal-correo-copia').value.trim();
-            const emailRe = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-            if (!destino || !emailRe.test(destino)) {
-                Swal.showValidationMessage('Ingrese un correo de proveedor válido');
-                return false;
-            }
-            if (copia && !emailRe.test(copia)) {
-                Swal.showValidationMessage('El correo de copia no es válido');
-                return false;
-            }
-            return fetch(`/app/api/requerimientos/${requerimientoId}/enviar-proveedor/`, {
-                method:'POST',
-                headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
-                body: JSON.stringify({
-                    correo_destino: destino,
-                    correo_copia: copia,
-                    mensaje: document.getElementById('swal-mensaje').value.trim(),
-                    es_reenvio: !!esReenvio,
-                })
-            }).then(r=>r.json()).then(res => { if(!res.success) throw new Error(res.error); return res; })
-              .catch(e => Swal.showValidationMessage(e.message));
-        },
-        allowOutsideClick: () => !Swal.isLoading()
-    }).then(r => { if (r.isConfirmed && r.value) { Swal.fire('Enviado', r.value.message, 'success'); cargarRequerimiento(); } });
-}
-
-function enviarAProveedorMejorado() { abrirModalEnvioProveedor(false); }
-function reenviarCorreoProveedor() { abrirModalEnvioProveedor(true); }
-
-function abrirModalRespuestaProveedor() {
-    document.getElementById('fecha-respuesta-proveedor').value = new Date().toISOString().slice(0,16);
-    document.getElementById('decision-proveedor').value = '';
-    document.getElementById('respuesta-proveedor-text').value = '';
-    document.getElementById('motivo-usuario').value = '';
-    document.querySelectorAll('input[name="decision_radio"]').forEach(r => { r.checked = false; });
-    new bootstrap.Modal(document.getElementById('modalRegistrarRespuesta')).show();
-}
-
-function guardarRespuestaProveedor() {
-    const dec = document.getElementById('decision-proveedor').value;
-    const resp = document.getElementById('respuesta-proveedor-text').value;
-    const mot = document.getElementById('motivo-usuario').value;
-    if (!dec||!resp||!mot) { Swal.fire('','Complete todos los campos','warning'); return; }
-
-    fetch(`/app/api/requerimientos/${requerimientoId}/respuesta-proveedor/`, {
-        method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
-        // La fecha se venía pidiendo y descartando: el backend siempre guardaba
-        // el instante del registro, no cuándo respondió el proveedor.
-        body: JSON.stringify({
-            decision:dec, respuesta:resp, motivo:mot,
-            fecha_respuesta: document.getElementById('fecha-respuesta-proveedor').value || null,
-        })
-    }).then(r=>r.json()).then(d => {
-        if (d.success) { bootstrap.Modal.getInstance(document.getElementById('modalRegistrarRespuesta')).hide(); Swal.fire(dec==='APROBADO'?'Aprobado':'Procesado',`El cliente vera: "${mot}"`,'success'); cargarRequerimiento(); }
-        else Swal.fire('Error',d.error,'error');
-    }).catch(()=>Swal.fire('Error','Error al registrar','error'));
 }
 </script>
 

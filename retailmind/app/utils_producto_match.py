@@ -239,3 +239,59 @@ def variantes_mismo_codigo(articulo, sucursal_id, excluir_id=None):
         if p.id != excluir_id and normalizar_articulo(p.articulo) == objetivo:
             out.append(p)
     return out
+
+
+def qs_fichas_identidad_todas_sucursales(articulo, atributo1_id, atributo2_id,
+                                         atributo3_id, categoria_id):
+    """Todas las fichas del MISMO producto (identidad completa) en CUALQUIER bodega.
+
+    Hermana de `qs_fichas_identidad_otras_sucursales`, pero incluyendo la
+    sucursal de origen: es la que necesita la EDICIÓN de producto, que reescribe
+    la ficha seleccionada y sus gemelas de las demás bodegas en una sola pasada.
+
+    Antes la edición propagaba con `filter(articulo=...)` a secas —sin marca,
+    color, género ni categoría—, o sea la MISMA clave floja que ya había dejado
+    unas zapatillas a precio de guante (ver el docstring de
+    `qs_fichas_identidad_otras_sucursales`). Con esa clave, editar el color de
+    la ficha NEGRA reescribía el color de la ficha BLANCA del mismo código, en
+    todas las empresas.
+    """
+    from .models import Producto
+    return Producto.objects.filter(
+        articulo__iexact=(articulo or '').strip(),
+        atributo1_id=atributo1_id,
+        atributo2_id=atributo2_id,
+        atributo3_id=atributo3_id,
+        categoria_id=categoria_id,
+    )
+
+
+def qs_fichas_identidad_de(productos):
+    """Fichas gemelas (identidad completa, todas las bodegas) de VARIAS fichas base.
+
+    Una sola query con un OR por identidad distinta, para que la edición masiva
+    no dispare N queries ni caiga en la clave floja `articulo__in`.
+    """
+    from .models import Producto
+    from django.db.models import Q
+
+    q = Q()
+    vistas = set()
+    for p in productos:
+        clave = (
+            normalizar_articulo(p.articulo),
+            p.atributo1_id, p.atributo2_id, p.atributo3_id, p.categoria_id,
+        )
+        if clave in vistas:
+            continue
+        vistas.add(clave)
+        q |= Q(
+            articulo__iexact=(p.articulo or '').strip(),
+            atributo1_id=p.atributo1_id,
+            atributo2_id=p.atributo2_id,
+            atributo3_id=p.atributo3_id,
+            categoria_id=p.categoria_id,
+        )
+    if not vistas:
+        return Producto.objects.none()
+    return Producto.objects.filter(q)

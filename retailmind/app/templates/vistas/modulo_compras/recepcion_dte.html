@@ -1701,6 +1701,48 @@
                                 </div>
                             </div>
 
+
+                            <!-- Detalle por documento: "Ver o corregir".
+                                 La tabla de arriba muestra UNA fila por DTE; el
+                                 talla a talla (y las acciones por línea) viven acá. -->
+                            <div class="modal fade" id="modalDetalleRegDTE" tabindex="-1">
+                                <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                                    <div class="modal-content">
+                                        <div class="modal-header" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%) !important;">
+                                            <h5 class="modal-title text-white">
+                                                <i class="bi bi-list-check me-2"></i>
+                                                <span id="detalleRegTipoDoc">DTE</span> #<span id="detalleRegNumero">-</span>
+                                            </h5>
+                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="alert alert-light border mb-3" id="detalleRegCabecera"></div>
+                                            <div id="detalleRegAyudaRol" class="mb-3"></div>
+                                            <div class="d-flex flex-wrap gap-2 mb-3" id="detalleRegAccionesDte"></div>
+                                            <div class="table-responsive">
+                                                <table class="table table-sm table-hover align-middle">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th>Producto</th>
+                                                            <th>SKU / Talla</th>
+                                                            <th class="text-center" title="Unidades documentadas en el DTE">Esperado</th>
+                                                            <th class="text-center" title="Unidades que sí ingresaron al stock del destino">Recibido</th>
+                                                            <th class="text-center" title="Unidades que nunca llegaron">Faltante</th>
+                                                            <th class="text-center" title="Unidades que llegaron de más">Sobrante</th>
+                                                            <th>Estado</th>
+                                                            <th class="text-end">Acciones</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody id="detalleRegBody"></tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="table-responsive">
                                 <table class="table table-hover align-middle">
                                     <thead>
@@ -3447,7 +3489,10 @@ function actualizarPaginacionRegularizar(pagination) {
     $('#paginationRegularizar').show();
     $('#btnPrevRegularizar').prop('disabled', paginaActualRegularizar <= 1);
     $('#btnNextRegularizar').prop('disabled', paginaActualRegularizar >= totalPaginasRegularizar);
-    $('#pageInfoRegularizar').text(`Página ${paginaActualRegularizar} de ${totalPaginasRegularizar} · ${pagination.total_items} resultados`);
+    // La unidad de paginación es el DOCUMENTO; las líneas se muestran aparte
+    // para que no parezca que se perdieron registros al agrupar.
+    const detalleLineas = pagination.total_lineas ? ` · ${pagination.total_lineas} líneas` : '';
+    $('#pageInfoRegularizar').text(`Página ${paginaActualRegularizar} de ${totalPaginasRegularizar} · ${pagination.total_items} documentos${detalleLineas}`);
 }
 
 function cambiarPaginaRegularizar(delta) {
@@ -3534,57 +3579,32 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
         return;
     }
 
-    // Agrupar por DTE para mostrar una cabecera por documento con botón de
-    // regularización masiva (1 NC con N líneas) cuando hay ≥2 líneas
-    // pendientes del mismo DTE y el documento es factura/boleta.
-    const grupos = {};
+    // ── Agrupado POR DOCUMENTO ────────────────────────────────────────────
+    // Antes se pintaba una fila por línea con problema: la misma factura se
+    // repetía N veces (cabecera, fecha, chip de antigüedad y la ayuda de rol
+    // incluidas). Leer una factura de 10 tallas costaba 10 filas idénticas.
+    // Ahora es UNA fila por documento con los totales, y el talla a talla vive
+    // en "Ver o corregir" (modalDetalleRegDTE).
+    //
+    // La clave de agrupación es dte_id, NO el folio: el número de documento se
+    // repite entre empresas (PAO4 reusó folios de PAO3), y agrupar por folio
+    // fusionaría dos facturas distintas en una fila — y peor, en una sola NC.
+    const grupos = new Map();
     productos.forEach(p => {
-        const key = String(p.dte_numero || 'sin_dte');
-        if (!grupos[key]) grupos[key] = [];
-        grupos[key].push(p);
+        const key = String(p.dte_id || `sin_dte_${p.dte_numero}`);
+        if (!grupos.has(key)) grupos.set(key, []);
+        grupos.get(key).push(p);
     });
+    // Lo lee abrirDetalleRegularizarDTE() para pintar el modal sin ir al server.
+    window.regularizarGrupos = grupos;
 
-    Object.entries(grupos).forEach(([dteNumero, lineas]) => {
+    grupos.forEach((lineas, key) => {
+        const g = resumenGrupoRegularizar(lineas);
         const primera = lineas[0];
-        const pendientes = lineas.filter(l => {
-            const e = String(l.estado || '').toUpperCase();
-            return e !== 'REGULARIZADO' && e !== 'RECEPCIONADO_OK';
-        });
-        const tipoDoc = String(primera.tipo_documento_display || primera.tipo_documento || '');
-        const tipoNorm = tipoDoc.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-        const esFacturaOBoleta = /FACTURA|BOLETA/.test(tipoNorm) && !tipoNorm.includes('GUIA');
-        const mostrarBotonMasivo = pendientes.length >= 2 && esFacturaOBoleta;
-
-        if (mostrarBotonMasivo) {
-            const totalUds = pendientes.reduce((s, l) => s + ((l.cantidad_faltante || 0) + (l.cantidad_danada || 0)), 0);
-            const montoAprox = pendientes.reduce((s, l) => s + (((l.cantidad_faltante || 0) + (l.cantidad_danada || 0)) * Number(l.precio_unitario || 0)), 0);
-            const montoFmt = Math.round(montoAprox * 1.19).toLocaleString('es-CL');
-            tbody.append(`
-                <tr class="table-light fw-semibold">
-                    <td colspan="9" class="py-2">
-                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                            <div>
-                                <i class="bi bi-file-earmark-text text-primary me-1"></i>
-                                ${tipoDoc || 'DTE'} <strong>#${dteNumero}</strong>
-                                <span class="badge bg-warning text-dark ms-2">${pendientes.length} productos con problema</span>
-                                <span class="text-muted small ms-2">${totalUds} uds · ~$${montoFmt} con IVA</span>
-                            </div>
-                            <button type="button" class="btn btn-success btn-sm" onclick="abrirModalRegularizarDTE('${dteNumero}')" title="Generar 1 sola NC con todas las líneas">
-                                <i class="bi bi-tools me-1"></i>Regularizar DTE completo (1 NC)
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `);
-        }
-
-        lineas.forEach(prod => {
-        const estadoBadge = getEstadoBadge(prod.estado);
-        const fecha = prod.dte_fecha ? new Date(prod.dte_fecha).toLocaleDateString('es-CL') : '-';
-        const yaRegularizado = ['REGULARIZADO', 'RECEPCIONADO_OK'].includes(String(prod.estado || '').toUpperCase());
+        const fecha = primera.dte_fecha ? new Date(primera.dte_fecha).toLocaleDateString('es-CL') : '-';
 
         // Antigüedad de la diferencia: cuánto lleva abierta sin resolverse.
-        const diasAbierto = yaRegularizado ? null : diasDesde(prod.dte_fecha);
+        const diasAbierto = g.pendientes.length ? diasDesde(primera.dte_fecha) : null;
         let chipAbierto = '';
         if (diasAbierto !== null) {
             const claseAbierto = diasAbierto > 15 ? 'transito-alert' : diasAbierto > 7 ? 'transito-warn' : 'transito-ok';
@@ -3593,103 +3613,363 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
                 <i class="bi bi-hourglass-split me-1"></i>${textoAbierto}</span>`;
         }
 
-        // Mini-resumen de NC asociada (si el backend lo envía)
-        const ncInfo = prod.nc_numero
-            ? `<br><small class="text-success"><i class="bi bi-receipt-cutoff me-1"></i>NC #${prod.nc_numero}${prod.nc_id ? ` <a href="/app/dte/${prod.nc_id}/txt-acepta/" class="ms-1" title="Descargar TXT Acepta"><i class="bi bi-download"></i></a>` : ''}</small>`
-            : (prod.tipo_regularizacion ? `<br><small class="text-muted">${prod.tipo_regularizacion}</small>` : '');
-
-        // Cancelar regularización: SOLO aplica a una regularización ya aplicada
-        // (REGULARIZADO). Tras cancelar, la línea queda pendiente (FALTANTE/PARCIAL)
-        // y se actualiza con Regularizar → Mercadería Encontrada/Ajustar, NO
-        // volviendo a cancelar (por eso el botón desaparece: no hay nada más que
-        // deshacer).
-        const estadoUpper = String(prod.estado || '').toUpperCase();
-        const puedeCancelar = PUEDE_REGULARIZAR_DTE && estadoUpper === 'REGULARIZADO';
-        const btnCancelar = puedeCancelar
-            ? `<button type="button" class="btn btn-outline-danger btn-sm ms-1" onclick="cancelarRegularizacionProducto(${prod.id})" title="Cancelar la regularización y reabrir para actualizar el stock por regularizar">
-                    <i class="bi bi-arrow-counterclockwise me-1"></i>Cancelar
-               </button>`
-            : '';
-
-        // Acciones ROLE-AWARE (botones por rol + ayuda):
-        //  - Ya regularizado → solo "Ver detalle".
-        //  - Soy origen (emisor) → "Corregir" (afirmar despacho) + "Emitir NC".
-        //  - Soy destino (receptor) → "Actualizar faltante" (Mercadería Encontrada).
-        // Sobrante puro (llegó de más, sin faltante ni daño): la única acción
-        // válida es decidir qué se hace con el excedente. Antes esta línea
-        // mostraba "Actualizar faltante", que valida contra cantidad_faltante=0
-        // y siempre fallaba: el sobrante no se podía resolver por ninguna vía y
-        // la pestaña nunca bajaba a 0.
-        const esSobrantePuro = (prod.cantidad_sobrante || 0) > 0
-            && (prod.cantidad_faltante || 0) === 0
-            && (prod.cantidad_danada || 0) === 0;
-
-        let acciones;
-        if (yaRegularizado) {
-            acciones = `<button type="button" class="btn btn-outline-success btn-sm" onclick="abrirModalRegularizar(${prod.id})" title="Ver detalle de la regularización">
-                    <i class="bi bi-eye me-1"></i>Ver detalle
-               </button>`;
-        } else if (esSobrantePuro && prod.soy_receptor) {
-            acciones = `<button type="button" class="btn btn-info btn-sm" onclick="decidirSobrante(${prod.id})" title="Llegaron ${prod.cantidad_sobrante} unidades de más: decidí si entran a tu inventario o vuelven al origen">
-                    <i class="bi bi-plus-slash-minus me-1"></i>Resolver sobrante
-               </button>
-               ${prod.dte_id ? `<button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionado(${prod.dte_id})" title="Ver DTE">
-                    <i class="bi bi-eye"></i>
-               </button>` : ''}`;
-        } else if (prod.soy_emisor) {
-            acciones = `<button type="button" class="btn btn-warning btn-sm" onclick="abrirCorreccionDTE(${prod.dte_id})" title="Afirmar que despachaste completo: sube la cantidad faltante al stock del destino">
-                    <i class="bi bi-pencil-square me-1"></i>Corregir
-               </button>
-               <button type="button" class="btn btn-outline-danger btn-sm ms-1" onclick="abrirModalRegularizar(${prod.id})" title="Emitir Nota de Crédito por lo que no se entregó">
-                    <i class="bi bi-receipt me-1"></i>Emitir NC
-               </button>`;
-        } else {
-            acciones = `<button type="button" class="btn btn-warning btn-sm" onclick="abrirModalRegularizar(${prod.id})" title="Registrá lo que sí llegó del faltante (Mercadería Encontrada)">
-                    <i class="bi bi-box-arrow-in-down me-1"></i>Actualizar faltante
-               </button>
-               ${prod.dte_id ? `<button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionado(${prod.dte_id})" title="Ver DTE">
-                    <i class="bi bi-eye"></i>
-               </button>` : ''}`;
-        }
-        acciones = acciones + btnCancelar;
-
-        // Ayuda por rol (solo en líneas con problema pendiente).
-        const rolHint = yaRegularizado ? '' : (prod.soy_emisor
-            ? '<div class="small text-muted mt-1"><i class="bi bi-info-circle me-1"></i>Sos el <strong>origen</strong>: corregí si despachaste completo, o emití NC por lo no entregado.</div>'
-            : (prod.soy_receptor
-                ? '<div class="small text-muted mt-1"><i class="bi bi-info-circle me-1"></i>Sos el <strong>destino</strong>: registrá lo que sí llegó del faltante.</div>'
-                : ''));
-
-        // Bandeja única role-aware: badge que indica desde qué lado actúa el usuario
-        // (el modal de regularización ya adapta sus opciones según soy_emisor/soy_receptor).
-        const rolBadge = prod.soy_emisor
+        const rolBadge = primera.soy_emisor
             ? '<span class="badge bg-primary ms-1" title="Tu sucursal EMITIÓ este traspaso (sos el origen)"><i class="bi bi-box-arrow-up-right me-1"></i>Soy origen</span>'
-            : (prod.soy_receptor
+            : (primera.soy_receptor
                 ? '<span class="badge bg-success ms-1" title="Tu sucursal RECIBE este traspaso (sos el destino)"><i class="bi bi-box-arrow-in-down me-1"></i>Soy destino</span>'
                 : '');
+
+        // Muestra de SKUs para reconocer el documento sin abrirlo.
+        const muestra = lineas.slice(0, 3)
+            .map(l => `${_escapeHtmlDte(l.sku || '-')} (T${_escapeHtmlDte(l.talla || '-')})`)
+            .join(', ');
+        const resto = lineas.length > 3 ? ` <span class="text-muted">y ${lineas.length - 3} más</span>` : '';
+
+        // Estado agregado del documento: badges por tipo de problema en vez de
+        // repetir el badge de una sola línea.
+        const chips = [];
+        if (g.lineasFaltante) chips.push(`<span class="badge bg-danger" title="Líneas con unidades que nunca llegaron">${g.lineasFaltante} faltante</span>`);
+        if (g.lineasDanada) chips.push(`<span class="badge bg-warning text-dark" title="Líneas con unidades dañadas">${g.lineasDanada} dañado</span>`);
+        if (g.lineasSobrante) chips.push(`<span class="badge bg-info text-dark" title="Líneas con unidades de más">${g.lineasSobrante} sobrante</span>`);
+        if (g.resueltas.length) chips.push(`<span class="badge bg-success" title="Líneas ya regularizadas">${g.resueltas.length} resuelta(s)</span>`);
+        if (g.enSolicitud) chips.push(`<span class="badge bg-secondary" title="Con solicitud de regularización en curso">${g.enSolicitud} en solicitud</span>`);
+
+        const ncsUnicas = [...new Set(lineas.filter(l => l.nc_numero).map(l => l.nc_numero))];
+        const ncInfo = ncsUnicas.length
+            ? `<br><small class="text-success"><i class="bi bi-receipt-cutoff me-1"></i>NC ${ncsUnicas.map(n => '#' + _escapeHtmlDte(n)).join(', ')}</small>`
+            : (primera.tipo_regularizacion ? `<br><small class="text-muted">${_escapeHtmlDte(primera.tipo_regularizacion)}</small>` : '');
+
+        // Ayuda por rol: una vez por documento, no una vez por talla.
+        const rolHint = !g.pendientes.length ? '' : (primera.soy_emisor
+            ? '<div class="small text-muted mt-1"><i class="bi bi-info-circle me-1"></i>Sos el <strong>origen</strong>: corregí si despachaste completo, o emití NC por lo no entregado.</div>'
+            : (primera.soy_receptor
+                ? '<div class="small text-muted mt-1"><i class="bi bi-info-circle me-1"></i>Sos el <strong>destino</strong>: registrá lo que sí llegó del faltante.</div>'
+                : ''));
 
         tbody.append(`
             <tr>
                 <td>
-                    <strong>${_escapeHtmlDte(prod.tipo_documento || 'DTE')} #${_escapeHtmlDte(prod.dte_numero)}</strong>
+                    <strong>${_escapeHtmlDte(primera.tipo_documento || 'DTE')} #${_escapeHtmlDte(primera.dte_numero)}</strong>
                     <br><small class="text-muted">${fecha}</small>${chipAbierto}
                 </td>
                 <td>
-                    <strong>${_escapeHtmlDte(prod.sucursal_origen || '-')}</strong>${rolBadge}
-                    <br><small class="text-muted">${_escapeHtmlDte(prod.emisor || '-')}</small>
+                    <strong>${_escapeHtmlDte(primera.sucursal_origen || '-')}</strong>${rolBadge}
+                    <br><small class="text-muted">${_escapeHtmlDte(primera.emisor || '-')}</small>
                 </td>
                 <td>
-                    <div class="fw-semibold">${_escapeHtmlDte(prod.producto_nombre || '-')}</div>
-                    <small class="text-muted">SKU ${_escapeHtmlDte(prod.sku || '-')} · Talla ${_escapeHtmlDte(prod.talla || '-')}</small>
+                    <div class="fw-semibold">${lineas.length} línea(s) con diferencia</div>
+                    <small class="text-muted">${muestra}${resto}</small>
                 </td>
-                <td class="text-center">${prod.cantidad_esperada || 0}</td>
-                <td class="text-center">${prod.cantidad_recibida || 0}</td>
-                <td class="text-center"><span class="${(prod.cantidad_faltante || 0) > 0 ? 'text-danger fw-bold' : ''}">${prod.cantidad_faltante || 0}</span></td>
-                <td class="text-center"><span class="${(prod.cantidad_sobrante || 0) > 0 ? 'text-info fw-bold' : ''}">${prod.cantidad_sobrante || 0}</span></td>
-                <td>${estadoBadge}${ncInfo}</td>
-                <td class="text-end">${acciones}${rolHint}</td>
+                <td class="text-center">${g.esperado}</td>
+                <td class="text-center">${g.recibido}</td>
+                <td class="text-center"><span class="${g.faltante > 0 ? 'text-danger fw-bold' : ''}">${g.faltante}</span></td>
+                <td class="text-center"><span class="${g.sobrante > 0 ? 'text-info fw-bold' : ''}">${g.sobrante}</span></td>
+                <td>${chips.join(' ') || getEstadoBadge(primera.estado)}${ncInfo}</td>
+                <td class="text-end">${accionesGrupoRegularizar(key, g)}${rolHint}</td>
             </tr>
         `);
+    });
+}
+
+/** ¿La línea sigue abierta (pendiente de resolución)? */
+function esLineaRegPendiente(l) {
+    const e = String(l.estado || '').toUpperCase();
+    return e !== 'REGULARIZADO' && e !== 'RECEPCIONADO_OK';
+}
+
+/** Totales del documento a partir de sus líneas con problema. */
+function resumenGrupoRegularizar(lineas) {
+    const g = {
+        lineas,
+        pendientes: lineas.filter(esLineaRegPendiente),
+        resueltas: lineas.filter(l => !esLineaRegPendiente(l)),
+        esperado: 0, recibido: 0, faltante: 0, danada: 0, sobrante: 0,
+        lineasFaltante: 0, lineasDanada: 0, lineasSobrante: 0, enSolicitud: 0,
+        monto: 0,
+    };
+    lineas.forEach(l => {
+        g.esperado += l.cantidad_esperada || 0;
+        g.recibido += l.cantidad_recibida || 0;
+        g.faltante += l.cantidad_faltante || 0;
+        g.danada += l.cantidad_danada || 0;
+        g.sobrante += l.cantidad_sobrante || 0;
+        if ((l.cantidad_faltante || 0) > 0) g.lineasFaltante++;
+        if ((l.cantidad_danada || 0) > 0) g.lineasDanada++;
+        if ((l.cantidad_sobrante || 0) > 0) g.lineasSobrante++;
+        if (String(l.estado || '').toUpperCase() === 'EN_SOLICITUD_REGULARIZACION') g.enSolicitud++;
+    });
+    g.pendientes.forEach(l => {
+        g.monto += ((l.cantidad_faltante || 0) + (l.cantidad_danada || 0)) * Number(l.precio_unitario || 0);
+    });
+    const p = lineas[0] || {};
+    const tipoDoc = String(p.tipo_documento_display || p.tipo_documento || '');
+    const tipoNorm = tipoDoc.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    g.tipoDoc = tipoDoc;
+    g.esFacturaOBoleta = /FACTURA|BOLETA/.test(tipoNorm) && !tipoNorm.includes('GUIA');
+    g.dteId = p.dte_id;
+    g.dteNumero = p.dte_numero;
+    g.soyEmisor = !!p.soy_emisor;
+    g.soyReceptor = !!p.soy_receptor;
+    return g;
+}
+
+/** Acciones a nivel DOCUMENTO (la fila de la tabla). */
+function accionesGrupoRegularizar(key, g, incluirVer = true) {
+    const btnVer = incluirVer
+        ? `<button type="button" class="btn btn-primary btn-sm" onclick="abrirDetalleRegularizarDTE('${key}')" title="Ver el detalle talla a talla y corregir línea por línea">
+                <i class="bi bi-list-check me-1"></i>Ver o corregir
+           </button>`
+        : '';
+
+    // NC por el documento completo: solo con ≥2 líneas pendientes y factura/boleta
+    // (mismo gate que antes; el backend valida rol y tipo de documento).
+    const btnNcMasiva = (g.pendientes.length >= 2 && g.esFacturaOBoleta)
+        ? `<button type="button" class="btn btn-outline-success btn-sm ms-1" onclick="abrirModalRegularizarDTE('${key}')" title="Generar 1 sola NC con las ${g.pendientes.length} líneas pendientes (${g.faltante + g.danada} uds)">
+                <i class="bi bi-receipt me-1"></i>1 NC por todo
+           </button>`
+        : '';
+
+    // "Llegó todo": la mercadería sí está, cerrar las N líneas de una pasada.
+    // Sirve a los dos lados; el destino no tiene otra forma de cerrar un
+    // documento de 30 tallas sin hacer Mercadería Encontrada 30 veces.
+    const udsEnDisputa = g.faltante + g.danada;
+    const btnLlegoTodo = (PUEDE_REGULARIZAR_DTE && g.pendientes.length && udsEnDisputa > 0 && g.dteId)
+        ? `<button type="button" class="btn btn-success btn-sm ms-1" onclick="confirmarLlegoTodo('${key}')" title="La mercadería sí está: ingresa ${udsEnDisputa} uds al stock del destino y cierra las ${g.pendientes.length} línea(s)">
+                <i class="bi bi-check2-all me-1"></i>Llegó todo
+           </button>`
+        : '';
+
+    // Origen: afirmar que despachó completo (sube el faltante al stock destino).
+    const btnCorregir = (g.pendientes.length && g.soyEmisor && g.dteId)
+        ? `<button type="button" class="btn btn-warning btn-sm ms-1" onclick="abrirCorreccionDTE(${g.dteId})" title="Afirmar que despachaste completo: sube la cantidad faltante al stock del destino">
+                <i class="bi bi-pencil-square me-1"></i>Corregir
+           </button>`
+        : '';
+
+    const btnDte = g.dteId
+        ? `<button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionado(${g.dteId})" title="Ver DTE">
+                <i class="bi bi-eye"></i>
+           </button>`
+        : '';
+
+    return btnVer + btnLlegoTodo + btnNcMasiva + btnCorregir + btnDte;
+}
+
+/** Acciones a nivel LÍNEA (dentro del modal de detalle). */
+function accionesLineaRegularizar(prod) {
+    const estadoUpper = String(prod.estado || '').toUpperCase();
+    const yaRegularizado = ['REGULARIZADO', 'RECEPCIONADO_OK'].includes(estadoUpper);
+
+    // Cancelar regularización: SOLO aplica a una regularización ya aplicada
+    // (REGULARIZADO). Tras cancelar, la línea queda pendiente (FALTANTE/PARCIAL)
+    // y se actualiza con Mercadería Encontrada/Ajustar, NO volviendo a cancelar.
+    const puedeCancelar = PUEDE_REGULARIZAR_DTE && estadoUpper === 'REGULARIZADO';
+    const btnCancelar = puedeCancelar
+        ? `<button type="button" class="btn btn-outline-danger btn-sm ms-1" onclick="cancelarRegularizacionProducto(${prod.id})" title="Cancelar la regularización y reabrir para actualizar el stock por regularizar">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>Cancelar
+           </button>`
+        : '';
+
+    // Sobrante puro (llegó de más, sin faltante ni daño): la única acción válida
+    // es decidir qué se hace con el excedente.
+    const esSobrantePuro = (prod.cantidad_sobrante || 0) > 0
+        && (prod.cantidad_faltante || 0) === 0
+        && (prod.cantidad_danada || 0) === 0;
+
+    let acciones;
+    if (yaRegularizado) {
+        acciones = `<button type="button" class="btn btn-outline-success btn-sm" onclick="abrirModalRegularizar(${prod.id})" title="Ver detalle de la regularización">
+                <i class="bi bi-eye me-1"></i>Ver detalle
+           </button>`;
+    } else if (esSobrantePuro && prod.soy_receptor) {
+        acciones = `<button type="button" class="btn btn-info btn-sm" onclick="decidirSobrante(${prod.id})" title="Llegaron ${prod.cantidad_sobrante} unidades de más: decidí si entran a tu inventario o vuelven al origen">
+                <i class="bi bi-plus-slash-minus me-1"></i>Resolver sobrante
+           </button>`;
+    } else if (prod.soy_emisor) {
+        acciones = `<button type="button" class="btn btn-outline-danger btn-sm" onclick="abrirModalRegularizar(${prod.id})" title="Emitir Nota de Crédito por lo que no se entregó">
+                <i class="bi bi-receipt me-1"></i>Emitir NC
+           </button>`;
+    } else {
+        acciones = `<button type="button" class="btn btn-warning btn-sm" onclick="abrirModalRegularizar(${prod.id})" title="Registrá lo que sí llegó del faltante (Mercadería Encontrada)">
+                <i class="bi bi-box-arrow-in-down me-1"></i>Actualizar faltante
+           </button>`;
+    }
+    return acciones + btnCancelar;
+}
+
+/**
+ * "Ver o corregir": detalle talla a talla del documento.
+ *
+ * Trabaja sobre window.regularizarGrupos, que ahora trae TODAS las líneas del
+ * documento (el backend pagina por documento, no por línea).
+ */
+function abrirDetalleRegularizarDTE(key) {
+    const lineas = (window.regularizarGrupos || new Map()).get(String(key)) || [];
+    if (!lineas.length) {
+        Swal.fire('Sin datos', 'No se encontró el detalle de este documento.', 'info');
+        return;
+    }
+    const g = resumenGrupoRegularizar(lineas);
+    const primera = lineas[0];
+    const fecha = primera.dte_fecha ? new Date(primera.dte_fecha).toLocaleDateString('es-CL') : '-';
+
+    $('#detalleRegTipoDoc').text(primera.tipo_documento_display || primera.tipo_documento || 'DTE');
+    $('#detalleRegNumero').text(primera.dte_numero || '-');
+
+    const montoFmt = Math.round(g.monto * 1.19).toLocaleString('es-CL');
+    $('#detalleRegCabecera').html(`
+        <div class="row g-2 small">
+            <div class="col-md-3"><span class="text-muted">Origen:</span> <strong>${_escapeHtmlDte(primera.sucursal_origen || '-')}</strong></div>
+            <div class="col-md-3"><span class="text-muted">Emisor:</span> <strong>${_escapeHtmlDte(primera.emisor || '-')}</strong></div>
+            <div class="col-md-3"><span class="text-muted">Receptor:</span> <strong>${_escapeHtmlDte(primera.receptor || '-')}</strong></div>
+            <div class="col-md-3"><span class="text-muted">Emisión:</span> <strong>${fecha}</strong></div>
+            <div class="col-12 mt-1">
+                <span class="badge bg-light text-dark border">${lineas.length} línea(s)</span>
+                <span class="badge bg-danger">${g.faltante} u. faltante</span>
+                <span class="badge bg-warning text-dark">${g.danada} u. dañada</span>
+                <span class="badge bg-info text-dark">${g.sobrante} u. sobrante</span>
+                <span class="badge bg-secondary" title="Valor aproximado de lo pendiente, con IVA">~$${montoFmt} con IVA pendiente</span>
+            </div>
+        </div>
+    `);
+
+    $('#detalleRegAyudaRol').html(!g.pendientes.length ? '' : (g.soyEmisor
+        ? '<div class="alert alert-info py-2 mb-0 small"><i class="bi bi-info-circle me-1"></i>Sos el <strong>origen</strong>: <strong>Corregir</strong> si despachaste completo (sube el faltante al stock del destino), o <strong>Emitir NC</strong> por lo que no entregaste.</div>'
+        : (g.soyReceptor
+            ? '<div class="alert alert-info py-2 mb-0 small"><i class="bi bi-info-circle me-1"></i>Sos el <strong>destino</strong>: registrá con <strong>Actualizar faltante</strong> lo que sí llegó (Mercadería Encontrada).</div>'
+            : '')));
+
+    // Mismas acciones de documento que la fila, menos el botón que abre este modal.
+    $('#detalleRegAccionesDte').html(accionesGrupoRegularizar(key, g, false));
+
+    $('#detalleRegBody').html(lineas.map(prod => `
+        <tr>
+            <td><div class="fw-semibold">${_escapeHtmlDte(prod.producto_nombre || '-')}</div></td>
+            <td><small class="text-muted">SKU ${_escapeHtmlDte(prod.sku || '-')} · Talla ${_escapeHtmlDte(prod.talla || '-')}</small></td>
+            <td class="text-center">${prod.cantidad_esperada || 0}</td>
+            <td class="text-center">${prod.cantidad_recibida || 0}</td>
+            <td class="text-center"><span class="${(prod.cantidad_faltante || 0) > 0 ? 'text-danger fw-bold' : ''}">${prod.cantidad_faltante || 0}</span></td>
+            <td class="text-center"><span class="${(prod.cantidad_sobrante || 0) > 0 ? 'text-info fw-bold' : ''}">${prod.cantidad_sobrante || 0}</span></td>
+            <td>${getEstadoBadge(prod.estado)}${prod.nc_numero ? `<br><small class="text-success"><i class="bi bi-receipt-cutoff me-1"></i>NC #${_escapeHtmlDte(prod.nc_numero)}${prod.nc_id ? ` <a href="/app/dte/${prod.nc_id}/txt-acepta/" title="Descargar TXT Acepta"><i class="bi bi-download"></i></a>` : ''}</small>` : ''}</td>
+            <td class="text-end text-nowrap">${accionesLineaRegularizar(prod)}</td>
+        </tr>
+    `).join(''));
+
+    new bootstrap.Modal(document.getElementById('modalDetalleRegDTE')).show();
+}
+
+/**
+ * "Llegó todo": cierra de una pasada TODAS las diferencias abiertas del
+ * documento, afirmando que la mercadería sí está.
+ *
+ * Es el caso "la bodega marcó faltante pero las cajas estaban": las unidades en
+ * disputa quedaron en limbo (el origen ya las descontó al despachar, el destino
+ * nunca las sumó) y esto las aterriza en el stock del destino.
+ *
+ * Sirve para los dos lados: al origen le evita ir línea por línea con Corregir,
+ * y al destino le evita hacer Mercadería Encontrada talla por talla — que en un
+ * documento de 30 tallas era el motivo real por el que nadie lo cerraba.
+ *
+ * El backend bloquea si hay NC o ajuste vigente sobre el documento: en ese caso
+ * hay que anular la NC primero o el stock queda duplicado.
+ */
+function confirmarLlegoTodo(key) {
+    const lineas = (window.regularizarGrupos || new Map()).get(String(key)) || [];
+    if (!lineas.length) {
+        Swal.fire('Sin datos', 'No se encontró el detalle de este documento.', 'info');
+        return;
+    }
+    const g = resumenGrupoRegularizar(lineas);
+    const pendientes = g.pendientes.filter(
+        l => ((l.cantidad_faltante || 0) + (l.cantidad_danada || 0)) > 0
+    );
+    if (!pendientes.length) {
+        Swal.fire('Sin diferencias', 'Este documento no tiene faltantes ni dañados por cerrar.', 'info');
+        return;
+    }
+    const uds = pendientes.reduce((s, l) => s + (l.cantidad_faltante || 0) + (l.cantidad_danada || 0), 0);
+    const primera = pendientes[0];
+
+    Swal.fire({
+        title: '📦 ¿Llegó todo?',
+        html: `
+            <div class="text-start">
+                <p>Vas a cerrar <strong>${pendientes.length} línea(s)</strong> del
+                   ${_escapeHtmlDte(primera.tipo_documento || 'documento')}
+                   <strong>#${_escapeHtmlDte(primera.dte_numero)}</strong> declarando que la mercadería sí está.</p>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>${uds} unidad(es)</strong> van a <strong>ingresar al stock del destino</strong>
+                    y las líneas quedan como recibidas OK. No se emite Nota de Crédito.
+                </div>
+                <div class="alert alert-light border small mb-2">
+                    Usalo solo si contaste la mercadería y está. Si de verdad no llegó,
+                    lo que corresponde es la Nota de Crédito.
+                </div>
+                <label class="form-label fw-bold">Motivo <span class="text-danger">*</span></label>
+                <textarea id="motivoLlegoTodo" class="form-control" rows="2"
+                          placeholder="Ej: las cajas estaban en la bodega de atrás, se contaron el 19-08"></textarea>
+            </div>
+        `,
+        icon: 'question',
+        width: '620px',
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-check2-all me-1"></i>Sí, llegó todo',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0ab39c',
+        preConfirm: () => {
+            const motivo = (document.getElementById('motivoLlegoTodo') || {}).value || '';
+            if (!motivo.trim()) {
+                Swal.showValidationMessage('Tenés que escribir el motivo.');
+                return false;
+            }
+            return motivo.trim();
+        }
+    }).then(result => {
+        if (!result.isConfirmed) return;
+
+        Swal.fire({
+            title: 'Cerrando diferencias...',
+            html: 'Ingresando la mercadería al stock del destino.',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        $.ajax({
+            url: '/app/dte/anular_regularizacion_dte/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({
+                dte_id: g.dteId || null,
+                dte_numero: g.dteNumero,
+                productos_ids: pendientes.map(l => l.id),
+                motivo: result.value
+            })
+        }).done(response => {
+            if (!response.success) {
+                Swal.fire({ icon: 'error', title: 'No se pudo cerrar', text: response.error || 'Error desconocido' });
+                return;
+            }
+            const detalle = (response.detalle || [])
+                .map(d => `<li><strong>${_escapeHtmlDte(d.sku)}</strong> (T${_escapeHtmlDte(d.talla)}): +${d.cantidad} u.</li>`)
+                .join('');
+            Swal.fire({
+                icon: 'success',
+                title: '✅ Diferencias cerradas',
+                html: `<div class="text-start"><p>${_escapeHtmlDte(response.message || '')}</p>
+                       ${detalle ? `<ul class="mb-0 small">${detalle}</ul>` : ''}</div>`,
+                width: '600px',
+                confirmButtonText: 'Entendido'
+            }).then(() => {
+                bootstrap.Modal.getInstance(document.getElementById('modalDetalleRegDTE'))?.hide();
+                cargarRegularizaciones();
+                if (typeof cargarRecepciones === 'function') cargarRecepciones();
+            });
+        }).fail(xhr => {
+            const msg = (xhr.responseJSON && xhr.responseJSON.error) || 'Error de conexión con el servidor.';
+            Swal.fire({ icon: 'error', title: 'No se pudo cerrar', html: `<div class="text-start">${_escapeHtmlDte(msg)}</div>`, width: '600px' });
         });
     });
 }
@@ -4171,12 +4451,22 @@ function renderTablaRecepciones() {
                 ${doc.vista_global ? '<span class="badge bg-light text-dark border ms-1" title="Vista global de todas las sucursales"><i class="bi bi-globe2"></i></span>' : ''}
             </div>${empresaOrigen}${reasignadoHtml}`;
 
+        // Aviso: alguien edito la ficha de N lineas despues de emitido el
+        // documento. Se recepciona igual (el vinculo es por FK), pero la guia
+        // impresa y la pantalla ya no dicen lo mismo.
+        const lineasEditadas = Number(doc.lineas_editadas) || 0;
+        const fichasEditadasHtml = lineasEditadas > 0
+            ? `<div class="mt-1"><span class="badge bg-warning text-dark" title="${lineasEditadas} línea(s) cambiaron de nombre/atributos después de emitirse este documento. Al abrir la recepción se muestra qué decía la guía.">
+                   <i class="bi bi-pencil-square"></i> ${lineasEditadas} ficha(s) editada(s) tras emitir
+               </span></div>`
+            : '';
+
         tbody.append(`
             <tr data-id="${doc.id}" class="${config.rowClass}">
                 <td>
                     <div class="fw-bold">${badgeTipo} Nº ${doc.numero_documento}</div>
                     <small class="text-muted">${doc.observaciones || doc.referencias || ''}</small>
-                    ${indicadorAjuste}
+                    ${indicadorAjuste}${fichasEditadasHtml}
                 </td>
                 <td class="text-center align-middle">${rolBadge}</td>
                 <td>${flujoHtml}</td>
@@ -4450,6 +4740,11 @@ function llenarDetalleDocumento(doc) {
             sku: item.sku,
             descripcion: item.descripcion,
             articulo: item.articulo || '',
+            // Texto congelado en la guia al emitirla. La ficha se lee viva, asi
+            // que si alguien edito el articulo mientras la mercaderia viajaba,
+            // esta pantalla y el papel del chofer dicen cosas distintas.
+            descripcion_documento: item.descripcion_documento || '',
+            ficha_editada: !!item.ficha_editada,
             marca: item.marca || '',
             color: item.color || '',
             talla: item.talla,
@@ -4531,6 +4826,12 @@ function renderizarProductosVerificacion() {
         // ✅ MEJORADO: Asegurar que los valores no sean undefined/null
         const skuMostrar = prod.sku || 'N/A';
         const descripcionMostrar = prod.descripcion || 'Sin descripción';
+        // Aviso: la ficha se edito despues de emitida la guia. No impide
+        // recepcionar (el vinculo es por FK/SKU), pero el operador tiene que
+        // saber por que el papel no dice lo mismo que la pantalla.
+        const avisoFichaEditada = prod.ficha_editada
+            ? `<span class="badge bg-warning text-dark ms-1" title="La ficha se editó después de emitir la guía. El documento decía: ${_escapeHtmlDte(prod.descripcion_documento || '-')}"><i class="bi bi-pencil-square me-1"></i>Ficha editada</span>`
+            : '';
         const articuloMostrar = prod.articulo || '-';
         const colorMostrar = prod.color || '-';
         const marcaMostrar = prod.marca || '-';
@@ -4561,8 +4862,9 @@ function renderizarProductosVerificacion() {
                 </td>
                 <td><small class="font-monospace">${skuMostrar}</small></td>
                 <td>
-                    <small class="d-block fw-semibold">${descripcionMostrar}</small>
+                    <small class="d-block fw-semibold">${descripcionMostrar}${avisoFichaEditada}</small>
                     <small class="text-muted">${articuloMostrar !== '-' ? articuloMostrar : ''}${colorMostrar !== '-' ? ' · ' + colorMostrar : ''}${marcaMostrar !== '-' ? ' · ' + marcaMostrar : ''}</small>
+                    ${prod.ficha_editada ? `<small class="d-block text-warning-emphasis" style="font-size:.72rem;"><i class="bi bi-file-earmark-text me-1"></i>Según el documento: ${_escapeHtmlDte(prod.descripcion_documento || '-')}</small>` : ''}
                 </td>
                 <td class="text-center"><span class="badge bg-secondary">${tallaMostrar}</span></td>
                 <td class="text-center">

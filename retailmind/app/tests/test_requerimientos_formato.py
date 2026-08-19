@@ -303,8 +303,8 @@ class EnvioConFormatoTest(BaseRequerimientos):
 
         self.assertEqual(resp.status_code, 200, resp.content)
         html = mail.outbox[0].alternatives[0][0]
-        self.assertIn('Producto detectado en stock de la tienda', html)
-        self.assertNotIn('Datos del Cliente', html)
+        self.assertIn('Detectado en mercadería de la tienda', html)
+        self.assertNotIn('Cliente afectado', html)
 
     def test_historial_deja_rastro_del_formato(self):
         req = self._crear_requerimiento()
