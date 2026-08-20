@@ -9134,6 +9134,38 @@ def reporte_movimientos_kardex(request):
             {'success': False, 'error': 'No tiene acceso al kardex de esta sucursal.'},
             status=403,
         )
+    # --- Apertura sintética de la migración (ver REF_SALDO_INICIAL_SINTETICO) ---
+    # La carga inicial de la migración Laravel entró como INGRESO_INICIAL con
+    # referencia MIGRACION_LARAVEL (~2026-01-22) ENCIMA del kardex legacy ya
+    # migrado (referencias MIG:<id>): sumarla al saldo duplica el stock (mismo
+    # criterio que _saldos_periodo / _mapas_movimientos_sucursal en
+    # views_modulo_reportes.py). Por defecto la apertura NO aporta al saldo.
+    # EXCEPCIÓN (ancla): SKUs cuya apertura no duplica nada porque no tienen
+    # kardex legacy detrás (p.ej. solo-apertura). Se detecta contra el stock
+    # real: si sin la apertura el saldo final NO cuadra con Producto_Talla.stock
+    # pero CON ella sí, la apertura es el saldo inicial genuino y se incluye.
+    # La decisión usa TODA la historia del SKU (no el rango filtrado): es una
+    # propiedad del SKU, no de la ventana consultada. Si ninguna de las dos
+    # variantes cuadra (drift real), rige el default (excluir).
+    from app.constants_kardex import REF_SALDO_INICIAL_SINTETICO
+    es_apertura_q = Q(
+        concepto='INGRESO_INICIAL',
+        referencia_externa=REF_SALDO_INICIAL_SINTETICO,
+    )
+    resumen = Movimientos_Producto.objects.filter(
+        ProductoTalla=producto_talla, estado='COMPLETADO'
+    ).aggregate(
+        total=Sum('cantidad'),
+        apertura=Sum('cantidad', filter=es_apertura_q),
+    )
+    suma_apertura = resumen['apertura'] or 0
+    suma_sin_apertura = (resumen['total'] or 0) - suma_apertura
+    stock_actual = producto_talla.stock or 0
+    apertura_anclada = bool(
+        suma_apertura
+        and suma_sin_apertura != stock_actual
+        and suma_sin_apertura + suma_apertura == stock_actual
+    )
     # select_related sobre dte y ticket: el bucle de abajo los lee para armar la
     # referencia, y sin esto son 2 queries por fila (hasta 1.000 por pagina).
     movimientos = Movimientos_Producto.objects.filter(
@@ -9150,16 +9182,33 @@ def reporte_movimientos_kardex(request):
     # El saldo se acumula en SQL sobre TODO el rango filtrado, no sobre la pagina:
     # antes se reiniciaba en 0 en cada pagina y el saldo era falso desde la 2 en
     # adelante. La window function se evalua antes del LIMIT/OFFSET.
+    # Al saldo solo aportan los movimientos COMPLETADOS (un CANCELADO/PENDIENTE
+    # se lista pero no mueve el acumulado) y, salvo ancla, tampoco la apertura
+    # sintética. Las filas excluidas siguen apareciendo con su entrada/salida;
+    # el saldo simplemente no salta en ellas.
+    fuera_del_saldo = ~Q(estado='COMPLETADO')
+    if not apertura_anclada:
+        fuera_del_saldo = fuera_del_saldo | es_apertura_q
     movimientos = movimientos.annotate(
+        aporte_saldo=Case(
+            When(fuera_del_saldo, then=Value(0)),
+            default=F('cantidad'),
+            output_field=IntegerField(),
+        ),
+    ).annotate(
         saldo_acumulado=Window(
-            expression=Sum('cantidad'),
+            expression=Sum('aporte_saldo'),
             order_by=[F('fecha').asc(), F('hora').asc(), F('id').asc()],
         )
     )
     movimientos = movimientos[offset:offset+page_size]
     kardex = []
     for m in movimientos:
-        saldo = m.saldo_acumulado
+        saldo = m.saldo_acumulado or 0
+        es_apertura = (
+            m.concepto == 'INGRESO_INICIAL'
+            and m.referencia_externa == REF_SALDO_INICIAL_SINTETICO
+        )
         # Enriquecer referencia
         referencia = ''
         if m.dte:
@@ -9182,7 +9231,11 @@ def reporte_movimientos_kardex(request):
             'precio': m.precio,
             'responsable': m.responsable,
             'referencia': referencia,
-            'sucursal_destino': m.sucursal_destino.alias if m.sucursal_destino else ''
+            'sucursal_destino': m.sucursal_destino.alias if m.sucursal_destino else '',
+            'estado': m.estado,
+            # Marca para la UI: fila de la apertura sintética de la migración.
+            # Si no está anclada, su entrada se muestra pero el saldo no salta.
+            'es_apertura': es_apertura,
         })
     return JsonResponse({
         'success': True,
@@ -9221,18 +9274,49 @@ def reporte_kardex_agrupado(request):
             status=403,
         )
 
+    # --- Apertura sintética de la migración (ver REF_SALDO_INICIAL_SINTETICO) ---
+    # Mismo criterio que reporte_movimientos_kardex: la apertura de la migración
+    # Laravel (INGRESO_INICIAL + referencia MIGRACION_LARAVEL) duplica el kardex
+    # legacy migrado y por defecto NO aporta al saldo. La excepción (ancla) se
+    # decide POR TALLA contra Producto_Talla.stock usando toda la historia: si
+    # sin apertura no cuadra pero con apertura sí, esa talla no tiene legacy
+    # detrás y su apertura es el saldo inicial genuino.
+    from app.constants_kardex import REF_SALDO_INICIAL_SINTETICO
+    es_apertura_q = Q(
+        concepto='INGRESO_INICIAL',
+        referencia_externa=REF_SALDO_INICIAL_SINTETICO,
+    )
+    stock_por_talla = dict(
+        Producto_Talla.objects.filter(producto=producto).values_list('id', 'stock')
+    )
+    resumen_tallas = Movimientos_Producto.objects.filter(
+        ProductoTalla__producto=producto, estado='COMPLETADO'
+    ).values('ProductoTalla_id').annotate(
+        total=Sum('cantidad'),
+        apertura=Sum('cantidad', filter=es_apertura_q),
+    )
+    tallas_ancladas = set()
+    for fila in resumen_tallas:
+        apertura_talla = fila['apertura'] or 0
+        sin_apertura_talla = (fila['total'] or 0) - apertura_talla
+        stock_talla = stock_por_talla.get(fila['ProductoTalla_id']) or 0
+        if (apertura_talla
+                and sin_apertura_talla != stock_talla
+                and sin_apertura_talla + apertura_talla == stock_talla):
+            tallas_ancladas.add(fila['ProductoTalla_id'])
+
     # Obtener todos los movimientos del producto (todas las tallas)
     movimientos = Movimientos_Producto.objects.filter(
         ProductoTalla__producto=producto
     ).select_related('ProductoTalla', 'dte', 'ticket', 'sucursal_destino').order_by('fecha', 'hora')
-    
+
     if fecha_inicio:
         from django.utils.dateparse import parse_date
         movimientos = movimientos.filter(fecha__gte=parse_date(fecha_inicio))
     if fecha_fin:
         from django.utils.dateparse import parse_date
         movimientos = movimientos.filter(fecha__lte=parse_date(fecha_fin))
-    
+
     # Agrupar movimientos por fecha y concepto
     from collections import defaultdict
     movimientos_agrupados = defaultdict(lambda: {
@@ -9241,6 +9325,8 @@ def reporte_kardex_agrupado(request):
         'concepto': None,
         'tipo_movimiento': None,
         'cantidad_total': 0,
+        'aporte_saldo': 0,
+        'es_apertura': False,
         'costo_promedio': 0,
         'precio_promedio': 0,
         'responsable': None,
@@ -9274,21 +9360,32 @@ def reporte_kardex_agrupado(request):
                 referencia = f"Ticket {m.ticket.correlativo}"
             grupo['referencia'] = referencia
         
-        # Sumar cantidades
+        # Sumar cantidades. La fila muestra el movimiento completo
+        # (cantidad_total) pero al saldo solo aportan los COMPLETADOS y, salvo
+        # talla anclada, no la apertura sintética de la migración.
+        es_apertura_mov = (
+            m.concepto == 'INGRESO_INICIAL'
+            and m.referencia_externa == REF_SALDO_INICIAL_SINTETICO
+        )
+        if es_apertura_mov:
+            grupo['es_apertura'] = True
         grupo['cantidad_total'] += m.cantidad
+        if m.estado == 'COMPLETADO' and (
+                not es_apertura_mov or m.ProductoTalla_id in tallas_ancladas):
+            grupo['aporte_saldo'] += m.cantidad
         grupo['movimientos_detalle'].append({
             'talla': m.ProductoTalla.talla,
             'sku': m.ProductoTalla.sku,
             'cantidad': m.cantidad
         })
-    
+
     # Convertir a lista y calcular saldo acumulado
     kardex_agrupado = []
     saldo_acumulado = 0
-    
+
     for grupo in sorted(movimientos_agrupados.values(), key=lambda x: (x['fecha'], x['hora'])):
-        saldo_acumulado += grupo['cantidad_total']
-        
+        saldo_acumulado += grupo['aporte_saldo']
+
         kardex_agrupado.append({
             'fecha': grupo['fecha'].strftime('%Y-%m-%d'),
             'hora': grupo['hora'].strftime('%H:%M') if grupo['hora'] else '',
@@ -9300,6 +9397,8 @@ def reporte_kardex_agrupado(request):
             'responsable': grupo['responsable'],
             'referencia': grupo['referencia'],
             'sucursal_destino': grupo['sucursal_destino'],
+            # Marca para la UI: grupo con apertura sintética de la migración.
+            'es_apertura': grupo['es_apertura'],
             'detalle_tallas': grupo['movimientos_detalle']  # Para mostrar en tooltip o modal
         })
     
@@ -31389,16 +31488,17 @@ def anular_factura_dte(request):
                         dp.activo = False
                     dp.save(update_fields=['stock', 'activo'])
 
-                productos_activos = dte.dte_productos.filter(activo=True)
-                nuevo_neto = productos_activos.aggregate(
-                    s=Sum(F('stock') * F('precio'))
-                )['s'] or Decimal('0')
-                nuevas_unidades = productos_activos.aggregate(u=Sum('stock'))['u'] or 0
-                nuevo_con_iva = (Decimal(nuevo_neto) * Decimal('1.19')).quantize(Decimal('1'))
-
-                dte.monto_neto = Decimal(nuevo_neto)
-                dte.monto_con_iva = nuevo_con_iva
-                dte.unidades_productos = int(nuevas_unidades)
+                # La cabecera del documento ORIGINAL no se reescribe jamás:
+                # es lo que recibió el SII al emitir y lo que la cuadratura
+                # del día ya cuadró. La NC documenta el crédito por sí sola.
+                # (El recálculo que vivía aquí dejaba boletas en $0 tras una
+                # devolución total por línea, y en las parciales trataba el
+                # precio IVA-inclusivo de boleta como neto — 234 documentos
+                # con cabecera menor que sus pagos, auditoría 2026-08-20.)
+                # `dp.stock`/`activo` sí se reducen (arriba): son el tope
+                # anti-doble-NC, no la cabecera.
+                nuevas_unidades = dte.dte_productos.filter(activo=True)\
+                    .aggregate(u=Sum('stock'))['u'] or 0
                 # IMPORTANTE: solo marcar el DTE como ANULADO cuando la NC
                 # es OCULTA. Para DEVOLUCION e INFORMATIVA mantenemos el
                 # estado original (EMITIDO/ACEPTADO) para que cuadratura
@@ -31417,13 +31517,7 @@ def anular_factura_dte(request):
                 )
                 if anular_estado:
                     dte.estado_dte = 'ANULADO'
-                    dte.save(update_fields=[
-                        'monto_neto', 'monto_con_iva', 'unidades_productos', 'estado_dte'
-                    ])
-                else:
-                    dte.save(update_fields=[
-                        'monto_neto', 'monto_con_iva', 'unidades_productos'
-                    ])
+                    dte.save(update_fields=['estado_dte'])
 
             # Anulación total clásica (sin productos_afectados).
             if es_anulacion_total and not usa_productos_afectados:
@@ -33609,6 +33703,66 @@ def exportar_correlativos_pdf(request):
 
 # ========== MÓDULO DE REPORTE DE EXISTENCIAS ==========
 
+def _queryset_existencias_reporte(request):
+    """Universo del reporte de existencias, compartido por el JSON y el Excel.
+
+    Único lugar donde se arma el queryset: scoping multi-empresa,
+    excluir_de_analitica y filtros de la pantalla (sucursal, categoría con
+    rama v1.2, búsqueda, estado de stock). El export reconstruía esto por su
+    cuenta SIN el filtro por empresa ni analítica y con la categoría plana
+    (auditoría 2026-08-20): al compartir helper no pueden divergir.
+    """
+    sucursal_id = request.GET.get('sucursal_id')
+    categoria_id = request.GET.get('categoria_id')
+    busqueda = request.GET.get('busqueda', '').strip()
+    estado_stock = request.GET.get('estado_stock', '')
+
+    empresas_usuario = EmpresaUser.objects.filter(
+        user=request.user,
+        status=True
+    ).values_list('empresa_id', flat=True)
+    sucursales_usuario = Sucursal.objects.filter(
+        empresa_id__in=empresas_usuario
+    ).values_list('id', flat=True)
+
+    productos_talla = Producto_Talla.objects.select_related(
+        'producto',
+        'producto__categoria',
+        'producto__sucursal',
+        'producto__atributo1',  # Marca
+        'producto__atributo2',  # Color
+    ).filter(
+        producto__isnull=False,
+        producto__sucursal__isnull=False,
+        producto__sucursal_id__in=sucursales_usuario,
+        producto__excluir_de_analitica=False
+    )
+
+    if sucursal_id:
+        productos_talla = productos_talla.filter(producto__sucursal_id=sucursal_id)
+    if categoria_id:
+        from app.views_modulo_reportes import _expandir_categoria_ids
+        productos_talla = productos_talla.filter(
+            producto__categoria_id__in=_expandir_categoria_ids(categoria_id)
+        )
+    if busqueda:
+        productos_talla = productos_talla.filter(
+            Q(sku__icontains=busqueda) |
+            Q(producto__articulo__icontains=busqueda) |
+            Q(producto__descripcion__icontains=busqueda) |
+            Q(talla__icontains=busqueda)
+        )
+    if estado_stock == 'con-stock':
+        productos_talla = productos_talla.filter(stock__gt=0)
+    elif estado_stock == 'sin-stock':
+        productos_talla = productos_talla.filter(stock=0)
+    elif estado_stock == 'bajo-stock':
+        productos_talla = productos_talla.filter(stock__gt=0, stock__lt=10)
+    elif estado_stock == 'stock-bajo-medio':
+        productos_talla = productos_talla.filter(stock__gte=10, stock__lt=30)
+    return productos_talla
+
+
 @login_required
 def ver_reporte_existencias(request):
     """Vista principal del reporte de existencias de productos"""
@@ -33643,64 +33797,9 @@ def obtener_existencias_reporte(request):
         
         logger.info(f'Filtros recibidos - sucursal: {sucursal_id}, categoria: {categoria_id}, busqueda: {busqueda}, estado: {estado_stock}, pagina: {pagina}')
         
-        # Filtrar por sucursales del usuario (seguridad multi-tenant)
-        empresas_usuario = EmpresaUser.objects.filter(
-            user=request.user,
-            status=True
-        ).values_list('empresa_id', flat=True)
-        sucursales_usuario = Sucursal.objects.filter(
-            empresa_id__in=empresas_usuario
-        ).values_list('id', flat=True)
+        # Universo compartido con el export (scoping + analitica + filtros)
+        productos_talla = _queryset_existencias_reporte(request)
 
-        # Construir queryset base optimizado
-        productos_talla = Producto_Talla.objects.select_related(
-            'producto',
-            'producto__categoria',
-            'producto__sucursal',
-            'producto__atributo1',  # Marca
-            'producto__atributo2',  # Color
-        ).filter(
-            producto__isnull=False,
-            producto__sucursal__isnull=False,
-            producto__sucursal_id__in=sucursales_usuario,
-            producto__excluir_de_analitica=False
-        )
-        
-        # ========== APLICAR FILTROS ==========
-        
-        # Filtro por sucursal
-        if sucursal_id:
-            productos_talla = productos_talla.filter(producto__sucursal_id=sucursal_id)
-            logger.info(f'Filtro sucursal aplicado: {sucursal_id}')
-        
-        # Filtro por categoría — árbol v1.2: un padre incluye todas sus hijas
-        if categoria_id:
-            from app.views_modulo_reportes import _expandir_categoria_ids
-            productos_talla = productos_talla.filter(
-                producto__categoria_id__in=_expandir_categoria_ids(categoria_id)
-            )
-            logger.info(f'Filtro categoría aplicado (rama v1.2): {categoria_id}')
-        
-        # Filtro por búsqueda de texto
-        if busqueda:
-            productos_talla = productos_talla.filter(
-                Q(sku__icontains=busqueda) |
-                Q(producto__articulo__icontains=busqueda) |
-                Q(producto__descripcion__icontains=busqueda) |
-                Q(talla__icontains=busqueda)
-            )
-            logger.info(f'Filtro búsqueda aplicado: {busqueda}')
-        
-        # Filtro por estado de stock (aplicado en DB para eficiencia)
-        if estado_stock == 'con-stock':
-            productos_talla = productos_talla.filter(stock__gt=0)
-        elif estado_stock == 'sin-stock':
-            productos_talla = productos_talla.filter(stock=0)
-        elif estado_stock == 'bajo-stock':
-            productos_talla = productos_talla.filter(stock__gt=0, stock__lt=10)
-        elif estado_stock == 'stock-bajo-medio':
-            productos_talla = productos_talla.filter(stock__gte=10, stock__lt=30)
-        
         # Ordenar por artículo y sucursal
         productos_talla = productos_talla.order_by('producto__articulo', 'producto__sucursal__alias', 'talla')
         
@@ -33822,6 +33921,13 @@ def obtener_existencias_reporte(request):
         categorias = []
         
         if pagina == 1 or request.GET.get('cargar_filtros') == '1':
+            # Alcance del usuario para los combos (el queryset de datos ya
+            # viene scopeado desde _queryset_existencias_reporte)
+            sucursales_usuario = Sucursal.objects.filter(
+                empresa_id__in=EmpresaUser.objects.filter(
+                    user=request.user, status=True
+                ).values_list('empresa_id', flat=True)
+            ).values_list('id', flat=True)
             # Sucursales del usuario que tienen productos
             sucursales = list(
                 Sucursal.objects.filter(
@@ -33897,51 +34003,49 @@ def exportar_existencias_excel(request):
         from openpyxl.utils import get_column_letter
         from datetime import datetime
         
-        # Obtener filtros del request (mismos que la API de datos)
-        sucursal_id = request.GET.get('sucursal_id')
-        categoria_id = request.GET.get('categoria_id')
-        busqueda = request.GET.get('busqueda', '').strip()
-        estado_stock = request.GET.get('estado_stock', '')
-        
-        # Construir queryset base
-        productos_talla = Producto_Talla.objects.select_related(
-            'producto',
-            'producto__categoria',
-            'producto__sucursal',
-            'producto__atributo1',
-            'producto__atributo2'
-        ).filter(
-            producto__isnull=False,
-            producto__sucursal__isnull=False
+        from django.db.models import Sum, F, Count
+
+        # Universo IDÉNTICO al de la pantalla: scoping multi-empresa,
+        # excluir_de_analitica y filtros (incl. rama de categorías v1.2).
+        productos_talla = _queryset_existencias_reporte(request).order_by(
+            'producto__sucursal__alias', 'producto__articulo', 'talla'
         )
-        
-        # Aplicar filtros
-        if sucursal_id:
-            productos_talla = productos_talla.filter(producto__sucursal_id=sucursal_id)
-        
-        if categoria_id:
-            productos_talla = productos_talla.filter(producto__categoria_id=categoria_id)
-        
-        if busqueda:
-            productos_talla = productos_talla.filter(
-                Q(sku__icontains=busqueda) |
-                Q(producto__articulo__icontains=busqueda) |
-                Q(producto__descripcion__icontains=busqueda) |
-                Q(talla__icontains=busqueda)
-            )
-        
-        # Filtro por estado de stock
-        if estado_stock == 'con-stock':
-            productos_talla = productos_talla.filter(stock__gt=0)
-        elif estado_stock == 'sin-stock':
-            productos_talla = productos_talla.filter(stock=0)
-        elif estado_stock == 'bajo-stock':
-            productos_talla = productos_talla.filter(stock__gt=0, stock__lt=10)
-        elif estado_stock == 'stock-bajo-medio':
-            productos_talla = productos_talla.filter(stock__gte=10, stock__lt=30)
-        
-        productos_talla = productos_talla.order_by('producto__sucursal__alias', 'producto__articulo', 'talla')
-        
+
+        # Agregados sobre el universo COMPLETO filtrado (el resumen es fiel
+        # aunque las hojas de detalle se trunquen por tamaño).
+        total_registros = productos_talla.count()
+        total_stock = int(productos_talla.aggregate(t=Sum('stock'))['t'] or 0)
+        sin_stock = productos_talla.filter(stock=0).count()
+        bajo_stock = productos_talla.filter(stock__gt=0, stock__lt=10).count()
+        resumen_por_sucursal = list(
+            productos_talla.values('producto__sucursal__alias')
+            .annotate(n=Count('id'), stock=Sum('stock'))
+            .order_by('producto__sucursal__alias')
+        )
+
+        # Tope de detalle: sin filtros el universo son cientos de miles de
+        # filas y el archivo no es usable; el resumen sí cubre todo.
+        MAX_FILAS_EXPORT = 20000
+        truncado = total_registros > MAX_FILAS_EXPORT
+        filas_pt = list(productos_talla[:MAX_FILAS_EXPORT])
+
+        # Costo FIFO promedio ponderado en UNA query agrupada por talla
+        # (antes: 2 queries por fila → el export no terminaba nunca).
+        costos_fifo = {}
+        pt_ids = [pt.id for pt in filas_pt]
+        for i in range(0, len(pt_ids), 5000):
+            chunk = pt_ids[i:i + 5000]
+            for fila in LoteProducto.objects.filter(
+                producto_talla_id__in=chunk,
+                cantidad_disponible__gt=0,
+                activo=True,
+            ).values('producto_talla_id').annotate(
+                costo=Sum(F('costo_unitario') * F('cantidad_disponible')),
+                cant=Sum('cantidad_disponible'),
+            ):
+                if fila['cant']:
+                    costos_fifo[fila['producto_talla_id']] = float(fila['costo']) / float(fila['cant'])
+
         # Crear workbook
         wb = openpyxl.Workbook()
         
@@ -33974,29 +34078,10 @@ def exportar_existencias_excel(request):
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = border
         
-        # Datos
+        # Datos (costo FIFO desde el mapa precomputado; fallback costo ficha)
         row_num = 2
-        for pt in productos_talla:
-            # Calcular costo FIFO
-            lotes_disponibles = LoteProducto.objects.filter(
-                producto_talla=pt,
-                cantidad_disponible__gt=0,
-                activo=True
-            )
-            
-            costo_fifo = 0
-            total_cantidad_lotes = 0
-            
-            if lotes_disponibles.exists():
-                for lote in lotes_disponibles:
-                    costo_fifo += lote.costo_unitario * lote.cantidad_disponible
-                    total_cantidad_lotes += lote.cantidad_disponible
-                
-                if total_cantidad_lotes > 0:
-                    costo_fifo = costo_fifo / total_cantidad_lotes
-            else:
-                costo_fifo = pt.producto.costo
-            
+        for pt in filas_pt:
+            costo_fifo = costos_fifo.get(pt.id, pt.producto.costo or 0)
             valor_total = pt.stock * costo_fifo
             
             # Determinar estado
@@ -34051,73 +34136,48 @@ def exportar_existencias_excel(request):
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = border
         
-        # Datos agrupados por sucursal
-        sucursales = Sucursal.objects.all().order_by('alias')
+        # Datos agrupados por sucursal: las filas ya vienen ordenadas por
+        # alias de sucursal, así que se agrupa en memoria reusando el costo
+        # FIFO precomputado (antes: N queries por sucursal y 2 por fila,
+        # además de iterar Sucursal.objects.all() — todas las empresas).
         row_num = 2
-        
-        for sucursal in sucursales:
-            productos_sucursal = productos_talla.filter(producto__sucursal=sucursal)
-            
-            if not productos_sucursal.exists():
-                continue
-            
-            # Fila de encabezado de sucursal
-            cell = ws_sucursal.cell(row=row_num, column=1)
-            cell.value = f"🏪 {sucursal.alias}"
-            cell.font = Font(bold=True, size=12)
-            cell.fill = PatternFill(start_color='E9ECEF', end_color='E9ECEF', fill_type='solid')
-            ws_sucursal.merge_cells(f'A{row_num}:J{row_num}')
-            row_num += 1
-            
-            # Productos de la sucursal
-            for pt in productos_sucursal:
-                # Calcular costo FIFO
-                lotes_disponibles = LoteProducto.objects.filter(
-                    producto_talla=pt,
-                    cantidad_disponible__gt=0,
-                    activo=True
-                )
-                
-                costo_fifo = 0
-                total_cantidad_lotes = 0
-                
-                if lotes_disponibles.exists():
-                    for lote in lotes_disponibles:
-                        costo_fifo += lote.costo_unitario * lote.cantidad_disponible
-                        total_cantidad_lotes += lote.cantidad_disponible
-                    
-                    if total_cantidad_lotes > 0:
-                        costo_fifo = costo_fifo / total_cantidad_lotes
-                else:
-                    costo_fifo = pt.producto.costo
-                
-                valor_total = pt.stock * costo_fifo
-                
-                # Determinar estado
-                if pt.stock == 0:
-                    estado = 'Sin Stock'
-                elif pt.stock < 10:
-                    estado = 'Bajo Stock'
-                else:
-                    estado = 'Disponible'
-                
-                # Escribir fila
-                ws_sucursal.cell(row=row_num, column=1).value = sucursal.alias
-                ws_sucursal.cell(row=row_num, column=2).value = str(pt.sku)
-                ws_sucursal.cell(row=row_num, column=3).value = pt.producto.articulo
-                ws_sucursal.cell(row=row_num, column=4).value = pt.talla
-                ws_sucursal.cell(row=row_num, column=5).value = pt.stock
-                ws_sucursal.cell(row=row_num, column=6).value = pt.producto.costo
-                ws_sucursal.cell(row=row_num, column=7).value = int(costo_fifo)
-                ws_sucursal.cell(row=row_num, column=8).value = pt.producto.precioventa
-                ws_sucursal.cell(row=row_num, column=9).value = int(valor_total)
-                ws_sucursal.cell(row=row_num, column=10).value = estado
-                
-                # Aplicar bordes
-                for col in range(1, 11):
-                    ws_sucursal.cell(row=row_num, column=col).border = border
-                
+        alias_actual = None
+        for pt in filas_pt:
+            alias = pt.producto.sucursal.alias
+            if alias != alias_actual:
+                alias_actual = alias
+                cell = ws_sucursal.cell(row=row_num, column=1)
+                cell.value = f"🏪 {alias}"
+                cell.font = Font(bold=True, size=12)
+                cell.fill = PatternFill(start_color='E9ECEF', end_color='E9ECEF', fill_type='solid')
+                ws_sucursal.merge_cells(f'A{row_num}:J{row_num}')
                 row_num += 1
+
+            costo_fifo = costos_fifo.get(pt.id, pt.producto.costo or 0)
+            valor_total = pt.stock * costo_fifo
+
+            if pt.stock == 0:
+                estado = 'Sin Stock'
+            elif pt.stock < 10:
+                estado = 'Bajo Stock'
+            else:
+                estado = 'Disponible'
+
+            ws_sucursal.cell(row=row_num, column=1).value = alias
+            ws_sucursal.cell(row=row_num, column=2).value = str(pt.sku)
+            ws_sucursal.cell(row=row_num, column=3).value = pt.producto.articulo
+            ws_sucursal.cell(row=row_num, column=4).value = pt.talla
+            ws_sucursal.cell(row=row_num, column=5).value = pt.stock
+            ws_sucursal.cell(row=row_num, column=6).value = pt.producto.costo
+            ws_sucursal.cell(row=row_num, column=7).value = int(costo_fifo)
+            ws_sucursal.cell(row=row_num, column=8).value = pt.producto.precioventa
+            ws_sucursal.cell(row=row_num, column=9).value = int(valor_total)
+            ws_sucursal.cell(row=row_num, column=10).value = estado
+
+            for col in range(1, 11):
+                ws_sucursal.cell(row=row_num, column=col).border = border
+
+            row_num += 1
         
         # Ajustar anchos de columna
         for col in range(1, 11):
@@ -34132,15 +34192,18 @@ def exportar_existencias_excel(request):
         ws_resumen.cell(row=1, column=1).value = "RESUMEN DE EXISTENCIAS"
         ws_resumen.cell(row=1, column=1).font = Font(bold=True, size=14)
         ws_resumen.cell(row=2, column=1).value = f"Generado el {timezone.localtime().strftime('%d/%m/%Y %H:%M')}"
-        
-        # Métricas generales
-        total_productos = productos_talla.count()
-        total_stock = sum(pt.stock for pt in productos_talla)
-        sin_stock = productos_talla.filter(stock=0).count()
-        bajo_stock = productos_talla.filter(stock__gt=0, stock__lt=10).count()
-        
+        if truncado:
+            cell = ws_resumen.cell(row=3, column=1)
+            cell.value = (
+                f"⚠ Detalle truncado a {MAX_FILAS_EXPORT:,} de {total_registros:,} filas — "
+                "aplica filtros (sucursal/categoría/búsqueda) para el detalle completo. "
+                "Este resumen SÍ cubre el universo completo filtrado."
+            )
+            cell.font = Font(bold=True, color='C00000')
+
+        # Métricas generales (agregadas en BD sobre el universo completo)
         ws_resumen.cell(row=4, column=1).value = "Total de Productos (SKUs):"
-        ws_resumen.cell(row=4, column=2).value = total_productos
+        ws_resumen.cell(row=4, column=2).value = total_registros
         ws_resumen.cell(row=4, column=1).font = Font(bold=True)
         
         ws_resumen.cell(row=5, column=1).value = "Stock Total (Unidades):"
@@ -34170,14 +34233,11 @@ def exportar_existencias_excel(request):
             ws_resumen.cell(row=row_num, column=col).font = header_font
         
         row_num += 1
-        
-        for sucursal in sucursales:
-            productos_sucursal = productos_talla.filter(producto__sucursal=sucursal)
-            stock_sucursal = sum(pt.stock for pt in productos_sucursal)
-            
-            ws_resumen.cell(row=row_num, column=1).value = sucursal.alias
-            ws_resumen.cell(row=row_num, column=2).value = productos_sucursal.count()
-            ws_resumen.cell(row=row_num, column=3).value = stock_sucursal
+
+        for fila in resumen_por_sucursal:
+            ws_resumen.cell(row=row_num, column=1).value = fila['producto__sucursal__alias']
+            ws_resumen.cell(row=row_num, column=2).value = fila['n']
+            ws_resumen.cell(row=row_num, column=3).value = int(fila['stock'] or 0)
             row_num += 1
         
         # Ajustar anchos

@@ -41,6 +41,7 @@ from .utils_permisos import (
     usuario_puede_ver_todas_sucursales,
     obtener_contexto_sucursales,
 )
+from .decorators import requiere_permiso
 
 logger = logging.getLogger('app')
 
@@ -1786,6 +1787,40 @@ def _diagnosticar_dte_vs_cuadratura(dte):
     return True
 
 
+def _tratamiento_cuadratura_nc(dte, fecha_obj):
+    """Réplica de LECTURA de cómo `_calcular_cuadratura_data` trata una NOTA
+    DE CREDITO en el `venta_total` del día `fecha_obj`. La cuadratura NO se
+    invoca ni se modifica (regla: sus valores no se tocan jamás).
+
+    Reglas replicadas de `views_modulo_ventas._calcular_cuadratura_data`:
+      · DEVOLUCION → RESTA del venta_total, imputada por su fecha de
+        cuadratura (primera `Dte_Detalle_Pago.fecha_pago` no nula; fallback
+        `fecha_emision`). Puede caer en OTRO día que el de emisión.
+      · ANULACION / VENTA_PUBLICO → modalidad informativa: cuenta el
+        documento del día pero NO resta del venta_total.
+      · VENTA → no entra a la iteración de DTEs de la cuadratura.
+      · descartado o estado fuera de {EMITIDO, ACEPTADO} → no entra.
+
+    Devuelve ``(aporte_al_venta_total_del_dia, descripcion)``.
+    """
+    if getattr(dte, 'descartado', False):
+        return 0, 'no entra a cuadratura (descartada)'
+    if dte.estado_dte not in {'EMITIDO', 'ACEPTADO'}:
+        return 0, f'no entra a cuadratura (estado {dte.estado_dte})'
+    monto = int(dte.monto_con_iva or 0)
+    if dte.tipo_transaccion == 'DEVOLUCION':
+        pagos_nc = list(dte.dte_asociado.all())
+        fecha_efecto = next(
+            (p.fecha_pago for p in pagos_nc if p.fecha_pago), None
+        ) or dte.fecha_emision
+        if fecha_efecto == fecha_obj:
+            return -monto, 'resta del venta_total (DEVOLUCION)'
+        return 0, f'resta en la cuadratura del {fecha_efecto} (fecha de cuadratura), no hoy'
+    if dte.tipo_transaccion in {'ANULACION', 'VENTA_PUBLICO'}:
+        return 0, f'informativa ({dte.tipo_transaccion}): cuenta el documento, NO resta'
+    return 0, f'no entra a cuadratura (tipo_transaccion={dte.tipo_transaccion})'
+
+
 @require_GET
 @login_required
 def api_diagnostico_cuadratura_vs_reporte(request):
@@ -1814,6 +1849,17 @@ def api_diagnostico_cuadratura_vs_reporte(request):
           "tickets_sin_dte": [
               {id, correlativo, total, folio_dte}
           ],
+          "nc_tratamiento_distinto": [   # NC que un lado resta y el otro no
+              {id, folio, tipo_transaccion, estado, monto,
+               trata_reporte, trata_cuadratura,
+               aporte_reporte, aporte_cuadratura, delta}
+          ],
+          "diferencia_explicada": <int>,  # parte atribuida de `diferencia`
+          "diferencia_residual": <int>,   # diferencia - explicada (≈0 si todo cuadra)
+          "explicacion_componentes": {
+              "nc_tratamiento_distinto", "documentos_un_solo_lado",
+              "tickets_sin_dte"
+          },
           "resumen_cuadratura": {  # extracto del dict de cuadratura
               "venta_total", "total_tickets", "total_boletas_electronicas",
               ...
@@ -1848,13 +1894,23 @@ def api_diagnostico_cuadratura_vs_reporte(request):
             'error': 'Formato de fecha invalido. Usar YYYY-MM-DD.'
         }, status=400)
 
+    # La sucursal pedida se intersecta SIEMPRE con las empresas del usuario
+    # (mismo patrón que existencias-marca): sin esto, bastaba cambiar el
+    # sucursal_id para leer la cuadratura de otra empresa.
+    empresas_usuario = EmpresaUser.objects.filter(
+        user=request.user,
+        status=True
+    ).values_list('empresa_id', flat=True)
     try:
-        sucursal = Sucursal.objects.get(id=int(sucursal_id))
+        sucursal = Sucursal.objects.get(
+            id=int(sucursal_id),
+            empresa_id__in=empresas_usuario,
+        )
     except (Sucursal.DoesNotExist, ValueError, TypeError):
         return JsonResponse({
             'success': False,
-            'error': 'Sucursal no encontrada.'
-        }, status=404)
+            'error': 'No tienes acceso a esa sucursal.'
+        }, status=403)
 
     # Cuadratura: fuente de verdad. NO se toca.
     cuadratura = _calcular_cuadratura_data(sucursal, fecha_str)
@@ -1865,7 +1921,9 @@ def api_diagnostico_cuadratura_vs_reporte(request):
         Dte.objects.filter(
             sucursal=sucursal,
             fecha_emision=fecha_obj,
-        ).select_related('receptor', 'emisor', 'sucursal').order_by(
+        ).select_related('receptor', 'emisor', 'sucursal').prefetch_related(
+            'dte_asociado'  # pagos: fecha de cuadratura de las NC DEVOLUCION
+        ).order_by(
             'tipo_documento', 'numero_documento'
         )
     )
@@ -1946,6 +2004,82 @@ def api_diagnostico_cuadratura_vs_reporte(request):
     cuadratura_total = int(cuadratura.get('venta_total', 0) or 0)
     diferencia = cuadratura_total - reporte_total
 
+    # ── ¿Qué explica la diferencia? (auditoría ago-2026, P1-8) ───────────
+    # El caso típico hoy es diferencia > 0 con las tres pestañas vacías: NC
+    # que están "en ambos" lados pero con TRATAMIENTO distinto — el reporte
+    # (facturación) resta TODAS las NC que pasan sus filtros; la cuadratura
+    # (caja) solo resta las DEVOLUCION (por su fecha de cuadratura) y trata
+    # las ANULACION como informativas. Aquí se atribuye la diferencia
+    # componente por componente; lo no atribuible queda en
+    # `diferencia_residual` (p.ej. cabeceras $0 del bug de NC por línea, o
+    # montos DTE≠ticket). La cuadratura en sí NO se recalcula ni se toca.
+    nc_tratamiento_distinto = []
+    delta_nc_total = 0
+    delta_dtes_un_solo_lado = 0
+
+    def _info_nc(dte, aporte_rep, trata_rep, aporte_cua, trata_cua):
+        return {
+            'id': dte.id,
+            'folio': dte.numero_documento,
+            'tipo_transaccion': dte.tipo_transaccion,
+            'estado': dte.estado_dte,
+            'monto': int(dte.monto_con_iva or 0),
+            'trata_reporte': trata_rep,
+            'trata_cuadratura': trata_cua,
+            'aporte_reporte': aporte_rep,
+            'aporte_cuadratura': aporte_cua,
+            'delta': aporte_cua - aporte_rep,
+        }
+
+    for dte in dtes_puros:
+        monto = int(dte.monto_con_iva or 0)
+        es_nc = dte.tipo_documento == 'NOTA DE CREDITO'
+        entra_rep = not _diagnosticar_dte_vs_reporte(dte)
+        aporte_rep = ((-monto if es_nc else monto) if entra_rep else 0)
+        if es_nc:
+            aporte_cua, trata_cua = _tratamiento_cuadratura_nc(dte, fecha_obj)
+            trata_rep = ('resta del total del reporte' if entra_rep
+                         else 'no entra al reporte')
+            if aporte_cua != aporte_rep:
+                nc_tratamiento_distinto.append(
+                    _info_nc(dte, aporte_rep, trata_rep, aporte_cua, trata_cua))
+            delta_nc_total += aporte_cua - aporte_rep
+        else:
+            # Documentos de venta que solo cuenta un lado (p.ej. estado
+            # ANULADO entra al reporte histórico pero no a la caja del día).
+            # Estimación por monto_con_iva: el fino (monto_real de pagos,
+            # dedup ticket↔DTE) queda en el residual.
+            aporte_cua_est = monto if _diagnosticar_dte_vs_cuadratura(dte) else 0
+            delta_dtes_un_solo_lado += aporte_cua_est - aporte_rep
+
+    # NC DEVOLUCION emitidas OTRO día pero cuya fecha de cuadratura
+    # (Dte_Detalle_Pago.fecha_pago) cae HOY: restan de la caja de hoy y el
+    # reporte las imputa a su día de emisión.
+    ncs_efecto_hoy = Dte.objects.filter(
+        sucursal=sucursal,
+        tipo_documento='NOTA DE CREDITO',
+        tipo_transaccion='DEVOLUCION',
+        estado_dte__in=('EMITIDO', 'ACEPTADO'),
+        descartado=False,
+        dte_asociado__fecha_pago=fecha_obj,
+    ).exclude(fecha_emision=fecha_obj).distinct().prefetch_related('dte_asociado')
+    for nc in ncs_efecto_hoy:
+        aporte_cua, trata_cua = _tratamiento_cuadratura_nc(nc, fecha_obj)
+        if not aporte_cua:
+            # Su fecha de efecto real no es hoy (manda la primera fecha_pago).
+            continue
+        nc_tratamiento_distinto.append(_info_nc(
+            nc, 0, f'el reporte la imputa al {nc.fecha_emision} (día de emisión)',
+            aporte_cua, trata_cua,
+        ))
+        delta_nc_total += aporte_cua
+
+    tickets_sin_dte_total = sum(t['total'] for t in tickets_sin_dte)
+    diferencia_explicada = (
+        delta_nc_total + delta_dtes_un_solo_lado + tickets_sin_dte_total
+    )
+    diferencia_residual = diferencia - diferencia_explicada
+
     resumen_cuadratura = {
         k: int(cuadratura.get(k, 0) or 0)
         for k in (
@@ -1976,7 +2110,17 @@ def api_diagnostico_cuadratura_vs_reporte(request):
         'solo_en_reporte': solo_en_reporte,
         'en_ambos': en_ambos,
         'tickets_sin_dte': tickets_sin_dte,
-        'tickets_sin_dte_total': sum(t['total'] for t in tickets_sin_dte),
+        'tickets_sin_dte_total': tickets_sin_dte_total,
+        # NC del día (o con efecto de caja hoy) que un lado resta y el otro
+        # no: la explicación típica de "diferencia con las 3 pestañas vacías".
+        'nc_tratamiento_distinto': nc_tratamiento_distinto,
+        'diferencia_explicada': diferencia_explicada,
+        'diferencia_residual': diferencia_residual,
+        'explicacion_componentes': {
+            'nc_tratamiento_distinto': delta_nc_total,
+            'documentos_un_solo_lado': delta_dtes_un_solo_lado,
+            'tickets_sin_dte': tickets_sin_dte_total,
+        },
         'resumen_cuadratura': resumen_cuadratura,
     })
 
@@ -1984,38 +2128,53 @@ def api_diagnostico_cuadratura_vs_reporte(request):
 @require_GET
 @login_required
 def obtener_vendedores_reporte(request):
-    """API para obtener lista de vendedores que tienen ventas en la sucursal"""
+    """API para obtener lista de vendedores que tienen ventas en la sucursal.
+
+    SCOPING (auditoría ago-2026): el feed listaba los vendedores de cualquier
+    sucursal del holding (y, sin filtro, TODOS los del sistema). Ahora la
+    sucursal pedida se valida contra el alcance del usuario (403 si es ajena,
+    igual que el resto del módulo) y el caso "sin filtro" se acota a las
+    sucursales de sus empresas — mismo universo que el vecino
+    `obtener_sucursales_reporte`.
+    """
     try:
         sucursal_id = request.GET.get('sucursal_id')
 
-        if sucursal_id:
-            # Obtener vendedores que tienen ventas EN esta sucursal (Tickets o DTEs)
+        permitidas, sin_acceso = _alcance_sucursales(request, sucursal_id)
+        if sin_acceso:
+            return sin_acceso
+
+        # {'sucursal_id': X} | {'sucursal_id__in': [...]} | {} (ve todo)
+        filtro_suc = _filtro_alcance('sucursal_id', sucursal_id, permitidas)
+
+        if filtro_suc:
+            # Vendedores que tienen ventas (Tickets o DTEs) dentro del alcance
             from django.db.models import Q
-            
-            # IDs de vendedores con Tickets en esta sucursal
+
+            # IDs de vendedores con Tickets en estas sucursales
             vendedores_tickets = set(Ticket.objects.filter(
-                sucursal_id=sucursal_id
+                **filtro_suc
             ).values_list('vendedor_id', flat=True).distinct())
-            
-            # IDs de vendedores con DTEs de venta al público en esta sucursal
+
+            # IDs de vendedores con DTEs de venta al público en estas sucursales
             vendedores_dtes = set(Dte.objects.filter(
-                sucursal_id=sucursal_id,
                 tipo_transaccion='VENTA_PUBLICO',
+                **filtro_suc,
             ).exclude(
                 receptor__isnull=False,
                 receptor_id=F('emisor_id')
             ).values_list('vendedor_id', flat=True).distinct())
-            
+
             # Unir ambos conjuntos
             vendedores_ids = vendedores_tickets | vendedores_dtes
             vendedores_ids.discard(None)  # Remover None si existe
-            
+
             vendedores = Vendedor.objects.filter(
                 id__in=vendedores_ids,
                 nombre__isnull=False
             ).order_by('nombre')
         else:
-            # Sin filtro de sucursal, mostrar todos
+            # Usuario sin restricción de alcance y sin filtro: mostrar todos
             vendedores = Vendedor.objects.filter(
                 nombre__isnull=False
             ).order_by('nombre')
@@ -3752,9 +3911,13 @@ def obtener_reporte_existencias_sucursal(request):
 
         # Pre-cargar total recibido desde Movimientos_Producto (todos los ingresos reales)
         # La FK en Movimientos_Producto se llama "ProductoTalla" (mayúsculas)
+        # Mismo universo que `queryset` (analítica + marca): las tallas de
+        # productos excluidos no aparecen en el reporte, así que tampoco se
+        # les calcula nada.
         talla_ids = list(
             Producto_Talla.objects.filter(
                 producto__sucursal_id=sucursal_id,
+                producto__excluir_de_analitica=False,
                 **({'producto__atributo1_id': marca_id} if marca_id else {})
             ).values_list('id', flat=True)
         )
@@ -3778,11 +3941,25 @@ def obtener_reporte_existencias_sucursal(request):
         # construcción: como stock = SUM(entradas) + SUM(salidas) y las salidas
         # son <= 0, sumar solo cantidad > 0 garantiza recibido >= stock siempre
         # que el kardex esté completo.
+        #
+        # EXCEPCIÓN (auditoría ago-2026): el saldo de APERTURA de la migración
+        # Laravel (INGRESO_INICIAL con referencia MIGRACION_LARAVEL) se
+        # excluye. No es una recepción: es la foto del stock al 22-ene, y los
+        # movimientos legacy ANTERIORES también se importaron, así que sumar
+        # la apertura cuenta el mismo stock dos veces (PAO3: 27.308 u dobles).
+        # Mismo criterio que `_mapas_movimientos_sucursal` / `_saldos_periodo`.
+        # Contrapartida conocida: un SKU cuyo único ingreso registrado sea la
+        # apertura mostrará recibido < stock — preferible al doble conteo.
+        from app.constants_kardex import REF_SALDO_INICIAL_SINTETICO as _REF_APERTURA
         stocks_iniciales_qs = (
             Movimientos_Producto.objects.filter(
                 ProductoTalla_id__in=talla_ids,
                 estado='COMPLETADO',
                 cantidad__gt=0,
+            )
+            .exclude(
+                concepto='INGRESO_INICIAL',
+                referencia_externa=_REF_APERTURA,
             )
             .values('ProductoTalla_id')
             .annotate(total=_Sum('cantidad'))
@@ -3845,21 +4022,42 @@ def obtener_reporte_existencias_sucursal(request):
 
         # KPIs de salud de inventario de la sucursal: cobertura en días,
         # % de stock envejecido (lotes >180d) y valor venta potencial.
+        #
+        # REGLA (auditoría ago-2026): numerador y denominador SIEMPRE sobre el
+        # MISMO universo — sucursal + solo-analítica + marca si se filtró.
+        # Antes los lotes viejos y las ventas 30d se tomaban de TODA la
+        # sucursal (incluidos productos `excluir_de_analitica` y otras marcas)
+        # contra un `total_stock` solo-analítica: PAO3 mostraba "155,4% viejo"
+        # (real 71,3%) y, con filtro de marca, la cobertura salía calculada
+        # con las ventas de la sucursal completa (29.101% de stock viejo con
+        # marca chica; cobertura "2 días" cuando la de la marca era 9).
         from datetime import timedelta as _td
         from app.constants_kardex import CONCEPTOS_VENTA as _CV
         from app.models import LoteProducto as _Lote
         _hoy = timezone.localdate()
+        _universo_mov = {
+            'ProductoTalla__producto__sucursal_id': sucursal_id,
+            'ProductoTalla__producto__excluir_de_analitica': False,
+        }
+        _universo_lote = {
+            'producto_talla__producto__sucursal_id': sucursal_id,
+            'producto_talla__producto__excluir_de_analitica': False,
+        }
+        if marca_id:
+            _universo_mov['ProductoTalla__producto__atributo1_id'] = marca_id
+            _universo_lote['producto_talla__producto__atributo1_id'] = marca_id
         vendidas_30 = abs(
             Movimientos_Producto.objects.filter(
                 concepto__in=_CV, estado='COMPLETADO',
                 fecha__gte=_hoy - _td(days=30),
                 sucursal_origen_id=sucursal_id,
+                **_universo_mov,
             ).aggregate(s=_Sum('cantidad'))['s'] or 0
         )
         stock_viejo = _Lote.objects.filter(
             activo=True, cantidad_disponible__gt=0,
-            producto_talla__producto__sucursal_id=sucursal_id,
             fecha_ingreso__date__lte=_hoy - _td(days=181),
+            **_universo_lote,
         ).aggregate(s=_Sum('cantidad_disponible'))['s'] or 0
         _velocidad = vendidas_30 / 30 if vendidas_30 else 0
         resumen.update({
@@ -4156,13 +4354,16 @@ ORIGEN_LABELS = {
 }
 
 
-@login_required
+# Gate de rol (auditoría ago-2026, P1-10): expone altas de catálogo, unidades
+# y costos. El código 'reporte_productos_origen' lo crea `inicializar_permisos`;
+# hasta correrlo el gate es fail-closed (esperado).
+@requiere_permiso('reporte_productos_origen')
 def ver_reporte_productos_origen(request):
     """Vista principal: productos creados en el período clasificados por origen."""
     return render(request, 'vistas/modulo_reportes/productos_por_origen.html')
 
 
-@login_required
+@requiere_permiso('reporte_productos_origen')
 @require_GET
 def api_productos_por_origen(request):
     """
@@ -4614,6 +4815,42 @@ def _datos_compras_por_proveedor(filtros):
     return datos
 
 
+def _cobertura_lineas_compras(filtros):
+    """
+    Cobertura de DETALLE del período: cuántos documentos de compra tienen
+    líneas (recepción registrada o Dte_Productos) sobre el total.
+
+    Motivo (auditoría ago-2026, P1-11): la migración Laravel dejó la mayoría
+    de los DTE de compra solo con cabecera (2026 anual: 192 de 585 con
+    líneas, 74% ciego). "Unidades", "Costo promedio/unidad" y "Cumplimiento
+    entregas" solo pueden calcularse sobre el subconjunto CON líneas, así que
+    sin este dato la cabecera parece completa cuando en realidad extrapola.
+    La UI muestra un aviso cuando pct < 90.
+    """
+    from django.db.models import Exists
+    from .models import Dte_Productos, Productos_Recepcionados
+
+    dtes_qs = _get_dtes_base_compras(filtros).exclude(
+        tipo_documento=TIPO_DOC_NC_COMPRAS)
+    agg = dtes_qs.annotate(
+        tiene_recepcion=Exists(
+            Productos_Recepcionados.objects.filter(dte_id=OuterRef('pk'))),
+        tiene_detalle=Exists(
+            Dte_Productos.objects.filter(dte_id=OuterRef('pk'))),
+    ).aggregate(
+        docs_totales=Count('id'),
+        docs_con_lineas=Count(
+            'id', filter=Q(tiene_recepcion=True) | Q(tiene_detalle=True)),
+    )
+    docs_totales = agg['docs_totales'] or 0
+    docs_con_lineas = agg['docs_con_lineas'] or 0
+    return {
+        'docs_totales': docs_totales,
+        'docs_con_lineas': docs_con_lineas,
+        'pct': round(docs_con_lineas / docs_totales * 100, 1) if docs_totales else 0,
+    }
+
+
 @login_required
 @require_GET
 def api_reporte_compras(request):
@@ -4651,9 +4888,15 @@ def api_reporte_compras(request):
         insights = generar_insights_compras(metricas, top_proveedores, comparativa_anual)
         alertas = generar_alertas_compras(metricas, estado_pagos, cumplimiento_proveedores)
 
+        cobertura_lineas = _cobertura_lineas_compras(filtros)
+
         return JsonResponse({
             'success': True,
             'metricas': metricas,
+            # Qué fracción de los documentos del período tiene detalle de
+            # líneas: unidades/costo promedio/cumplimiento solo salen de ese
+            # subconjunto (la UI avisa cuando pct < 90).
+            'cobertura_lineas': cobertura_lineas,
             'evolucion_mensual': evolucion_mensual,
             'top_proveedores': top_proveedores,
             'pareto_proveedores': pareto_proveedores,
@@ -5632,6 +5875,23 @@ CONCEPTOS_OTROS_EGRESOS = [
 ]
 
 
+def _mov_entrada_sin_apertura(**filtros):
+    """Movimientos de ENTRADA excluyendo la foto de apertura de la migración
+    (INGRESO_INICIAL con referencia sintética): es saldo inicial, no compra
+    del período. Sin esta exclusión la "inversión/entrada" 2026 sumaba
+    ~$2.005M de apertura del 22-ene sobre ~$707M de compras reales, y
+    rotación/stock-sin-vender salían como artefactos (auditoría 2026-08-20).
+    Mismo criterio que ya usan los helpers de movimientos-sucursal."""
+    from app.constants_kardex import REF_SALDO_INICIAL_SINTETICO
+    from .models import Movimientos_Producto
+    return Movimientos_Producto.objects.filter(
+        concepto__in=CONCEPTOS_ENTRADA, **filtros
+    ).exclude(
+        concepto='INGRESO_INICIAL',
+        referencia_externa=REF_SALDO_INICIAL_SINTETICO,
+    )
+
+
 @login_required
 @require_GET
 def api_rendimiento_compras(request):
@@ -5668,7 +5928,7 @@ def api_rendimiento_compras(request):
         bf = {'fecha__year': anio, 'estado': 'COMPLETADO', 'ProductoTalla_id__in': pt_ids}
         bf.update(_filtro_alcance('sucursal_origen_id', sucursal_id, permitidas))
 
-        ent = Movimientos_Producto.objects.filter(concepto__in=CONCEPTOS_ENTRADA, **bf).aggregate(
+        ent = _mov_entrada_sin_apertura(**bf).aggregate(
             uds=Sum('cantidad'),
             costo=Sum(F('costo') * F('cantidad')),
         )
@@ -5684,7 +5944,7 @@ def api_rendimiento_compras(request):
         otros = Movimientos_Producto.objects.filter(concepto__in=CONCEPTOS_OTROS_EGRESOS, **bf).aggregate(
             uds=Sum('cantidad'),
         )
-        q_tk = {'idTicket__fecha__year': anio, 'idTicket__estado__in': ['PAGADO', 'PENDIENTE'],
+        q_tk = {'idTicket__created_at__year': anio, 'idTicket__estado': 'PAGADO',
                 'ProductoTalla_id__in': pt_ids}
         q_tk.update(_filtro_alcance('idTicket__sucursal_id', sucursal_id, permitidas))
         vtas_tk = Ticket_Productos.objects.filter(**q_tk).aggregate(
@@ -5753,18 +6013,17 @@ def api_rendimiento_compras(request):
         }
 
     def _evolucion_desde_movimientos(anio, sucursal_id, pt_ids, bf):
-        ent_m = {e['mes']: e for e in Movimientos_Producto.objects.filter(
-            concepto__in=CONCEPTOS_ENTRADA, **bf
-        ).values(mes=F('fecha__month')).annotate(uds=Sum('cantidad'))}
+        ent_m = {e['mes']: e for e in _mov_entrada_sin_apertura(**bf)
+                 .values(mes=F('fecha__month')).annotate(uds=Sum('cantidad'))}
 
         vtas_m = {v['mes']: v for v in Movimientos_Producto.objects.filter(
             concepto__in=CONCEPTOS_VENTA, **bf
         ).values(mes=F('fecha__month')).annotate(uds=Sum('cantidad'), ingreso=Sum(F('precio') * F('cantidad')))}
 
-        q_tk = {'idTicket__fecha__year': anio, 'idTicket__estado__in': ['PAGADO', 'PENDIENTE']}
+        q_tk = {'idTicket__created_at__year': anio, 'idTicket__estado': 'PAGADO'}
         q_tk.update(_filtro_alcance('idTicket__sucursal_id', sucursal_id, permitidas))
         vtas_tk = {v['mes']: v for v in Ticket_Productos.objects.filter(**q_tk).values(
-            mes=F('idTicket__fecha__month')
+            mes=F('idTicket__created_at__month')
         ).annotate(uds=Sum('stock'), ingreso=Sum('subtotal'))}
 
         evol = []
@@ -6009,8 +6268,8 @@ def api_rendimiento_compras(request):
             por_compra = []
         else:
             # Lógica existente de movimientos
-            entradas_suc = {e['sucursal_origen_id']: e for e in Movimientos_Producto.objects.filter(
-                concepto__in=CONCEPTOS_ENTRADA, **bf
+            entradas_suc = {e['sucursal_origen_id']: e for e in _mov_entrada_sin_apertura(
+                **bf
             ).values('sucursal_origen_id', 'sucursal_origen__alias').annotate(
                 uds=Sum('cantidad'), costo=Sum(F('costo') * F('cantidad')),
             )}
@@ -6024,7 +6283,7 @@ def api_rendimiento_compras(request):
             ).values('sucursal_origen_id', 'sucursal_origen__alias').annotate(
                 uds=Sum('cantidad'), ingreso=Sum(F('precio') * F('cantidad')),
             )}
-            q_tk_suc = {'idTicket__fecha__year': anio, 'idTicket__estado__in': ['PAGADO', 'PENDIENTE']}
+            q_tk_suc = {'idTicket__created_at__year': anio, 'idTicket__estado': 'PAGADO'}
             q_tk_suc.update(_filtro_alcance('idTicket__sucursal_id', sucursal_id, permitidas))
             ventas_suc_ticket = {v['idTicket__sucursal_id']: v for v in Ticket_Productos.objects.filter(
                 **q_tk_suc
@@ -6095,7 +6354,7 @@ def api_rendimiento_compras(request):
         # ── Top productos ──
         por_producto = []
         if not usar_dte:
-            q_top_tk = {'idTicket__fecha__year': anio, 'idTicket__estado__in': ['PAGADO', 'PENDIENTE']}
+            q_top_tk = {'idTicket__created_at__year': anio, 'idTicket__estado': 'PAGADO'}
             q_top_tk.update(_filtro_alcance('idTicket__sucursal_id', sucursal_id, permitidas))
             top_vendidos = list(Ticket_Productos.objects.filter(**q_top_tk).values(
                 'ProductoTalla_id', 'ProductoTalla__producto__articulo', 'ProductoTalla__talla',
@@ -6112,9 +6371,9 @@ def api_rendimiento_compras(request):
             top_pt_ids = [t['ProductoTalla_id'] for t in top_vendidos]
             entradas_top = {}
             if top_pt_ids:
-                for e in Movimientos_Producto.objects.filter(
+                for e in _mov_entrada_sin_apertura(
                     ProductoTalla_id__in=top_pt_ids,
-                    concepto__in=CONCEPTOS_ENTRADA, fecha__year=anio, estado='COMPLETADO',
+                    fecha__year=anio, estado='COMPLETADO',
                 ).values('ProductoTalla_id').annotate(uds=Sum('cantidad'), costo=Sum(F('costo') * F('cantidad'))):
                     entradas_top[e['ProductoTalla_id']] = e
             despachos_top = {}
@@ -7428,8 +7687,12 @@ def exportar_movimientos_sucursal_excel(request):
 
 # ========== REPORTES MEJORADOS: RECEPCIONES Y DESPACHOS ==========
 
+# Gate de rol (auditoría ago-2026, P1-10): ambos endpoints son HUÉRFANOS y
+# candidatos a eliminación, así que no ameritan un código de permiso propio:
+# cuelgan del EXISTENTE 'reporte_compras' (mismo dominio de datos) mientras
+# sigan publicados.
+@requiere_permiso('reporte_compras')
 @require_GET
-@login_required
 def api_reporte_recepciones_detallado(request):
     """
     API mejorada para reporte de recepciones con:
@@ -7642,8 +7905,8 @@ def api_reporte_recepciones_detallado(request):
         }, status=500)
 
 
+@requiere_permiso('reporte_compras')
 @require_GET
-@login_required
 def api_reporte_despachos_detallado(request):
     """
     API mejorada para despachos con datos reales de recepción,
@@ -9103,15 +9366,20 @@ def exportar_reporte_ventas_internet(request):
 
 # ========== REPORTE VENTAS GLOBALES POR EMPRESA ==========
 
-@login_required
+# Gate de rol (auditoría ago-2026, P1-10): la página y su API consolidan la
+# venta de TODO el holding, así que además del scoping por empresa llevan
+# permiso explícito. El código 'reporte_ventas_global' lo crea
+# `inicializar_permisos`; hasta que ese command se corra en la BD el efecto es
+# fail-closed (403/redirect para todos) — esperado y preferible a fail-open.
+@requiere_permiso('reporte_ventas_global')
 def ver_reporte_ventas_global(request):
     """Vista del reporte de ventas globales agrupadas por empresa"""
     context = obtener_contexto_sucursales(request.user, request)
     return render(request, 'vistas/modulo_reportes/reporte_ventas_global.html', context)
 
 
+@requiere_permiso('reporte_ventas_global')
 @require_GET
-@login_required
 def obtener_ventas_global_por_empresa(request):
     """API: ventas globales de todas las sucursales agrupadas por empresa con comparativo"""
     try:

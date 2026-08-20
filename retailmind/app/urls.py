@@ -1431,7 +1431,8 @@ urlpatterns = [
 
     # Reporte de diferencias despachado vs recepcionado (faltantes / dañados /
     # sobrantes de Productos_Recepcionados) y mercadería en tránsito consolidada.
-    # Ambas vistas ya llevan @requiere_permiso('reporte_compras') en el módulo,
+    # Ambas vistas llevan @requiere_permiso con sus códigos dedicados
+    # ('reporte_diferencias_recepcion' / 'reporte_mercaderia_transito'),
     # así que no dependen de que la URL esté en URL_PERMISO_MAP.
     path('reportes/diferencias-recepcion/', views_modulo_reportes_diferencias.ver_reporte_diferencias_recepcion, name='ver_reporte_diferencias_recepcion'),
     path('api/reportes/diferencias-recepcion/', views_modulo_reportes_diferencias.api_reporte_diferencias_recepcion, name='api_reporte_diferencias_recepcion'),

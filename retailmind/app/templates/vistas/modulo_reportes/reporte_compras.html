@@ -516,6 +516,13 @@
             <div class="text-muted mt-2" id="rangoAplicado" style="font-size:.78rem;"></div>
         </div>
 
+        <!-- Aviso de cobertura de líneas: gran parte del histórico migrado de
+             Laravel tiene solo cabecera. Unidades, costo promedio y
+             cumplimiento se calculan únicamente sobre los documentos CON
+             detalle, y este aviso lo hace explícito cuando la cobertura es
+             baja (pct < 90). Lo llena mostrarCoberturaLineas(). -->
+        <div class="alert alert-warning py-2 px-3 mb-3 d-none" id="avisoCoberturaLineas" style="font-size:.82rem;"></div>
+
         <!-- KPIs Principales -->
         <div class="row g-3 mb-4">
             <!-- Total Compras -->
@@ -1436,6 +1443,7 @@ function cargarDatosReporte() {
             if (data.success) {
                 datosReporte = data;
                 mostrarFiltrosAplicados(data.filtros_aplicados || {});
+                mostrarCoberturaLineas(data.cobertura_lineas);
                 actualizarKPIs(data.metricas);
                 renderizarGraficos(data);
                 renderizarTablas(data);
@@ -1464,6 +1472,27 @@ function mostrarFiltrosAplicados(filtros) {
     if (!aviso) return;
     if (filtros.temporada && !filtros.temporada_aplicada) {
         aviso.textContent = 'El filtro de temporada no se pudo aplicar en este contexto: la temporada se registra en las órdenes de compra del centro de distribución. Los datos se muestran sin ese filtro.';
+        aviso.classList.remove('d-none');
+    } else {
+        aviso.classList.add('d-none');
+    }
+}
+
+// ========== Aviso de cobertura de líneas ==========
+// "Unidades", "Costo Promedio/Unidad" y "Cumplimiento entregas" se calculan
+// solo sobre los documentos que tienen detalle de líneas (recepción o
+// Dte_Productos). En períodos dominados por la migración Laravel eso es una
+// minoría, así que se avisa cuando la cobertura baja de 90%.
+function mostrarCoberturaLineas(cobertura) {
+    const aviso = document.getElementById('avisoCoberturaLineas');
+    if (!aviso) return;
+    if (cobertura && cobertura.docs_totales > 0 && cobertura.pct < 90) {
+        aviso.innerHTML = '<i class="ri-error-warning-line"></i> ' +
+            '<strong>Cobertura de detalle: ' + cobertura.pct + '%.</strong> ' +
+            'Sólo ' + formatearNumero(cobertura.docs_con_lineas) + ' de ' +
+            formatearNumero(cobertura.docs_totales) +
+            ' documentos del período tienen detalle de líneas; ' +
+            '"Unidades", "Costo Promedio/Unidad" y "Cumplimiento entregas" se calculan sobre ese subconjunto.';
         aviso.classList.remove('d-none');
     } else {
         aviso.classList.add('d-none');

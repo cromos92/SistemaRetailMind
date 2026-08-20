@@ -17,7 +17,7 @@ from django.core.paginator import Paginator
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.core.mail import send_mail, EmailMessage, EmailMultiAlternatives
+from django.core.mail import send_mail, EmailMessage, EmailMultiAlternatives, get_connection
 from django.core.validators import validate_email
 from django.conf import settings
 from django.template.loader import render_to_string
@@ -49,6 +49,10 @@ logger = logging.getLogger('app')
 # MailerSend cortan cerca de los 25MB.
 MAX_ADJUNTOS_MB = int(os.environ.get('REQUERIMIENTOS_MAX_ADJUNTOS_MB', '12'))
 PLAZO_RESPUESTA_DIAS = int(os.environ.get('REQUERIMIENTOS_PLAZO_RESPUESTA_DIAS', '7'))
+# Timeout (segundos) de cada operación SMTP del envío al proveedor. Sin él,
+# un servidor de correo colgado deja la request esperando sin límite y el
+# usuario mirando el spinner.
+EMAIL_TIMEOUT_SEGUNDOS = int(os.environ.get('REQUERIMIENTOS_EMAIL_TIMEOUT', '30'))
 
 
 # ========== SISTEMA DE PERMISOS ==========
@@ -600,6 +604,12 @@ def listar_requerimientos(request):
                 'proveedor': req.proveedor.nombre if req.proveedor else '',
                 'asignado_a': req.asignado_a.get_full_name() if req.asignado_a else '',
                 'correo_enviado_proveedor': req.correo_enviado_proveedor,
+                # Para que la lista pueda decir A QUIÉN y CUÁNDO salió el
+                # correo, no solo que salió.
+                'correo_proveedor_destino': req.correo_proveedor_destino or '',
+                'fecha_envio_proveedor': (
+                    req.fecha_envio_proveedor.strftime('%d/%m/%Y %H:%M')
+                    if req.fecha_envio_proveedor else ''),
                 'dias_sin_respuesta': req.dias_sin_respuesta,
                 'requiere_recordatorio': req.requiere_recordatorio,
                 'nivel_urgencia': req.nivel_urgencia,
@@ -1302,8 +1312,15 @@ def enviar_a_proveedor(request, requerimiento_id):
                      f'y ya no corresponde enviarlo al proveedor'
         }, status=400)
 
-    # Correo destino: manual > correoVendedor > email > correoIntercambio
-    correo_destino = (data.get('correo_destino') or '').strip() or _correo_proveedor(requerimiento.proveedor)
+    # Correo destino: manual > último envío > correoVendedor > email > correoIntercambio.
+    # El "último envío" importa para el recordatorio rápido de la lista (que no
+    # manda correo en el POST): sin él, el reenvío se iba al correo de la ficha
+    # aunque el envío original se hubiera hecho a un correo tipeado a mano.
+    correo_destino = (
+        (data.get('correo_destino') or '').strip()
+        or (requerimiento.correo_proveedor_destino or '').strip()
+        or _correo_proveedor(requerimiento.proveedor)
+    )
     if not correo_destino:
         return JsonResponse({
             'success': False,
@@ -1331,13 +1348,23 @@ def enviar_a_proveedor(request, requerimiento_id):
     mensaje_adicional = (data.get('mensaje') or '').strip()
     es_reenvio = bool(data.get('es_reenvio')) or requerimiento.correo_enviado_proveedor
 
-    # Fotos adjuntables (existentes en el storage DEL CAMPO, que puede ser
-    # Spaces y no el default: `default_storage` miraría el disco local).
-    fotos_adjuntables = [
-        foto for foto in requerimiento.fotos.all()
-        if foto.imagen and foto.imagen.storage.exists(foto.imagen.name)
-    ]
-    fotos_registradas = requerimiento.fotos.count()
+    # Cada foto se descarga UNA sola vez del storage DEL CAMPO (puede ser
+    # Spaces y no el default: `default_storage` miraría el disco local) y los
+    # bytes se reusan para el PDF y para los adjuntos. Antes cada foto viajaba
+    # 3 veces por la red (exists + lectura del PDF + lectura del adjunto) y el
+    # envío demoraba proporcionalmente.
+    fotos = list(requerimiento.fotos.select_related('tipo_foto').all())
+    fotos_bytes = {}
+    for foto in fotos:
+        if not foto.imagen:
+            continue
+        try:
+            with foto.imagen.storage.open(foto.imagen.name, 'rb') as fh:
+                fotos_bytes[foto.id] = fh.read()
+        except Exception as e:
+            logger.warning("Error al leer foto de requerimiento %s: %s", requerimiento.id, e)
+    fotos_adjuntables = [foto for foto in fotos if foto.id in fotos_bytes]
+    fotos_registradas = len(fotos)
 
     # Formato propio de RetailMind: el documento formal que el proveedor
     # archiva y responde. Lleva las fotos incrustadas y reescaladas, así que
@@ -1346,6 +1373,7 @@ def enviar_a_proveedor(request, requerimiento_id):
     try:
         pdf_bytes = generar_pdf_requerimiento(
             requerimiento, usuario=request.user, plazo_dias=PLAZO_RESPUESTA_DIAS,
+            fotos_bytes=fotos_bytes,
         )
     except Exception:
         # Si el formato falla, el correo igual sale: perder el envío por un
@@ -1361,12 +1389,7 @@ def enviar_a_proveedor(request, requerimiento_id):
     adjuntos_fotos = []      # [(nombre, contenido)] que realmente se envían
     fotos_omitidas = []      # no cupieron: van igual dentro del PDF
     for foto in fotos_adjuntables:
-        try:
-            with foto.imagen.storage.open(foto.imagen.name, 'rb') as fh:
-                contenido = fh.read()
-        except Exception as e:
-            logger.warning("Error al leer foto de requerimiento %s: %s", requerimiento.id, e)
-            continue
+        contenido = fotos_bytes[foto.id]
         if len(contenido) > presupuesto:
             fotos_omitidas.append(foto.imagen.name)
             continue
@@ -1377,7 +1400,7 @@ def enviar_a_proveedor(request, requerimiento_id):
 
     context = {
         'requerimiento': requerimiento,
-        'fotos': requerimiento.fotos.all(),
+        'fotos': fotos,
         'cantidad_fotos_adjuntas': fotos_enviadas,
         # Solo en el PDF: no cupieron como adjunto pero sí van incrustadas.
         'fotos_solo_en_pdf': len(fotos_omitidas) if pdf_bytes else 0,
@@ -1417,7 +1440,7 @@ def enviar_a_proveedor(request, requerimiento_id):
         f'Motivo: {requerimiento.motivo}\n'
         f'{("Mensaje: " + mensaje_adicional) if mensaje_adicional else ""}\n'
         f'{"Se adjunta el formato del requerimiento en PDF con la evidencia fotográfica. " if pdf_bytes else ""}'
-        f'Se adjuntan {len(fotos_adjuntables)} foto(s) en su resolución original.\n'
+        f'Se adjuntan {fotos_enviadas} foto(s) en su resolución original.\n'
         f'Por favor responda indicando si procede.\n'
         f'Contacto: {request.user.get_full_name()} - {requerimiento.sucursal.empresa.nombre}'
     )
@@ -1428,13 +1451,29 @@ def enviar_a_proveedor(request, requerimiento_id):
     if correo_admin_proveedor and correo_admin_proveedor.lower() != correo_destino.lower():
         cc.append(correo_admin_proveedor)
 
+    # Una sola conexión SMTP para el correo al proveedor Y la copia de control:
+    # cada send() suelto abre, negocia TLS y autentica de nuevo, o sea el
+    # usuario pagaba dos handshakes completos por envío.
+    connection = get_connection(timeout=EMAIL_TIMEOUT_SEGUNDOS)
+
+    # Reply-To con el usuario que envía Y la casilla de control: cuando el
+    # proveedor aprieta "Responder", su respuesta les llega a ambos (Reply-To
+    # admite varias direcciones y Gmail/Outlook las precargan todas). Solo con
+    # el usuario, la respuesta se quedaba en su casilla personal y la copia de
+    # control nunca se enteraba.
+    reply_to = []
+    for direccion in ((request.user.email or '').strip(), correo_copia):
+        if direccion and direccion.lower() not in (d.lower() for d in reply_to):
+            reply_to.append(direccion)
+
     email = EmailMultiAlternatives(
         subject=asunto,
         body=texto_plano,
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[correo_destino],
         cc=cc,
-        reply_to=[request.user.email] if request.user.email else [],
+        reply_to=reply_to,
+        connection=connection,
     )
     email.attach_alternative(html_message, 'text/html')
 
@@ -1456,9 +1495,16 @@ def enviar_a_proveedor(request, requerimiento_id):
         )
 
     try:
+        # Abrir a mano: si la abre send(), Django la cierra al terminar ese
+        # send() y la copia vuelve a pagar la conexión completa.
+        connection.open()
         email.send(fail_silently=False)
     except Exception as e:
         logger.exception("Error al enviar requerimiento %s al proveedor %s", requerimiento.id, correo_destino)
+        try:
+            connection.close()
+        except Exception:
+            pass
         return JsonResponse({
             'success': False,
             'error': f'Error al enviar correo al proveedor: {str(e)}'
@@ -1498,6 +1544,7 @@ def enviar_a_proveedor(request, requerimiento_id):
             context_copia.update({
                 'correo_destino': correo_destino,
                 'correo_cc': ', '.join(cc),
+                'reply_to': ', '.join(reply_to),
                 'fecha_envio': requerimiento.fecha_envio_proveedor,
                 'intento': requerimiento.intentos_envio,
                 'url_detalle': request.build_absolute_uri(f'/app/requerimientos/{requerimiento.id}/'),
@@ -1518,6 +1565,7 @@ def enviar_a_proveedor(request, requerimiento_id):
                 body=texto_copia,
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[correo_copia],
+                connection=connection,
             )
             email_copia.attach_alternative(html_copia, 'text/html')
             email_copia.send(fail_silently=False)
@@ -1532,6 +1580,11 @@ def enviar_a_proveedor(request, requerimiento_id):
         except Exception as e:
             # La copia es de control: su falla no revierte el envío al proveedor
             logger.exception("Error al enviar copia-resumen del requerimiento %s a %s", requerimiento.id, correo_copia)
+
+    try:
+        connection.close()
+    except Exception:
+        pass
 
     mensaje_out = (
         f'Requerimiento enviado a {requerimiento.proveedor.nombre} ({correo_destino})'

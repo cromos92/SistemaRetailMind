@@ -18,9 +18,9 @@ import logging
 import re
 from datetime import timedelta
 
-from django.contrib.auth.decorators import login_required
 from django.db.models import (
-    BigIntegerField, Count, F, Max, OuterRef, Q, Subquery, Sum,
+    BigIntegerField, Case, CharField, Count, F, Max, OuterRef, Q, Subquery,
+    Sum, Value, When,
 )
 from django.db.models.functions import Abs, Coalesce, ExtractMonth, ExtractYear
 from django.db.utils import ProgrammingError
@@ -29,7 +29,10 @@ from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
-from .constants_kardex import CONCEPTOS_ABASTECIMIENTO, CONCEPTOS_VENTA
+from .constants_kardex import (
+    CONCEPTOS_ABASTECIMIENTO, CONCEPTOS_REINGRESO, CONCEPTOS_VENTA,
+    REF_SALDO_INICIAL_SINTETICO,
+)
 from .decorators import requiere_permiso
 from .models import (
     AtributoOpcion, CampanaLiquidacionProducto, Categoria, Compras_Producto,
@@ -138,7 +141,10 @@ def _forecast(serie, hoy):
 
 
 # ------------------------------------------------------------------ vista
-@login_required
+# El código 'inteligencia_compra' lo crea `inicializar_permisos` (Fase B):
+# hasta correr el command en prod, el decorador es fail-closed (403) —
+# esperado, mismo despliegue que diferencias/tránsito (incidente 05-ago).
+@requiere_permiso('inteligencia_compra', 'puede_ver')
 def ver_inteligencia_compra(request):
     """Página 'Inteligencia de Compra' con selector de marca."""
     sucursales = list(_sucursales_usuario(request))
@@ -159,7 +165,7 @@ def ver_inteligencia_compra(request):
 
 
 @require_GET
-@login_required
+@requiere_permiso('inteligencia_compra', 'puede_ver')
 def obtener_inteligencia_compra(request):
     """API: análisis + pronóstico de compra para una marca."""
     try:
@@ -198,34 +204,71 @@ def obtener_inteligencia_compra(request):
         }
         movs = Movimientos_Producto.objects.filter(**prod_f)
         ventas = movs.filter(concepto__in=CONCEPTOS_VENTA)
-        abast = movs.filter(concepto__in=CONCEPTOS_ABASTECIMIENTO)
-        ventas_tienda = ventas.filter(
-            ProductoTalla__producto__sucursal__es_centro_distribucion=False,
-            ProductoTalla__producto__sucursal_id__in=tienda_scope,
+        # Venta NETA: los reingresos post-venta (NC, devoluciones, cambios —
+        # CONCEPTOS_REINGRESO) se RESTAN de la demanda en el mismo universo
+        # (marca/analítica/sucursal/período). Con demanda bruta SKECHERS 90d
+        # sumaba 1.410 ventas con 169 reingresos (+12%): velocidad, TTM,
+        # pronóstico y compra sugerida inflados (auditoría 2026-08, P1-6a).
+        reingresos = movs.filter(concepto__in=CONCEPTOS_REINGRESO)
+        # Sell-through: la apertura sintética de la migración Laravel entró
+        # como INGRESO_INICIAL pero NO es abastecimiento (es la foto inicial);
+        # contarla duplica "ingresado" y hunde el STR (26,8% vs 60,2% real
+        # en SKECHERS 2026 — auditoría 2026-08, P1-6b).
+        abast = movs.filter(concepto__in=CONCEPTOS_ABASTECIMIENTO).exclude(
+            concepto='INGRESO_INICIAL',
+            referencia_externa=REF_SALDO_INICIAL_SINTETICO,
         )
+        en_tienda = {
+            'ProductoTalla__producto__sucursal__es_centro_distribucion': False,
+            'ProductoTalla__producto__sucursal_id__in': tienda_scope,
+        }
+        ventas_tienda = ventas.filter(**en_tienda)
+        reingresos_tienda = reingresos.filter(**en_tienda)
         ventas_bodega = ventas.filter(
             ProductoTalla__producto__sucursal__es_centro_distribucion=True)
+        reingresos_bodega = reingresos.filter(
+            ProductoTalla__producto__sucursal__es_centro_distribucion=True)
 
-        # -------- 1. venta pública por año --------
-        va = {r['a']: r for r in ventas_tienda.annotate(a=ExtractYear('fecha')).values('a')
-              .annotate(u=Sum(Abs('cantidad'), output_field=BI),
-                        monto=Sum(Abs(F('cantidad')) * F('precio'), output_field=BI)).order_by('a')}
-        ventas_anual = [{'anio': a, 'unidades': (va[a]['u'] or 0), 'monto': (va[a]['monto'] or 0)}
+        # -------- 1. venta pública por año (NETA de reingresos) --------
+        def _agg_anio(qs):
+            return {r['a']: r for r in qs.annotate(a=ExtractYear('fecha')).values('a')
+                    .annotate(u=Sum(Abs('cantidad'), output_field=BI),
+                              monto=Sum(Abs(F('cantidad')) * F('precio'), output_field=BI))
+                    .order_by('a')}
+        va_bruta = _agg_anio(ventas_tienda)
+        ra = _agg_anio(reingresos_tienda)
+        va = {}
+        for a in sorted(set(va_bruta) | set(ra)):
+            va[a] = {
+                'u': ((va_bruta.get(a) or {}).get('u') or 0) - ((ra.get(a) or {}).get('u') or 0),
+                'monto': ((va_bruta.get(a) or {}).get('monto') or 0) - ((ra.get(a) or {}).get('monto') or 0),
+            }
+        ventas_anual = [{'anio': a, 'unidades': va[a]['u'], 'monto': va[a]['monto']}
                         for a in sorted(va)]
         aa = {r['a']: (r['u'] or 0) for r in abast.annotate(a=ExtractYear('fecha')).values('a')
               .annotate(u=Sum(Abs('cantidad'), output_field=BI)).order_by('a')}
 
-        # -------- 2. venta por tienda + distribución bodegas --------
-        ventas_por_tienda = [
-            {'alias': r['ProductoTalla__producto__sucursal__alias'],
-             'unidades': (r['u'] or 0), 'monto': (r['monto'] or 0)}
-            for r in ventas_tienda.values('ProductoTalla__producto__sucursal__alias')
-            .annotate(u=Sum(Abs('cantidad'), output_field=BI),
-                      monto=Sum(Abs(F('cantidad')) * F('precio'), output_field=BI)).order_by('-u')]
-        distribucion_bodega = [
-            {'alias': r['ProductoTalla__producto__sucursal__alias'], 'unidades': (r['u'] or 0)}
-            for r in ventas_bodega.values('ProductoTalla__producto__sucursal__alias')
-            .annotate(u=Sum(Abs('cantidad'), output_field=BI)).order_by('-u')]
+        # -------- 2. venta por tienda + distribución bodegas (netas) --------
+        def _agg_alias(qs):
+            return {r['ProductoTalla__producto__sucursal__alias']: r for r in
+                    qs.values('ProductoTalla__producto__sucursal__alias')
+                    .annotate(u=Sum(Abs('cantidad'), output_field=BI),
+                              monto=Sum(Abs(F('cantidad')) * F('precio'), output_field=BI))}
+        vt_bruta = _agg_alias(ventas_tienda)
+        rt = _agg_alias(reingresos_tienda)
+        ventas_por_tienda = sorted(
+            [{'alias': al,
+              'unidades': ((vt_bruta.get(al) or {}).get('u') or 0) - ((rt.get(al) or {}).get('u') or 0),
+              'monto': ((vt_bruta.get(al) or {}).get('monto') or 0) - ((rt.get(al) or {}).get('monto') or 0)}
+             for al in set(vt_bruta) | set(rt)],
+            key=lambda x: -x['unidades'])
+        vb_bruta = _agg_alias(ventas_bodega)
+        rb = _agg_alias(reingresos_bodega)
+        distribucion_bodega = sorted(
+            [{'alias': al,
+              'unidades': ((vb_bruta.get(al) or {}).get('u') or 0) - ((rb.get(al) or {}).get('u') or 0)}
+             for al in set(vb_bruta) | set(rb)],
+            key=lambda x: -x['unidades'])
 
         # -------- 3. stock actual --------
         pt = Producto_Talla.objects.filter(
@@ -241,11 +284,14 @@ def obtener_inteligencia_compra(request):
                                   producto__sucursal_id__in=tienda_scope
                                   ).aggregate(s=Sum('stock', output_field=BI))['s'] or 0
 
-        # -------- 4. serie mensual venta pública (para gráfico + pronóstico) --------
+        # -------- 4. serie mensual venta pública NETA (gráfico + pronóstico) --------
         serie = {}
         for r in (ventas_tienda.annotate(a=ExtractYear('fecha'), m=ExtractMonth('fecha'))
                   .values('a', 'm').annotate(u=Sum(Abs('cantidad'), output_field=BI)).order_by('a', 'm')):
             serie[(r['a'], r['m'])] = r['u'] or 0
+        for r in (reingresos_tienda.annotate(a=ExtractYear('fecha'), m=ExtractMonth('fecha'))
+                  .values('a', 'm').annotate(u=Sum(Abs('cantidad'), output_field=BI))):
+            serie[(r['a'], r['m'])] = serie.get((r['a'], r['m']), 0) - (r['u'] or 0)
         # serie continua últimos 36 meses para el chart
         serie_chart = []
         yy, mm = hoy.year, hoy.month
@@ -265,22 +311,32 @@ def obtener_inteligencia_compra(request):
             sellthrough.append({'anio': a, 'vendido': v, 'ingresado': i,
                                 'str': round(100.0 * v / i, 1) if i else None})
 
-        # -------- 6. velocidad 90d --------
+        # -------- 6. velocidad 90d (neta) --------
         def vend(desde, hasta):
-            return _u(ventas_tienda.filter(fecha__gte=desde, fecha__lt=hasta))
+            return (_u(ventas_tienda.filter(fecha__gte=desde, fecha__lt=hasta))
+                    - _u(reingresos_tienda.filter(fecha__gte=desde, fecha__lt=hasta)))
         v90 = vend(hoy - timedelta(days=90), hoy)
         v90_ly = vend(hoy - timedelta(days=455), hoy - timedelta(days=365))
 
-        # -------- 7. curva de tallas (EU normalizada, demanda reciente 24m) --------
+        # -------- 7. curva de tallas (EU normalizada, demanda NETA 24m) --------
         venta_talla, stock_talla = {}, {}
         ventas_curva = ventas_tienda.filter(fecha__gte=hoy - timedelta(days=730))
+        reingresos_curva = reingresos_tienda.filter(fecha__gte=hoy - timedelta(days=730))
         if not ventas_curva.exists():
             ventas_curva = ventas_tienda  # fallback: marca sin venta reciente → all-time
+            reingresos_curva = reingresos_tienda
         for r in (ventas_curva.values('ProductoTalla__talla')
                   .annotate(u=Sum(Abs('cantidad'), output_field=BI))):
             t = _talla_norm(r['ProductoTalla__talla'])
             if t:
                 venta_talla[t] = venta_talla.get(t, 0) + (r['u'] or 0)
+        for r in (reingresos_curva.values('ProductoTalla__talla')
+                  .annotate(u=Sum(Abs('cantidad'), output_field=BI))):
+            t = _talla_norm(r['ProductoTalla__talla'])
+            if t:
+                venta_talla[t] = venta_talla.get(t, 0) - (r['u'] or 0)
+        # Piso 0: una talla con más reingresos que ventas no puede pesar negativo.
+        venta_talla = {t: max(0, v) for t, v in venta_talla.items()}
         for r in (pt.filter(producto__sucursal__es_centro_distribucion=False,
                             producto__sucursal_id__in=tienda_scope)
                   .values('talla').annotate(u=Sum('stock', output_field=BI))):
@@ -352,8 +408,9 @@ def obtener_inteligencia_compra(request):
 
         d12 = hoy - timedelta(days=365)
         tv = ventas_tienda.filter(fecha__gte=d12)
-        ttm_venta_m = _um(tv, 'precio')
-        ttm_costo_m = _um(tv, 'costo')
+        rv = reingresos_tienda.filter(fecha__gte=d12)
+        ttm_venta_m = _um(tv, 'precio') - _um(rv, 'precio')
+        ttm_costo_m = _um(tv, 'costo') - _um(rv, 'costo')
         # margen: realizado si el costo viene en las ventas; si no, margen de lista del inventario
         if ttm_venta_m > 0 and 0 < ttm_costo_m < ttm_venta_m:
             margen_pct = round(100.0 * (ttm_venta_m - ttm_costo_m) / ttm_venta_m, 1)
@@ -493,6 +550,19 @@ BUCKETS_ANTIGUEDAD = {
 ESCALA_DESCUENTO_LIQUIDACION = [(730, 40), (365, 25), (180, 15)]
 PISO_COSTO_FACTOR = 1.1
 
+# Tramos de antigüedad por DÍAS EXACTOS desde hoy — NO por año calendario.
+# Los cortes son los mismos umbrales de ESCALA_DESCUENTO_LIQUIDACION, así el
+# % del tramo es EXACTAMENTE el % que lleva cada fila del detalle y el mismo
+# producto ya no puede salir con 0% en su fila y 25% en el resumen (bucket
+# por año calendario sobrestimaba ≥$220,7M el "1 año a liquidar" — auditoría
+# 2026-08, P1-7b). (clave, label, días desde, días hasta exclusivo).
+TRAMOS_ANTIGUEDAD = (
+    ('t0', '<6 meses', 0, 180),
+    ('t1', '6-12 meses', 180, 365),
+    ('t2', '1-2 años', 365, 730),
+    ('t3', '2+ años', 730, None),
+)
+
 
 def _descuento_sugerido(dias):
     """% de descuento de liquidación sugerido según días de antigüedad."""
@@ -502,6 +572,20 @@ def _descuento_sugerido(dias):
         if dias >= umbral:
             return pct
     return 0
+
+
+def _tramo_de_dias(dias):
+    """Clave de TRAMOS_ANTIGUEDAD para una antigüedad en días exactos.
+    Espeja el orden del Case de `_tramo_case` (None => sin dato)."""
+    if dias is None:
+        return None
+    if dias >= 730:
+        return 't3'
+    if dias >= 365:
+        return 't2'
+    if dias >= 180:
+        return 't1'
+    return 't0'
 
 
 def _precio_liq_sugerido(precioventa, costo, dias):
@@ -546,9 +630,14 @@ def _scope_plan(request):
         producto__sucursal_id__in=alcance_ids,
     )
     mov_scope = [i for i in alcance_ids if i in tiendas_ids]
+    # Mismo universo que base_pt: sin excluir_de_analitica aquí, las ventas
+    # de productos excluidos (bolsas IMP/PA00, etc.) inflaban rotación/GMROI
+    # de la marca y el plan recomendaba "Reponer" lo que había que liquidar
+    # (PAOLA: rotación 147 con exclusiones vs 0,56 real — auditoría 20-ago).
     mov_base = Movimientos_Producto.objects.filter(
         estado='COMPLETADO', concepto__in=CONCEPTOS_VENTA,
         ProductoTalla__producto__sucursal_id__in=mov_scope,
+        ProductoTalla__producto__excluir_de_analitica=False,
     )
 
     if categoria_id:
@@ -884,21 +973,28 @@ def _bucket_filter(qs, bucket, hoy):
     return qs
 
 
-def _parse_anios(raw):
-    """'2025,2026' -> [2025, 2026] (ignora no-numéricos)."""
-    anios = []
-    for p in (raw or '').split(','):
-        p = p.strip()
-        if p.isdigit():
-            anios.append(int(p))
-    return anios
+def _parse_tramos(raw):
+    """'t1,t2' -> tuplas de TRAMOS_ANTIGUEDAD (ignora claves desconocidas)."""
+    claves = {p.strip() for p in (raw or '').split(',') if p.strip()}
+    return [t for t in TRAMOS_ANTIGUEDAD if t[0] in claves]
 
 
-def _anio_filter(qs, anios):
-    """Filtra el queryset del detalle por AÑO(s) de antigüedad (sobre aging_dt)."""
-    if not anios:
+def _tramo_filter(qs, tramos, hoy):
+    """Filtra el queryset del detalle por TRAMO(s) de antigüedad en días
+    exactos (sobre aging_dt) — mismo criterio que el gráfico y el Excel."""
+    if not tramos:
         return qs
-    return qs.annotate(_anio=ExtractYear('aging_dt')).filter(_anio__in=anios)
+    cond = Q()
+    for _clave, _label, d0, d1 in tramos:
+        # dias en [d0, d1)  <=>  aging_date in (hoy-d1, hoy-d0]
+        if d0 > 0:
+            c = Q(aging_dt__date__lte=hoy - timedelta(days=d0))
+        else:
+            c = Q(aging_dt__isnull=False)  # incluye fechas futuras (días<0)
+        if d1 is not None:
+            c &= Q(aging_dt__date__gt=hoy - timedelta(days=d1))
+        cond |= c
+    return qs.filter(cond)
 
 
 def _serializar_detalle(qs, hoy):
@@ -959,7 +1055,7 @@ def obtener_plan_liquidacion_detalle(request):
         bucket = request.GET.get('antiguedad') or None
         if bucket:
             qs = _bucket_filter(qs, bucket, hoy)
-        qs = _anio_filter(qs, _parse_anios(request.GET.get('anio')))
+        qs = _tramo_filter(qs, _parse_tramos(request.GET.get('tramo')), hoy)
 
         orden = request.GET.get('orden') or '-valor_costo'
         rev = orden.startswith('-')
@@ -1005,72 +1101,94 @@ def obtener_plan_liquidacion_detalle(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-def _aging_year_expr():
-    """ExtractYear de la antigüedad FIFO (lote vivo más antiguo o creación)."""
+def _aging_dt_expr():
+    """Antigüedad FIFO como fecha (lote vivo más antiguo o creación)."""
     lote_sq = (LoteProducto.objects.filter(
         producto_talla__producto=OuterRef('pk'),
         activo=True, agotado=False, cantidad_disponible__gt=0,
     ).order_by('fecha_ingreso').values('fecha_ingreso')[:1])
-    return ExtractYear(Coalesce(Subquery(lote_sq), F('fecha_creacion')))
+    return Coalesce(Subquery(lote_sq), F('fecha_creacion'))
 
 
-def _anios_liquidacion(base_pt, hoy):
-    """Capital + pares por AÑO de antigüedad del stock filtrado."""
+def _tramo_case(hoy):
+    """Case SQL: aging_dt (anotado) -> clave de TRAMOS_ANTIGUEDAD por días
+    exactos desde hoy. Sin fecha => NULL (queda fuera, igual que antes)."""
+    return Case(
+        When(aging_dt__date__lte=hoy - timedelta(days=730), then=Value('t3')),
+        When(aging_dt__date__lte=hoy - timedelta(days=365), then=Value('t2')),
+        When(aging_dt__date__lte=hoy - timedelta(days=180), then=Value('t1')),
+        When(aging_dt__isnull=False, then=Value('t0')),
+        default=Value(None),
+        output_field=CharField(),
+    )
+
+
+def _tramos_liquidacion(base_pt, hoy):
+    """Capital + pares por TRAMO de antigüedad (días exactos desde hoy).
+
+    Reemplaza el bucket por año calendario: "todo 2025 = 1 año = 25%"
+    metía en '≥1 año' stock con lote de <365 días. Los cortes son los de
+    ESCALA_DESCUENTO_LIQUIDACION, así el % del tramo coincide 1:1 con el
+    % de cada fila del detalle y del Excel."""
     stock_f = Q(producto_talla__stock__gt=0)
     rows = (Producto.objects.filter(id__in=base_pt.values('producto_id'))
-            .annotate(anio=_aging_year_expr())
-            .values('anio')
+            .annotate(aging_dt=_aging_dt_expr())
+            .annotate(tramo=_tramo_case(hoy))
+            .values('tramo')
             .annotate(
                 valor=Coalesce(Sum(F('producto_talla__stock') * F('costo'),
                                    filter=stock_f, output_field=BI), 0),
                 pares=Coalesce(Sum('producto_talla__stock', filter=stock_f, output_field=BI), 0),
-                productos=Count('id', distinct=True))
-            .order_by('anio'))
-    anio_actual = hoy.year
-    anios = []
-    for r in rows:
-        if not r['anio']:
+                productos=Count('id', distinct=True)))
+    por_tramo = {r['tramo']: r for r in rows}
+    tramos = []
+    for clave, label, d0, d1 in TRAMOS_ANTIGUEDAD:
+        r = por_tramo.get(clave)
+        if not r:
             continue
-        antig = anio_actual - r['anio']
-        anios.append({
-            'anio': r['anio'], 'valor': r['valor'] or 0, 'pares': r['pares'] or 0,
-            'productos': r['productos'] or 0, 'antiguedad_anios': antig,
-            'descuento_sugerido': _descuento_sugerido(antig * 365)})
-    return anios
+        tramos.append({
+            'tramo': clave, 'label': label,
+            'dias_desde': d0, 'dias_hasta': d1,
+            'antiguedad_anios': d0 // 365,
+            'valor': r['valor'] or 0, 'pares': r['pares'] or 0,
+            'productos': r['productos'] or 0,
+            'descuento_sugerido': _descuento_sugerido(d0)})
+    return tramos
 
 
 def _dimension_liquidacion(base_pt, hoy, dim='marca', top_n=10):
     """Top items de una dimensión (marca|especialidad) con su capital dividido
-    en buckets de urgencia (reciente / 1 año / 2+ años). Especialidad es
+    en buckets de urgencia por DÍAS EXACTOS del lote (<1 año / 1-2 años /
+    2+ años — mismo criterio que los tramos y el detalle). Especialidad es
     multi-etiqueta (atribución): un producto suma en cada una que tenga.
     """
     stock_f = Q(producto_talla__stock__gt=0)
     qs = (Producto.objects.filter(id__in=base_pt.values('producto_id'))
-          .annotate(anio=_aging_year_expr()))
+          .annotate(aging_dt=_aging_dt_expr())
+          .annotate(tramo=_tramo_case(hoy)))
     if dim == 'especialidad':
         qs = qs.filter(atributos__atributo__nombre__iexact=NOMBRE_ATRIBUTO_ESPECIALIDAD)
         campo, etiqueta = 'atributos__opcion__valor', 'especialidad'
     else:
         campo, etiqueta = 'atributo1__valor', 'marca'
-    rows = list(qs.values(campo, 'anio').annotate(
+    rows = list(qs.values(campo, 'tramo').annotate(
         valor=Coalesce(Sum(F('producto_talla__stock') * F('costo'),
                            filter=stock_f, output_field=BI), 0),
         pares=Coalesce(Sum('producto_talla__stock', filter=stock_f, output_field=BI), 0)))
-    anio_actual = hoy.year
     acc = {}
     for r in rows:
         nombre = r[campo] or f'Sin {etiqueta}'
-        anio = r['anio']
+        tramo = r['tramo']
         valor, pares = r['valor'] or 0, r['pares'] or 0
         it = acc.setdefault(nombre, {'nombre': nombre, 'val_reciente': 0,
                                      'val_1anio': 0, 'val_2mas': 0, 'valor': 0, 'pares': 0})
         it['valor'] += valor
         it['pares'] += pares
-        if anio is None or anio >= anio_actual:
+        if tramo in (None, 't0', 't1'):   # <1 año (o sin dato)
             it['val_reciente'] += valor
-        elif anio == anio_actual - 1:
+        elif tramo == 't2':               # 1-2 años
             it['val_1anio'] += valor
-        else:
+        else:                             # 't3' => 2+ años
             it['val_2mas'] += valor
     items = sorted(acc.values(), key=lambda x: -x['valor'])
     top = items[:top_n]
@@ -1085,11 +1203,13 @@ def _dimension_liquidacion(base_pt, hoy, dim='marca', top_n=10):
 
 
 @require_GET
-@login_required
+@requiere_permiso('plan_liquidacion', 'puede_ver')
 def obtener_plan_liquidacion_por_anio(request):
-    """Análisis de antigüedad para los gráficos: capital/pares por año y por
-    dimensión (marca|especialidad, param `dim`). `solo=dim` omite el año (para
-    el toggle de dimensión, que no recalcula el gráfico de años)."""
+    """Análisis de antigüedad para los gráficos: capital/pares por TRAMO de
+    días exactos y por dimensión (marca|especialidad, param `dim`).
+    `solo=dim` omite los tramos (para el toggle de dimensión, que no
+    recalcula el gráfico de antigüedad). Era la única ruta del plan sin
+    @requiere_permiso (auditoría 2026-08, P1-7a)."""
     try:
         hoy = timezone.localdate()
         base_pt, mov_base, ctx = _scope_plan(request)
@@ -1098,19 +1218,26 @@ def obtener_plan_liquidacion_por_anio(request):
         por_dimension = _dimension_liquidacion(base_pt, hoy, dim=dim)
         if solo == 'dim':
             return JsonResponse({'success': True, 'dim': dim, 'por_dimension': por_dimension})
-        anios = _anios_liquidacion(base_pt, hoy)
-        total_valor = sum(a['valor'] for a in anios)
-        total_pares = sum(a['pares'] for a in anios)
-        valor_liquidar = sum(a['valor'] for a in anios if (a['descuento_sugerido'] or 0) > 0)
-        pares_liquidar = sum(a['pares'] for a in anios if (a['descuento_sugerido'] or 0) > 0)
-        return JsonResponse({'success': True, 'anios': anios, 'dim': dim,
-                             'por_dimension': por_dimension, 'anio_actual': hoy.year,
-                             'anios_disponibles': [a['anio'] for a in anios],
+        tramos = _tramos_liquidacion(base_pt, hoy)
+        total_valor = sum(t['valor'] for t in tramos)
+        total_pares = sum(t['pares'] for t in tramos)
+        # "A liquidar" = tramos con descuento sugerido (≥6 meses)…
+        valor_liquidar = sum(t['valor'] for t in tramos if (t['descuento_sugerido'] or 0) > 0)
+        pares_liquidar = sum(t['pares'] for t in tramos if (t['descuento_sugerido'] or 0) > 0)
+        # …y aparte el corte clásico "≥1 año" (ahora por días reales).
+        valor_1anio_mas = sum(t['valor'] for t in tramos if t['dias_desde'] >= 365)
+        pares_1anio_mas = sum(t['pares'] for t in tramos if t['dias_desde'] >= 365)
+        return JsonResponse({'success': True, 'tramos': tramos, 'dim': dim,
+                             'por_dimension': por_dimension,
+                             'tramos_disponibles': [{'tramo': t['tramo'], 'label': t['label']}
+                                                    for t in tramos],
                              'totales': {'valor': total_valor, 'pares': total_pares,
                                          'valor_liquidar': valor_liquidar,
-                                         'pares_liquidar': pares_liquidar}})
+                                         'pares_liquidar': pares_liquidar,
+                                         'valor_1anio_mas': valor_1anio_mas,
+                                         'pares_1anio_mas': pares_1anio_mas}})
     except Exception as e:
-        logger.exception('Error en plan de liquidación por año')
+        logger.exception('Error en plan de liquidación por antigüedad')
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
@@ -1122,7 +1249,7 @@ def _filas_export(request, hoy):
     bucket = request.GET.get('antiguedad') or None
     if bucket:
         qs = _bucket_filter(qs, bucket, hoy)
-    qs = _anio_filter(qs, _parse_anios(request.GET.get('anio')))
+    qs = _tramo_filter(qs, _parse_tramos(request.GET.get('tramo')), hoy)
     # valor desc SOLO para que el cap priorice lo más valioso; el orden final
     # (marca → año → artículo asc) se aplica en Python por sucursal.
     qs = qs.order_by(F('valor_ord').desc(nulls_last=True), 'id')
@@ -1179,7 +1306,8 @@ def exportar_plan_liquidacion_excel(request):
 
         hoy = timezone.localdate()
         filas, ctx, bucket, truncado = _filas_export(request, hoy)
-        anios_txt = request.GET.get('anio') or 'Todos'
+        tramos_sel = _parse_tramos(request.GET.get('tramo'))
+        anios_txt = ', '.join(t[1] for t in tramos_sel) or 'Todos'
         grupos = _agrupar_por_sucursal(filas)
 
         wb = Workbook()
@@ -1191,7 +1319,8 @@ def exportar_plan_liquidacion_excel(request):
         borde = Border(left=thin, right=thin, top=thin, bottom=thin)
         centrado = Alignment(horizontal='center')
 
-        resumen_suc = {}  # (alias, anio) -> {pares, costo, lista, liq}
+        resumen_suc = {}    # (alias, anio) -> {pares, costo, lista, liq}
+        resumen_tramo = {}  # clave de tramo (días exactos) -> {pares, costo, liq}
         for (es_cd, alias), items in grupos.items():
             ws = wb.create_sheet(_titulo_hoja(alias, es_cd))
             for i, ancho in enumerate(ANCHOS_VERIFICACION, start=1):
@@ -1208,7 +1337,7 @@ def exportar_plan_liquidacion_excel(request):
             ws.freeze_panes = 'A3'
 
             titulo = (f'Plan de Liquidación · {alias}{" (CD)" if es_cd else ""}'
-                      f' · {hoy.strftime("%d-%m-%Y")} · Años: {anios_txt}')
+                      f' · {hoy.strftime("%d-%m-%Y")} · Antigüedad: {anios_txt}')
             c0 = ws.cell(row=1, column=1, value=titulo)
             c0.font = Font(bold=True, size=13)
             ws.merge_cells(start_row=1, start_column=1,
@@ -1246,6 +1375,14 @@ def exportar_plan_liquidacion_excel(request):
                 r['costo'] += f['valor_costo'] or 0
                 r['lista'] += lista * pares
                 r['liq'] += liq * pares
+                # Resumen por tramo con los MISMOS días exactos de la fila:
+                # el % del tramo es el % que lleva la fila (antes el bloque
+                # "por año" del Resumen usaba años×365 y contradecía al detalle).
+                rt = resumen_tramo.setdefault(_tramo_de_dias(f['dias_antiguedad']), {
+                    'pares': 0, 'costo': 0, 'liq': 0})
+                rt['pares'] += pares
+                rt['costo'] += f['valor_costo'] or 0
+                rt['liq'] += liq * pares
                 fila_n += 1
 
             for col, val in ((2, 'TOTAL'), (9, tot_pares), (12, tot_lista), (14, tot_liq)):
@@ -1263,18 +1400,22 @@ def exportar_plan_liquidacion_excel(request):
             ws_r.append([alias, anio or 's/d', r['pares'], r['costo'],
                          r['lista'], r['liq']])
         ws_r.append([])
-        ws_r.append(['Año', 'Antigüedad (años)', 'Descuento sugerido %',
+        ws_r.append(['Tramo antigüedad', 'Días', 'Descuento sugerido %',
                      'Pares', 'Valor a costo', 'Valor liquidación est.'])
-        por_anio = {}
-        for (alias, anio), r in resumen_suc.items():
-            a = por_anio.setdefault(anio, {'pares': 0, 'costo': 0, 'liq': 0})
-            for k in ('pares', 'costo', 'liq'):
-                a[k] += r[k]
-        for anio in sorted(por_anio):
-            a = por_anio[anio]
-            antig = (hoy.year - anio) if anio else 's/d'
-            pct = _descuento_sugerido(antig * 365 if isinstance(antig, int) else None)
-            ws_r.append([anio or 's/d', antig, pct, a['pares'], a['costo'], a['liq']])
+        # Tramos por días EXACTOS (mismo criterio que cada fila del detalle);
+        # antes este bloque usaba años calendario ×365 y el mismo producto
+        # podía llevar 0% en su fila y 25% aquí.
+        meta_tramo = {clave: (label, d0, d1) for clave, label, d0, d1 in TRAMOS_ANTIGUEDAD}
+        orden_tramo = {clave: i for i, (clave, _l, _d0, _d1) in enumerate(TRAMOS_ANTIGUEDAD)}
+        for clave in sorted(resumen_tramo, key=lambda c: orden_tramo.get(c, 99)):
+            a = resumen_tramo[clave]
+            if clave is None:
+                ws_r.append(['Sin dato', '—', 0, a['pares'], a['costo'], a['liq']])
+                continue
+            label, d0, d1 = meta_tramo[clave]
+            rango = f'{d0}–{d1 - 1}' if d1 is not None else f'≥{d0}'
+            ws_r.append([label, rango, _descuento_sugerido(d0),
+                         a['pares'], a['costo'], a['liq']])
 
         # ---- Hoja Filtros ----
         ws2 = wb.create_sheet('Filtros')
@@ -1282,7 +1423,7 @@ def exportar_plan_liquidacion_excel(request):
         ws2.append(['Generado', hoy.strftime('%Y-%m-%d')])
         for nombre, valor in _etiquetas_filtros(ctx):
             ws2.append([nombre, valor])
-        ws2.append(['Años', anios_txt])
+        ws2.append(['Tramos antigüedad', anios_txt])
         ws2.append(['Bucket antigüedad', bucket or 'Todos'])
         ws2.append(['Búsqueda', request.GET.get('q') or '—'])
         if truncado:
@@ -1313,7 +1454,8 @@ def imprimir_plan_liquidacion(request):
     hoy = timezone.localdate()
     filas, ctx, bucket, truncado = _filas_export(request, hoy)
     grupos = _agrupar_por_sucursal(filas)
-    anios_txt = request.GET.get('anio') or 'Todos'
+    tramos_sel = _parse_tramos(request.GET.get('tramo'))
+    anios_txt = ', '.join(t[1] for t in tramos_sel) or 'Todos'
 
     secciones = []
     for (es_cd, alias), items in grupos.items():

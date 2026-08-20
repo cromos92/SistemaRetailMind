@@ -292,6 +292,26 @@ URL_PERMISO_MAP = {
     '/app/api/reporte-rendimiento-proveedor/': 'reporte_rendimiento_proveedor',
     '/app/api/exportar-rendimiento-proveedor-excel/': 'reporte_rendimiento_proveedor',
 
+    # --- Fase B auditoría 2026-08 (P1-10): tres reportes sin gate de rol ---
+    # Sus códigos NO existían en OpcionMenu; los crea inicializar_permisos
+    # (correrlo en prod junto con el deploy, o el decorador fail-closed de las
+    # vistas dará 403 a todos). Endpoint por endpoint, sin prefijos amplios.
+
+    # Ventas global por empresa (KPIs consolidados multi-empresa)
+    '/app/reportes/ventas-global/': 'reporte_ventas_global',
+    '/app/api/reportes/ventas-global-empresa/': 'reporte_ventas_global',
+
+    # Productos creados por origen (alta por compra / manual / traspaso / ajuste)
+    '/app/reportes/productos-origen/': 'reporte_productos_origen',
+    '/app/api/reportes/productos-origen/': 'reporte_productos_origen',
+
+    # Inteligencia de compra (análisis + pronóstico por marca, con costos y GMROI).
+    # ⚠️ Solo su página y SU API: '/app/api/plan-liquidacion/' y
+    # '/app/reportes/plan-liquidacion/' son de plan_liquidacion (otro permiso)
+    # y no se tocan aquí.
+    '/app/reportes/inteligencia-compra/': 'inteligencia_compra',
+    '/app/api/inteligencia-compra/': 'inteligencia_compra',
+
 
     # Ventas (adicionales)
     '/app/ventas/revision-arqueos/': 'revision_arqueos',

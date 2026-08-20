@@ -129,6 +129,20 @@ MIN_VENTA_QUIEBRE_DEFAULT = 1
 # como demanda.
 PCT_DISPONIBILIDAD_MINIMA = 60
 
+# Guardas del KPI AGREGADO "venta perdida estimada" (el de cabecera).
+# Las FILAS siempre muestran su extrapolación completa con sus flags; el
+# agregado sólo suma lo defendible (auditoría ago-2026, P1.5: una sola celda
+# con 300 ventas en 1 día "demostraba" 26.700 u perdidas — multiplicador ×90 —
+# y era el 90% del KPI del trimestre):
+#   * fuera las celdas con `reconstruccion_dudosa` (kardex↔stock descuadrado);
+#   * fuera las celdas con menos de MIN_DIAS_AGREGADO días de disponibilidad
+#     (la extrapolación lineal con 1-6 días de muestra es ruido);
+#   * el multiplicador dias_periodo/dias_disponible se capea a
+#     CAP_MULTIPLICADOR_AGREGADO para el resto.
+# Lo excluido se reporta aparte en `unidades_perdidas_excluidas`.
+MIN_DIAS_AGREGADO = 7
+CAP_MULTIPLICADOR_AGREGADO = 3.0
+
 LIMITE_ESTILOS_DEFAULT = 300
 LIMITE_ESTILOS_MAX = 1000
 
@@ -650,7 +664,13 @@ def api_reporte_quiebre_talla(request):
         total_criticos = 0
         total_reponibles = 0
         total_unidades_cd = 0
+        # KPI de cabecera (conservador) y el desglose de lo que quedó fuera.
         total_perdidas = 0.0
+        excl_dudosa = 0.0        # celdas reconstruccion_dudosa
+        excl_baja_disp = 0.0     # celdas con dias_disponible < MIN_DIAS_AGREGADO
+        excl_cap = 0.0           # exceso recortado por el cap del multiplicador
+        celdas_excluidas = 0
+        celdas_capeadas = 0
 
         for clave in claves_analizadas:
             info = meta_estilos[clave]
@@ -712,6 +732,22 @@ def api_reporte_quiebre_talla(request):
                 if quiebre:
                     quiebres_estilo += 1
                     perdidas_estilo += perdidas
+                    # El KPI de cabecera sólo suma la versión CONSERVADORA de
+                    # la celda; la fila conserva `perdidas` completo + flags.
+                    if dudosa:
+                        excl_dudosa += perdidas
+                        celdas_excluidas += 1
+                    elif dias_ok < MIN_DIAS_AGREGADO:
+                        excl_baja_disp += perdidas
+                        celdas_excluidas += 1
+                    else:
+                        mult = min(dias_periodo / dias_ok,
+                                   CAP_MULTIPLICADOR_AGREGADO)
+                        perdidas_kpi = max(0.0, vendidas * mult - vendidas)
+                        total_perdidas += perdidas_kpi
+                        if perdidas > perdidas_kpi:
+                            excl_cap += perdidas - perdidas_kpi
+                            celdas_capeadas += 1
                     if unidades_cd > 0:
                         total_reponibles += 1
                         total_unidades_cd += unidades_cd
@@ -743,7 +779,6 @@ def api_reporte_quiebre_talla(request):
 
             if quiebres_estilo:
                 total_quiebres += quiebres_estilo
-                total_perdidas += perdidas_estilo
             if critico:
                 total_criticos += 1
 
@@ -790,6 +825,18 @@ def api_reporte_quiebre_talla(request):
                 f'venta. Sube `limite` (máx. {LIMITE_ESTILOS_MAX}) o acota por '
                 f'marca / categoría para ver el resto.')
 
+        excluidas_total = excl_dudosa + excl_baja_disp + excl_cap
+        if excluidas_total >= 1:
+            avisos.append(
+                f'El KPI "venta perdida" de cabecera es una estimación '
+                f'CONSERVADORA: quedaron fuera {round(excluidas_total):,} u '
+                f'({round(excl_dudosa):,} de tallas con reconstrucción dudosa, '
+                f'{round(excl_baja_disp):,} de tallas con menos de '
+                f'{MIN_DIAS_AGREGADO} días con stock en el período y '
+                f'{round(excl_cap):,} recortadas por el tope de extrapolación '
+                f'{CAP_MULTIPLICADOR_AGREGADO:g}x). Cada talla sigue mostrando '
+                f'su estimación completa en su fila, con su bandera.'.replace(',', '.'))
+
         avisos.append(
             'La demanda por talla se corrige por disponibilidad: las tallas con '
             f'menos de {PCT_DISPONIBILIDAD_MINIMA}% de días con stock quedan '
@@ -810,6 +857,16 @@ def api_reporte_quiebre_talla(request):
                 'quiebres_reponibles': total_reponibles,
                 'unidades_disponibles_cd': total_unidades_cd,
                 'unidades_perdidas_estimadas': round(total_perdidas, 1),
+                'unidades_perdidas_excluidas': {
+                    'total': round(excl_dudosa + excl_baja_disp + excl_cap, 1),
+                    'reconstruccion_dudosa': round(excl_dudosa, 1),
+                    'baja_disponibilidad': round(excl_baja_disp, 1),
+                    'cap_multiplicador': round(excl_cap, 1),
+                    'celdas_excluidas': celdas_excluidas,
+                    'celdas_capeadas': celdas_capeadas,
+                    'min_dias_disponible': MIN_DIAS_AGREGADO,
+                    'cap': CAP_MULTIPLICADOR_AGREGADO,
+                },
                 'truncado': truncado,
             },
             'tallas_core': [
@@ -864,5 +921,15 @@ def _resumen_vacio():
         'quiebres_reponibles': 0,
         'unidades_disponibles_cd': 0,
         'unidades_perdidas_estimadas': 0,
+        'unidades_perdidas_excluidas': {
+            'total': 0,
+            'reconstruccion_dudosa': 0,
+            'baja_disponibilidad': 0,
+            'cap_multiplicador': 0,
+            'celdas_excluidas': 0,
+            'celdas_capeadas': 0,
+            'min_dias_disponible': MIN_DIAS_AGREGADO,
+            'cap': CAP_MULTIPLICADOR_AGREGADO,
+        },
         'truncado': False,
     }

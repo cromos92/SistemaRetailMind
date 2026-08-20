@@ -460,7 +460,7 @@
                     <div class="col-md-6">
                         <label class="form-label small mb-0">Copia de control</label>
                         <input type="email" class="form-control form-control-sm" id="env-correo-copia" placeholder="copia@miempresa.cl">
-                        <small class="text-muted" style="font-size:.7rem">Recibe un resumen sin fotos que certifica el envío.</small>
+                        <small class="text-muted" style="font-size:.7rem">Recibe un resumen que certifica el envío, y las respuestas que el proveedor haga con "Responder". Editable en cada envío.</small>
                     </div>
                 </div>
                 <div class="mb-2">
@@ -784,6 +784,8 @@ function pintarProveedor(r) {
 
     let h = `<hr class="my-2"><div style="font-size:.75rem">
         <div class="d-flex justify-content-between"><span class="text-muted">Enviado</span><span>${reqEsc(r.fecha_envio_proveedor)}</span></div>
+        <div class="d-flex justify-content-between"><span class="text-muted">Al correo</span>
+            <span class="text-truncate ms-2" style="max-width:65%" title="${reqEsc(r.correo_proveedor_destino || '')}">${reqEsc(r.correo_proveedor_destino) || '<span class="text-muted">no registrado (envío antiguo)</span>'}</span></div>
         <div class="d-flex justify-content-between"><span class="text-muted">Intentos</span><span class="badge badge-soft-info">${r.intentos_envio || 0}</span></div>`;
 
     if (!r.fecha_respuesta_proveedor) {

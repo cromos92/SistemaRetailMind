@@ -38,7 +38,7 @@ import logging
 from datetime import datetime, timedelta
 
 from django.core.paginator import Paginator
-from django.db.models import Count, F, IntegerField, Max, Min, Q, Sum, Value
+from django.db.models import Count, F, IntegerField, Min, Q, Sum, Value
 from django.db.models.functions import Abs, Coalesce
 from django.http import JsonResponse
 from django.shortcuts import render
@@ -80,6 +80,17 @@ DIAS_TRANSITO_NORMAL = 3
 
 # Movimientos que SUMAN stock en el destino (para netear devoluciones por NC).
 TIPOS_MOVIMIENTO_ENTRADA = ('INGRESO', 'DEVOLUCION')
+
+# Conceptos que también INGRESAN unidades al destino contra el MISMO DTE del
+# despacho, fuera del traspaso normal: el botón "Llegó todo"
+# (`anular_regularizacion_dte`, views.py) escribe ANULACION_REGULARIZACION y
+# las correcciones manuales escriben CORRECCION_STOCK. Sin contarlos, un
+# documento cerrado por esos flujos quedaba SIN_RECIBIR para siempre (falso
+# positivo permanente — auditoría ago-2026, P1.4: folio 17098). Se exigen
+# tipo INGRESO + estado COMPLETADO porque ambos conceptos existen también en
+# dirección de salida (la reversa de "cancelar regularización" es un EGRESO
+# con el mismo concepto ANULACION_REGULARIZACION).
+CONCEPTOS_CIERRE_RECEPCION = ('ANULACION_REGULARIZACION', 'CORRECCION_STOCK')
 
 DIAS_DEFAULT = 30
 DIAS_MAX = 730
@@ -487,6 +498,23 @@ def api_reporte_diferencias_recepcion(request):
 # detalle por SKU de lo que falta.
 
 
+def _filtro_entradas_dte():
+    """
+    Q() de los movimientos que cuentan como RECIBIDO en el destino de un DTE:
+    el traspaso normal (`CONCEPTOS_TRASPASO_ENTRADA`) más los cierres
+    administrativos (`CONCEPTOS_CIERRE_RECEPCION`), estos últimos acotados a
+    INGRESO COMPLETADO para no sumar sus reversas (EGRESO) ni movimientos
+    anulados. Lo usan el listado y el detalle por SKU: los dos tienen que
+    contar EXACTAMENTE las mismas entradas o dan pendientes distintos para el
+    mismo documento.
+    """
+    return (
+        Q(concepto__in=CONCEPTOS_TRASPASO_ENTRADA)
+        | Q(concepto__in=CONCEPTOS_CIERRE_RECEPCION,
+            tipo_movimiento='INGRESO', estado='COMPLETADO')
+    )
+
+
 def _clasificar_situacion(enviadas, recibidas, pendientes, dias):
     if recibidas > enviadas:
         # El destino ingresó más unidades de las que salieron: no es un
@@ -591,7 +619,7 @@ def _documentos_en_transito(request, dias, sucursal_origen_id=None, sucursal_des
 
     recibidas_por_dte = dict(
         Movimientos_Producto.objects
-        .filter(concepto__in=CONCEPTOS_TRASPASO_ENTRADA, dte_id__in=dte_ids)
+        .filter(_filtro_entradas_dte(), dte_id__in=dte_ids)
         .values_list('dte_id')
         .annotate(u=Sum(Abs('cantidad')))
         .order_by()
@@ -831,7 +859,7 @@ def api_detalle_mercaderia_transito(request):
 
         recibidas = dict(
             Movimientos_Producto.objects
-            .filter(concepto__in=CONCEPTOS_TRASPASO_ENTRADA, dte_id=dte_id)
+            .filter(_filtro_entradas_dte(), dte_id=dte_id)
             .values_list('ProductoTalla__sku')
             .annotate(u=Sum(Abs('cantidad')))
             .order_by()
@@ -850,15 +878,12 @@ def api_detalle_mercaderia_transito(request):
                 .order_by()
             )
 
-        # Costo unitario del SKU en ESTE documento. Se toma el máximo porque un
-        # mismo SKU puede venir repetido en varias líneas: promediar exigiría
-        # ponderar por unidades y el costo por línea no varía en la práctica.
-        costo_por_sku = dict(
-            Dte_Productos.objects.filter(dte_id=dte_id, productoTalla__isnull=False)
-            .values_list('productoTalla__sku')
-            .annotate(c=Max('costo'))
-            .order_by()
-        )
+        # Costo unitario: el MISMO promedio del documento que usa el listado
+        # (`_costo_unitario_por_dte`). Antes el detalle tomaba Max(costo) por
+        # SKU y el listado el promedio, así que el mismo despacho se valorizaba
+        # distinto según la pantalla (-12% medido en la auditoría ago-2026).
+        # Un solo criterio ⇒ listado y detalle suman los mismos pesos.
+        costo_doc = _costo_unitario_por_dte([dte_id]).get(dte_id, 0)
 
         filas = []
         totales = {'enviadas': 0, 'recibidas': 0, 'devueltas_nc': 0,
@@ -869,7 +894,7 @@ def api_detalle_mercaderia_transito(request):
             rec = recibidas.get(sku, 0) or 0
             dev = devueltas.get(sku, 0) or 0
             pend = max(0, env - rec - dev)
-            costo = int(costo_por_sku.get(sku, 0) or 0)
+            costo = costo_doc
             filas.append({
                 'sku': str(sku) if sku is not None else '—',
                 'articulo': row['ProductoTalla__producto__articulo'] or '—',

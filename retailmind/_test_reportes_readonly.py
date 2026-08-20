@@ -1029,6 +1029,53 @@ def construir_plan(fi, ff, ctxs, fx, rapido):
         plan.append(('plan_liquidacion', lambda o: (
             check_smoke(invocar_vista(
                 'app.views_inteligencia_compra.obtener_plan_liquidacion', {}, G)), [])))
+    # --- guards de la Fase A de fixes (2026-08-20) ---
+    if R:
+        def dfuga(oraculos):
+            emp_r = set(EmpresaUser.objects.filter(user=R.usuario, status=True)
+                        .values_list('empresa_id', flat=True))
+            ajena = Sucursal.objects.exclude(empresa_id__in=emp_r).first()
+            if not ajena:
+                return [C('fuga_403', 'skip', '', '', 'sin sucursal ajena')], []
+            res = invocar_vista(
+                'app.views_modulo_reportes.api_diagnostico_cuadratura_vs_reporte',
+                {'fecha': fi_s, 'sucursal_id': ajena.id}, R)
+            return [C('fuga_403', res['status'] == 403, '403', str(res['status']),
+                      f'cuadratura de sucursal ajena ({ajena.alias}) via querystring')], [res]
+        plan.append(('diagnostico_fuga', dfuga))
+    if G and not rapido:
+        def rc(oraculos):
+            res = invocar_vista('app.views_modulo_reportes.api_rendimiento_compras',
+                                {'anio': fi.year}, G)
+            checks = checks_universales(res, umbral_q=60, umbral_ms=90000)
+            js = res.get('json') or {}
+            inv = float(((js.get('resumen') or {}).get('total_inversion')) or 0)
+            neto = float(Dte.objects.filter(
+                tipo_transaccion='COMPRA', fecha_emision__year=fi.year,
+                descartado=False,
+            ).exclude(estado_dte__in=['ANULADO', 'CANCELADO', 'RECHAZADO'])
+             .aggregate(t=Sum('monto_neto'))['t'] or 0)
+            ok = neto > 0 and abs(inv - neto) <= 0.35 * neto
+            checks.append(C('inversion_sin_apertura', ok,
+                            f'±35% de compras DTE ({neto:,.0f})', f'{inv:,.0f}',
+                            'la apertura de migración inflaba esto 3x (fix 20-ago)'))
+            return checks, [res]
+        plan.append(('rendimiento_compras', rc))
+    # --- nuevos ago-2026 (auditoría 2026-08-20): los 3 reportes post-julio ---
+    if T:
+        plan.append(('quiebre_talla', lambda o: (
+            check_smoke(invocar_vista(
+                'app.views_modulo_reportes_tallas.api_reporte_quiebre_talla',
+                {'sucursal_id': T.sucursal_id, 'desde': fi_s, 'hasta': ff_s}, T)), [])))
+    if G:
+        plan.append(('diferencias_recepcion', lambda o: (
+            check_smoke(invocar_vista(
+                'app.views_modulo_reportes_diferencias.api_reporte_diferencias_recepcion',
+                {'fecha_desde': fi_s, 'fecha_hasta': ff_s}, G)), [])))
+        plan.append(('mercaderia_transito', lambda o: (
+            check_smoke(invocar_vista(
+                'app.views_modulo_reportes_diferencias.api_reporte_mercaderia_transito',
+                {'dias': 90}, G)), [])))
     return plan
 
 

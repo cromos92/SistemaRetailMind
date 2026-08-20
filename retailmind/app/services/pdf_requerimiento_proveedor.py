@@ -154,12 +154,16 @@ def _grilla(pares, ancho, st, columnas=3):
     return t
 
 
-def _foto_flowable(foto, ancho_celda):
+def _foto_flowable(foto, ancho_celda, contenido=None):
     """Imagen reescalada lista para incrustar, o None si no se puede leer.
 
     Se usa Pillow (ya es dependencia por ImageField) para: corregir la
     orientación EXIF —las fotos de celular llegan acostadas—, convertir a RGB
     (un PNG con alpha revienta al guardar como JPEG) y bajar el peso.
+
+    `contenido` permite pasar los bytes ya descargados (el envío al proveedor
+    los lee una sola vez del storage y los comparte con los adjuntos); si no
+    viene, se lee del storage del campo acá.
     """
     try:
         from PIL import Image as PILImage, ImageOps
@@ -168,17 +172,19 @@ def _foto_flowable(foto, ancho_celda):
         return None
 
     try:
-        # `foto.imagen.storage`, no `default_storage`: la evidencia puede vivir
-        # en Spaces mientras el default sigue siendo el disco local.
-        with foto.imagen.storage.open(foto.imagen.name, 'rb') as fh:
-            img = PILImage.open(fh)
-            img = ImageOps.exif_transpose(img)
-            if img.mode not in ('RGB', 'L'):
-                img = img.convert('RGB')
-            img.thumbnail((FOTO_LADO_MAX, FOTO_LADO_MAX), PILImage.LANCZOS)
-            buf = BytesIO()
-            img.save(buf, format='JPEG', quality=FOTO_CALIDAD, optimize=True)
-            ancho_px, alto_px = img.size
+        if contenido is None:
+            # `foto.imagen.storage`, no `default_storage`: la evidencia puede
+            # vivir en Spaces mientras el default sigue siendo el disco local.
+            with foto.imagen.storage.open(foto.imagen.name, 'rb') as fh:
+                contenido = fh.read()
+        img = PILImage.open(BytesIO(contenido))
+        img = ImageOps.exif_transpose(img)
+        if img.mode not in ('RGB', 'L'):
+            img = img.convert('RGB')
+        img.thumbnail((FOTO_LADO_MAX, FOTO_LADO_MAX), PILImage.LANCZOS)
+        buf = BytesIO()
+        img.save(buf, format='JPEG', quality=FOTO_CALIDAD, optimize=True)
+        ancho_px, alto_px = img.size
     except Exception as e:
         logger.warning('No se pudo incrustar la foto %s del requerimiento: %s',
                        getattr(foto, 'id', '?'), e)
@@ -308,12 +314,17 @@ def _contexto_producto(requerimiento):
     return datos
 
 
-def generar_pdf_requerimiento(requerimiento, *, usuario=None, plazo_dias=7) -> bytes:
+def generar_pdf_requerimiento(requerimiento, *, usuario=None, plazo_dias=7,
+                              fotos_bytes=None) -> bytes:
     """
     Arma el formato RetailMind del requerimiento y devuelve los bytes del PDF.
 
     Tolera datos faltantes campo por campo: un requerimiento sin cliente, sin
     factura de compra o sin fotos igual genera documento (y lo hace notar).
+
+    `fotos_bytes` ({foto_id: bytes}) permite reusar fotos ya descargadas del
+    storage: si viene, una foto ausente del dict se da por irrecuperable (el
+    llamador ya intentó leerla) y NO se vuelve a golpear el storage.
     """
     st = _estilos()
     buffer = BytesIO()
@@ -326,7 +337,11 @@ def generar_pdf_requerimiento(requerimiento, *, usuario=None, plazo_dias=7) -> b
     fotos = list(requerimiento.fotos.select_related('tipo_foto').all())
     fotos_ok, fotos_perdidas = [], 0
     for foto in fotos:
-        flow = _foto_flowable(foto, (ancho - 6 * mm) / 2) if foto.imagen else None
+        contenido = fotos_bytes.get(foto.id) if fotos_bytes is not None else None
+        if not foto.imagen or (fotos_bytes is not None and contenido is None):
+            flow = None
+        else:
+            flow = _foto_flowable(foto, (ancho - 6 * mm) / 2, contenido=contenido)
         if flow is None:
             fotos_perdidas += 1
         else:

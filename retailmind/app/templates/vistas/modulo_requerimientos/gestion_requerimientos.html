@@ -407,7 +407,12 @@ function mostrarRequerimientos(requerimientos) {
                 : '<span class="text-muted" style="font-size:.75rem"><i class="ri-store-2-line me-1"></i>Stock tienda</span>'}</td>
             <td data-col="Proveedor">${req.proveedor
                 ? `<span class="text-truncate d-inline-block" style="max-width:140px" title="${reqEsc(req.proveedor)}">${reqEsc(req.proveedor)}</span>`
-                : '<span class="text-danger" style="font-size:.75rem"><i class="ri-error-warning-line me-1"></i>sin asignar</span>'}</td>
+                : '<span class="text-danger" style="font-size:.75rem"><i class="ri-error-warning-line me-1"></i>sin asignar</span>'}
+                ${req.correo_enviado_proveedor
+                    ? `<div class="text-success text-truncate" style="font-size:.68rem;max-width:150px"
+                          title="Correo enviado el ${reqEsc(req.fecha_envio_proveedor)}${req.correo_proveedor_destino ? ` a ${reqEsc(req.correo_proveedor_destino)}` : ''}">
+                          <i class="ri-mail-check-line me-1"></i>${reqEsc((req.fecha_envio_proveedor || '').split(' ')[0]) || 'enviado'}${req.correo_proveedor_destino ? ` · ${reqEsc(req.correo_proveedor_destino)}` : ''}</div>`
+                    : ''}</td>
             <td data-col="Sucursal" class="d-none d-xxl-table-cell"><span class="badge badge-soft-secondary">${reqEsc(req.sucursal)}</span></td>
             <td data-col="Evidencia" class="text-center">
                 ${req.cantidad_fotos > 0
@@ -427,7 +432,7 @@ function mostrarRequerimientos(requerimientos) {
                               title="Falta ${reqEsc(req.faltantes.join(' y '))}"><i class="ri-edit-2-line"></i></a>`
                         : ''}
                     ${req.requiere_recordatorio
-                        ? `<button class="btn btn-sm btn-soft-danger" onclick="enviarRecordatorioRapido(${req.id}, '${reqEsc(req.numero_requerimiento)}')"
+                        ? `<button class="btn btn-sm btn-soft-danger" onclick="enviarRecordatorioRapido(${req.id}, '${reqEsc(req.numero_requerimiento)}', '${reqEsc(req.correo_proveedor_destino)}')"
                               title="Enviar recordatorio al proveedor"><i class="ri-mail-send-line"></i></button>`
                         : ''}
                 </div>
@@ -546,10 +551,11 @@ function exportarRequerimientos() {
     window.location.href = `/app/api/requerimientos/exportar/?${params}`;
 }
 
-function enviarRecordatorioRapido(requerimientoId, numero) {
+function enviarRecordatorioRapido(requerimientoId, numero, correoDestino) {
     Swal.fire({
         title: 'Enviar recordatorio',
-        html: `Se le reenviará el requerimiento <strong>${numero}</strong> al proveedor,
+        html: `Se le reenviará el requerimiento <strong>${numero}</strong> al proveedor
+               ${correoDestino ? `(<strong>${correoDestino}</strong>)` : '(al correo de su ficha)'},
                con el formato PDF y las fotos.`,
         icon: 'question',
         showCancelButton: true,

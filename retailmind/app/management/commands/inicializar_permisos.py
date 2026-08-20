@@ -305,6 +305,15 @@ class Command(BaseCommand):
             # llenaban en cada recepcion y ningun reporte los leia.
             ('reporte_diferencias_recepcion', 'Diferencias de Recepcion', None, '/app/reportes/diferencias-recepcion/', 'ri-error-warning-line', 11),
             ('reporte_mercaderia_transito', 'Mercaderia en Transito', None, '/app/reportes/mercaderia-transito/', 'ri-truck-line', 12),
+            # Auditoria Reportes 2026-08 (P1-10): estos tres reportes existian
+            # en urls.py sin codigo en OpcionMenu, asi que el middleware
+            # (fail-open) dejaba pasar a cualquier autenticado. Las vistas se
+            # decoran con @requiere_permiso (fail-closed): este command debe
+            # correrse en prod ANTES/JUNTO con el deploy o daran 403 a todos,
+            # como paso el 05-ago con diferencias/transito.
+            ('reporte_ventas_global', 'Ventas Global por Empresa', None, '/app/reportes/ventas-global/', 'ri-earth-line', 13),
+            ('reporte_productos_origen', 'Productos por Origen', None, '/app/reportes/productos-origen/', 'ri-git-branch-line', 14),
+            ('inteligencia_compra', 'Inteligencia de Compra', None, '/app/reportes/inteligencia-compra/', 'ri-lightbulb-flash-line', 15),
         ]
         
         for codigo, nombre, url_name, url_path, icono, orden in opciones:
@@ -567,7 +576,8 @@ class Command(BaseCommand):
             'reporte_existencias_marca', 'reporte_existencias_sucursal', 'reporte_despachos_proveedor',
             'resumen_existencias', 'reporte_movimientos_sucursal', 'reporte_compras',
             'reporte_rendimiento_proveedor', 'reporte_diferencias_recepcion',
-            'reporte_mercaderia_transito',
+            'reporte_mercaderia_transito', 'reporte_ventas_global',
+            'reporte_productos_origen', 'inteligencia_compra',
             # Liquidaci?n
             'plan_liquidacion', 'campanas_liquidacion',
             # Configuraci?n

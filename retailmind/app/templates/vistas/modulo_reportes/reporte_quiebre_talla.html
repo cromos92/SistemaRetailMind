@@ -343,7 +343,7 @@
     <div class="nexo-kpi-card kpi-warning" id="kpi-card-6" style="display:none">
       <div class="nexo-kpi-icon icon-warning"><i class="ri-line-chart-line"></i></div>
       <div class="nexo-kpi-body">
-        <div class="nexo-kpi-label" title="ESTIMACIÓN, no un dato: venta diaria observada con stock, extrapolada a los días sin stock. Lee siempre el % de disponibilidad junto a la cifra.">Venta perdida (estim.)</div>
+        <div class="nexo-kpi-label" id="kpi-perdidas-label" title="ESTIMACIÓN CONSERVADORA, no un dato: venta diaria observada con stock, extrapolada a los días sin stock. Excluye las tallas con reconstrucción dudosa o con menos de 7 días con stock, y capea la extrapolación a 3x. Cada talla muestra su estimación completa en su fila.">Venta perdida (estim. conservadora)</div>
         <div class="nexo-kpi-value" id="kpi-perdidas">0</div>
       </div>
     </div>
@@ -558,6 +558,24 @@ function renderKpis(r) {
   document.getElementById('kpi-reponibles').textContent  = num(r.quiebres_reponibles);
   document.getElementById('kpi-unidades-cd').textContent = num(r.unidades_disponibles_cd);
   document.getElementById('kpi-perdidas').textContent    = num(Math.round(r.unidades_perdidas_estimadas || 0));
+
+  // Tooltip del KPI conservador: dice cuánto quedó fuera y por qué.
+  const ex = r.unidades_perdidas_excluidas || {};
+  const lbl = document.getElementById('kpi-perdidas-label');
+  if (lbl) {
+    let t = 'ESTIMACIÓN CONSERVADORA, no un dato: excluye las tallas con ' +
+            'reconstrucción dudosa o con menos de ' + (ex.min_dias_disponible || 7) +
+            ' días con stock en el período, y capea la extrapolación a ' +
+            (ex.cap || 3) + 'x.';
+    if ((ex.total || 0) > 0) {
+      t += ' Quedaron fuera ' + num(Math.round(ex.total)) + ' u estimadas: ' +
+           num(Math.round(ex.reconstruccion_dudosa || 0)) + ' dudosas, ' +
+           num(Math.round(ex.baja_disponibilidad || 0)) + ' con pocos días de stock y ' +
+           num(Math.round(ex.cap_multiplicador || 0)) + ' recortadas por el tope.';
+    }
+    t += ' Cada talla muestra su estimación completa en su fila.';
+    lbl.title = t;
+  }
   mostrarKpis(true);
 }
 
