@@ -632,15 +632,22 @@ class GiftCardEstadoCorreoTest(TestCase):
             'reason': reason,
         }}}
 
-    def test_webhook_sin_secret_responde_503(self):
+    def test_webhook_sin_secret_permite_el_alta_pero_no_procesa(self):
+        """MailerSend valida la URL ANTES de darte el secret: hay que responder
+        200 o el webhook no se puede crear. Pero sin secret no se escribe nada."""
+        import os
+        os.environ.pop('GIFTCARD_WEBHOOK_SECRET', None)
         gc = self._gc_enviada()
-        with self.settings():
-            import os
-            os.environ.pop('GIFTCARD_WEBHOOK_SECRET', None)
-            resp = self._post_webhook(self._payload('activity.delivered'))
-        self.assertEqual(resp.status_code, 503)
+        resp = self._post_webhook(self._payload('activity.delivered'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json().get('pendiente_configuracion'))
         gc.refresh_from_db()
         self.assertEqual(gc.correo_estado, 'ENVIADO')   # nada cambió
+
+    def test_webhook_get_responde_ok_para_verificar_url(self):
+        resp = self.client.get('/app/api/giftcards/webhook-correo/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json().get('success'))
 
     def test_webhook_firma_invalida_rechazada(self):
         import os

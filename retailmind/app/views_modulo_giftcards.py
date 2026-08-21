@@ -1249,25 +1249,45 @@ _PRIORIDAD_ESTADO_CORREO = {
 
 
 @csrf_exempt
-@require_POST
 def webhook_correo_giftcard(request):
     """
     Recibe los eventos de entrega del proveedor de correo (MailerSend) y
     actualiza el estado de la gift card cuyo último envío coincide.
 
     Público por necesidad (lo llama el proveedor), pero autenticado por la
-    firma HMAC-SHA256 del cuerpo con `GIFTCARD_WEBHOOK_SECRET`. Sin secret
-    configurado el endpoint responde 503: es preferible no recibir eventos a
-    aceptar que cualquiera escriba estados de entrega.
+    firma HMAC-SHA256 del cuerpo con `GIFTCARD_WEBHOOK_SECRET`: sin firma
+    válida NO se escribe absolutamente nada.
+
+    Responde 200 a las verificaciones de URL (GET, y POST cuando el secret
+    todavía no está configurado) porque MailerSend COMPRUEBA la URL antes de
+    crear el webhook, y el Signing Secret solo existe DESPUÉS de crearlo.
+    Devolver error ahí hacía imposible completar el alta (huevo y gallina).
     """
     import hashlib
     import hmac
 
+    if request.method != 'POST':
+        # Verificación de disponibilidad de la URL (o visita manual).
+        return JsonResponse({
+            'success': True,
+            'endpoint': 'webhook de entrega de gift cards',
+            'listo': bool(os.environ.get('GIFTCARD_WEBHOOK_SECRET')),
+        })
+
     secret = os.environ.get('GIFTCARD_WEBHOOK_SECRET', '')
     if not secret:
-        logger.error("Webhook de correo recibido sin GIFTCARD_WEBHOOK_SECRET configurado")
-        return JsonResponse(
-            {'success': False, 'error': 'Webhook no configurado.'}, status=503)
+        # Alta del webhook en curso: aceptamos la llamada para que el proveedor
+        # valide la URL, pero no se procesa ningún evento (nada que firmar).
+        logger.warning(
+            "Webhook de correo llamado sin GIFTCARD_WEBHOOK_SECRET configurado: "
+            "se responde OK para permitir el alta, pero NO se procesan eventos."
+        )
+        return JsonResponse({
+            'success': True,
+            'pendiente_configuracion': True,
+            'mensaje': ('Endpoint activo. Falta definir GIFTCARD_WEBHOOK_SECRET '
+                        'para empezar a registrar los estados de entrega.'),
+        })
 
     firma = (request.headers.get('Signature')
              or request.headers.get('X-Mailersend-Signature') or '')

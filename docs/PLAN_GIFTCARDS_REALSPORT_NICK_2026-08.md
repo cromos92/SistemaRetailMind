@@ -104,7 +104,19 @@ Antes el sistema solo sabía "lo mandé". Ahora cada tarjeta tiene un **estado d
 2. Al guardar, MailerSend muestra el **Signing Secret**: ese valor exacto va al `.env` como `GIFTCARD_WEBHOOK_SECRET` (y en las variables de entorno del hosting).
 3. Reiniciar la app para que tome la variable.
 
-El endpoint valida `Signature` = HMAC-SHA256 hex del cuerpo crudo, que es exactamente el esquema de MailerSend. Además acepta el **secret público de prueba** (`test_Am3L1GuOIc4blLUuHqAPxxwkZaJyEk8G`) para que el botón "Send test" del panel muestre éxito, pero responde sin escribir ningún estado — ese secret está publicado y no puede servir para alterar entregas.
+**MailerSend COMPRUEBA la URL antes de crear el webhook** y rechaza el alta con el código que reciba. Diagnóstico de los errores vistos el 21-ago:
+
+| Error al crear el webhook | Causa real |
+|---|---|
+| `The endpoint returned HTTP 404` | El código con el endpoint aún no estaba desplegado (commit sin subir / deploy sin terminar) |
+| `The endpoint returned HTTP 504` | Transitorio: el contenedor se estaba reiniciando durante el deploy. Reintentar |
+| `The endpoint returned HTTP 503` | **Problema de diseño corregido**: el endpoint exigía `GIFTCARD_WEBHOOK_SECRET` para responder, pero ese secret solo existe DESPUÉS de crear el webhook — imposible completar el alta |
+
+Por eso el endpoint ahora responde **200** a las verificaciones de URL (GET, y POST mientras el secret no esté configurado) **sin procesar ni escribir nada**. Una vez copiado el Signing Secret al `.env`, empieza a registrar estados de verdad y rechaza con 401 cualquier POST sin firma válida.
+
+El endpoint valida `Signature` = HMAC-SHA256 hex del cuerpo crudo, que es exactamente el esquema de MailerSend.
+
+⚠️ **El deploy de DigitalOcean NO ejecuta `migrate`** (el Dockerfile solo hace `collectstatic` + gunicorn). Tras subir código con migraciones hay que correr a mano, desde la consola de la app: `cd /app/retailmind && python manage.py migrate app`. Si no, los modelos tienen campos que no existen en la BD y **se caen la cuadratura de caja, los arqueos y todo el módulo de gift cards** con error 500. Conviene automatizarlo (`pre_deploy_job` en el spec de App Platform, o anteponer `python manage.py migrate --noinput &&` al CMD del Dockerfile). Además acepta el **secret público de prueba** (`test_Am3L1GuOIc4blLUuHqAPxxwkZaJyEk8G`) para que el botón "Send test" del panel muestre éxito, pero responde sin escribir ningún estado — ese secret está publicado y no puede servir para alterar entregas.
 
 ⚠️ **`retailmind/.env` sigue TRACKEADO en git** (aunque está en `.gitignore`, que no aplica a archivos ya versionados): cualquier secret que se agregue ahí se commitea. Ver `docs/SEGURIDAD_URGENTE_2026-07-25.md`.
 
