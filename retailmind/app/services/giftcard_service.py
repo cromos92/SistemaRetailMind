@@ -54,6 +54,31 @@ def _resolver_giftcard(codigo, *, lock=False):
     return qs.filter(Q(codigo=codigo) | Q(codigo_fisico=codigo)).first()
 
 
+def _error_ambito(gc, sucursal):
+    """
+    Devuelve el mensaje de rechazo por ámbito, o None si la tarjeta es válida
+    en la sucursal dada.
+
+    Regla: `gc.empresa` acota el canje a sucursales de ESA empresa; en null la
+    tarjeta es global (todas las empresas — comportamiento histórico). Si la
+    tarjeta está acotada y el llamador NO informa sucursal, se rechaza
+    (fail-closed): sin sucursal no se puede garantizar el ámbito.
+    """
+    if gc.empresa_id is None:
+        return None
+    if sucursal is None:
+        return (
+            'Esta gift card está limitada a una empresa y no se pudo '
+            'determinar la sucursal del canje.'
+        )
+    if sucursal.empresa_id != gc.empresa_id:
+        return (
+            f'Esta gift card solo es válida en tiendas de '
+            f'{gc.empresa.nombre}.'
+        )
+    return None
+
+
 def _registrar_movimiento(giftcard, tipo, monto, *, ticket=None, pago_ticket=None,
                           sucursal=None, usuario=None, idempotency_key=None,
                           observaciones=''):
@@ -85,7 +110,7 @@ def _registrar_movimiento(giftcard, tipo, monto, *, ticket=None, pago_ticket=Non
 def emitir(monto, *, sucursal=None, cliente=None, vendedor=None,
            ticket=None, vencimiento=None, pin=None, usuario=None,
            observaciones='', tipo_tarjeta='DIGITAL', codigo_fisico=None,
-           motivo='OTRO', descripcion=''):
+           motivo='OTRO', descripcion='', empresa=None):
     """
     Emite una nueva gift card con `monto` de saldo inicial.
     Devuelve la GiftCard creada. El código de sistema se genera de forma segura
@@ -96,6 +121,7 @@ def emitir(monto, *, sucursal=None, cliente=None, vendedor=None,
       el cliente es opcional y puede vincularse al canjear.
     - motivo: propósito de la tarjeta (ver MOTIVO_GIFTCARD_CHOICES).
     - descripcion: etiqueta/nombre libre para el seguimiento.
+    - empresa: ámbito de canje — solo sucursales de esa empresa (None = todas).
     """
     monto = int(monto)
     if monto <= 0:
@@ -126,6 +152,18 @@ def emitir(monto, *, sucursal=None, cliente=None, vendedor=None,
         vencimiento = timezone.localdate() + timezone.timedelta(
             days=30 * GIFTCARD_VIGENCIA_MESES_DEFAULT
         )
+    elif isinstance(vencimiento, str):
+        # Las vistas mandan 'YYYY-MM-DD' desde el modal. Django lo acepta al
+        # guardar, pero la INSTANCIA en memoria conserva el str: cualquier
+        # `gc.fecha_vencimiento.isoformat()` posterior reventaba con
+        # AttributeError DESPUÉS de haber creado la tarjeta (500 + el usuario
+        # reintenta = pasivo duplicado). Se normaliza a date acá, que es la
+        # única puerta de entrada común a todos los llamadores.
+        from datetime import datetime as _dt
+        try:
+            vencimiento = _dt.strptime(vencimiento.strip(), '%Y-%m-%d').date()
+        except ValueError:
+            raise GiftCardError('Fecha de vencimiento inválida (formato AAAA-MM-DD).')
 
     with transaction.atomic():
         giftcard = GiftCard(
@@ -136,6 +174,7 @@ def emitir(monto, *, sucursal=None, cliente=None, vendedor=None,
             codigo_fisico=codigo_fisico,
             fecha_vencimiento=vencimiento,
             sucursal_emision=sucursal,
+            empresa=empresa,
             cliente=cliente,
             vendedor=vendedor,
             ticket_emision=ticket,
@@ -178,14 +217,20 @@ def consultar_saldo(codigo):
         'fecha_vencimiento': gc.fecha_vencimiento.isoformat() if gc.fecha_vencimiento else None,
         'vencida': gc.esta_vencida,
         'valida': gc.estado == 'ACTIVA' and not gc.esta_vencida and gc.saldo_actual > 0,
+        'empresa_id': gc.empresa_id,
+        'empresa': gc.empresa.nombre if gc.empresa_id else '',
+        'ambito': 'EMPRESA' if gc.empresa_id else 'TODAS',
     }
 
 
-def validar(codigo, monto, *, pin=None):
+def validar(codigo, monto, *, pin=None, sucursal=None):
     """
     Pre-validación SIN descontar (usada antes de cobrar).
     Devuelve dict con `valida`, `saldo_suficiente`, `saldo_actual` y `motivo`.
     Nunca lanza por saldo/estado; solo informa.
+
+    `sucursal`: sucursal donde se pretende canjear — obligatoria para detectar
+    tarjetas acotadas a otra empresa ANTES de confirmar el cobro.
     """
     monto = int(monto or 0)
     gc = _resolver_giftcard(codigo)
@@ -198,6 +243,10 @@ def validar(codigo, monto, *, pin=None):
     if gc.esta_vencida:
         return {'valida': False, 'motivo': 'Vencida', 'saldo_actual': gc.saldo_actual,
                 'saldo_suficiente': False}
+    error_ambito = _error_ambito(gc, sucursal)
+    if error_ambito:
+        return {'valida': False, 'motivo': error_ambito,
+                'saldo_actual': gc.saldo_actual, 'saldo_suficiente': False}
     if gc.pin and pin is not None and str(pin) != str(gc.pin):
         return {'valida': False, 'motivo': 'PIN incorrecto', 'saldo_actual': gc.saldo_actual,
                 'saldo_suficiente': False}
@@ -257,6 +306,12 @@ def consumir(codigo, monto, *, ticket=None, pago_ticket=None, sucursal=None,
             raise GiftCardError(f'Gift card no disponible (estado: {gc.get_estado_display()}).')
         if gc.esta_vencida:
             raise GiftCardError('Gift card vencida.')
+        # Ámbito por empresa: se valida también aquí (no solo en la
+        # pre-validación) porque el servicio es la única barrera común a POS
+        # web, API desktop y cualquier llamador futuro.
+        error_ambito = _error_ambito(gc, sucursal)
+        if error_ambito:
+            raise GiftCardError(error_ambito)
         if gc.pin and pin is not None and str(pin) != str(gc.pin):
             raise GiftCardError('PIN incorrecto.')
         if gc.saldo_actual < monto:
@@ -361,16 +416,23 @@ def anular(codigo, *, usuario=None, observaciones=''):
     return gc
 
 
-def reversar(codigo, monto, *, ticket=None, usuario=None, idempotency_key=None,
-             observaciones=''):
+def reversar(codigo, monto, *, ticket=None, pago_ticket=None, usuario=None,
+             idempotency_key=None, observaciones=''):
     """
     Recarga la gift card por una devolución/anulación de venta que la consumió.
     Idempotente por `idempotency_key`.
+
+    La clave se deriva del PAGO cuando el llamador lo entrega, en simetría con
+    `consumir` (que descuenta por pago): un ticket con DOS pagos de la MISMA
+    tarjeta descuenta dos veces, y con una clave por ticket+código la segunda
+    reversa se auto-anulaba por idempotencia dejando al cliente sin ese saldo.
     """
     codigo = _normalizar_codigo(codigo)
     monto = int(monto)
     if monto <= 0:
         return None
+    if not idempotency_key and pago_ticket is not None:
+        idempotency_key = f"reversa:{pago_ticket.id}"
     if not idempotency_key and ticket is not None:
         idempotency_key = f"reversa_gc:{ticket.id}:{codigo}"
     with transaction.atomic():
@@ -500,6 +562,46 @@ def editar(codigo, *, descripcion=None, motivo=None, observaciones=None, usuario
             observaciones='Edición: ' + ', '.join(cambios),
         )
     logger.info("GiftCard editada codigo=%s cambios=%s", gc.codigo, cambios)
+    return gc
+
+
+def cambiar_ambito(codigo, empresa, *, usuario=None, observaciones=''):
+    """
+    Cambia el ámbito de canje de una gift card:
+    - `empresa` = instancia de Empresa → solo sucursales de esa empresa.
+    - `empresa` = None → válida en todas las empresas de la cadena.
+
+    No mueve saldo. Deja una fila AJUSTE monto=0 en el ledger con el cambio
+    para que quede en la trazabilidad. No aplica sobre tarjetas anuladas.
+    """
+    with transaction.atomic():
+        gc = _resolver_giftcard(codigo, lock=True)
+        if gc is None:
+            raise GiftCardError('Gift card no encontrada.')
+        if gc.estado == 'ANULADA':
+            raise GiftCardError('La gift card está anulada: no se puede cambiar su ámbito.')
+
+        nueva_id = empresa.id if empresa is not None else None
+        if gc.empresa_id == nueva_id:
+            return gc
+
+        antes = gc.empresa.nombre if gc.empresa_id else 'Todas las empresas'
+        despues = empresa.nombre if empresa is not None else 'Todas las empresas'
+        gc.empresa = empresa
+        gc.updated_by = usuario
+        gc.save(update_fields=['empresa', 'updated_by', 'updated_at'])
+        MovimientoGiftCard.objects.create(
+            giftcard=gc,
+            tipo='AJUSTE',
+            monto=0,
+            saldo_resultante=gc.saldo_actual,
+            usuario=usuario,
+            observaciones=(
+                f'Ámbito: {antes} -> {despues}'
+                + (f'. {observaciones}' if observaciones else '')
+            ),
+        )
+    logger.info("GiftCard ambito actualizado codigo=%s %s -> %s", gc.codigo, antes, despues)
     return gc
 
 

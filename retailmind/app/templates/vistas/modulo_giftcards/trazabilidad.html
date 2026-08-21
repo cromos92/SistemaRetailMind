@@ -81,16 +81,24 @@
                                 <input type="date" id="tz-hasta" class="form-control" title="Hasta">
                             </div>
                         </div>
-                        <div class="col-md-12 mt-2 text-end">
-                            <button class="btn btn-primary" onclick="cargarTrazabilidad(1)">
-                                <i class="ri-filter-line"></i> Filtrar
+                        <div class="col-md-12 mt-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <button class="btn btn-outline-danger btn-sm" onclick="verSoloCanjes()" title="Gift cards usadas como pago, con su boleta y subtotales por sucursal">
+                                <i class="ri-shopping-bag-3-line"></i> Ver solo canjes (GC usadas)
                             </button>
-                            <button class="btn btn-light" onclick="limpiarFiltrosTz()">
-                                <i class="ri-refresh-line"></i> Limpiar
-                            </button>
+                            <div>
+                                <button class="btn btn-primary" onclick="cargarTrazabilidad(1)">
+                                    <i class="ri-filter-line"></i> Filtrar
+                                </button>
+                                <button class="btn btn-light" onclick="limpiarFiltrosTz()">
+                                    <i class="ri-refresh-line"></i> Limpiar
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Resumen por sucursal (solo con filtro tipo=CONSUMO) -->
+                <div id="tz-resumen-sucursal" class="d-none mb-3"></div>
 
                 <!-- Tabla -->
                 <div class="table-responsive">
@@ -104,13 +112,15 @@
                                 <th class="text-end">Monto</th>
                                 <th class="text-end">Saldo</th>
                                 <th>Ticket</th>
+                                <th>Boleta</th>
+                                <th class="text-end">Total venta</th>
                                 <th>Usuario</th>
                                 <th>Sucursal</th>
                                 <th>Observaciones</th>
                             </tr>
                         </thead>
                         <tbody id="tz-tbody">
-                            <tr><td colspan="10" class="text-center text-muted py-4">Cargando...</td></tr>
+                            <tr><td colspan="12" class="text-center text-muted py-4">Cargando...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -130,8 +140,16 @@ const URLS_TZ = {
     exportar: "{% url 'api_exportar_trazabilidad' %}",
 };
 const MOV_COLORES = {EMISION:'primary', CARGA:'success', CONSUMO:'danger', ANULACION:'dark',
-    AJUSTE:'secondary', REVERSA:'info', BLOQUEO:'warning', DESBLOQUEO:'secondary'};
+    AJUSTE:'secondary', REVERSA:'info', BLOQUEO:'warning', DESBLOQUEO:'secondary', ENVIO_CORREO:'info'};
 function fmt(n) { return '$' + (n||0).toLocaleString('es-CL'); }
+/* Escapa texto libre (observaciones del ledger, nombres, sucursal) antes de
+   inyectarlo con innerHTML: las observaciones las teclea el usuario al
+   bloquear/anular, así que sin esto un motivo con HTML se ejecutaría en el
+   navegador de quien abra la trazabilidad. */
+function esc(s) {
+    return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, c =>
+        ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 
 function filtrosTzQuery() {
     const p = new URLSearchParams();
@@ -153,29 +171,60 @@ function exportarTrazabilidad() {
     window.location.href = `${URLS_TZ.exportar}?${filtrosTzQuery().toString()}`;
 }
 
+function verSoloCanjes() {
+    document.getElementById('tz-tipo').value = 'CONSUMO';
+    cargarTrazabilidad(1);
+}
+
+function pintarResumenSucursal(resumen) {
+    const cont = document.getElementById('tz-resumen-sucursal');
+    if (!resumen || !resumen.length) { cont.classList.add('d-none'); cont.innerHTML = ''; return; }
+    const totalCanjes = resumen.reduce((a, r) => a + r.canjes, 0);
+    const totalMonto = resumen.reduce((a, r) => a + r.monto, 0);
+    cont.classList.remove('d-none');
+    cont.innerHTML = `
+        <div class="pagination-controls mb-0">
+            <div class="fw-bold mb-2"><i class="ri-store-2-line"></i> Canjes por sucursal (universo filtrado completo)</div>
+            <div class="d-flex flex-wrap gap-2">
+                ${resumen.map(r => `
+                    <div class="border rounded bg-white px-3 py-2">
+                        <div class="small text-muted">${esc(r.sucursal)}</div>
+                        <div class="fw-bold">${fmt(r.monto)} <span class="small text-muted">· ${r.canjes} canje(s)</span></div>
+                    </div>`).join('')}
+                <div class="border rounded px-3 py-2" style="background:#405189;color:white;">
+                    <div class="small" style="opacity:.8;">TOTAL</div>
+                    <div class="fw-bold">${fmt(totalMonto)} <span class="small" style="opacity:.8;">· ${totalCanjes} canje(s)</span></div>
+                </div>
+            </div>
+        </div>`;
+}
+
 function cargarTrazabilidad(page) {
     const p = filtrosTzQuery();
     p.set('page', page || 1);
     fetch(`${URLS_TZ.listar}?${p.toString()}`).then(r=>r.json()).then(d=>{
         const tbody = document.getElementById('tz-tbody');
+        pintarResumenSucursal(d.resumen_sucursal);
         if (!d.success || !d.items.length) {
-            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">Sin movimientos</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-4">Sin movimientos</td></tr>';
             document.getElementById('tz-info').textContent = '';
             document.getElementById('tz-paginacion').innerHTML = '';
             return;
         }
         tbody.innerHTML = d.items.map(m => `
             <tr>
-                <td class="small text-nowrap">${m.fecha}</td>
-                <td><a class="gc-codigo" href="/app/giftcards/${m.giftcard_id}/">${m.codigo}</a></td>
-                <td class="small">${m.cliente || '<span class="text-muted">—</span>'}</td>
-                <td><span class="badge bg-${MOV_COLORES[m.tipo]||'secondary'} badge-mov">${m.tipo_display}</span></td>
+                <td class="small text-nowrap">${esc(m.fecha)}</td>
+                <td><a class="gc-codigo" href="/app/giftcards/${Number(m.giftcard_id)}/">${esc(m.codigo)}</a></td>
+                <td class="small">${m.cliente ? esc(m.cliente) : '<span class="text-muted">—</span>'}</td>
+                <td><span class="badge bg-${MOV_COLORES[m.tipo]||'secondary'} badge-mov">${esc(m.tipo_display)}</span></td>
                 <td class="text-end fw-bold ${m.monto < 0 ? 'text-danger' : 'text-success'}">${fmt(m.monto)}</td>
                 <td class="text-end">${fmt(m.saldo_resultante)}</td>
-                <td class="small">${m.ticket ? '#'+m.ticket : '—'}</td>
-                <td class="small">${m.usuario || '—'}</td>
-                <td class="small">${m.sucursal || '—'}</td>
-                <td class="small text-muted">${m.observaciones || ''}</td>
+                <td class="small">${m.ticket ? '#'+esc(m.ticket) : '—'}</td>
+                <td class="small">${m.folio_dte ? esc((m.tipo_dte ? m.tipo_dte + ' ' : '') + m.folio_dte) : '—'}</td>
+                <td class="text-end small">${m.total_venta != null ? fmt(m.total_venta) : '—'}</td>
+                <td class="small">${m.usuario ? esc(m.usuario) : '—'}</td>
+                <td class="small">${m.sucursal ? esc(m.sucursal) : '—'}</td>
+                <td class="small text-muted">${esc(m.observaciones)}</td>
             </tr>`).join('');
         document.getElementById('tz-info').textContent = `${d.total} movimientos · página ${d.page}/${d.num_pages}`;
         renderPaginacionTz(d.page, d.num_pages);

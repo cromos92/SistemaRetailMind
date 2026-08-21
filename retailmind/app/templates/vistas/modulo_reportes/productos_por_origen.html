@@ -117,7 +117,7 @@
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
           <div>
             <h4><i class="ri-seedling-line me-2"></i>Origen de Catálogo</h4>
-            <p>Cada SKU clasificado por el concepto de su <strong>primer ingreso</strong> · compra formal, traspaso, alta manual o ajuste</p>
+            <p>Cada SKU clasificado por el concepto de su <strong>primer ingreso</strong> · alta por recepción/creación, movimiento interno o ajuste</p>
           </div>
           <span class="badge-anio" id="badgeAnio">—</span>
         </div>
@@ -185,46 +185,48 @@
         <div class="col-sm-6 col-xl-2">
           <div class="kpi-origen" style="--kc:#0ab39c;--kc-bg:#E3F7F5;">
             <div class="ki-icon"><i class="ri-shopping-bag-line"></i></div>
-            <div class="ki-label">% compra directa</div>
+            <div class="ki-label" title="En este ERP el stock entra al crear el producto (recepción-DTE genera el alta): es el flujo normal, incluya o no una orden de compra enlazada.">% alta normal</div>
             <div class="ki-val" id="kpiPctCompra">—</div>
-            <div class="ki-sub">SKU con DTE de compra</div>
+            <div class="ki-sub">recepción-DTE, creación y OC</div>
           </div>
         </div>
         <div class="col-sm-6 col-xl-2">
-          <div class="kpi-origen" id="kpiIrregCard" style="--kc:#FF4D4D;--kc-bg:#FFEAEA;">
-            <div class="ki-icon"><i class="ri-alert-line"></i></div>
-            <div class="ki-label">Altas irregulares</div>
+          <div class="kpi-origen" id="kpiIrregCard" style="--kc:#FFB020;--kc-bg:#FFF4E0;">
+            <div class="ki-icon"><i class="ri-error-warning-line"></i></div>
+            <div class="ki-label">Ajustes / correcciones</div>
             <div class="ki-val" id="kpiIrreg">—</div>
-            <div class="ki-sub">ajustes, manuales, devoluciones</div>
+            <div class="ki-sub">ajustes, devoluciones, reversas</div>
           </div>
         </div>
       </div>
 
-      <!-- ===== GRUPOS OPERATIVOS ===== -->
+      <!-- ===== GRUPOS OPERATIVOS =====
+           Los tres grupos son EXHAUSTIVOS (el backend asigna `grupo` a todo
+           concepto, incluso los no mapeados): las barras suman 100%. -->
       <div class="row g-3 mb-4">
         <div class="col-md-4">
           <div class="grupo-card" style="--gc:#00D4AA;">
-            <div class="gc-title"><i class="ri-file-text-line me-1"></i>Compra formal</div>
+            <div class="gc-title"><i class="ri-file-text-line me-1"></i>Alta por recepción / creación</div>
             <div class="gc-pct" id="gcPctFormal">—</div>
-            <div class="gc-desc">Recepciones con DTE de proveedor</div>
+            <div class="gc-desc">Flujo normal: el stock entra al crear el producto (recepción-DTE, alta inicial u OC)</div>
             <div class="gc-bar"><span id="gcBarFormal" style="width:0%;"></span></div>
             <div class="gc-skus" id="gcSkusFormal">— SKU</div>
           </div>
         </div>
         <div class="col-md-4">
           <div class="grupo-card" style="--gc:#0066FF;">
-            <div class="gc-title"><i class="ri-swap-line me-1"></i>Movimiento operativo</div>
+            <div class="gc-title"><i class="ri-swap-line me-1"></i>Movimiento interno</div>
             <div class="gc-pct" id="gcPctOp">—</div>
-            <div class="gc-desc">Traspasos, reposiciones e ingresos iniciales</div>
+            <div class="gc-desc">Traspasos entre sucursales y reposiciones (el SKU nació en otra bodega)</div>
             <div class="gc-bar"><span id="gcBarOp" style="width:0%;"></span></div>
             <div class="gc-skus" id="gcSkusOp">— SKU</div>
           </div>
         </div>
         <div class="col-md-4">
           <div class="grupo-card" id="gcIrregCard" style="--gc:#FFB020;">
-            <div class="gc-title"><i class="ri-error-warning-line me-1"></i>Manual / Irregular</div>
+            <div class="gc-title"><i class="ri-error-warning-line me-1"></i>Ajustes y correcciones</div>
             <div class="gc-pct" id="gcPctIrreg">—</div>
-            <div class="gc-desc">Sin DTE: ajustes, altas manuales, devoluciones</div>
+            <div class="gc-desc">Ajustes de inventario, devoluciones de cliente y reversas — conviene revisar</div>
             <div class="gc-bar"><span id="gcBarIrreg" style="width:0%;"></span></div>
             <div class="gc-skus" id="gcSkusIrreg">— SKU</div>
           </div>
@@ -299,20 +301,25 @@
     const fmtM = n => '$' + Math.round(n || 0).toLocaleString('es-CL');
     const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
-    const CONCEPTOS_FORMAL    = new Set(['RECEPCION_COMPRA']);
-    const CONCEPTOS_OPERATIVO = new Set(['TRASPASO_ENTRADA','TRASPASO_SUCURSAL','REPOSICION_STOCK','INGRESO_INICIAL']);
-    const CONCEPTOS_IRREG     = new Set(['INGRESO_MANUAL','AJUSTE_POSITIVO','AJUSTE_INVENTARIO','DEVOLUCION_CLIENTE']);
+    // El grupo viene del backend (`o.grupo`: alta / movimiento / ajuste) y es
+    // exhaustivo. El mapa local es solo fallback por si llega un payload viejo.
+    const GRUPO_FALLBACK = {
+        RECEPCION_COMPRA: 'alta', INGRESO_INICIAL: 'alta', INGRESO_MANUAL: 'alta',
+        TRASPASO_SUCURSAL: 'movimiento', TRASPASO_ENTRADA: 'movimiento', REPOSICION_STOCK: 'movimiento',
+    };
+    const grupoDe = o => o.grupo || GRUPO_FALLBACK[o.concepto] || 'ajuste';
 
     const COLOR_ORIGEN = {
         RECEPCION_COMPRA:   { bg:'#E0FAF4', color:'#00A87A', icon:'ri-file-list-3-line' },
-        INGRESO_INICIAL:    { bg:'#F2EDFC', color:'#6f42c1', icon:'ri-archive-line' },
-        INGRESO_MANUAL:     { bg:'#FFF4E0', color:'#D08000', icon:'ri-pencil-line' },
+        INGRESO_INICIAL:    { bg:'#E0FAF4', color:'#00A87A', icon:'ri-archive-line' },
+        INGRESO_MANUAL:     { bg:'#E0FAF4', color:'#00A87A', icon:'ri-pencil-line' },
         TRASPASO_SUCURSAL:  { bg:'#E6F0FF', color:'#0055D4', icon:'ri-swap-box-line' },
         TRASPASO_ENTRADA:   { bg:'#E6F0FF', color:'#0055D4', icon:'ri-swap-line' },
-        REPOSICION_STOCK:   { bg:'#E3F7F5', color:'#0ab39c', icon:'ri-refresh-line' },
-        AJUSTE_POSITIVO:    { bg:'#FFEAEA', color:'#CC0000', icon:'ri-alert-line' },
-        AJUSTE_INVENTARIO:  { bg:'#FFEAEA', color:'#CC0000', icon:'ri-alert-line' },
-        DEVOLUCION_CLIENTE: { bg:'#F5F5F7', color:'#8A8A9A', icon:'ri-reply-line' },
+        REPOSICION_STOCK:   { bg:'#E6F0FF', color:'#0055D4', icon:'ri-refresh-line' },
+        AJUSTE_POSITIVO:    { bg:'#FFF4E0', color:'#D08000', icon:'ri-alert-line' },
+        AJUSTE_INVENTARIO:  { bg:'#FFF4E0', color:'#D08000', icon:'ri-alert-line' },
+        DEVOLUCION_CLIENTE: { bg:'#FFF4E0', color:'#D08000', icon:'ri-reply-line' },
+        ANULACION_REGULARIZACION: { bg:'#FFF4E0', color:'#D08000', icon:'ri-arrow-go-back-line' },
     };
 
     /* ── Estado ── */
@@ -381,15 +388,22 @@
         document.getElementById('kpiCosto').textContent   = fmtM(r.total_costo);
         document.getElementById('kpiCostoSku').textContent = fmtM(r.costo_por_sku);
 
-        /* KPI % compra directa */
-        const compraItem = (data.por_origen || []).find(o => o.concepto === 'RECEPCION_COMPRA');
-        const pctCompra  = compraItem ? compraItem.pct : 0;
+        /* ── Grupos operativos (exhaustivos: alta + movimiento + ajuste = 100%) ── */
+        let gFormal = 0, gOp = 0, gIrreg = 0;
+        (data.por_origen || []).forEach(o => {
+            const g = grupoDe(o);
+            if (g === 'alta') gFormal += o.skus;
+            else if (g === 'movimiento') gOp += o.skus;
+            else gIrreg += o.skus;
+        });
+        const total = r.total_skus || 1;
+
+        /* KPI % alta normal (recepción/creación) */
+        const pctCompra = r.total_skus ? Math.round(gFormal / r.total_skus * 100) : 0;
         document.getElementById('kpiPctCompra').textContent = pctCompra + '%';
 
-        /* KPI altas irregulares */
-        let irregSkus = 0, irregPct = 0;
-        (data.por_origen || []).forEach(o => { if (o.alerta) { irregSkus += o.skus; irregPct += o.pct; } });
-        irregPct = r.total_skus ? Math.round(irregSkus / r.total_skus * 100) : 0;
+        /* KPI ajustes / correcciones */
+        const irregPct = r.total_skus ? Math.round(gIrreg / r.total_skus * 100) : 0;
         document.getElementById('kpiIrreg').textContent = irregPct + '%';
         const kpiIrregCard = document.getElementById('kpiIrregCard');
         if (irregPct <= 5) {
@@ -405,15 +419,6 @@
             kpiIrregCard.style.setProperty('--kc-bg', '#FFF4E0');
             kpiIrregCard.querySelector('i').className = 'ri-error-warning-line';
         }
-
-        /* ── Grupos operativos ── */
-        let gFormal = 0, gOp = 0, gIrreg = 0;
-        (data.por_origen || []).forEach(o => {
-            if (CONCEPTOS_FORMAL.has(o.concepto))    gFormal += o.skus;
-            else if (CONCEPTOS_OPERATIVO.has(o.concepto)) gOp += o.skus;
-            else if (CONCEPTOS_IRREG.has(o.concepto))     gIrreg += o.skus;
-        });
-        const total = r.total_skus || 1;
         const pFormal = Math.round(gFormal / total * 100);
         const pOp     = Math.round(gOp     / total * 100);
         const pIrreg  = Math.round(gIrreg  / total * 100);
@@ -460,7 +465,7 @@
         body.innerHTML = origenes.map(o => {
             const cfg = COLOR_ORIGEN[o.concepto] || { bg:'#F5F5F7', color:'#8A8A9A', icon:'ri-question-line' };
             const alertaHtml = o.alerta
-                ? `<i class="ri-error-warning-line alerta-icon ms-1" title="Origen sin DTE — requiere revisión"></i>`
+                ? `<i class="ri-error-warning-line alerta-icon ms-1" title="Origen por ajuste/corrección — conviene revisar"></i>`
                 : '';
             return `<tr>
                 <td>
@@ -490,14 +495,14 @@
         const mesNombre = r.mes_pico ? MESES[r.mes_pico - 1] : null;
 
         if (irregPct > 15) {
-            items.push({ tipo:'warn', icon:'ri-alert-fill', titulo:'Alta proporción de ingresos sin DTE',
-                msg:`El ${irregPct}% de los SKU nuevos entraron por ajuste o alta manual — sin respaldo documental. Revisar procesos de recepción.` });
+            items.push({ tipo:'warn', icon:'ri-alert-fill', titulo:'Alta proporción de SKU nacidos por ajuste o corrección',
+                msg:`El ${irregPct}% de los SKU nuevos entraron por ajuste de inventario, devolución o reversa. Conviene revisar caso a caso — el alta normal es la recepción/creación del producto.` });
         } else if (irregPct > 5) {
-            items.push({ tipo:'info', icon:'ri-information-fill', titulo:'Ingresos irregulares detectados',
-                msg:`El ${irregPct}% de altas son ajustes o manuales. Dentro de rango tolerable, pero conviene monitorear.` });
+            items.push({ tipo:'info', icon:'ri-information-fill', titulo:'Ajustes y correcciones detectados',
+                msg:`El ${irregPct}% de las altas provienen de ajustes, devoluciones o reversas. Dentro de rango tolerable, pero conviene monitorear.` });
         } else if (r.total_skus > 0) {
-            items.push({ tipo:'ok', icon:'ri-checkbox-circle-fill', titulo:'Trazabilidad formal predominante',
-                msg:`El ${pctCompra}% de los SKU ingresaron con DTE de compra. Solo el ${irregPct}% sin respaldo documental.` });
+            items.push({ tipo:'ok', icon:'ri-checkbox-circle-fill', titulo:'Altas por el flujo normal',
+                msg:`El ${pctCompra}% de los SKU nacieron por recepción/creación de producto (el flujo normal de este ERP). Solo el ${irregPct}% vino de ajustes o correcciones.` });
         }
 
         if (mesNombre && r.mes_pico_skus > 0) {

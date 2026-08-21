@@ -9137,35 +9137,60 @@ def reporte_movimientos_kardex(request):
     # --- Apertura sintética de la migración (ver REF_SALDO_INICIAL_SINTETICO) ---
     # La carga inicial de la migración Laravel entró como INGRESO_INICIAL con
     # referencia MIGRACION_LARAVEL (~2026-01-22) ENCIMA del kardex legacy ya
-    # migrado (referencias MIG:<id>): sumarla al saldo duplica el stock (mismo
-    # criterio que _saldos_periodo / _mapas_movimientos_sucursal en
-    # views_modulo_reportes.py). Por defecto la apertura NO aporta al saldo.
-    # EXCEPCIÓN (ancla): SKUs cuya apertura no duplica nada porque no tienen
-    # kardex legacy detrás (p.ej. solo-apertura). Se detecta contra el stock
-    # real: si sin la apertura el saldo final NO cuadra con Producto_Talla.stock
-    # pero CON ella sí, la apertura es el saldo inicial genuino y se incluye.
-    # La decisión usa TODA la historia del SKU (no el rango filtrado): es una
-    # propiedad del SKU, no de la ventana consultada. Si ninguna de las dos
-    # variantes cuadra (drift real), rige el default (excluir).
+    # migrado (referencias MIG:<id>): sumarla tal cual duplica el stock (mismo
+    # fenómeno que corrigen _saldos_periodo / _mapas_movimientos_sucursal en
+    # views_modulo_reportes.py).
+    #
+    # Criterio del saldo corrido (medido contra prod, ver Fase B):
+    #   1. DEFAULT: la apertura NO aporta al saldo (queda absorbida en el
+    #      kardex legacy que la precede). Con eso 20/20 SKUs de la muestra
+    #      cuadran saldo final == Producto_Talla.stock.
+    #   2. RE-ANCLA (excepción): si excluyéndola el saldo final de TODA la
+    #      historia NO cuadra con el stock, pero tratando la apertura como
+    #      FOTO (saldo re-anclado a su valor + movimientos posteriores) SÍ
+    #      cuadra, entonces la apertura es el dato autoritativo (SKU
+    #      solo-apertura o kardex legacy incompleto, p.ej. PT 214822) y su
+    #      fila aporta ``delta = apertura - acumulado_previo``.
+    #   3. Si ninguna variante cuadra (drift real kardex-vs-stock, p.ej.
+    #      PT 362970 con +34 de drift pre-existente), rige el default.
+    # La decisión usa la historia COMPLETA del SKU (es una propiedad del SKU,
+    # no del rango de fechas consultado).
     from app.constants_kardex import REF_SALDO_INICIAL_SINTETICO
     es_apertura_q = Q(
         concepto='INGRESO_INICIAL',
         referencia_externa=REF_SALDO_INICIAL_SINTETICO,
     )
-    resumen = Movimientos_Producto.objects.filter(
+    base_completado = Movimientos_Producto.objects.filter(
         ProductoTalla=producto_talla, estado='COMPLETADO'
-    ).aggregate(
-        total=Sum('cantidad'),
-        apertura=Sum('cantidad', filter=es_apertura_q),
     )
-    suma_apertura = resumen['apertura'] or 0
-    suma_sin_apertura = (resumen['total'] or 0) - suma_apertura
-    stock_actual = producto_talla.stock or 0
-    apertura_anclada = bool(
-        suma_apertura
-        and suma_sin_apertura != stock_actual
-        and suma_sin_apertura + suma_apertura == stock_actual
+    primera_apertura_hist = (
+        base_completado.filter(es_apertura_q)
+        .order_by('fecha', 'hora', 'id')
+        .values('id', 'fecha', 'hora')
+        .first()
     )
+    reanclar = False
+    if primera_apertura_hist:
+        apertura_hist = base_completado.filter(es_apertura_q).aggregate(
+            s=Sum('cantidad'))['s'] or 0
+        total_hist = base_completado.aggregate(s=Sum('cantidad'))['s'] or 0
+        despues_de_apertura_q = (
+            Q(fecha__gt=primera_apertura_hist['fecha'])
+            | Q(fecha=primera_apertura_hist['fecha'],
+                hora__gt=primera_apertura_hist['hora'])
+            | Q(fecha=primera_apertura_hist['fecha'],
+                hora=primera_apertura_hist['hora'],
+                id__gt=primera_apertura_hist['id'])
+        )
+        post_hist = base_completado.filter(despues_de_apertura_q).exclude(
+            concepto='INGRESO_INICIAL',
+            referencia_externa=REF_SALDO_INICIAL_SINTETICO,
+        ).aggregate(s=Sum('cantidad'))['s'] or 0
+        stock_actual = producto_talla.stock or 0
+        final_excluyendo = total_hist - apertura_hist
+        final_reanclando = apertura_hist + post_hist
+        reanclar = (final_excluyendo != stock_actual
+                    and final_reanclando == stock_actual)
     # select_related sobre dte y ticket: el bucle de abajo los lee para armar la
     # referencia, y sin esto son 2 queries por fila (hasta 1.000 por pagina).
     movimientos = Movimientos_Producto.objects.filter(
@@ -9183,15 +9208,45 @@ def reporte_movimientos_kardex(request):
     # antes se reiniciaba en 0 en cada pagina y el saldo era falso desde la 2 en
     # adelante. La window function se evalua antes del LIMIT/OFFSET.
     # Al saldo solo aportan los movimientos COMPLETADOS (un CANCELADO/PENDIENTE
-    # se lista pero no mueve el acumulado) y, salvo ancla, tampoco la apertura
-    # sintética. Las filas excluidas siguen apareciendo con su entrada/salida;
-    # el saldo simplemente no salta en ellas.
-    fuera_del_saldo = ~Q(estado='COMPLETADO')
-    if not apertura_anclada:
-        fuera_del_saldo = fuera_del_saldo | es_apertura_q
+    # se lista pero no mueve el acumulado). La apertura sintética aporta 0 o,
+    # si el SKU re-ancla, su primera fila aporta el delta de re-anclaje
+    # calculado DENTRO del rango filtrado (el acumulado también es relativo al
+    # rango). Las filas excluidas siguen mostrando su entrada/salida; el saldo
+    # simplemente no salta en ellas.
+    condiciones_aporte = [When(~Q(estado='COMPLETADO'), then=Value(0))]
+    if reanclar:
+        primera_apertura = (
+            movimientos.filter(es_apertura_q, estado='COMPLETADO')
+            .order_by('fecha', 'hora', 'id')
+            .values('id', 'fecha', 'hora')
+            .first()
+        )
+        if primera_apertura:
+            apertura_rango = movimientos.filter(
+                es_apertura_q, estado='COMPLETADO'
+            ).aggregate(s=Sum('cantidad'))['s'] or 0
+            antes_de_apertura_q = (
+                Q(fecha__lt=primera_apertura['fecha'])
+                | Q(fecha=primera_apertura['fecha'],
+                    hora__lt=primera_apertura['hora'])
+                | Q(fecha=primera_apertura['fecha'],
+                    hora=primera_apertura['hora'],
+                    id__lt=primera_apertura['id'])
+            )
+            acumulado_previo = movimientos.filter(
+                antes_de_apertura_q, estado='COMPLETADO'
+            ).exclude(
+                concepto='INGRESO_INICIAL',
+                referencia_externa=REF_SALDO_INICIAL_SINTETICO,
+            ).aggregate(s=Sum('cantidad'))['s'] or 0
+            condiciones_aporte.append(When(
+                id=primera_apertura['id'],
+                then=Value(apertura_rango - acumulado_previo),
+            ))
+    condiciones_aporte.append(When(es_apertura_q, then=Value(0)))
     movimientos = movimientos.annotate(
         aporte_saldo=Case(
-            When(fuera_del_saldo, then=Value(0)),
+            *condiciones_aporte,
             default=F('cantidad'),
             output_field=IntegerField(),
         ),
@@ -9275,40 +9330,65 @@ def reporte_kardex_agrupado(request):
         )
 
     # --- Apertura sintética de la migración (ver REF_SALDO_INICIAL_SINTETICO) ---
-    # Mismo criterio que reporte_movimientos_kardex: la apertura de la migración
-    # Laravel (INGRESO_INICIAL + referencia MIGRACION_LARAVEL) duplica el kardex
-    # legacy migrado y por defecto NO aporta al saldo. La excepción (ancla) se
-    # decide POR TALLA contra Producto_Talla.stock usando toda la historia: si
-    # sin apertura no cuadra pero con apertura sí, esa talla no tiene legacy
-    # detrás y su apertura es el saldo inicial genuino.
+    # Mismo criterio que reporte_movimientos_kardex, aplicado POR TALLA:
+    # DEFAULT la apertura de la migración (INGRESO_INICIAL + referencia
+    # MIGRACION_LARAVEL) no aporta al saldo (duplicaría el kardex legacy
+    # migrado); EXCEPCIÓN, si para una talla excluir la apertura no cuadra con
+    # Producto_Talla.stock pero tratarla como FOTO (re-anclar el acumulado a
+    # su valor) sí cuadra, esa talla re-ancla y la fila de apertura aporta
+    # ``apertura - acumulado previo de la talla``. La decisión usa la historia
+    # completa (no el rango filtrado).
     from app.constants_kardex import REF_SALDO_INICIAL_SINTETICO
     es_apertura_q = Q(
         concepto='INGRESO_INICIAL',
         referencia_externa=REF_SALDO_INICIAL_SINTETICO,
     )
-    stock_por_talla = dict(
-        Producto_Talla.objects.filter(producto=producto).values_list('id', 'stock')
-    )
-    resumen_tallas = Movimientos_Producto.objects.filter(
-        ProductoTalla__producto=producto, estado='COMPLETADO'
-    ).values('ProductoTalla_id').annotate(
-        total=Sum('cantidad'),
-        apertura=Sum('cantidad', filter=es_apertura_q),
-    )
-    tallas_ancladas = set()
-    for fila in resumen_tallas:
-        apertura_talla = fila['apertura'] or 0
-        sin_apertura_talla = (fila['total'] or 0) - apertura_talla
-        stock_talla = stock_por_talla.get(fila['ProductoTalla_id']) or 0
-        if (apertura_talla
-                and sin_apertura_talla != stock_talla
-                and sin_apertura_talla + apertura_talla == stock_talla):
-            tallas_ancladas.add(fila['ProductoTalla_id'])
+    apertura_por_talla = {
+        fila['ProductoTalla_id']: fila['apertura'] or 0
+        for fila in Movimientos_Producto.objects.filter(
+            ProductoTalla__producto=producto, estado='COMPLETADO'
+        ).filter(es_apertura_q).values('ProductoTalla_id').annotate(
+            apertura=Sum('cantidad')
+        )
+    }
+    tallas_reancla = set()
+    if apertura_por_talla:
+        stock_por_talla = dict(
+            Producto_Talla.objects.filter(producto=producto)
+            .values_list('id', 'stock')
+        )
+        # Pasada liviana sobre la historia completa para partir cada talla en
+        # pre-apertura / post-apertura y evaluar ambas variantes del final.
+        historia = Movimientos_Producto.objects.filter(
+            ProductoTalla__producto=producto, estado='COMPLETADO'
+        ).order_by('fecha', 'hora', 'id').values_list(
+            'ProductoTalla_id', 'cantidad', 'concepto', 'referencia_externa'
+        )
+        acum_tallas = {}  # talla_id -> [pre, post, vio_apertura]
+        for talla_id, cantidad, concepto, ref in historia.iterator(chunk_size=2000):
+            datos = acum_tallas.setdefault(talla_id, [0, 0, False])
+            if (concepto == 'INGRESO_INICIAL'
+                    and ref == REF_SALDO_INICIAL_SINTETICO):
+                datos[2] = True
+            elif datos[2]:
+                datos[1] += cantidad
+            else:
+                datos[0] += cantidad
+        for talla_id, (pre, post, vio_apertura) in acum_tallas.items():
+            if not vio_apertura:
+                continue
+            stock_talla = stock_por_talla.get(talla_id) or 0
+            if (pre + post != stock_talla
+                    and apertura_por_talla.get(talla_id, 0) + post == stock_talla):
+                tallas_reancla.add(talla_id)
+    acumulado_por_talla = {}
+    tallas_reancladas = set()
 
-    # Obtener todos los movimientos del producto (todas las tallas)
+    # Obtener todos los movimientos del producto (todas las tallas). El 'id'
+    # desempata timestamps iguales para que el re-anclaje sea determinista.
     movimientos = Movimientos_Producto.objects.filter(
         ProductoTalla__producto=producto
-    ).select_related('ProductoTalla', 'dte', 'ticket', 'sucursal_destino').order_by('fecha', 'hora')
+    ).select_related('ProductoTalla', 'dte', 'ticket', 'sucursal_destino').order_by('fecha', 'hora', 'id')
 
     if fecha_inicio:
         from django.utils.dateparse import parse_date
@@ -9361,8 +9441,8 @@ def reporte_kardex_agrupado(request):
             grupo['referencia'] = referencia
         
         # Sumar cantidades. La fila muestra el movimiento completo
-        # (cantidad_total) pero al saldo solo aportan los COMPLETADOS y, salvo
-        # talla anclada, no la apertura sintética de la migración.
+        # (cantidad_total) pero al saldo solo aportan los COMPLETADOS; la
+        # apertura sintética aporta su delta de re-anclaje por talla.
         es_apertura_mov = (
             m.concepto == 'INGRESO_INICIAL'
             and m.referencia_externa == REF_SALDO_INICIAL_SINTETICO
@@ -9370,9 +9450,22 @@ def reporte_kardex_agrupado(request):
         if es_apertura_mov:
             grupo['es_apertura'] = True
         grupo['cantidad_total'] += m.cantidad
-        if m.estado == 'COMPLETADO' and (
-                not es_apertura_mov or m.ProductoTalla_id in tallas_ancladas):
-            grupo['aporte_saldo'] += m.cantidad
+        if m.estado == 'COMPLETADO':
+            talla_id = m.ProductoTalla_id
+            if es_apertura_mov:
+                if (talla_id in tallas_reancla
+                        and talla_id not in tallas_reancladas):
+                    tallas_reancladas.add(talla_id)
+                    aporte = (apertura_por_talla.get(talla_id, 0)
+                              - acumulado_por_talla.get(talla_id, 0))
+                else:
+                    aporte = 0
+            else:
+                aporte = m.cantidad
+            grupo['aporte_saldo'] += aporte
+            acumulado_por_talla[talla_id] = (
+                acumulado_por_talla.get(talla_id, 0) + aporte
+            )
         grupo['movimientos_detalle'].append({
             'talla': m.ProductoTalla.talla,
             'sku': m.ProductoTalla.sku,
@@ -22441,11 +22534,14 @@ def obtener_productos(request):
 @login_required
 def reporte_despachos_por_proveedor(request):
     """
-    Reporte que muestra por cada proveedor y DTE:
-    - Total de productos ingresados
-    - Total de productos despachados (vendidos, transferidos, etc.)
-    - Saldo restante
-    - Resumen global de KPIs
+    Reporte de INGRESOS por proveedor y DTE de compra: unidades comprometidas
+    en el documento, pendientes de ingreso, ingresadas y su monto.
+
+    Las métricas "despachado" y "saldo restante" se ELIMINARON (auditoría
+    ago-2026): eran métricas muertas — en TODO el histórico hay 0 movimientos
+    EGRESO colgados de un DTE de COMPRA, así que despachado era siempre 0 y el
+    saldo siempre igual a lo ingresado. Los egresos reales (ventas, traspasos)
+    nunca referencian el DTE de compra de origen.
 
     NOTA: En una COMPRA, el EMISOR es el proveedor (quien nos vende/factura)
 
@@ -22455,7 +22551,15 @@ def reporte_despachos_por_proveedor(request):
     anclaje es el par emisor/receptor del DTE (en una compra el RECEPTOR somos
     nosotros) más la sucursal: los DTE de compra migrados llegan con
     `sucursal=NULL`, así que filtrar sólo por sucursal borraría la historia.
+
+    PERFORMANCE: sin rango de fechas la vista materializaba los 1.266 DTE
+    históricos y disparaba 4 queries por DTE de la página (88 queries / 15,2 s
+    medidos). Ahora las agregaciones van en bulk (una query por lote) y la
+    carga sin filtros aplica un rango por defecto de 90 días (el frontend lo
+    avisa vía `filtros_aplicados.fecha_defecto_aplicada`).
     """
+    from datetime import timedelta
+
     from app.utils_permisos import ids_empresas_alcance
 
     # Filtros
@@ -22463,6 +22567,14 @@ def reporte_despachos_por_proveedor(request):
     fecha_inicio = request.GET.get('fecha_inicio')
     fecha_fin = request.GET.get('fecha_fin')
     dte_numero = request.GET.get('dte_numero')
+
+    # Rango por defecto: últimos 90 días. Solo cuando el usuario no acotó por
+    # fecha NI está buscando un número de DTE puntual (esa búsqueda debe
+    # recorrer todo el histórico o no encontraría documentos viejos).
+    fecha_defecto_aplicada = False
+    if not fecha_inicio and not fecha_fin and not dte_numero:
+        fecha_inicio = (timezone.localdate() - timedelta(days=90)).isoformat()
+        fecha_defecto_aplicada = True
     # Por defecto se excluye la facturación interna (emisor == receptor).
     # El frontend puede pasar excluir_interna=false para incluirlas.
     excluir_interna = request.GET.get('excluir_interna', 'true').lower() != 'false'
@@ -22515,48 +22627,44 @@ def reporte_despachos_por_proveedor(request):
     # Contar total para paginación
     total_count = dtes_query.count()
     total_pages = (total_count + page_size - 1) // page_size
-    
+
     # ========== RESUMEN GLOBAL (todos los registros filtrados) ==========
+    # Estados en UNA query agregada (antes eran 3 counts separados).
+    estados = dtes_query.aggregate(
+        pagados=Count('id', filter=Q(estado_pago='PAGADO')),
+        pendientes=Count('id', filter=Q(estado_pago='PENDIENTE')),
+        aceptados=Count('id', filter=Q(estado_dte='ACEPTADO')),
+    )
     resumen_global = {
         'total_proveedores': dtes_query.values('emisor_id').distinct().count(),
         'total_dtes': total_count,
-        'dtes_pagados': dtes_query.filter(estado_pago='PAGADO').count(),
-        'dtes_pendientes': dtes_query.filter(estado_pago='PENDIENTE').count(),
-        'dtes_aceptados': dtes_query.filter(estado_dte='ACEPTADO').count(),
+        'dtes_pagados': estados['pagados'] or 0,
+        'dtes_pendientes': estados['pendientes'] or 0,
+        'dtes_aceptados': estados['aceptados'] or 0,
         'total_unidades_ingresadas': 0,
-        'total_unidades_despachadas': 0,
         'total_monto_compras': 0,
         'monto_minimo': 0,
         'monto_maximo': 0,
     }
-    
-    # Calcular métricas globales de movimientos para todos los DTEs filtrados
-    all_dtes_ids = list(dtes_query.values_list('id', flat=True))
-    if all_dtes_ids:
-        # Ingresos globales
+
+    # Universo de DTE como SUBQUERY (no materializar la lista de ids en Python:
+    # sin filtro de fechas eran 1.266 ids viajando en cada IN (...)).
+    dtes_ids_sq = dtes_query.values('id')
+    if total_count:
+        # Ingresos globales. Los EGRESOS ya no se agregan: 0 movimientos EGRESO
+        # referencian DTE de compra en todo el histórico (métrica muerta).
         ingresos_globales = Movimientos_Producto.objects.filter(
-            dte_id__in=all_dtes_ids,
+            dte_id__in=dtes_ids_sq,
             tipo_movimiento='INGRESO'
         ).aggregate(
             total_cantidad=Sum('cantidad'),
             total_costo=Sum(F('cantidad') * F('costo'))
         )
-        
-        # Egresos globales
-        egresos_globales = Movimientos_Producto.objects.filter(
-            dte_id__in=all_dtes_ids,
-            tipo_movimiento='EGRESO'
-        ).aggregate(
-            total_cantidad=Sum('cantidad'),
-            total_costo=Sum(F('cantidad') * F('costo'))
-        )
-        
         resumen_global['total_unidades_ingresadas'] = ingresos_globales['total_cantidad'] or 0
-        resumen_global['total_unidades_despachadas'] = abs(egresos_globales['total_cantidad'] or 0)
         resumen_global['total_monto_compras'] = float(ingresos_globales['total_costo'] or 0)
 
         # Unidades totales comprometidas en DTEs y pendientes de ingreso
-        total_en_dtes = Dte_Productos.objects.filter(dte_id__in=all_dtes_ids).aggregate(t=Sum('stock'))['t'] or 0
+        total_en_dtes = Dte_Productos.objects.filter(dte_id__in=dtes_ids_sq).aggregate(t=Sum('stock'))['t'] or 0
         resumen_global['total_unidades_en_dtes'] = total_en_dtes
         resumen_global['total_unidades_pendientes'] = max(0, total_en_dtes - resumen_global['total_unidades_ingresadas'])
 
@@ -22569,46 +22677,40 @@ def reporte_despachos_por_proveedor(request):
         resumen_global['monto_minimo'] = float(montos_dtes['monto_min'] or 0)
         resumen_global['monto_maximo'] = float(montos_dtes['monto_max'] or 0)
         resumen_global['monto_promedio'] = float(montos_dtes['monto_promedio'] or 0)
-    
+
     # Aplicar paginación para datos de tabla
     offset = (page - 1) * page_size
-    dtes = dtes_query.order_by('-fecha_emision')[offset:offset + page_size]
-    
+    dtes = list(dtes_query.order_by('-fecha_emision')[offset:offset + page_size])
+    page_ids = [d.id for d in dtes]
+
+    # Agregaciones de la página en BULK: una query por fuente para TODOS los
+    # DTE de la página (antes: 4 queries POR DTE → 88 queries / 15,2 s).
+    ingresos_por_dte = {}
+    en_dte_por_dte = {}
+    if page_ids:
+        for fila in (Movimientos_Producto.objects
+                     .filter(dte_id__in=page_ids, tipo_movimiento='INGRESO')
+                     .values('dte_id')
+                     .annotate(total_cantidad=Sum('cantidad'),
+                               total_costo=Sum(F('cantidad') * F('costo')))):
+            ingresos_por_dte[fila['dte_id']] = fila
+        for fila in (Dte_Productos.objects
+                     .filter(dte_id__in=page_ids)
+                     .values('dte_id')
+                     .annotate(t=Sum('stock'))):
+            en_dte_por_dte[fila['dte_id']] = fila['t'] or 0
+
     resultado = []
-    
+
     for dte in dtes:
-        # Calcular ingresos (movimientos de INGRESO asociados a este DTE)
-        ingresos = Movimientos_Producto.objects.filter(
-            dte=dte,
-            tipo_movimiento='INGRESO'
-        ).aggregate(
-            total_cantidad=Sum('cantidad'),
-            total_costo=Sum(F('cantidad') * F('costo'))
-        )
-        
-        # Calcular despachos (movimientos de EGRESO asociados a este DTE)
-        despachos = Movimientos_Producto.objects.filter(
-            dte=dte,
-            tipo_movimiento='EGRESO'
-        ).aggregate(
-            total_cantidad=Sum('cantidad'),
-            total_costo=Sum(F('cantidad') * F('costo'))
-        )
-        
-        # Valores por defecto
-        total_ingresado = ingresos['total_cantidad'] or 0
-        total_despachado = abs(despachos['total_cantidad'] or 0)  # Valor absoluto porque egresos son negativos
-        saldo_restante = total_ingresado - total_despachado
+        ingresos = ingresos_por_dte.get(dte.id, {})
+        total_ingresado = ingresos.get('total_cantidad') or 0
+        monto_ingresado = ingresos.get('total_costo') or 0
 
         # Unidades comprometidas en el DTE y pendientes de ingreso
-        unidades_en_dte = Dte_Productos.objects.filter(dte=dte).aggregate(t=Sum('stock'))['t'] or 0
+        unidades_en_dte = en_dte_por_dte.get(dte.id, 0)
         unidades_pendientes_ingreso = max(0, unidades_en_dte - total_ingresado)
 
-        # Calcular montos
-        monto_ingresado = ingresos['total_costo'] or 0
-        monto_despachado = abs(despachos['total_costo'] or 0)
-        monto_restante = monto_ingresado - monto_despachado
-        
         resultado.append({
             'dte_id': dte.id,
             'dte_numero': dte.numero_documento,
@@ -22620,15 +22722,11 @@ def reporte_despachos_por_proveedor(request):
             'unidades_en_dte': unidades_en_dte,
             'unidades_pendientes_ingreso': unidades_pendientes_ingreso,
             'total_ingresado': total_ingresado,
-            'total_despachado': total_despachado,
-            'saldo_restante': saldo_restante,
             'monto_ingresado': float(monto_ingresado),
-            'monto_despachado': float(monto_despachado),
-            'monto_restante': float(monto_restante),
             'estado_dte': dte.estado_dte,
             'estado_pago': dte.estado_pago
         })
-    
+
     return JsonResponse({
         'success': True,
         'data': resultado,
@@ -22639,6 +22737,11 @@ def reporte_despachos_por_proveedor(request):
             'total_pages': total_pages,
             'total_records': total_count,
             'page_size': page_size
+        },
+        'filtros_aplicados': {
+            'fecha_inicio': fecha_inicio or None,
+            'fecha_fin': fecha_fin or None,
+            'fecha_defecto_aplicada': fecha_defecto_aplicada,
         }
     })
 

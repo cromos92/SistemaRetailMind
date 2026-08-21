@@ -21,7 +21,7 @@ from django.utils import timezone
 
 from .decorators import requiere_permiso
 from .models import (
-    GiftCard, MovimientoGiftCard, Sucursal, Cliente, Vendedor, Empresa,
+    GiftCard, MovimientoGiftCard, PermisoRol, Sucursal, Cliente, Vendedor, Empresa,
     ESTADO_GIFTCARD_CHOICES,
 )
 from .services import giftcard_service, fidelizacion_service
@@ -122,6 +122,14 @@ def _aplicar_filtros_giftcards(qs, request):
     elif vigencia == 'con_saldo':
         qs = _qs_con_saldo(qs)
 
+    # Estado de entrega del código: para saber a quién falta enviarle su
+    # gift card (o revisar las ya enviadas) sin exportar todo el listado.
+    envio = (request.GET.get('envio') or '').strip()
+    if envio == 'enviadas':
+        qs = qs.filter(correo_enviado_en__isnull=False)
+    elif envio == 'sin_enviar':
+        qs = qs.filter(correo_enviado_en__isnull=True)
+
     busqueda = (request.GET.get('q') or '').strip()
     if busqueda:
         qs = qs.filter(
@@ -130,6 +138,7 @@ def _aplicar_filtros_giftcards(qs, request):
             Q(cliente__nombre__icontains=busqueda) |
             Q(cliente__apellido__icontains=busqueda) |
             Q(cliente__rut__icontains=busqueda) |
+            Q(correo_enviado_a__icontains=busqueda) |
             Q(descripcion__icontains=busqueda)
         )
     estado = (request.GET.get('estado') or '').strip()
@@ -141,13 +150,26 @@ def _aplicar_filtros_giftcards(qs, request):
     sucursal_id = (request.GET.get('sucursal_id') or '').strip()
     if sucursal_id.isdigit():
         qs = qs.filter(sucursal_emision_id=int(sucursal_id))
-    desde = (request.GET.get('desde') or '').strip()
+    desde = _fecha_valida(request.GET.get('desde'))
     if desde:
         qs = qs.filter(fecha_emision__date__gte=desde)
-    hasta = (request.GET.get('hasta') or '').strip()
+    hasta = _fecha_valida(request.GET.get('hasta'))
     if hasta:
         qs = qs.filter(fecha_emision__date__lte=hasta)
     return qs
+
+
+def _fecha_valida(valor):
+    """'YYYY-MM-DD' -> str si es una fecha real; None si no (evita el 500)."""
+    from datetime import datetime as _dt
+    valor = (valor or '').strip()
+    if not valor:
+        return None
+    try:
+        _dt.strptime(valor, '%Y-%m-%d')
+    except ValueError:
+        return None
+    return valor
 
 
 def _aplicar_filtros_trazabilidad(qs, request):
@@ -163,16 +185,18 @@ def _aplicar_filtros_trazabilidad(qs, request):
     tipo = (request.GET.get('tipo') or '').strip()
     if tipo:
         qs = qs.filter(tipo=tipo)
+    # `isdigit` obligatorio: un sucursal_id no numérico en la URL reventaba con
+    # ValueError -> 500 en la trazabilidad y en su export.
     sucursal_id = (request.GET.get('sucursal_id') or '').strip()
-    if sucursal_id:
-        qs = qs.filter(sucursal_id=sucursal_id)
+    if sucursal_id.isdigit():
+        qs = qs.filter(sucursal_id=int(sucursal_id))
     usuario = (request.GET.get('usuario') or '').strip()
     if usuario:
         qs = qs.filter(usuario__username__icontains=usuario)
-    desde = (request.GET.get('desde') or '').strip()
+    desde = _fecha_valida(request.GET.get('desde'))
     if desde:
         qs = qs.filter(fecha__date__gte=desde)
-    hasta = (request.GET.get('hasta') or '').strip()
+    hasta = _fecha_valida(request.GET.get('hasta'))
     if hasta:
         qs = qs.filter(fecha__date__lte=hasta)
     return qs
@@ -185,6 +209,7 @@ def modulo_giftcards(request):
     """Listado / gestión de gift cards. La emisión se hace en un modal aquí."""
     context = {
         'sucursal_actual': _sucursal_actual(request),
+        'empresa_actual': _empresa_actual(request),
         'estado_choices': GiftCard._meta.get_field('estado').choices,
         'tipo_tarjeta_choices': GiftCard._meta.get_field('tipo_tarjeta').choices,
         'motivo_choices': GiftCard._meta.get_field('motivo').choices,
@@ -207,7 +232,7 @@ def emitir_giftcard_vista(request):
 def detalle_giftcard_vista(request, giftcard_id):
     """Detalle de una gift card con su historial de movimientos."""
     giftcard = get_object_or_404(
-        GiftCard.objects.select_related('cliente', 'sucursal_emision', 'created_by'),
+        GiftCard.objects.select_related('cliente', 'sucursal_emision', 'created_by', 'empresa'),
         id=giftcard_id,
     )
     hoy = timezone.localdate()
@@ -297,6 +322,25 @@ def api_emitir_giftcard(request):
 
         vencimiento = data.get('fecha_vencimiento') or None
 
+        # Ámbito de canje: 'EMPRESA' (default) = solo sucursales de la empresa
+        # activa de la sesión; 'TODAS' = toda la cadena (comportamiento viejo).
+        ambito = (data.get('ambito') or 'EMPRESA').upper()
+        if ambito not in ('EMPRESA', 'TODAS'):
+            return JsonResponse({'success': False, 'error': 'Ámbito inválido.'}, status=400)
+        empresa_gc = None
+        if ambito == 'EMPRESA':
+            empresa_gc = _empresa_actual(request)
+            # Sin empresa en sesión NO se emite en silencio como global: el
+            # usuario pidió acotarla y la tarjeta saldría canjeable en toda la
+            # cadena sin aviso (mismo criterio que api_cambiar_ambito).
+            if empresa_gc is None:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No se pudo determinar la empresa activa para acotar la '
+                             'gift card. Selecciona una empresa o emite con ámbito '
+                             '"Todas las empresas".',
+                }, status=400)
+
         giftcard = giftcard_service.emitir(
             monto,
             sucursal=_sucursal_actual(request),
@@ -310,6 +354,7 @@ def api_emitir_giftcard(request):
             codigo_fisico=(data.get('codigo_fisico') or None),
             motivo=(data.get('motivo') or 'OTRO'),
             descripcion=(data.get('descripcion') or ''),
+            empresa=empresa_gc,
         )
         return JsonResponse({
             'success': True,
@@ -319,8 +364,11 @@ def api_emitir_giftcard(request):
                 'codigo_fisico': giftcard.codigo_fisico,
                 'tipo_tarjeta': giftcard.tipo_tarjeta,
                 'cliente': giftcard.cliente.nombre_completo if giftcard.cliente else '',
+                'cliente_email': (giftcard.cliente.email or '') if giftcard.cliente else '',
                 'saldo_actual': giftcard.saldo_actual,
                 'fecha_vencimiento': giftcard.fecha_vencimiento.isoformat() if giftcard.fecha_vencimiento else None,
+                'ambito': 'EMPRESA' if giftcard.empresa_id else 'TODAS',
+                'empresa': giftcard.empresa.nombre if giftcard.empresa_id else '',
             },
         })
     except giftcard_service.GiftCardError as e:
@@ -335,7 +383,7 @@ def api_emitir_giftcard(request):
 def api_listar_giftcards(request):
     """Listado paginado de gift cards con filtros."""
     hoy = timezone.localdate()
-    qs = GiftCard.objects.select_related('cliente', 'sucursal_emision').all()
+    qs = GiftCard.objects.select_related('cliente', 'sucursal_emision', 'empresa').all()
     qs = _aplicar_filtros_giftcards(qs, request)
 
     # Totales del universo filtrado (no solo de la página visible): sin esto el
@@ -384,11 +432,27 @@ def api_listar_giftcards(request):
             'estado_efectivo': efectivo,
             'estado_efectivo_display': dict(ESTADO_GIFTCARD_CHOICES).get(efectivo, efectivo),
             'cliente': gc.cliente.nombre_completo if gc.cliente else '',
+            'cliente_email': (gc.cliente.email or '') if gc.cliente else '',
             'sucursal_emision': gc.sucursal_emision.nombre if gc.sucursal_emision else '',
             'fecha_emision': gc.fecha_emision.strftime('%Y-%m-%d %H:%M'),
             'fecha_vencimiento': gc.fecha_vencimiento.isoformat() if gc.fecha_vencimiento else None,
             'dias_vencimiento': dias,
             'vencida': gc.esta_vencida,
+            'ambito': 'EMPRESA' if gc.empresa_id else 'TODAS',
+            'empresa': gc.empresa.nombre if gc.empresa_id else '',
+            # Entrega del código: a quién y cuándo se envió (vacío = nunca).
+            'correo_enviado_a': gc.correo_enviado_a or '',
+            'correo_enviado_en': (
+                timezone.localtime(gc.correo_enviado_en).strftime('%Y-%m-%d %H:%M')
+                if gc.correo_enviado_en else ''
+            ),
+            'correo_envios': gc.correo_envios or 0,
+            # Plata que el cliente TODAVÍA puede gastar (0 si ya no es canjeable).
+            'pendiente_por_usar': (
+                gc.saldo_actual
+                if (gc.estado == 'ACTIVA' and not gc.esta_vencida and gc.saldo_actual > 0)
+                else 0
+            ),
         })
 
     return JsonResponse({
@@ -439,17 +503,26 @@ def api_detalle_giftcard(request, giftcard_id):
             'estado': gc.estado,
             'estado_display': gc.get_estado_display(),
             'cliente': gc.cliente.nombre_completo if gc.cliente else '',
+            'cliente_email': (gc.cliente.email or '') if gc.cliente else '',
             'fecha_emision': gc.fecha_emision.strftime('%Y-%m-%d %H:%M'),
             'fecha_vencimiento': gc.fecha_vencimiento.isoformat() if gc.fecha_vencimiento else None,
+            'ambito': 'EMPRESA' if gc.empresa_id else 'TODAS',
+            'empresa': gc.empresa.nombre if gc.empresa_id else '',
         },
         'movimientos': movimientos,
     })
 
 
 @require_GET
-@requiere_permiso('giftcards_listado', 'puede_ver')
+@login_required
 def api_consultar_saldo_giftcard(request):
-    """Consulta saldo por código (usada por el POS web y la pantalla de gestión)."""
+    """
+    Consulta saldo por código (usada por el POS web y la pantalla de gestión).
+
+    Gate en `login_required` (no permiso de módulo) a propósito: lo consume la
+    CAJA al cobrar y el rol cajero/vendedor no tiene `giftcards_listado`.
+    Mismo criterio que `obtener_promos_activas` / `obtener_ofertas_activas`.
+    """
     codigo = (request.GET.get('codigo') or '').strip()
     if not codigo:
         return JsonResponse({'success': False, 'error': 'Código requerido.'}, status=400)
@@ -457,7 +530,7 @@ def api_consultar_saldo_giftcard(request):
         info = giftcard_service.consultar_saldo(codigo)
         # Datos extra que la pantalla de gestión necesita para no obligar al
         # usuario a abrir el detalle en otra pestaña.
-        gc = GiftCard.objects.select_related('cliente', 'sucursal_emision').filter(
+        gc = GiftCard.objects.select_related('cliente', 'sucursal_emision', 'empresa').filter(
             Q(codigo=codigo.upper()) | Q(codigo_fisico=codigo.upper())
         ).first()
         if gc is not None:
@@ -471,17 +544,33 @@ def api_consultar_saldo_giftcard(request):
                 'estado_efectivo': _estado_efectivo(gc, hoy),
                 'movimientos': gc.movimientos.count(),
             })
+            # El correo del titular SOLO para quien administra gift cards: este
+            # endpoint está en `login_required` porque lo consume la caja, y
+            # cualquier usuario logueado que pruebe códigos físicos (impresos,
+            # potencialmente correlativos) no debe cosechar emails de clientes.
+            if PermisoRol.tiene_permiso(request.user, 'giftcards_listado', 'puede_ver'):
+                info['cliente_email'] = (gc.cliente.email or '') if gc.cliente else ''
+                info['correo_enviado_a'] = gc.correo_enviado_a or ''
+                info['correo_enviado_en'] = (
+                    timezone.localtime(gc.correo_enviado_en).strftime('%Y-%m-%d %H:%M')
+                    if gc.correo_enviado_en else ''
+                )
+                info['correo_envios'] = gc.correo_envios or 0
         return JsonResponse({'success': True, **info})
     except giftcard_service.GiftCardError as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=404)
 
 
 @require_POST
-@requiere_permiso('giftcards_listado', 'puede_ver')
+@login_required
 def api_validar_giftcard(request):
     """
     Pre-validación de gift card antes de cobrar (no descuenta).
     La usa el POS al agregar un pago con gift card.
+
+    Gate en `login_required` (no permiso de módulo): lo consume la CAJA y el
+    rol cajero/vendedor no tiene `giftcards_listado` (criterio de promos POS).
+    Valida también el ámbito por empresa contra la sucursal activa.
     """
     try:
         data = json.loads(request.body or '{}')
@@ -490,7 +579,9 @@ def api_validar_giftcard(request):
     codigo = (data.get('codigo') or '').strip()
     monto = int(data.get('monto') or 0)
     pin = data.get('pin')
-    resultado = giftcard_service.validar(codigo, monto, pin=pin)
+    resultado = giftcard_service.validar(
+        codigo, monto, pin=pin, sucursal=_sucursal_actual(request),
+    )
     return JsonResponse({'success': True, **resultado})
 
 
@@ -634,6 +725,11 @@ def api_reporte_giftcards(request):
         'por_estado': list(
             qs.values('estado').annotate(n=Count('id')).order_by('-n')
         ),
+        # === ENTREGA DEL CÓDIGO ===
+        # Cuántas tarjetas del filtro ya salieron por correo y cuántas no:
+        # responde "¿le envié su gift card a todos?" sin abrir el listado.
+        'con_correo_enviado': qs.filter(correo_enviado_en__isnull=False).count(),
+        'sin_correo_enviado': qs.filter(correo_enviado_en__isnull=True).count(),
         # Compatibilidad con consumidores antiguos del endpoint.
         'activas': n_vig,
         'saldo_circulante': m_vig,
@@ -768,6 +864,338 @@ def api_editar_giftcard(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
 
+@require_POST
+@requiere_permiso('giftcards_emitir', 'puede_editar')
+def api_cambiar_ambito_giftcard(request):
+    """
+    Cambia el ámbito de canje de una gift card:
+    - ambito='EMPRESA': solo sucursales de la empresa activa de la sesión
+      (o de `empresa_id` si viene explícito).
+    - ambito='TODAS':   válida en todas las empresas de la cadena.
+    Queda una fila AJUSTE monto=0 en el ledger.
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    codigo = (data.get('codigo') or '').strip()
+    ambito = (data.get('ambito') or '').upper()
+    if ambito == 'TODAS':
+        empresa = None
+    elif ambito == 'EMPRESA':
+        empresa_id = data.get('empresa_id')
+        empresa = (Empresa.objects.filter(id=empresa_id).first()
+                   if empresa_id else _empresa_actual(request))
+        if empresa is None:
+            return JsonResponse({
+                'success': False,
+                'error': 'No se pudo determinar la empresa para acotar el ámbito.',
+            }, status=400)
+    else:
+        return JsonResponse({'success': False, 'error': 'Ámbito inválido (EMPRESA o TODAS).'}, status=400)
+
+    try:
+        gc = giftcard_service.cambiar_ambito(
+            codigo, empresa, usuario=request.user,
+            observaciones=data.get('observaciones', ''),
+        )
+        return JsonResponse({
+            'success': True,
+            'ambito': 'EMPRESA' if gc.empresa_id else 'TODAS',
+            'empresa': gc.empresa.nombre if gc.empresa_id else '',
+        })
+    except giftcard_service.GiftCardError as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+
+# Meses en español para la fecha "humana" del correo (evita depender del
+# locale del sistema operativo del servidor).
+_MESES_ES = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+             'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+
+
+class CorreoGiftCardError(Exception):
+    """El correo no se pudo entregar al servidor (nada quedó registrado)."""
+
+
+def enviar_codigos_por_correo(giftcards, email_destino, *, nombre_destino='',
+                              usuario=None, sucursal=None, beneficiarios=None,
+                              connection=None):
+    """
+    Envía UN correo con los códigos de una o varias gift cards.
+
+    Lo usan el botón de la pantalla y el comando de lote: un trabajador con
+    varios hijos recibe UN correo con todas sus tarjetas (cada una rotulada con
+    su beneficiario) en vez de N correos sueltos.
+
+    - `beneficiarios`: dict {giftcard_id: 'NOMBRE'} para rotular cada tarjeta.
+    - `connection`: conexión SMTP ya abierta (para envíos masivos; si no se
+      entrega, se abre y cierra una propia con timeout).
+
+    Registra el envío SOLO si el servidor lo aceptó: fila `ENVIO_CORREO` en el
+    ledger de cada tarjeta + campos denormalizados. Lanza `CorreoGiftCardError`
+    si el envío falla, sin tocar nada.
+    """
+    from django.conf import settings as dj_settings
+    from django.core.mail import EmailMultiAlternatives, get_connection
+    from django.template.loader import render_to_string
+
+    giftcards = list(giftcards)
+    if not giftcards:
+        raise CorreoGiftCardError('No hay gift cards que enviar.')
+    beneficiarios = beneficiarios or {}
+    hoy = timezone.localdate()
+    marca = os.environ.get('GIFTCARD_CORREO_MARCA', 'REALSPORT')
+
+    # Vigencia y ámbito se toman de la primera tarjeta: en un lote son iguales
+    # (mismo comando, misma empresa y vencimiento).
+    ref = giftcards[0]
+    vigencia_dias = (ref.fecha_vencimiento - hoy).days if ref.fecha_vencimiento else None
+    fecha_venc_humana = ''
+    if ref.fecha_vencimiento:
+        f = ref.fecha_vencimiento
+        fecha_venc_humana = f'{f.day} de {_MESES_ES[f.month]} de {f.year}'
+
+    tiendas = []
+    if ref.empresa_id:
+        tiendas = list(
+            Sucursal.objects.filter(empresa_id=ref.empresa_id)
+            .exclude(tipo_sucursal='CENTRO_DISTRIBUCION')
+            .order_by('alias').values_list('alias', flat=True)
+        )
+
+    tarjetas = [{
+        'codigo': (gc.codigo_fisico if gc.tipo_tarjeta == 'FISICA' and gc.codigo_fisico
+                   else gc.codigo),
+        'monto': gc.saldo_actual,
+        'beneficiario': (beneficiarios.get(gc.id) or '').strip(),
+    } for gc in giftcards]
+    monto_total = sum(t['monto'] for t in tarjetas)
+
+    html = render_to_string('emails/giftcard_codigo.html', {
+        'marca': marca,
+        'nombre_destinatario': nombre_destino,
+        'tarjetas': tarjetas,
+        'fecha_vencimiento_humana': fecha_venc_humana,
+        'vigencia_dias': vigencia_dias,
+        'empresa_nombre': ref.empresa.nombre if ref.empresa_id else '',
+        'empresa_rut': ref.empresa.rut if ref.empresa_id else '',
+        'tiendas': tiendas,
+    })
+
+    saludo = f'Hola {nombre_destino}, ' if nombre_destino else 'Hola, '
+    donde = (f'en cualquier tienda de {ref.empresa.nombre} ({", ".join(tiendas)})'
+             if ref.empresa_id and tiendas else 'en cualquiera de nuestras tiendas')
+    detalle_txt = '\n'.join(
+        (f"{t['beneficiario']}: " if t['beneficiario'] else '')
+        + f"{t['codigo']}  (${t['monto']:,})"
+        for t in tarjetas
+    )
+    plural = len(tarjetas) > 1
+    texto = (
+        f'{marca} - GIFT CARD\n\n'
+        f'{saludo}has recibido {len(tarjetas)} gift card{"s" if plural else ""} '
+        f'por un total de ${monto_total:,}.\n\n'
+        f'{"TUS CODIGOS" if plural else "TU CODIGO"}:\n{detalle_txt}\n\n'
+        + (f'Validas hasta el {fecha_venc_humana}.\n\n' if fecha_venc_humana else '')
+        + f'Preséntala{"s" if plural else ""} en caja {donde}. Si no usas todo el '
+        'monto, el saldo queda disponible para una próxima compra dentro de la '
+        'vigencia.\n\n'
+        'IMPORTANTE - cuidado del código: esta gift card funciona al portador; '
+        'cualquier persona que presente el código puede canjearla. La custodia del '
+        'código es responsabilidad exclusiva del titular. No se repone el saldo '
+        'canjeado por terceros en caso de pérdida, robo o divulgación. No es '
+        'canjeable por dinero en efectivo.\n'
+    ).replace(',', '.')
+
+    asunto = (
+        f'\U0001F381 Tus {len(tarjetas)} Gift Cards {marca} — ${monto_total:,}'
+        if plural else f'\U0001F381 Tu Gift Card {marca} — ${monto_total:,}'
+    ).replace(',', '.')
+
+    propia = connection is None
+    if propia:
+        connection = get_connection(
+            timeout=int(os.environ.get('GIFTCARD_EMAIL_TIMEOUT', '30'))
+        )
+    correo = EmailMultiAlternatives(
+        subject=asunto,
+        body=texto,
+        from_email=dj_settings.DEFAULT_FROM_EMAIL,
+        to=[email_destino],
+        connection=connection,
+    )
+    correo.attach_alternative(html, 'text/html')
+    try:
+        enviados = correo.send(fail_silently=False)
+    except Exception as e:
+        logger.exception("Error al enviar correo de gift cards destino=%s", email_destino)
+        raise CorreoGiftCardError(f'No se pudo enviar el correo: {e}.')
+    finally:
+        if propia:
+            try:
+                connection.close()
+            except Exception:
+                pass
+
+    if not enviados:
+        # El servidor NO aceptó el mensaje: no se registra como enviado (si no,
+        # el sistema mostraría un envío que nunca ocurrió).
+        logger.error("Correo de gift cards NO aceptado destino=%s", email_destino)
+        raise CorreoGiftCardError(
+            'El servidor de correo rechazó el mensaje (0 enviados). '
+            'Revisa la dirección del destinatario.'
+        )
+
+    # Message-ID: permite rastrear ESTE envío en el panel del proveedor
+    # (MailerSend/Gmail) si el destinatario dice no haberlo recibido.
+    message_id = (correo.extra_headers or {}).get('Message-ID', '')
+    if not message_id:
+        try:
+            message_id = correo.message()['Message-ID'] or ''
+        except Exception:
+            message_id = ''
+
+    enviado_en = timezone.now()
+    for gc in giftcards:
+        # Sin idempotency_key: reenviar el código es legítimo y cada envío debe
+        # quedar como fila propia del ledger.
+        MovimientoGiftCard.objects.create(
+            giftcard=gc,
+            tipo='ENVIO_CORREO',
+            monto=0,
+            saldo_resultante=gc.saldo_actual,
+            usuario=usuario,
+            sucursal=sucursal,
+            observaciones=(
+                f'Código enviado a {email_destino}'
+                + (f' ({nombre_destino})' if nombre_destino else '')
+                + (f' — para {beneficiarios[gc.id]}'
+                   if beneficiarios.get(gc.id) else '')
+                + (f' [msg {message_id}]' if message_id else '')
+            ),
+        )
+    GiftCard.objects.filter(pk__in=[g.pk for g in giftcards]).update(
+        correo_enviado_a=email_destino,
+        correo_enviado_en=enviado_en,
+        correo_envios=F('correo_envios') + 1,
+        correo_message_id=message_id[:255],
+    )
+    logger.info("Gift cards enviadas por correo n=%s destino=%s msg=%s",
+                len(giftcards), email_destino, message_id)
+    return {
+        'enviado_en': enviado_en,
+        'message_id': message_id,
+        'tarjetas': len(giftcards),
+        'monto_total': monto_total,
+    }
+
+
+@require_POST
+@requiere_permiso('giftcards_emitir', 'puede_crear')
+def api_enviar_correo_giftcard(request):
+    """
+    Envía por correo el código de una gift card al destinatario indicado.
+
+    El correo es el CANAL DE ENTREGA del código (instrumento al portador):
+    incluye monto, código, vigencia y el descargo de responsabilidad de
+    custodia. Cada envío queda en el ledger (fila ENVIO_CORREO monto=0) con
+    destinatario, usuario y sucursal — trazable en la trazabilidad global.
+
+    Patrón de envío del proyecto (requerimientos): EmailMultiAlternatives con
+    texto plano + alternativa HTML y get_connection(timeout=...) para que un
+    SMTP caído no deje la request colgada.
+    """
+    from django.conf import settings as dj_settings
+    from django.core.exceptions import ValidationError as DjangoValidationError
+    from django.core.mail import EmailMultiAlternatives, get_connection
+    from django.core.validators import validate_email
+    from django.template.loader import render_to_string
+
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    codigo = (data.get('codigo') or '').strip().upper()
+    email_destino = (data.get('email') or '').strip()
+    nombre_destino = (data.get('nombre') or '').strip()
+
+    if not codigo:
+        return JsonResponse({'success': False, 'error': 'Código requerido.'}, status=400)
+    try:
+        validate_email(email_destino)
+    except DjangoValidationError:
+        return JsonResponse({'success': False, 'error': 'Correo de destino inválido.'}, status=400)
+
+    gc = GiftCard.objects.select_related('cliente', 'empresa').filter(
+        Q(codigo=codigo) | Q(codigo_fisico=codigo)
+    ).first()
+    if gc is None:
+        return JsonResponse({'success': False, 'error': 'Gift card no encontrada.'}, status=404)
+    # Solo se envía lo canjeable: mandar el diseño de regalo con una tarjeta
+    # vencida/agotada/bloqueada garantiza un reclamo en caja.
+    if gc.estado in ('ANULADA', 'BLOQUEADA'):
+        return JsonResponse({
+            'success': False,
+            'error': f'La gift card está {gc.get_estado_display().lower()}: '
+                     'no corresponde enviar su código.',
+        }, status=400)
+    if gc.esta_vencida:
+        return JsonResponse({
+            'success': False,
+            'error': f'La gift card venció el {gc.fecha_vencimiento}. '
+                     'Extiende primero el vencimiento desde Gestionar.',
+        }, status=400)
+    if gc.saldo_actual <= 0:
+        return JsonResponse({
+            'success': False,
+            'error': 'La gift card no tiene saldo: no corresponde enviar su código.',
+        }, status=400)
+
+    hoy = timezone.localdate()
+    codigo_mostrar = (gc.codigo_fisico
+                      if gc.tipo_tarjeta == 'FISICA' and gc.codigo_fisico else gc.codigo)
+    vigencia_dias = ((gc.fecha_vencimiento - hoy).days
+                     if gc.fecha_vencimiento else None)
+    fecha_venc_humana = ''
+    if gc.fecha_vencimiento:
+        f = gc.fecha_vencimiento
+        fecha_venc_humana = f'{f.day} de {_MESES_ES[f.month]} de {f.year}'
+
+    # Tiendas donde vale: las de la empresa del ámbito (sin el CD); global = texto genérico.
+    tiendas = []
+    if gc.empresa_id:
+        tiendas = list(
+            Sucursal.objects.filter(empresa_id=gc.empresa_id)
+            .exclude(tipo_sucursal='CENTRO_DISTRIBUCION')
+            .order_by('alias').values_list('alias', flat=True)
+        )
+
+    try:
+        resultado = enviar_codigos_por_correo(
+            [gc], email_destino, nombre_destino=nombre_destino,
+            usuario=request.user, sucursal=_sucursal_actual(request),
+            beneficiarios={gc.id: (data.get('beneficiario') or '').strip()},
+        )
+    except CorreoGiftCardError as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'{e} La gift card no se modificó; corrige el problema e intenta de nuevo.',
+        }, status=502)
+
+    gc.refresh_from_db()
+    return JsonResponse({
+        'success': True,
+        'destinatario': email_destino,
+        'enviado_en': timezone.localtime(resultado['enviado_en']).strftime('%Y-%m-%d %H:%M'),
+        'message_id': resultado['message_id'],
+        'envios': gc.correo_envios,
+        'saldo_enviado': gc.saldo_actual,
+    })
+
+
 # ========== TRAZABILIDAD GLOBAL ==========
 
 @requiere_permiso('giftcards_listado', 'puede_ver')
@@ -789,7 +1217,27 @@ def api_trazabilidad_giftcards(request):
     ).all()
     qs = _aplicar_filtros_trazabilidad(qs, request).order_by('-fecha')
 
-    paginator = Paginator(qs, int(request.GET.get('per_page', 30)))
+    try:
+        per_page = min(max(int(request.GET.get('per_page', 30) or 30), 5), 200)
+    except (TypeError, ValueError):
+        per_page = 30
+
+    # Resumen por sucursal de los CANJES del filtro (nº y $ canjeado). Se
+    # calcula sobre el universo filtrado COMPLETO, no la página, cuando el
+    # filtro pide tipo=CONSUMO — es el reporte "gift cards usadas por sucursal".
+    resumen_sucursal = None
+    if (request.GET.get('tipo') or '').strip() == 'CONSUMO':
+        resumen_sucursal = [{
+            'sucursal': r['sucursal__nombre'] or 'Sin sucursal',
+            'canjes': r['n'],
+            'monto': -(r['s'] or 0),
+        } for r in (
+            qs.values('sucursal__nombre')
+            .annotate(n=Count('id'), s=Sum('monto'))
+            .order_by('s')   # monto más negativo = más canjeado, primero
+        )]
+
+    paginator = Paginator(qs, per_page)
     page = paginator.get_page(request.GET.get('page', 1))
 
     items = [{
@@ -802,6 +1250,11 @@ def api_trazabilidad_giftcards(request):
         'monto': m.monto,
         'saldo_resultante': m.saldo_resultante,
         'ticket': m.ticket.correlativo if m.ticket else None,
+        # Boleta/factura de la venta que canjeó la tarjeta (si el ticket ya
+        # tiene DTE emitido): lo que el usuario cruza contra el SII.
+        'folio_dte': m.ticket.folio_dte if m.ticket else None,
+        'tipo_dte': m.ticket.tipo_dte if m.ticket else None,
+        'total_venta': m.ticket.total if m.ticket else None,
         'usuario': str(m.usuario) if m.usuario else '',
         'sucursal': m.sucursal.nombre if m.sucursal else '',
         'observaciones': m.observaciones or '',
@@ -813,6 +1266,7 @@ def api_trazabilidad_giftcards(request):
         'page': page.number,
         'num_pages': paginator.num_pages,
         'total': paginator.count,
+        'resumen_sucursal': resumen_sucursal,
     })
 
 
@@ -849,7 +1303,7 @@ def _estilar_encabezados(ws, headers):
 def api_exportar_giftcards(request):
     """Exporta el listado de gift cards (respeta filtros) a Excel."""
     import openpyxl
-    qs = GiftCard.objects.select_related('cliente', 'sucursal_emision').all()
+    qs = GiftCard.objects.select_related('cliente', 'sucursal_emision', 'empresa').all()
     qs = _aplicar_filtros_giftcards(qs, request)
 
     wb = openpyxl.Workbook()
@@ -858,7 +1312,8 @@ def api_exportar_giftcards(request):
     headers = [
         'Código', 'Código físico', 'Tipo', 'Motivo', 'Descripción', 'Cliente',
         'Saldo inicial', 'Saldo actual', 'Estado', 'Emisión', 'Vencimiento', 'Sucursal',
-        'Vigencia real',
+        'Vigencia real', 'Ámbito', 'Pendiente por usar',
+        'Correo enviado a', 'Fecha envío', 'N° envíos',
     ]
     _estilar_encabezados(ws, headers)
     hoy = timezone.localdate()
@@ -878,6 +1333,17 @@ def api_exportar_giftcards(request):
         ws.cell(row=row, column=12, value=gc.sucursal_emision.nombre if gc.sucursal_emision else '')
         _ef = _estado_efectivo(gc, hoy)
         ws.cell(row=row, column=13, value=estados_dict.get(_ef, _ef))
+        ws.cell(row=row, column=14,
+                value=gc.empresa.nombre if gc.empresa_id else 'Todas las empresas')
+        ws.cell(row=row, column=15, value=(
+            gc.saldo_actual if _ef == 'ACTIVA' and gc.saldo_actual > 0 else 0
+        ))
+        ws.cell(row=row, column=16, value=gc.correo_enviado_a or '')
+        ws.cell(row=row, column=17, value=(
+            timezone.localtime(gc.correo_enviado_en).strftime('%Y-%m-%d %H:%M')
+            if gc.correo_enviado_en else ''
+        ))
+        ws.cell(row=row, column=18, value=gc.correo_envios or 0)
     return _excel_response(wb, 'giftcards.xlsx')
 
 
@@ -896,6 +1362,7 @@ def api_exportar_trazabilidad(request):
     ws.title = "Trazabilidad Gift Cards"
     headers = [
         'Fecha', 'Código', 'Cliente', 'Tipo', 'Monto', 'Saldo', 'Ticket',
+        'Boleta/Factura', 'Tipo doc', 'Total venta',
         'Usuario', 'Sucursal', 'Observaciones',
     ]
     _estilar_encabezados(ws, headers)
@@ -907,7 +1374,10 @@ def api_exportar_trazabilidad(request):
         ws.cell(row=row, column=5, value=m.monto)
         ws.cell(row=row, column=6, value=m.saldo_resultante)
         ws.cell(row=row, column=7, value=m.ticket.correlativo if m.ticket else '')
-        ws.cell(row=row, column=8, value=str(m.usuario) if m.usuario else '')
-        ws.cell(row=row, column=9, value=m.sucursal.nombre if m.sucursal else '')
-        ws.cell(row=row, column=10, value=m.observaciones or '')
+        ws.cell(row=row, column=8, value=(m.ticket.folio_dte or '') if m.ticket else '')
+        ws.cell(row=row, column=9, value=(m.ticket.tipo_dte or '') if m.ticket else '')
+        ws.cell(row=row, column=10, value=m.ticket.total if m.ticket else '')
+        ws.cell(row=row, column=11, value=str(m.usuario) if m.usuario else '')
+        ws.cell(row=row, column=12, value=m.sucursal.nombre if m.sucursal else '')
+        ws.cell(row=row, column=13, value=m.observaciones or '')
     return _excel_response(wb, 'trazabilidad_giftcards.xlsx')

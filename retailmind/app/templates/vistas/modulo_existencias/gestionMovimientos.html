@@ -1220,6 +1220,17 @@ function formatearConcepto(concepto, sucursalDestino) {
     return texto;
 }
 
+// Badge para las filas de apertura sintética de la migración: el backend las
+// marca con `es_apertura: true` y NO las suma al saldo del kardex (la historia
+// legacy migrada ya contiene esas unidades — sumarlas era doble conteo).
+function badgeApertura(mov) {
+    if (!mov.es_apertura) return '';
+    return ' <span class="nexo-badge nexo-badge-ajuste" ' +
+        'style="font-size: 0.62rem; padding: 2px 8px; vertical-align: middle;" ' +
+        'title="Fila sintética creada por la migración: el stock inicial ya está contenido en la historia legacy, por eso no suma al saldo.">' +
+        'Apertura migración — no suma al saldo</span>';
+}
+
 function updatePaginationMovimientos(pagination) {
     currentPageMovimientos = pagination.page;
     $('#pageInfoMovimientos').text(`Página ${pagination.page} de ${pagination.total_pages}`);
@@ -1329,7 +1340,7 @@ function cargarKardex(page = 1) {
                         <tr>
                             <td>${formatearFecha(mov.fecha)}</td>
                             <td>${mov.hora}</td>
-                            <td>${formatearConcepto(mov.concepto, mov.sucursal_destino)}</td>
+                            <td>${formatearConcepto(mov.concepto, mov.sucursal_destino)}${badgeApertura(mov)}</td>
                             <td class="cantidad-positiva">${mov.entrada || '-'}</td>
                             <td class="cantidad-negativa">${mov.salida || '-'}</td>
                             <td><strong>${mov.saldo}</strong></td>
@@ -1475,7 +1486,7 @@ function cargarKardexAgrupado(page = 1) {
                         <tr>
                             <td>${formatearFecha(mov.fecha)}</td>
                             <td>${mov.hora}</td>
-                            <td>${formatearConcepto(mov.concepto, mov.sucursal_destino)}</td>
+                            <td>${formatearConcepto(mov.concepto, mov.sucursal_destino)}${badgeApertura(mov)}</td>
                             <td class="cantidad-positiva">${mov.entrada || '-'}</td>
                             <td class="cantidad-negativa">${mov.salida || '-'}</td>
                             <td><strong>${mov.saldo}</strong></td>

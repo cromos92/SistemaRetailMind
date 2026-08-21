@@ -92,6 +92,20 @@
                             <div class="col-6 mb-2"><small class="text-muted">Emisión</small><div>{{ giftcard.fecha_emision|date:"Y-m-d H:i" }}</div></div>
                             <div class="col-6 mb-2"><small class="text-muted">Vencimiento</small><div>{{ giftcard.fecha_vencimiento|default:"Sin vencimiento" }}</div></div>
                             <div class="col-6 mb-2"><small class="text-muted">Sucursal emisión</small><div>{{ giftcard.sucursal_emision|default:"—" }}</div></div>
+                            <div class="col-6 mb-2"><small class="text-muted">Ámbito de uso</small><div class="fw-bold">{% if giftcard.empresa %}Solo {{ giftcard.empresa.nombre }}{% else %}Todas las empresas{% endif %}</div></div>
+                            <div class="col-6 mb-2">
+                                <small class="text-muted">Entrega del código</small>
+                                <div class="fw-bold">
+                                    {% if giftcard.correo_enviado_en %}
+                                    <span class="text-success">📧 {{ giftcard.correo_enviado_a }}</span>
+                                    <div class="small text-muted fw-normal">
+                                        Enviado el {{ giftcard.correo_enviado_en|date:"Y-m-d H:i" }}{% if giftcard.correo_envios > 1 %} · {{ giftcard.correo_envios }} envíos{% endif %}
+                                    </div>
+                                    {% else %}
+                                    <span class="text-muted">📭 Sin enviar por correo</span>
+                                    {% endif %}
+                                </div>
+                            </div>
                             <div class="col-6 mb-2"><small class="text-muted">Emitida por</small><div>{{ giftcard.created_by|default:"—" }}</div></div>
                             {% if giftcard.observaciones %}
                             <div class="col-12 mb-2"><small class="text-muted">Observaciones</small><div>{{ giftcard.observaciones }}</div></div>
@@ -132,7 +146,7 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Fecha</th><th>Tipo</th><th class="text-end">Monto</th>
-                                <th class="text-end">Saldo</th><th>Ticket</th>
+                                <th class="text-end">Saldo</th><th>Ticket</th><th>Boleta</th>
                                 <th>Usuario</th><th>Sucursal</th><th>Observaciones</th>
                             </tr>
                         </thead>
@@ -144,12 +158,13 @@
                                 <td class="text-end fw-bold {% if m.monto < 0 %}text-danger{% elif m.monto > 0 %}text-success{% else %}text-muted{% endif %}">${{ m.monto|floatformat:0|intcomma }}</td>
                                 <td class="text-end">${{ m.saldo_resultante|floatformat:0|intcomma }}</td>
                                 <td>{% if m.ticket %}#{{ m.ticket.correlativo }}{% else %}—{% endif %}</td>
+                                <td class="small">{% if m.ticket and m.ticket.folio_dte %}{{ m.ticket.tipo_dte|default:"DOC" }} {{ m.ticket.folio_dte }}{% else %}—{% endif %}</td>
                                 <td class="small">{{ m.usuario|default:"—" }}</td>
                                 <td class="small">{{ m.sucursal.nombre|default:"—" }}</td>
                                 <td class="small text-muted">{{ m.observaciones|default:"" }}</td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="8" class="text-center text-muted py-3">Sin movimientos</td></tr>
+                            <tr><td colspan="9" class="text-center text-muted py-3">Sin movimientos</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>

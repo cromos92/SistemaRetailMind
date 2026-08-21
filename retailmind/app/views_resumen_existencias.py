@@ -17,6 +17,7 @@ import json
 import logging
 
 from .models import Sucursal, Producto, Producto_Talla, Movimientos_Producto, Categoria, EmpresaUser
+from .views_modulo_reportes import _expandir_categoria_ids
 
 logger = logging.getLogger('app')
 
@@ -101,7 +102,11 @@ def _aggregar_por_sucursal_actual(empresas_usuario, marca_id=None, categoria_id=
     if marca_id:
         talla_qs = talla_qs.filter(producto__atributo1_id=marca_id)
     if categoria_id:
-        talla_qs = talla_qs.filter(producto__categoria_id=categoria_id)
+        # El dropdown ofrece PADRES v1.2 (Calzado, Ropa…): filtrar por el id
+        # crudo devolvía 0 en silencio porque el stock cuelga de las hijas.
+        # Se expande la rama igual que views.py (Calzado → 61.653 pares).
+        talla_qs = talla_qs.filter(
+            producto__categoria_id__in=_expandir_categoria_ids(categoria_id))
     if excluir_ids:
         talla_qs = talla_qs.exclude(producto_id__in=excluir_ids)
 
@@ -128,12 +133,113 @@ def _aggregar_por_sucursal_actual(empresas_usuario, marca_id=None, categoria_id=
     }
 
 
+# --- Fase C (perf) 2026-08: reconstrucción histórica sin materializar el
+# catálogo. Las condiciones son las MISMAS del método de mapas anterior (y de
+# calcular_stock_historico): solo cuentan los movimientos posteriores al corte
+# cuyo destino (ingresos) u origen (egresos) es la PROPIA sucursal de la
+# talla. Un destino/origen NULL o ajeno no cuenta — en SQL `col = F(...)`
+# nunca matchea NULL, igual que el lookup (talla, sucursal) de los mapas
+# (Producto.sucursal es NOT NULL, así que el lado derecho nunca es NULL).
+_ING_Q = Q(tipo_movimiento='INGRESO') | Q(concepto='TRASPASO_ENTRADA')
+_EGR_Q = Q(tipo_movimiento='EGRESO') | Q(concepto='TRASPASO_SALIDA')
+_ING_PROPIA = _ING_Q & Q(sucursal_destino_id=F('ProductoTalla__producto__sucursal_id'))
+_EGR_PROPIA = _EGR_Q & Q(sucursal_origen_id=F('ProductoTalla__producto__sucursal_id'))
+
+
+def _acumulados_historicos(talla_qs, fecha_corte, con_categoria=False):
+    """
+    Acumulados históricos {clave: {'pares','costo','p_interno','p_venta'}} con
+    clave = sucursal_id (o (categoria_id, sucursal_id) con con_categoria).
+
+    Reconstrucción EXACTA de la versión con mapas en Python
+    (stock - ingresos_post + |egresos_post| por talla, descartando <= 0),
+    dividida para que la BD haga el trabajo:
+      1) tallas CON movimientos relevantes post-corte (pocas): una query
+         agrupada por talla — el stock/costos/sucursal van en el GROUP BY
+         porque dependen funcionalmente de la talla — y la fórmula de
+         reversión en Python solo sobre ese subconjunto;
+      2) tallas SIN movimientos relevantes (la gran mayoría): hist == stock,
+         agregación 100% SQL con stock__gt=0 (igual que el corte actual).
+    Antes se materializaba TODO el catálogo del usuario (~10^5 filas) y se
+    enviaban 2 queries con IN de todos los ids: 35,8s medidos en el corte
+    histórico (auditoría 2026-08, sección 10).
+    """
+    mov_rel = (Movimientos_Producto.objects.filter(
+        ProductoTalla__in=talla_qs.values('id'),
+        fecha__gt=fecha_corte, estado='COMPLETADO',
+    ).filter(_ING_PROPIA | _EGR_PROPIA))
+
+    campos_mov = ['ProductoTalla_id', 'ProductoTalla__stock',
+                  'ProductoTalla__producto__sucursal_id',
+                  'ProductoTalla__producto__costo',
+                  'ProductoTalla__producto__sobreprecio',
+                  'ProductoTalla__producto__precioventa']
+    if con_categoria:
+        campos_mov.append('ProductoTalla__producto__categoria_id')
+    ajustadas = (mov_rel.values(*campos_mov)
+                 .annotate(ing=Coalesce(Sum('cantidad', filter=_ING_PROPIA), 0),
+                           egr=Coalesce(Sum('cantidad', filter=_EGR_PROPIA), 0)))
+
+    zero_int = Value(0, output_field=IntegerField())
+    campos_pt = ['producto__sucursal_id']
+    if con_categoria:
+        campos_pt.append('producto__categoria_id')
+    sin_ajuste = (
+        talla_qs.filter(stock__gt=0)
+        .exclude(id__in=mov_rel.values('ProductoTalla_id'))
+        .values(*campos_pt)
+        .annotate(
+            total_pares=Coalesce(Sum('stock'), zero_int),
+            total_costo=Coalesce(Sum(F('producto__costo') * F('stock')), zero_int),
+            total_p_interno=Coalesce(Sum((F('producto__costo') + F('producto__sobreprecio')) * F('stock')), zero_int),
+            total_p_venta=Coalesce(Sum(F('producto__precioventa') * F('stock')), zero_int),
+        )
+    )
+
+    acum = {}
+
+    def _bucket(sid, cid):
+        key = (cid, sid) if con_categoria else sid
+        b = acum.get(key)
+        if b is None:
+            b = {'pares': 0, 'costo': 0, 'p_interno': 0, 'p_venta': 0}
+            acum[key] = b
+        return b
+
+    for row in sin_ajuste:
+        b = _bucket(row['producto__sucursal_id'], row.get('producto__categoria_id'))
+        b['pares'] += int(row['total_pares'] or 0)
+        b['costo'] += int(row['total_costo'] or 0)
+        b['p_interno'] += int(row['total_p_interno'] or 0)
+        b['p_venta'] += int(row['total_p_venta'] or 0)
+
+    for t in ajustadas:
+        stock_actual = t['ProductoTalla__stock'] or 0
+        # stock_actual - ingresos_posteriores + |egresos_posteriores|
+        # (egresos guardan cantidad negativa, por eso el abs del TOTAL)
+        stock_hist = stock_actual - int(t['ing'] or 0) + abs(int(t['egr'] or 0))
+        if stock_hist <= 0:
+            continue
+        costo = t['ProductoTalla__producto__costo'] or 0
+        sobre = t['ProductoTalla__producto__sobreprecio'] or 0
+        venta = t['ProductoTalla__producto__precioventa'] or 0
+        b = _bucket(t['ProductoTalla__producto__sucursal_id'],
+                    t.get('ProductoTalla__producto__categoria_id'))
+        b['pares'] += stock_hist
+        b['costo'] += costo * stock_hist
+        b['p_interno'] += (costo + sobre) * stock_hist
+        b['p_venta'] += venta * stock_hist
+
+    return acum
+
+
 def _aggregar_por_sucursal_historico(empresas_usuario, fecha_corte, marca_id=None,
                                      categoria_id=None, excluir_ids=None,
                                      excluidos_de_analitica=False):
     """
-    Agregación optimizada del inventario HISTÓRICO agrupado por sucursal.
-    Ejecuta 3 queries (tallas + ingresos + egresos) y arma todo en Python con dicts.
+    Agregación del inventario HISTÓRICO agrupado por sucursal.
+    Fase C: 3 queries acotadas vía `_acumulados_historicos` (la reversión en
+    Python queda solo para las tallas con movimientos post-corte).
 
     Ver `_aggregar_por_sucursal_actual` para `excluidos_de_analitica`.
     """
@@ -144,77 +250,13 @@ def _aggregar_por_sucursal_historico(empresas_usuario, fecha_corte, marca_id=Non
     if marca_id:
         talla_qs = talla_qs.filter(producto__atributo1_id=marca_id)
     if categoria_id:
-        talla_qs = talla_qs.filter(producto__categoria_id=categoria_id)
+        # Mismo criterio que el corte actual: un padre incluye toda su rama.
+        talla_qs = talla_qs.filter(
+            producto__categoria_id__in=_expandir_categoria_ids(categoria_id))
     if excluir_ids:
         talla_qs = talla_qs.exclude(producto_id__in=excluir_ids)
 
-    # 1) Tallas con datos del producto necesarios
-    tallas_data = list(
-        talla_qs.values(
-            'id', 'stock',
-            'producto__sucursal_id',
-            'producto__costo', 'producto__sobreprecio', 'producto__precioventa',
-        )
-    )
-    if not tallas_data:
-        return {}
-
-    talla_ids = [t['id'] for t in tallas_data]
-
-    # 2) Ingresos posteriores agrupados por (talla, sucursal_destino)
-    ingresos = (
-        Movimientos_Producto.objects
-        .filter(
-            ProductoTalla_id__in=talla_ids,
-            fecha__gt=fecha_corte,
-            estado='COMPLETADO',
-        )
-        .filter(Q(tipo_movimiento='INGRESO') | Q(concepto='TRASPASO_ENTRADA'))
-        .values('ProductoTalla_id', 'sucursal_destino_id')
-        .annotate(total=Sum('cantidad'))
-    )
-    ingresos_map = {(r['ProductoTalla_id'], r['sucursal_destino_id']): int(r['total'] or 0) for r in ingresos}
-
-    # 3) Egresos posteriores agrupados por (talla, sucursal_origen)
-    egresos = (
-        Movimientos_Producto.objects
-        .filter(
-            ProductoTalla_id__in=talla_ids,
-            fecha__gt=fecha_corte,
-            estado='COMPLETADO',
-        )
-        .filter(Q(tipo_movimiento='EGRESO') | Q(concepto='TRASPASO_SALIDA'))
-        .values('ProductoTalla_id', 'sucursal_origen_id')
-        .annotate(total=Sum('cantidad'))
-    )
-    egresos_map = {(r['ProductoTalla_id'], r['sucursal_origen_id']): int(r['total'] or 0) for r in egresos}
-
-    # 4) Agregar en Python por sucursal aplicando reversión de movimientos
-    acum = {}
-    for t in tallas_data:
-        sid = t['producto__sucursal_id']
-        ingresos_post = ingresos_map.get((t['id'], sid), 0)
-        egresos_post = egresos_map.get((t['id'], sid), 0)
-        stock_actual = t['stock'] or 0
-        # stock_actual - ingresos_posteriores + |egresos_posteriores| (egresos guardan cantidad negativa)
-        stock_hist = stock_actual - ingresos_post + abs(egresos_post)
-        if stock_hist <= 0:
-            continue
-
-        costo = t['producto__costo'] or 0
-        sobre = t['producto__sobreprecio'] or 0
-        venta = t['producto__precioventa'] or 0
-
-        bucket = acum.get(sid)
-        if bucket is None:
-            bucket = {'pares': 0, 'costo': 0, 'p_interno': 0, 'p_venta': 0}
-            acum[sid] = bucket
-        bucket['pares'] += stock_hist
-        bucket['costo'] += costo * stock_hist
-        bucket['p_interno'] += (costo + sobre) * stock_hist
-        bucket['p_venta'] += venta * stock_hist
-
-    return acum
+    return _acumulados_historicos(talla_qs, fecha_corte, con_categoria=False)
 
 
 def _construir_mapa_categoria_raiz():
@@ -272,8 +314,8 @@ def _aggregar_por_categoria_actual(empresas_usuario, sucursales_ids, marca_id=No
 
 def _aggregar_por_categoria_historico(empresas_usuario, sucursales_ids, fecha_corte, marca_id=None, excluir_ids=None):
     """
-    Variante histórica: 3 queries (tallas con categoría/sucursal, ingresos, egresos)
-    y agregación en Python por (categoria, sucursal).
+    Variante histórica por (categoria, sucursal). Fase C: misma reconstrucción
+    vía `_acumulados_historicos` (None => bucket "Sin categoría").
     Devuelve la misma estructura que _aggregar_por_categoria_actual
     (lista de dicts con producto__categoria_id, producto__sucursal_id, total_*).
     """
@@ -287,77 +329,18 @@ def _aggregar_por_categoria_historico(empresas_usuario, sucursales_ids, fecha_co
     if excluir_ids:
         talla_qs = talla_qs.exclude(producto_id__in=excluir_ids)
 
-    tallas_data = list(
-        talla_qs.values(
-            'id', 'stock',
-            'producto__categoria_id',
-            'producto__sucursal_id',
-            'producto__costo', 'producto__sobreprecio', 'producto__precioventa',
-        )
-    )
-    if not tallas_data:
-        return []
-
-    talla_ids = [t['id'] for t in tallas_data]
-
-    ingresos = (
-        Movimientos_Producto.objects
-        .filter(
-            ProductoTalla_id__in=talla_ids,
-            fecha__gt=fecha_corte,
-            estado='COMPLETADO',
-        )
-        .filter(Q(tipo_movimiento='INGRESO') | Q(concepto='TRASPASO_ENTRADA'))
-        .values('ProductoTalla_id', 'sucursal_destino_id')
-        .annotate(total=Sum('cantidad'))
-    )
-    ingresos_map = {(r['ProductoTalla_id'], r['sucursal_destino_id']): int(r['total'] or 0) for r in ingresos}
-
-    egresos = (
-        Movimientos_Producto.objects
-        .filter(
-            ProductoTalla_id__in=talla_ids,
-            fecha__gt=fecha_corte,
-            estado='COMPLETADO',
-        )
-        .filter(Q(tipo_movimiento='EGRESO') | Q(concepto='TRASPASO_SALIDA'))
-        .values('ProductoTalla_id', 'sucursal_origen_id')
-        .annotate(total=Sum('cantidad'))
-    )
-    egresos_map = {(r['ProductoTalla_id'], r['sucursal_origen_id']): int(r['total'] or 0) for r in egresos}
-
-    acum = {}  # (cat_id, suc_id) -> dict
-    for t in tallas_data:
-        sid = t['producto__sucursal_id']
-        cid = t['producto__categoria_id']  # None => bucket "Sin categoría"
-        ingresos_post = ingresos_map.get((t['id'], sid), 0)
-        egresos_post = egresos_map.get((t['id'], sid), 0)
-        stock_hist = (t['stock'] or 0) - ingresos_post + abs(egresos_post)
-        if stock_hist <= 0:
-            continue
-
-        costo = t['producto__costo'] or 0
-        sobre = t['producto__sobreprecio'] or 0
-        venta = t['producto__precioventa'] or 0
-
-        key = (cid, sid)
-        bucket = acum.get(key)
-        if bucket is None:
-            bucket = {
-                'producto__categoria_id': cid,
-                'producto__sucursal_id': sid,
-                'total_pares': 0,
-                'total_costo': 0,
-                'total_p_interno': 0,
-                'total_p_venta': 0,
-            }
-            acum[key] = bucket
-        bucket['total_pares'] += stock_hist
-        bucket['total_costo'] += costo * stock_hist
-        bucket['total_p_interno'] += (costo + sobre) * stock_hist
-        bucket['total_p_venta'] += venta * stock_hist
-
-    return list(acum.values())
+    acum = _acumulados_historicos(talla_qs, fecha_corte, con_categoria=True)
+    return [
+        {
+            'producto__categoria_id': cid,
+            'producto__sucursal_id': sid,
+            'total_pares': b['pares'],
+            'total_costo': b['costo'],
+            'total_p_interno': b['p_interno'],
+            'total_p_venta': b['p_venta'],
+        }
+        for (cid, sid), b in acum.items()
+    ]
 
 
 def _parse_excluir_articulos(request):

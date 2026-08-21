@@ -221,6 +221,24 @@ class RestaurarCabecerasTest(RestaurarCabecerasBase):
         self.assertEqual([f for f in os.listdir(self.tmpdir)
                           if not f.endswith('_preview.csv')], [])
 
+    def test_unidades_derivadas_de_monto_item_cuando_la_nc_no_las_lleva(self):
+        """Patrón dominante en prod (171/228): la NC hija no lleva las unidades
+        en sus líneas → se derivan de monto_item/precio (misma fuente que los
+        montos)."""
+        b = self._dte(cab=0, neto=0, unidades=0)
+        self._linea(b, precio=25990, stock=0, activo=False, monto_item=51980)  # 2 uds
+        self._pago(b, 51980)
+        # NC "por monto": única línea sin unidades reales
+        self._nc(b, lineas=None, monto=51980)
+
+        self._run(aplicar=True)
+        b.refresh_from_db()
+        self.assertEqual(b.monto_con_iva, Decimal('51980'))
+        self.assertEqual(b.unidades_productos, 2)  # 51980 / 25990
+        fila = self._leer_csv(self._snapshot_path())[0]
+        self.assertEqual(fila['unidades_tocadas'], '1')
+        self.assertIn('derivado de monto_item/precio', fila['nota_unidades'])
+
     def test_unidades_no_reconstruibles_corrige_solo_el_monto(self):
         """NC por monto (sin líneas) + línea con precio 0: las unidades no se
         pueden reconstruir → se corrige el monto y unidades queda SIN tocar."""

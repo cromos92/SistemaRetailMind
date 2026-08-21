@@ -303,8 +303,65 @@ Suite extendida con 2 guards nuevos: `diagnostico_fuga` (403 con sucursal ajena)
 `rendimiento_compras` (inversión dentro de ±35% del oráculo DTE) — ambos PASS.
 `test_scoping_reportes` 24/24 PASS en SQLite.
 
+## 10. FASE B — APLICADA (2026-08-20, misma jornada; 6 agentes, verificada read-only contra prod)
+
+| Fix (P1) | Cambio | Verificación medida |
+|---|---|---|
+| Kardex legacy (movs + agrupado) | La apertura sintética ya no suma al saldo, con **re-anclaje** cuando el legacy está incompleto o el SKU es solo-apertura; CANCELADO no suma; filas con `es_apertura` | Muestra 20 SKUs: **20/20 saldo==stock** (antes 8/20); PT 467549→0, PT 214822→5 ✔ |
+| KPIs salud existencias-sucursal | Numerador y denominador SIEMPRE mismo universo (analítica+marca+sucursal); "Recibido hist." sin apertura | PAO3: pct_viejo **155,4%→71,3%**; con marca: 29.101%→2,7%. Nota: la "cobertura 9 días" del informe original venía de un oráculo con universos mixtos — el valor consistente es 370d |
+| Diagnóstico cuadratura | Nueva pestaña "NC trato distinto" + Explicada/Residual en el modal (helper de LECTURA; `_calcular_cuadratura_data` intacto) | 11-jul/suc 7: explicada **$653.620 / residual $0**, 10 NC listadas |
+| Compras anual | `cobertura_lineas` en payload + aviso en UI cuando <90% | 2026: 256/585 docs con detalle (43,8%) — ahora visible |
+| Mercadería-tránsito | "Llegó todo" cuenta como recepción (`ANULACION_REGULARIZACION`/`CORRECCION_STOCK` INGRESO+COMPLETADO — la reversa EGRESO no suma); detalle valoriza igual que el listado | Folio 17098: **pendiente 0, fuera de SIN_RECIBIR** (delta exacto −12 u/−$227.244); detalle==listado en los 3 docs top |
+| Quiebre-talla | KPI cabecera conservador: excluye dudosas y <7 días disponibles, cap 3x, todo itemizado en `unidades_perdidas_excluidas` | Ene-mar: 29.617→**577,6 u** con 29.040 excluidas desglosadas; filas individuales intactas |
+| Inteligencia-compra | Demanda NETA (resta CONCEPTOS_REINGRESO) en toda la cadena (velocidad, TTM, pronóstico, curva tallas, GMROI); sell-through sin apertura; `@requiere_permiso('inteligencia_compra')` | SKECHERS: vel_dia 15,7→**13,8**; STR 24,5%→**55,2%** |
+| Plan-liquidación | Buckets por DÍAS exactos alineados a la escala de dcto (<6m/6-12m/1-2a/2+a); fila==resumen 1:1; `por-anio` con permiso | "≥1 año": $1.086,6M→**$866,0M** (−$220,6M); tramo t2: 3.576 productos todos 365-730d/25%, 0 fuera de rango |
+| Resumen-existencias | Filtro por categoría PADRE expande la rama v1.2 (actual + histórico; exports heredan) | Calzado: 0→**61.687 pares** |
+| Gates de rol | Decoradores en ventas-global, productos-origen, inteligencia-compra (códigos nuevos), detallados (`reporte_compras` existente), feed vendedores scopeado (403 ajena) | `inicializar_permisos` extendido (3 códigos, ver+exportar para administrador/administración/jefe_local, idempotente, 11/11 tests). **Fail-closed hasta correr el command en prod** |
+
+Tests SQLite de la fase: **40/40** (reportes) + **16/16** (inteligencia) + **12/12** (tránsito/tallas) + **8/8** (kardex) + **11/11** (permisos) + regresiones 64/64 + 9/9 + 16/16 + 24/24. Suite prod final: **103 PASS / 6 FAIL** = 3 fail-closed esperados (se resuelven con `inicializar_permisos`) + 3 pre-existentes de datos (comparativa — parcialmente explicado por las 234 cabeceras SIN backfill —, categorías planas, atributo4).
+
+**Command de backfill ENTREGADO (sin aplicar):** `restaurar_cabeceras_boletas_nc` — 16/16 tests (incl. dry-run=0 escrituras, idempotencia, `--revertir`); dry-run real: **228 candidatos / $11.965.836**, 8 a revisión manual. OJO: detectó 2 boletas dañadas más que ayer — el daño sigue mientras el fix de `anular_factura_dte` no se despliegue.
+
+**Deuda que quedó para Fase C** (además de la sección 8): pintar badge `es_apertura` en el modal de gestionMovimientos; eliminar los reportes huérfanos y `exportar_existencias`-legacy redundantes; performance de los endpoints >5s; edad de lote reseteada por traspaso (necesita diseño de propagación de fecha); umbral relativo-a-ventana del KPI quiebre-talla si el absoluto de 7d recorta mucho en ventanas cortas; `get_or_create` en el setUp de `test_resumen_existencias_ocultos` (choca con seed de migración 0150).
+
+---
+
+## 11. FASE C — APLICADA (2026-08-21; limpieza + performance)
+
+**Backfill del P0-5: APLICADO por el usuario el 21-ago 11:18** — 228 cabeceras
+restauradas ($11.965.836), verificación post-escritura 0 con déficit, re-dry-run
+idempotente (0 candidatos), y confirmación independiente: brutas julio por cabecera
+== pagos AL PESO. Quedan 8 docs en revisión manual (~$700K en pagos). Snapshot:
+`retailmind/_restauracion_cabeceras_20260821_111853.csv`.
+
+| Fix | Cambio | Verificación medida |
+|---|---|---|
+| Endpoints huérfanos | `api_reporte_recepciones/despachos_detallado` **ELIMINADOS** (338 líneas + rutas + tests + entradas de la suite); helpers de alcance conservados | check limpio; test_scoping 18/18 |
+| Tab vendedores | NC imputadas en cascada NC→documento_afectado→"Sin vendedor" (patrón comisiones), también en drill-down | "Sin vendedor": $6.066.392 → **$2.414.255/11 NC** (predicción exacta); Σ brutas/devoluciones/netas idénticas al peso — la plata solo cambia de fila |
+| productos-origen | Rótulos honestos (INGRESO_MANUAL/INICIAL = alta normal, sin semáforo rojo; grupos exhaustivos) + pipeline DISTINCT-ON acotado | Totales idénticos (20.6k SKU/56.8k u/$1.000M); 18,3s → 8,6-12,6s (la meta <5s requiere índice `(ProductoTalla_id, fecha, hora, id)` — propuesto, no creado) |
+| Compras tabla↔KPI | OC-sin-DTE separado en `costo_ordenes_sin_dte` (ya no infla la inversión); proveedores solo-NC conservados; tendencia "vs año anterior" con la MISMA ventana desplazada (antes anclaba al 31-dic) | Tabla Σ == KPI **$74.068.332 delta 0**; ventana anterior de "mes": dic-2025 → jul/ago-2025 |
+| Excel rendimiento-proveedor | Banner de cobertura de atribución + asteriscos + nota metodológica | A1 = "ATRIBUCIÓN 24.7% … 4.032 u sin atribuir" == JSON exacto |
+| ventas-internet | Sección "Facturado externo (sin boleta propia)" APARTE (KPI + tab alertas + hoja Excel), sin tocar el total | 14 pedidos/$750.174 == oráculo; total principal intacto $21.113.113 |
+| despachos-por-proveedor legacy | Métricas muertas eliminadas (despachado/saldo = siempre 0); renombrado "Ingresos por Proveedor"; bulk + default 90d declarado | 88q/15,2s → **9q/2s**; julio 61 docs/5.083 u == oráculo |
+| Writer destino NULL | `anular_ticket_pendiente` (único writer activo, ~250 u/mes) ahora puebla `sucursal_destino` = sucursal dueña del SKU | Los demás conceptos ya no escriben NULL desde abr-2026. Backfill legacy NO hecho: 546.118 movs/2,8M u históricos — decisión aparte |
+| Badge apertura | Modal kardex marca las filas de apertura ("no suma al saldo") | node --check OK |
+| Performance (igualdad EXACTA verificada bajo snapshot) | inteligencia 6,9→3,4s (39→20q) · plan 11,4→6,8s · por-año 11,6→6,0s · Excel plan 22,4→17,1s (resto es openpyxl) · **resumen histórico 24,5→3,5s (7x)** y por categoría 10x | Igualdad campo a campo / byte a byte en cada endpoint; reconstrucción histórica reproducida idéntica (834/264 ocultos exactos) |
+| Rótulos cobertura | inteligencia: "stock ÷ pronóstico 12m"; plan: "÷ venta TTM" — la divergencia del 30% entre hermanos quedó declarada | Fórmulas intactas |
+
+Tests de la fase: 16/16 (reportes C) + 7/7 (legacy) + 15/15 (perf) + regresiones B
+completas. Índice propuesto (decisión futura, con EXPLAIN): parcial
+`Movimientos_Producto(fecha) WHERE estado='COMPLETADO'` y
+`(ProductoTalla_id, fecha, hora, id)` para productos-origen.
+
+**Deuda restante (menor):** backfill legacy de destino NULL (546k movs — decisión) ·
+8 docs de cabecera en revisión manual · Excel plan >8s (openpyxl) · detalle plan
+ordenado por última venta ~14s · dim=especialidad sin optimizar (multi-etiqueta) ·
+existencias-por-sucursal legacy convive con los reportes nuevos (fusión opcional).
+
+---
+
 **PENDIENTE DE DECISIÓN (escribe en prod — no aplicado):** backfill de las 234
-cabeceras históricas. Diseño en el diagnóstico (scripts `scratchpad/boletas_cero/`):
+cabeceras históricas. **[RESUELTO — ver §11: aplicado el 21-ago.]** Diseño en el diagnóstico (scripts `scratchpad/boletas_cero/`):
 command `restaurar_cabeceras_boletas_nc`, dry-run por defecto, fuente de verdad =
 `Σ Dte_Productos.monto_item` (lo que llevó el TXT al SII, intacto tras la NC);
 219/234 cuadran solos con pagos y ticket; 6 van a revisión manual (dte 900643,

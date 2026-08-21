@@ -120,5 +120,16 @@ class GiftCardValidarView(APIView):
             monto = int(monto)
         except (TypeError, ValueError):
             monto = 0
-        resultado = giftcard_service.validar(codigo, monto, pin=pin)
+        # La sucursal es OBLIGATORIA para evaluar el ámbito por empresa de la
+        # tarjeta: sin ella, `validar` es fail-closed y rechazaría toda gift
+        # card acotada. El cliente Tauri ya manda `x-sucursal-id` (header CORS
+        # permitido); se acepta también en el body como respaldo.
+        sucursal_id = (
+            request.headers.get('x-sucursal-id')
+            or request.data.get('sucursal_id')
+        )
+        sucursal = None
+        if sucursal_id and str(sucursal_id).isdigit():
+            sucursal = Sucursal.objects.filter(id=int(sucursal_id)).first()
+        resultado = giftcard_service.validar(codigo, monto, pin=pin, sucursal=sucursal)
         return Response({'success': True, **resultado})

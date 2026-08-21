@@ -2225,7 +2225,15 @@ def anular_ticket_pendiente(request):
                         tipo_movimiento='INGRESO',
                         responsable=request.user.username,
                         observaciones=f'Anulación de ticket #{ticket.correlativo} - Motivo: {motivo}',
-                        referencia_externa=referencia
+                        referencia_externa=referencia,
+                        # La sucursal receptora de un INGRESO es SIEMPRE la dueña
+                        # del SKU (regla canónica del kardex — ver _mapa_entrada en
+                        # views_modulo_reportes). Este writer era el ÚNICO activo
+                        # que seguía dejando sucursal_destino=NULL (medido en prod
+                        # jul-ago 2026: 412 movimientos / 439 u, todos de este
+                        # flujo), lo que cegaba el filtro por sucursal de
+                        # diferencias-recepción y los cortes del resumen.
+                        sucursal_destino=item.ProductoTalla.producto.sucursal,
                     )
             
             # Cambiar estado del ticket a ANULADO
@@ -2248,7 +2256,8 @@ def anular_ticket_pendiente(request):
                     if codigo_gc:
                         giftcard_service.reversar(
                             codigo_gc, pago_gc.monto,
-                            ticket=ticket, usuario=request.user,
+                            ticket=ticket, pago_ticket=pago_gc,
+                            usuario=request.user,
                         )
             except Exception:
                 logger.exception("Error al reversar gift cards ticket=%s", ticket.correlativo)
@@ -4513,6 +4522,61 @@ def registrar_pagos_ticket(request, correlativo):
                 }, status=400)
     # ─────────────────────────────────────────────────────────────────────────────────
 
+    # ── GUARD: pre-validación de GIFT CARDS del cobro ────────────────────────
+    # Corre ANTES del candado anti doble cobro y de escribir cualquier pago:
+    # si una gift card no es válida (inexistente, bloqueada, vencida, de otra
+    # empresa o sin saldo) el cobro se rechaza con 400 y la venta queda
+    # intacta. Sin esto, el consumo post-confirmación fallaba en silencio
+    # (solo un log) y el ticket quedaba PAGADO con un pago gift card que
+    # nunca se descontó — agujero de plata.
+    # Los montos se ACUMULAN por código: dos pagos con la misma tarjeta deben
+    # caber JUNTOS en su saldo (validarlos por separado dejaba pasar el doble).
+    #
+    # Solo valida si el ticket en BD sigue PENDIENTE: en un REINTENTO del POS
+    # (ticket ya PAGADO en BD, respuesta perdida) la gift card ya se consumió y
+    # este guard la vería "sin saldo" — cortaría con 400 un reintento legítimo
+    # antes de llegar a la respuesta idempotente del candado de más abajo.
+    if (ticket.estado == 'PAGADO' and ticket.modulo_origen != 'CAMBIO_DEVOLUCION'
+            and Ticket.objects.filter(id=ticket.id, estado='PENDIENTE').exists()):
+        from .services import giftcard_service as _gc_svc
+        _montos_por_gc = {}
+        for _p in pagos:
+            if (_p.get('metodo_pago') or '').upper() != 'GIFTCARD':
+                continue
+            _codigo_gc = (_p.get('voucher') or '').strip().upper()
+            try:
+                _monto_gc = int(_p.get('monto', 0))
+            except (TypeError, ValueError):
+                _monto_gc = 0
+            if not _codigo_gc:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Falta el código de la gift card en uno de los pagos.',
+                    'error_tipo': 'GIFTCARD_SIN_CODIGO',
+                }, status=400)
+            if _monto_gc <= 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Monto inválido para el pago con gift card {_codigo_gc}.',
+                    'error_tipo': 'GIFTCARD_MONTO_INVALIDO',
+                }, status=400)
+            _montos_por_gc[_codigo_gc] = _montos_por_gc.get(_codigo_gc, 0) + _monto_gc
+        for _codigo_gc, _monto_gc in _montos_por_gc.items():
+            _res_gc = _gc_svc.validar(_codigo_gc, _monto_gc, sucursal=ticket.sucursal)
+            if not _res_gc.get('valida'):
+                logger.warning(
+                    "Cobro rechazado por gift card inválida ticket=%s codigo=%s motivo=%s",
+                    ticket.correlativo, _codigo_gc, _res_gc.get('motivo'),
+                )
+                return JsonResponse({
+                    'success': False,
+                    'error': f"Gift card {_codigo_gc}: {_res_gc.get('motivo') or 'no válida'}.",
+                    'error_tipo': 'GIFTCARD_INVALIDA',
+                    'codigo_giftcard': _codigo_gc,
+                    'saldo_actual': _res_gc.get('saldo_actual', 0),
+                }, status=400)
+    # ─────────────────────────────────────────────────────────────────────────
+
     # ── Pre-validación de stock de TODO el ticket ────────────────────────────
     # Corre ANTES de escribir pagos, del candado y del canje de vale/gift card:
     # es la única operación que puede abortar el cobro y aquí todavía no se
@@ -4680,6 +4744,7 @@ def registrar_pagos_ticket(request, correlativo):
     # Se procesa con su propia transacción + lock (el servicio lo maneja) y es
     # idempotente por pago, así que un reintento del POS no descuenta dos veces.
     # El código de la gift card viaja en el campo `voucher` del pago.
+    _giftcards_cobradas = []
     if ticket_se_pago:
         from .services import giftcard_service
         for pago_gc in ticket.pagos.filter(metodo_pago='GIFTCARD'):
@@ -4687,14 +4752,31 @@ def registrar_pagos_ticket(request, correlativo):
             if not codigo_gc:
                 continue
             try:
-                giftcard_service.consumir(
+                mov_gc = giftcard_service.consumir(
                     codigo_gc, pago_gc.monto,
                     ticket=ticket, pago_ticket=pago_gc,
                     sucursal=ticket.sucursal, usuario=request.user,
+                    # Tarjeta que circulaba sin titular: se vincula al cliente
+                    # de la venta en su primer canje (mecanismo del servicio).
+                    cliente=ticket.cliente,
                 )
+                # Datos del comprobante térmico de uso (RUT + firma) que el
+                # POS imprime al terminar el cobro.
+                _giftcards_cobradas.append({
+                    'codigo': codigo_gc.upper(),
+                    'monto': pago_gc.monto,
+                    'saldo_restante': mov_gc.saldo_resultante,
+                    'saldo_anterior': mov_gc.saldo_resultante + pago_gc.monto,
+                    'vencimiento': (
+                        mov_gc.giftcard.fecha_vencimiento.strftime('%d-%m-%Y')
+                        if mov_gc.giftcard.fecha_vencimiento else ''
+                    ),
+                })
             except giftcard_service.GiftCardError:
                 # No tumbar la venta (el cobro ya se confirmó); registrar para
-                # revisión. La pre-validación AJAX debió evitar este caso.
+                # revisión. El guard pre-candado debió evitar este caso — esto
+                # queda solo como red para carreras extremas (p.ej. bloqueo
+                # entre la validación y el consumo).
                 logger.exception(
                     "Error al consumir gift card en cobro ticket=%s codigo=%s",
                     ticket.correlativo, codigo_gc,
@@ -5149,6 +5231,10 @@ def registrar_pagos_ticket(request, correlativo):
         'success': True,
         'ticket': construir_ticket_data(ticket)
     }
+
+    # Gift cards canjeadas en este cobro: el cajero informa el saldo restante.
+    if _giftcards_cobradas:
+        response_data['giftcards'] = _giftcards_cobradas
 
     if ticket.dte_generacion_fallida:
         response_data['dte_generacion_fallo'] = True
@@ -5887,6 +5973,7 @@ def exportar_documentos_ventas_excel(request):
                 'ORDEN_COMPRA': 'Orden de Compra',
                 'CREDITO_TRABAJADOR': 'Crédito Trabajador',
                 'CREDITO_EXTERNO': 'Crédito Externo',
+                'GIFTCARD': 'Gift Card',
             }
             return nombres_metodos.get(codigo, codigo)
         
@@ -6347,6 +6434,7 @@ def detalle_documento_venta(request, documento_id):
                 'ORDEN_COMPRA': 'Orden de Compra',
                 'CREDITO_TRABAJADOR': 'Crédito Trabajador',
                 'CREDITO_EXTERNO': 'Crédito Externo',
+                'GIFTCARD': 'Gift Card',
             }
             return nombres_metodos.get(codigo, codigo)
         
@@ -8298,6 +8386,10 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         'total_credito_trabajador': 0,
         'total_credito_externo': 0,
         'total_orden_compra': 0,
+        # Gift cards canjeadas como pago: medio NO efectivo (el pasivo nació al
+        # emitir la tarjeta). Sin este bucket cada canje encendía la alerta
+        # "documentos vs medios" del Resumen de Caja.
+        'total_giftcard': 0,
         'total_nota_credito': 0,
         'total_descuentos': 0,  # Descuentos aplicados
         'total_descuento_puntos': 0,  # Descuentos por canje de puntos de fidelización
@@ -8397,6 +8489,8 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
                 cuadratura_data['total_credito_trabajador'] += monto
             elif metodo == 'CREDITO_EXTERNO':
                 cuadratura_data['total_credito_externo'] += monto
+            elif metodo == 'GIFTCARD':
+                cuadratura_data['total_giftcard'] += monto
             elif metodo == 'ORDEN_COMPRA':
                 cuadratura_data['total_orden_compra'] += monto
             elif metodo == 'TARJETA_COMERCIAL':
@@ -8591,7 +8685,11 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
                 # Crédito externo
                 elif metodo_upper == 'CREDITO_EXTERNO':
                     cuadratura_data['total_credito_externo'] += monto
-                
+
+                # Gift card (DTE sin ticket pagado con gift card)
+                elif metodo_upper == 'GIFTCARD':
+                    cuadratura_data['total_giftcard'] += monto
+
                 # Orden de compra
                 elif metodo_upper == 'ORDEN_COMPRA' or ('ORDEN' in metodo_upper and 'COMPRA' in metodo_upper):
                     cuadratura_data['total_orden_compra'] += monto
@@ -8732,6 +8830,7 @@ _MAPEO_TEORICOS_ARQUEO = (
     ('total_cheque_teorico', 'total_cheque'),
     ('total_convenio_teorico', 'total_convenio'),
     ('total_credito_trabajador_teorico', 'total_credito_trabajador'),
+    ('total_giftcard_teorico', 'total_giftcard'),
     ('total_tickets_teorico', 'total_tickets'),
     ('total_boletas_electronicas_teorico', 'total_boletas_electronicas'),
     ('total_facturas_teorico', 'total_facturas'),
@@ -8958,6 +9057,9 @@ _CATEGORIAS_METODO_PAGO = {
     'CREDITO_TRABAJADOR': 'efectivo',
     'CREDITO_EXTERNO': 'efectivo',
     'ORDEN_COMPRA': 'efectivo',
+    # Gift card: medio no-efectivo que vive en la tarjeta "Efectivo y Otros"
+    # del Resumen (igual que los créditos) — no exige plata en el conteo.
+    'GIFTCARD': 'efectivo',
     'OTRO': 'efectivo',
     # Marketplaces / venta por internet
     'VENTA_INTERNET': 'internet',
@@ -11480,6 +11582,7 @@ def exportar_cuadratura_excel(request):
             ('Transferencia', cuadratura_data.get('total_transferencia', 0)),
             ('Cheque', cuadratura_data.get('total_cheque', 0)),
             ('Convenio', cuadratura_data.get('total_convenio', 0)),
+            ('Gift Card', cuadratura_data.get('total_giftcard', 0)),
             ('VISA/MC/AMEX', cuadratura_data.get('total_visa_mc_amex', 0)),
             ('Presto', cuadratura_data.get('total_presto', 0)),
             ('AbcDin', cuadratura_data.get('total_abcdin', 0)),

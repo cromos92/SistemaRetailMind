@@ -31,7 +31,10 @@ class BaseResumenTest(TestCase):
         self.user = crear_usuario(rol='administrador')
         crear_empresa_user(self.user, self.empresa, self.tienda)
 
-        modulo = ModuloSistema.objects.create(codigo='reportes', nombre='Reportes')
+        # get_or_create: la migración 0150 siembra el módulo 'reportes'; con la
+        # suite corriendo CON migraciones, un create() duplicado revienta.
+        modulo, _ = ModuloSistema.objects.get_or_create(
+            codigo='reportes', defaults={'nombre': 'Reportes'})
         for codigo in ('resumen_existencias',):
             opcion = OpcionMenu.objects.create(modulo=modulo, codigo=codigo, nombre=codigo)
             PermisoRol.objects.create(

@@ -680,10 +680,10 @@
                         </div>
                         <div>
                             <h2>
-                                Reporte de Despachos por Proveedor
+                                Reporte de Ingresos por Proveedor
                             </h2>
                             <p>
-                                Análisis detallado de ingresos, despachos y saldos por proveedor y documento DTE
+                                Unidades comprometidas, pendientes e ingresadas por proveedor y documento DTE de compra
                             </p>
                         </div>
                     </div>
@@ -728,20 +728,6 @@
                 </div>
             </div>
             <div class="kpi-item">
-                <div class="kpi-item-icon error"><i class="bi bi-send"></i></div>
-                <div>
-                    <div class="kpi-item-value" id="totalDespachado">-</div>
-                    <div class="kpi-item-label">Pares Despachados</div>
-                </div>
-            </div>
-            <div class="kpi-item">
-                <div class="kpi-item-icon accent"><i class="bi bi-archive"></i></div>
-                <div>
-                    <div class="kpi-item-value" id="totalSaldo">-</div>
-                    <div class="kpi-item-label">Saldo Stock</div>
-                </div>
-            </div>
-            <div class="kpi-item">
                 <div class="kpi-item-icon secondary"><i class="bi bi-currency-dollar"></i></div>
                 <div>
                     <div class="kpi-item-value" id="montoTotal">-</div>
@@ -752,20 +738,6 @@
         
         <!-- ========== INDICADORES CLAVE ========== -->
         <div class="indicadores-strip">
-            <!-- Rotación -->
-            <div class="indicador-item">
-                <div class="indicador-item-top">
-                    <span class="indicador-item-label"><i class="bi bi-arrow-repeat me-1" style="color:var(--nexo-primary);"></i>Rotación</span>
-                    <span class="badge-nexo primary" id="rotacionBadge" style="font-size:0.6rem;padding:2px 6px;">-</span>
-                </div>
-                <div class="indicador-item-row">
-                    <span class="indicador-item-value" id="rotacionValor">0%</span>
-                    <span class="indicador-item-sub" id="rotacionDetalle">0 de 0</span>
-                </div>
-                <div class="indicador-mini-bar">
-                    <div class="indicador-mini-bar-fill primary" id="rotacionBar" style="width:0%;"></div>
-                </div>
-            </div>
             <!-- Pagos -->
             <div class="indicador-item">
                 <div class="indicador-item-top">
@@ -859,12 +831,19 @@
             </div>
         </div>
         
+        <!-- Aviso: rango de fechas por defecto aplicado por el backend -->
+        <div id="avisoRangoDefecto" style="display:none; background: rgba(0,102,255,0.08); border: 1px solid rgba(0,102,255,0.25); border-radius: var(--nexo-radius-md); padding: 10px 16px; margin-bottom: 16px; font-size: 0.82rem; color: var(--nexo-gray-700);">
+            <i class="bi bi-info-circle me-1" style="color: var(--nexo-info);"></i>
+            Mostrando los <strong>últimos 90 días</strong> (desde <strong id="avisoFechaDesde">-</strong>).
+            Usa los filtros de fecha para consultar períodos anteriores.
+        </div>
+
         <!-- ========== TABLA DE DATOS ========== -->
         <div class="tabla-container">
             <div class="tabla-header">
                 <h5>
                     <i class="bi bi-table me-2"></i>
-                    Detalle de Despachos
+                    Detalle de Ingresos por DTE
                 </h5>
                 <span class="badge-nexo light" id="totalRegistros">0 registros</span>
             </div>
@@ -975,6 +954,7 @@ function cargarReporteProveedor(page = 1) {
                 calcularKPIs(response.data);
                 calcularIndicadores(response.data);
             }
+            mostrarAvisoRangoDefecto(response.filtros_aplicados);
         } else {
             mostrarError('No se pudo cargar el reporte');
         }
@@ -1024,11 +1004,6 @@ function mostrarReporteProveedor(data, pagination) {
     }
     
     data.forEach(function(item) {
-        // Determinar clases para saldo
-        let saldoClass = 'light';
-        if (item.saldo_restante > 0) saldoClass = 'success';
-        else if (item.saldo_restante === 0) saldoClass = 'warning';
-        
         // Determinar clase para estado DTE
         let estadoDteClass = 'light';
         if (item.estado_dte === 'ACEPTADO') estadoDteClass = 'success';
@@ -1056,13 +1031,10 @@ function mostrarReporteProveedor(data, pagination) {
                     ${item.unidades_en_dte > 0 ? `<div class="unidades-row"><span class="badge-tag light">DTE</span>${formatearNumero(item.unidades_en_dte)}</div>` : ''}
                     ${item.unidades_pendientes_ingreso > 0 ? `<div class="unidades-row"><span class="badge-tag warning">Pend</span><strong style="color:var(--nexo-warning);">${formatearNumero(item.unidades_pendientes_ingreso)}</strong></div>` : ''}
                     <div class="unidades-row"><span class="badge-tag primary">Ing</span>${formatearNumero(item.total_ingresado)}</div>
-                    <div class="unidades-row"><span class="badge-tag info">Desp</span>${formatearNumero(item.total_despachado)}</div>
-                    <div class="unidades-row"><span class="badge-tag ${saldoClass}">Saldo</span><strong>${formatearNumero(item.saldo_restante)}</strong></div>
                 </td>
                 <td class="text-end">
                     <div class="monto-principal">$${formatearNumero(item.monto_ingresado)}</div>
-                    <div class="monto-secundario">Desp: $${formatearNumero(item.monto_despachado)}</div>
-                    <div class="monto-saldo" style="color: var(--nexo-${saldoClass === 'success' ? 'success' : saldoClass === 'warning' ? 'warning' : 'gray-500'});">Saldo: $${formatearNumero(item.monto_restante)}</div>
+                    <div class="monto-secundario">Ingresado a inventario</div>
                 </td>
                 <td>
                     <div class="estados-cell">
@@ -1078,35 +1050,27 @@ function mostrarReporteProveedor(data, pagination) {
     $('#totalRegistros').text(`${pagination.total_records} registros`);
 }
 
+// === AVISO DE RANGO POR DEFECTO ===
+function mostrarAvisoRangoDefecto(filtros) {
+    if (filtros && filtros.fecha_defecto_aplicada) {
+        $('#avisoFechaDesde').text(formatearFecha(filtros.fecha_inicio));
+        $('#avisoRangoDefecto').show();
+    } else {
+        $('#avisoRangoDefecto').hide();
+    }
+}
+
 // === KPIs DESDE RESUMEN GLOBAL DEL BACKEND ===
 function mostrarKPIsDesdeResumen(resumen) {
     $('#totalProveedores').text(resumen.total_proveedores || 0);
     $('#totalDtes').text(resumen.total_dtes || 0);
     $('#totalIngresado').text(formatearNumero(resumen.total_unidades_ingresadas || 0));
-    $('#totalDespachado').text(formatearNumero(resumen.total_unidades_despachadas || 0));
     $('#totalPendienteIngreso').text(formatearNumero(resumen.total_unidades_pendientes || 0));
-    
-    const saldo = (resumen.total_unidades_ingresadas || 0) - (resumen.total_unidades_despachadas || 0);
-    $('#totalSaldo').text(formatearNumero(saldo));
     $('#montoTotal').text('$' + formatearNumero(resumen.total_monto_compras || 0));
 }
 
 function calcularIndicadoresDesdeResumen(resumen) {
-    // 1. Rotación de Inventario
-    const totalIngresado = resumen.total_unidades_ingresadas || 0;
-    const totalDespachado = resumen.total_unidades_despachadas || 0;
-    const rotacion = totalIngresado > 0 ? ((totalDespachado / totalIngresado) * 100) : 0;
-    
-    $('#rotacionValor').text(rotacion.toFixed(1) + '%');
-    $('#rotacionBar').css('width', Math.min(rotacion, 100) + '%');
-    $('#rotacionDetalle').text(`${formatearNumero(totalDespachado)} de ${formatearNumero(totalIngresado)}`);
-    
-    let rotacionStatus = 'Bajo';
-    if (rotacion >= 70) rotacionStatus = 'Alto';
-    else if (rotacion >= 40) rotacionStatus = 'Medio';
-    $('#rotacionBadge').text(rotacionStatus);
-    
-    // 2. Estado de Pagos
+    // 1. Estado de Pagos
     const dtesPagados = resumen.dtes_pagados || 0;
     const totalDtes = resumen.total_dtes || 0;
     const porcentajePagos = totalDtes > 0 ? ((dtesPagados / totalDtes) * 100) : 0;
@@ -1125,13 +1089,13 @@ function calcularIndicadoresDesdeResumen(resumen) {
     if (porcentajePagos >= 80) pagosBar.addClass('success');
     else if (porcentajePagos >= 50) pagosBar.addClass('warning');
     else pagosBar.addClass('error');
-    
-    // 3. Valor Promedio
+
+    // 2. Valor Promedio
     $('#promedioValor').text('$' + formatearNumero(resumen.monto_promedio || 0));
     $('#montoMinimo').text('$' + formatearNumero(resumen.monto_minimo || 0));
     $('#montoMaximo').text('$' + formatearNumero(resumen.monto_maximo || 0));
 
-    // 4. Pares por Ingresar
+    // 3. Pares por Ingresar
     const totalEnDtes = resumen.total_unidades_en_dtes || 0;
     const pendientes = resumen.total_unidades_pendientes || 0;
     const porcentajePendiente = totalEnDtes > 0 ? ((pendientes / totalEnDtes) * 100) : 0;
@@ -1164,19 +1128,11 @@ function calcularKPIs(data) {
     // Unidades ingresadas
     const totalIngresado = data.reduce((sum, item) => sum + (parseFloat(item.total_ingresado) || 0), 0);
     $('#totalIngresado').text(formatearNumero(totalIngresado));
-    
-    // Unidades despachadas
-    const totalDespachado = data.reduce((sum, item) => sum + (parseFloat(item.total_despachado) || 0), 0);
-    $('#totalDespachado').text(formatearNumero(totalDespachado));
-    
+
     // Pares pendientes
     const totalPendiente = data.reduce((sum, item) => sum + (parseFloat(item.unidades_pendientes_ingreso) || 0), 0);
     $('#totalPendienteIngreso').text(formatearNumero(totalPendiente));
-    
-    // Saldo total
-    const totalSaldo = totalIngresado - totalDespachado;
-    $('#totalSaldo').text(formatearNumero(totalSaldo));
-    
+
     // Monto total
     const montoTotal = data.reduce((sum, item) => sum + (parseFloat(item.monto_ingresado) || 0), 0);
     $('#montoTotal').text('$' + formatearNumero(montoTotal));
@@ -1189,22 +1145,7 @@ function calcularIndicadores(data) {
         return;
     }
     
-    // 1. Rotación de Inventario
-    const totalIngresado = data.reduce((sum, item) => sum + (parseFloat(item.total_ingresado) || 0), 0);
-    const totalDespachado = data.reduce((sum, item) => sum + (parseFloat(item.total_despachado) || 0), 0);
-    const rotacion = totalIngresado > 0 ? ((totalDespachado / totalIngresado) * 100) : 0;
-    
-    $('#rotacionValor').text(rotacion.toFixed(1) + '%');
-    $('#rotacionBar').css('width', Math.min(rotacion, 100) + '%');
-    $('#rotacionDetalle').text(`${formatearNumero(totalDespachado)} de ${formatearNumero(totalIngresado)}`);
-    
-    // Badge de rotación
-    let rotacionStatus = 'Bajo';
-    if (rotacion >= 70) rotacionStatus = 'Alto';
-    else if (rotacion >= 40) rotacionStatus = 'Medio';
-    $('#rotacionBadge').text(rotacionStatus);
-    
-    // 2. Estado de Pagos
+    // 1. Estado de Pagos
     const dtesPagados = data.filter(item => item.estado_pago === 'PAGADO').length;
     const totalDtes = data.length;
     const porcentajePagos = totalDtes > 0 ? ((dtesPagados / totalDtes) * 100) : 0;
@@ -1225,18 +1166,18 @@ function calcularIndicadores(data) {
     if (porcentajePagos >= 80) pagosBar.addClass('success');
     else if (porcentajePagos >= 50) pagosBar.addClass('warning');
     else pagosBar.addClass('error');
-    
-    // 3. Valor Promedio
+
+    // 2. Valor Promedio
     const montos = data.map(item => parseFloat(item.monto_ingresado) || 0);
     const promedio = montos.length > 0 ? montos.reduce((a, b) => a + b, 0) / montos.length : 0;
     const minimo = Math.min(...montos);
     const maximo = Math.max(...montos);
-    
+
     $('#promedioValor').text('$' + formatearNumero(promedio));
     $('#montoMinimo').text('$' + formatearNumero(minimo));
     $('#montoMaximo').text('$' + formatearNumero(maximo));
 
-    // 4. Pares por ingresar
+    // 3. Pares por ingresar
     const totalEnDtes = data.reduce((sum, item) => sum + (parseFloat(item.unidades_en_dte) || 0), 0);
     const pendientes = data.reduce((sum, item) => sum + (parseFloat(item.unidades_pendientes_ingreso) || 0), 0);
     const porcentajePendiente = totalEnDtes > 0 ? ((pendientes / totalEnDtes) * 100) : 0;
@@ -1252,17 +1193,16 @@ function calcularIndicadores(data) {
 }
 
 function resetKPIs() {
-    $('#totalProveedores, #totalDtes, #totalIngresado, #totalDespachado, #totalSaldo, #totalPendienteIngreso').text('-');
+    $('#totalProveedores, #totalDtes, #totalIngresado, #totalPendienteIngreso').text('-');
     $('#montoTotal').text('$0');
 }
 
 function resetIndicadores() {
-    $('#rotacionValor, #pagosValor').text('0%');
-    $('#rotacionBar, #pagosBar, #pendienteBar').css('width', '0%');
-    $('#rotacionDetalle').text('0 de 0');
+    $('#pagosValor').text('0%');
+    $('#pagosBar, #pendienteBar').css('width', '0%');
     $('#pagosDetalle').text('0 de 0');
     $('#promedioValor, #montoMinimo, #montoMaximo').text('$0');
-    $('#rotacionBadge, #pagosBadge, #pendienteBadge').text('-');
+    $('#pagosBadge, #pendienteBadge').text('-');
     $('#pendienteValor').text('0');
     $('#pendienteDetalle').text('0 de 0');
 }
@@ -1397,10 +1337,10 @@ function exportarExcel() {
     }
     
     // Crear datos para CSV
-    let csv = 'Proveedor,RUT,DTE,Tipo,Fecha,En DTE,Pendiente Ingreso,Ingresado,Despachado,Saldo,Monto Ingreso,Monto Despacho,Monto Saldo,Estado DTE,Estado Pago\n';
-    
+    let csv = 'Proveedor,RUT,DTE,Tipo,Fecha,En DTE,Pendiente Ingreso,Ingresado,Monto Ingreso,Estado DTE,Estado Pago\n';
+
     datosReporte.forEach(item => {
-        csv += `"${item.proveedor_nombre}","${item.proveedor_rut}","${item.dte_numero}","${item.dte_tipo}","${item.fecha_emision}",${item.unidades_en_dte || 0},${item.unidades_pendientes_ingreso || 0},${item.total_ingresado},${item.total_despachado},${item.saldo_restante},${item.monto_ingresado},${item.monto_despachado},${item.monto_restante},"${item.estado_dte}","${item.estado_pago}"\n`;
+        csv += `"${item.proveedor_nombre}","${item.proveedor_rut}","${item.dte_numero}","${item.dte_tipo}","${item.fecha_emision}",${item.unidades_en_dte || 0},${item.unidades_pendientes_ingreso || 0},${item.total_ingresado},${item.monto_ingresado},"${item.estado_dte}","${item.estado_pago}"\n`;
     });
     
     // Descargar

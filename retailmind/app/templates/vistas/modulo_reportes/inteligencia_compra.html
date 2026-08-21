@@ -216,12 +216,12 @@ function render(d) {
 
     let html = `
     <div class="ic-kpis">
-        <div class="ic-kpi"><div class="lbl">Venta público histórica</div><div class="val">${fmt(k.venta_publica_hist)}</div><div class="sub">pares (tiendas)</div></div>
-        <div class="ic-kpi"><div class="lbl">Distribución bodegas</div><div class="val">${fmt(k.distribucion_bodega)}</div><div class="sub">pares (mayorista/CD)</div></div>
+        <div class="ic-kpi" title="Venta neta: descuenta devoluciones, cambios y notas de crédito (reingresos del kardex)."><div class="lbl">Venta público histórica</div><div class="val">${fmt(k.venta_publica_hist)}</div><div class="sub">pares netos (− devoluciones/NC)</div></div>
+        <div class="ic-kpi"><div class="lbl">Distribución bodegas</div><div class="val">${fmt(k.distribucion_bodega)}</div><div class="sub">pares netos (mayorista/CD)</div></div>
         <div class="ic-kpi"><div class="lbl">Stock en tiendas</div><div class="val">${fmt(k.stock_tiendas)}</div><div class="sub">pares en piso</div></div>
-        <div class="ic-kpi"><div class="lbl">Velocidad 90 días</div><div class="val">${fmt(k.vel_dia)}<small style="font-size:.8rem;">/día</small></div><div class="sub ${yoyCls}">${k.vel_yoy != null ? (k.vel_yoy > 0 ? '+' : '') + k.vel_yoy + '% YoY' : ''}</div></div>
+        <div class="ic-kpi" title="Venta neta de los últimos 90 días ÷ 90 (resta devoluciones/NC)."><div class="lbl">Velocidad 90 días</div><div class="val">${fmt(k.vel_dia)}<small style="font-size:.8rem;">/día</small></div><div class="sub ${yoyCls}">${k.vel_yoy != null ? (k.vel_yoy > 0 ? '+' : '') + k.vel_yoy + '% YoY' : ''}</div></div>
         <div class="ic-kpi"><div class="lbl">Pronóstico 12 meses</div><div class="val">${fmt(k.pronostico_12m)}</div><div class="sub">pares proyectados</div></div>
-        <div class="ic-kpi"><div class="lbl">Cobertura</div><div class="val">${cob != null ? cob : '—'}<small style="font-size:.8rem;"> m</small></div><div class="sub">stock ÷ venta</div></div>
+        <div class="ic-kpi" title="Meses de cobertura = stock en tiendas ÷ (pronóstico 12m ÷ 12). Se divide por el PRONÓSTICO mensual, no por la venta histórica: con tendencia a la baja la cobertura sale mayor que contra el trailing."><div class="lbl">Cobertura</div><div class="val">${cob != null ? cob : '—'}<small style="font-size:.8rem;"> m</small></div><div class="sub">stock ÷ pronóstico 12m</div></div>
     </div>
 
     <div class="ic-kpis">
@@ -239,8 +239,8 @@ function render(d) {
     </div>
 
     <div class="ic-grid">
-        <div class="ic-card"><h3><i class="ri-bar-chart-2-line"></i> Venta a público por año</h3><div id="ic-chart-anual"></div></div>
-        <div class="ic-card"><h3><i class="ri-donut-chart-line"></i> Venta por tienda</h3><div id="ic-chart-tienda"></div></div>
+        <div class="ic-card"><h3><i class="ri-bar-chart-2-line"></i> Venta a público por año <span style="font-weight:500; color:var(--nexo-gray-500); font-size:.78rem;">(neta de devoluciones/NC)</span></h3><div id="ic-chart-anual"></div></div>
+        <div class="ic-card"><h3><i class="ri-donut-chart-line"></i> Venta por tienda <span style="font-weight:500; color:var(--nexo-gray-500); font-size:.78rem;">(neta)</span></h3><div id="ic-chart-tienda"></div></div>
         <div class="ic-card full"><h3><i class="ri-line-chart-line"></i> Serie mensual + pronóstico 12 meses</h3><div id="ic-chart-forecast"></div></div>
         <div class="ic-card full"><h3><i class="ri-ruler-line"></i> Curva de tallas — venta % vs stock % <span style="font-weight:500; color:var(--nexo-gray-500); font-size:.8rem;">(gap positivo = falta stock)</span></h3><div id="ic-chart-curva"></div></div>
         <div class="ic-card"><h3><i class="ri-heart-pulse-line"></i> Salud &amp; antigüedad de inventario</h3>
@@ -252,7 +252,7 @@ function render(d) {
             </table>
             ${abcHtml}
         </div>
-        <div class="ic-card"><h3><i class="ri-recycle-line"></i> Sell-through anual <span style="font-weight:500; color:var(--nexo-gray-500); font-size:.78rem;">(tendencia; &gt;100% = subvaluado por traspaso)</span></h3><div id="ic-chart-str"></div></div>
+        <div class="ic-card"><h3><i class="ri-recycle-line"></i> Sell-through anual <span style="font-weight:500; color:var(--nexo-gray-500); font-size:.78rem;">(venta neta ÷ ingresado sin la apertura de migración; &gt;100% = subvaluado por traspaso)</span></h3><div id="ic-chart-str"></div></div>
         <div class="ic-card full"><h3><i class="ri-store-2-line"></i> Stock por sucursal</h3><div id="ic-stock-suc"></div></div>
     </div>
 

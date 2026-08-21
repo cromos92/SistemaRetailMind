@@ -131,7 +131,7 @@
                 <button class="pl-fbtn" data-b="365+" onclick="setBucket('365+')">+1 año</button>
                 <button class="pl-fbtn" data-b="sin-dato" onclick="setBucket('sin-dato')">Sin dato</button>
                 <span style="width:1px; height:22px; background:var(--nexo-gray-300); margin:0 4px;"></span>
-                <span style="font-weight:700; color:var(--nexo-gray-700); font-size:.82rem;">Año:</span>
+                <span style="font-weight:700; color:var(--nexo-gray-700); font-size:.82rem;">Tramo:</span>
                 <span id="det-anio-chips" class="pl-note">—</span>
             </div>
             <div style="overflow-x:auto; max-height:640px; overflow-y:auto;">
@@ -189,14 +189,14 @@ const DIMS = {
     sucursales:     { label: 'Sucursal',     field: 'sucursal',     filtro: 'sucursal_id' },
 };
 let PL_RES = null;                       // respuesta completa de la API
-let PL_ANIO_RES = null;                   // análisis por año/dimensión
+let PL_ANIO_RES = null;                   // análisis por tramo de antigüedad/dimensión
 let anioMetric = 'valor';                 // 'valor' (dinero) | 'pares'
 let dimGrafico = 'marca';                 // 'marca' | 'especialidad'
 let chartAnio = null, chartDim = null;
 let plDim = 'marcas';
 let plCharts = [], plSort = { key: 'dead_costo', dir: -1 }, plFilter = 'Todas';
 let PL_F = { sucursal_id: '', marca_id: '', categoria_id: '', especialidad_id: '', incluir_cd: '' };
-let DET = { page: 1, page_size: 50, orden: '-valor_costo', antiguedad: '', q: '', anios: new Set() };
+let DET = { page: 1, page_size: 50, orden: '-valor_costo', antiguedad: '', q: '', tramos: new Set() };
 let detTotal = 0, detTimer = null, opcionesCargadas = false;
 const SEL = new Set();          // producto_ids seleccionados para campaña
 const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
@@ -292,14 +292,14 @@ function renderPlan(d) {
 
     <div class="pl-grid">
         <div class="pl-card">
-            <h3><i class="ri-calendar-line"></i> Capital a liquidar por año <span class="pl-note" id="anio-kpi"></span></h3>
+            <h3><i class="ri-calendar-line"></i> Capital por antigüedad del lote <span class="pl-note" id="anio-kpi"></span></h3>
             <div class="pl-filters" style="margin-bottom:4px;">
                 <span style="font-weight:700; color:var(--nexo-gray-700); font-size:.8rem;">Medir en:</span>
                 <button class="pl-fbtn active" data-metric="valor" onclick="setAnioMetric('valor')">Dinero</button>
                 <button class="pl-fbtn" data-metric="pares" onclick="setAnioMetric('pares')">Pares</button>
             </div>
             <div id="pl-chart-anio"><div class="pl-note" style="padding:20px;">Calculando antigüedad…</div></div>
-            <div class="pl-note" style="margin-top:6px;">Año de ingreso del stock más antiguo en mano. <span style="color:#00A88A;">■</span> reciente · <span style="color:#FFB020;">■</span> 1 año · <span style="color:#f06548;">■</span> 2+ años (liquidar).</div>
+            <div class="pl-note" style="margin-top:6px;">Tramos por días exactos desde hoy (lote FIFO vivo más antiguo) — no por año calendario. <span style="color:#00A88A;">■</span> &lt;1 año · <span style="color:#FFB020;">■</span> 1-2 años · <span style="color:#f06548;">■</span> +2 años (liquidar).</div>
         </div>
         <div class="pl-card">
             <h3><i class="ri-price-tag-3-line"></i> Top <span id="dim-graf-lbl">marcas</span> — capital por antigüedad</h3>
@@ -332,7 +332,7 @@ function renderPlan(d) {
                     ${cd ? '<th onclick="sortBy(\'valor_cd\')">Valor $ CD</th>' : ''}
                     <th onclick="sortBy('gmroi')" title="Calculado con precio de venta y costo de LISTA del kardex, no con lo efectivamente cobrado ni el costo FIFO. Sirve para ordenar/comparar, no como rentabilidad real.">GMROI*</th>
                     <th onclick="sortBy('rotacion')">Rotación</th>
-                    <th onclick="sortBy('cobertura')">Cob. (m)</th>
+                    <th onclick="sortBy('cobertura')" title="Meses de cobertura: stock tiendas ÷ (venta TTM ÷ 12) — se divide por la venta REAL de los últimos 12 meses, no por pronóstico.">Cob. (m)</th>
                     <th onclick="sortBy('dead_costo')">Inmovil. $</th>
                     <th onclick="sortBy('pct_dead')">% dead</th>
                     <th class="txt" onclick="sortBy('accion')">Acción</th>
@@ -426,20 +426,22 @@ function sortBy(key) {
 // Colores de urgencia por antigüedad (teal→ámbar→rojo; legibles y CVD-ok).
 const URG = { reciente: '#00A88A', un_anio: '#FFB020', dos_mas: '#f06548' };
 
-function anioColor(a) {
-    const ed = (a.antiguedad_anios == null) ? 0 : a.antiguedad_anios;
-    return ed >= 2 ? URG.dos_mas : (ed >= 1 ? URG.un_anio : URG.reciente);
+// Color por TRAMO de días exactos: mismo semáforo que el badge de descuento
+// del detalle (40% rojo, 25% ocre, 15% ámbar, 0% teal).
+function tramoColor(t) {
+    const pct = t.descuento_sugerido || 0;
+    return pct >= 40 ? URG.dos_mas : (pct >= 25 ? '#b8860b' : (pct >= 15 ? URG.un_anio : URG.reciente));
 }
 
 function drawChartAnio() {
     if (chartAnio) { try { chartAnio.destroy(); } catch (e) {} chartAnio = null; }
     const cont = document.getElementById('pl-chart-anio');
     if (!cont || !PL_ANIO_RES) return;
-    const anios = (PL_ANIO_RES.anios || []).filter(a => a.anio);
+    const tramos = (PL_ANIO_RES.tramos || []).filter(a => a.tramo);
     const t = PL_ANIO_RES.totales || {};
     const kpi = document.getElementById('anio-kpi');
-    if (kpi) kpi.textContent = `· ${moneyM(t.valor_liquidar)} a liquidar (≥1 año) de ${moneyM(t.valor)}`;
-    if (!anios.length) { cont.innerHTML = '<div class="pl-note" style="padding:20px;">Sin datos de antigüedad.</div>'; return; }
+    if (kpi) kpi.textContent = `· ${moneyM(t.valor_1anio_mas)} con ≥1 año (días reales) de ${moneyM(t.valor)}`;
+    if (!tramos.length) { cont.innerHTML = '<div class="pl-note" style="padding:20px;">Sin datos de antigüedad.</div>'; return; }
     cont.innerHTML = '';
     const esDinero = anioMetric === 'valor';
     const val = a => esDinero ? a.valor : a.pares;
@@ -447,19 +449,20 @@ function drawChartAnio() {
     chartAnio = new ApexCharts(cont, {
         chart: { type: 'bar', height: 320, toolbar: { show: false }, fontFamily: 'inherit' },
         series: [{ name: esDinero ? 'Capital a costo' : 'Pares',
-                   data: anios.map(a => ({ x: String(a.anio), y: val(a), fillColor: anioColor(a) })) }],
+                   data: tramos.map(a => ({ x: a.label, y: val(a), fillColor: tramoColor(a) })) }],
         plotOptions: { bar: { distributed: true, borderRadius: 4, columnWidth: '58%' } },
-        colors: anios.map(anioColor), legend: { show: false },
+        colors: tramos.map(tramoColor), legend: { show: false },
         states: { hover: { filter: { type: 'darken', value: 0.9 } } },
         dataLabels: { enabled: true, formatter: (v) => fmtV(v),
             style: { fontSize: '10px', fontWeight: 700, colors: ['#1A1A2E'] }, offsetY: -16 },
-        xaxis: { categories: anios.map(a => String(a.anio)), axisBorder: { show: false },
+        xaxis: { categories: tramos.map(a => a.label), axisBorder: { show: false },
             axisTicks: { show: false }, labels: { style: { fontWeight: 600 } } },
         yaxis: { labels: { formatter: v => fmtV(v) } },
         grid: { borderColor: '#eef0f5', strokeDashArray: 3 },
         tooltip: { custom: ({ dataPointIndex }) => {
-            const a = anios[dataPointIndex];
-            return `<div style="padding:8px; font-size:.8rem;"><b>Año ${a.anio}</b> · ${a.antiguedad_anios} año/s<br>
+            const a = tramos[dataPointIndex];
+            const rango = a.dias_hasta != null ? `${a.dias_desde}–${a.dias_hasta - 1} días` : `≥${a.dias_desde} días`;
+            return `<div style="padding:8px; font-size:.8rem;"><b>${a.label}</b> · ${rango}<br>
                 Capital: ${money(a.valor)}<br>Pares: ${fmt(a.pares)} · Productos: ${fmt(a.productos)}<br>
                 Descuento sugerido: <b>${a.descuento_sugerido}%</b></div>`;
         } },
@@ -485,8 +488,8 @@ function drawChartDim() {
     chartDim = new ApexCharts(cont, {
         chart: { type: 'bar', height: 340, stacked: true, toolbar: { show: false }, fontFamily: 'inherit' },
         series: [
-            { name: 'Reciente', data: items.map(m => m.val_reciente) },
-            { name: '1 año', data: items.map(m => m.val_1anio) },
+            { name: '<1 año', data: items.map(m => m.val_reciente) },
+            { name: '1-2 años', data: items.map(m => m.val_1anio) },
             { name: '2+ años', data: items.map(m => m.val_2mas) },
         ],
         colors: [URG.reciente, URG.un_anio, URG.dos_mas],
@@ -522,25 +525,26 @@ function setDimGrafico(dim) {
 // ------------------------------------------------ drill-down por producto
 function qsDetalle() {
     return qsFiltros({ antiguedad: DET.antiguedad, q: DET.q, orden: DET.orden,
-                       anio: Array.from(DET.anios).join(','),
+                       tramo: Array.from(DET.tramos).join(','),
                        page: String(DET.page), page_size: String(DET.page_size) });
 }
 
-// Chips de año (multi-selección) del detalle, poblados desde el análisis.
-function renderChipsAnio(anios) {
+// Chips de tramo de antigüedad (multi-selección) del detalle — días exactos,
+// mismo criterio que el gráfico y el descuento sugerido de cada fila.
+function renderChipsAnio(tramos) {
     const cont = document.getElementById('det-anio-chips');
     if (!cont) return;
-    if (!anios.length) { cont.innerHTML = '<span class="pl-note">sin datos</span>'; return; }
-    const todos = `<button class="pl-fbtn ${DET.anios.size === 0 ? 'active' : ''}" onclick="toggleAnio('')">Todos</button>`;
-    const chips = anios.map(y => `<button class="pl-fbtn ${DET.anios.has(y) ? 'active' : ''}" data-anio="${y}" onclick="toggleAnio(${y})">${y}</button>`).join('');
+    if (!tramos.length) { cont.innerHTML = '<span class="pl-note">sin datos</span>'; return; }
+    const todos = `<button class="pl-fbtn ${DET.tramos.size === 0 ? 'active' : ''}" onclick="toggleTramo('')">Todos</button>`;
+    const chips = tramos.map(t => `<button class="pl-fbtn ${DET.tramos.has(t.tramo) ? 'active' : ''}" data-tramo="${t.tramo}" onclick="toggleTramo('${t.tramo}')">${esc(t.label)}</button>`).join('');
     cont.innerHTML = todos + chips;
 }
-function toggleAnio(y) {
-    if (y === '') DET.anios.clear();
-    else if (DET.anios.has(y)) DET.anios.delete(y);
-    else DET.anios.add(y);
+function toggleTramo(t) {
+    if (t === '') DET.tramos.clear();
+    else if (DET.tramos.has(t)) DET.tramos.delete(t);
+    else DET.tramos.add(t);
     DET.page = 1;
-    renderChipsAnio(PL_ANIO_RES ? (PL_ANIO_RES.anios_disponibles || []) : []);
+    renderChipsAnio(PL_ANIO_RES ? (PL_ANIO_RES.tramos_disponibles || []) : []);
     cargarDetalle();
 }
 
@@ -630,13 +634,13 @@ function cambiarPageSize() {
     cargarDetalle();
 }
 function exportarExcel() {
-    const p = qsFiltros({ antiguedad: DET.antiguedad, q: DET.q, anio: Array.from(DET.anios).join(',') });
+    const p = qsFiltros({ antiguedad: DET.antiguedad, q: DET.q, tramo: Array.from(DET.tramos).join(',') });
     window.location = PL_XLS_API + '?' + p.toString();
 }
 
 // Abrir el formulario de verificación imprimible (1 sección por tienda).
 function imprimirVerificacion() {
-    const p = qsFiltros({ antiguedad: DET.antiguedad, q: DET.q, anio: Array.from(DET.anios).join(',') });
+    const p = qsFiltros({ antiguedad: DET.antiguedad, q: DET.q, tramo: Array.from(DET.tramos).join(',') });
     window.open(PL_PRINT_URL + '?' + p.toString(), '_blank');
 }
 
@@ -694,7 +698,7 @@ function cargarPorAnio() {
             PL_ANIO_RES = res;
             drawChartAnio();
             drawChartDim();
-            renderChipsAnio(res.anios_disponibles || []);
+            renderChipsAnio(res.tramos_disponibles || []);
         })
         .catch(e => { document.getElementById('pl-chart-anio').innerHTML = '<div class="pl-note" style="padding:20px;">Error de red: ' + esc(e) + '</div>'; });
 }

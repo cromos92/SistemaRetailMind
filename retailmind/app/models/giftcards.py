@@ -15,7 +15,7 @@ from django.db import models, transaction, IntegrityError
 from django.utils import timezone
 from django.conf import settings
 
-from .organizacion import Sucursal, Vendedor
+from .organizacion import Empresa, Sucursal, Vendedor
 from .crm import Cliente
 
 
@@ -47,6 +47,7 @@ TIPO_MOV_GIFTCARD_CHOICES = [
     ('REVERSA', 'Reversa (devolución/anulación de venta)'),
     ('BLOQUEO', 'Bloqueo'),
     ('DESBLOQUEO', 'Desbloqueo'),
+    ('ENVIO_CORREO', 'Envío de código por correo'),
 ]
 
 # Tipo de gift card:
@@ -143,6 +144,17 @@ class GiftCard(models.Model):
         blank=True,
         related_name='giftcards_emitidas',
     )
+    # Ámbito de canje: con empresa asignada, la tarjeta solo se acepta en
+    # sucursales de ESA empresa; en null vale en toda la cadena (comportamiento
+    # histórico — las tarjetas emitidas antes de este campo siguen globales).
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='giftcards',
+        help_text="Ámbito de canje (null = válida en todas las empresas)",
+    )
     cliente = models.ForeignKey(
         Cliente,
         on_delete=models.SET_NULL,
@@ -183,6 +195,26 @@ class GiftCard(models.Model):
     )
 
     observaciones = models.TextField(blank=True, null=True)
+
+    # === ENTREGA DEL CÓDIGO POR CORREO ===
+    # Denormalizado para responder de un vistazo "¿a quién y cuándo se le envió
+    # esta tarjeta?" sin recorrer el ledger (que igual guarda cada envío).
+    correo_enviado_a = models.CharField(
+        max_length=200, blank=True, null=True,
+        help_text="Último destinatario al que se envió el código",
+    )
+    correo_enviado_en = models.DateTimeField(
+        blank=True, null=True, db_index=True,
+        help_text="Fecha/hora del último envío aceptado por el servidor de correo",
+    )
+    correo_envios = models.IntegerField(
+        default=0,
+        help_text="Cuántas veces se envió el código (reenvíos incluidos)",
+    )
+    correo_message_id = models.CharField(
+        max_length=255, blank=True, null=True,
+        help_text="Message-ID del último envío (para rastrearlo en el proveedor)",
+    )
 
     # === AUDITORÍA ===
     created_at = models.DateTimeField(auto_now_add=True)

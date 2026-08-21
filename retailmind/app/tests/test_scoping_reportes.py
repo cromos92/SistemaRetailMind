@@ -27,9 +27,7 @@ from unittest import mock
 from django.test import Client, TestCase
 from django.utils import timezone
 
-from app.models import (
-    Dte, Dte_Productos, Movimientos_Producto, Productos_Recepcionados,
-)
+from app.models import Dte, Dte_Productos, Movimientos_Producto
 from .factories import (
     crear_empresa, crear_empresa_user, crear_producto_con_talla,
     crear_sucursal, crear_usuario,
@@ -263,84 +261,6 @@ class ProductosPorOrigenScopingTest(BaseScopingReportes):
         status, data = self._json(self.URL, anio=self.anio)
         self.assertEqual(status, 200)
         self.assertEqual(data['resumen']['total_skus'], 2)
-
-
-class RecepcionesDetalladoScopingTest(BaseScopingReportes):
-    """
-    `api_reporte_recepciones_detallado`.
-
-    HUÉRFANO: ningún template ni JS llama esta URL, pero la ruta sigue
-    publicada, así que se le exige el mismo alcance que al resto.
-    """
-
-    URL = '/app/api/reporte-recepciones-detallado/'
-
-    def setUp(self):
-        super().setUp()
-        self._recepcion(self.dte_a, self.talla_a, self.sucursal_a, self.UNIDADES_A)
-        self._recepcion(self.dte_b, self.talla_b, self.sucursal_b, self.UNIDADES_B)
-
-    def _recepcion(self, dte, talla, sucursal, unidades):
-        linea = Dte_Productos.objects.filter(dte=dte).first()
-        return Productos_Recepcionados.objects.create(
-            dte=dte,
-            dte_producto=linea,
-            producto_talla=talla,
-            sucursal_destino=sucursal,
-            stockArribado=unidades,
-            cantidad_esperada=unidades,
-            fecha_recepcion=timezone.now(),
-        )
-
-    def test_sucursal_ajena_devuelve_403(self):
-        status, data = self._json(self.URL, sucursal_id=self.sucursal_b.id)
-        self.assertEqual(status, 403)
-        self.assertFalse(data['success'])
-
-    def test_sin_filtro_solo_ve_sus_recepciones(self):
-        status, data = self._json(self.URL)
-        self.assertEqual(status, 200)
-        self.assertEqual(data['resumen']['total_unidades'], self.UNIDADES_A)
-        sucursales = {fila['sucursal'] for fila in data['por_sucursal']}
-        self.assertEqual(sucursales, {self.sucursal_a.alias})
-
-    def test_administrador_ve_las_dos_empresas(self):
-        self._login(self.admin, self.sucursal_a, self.empresa_a)
-        status, data = self._json(self.URL)
-        self.assertEqual(status, 200)
-        self.assertEqual(data['resumen']['total_unidades'],
-                         self.UNIDADES_A + self.UNIDADES_B)
-
-
-class DespachosDetalladoScopingTest(BaseScopingReportes):
-    """
-    `api_reporte_despachos_detallado` (también HUÉRFANO).
-
-    No recibe `sucursal_id`, así que el único control posible es que el
-    universo de DTE ya venga acotado.
-    """
-
-    URL = '/app/api/reporte-despachos-detallado/'
-
-    def test_sin_filtro_solo_ve_sus_dtes(self):
-        status, data = self._json(self.URL)
-        self.assertEqual(status, 200)
-        numeros = {d['numero_dte'] for d in data['despachos']}
-        self.assertEqual(numeros, {self.dte_a.numero_documento})
-        self.assertEqual(data['resumen']['total_documentos'], 1)
-
-    def test_usuario_ajeno_ve_solo_el_suyo(self):
-        self._login(self.user_b, self.sucursal_b, self.empresa_b)
-        status, data = self._json(self.URL)
-        self.assertEqual(status, 200)
-        numeros = {d['numero_dte'] for d in data['despachos']}
-        self.assertEqual(numeros, {self.dte_b.numero_documento})
-
-    def test_administrador_ve_los_dos(self):
-        self._login(self.admin, self.sucursal_a, self.empresa_a)
-        status, data = self._json(self.URL)
-        self.assertEqual(status, 200)
-        self.assertEqual(data['resumen']['total_documentos'], 2)
 
 
 class DespachosPorProveedorScopingTest(BaseScopingReportes):

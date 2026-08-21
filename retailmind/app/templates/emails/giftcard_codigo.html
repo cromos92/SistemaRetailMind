@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tu Gift Card {{ marca }}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f5f7;font-family:Arial,Helvetica,sans-serif;">
+  <!-- Preheader oculto -->
+  <div style="display:none;max-height:0;overflow:hidden;">Tu Gift Card {{ marca }} por ${{ monto|floatformat:"0g" }} — código adentro.</div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:24px 0;">
+    <tr><td align="center">
+
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(26,26,46,0.12);">
+
+        <!-- Header -->
+        <tr>
+          <td style="background-color:#1A1A2E;padding:28px 40px;text-align:center;">
+            <div style="font-size:26px;font-weight:bold;letter-spacing:4px;color:#ffffff;">{{ marca }}</div>
+            <div style="font-size:12px;letter-spacing:2px;color:#00D4AA;margin-top:4px;">GIFT CARD</div>
+          </td>
+        </tr>
+
+        <!-- Saludo -->
+        <tr>
+          <td style="padding:32px 40px 8px 40px;color:#1A1A2E;">
+            <p style="margin:0 0 6px 0;font-size:20px;font-weight:bold;">🎁 ¡Has recibido {% if tarjetas|length > 1 %}{{ tarjetas|length }} Gift Cards{% else %}una Gift Card{% endif %}!</p>
+            <p style="margin:0;font-size:14px;color:#555a66;line-height:1.6;">
+              Hola{% if nombre_destinatario %} <strong>{{ nombre_destinatario }}</strong>{% endif %},
+              {{ marca }} te ha enviado {% if tarjetas|length > 1 %}estas tarjetas de regalo{% else %}una tarjeta de regalo{% endif %}.
+              {% if tarjetas|length > 1 %}Cada una tiene su propio código y se usa por separado.{% else %}Preséntala en caja con el código de abajo y úsala como medio de pago.{% endif %}
+            </p>
+          </td>
+        </tr>
+
+        <!-- Tarjeta(s) -->
+        {% for t in tarjetas %}
+        <tr>
+          <td style="padding:{% if forloop.first %}24px{% else %}8px{% endif %} 40px {% if forloop.last %}24px{% else %}8px{% endif %} 40px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1A1A2E;border-radius:14px;">
+              <tr>
+                <td style="padding:28px 32px;text-align:center;">
+                  {% if t.beneficiario %}
+                  <div style="font-size:13px;letter-spacing:1px;color:#00D4AA;margin-bottom:10px;">PARA {{ t.beneficiario }}</div>
+                  {% endif %}
+                  <div style="font-size:12px;letter-spacing:2px;color:#9aa0b4;">MONTO</div>
+                  <div style="font-size:40px;font-weight:bold;color:#ffffff;margin:6px 0 18px 0;">${{ t.monto|floatformat:"0g" }}</div>
+                  <div style="font-size:12px;letter-spacing:2px;color:#9aa0b4;">{% if tarjetas|length > 1 %}CÓDIGO{% else %}TU CÓDIGO{% endif %}</div>
+                  <div style="font-family:'Courier New',Courier,monospace;font-size:24px;font-weight:bold;letter-spacing:3px;color:#00D4AA;background:rgba(0,212,170,0.08);border:1px dashed #00D4AA;border-radius:8px;padding:12px 8px;margin:8px 0 14px 0;">
+                    {{ t.codigo }}
+                  </div>
+                  {% if fecha_vencimiento_humana %}
+                  <div style="font-size:13px;color:#c9cdda;">Válida hasta el <strong style="color:#ffffff;">{{ fecha_vencimiento_humana }}</strong>{% if vigencia_dias %} ({{ vigencia_dias }} días){% endif %}</div>
+                  {% else %}
+                  <div style="font-size:13px;color:#c9cdda;">Sin fecha de vencimiento</div>
+                  {% endif %}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        {% endfor %}
+
+        <!-- Cómo usarla -->
+        <tr>
+          <td style="padding:8px 40px 8px 40px;color:#1A1A2E;">
+            <p style="margin:0 0 10px 0;font-size:15px;font-weight:bold;">¿Cómo usarla?</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;color:#555a66;line-height:1.7;">
+              <tr><td style="padding:2px 0;">1&nbsp;&nbsp;Acércate a caja en {% if tiendas %}cualquiera de nuestras tiendas ({{ tiendas|join:", " }}){% else %}cualquiera de nuestras tiendas{% endif %}.</td></tr>
+              <tr><td style="padding:2px 0;">2&nbsp;&nbsp;Muestra este código (impreso o desde tu teléfono).</td></tr>
+              <tr><td style="padding:2px 0;">3&nbsp;&nbsp;Se descuenta del total de tu compra. Si no usas todo el monto, <strong>el saldo queda disponible</strong> para una próxima compra dentro de la vigencia.</td></tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Condiciones -->
+        <tr>
+          <td style="padding:20px 40px 8px 40px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f8fa;border-left:4px solid #e2b100;border-radius:6px;">
+              <tr>
+                <td style="padding:14px 18px;font-size:12px;color:#555a66;line-height:1.7;">
+                  <strong style="color:#1A1A2E;">Importante — cuidado del código</strong><br>
+                  Esta gift card funciona <strong>al portador</strong>: cualquier persona que presente el código puede canjearla.
+                  <strong>La custodia del código es responsabilidad exclusiva del titular.</strong>
+                  No la compartas ni la publiques; en caso de pérdida, robo o divulgación del código,
+                  el saldo canjeado por terceros no será repuesto.
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Términos -->
+        <tr>
+          <td style="padding:14px 40px 26px 40px;font-size:11px;color:#8a8f9c;line-height:1.7;">
+            {% if fecha_vencimiento_humana %}• Válida hasta la fecha indicada. {% endif %}No se canjea por dinero en efectivo ni se recarga con vuelto.<br>
+            {% if tiendas %}• Utilizable en las tiendas: {{ tiendas|join:", " }}.<br>{% else %}• Utilizable en todas nuestras tiendas.<br>{% endif %}
+            • Puedes consultar tu saldo en cualquier caja presentando el código.<br>
+            • Si tu compra supera el monto de la tarjeta, pagas la diferencia con cualquier medio de pago.
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background-color:#1A1A2E;padding:18px 40px;text-align:center;">
+            <div style="font-size:12px;color:#c9cdda;">{{ marca }}</div>
+            {% if empresa_nombre %}<div style="font-size:11px;color:#9aa0b4;margin-top:4px;">{{ empresa_nombre }}{% if empresa_rut %} · RUT {{ empresa_rut }}{% endif %}</div>{% endif %}
+            <div style="font-size:10px;color:#6b7188;margin-top:8px;">Este correo fue generado automáticamente, por favor no respondas a este mensaje.</div>
+          </td>
+        </tr>
+
+      </table>
+
+    </td></tr>
+  </table>
+</body>
+</html>

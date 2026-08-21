@@ -2,14 +2,19 @@
 Fase B auditoría de Reportes — kardex por talla y kardex agrupado.
 
 Cubre el fix de la apertura sintética de la migración Laravel
-(INGRESO_INICIAL + referencia_externa=REF_SALDO_INICIAL_SINTETICO):
+(INGRESO_INICIAL + referencia_externa=REF_SALDO_INICIAL_SINTETICO).
 
-1. SKU con kardex legacy + apertura duplicada -> la apertura NO aporta al
-   saldo y el saldo final cuadra con Producto_Talla.stock.
-2. SKU cuyo ÚNICO movimiento es la apertura (sin legacy detrás) -> la
-   apertura se ANCLA como saldo inicial y el saldo final cuadra con stock.
-3. Movimiento no COMPLETADO (CANCELADO) -> se lista pero no suma al saldo.
-4. Kardex agrupado: mezcla de tallas (una excluida, otra anclada) -> saldo
+Criterio implementado (re-anclaje): la apertura es una FOTO del stock a la
+fecha de migración, no un flujo. En su fila el saldo se re-ancla al valor de
+la apertura (aporte = apertura - acumulado previo):
+
+1. SKU con kardex legacy COMPLETO + apertura duplicada -> delta 0, la
+   apertura no infla el saldo y el final cuadra con Producto_Talla.stock.
+2. SKU cuyo ÚNICO movimiento es la apertura -> el saldo salta a la foto.
+3. SKU con legacy INCOMPLETO (patrón PT 214822 en prod) -> el saldo se
+   re-ancla a la foto y el final cuadra con stock.
+4. Movimiento no COMPLETADO (CANCELADO) -> se lista pero no suma al saldo.
+5. Kardex agrupado: mezcla de tallas (delta 0 y re-ancladas) -> saldo
    final == stock_total.
 
 Ejecutar SIEMPRE contra SQLite desechable (el .env apunta a prod):
@@ -106,9 +111,26 @@ class KardexPorTallaAperturaTest(KardexAperturaSinteticaBase):
         self.assertFalse(items[0]['es_apertura'])
         self.assertFalse(items[1]['es_apertura'])
 
+    def test_legacy_incompleto_se_reancla_a_la_foto(self):
+        """Patrón PT 214822 en prod: el kardex legacy suma 2 pero la foto de
+        la migración era 5 (legacy incompleto). El saldo debe re-anclarse a 5
+        en la apertura; excluirla dejaría el saldo bajo el stock real."""
+        _, pt = crear_producto_con_talla(self.sucursal, sku=9001005, stock=5)
+        _mov(pt, FECHA_LEGACY_1, 3, referencia='MIG:20')
+        _mov(pt, FECHA_LEGACY_2, -1, concepto='VENTA_PUBLICO', referencia='MIG:21')
+        _mov(pt, FECHA_APERTURA, 5, referencia=REF_SALDO_INICIAL_SINTETICO)
+        _mov(pt, FECHA_POST, 2, concepto='TRASPASO_SUCURSAL', referencia='MIG:22')
+        _mov(pt, datetime.date(2026, 7, 7), -2, concepto='TRASPASO_SALIDA')
+
+        data = self._get_kardex(pt)
+        # Acumulado: 3 -> 2 -> re-ancla a 5 -> 7 -> 5.
+        self.assertEqual([i['saldo'] for i in data['items']], [3, 2, 5, 7, 5])
+        self.assertEqual(data['items'][-1]['saldo'], pt.stock)
+        self.assertTrue(data['items'][2]['es_apertura'])
+
     def test_solo_apertura_ancla_saldo_inicial(self):
         """SKU sin kardex legacy: excluir la apertura dejaría saldo 0 vs
-        stock real -> se ancla la apertura como saldo inicial."""
+        stock real -> el saldo se re-ancla a la foto de la apertura."""
         _, pt = crear_producto_con_talla(self.sucursal, sku=9001002, stock=7)
         _mov(pt, FECHA_APERTURA, 7, referencia=REF_SALDO_INICIAL_SINTETICO)
 
@@ -129,6 +151,19 @@ class KardexPorTallaAperturaTest(KardexAperturaSinteticaBase):
         data = self._get_kardex(pt)
         self.assertEqual([i['saldo'] for i in data['items']], [6, 4])
         self.assertEqual(data['items'][-1]['saldo'], pt.stock)
+
+    def test_drift_real_rige_el_default_excluir(self):
+        """Si ni excluir la apertura ni re-anclar cuadran con el stock (drift
+        real kardex-vs-stock, patrón PT 362970), rige el default: excluir."""
+        _, pt = crear_producto_con_talla(self.sucursal, sku=9001006, stock=13)
+        _mov(pt, FECHA_LEGACY_1, 12, referencia='MIG:30')
+        _mov(pt, FECHA_LEGACY_2, -2, concepto='VENTA_PUBLICO', referencia='MIG:31')
+        _mov(pt, FECHA_APERTURA, 8, referencia=REF_SALDO_INICIAL_SINTETICO)
+
+        data = self._get_kardex(pt)
+        # Excluir -> 10; re-anclar -> 8; stock 13: ninguna cuadra -> default
+        # (excluir), y el saldo no salta en la fila de apertura.
+        self.assertEqual([i['saldo'] for i in data['items']], [12, 10, 10])
 
     def test_movimiento_cancelado_no_suma(self):
         """Un movimiento no COMPLETADO se lista pero no mueve el saldo."""
@@ -151,8 +186,8 @@ class KardexPorTallaAperturaTest(KardexAperturaSinteticaBase):
 class KardexAgrupadoAperturaTest(KardexAperturaSinteticaBase):
 
     def test_agrupado_mezcla_tallas_cuadra_con_stock_total(self):
-        """Producto con una talla legacy+apertura (se excluye) y otra
-        solo-apertura (se ancla): el saldo final debe igualar stock_total."""
+        """Producto con una talla legacy+apertura duplicada (delta 0) y otra
+        solo-apertura (se re-ancla): el saldo final debe igualar stock_total."""
         producto, pt_a = crear_producto_con_talla(
             self.sucursal, articulo='Mix Test', sku=9002001, stock=10, talla='40',
         )
@@ -171,8 +206,8 @@ class KardexAgrupadoAperturaTest(KardexAperturaSinteticaBase):
         items = data['items']
         self.assertEqual(items[-1]['saldo'], data['producto']['stock_total'])
         # El grupo de la apertura queda marcado y su entrada muestra el
-        # movimiento completo (10 excluidos + 3 anclados = 13), pero al saldo
-        # solo aportan los 3 de la talla anclada.
+        # movimiento completo (10 con delta 0 + 3 re-anclados = 13), pero al
+        # saldo solo aportan los 3 de la talla re-anclada.
         grupos_apertura = [i for i in items if i['es_apertura']]
         self.assertEqual(len(grupos_apertura), 1)
         self.assertEqual(grupos_apertura[0]['entrada'], 13)

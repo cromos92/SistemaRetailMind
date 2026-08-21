@@ -24,10 +24,11 @@ dp.activo son el tope anti-doble-NC):
 - `monto_con_iva` = Σ monto_item
 - `monto_neto`    = (total / 1.19) redondeado HALF-UP vía Decimal.quantize
   (REGLA DURA del proyecto: nunca int() ni round() de float sobre montos DTE)
-- `unidades_productos` = Σ stock actual de líneas + Σ unidades acreditadas por
-  sus NC por-línea (Dte_Productos de las NC hijas con redujo_lineas_documento).
-  Si no es reconstruible (o no valida contra monto_item/precio), las unidades
-  se dejan SIN tocar y se reporta.
+- `unidades_productos` = cantidades originales del documento: derivadas de
+  Σ(monto_item / precio) cuando todas las líneas lo permiten (misma fuente
+  intacta que los montos), con validación/fallback vía Σ stock actual de líneas
+  + Σ unidades acreditadas por sus NC por-línea (Dte_Productos de las NC
+  hijas). Si ninguna fuente sirve, las unidades se dejan SIN tocar y se reporta.
 
 SEGURIDAD:
 - DRY-RUN POR DEFECTO: sin --aplicar no escribe nada en la BD (solo puede dejar
@@ -69,7 +70,7 @@ CSV_CAMPOS = [
     'dte_id', 'folio', 'tipo', 'sucursal_id', 'fecha_emision',
     'old_neto', 'old_con_iva', 'old_unidades',
     'new_neto', 'new_con_iva', 'new_unidades', 'unidades_tocadas',
-    'fuente', 'cross_check', 'ncs_vinculadas', 'deficit',
+    'fuente', 'cross_check', 'ncs_vinculadas', 'deficit', 'nota_unidades',
 ]
 
 
@@ -320,11 +321,20 @@ class Command(BaseCommand):
 
     def _reconstruir_unidades(self, lns, ncs_doc, nc_unidades):
         """
-        Unidades originales = Σ stock actual de líneas + Σ unidades acreditadas
-        por las NC por-línea (dp.stock de las NC hijas). Se valida, cuando las
-        líneas lo permiten (precio > 0, sin descuento, monto_item múltiplo
-        exacto), contra Σ(monto_item / precio). Si no es reconstruible o no
-        valida → (None, False, motivo): las unidades se dejan sin tocar.
+        Unidades originales del documento tal como se emitió al SII.
+
+        Fuente primaria: Σ(monto_item / precio) por línea — la MISMA fuente de
+        verdad intacta que se usa para los montos (monto_item = PrcItem×QtyItem
+        − DescuentoMonto), utilizable solo cuando TODAS las líneas son limpias
+        (precio > 0, sin descuento, división exacta). En prod la reconstrucción
+        vía NC hijas falla en ~75% de los casos porque las NC no siempre llevan
+        las unidades en sus líneas (ej. línea única "Devolución parcial").
+
+        Fallback: Σ stock actual de líneas + Σ unidades acreditadas por las NC
+        por-línea (dp.stock de las NC hijas con redujo_lineas_documento). Se usa
+        como validación cruzada cuando la derivación por precio existe.
+
+        Si ninguna fuente sirve → (None, False, motivo): unidades SIN tocar.
         """
         stock_actual = sum(int(l['stock'] or 0) for l in lns)
         acreditadas = sum(nc_unidades.get(n['id'], 0) for n in ncs_doc
@@ -333,9 +343,9 @@ class Command(BaseCommand):
                                if n['redujo_lineas_documento'])
         rec_nc = stock_actual + acreditadas
 
-        # Derivación independiente desde monto_item/precio (solo si TODAS las
-        # líneas son "limpias": precio>0, sin descuento, división exacta)
-        q_total, computable = 0, True
+        # Derivación desde monto_item/precio (solo si TODAS las líneas son
+        # "limpias": precio>0, sin descuento, división exacta)
+        q_total, computable = 0, bool(lns)
         for l in lns:
             precio = int(l['precio'] or 0)
             mi = int(l['monto_item'] or 0)
@@ -346,14 +356,13 @@ class Command(BaseCommand):
 
         if computable:
             if rec_nc == q_total:
-                return rec_nc, True, ''
-            rec_incl = stock_actual + acreditadas_incl
-            if rec_incl == q_total:
-                return rec_incl, True, 'incluye NC descartadas'
-            return None, False, (f'NC({rec_nc}) != monto_item/precio({q_total})')
+                return q_total, True, ''
+            if stock_actual + acreditadas_incl == q_total:
+                return q_total, True, 'valida solo incluyendo NC descartadas'
+            return q_total, True, f'derivado de monto_item/precio (stock+NC daba {rec_nc})'
         if rec_nc > 0:
-            return rec_nc, True, 'sin validación por precio'
-        return None, False, 'no reconstruible (rec_nc<=0 y líneas no derivables)'
+            return rec_nc, True, 'desde stock+NC, sin validación por precio'
+        return None, False, 'no reconstruible (sin derivación por precio y stock+NC<=0)'
 
     # ------------------------------------------------------------------ #
     # Salida
@@ -361,7 +370,7 @@ class Command(BaseCommand):
 
     def _imprimir_resumen(self, candidatos, manuales):
         por_mes = collections.defaultdict(lambda: dict(n=0, cab0=0, deficit=0))
-        uds_sin_tocar = []
+        uds_sin_tocar, uds_con_nota = [], []
         for c in candidatos:
             m = c['fecha_emision'].strftime('%Y-%m')
             d = por_mes[m]
@@ -371,6 +380,8 @@ class Command(BaseCommand):
             d['deficit'] += c['deficit']
             if not c['unidades_tocadas']:
                 uds_sin_tocar.append(c)
+            elif c['nota_unidades']:
+                uds_con_nota.append(c)
 
         self.stdout.write('\n=== CANDIDATOS por mes (n | cabecera==0 | déficit a restaurar) ===')
         for m in sorted(por_mes):
@@ -383,6 +394,15 @@ class Command(BaseCommand):
             f"  TOTAL: {len(candidatos)} candidatos "
             f"({', '.join(f'{v} {k}' for k, v in sorted(por_tipo.items()))}) "
             f"| déficit ${total_def:,}")
+
+        if uds_con_nota:
+            self.stdout.write(
+                f'\n  {len(uds_con_nota)} candidatos con unidades reconstruidas '
+                f'con nota (detalle en el CSV, columna nota_unidades); ej:')
+            for c in uds_con_nota[:8]:
+                self.stdout.write(
+                    f"    dte={c['dte_id']} folio={c['folio']} "
+                    f"uds {c['old_unidades']}→{c['new_unidades']} ({c['nota_unidades']})")
 
         if uds_sin_tocar:
             self.stdout.write(self.style.WARNING(
@@ -419,6 +439,7 @@ class Command(BaseCommand):
                     'unidades_tocadas': 1 if c['unidades_tocadas'] else 0,
                     'fuente': c['fuente'], 'cross_check': c['cross_check'],
                     'ncs_vinculadas': c['ncs_vinculadas'], 'deficit': c['deficit'],
+                    'nota_unidades': c['nota_unidades'],
                 })
 
     # ------------------------------------------------------------------ #

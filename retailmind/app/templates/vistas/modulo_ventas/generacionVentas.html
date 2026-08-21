@@ -934,10 +934,16 @@
                                                     <span class="label-principal">Cred. Ext.</span>
                                                 </button>
                                             </div>
-                                            <div class="col-12">
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-success w-100 pos-pago-btn pos-pago-btn-sm" style="border-style: dashed;" onclick="agregarPago('GIFTCARD')" id="btnPagoGiftcard" title="Pago con gift card (código GC-XXXX o tarjeta física)">
+                                                    <i class="ri-gift-line"></i>
+                                                    <span class="label-principal">Gift Card</span>
+                                                </button>
+                                            </div>
+                                            <div class="col-6">
                                                 <button class="btn w-100 pos-pago-btn-orden" onclick="agregarPago('ORDEN_COMPRA')" title="Orden de compra empresa">
                                                     <i class="ri-file-list-3-line me-1"></i>
-                                                    <span class="fw-bold">ORDEN DE COMPRA</span>
+                                                    <span class="fw-bold">ORDEN COMPRA</span>
                                                 </button>
                                             </div>
                                         </div>
@@ -1186,6 +1192,13 @@
                     <div class="mb-3" id="campoVoucher" style="display: none;">
                         <label class="form-label">N° Voucher/Autorización</label>
                         <input type="text" class="form-control" id="pagoVoucher" placeholder="Opcional">
+                    </div>
+                    <!-- Consulta de saldo de gift card (solo método GIFTCARD) -->
+                    <div class="mb-3" id="campoGiftcardSaldo" style="display: none;">
+                        <button type="button" class="btn btn-outline-success btn-sm" onclick="consultarSaldoGiftcardPos()">
+                            <i class="ri-search-line"></i> Consultar saldo
+                        </button>
+                        <div id="giftcardSaldoInfo" class="small mt-2 text-muted"></div>
                     </div>
                     <div class="mb-3" id="campoOrdenCompra" style="display: none;">
                         <label class="form-label fw-bold text-purple">N° Orden de Compra *</label>
@@ -4137,6 +4150,7 @@ document.addEventListener('DOMContentLoaded', function() {
         crearTicket: '{% url "crear_ticket" %}',
         crearTicketPendiente: '{% url "crear_ticket_pendiente_pos" %}',
         registrarPagos: (correlativo) => `{% url 'registrar_pagos_ticket' correlativo=0 %}`.replace('/0/', `/${correlativo}/`),
+        validarGiftcard: '{% url "api_validar_giftcard" %}',
         validarRut: '{% url "validar_rut_cliente" %}',
         buscarCliente: '{% url "buscar_cliente_rut" %}',
         verificarCorrelativos: '{% url "verificar_correlativos_disponibles" %}',
@@ -7005,9 +7019,26 @@ document.addEventListener('DOMContentLoaded', function() {
         const selectTipoTarjeta = document.getElementById('pagoTipoTarjeta');
         
         const campoDenominaciones = document.getElementById('campoDenominaciones');
-        
+        const campoGiftcardSaldo = document.getElementById('campoGiftcardSaldo');
+        // La consulta de saldo solo aplica al método GIFTCARD; ocultarla
+        // siempre primero para que no quede visible al cambiar de método.
+        if (campoGiftcardSaldo) {
+            campoGiftcardSaldo.style.display = 'none';
+            document.getElementById('giftcardSaldoInfo').textContent = '';
+        }
+
         // ✅ Mostrar campos según el método
-        if (metodo === 'VENTA_INTERNET') {
+        if (metodo === 'GIFTCARD') {
+            campoTarjeta.style.display = 'none';
+            campoVoucher.style.display = 'block';
+            campoVuelto.style.display = 'none';
+            campoOrdenCompra.style.display = 'none';
+            if (campoDenominaciones) campoDenominaciones.style.display = 'none';
+            if (campoGiftcardSaldo) campoGiftcardSaldo.style.display = 'block';
+
+            labelVoucher.textContent = 'Código Gift Card';
+            document.getElementById('pagoVoucher').placeholder = 'GC-XXXX-XXXX-XXXX o código físico';
+        } else if (metodo === 'VENTA_INTERNET') {
             campoTarjeta.style.display = 'block';
             campoVoucher.style.display = 'block';
             campoVuelto.style.display = 'none';
@@ -7195,6 +7226,75 @@ document.addEventListener('DOMContentLoaded', function() {
         guardarEstadoPOS();
     }
 
+    /* Escapa texto libre antes de inyectarlo con innerHTML / html de Swal. */
+    function escHtmlPos(s) {
+        return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, c =>
+            ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    /* Bloque de gift cards canjeadas para el modal de éxito de la venta.
+       Se arma desde `window._gcCobradasUltimaVenta` (lo llena la respuesta del
+       cobro) y se consume UNA vez: así el cajero ve el saldo restante junto al
+       folio, sin que un toast cierre el modal. */
+    function bloqueGiftcardsHtml() {
+        const gcs = window._gcCobradasUltimaVenta || [];
+        window._gcCobradasUltimaVenta = [];
+        if (!gcs.length) return '';
+        return `
+            <hr>
+            <div class="alert alert-success mb-0">
+                <i class="ri-gift-line"></i> <strong>Gift card${gcs.length > 1 ? 's' : ''} canjeada${gcs.length > 1 ? 's' : ''}</strong>
+                ${gcs.map(g => `
+                    <br><small>${escHtmlPos(g.codigo)}: usado <strong>${formatearMoneda(g.monto)}</strong>
+                    — saldo restante <strong>${formatearMoneda(g.saldo_restante)}</strong></small>`).join('')}
+            </div>`;
+    }
+
+    function consultarSaldoGiftcardPos() {
+        const codigo = document.getElementById('pagoVoucher').value.trim().toUpperCase();
+        const info = document.getElementById('giftcardSaldoInfo');
+        if (!codigo) {
+            info.className = 'small mt-2 text-warning';
+            info.textContent = 'Ingresa primero el código de la gift card.';
+            return;
+        }
+        info.className = 'small mt-2 text-muted';
+        info.textContent = 'Consultando...';
+        // monto=0: solo consulta estado/ámbito/saldo, sin comprometer nada.
+        fetch(apiUrls.validarGiftcard, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            },
+            body: JSON.stringify({ codigo: codigo, monto: 0 }),
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (!d.valida) {
+                info.className = 'small mt-2 text-danger fw-bold';
+                info.textContent = `No se puede usar: ${d.motivo || 'gift card no válida'}`
+                    + (d.saldo_actual ? ` (saldo ${formatearMoneda(d.saldo_actual)})` : '');
+                return;
+            }
+            const saldo = d.saldo_actual || 0;
+            const pendiente = calcularSaldoPendiente();
+            const sugerido = Math.min(saldo, pendiente);
+            info.className = 'small mt-2 text-success fw-bold';
+            info.textContent = `Saldo disponible: ${formatearMoneda(saldo)}`;
+            if (sugerido > 0) {
+                document.getElementById('pagoMonto').value = sugerido;
+                if (sugerido < pendiente) {
+                    info.textContent += ` — cubre ${formatearMoneda(sugerido)}; el resto se paga con otro medio`;
+                }
+            }
+        })
+        .catch(() => {
+            info.className = 'small mt-2 text-danger';
+            info.textContent = 'No se pudo consultar el saldo (sin conexión).';
+        });
+    }
+
     function confirmarPago() {
         const metodo = document.getElementById('pagoMetodo').value;
         let monto = parseInt(document.getElementById('pagoMonto').value) || 0;
@@ -7234,6 +7334,108 @@ document.addEventListener('DOMContentLoaded', function() {
                 mostrarNotificacion('Debe ingresar el número de orden de compra', 'warning');
                 return;
             }
+        }
+
+        // ✅ GIFT CARD: flujo propio ASÍNCRONO — valida contra el backend
+        // (existencia, estado, vigencia, ámbito de empresa y saldo) ANTES de
+        // agregar el pago. El código viaja en `voucher` (así lo consume el
+        // backend al cobrar). Sale por return: no sigue el flujo síncrono.
+        if (metodo === 'GIFTCARD') {
+            if (!voucher) {
+                mostrarNotificacion('Ingrese el código de la gift card', 'warning');
+                return;
+            }
+            // Anti doble-submit: el flujo síncrono de los otros métodos se
+            // autoprotege recalculando el saldo en cada click, pero aquí el
+            // modal sigue abierto mientras el fetch está en vuelo. Sin este
+            // candado, un doble click (o Enter con auto-repeat) lanzaba N
+            // validaciones con el MISMO snapshot y agregaba N pagos: la
+            // tarjeta se descontaba dos veces por una sola venta.
+            if (window._gcValidacionEnCurso) return;
+            const btnConfirmar = document.getElementById('btnConfirmarPago');
+            const soltarCandadoGc = () => {
+                window._gcValidacionEnCurso = false;
+                if (btnConfirmar) btnConfirmar.disabled = false;
+            };
+            const saldoPendienteGc = calcularSaldoPendiente();
+            if (saldoPendienteGc <= 0) {
+                mostrarNotificacion('No hay saldo pendiente por pagar', 'info');
+                return;
+            }
+            window._gcValidacionEnCurso = true;
+            if (btnConfirmar) btnConfirmar.disabled = true;
+            // No-efectivo: nunca exceder el pendiente (no hay vuelto de gift card).
+            const montoGc = Math.min(monto, saldoPendienteGc);
+            const codigoGc = voucher.toUpperCase();
+            // Una misma tarjeta puede ir en varios pagos del ticket: el saldo
+            // debe alcanzar para TODOS juntos, así que se valida acumulado.
+            const yaUsadoMismaGc = pagosActuales
+                .filter(p => p.metodo_pago === 'GIFTCARD' && (p.voucher || '').toUpperCase() === codigoGc)
+                .reduce((a, p) => a + (p.monto || 0), 0);
+            fetch(apiUrls.validarGiftcard, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                },
+                body: JSON.stringify({ codigo: codigoGc, monto: montoGc + yaUsadoMismaGc }),
+            })
+            .then(r => r.json())
+            .then(d => {
+                soltarCandadoGc();
+                if (!d.valida) {
+                    const disponible = Math.max(0, (d.saldo_actual || 0) - yaUsadoMismaGc);
+                    if (d.saldo_suficiente === false && disponible > 0 && (d.motivo || '').indexOf('Saldo') === 0) {
+                        document.getElementById('pagoMonto').value = Math.min(disponible, saldoPendienteGc);
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Saldo insuficiente',
+                            html: `La gift card <strong>${escHtmlPos(codigoGc)}</strong> tiene ` +
+                                  `<strong>${formatearMoneda(disponible)}</strong> disponibles.<br>` +
+                                  `Se ajustó el monto — el resto se paga con otro medio.`,
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Gift card no válida',
+                            text: d.motivo || 'La gift card no se puede usar.',
+                        });
+                    }
+                    return;
+                }
+                // Recalcular contra el estado ACTUAL (no el snapshot): si algo
+                // se agregó mientras el fetch viajaba, el pago se recorta al
+                // pendiente real en vez de sobrepagar la venta.
+                const pendienteAhora = calcularSaldoPendiente();
+                if (pendienteAhora <= 0) {
+                    mostrarNotificacion('La venta ya quedó cubierta; no se agregó la gift card.', 'info');
+                    return;
+                }
+                const montoFinalGc = Math.min(montoGc, pendienteAhora);
+                const saldoRestante = (d.saldo_actual || 0) - yaUsadoMismaGc - montoFinalGc;
+                pagosActuales.push({
+                    metodo_pago: 'GIFTCARD',
+                    monto: montoFinalGc,
+                    tipo_tarjeta: '',
+                    voucher: codigoGc,
+                    numero_orden_compra: '',
+                    notas: notas,
+                });
+                actualizarListaPagos();
+                actualizarResumenVenta();
+                bootstrap.Modal.getInstance(document.getElementById('modalPago')).hide();
+                document.getElementById('formPago').reset();
+                mostrarNotificacion(
+                    `Gift card agregada — saldo restante ${formatearMoneda(saldoRestante)}`,
+                    'success'
+                );
+                guardarEstadoPOS();
+            })
+            .catch(() => {
+                soltarCandadoGc();
+                mostrarNotificacion('No se pudo validar la gift card (sin conexión)', 'error');
+            });
+            return;
         }
 
         // Validar que el pago no exceda el saldo pendiente
@@ -7361,6 +7563,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     ` : ''}
                     ${pago.metodo_pago === 'ORDEN_COMPRA' && pago.numero_orden_compra ? `
                         <br><small class="text-muted"><i class="ri-file-list-3-line"></i> OC: ${pago.numero_orden_compra}</small>
+                    ` : ''}
+                    ${pago.metodo_pago === 'GIFTCARD' && pago.voucher ? `
+                        <br><small class="text-muted"><i class="ri-gift-line"></i> ${escHtmlPos(pago.voucher)}</small>
                     ` : ''}
                     <br>
                     <small class="text-muted fw-bold">${formatearMoneda(pago.monto)}</small>
@@ -9018,6 +9223,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log('Actualizando ticketActual con datos del servidor:', data.ticket);
                     ticketActual = data.ticket;
                 }
+
+                // Gift cards canjeadas en este cobro: el saldo restante se
+                // INYECTA en el modal de éxito (ver bloqueGiftcardsHtml).
+                // Nada de toasts: SweetAlert2 es singleton y un toast cerraría
+                // el modal '¡Venta Completada!' resolviendo su promise antes
+                // de que el cajero alcance a leer el folio.
+                window._gcCobradasUltimaVenta = data.giftcards || [];
+
+                // Comprobante firmado por cada gift card usada (RUT + firma):
+                // la tarjeta es al portador, así que este voucher es el único
+                // respaldo de QUIÉN canjeó el saldo. Va antes del modal de
+                // éxito para que el papel ya esté saliendo cuando el cajero
+                // se lo pasa al cliente a firmar.
+                (data.giftcards || []).forEach(g => {
+                    imprimirComprobanteGiftCard(g).catch(err =>
+                        console.error('[GC] No se pudo imprimir el comprobante:', err));
+                });
                 
                 // Si hay crédito (trabajador o externo) en los pagos, descontar del crédito
                 const pagoCreditoTrabajador = pagosActuales.find(p => 
@@ -9104,6 +9326,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                         <small>Saldo total: <strong>${(f.saldo_total||0).toLocaleString('es-CL')} pts</strong>${f.saldo_pesos ? ' (' + formatearMoneda(f.saldo_pesos) + ')' : ''}</small>
                                     </div>`;
                             }
+
+                            htmlMensaje += bloqueGiftcardsHtml();
 
                             Swal.fire({
                                 icon: 'success',
@@ -9201,6 +9425,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>`;
                     }
 
+                    htmlMensaje += bloqueGiftcardsHtml();
+
                     if (typeof Swal !== 'undefined') {
                         if (htmlMensaje && htmlMensaje.trim()) {
                             // Hay info de DTE — mostrarla y luego preguntar ticket de cambio
@@ -9295,6 +9521,101 @@ document.addEventListener('DOMContentLoaded', function() {
             telefono_secundario: document.getElementById('clienteTelefono2').value.trim(),
             email_facturacion: document.getElementById('clienteEmailFactura').value.trim(),
         };
+    }
+
+    /* ── Comprobante de USO DE GIFT CARD (térmica 80mm) ───────────────────
+       La gift card es al portador: basta el código para canjearla. Este
+       voucher con RUT + firma es el respaldo del local de QUIÉN usó el saldo.
+       Se imprime uno por cada tarjeta canjeada, justo después del cobro.
+       QZ Tray primero (silencioso); si está apagado, diálogo del navegador. */
+    async function imprimirComprobanteGiftCard(gcData) {
+        const t = ticketActual || {};
+        const datos = {
+            modulo_origen: 'GIFTCARD_USO',
+            sucursal: t.sucursal || {},
+            fecha: new Date().toLocaleDateString('es-CL'),
+            hora: new Date().toLocaleTimeString('es-CL', {hour: '2-digit', minute: '2-digit'}),
+            ticket: t.correlativo || t.ticket_id || '',
+            dte_folio: t.folio_dte || '',
+            dte_tipo: t.tipo_dte || '',
+            cajero: (window.USUARIO_ACTUAL || ''),
+            vendedor: (t.vendedor && (t.vendedor.nombre || t.vendedor)) || '',
+            // Si la venta identificó al cliente, sus datos van impresos; si no,
+            // el voucher sale con líneas en blanco para completarlas a mano.
+            cliente: {
+                nombre: (t.cliente_nombre || ''),
+                rut: (t.cliente_rut || ''),
+            },
+            giftcard: {
+                codigo: gcData.codigo,
+                monto_usado: gcData.monto,
+                saldo_restante: gcData.saldo_restante,
+                saldo_anterior: (gcData.saldo_anterior !== undefined
+                    ? gcData.saldo_anterior
+                    : (gcData.saldo_restante || 0) + (gcData.monto || 0)),
+                vencimiento: gcData.vencimiento || '',
+            },
+        };
+
+        if (typeof QZ_CONFIG !== 'undefined' && QZ_CONFIG.habilitado) {
+            const exito = await imprimirConQZ(datos);
+            if (exito) return true;
+        }
+        // Fallback: ventana del navegador con el mismo contenido en 80mm.
+        const v = window.open('', '_blank', 'width=320,height=640');
+        if (!v) {
+            mostrarNotificacion(
+                'No se pudo imprimir el comprobante de gift card (popup bloqueado)', 'warning');
+            return false;
+        }
+        v.document.write(generarHtmlComprobanteGiftCard(datos));
+        v.document.close();
+        v.onload = function () { v.print(); };
+        return true;
+    }
+
+    function generarHtmlComprobanteGiftCard(d) {
+        const gc = d.giftcard, suc = d.sucursal || {}, cli = d.cliente || {};
+        const linea = '________________________________';
+        return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Uso de Gift Card</title>
+<style>
+  @page { size: 80mm auto; margin: 3mm; }
+  body { font-family: 'Courier New', monospace; font-size: 11px; width: 74mm; margin: 0; }
+  .c { text-align: center; } .b { font-weight: bold; }
+  .big { font-size: 16px; font-weight: bold; }
+  .sep { border-top: 1px dashed #000; margin: 5px 0; }
+  .row { display: flex; justify-content: space-between; }
+  .firma { margin-top: 10px; line-height: 2.2; }
+</style></head><body>
+  <div class="c b">${escHtmlPos(String(suc.empresa || '').toUpperCase())}</div>
+  <div class="c">${escHtmlPos(suc.alias || '')}</div>
+  ${suc.rut_empresa ? `<div class="c">RUT: ${escHtmlPos(suc.rut_empresa)}</div>` : ''}
+  <div class="sep"></div>
+  <div class="c big">USO DE GIFT CARD</div>
+  <div class="c b" style="font-size:13px;letter-spacing:1px;">${escHtmlPos(gc.codigo)}</div>
+  <div class="sep"></div>
+  <div class="row"><span>Fecha:</span><span>${escHtmlPos(d.fecha)} ${escHtmlPos(d.hora)}</span></div>
+  ${d.ticket ? `<div class="row"><span>Ticket:</span><span>#${escHtmlPos(d.ticket)}</span></div>` : ''}
+  ${d.dte_folio ? `<div class="row"><span>Documento:</span><span>${escHtmlPos(d.dte_tipo)} #${escHtmlPos(d.dte_folio)}</span></div>` : ''}
+  ${d.cajero ? `<div class="row"><span>Cajero:</span><span>${escHtmlPos(d.cajero)}</span></div>` : ''}
+  <div class="sep"></div>
+  <div class="row"><span>Saldo anterior:</span><span>${formatearMoneda(gc.saldo_anterior)}</span></div>
+  <div class="row b"><span>Monto usado:</span><span>${formatearMoneda(gc.monto_usado)}</span></div>
+  <div class="sep"></div>
+  <div class="c big">SALDO: ${formatearMoneda(gc.saldo_restante)}</div>
+  <div class="c">${gc.saldo_restante > 0
+      ? 'Queda saldo para otra compra' + (gc.vencimiento ? '<br>Vence: ' + escHtmlPos(gc.vencimiento) : '')
+      : 'GIFT CARD SIN SALDO'}</div>
+  <div class="sep"></div>
+  <div class="b">IDENTIFICACION DE QUIEN LA UTILIZA</div>
+  <div class="firma">
+    Nombre: ${cli.nombre ? escHtmlPos(cli.nombre) : linea}<br>
+    RUT:&nbsp;&nbsp;&nbsp;&nbsp; ${cli.rut ? escHtmlPos(cli.rut) : linea}<br>
+    Firma:&nbsp;&nbsp; ${linea}
+  </div>
+  <div class="sep"></div>
+  <div class="c">COMPROBANTE NO TRIBUTARIO<br>Respaldo de canje de gift card<br>Conserve este comprobante</div>
+</body></html>`;
     }
 
     async function imprimirTicket() {
@@ -10715,6 +11036,7 @@ body {
             'TARJETA_COMERCIAL': 'Tarjeta Comercial',
             'CONVENIO': 'Convenio',
             'CHEQUE': 'Cheque',
+            'GIFTCARD': 'Gift Card',
             'OTRO': 'Otro'
         };
         return nombres[metodo] || metodo;
@@ -11214,6 +11536,7 @@ body {
     window.seleccionarCotizacion = seleccionarCotizacion;
     // window.buscarClientePorRut ya está definida globalmente arriba
     window.agregarPago = agregarPago;
+    window.consultarSaldoGiftcardPos = consultarSaldoGiftcardPos;
     window.confirmarPago = confirmarPago;
     window.eliminarPago = eliminarPago;
     window.finalizarVenta = finalizarVenta;

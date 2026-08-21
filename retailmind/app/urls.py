@@ -402,6 +402,8 @@ from .views_modulo_giftcards import (
     api_bloquear_giftcard,
     api_desbloquear_giftcard,
     api_editar_giftcard,
+    api_cambiar_ambito_giftcard,
+    api_enviar_correo_giftcard,
     api_trazabilidad_giftcards,
     api_exportar_giftcards,
     api_exportar_trazabilidad,
@@ -1377,9 +1379,10 @@ urlpatterns = [
     path('api/reporte-rendimiento-proveedor/', views_modulo_reportes.api_reporte_rendimiento_proveedor, name='api_reporte_rendimiento_proveedor'),
     path('api/exportar-rendimiento-proveedor-excel/', views_modulo_reportes.exportar_rendimiento_proveedor_excel, name='exportar_rendimiento_proveedor_excel'),
 
-    # Reportes mejorados: recepciones y despachos con datos reales
-    path('api/reporte-recepciones-detallado/', views_modulo_reportes.api_reporte_recepciones_detallado, name='api_reporte_recepciones_detallado'),
-    path('api/reporte-despachos-detallado/', views_modulo_reportes.api_reporte_despachos_detallado, name='api_reporte_despachos_detallado'),
+    # Los reportes "mejorados" recepciones/despachos-detallado se ELIMINARON en
+    # la Fase C de la auditoría ago-2026: huérfanos confirmados (0 consumidores
+    # en templates/JS), y despachos-detallado además sumaba NC y descartados
+    # con un N+1 de ~125 queries. Ver docs/AUDITORIA_REPORTES_2026-08.md §4.
 
     # Inteligencia de Compra (análisis + pronóstico por marca)
     path('reportes/inteligencia-compra/', views_inteligencia_compra.ver_inteligencia_compra, name='ver_inteligencia_compra'),
@@ -1499,6 +1502,8 @@ urlpatterns = [
     path('api/giftcards/bloquear/', api_bloquear_giftcard, name='api_bloquear_giftcard'),
     path('api/giftcards/desbloquear/', api_desbloquear_giftcard, name='api_desbloquear_giftcard'),
     path('api/giftcards/editar/', api_editar_giftcard, name='api_editar_giftcard'),
+    path('api/giftcards/ambito/', api_cambiar_ambito_giftcard, name='api_cambiar_ambito_giftcard'),
+    path('api/giftcards/enviar-correo/', api_enviar_correo_giftcard, name='api_enviar_correo_giftcard'),
     path('api/giftcards/reporte/', api_reporte_giftcards, name='api_reporte_giftcards'),
     path('api/giftcards/trazabilidad/', api_trazabilidad_giftcards, name='api_trazabilidad_giftcards'),
     path('api/giftcards/trazabilidad/exportar/', api_exportar_trazabilidad, name='api_exportar_trazabilidad'),

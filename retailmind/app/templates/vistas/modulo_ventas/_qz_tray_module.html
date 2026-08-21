@@ -612,6 +612,98 @@ function _generarEscPosDevolucionGarantia(td) {
     return c;
 }
 
+/* ── Comprobante de USO DE GIFT CARD ─────────────────────────────
+   Se imprime al cobrar con gift card: deja constancia FIRMADA de quién
+   canjeó el saldo. La tarjeta es al portador (basta el código), así que
+   este voucher con RUT + firma es el único respaldo del local frente a
+   un "yo no la usé". Una copia por cada gift card usada en la venta. */
+function _generarEscPosGiftCard(td) {
+    const suc = td.sucursal || {};
+    const gc  = td.giftcard || {};
+    const cli = td.cliente  || {};
+
+    const empNombre = String(suc.empresa     || 'MI EMPRESA');
+    const empRut    = String(suc.rut_empresa || '');
+    const fechaStr  = td.fecha
+        ? (td.fecha + (td.hora ? ' ' + td.hora : ''))
+        : new Date().toLocaleString('es-CL');
+
+    const c = [];
+    c.push(_EP.INIT, _EP.CP1252);
+
+    // Cabecera empresa
+    c.push(_EP.CENTER, _EP.BOLD_ON);
+    c.push(empNombre.toUpperCase().substring(0, _COLS) + _N);
+    c.push(_EP.BOLD_OFF);
+    if (suc.alias)     c.push(String(suc.alias).toUpperCase().substring(0, _COLS) + _N);
+    if (suc.direccion) c.push(String(suc.direccion).substring(0, _COLS) + _N);
+    if (empRut)        c.push('RUT: ' + empRut + _N);
+    c.push(_sep('='));
+
+    // Banner
+    c.push(_EP.CENTER, _EP.DBL_ON, _EP.BOLD_ON);
+    c.push('USO DE' + _N);
+    c.push('GIFT CARD' + _N);
+    c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
+    c.push(_sep('-'));
+
+    // Código de la tarjeta (escaneable para reimprimir/auditar)
+    const codigo = String(gc.codigo || '');
+    if (codigo) {
+        c.push(..._escBarcode128(codigo));
+        c.push(_EP.CENTER, _EP.BOLD_ON);
+        c.push(codigo.substring(0, _COLS) + _N);
+        c.push(_EP.BOLD_OFF);
+    }
+    c.push(_sep('='));
+
+    // Datos de la operación
+    c.push(_EP.LEFT);
+    c.push(_row('Fecha:', fechaStr));
+    if (td.ticket)     c.push(_row('Ticket:', '#' + td.ticket));
+    if (td.dte_folio)  c.push(_row('Documento:', String(td.dte_tipo || 'DOC') + ' #' + td.dte_folio));
+    if (td.cajero)     c.push(_row('Cajero:', String(td.cajero)));
+    if (td.vendedor)   c.push(_row('Vendedor:', String(td.vendedor)));
+    c.push(_sep('-'));
+
+    // Montos: lo usado y lo que le queda al cliente
+    c.push(_row('Saldo anterior:', _clp(gc.saldo_anterior || 0)));
+    c.push(_EP.BOLD_ON);
+    c.push(_row('Monto usado:',    _clp(gc.monto_usado || 0)));
+    c.push(_EP.BOLD_OFF);
+    c.push(_sep('-'));
+    c.push(_EP.CENTER, _EP.DBL_ON, _EP.BOLD_ON);
+    c.push('SALDO: ' + _clp(gc.saldo_restante || 0) + _N);
+    c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
+    c.push(_EP.CENTER);
+    if ((gc.saldo_restante || 0) > 0) {
+        c.push('Queda saldo para otra compra' + _N);
+        if (gc.vencimiento) c.push('Vence: ' + gc.vencimiento + _N);
+    } else {
+        c.push('GIFT CARD SIN SALDO' + _N);
+    }
+    c.push(_sep('='));
+
+    // Identificación de quien la usó: se rellena a mano si no vino en la venta.
+    c.push(_EP.LEFT, _EP.BOLD_ON);
+    c.push('IDENTIFICACION DE QUIEN LA UTILIZA' + _N);
+    c.push(_EP.BOLD_OFF);
+    const nombreCli = String(cli.nombre || '').trim();
+    const rutCli    = String(cli.rut    || '').trim();
+    c.push('  Nombre: ' + (nombreCli ? nombreCli.substring(0, 36) : '_'.repeat(36)) + _N, _N);
+    c.push('  RUT:    ' + (rutCli ? rutCli.substring(0, 36) : '_'.repeat(36)) + _N, _N);
+    c.push('  Firma:  ' + '_'.repeat(36) + _N, _N);
+    c.push(_sep('-'));
+
+    c.push(_EP.CENTER);
+    c.push('COMPROBANTE NO TRIBUTARIO' + _N);
+    c.push('Respaldo de canje de gift card' + _N);
+    c.push('Conserve este comprobante' + _N);
+    c.push(_EP.FEED3, _EP.CUT);
+
+    return c;
+}
+
 /* ── Generar comandos ESC/POS a partir de ticketData ────────── */
 function _generarEscPos(td) {
     if (td.modulo_origen === 'CAMBIO_DEVOLUCION') {
@@ -619,6 +711,9 @@ function _generarEscPos(td) {
     }
     if (td.modulo_origen === 'DEVOLUCION_GARANTIA') {
         return _generarEscPosDevolucionGarantia(td);
+    }
+    if (td.modulo_origen === 'GIFTCARD_USO') {
+        return _generarEscPosGiftCard(td);
     }
     if (td.modulo_origen === 'ECOMMERCE') {
         return _generarEscPosEcommerce(td);

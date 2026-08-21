@@ -1280,6 +1280,7 @@
                                         <tr class="row-detalle" data-categoria="efectivo" data-metodos="CONVENIO" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">CONVENIO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="convenio">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="efectivo" data-metodos="CREDITO_TRABAJADOR" title="Ver detalle"><td style="font-size:.75rem;color:var(--nexo-primary);">CRÉD. TRABAJADOR</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;color:var(--nexo-primary);"><span id="credito_trabajador">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="efectivo" data-metodos="CREDITO_EXTERNO" title="Ver detalle"><td style="font-size:.75rem;color:var(--nexo-warning);">CRÉD. EXTERNO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;color:var(--nexo-warning);"><span id="credito_externo">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="efectivo" data-metodos="GIFTCARD" title="Ver detalle — no es efectivo: el pasivo nació al emitir la tarjeta"><td style="font-size:.75rem;color:var(--nexo-accent, #00D4AA);">GIFT CARD</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;color:var(--nexo-accent, #00D4AA);"><span id="giftcard">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="efectivo" data-metodos="CHEQUE" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">CHEQUE</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="cheque">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="efectivo" data-metodos="ORDEN_COMPRA" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">ORDEN COMPRA</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="orden_compra">$0</span></td></tr>
                                     </tbody>
@@ -3513,7 +3514,7 @@ function abrirResumenCaja() {
 }
 
 function limpiarCamposCuadratura() {
-    ['visa','debito','presto','hites','efectivo','transferencia','nota_credito','nc_efectivo','nc_transferencia','nc_credito','convenio','credito_trabajador','credito_externo',
+    ['visa','debito','presto','hites','efectivo','transferencia','nota_credito','nc_efectivo','nc_transferencia','nc_credito','convenio','credito_trabajador','credito_externo','giftcard',
      'falabella','paris','ripley','mercadopago','klap','totalboletaelectronica','totalboletapapel','totalfactura','totalfacturaexenta','totalnotascredito','totalncefectivo','totalnctransferencia',
      'ventatotal','totalefectivo','totaltbk','totalcomercial','totalinternet',
      'sum_tarjetas','sum_efectivo','sum_internet'].forEach(c => $(`#${c}`).text('$0'));
@@ -3563,6 +3564,7 @@ function cargarDatosCuadratura(c) {
     $('#nc_credito').text(fmCLP(c.total_nc_credito||0));
     $('#convenio').text(fmCLP(c.total_convenio||0));
     $('#credito_trabajador').text(fmCLP(c.total_credito_trabajador||0)); $('#credito_externo').text(fmCLP(c.total_credito_externo||0));
+    $('#giftcard').text(fmCLP(c.total_giftcard||0));
     $('#cheque').text(fmCLP(c.total_cheque||0)); $('#orden_compra').text(fmCLP(c.total_orden_compra||0));
     $('#falabella').text(fmCLP(c.total_falabella||0)); $('#paris').text(fmCLP(c.total_paris||0));
     $('#ripley').text(fmCLP(c.total_ripley||0)); $('#mercadopago').text(fmCLP(c.total_mercadopago||0));
@@ -3599,7 +3601,7 @@ function cargarDatosCuadratura(c) {
     // TOTAL salía "935.030.155.460" = "935030"+"155460"). _n() garantiza la suma.
     const _n = v => Number(v) || 0;
     const sumTarjetas = _n(c.total_visa_mc_amex) + _n(c.total_tarjeta_debito) + _n(c.total_presto) + _n(c.total_hites);
-    const sumEfectivo = _n(c.total_efectivo) + _n(c.total_transferencia) + _n(c.total_convenio) + _n(c.total_credito_trabajador) + _n(c.total_credito_externo) + _n(c.total_cheque) + _n(c.total_orden_compra);
+    const sumEfectivo = _n(c.total_efectivo) + _n(c.total_transferencia) + _n(c.total_convenio) + _n(c.total_credito_trabajador) + _n(c.total_credito_externo) + _n(c.total_giftcard) + _n(c.total_cheque) + _n(c.total_orden_compra);
     const sumInternet = _n(c.total_falabella) + _n(c.total_paris) + _n(c.total_ripley) + _n(c.total_mercadopago) + _n(c.total_klap);
     const sumTotal    = sumTarjetas + sumEfectivo + sumInternet;
 

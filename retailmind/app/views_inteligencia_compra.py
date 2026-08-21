@@ -209,7 +209,6 @@ def obtener_inteligencia_compra(request):
         # (marca/analítica/sucursal/período). Con demanda bruta SKECHERS 90d
         # sumaba 1.410 ventas con 169 reingresos (+12%): velocidad, TTM,
         # pronóstico y compra sugerida inflados (auditoría 2026-08, P1-6a).
-        reingresos = movs.filter(concepto__in=CONCEPTOS_REINGRESO)
         # Sell-through: la apertura sintética de la migración Laravel entró
         # como INGRESO_INICIAL pero NO es abastecimiento (es la foto inicial);
         # contarla duplica "ingresado" y hunde el STR (26,8% vs 60,2% real
@@ -223,20 +222,38 @@ def obtener_inteligencia_compra(request):
             'ProductoTalla__producto__sucursal_id__in': tienda_scope,
         }
         ventas_tienda = ventas.filter(**en_tienda)
-        reingresos_tienda = reingresos.filter(**en_tienda)
-        ventas_bodega = ventas.filter(
-            ProductoTalla__producto__sucursal__es_centro_distribucion=True)
-        reingresos_bodega = reingresos.filter(
-            ProductoTalla__producto__sucursal__es_centro_distribucion=True)
 
-        # -------- 1. venta pública por año (NETA de reingresos) --------
-        def _agg_anio(qs):
-            return {r['a']: r for r in qs.annotate(a=ExtractYear('fecha')).values('a')
-                    .annotate(u=Sum(Abs('cantidad'), output_field=BI),
-                              monto=Sum(Abs(F('cantidad')) * F('precio'), output_field=BI))
-                    .order_by('a')}
-        va_bruta = _agg_anio(ventas_tienda)
-        ra = _agg_anio(reingresos_tienda)
+        # Fase C (perf): ventas y reingresos se agregan JUNTOS en una pasada
+        # por (grupo, año, mes, tienda) y las series (anual / por tienda /
+        # mensual) se derivan sumando parciales enteros — mismo resultado
+        # campo a campo que las 8 agregaciones separadas de antes, con 2
+        # scans del kardex en vez de 8 (auditoría 2026-08, sección 10).
+        GRUPO = Case(When(concepto__in=CONCEPTOS_VENTA, then=Value('v')),
+                     default=Value('r'), output_field=CharField())
+        vr = movs.filter(concepto__in=CONCEPTOS_VENTA + CONCEPTOS_REINGRESO)
+        vr_tienda = vr.filter(**en_tienda)
+
+        # -------- 1+2+4. una pasada tiendas: año/mes/tienda (NETA) --------
+        ALIAS_K = 'ProductoTalla__producto__sucursal__alias'
+        va_bruta, ra = {}, {}   # año  -> {'u','monto'} (ventas / reingresos)
+        vt_bruta, rt = {}, {}   # alias-> {'u','monto'}
+        serie = {}              # (año, mes) -> unidades netas
+        for r in (vr_tienda
+                  .annotate(g=GRUPO, a=ExtractYear('fecha'), m=ExtractMonth('fecha'))
+                  .values('g', 'a', 'm', ALIAS_K)
+                  .annotate(u=Sum(Abs('cantidad'), output_field=BI),
+                            monto=Sum(Abs(F('cantidad')) * F('precio'), output_field=BI))):
+            u, monto = r['u'] or 0, r['monto'] or 0
+            es_venta = r['g'] == 'v'
+            acc = (va_bruta if es_venta else ra).setdefault(r['a'], {'u': 0, 'monto': 0})
+            acc['u'] += u
+            acc['monto'] += monto
+            acc = (vt_bruta if es_venta else rt).setdefault(r[ALIAS_K], {'u': 0, 'monto': 0})
+            acc['u'] += u
+            acc['monto'] += monto
+            k = (r['a'], r['m'])
+            serie[k] = serie.get(k, 0) + (u if es_venta else -u)
+
         va = {}
         for a in sorted(set(va_bruta) | set(ra)):
             va[a] = {
@@ -248,26 +265,22 @@ def obtener_inteligencia_compra(request):
         aa = {r['a']: (r['u'] or 0) for r in abast.annotate(a=ExtractYear('fecha')).values('a')
               .annotate(u=Sum(Abs('cantidad'), output_field=BI)).order_by('a')}
 
-        # -------- 2. venta por tienda + distribución bodegas (netas) --------
-        def _agg_alias(qs):
-            return {r['ProductoTalla__producto__sucursal__alias']: r for r in
-                    qs.values('ProductoTalla__producto__sucursal__alias')
-                    .annotate(u=Sum(Abs('cantidad'), output_field=BI),
-                              monto=Sum(Abs(F('cantidad')) * F('precio'), output_field=BI))}
-        vt_bruta = _agg_alias(ventas_tienda)
-        rt = _agg_alias(reingresos_tienda)
         ventas_por_tienda = sorted(
             [{'alias': al,
               'unidades': ((vt_bruta.get(al) or {}).get('u') or 0) - ((rt.get(al) or {}).get('u') or 0),
               'monto': ((vt_bruta.get(al) or {}).get('monto') or 0) - ((rt.get(al) or {}).get('monto') or 0)}
              for al in set(vt_bruta) | set(rt)],
             key=lambda x: -x['unidades'])
-        vb_bruta = _agg_alias(ventas_bodega)
-        rb = _agg_alias(reingresos_bodega)
+
+        # bodegas: una pasada (solo unidades — es lo único que se publica)
+        vb, rb = {}, {}
+        for r in (vr.filter(ProductoTalla__producto__sucursal__es_centro_distribucion=True)
+                  .annotate(g=GRUPO).values('g', ALIAS_K)
+                  .annotate(u=Sum(Abs('cantidad'), output_field=BI))):
+            (vb if r['g'] == 'v' else rb)[r[ALIAS_K]] = r['u'] or 0
         distribucion_bodega = sorted(
-            [{'alias': al,
-              'unidades': ((vb_bruta.get(al) or {}).get('u') or 0) - ((rb.get(al) or {}).get('u') or 0)}
-             for al in set(vb_bruta) | set(rb)],
+            [{'alias': al, 'unidades': vb.get(al, 0) - rb.get(al, 0)}
+             for al in set(vb) | set(rb)],
             key=lambda x: -x['unidades'])
 
         # -------- 3. stock actual --------
@@ -285,13 +298,7 @@ def obtener_inteligencia_compra(request):
                                   ).aggregate(s=Sum('stock', output_field=BI))['s'] or 0
 
         # -------- 4. serie mensual venta pública NETA (gráfico + pronóstico) --------
-        serie = {}
-        for r in (ventas_tienda.annotate(a=ExtractYear('fecha'), m=ExtractMonth('fecha'))
-                  .values('a', 'm').annotate(u=Sum(Abs('cantidad'), output_field=BI)).order_by('a', 'm')):
-            serie[(r['a'], r['m'])] = r['u'] or 0
-        for r in (reingresos_tienda.annotate(a=ExtractYear('fecha'), m=ExtractMonth('fecha'))
-                  .values('a', 'm').annotate(u=Sum(Abs('cantidad'), output_field=BI))):
-            serie[(r['a'], r['m'])] = serie.get((r['a'], r['m']), 0) - (r['u'] or 0)
+        # (`serie` ya viene de la pasada consolidada 1+2+4)
         # serie continua últimos 36 meses para el chart
         serie_chart = []
         yy, mm = hoy.year, hoy.month
@@ -311,30 +318,48 @@ def obtener_inteligencia_compra(request):
             sellthrough.append({'anio': a, 'vendido': v, 'ingresado': i,
                                 'str': round(100.0 * v / i, 1) if i else None})
 
-        # -------- 6. velocidad 90d (neta) --------
-        def vend(desde, hasta):
-            return (_u(ventas_tienda.filter(fecha__gte=desde, fecha__lt=hasta))
-                    - _u(reingresos_tienda.filter(fecha__gte=desde, fecha__lt=hasta)))
-        v90 = vend(hoy - timedelta(days=90), hoy)
-        v90_ly = vend(hoy - timedelta(days=455), hoy - timedelta(days=365))
+        # -------- 6. velocidad 90d + montos TTM (una pasada 455d) --------
+        # Las 4 ventanas (90d, LY 455→365d y los montos TTM del bloque 9) son
+        # agregados condicionales sobre el MISMO scan de 455 días: idéntico a
+        # los 8 aggregates separados de antes, con 1 query.
+        d90 = hoy - timedelta(days=90)
+        d12 = hoy - timedelta(days=365)
+        d455 = hoy - timedelta(days=455)
+        win = {r['g']: r for r in (
+            vr_tienda.filter(fecha__gte=d455).annotate(g=GRUPO).values('g')
+            .annotate(
+                u90=Sum(Abs('cantidad'),
+                        filter=Q(fecha__gte=d90, fecha__lt=hoy), output_field=BI),
+                u_ly=Sum(Abs('cantidad'),
+                         filter=Q(fecha__lt=d12), output_field=BI),
+                mp=Sum(Abs(F('cantidad')) * F('precio'),
+                       filter=Q(fecha__gte=d12), output_field=BI),
+                mc=Sum(Abs(F('cantidad')) * F('costo'),
+                       filter=Q(fecha__gte=d12), output_field=BI)))}
+        _wv, _wr = win.get('v') or {}, win.get('r') or {}
+        v90 = (_wv.get('u90') or 0) - (_wr.get('u90') or 0)
+        v90_ly = (_wv.get('u_ly') or 0) - (_wr.get('u_ly') or 0)
+        ttm_venta_m = (_wv.get('mp') or 0) - (_wr.get('mp') or 0)
+        ttm_costo_m = (_wv.get('mc') or 0) - (_wr.get('mc') or 0)
 
         # -------- 7. curva de tallas (EU normalizada, demanda NETA 24m) --------
         venta_talla, stock_talla = {}, {}
-        ventas_curva = ventas_tienda.filter(fecha__gte=hoy - timedelta(days=730))
-        reingresos_curva = reingresos_tienda.filter(fecha__gte=hoy - timedelta(days=730))
-        if not ventas_curva.exists():
-            ventas_curva = ventas_tienda  # fallback: marca sin venta reciente → all-time
-            reingresos_curva = reingresos_tienda
-        for r in (ventas_curva.values('ProductoTalla__talla')
-                  .annotate(u=Sum(Abs('cantidad'), output_field=BI))):
-            t = _talla_norm(r['ProductoTalla__talla'])
+        TALLA_K = 'ProductoTalla__talla'
+        rows_curva = list(
+            vr_tienda.filter(fecha__gte=hoy - timedelta(days=730))
+            .annotate(g=GRUPO).values('g', TALLA_K)
+            .annotate(u=Sum(Abs('cantidad'), output_field=BI)))
+        if not any(r['g'] == 'v' for r in rows_curva):
+            # fallback: marca sin venta reciente → all-time (mismo criterio
+            # que antes: manda la existencia de VENTAS en 24m)
+            rows_curva = list(
+                vr_tienda.annotate(g=GRUPO).values('g', TALLA_K)
+                .annotate(u=Sum(Abs('cantidad'), output_field=BI)))
+        for r in rows_curva:
+            t = _talla_norm(r[TALLA_K])
             if t:
-                venta_talla[t] = venta_talla.get(t, 0) + (r['u'] or 0)
-        for r in (reingresos_curva.values('ProductoTalla__talla')
-                  .annotate(u=Sum(Abs('cantidad'), output_field=BI))):
-            t = _talla_norm(r['ProductoTalla__talla'])
-            if t:
-                venta_talla[t] = venta_talla.get(t, 0) - (r['u'] or 0)
+                delta = (r['u'] or 0) if r['g'] == 'v' else -(r['u'] or 0)
+                venta_talla[t] = venta_talla.get(t, 0) + delta
         # Piso 0: una talla con más reingresos que ventas no puede pesar negativo.
         venta_talla = {t: max(0, v) for t, v in venta_talla.items()}
         for r in (pt.filter(producto__sucursal__es_centro_distribucion=False,
@@ -401,16 +426,14 @@ def obtener_inteligencia_compra(request):
         # -------- 9. finanzas: valor inventario, margen, rotación, WOS, GMROI --------
         pt_tienda = pt.filter(producto__sucursal__es_centro_distribucion=False,
                               producto__sucursal_id__in=tienda_scope)
-        inv_costo = pt_tienda.aggregate(
-            c=Sum(F('stock') * F('producto__costo'), output_field=BI))['c'] or 0
-        inv_precio = pt_tienda.aggregate(
-            p=Sum(F('stock') * F('producto__precioventa'), output_field=BI))['p'] or 0
+        fin = pt_tienda.aggregate(
+            c=Sum(F('stock') * F('producto__costo'), output_field=BI),
+            p=Sum(F('stock') * F('producto__precioventa'), output_field=BI),
+            n=Count('id'))
+        inv_costo = fin['c'] or 0
+        inv_precio = fin['p'] or 0
 
-        d12 = hoy - timedelta(days=365)
-        tv = ventas_tienda.filter(fecha__gte=d12)
-        rv = reingresos_tienda.filter(fecha__gte=d12)
-        ttm_venta_m = _um(tv, 'precio') - _um(rv, 'precio')
-        ttm_costo_m = _um(tv, 'costo') - _um(rv, 'costo')
+        # ttm_venta_m / ttm_costo_m ya vienen de la pasada 455d del bloque 6.
         # margen: realizado si el costo viene en las ventas; si no, margen de lista del inventario
         if ttm_venta_m > 0 and 0 < ttm_costo_m < ttm_venta_m:
             margen_pct = round(100.0 * (ttm_venta_m - ttm_costo_m) / ttm_venta_m, 1)
@@ -427,16 +450,16 @@ def obtener_inteligencia_compra(request):
         gmroi = round(margen_anual / inv_costo, 2) if inv_costo else None
 
         # -------- 10. dead stock / antigüedad (SKUs con stock sin venta reciente) --------
-        skus_total = pt_tienda.count()
+        skus_total = fin['n'] or 0
         vend90 = ventas_tienda.filter(fecha__gte=hoy - timedelta(days=90)).values('ProductoTalla')
         vend180 = ventas_tienda.filter(fecha__gte=hoy - timedelta(days=180)).values('ProductoTalla')
-        dead90 = pt_tienda.exclude(id__in=vend90)
-        dead180 = pt_tienda.exclude(id__in=vend180)
-        dead90_n = dead90.count()
-        dead180_n = dead180.count()
-        dead180_u = dead180.aggregate(s=Sum('stock', output_field=BI))['s'] or 0
-        dead180_costo = dead180.aggregate(
-            c=Sum(F('stock') * F('producto__costo'), output_field=BI))['c'] or 0
+        dead90_n = pt_tienda.exclude(id__in=vend90).count()
+        d180 = pt_tienda.exclude(id__in=vend180).aggregate(
+            n=Count('id'), s=Sum('stock', output_field=BI),
+            c=Sum(F('stock') * F('producto__costo'), output_field=BI))
+        dead180_n = d180['n'] or 0
+        dead180_u = d180['s'] or 0
+        dead180_costo = d180['c'] or 0
 
         # -------- 11. clasificación ABC (motor de predicción, snapshot batch) --------
         abc = None
@@ -755,33 +778,71 @@ def obtener_plan_liquidacion(request):
         vend180 = (mov_base.filter(fecha__gte=hoy - timedelta(days=180))
                    .values('ProductoTalla'))
 
-        def _filas_por(campo_id, campos_label, nombre_key, etiquetar,
-                       filtro_extra=None, extra_fila=None):
-            """Ranking agrupado por un campo id que vive en Producto."""
-            pt = base_pt.filter(**filtro_extra) if filtro_extra else base_pt
-            v_inv = [f'producto__{campo_id}'] + [f'producto__{l}' for l in campos_label]
-            inv = {r[f'producto__{campo_id}']: r for r in
-                   pt.values(*v_inv)
-                   .annotate(stock_u=Sum('stock', filter=ES_TIENDA_PT, output_field=BI),
-                             stock_cd=Sum('stock', filter=ES_CD_PT, output_field=BI),
-                             valor_costo=Sum(F('stock') * F('producto__costo'),
-                                             filter=ES_TIENDA_PT, output_field=BI),
-                             valor_cd=Sum(F('stock') * F('producto__costo'),
-                                          filter=ES_CD_PT, output_field=BI),
-                             skus=Count('id', filter=ES_TIENDA_PT))}
-            mv = (mov_base.filter(fecha__gte=hoy - timedelta(days=365))
-                  .values(f'ProductoTalla__producto__{campo_id}')
-                  .annotate(u=Sum(Abs('cantidad'), output_field=BI),
-                            venta=Sum(Abs(F('cantidad')) * F('precio'), output_field=BI),
-                            costo=Sum(Abs(F('cantidad')) * F('costo'), output_field=BI)))
-            ttm = {r[f'ProductoTalla__producto__{campo_id}']: r for r in mv}
-            dead = {r[f'producto__{campo_id}']: r for r in
-                    pt.filter(ES_TIENDA_PT).exclude(id__in=vend180)
-                    .values(f'producto__{campo_id}')
-                    .annotate(dead_u=Sum('stock', output_field=BI),
-                              dead_costo=Sum(F('stock') * F('producto__costo'), output_field=BI),
-                              dead_skus=Count('id'))}
+        # ---- Fase C (perf): marca/categoría/sucursal comparten base. Se
+        # agrega UNA vez por la terna (marca, categoría, sucursal) y cada
+        # dimensión (y los totales) se deriva sumando parciales enteros:
+        # mismo resultado que las 9 queries anteriores con 3. Especialidad
+        # sigue aparte (multi-etiqueta: su join duplica filas).
+        K_MAR, K_CAT, K_SUC = ('producto__atributo1_id', 'producto__categoria_id',
+                               'producto__sucursal_id')
+        MK_MAR, MK_CAT, MK_SUC = ('ProductoTalla__producto__atributo1_id',
+                                  'ProductoTalla__producto__categoria_id',
+                                  'ProductoTalla__producto__sucursal_id')
+        inv_rows = list(
+            base_pt.values(K_MAR, 'producto__atributo1__valor',
+                           K_CAT, 'producto__categoria__nombre',
+                           'producto__categoria__padre__nombre',
+                           K_SUC, 'producto__sucursal__alias',
+                           'producto__sucursal__es_centro_distribucion')
+            .annotate(stock_u=Sum('stock', filter=ES_TIENDA_PT, output_field=BI),
+                      stock_cd=Sum('stock', filter=ES_CD_PT, output_field=BI),
+                      valor_costo=Sum(F('stock') * F('producto__costo'),
+                                      filter=ES_TIENDA_PT, output_field=BI),
+                      valor_cd=Sum(F('stock') * F('producto__costo'),
+                                   filter=ES_CD_PT, output_field=BI),
+                      skus=Count('id', filter=ES_TIENDA_PT)))
+        mv_rows = list(
+            mov_base.filter(fecha__gte=hoy - timedelta(days=365))
+            .values(MK_MAR, MK_CAT, MK_SUC)
+            .annotate(u=Sum(Abs('cantidad'), output_field=BI),
+                      venta=Sum(Abs(F('cantidad')) * F('precio'), output_field=BI),
+                      costo=Sum(Abs(F('cantidad')) * F('costo'), output_field=BI)))
+        dead_rows = list(
+            base_pt.filter(ES_TIENDA_PT).exclude(id__in=vend180)
+            .values(K_MAR, K_CAT, K_SUC)
+            .annotate(dead_u=Sum('stock', output_field=BI),
+                      dead_costo=Sum(F('stock') * F('producto__costo'), output_field=BI),
+                      dead_skus=Count('id')))
 
+        CAMPOS_INV = ('stock_u', 'stock_cd', 'valor_costo', 'valor_cd', 'skus')
+        CAMPOS_MV = ('u', 'venta', 'costo')
+        CAMPOS_DEAD = ('dead_u', 'dead_costo', 'dead_skus')
+
+        def _acum(rows, key, campos, etiquetas=()):
+            """Suma parciales agrupando por rows[key]. Los labels dependen
+            funcionalmente del id, así que basta la primera aparición."""
+            out = {}
+            for r in rows:
+                acc = out.get(r[key])
+                if acc is None:
+                    acc = {c: 0 for c in campos}
+                    for e in etiquetas:
+                        acc[e] = r.get(e)
+                    out[r[key]] = acc
+                for c in campos:
+                    acc[c] += r.get(c) or 0
+            return out
+
+        def _filas_dim(key, mkey, etiquetas, nombre_key, etiquetar,
+                       excluir_none=True, extra_fila=None):
+            """Ranking de una dimensión, derivado de las pasadas comunes.
+            `excluir_none` espeja el filtro isnull=False que la versión por
+            queries aplicaba a marca/categoría."""
+            inv = _acum([r for r in inv_rows
+                         if not (excluir_none and r[key] is None)],
+                        key, CAMPOS_INV, etiquetas)
+            ttm = _acum(mv_rows, mkey, CAMPOS_MV)
+            dead = _acum(dead_rows, key, CAMPOS_DEAD)
             filas = []
             for did, ir in inv.items():
                 fila = _fila_liquidacion(ir, ttm.get(did, {}), dead.get(did, {}))
@@ -795,10 +856,9 @@ def obtener_plan_liquidacion(request):
             filas.sort(key=lambda x: (-(x['dead_costo'] or 0), -(x['valor_cd'] or 0)))
             return filas
 
-        filas = _filas_por(
-            'atributo1_id', ['atributo1__valor'], 'marca',
+        filas = _filas_dim(
+            K_MAR, MK_MAR, ('producto__atributo1__valor',), 'marca',
             lambda ir: ir['producto__atributo1__valor'],
-            filtro_extra={'producto__atributo1__isnull': False},
         )
 
         def _label_cat(ir):
@@ -806,15 +866,17 @@ def obtener_plan_liquidacion(request):
             padre = ir.get('producto__categoria__padre__nombre') or ''
             return f'{padre} › {nombre}' if padre else nombre
 
-        filas_cat = _filas_por(
-            'categoria_id', ['categoria__nombre', 'categoria__padre__nombre'],
+        filas_cat = _filas_dim(
+            K_CAT, MK_CAT,
+            ('producto__categoria__nombre', 'producto__categoria__padre__nombre'),
             'categoria', _label_cat,
-            filtro_extra={'producto__categoria__isnull': False},
         )
 
-        filas_suc = _filas_por(
-            'sucursal_id', ['sucursal__alias', 'sucursal__es_centro_distribucion'],
+        filas_suc = _filas_dim(
+            K_SUC, MK_SUC,
+            ('producto__sucursal__alias', 'producto__sucursal__es_centro_distribucion'),
             'sucursal', lambda ir: ir['producto__sucursal__alias'],
+            excluir_none=False,
             extra_fila=lambda ir: {
                 'es_cd': bool(ir['producto__sucursal__es_centro_distribucion'])},
         )
@@ -865,16 +927,16 @@ def obtener_plan_liquidacion(request):
 
         filas_esp = _filas_por_especialidad()
 
-        # Totales sobre el universo filtrado completo (no solo filas con marca).
-        tot = base_pt.aggregate(
-            stock_u=Sum('stock', filter=ES_TIENDA_PT, output_field=BI),
-            valor_costo=Sum(F('stock') * F('producto__costo'), filter=ES_TIENDA_PT, output_field=BI),
-            stock_cd=Sum('stock', filter=ES_CD_PT, output_field=BI),
-            valor_cd=Sum(F('stock') * F('producto__costo'), filter=ES_CD_PT, output_field=BI),
-        )
-        dead_tot = (base_pt.filter(ES_TIENDA_PT).exclude(id__in=vend180)
-                    .aggregate(dead_u=Sum('stock', output_field=BI),
-                               dead_costo=Sum(F('stock') * F('producto__costo'), output_field=BI)))
+        # Totales sobre el universo filtrado completo (no solo filas con
+        # marca): TODAS las filas de la pasada común, ids nulos incluidos.
+        tot = {'stock_u': 0, 'valor_costo': 0, 'stock_cd': 0, 'valor_cd': 0}
+        for r in inv_rows:
+            for c in tot:
+                tot[c] += r.get(c) or 0
+        dead_tot = {'dead_u': 0, 'dead_costo': 0}
+        for r in dead_rows:
+            for c in dead_tot:
+                dead_tot[c] += r.get(c) or 0
         tot_valor = tot['valor_costo'] or 0
         tot_dead_costo = dead_tot['dead_costo'] or 0
 
@@ -918,7 +980,7 @@ ORDENES_DETALLE = {
 }
 
 
-def _detalle_query(base_pt, mov_base, hoy, q=None):
+def _detalle_query(base_pt, mov_base, hoy, q=None, con_ventas=True):
     """Queryset de Producto anotado para el drill-down, paginable en el DB.
 
     Todo el cálculo pesado (agregados + antigüedad FIFO + última venta) se
@@ -927,6 +989,12 @@ def _detalle_query(base_pt, mov_base, hoy, q=None):
     Antigüedad = lote vivo más antiguo; si el producto no tiene lotes (stock
     migrado), `fecha_creacion` (corregida en prod desde el kardex el
     2026-05-20). Ventas siempre solo tiendas (mov_base ya viene acotado).
+
+    `con_ventas=False` (Fase C perf): omite los Subquery correlacionados de
+    última venta y u365 — el EXPORT los resuelve con 2 pasadas agrupadas en
+    `_filas_export` (con ~15k filas los 2 subqueries por fila eran el grueso
+    de los 33s del Excel); el detalle paginado los sigue usando porque
+    ordena/pagina por ellos en el DB.
     """
     prod = Producto.objects.filter(id__in=base_pt.values('producto_id'))
     if q:
@@ -938,21 +1006,24 @@ def _detalle_query(base_pt, mov_base, hoy, q=None):
         producto_talla__producto=OuterRef('pk'),
         activo=True, agotado=False, cantidad_disponible__gt=0,
     ).order_by('fecha_ingreso').values('fecha_ingreso')[:1])
-    venta_sq = (mov_base.filter(ProductoTalla__producto=OuterRef('pk'))
-                .order_by('-fecha').values('fecha')[:1])
-    u365_sq = (mov_base.filter(ProductoTalla__producto=OuterRef('pk'),
-                               fecha__gte=hoy - timedelta(days=365))
-               .values('ProductoTalla__producto')
-               .annotate(s=Sum(Abs('cantidad'), output_field=BI)).values('s')[:1])
 
     stock_f = Q(producto_talla__stock__gt=0)
-    return prod.annotate(
+    annots = dict(
         stock_u=Coalesce(Sum('producto_talla__stock', filter=stock_f, output_field=BI), 0),
         tallas=Count('producto_talla', filter=stock_f),
         fecha_lote=Subquery(lote_sq),
-        ultima_venta=Subquery(venta_sq),
-        u365=Coalesce(Subquery(u365_sq, output_field=BI), 0),
-    ).annotate(
+    )
+    if con_ventas:
+        venta_sq = (mov_base.filter(ProductoTalla__producto=OuterRef('pk'))
+                    .order_by('-fecha').values('fecha')[:1])
+        u365_sq = (mov_base.filter(ProductoTalla__producto=OuterRef('pk'),
+                                   fecha__gte=hoy - timedelta(days=365))
+                   .values('ProductoTalla__producto')
+                   .annotate(s=Sum(Abs('cantidad'), output_field=BI)).values('s')[:1])
+        annots['ultima_venta'] = Subquery(venta_sq)
+        annots['u365'] = Coalesce(Subquery(u365_sq, output_field=BI), 0)
+
+    return prod.annotate(**annots).annotate(
         aging_dt=Coalesce('fecha_lote', 'fecha_creacion'),
         valor_ord=F('costo') * F('stock_u'),
     )
@@ -997,16 +1068,27 @@ def _tramo_filter(qs, tramos, hoy):
     return qs.filter(cond)
 
 
-def _serializar_detalle(qs, hoy):
-    """Convierte una página del queryset (ya sliceada) en dicts JSON."""
-    filas = list(qs.values(
+def _serializar_detalle(qs, hoy, ventas_bulk=None):
+    """Convierte una página del queryset (ya sliceada) en dicts JSON.
+
+    `ventas_bulk=(venta_map, u365_map)` (Fase C perf): última venta y u365
+    resueltos por mapas {producto_id: valor} de 2 queries agrupadas, para el
+    queryset liviano de `_detalle_query(..., con_ventas=False)`. Sin mapas,
+    se leen de las anotaciones (comportamiento original del detalle paginado).
+    """
+    campos = [
         'id', 'articulo', 'descripcion', 'atributo1__valor', 'atributo2__valor',
         'categoria__nombre', 'categoria__padre__nombre', 'sucursal_id',
         'sucursal__alias', 'sucursal__es_centro_distribucion', 'precioventa',
-        'costo', 'stock_u', 'tallas', 'fecha_lote', 'fecha_creacion',
-        'ultima_venta', 'u365'))
+        'costo', 'stock_u', 'tallas', 'fecha_lote', 'fecha_creacion']
+    if ventas_bulk is None:
+        campos += ['ultima_venta', 'u365']
+    filas = list(qs.values(*campos))
     out = []
     for r in filas:
+        if ventas_bulk is not None:
+            r['ultima_venta'] = ventas_bulk[0].get(r['id'])
+            r['u365'] = ventas_bulk[1].get(r['id'], 0)
         f = r['fecha_lote'] or r['fecha_creacion']
         fuente = 'lote' if r['fecha_lote'] else ('creacion' if r['fecha_creacion'] else None)
         fecha_fifo = timezone.localtime(f).date() if f else None
@@ -1156,11 +1238,16 @@ def _tramos_liquidacion(base_pt, hoy):
     return tramos
 
 
-def _dimension_liquidacion(base_pt, hoy, dim='marca', top_n=10):
+def _dimension_liquidacion(base_pt, hoy, dim='marca', top_n=10, con_productos=False):
     """Top items de una dimensión (marca|especialidad) con su capital dividido
     en buckets de urgencia por DÍAS EXACTOS del lote (<1 año / 1-2 años /
     2+ años — mismo criterio que los tramos y el detalle). Especialidad es
     multi-etiqueta (atribución): un producto suma en cada una que tenga.
+
+    `con_productos=True` (Fase C perf): agrega Count(distinct) de productos
+    por grupo y devuelve (top, rows) para que `obtener_plan_liquidacion_por_anio`
+    derive los tramos de ESTA misma pasada (el costo está en el subquery de
+    aging por producto) en vez de re-escanear con `_tramos_liquidacion`.
     """
     stock_f = Q(producto_talla__stock__gt=0)
     qs = (Producto.objects.filter(id__in=base_pt.values('producto_id'))
@@ -1171,10 +1258,13 @@ def _dimension_liquidacion(base_pt, hoy, dim='marca', top_n=10):
         campo, etiqueta = 'atributos__opcion__valor', 'especialidad'
     else:
         campo, etiqueta = 'atributo1__valor', 'marca'
-    rows = list(qs.values(campo, 'tramo').annotate(
+    annots = dict(
         valor=Coalesce(Sum(F('producto_talla__stock') * F('costo'),
                            filter=stock_f, output_field=BI), 0),
-        pares=Coalesce(Sum('producto_talla__stock', filter=stock_f, output_field=BI), 0)))
+        pares=Coalesce(Sum('producto_talla__stock', filter=stock_f, output_field=BI), 0))
+    if con_productos:
+        annots['productos'] = Count('id', distinct=True)
+    rows = list(qs.values(campo, 'tramo').annotate(**annots))
     acc = {}
     for r in rows:
         nombre = r[campo] or f'Sin {etiqueta}'
@@ -1199,7 +1289,39 @@ def _dimension_liquidacion(base_pt, hoy, dim='marca', top_n=10):
             for k in ('val_reciente', 'val_1anio', 'val_2mas', 'valor', 'pares'):
                 otras[k] += m[k]
         top.append(otras)
+    if con_productos:
+        return top, rows
     return top
+
+
+def _tramos_desde_rows(rows):
+    """Tramos de antigüedad derivados de las filas (grupo, tramo) de
+    `_dimension_liquidacion(..., con_productos=True)`.
+
+    Cada producto vive en exactamente UN (grupo, tramo) — atributo1 es una FK
+    simple, no multi-etiqueta — así que sumar los parciales (valor, pares y
+    Count distinct de productos) reproduce 1:1 la query dedicada de
+    `_tramos_liquidacion` sin re-escanear el aging por producto."""
+    por_tramo = {}
+    for r in rows:
+        acc = por_tramo.setdefault(r['tramo'],
+                                   {'valor': 0, 'pares': 0, 'productos': 0})
+        acc['valor'] += r['valor'] or 0
+        acc['pares'] += r['pares'] or 0
+        acc['productos'] += r.get('productos') or 0
+    tramos = []
+    for clave, label, d0, d1 in TRAMOS_ANTIGUEDAD:
+        r = por_tramo.get(clave)
+        if not r:
+            continue
+        tramos.append({
+            'tramo': clave, 'label': label,
+            'dias_desde': d0, 'dias_hasta': d1,
+            'antiguedad_anios': d0 // 365,
+            'valor': r['valor'] or 0, 'pares': r['pares'] or 0,
+            'productos': r['productos'] or 0,
+            'descuento_sugerido': _descuento_sugerido(d0)})
+    return tramos
 
 
 @require_GET
@@ -1215,10 +1337,19 @@ def obtener_plan_liquidacion_por_anio(request):
         base_pt, mov_base, ctx = _scope_plan(request)
         dim = request.GET.get('dim') or 'marca'
         solo = request.GET.get('solo')
-        por_dimension = _dimension_liquidacion(base_pt, hoy, dim=dim)
         if solo == 'dim':
+            por_dimension = _dimension_liquidacion(base_pt, hoy, dim=dim)
             return JsonResponse({'success': True, 'dim': dim, 'por_dimension': por_dimension})
-        tramos = _tramos_liquidacion(base_pt, hoy)
+        if dim == 'especialidad':
+            # multi-etiqueta: sus filas duplican productos — tramos aparte.
+            por_dimension = _dimension_liquidacion(base_pt, hoy, dim=dim)
+            tramos = _tramos_liquidacion(base_pt, hoy)
+        else:
+            # Fase C (perf): dimensión y tramos comparten la MISMA pasada de
+            # aging por producto (1 query en vez de 2, resultado idéntico).
+            por_dimension, rows_dim = _dimension_liquidacion(
+                base_pt, hoy, dim=dim, con_productos=True)
+            tramos = _tramos_desde_rows(rows_dim)
         total_valor = sum(t['valor'] for t in tramos)
         total_pares = sum(t['pares'] for t in tramos)
         # "A liquidar" = tramos con descuento sugerido (≥6 meses)…
@@ -1243,9 +1374,17 @@ def obtener_plan_liquidacion_por_anio(request):
 
 def _filas_export(request, hoy):
     """Filas serializadas del detalle filtrado (sin paginar, cap
-    MAX_EXPORT_FILAS). Compartido por el Excel y el formulario de impresión."""
+    MAX_EXPORT_FILAS). Compartido por el Excel y el formulario de impresión.
+
+    Fase C (perf): el export NO usa los Subquery por fila de última venta /
+    u365 (con ~15k filas eran el grueso de los 33s del Excel): las mismas
+    cifras salen de 2 pasadas agrupadas por producto sobre `mov_base`
+    (Max(fecha) ≡ subquery order_by -fecha [:1]; Sum(|cantidad|) 365d ≡
+    subquery agrupado) y se cruzan por id en la serialización.
+    """
     base_pt, mov_base, ctx = _scope_plan(request)
-    qs = _detalle_query(base_pt, mov_base, hoy, q=request.GET.get('q') or None)
+    qs = _detalle_query(base_pt, mov_base, hoy, q=request.GET.get('q') or None,
+                        con_ventas=False)
     bucket = request.GET.get('antiguedad') or None
     if bucket:
         qs = _bucket_filter(qs, bucket, hoy)
@@ -1253,8 +1392,19 @@ def _filas_export(request, hoy):
     # valor desc SOLO para que el cap priorice lo más valioso; el orden final
     # (marca → año → artículo asc) se aplica en Python por sucursal.
     qs = qs.order_by(F('valor_ord').desc(nulls_last=True), 'id')
-    truncado = qs.count() > MAX_EXPORT_FILAS
-    filas = _serializar_detalle(qs[:MAX_EXPORT_FILAS], hoy)
+    venta_map = {r['ProductoTalla__producto_id']: r['f'] for r in
+                 mov_base.values('ProductoTalla__producto_id')
+                 .annotate(f=Max('fecha'))}
+    u365_map = {r['ProductoTalla__producto_id']: (r['s'] or 0) for r in
+                mov_base.filter(fecha__gte=hoy - timedelta(days=365))
+                .values('ProductoTalla__producto_id')
+                .annotate(s=Sum(Abs('cantidad'), output_field=BI))}
+    # truncado sin COUNT aparte: se pide UNA fila extra y se descarta.
+    filas = _serializar_detalle(qs[:MAX_EXPORT_FILAS + 1], hoy,
+                                ventas_bulk=(venta_map, u365_map))
+    truncado = len(filas) > MAX_EXPORT_FILAS
+    if truncado:
+        filas = filas[:MAX_EXPORT_FILAS]
     return filas, ctx, bucket, truncado
 
 

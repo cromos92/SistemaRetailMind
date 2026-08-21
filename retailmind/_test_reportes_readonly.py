@@ -1006,15 +1006,9 @@ def construir_plan(fi, ff, ctxs, fx, rapido):
             check_smoke(invocar_vista(
                 'app.views_modulo_reportes.api_productos_por_origen',
                 {'fecha_desde': fi_s, 'fecha_hasta': ff_s}, G)), [])))
-        plan.append(('recepciones_detallado', lambda o: (
-            check_smoke(invocar_vista(
-                'app.views_modulo_reportes.api_reporte_recepciones_detallado',
-                {'fecha_desde': fi_s, 'fecha_hasta': ff_s}, G)), [])))
+        # recepciones/despachos-detallado ELIMINADOS en Fase C (huérfanos,
+        # auditoría 2026-08) — sus smoke checks se retiraron con ellos.
         if not rapido:
-            plan.append(('despachos_detallado', lambda o: (
-                check_smoke(invocar_vista(
-                    'app.views_modulo_reportes.api_reporte_despachos_detallado',
-                    {'fecha_desde': fi_s, 'fecha_hasta': ff_s}, G)), [])))
             plan.append(('rendimiento_proveedor', lambda o: (
                 check_smoke(invocar_vista(
                     'app.views_modulo_reportes.api_reporte_rendimiento_proveedor',

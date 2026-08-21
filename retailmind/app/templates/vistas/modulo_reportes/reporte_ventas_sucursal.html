@@ -1939,6 +1939,17 @@ function mostrarResultadoDiagnostico(data) {
             <td class="text-end">${fmt(t.total)}</td>
         </tr>`).join('') ||
         '<tr><td colspan="3" class="text-center text-muted py-2">— ninguno —</td></tr>';
+    const tablaNcTrato = (data.nc_tratamiento_distinto || []).map(n => `
+        <tr>
+            <td><code>${n.folio || '-'}</code></td>
+            <td><small class="text-muted">${n.tipo_transaccion || ''}</small></td>
+            <td class="text-end">${fmt(n.monto)}</td>
+            <td><small>${n.trata_reporte || ''}</small></td>
+            <td><small>${n.trata_cuadratura || ''}</small></td>
+            <td class="text-end fw-bold">${fmt(n.delta)}</td>
+        </tr>`).join('') ||
+        '<tr><td colspan="6" class="text-center text-muted py-2">— ninguna —</td></tr>';
+    const residualCero = Math.abs(data.diferencia_residual || 0) < 2;
 
     const html = `
         <div class="text-start small">
@@ -1959,6 +1970,11 @@ function mostrarResultadoDiagnostico(data) {
                     <div class="border border-${colorDif} rounded p-2 text-center">
                         <div class="text-muted small">Diferencia (cuadratura − reporte)</div>
                         <div class="fs-4 fw-bold text-${colorDif}">${fmt(data.diferencia)}</div>
+                        <div class="small mt-1">
+                            Explicada: <strong class="text-success">${fmt(data.diferencia_explicada)}</strong>
+                            &nbsp;·&nbsp;
+                            Residual: <strong class="${residualCero ? 'text-success' : 'text-danger'}">${fmt(data.diferencia_residual)}</strong>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1980,6 +1996,12 @@ function mostrarResultadoDiagnostico(data) {
                     <a class="nav-link" data-bs-toggle="tab" href="#diagTickets" role="tab">
                         Tickets sin DTE
                         <span class="badge bg-secondary ms-1">${(data.tickets_sin_dte || []).length}</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" href="#diagNcTrato" role="tab">
+                        NC trato distinto
+                        <span class="badge bg-secondary ms-1">${(data.nc_tratamiento_distinto || []).length}</span>
                     </a>
                 </li>
             </ul>
@@ -2017,6 +2039,21 @@ function mostrarResultadoDiagnostico(data) {
                                 <th>Correlativo</th><th>Folio DTE</th><th class="text-end">Total</th>
                             </tr></thead>
                             <tbody>${tablaTickets}</tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="tab-pane fade" id="diagNcTrato" role="tabpanel">
+                    <div class="text-muted small mb-1">
+                        NC que un lado resta y el otro trata como informativa —
+                        la explicación típica de una diferencia con las otras pestañas vacías.
+                    </div>
+                    <div class="table-responsive" style="max-height:300px;">
+                        <table class="table table-sm table-hover small">
+                            <thead><tr>
+                                <th>Folio</th><th>Transacción</th><th class="text-end">Monto</th>
+                                <th>En el reporte</th><th>En cuadratura</th><th class="text-end">Δ</th>
+                            </tr></thead>
+                            <tbody>${tablaNcTrato}</tbody>
                         </table>
                     </div>
                 </div>

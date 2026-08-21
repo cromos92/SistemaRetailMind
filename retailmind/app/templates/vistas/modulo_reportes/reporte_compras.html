@@ -821,11 +821,11 @@
                                                             <tr>
                                                                 <th>Proveedor</th>
                                                                 <th class="text-center">Compras</th>
-                                                                <th class="text-end">Inversión</th>
+                                                                <th class="text-end" title="Neto de facturas recibidas menos notas de crédito. Las órdenes de compra aún sin DTE NO suman aquí (se rotulan aparte): la suma de la columna calza con el KPI Inversión Total.">Inversión facturada</th>
                                                                 <th class="text-center">Unidades</th>
                                                                 <th class="text-center" title="Unidades recepcionadas / unidades pedidas">Entregas</th>
                                                                 <th class="text-center" title="Precio sugerido de la orden sobre el costo (teórico)">Markup</th>
-                                                                <th class="text-center">Participación</th>
+                                                                <th class="text-center" title="Participación sobre la inversión FACTURADA del período">Participación</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody id="tbodyProveedores">
@@ -2052,6 +2052,14 @@ function renderizarTablaProveedores(datos) {
         const markup = (proveedor.markup > 0)
             ? `<span class="badge-nexo ${proveedor.markup >= 100 ? 'success' : (proveedor.markup >= 60 ? 'warning' : 'error')}">${proveedor.markup}%</span>`
             : '<span class="text-muted">s/d</span>';
+        // OC sin DTE: costo de órdenes aún no facturadas. Va APARTE de la
+        // inversión facturada (así la columna suma igual que el KPI).
+        const ocSinDte = (proveedor.costo_ordenes_sin_dte || 0) > 0
+            ? `<div><small class="text-muted" title="Órdenes de compra sin factura recibida todavía: no es inversión facturada y no entra en la Participación">OC sin DTE: ${formatearMoneda(proveedor.costo_ordenes_sin_dte)}</small></div>`
+            : '';
+        const inversionCelda = proveedor.solo_ordenes
+            ? `<span class="text-muted" title="Proveedor solo con órdenes de compra: aún sin factura recibida en el período">—</span>${ocSinDte}`
+            : `${formatearMoneda(proveedor.inversion)}${ocSinDte}`;
 
         tbody.innerHTML += `
             <tr>
@@ -2059,8 +2067,8 @@ function renderizarTablaProveedores(datos) {
                     <div class="fw-semibold">${proveedor.nombre}</div>
                     <small class="text-muted">${proveedor.rut || ''}</small>
                 </td>
-                <td class="text-center">${formatearNumero(proveedor.total_compras)}</td>
-                <td class="text-end fw-semibold">${formatearMoneda(proveedor.inversion)}</td>
+                <td class="text-center">${formatearNumero(proveedor.total_compras)}${proveedor.solo_ordenes ? ' <small class="text-muted">(OC)</small>' : ''}</td>
+                <td class="text-end fw-semibold">${inversionCelda}</td>
                 <td class="text-center">${formatearNumero(proveedor.unidades)}</td>
                 <td class="text-center">${entregas}</td>
                 <td class="text-center">${markup}</td>

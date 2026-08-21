@@ -55,7 +55,11 @@ class ArqueoCaja(models.Model):
     total_cheque_teorico = models.IntegerField(default=0)
     total_convenio_teorico = models.IntegerField(default=0)
     total_credito_trabajador_teorico = models.IntegerField(default=0)
-    
+    # Gift cards canjeadas como medio de pago: NO es efectivo (el pasivo se
+    # creó al emitir la tarjeta); se registra para que el desglose de medios
+    # cuadre con la venta total sin exigir plata en el conteo físico.
+    total_giftcard_teorico = models.IntegerField(default=0)
+
     # Documentos
     total_tickets_teorico = models.IntegerField(default=0)
     total_boletas_electronicas_teorico = models.IntegerField(default=0)

@@ -217,6 +217,9 @@
                         <button type="button" class="quick-filter-btn" data-chip="vencidas" onclick="aplicarChip('vencidas')">Vencidas con saldo</button>
                         <button type="button" class="quick-filter-btn" data-chip="bloqueadas" onclick="aplicarChip('bloqueadas')">Bloqueadas</button>
                         <button type="button" class="quick-filter-btn" data-chip="con_saldo" onclick="aplicarChip('con_saldo')">Con saldo</button>
+                        <span class="text-muted mx-1">|</span>
+                        <button type="button" class="quick-filter-btn" id="chip-envio-sin" onclick="aplicarChipEnvio('sin_enviar')" title="Gift cards a las que todavía no se les envió el código por correo">📭 Sin enviar</button>
+                        <button type="button" class="quick-filter-btn" id="chip-envio-si" onclick="aplicarChipEnvio('enviadas')" title="Gift cards cuyo código ya salió por correo">📧 Enviadas</button>
                         <div class="ms-auto d-flex gap-2 align-items-center">
                             <select id="gc-perpage" class="form-select form-select-sm" style="width:auto;" onchange="cargarGiftCards(1)">
                                 <option value="20">20 por página</option>
@@ -354,6 +357,14 @@
                                 <input type="text" id="em-descripcion" class="form-control" maxlength="255" placeholder="Ej: Regalo corporativo Empresa X">
                             </div>
                         </div>
+                        <div class="mb-3">
+                            <label class="form-label">Ámbito de uso</label>
+                            <select id="em-ambito" class="form-select">
+                                <option value="EMPRESA" selected>Solo {{ empresa_actual.nombre|default:"la empresa actual" }}</option>
+                                <option value="TODAS">Todas las empresas de la cadena</option>
+                            </select>
+                            <small class="text-muted">Sucursales donde se podrá canjear la tarjeta.</small>
+                        </div>
                         <div class="alert alert-warning py-2 d-none" id="em-aviso-venta" style="font-size:12px;">
                             <i class="ri-money-dollar-circle-line"></i>
                             Motivo <strong>Venta</strong>: esta pantalla <u>no</u> registra el cobro en caja.
@@ -374,8 +385,9 @@
                         </div>
                         <div class="small text-muted mt-3">
                             <i class="ri-information-line"></i>
-                            Sirve en cualquier sucursal de la cadena. Queda registrada con tu usuario y
-                            con la sucursal activa; todo movimiento posterior queda en la trazabilidad.
+                            El <strong>ámbito</strong> define en qué sucursales se canjea. Queda registrada
+                            con tu usuario y con la sucursal activa; todo movimiento posterior queda en la
+                            trazabilidad, y puedes enviar el código por correo desde Gestionar.
                         </div>
                     </div>
                 </div>
@@ -438,6 +450,8 @@
             </div>
             <div class="modal-footer flex-wrap">
                 <a class="btn btn-outline-primary d-none" id="btn-detalle-gc" href="#"><i class="ri-eye-line"></i> Ver ledger</a>
+                <button class="btn btn-outline-success d-none" id="btn-correo-gc" onclick="abrirEnvioCorreoGc()"><i class="ri-mail-send-line"></i> Enviar por correo</button>
+                <button class="btn btn-outline-dark d-none" id="btn-ambito-gc" onclick="cambiarAmbitoGc()"><i class="ri-building-line"></i> Ámbito</button>
                 <button class="btn btn-success d-none" id="btn-recargar-gc" onclick="recargarGc()">Recargar</button>
                 <button class="btn btn-info text-white d-none" id="btn-editar-gc" onclick="editarGc()">Guardar cambios</button>
                 <button class="btn btn-warning d-none" id="btn-bloquear-gc" onclick="bloquearGc()">Bloquear</button>
@@ -465,9 +479,15 @@ const URLS_GC = {
     bloquear: "{% url 'api_bloquear_giftcard' %}",
     desbloquear: "{% url 'api_desbloquear_giftcard' %}",
     editar: "{% url 'api_editar_giftcard' %}",
+    ambito: "{% url 'api_cambiar_ambito_giftcard' %}",
+    enviarCorreo: "{% url 'api_enviar_correo_giftcard' %}",
     exportar: "{% url 'api_exportar_giftcards' %}",
     buscarCliente: "{% url 'api_buscar_cliente_requerimiento' %}",
 };
+const EMPRESA_ACTUAL_NOMBRE = "{{ empresa_actual.nombre|default:''|escapejs }}";
+let GC_AMBITO_ACTUAL = 'TODAS';     // ámbito de la tarjeta consultada en el modal
+let GC_EMAIL_PREFILL = '';          // email del titular para prellenar el envío
+let GC_CODIGO_CONSULTADO = '';      // código al que corresponden los dos de arriba
 const PUEDE_EMITIR = {% if user|puede_crear_en:'giftcards_emitir' %}true{% else %}false{% endif %};
 const PUEDE_ANULAR_GC = {% if user|puede_editar_en:'giftcards_emitir' %}true{% else %}false{% endif %};
 const MOTIVO_COLORES = {PROMOCION:'info', COMPENSACION:'warning', REGALO_CORP:'primary', VENTA:'success', OTRO:'secondary'};
@@ -476,6 +496,7 @@ const MONTO_ALERTA_EMISION = 200000;   // sobre esto pedimos confirmación expl�
 let TIPO_GC = 'DIGITAL';
 let CLIENTE_ID = null;
 let CHIP_VIGENCIA = '';
+let CHIP_ENVIO = '';                // '', 'enviadas' o 'sin_enviar'
 let modalEmitir = null, modalConsultar = null;
 
 function csrf() { return document.querySelector('[name=csrfmiddlewaretoken]').value; }
@@ -537,20 +558,33 @@ function filtrosGcQuery() {
     if (desde) p.set('desde', desde);
     if (hasta) p.set('hasta', hasta);
     if (CHIP_VIGENCIA) p.set('vigencia', CHIP_VIGENCIA);
+    if (CHIP_ENVIO) p.set('envio', CHIP_ENVIO);
     return p;
 }
 
 function aplicarChip(chip) {
     CHIP_VIGENCIA = chip || '';
-    document.querySelectorAll('.quick-filter-btn').forEach(b => {
+    document.querySelectorAll('.quick-filter-btn[data-chip]').forEach(b => {
         b.classList.toggle('activo', (b.dataset.chip || '') === CHIP_VIGENCIA);
     });
+    cargarGiftCards(1);
+}
+
+/* Filtro por estado de ENTREGA del código (independiente de la vigencia):
+   responde "¿a quién todavía no le llegó su gift card?". */
+function aplicarChipEnvio(valor) {
+    CHIP_ENVIO = (CHIP_ENVIO === valor) ? '' : valor;   // segundo click lo apaga
+    document.getElementById('chip-envio-sin').classList.toggle('activo', CHIP_ENVIO === 'sin_enviar');
+    document.getElementById('chip-envio-si').classList.toggle('activo', CHIP_ENVIO === 'enviadas');
     cargarGiftCards(1);
 }
 
 function limpiarFiltrosGc() {
     ['gc-busqueda','gc-estado','gc-motivo','gc-sucursal','gc-desde','gc-hasta']
         .forEach(id => { document.getElementById(id).value = ''; });
+    CHIP_ENVIO = '';
+    document.getElementById('chip-envio-sin').classList.remove('activo');
+    document.getElementById('chip-envio-si').classList.remove('activo');
     aplicarChip('');
 }
 
@@ -594,9 +628,15 @@ function cargarGiftCards(page) {
                 vence = `<span class="${cls}">${esc(gc.fecha_vencimiento)}${txt}</span>`;
             }
             const suc = gc.sucursal_emision ? `<div class="small text-muted">${esc(gc.sucursal_emision)}</div>` : '';
+            const ambito = gc.ambito === 'EMPRESA'
+                ? `<div class="small"><span class="badge bg-light text-dark border" title="Solo canjeable en sucursales de esta empresa">${esc(gc.empresa)}</span></div>` : '';
+            // Entrega del código: se ve de un vistazo a quién y cuándo salió.
+            const envio = gc.correo_enviado_en
+                ? `<div class="small text-success" title="Enviado ${esc(gc.correo_enviado_en)}${gc.correo_envios > 1 ? ' · ' + gc.correo_envios + ' envíos' : ''}">📧 ${esc(gc.correo_enviado_a)}</div>`
+                : `<div class="small text-muted" title="Todavía no se envió el código por correo">📭 sin enviar</div>`;
             return `
             <tr>
-                <td><span class="gc-codigo">${esc(codigoMostrar)}</span>${desc}</td>
+                <td><span class="gc-codigo">${esc(codigoMostrar)}</span>${desc}${ambito}${envio}</td>
                 <td><span class="badge-tipo ${esFisica?'fisica':'digital'}">${esFisica?'Física':'Digital'}</span></td>
                 <td><span class="badge bg-${MOTIVO_COLORES[gc.motivo]||'secondary'} badge-estado">${esc(gc.motivo_display)}</span></td>
                 <td>${gc.cliente ? esc(gc.cliente) : '<span class="text-muted">—</span>'}</td>
@@ -647,6 +687,10 @@ function abrirModalEmitir() {
     ['em-monto','em-codigo-fisico','em-rut','em-vencimiento','em-pin','em-obs','em-descripcion','em-nuevo-nombre']
         .forEach(id => { document.getElementById(id).value = ''; });
     document.getElementById('em-motivo').value = 'OTRO';
+    // El ámbito también se resetea: todo lo demás vuelve limpio, así que un
+    // select pegado en "Todas las empresas" de la emisión anterior pasaría
+    // desapercibido y la tarjeta saldría canjeable en toda la cadena.
+    document.getElementById('em-ambito').value = 'EMPRESA';
     document.getElementById('em-cliente-nombre').textContent = '';
     document.getElementById('grp-nuevo-cliente').classList.add('d-none');
     document.getElementById('em-aviso-venta').classList.add('d-none');
@@ -761,6 +805,7 @@ function enviarEmision(monto, rut, codigoFisico) {
         observaciones: document.getElementById('em-obs').value.trim(),
         motivo: document.getElementById('em-motivo').value,
         descripcion: document.getElementById('em-descripcion').value.trim(),
+        ambito: document.getElementById('em-ambito').value,
     };
     const btn = document.getElementById('btn-emitir');
     btn.disabled = true;
@@ -773,12 +818,21 @@ function enviarEmision(monto, rut, codigoFisico) {
             const codFis = d.giftcard.codigo_fisico ? `<br><small class="text-muted">Código físico: ${esc(d.giftcard.codigo_fisico)}</small>` : '';
             const titular = d.giftcard.cliente ? `<br><small>Titular: ${esc(d.giftcard.cliente)}</small>` : '';
             const vence = d.giftcard.fecha_vencimiento ? `<br><small class="text-muted">Vence: ${esc(d.giftcard.fecha_vencimiento)}</small>` : '';
+            const ambitoTxt = d.giftcard.ambito === 'EMPRESA'
+                ? `<br><small class="text-muted">Válida solo en: ${esc(d.giftcard.empresa)}</small>`
+                : `<br><small class="text-muted">Válida en todas las empresas</small>`;
             Swal.fire({
                 icon:'success', title:'Gift Card emitida',
-                html:`${codSys}${codFis}${titular}<br>Saldo: ${fmt(d.giftcard.saldo_actual)}${vence}`,
-                showCancelButton:true, confirmButtonText:'Ver detalle', cancelButtonText:'Seguir aquí',
+                html:`${codSys}${codFis}${titular}<br>Saldo: ${fmt(d.giftcard.saldo_actual)}${vence}${ambitoTxt}`,
+                showCancelButton:true, showDenyButton:true,
+                confirmButtonText:'Ver detalle', denyButtonText:'📧 Enviar por correo',
+                cancelButtonText:'Seguir aquí',
             }).then(res=>{
                 if (res.isConfirmed) window.location.href = `/app/giftcards/${d.giftcard.id}/`;
+                else if (res.isDenied) {
+                    cargarGiftCards(1);
+                    abrirEnvioCorreoGc(d.giftcard.codigo, d.giftcard.cliente_email || '');
+                }
                 else { cargarGiftCards(1); }
             });
         } else {
@@ -794,9 +848,16 @@ function enviarEmision(monto, rut, codigoFisico) {
 
 /* ===== Consultar / Recargar / Bloquear / Anular ===== */
 function ocultarAccionesGc() {
+    // Los cachés de la última consulta se invalidan junto con los botones: si
+    // el usuario edita el código sin volver a consultar, "Ámbito"/"Enviar por
+    // correo" operarían sobre el código nuevo con el estado de la tarjeta vieja.
+    GC_AMBITO_ACTUAL = 'TODAS';
+    GC_EMAIL_PREFILL = '';
+    GC_CODIGO_CONSULTADO = '';
     document.getElementById('gc-acciones-extra').classList.add('d-none');
     document.getElementById('gc-editar-extra').classList.add('d-none');
-    ['btn-recargar-gc','btn-anular-gc','btn-editar-gc','btn-bloquear-gc','btn-desbloquear-gc','btn-detalle-gc']
+    ['btn-recargar-gc','btn-anular-gc','btn-editar-gc','btn-bloquear-gc','btn-desbloquear-gc','btn-detalle-gc',
+     'btn-correo-gc','btn-ambito-gc']
         .forEach(id => document.getElementById(id).classList.add('d-none'));
 }
 
@@ -829,7 +890,19 @@ function consultarSaldoGc() {
             (d.cliente ? `<br>Titular: ${esc(d.cliente)}` : '<br>Sin titular') +
             (d.fecha_emision ? `<br>Emitida: ${esc(d.fecha_emision)}${d.sucursal_emision ? ' · ' + esc(d.sucursal_emision) : ''}` : '') +
             (d.fecha_vencimiento ? `<br>Vence: ${esc(d.fecha_vencimiento)}${vencida ? ' <span class="text-danger fw-bold">(VENCIDA)</span>' : ''}` : '<br>Sin vencimiento') +
+            (d.ambito === 'EMPRESA'
+                ? `<br>Ámbito: <span class="badge bg-light text-dark border">${esc(d.empresa)}</span>`
+                : '<br>Ámbito: <span class="badge bg-light text-dark border">Todas las empresas</span>') +
+            (d.valida ? `<br><strong>Pendiente por usar: ${fmt(d.saldo_actual)}</strong>` : '') +
+            (d.correo_enviado_en
+                ? `<br><span class="text-success">📧 Código enviado a ${esc(d.correo_enviado_a)} el ${esc(d.correo_enviado_en)}${d.correo_envios > 1 ? ` (${d.correo_envios} envíos)` : ''}</span>`
+                : '<br><span class="text-muted">📭 El código todavía no se ha enviado por correo</span>') +
             (d.movimientos !== undefined ? `<br><small class="text-muted">${d.movimientos} movimiento(s) en el ledger</small>` : '');
+
+        // Estado para las acciones de correo / ámbito de ESTA tarjeta.
+        GC_AMBITO_ACTUAL = d.ambito || 'TODAS';
+        GC_EMAIL_PREFILL = d.cliente_email || '';
+        GC_CODIGO_CONSULTADO = codigo.toUpperCase();
 
         if (d.id) {
             const a = document.getElementById('btn-detalle-gc');
@@ -858,6 +931,110 @@ function consultarSaldoGc() {
             if (d.estado !== 'ANULADA')
                 document.getElementById('btn-anular-gc').classList.remove('d-none');
         }
+        // Enviar el código por correo: cualquier tarjeta viva (el correo es el
+        // canal de entrega del código; reenviar es legítimo y queda trazado).
+        if (PUEDE_EMITIR && d.estado !== 'ANULADA') {
+            document.getElementById('btn-correo-gc').classList.remove('d-none');
+        }
+        // Cambiar ámbito (empresa <-> todas): permiso de edición.
+        if (PUEDE_ANULAR_GC && d.estado !== 'ANULADA') {
+            const btnAmb = document.getElementById('btn-ambito-gc');
+            btnAmb.innerHTML = GC_AMBITO_ACTUAL === 'EMPRESA'
+                ? '<i class="ri-building-line"></i> Abrir a todas las empresas'
+                : '<i class="ri-building-line"></i> Limitar a ' + esc(EMPRESA_ACTUAL_NOMBRE || 'la empresa actual');
+            btnAmb.classList.remove('d-none');
+        }
+    });
+}
+
+function abrirEnvioCorreoGc(codigoOpt, emailOpt) {
+    const codigo = (codigoOpt || document.getElementById('gc-codigo-input').value || '').trim();
+    if (!codigo) { Swal.fire('Atención', 'Consulta primero una gift card.', 'warning'); return; }
+    // Sin `codigoOpt` (viene del modal) el prefill vale solo si corresponde al
+    // código consultado: si el usuario tipeó otro sin consultar, se prellenaría
+    // el correo del titular de la tarjeta anterior.
+    const mismoCodigo = codigo.toUpperCase() === GC_CODIGO_CONSULTADO;
+    const prefill = emailOpt !== undefined
+        ? (emailOpt || '')
+        : (mismoCodigo ? GC_EMAIL_PREFILL : '');
+    Swal.fire({
+        title: 'Enviar código por correo',
+        html:
+            `<div class="text-start small text-muted mb-2">Gift card <strong class="gc-codigo">${esc(codigo)}</strong></div>` +
+            `<input id="swal-gc-email" class="form-control mb-2" type="email" placeholder="correo@destinatario.cl" value="${esc(prefill)}">` +
+            `<input id="swal-gc-nombre" class="form-control" type="text" placeholder="Nombre del destinatario (opcional)">` +
+            `<div class="text-muted small mt-2 text-start"><i class="ri-shield-keyhole-line"></i> ` +
+            `El correo incluye el código, la vigencia y el descargo de responsabilidad: ` +
+            `la tarjeta es al portador y la custodia del código es del titular.</div>`,
+        showCancelButton: true,
+        confirmButtonText: 'Enviar',
+        cancelButtonText: 'Cancelar',
+        preConfirm: () => {
+            const email = document.getElementById('swal-gc-email').value.trim();
+            if (!email || email.indexOf('@') < 1) {
+                Swal.showValidationMessage('Ingresa un correo válido');
+                return false;
+            }
+            return { email, nombre: document.getElementById('swal-gc-nombre').value.trim() };
+        },
+    }).then(res => {
+        if (!res.isConfirmed) return;
+        fetch(URLS_GC.enviarCorreo, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
+            body: JSON.stringify({codigo, email: res.value.email, nombre: res.value.nombre}),
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Correo enviado',
+                    html:
+                        `<div class="text-start">` +
+                        `<div>✅ Aceptado por el servidor de correo y entregado a <strong>${esc(d.destinatario)}</strong>.</div>` +
+                        `<div class="small text-muted mt-1">Fecha: ${esc(d.enviado_en || '')}` +
+                        (d.envios > 1 ? ` · envío N° ${d.envios}` : '') + `</div>` +
+                        (d.message_id ? `<div class="small text-muted">ID de mensaje: <code>${esc(d.message_id)}</code></div>` : '') +
+                        `<div class="small text-muted mt-2">Queda registrado en la ficha y en la trazabilidad. ` +
+                        `Si el cliente no lo ve, revisa su carpeta de spam y reenvíalo.</div></div>`,
+                });
+                consultarSaldoGc(); cargarGiftCards(1);
+            } else {
+                Swal.fire('No se envió', d.error || 'No se pudo enviar el correo.', 'error');
+            }
+        }).catch(() => Swal.fire('Error', 'No se pudo enviar el correo.', 'error'));
+    });
+}
+
+function cambiarAmbitoGc() {
+    const codigo = document.getElementById('gc-codigo-input').value.trim();
+    if (!codigo) return;
+    // El ámbito destino se decide con el estado de la ÚLTIMA consulta: si el
+    // código del input ya no es ese, obligar a re-consultar (si no, se le
+    // aplicaría a esta tarjeta el cambio calculado para la anterior).
+    if (codigo.toUpperCase() !== GC_CODIGO_CONSULTADO) {
+        Swal.fire('Atención', 'Consulta la gift card antes de cambiar su ámbito.', 'info');
+        return;
+    }
+    const aEmpresa = GC_AMBITO_ACTUAL !== 'EMPRESA';
+    Swal.fire({
+        title: '¿Cambiar ámbito de uso?',
+        html: aEmpresa
+            ? `La tarjeta quedará limitada a <strong>${esc(EMPRESA_ACTUAL_NOMBRE || 'la empresa actual')}</strong>: solo se podrá canjear en sus sucursales.`
+            : 'La tarjeta pasará a valer en <strong>todas las empresas</strong> de la cadena.',
+        icon: 'question', showCancelButton: true, confirmButtonText: 'Sí, cambiar',
+    }).then(res => {
+        if (!res.isConfirmed) return;
+        fetch(URLS_GC.ambito, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
+            body: JSON.stringify({codigo, ambito: aEmpresa ? 'EMPRESA' : 'TODAS'}),
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                Swal.fire('Listo', d.ambito === 'EMPRESA'
+                    ? `Limitada a ${esc(d.empresa)}.` : 'Válida en todas las empresas.', 'success');
+                consultarSaldoGc(); cargarGiftCards(1);
+            } else Swal.fire('Error', d.error, 'error');
+        });
     });
 }
 
@@ -950,6 +1127,8 @@ window.anularGc = anularGc;
 window.bloquearGc = bloquearGc;
 window.desbloquearGc = desbloquearGc;
 window.editarGc = editarGc;
+window.abrirEnvioCorreoGc = abrirEnvioCorreoGc;
+window.cambiarAmbitoGc = cambiarAmbitoGc;
 
 document.addEventListener('DOMContentLoaded', () => {
     cargarGiftCards(1);

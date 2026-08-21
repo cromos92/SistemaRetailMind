@@ -408,6 +408,16 @@
                             </div>
                         </div>
                     </div>
+                    <!-- Sección APARTE: pedidos FACTURADO_EXTERNO sin boleta propia.
+                         NO suma al KPI "Venta internet" (rompería el cuadre con pagos). -->
+                    <div class="col-6 col-lg-2">
+                        <div class="card kpi-card" style="background:linear-gradient(135deg,#f3e8ff,#e9d5ff);border-left:4px solid #9333ea;">
+                            <div class="card-body d-flex gap-2 align-items-center">
+                                <div class="kpi-icon" style="background:linear-gradient(135deg,#9333ea,#7e22ce);"><i class="bi bi-box-arrow-up-right"></i></div>
+                                <div><div class="kpi-label" title="Pedidos con sub-estado FACTURADO EXTERNO y sin boleta/ticket propio: venta real facturada fuera del módulo. Se informa APARTE y NO suma al KPI Venta internet.">Facturado externo <i class="bi bi-info-circle"></i></div><div class="kpi-value" id="kpiFactExterno">$0</div><div class="kpi-detail" id="kpiFactExternoPedidos">sin boleta propia — no suma</div></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="row g-3 mb-3">
@@ -609,6 +619,10 @@
         $('#kpiPlataformas').textContent = number(r.plataformas);
         $('#kpiEcommerce').textContent = number(r.ecommerce_count);
         $('#kpiPos').textContent = number(r.pos_count);
+        // Facturado externo: KPI APARTE, no entra en kpiVentas.
+        $('#kpiFactExterno').textContent = money(r.facturado_externo_monto || 0);
+        $('#kpiFactExternoPedidos').textContent =
+            `${number(r.facturado_externo_pedidos || 0)} pedidos — no suma al total`;
         $('#kpiPeriodo').textContent = data.periodo.label || '-';
         $('#ultimaActualizacion').textContent = new Date().toLocaleString('es-CL', {
             day: '2-digit',
@@ -622,7 +636,7 @@
         renderPlataformas(data.plataformas);
         renderVendedores(data.vendedores);
         renderBoletasEmpresas(data.boletas_empresas || []);
-        renderAlertas(data.alertas);
+        renderAlertas(data.alertas, data.facturado_externo);
         renderDetalle(data.detalle, data.paginacion);
         renderGraficos(data);
     }
@@ -695,13 +709,13 @@
             </tr>`).join('') : '<tr><td colspan="7" class="empty-state">Sin boletas emitidas en ventas internet.</td></tr>';
     }
 
-    function renderAlertas(alertas) {
+    function renderAlertas(alertas, facturadoExterno) {
         const cards = [
             ['Ecommerce sin pago VENTA_INTERNET', alertas.ecommerce_sin_pago_internet.count, alertas.ecommerce_sin_pago_internet.monto, alertas.ecommerce_sin_pago_internet.tickets],
             ['Tickets mixtos', alertas.tickets_mixtos.count, alertas.tickets_mixtos.monto_internet, alertas.tickets_mixtos.tickets],
             ['Sin plataforma', alertas.sin_plataforma.count, alertas.sin_plataforma.monto, alertas.sin_plataforma.tickets],
         ];
-        $('#contenedorAlertas').innerHTML = cards.map(([titulo, count, monto, tickets]) => `
+        let html = cards.map(([titulo, count, monto, tickets]) => `
             <div class="card alert-card mb-2">
                 <div class="card-body py-3">
                     <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
@@ -710,6 +724,23 @@
                     </div>
                 </div>
             </div>`).join('');
+        // Fila APARTE: facturado externo (no suma al total principal).
+        const fe = facturadoExterno || {};
+        if (fe.pedidos) {
+            const muestra = (fe.detalle || []).slice(0, 20).map(p => p.numero_ticket_rm);
+            html += `
+            <div class="card alert-card mb-2" style="border-left-color:#9333ea;background:#faf5ff;">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                        <div><strong>Facturado externo (sin boleta propia)</strong>
+                            <div class="small text-muted">${esc(fe.nota || 'Pedidos FACTURADO_EXTERNO sin ticket PAGADO: NO suman al total principal.')}</div>
+                            <div class="small text-muted">Muestra pedidos: ${muestra.length ? muestra.map(esc).join(', ') : '-'}</div></div>
+                        <div class="text-end"><div class="fw-bold">${number(fe.pedidos)}</div><div class="small text-muted">${money(fe.monto)}</div></div>
+                    </div>
+                </div>
+            </div>`;
+        }
+        $('#contenedorAlertas').innerHTML = html;
     }
 
     function renderDetalle(detalle, p) {
