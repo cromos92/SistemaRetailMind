@@ -220,6 +220,8 @@
                         <span class="text-muted mx-1">|</span>
                         <button type="button" class="quick-filter-btn" id="chip-envio-sin" onclick="aplicarChipEnvio('sin_enviar')" title="Gift cards a las que todavía no se les envió el código por correo">📭 Sin enviar</button>
                         <button type="button" class="quick-filter-btn" id="chip-envio-si" onclick="aplicarChipEnvio('enviadas')" title="Gift cards cuyo código ya salió por correo">📧 Enviadas</button>
+                        <button type="button" class="quick-filter-btn" id="chip-envio-ok" onclick="aplicarChipEnvio('entregadas')" title="El proveedor confirmó que el correo llegó al buzón (o se confirmó a mano)">✅ Entregadas</button>
+                        <button type="button" class="quick-filter-btn" id="chip-envio-mal" onclick="aplicarChipEnvio('problema')" title="El correo rebotó, cayó en spam o falló: el beneficiario NO recibió su código">⚠️ No llegaron</button>
                         <div class="ms-auto d-flex gap-2 align-items-center">
                             <select id="gc-perpage" class="form-select form-select-sm" style="width:auto;" onchange="cargarGiftCards(1)">
                                 <option value="20">20 por página</option>
@@ -451,6 +453,7 @@
             <div class="modal-footer flex-wrap">
                 <a class="btn btn-outline-primary d-none" id="btn-detalle-gc" href="#"><i class="ri-eye-line"></i> Ver ledger</a>
                 <button class="btn btn-outline-success d-none" id="btn-correo-gc" onclick="abrirEnvioCorreoGc()"><i class="ri-mail-send-line"></i> Enviar por correo</button>
+                <button class="btn btn-outline-secondary d-none" id="btn-entrega-gc" onclick="confirmarEntregaGc()" title="El beneficiario confirmó que recibió su gift card por otro medio"><i class="ri-check-double-line"></i> Confirmar entrega</button>
                 <button class="btn btn-outline-dark d-none" id="btn-ambito-gc" onclick="cambiarAmbitoGc()"><i class="ri-building-line"></i> Ámbito</button>
                 <button class="btn btn-success d-none" id="btn-recargar-gc" onclick="recargarGc()">Recargar</button>
                 <button class="btn btn-info text-white d-none" id="btn-editar-gc" onclick="editarGc()">Guardar cambios</button>
@@ -481,6 +484,7 @@ const URLS_GC = {
     editar: "{% url 'api_editar_giftcard' %}",
     ambito: "{% url 'api_cambiar_ambito_giftcard' %}",
     enviarCorreo: "{% url 'api_enviar_correo_giftcard' %}",
+    confirmarEntrega: "{% url 'api_confirmar_entrega_giftcard' %}",
     exportar: "{% url 'api_exportar_giftcards' %}",
     buscarCliente: "{% url 'api_buscar_cliente_requerimiento' %}",
 };
@@ -496,7 +500,19 @@ const MONTO_ALERTA_EMISION = 200000;   // sobre esto pedimos confirmación expl�
 let TIPO_GC = 'DIGITAL';
 let CLIENTE_ID = null;
 let CHIP_VIGENCIA = '';
-let CHIP_ENVIO = '';                // '', 'enviadas' o 'sin_enviar'
+let CHIP_ENVIO = '';                // '', 'enviadas', 'sin_enviar', 'entregadas', 'problema'
+/* Estado de ENTREGA del correo: color + ícono + etiqueta corta.
+   Lo alimenta el webhook del proveedor (entregado/abierto/rebotado). */
+const ESTADO_CORREO = {
+    SIN_ENVIAR:        {color: 'muted',     icono: '📭', texto: 'sin enviar'},
+    ENVIADO:           {color: 'info',      icono: '📧', texto: 'en camino'},
+    ENTREGADO:         {color: 'success',   icono: '✅', texto: 'entregado'},
+    ABIERTO:           {color: 'success',   icono: '👁', texto: 'abierto'},
+    CONFIRMADO_MANUAL: {color: 'success',   icono: '🤝', texto: 'confirmado'},
+    REBOTADO:          {color: 'danger',    icono: '⚠️', texto: 'REBOTÓ'},
+    SPAM:              {color: 'warning',   icono: '🚫', texto: 'spam'},
+    FALLIDO:           {color: 'danger',    icono: '❌', texto: 'falló'},
+};
 let modalEmitir = null, modalConsultar = null;
 
 function csrf() { return document.querySelector('[name=csrfmiddlewaretoken]').value; }
@@ -576,6 +592,8 @@ function aplicarChipEnvio(valor) {
     CHIP_ENVIO = (CHIP_ENVIO === valor) ? '' : valor;   // segundo click lo apaga
     document.getElementById('chip-envio-sin').classList.toggle('activo', CHIP_ENVIO === 'sin_enviar');
     document.getElementById('chip-envio-si').classList.toggle('activo', CHIP_ENVIO === 'enviadas');
+    document.getElementById('chip-envio-ok').classList.toggle('activo', CHIP_ENVIO === 'entregadas');
+    document.getElementById('chip-envio-mal').classList.toggle('activo', CHIP_ENVIO === 'problema');
     cargarGiftCards(1);
 }
 
@@ -630,10 +648,18 @@ function cargarGiftCards(page) {
             const suc = gc.sucursal_emision ? `<div class="small text-muted">${esc(gc.sucursal_emision)}</div>` : '';
             const ambito = gc.ambito === 'EMPRESA'
                 ? `<div class="small"><span class="badge bg-light text-dark border" title="Solo canjeable en sucursales de esta empresa">${esc(gc.empresa)}</span></div>` : '';
-            // Entrega del código: se ve de un vistazo a quién y cuándo salió.
-            const envio = gc.correo_enviado_en
-                ? `<div class="small text-success" title="Enviado ${esc(gc.correo_enviado_en)}${gc.correo_envios > 1 ? ' · ' + gc.correo_envios + ' envíos' : ''}">📧 ${esc(gc.correo_enviado_a)}</div>`
-                : `<div class="small text-muted" title="Todavía no se envió el código por correo">📭 sin enviar</div>`;
+            // Entrega del código: a quién salió y QUÉ PASÓ con ese correo
+            // (entregado / rebotado), no solo que se mandó.
+            const ec = ESTADO_CORREO[gc.correo_estado] || ESTADO_CORREO.SIN_ENVIAR;
+            const tituloEnvio = gc.correo_enviado_en
+                ? `${esc(gc.correo_estado_display)} · enviado ${esc(gc.correo_enviado_en)}`
+                  + (gc.correo_envios > 1 ? ` · ${gc.correo_envios} envíos` : '')
+                  + (gc.correo_estado_detalle ? ` · ${esc(gc.correo_estado_detalle)}` : '')
+                : 'Todavía no se envió el código por correo';
+            const envio = `<div class="small text-${ec.color}" title="${tituloEnvio}">`
+                + `${ec.icono} ${gc.correo_enviado_a ? esc(gc.correo_enviado_a) : ec.texto}`
+                + (gc.correo_enviado_a ? ` <span class="badge bg-${ec.color}" style="font-size:9px;">${ec.texto}</span>` : '')
+                + `</div>`;
             return `
             <tr>
                 <td><span class="gc-codigo">${esc(codigoMostrar)}</span>${desc}${ambito}${envio}</td>
@@ -857,7 +883,7 @@ function ocultarAccionesGc() {
     document.getElementById('gc-acciones-extra').classList.add('d-none');
     document.getElementById('gc-editar-extra').classList.add('d-none');
     ['btn-recargar-gc','btn-anular-gc','btn-editar-gc','btn-bloquear-gc','btn-desbloquear-gc','btn-detalle-gc',
-     'btn-correo-gc','btn-ambito-gc']
+     'btn-correo-gc','btn-ambito-gc','btn-entrega-gc']
         .forEach(id => document.getElementById(id).classList.add('d-none'));
 }
 
@@ -895,7 +921,18 @@ function consultarSaldoGc() {
                 : '<br>Ámbito: <span class="badge bg-light text-dark border">Todas las empresas</span>') +
             (d.valida ? `<br><strong>Pendiente por usar: ${fmt(d.saldo_actual)}</strong>` : '') +
             (d.correo_enviado_en
-                ? `<br><span class="text-success">📧 Código enviado a ${esc(d.correo_enviado_a)} el ${esc(d.correo_enviado_en)}${d.correo_envios > 1 ? ` (${d.correo_envios} envíos)` : ''}</span>`
+                ? (function () {
+                    const ec = ESTADO_CORREO[d.correo_estado] || ESTADO_CORREO.ENVIADO;
+                    return `<br><span class="text-${ec.color}">${ec.icono} Código enviado a `
+                        + `<strong>${esc(d.correo_enviado_a)}</strong> el ${esc(d.correo_enviado_en)}`
+                        + (d.correo_envios > 1 ? ` (${d.correo_envios} envíos)` : '')
+                        + `<br>Estado de entrega: <span class="badge bg-${ec.color}">${esc(d.correo_estado_display)}</span>`
+                        + (d.correo_estado_detalle ? `<br><small>${esc(d.correo_estado_detalle)}</small>` : '')
+                        + (d.correo_problema
+                            ? '<br><small class="text-danger fw-bold">El beneficiario NO recibió el código: corrige el correo y reenvía.</small>'
+                            : '')
+                        + `</span>`;
+                })()
                 : '<br><span class="text-muted">📭 El código todavía no se ha enviado por correo</span>') +
             (d.movimientos !== undefined ? `<br><small class="text-muted">${d.movimientos} movimiento(s) en el ledger</small>` : '');
 
@@ -935,6 +972,12 @@ function consultarSaldoGc() {
         // canal de entrega del código; reenviar es legítimo y queda trazado).
         if (PUEDE_EMITIR && d.estado !== 'ANULADA') {
             document.getElementById('btn-correo-gc').classList.remove('d-none');
+        }
+        // Confirmar entrega a mano: útil cuando el correo rebotó y el
+        // beneficiario recibió su código por otro canal.
+        if (PUEDE_ANULAR_GC && d.estado !== 'ANULADA'
+            && d.correo_estado !== 'CONFIRMADO_MANUAL') {
+            document.getElementById('btn-entrega-gc').classList.remove('d-none');
         }
         // Cambiar ámbito (empresa <-> todas): permiso de edición.
         if (PUEDE_ANULAR_GC && d.estado !== 'ANULADA') {
@@ -1002,6 +1045,33 @@ function abrirEnvioCorreoGc(codigoOpt, emailOpt) {
                 Swal.fire('No se envió', d.error || 'No se pudo enviar el correo.', 'error');
             }
         }).catch(() => Swal.fire('Error', 'No se pudo enviar el correo.', 'error'));
+    });
+}
+
+function confirmarEntregaGc() {
+    const codigo = document.getElementById('gc-codigo-input').value.trim();
+    if (!codigo) return;
+    Swal.fire({
+        title: '¿Confirmar la entrega?',
+        html: 'Registra que el beneficiario <strong>sí recibió</strong> su gift card '
+            + '(te lo confirmó por teléfono, WhatsApp o en persona).<br>'
+            + '<small class="text-muted">Queda en la trazabilidad con tu usuario.</small>',
+        icon: 'question', input: 'text',
+        inputLabel: 'Cómo se confirmó (opcional)',
+        inputPlaceholder: 'Ej: confirmó por WhatsApp',
+        showCancelButton: true, confirmButtonText: 'Sí, confirmar',
+    }).then(res => {
+        if (!res.isConfirmed) return;
+        fetch(URLS_GC.confirmarEntrega, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
+            body: JSON.stringify({codigo, nota: (res.value || '').trim()}),
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                Swal.fire('Registrado', 'La entrega quedó confirmada.', 'success');
+                consultarSaldoGc(); cargarGiftCards(1);
+            } else Swal.fire('Error', d.error, 'error');
+        });
     });
 }
 
@@ -1129,6 +1199,8 @@ window.desbloquearGc = desbloquearGc;
 window.editarGc = editarGc;
 window.abrirEnvioCorreoGc = abrirEnvioCorreoGc;
 window.cambiarAmbitoGc = cambiarAmbitoGc;
+window.confirmarEntregaGc = confirmarEntregaGc;
+window.aplicarChipEnvio = aplicarChipEnvio;
 
 document.addEventListener('DOMContentLoaded', () => {
     cargarGiftCards(1);

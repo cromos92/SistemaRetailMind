@@ -68,7 +68,51 @@ Pedido: *"cuando se utilice giftcard que envíe a imprimir un papel por la térm
 - Contenido: cabecera de empresa/sucursal, **código de barras CODE128 del código de la tarjeta**, ticket y folio del DTE, cajero, saldo anterior, monto usado, **SALDO restante en doble alto**, vencimiento, y el bloque **IDENTIFICACIÓN DE QUIEN LA UTILIZA con Nombre, RUT y Firma** (impresos si la venta identificó al cliente; en blanco para completar a mano si fue venta anónima). Cierra con "COMPROBANTE NO TRIBUTARIO".
 - **Se imprime solo**, uno por cada tarjeta canjeada, apenas responde el cobro — antes del modal de éxito, para que el papel ya esté saliendo cuando el cajero se lo pasa al cliente.
 - **Fallback**: si QZ Tray está apagado, abre el diálogo del navegador con el mismo comprobante maquetado a 80mm (`generarHtmlComprobanteGiftCard`), con todo el texto escapado.
+- **Desglose del pago en el comprobante**: la gift card suele cubrir solo parte de la venta. El voucher imprime `TOTAL VENTA` y cómo se completó — ejemplo real: venta $60.000 → Gift card $50.000 + Efectivo $10.000 — para que el papel firmado cuadre con la boleta.
+- **El sistema avisa que fue gift card al finalizar**: el modal de éxito muestra un bloque naranja "PAGO CON GIFT CARD" con el código, el monto usado, el saldo restante y la instrucción de hacerlo firmar, más un botón **"Reimprimir comprobante"** por si el papel no salió (impresora sin hojas, QZ caído).
 - Verificado: `node --check` sobre el módulo QZ y sobre las funciones nuevas del POS; los 7 templates tocados compilan.
+
+### Estado de ENTREGA del correo por tarjeta — iteración 5
+
+Pedido: *"agregar el estado de correo en el código de la gift card para que el usuario vea si se entregó bien"*.
+
+Antes el sistema solo sabía "lo mandé". Ahora cada tarjeta tiene un **estado de entrega** (migración **0216**: `correo_estado`, `correo_estado_en`, `correo_estado_detalle`):
+
+| Estado | Qué significa | Cómo se ve |
+|---|---|---|
+| Sin enviar | Nunca salió el correo | 📭 gris |
+| Enviado (en camino) | El servidor lo aceptó | 📧 azul |
+| Entregado en el buzón | El proveedor confirmó la entrega | ✅ verde |
+| Abierto | El destinatario lo abrió | 👁 verde |
+| **Rebotado** | **No llegó** (buzón inexistente, lleno) | ⚠️ rojo |
+| Marcado como spam | Cayó en spam / lo reportaron | 🚫 naranja |
+| Falló el envío | El servidor lo rechazó al enviar | ❌ rojo |
+| Entrega confirmada a mano | Confirmada por teléfono/WhatsApp/en persona | 🤝 verde |
+
+- **Webhook** `POST /app/api/giftcards/webhook-correo/`: recibe los eventos de MailerSend (`delivered`, `opened`, `hard_bounced`, `soft_bounced`, `spam_complaint`) y ubica la tarjeta por **Message-ID** (o por el último destinatario como respaldo). Autenticado con **HMAC-SHA256** del cuerpo usando `GIFTCARD_WEBHOOK_SECRET`; **sin ese secret el endpoint responde 503** (mejor no recibir eventos que dejar que cualquiera escriba estados). Los eventos no pueden **retroceder** el estado: un `delivered` que llega tarde no borra un rebote.
+- Un rebote además **queda en la trazabilidad** como fila del ledger, no solo en la ficha.
+- **Confirmación manual** (`api_confirmar_entrega_giftcard`, permiso de edición): botón "Confirmar entrega" para cuando el correo rebotó pero el beneficiario sí recibió su código por otro canal. Queda con el usuario y la nota en el ledger.
+- **Dónde se ve**: badge de color con ícono en cada fila del listado, bloque completo en el modal Gestionar (con el motivo del rebote y el aviso "el beneficiario NO recibió el código"), sección en el detalle, dos columnas nuevas en el Excel, y dos chips de filtro: **"✅ Entregadas"** y **"⚠️ No llegaron"**. El reporte suma `correo_entregado` y `correo_con_problema`.
+
+**Configuración en producción** (sin esto el estado se queda en "Enviado"). Ojo al orden: **el Signing Secret lo genera MailerSend al crear el webhook**, no se inventa — verificado en su [documentación oficial](https://developers.mailersend.com/api/v1/webhooks).
+
+1. Panel de MailerSend → **Webhooks** → *Add a webhook*:
+   - **Webhook name**: `RetailMind Gift Cards`
+   - **Endpoint URL**: `https://retail.webappsolutions.cl/app/api/giftcards/webhook-correo/`
+   - **Webhook version**: la que venga por defecto
+   - **Events to send**: `activity.delivered`, `activity.opened`, `activity.hard_bounced`, `activity.soft_bounced`, `activity.spam_complaint` (opcional `activity.clicked`)
+2. Al guardar, MailerSend muestra el **Signing Secret**: ese valor exacto va al `.env` como `GIFTCARD_WEBHOOK_SECRET` (y en las variables de entorno del hosting).
+3. Reiniciar la app para que tome la variable.
+
+El endpoint valida `Signature` = HMAC-SHA256 hex del cuerpo crudo, que es exactamente el esquema de MailerSend. Además acepta el **secret público de prueba** (`test_Am3L1GuOIc4blLUuHqAPxxwkZaJyEk8G`) para que el botón "Send test" del panel muestre éxito, pero responde sin escribir ningún estado — ese secret está publicado y no puede servir para alterar entregas.
+
+⚠️ **`retailmind/.env` sigue TRACKEADO en git** (aunque está en `.gitignore`, que no aplica a archivos ya versionados): cualquier secret que se agregue ahí se commitea. Ver `docs/SEGURIDAD_URGENTE_2026-07-25.md`.
+
+### Dónde se pueden usar las gift cards (verificado en prod 21-ago)
+
+El sistema tiene 3 empresas con sucursales: **Importadora Nicole Andrea** (NICK1, NICK2, NICK3 + CD IMP), **Paola Tebes** (PAO1..PAO4 + CDs) y **Edelmira Tebes** (solo centros de distribución).
+
+Con `--empresa 76104936-4` el lote queda canjeable en **NICK1, NICK2 y NICK3** (las tres tiendas de la empresa), y **no** en las tiendas PAO*. Para que sirvan en toda la cadena (incluidas PAO1-PAO4) basta **omitir `--empresa`** al emitir, o cambiarlo después tarjeta por tarjeta con la acción "Ámbito" de la pantalla de Gift Cards.
 
 ## Decisiones YA resueltas por el usuario (2026-08-21)
 

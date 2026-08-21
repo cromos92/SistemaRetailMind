@@ -12,6 +12,7 @@ import os
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, HttpResponse
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -22,7 +23,7 @@ from django.utils import timezone
 from .decorators import requiere_permiso
 from .models import (
     GiftCard, MovimientoGiftCard, PermisoRol, Sucursal, Cliente, Vendedor, Empresa,
-    ESTADO_GIFTCARD_CHOICES,
+    ESTADO_GIFTCARD_CHOICES, ESTADO_CORREO_GIFTCARD_CHOICES, ESTADOS_CORREO_PROBLEMA,
 )
 from .services import giftcard_service, fidelizacion_service
 
@@ -129,6 +130,11 @@ def _aplicar_filtros_giftcards(qs, request):
         qs = qs.filter(correo_enviado_en__isnull=False)
     elif envio == 'sin_enviar':
         qs = qs.filter(correo_enviado_en__isnull=True)
+    elif envio == 'problema':
+        # Rebotados / spam / fallidos: el código NO llegó a su destinatario.
+        qs = qs.filter(correo_estado__in=ESTADOS_CORREO_PROBLEMA)
+    elif envio == 'entregadas':
+        qs = qs.filter(correo_estado__in=['ENTREGADO', 'ABIERTO', 'CONFIRMADO_MANUAL'])
 
     busqueda = (request.GET.get('q') or '').strip()
     if busqueda:
@@ -213,6 +219,7 @@ def modulo_giftcards(request):
         'estado_choices': GiftCard._meta.get_field('estado').choices,
         'tipo_tarjeta_choices': GiftCard._meta.get_field('tipo_tarjeta').choices,
         'motivo_choices': GiftCard._meta.get_field('motivo').choices,
+        'estado_correo_choices': ESTADO_CORREO_GIFTCARD_CHOICES,
         'sucursales': Sucursal.objects.all().order_by('nombre'),
         'hoy': timezone.localdate(),
     }
@@ -447,6 +454,10 @@ def api_listar_giftcards(request):
                 if gc.correo_enviado_en else ''
             ),
             'correo_envios': gc.correo_envios or 0,
+            'correo_estado': gc.correo_estado,
+            'correo_estado_display': gc.get_correo_estado_display(),
+            'correo_estado_detalle': gc.correo_estado_detalle or '',
+            'correo_problema': gc.correo_estado in ESTADOS_CORREO_PROBLEMA,
             # Plata que el cliente TODAVÍA puede gastar (0 si ya no es canjeable).
             'pendiente_por_usar': (
                 gc.saldo_actual
@@ -556,6 +567,10 @@ def api_consultar_saldo_giftcard(request):
                     if gc.correo_enviado_en else ''
                 )
                 info['correo_envios'] = gc.correo_envios or 0
+                info['correo_estado'] = gc.correo_estado
+                info['correo_estado_display'] = gc.get_correo_estado_display()
+                info['correo_estado_detalle'] = gc.correo_estado_detalle or ''
+                info['correo_problema'] = gc.correo_estado in ESTADOS_CORREO_PROBLEMA
         return JsonResponse({'success': True, **info})
     except giftcard_service.GiftCardError as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=404)
@@ -730,6 +745,10 @@ def api_reporte_giftcards(request):
         # responde "¿le envié su gift card a todos?" sin abrir el listado.
         'con_correo_enviado': qs.filter(correo_enviado_en__isnull=False).count(),
         'sin_correo_enviado': qs.filter(correo_enviado_en__isnull=True).count(),
+        # Confirmadas por el proveedor (o a mano) vs. las que NO llegaron.
+        'correo_entregado': qs.filter(
+            correo_estado__in=['ENTREGADO', 'ABIERTO', 'CONFIRMADO_MANUAL']).count(),
+        'correo_con_problema': qs.filter(correo_estado__in=ESTADOS_CORREO_PROBLEMA).count(),
         # Compatibilidad con consumidores antiguos del endpoint.
         'activas': n_vig,
         'saldo_circulante': m_vig,
@@ -1081,6 +1100,11 @@ def enviar_codigos_por_correo(giftcards, email_destino, *, nombre_destino='',
         correo_enviado_en=enviado_en,
         correo_envios=F('correo_envios') + 1,
         correo_message_id=message_id[:255],
+        # "ENVIADO" = el servidor lo aceptó. Pasa a ENTREGADO/REBOTADO cuando
+        # el proveedor reporta el resultado real (webhook).
+        correo_estado='ENVIADO',
+        correo_estado_en=enviado_en,
+        correo_estado_detalle=None,
     )
     logger.info("Gift cards enviadas por correo n=%s destino=%s msg=%s",
                 len(giftcards), email_destino, message_id)
@@ -1193,6 +1217,187 @@ def api_enviar_correo_giftcard(request):
         'message_id': resultado['message_id'],
         'envios': gc.correo_envios,
         'saldo_enviado': gc.saldo_actual,
+    })
+
+
+# ========== ESTADO DE ENTREGA DEL CORREO ==========
+
+# Eventos de MailerSend → estado que mostramos en la ficha de la tarjeta.
+# (https://developers.mailersend.com/api/v1/webhooks.html#events)
+_EVENTOS_CORREO = {
+    'activity.delivered': 'ENTREGADO',
+    'activity.opened': 'ABIERTO',
+    'activity.opened_unique': 'ABIERTO',
+    'activity.clicked': 'ABIERTO',
+    'activity.hard_bounced': 'REBOTADO',
+    'activity.soft_bounced': 'REBOTADO',
+    'activity.spam_complaint': 'SPAM',
+}
+
+# Secret FIJO Y PÚBLICO con el que MailerSend firma las peticiones de prueba
+# del panel (documentado en developers.mailersend.com). Sirve para confirmar
+# que el endpoint responde, nunca para escribir datos.
+_MAILERSEND_TEST_SECRET = 'test_Am3L1GuOIc4blLUuHqAPxxwkZaJyEk8G'
+
+# Prioridad: un evento no puede "retroceder" el estado. MailerSend entrega los
+# eventos sin orden garantizado, así que un `delivered` que llega tarde no debe
+# pisar un `opened` (ni mucho menos un rebote posterior).
+_PRIORIDAD_ESTADO_CORREO = {
+    'SIN_ENVIAR': 0, 'ENVIADO': 1, 'ENTREGADO': 2, 'ABIERTO': 3,
+    'CONFIRMADO_MANUAL': 3, 'SPAM': 4, 'REBOTADO': 5, 'FALLIDO': 5,
+}
+
+
+@csrf_exempt
+@require_POST
+def webhook_correo_giftcard(request):
+    """
+    Recibe los eventos de entrega del proveedor de correo (MailerSend) y
+    actualiza el estado de la gift card cuyo último envío coincide.
+
+    Público por necesidad (lo llama el proveedor), pero autenticado por la
+    firma HMAC-SHA256 del cuerpo con `GIFTCARD_WEBHOOK_SECRET`. Sin secret
+    configurado el endpoint responde 503: es preferible no recibir eventos a
+    aceptar que cualquiera escriba estados de entrega.
+    """
+    import hashlib
+    import hmac
+
+    secret = os.environ.get('GIFTCARD_WEBHOOK_SECRET', '')
+    if not secret:
+        logger.error("Webhook de correo recibido sin GIFTCARD_WEBHOOK_SECRET configurado")
+        return JsonResponse(
+            {'success': False, 'error': 'Webhook no configurado.'}, status=503)
+
+    firma = (request.headers.get('Signature')
+             or request.headers.get('X-Mailersend-Signature') or '')
+
+    def _firma_ok(clave):
+        esperada = hmac.new(clave.encode('utf-8'), request.body, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(firma.strip().lower(), esperada)
+
+    if not _firma_ok(secret):
+        # MailerSend firma las peticiones de PRUEBA del panel ("Send test")
+        # con un secret fijo y PÚBLICO, documentado en su web. Se acepta para
+        # que el botón de prueba muestre éxito, pero NO se escribe ningún
+        # estado: si no, cualquiera podría alterar entregas con ese secret.
+        if _firma_ok(_MAILERSEND_TEST_SECRET):
+            logger.info("Webhook de correo: petición de PRUEBA de MailerSend recibida OK")
+            return JsonResponse({
+                'success': True,
+                'prueba': True,
+                'mensaje': 'Conexión verificada. Los eventos de prueba no modifican datos.',
+            })
+        logger.warning("Webhook de correo con firma inválida (ip=%s)",
+                       request.META.get('REMOTE_ADDR'))
+        return JsonResponse({'success': False, 'error': 'Firma inválida.'}, status=401)
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    evento = (payload.get('type') or '').strip()
+    nuevo_estado = _EVENTOS_CORREO.get(evento)
+    if not nuevo_estado:
+        # Evento que no nos interesa (queued, sent, etc.): 200 para que el
+        # proveedor no lo reintente eternamente.
+        return JsonResponse({'success': True, 'ignorado': evento})
+
+    datos = (payload.get('data') or {})
+    email_obj = (datos.get('email') or {})
+    message_id = (email_obj.get('message_id')
+                  or (email_obj.get('message') or {}).get('id') or '')
+    destinatario = ((email_obj.get('recipient') or {}).get('email') or '').strip()
+    detalle = (email_obj.get('reason')
+               or (datos.get('morph') or {}).get('reason') or '')[:255]
+
+    # Se ubica la tarjeta por Message-ID (exacto) y, como respaldo, por el
+    # último destinatario: MailerSend normaliza el ID quitando los <>.
+    qs = GiftCard.objects.none()
+    if message_id:
+        limpio = message_id.strip().strip('<>')
+        qs = GiftCard.objects.filter(
+            Q(correo_message_id__icontains=limpio) | Q(correo_message_id=message_id)
+        )
+    if not qs.exists() and destinatario:
+        qs = GiftCard.objects.filter(
+            correo_enviado_a__iexact=destinatario,
+            correo_enviado_en__isnull=False,
+        ).order_by('-correo_enviado_en')[:20]
+        qs = GiftCard.objects.filter(pk__in=[g.pk for g in qs])
+
+    afectadas = 0
+    ahora = timezone.now()
+    for gc in qs:
+        actual = _PRIORIDAD_ESTADO_CORREO.get(gc.correo_estado, 0)
+        if _PRIORIDAD_ESTADO_CORREO.get(nuevo_estado, 0) < actual:
+            continue   # no retroceder el estado con un evento fuera de orden
+        GiftCard.objects.filter(pk=gc.pk).update(
+            correo_estado=nuevo_estado,
+            correo_estado_en=ahora,
+            correo_estado_detalle=detalle or None,
+        )
+        afectadas += 1
+        # Un rebote es plata que el beneficiario no recibió: queda en el
+        # ledger para que aparezca en la trazabilidad, no solo en la ficha.
+        if nuevo_estado in ESTADOS_CORREO_PROBLEMA:
+            MovimientoGiftCard.objects.create(
+                giftcard=gc,
+                tipo='ENVIO_CORREO',
+                monto=0,
+                saldo_resultante=gc.saldo_actual,
+                observaciones=(
+                    f'PROBLEMA DE ENTREGA ({nuevo_estado}) hacia '
+                    f'{gc.correo_enviado_a or destinatario}'
+                    + (f': {detalle}' if detalle else '')
+                ),
+            )
+
+    logger.info("Webhook correo evento=%s estado=%s tarjetas=%s destino=%s",
+                evento, nuevo_estado, afectadas, destinatario)
+    return JsonResponse({'success': True, 'estado': nuevo_estado, 'tarjetas': afectadas})
+
+
+@require_POST
+@requiere_permiso('giftcards_emitir', 'puede_editar')
+def api_confirmar_entrega_giftcard(request):
+    """
+    Marca a mano que el beneficiario recibió su gift card (lo confirmó por
+    teléfono, WhatsApp o en persona). Útil cuando el correo rebotó o cuando el
+    proveedor no reporta eventos.
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    codigo = (data.get('codigo') or '').strip().upper()
+    nota = (data.get('nota') or '').strip()
+    gc = GiftCard.objects.filter(Q(codigo=codigo) | Q(codigo_fisico=codigo)).first()
+    if gc is None:
+        return JsonResponse({'success': False, 'error': 'Gift card no encontrada.'}, status=404)
+
+    ahora = timezone.now()
+    GiftCard.objects.filter(pk=gc.pk).update(
+        correo_estado='CONFIRMADO_MANUAL',
+        correo_estado_en=ahora,
+        correo_estado_detalle=(nota or 'Entrega confirmada por el usuario')[:255],
+    )
+    MovimientoGiftCard.objects.create(
+        giftcard=gc,
+        tipo='ENVIO_CORREO',
+        monto=0,
+        saldo_resultante=gc.saldo_actual,
+        usuario=request.user,
+        sucursal=_sucursal_actual(request),
+        observaciones=('Entrega confirmada manualmente'
+                       + (f': {nota}' if nota else '')),
+    )
+    return JsonResponse({
+        'success': True,
+        'estado': 'CONFIRMADO_MANUAL',
+        'estado_display': 'Entrega confirmada a mano',
     })
 
 
@@ -1314,6 +1519,7 @@ def api_exportar_giftcards(request):
         'Saldo inicial', 'Saldo actual', 'Estado', 'Emisión', 'Vencimiento', 'Sucursal',
         'Vigencia real', 'Ámbito', 'Pendiente por usar',
         'Correo enviado a', 'Fecha envío', 'N° envíos',
+        'Estado correo', 'Detalle entrega',
     ]
     _estilar_encabezados(ws, headers)
     hoy = timezone.localdate()
@@ -1344,6 +1550,8 @@ def api_exportar_giftcards(request):
             if gc.correo_enviado_en else ''
         ))
         ws.cell(row=row, column=18, value=gc.correo_envios or 0)
+        ws.cell(row=row, column=19, value=gc.get_correo_estado_display())
+        ws.cell(row=row, column=20, value=gc.correo_estado_detalle or '')
     return _excel_response(wb, 'giftcards.xlsx')
 
 

@@ -404,6 +404,8 @@ from .views_modulo_giftcards import (
     api_editar_giftcard,
     api_cambiar_ambito_giftcard,
     api_enviar_correo_giftcard,
+    api_confirmar_entrega_giftcard,
+    webhook_correo_giftcard,
     api_trazabilidad_giftcards,
     api_exportar_giftcards,
     api_exportar_trazabilidad,
@@ -1504,6 +1506,9 @@ urlpatterns = [
     path('api/giftcards/editar/', api_editar_giftcard, name='api_editar_giftcard'),
     path('api/giftcards/ambito/', api_cambiar_ambito_giftcard, name='api_cambiar_ambito_giftcard'),
     path('api/giftcards/enviar-correo/', api_enviar_correo_giftcard, name='api_enviar_correo_giftcard'),
+    path('api/giftcards/confirmar-entrega/', api_confirmar_entrega_giftcard, name='api_confirmar_entrega_giftcard'),
+    # Público: lo llama el proveedor de correo. Autenticado por firma HMAC.
+    path('api/giftcards/webhook-correo/', webhook_correo_giftcard, name='webhook_correo_giftcard'),
     path('api/giftcards/reporte/', api_reporte_giftcards, name='api_reporte_giftcards'),
     path('api/giftcards/trazabilidad/', api_trazabilidad_giftcards, name='api_trazabilidad_giftcards'),
     path('api/giftcards/trazabilidad/exportar/', api_exportar_trazabilidad, name='api_exportar_trazabilidad'),

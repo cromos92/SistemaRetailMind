@@ -5232,8 +5232,23 @@ def registrar_pagos_ticket(request, correlativo):
         'ticket': construir_ticket_data(ticket)
     }
 
-    # Gift cards canjeadas en este cobro: el cajero informa el saldo restante.
+    # Gift cards canjeadas en este cobro: el cajero informa el saldo restante
+    # y el POS imprime el comprobante firmado de uso (RUT + firma).
     if _giftcards_cobradas:
+        # Contexto de la venta para ese comprobante: cuánto fue el total y con
+        # qué OTROS medios se completó el pago (ej. $50.000 gift card +
+        # $10.000 efectivo), para que el papel que firma el cliente cuadre
+        # con la boleta.
+        _otros_pagos = [
+            {
+                'metodo': dict(METODO_PAGO_TICKET_CHOICES).get(p.metodo_pago, p.metodo_pago),
+                'monto': p.monto or 0,
+            }
+            for p in ticket.pagos.exclude(metodo_pago='GIFTCARD')
+        ]
+        for _g in _giftcards_cobradas:
+            _g['venta_total'] = int(ticket.total or 0)
+            _g['otros_pagos'] = _otros_pagos
         response_data['giftcards'] = _giftcards_cobradas
 
     if ticket.dte_generacion_fallida:

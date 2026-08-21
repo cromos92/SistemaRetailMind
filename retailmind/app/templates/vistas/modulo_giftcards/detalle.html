@@ -97,10 +97,18 @@
                                 <small class="text-muted">Entrega del código</small>
                                 <div class="fw-bold">
                                     {% if giftcard.correo_enviado_en %}
-                                    <span class="text-success">📧 {{ giftcard.correo_enviado_a }}</span>
+                                    <span>📧 {{ giftcard.correo_enviado_a }}</span>
+                                    <div class="small fw-normal mt-1">
+                                        <span class="badge {% if giftcard.correo_estado == 'REBOTADO' or giftcard.correo_estado == 'FALLIDO' %}bg-danger{% elif giftcard.correo_estado == 'SPAM' %}bg-warning text-dark{% elif giftcard.correo_estado == 'ENVIADO' %}bg-info{% else %}bg-success{% endif %}">
+                                            {{ giftcard.get_correo_estado_display }}
+                                        </span>
+                                    </div>
                                     <div class="small text-muted fw-normal">
                                         Enviado el {{ giftcard.correo_enviado_en|date:"Y-m-d H:i" }}{% if giftcard.correo_envios > 1 %} · {{ giftcard.correo_envios }} envíos{% endif %}
                                     </div>
+                                    {% if giftcard.correo_estado_detalle %}
+                                    <div class="small text-muted fw-normal">{{ giftcard.correo_estado_detalle }}</div>
+                                    {% endif %}
                                     {% else %}
                                     <span class="text-muted">📭 Sin enviar por correo</span>
                                     {% endif %}

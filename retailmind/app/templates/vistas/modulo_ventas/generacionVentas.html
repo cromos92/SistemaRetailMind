@@ -7238,16 +7238,34 @@ document.addEventListener('DOMContentLoaded', function() {
        folio, sin que un toast cierre el modal. */
     function bloqueGiftcardsHtml() {
         const gcs = window._gcCobradasUltimaVenta || [];
-        window._gcCobradasUltimaVenta = [];
+        // NO se vacía: el botón "Reimprimir comprobante" del modal lo necesita
+        // si el papel no salió (impresora sin hojas, QZ caído). Se reemplaza
+        // completo en el siguiente cobro.
         if (!gcs.length) return '';
         return `
             <hr>
-            <div class="alert alert-success mb-0">
-                <i class="ri-gift-line"></i> <strong>Gift card${gcs.length > 1 ? 's' : ''} canjeada${gcs.length > 1 ? 's' : ''}</strong>
+            <div class="alert alert-warning mb-0 text-start">
+                <i class="ri-gift-line"></i> <strong>PAGO CON GIFT CARD</strong>
                 ${gcs.map(g => `
                     <br><small>${escHtmlPos(g.codigo)}: usado <strong>${formatearMoneda(g.monto)}</strong>
                     — saldo restante <strong>${formatearMoneda(g.saldo_restante)}</strong></small>`).join('')}
+                <br><small class="text-muted">Se imprimió el comprobante de uso:
+                <strong>hazlo firmar por el cliente con su RUT</strong> y guárdalo.</small>
+                <br><button type="button" class="btn btn-sm btn-outline-dark mt-2" onclick="reimprimirComprobantesGiftCard()">
+                    <i class="ri-printer-line"></i> Reimprimir comprobante
+                </button>
             </div>`;
+    }
+
+    /* Reimpresión manual del comprobante firmado (si no salió el papel). */
+    function reimprimirComprobantesGiftCard() {
+        const gcs = window._gcCobradasUltimaVenta || [];
+        if (!gcs.length) {
+            mostrarNotificacion('No hay comprobantes de gift card para reimprimir', 'info');
+            return;
+        }
+        gcs.forEach(g => imprimirComprobanteGiftCard(g).catch(err =>
+            console.error('[GC] No se pudo reimprimir el comprobante:', err)));
     }
 
     function consultarSaldoGiftcardPos() {
@@ -9555,6 +9573,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     : (gcData.saldo_restante || 0) + (gcData.monto || 0)),
                 vencimiento: gcData.vencimiento || '',
             },
+            // Desglose del pago: la gift card suele cubrir solo parte de la
+            // venta ($60.000 = $50.000 gift card + $10.000 efectivo).
+            venta_total: gcData.venta_total || t.total || 0,
+            otros_pagos: gcData.otros_pagos || [],
         };
 
         if (typeof QZ_CONFIG !== 'undefined' && QZ_CONFIG.habilitado) {
@@ -9599,6 +9621,11 @@ document.addEventListener('DOMContentLoaded', function() {
   ${d.dte_folio ? `<div class="row"><span>Documento:</span><span>${escHtmlPos(d.dte_tipo)} #${escHtmlPos(d.dte_folio)}</span></div>` : ''}
   ${d.cajero ? `<div class="row"><span>Cajero:</span><span>${escHtmlPos(d.cajero)}</span></div>` : ''}
   <div class="sep"></div>
+  ${d.venta_total ? `
+  <div class="row b"><span>TOTAL VENTA:</span><span>${formatearMoneda(d.venta_total)}</span></div>
+  <div class="row"><span>&nbsp;&nbsp;Gift card:</span><span>${formatearMoneda(gc.monto_usado)}</span></div>
+  ${(d.otros_pagos || []).map(p => `<div class="row"><span>&nbsp;&nbsp;${escHtmlPos(p.metodo)}:</span><span>${formatearMoneda(p.monto)}</span></div>`).join('')}
+  <div class="sep"></div>` : ''}
   <div class="row"><span>Saldo anterior:</span><span>${formatearMoneda(gc.saldo_anterior)}</span></div>
   <div class="row b"><span>Monto usado:</span><span>${formatearMoneda(gc.monto_usado)}</span></div>
   <div class="sep"></div>
@@ -11537,6 +11564,8 @@ body {
     // window.buscarClientePorRut ya está definida globalmente arriba
     window.agregarPago = agregarPago;
     window.consultarSaldoGiftcardPos = consultarSaldoGiftcardPos;
+    // Se llama desde el onclick inline del modal de éxito de la venta.
+    window.reimprimirComprobantesGiftCard = reimprimirComprobantesGiftCard;
     window.confirmarPago = confirmarPago;
     window.eliminarPago = eliminarPago;
     window.finalizarVenta = finalizarVenta;

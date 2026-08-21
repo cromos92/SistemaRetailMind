@@ -38,6 +38,24 @@ MOTIVO_GIFTCARD_CHOICES = [
     ('OTRO', 'Otro'),
 ]
 
+# Estado de ENTREGA del correo con el código. Va más allá de "lo mandé":
+# el proveedor (MailerSend) avisa por webhook si el mensaje llegó al buzón,
+# si lo abrieron o si rebotó, y ese estado se refleja en la ficha de la
+# tarjeta para saber si el beneficiario realmente recibió su gift card.
+ESTADO_CORREO_GIFTCARD_CHOICES = [
+    ('SIN_ENVIAR', 'Sin enviar'),
+    ('ENVIADO', 'Enviado (en camino)'),
+    ('ENTREGADO', 'Entregado en el buzón'),
+    ('ABIERTO', 'Abierto por el destinatario'),
+    ('REBOTADO', 'Rebotado (no llegó)'),
+    ('SPAM', 'Marcado como spam'),
+    ('FALLIDO', 'Falló el envío'),
+    ('CONFIRMADO_MANUAL', 'Entrega confirmada a mano'),
+]
+
+# Estados en los que el código NO llegó a destino y hay que actuar.
+ESTADOS_CORREO_PROBLEMA = ('REBOTADO', 'SPAM', 'FALLIDO')
+
 TIPO_MOV_GIFTCARD_CHOICES = [
     ('EMISION', 'Emisión'),
     ('CARGA', 'Carga / Recarga'),
@@ -213,7 +231,23 @@ class GiftCard(models.Model):
     )
     correo_message_id = models.CharField(
         max_length=255, blank=True, null=True,
+        db_index=True,
         help_text="Message-ID del último envío (para rastrearlo en el proveedor)",
+    )
+    correo_estado = models.CharField(
+        max_length=20,
+        choices=ESTADO_CORREO_GIFTCARD_CHOICES,
+        default='SIN_ENVIAR',
+        db_index=True,
+        help_text="¿Llegó el código al destinatario? (lo actualiza el webhook del proveedor)",
+    )
+    correo_estado_en = models.DateTimeField(
+        blank=True, null=True,
+        help_text="Cuándo se registró el último estado de entrega",
+    )
+    correo_estado_detalle = models.CharField(
+        max_length=255, blank=True, null=True,
+        help_text="Motivo del rebote / detalle informado por el proveedor",
     )
 
     # === AUDITORÍA ===

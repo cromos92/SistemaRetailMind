@@ -666,7 +666,21 @@ function _generarEscPosGiftCard(td) {
     if (td.vendedor)   c.push(_row('Vendedor:', String(td.vendedor)));
     c.push(_sep('-'));
 
-    // Montos: lo usado y lo que le queda al cliente
+    // Cómo se pagó la venta: la gift card suele cubrir solo una parte
+    // (ej. venta $60.000 = $50.000 gift card + $10.000 efectivo). El papel
+    // que firma el cliente tiene que cuadrar con la boleta.
+    if (td.venta_total) {
+        c.push(_EP.BOLD_ON);
+        c.push(_row('TOTAL VENTA:', _clp(td.venta_total)));
+        c.push(_EP.BOLD_OFF);
+        c.push(_row('  Gift card:', _clp(gc.monto_usado || 0)));
+        (td.otros_pagos || []).forEach(function (p) {
+            c.push(_row('  ' + String(p.metodo || '').substring(0, 22) + ':', _clp(p.monto || 0)));
+        });
+        c.push(_sep('-'));
+    }
+
+    // Montos de la tarjeta: lo usado y lo que le queda al cliente
     c.push(_row('Saldo anterior:', _clp(gc.saldo_anterior || 0)));
     c.push(_EP.BOLD_ON);
     c.push(_row('Monto usado:',    _clp(gc.monto_usado || 0)));

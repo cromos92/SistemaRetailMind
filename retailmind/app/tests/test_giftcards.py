@@ -581,6 +581,179 @@ class GiftCardEnvioCorreoEndpointTest(TestCase):
         self.assertEqual(sin_enviar['total'], 0)
 
 
+class GiftCardEstadoCorreoTest(TestCase):
+    """Estado de ENTREGA: webhook del proveedor + confirmación manual."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from app.models import ModuloSistema, OpcionMenu, PermisoRol
+        from users.models import Usuario
+        cls.empresa = crear_empresa('Empresa Estado', rut='76.104.936-4')
+        cls.sucursal = crear_sucursal(empresa=cls.empresa, alias='NICKW')
+        cls.user = Usuario.objects.create_user(
+            username='gcweb', password='x', rol='administrador')
+        modulo = ModuloSistema.objects.create(nombre='Fidelizacion2', orden=9)
+        for codigo in ('giftcards_listado', 'giftcards_emitir'):
+            opcion = OpcionMenu.objects.create(
+                modulo=modulo, codigo=codigo, nombre=codigo, activo=True)
+            PermisoRol.objects.create(
+                rol='administrador', opcion_menu=opcion,
+                puede_ver=True, puede_crear=True, puede_editar=True)
+
+    SECRET = 'secreto-de-prueba'
+
+    def _post_webhook(self, payload, secret=None, firma=None):
+        import hashlib
+        import hmac
+        import json as _json
+        cuerpo = _json.dumps(payload).encode('utf-8')
+        if firma is None:
+            firma = hmac.new((secret or self.SECRET).encode('utf-8'),
+                             cuerpo, hashlib.sha256).hexdigest()
+        return self.client.post(
+            '/app/api/giftcards/webhook-correo/', data=cuerpo,
+            content_type='application/json', HTTP_SIGNATURE=firma,
+        )
+
+    def _gc_enviada(self, message_id='<abc123@mailersend>', email='papa@empresa.com'):
+        gc = giftcard_service.emitir(50000, empresa=self.empresa)
+        GiftCard.objects.filter(pk=gc.pk).update(
+            correo_enviado_a=email, correo_enviado_en=timezone.now(),
+            correo_envios=1, correo_message_id=message_id, correo_estado='ENVIADO',
+        )
+        gc.refresh_from_db()
+        return gc
+
+    def _payload(self, tipo, message_id='<abc123@mailersend>', email='papa@empresa.com',
+                 reason=''):
+        return {'type': tipo, 'data': {'email': {
+            'message_id': message_id,
+            'recipient': {'email': email},
+            'reason': reason,
+        }}}
+
+    def test_webhook_sin_secret_responde_503(self):
+        gc = self._gc_enviada()
+        with self.settings():
+            import os
+            os.environ.pop('GIFTCARD_WEBHOOK_SECRET', None)
+            resp = self._post_webhook(self._payload('activity.delivered'))
+        self.assertEqual(resp.status_code, 503)
+        gc.refresh_from_db()
+        self.assertEqual(gc.correo_estado, 'ENVIADO')   # nada cambió
+
+    def test_webhook_firma_invalida_rechazada(self):
+        import os
+        os.environ['GIFTCARD_WEBHOOK_SECRET'] = self.SECRET
+        try:
+            gc = self._gc_enviada()
+            resp = self._post_webhook(self._payload('activity.delivered'),
+                                      firma='firma-falsa')
+            self.assertEqual(resp.status_code, 401)
+            gc.refresh_from_db()
+            self.assertEqual(gc.correo_estado, 'ENVIADO')
+        finally:
+            os.environ.pop('GIFTCARD_WEBHOOK_SECRET', None)
+
+    def test_webhook_delivered_y_bounce_actualizan_estado(self):
+        import os
+        os.environ['GIFTCARD_WEBHOOK_SECRET'] = self.SECRET
+        try:
+            gc = self._gc_enviada()
+            self.assertEqual(self._post_webhook(
+                self._payload('activity.delivered')).status_code, 200)
+            gc.refresh_from_db()
+            self.assertEqual(gc.correo_estado, 'ENTREGADO')
+
+            # Un rebote posterior SÍ pisa el estado (prioridad mayor)
+            otra = self._gc_enviada(message_id='<zzz@ms>', email='malo@empresa.com')
+            self._post_webhook(self._payload(
+                'activity.hard_bounced', message_id='<zzz@ms>',
+                email='malo@empresa.com', reason='Mailbox does not exist'))
+            otra.refresh_from_db()
+            self.assertEqual(otra.correo_estado, 'REBOTADO')
+            self.assertIn('Mailbox', otra.correo_estado_detalle)
+            # El rebote queda además en la trazabilidad
+            self.assertTrue(otra.movimientos.filter(
+                tipo='ENVIO_CORREO', observaciones__icontains='PROBLEMA').exists())
+        finally:
+            os.environ.pop('GIFTCARD_WEBHOOK_SECRET', None)
+
+    def test_webhook_no_retrocede_el_estado(self):
+        """Un `delivered` que llega tarde no debe borrar un rebote."""
+        import os
+        os.environ['GIFTCARD_WEBHOOK_SECRET'] = self.SECRET
+        try:
+            gc = self._gc_enviada()
+            self._post_webhook(self._payload('activity.hard_bounced'))
+            gc.refresh_from_db()
+            self.assertEqual(gc.correo_estado, 'REBOTADO')
+            self._post_webhook(self._payload('activity.delivered'))
+            gc.refresh_from_db()
+            self.assertEqual(gc.correo_estado, 'REBOTADO')   # sigue rebotado
+        finally:
+            os.environ.pop('GIFTCARD_WEBHOOK_SECRET', None)
+
+    def test_webhook_evento_irrelevante_no_falla(self):
+        import os
+        os.environ['GIFTCARD_WEBHOOK_SECRET'] = self.SECRET
+        try:
+            gc = self._gc_enviada()
+            resp = self._post_webhook(self._payload('activity.queued'))
+            self.assertEqual(resp.status_code, 200)
+            gc.refresh_from_db()
+            self.assertEqual(gc.correo_estado, 'ENVIADO')
+        finally:
+            os.environ.pop('GIFTCARD_WEBHOOK_SECRET', None)
+
+    def test_peticion_de_prueba_de_mailersend_responde_ok_sin_tocar_datos(self):
+        """El botón "Send test" del panel firma con un secret público fijo."""
+        import os
+        from app.views_modulo_giftcards import _MAILERSEND_TEST_SECRET
+        os.environ['GIFTCARD_WEBHOOK_SECRET'] = self.SECRET
+        try:
+            gc = self._gc_enviada()
+            resp = self._post_webhook(self._payload('activity.hard_bounced'),
+                                      secret=_MAILERSEND_TEST_SECRET)
+            self.assertEqual(resp.status_code, 200)
+            self.assertTrue(resp.json().get('prueba'))
+            gc.refresh_from_db()
+            # El secret de prueba es público: NO puede alterar estados reales.
+            self.assertEqual(gc.correo_estado, 'ENVIADO')
+        finally:
+            os.environ.pop('GIFTCARD_WEBHOOK_SECRET', None)
+
+    def test_confirmar_entrega_manual(self):
+        gc = self._gc_enviada()
+        self.client.force_login(self.user)
+        import json as _json
+        resp = self.client.post(
+            '/app/api/giftcards/confirmar-entrega/',
+            data=_json.dumps({'codigo': gc.codigo, 'nota': 'confirmó por WhatsApp'}),
+            content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        gc.refresh_from_db()
+        self.assertEqual(gc.correo_estado, 'CONFIRMADO_MANUAL')
+        self.assertIn('WhatsApp', gc.correo_estado_detalle)
+
+    def test_envio_deja_estado_enviado_y_filtros(self):
+        from app.views_modulo_giftcards import enviar_codigos_por_correo
+        gc = giftcard_service.emitir(50000, empresa=self.empresa)
+        enviar_codigos_por_correo([gc], 'destino@empresa.com',
+                                  nombre_destino='Papá', sucursal=self.sucursal)
+        gc.refresh_from_db()
+        self.assertEqual(gc.correo_estado, 'ENVIADO')
+
+        self.client.force_login(self.user)
+        problema = self.client.get('/app/api/giftcards/listar/?envio=problema').json()
+        self.assertEqual(problema['total'], 0)
+        # Tras un rebote aparece en el filtro "no llegaron"
+        GiftCard.objects.filter(pk=gc.pk).update(correo_estado='REBOTADO')
+        problema2 = self.client.get('/app/api/giftcards/listar/?envio=problema').json()
+        self.assertEqual(problema2['total'], 1)
+        self.assertTrue(problema2['items'][0]['correo_problema'])
+
+
 class EmitirGiftcardsDesdeListaCommandTest(TestCase):
     """Lote corporativo desde CSV: 1 tarjeta por beneficiario, correo agrupado."""
 
