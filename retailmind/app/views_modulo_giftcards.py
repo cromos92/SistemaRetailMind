@@ -976,13 +976,26 @@ def enviar_codigos_por_correo(giftcards, email_destino, *, nombre_destino='',
         f = ref.fecha_vencimiento
         fecha_venc_humana = f'{f.day} de {_MESES_ES[f.month]} de {f.year}'
 
+    # Tiendas que se le nombran al cliente en el correo. Se excluyen los
+    # centros de distribución (no atienden público), las sucursales marcadas
+    # como inactivas, y las que se listen en `GIFTCARD_CORREO_TIENDAS_EXCLUIR`
+    # (locales que existen en el sistema pero no operan: nombrarlos manda al
+    # cliente a una tienda cerrada).
     tiendas = []
     if ref.empresa_id:
-        tiendas = list(
-            Sucursal.objects.filter(empresa_id=ref.empresa_id)
-            .exclude(tipo_sucursal='CENTRO_DISTRIBUCION')
-            .order_by('alias').values_list('alias', flat=True)
-        )
+        excluidas = {
+            a.strip().upper()
+            for a in os.environ.get('GIFTCARD_CORREO_TIENDAS_EXCLUIR', '').split(',')
+            if a.strip()
+        }
+        tiendas = [
+            alias for alias in (
+                Sucursal.objects.filter(empresa_id=ref.empresa_id, activa=True)
+                .exclude(tipo_sucursal='CENTRO_DISTRIBUCION')
+                .order_by('alias').values_list('alias', flat=True)
+            )
+            if (alias or '').upper() not in excluidas
+        ]
 
     tarjetas = [{
         'codigo': (gc.codigo_fisico if gc.tipo_tarjeta == 'FISICA' and gc.codigo_fisico
@@ -1324,28 +1337,58 @@ def webhook_correo_giftcard(request):
         # proveedor no lo reintente eternamente.
         return JsonResponse({'success': True, 'ignorado': evento})
 
+    # El payload cambió entre versiones de webhook, así que se leen AMBAS:
+    #   v1: data.email = { message_id, recipient: {email}, reason }
+    #   v2: data.email = "destinatario@dominio" (texto) y data.message_id
+    # Verificado en developers.mailersend.com (los webhooks 2.0 son "más
+    # livianos"). Leer solo una forma dejaba el evento sin efecto: el endpoint
+    # respondía 200 y la tarjeta se quedaba en "en camino".
     datos = (payload.get('data') or {})
-    email_obj = (datos.get('email') or {})
-    message_id = (email_obj.get('message_id')
-                  or (email_obj.get('message') or {}).get('id') or '')
-    destinatario = ((email_obj.get('recipient') or {}).get('email') or '').strip()
-    detalle = (email_obj.get('reason')
-               or (datos.get('morph') or {}).get('reason') or '')[:255]
+    email_campo = datos.get('email')
+    email_obj = email_campo if isinstance(email_campo, dict) else {}
 
-    # Se ubica la tarjeta por Message-ID (exacto) y, como respaldo, por el
-    # último destinatario: MailerSend normaliza el ID quitando los <>.
+    message_id = (
+        email_obj.get('message_id')
+        or (email_obj.get('message') or {}).get('id')
+        or datos.get('message_id')
+        or datos.get('email_id')
+        or ''
+    )
+    destinatario = (
+        (email_campo if isinstance(email_campo, str) else '')
+        or (email_obj.get('recipient') or {}).get('email')
+        or datos.get('recipient')
+        or ''
+    ).strip()
+    detalle = (
+        email_obj.get('reason')
+        or datos.get('reason')
+        or (datos.get('morph') or {}).get('reason')
+        or ''
+    )[:255]
+
+    # Se ubica la tarjeta por Message-ID cuando coincide; si no (el id de
+    # MailerSend no es el Message-ID que genera el SMTP), por el ÚLTIMO envío
+    # hecho a ese destinatario. Se actualizan todas las tarjetas que viajaron
+    # en ese mismo correo — un trabajador con varios hijos recibe una sola
+    # pieza con varias gift cards, y el evento aplica a todas.
     qs = GiftCard.objects.none()
     if message_id:
-        limpio = message_id.strip().strip('<>')
-        qs = GiftCard.objects.filter(
-            Q(correo_message_id__icontains=limpio) | Q(correo_message_id=message_id)
-        )
+        limpio = str(message_id).strip().strip('<>')
+        if limpio:
+            qs = GiftCard.objects.filter(
+                Q(correo_message_id__icontains=limpio) | Q(correo_message_id=message_id)
+            )
     if not qs.exists() and destinatario:
-        qs = GiftCard.objects.filter(
+        ultimo = GiftCard.objects.filter(
             correo_enviado_a__iexact=destinatario,
             correo_enviado_en__isnull=False,
-        ).order_by('-correo_enviado_en')[:20]
-        qs = GiftCard.objects.filter(pk__in=[g.pk for g in qs])
+        ).order_by('-correo_enviado_en').first()
+        if ultimo:
+            qs = GiftCard.objects.filter(
+                correo_enviado_a__iexact=destinatario,
+                correo_message_id=ultimo.correo_message_id,
+            ) if ultimo.correo_message_id else GiftCard.objects.filter(pk=ultimo.pk)
 
     afectadas = 0
     ahora = timezone.now()

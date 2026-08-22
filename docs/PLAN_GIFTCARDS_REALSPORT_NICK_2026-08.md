@@ -114,11 +114,57 @@ Antes el sistema solo sabía "lo mandé". Ahora cada tarjeta tiene un **estado d
 
 Por eso el endpoint ahora responde **200** a las verificaciones de URL (GET, y POST mientras el secret no esté configurado) **sin procesar ni escribir nada**. Una vez copiado el Signing Secret al `.env`, empieza a registrar estados de verdad y rechaza con 401 cualquier POST sin firma válida.
 
+**Formato del payload — webhooks 1.0 vs 2.0 (bug encontrado y corregido 22-ago).** Los webhooks **2.0** (los que MailerSend crea por defecto) mandan un payload "más liviano" con otra estructura:
+
+```jsonc
+// v1 (anidado)                          // v2 (plano)
+{"data": {"email": {                     {"data": {
+   "message_id": "...",                     "message_id": "...",
+   "recipient": {"email": "x@y.cl"},        "email": "x@y.cl",   // ← TEXTO, no objeto
+   "reason": "..." }}}                      "reason": "..." }}
+```
+
+El parser original solo entendía v1: el endpoint respondía **200 pero no encontraba la tarjeta**, y el estado se quedaba en "en camino" (síntoma exacto observado: el panel mostraba `Success 200` y la ficha sin cambios). Ahora **lee ambos formatos**. Como el `message_id` de MailerSend no es el Message-ID que genera el SMTP, el match real se hace por el **último envío a ese destinatario**, y actualiza **todas las tarjetas que viajaron en ese mismo correo** (un trabajador con 3 hijos recibe una sola pieza con 3 códigos).
+
+**Eventos que hay que marcar en el webhook** — sin `activity.hard_bounced` no te enteras de los rebotes definitivos, que son justamente los que importan:
+
+| Evento | ¿Necesario? |
+|---|---|
+| `activity.delivered` | ✅ imprescindible |
+| `activity.hard_bounced` | ✅ **imprescindible** (dirección inexistente) |
+| `activity.soft_bounced` | ✅ sí (buzón lleno) |
+| `activity.spam_complaint` | ✅ sí |
+| `activity.opened` | opcional (marca "abierto") |
+| `activity.survey_opened` | ❌ no aplica, se ignora |
+
 El endpoint valida `Signature` = HMAC-SHA256 hex del cuerpo crudo, que es exactamente el esquema de MailerSend.
 
 ⚠️ **El deploy de DigitalOcean NO ejecuta `migrate`** (el Dockerfile solo hace `collectstatic` + gunicorn). Tras subir código con migraciones hay que correr a mano, desde la consola de la app: `cd /app/retailmind && python manage.py migrate app`. Si no, los modelos tienen campos que no existen en la BD y **se caen la cuadratura de caja, los arqueos y todo el módulo de gift cards** con error 500. Conviene automatizarlo (`pre_deploy_job` en el spec de App Platform, o anteponer `python manage.py migrate --noinput &&` al CMD del Dockerfile). Además acepta el **secret público de prueba** (`test_Am3L1GuOIc4blLUuHqAPxxwkZaJyEk8G`) para que el botón "Send test" del panel muestre éxito, pero responde sin escribir ningún estado — ese secret está publicado y no puede servir para alterar entregas.
 
 ⚠️ **`retailmind/.env` sigue TRACKEADO en git** (aunque está en `.gitignore`, que no aplica a archivos ya versionados): cualquier secret que se agregue ahí se commitea. Ver `docs/SEGURIDAD_URGENTE_2026-07-25.md`.
+
+### Guía de pruebas del circuito completo (post-deploy)
+
+**Paso 0 — migraciones.** Abre *Ventas → Cuadratura de Caja* y *Gift Cards*. Si cargan sin error 500, las migraciones están aplicadas. Si no: `cd /app/retailmind && python manage.py migrate app`.
+
+**Paso 1 — ¿está el secret?** Abre `https://retail.webappsolutions.cl/app/api/giftcards/webhook-correo/` → debe decir `"listo": true`. Si dice `false`, falta `GIFTCARD_WEBHOOK_SECRET`.
+
+**Paso 2 — "Send test" del panel de MailerSend.** Debe reportar **éxito (200)**. Ojo con lo que significa: MailerSend firma esa prueba con un secret público fijo, así que el sistema responde OK **pero no modifica ninguna tarjeta**, a propósito. Sirve para confirmar que MailerSend alcanza tu servidor; **no** prueba que los estados se registren.
+
+**Paso 3 — prueba real de entrega (la que importa).**
+1. Emite una gift card de prueba por un monto bajo ($1.000).
+2. Gestionar → *Enviar por correo* → a tu propia dirección.
+3. Confirma que el correo llegó (revisa spam).
+4. En el listado, refresca: el estado debe pasar de 📧 *en camino* a ✅ **entregado** en menos de un minuto.
+5. Abre el correo en tu cliente → al refrescar debería quedar 👁 **abierto**.
+
+**Paso 4 — prueba de rebote.** Envía otra gift card de prueba a una dirección de un dominio inexistente (ej. `prueba@dominio-que-no-existe-98765.cl`). En segundos el estado debe pasar a ⚠️ **REBOTÓ**, con el motivo visible en Gestionar, y la tarjeta debe aparecer en el filtro **"⚠️ No llegaron"**. No abuses de esta prueba: los rebotes afectan la reputación de envío del dominio.
+
+**Paso 5 — cobro en el POS.** Vende algo por más del saldo de la tarjeta de prueba y págalo con gift card + efectivo. Verifica: se descuenta solo lo disponible, sale el **comprobante térmico** con RUT y firma, el modal de cierre avisa "PAGO CON GIFT CARD" con el saldo restante, y en *Cuadratura de Caja* aparece la fila **GIFT CARD** sin alterar el efectivo.
+
+**Paso 6 — reportes.** En Gift Cards → *Trazabilidad* → "Ver solo canjes": debe listar el consumo con el folio de la boleta y el subtotal por sucursal.
+
+**Paso 7 — limpieza.** Anula las gift cards de prueba para no dejar pasivo falso (Gestionar → Anular, con motivo).
 
 ### Dónde se pueden usar las gift cards (verificado en prod 21-ago)
 

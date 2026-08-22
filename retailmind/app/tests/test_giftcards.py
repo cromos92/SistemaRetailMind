@@ -662,6 +662,71 @@ class GiftCardEstadoCorreoTest(TestCase):
         finally:
             os.environ.pop('GIFTCARD_WEBHOOK_SECRET', None)
 
+    def _payload_v2(self, tipo, message_id='ms-id-123', email='papa@empresa.com',
+                    reason=''):
+        """Formato de los webhooks 2.0: payload plano (data.email es TEXTO)."""
+        return {
+            'type': tipo,
+            'created_at': '2026-08-22T15:54:26.000000Z',
+            'data': {
+                'id': 'evt-1', 'domain_id': 'dom-1',
+                'message_id': message_id, 'email_id': 'eml-1',
+                'type': tipo.split('.')[-1],
+                'subject': 'Tu Gift Card',
+                'email': email,          # <-- string, no objeto (v2)
+                'reason': reason,
+                'tags': [], 'meta': [],
+            },
+        }
+
+    def test_webhook_v2_delivered_actualiza_estado(self):
+        """Webhooks 2.0: el destinatario viene como texto en data.email.
+
+        Con el parser antiguo (solo v1) el endpoint respondía 200 pero no
+        encontraba la tarjeta y el estado se quedaba en ENVIADO.
+        """
+        import os
+        os.environ['GIFTCARD_WEBHOOK_SECRET'] = self.SECRET
+        try:
+            gc = self._gc_enviada(email='papa@empresa.com')
+            resp = self._post_webhook(self._payload_v2('activity.delivered'))
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.json().get('tarjetas'), 1)
+            gc.refresh_from_db()
+            self.assertEqual(gc.correo_estado, 'ENTREGADO')
+        finally:
+            os.environ.pop('GIFTCARD_WEBHOOK_SECRET', None)
+
+    def test_webhook_v2_bounce_con_motivo(self):
+        import os
+        os.environ['GIFTCARD_WEBHOOK_SECRET'] = self.SECRET
+        try:
+            gc = self._gc_enviada(email='malo@empresa.com')
+            self._post_webhook(self._payload_v2(
+                'activity.hard_bounced', email='malo@empresa.com',
+                reason='Recipient address rejected'))
+            gc.refresh_from_db()
+            self.assertEqual(gc.correo_estado, 'REBOTADO')
+            self.assertIn('rejected', gc.correo_estado_detalle)
+        finally:
+            os.environ.pop('GIFTCARD_WEBHOOK_SECRET', None)
+
+    def test_webhook_v2_actualiza_todas_las_del_mismo_correo(self):
+        """Un papá con 3 hijos recibe UN correo: el evento aplica a las 3."""
+        import os
+        os.environ['GIFTCARD_WEBHOOK_SECRET'] = self.SECRET
+        try:
+            from app.views_modulo_giftcards import enviar_codigos_por_correo
+            gcs = [giftcard_service.emitir(50000, empresa=self.empresa) for _ in range(3)]
+            enviar_codigos_por_correo(gcs, 'papa3@empresa.com', sucursal=self.sucursal)
+            self._post_webhook(self._payload_v2('activity.delivered',
+                                                email='papa3@empresa.com'))
+            for gc in gcs:
+                gc.refresh_from_db()
+                self.assertEqual(gc.correo_estado, 'ENTREGADO')
+        finally:
+            os.environ.pop('GIFTCARD_WEBHOOK_SECRET', None)
+
     def test_webhook_delivered_y_bounce_actualizan_estado(self):
         import os
         os.environ['GIFTCARD_WEBHOOK_SECRET'] = self.SECRET
@@ -742,6 +807,32 @@ class GiftCardEstadoCorreoTest(TestCase):
         gc.refresh_from_db()
         self.assertEqual(gc.correo_estado, 'CONFIRMADO_MANUAL')
         self.assertIn('WhatsApp', gc.correo_estado_detalle)
+
+    def test_correo_omite_tiendas_inactivas_y_excluidas(self):
+        """No se le nombran al cliente locales cerrados o que no operan."""
+        import os
+        from django.core import mail
+        from app.views_modulo_giftcards import enviar_codigos_por_correo
+        crear_sucursal(empresa=self.empresa, alias='NICKZ1')
+        crear_sucursal(empresa=self.empresa, alias='NICKZ2')
+        crear_sucursal(empresa=self.empresa, alias='NICKZ3')          # se excluye por env
+        crear_sucursal(empresa=self.empresa, alias='NICKOFF', activa=False)  # inactiva
+
+        gc = giftcard_service.emitir(50000, empresa=self.empresa)
+        os.environ['GIFTCARD_CORREO_TIENDAS_EXCLUIR'] = 'NICKZ3'
+        try:
+            enviar_codigos_por_correo([gc], 'cliente@test.cl', sucursal=self.sucursal)
+        finally:
+            os.environ.pop('GIFTCARD_CORREO_TIENDAS_EXCLUIR', None)
+
+        cuerpo = mail.outbox[-1].body
+        html = mail.outbox[-1].alternatives[0][0]
+        self.assertIn('NICKZ1', cuerpo)
+        self.assertIn('NICKZ2', cuerpo)
+        self.assertNotIn('NICKZ3', cuerpo)      # excluida por configuración
+        self.assertNotIn('NICKZ3', html)
+        self.assertNotIn('NICKOFF', cuerpo)     # inactiva
+        self.assertNotIn('NICKOFF', html)
 
     def test_envio_deja_estado_enviado_y_filtros(self):
         from app.views_modulo_giftcards import enviar_codigos_por_correo
