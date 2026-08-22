@@ -808,15 +808,19 @@ class GiftCardEstadoCorreoTest(TestCase):
         self.assertEqual(gc.correo_estado, 'CONFIRMADO_MANUAL')
         self.assertIn('WhatsApp', gc.correo_estado_detalle)
 
-    def test_correo_omite_tiendas_inactivas_y_excluidas(self):
-        """No se le nombran al cliente locales cerrados o que no operan."""
+    def test_correo_muestra_direcciones_no_alias_internos(self):
+        """Al cliente se le dan DIRECCIONES ("Matta 2479"), no códigos internos
+        ("NICK1"), y se omiten los locales cerrados o que no operan."""
         import os
         from django.core import mail
         from app.views_modulo_giftcards import enviar_codigos_por_correo
-        crear_sucursal(empresa=self.empresa, alias='NICKZ1')
-        crear_sucursal(empresa=self.empresa, alias='NICKZ2')
-        crear_sucursal(empresa=self.empresa, alias='NICKZ3')          # se excluye por env
-        crear_sucursal(empresa=self.empresa, alias='NICKOFF', activa=False)  # inactiva
+        crear_sucursal(empresa=self.empresa, alias='NICKZ1',
+                       direccion='Matta 2479', comuna='Santiago')
+        crear_sucursal(empresa=self.empresa, alias='NICKZ2', direccion='Matta 2438')
+        crear_sucursal(empresa=self.empresa, alias='NICKZ3',
+                       direccion='Matta 2418')                        # excluida por env
+        crear_sucursal(empresa=self.empresa, alias='NICKOFF',
+                       direccion='Bodega 999', activa=False)          # inactiva
 
         gc = giftcard_service.emitir(50000, empresa=self.empresa)
         os.environ['GIFTCARD_CORREO_TIENDAS_EXCLUIR'] = 'NICKZ3'
@@ -827,12 +831,16 @@ class GiftCardEstadoCorreoTest(TestCase):
 
         cuerpo = mail.outbox[-1].body
         html = mail.outbox[-1].alternatives[0][0]
-        self.assertIn('NICKZ1', cuerpo)
-        self.assertIn('NICKZ2', cuerpo)
-        self.assertNotIn('NICKZ3', cuerpo)      # excluida por configuración
-        self.assertNotIn('NICKZ3', html)
-        self.assertNotIn('NICKOFF', cuerpo)     # inactiva
-        self.assertNotIn('NICKOFF', html)
+        # Direcciones sí (con comuna cuando existe); alias internos NO
+        self.assertIn('Matta 2479, Santiago', html)
+        self.assertIn('Matta 2438', html)
+        self.assertNotIn('NICKZ1', html)
+        self.assertNotIn('NICKZ1', cuerpo)
+        # Excluida por configuración e inactiva: ni por alias ni por dirección
+        self.assertNotIn('Matta 2418', html)
+        self.assertNotIn('Matta 2418', cuerpo)
+        self.assertNotIn('Bodega 999', html)
+        self.assertNotIn('Bodega 999', cuerpo)
 
     def test_envio_deja_estado_enviado_y_filtros(self):
         from app.views_modulo_giftcards import enviar_codigos_por_correo

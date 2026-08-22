@@ -5003,6 +5003,31 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         const codigo = (document.getElementById('valeCanjeInput').value || '').trim().toUpperCase();
         if (!codigo) { mostrarNotificacion('Ingrese el código del vale', 'warning'); return; }
+        // Confusión frecuente: la gift card (GC-XXXX-XXXX-XXXX) NO es un vale de
+        // puntos. Son dos sistemas distintos y este campo respondía "El código no
+        // existe", que no le dice al cajero qué hacer. Se le indica el camino.
+        if (/^GC-/.test(codigo)) {
+            document.getElementById('valeCanjeMsg').innerHTML = '';
+            Swal.fire({
+                icon: 'info',
+                title: 'Eso es una Gift Card',
+                html: '<div class="text-start">Este campo es solo para <strong>vales de puntos</strong> '
+                    + '(códigos RM-XXXXXXXX).<br><br>Para cobrar con gift card usa el botón '
+                    + '<strong>🎁 Gift Card</strong> del panel de pagos.</div>',
+                confirmButtonText: 'Ir a pagar con Gift Card',
+                showCancelButton: true,
+                cancelButtonText: 'Cerrar',
+            }).then(res => {
+                limpiarVale();
+                if (res.isConfirmed) {
+                    agregarPago('GIFTCARD');
+                    // El código ya lo tecleó el cajero: se lo dejamos puesto.
+                    const campo = document.getElementById('pagoVoucher');
+                    if (campo) { campo.value = codigo; consultarSaldoGiftcardPos(); }
+                }
+            });
+            return;
+        }
         const msgEl = document.getElementById('valeCanjeMsg');
         msgEl.innerHTML = '<span class="text-muted"><i class="ri-loader-2-line"></i> Validando…</span>';
         const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;

@@ -988,14 +988,18 @@ def enviar_codigos_por_correo(giftcards, email_destino, *, nombre_destino='',
             for a in os.environ.get('GIFTCARD_CORREO_TIENDAS_EXCLUIR', '').split(',')
             if a.strip()
         }
-        tiendas = [
-            alias for alias in (
-                Sucursal.objects.filter(empresa_id=ref.empresa_id, activa=True)
-                .exclude(tipo_sucursal='CENTRO_DISTRIBUCION')
-                .order_by('alias').values_list('alias', flat=True)
-            )
-            if (alias or '').upper() not in excluidas
-        ]
+        # Al cliente se le da la DIRECCIÓN, no el alias interno: "NICK1" no le
+        # dice nada a quien recibe la tarjeta; "Matta 2479" sí. Si alguna
+        # sucursal no tiene dirección cargada, cae a su alias.
+        for s in (Sucursal.objects
+                  .filter(empresa_id=ref.empresa_id, activa=True)
+                  .exclude(tipo_sucursal='CENTRO_DISTRIBUCION')
+                  .order_by('alias')):
+            if (s.alias or '').upper() in excluidas:
+                continue
+            partes = [p for p in [(s.direccion or '').strip(),
+                                  (s.comuna or '').strip()] if p]
+            tiendas.append(', '.join(partes) if partes else (s.alias or ''))
 
     tarjetas = [{
         'codigo': (gc.codigo_fisico if gc.tipo_tarjeta == 'FISICA' and gc.codigo_fisico
@@ -1017,8 +1021,8 @@ def enviar_codigos_por_correo(giftcards, email_destino, *, nombre_destino='',
     })
 
     saludo = f'Hola {nombre_destino}, ' if nombre_destino else 'Hola, '
-    donde = (f'en cualquier tienda de {ref.empresa.nombre} ({", ".join(tiendas)})'
-             if ref.empresa_id and tiendas else 'en cualquiera de nuestras tiendas')
+    donde = (f'en cualquiera de nuestras tiendas ({" / ".join(tiendas)})'
+             if tiendas else 'en cualquiera de nuestras tiendas')
     detalle_txt = '\n'.join(
         (f"{t['beneficiario']}: " if t['beneficiario'] else '')
         + f"{t['codigo']}  (${t['monto']:,})"

@@ -67,7 +67,9 @@
           <td style="padding:8px 40px 8px 40px;color:#1A1A2E;">
             <p style="margin:0 0 10px 0;font-size:15px;font-weight:bold;">¿Cómo usarla?</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;color:#555a66;line-height:1.7;">
-              <tr><td style="padding:2px 0;">1&nbsp;&nbsp;Acércate a caja en {% if tiendas %}cualquiera de nuestras tiendas ({{ tiendas|join:", " }}){% else %}cualquiera de nuestras tiendas{% endif %}.</td></tr>
+              <tr><td style="padding:2px 0;">1&nbsp;&nbsp;Acércate a caja en cualquiera de nuestras tiendas{% if tiendas %}:{% endif %}
+                {% if tiendas %}<br><span style="color:#1A1A2E;">{% for t in tiendas %}&nbsp;&nbsp;&nbsp;&nbsp;📍 {{ t }}<br>{% endfor %}</span>{% endif %}
+              </td></tr>
               <tr><td style="padding:2px 0;">2&nbsp;&nbsp;Muestra este código (impreso o desde tu teléfono).</td></tr>
               <tr><td style="padding:2px 0;">3&nbsp;&nbsp;Se descuenta del total de tu compra. Si no usas todo el monto, <strong>el saldo queda disponible</strong> para una próxima compra dentro de la vigencia.</td></tr>
             </table>
@@ -95,7 +97,7 @@
         <tr>
           <td style="padding:14px 40px 26px 40px;font-size:11px;color:#8a8f9c;line-height:1.7;">
             {% if fecha_vencimiento_humana %}• Válida hasta la fecha indicada. {% endif %}No se canjea por dinero en efectivo ni se recarga con vuelto.<br>
-            {% if tiendas %}• Utilizable en las tiendas: {{ tiendas|join:", " }}.<br>{% else %}• Utilizable en todas nuestras tiendas.<br>{% endif %}
+            {% if tiendas %}• Utilizable en: {{ tiendas|join:" · " }}.<br>{% else %}• Utilizable en todas nuestras tiendas.<br>{% endif %}
             • Puedes consultar tu saldo en cualquier caja presentando el código.<br>
             • Si tu compra supera el monto de la tarjeta, pagas la diferencia con cualquier medio de pago.
           </td>

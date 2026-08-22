@@ -30,7 +30,9 @@ Formato del CSV (separador `;`, con encabezado):
 import csv
 import logging
 import os
+import time
 
+from django.core.mail import get_connection
 from django.core.management.base import BaseCommand, CommandError
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
@@ -72,6 +74,10 @@ class Command(BaseCommand):
         parser.add_argument('--correo-por-tarjeta', action='store_true',
                             help='Un correo por cada tarjeta (default: uno por destinatario '
                                  'con todas sus tarjetas juntas).')
+        parser.add_argument('--solo-pendientes', action='store_true',
+                            help='NO emite nada: reenvía solo a los destinatarios del CSV '
+                                 'cuyas gift cards del lote quedaron sin correo enviado. '
+                                 'Usa --descripcion para identificar el lote.')
 
     # --- helpers de resolución (mismos criterios que emitir_giftcards_lote) ---
     def _resolver_sucursal(self, valor):
@@ -119,6 +125,41 @@ class Command(BaseCommand):
         if not filas:
             raise CommandError('El CSV no tiene filas de datos.')
         return filas
+
+    def _emitir(self, filas, monto, sucursal, empresa, vencimiento, motivo,
+                descripcion_lote):
+        """Emite una gift card por fila del CSV. Devuelve [(fila, giftcard)]."""
+        emitidas = []
+        for f in filas:
+            desc = ' - '.join(x for x in (descripcion_lote, f['beneficiario']) if x)
+            gc = giftcard_service.emitir(
+                monto,
+                sucursal=sucursal,
+                empresa=empresa,
+                vencimiento=vencimiento,
+                tipo_tarjeta='DIGITAL',
+                motivo=motivo,
+                descripcion=desc,
+                observaciones=(f"Trabajador: {f['trabajador']}" if f['trabajador'] else ''),
+            )
+            emitidas.append((f, gc))
+            self.stdout.write(f"  {len(emitidas):>3}/{len(filas)}  {gc.codigo}  "
+                              f"{f['beneficiario'] or '(sin nombre)'}  → {f['correo']}")
+        return emitidas
+
+    def _escribir_csv(self, emitidas, empresa):
+        """Respaldo con los códigos ANTES de intentar enviar los correos."""
+        stamp = timezone.localtime().strftime('%Y%m%d_%H%M%S')
+        ruta_csv = os.path.join(os.getcwd(), f'_giftcards_emitidas_{stamp}.csv')
+        with open(ruta_csv, 'w', newline='', encoding='utf-8-sig') as fh:
+            w = csv.writer(fh, delimiter=';')
+            w.writerow(['codigo', 'monto', 'beneficiario', 'trabajador', 'correo',
+                        'vencimiento', 'ambito'])
+            for f, gc in emitidas:
+                w.writerow([gc.codigo, gc.saldo_actual, f['beneficiario'], f['trabajador'],
+                            f['correo'], gc.fecha_vencimiento,
+                            empresa.nombre if empresa else 'TODAS'])
+        return ruta_csv
 
     def handle(self, *args, **options):
         monto = options['monto']
@@ -171,7 +212,9 @@ class Command(BaseCommand):
             self.stdout.write(f'    {correo:<40} {len(items)} → {nombres}')
         self.stdout.write('')
 
-        if not options['aplicar']:
+        # El dry-run de EMISIÓN no aplica al modo reenvío: ese tiene su propio
+        # resumen (qué tarjetas quedaron sin avisar) más abajo.
+        if not options['aplicar'] and not options['solo_pendientes']:
             self.stdout.write(self.style.WARNING(
                 '[DRY-RUN] No se emitió ni envió nada. Agrega --aplicar para emitir'
                 + (' y --enviar para mandar los correos.' if not options['enviar']
@@ -179,38 +222,70 @@ class Command(BaseCommand):
             ))
             return
 
-        # ===== EMISIÓN =====
-        emitidas = []   # [(fila, giftcard)]
-        for f in filas:
-            desc = ' - '.join(x for x in (descripcion_lote, f['beneficiario']) if x)
-            gc = giftcard_service.emitir(
-                monto,
-                sucursal=sucursal,
-                empresa=empresa,
-                vencimiento=vencimiento,
-                tipo_tarjeta='DIGITAL',
-                motivo=motivo,
-                descripcion=desc,
-                observaciones=(f"Trabajador: {f['trabajador']}" if f['trabajador'] else ''),
+        # ===== REENVÍO DE PENDIENTES (no emite nada) =====
+        # Sirve cuando el proveedor cortó la conexión a mitad del lote: las
+        # tarjetas ya existen y solo falta avisarle a su destinatario.
+        if options['solo_pendientes']:
+            if not descripcion_lote:
+                raise CommandError(
+                    '--solo-pendientes necesita --descripcion para identificar el lote.')
+            pendientes = list(
+                GiftCard.objects
+                .filter(descripcion__startswith=descripcion_lote,
+                        correo_enviado_en__isnull=True)
+                .exclude(estado='ANULADA')
+                .order_by('id')
             )
-            emitidas.append((f, gc))
-            self.stdout.write(f"  {len(emitidas):>3}/{len(filas)}  {gc.codigo}  "
-                              f"{f['beneficiario'] or '(sin nombre)'}  → {f['correo']}")
-
-        # CSV de respaldo con los códigos emitidos (antes de intentar enviar).
-        stamp = timezone.localtime().strftime('%Y%m%d_%H%M%S')
-        ruta_csv = os.path.join(os.getcwd(), f'_giftcards_emitidas_{stamp}.csv')
-        with open(ruta_csv, 'w', newline='', encoding='utf-8-sig') as fh:
-            w = csv.writer(fh, delimiter=';')
-            w.writerow(['codigo', 'monto', 'beneficiario', 'trabajador', 'correo',
-                        'vencimiento', 'ambito'])
-            for f, gc in emitidas:
-                w.writerow([gc.codigo, gc.saldo_actual, f['beneficiario'], f['trabajador'],
-                            f['correo'], gc.fecha_vencimiento,
-                            empresa.nombre if empresa else 'TODAS'])
-        self.stdout.write('')
-        self.stdout.write(self.style.SUCCESS(f'>> {len(emitidas)} gift cards emitidas.'))
-        self.stdout.write(self.style.SUCCESS(f'>> Códigos en: {ruta_csv}'))
+            if not pendientes:
+                self.stdout.write(self.style.SUCCESS(
+                    '>> No hay gift cards pendientes de envío en este lote.'))
+                return
+            # Se cruza cada tarjeta con su destinatario usando el nombre del
+            # beneficiario que quedó grabado en la descripción.
+            por_beneficiario = {}
+            for f in filas:
+                clave = (f['beneficiario'] or '').strip().upper()
+                por_beneficiario.setdefault(clave, []).append(f)
+            emitidas = []
+            sin_cruce = []
+            usados = set()
+            for gc in pendientes:
+                nombre_benef = (gc.descripcion or '').replace(descripcion_lote, '', 1)
+                nombre_benef = nombre_benef.lstrip(' -').strip().upper()
+                candidatos = [f for f in por_beneficiario.get(nombre_benef, [])
+                              if id(f) not in usados]
+                if not candidatos:
+                    sin_cruce.append(gc)
+                    continue
+                f = candidatos[0]
+                usados.add(id(f))
+                emitidas.append((f, gc))
+            self.stdout.write(self.style.WARNING(
+                f'>> MODO REENVÍO: {len(emitidas)} gift card(s) sin correo enviado.'))
+            if sin_cruce:
+                self.stdout.write(self.style.ERROR(
+                    f'   {len(sin_cruce)} tarjeta(s) no se pudieron cruzar con el CSV '
+                    '(envíalas desde la pantalla): '
+                    + ', '.join(g.codigo for g in sin_cruce)))
+            if not options['aplicar']:
+                for f, gc in emitidas:
+                    self.stdout.write(f"   {gc.codigo}  {f['beneficiario'] or '(sin nombre)'}"
+                                      f"  → {f['correo']}")
+                self.stdout.write(self.style.WARNING(
+                    '[DRY-RUN] Agrega --aplicar --enviar para reenviarlos.'))
+                return
+            if not options['enviar']:
+                raise CommandError('--solo-pendientes requiere también --enviar.')
+            ruta_csv = '(reenvío: no se generó CSV nuevo)'
+            self.stdout.write('')
+        else:
+            # ===== EMISIÓN =====
+            emitidas = self._emitir(filas, monto, sucursal, empresa, vencimiento,
+                                    motivo, descripcion_lote)
+            ruta_csv = self._escribir_csv(emitidas, empresa)
+            self.stdout.write('')
+            self.stdout.write(self.style.SUCCESS(f'>> {len(emitidas)} gift cards emitidas.'))
+            self.stdout.write(self.style.SUCCESS(f'>> Códigos en: {ruta_csv}'))
 
         if not options['enviar']:
             self.stdout.write('Para enviarlas por correo: repite con --enviar, o usa el '
@@ -220,7 +295,7 @@ class Command(BaseCommand):
         # ===== ENVÍO DE CORREOS =====
         # Una sola conexión SMTP para todo el lote: si la abre cada send(),
         # Django la cierra al terminar y cada correo paga otro handshake TLS.
-        from django.core.mail import get_connection
+        # (Se reabre automáticamente si el proveedor la corta — ver más abajo.)
         connection = get_connection(
             timeout=int(os.environ.get('GIFTCARD_EMAIL_TIMEOUT', '30'))
         )
@@ -234,6 +309,53 @@ class Command(BaseCommand):
             )
 
         enviados_ok, fallidos = 0, []
+        # Una respuesta 421 del servidor ("Service not available", típico tope de
+        # envío) DEJA MUERTA la conexión: los mensajes siguientes reventaban con
+        # "please run connect() first" y un solo fallo se llevaba todo el lote
+        # (medido en prod 22-ago: 1 rechazo -> 10 correos perdidos). Por eso cada
+        # destinatario se reintenta reabriendo la conexión, y se hace una pausa
+        # entre envíos para no gatillar el límite.
+        pausa = float(os.environ.get('GIFTCARD_EMAIL_PAUSA_SEG', '1'))
+        intentos_max = int(os.environ.get('GIFTCARD_EMAIL_REINTENTOS', '3'))
+        estado = {'conn': connection}
+
+        def _reabrir():
+            try:
+                estado['conn'].close()
+            except Exception:
+                pass
+            nueva = get_connection(
+                timeout=int(os.environ.get('GIFTCARD_EMAIL_TIMEOUT', '30'))
+            )
+            nueva.open()
+            estado['conn'] = nueva
+
+        def _enviar_con_reintento(gcs, correo, nombre, benef):
+            ultimo_error = None
+            for intento in range(1, intentos_max + 1):
+                try:
+                    return enviar_codigos_por_correo(
+                        gcs, correo, nombre_destino=nombre,
+                        sucursal=sucursal, beneficiarios=benef,
+                        connection=estado['conn'],
+                    )
+                except CorreoGiftCardError as e:
+                    ultimo_error = e
+                    if intento < intentos_max:
+                        espera = pausa * (intento * 2)
+                        self.stdout.write(self.style.WARNING(
+                            f'  … reintento {intento + 1}/{intentos_max} para {correo} '
+                            f'(esperando {espera:.0f}s)'
+                        ))
+                        time.sleep(espera)
+                        try:
+                            _reabrir()
+                        except Exception as e2:
+                            ultimo_error = CorreoGiftCardError(
+                                f'No se pudo reabrir la conexión: {e2}')
+                            break
+            raise ultimo_error
+
         try:
             if agrupar:
                 grupos = {}
@@ -251,13 +373,11 @@ class Command(BaseCommand):
                     for f, gc in emitidas
                 ]
 
-            for correo, gcs, nombre, benef in lotes:
+            for i, (correo, gcs, nombre, benef) in enumerate(lotes):
+                if i and pausa:
+                    time.sleep(pausa)   # no gatillar el tope de envío del proveedor
                 try:
-                    enviar_codigos_por_correo(
-                        gcs, correo, nombre_destino=nombre,
-                        sucursal=sucursal, beneficiarios=benef,
-                        connection=connection,
-                    )
+                    _enviar_con_reintento(gcs, correo, nombre, benef)
                     enviados_ok += 1
                     self.stdout.write(self.style.SUCCESS(
                         f'  ✓ {correo} ({len(gcs)} tarjeta(s))'
@@ -269,7 +389,7 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.ERROR(f'  ✗ {correo}: {e}'))
         finally:
             try:
-                connection.close()
+                estado['conn'].close()
             except Exception:
                 pass
 
@@ -282,5 +402,8 @@ class Command(BaseCommand):
             ))
             for correo, err in fallidos:
                 self.stdout.write(self.style.ERROR(f'   - {correo}: {err}'))
-        logger.info("emitir_giftcards_desde_lista: %s GC emitidas, %s correos ok, %s fallidos",
-                    len(emitidas), enviados_ok, len(fallidos))
+        logger.info(
+            "emitir_giftcards_desde_lista: modo=%s, %s gift cards, %s correos ok, %s fallidos",
+            'REENVIO' if options['solo_pendientes'] else 'EMISION',
+            len(emitidas), enviados_ok, len(fallidos),
+        )
