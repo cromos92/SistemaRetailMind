@@ -594,7 +594,10 @@
                         <div class="row g-2">
                             <!-- Panel Izquierdo: Productos -->
                             <div class="col-md-8">
-                                <div class="card shadow-sm h-100">
+                                <!-- Sin h-100: la card ya no es lo único de esta columna (debajo
+                                     van Resumen y Beneficios), así que estirarla dejaba el bloque
+                                     inferior fuera de la pantalla. -->
+                                <div class="card shadow-sm">
                                     <div class="card-header bg-dark text-white py-2">
                                         <div class="d-flex justify-content-between align-items-center">
                                             <h6 class="mb-0 fw-bold text-white">
@@ -653,8 +656,13 @@
                                         </div>
                                     </div>
 
+                                    <!-- Alto FIJO con scroll propio: antes la tabla crecía con cada
+                                         producto y desplazaba todo lo de abajo; con 2 ítems dejaba un
+                                         hueco enorme. Ahora el bloque de Resumen/beneficios queda
+                                         siempre en el mismo lugar. El thead va sticky para no perder
+                                         los títulos de columna al desplazarse. -->
                                     <div class="card-body p-0">
-                                        <div class="table-responsive">
+                                        <div class="table-responsive pos-tabla-productos-scroll">
                                             <table class="table table-hover table-sm mb-0">
                                                 <thead class="table-light">
                                                     <tr>
@@ -681,76 +689,159 @@
                                         </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <!-- Panel Derecho: Resumen (fijo arriba) + métodos (scroll) + Pagos (pie fijo) -->
-                            <div class="col-md-4 pos-checkout-col">
-                                <!-- ===== RESUMEN STICKY (encabezado fijo) ===== -->
-                                <div class="pos-resumen-sticky-wrapper">
-                                    <div class="card shadow-sm pos-resumen-card">
-                                        <div class="card-header bg-primary text-white py-2">
-                                            <div class="d-flex justify-content-between align-items-center">
-                                                <h6 class="mb-0 fw-bold text-white">
-                                                    <i class="ri-calculator-line me-1"></i> Resumen de Venta
-                                                </h6>
-                                                <span class="badge bg-white text-primary" style="font-size:0.65rem;">
-                                                    <i class="ri-shopping-bag-line"></i> <span id="totalItems">0</span> items
-                                                </span>
+                                <!-- ===== BAJO LA TABLA: Resumen + beneficios =====
+                                     Ocupan el espacio que antes quedaba vacío bajo la tabla, y al
+                                     salir de la columna derecha dejan los métodos de pago arriba
+                                     del todo. Los ids y las funciones son los mismos de antes. -->
+                                <div class="row g-2 mt-1 pos-bajo-tabla">
+                                    <!-- Resumen de Venta -->
+                                    <div class="col-lg-5">
+                                        <div class="card shadow-sm pos-resumen-card h-100">
+                                            <div class="card-header bg-primary text-white py-2">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <h6 class="mb-0 fw-bold text-white">
+                                                        <i class="ri-calculator-line me-1"></i> Resumen de Venta
+                                                    </h6>
+                                                    <span class="badge bg-white text-primary" style="font-size:0.65rem;">
+                                                        <i class="ri-shopping-bag-line"></i> <span id="totalItems">0</span> items
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div class="card-body p-2">
+                                                <!-- Hero: Saldo pendiente gigante / Pagado -->
+                                                <div id="heroSaldo" class="pos-hero-saldo pos-hero-pendiente">
+                                                    <div class="pos-hero-label">
+                                                        <i class="ri-arrow-down-circle-line"></i>
+                                                        <span id="heroSaldoLabel">SALDO PENDIENTE</span>
+                                                    </div>
+                                                    <div class="pos-hero-amount" id="saldo">$0</div>
+                                                </div>
+
+                                                <div class="pos-resumen-mini mt-2">
+                                                    <div class="pos-resumen-mini-cell">
+                                                        <span class="pos-mini-label">Subtotal</span>
+                                                        <strong id="subtotal">$0</strong>
+                                                    </div>
+                                                    <div class="pos-resumen-mini-cell" id="lineaDescuento" style="display: none;">
+                                                        <span class="pos-mini-label text-warning"><i class="ri-price-tag-3-line"></i> Dcto.</span>
+                                                        <strong class="text-warning" id="descuento">-$0</strong>
+                                                    </div>
+                                                    <!-- Cupón / vale de puntos: el beneficio se resta al total en el
+                                                         backend, así que sin esta línea el cajero ve bajar el total
+                                                         sin saber por qué. -->
+                                                    <div class="pos-resumen-mini-cell" id="lineaBeneficio" style="display: none;">
+                                                        <span class="pos-mini-label" id="beneficioLabel"><i class="ri-coupon-3-line"></i> Cupón</span>
+                                                        <strong id="beneficioMonto" style="color:#405189">-$0</strong>
+                                                    </div>
+                                                    <div class="pos-resumen-mini-cell">
+                                                        <span class="pos-mini-label">Total</span>
+                                                        <strong class="text-primary" id="total">$0</strong>
+                                                    </div>
+                                                    <div class="pos-resumen-mini-cell">
+                                                        <span class="pos-mini-label">Pagado</span>
+                                                        <strong class="text-success" id="pagado">$0</strong>
+                                                    </div>
+                                                </div>
+
+                                                <!-- CTA Continuar a Finalizar (aparece cuando saldo = 0) -->
+                                                <div id="ctaContinuarFinalizar" class="mt-2" style="display:none;">
+                                                    <button class="btn btn-success btn-lg w-100 py-3 fw-bold pos-cta-finalizar"
+                                                            onclick="pasoSiguiente()"
+                                                            title="Ir al paso de confirmación (F10)">
+                                                        <i class="ri-check-double-line me-1"></i> CONTINUAR A FINALIZAR
+                                                        <kbd class="pos-kbd-cta ms-2">F10</kbd>
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
-                                        <div class="card-body p-2">
-                                            <!-- Hero: Saldo pendiente gigante / Pagado -->
-                                            <div id="heroSaldo" class="pos-hero-saldo pos-hero-pendiente">
-                                                <div class="pos-hero-label">
-                                                    <i class="ri-arrow-down-circle-line"></i>
-                                                    <span id="heroSaldoLabel">SALDO PENDIENTE</span>
-                                                </div>
-                                                <div class="pos-hero-amount" id="saldo">$0</div>
-                                            </div>
+                                    </div>
 
-                                            <!-- Desglose compacto (3 columnas) -->
-                                            <div class="pos-resumen-mini mt-2">
-                                                <div class="pos-resumen-mini-cell">
-                                                    <span class="pos-mini-label">Subtotal</span>
-                                                    <strong id="subtotal">$0</strong>
-                                                </div>
-                                                <div class="pos-resumen-mini-cell" id="lineaDescuento" style="display: none;">
-                                                    <span class="pos-mini-label text-warning"><i class="ri-price-tag-3-line"></i> Dcto.</span>
-                                                    <strong class="text-warning" id="descuento">-$0</strong>
-                                                </div>
-                                                <!-- Cupón / vale de puntos: el beneficio se resta al total en el
-                                                     backend, así que sin esta línea el cajero ve bajar el total
-                                                     sin saber por qué. -->
-                                                <div class="pos-resumen-mini-cell" id="lineaBeneficio" style="display: none;">
-                                                    <span class="pos-mini-label" id="beneficioLabel"><i class="ri-coupon-3-line"></i> Cupón</span>
-                                                    <strong id="beneficioMonto" style="color:#405189">-$0</strong>
-                                                </div>
-                                                <div class="pos-resumen-mini-cell">
-                                                    <span class="pos-mini-label">Total</span>
-                                                    <strong class="text-primary" id="total">$0</strong>
-                                                </div>
-                                                <div class="pos-resumen-mini-cell">
-                                                    <span class="pos-mini-label">Pagado</span>
-                                                    <strong class="text-success" id="pagado">$0</strong>
-                                                </div>
+                                    <!-- Beneficios: vale de puntos + código de descuento.
+                                         El contenedor se oculta completo en factura/cotización
+                                         (ninguno de los dos aplica), para no dejar una tarjeta
+                                         vacía ocupando espacio. -->
+                                    <div class="col-lg-7" id="beneficiosCol">
+                                        <div class="card shadow-sm h-100">
+                                            <div class="card-header bg-light py-2">
+                                                <h6 class="mb-0 fw-bold" style="font-size:0.85rem; color:#405189;">
+                                                    <i class="ri-price-tag-3-line me-1"></i> Beneficios del cliente
+                                                    <small class="text-muted fw-normal ms-1" style="font-size:0.7rem;">
+                                                        — se aplica uno u otro, no ambos
+                                                    </small>
+                                                </h6>
                                             </div>
+                                            <div class="card-body p-2">
+                                                <div class="row g-2">
+                                                    <!-- ===== VALE DE PUNTOS FIDELIZACIÓN ===== -->
+                                                    <div class="col-md-6">
+                                                        <div id="valeCanjeCard" class="h-100 px-2 py-1" style="border-left:3px solid #0ab39c;">
+                                                            <div class="d-flex align-items-center gap-1">
+                                                                <i class="ri-gift-line text-success" style="font-size:0.95rem;"></i>
+                                                                <span class="fw-semibold" style="font-size:0.82rem;">Vale de Puntos</span>
+                                                            </div>
+                                                            <div class="text-muted mb-1 pos-beneficio-ayuda" style="font-size:0.68rem;">
+                                                                Canjea los puntos acumulados del cliente
+                                                            </div>
+                                                            <div class="input-group input-group-sm">
+                                                                <input type="text" id="valeCanjeInput" class="form-control form-control-sm"
+                                                                       placeholder="RM-XXXXXXXX — vale de puntos" maxlength="24"
+                                                                       style="text-transform:uppercase; letter-spacing:0.5px; font-size:0.78rem;"
+                                                                       onkeydown="if(event.key==='Enter'){event.preventDefault();validarVale();}">
+                                                                <button class="btn btn-outline-success btn-sm" type="button" onclick="validarVale()" title="Validar vale">
+                                                                    <i class="ri-search-line"></i>
+                                                                </button>
+                                                                <button class="btn btn-outline-secondary btn-sm" type="button" onclick="limpiarVale()" title="Quitar vale">
+                                                                    <i class="ri-close-line"></i>
+                                                                </button>
+                                                            </div>
+                                                            <div id="valeCanjeMsg" class="mt-1" style="font-size:0.75rem; min-height:1.1em;"></div>
+                                                        </div>
+                                                    </div>
 
-                                            <!-- CTA Continuar a Finalizar (aparece cuando saldo = 0) -->
-                                            <div id="ctaContinuarFinalizar" class="mt-2" style="display:none;">
-                                                <button class="btn btn-success btn-lg w-100 py-3 fw-bold pos-cta-finalizar"
-                                                        onclick="pasoSiguiente()"
-                                                        title="Ir al paso de confirmación (F10)">
-                                                    <i class="ri-check-double-line me-1"></i> CONTINUAR A FINALIZAR
-                                                    <kbd class="pos-kbd-cta ms-2">F10</kbd>
-                                                </button>
+                                                    <!-- ===== CÓDIGO DE DESCUENTO ===== -->
+                                                    <!-- Acepta los dos tipos y el cajero no tiene que
+                                                         distinguirlos: el nominativo del cliente
+                                                         (DC-XXXXXXXX) y el código público de una
+                                                         campaña (ej. GISE2438). El backend resuelve
+                                                         cuál es (`cupon_service.resolver_codigo`). -->
+                                                    <div class="col-md-6">
+                                                        <div id="cuponCard" class="h-100 px-2 py-1" style="border-left:3px solid #405189;">
+                                                            <div class="d-flex align-items-center gap-1">
+                                                                <i class="ri-coupon-3-line" style="font-size:0.95rem; color:#405189;"></i>
+                                                                <span class="fw-semibold" style="font-size:0.82rem;">Código de Descuento</span>
+                                                            </div>
+                                                            <div class="text-muted mb-1 pos-beneficio-ayuda" style="font-size:0.68rem;">
+                                                                Cupón del cliente o promoción vigente
+                                                            </div>
+                                                            <div class="input-group input-group-sm">
+                                                                <input type="text" id="cuponInput" class="form-control form-control-sm"
+                                                                       placeholder="DC-XXXXXXXX o código de campaña" maxlength="32"
+                                                                       style="text-transform:uppercase; letter-spacing:0.5px; font-size:0.78rem;"
+                                                                       onkeydown="if(event.key==='Enter'){event.preventDefault();validarCupon();}">
+                                                                <button class="btn btn-outline-primary btn-sm" type="button" onclick="validarCupon()" title="Validar código de descuento">
+                                                                    <i class="ri-search-line"></i>
+                                                                </button>
+                                                                <button class="btn btn-outline-secondary btn-sm" type="button" onclick="limpiarCupon()" title="Quitar código">
+                                                                    <i class="ri-close-line"></i>
+                                                                </button>
+                                                            </div>
+                                                            <div id="cuponMsg" class="mt-1" style="font-size:0.75rem; min-height:1.1em;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
+                            </div>
 
-                                <!-- ===== ZONA CON SCROLL PROPIO (fidelización + vale + métodos) =====
-                                     Sólo esta zona se desplaza: el resumen queda arriba y la lista de
-                                     pagos abajo, siempre a la vista en pantallas de 15" (1366x768). -->
+                            <!-- Panel Derecho: SOLO COBRO — métodos de pago (arriba, sin scroll
+                                 previo) + Pagos registrados (pie fijo). El Resumen de Venta y los
+                                 códigos de beneficio se movieron bajo la tabla de productos, en la
+                                 columna izquierda: ocupaban el espacio de arriba y empujaban los
+                                 botones de pago fuera de la vista en pantallas de 15". -->
+                            <div class="col-md-4 pos-checkout-col">
                                 <div class="pos-checkout-scroll">
 
                                 <!-- ===== TARJETA FIDELIZACIÓN (solo si hay cliente fidelizado) ===== -->
@@ -777,57 +868,6 @@
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </div>
-
-                                <!-- ===== VALE DE PUNTOS FIDELIZACIÓN ===== -->
-                                <div id="valeCanjeCard" class="card shadow-sm mt-2 border-0" style="border-left:3px solid #0ab39c !important;">
-                                    <div class="card-body py-2 px-3">
-                                        <div class="d-flex align-items-center gap-1 mb-1">
-                                            <i class="ri-gift-line text-success" style="font-size:0.95rem;"></i>
-                                            <span class="fw-semibold" style="font-size:0.82rem;">Vale de Puntos</span>
-                                        </div>
-                                        <div class="input-group input-group-sm">
-                                            <input type="text" id="valeCanjeInput" class="form-control form-control-sm"
-                                                   placeholder="Código del vale (ej: RM-XXXXXXXX)" maxlength="24"
-                                                   style="text-transform:uppercase; letter-spacing:0.5px; font-size:0.78rem;"
-                                                   onkeydown="if(event.key==='Enter'){event.preventDefault();validarVale();}">
-                                            <button class="btn btn-outline-success btn-sm" type="button" onclick="validarVale()" title="Validar vale">
-                                                <i class="ri-search-line"></i> Validar
-                                            </button>
-                                            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="limpiarVale()" title="Quitar vale">
-                                                <i class="ri-close-line"></i>
-                                            </button>
-                                        </div>
-                                        <div id="valeCanjeMsg" class="mt-1" style="font-size:0.75rem; min-height:1.1em;"></div>
-                                    </div>
-                                </div>
-
-                                <!-- ===== CÓDIGO DE DESCUENTO ===== -->
-                                <!-- Acepta los dos tipos y el cajero no tiene que
-                                     distinguirlos: el nominativo del cliente
-                                     (DC-XXXXXXXX) y el código público de una
-                                     campaña (ej. GISE2438). El backend resuelve
-                                     cuál es (`cupon_service.resolver_codigo`). -->
-                                <div id="cuponCard" class="card shadow-sm mt-2 border-0" style="border-left:3px solid #405189 !important;">
-                                    <div class="card-body py-2 px-3">
-                                        <div class="d-flex align-items-center gap-1 mb-1">
-                                            <i class="ri-coupon-3-line" style="font-size:0.95rem; color:#405189;"></i>
-                                            <span class="fw-semibold" style="font-size:0.82rem;">Código de Descuento</span>
-                                        </div>
-                                        <div class="input-group input-group-sm">
-                                            <input type="text" id="cuponInput" class="form-control form-control-sm"
-                                                   placeholder="Código del cliente o de la promoción" maxlength="32"
-                                                   style="text-transform:uppercase; letter-spacing:0.5px; font-size:0.78rem;"
-                                                   onkeydown="if(event.key==='Enter'){event.preventDefault();validarCupon();}">
-                                            <button class="btn btn-outline-primary btn-sm" type="button" onclick="validarCupon()" title="Validar código de descuento">
-                                                <i class="ri-search-line"></i> Validar
-                                            </button>
-                                            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="limpiarCupon()" title="Quitar código">
-                                                <i class="ri-close-line"></i>
-                                            </button>
-                                        </div>
-                                        <div id="cuponMsg" class="mt-1" style="font-size:0.75rem; min-height:1.1em;"></div>
                                     </div>
                                 </div>
 
@@ -3533,6 +3573,60 @@
      · Pagos Registrados                      -> pie, siempre visible
    Así el cajero ve el total y lo cobrado sin scrollear la página.
    ========================================================= */
+/* =========================================================
+   POS · Tabla de productos con ALTO FIJO
+   Antes crecía con cada línea: con 2 productos dejaba un hueco enorme
+   debajo y con 20 empujaba el Resumen fuera de la pantalla. Con alto fijo
+   el bloque de Resumen/Beneficios queda SIEMPRE en el mismo lugar.
+   ========================================================= */
+#step3 .pos-tabla-productos-scroll {
+    max-height: 42vh;
+    overflow-y: auto;
+}
+#step3 .pos-tabla-productos-scroll thead th {
+    position: sticky;                    /* no perder los títulos al desplazar */
+    top: 0;
+    z-index: 2;
+    background: #f3f6f9;                 /* opaco: si no, las filas se ven debajo */
+}
+#step3 .pos-tabla-productos-scroll::-webkit-scrollbar { width: 7px; }
+#step3 .pos-tabla-productos-scroll::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.18);
+    border-radius: 4px;
+}
+/* --- 15" (1366×768): el alto es el recurso escaso ---------------------
+   La izquierda debe caber en ~700px útiles: cabecera + quick-add (~120px)
+   + tabla (30vh ≈ 230px) + bloque Resumen/Beneficios (~230px). Se recortan
+   alturas, no cantidad de información. */
+@media (max-height: 800px) {
+    #step3 .pos-tabla-productos-scroll { max-height: 30vh; }
+    /* Bloque bajo la tabla: más apretado */
+    #step3 .pos-bajo-tabla .card-header { padding: 3px 8px !important; }
+    #step3 .pos-bajo-tabla .card-body   { padding: 5px !important; }
+    /* La ayuda de cada código pasa a una línea mínima (sigue legible) */
+    #step3 .pos-bajo-tabla .pos-beneficio-ayuda {
+        font-size: 0.62rem !important;
+        margin-bottom: 2px !important;
+        line-height: 1.15;
+    }
+    #step3 .pos-bajo-tabla .form-control,
+    #step3 .pos-bajo-tabla .btn { font-size: 0.72rem !important; }
+    /* Mensajes de validación: no reservar alto cuando están vacíos */
+    #step3 #valeCanjeMsg, #step3 #cuponMsg { min-height: 0 !important; }
+}
+
+/* --- Ancho justo (1366px): el bloque de beneficios queda en ~530px y
+   cada código en ~265px. Se recorta el texto del input, no el control. --- */
+@media (max-width: 1500px) {
+    #step3 .pos-bajo-tabla .input-group .form-control {
+        min-width: 0;                    /* permite encoger dentro del grupo */
+        text-overflow: ellipsis;
+    }
+}
+
+/* --- Bajo 992px (tablet/vertical) los dos códigos se apilan solos por
+   Bootstrap; el resumen pasa a ancho completo y no se corta nada. --- */
+
 @media (min-width: 992px) {
     #step3 .pos-checkout-col {
         position: sticky;
@@ -3542,7 +3636,8 @@
         flex-direction: column;
         max-height: calc(100vh - 88px);
     }
-    #step3 .pos-checkout-col > .pos-resumen-sticky-wrapper,
+    /* El resumen ya no vive acá (se movió bajo la tabla): la columna derecha
+       quedó con dos hijos — la zona con scroll y el pie de pagos. */
     #step3 .pos-checkout-col > .pos-checkout-pagos {
         flex: 0 0 auto;
         position: static;                /* ya no necesita sticky propio */
@@ -3589,12 +3684,14 @@
     /* La fila de atajos es redundante: cada botón ya trae su tecla */
     #step3 .pos-atajos-hint { display: none !important; }
 
-    /* Fidelización y vale de puntos más apretados */
+    /* Fidelización y bloque de beneficios más apretados */
     #step3 #fidelCard .card-body,
-    #step3 #valeCanjeCard .card-body {
+    #step3 .pos-bajo-tabla .card-body {
         padding-top: 5px !important;
         padding-bottom: 5px !important;
     }
+    /* En 15" el hero del resumen y los beneficios comparten poco alto */
+    #step3 .pos-bajo-tabla { margin-top: 4px !important; }
 
     /* Encabezados de tarjeta del paso 3 */
     #step3 .card-header { padding: 4px 8px !important; }
@@ -5274,6 +5371,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // de cliente particular y el backend lo rechaza igual (ver venta_fideliza).
         const cuponCard = document.getElementById('cuponCard');
         if (cuponCard) cuponCard.style.display = bloqueada ? 'none' : '';
+
+        // Ambos se bloquean juntos: se esconde la columna entera para no dejar
+        // una tarjeta "Beneficios del cliente" vacía bajo la tabla.
+        const beneficiosCol = document.getElementById('beneficiosCol');
+        if (beneficiosCol) beneficiosCol.style.display = bloqueada ? 'none' : '';
 
         const aviso = document.getElementById('empresaNoFidelizaAviso');
         if (aviso) {
