@@ -277,8 +277,12 @@
                                                 <th>Marca</th>
                                                 <th>Categoría</th>
                                                 <!-- Antes había DOS columnas "Género": esta (atributo3,
-                                                     poblada) y otra sobre atributo4, que en este catálogo
-                                                     está vacío y salía "-" en todas las filas. Se eliminó. -->
+                                                     100% poblada) y otra sobre atributo4, que en este
+                                                     catálogo está vacío (0 de 137.238 productos, medido
+                                                     22-ago-2026) y salía "-" en todas las filas. La
+                                                     columna se quitó en agosto; el cálculo y el payload
+                                                     `por_genero` que la alimentaban se eliminaron del
+                                                     backend el 22-ago-2026. -->
                                                 <th>Género</th>
                                                 <th class="text-end" title="Unidades vendidas netas de devoluciones">Unidades</th>
                                                 <th class="text-center" title="Unidades devueltas por clientes en el período (ya restadas de Unidades)">Devol.</th>
@@ -388,7 +392,7 @@
                                 </div>
                             </div>
 
-                            <!-- Tab Sexo / Género -->
+                            <!-- Tab Género (atributo3) / Especialidad (v1.2) -->
                             <div class="tab-pane fade" id="tabSexo" role="tabpanel">
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
@@ -425,9 +429,9 @@
                                                 </h6>
                                             </div>
                                             <div class="card-body">
-                                                <div id="chartGenero" style="min-height:300px"></div>
+                                                <div id="chartEspecialidad" style="min-height:300px"></div>
                                                 <div class="table-responsive mt-3">
-                                                    <table class="table table-sm mb-0" id="tablaGenero">
+                                                    <table class="table table-sm mb-0" id="tablaEspecialidad">
                                                         <thead class="table-light">
                                                             <tr>
                                                                 <th>Especialidad</th>
@@ -519,7 +523,7 @@
 @media (max-width: 768px) {
     .kpi-main { font-size: 1rem; }
     .kpi-label { font-size: .6rem; }
-    #chartMarcas, #chartCategorias, #chartSexo, #chartGenero { min-height: 260px !important; }
+    #chartMarcas, #chartCategorias, #chartSexo, #chartEspecialidad { min-height: 260px !important; }
     #tablaProductos, #tablaMarcas, #tablaCategorias { font-size: .68rem; }
 }
 </style>
@@ -528,7 +532,7 @@
 (function() {
     const esSuperuser = {{ puede_ver_todas_sucursales|yesno:"true,false" }};
     const sucursalActivaId = '{{ sucursal_activa_id|default:"" }}';
-    let chartMarcas, chartCategorias, chartSexo, chartGenero;
+    let chartMarcas, chartCategorias, chartSexo, chartEspecialidad;
 
     const fmtMoney = n => '$' + new Intl.NumberFormat('es-CL').format(Math.round(n || 0));
     const fmtNum = n => new Intl.NumberFormat('es-CL').format(Math.round(n || 0));
@@ -669,7 +673,7 @@
                 renderProductos(data.productos, data.productos_total);
                 renderMarca(data.por_marca);
                 renderCategoria(data.por_categoria);
-                renderSexoGenero(data.por_sexo, data.por_especialidad);
+                renderSexoEspecialidad(data.por_sexo, data.por_especialidad);
                 renderHeatmap(data.heatmap);
             })
             .catch(err => {
@@ -838,9 +842,12 @@
         chartCategorias.render();
     }
 
-    function renderSexoGenero(sexos, generos) {
+    // Izquierda: Género = `por_sexo` (atributo3, la dimensión poblada).
+    // Derecha: Especialidad v1.2 (`por_especialidad`, multi-etiqueta).
+    // El payload `por_genero` (atributo4) ya no existe en la API.
+    function renderSexoEspecialidad(sexos, especialidades) {
         renderDonutTabla(sexos, 'chartSexo', 'tablaSexo');
-        renderDonutTabla(generos, 'chartGenero', 'tablaGenero');
+        renderDonutTabla(especialidades, 'chartEspecialidad', 'tablaEspecialidad');
     }
 
     function renderDonutTabla(rows, chartId, tablaId) {
@@ -872,9 +879,9 @@
             chartSexo = new ApexCharts(document.querySelector(`#${chartId}`), options);
             chartSexo.render();
         } else {
-            if (chartGenero) chartGenero.destroy();
-            chartGenero = new ApexCharts(document.querySelector(`#${chartId}`), options);
-            chartGenero.render();
+            if (chartEspecialidad) chartEspecialidad.destroy();
+            chartEspecialidad = new ApexCharts(document.querySelector(`#${chartId}`), options);
+            chartEspecialidad.render();
         }
     }
 

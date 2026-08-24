@@ -361,7 +361,82 @@ existencias-por-sucursal legacy convive con los reportes nuevos (fusión opciona
 ---
 
 **PENDIENTE DE DECISIÓN (escribe en prod — no aplicado):** backfill de las 234
-cabeceras históricas. **[RESUELTO — ver §11: aplicado el 21-ago.]** Diseño en el diagnóstico (scripts `scratchpad/boletas_cero/`):
+cabeceras históricas. **[RESUELTO — ver §11: aplicado el 21-ago.]**
+
+---
+
+## 12. FASE D — deuda cerrada (2026-08-22)
+
+Ejecutada con 14 agentes (7 implementan / 7 verifican adversarialmente) + una
+ronda de remediación de 10 agentes sobre los defectos que la verificación probó.
+**Todo lo que sigue sobrevivió a una verificación independiente que re-midió con
+script propio.** Las cifras contra prod van fechadas: la BD sigue vendiendo.
+
+### Lo aplicado en código
+
+| Frente | Resultado verificado |
+|---|---|
+| **Suite honesta** | Los 3 FAIL "de datos" cerrados. **El que mentía era el ORÁCULO, no la vista**: pedía las NC con `tipo_documento='NOTA DE CREDITO'` sobre un queryset ya acotado a `VENTA_PUBLICO` — intersección vacía → exigía bruto contra una vista que muestra neto. Descompuesto al peso: julio delta = $6.066.392 = 100% las NC; agosto $2.950.603, ídem. **Queda descartada con número la hipótesis previa** (las facturas `tt=VENTA` están fuera de AMBOS lados). Tolerancia apretada 1,5%→0,5% y F-16 verificada aparte |
+| **atributo4 muerto** | 0 de 137.238 productos poblados. Eliminado el cálculo y el payload `por_genero` (era 1 fila con el 100% del monto), −2 JOINs por agregación. Totales invariantes ($155.129.379 / 5.281 u idénticos) |
+| **Categorías v1.2** | Cola de DATOS, no bug: 98,7% del catálogo en hijas, 1,3% en 49 planas vivas, 0 productos en las 31 `_ZZ_`. El check pasa a WARN con umbral declarado (97% del monto en hijas; hoy 99,87% jul / 99,75% ago) y FAIL inmediato si reaparece una `_ZZ_` |
+| **Código muerto** | Funciones duplicadas sin rutear eliminadas de `views_modulo_existencias.py` (F-06, abierto desde julio), tras grep exhaustivo de consumidores |
+| **Performance residual** | Excel del plan, detalle por última venta y dimensión especialidad: bajaron con **igualdad exacta demostrada** (29/29 endpoints, 3/3 `_filas_export`, 4/4 .xlsx idénticos miembro por miembro del ZIP, 2/2 impresión byte a byte) |
+
+### Entregables para decidir (nada aplicado)
+
+- **`backfill_destino_movimientos`** (dry-run por defecto): 546.130 movimientos
+  INGRESO legacy sin `sucursal_destino`. La evidencia que decide, medida
+  22-ago: el corte histórico 2025-12-31 de resumen-existencias pasaría de
+  113.428 u a **26.446 u**, con **error contra el oráculo de 86.988 u → 6 u** y
+  tallas que cuadran **72,20% → 99,99%**. Corrección importante sobre el
+  borrador: los 57.605 movimientos afectados **NO se suman a dos sucursales, MIGRAN**
+  (salen del kardex de las tiendas y aparecen en EDEL) — hay que avisar a quien
+  mire movimientos-sucursal. `TRASPASO_SUCURSAL` es el 40% del universo y sin él
+  el arreglo queda a medias (53.006 u en vez de 26.446). Snapshot fuera del repo,
+  `--revertir`, y piso de tiempo real medido (~4-5 min con las filas bloqueadas
+  en una transacción → correr fuera de horario de venta).
+- **`diagnosticar_cola_categorias_v12`** (read-only puro, sin `--aplicar`):
+  prioriza por plata la cola de recategorización y propone mapeo plana→hija con
+  confianza. Tras remediación, un mapeo que **no** se apoya en calce de nombre ya
+  no puede salir como MAPEAR, y las señales que contradicen una propuesta se
+  imprimen destacadas (antes se ocultaban justo ahí).
+- **`restaurar_cabeceras_boletas_nc --ids --fuente`**: vía manual para los 8
+  documentos que el backfill de cabeceras dejó fuera. Ahora exige reconocer la
+  discrepancia entre fuentes antes de escribir (antes aceptaba en silencio la
+  fuente equivocada) y advierte el caso en que el DTE dejaría de cuadrar con su
+  ticket.
+- **`docs/INDICES_PROPUESTOS_REPORTES_2026-08.md`**: rehecho tras la
+  verificación. Hallazgo que cambia la recomendación: el índice existente
+  `(ProductoTalla_id, fecha)` **ya entrega el `Unique` en streaming gratis**, así
+  que el beneficio del índice nuevo era menor de lo estimado. Criterio de
+  aceptación por buffers/plan, no por tiempo de pared (la misma consulta varió
+  6-9x en 40 minutos).
+
+### Estado de verificación al cierre (22-ago)
+
+- **Tests locales (SQLite desechable): 262 PASS** — suites de Fases C y D juntas.
+- **Suite contra prod (read-only): 100 PASS · 3 FAIL · 6 WARN.** Los 3 FAIL son los
+  gates fail-closed de los permisos nuevos (`ventas_global_fuga`, `productos_origen`,
+  `inteligencia_compra`, los tres por `status_200`) y **mueren al correr
+  `inicializar_permisos` en prod**. Los 3 FAIL "de datos" que la suite arrastraba
+  desde julio ya no existen: son WARN con su conteo, como corresponde a una cola de
+  datos conocida.
+- Resumen ejecutivo publicado (mismo enlace en cada actualización):
+  https://claude.ai/code/artifact/f145a08c-9f18-41f6-9cb1-07323af5aedd
+
+### Handoffs nuevos (medidos, fuera del alcance de esta auditoría)
+
+1. **Writer con bug**: `TRASPASO_ENTRADA` escribe `sucursal_destino == sucursal_origen`
+   (la emisora) en 17.750 de 162.541 filas (10,92%); solo 2 apuntan a una tercera
+   sucursal. Es fix de código, no backfill.
+2. **`Sin asignar` de diferencias-recepción NO lo arregla el backfill**: sus 36
+   faltantes viven en `Productos_Recepcionados.sucursal_destino` (otra tabla) y
+   ninguno tiene movimiento vinculado. Hay que poblarlo desde el destino real del
+   traspaso — **nunca** desde la sucursal dueña del SKU (esa regla se cumple en
+   0,00% de 2.721 casos ahí).
+3. **3 fallas pre-existentes en `app.tests`** ajenas a esta auditoría
+   (`test_ventas.CrearTicketVentaTest.test_crear_ticket_descuenta_stock` 8≠9 y 2 más),
+   comprobadas contra HEAD: no las introdujo ninguna fase. Diseño en el diagnóstico (scripts `scratchpad/boletas_cero/`):
 command `restaurar_cabeceras_boletas_nc`, dry-run por defecto, fuente de verdad =
 `Σ Dte_Productos.monto_item` (lo que llevó el TXT al SII, intacto tras la NC);
 219/234 cuadran solos con pagos y ticket; 6 van a revisión manual (dte 900643,

@@ -10271,8 +10271,11 @@ def _aplicar_filtros_producto(qs, prefix, filtros):
         qs = qs.filter(**{f'{prefix}__atributo2_id': filtros['color_id']})
     if filtros.get('sexo_id'):
         qs = qs.filter(**{f'{prefix}__atributo3_id': filtros['sexo_id']})
-    if filtros.get('genero_id'):
-        qs = qs.filter(**{f'{prefix}__atributo4_id': filtros['genero_id']})
+    # `atributo4` ("Género" del catálogo viejo) NO se filtra: está poblado en
+    # 0 de los 137.238 productos analíticos (medido 22-ago-2026, prod). El
+    # filtro solo podía devolver 0 filas. La dimensión viva de género es
+    # `atributo3` ("sexo_id", 100% poblada) y la de especialidad v1.2 vive en
+    # ProductoAtributoValor.
     if filtros.get('categoria_id'):
         # Árbol v1.2: filtrar por un PADRE debe incluir todas sus hijas
         # (patrón obtener_ventas_por_especialidad). El resultado expandido se
@@ -10408,13 +10411,18 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
     Las devoluciones se restan desde CambioDevolucionDetalle (no desde la Nota
     de Crédito): las ventas por ticket no generan NC.
 
+    DIMENSIÓN "GÉNERO": es `atributo3` y viaja como `sexo`/`por_sexo`. La
+    segunda dimensión histórica (`atributo4`) se eliminó del reporte el
+    22-ago-2026: 0 de 137.238 productos analíticos la tienen poblada, así que
+    `por_genero` era siempre una única fila "Sin clasificar" con el 100% del
+    monto (payload muerto que además obligaba a 2 JOINs por agregación).
+
     Devuelve dict con:
       {
         'productos': [{producto_id, articulo, descripcion, marca, categoria,
-                       sexo, genero, unidades, monto, costo, margen, margen_pct, docs}],
+                       sexo, unidades, monto, costo, margen, margen_pct, docs}],
         'por_marca': [...], 'por_categoria': [...], 'por_sexo': [...],
-        'por_genero': [...], 'por_sucursal_categoria': [{sucursal, categoria, unidades, monto}],
-        'kpis': {...}
+        'por_especialidad': [...], 'heatmap': [...], 'kpis': {...}
       }
     """
     # ---------- TICKET_PRODUCTOS (solo tickets sin DTE) ----------
@@ -10471,8 +10479,6 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
             'categoria_id': data_row.get('prod_categoria_id'),
             'sexo': data_row.get('prod_sexo') or '-',
             'sexo_id': data_row.get('prod_sexo_id'),
-            'genero': data_row.get('prod_genero') or '-',
-            'genero_id': data_row.get('prod_genero_id'),
             'unidades': 0, 'monto': 0, 'costo': 0, 'docs': 0,
             'unidades_devueltas': 0, 'monto_devuelto': 0,
         })
@@ -10489,8 +10495,6 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
         prod_categoria_id=F('ProductoTalla__producto__categoria_id'),
         prod_sexo=F('ProductoTalla__producto__atributo3__valor'),
         prod_sexo_id=F('ProductoTalla__producto__atributo3_id'),
-        prod_genero=F('ProductoTalla__producto__atributo4__valor'),
-        prod_genero_id=F('ProductoTalla__producto__atributo4_id'),
     ).annotate(
         unid=Sum('stock'),
         monto=Sum('subtotal'),
@@ -10530,8 +10534,6 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
         prod_categoria_id=F('productoTalla__producto__categoria_id'),
         prod_sexo=F('productoTalla__producto__atributo3__valor'),
         prod_sexo_id=F('productoTalla__producto__atributo3_id'),
-        prod_genero=F('productoTalla__producto__atributo4__valor'),
-        prod_genero_id=F('productoTalla__producto__atributo4_id'),
     ).annotate(
         unid=Sum('stock'),
         monto_total=Sum(_expr_monto_linea_dte()),
@@ -10716,7 +10718,7 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
     # hijas homónimas de padres distintos).
     por_categoria = _agrupar_por('categoria_id', 'categoria_label')
     por_sexo = _agrupar_por('sexo_id', 'sexo')
-    por_genero = _agrupar_por('genero_id', 'genero')
+    # NO existe `por_genero`: atributo4 está 100% vacío (ver docstring).
 
     # ---------- Agregación por ESPECIALIDAD v1.2 (multi-etiqueta) ----------
     # Vista de ATRIBUCIÓN, no partición: un producto [running, urbano] suma a
@@ -10855,7 +10857,6 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
         'por_marca': por_marca,
         'por_categoria': por_categoria,
         'por_sexo': por_sexo,
-        'por_genero': por_genero,
         'por_especialidad': por_especialidad,
         'heatmap': heatmap,
         'kpis': kpis,
@@ -10872,12 +10873,16 @@ def ver_reporte_productos_vendidos(request):
 @require_GET
 @login_required
 def obtener_productos_vendidos(request):
-    """API: productos vendidos con agregaciones por marca/categoría/sexo/género y heatmap.
+    """API: productos vendidos con agregaciones por marca/categoría/género y heatmap.
+
+    "Género" = `atributo3` = clave `sexo_id` / payload `por_sexo` (la que sí
+    está poblada). `por_genero` (atributo4) se eliminó el 22-ago-2026: era
+    payload muerto — 0/137.238 productos poblados.
 
     Parámetros (todos opcionales):
       - tipo_flujo / fecha_inicio / fecha_fin
       - sucursal_id
-      - marca_id, color_id, sexo_id, genero_id, categoria_id
+      - marca_id, color_id, sexo_id, categoria_id
       - temporada, anio_temporada, rango_precio
       - busqueda (texto libre)
       - orden: unidades_desc | monto_desc | margen_desc | margen_pct_desc
@@ -10900,7 +10905,6 @@ def obtener_productos_vendidos(request):
             'marca_id': request.GET.get('marca_id') or None,
             'color_id': request.GET.get('color_id') or None,
             'sexo_id': request.GET.get('sexo_id') or None,
-            'genero_id': request.GET.get('genero_id') or None,
             'categoria_id': request.GET.get('categoria_id') or None,
             'especialidad_id': request.GET.get('especialidad_id') or None,
             'temporada': request.GET.get('temporada') or None,
@@ -10934,7 +10938,6 @@ def obtener_productos_vendidos(request):
             'por_marca': data['por_marca'][:100],
             'por_categoria': data['por_categoria'][:100],
             'por_sexo': data['por_sexo'],
-            'por_genero': data['por_genero'],
             'por_especialidad': data['por_especialidad'],
             'heatmap': data['heatmap'],
         })
@@ -10950,7 +10953,13 @@ def obtener_atributo_opciones(request):
     """API: lista de opciones de un atributo (marca, color, sexo, género) o categorías.
 
     Parámetro:
-      - tipo: 'marca' | 'color' | 'sexo' | 'genero' | 'categoria'
+      - tipo: 'marca' | 'color' | 'sexo' | 'genero' | 'categoria' | 'especialidad'
+
+    OJO: 'genero' es el atributo del catálogo VIEJO (`Producto.atributo4`,
+    poblado en 0 productos). Sigue expuesto porque es un lookup genérico de
+    AtributoOpcion, pero productos-vendidos ya NO acepta `genero_id` como
+    filtro: la dimensión viva es 'sexo' (atributo3) y, para el árbol v1.2,
+    'especialidad'.
     """
     try:
         tipo = (request.GET.get('tipo') or '').lower()

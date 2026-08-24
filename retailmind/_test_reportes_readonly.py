@@ -32,7 +32,11 @@ except Exception:
     pass
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'retailmind.settings')
-django.setup()
+# Importable desde los tests (app.tests.test_fase_d_suite reusa los oráculos y
+# evaluadores puros de acá): si Django ya está inicializado no se re-inicializa.
+from django.apps import apps as _django_apps  # noqa: E402
+if not _django_apps.ready:
+    django.setup()
 
 from django.conf import settings  # noqa: E402
 from django.db import connection, reset_queries, transaction  # noqa: E402
@@ -402,6 +406,84 @@ def oraculo_censo_categorias():
     }
 
 
+# Umbral del check `categorias_v12`. Se mide el % del MONTO vendido que cae en
+# hijas del árbol v1.2; el resto es la cola de categorías planas viejas que
+# nunca se recategorizaron (cola de DATOS, no bug de código — la
+# recategorización v1.2 cerró en 98,3% y quedó una cola manual).
+#
+# Medido contra prod el 22-ago-2026:
+#   catálogo : 135.410/137.238 productos analíticos (98,7%) en hijas v1.2,
+#              1.828 (1,3%) en 49 categorías planas vivas, 0 en las 31 _ZZ_,
+#              0 sin categoría.
+#   reporte  : julio  99,87% del monto en hijas (3 filas planas = $200.930)
+#              agosto 99,75% del monto en hijas (3 filas planas = $280.900)
+#              — RAMA CASUAL, RAMA FOOTBALL y SET DE FOOTBAL.
+#
+# 97% deja ~3pp de holgura (≈23x la cola actual): la cola de datos no falla,
+# pero sí falla una regresión real (una plana grande revivida, el árbol v1.2
+# revertido, o el reporte volviendo a agrupar por categoría plana).
+UMBRAL_MONTO_HIJAS_V12 = 97.0
+
+
+def evaluar_categorias_v12(filas_cat, censo):
+    """Clasifica las filas de `por_categoria` contra el árbol v1.2.
+
+    Función PURA (no toca BD): recibe las filas de la API y el censo ya
+    calculado. Devuelve el veredicto + los números para el informe.
+
+      ok=True   → PASS: 0 planas, 0 _ZZ_ (árbol limpio)
+      ok=None   → WARN: hay cola plana pero el monto en hijas ≥ umbral
+      ok=False  → FAIL: monto en hijas < umbral, o apareció una _ZZ_
+                  (las _ZZ_ están deprecadas: hoy 0 productos apuntan a ellas,
+                   ver una es regresión, no cola)
+    """
+    hijas_ids = censo.get('hijas_ids') or set()
+    planas_ids = censo.get('planas_vivas_ids') or set()
+    ids_api = {f.get('id') for f in filas_cat if f.get('id')}
+    en_hijas = ids_api & hijas_ids
+    en_planas = ids_api & planas_ids
+    zz_nombres = [str(f.get('nombre', '')) for f in filas_cat
+                  if str(f.get('nombre', '')).startswith('_ZZ_')
+                  or ' › _ZZ_' in str(f.get('nombre', ''))]
+    monto_tot = sum(_num(f.get('monto')) for f in filas_cat)
+    monto_hijas = sum(_num(f.get('monto')) for f in filas_cat if f.get('id') in hijas_ids)
+    monto_planas = sum(_num(f.get('monto')) for f in filas_cat if f.get('id') in planas_ids)
+    pct_hijas = _pct(monto_hijas, monto_tot)
+    pct_planas = _pct(monto_planas, monto_tot)
+
+    if zz_nombres:
+        ok = False
+        detalle = (f'REGRESIÓN: categorías _ZZ_ deprecadas en el reporte '
+                   f'({sorted(zz_nombres)[:5]})')
+    elif not filas_cat:
+        ok = 'skip'
+        detalle = 'sin filas por_categoria'
+    elif pct_hijas < UMBRAL_MONTO_HIJAS_V12:
+        ok = False
+        detalle = (f'el monto en hijas v1.2 cayó bajo el umbral '
+                   f'{UMBRAL_MONTO_HIJAS_V12}% — revisar si es cola de datos '
+                   f'o una regresión del árbol')
+    elif en_planas:
+        ok = None
+        nombres = [str(f.get('nombre')) for f in filas_cat if f.get('id') in planas_ids]
+        detalle = (f'cola de recategorización (DATOS, no código): '
+                   f'{len(planas_ids)} categorías planas vivas en el catálogo, '
+                   f'{len(en_planas)} con venta en el período '
+                   f'({sorted(nombres)[:6]}). No se borran ni recategorizan '
+                   f'desde acá.')
+    else:
+        ok = True
+        detalle = f'árbol v1.2 limpio ({len(censo.get("padres_v12") or [])} raíces)'
+
+    return {
+        'ok': ok, 'detalle': detalle,
+        'n_hijas': len(en_hijas), 'n_planas': len(en_planas), 'n_zz': len(zz_nombres),
+        'monto_total': monto_tot, 'monto_hijas': monto_hijas,
+        'monto_planas': monto_planas,
+        'pct_monto_hijas': pct_hijas, 'pct_monto_planas': pct_planas,
+    }
+
+
 def oraculo_genero_atributos():
     prod = Producto.objects.filter(excluir_de_analitica=False)
     total = prod.count()
@@ -453,6 +535,65 @@ def oraculo_comparativa_doble_conteo(fi, ff):
         modulo_origen__in=['VENTA_PUBLICO', 'POS', 'ECOMMERCE'], dte_generado=True)
     agg = qs.aggregate(n=Count('id'), m=Sum('total'))
     return {'tickets_con_dte': agg['n'], 'monto_duplicable': int(agg['m'] or 0)}
+
+
+def oraculo_comparativa_mes(fi, ff):
+    """Universo REAL del gráfico comparativa-mensual, mes [fi, ff], sin filtro
+    de sucursal (contexto GLOBAL/admin).
+
+    POR QUÉ ESTE ORÁCULO Y NO EL ANTERIOR
+    -------------------------------------
+    Hasta el 21-ago el oráculo restaba las NC con
+    ``base_d.filter(tipo_documento='NOTA DE CREDITO')`` sobre un queryset ya
+    filtrado por ``tipo_transaccion='VENTA_PUBLICO'``. Una NC de venta jamás
+    lleva ese tipo_transaccion (van en DEVOLUCION / ANULACION / VENTA), así
+    que ese término valía **$0** y el oráculo pedía las ventas BRUTAS mientras
+    la vista mostraba las NETAS. Medido 22-ago-2026 contra prod:
+
+      julio-2026  vista $157.789.911 · oráculo viejo $163.856.303
+                  → delta $6.066.392 == 80 NC del mes, al peso.
+      agosto-2026 vista $115.241.231 (mes vivo) · oráculo viejo $118.191.834
+                  → delta $2.950.603 == 60 NC del mes, al peso.
+
+    O sea: el FAIL era del ORÁCULO, no de la vista. (La otra hipótesis —que la
+    vista se comiera las facturas ``tipo_transaccion='VENTA'``, $7.740.648 /
+    10 docs en julio— es falsa: esas facturas están fuera de AMBOS lados; el
+    gráfico es de venta al público por sucursal, por diseño.)
+
+    Este oráculo replica el universo de la vista escribiendo los filtros a
+    mano (no llama a los helpers de la vista, para seguir siendo independiente).
+    """
+    # 1) Tickets POS sin DTE (el DTE de un ticket ya viaja en el término 2)
+    tk = Ticket.objects.filter(
+        created_at__date__gte=fi, created_at__date__lte=ff, estado='PAGADO',
+        dte_generado=False,
+        modulo_origen__in=['VENTA_PUBLICO', 'POS', 'ECOMMERCE'],
+    ).aggregate(m=Sum('total'), n=Count('id'))
+    # 2) DTEs de venta al público (sin facturación interna ni anulados)
+    base_d = Dte.objects.filter(
+        fecha_emision__gte=fi, fecha_emision__lte=ff,
+        tipo_transaccion='VENTA_PUBLICO',
+    ).exclude(estado_dte__in=['ANULADO', 'CANCELADO', 'RECHAZADO']) \
+        .exclude(receptor__isnull=False, receptor_id=F('emisor_id'))
+    dv = base_d.exclude(tipo_documento='NOTA DE CREDITO').aggregate(
+        m=Sum('monto_con_iva'), n=Count('id'))
+    # 3) Notas de crédito REALES del lado venta (restan). Mismo criterio que
+    #    `_queryset_ncs_venta(..., estados=('EMITIDO','ACEPTADO'),
+    #    excluir_internas=True)` pero escrito acá para no depender del helper.
+    nc = Dte.objects.filter(
+        fecha_emision__gte=fi, fecha_emision__lte=ff,
+        tipo_documento='NOTA DE CREDITO',
+        tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO', 'DEVOLUCION', 'ANULACION'],
+        descartado=False,
+        estado_dte__in=['EMITIDO', 'ACEPTADO'],
+    ).exclude(receptor__isnull=False, receptor_id=F('emisor_id')).aggregate(
+        m=Sum('monto_con_iva'), n=Count('id'))
+    return {
+        'tickets_sin_dte': int(tk['m'] or 0), 'tickets_sin_dte_n': tk['n'],
+        'dte_publico': int(dv['m'] or 0), 'dte_publico_n': dv['n'],
+        'nc': int(nc['m'] or 0), 'nc_n': nc['n'],
+        'esperado': int(tk['m'] or 0) + int(dv['m'] or 0) - int(nc['m'] or 0),
+    }
 
 
 # ============================================================ CHECKS POR REPORTE
@@ -563,31 +704,32 @@ def check_comparativa(res, oraculos, fx):
     series = js.get('series') or []
     out.append(C('series_presentes', bool(series), '>0 series', len(series)))
     # Verificación a nivel de VISTA: el mes del rango de test sumado sobre
-    # todas las series debe calzar con tickets-sin-DTE + DTEs VP netos.
+    # todas las series debe calzar con el universo real del gráfico
+    # (tickets-sin-DTE + DTEs de venta al público − NC de venta).
     fi, ff = oraculos['rango']
     label_mes = fi.strftime('%b %Y')
     cats = js.get('categories') or []
     if label_mes in cats and series:
         idx = cats.index(label_mes)
         total_vista = sum(_num((s.get('data') or [0] * len(cats))[idx]) for s in series)
-        t = Ticket.objects.filter(
-            created_at__date__gte=fi, created_at__date__lte=ff, estado='PAGADO',
-            dte_generado=False,
-            modulo_origen__in=['VENTA_PUBLICO', 'POS', 'ECOMMERCE'],
-            sucursal__isnull=False,
-        ).aggregate(m=Sum('total'))['m'] or 0
-        base_d = Dte.objects.filter(
-            fecha_emision__gte=fi, fecha_emision__lte=ff,
-            tipo_transaccion='VENTA_PUBLICO', sucursal__isnull=False,
-        ).exclude(estado_dte__in=['ANULADO', 'CANCELADO', 'RECHAZADO']) \
-            .exclude(receptor__isnull=False, receptor_id=F('emisor_id'))
-        dv = base_d.exclude(tipo_documento='NOTA DE CREDITO').aggregate(m=Sum('monto_con_iva'))['m'] or 0
-        dn = base_d.filter(tipo_documento='NOTA DE CREDITO').aggregate(m=Sum('monto_con_iva'))['m'] or 0
-        esperado = int(t) + int(dv) - int(dn)
+        ora = oraculos.get('comparativa_mes') or oraculo_comparativa_mes(fi, ff)
+        esperado = ora['esperado']
         dc = oraculos['doble_conteo']
-        out.append(C('anti_doble_conteo', _cerca(total_vista, esperado, 1.5),
+        out.append(C('anti_doble_conteo', _cerca(total_vista, esperado, 0.5),
                      f'${esperado:,}', f'${int(total_vista):,}',
-                     f"si duplica: habría ~${dc['monto_duplicable']:,} extra "
+                     f"= tickets sin DTE ${ora['tickets_sin_dte']:,} "
+                     f"+ DTE público ${ora['dte_publico']:,} "
+                     f"− NC ${ora['nc']:,} ({ora['nc_n']} NC)"))
+        # Garantía F-16 explícita: el gráfico NO puede incluir los tickets que
+        # ya tienen boleta (irían dos veces, una como ticket y otra como DTE).
+        # Si los incluyera, el mes saldría ~+${monto_duplicable}.
+        margen = _num(esperado) + 0.5 * dc['monto_duplicable']
+        out.append(C('f16_tickets_con_dte_excluidos',
+                     (total_vista < margen) if dc['monto_duplicable'] > 0 else 'skip',
+                     f"< ${int(margen):,} (mitad del salto por duplicar)",
+                     f'${int(total_vista):,}',
+                     f"si contara los tickets con boleta sumaría "
+                     f"${dc['monto_duplicable']:,} extra "
                      f"({dc['tickets_con_dte']} tickets con DTE en el mes)"))
     else:
         out.append(C('anti_doble_conteo', 'skip', label_mes, f'mes no presente en {cats[:3]}'))
@@ -644,8 +786,10 @@ def check_productos_vendidos(res, oraculos, fx):
                  f"${ora['monto']:,}", f"${int(_num(kpis.get('total_monto'))):,}"))
     out.append(C('kpi_unidades_vs_oraculo', _cerca(kpis.get('total_unidades'), ora['unidades']),
                  ora['unidades'], kpis.get('total_unidades')))
-    # Partición: cada agrupación debe sumar el total
-    for dim in ('por_marca', 'por_categoria', 'por_sexo', 'por_genero'):
+    # Partición: cada agrupación debe sumar el total.
+    # (`por_genero`/atributo4 se eliminó del payload el 22-ago-2026 — ver
+    #  `payload_genero_muerto` más abajo.)
+    for dim in ('por_marca', 'por_categoria', 'por_sexo'):
         filas = js.get(dim) or []
         s = sum(_num(f.get('monto')) for f in filas)
         posible_trunc = len(filas) == 100
@@ -653,35 +797,37 @@ def check_productos_vendidos(res, oraculos, fx):
         out.append(C(f'particion_{dim}', ok if not posible_trunc or ok else None,
                      f"${int(_num(kpis.get('total_monto'))):,}", f"${int(s):,}",
                      'truncado a 100 filas' if posible_trunc else ''))
-    # Censo v1.2 en por_categoria
+    # Censo v1.2 en por_categoria (medición honesta — ver evaluar_categorias_v12)
     censo = oraculos['censo']
     filas_cat = js.get('por_categoria') or []
-    ids_api = {f.get('id') for f in filas_cat if f.get('id')}
-    en_hijas = ids_api & censo['hijas_ids']
-    en_planas = ids_api & censo['planas_vivas_ids']
-    zz_nombres = [f['nombre'] for f in filas_cat
-                  if str(f.get('nombre', '')).startswith('_ZZ_')]
-    monto_hijas = sum(_num(f.get('monto')) for f in filas_cat if f.get('id') in censo['hijas_ids'])
-    monto_tot = sum(_num(f.get('monto')) for f in filas_cat)
-    out.append(C('categorias_v12', len(en_planas) == 0 and not zz_nombres,
-                 '100% hijas v1.2, 0 _ZZ_',
-                 f'{len(en_hijas)} hijas / {len(en_planas)} planas vivas / {len(zz_nombres)} _ZZ_',
-                 f'{_pct(monto_hijas, monto_tot)}% del monto en hijas v1.2'))
+    ev = evaluar_categorias_v12(filas_cat, censo)
+    out.append(C('categorias_v12', ev['ok'],
+                 f">={UMBRAL_MONTO_HIJAS_V12}% del monto en hijas v1.2, 0 _ZZ_",
+                 f"{ev['pct_monto_hijas']}% del monto en hijas v1.2 "
+                 f"({ev['n_hijas']} filas); cola plana {ev['n_planas']} filas / "
+                 f"${int(ev['monto_planas']):,} ({ev['pct_monto_planas']}%); "
+                 f"{ev['n_zz']} _ZZ_",
+                 ev['detalle']))
     # Sin label Padre › Hijo (ambigüedad de hijas homónimas)
     tiene_padre = any('›' in str(f.get('nombre', '')) for f in filas_cat)
     out.append(C('label_padre_hijo', tiene_padre if filas_cat else 'skip',
                  'label "Padre › Hijo"', 'solo nombre hijo' if not tiene_padre else 'ok',
                  'hijas homónimas de padres distintos colapsan visualmente'))
-    # atributo4 (columna "género") muerta
+    # atributo4 (segunda columna "género"): columna DELIBERADAMENTE muerta.
+    # Hasta el 21-ago este check exigía ">=5% poblado" y fallaba eternamente
+    # midiendo una columna que la UI ya no pintaba pero la API seguía
+    # calculando y enviando (`por_genero` = 1 fila "Sin clasificar" con el
+    # 100% del monto). El 22-ago se eliminó el cálculo y el payload del
+    # backend, así que ahora el check es el GUARD de esa eliminación: si
+    # alguien revive `por_genero`, vuelve a fallar.
     gen = oraculos['genero']
-    filas_gen = js.get('por_genero') or []
-    monto_sin = sum(_num(f.get('monto')) for f in filas_gen if not f.get('id'))
-    monto_gen_tot = sum(_num(f.get('monto')) for f in filas_gen)
-    out.append(C('atributo4_poblado', gen['pct_atributo4'] >= 5,
-                 '>=5% productos con atributo4',
-                 f"{gen['pct_atributo4']}% poblado; "
-                 f"{_pct(monto_sin, monto_gen_tot)}% del monto sin género(atributo4)",
-                 'columna muerta: candidata a eliminar del reporte'))
+    tiene_payload = 'por_genero' in js
+    out.append(C('payload_genero_muerto', not tiene_payload,
+                 'sin payload por_genero (atributo4 eliminado del reporte)',
+                 'por_genero PRESENTE (revivido)' if tiene_payload else 'ausente',
+                 f"atributo4 poblado en {gen['pct_atributo4']}% de "
+                 f"{gen['total']:,} productos analíticos; la dimensión viva de "
+                 f"género es atributo3 (por_sexo, {gen['pct_atributo3']}% poblada)"))
     # Heatmap consistente
     heat = js.get('heatmap') or []
     s_heat = sum(_num(h.get('monto')) for h in heat)
@@ -1117,8 +1263,13 @@ def main():
         'stock_resumen': (oraculo_stock_resumen(ctxs['GLOBAL'].usuario)
                           if 'GLOBAL' in ctxs else {}),
         'doble_conteo': oraculo_comparativa_doble_conteo(fi, ff),
+        'comparativa_mes': oraculo_comparativa_mes(fi, ff),
         'lotes_vs_stock': oraculo_lotes_vs_stock(),
     }
+    cm = oraculos['comparativa_mes']
+    print(f"  comparativa {fi.strftime('%b %Y')}: tickets sin DTE "
+          f"${cm['tickets_sin_dte']:,} + DTE público ${cm['dte_publico']:,} "
+          f"− NC ${cm['nc']:,} ({cm['nc_n']}) = ${cm['esperado']:,}")
     cs = oraculos['censo']
     print(f"  censo: {cs['pct_prod_en_hijas']}% productos en hijas v1.2, "
           f"{cs['pct_prod_en_planas']}% en planas, {cs['pct_prod_sin_cat']}% sin categoría; "

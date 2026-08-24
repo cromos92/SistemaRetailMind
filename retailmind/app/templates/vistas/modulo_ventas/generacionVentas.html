@@ -695,8 +695,10 @@
                                      salir de la columna derecha dejan los métodos de pago arriba
                                      del todo. Los ids y las funciones son los mismos de antes. -->
                                 <div class="row g-2 mt-1 pos-bajo-tabla">
-                                    <!-- Resumen de Venta -->
-                                    <div class="col-lg-5">
+                                    <!-- Resumen de Venta. En factura/cotización los beneficios se
+                                         ocultan y esta columna pasa a ancho completo (lo hace el JS),
+                                         para no dejar media pantalla en blanco bajo la tabla. -->
+                                    <div class="col-lg-5" id="resumenCol">
                                         <div class="card shadow-sm pos-resumen-card h-100">
                                             <div class="card-header bg-primary text-white py-2">
                                                 <div class="d-flex justify-content-between align-items-center">
@@ -3594,6 +3596,14 @@
     background: rgba(0, 0, 0, 0.18);
     border-radius: 4px;
 }
+/* Los avisos (stock insuficiente, cabecera de cambio/devolución) se inyectan
+   como PRIMERAS FILAS del tbody: con alto fijo se comían toda el área visible
+   y no se veía ni un producto. Cuando hay aviso, la tabla crece: ver el
+   problema importa más que mantener el alto parejo. */
+#step3 .pos-tabla-productos-scroll:has(.stock-alert-banner),
+#step3 .pos-tabla-productos-scroll:has(tr.table-warning) {
+    max-height: none;
+}
 /* --- 15" (1366×768): el alto es el recurso escaso ---------------------
    La izquierda debe caber en ~700px útiles: cabecera + quick-add (~120px)
    + tabla (30vh ≈ 230px) + bloque Resumen/Beneficios (~230px). Se recortan
@@ -3609,18 +3619,43 @@
         margin-bottom: 2px !important;
         line-height: 1.15;
     }
+    /* OJO: el CTA "CONTINUAR A FINALIZAR" vive dentro de .pos-bajo-tabla desde
+       que el Resumen bajó acá. Sin el :not() esta regla le ganaba en
+       especificidad a `.pos-cta-finalizar` y dejaba el botón principal del POS
+       en 11px y ~27px de alto, bajo el mínimo táctil de 44px. */
     #step3 .pos-bajo-tabla .form-control,
-    #step3 .pos-bajo-tabla .btn { font-size: 0.72rem !important; }
+    #step3 .pos-bajo-tabla .btn:not(.pos-cta-finalizar) { font-size: 0.72rem !important; }
+    #step3 .pos-bajo-tabla .pos-cta-finalizar {
+        font-size: 0.88rem !important;
+        min-height: 44px;                /* regla dura del POS táctil */
+        padding-top: 7px !important;
+        padding-bottom: 7px !important;
+    }
+    /* Foto más chica: con 64px cada fila medía ~74px y en 30vh entraban 2
+       productos. A 44px entran ~4 sin perder la referencia visual. */
+    #step3 .pos-tabla-productos-scroll .producto-portada-img {
+        width: 44px !important;
+        height: 44px !important;
+    }
+    /* 28vh en vez de 30: con filas de ~56px (foto 44) entran las mismas 3-4
+       líneas y se recupera alto para que el CTA no quede bajo la línea de
+       flotación en ventana maximizada (no fullscreen). */
+    #step3 .pos-tabla-productos-scroll { max-height: 28vh; }
+    /* Hero del resumen más plano: es donde queda alto disponible */
+    #step3 .pos-bajo-tabla .pos-hero-saldo { padding: 5px 8px 4px !important; }
+    #step3 .pos-bajo-tabla .pos-hero-amount { font-size: 1.35rem !important; }
     /* Mensajes de validación: no reservar alto cuando están vacíos */
     #step3 #valeCanjeMsg, #step3 #cuponMsg { min-height: 0 !important; }
 }
 
-/* --- Ancho justo (1366px): el bloque de beneficios queda en ~530px y
-   cada código en ~265px. Se recorta el texto del input, no el control. --- */
-@media (max-width: 1500px) {
-    #step3 .pos-bajo-tabla .input-group .form-control {
-        min-width: 0;                    /* permite encoger dentro del grupo */
-        text-overflow: ellipsis;
+/* --- Ancho: con el menú lateral abierto (250px), a 1366px cada código
+   quedaría en ~115px de campo y el texto de ayuda del input se cortaría a la
+   mitad ("DC-XXXXXXXX O"). Hasta 1600px se APILAN uno sobre otro: así el
+   campo mide el ancho completo del bloque y se lee entero. --- */
+@media (max-width: 1600px) {
+    #step3 #beneficiosCol .row > [class*="col-md-6"] {
+        flex: 0 0 100%;
+        max-width: 100%;
     }
 }
 
@@ -5373,9 +5408,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (cuponCard) cuponCard.style.display = bloqueada ? 'none' : '';
 
         // Ambos se bloquean juntos: se esconde la columna entera para no dejar
-        // una tarjeta "Beneficios del cliente" vacía bajo la tabla.
+        // una tarjeta "Beneficios del cliente" vacía bajo la tabla, y el
+        // Resumen se estira a todo el ancho (si no, quedaba el 58% en blanco).
         const beneficiosCol = document.getElementById('beneficiosCol');
         if (beneficiosCol) beneficiosCol.style.display = bloqueada ? 'none' : '';
+        const resumenCol = document.getElementById('resumenCol');
+        if (resumenCol) resumenCol.className = bloqueada ? 'col-12' : 'col-lg-5';
 
         const aviso = document.getElementById('empresaNoFidelizaAviso');
         if (aviso) {

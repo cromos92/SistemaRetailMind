@@ -30,6 +30,44 @@ dp.activo son el tope anti-doble-NC):
   + Σ unidades acreditadas por sus NC por-línea (Dte_Productos de las NC
   hijas). Si ninguna fuente sirve, las unidades se dejan SIN tocar y se reporta.
 
+VÍA MANUAL EXPLÍCITA (--fuente, cierre de los REVISION_MANUAL):
+Los documentos que el análisis automático rechaza (SIN_NC_VINCULADA,
+FUENTE_INCONSISTENTE, SIN_MONTO_ITEM) solo se pueden cerrar declarando A MANO
+de dónde sale el monto correcto, documento por documento:
+
+    --ids <id[,id...]> --fuente {monto_item,pagos,ticket}
+
+- `--fuente` SIN `--ids` es un error (nunca masivo, nunca por defecto).
+- Con `--fuente`, los ids indicados se resuelven con ESA fuente y se saltan las
+  compuertas del análisis automático — pero se mantienen las de integridad:
+  el documento debe seguir con déficit real (Σ pagos > cabecera), la fuente
+  debe traer un monto > 0 y ESTRICTAMENTE MAYOR que la cabecera actual.
+- COMPUERTA DE DISCREPANCIA (--acepto-discrepancia): elegir la fuente
+  equivocada NO se acepta en silencio. Antes de escribir se comparan las TRES
+  fuentes del documento (Σ monto_item / Σ pagos / Ticket.total, las que
+  existan). Si alguna de las OTRAS no coincide con la elegida dentro de ±$5,
+  el documento se BLOQUEA, se imprimen las tres lado a lado con el Δ de cada
+  una y el command exige repetir la corrida con `--acepto-discrepancia`.
+  Excepción única: Σ monto_item se considera coincidente si cuadra tras restar
+  el `descuento` global del documento (Σ monto_item − descuento == elegido).
+  Cuando se acepta, el bloque de las tres fuentes se imprime igual (marcado
+  DISCREPANCIA ACEPTADA) y queda en la columna `discrepancia` del CSV.
+- AVISO DE DÉFICIT RESIDUAL (pre-escritura): si el monto elegido queda por
+  debajo de Σ pagos, se avisa ANTES de escribir cuánto déficit deja y que el
+  documento volverá a aparecer en la verificación post-escritura.
+- AVISO DE EFECTO COLATERAL DTE↔TICKET: este command NUNCA toca `Ticket`. Si
+  hoy la cabecera coincide con `Ticket.total` y el monto elegido no, se avisa
+  que la escritura CREA un descuadre DTE↔ticket (caso real: dte 2178247, hoy
+  cab $173.950 == ticket #334; con --fuente pagos queda $188.940 vs ticket
+  $173.950). También se avisa cuando la escritura RESUELVE un descuadre.
+- `unidades_productos` solo se reconstruye si la fuente elegida queda
+  CORROBORADA por las líneas (Σ monto_item, o Σ monto_item − descuento global);
+  si no, las unidades se dejan intactas y se reporta. En los 4 legacy migrados
+  (836011/900643/901236/1166683) NO son reconstruibles: quedan en 0 y cualquier
+  indicador monto/unidad seguirá mintiendo en ellos.
+- Snapshot, verificación post-escritura y `--revertir` funcionan igual; la
+  columna `fuente` del CSV queda como `MANUAL_<FUENTE>`.
+
 SEGURIDAD:
 - DRY-RUN POR DEFECTO: sin --aplicar no escribe nada en la BD (solo puede dejar
   un CSV *_preview.csv en disco con lo que haría).
@@ -43,6 +81,9 @@ Uso:
     python manage.py restaurar_cabeceras_boletas_nc --tipo todos       # + facturas
     python manage.py restaurar_cabeceras_boletas_nc --tipo todos --aplicar
     python manage.py restaurar_cabeceras_boletas_nc --ids 2193698,2191857 --aplicar
+    python manage.py restaurar_cabeceras_boletas_nc --ids 836011 --fuente pagos
+    python manage.py restaurar_cabeceras_boletas_nc --ids 836011 --fuente pagos --acepto-discrepancia
+    python manage.py restaurar_cabeceras_boletas_nc --ids 836011 --fuente pagos --acepto-discrepancia --aplicar
     python manage.py restaurar_cabeceras_boletas_nc --revertir _restauracion_cabeceras_20260820_120000.csv
 """
 import collections
@@ -66,11 +107,21 @@ TIPOS_OPCION = {
     'factura': ['FACTURA ELECTRONICA'],
     'todos': ['BOLETA ELECTRONICA', 'FACTURA ELECTRONICA'],
 }
+# Fuentes admitidas por la vía manual explícita (--fuente). El valor es la
+# etiqueta que queda escrita en la columna `fuente` del snapshot CSV.
+FUENTES_MANUALES = {
+    'monto_item': 'MANUAL_SUM_MONTO_ITEM',
+    'pagos': 'MANUAL_PAGOS',
+    'ticket': 'MANUAL_TICKET',
+}
+# OJO: las columnas nuevas van al FINAL para que los snapshots viejos (sin
+# ellas) sigan siendo revertibles — `_revertir` solo lee dte_id/folio/old_*/new_*.
 CSV_CAMPOS = [
     'dte_id', 'folio', 'tipo', 'sucursal_id', 'fecha_emision',
     'old_neto', 'old_con_iva', 'old_unidades',
     'new_neto', 'new_con_iva', 'new_unidades', 'unidades_tocadas',
     'fuente', 'cross_check', 'ncs_vinculadas', 'deficit', 'nota_unidades',
+    'discrepancia', 'nota_ticket',
 ]
 
 
@@ -94,6 +145,16 @@ class Command(BaseCommand):
                             help='Lista de ids de Dte separados por coma (ignora --desde/--hasta)')
         parser.add_argument('--tipo', choices=sorted(TIPOS_OPCION), default='boleta',
                             help='boleta (default) | factura | todos (incluye FACTURA ELECTRONICA)')
+        parser.add_argument('--fuente', choices=sorted(FUENTES_MANUALES), default=None,
+                            help=('VÍA MANUAL: monto de restauración declarado a mano para los '
+                                  'documentos de --ids (obligatorio junto con --ids). '
+                                  'monto_item = Σ Dte_Productos.monto_item | '
+                                  'pagos = Σ Dte_Detalle_Pago.monto | ticket = Ticket.total'))
+        parser.add_argument('--acepto-discrepancia', action='store_true',
+                            help=('VÍA MANUAL: reconoce explícitamente que la fuente elegida '
+                                  'NO coincide con las otras fuentes del documento. Sin esta '
+                                  'bandera, un documento con fuentes en desacuerdo se BLOQUEA '
+                                  '(nunca se escribe en silencio).'))
         parser.add_argument('--snapshot-dir', default='.',
                             help='Carpeta para el CSV de snapshot/preview (default: actual)')
         parser.add_argument('--revertir', default=None, metavar='SNAPSHOT.CSV',
@@ -105,9 +166,16 @@ class Command(BaseCommand):
 
     def handle(self, *args, **opts):
         if opts['revertir']:
+            if opts.get('fuente'):
+                raise CommandError('--fuente no aplica a --revertir (la reversión usa el CSV).')
+            if opts.get('acepto_discrepancia'):
+                raise CommandError(
+                    '--acepto-discrepancia no aplica a --revertir (la reversión usa el CSV).')
             return self._revertir(opts['revertir'], opts['forzar'])
 
         aplicar = opts['aplicar']
+        fuente = opts.get('fuente')
+        acepto_disc = bool(opts.get('acepto_discrepancia'))
         tipos = TIPOS_OPCION[opts['tipo']]
         try:
             desde = datetime.date.fromisoformat(opts['desde'])
@@ -121,14 +189,40 @@ class Command(BaseCommand):
             except ValueError:
                 raise CommandError('--ids debe ser una lista de enteros separados por coma')
 
+        # VÍA MANUAL: jamás por defecto, jamás masiva.
+        if fuente and not ids:
+            raise CommandError(
+                '--fuente exige --ids: la restauración manual se decide documento por '
+                'documento.\n'
+                '    Ej: python manage.py restaurar_cabeceras_boletas_nc '
+                '--ids 836011 --fuente pagos'
+            )
+        if acepto_disc and not fuente:
+            raise CommandError(
+                '--acepto-discrepancia solo aplica a la vía manual: úsalo junto con '
+                '--ids <id> --fuente <fuente>. La vía automática ya exige que Σ '
+                'monto_item y Σ pagos cuadren dentro de ±$5 y no admite excepciones.'
+            )
+
         self.stdout.write(self.style.MIGRATE_HEADING(
             f"{'APLICANDO' if aplicar else 'DRY-RUN (0 escrituras en BD)'} — "
             f"restauración de cabeceras rotas por NC por línea "
             f"(tipos: {', '.join(tipos)})"
         ))
+        if fuente:
+            self.stdout.write(self.style.WARNING(
+                f"VÍA MANUAL EXPLÍCITA: fuente={fuente} sobre {len(ids)} id(s) "
+                f"({', '.join(str(i) for i in ids)}). Se saltan las compuertas del "
+                f"análisis automático (NC vinculada / cruce Σmonto_item vs pagos); "
+                f"se mantienen déficit real, monto > 0, monto > cabecera actual y "
+                f"acuerdo entre las 3 fuentes"
+                f"{' (DISCREPANCIA ACEPTADA a mano)' if acepto_disc else ''}."
+            ))
 
-        candidatos, manuales = self._analizar(tipos, desde, hasta, ids)
-        self._imprimir_resumen(candidatos, manuales)
+        candidatos, manuales = self._analizar(tipos, desde, hasta, ids, fuente, acepto_disc)
+        self._imprimir_resumen(candidatos, manuales, fuente)
+        bloqueados_disc = [r for r in manuales
+                           if str(r.get('razon', '')).startswith('MANUAL: DISCREPANCIA')]
 
         ts = timezone.localtime().strftime('%Y%m%d_%H%M%S')
         if not aplicar:
@@ -140,14 +234,39 @@ class Command(BaseCommand):
             filtros = f" --tipo {opts['tipo']}" if opts['tipo'] != 'boleta' else ''
             if ids:
                 filtros += f" --ids {opts['ids']}"
-            self.stdout.write(self.style.WARNING(
-                '\nDry-run. Para ejecutar de verdad:\n'
-                f'    python manage.py restaurar_cabeceras_boletas_nc{filtros} --aplicar'
-            ))
+            if fuente:
+                filtros += f" --fuente {fuente}"
+            if acepto_disc:
+                filtros += " --acepto-discrepancia"
+            if bloqueados_disc:
+                # Sin la bandera ese comando volvería a bloquearse: no lo
+                # ofrecemos como si fuera a funcionar.
+                self.stdout.write(self.style.WARNING(
+                    f'\nDry-run. {len(bloqueados_disc)} documento(s) BLOQUEADO(S) por '
+                    f'discrepancia entre fuentes: repetir con --aplicar NO los escribe. '
+                    f'Usa el comando con --acepto-discrepancia que aparece arriba, o '
+                    f'elige otra --fuente.'))
+            if candidatos:
+                self.stdout.write(self.style.WARNING(
+                    f'\nDry-run. Para escribir los {len(candidatos)} candidato(s) de '
+                    f'verdad:\n'
+                    f'    python manage.py restaurar_cabeceras_boletas_nc{filtros} '
+                    f'--aplicar'))
+            elif not bloqueados_disc:
+                self.stdout.write(self.style.WARNING(
+                    '\nDry-run. Para ejecutar de verdad:\n'
+                    f'    python manage.py restaurar_cabeceras_boletas_nc{filtros} '
+                    f'--aplicar'))
             return
 
         if not candidatos:
-            self.stdout.write(self.style.SUCCESS('\nNada que aplicar: 0 candidatos.'))
+            if bloqueados_disc:
+                self.stdout.write(self.style.ERROR(
+                    f'\nNada que aplicar: los {len(bloqueados_disc)} documento(s) '
+                    f'pedidos están BLOQUEADOS por discrepancia entre fuentes (ver '
+                    f'arriba). NADA se escribió.'))
+            else:
+                self.stdout.write(self.style.SUCCESS('\nNada que aplicar: 0 candidatos.'))
             return
 
         # ------------------------- APLICAR ------------------------------ #
@@ -182,12 +301,46 @@ class Command(BaseCommand):
                 batch_size=200,
             )
 
-        # Verificación: ninguno de los aplicados debe seguir calificando
-        restantes = self._queryset_base(tipos, desde, hasta,
-                                        [c['dte_id'] for c in candidatos]).count()
-        marca = (self.style.SUCCESS('OK: 0 siguen con déficit') if restantes == 0
-                 else self.style.ERROR(f'ATENCIÓN: {restantes} siguen con déficit'))
+        # Verificación: ninguno de los aplicados debe seguir calificando.
+        # (En la vía manual con una fuente por debajo de los pagos —ej. una
+        # boleta cuyo marketplace liquidó menos— el documento sigue apareciendo:
+        # es correcto y se explica, no se re-escribe.)
+        ids_escritos = [c['dte_id'] for c in candidatos]
+        restantes = list(self._queryset_base(tipos, desde, hasta, ids_escritos)
+                         .values_list('id', flat=True))
+        marca = (self.style.SUCCESS('OK: 0 siguen con déficit') if not restantes
+                 else self.style.ERROR(
+                     f'ATENCIÓN: {len(restantes)} siguen con déficit '
+                     f'({", ".join(str(i) for i in restantes)})'))
         self.stdout.write(f'\nVerificación post-escritura: {marca}')
+        if restantes and fuente:
+            self.stdout.write(self.style.WARNING(
+                f'  Esperable con --fuente {fuente}: el monto declarado quedó por '
+                f'debajo de Σ pagos. Revisa el detalle de arriba antes de insistir.'))
+        # Verificación positiva: la cabecera quedó exactamente en lo declarado
+        quedaron = dict(Dte.objects.filter(id__in=ids_escritos)
+                        .values_list('id', 'monto_con_iva'))
+        desviados = [c['dte_id'] for c in candidatos
+                     if quedaron.get(c['dte_id']) != c['new_con_iva']]
+        if desviados:
+            self.stdout.write(self.style.ERROR(
+                f'  ATENCIÓN: {len(desviados)} cabeceras no quedaron en el valor '
+                f'declarado: {", ".join(str(i) for i in desviados)}'))
+        else:
+            self.stdout.write(self.style.SUCCESS(
+                f'  {len(ids_escritos)}/{len(ids_escritos)} cabeceras quedaron en el '
+                f'monto declarado.'))
+        # Efecto colateral DTE↔Ticket: se repite DESPUÉS de escribir para que no
+        # se pierda entre el detalle (el command nunca toca Ticket).
+        colaterales = [c for c in candidatos
+                       if 'EFECTO COLATERAL' in (c.get('nota_ticket') or '')]
+        if colaterales:
+            self.stdout.write(self.style.WARNING(
+                f'\n  ⚠ {len(colaterales)} documento(s) quedaron descuadrados contra '
+                f'su Ticket (el ticket NO se tocó):'))
+            for c in colaterales:
+                self.stdout.write(self.style.WARNING(
+                    f"    dte={c['dte_id']} folio={c['folio']}: {c['nota_ticket']}"))
         self.stdout.write(self.style.SUCCESS(
             f"\nListo. {len(candidatos)} cabeceras restauradas "
             f"({con_unidades} con unidades_productos; "
@@ -216,13 +369,15 @@ class Command(BaseCommand):
         return (qs.annotate(pagos_sum=Sum('dte_asociado__monto'))
                   .filter(pagos_sum__gt=F('monto_con_iva') + TOL))
 
-    def _analizar(self, tipos, desde, hasta, ids):
+    def _analizar(self, tipos, desde, hasta, ids, fuente=None, acepto_disc=False):
         afectados = list(self._queryset_base(tipos, desde, hasta, ids).values(
             'id', 'numero_documento', 'tipo_documento', 'fecha_emision',
             'sucursal_id', 'monto_con_iva', 'monto_neto', 'unidades_productos',
-            'referencias', 'pagos_sum',
+            'descuento', 'referencias', 'pagos_sum',
         ))
         ids_af = [a['id'] for a in afectados]
+        if ids:
+            self._reportar_ids_fuera(ids, set(ids_af), tipos)
 
         # Líneas del documento (activas + inactivas): monto_item intacto = fuente de verdad
         lineas = collections.defaultdict(list)
@@ -242,22 +397,9 @@ class Command(BaseCommand):
                        for r in Dte_Productos.objects.filter(dte_id__in=nc_ids_redujo)
                        .values('dte_id').annotate(u=Sum('stock'))}
 
-        # Cross-check informativo contra el ticket (referencias TICKET-<correlativo>)
-        corr_por_dte = {}
-        for a in afectados:
-            ref = a['referencias'] or ''
-            if ref.startswith('TICKET-'):
-                try:
-                    corr_por_dte[a['id']] = (int(ref.split('TICKET-')[1].split()[0]),
-                                             a['sucursal_id'])
-                except (ValueError, IndexError):
-                    pass
-        tickets = {}
-        if corr_por_dte:
-            corrs = {c for c, _s in corr_por_dte.values()}
-            for t in Ticket.objects.filter(correlativo__in=corrs).values(
-                    'correlativo', 'sucursal_id', 'total'):
-                tickets[(t['correlativo'], t['sucursal_id'])] = int(t['total'] or 0)
+        # Cruce contra el ticket (informativo en la vía automática; fuente
+        # elegible en la vía manual `--fuente ticket`).
+        tickets = self._tickets_por_dte(afectados)
 
         candidatos, manuales = [], []
         for a in sorted(afectados, key=lambda x: (x['fecha_emision'], x['id'])):
@@ -267,18 +409,32 @@ class Command(BaseCommand):
             deficit = pagos - int(cab)
             lns = lineas.get(did, [])
             total_mi = sum(int(l['monto_item'] or 0) for l in lns)
-            ticket_total = tickets.get(corr_por_dte.get(did))
+            tk = tickets.get(did)
+            ticket_total = tk['total'] if tk else None
             base = dict(
                 dte_id=did, folio=a['numero_documento'], tipo=a['tipo_documento'],
                 sucursal_id=a['sucursal_id'], fecha_emision=a['fecha_emision'],
                 old_con_iva=cab, old_neto=a['monto_neto'] or Decimal(0),
                 old_unidades=int(a['unidades_productos'] or 0),
+                descuento=int(a['descuento'] or 0),
                 pagos=pagos, total_mi=total_mi, ticket_total=ticket_total,
+                ticket_via=(tk['via'] if tk else None),
+                ticket_id=(tk['id'] if tk else None),
                 deficit=deficit,
             )
+            ncs_doc = ncs.get(did, [])
+
+            # ---------------- VÍA MANUAL EXPLÍCITA (--ids + --fuente) --------
+            if fuente:
+                cand, razon = self._candidato_manual(
+                    base, fuente, lns, ncs_doc, nc_unidades, acepto_disc)
+                if cand is None:
+                    manuales.append({**base, 'razon': razon})
+                else:
+                    candidatos.append(cand)
+                continue
 
             # 1) NC vinculada en EMITIDO/ACEPTADO — obligatoria
-            ncs_doc = ncs.get(did, [])
             ncs_ok = [n for n in ncs_doc if n['estado_dte'] in ESTADOS_NC_VALIDOS]
             if not ncs_ok:
                 manuales.append({**base, 'razon': 'SIN_NC_VINCULADA'})
@@ -316,6 +472,8 @@ class Command(BaseCommand):
                 'fuente': 'SUM_MONTO_ITEM',
                 'cross_check': cross,
                 'ncs_vinculadas': ';'.join(str(n['id']) for n in ncs_ok),
+                'discrepancia': '',   # la vía automática exige acuerdo ±$5 por diseño
+                'nota_ticket': self._nota_ticket(base, int(new_con_iva)),
             })
         return candidatos, manuales
 
@@ -365,10 +523,312 @@ class Command(BaseCommand):
         return None, False, 'no reconstruible (sin derivación por precio y stock+NC<=0)'
 
     # ------------------------------------------------------------------ #
+    # Vía manual explícita (--ids + --fuente)
+    # ------------------------------------------------------------------ #
+
+    def _tickets_por_dte(self, afectados):
+        """
+        {dte_id: {'id':…, 'total': int, 'via': 'TICKET-ref'|'folio_dte'}}
+
+        Resuelve primero por `referencias = 'TICKET-<correlativo>'` (+ sucursal,
+        que es la clave única del Ticket) y, para los que no traen esa
+        referencia, por `Ticket.folio_dte == numero_documento` + sucursal. El
+        fallback exige coincidencia ÚNICA: si dos tickets de la misma sucursal
+        comparten folio (boleta y factura con la misma numeración), se descarta
+        el cruce en vez de adivinar.
+        """
+        corr_por_dte = {}
+        for a in afectados:
+            ref = a['referencias'] or ''
+            if ref.startswith('TICKET-'):
+                try:
+                    corr_por_dte[a['id']] = (int(ref.split('TICKET-')[1].split()[0]),
+                                             a['sucursal_id'])
+                except (ValueError, IndexError):
+                    pass
+        res = {}
+        if corr_por_dte:
+            corrs = {c for c, _s in corr_por_dte.values()}
+            idx = {}
+            for t in Ticket.objects.filter(correlativo__in=corrs).values(
+                    'id', 'correlativo', 'sucursal_id', 'total'):
+                idx[(t['correlativo'], t['sucursal_id'])] = t
+            for did, clave in corr_por_dte.items():
+                t = idx.get(clave)
+                if t:
+                    res[did] = {'id': t['id'], 'total': int(t['total'] or 0),
+                                'via': 'TICKET-ref'}
+
+        faltan = [a for a in afectados if a['id'] not in res]
+        if faltan:
+            folios = {a['numero_documento'] for a in faltan}
+            por_clave = collections.defaultdict(list)
+            for t in Ticket.objects.filter(folio_dte__in=folios).values(
+                    'id', 'folio_dte', 'sucursal_id', 'total'):
+                por_clave[(t['folio_dte'], t['sucursal_id'])].append(t)
+            for a in faltan:
+                lst = por_clave.get((a['numero_documento'], a['sucursal_id']), [])
+                if len(lst) == 1:
+                    res[a['id']] = {'id': lst[0]['id'], 'total': int(lst[0]['total'] or 0),
+                                    'via': 'folio_dte'}
+        return res
+
+    def _fuentes_disponibles(self, base):
+        """
+        Las TRES fuentes del documento, en orden fijo, para imprimirlas lado a
+        lado: [(clave, etiqueta, valor|None, nota)]. `valor is None` = la fuente
+        no existe para ese documento (sin líneas / sin pagos / sin ticket).
+        """
+        desc = int(base['descuento'] or 0)
+        mi = int(base['total_mi'] or 0)
+        tt = base['ticket_total']
+        return [
+            ('monto_item', 'Σ Dte_Productos.monto_item', mi if mi > 0 else None,
+             f'(− descuento global ${desc:,} = ${mi - desc:,})' if desc else ''),
+            ('pagos', 'Σ Dte_Detalle_Pago.monto',
+             int(base['pagos'] or 0) or None, ''),
+            ('ticket', 'Ticket.total', int(tt) if tt is not None else None,
+             f"(ticket #{base['ticket_id']}, vía {base['ticket_via']})"
+             if tt is not None else '(no resoluble)'),
+        ]
+
+    def _discrepancias(self, base, fuente, total):
+        """
+        Fuentes DISPONIBLES distintas de la elegida que NO coinciden (±TOL) con
+        el monto declarado. Única reconciliación admitida: Σ monto_item cuadra
+        también si lo hace tras restar el `descuento` global del documento
+        (así el caso legítimo con descuento de cabecera no pide bandera).
+
+        Devuelve [(clave, etiqueta, valor, delta_vs_elegido)].
+        """
+        desc = int(base['descuento'] or 0)
+        fuera = []
+        for clave, etiqueta, valor, _nota in self._fuentes_disponibles(base):
+            if clave == fuente or valor is None:
+                continue
+            if abs(valor - total) <= TOL:
+                continue
+            if clave == 'monto_item' and desc and abs(valor - desc - total) <= TOL:
+                continue  # cuadra vía el descuento global del documento
+            fuera.append((clave, etiqueta, valor, valor - total))
+        return fuera
+
+    def _bloque_fuentes(self, base, fuente, total, disc, sangria='      '):
+        """Las 3 fuentes lado a lado + el elegido. Se imprime SIEMPRE, antes de
+        cualquier escritura (y también cuando el documento queda bloqueado)."""
+        fuera = {c for c, _e, _v, _d in disc}
+        out = [f'{sangria}FUENTES DEL DOCUMENTO (elegida: {fuente}):']
+        for clave, etiqueta, valor, nota in self._fuentes_disponibles(base):
+            if valor is None:
+                out.append(f'{sangria}  {clave:<11} {"—":>14}   {etiqueta} {nota}')
+                continue
+            if clave == fuente:
+                marca = '<= ELEGIDA'
+            elif clave in fuera:
+                marca = f'!= difiere en ${valor - total:+,}'
+            else:
+                marca = '== coincide'
+            out.append(f'{sangria}  {clave:<11} ${valor:>13,}   {marca} {nota}'.rstrip())
+        return out
+
+    def _nota_ticket(self, base, total):
+        """
+        Efecto sobre la relación DTE↔Ticket. Este command NUNCA toca `Ticket`,
+        así que mover la cabecera puede CREAR un descuadre donde hoy no lo hay
+        (caso real: dte 2178247, cab $173.950 == ticket #334 $173.950; con
+        --fuente pagos la cabecera queda en $188.940 y el ticket no se mueve).
+        """
+        tt = base['ticket_total']
+        if tt is None:
+            return ''
+        tt, old = int(tt), int(base['old_con_iva'])
+        cuadra_hoy = abs(old - tt) <= TOL
+        cuadra_luego = abs(total - tt) <= TOL
+        tk = f"#{base['ticket_id']}"
+        if cuadra_hoy and not cuadra_luego:
+            return (f'EFECTO COLATERAL: hoy DTE y ticket {tk} COINCIDEN (${old:,}); '
+                    f'tras escribir el DTE queda en ${total:,} y el ticket sigue en '
+                    f'${tt:,} => se CREA un descuadre DTE↔ticket de ${total - tt:+,} '
+                    f'(este command no toca Ticket)')
+        if not cuadra_hoy and cuadra_luego:
+            return (f'el descuadre DTE↔ticket {tk} actual (${old:,} vs ${tt:,}) queda '
+                    f'RESUELTO: ambos en ${tt:,}')
+        if not cuadra_hoy and not cuadra_luego:
+            return (f'DTE y ticket {tk} siguen descuadrados tras escribir: '
+                    f'${total:,} vs ${tt:,} (${total - tt:+,})')
+        return f'DTE y ticket {tk} siguen coincidiendo en ${tt:,}'
+
+    def _candidato_manual(self, base, fuente, lns, ncs_doc, nc_unidades,
+                          acepto_disc=False):
+        """
+        Construye el candidato con el monto DECLARADO por el operador.
+
+        Se saltan las compuertas de la vía automática (NC vinculada, cruce
+        Σmonto_item↔pagos), pero NO las de integridad:
+          - la fuente debe traer un monto > 0,
+          - ese monto debe ser ESTRICTAMENTE MAYOR que la cabecera actual
+            (este command solo repara déficit; jamás baja una cabecera),
+          - las OTRAS fuentes disponibles deben coincidir con la elegida (±$5);
+            si no, el documento se BLOQUEA salvo `--acepto-discrepancia`.
+
+        `unidades_productos` solo se reconstruye si la fuente elegida queda
+        corroborada por las líneas (Σ monto_item, o Σ monto_item − descuento
+        global del documento). Si no, se dejan intactas: preferimos un dato
+        viejo declarado a uno nuevo inventado.
+
+        Devuelve (candidato, None) o (None, razón_para_REVISION_MANUAL).
+        """
+        if fuente == 'monto_item':
+            total = base['total_mi']
+        elif fuente == 'pagos':
+            total = base['pagos']
+        else:  # ticket
+            total = base['ticket_total']
+            if total is None:
+                return None, 'MANUAL: SIN_TICKET_RESOLUBLE'
+        total = int(total or 0)
+        if total <= 0:
+            return None, f'MANUAL: FUENTE_{fuente.upper()}_EN_CERO'
+
+        old = int(base['old_con_iva'])
+        if total <= old:
+            return None, (f'MANUAL: FUENTE_NO_MEJORA (elegido ${total:,} <= '
+                          f'cabecera actual ${old:,})')
+
+        # COMPUERTA DE DISCREPANCIA: elegir la fuente equivocada jamás se acepta
+        # en silencio. Se compara la elegida contra TODAS las otras disponibles.
+        disc = self._discrepancias(base, fuente, total)
+        if disc and not acepto_disc:
+            detalle = ', '.join(f'{c} ${v:,} (Δ ${d:+,})' for c, _e, v, d in disc)
+            return None, (
+                f'MANUAL: DISCREPANCIA_ENTRE_FUENTES — elegido {fuente} ${total:,}; '
+                f'no coincide con {detalle}. Exige --acepto-discrepancia')
+        if disc:
+            nota_disc = ('DISCREPANCIA ACEPTADA (--acepto-discrepancia): elegido '
+                         f'{fuente} ${total:,} vs '
+                         + ', '.join(f'{c} ${v:,} (Δ ${d:+,})' for c, _e, v, d in disc))
+        else:
+            nota_disc = ''
+
+        # ¿las líneas corroboran el monto elegido?
+        desc = int(base['descuento'] or 0)
+        corrobora = ''
+        if abs(base['total_mi'] - total) <= TOL:
+            corrobora = 'Σmonto_item'
+        elif desc and abs(base['total_mi'] - desc - total) <= TOL:
+            corrobora = 'Σmonto_item - descuento global'
+
+        if corrobora:
+            new_unidades, tocadas, nota_uds = self._reconstruir_unidades(
+                lns, ncs_doc, nc_unidades)
+            if nota_uds:
+                nota_uds = f'{nota_uds}; líneas corroboran por {corrobora}'
+            else:
+                nota_uds = f'líneas corroboran por {corrobora}'
+        else:
+            new_unidades, tocadas = None, False
+            nota_uds = (f'unidades SIN tocar: las líneas no corroboran el monto '
+                        f'elegido (Σmonto_item ${base["total_mi"]:,} vs '
+                        f'${total:,})')
+
+        partes = [f'Σmonto_item ${base["total_mi"]:,}', f'pagos ${base["pagos"]:,}']
+        if base['ticket_total'] is not None:
+            partes.append(f'ticket ${base["ticket_total"]:,} ({base["ticket_via"]})')
+        ncs_ok = [n for n in ncs_doc if n['estado_dte'] in ESTADOS_NC_VALIDOS]
+        return {
+            **base,
+            'new_con_iva': Decimal(total),
+            'new_neto': _neto_half_up(Decimal(total)),
+            'new_unidades': new_unidades if tocadas else base['old_unidades'],
+            'unidades_tocadas': tocadas,
+            'nota_unidades': nota_uds,
+            'fuente': FUENTES_MANUALES[fuente],
+            'cross_check': 'MANUAL[' + ' | '.join(partes) + ']',
+            'ncs_vinculadas': ';'.join(str(n['id']) for n in ncs_ok),
+            'discrepancia': nota_disc,
+            'fuentes_fuera': disc,
+            'nota_ticket': self._nota_ticket(base, total),
+        }, None
+
+    def _reportar_ids_fuera(self, ids, ids_en_scope, tipos):
+        """Con --ids: dice EN VOZ ALTA qué ids pedidos no entraron y por qué."""
+        faltan = [i for i in ids if i not in ids_en_scope]
+        if not faltan:
+            return
+        info = {d['id']: d for d in Dte.objects.filter(id__in=faltan)
+                .annotate(pagos_sum=Sum('dte_asociado__monto'))
+                .values('id', 'numero_documento', 'tipo_documento', 'monto_con_iva',
+                        'pagos_sum', 'es_nota_credito', 'descartado', 'tipo_transaccion')}
+        self.stdout.write(self.style.WARNING(
+            f'\n=== {len(faltan)} id(s) de --ids FUERA de alcance (no se tocan) ==='))
+        for i in faltan:
+            d = info.get(i)
+            if d is None:
+                self.stdout.write(f'  dte={i}: no existe')
+                continue
+            pagos = int(d['pagos_sum'] or 0)
+            cab = int(d['monto_con_iva'] or 0)
+            if d['es_nota_credito']:
+                motivo = 'es NOTA DE CREDITO'
+            elif d['descartado']:
+                motivo = 'está descartado'
+            elif d['tipo_documento'] not in tipos:
+                motivo = f"tipo {d['tipo_documento']} fuera de --tipo ({', '.join(tipos)})"
+            elif d['tipo_transaccion'] not in ('VENTA', 'VENTA_PUBLICO'):
+                motivo = f"tipo_transaccion {d['tipo_transaccion']} no es venta"
+            elif pagos <= cab + TOL:
+                motivo = f'sin déficit (cabecera ${cab:,} >= pagos ${pagos:,} - ${TOL})'
+            else:
+                # Inalcanzable hoy: las 5 ramas de arriba replican exactamente los
+                # filtros de _queryset_base. Se deja como red por si ese queryset
+                # gana una condición nueva y este reporte deja de explicarla.
+                motivo = 'no calificó en el queryset base'
+            self.stdout.write(f"  dte={i} folio={d['numero_documento']}: {motivo}")
+
+    # ------------------------------------------------------------------ #
     # Salida
     # ------------------------------------------------------------------ #
 
-    def _imprimir_resumen(self, candidatos, manuales):
+    def _imprimir_resumen(self, candidatos, manuales, fuente=None):
+        if fuente:
+            self._imprimir_bloqueos_por_discrepancia(manuales, fuente)
+            self.stdout.write(
+                f'\n=== VÍA MANUAL (--fuente {fuente}): {len(candidatos)} '
+                f'documento(s) a restaurar ===')
+            for c in candidatos:
+                self.stdout.write(
+                    f"  dte={c['dte_id']} folio={c['folio']} "
+                    f"cab ${int(c['old_con_iva']):,} → ${int(c['new_con_iva']):,} "
+                    f"(neto ${int(c['old_neto']):,} → ${int(c['new_neto']):,}, "
+                    f"uds {c['old_unidades']}"
+                    f"{'→' + str(c['new_unidades']) if c['unidades_tocadas'] else ' SIN TOCAR'})")
+                # Las 3 fuentes SIEMPRE lado a lado, antes de cualquier escritura.
+                for linea in self._bloque_fuentes(c, fuente, int(c['new_con_iva']),
+                                                  c.get('fuentes_fuera') or []):
+                    self.stdout.write(linea)
+                if c.get('discrepancia'):
+                    self.stdout.write(self.style.WARNING(f"      ⚠ {c['discrepancia']}"))
+                # Aviso PRE-escritura de déficit residual (antes solo se avisaba
+                # en la verificación post-escritura, o sea después de escribir).
+                resto = int(c['pagos']) - int(c['new_con_iva'])
+                if resto > TOL:
+                    self.stdout.write(self.style.WARNING(
+                        f'      ⚠ el monto elegido deja ${resto:,} de DÉFICIT frente a '
+                        f'Σ pagos (${int(c["pagos"]):,}): el documento volverá a '
+                        f'aparecer en la verificación post-escritura'))
+                if c.get('nota_ticket'):
+                    if 'EFECTO COLATERAL' in c['nota_ticket']:
+                        self.stdout.write(self.style.WARNING(
+                            f"      ⚠ {c['nota_ticket']}"))
+                    else:
+                        self.stdout.write(f"      ticket: {c['nota_ticket']}")
+                self.stdout.write(f"      unidades: {c['nota_unidades']}")
+            delta = sum(int(c['new_con_iva']) - int(c['old_con_iva']) for c in candidatos)
+            self.stdout.write(
+                f'  Δ cabecera a escribir: ${delta:,} '
+                f'(el "déficit" de abajo mide pagos − cabecera, que no siempre '
+                f'coincide con la fuente elegida)')
+
         por_mes = collections.defaultdict(lambda: dict(n=0, cab0=0, deficit=0))
         uds_sin_tocar, uds_con_nota = [], []
         for c in candidatos:
@@ -423,6 +883,51 @@ class Command(BaseCommand):
                 f"pagos=${r['pagos']:,} Σmonto_item=${r['total_mi']:,} "
                 f"ticket={tk} → {r['razon']}")
 
+    def _imprimir_bloqueos_por_discrepancia(self, manuales, fuente):
+        """
+        Bloque a prueba de distracciones para los documentos que la compuerta de
+        discrepancia frenó: las 3 fuentes lado a lado + el comando exacto con
+        --acepto-discrepancia. Se imprime ANTES de la lista de candidatos.
+        """
+        bloqueados = [r for r in manuales
+                      if str(r.get('razon', '')).startswith('MANUAL: DISCREPANCIA')]
+        if not bloqueados:
+            return
+        self.stdout.write(self.style.ERROR(
+            f'\n=== BLOQUEADO POR DISCREPANCIA ENTRE FUENTES: {len(bloqueados)} '
+            f'documento(s) — NADA se escribe ==='))
+        for r in bloqueados:
+            total = self._monto_de_fuente(r, fuente)
+            self.stdout.write(
+                f"  dte={r['dte_id']} folio={r['folio']} {r['tipo']} "
+                f"fecha={r['fecha_emision']} cab actual ${int(r['old_con_iva']):,}")
+            for linea in self._bloque_fuentes(
+                    r, fuente, total, self._discrepancias(r, fuente, total)):
+                self.stdout.write(linea)
+            resto = int(r['pagos']) - total
+            if resto > TOL:
+                self.stdout.write(self.style.WARNING(
+                    f'      ⚠ con {fuente} la cabecera quedaría en ${total:,} y '
+                    f'dejaría ${resto:,} de DÉFICIT frente a Σ pagos'))
+            nt = self._nota_ticket(r, total)
+            if nt:
+                self.stdout.write(f'      ticket: {nt}')
+        ids_txt = ','.join(str(r['dte_id']) for r in bloqueados)
+        self.stdout.write(self.style.WARNING(
+            '\n  Revisa las fuentes de arriba y decide. Si la fuente elegida es la '
+            'correcta pese al desacuerdo, reconócelo explícitamente:\n'
+            f'    python manage.py restaurar_cabeceras_boletas_nc --ids {ids_txt} '
+            f'--fuente {fuente} --acepto-discrepancia\n'
+            '  (y agrega --aplicar cuando el dry-run diga lo que esperas)'))
+
+    @staticmethod
+    def _monto_de_fuente(base, fuente):
+        if fuente == 'monto_item':
+            return int(base['total_mi'] or 0)
+        if fuente == 'pagos':
+            return int(base['pagos'] or 0)
+        return int(base['ticket_total'] or 0)
+
     def _escribir_csv(self, ruta, candidatos):
         with open(ruta, 'w', encoding='utf-8', newline='') as f:
             w = csv.DictWriter(f, fieldnames=CSV_CAMPOS)
@@ -440,6 +945,8 @@ class Command(BaseCommand):
                     'fuente': c['fuente'], 'cross_check': c['cross_check'],
                     'ncs_vinculadas': c['ncs_vinculadas'], 'deficit': c['deficit'],
                     'nota_unidades': c['nota_unidades'],
+                    'discrepancia': c.get('discrepancia', ''),
+                    'nota_ticket': c.get('nota_ticket', ''),
                 })
 
     # ------------------------------------------------------------------ #

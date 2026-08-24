@@ -3,26 +3,35 @@ Módulo de Existencias - RetailMind
 Contiene todas las vistas relacionadas con productos, inventario, FIFO, lotes, movimientos y gestión de stock
 """
 
-from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse, Http404, HttpResponseBadRequest, HttpResponse
+from django.shortcuts import render, get_object_or_404
+from django.http import JsonResponse, HttpResponse
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_POST, require_GET, require_http_methods
-from django.views.decorators.csrf import csrf_exempt
-from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg
+from django.views.decorators.http import require_POST, require_GET
+from django.db.models import Sum, F, Q
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import transaction
 import json
-import re
 from decimal import Decimal
 
 from .models import (
-    Producto, Producto_Talla, Productos_Atributos, AtributoOpcion, Categoria,
-    GuiaTalla, GuiaTallaItem, GuiaTallaProducto, LoteProducto, Movimientos_Producto,
-    Sucursal, EmpresaUser, Empresa, Ticket, Dte, Traspaso, Traspaso_Detalle,
+    Producto, Producto_Talla, LoteProducto, Movimientos_Producto, Sucursal,
     AjusteInventario, AjusteInventario_Detalle, Productos_Recepcionados
 )
+# LIMPIEZA DE IMPORTS 2026-08-22 (Fase D, F-06). Se fueron 23 nombres que el
+# módulo importaba y no referenciaba en ninguna parte — verificado por AST
+# (ningún `ast.Name` los usa) y confirmado línea a línea: salvo su propia línea
+# de import, no aparecen en el archivo.
+#   - por el borrado de las 3 FBV de traspaso: Traspaso, Traspaso_Detalle
+#   - ya muertos de antes: redirect, Http404, HttpResponseBadRequest,
+#     require_http_methods, csrf_exempt, ExpressionWrapper, DecimalField,
+#     Count, Avg, re, Productos_Atributos, AtributoOpcion, Categoria,
+#     GuiaTalla, GuiaTallaItem, GuiaTallaProducto, EmpresaUser, Empresa,
+#     Ticket, Dte, Font, PatternFill, Alignment (estos 3 últimos, en el
+#     import local de openpyxl más abajo).
+# `Ticket_Productos` NO estaba en este import: se importa localmente dentro de
+# la función que lo usa.
 
 
 # ========== GESTIÓN DE PRODUCTOS ==========
@@ -259,100 +268,15 @@ def detalle_producto_para_crear(request, producto_id):
         })
 
 
-@transaction.atomic
-def crear_producto_desde_recepcion(request):
-    """Crear producto desde recepción"""
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            
-            # Validar datos requeridos
-            recepcion_id = data.get('recepcion_id')
-            nombre = data.get('nombre')
-            categoria_id = data.get('categoria_id')
-            
-            if not all([recepcion_id, nombre]):
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Recepción ID y nombre son requeridos'
-                })
-            
-            recepcion = get_object_or_404(Productos_Recepcionados, id=recepcion_id)
-
-            # Crear producto usando la función existente.
-            # Pasamos la fecha de recepción para que el producto y el movimiento
-            # queden con la fecha real del DTE/recepción (no la fecha actual).
-            from .views import crear_producto
-            producto = crear_producto(
-                data,
-                request.user,
-                fecha_creacion=recepcion.fecha_recepcion,
-            )
-
-            # Marcar recepción como procesada
-            recepcion.producto_creado = True
-            recepcion.producto = producto
-            recepcion.save()
-            
-            return JsonResponse({
-                'success': True,
-                'message': 'Producto creado exitosamente',
-                'producto_id': producto.id
-            })
-            
-        except json.JSONDecodeError:
-            return JsonResponse({
-                'success': False,
-                'error': 'Datos JSON inválidos'
-            })
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': f'Error al crear producto: {str(e)}'
-            })
-    
-    return JsonResponse({'success': False, 'error': 'Método no permitido'})
-
-
-def crear_producto_manual(request):
-    """Crear producto manualmente"""
-    if request.method == 'GET':
-        return render(request, 'vistas/modulo_existencias/crear_producto_manual.html')
-    
-    elif request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            
-            # Validar datos requeridos
-            nombre = data.get('nombre')
-            categoria_id = data.get('categoria_id')
-            
-            if not nombre:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Nombre del producto es requerido'
-                })
-            
-            # Crear producto usando la función existente
-            from .views import crear_producto
-            producto = crear_producto(data, request.user)
-            
-            return JsonResponse({
-                'success': True,
-                'message': 'Producto creado exitosamente',
-                'producto_id': producto.id
-            })
-            
-        except json.JSONDecodeError:
-            return JsonResponse({
-                'success': False,
-                'error': 'Datos JSON inválidos'
-            })
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': f'Error al crear producto: {str(e)}'
-            })
+# NOTA 2026-08-22 (F-06, Fase D de la auditoría de Reportes): aquí vivían dos
+# copias muertas — `crear_producto_desde_recepcion` y `crear_producto_manual` —
+# que llamaban directo a `views.crear_producto`. Las vivas y ruteadas son
+# `views.crear_producto_desde_recepcion` (app/urls.py:706 → app/views.py:20880) y
+# `views.crear_producto_manual` (app/urls.py:783 → app/views.py:22841); el
+# template verGestionProductos.html pega a /app/crear_producto_desde_recepcion/
+# y /app/crear_producto_manual/, que resuelven a esas dos. Este módulo no lo
+# importa NADIE (0 `from .views_modulo_existencias import` en todo el repo), así
+# que editar estas copias no tenía efecto alguno en producción.
 
 
 @require_GET
@@ -603,241 +527,14 @@ def obtener_movimientos_producto(request):
         })
 
 
-# ========== TRASPASOS ==========
-
-@require_POST
-@transaction.atomic
-def crear_traspaso(request):
-    """Crear traspaso entre sucursales"""
-    try:
-        data = json.loads(request.body)
-        
-        # Validar datos requeridos
-        sucursal_origen_id = data.get('sucursal_origen_id')
-        sucursal_destino_id = data.get('sucursal_destino_id')
-        productos = data.get('productos', [])
-        
-        if not all([sucursal_origen_id, sucursal_destino_id]):
-            return JsonResponse({
-                'success': False,
-                'error': 'Sucursales origen y destino son requeridas'
-            })
-        
-        if not productos:
-            return JsonResponse({
-                'success': False,
-                'error': 'Debe incluir al menos un producto'
-            })
-        
-        if sucursal_origen_id == sucursal_destino_id:
-            return JsonResponse({
-                'success': False,
-                'error': 'Las sucursales origen y destino deben ser diferentes'
-            })
-        
-        # Obtener sucursales
-        sucursal_origen = get_object_or_404(Sucursal, id=sucursal_origen_id)
-        sucursal_destino = get_object_or_404(Sucursal, id=sucursal_destino_id)
-        
-        # Crear traspaso
-        traspaso = Traspaso.objects.create(
-            sucursal_origen=sucursal_origen,
-            sucursal_destino=sucursal_destino,
-            usuario_solicita=request.user,
-            estado='PENDIENTE',
-            observaciones=data.get('observaciones', '')
-        )
-        
-        # Crear detalles del traspaso
-        for item in productos:
-            producto_talla = get_object_or_404(Producto_Talla, id=item['producto_talla_id'])
-            cantidad = int(item['cantidad'])
-            
-            # Verificar stock en sucursal origen
-            stock_origen = producto_talla.stock_sucursal(sucursal_origen_id)
-            if stock_origen < cantidad:
-                raise ValidationError(f'Stock insuficiente para {producto_talla.sku} en sucursal origen')
-            
-            Traspaso_Detalle.objects.create(
-                traspaso=traspaso,
-                producto_talla=producto_talla,
-                cantidad_solicitada=cantidad,
-                observaciones=item.get('observaciones', '')
-            )
-        
-        return JsonResponse({
-            'success': True,
-            'message': 'Traspaso creado exitosamente',
-            'traspaso_id': traspaso.id
-        })
-        
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'success': False,
-            'error': 'Datos JSON inválidos'
-        })
-    except ValidationError as e:
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        })
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'Error al crear traspaso: {str(e)}'
-        })
-
-
-@require_POST
-@transaction.atomic
-def aprobar_traspaso(request):
-    """Aprobar traspaso y generar movimientos de salida"""
-    try:
-        data = json.loads(request.body)
-        traspaso_id = data.get('traspaso_id')
-        
-        if not traspaso_id:
-            return JsonResponse({
-                'success': False,
-                'error': 'ID de traspaso requerido'
-            })
-        
-        traspaso = get_object_or_404(Traspaso, id=traspaso_id)
-        
-        if traspaso.estado != 'PENDIENTE':
-            return JsonResponse({
-                'success': False,
-                'error': 'Solo se pueden aprobar traspasos pendientes'
-            })
-        
-        # Aprobar traspaso
-        traspaso.estado = 'APROBADO'
-        traspaso.usuario_aprueba = request.user
-        traspaso.fecha_aprobacion = timezone.now()
-        traspaso.save()
-        
-        # Generar movimientos de salida
-        from .views import registrar_movimiento_producto, consumir_stock_fifo
-        
-        for detalle in traspaso.traspaso_detalle_set.all():
-            # Registrar movimiento de salida
-            registrar_movimiento_producto(
-                producto_talla=detalle.producto_talla,
-                concepto='TRASPASO_SALIDA',
-                cantidad=-detalle.cantidad_solicitada,  # Negativo para salida
-                responsable=request.user,
-                sucursal_origen=traspaso.sucursal_origen,
-                sucursal_destino=traspaso.sucursal_destino,
-                observaciones=f'Traspaso #{traspaso.id} aprobado',
-                referencia_externa=str(traspaso.id)
-            )
-            
-            # Consumir stock FIFO en sucursal origen
-            consumir_stock_fifo(
-                producto_talla=detalle.producto_talla,
-                cantidad_requerida=detalle.cantidad_solicitada,
-                responsable=request.user,
-                observaciones=f'Traspaso #{traspaso.id} - Salida',
-                referencia_externa=str(traspaso.id)
-            )
-        
-        return JsonResponse({
-            'success': True,
-            'message': 'Traspaso aprobado exitosamente'
-        })
-        
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'success': False,
-            'error': 'Datos JSON inválidos'
-        })
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'Error al aprobar traspaso: {str(e)}'
-        })
-
-
-@require_POST
-@transaction.atomic
-def recibir_traspaso(request):
-    """Recibir traspaso en sucursal destino"""
-    try:
-        data = json.loads(request.body)
-        traspaso_id = data.get('traspaso_id')
-        productos_recibidos = data.get('productos_recibidos', [])
-        
-        if not traspaso_id:
-            return JsonResponse({
-                'success': False,
-                'error': 'ID de traspaso requerido'
-            })
-        
-        traspaso = get_object_or_404(Traspaso, id=traspaso_id)
-        
-        if traspaso.estado != 'APROBADO':
-            return JsonResponse({
-                'success': False,
-                'error': 'Solo se pueden recibir traspasos aprobados'
-            })
-        
-        # Actualizar estado del traspaso
-        traspaso.estado = 'RECIBIDO'
-        traspaso.usuario_recibe = request.user
-        traspaso.fecha_recepcion = timezone.now()
-        traspaso.save()
-        
-        # Procesar productos recibidos
-        from .views import registrar_movimiento_producto, crear_lote_producto
-        
-        for item in productos_recibidos:
-            detalle = get_object_or_404(Traspaso_Detalle, id=item['detalle_id'])
-            cantidad_recibida = int(item['cantidad_recibida'])
-            
-            # Actualizar detalle
-            detalle.cantidad_recibida = cantidad_recibida
-            detalle.save()
-            
-            # Registrar movimiento de entrada
-            registrar_movimiento_producto(
-                producto_talla=detalle.producto_talla,
-                concepto='TRASPASO_ENTRADA',
-                cantidad=cantidad_recibida,
-                responsable=request.user,
-                sucursal_origen=traspaso.sucursal_origen,
-                sucursal_destino=traspaso.sucursal_destino,
-                observaciones=f'Traspaso #{traspaso.id} recibido',
-                referencia_externa=str(traspaso.id)
-            )
-            
-            # Crear lote en sucursal destino (usar costo promedio)
-            from .views import obtener_costo_promedio_fifo
-            costo_promedio = obtener_costo_promedio_fifo(detalle.producto_talla)
-            
-            crear_lote_producto(
-                producto_talla=detalle.producto_talla,
-                cantidad=cantidad_recibida,
-                costo_unitario=costo_promedio or detalle.producto_talla.precio_venta * Decimal('0.7'),  # Fallback
-                sobreprecio_unitario=0,
-                precio_venta_unitario=detalle.producto_talla.precio_venta,
-                observaciones=f'Traspaso #{traspaso.id} - Entrada'
-            )
-        
-        return JsonResponse({
-            'success': True,
-            'message': 'Traspaso recibido exitosamente'
-        })
-        
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'success': False,
-            'error': 'Datos JSON inválidos'
-        })
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'Error al recibir traspaso: {str(e)}'
-        })
+# NOTA 2026-08-22 (Fase D de la auditoría de Reportes): aquí vivían
+# `crear_traspaso`, `aprobar_traspaso` y `recibir_traspaso`. Eran las ÚNICAS
+# definiciones de esos tres nombres en el repo y sus rutas se eliminaron el
+# 2026-07-28 (ver el comentario en app/urls.py:758): movían stock sin
+# `@login_required` (POST anónimo) y `aprobar_traspaso` descontaba de nuevo el
+# stock que `api_crear_despacho_masivo` ya había descontado. Quedaron sin ruta
+# pero con el cuerpo intacto, listas para que alguien las volviera a colgar de
+# una URL. Borradas. El circuito real de traspasos es por DTE (recepcion-dte/).
 
 
 # ========== AJUSTES DE INVENTARIO ==========
@@ -1343,8 +1040,9 @@ def exportar_dashboard_productos(request):
     """Exportar datos del dashboard de productos a Excel"""
     try:
         import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment
-        
+        # `Font, PatternFill, Alignment` se importaban acá y no se usaban en
+        # ninguna celda: fuera el 2026-08-22 (ver nota de imports arriba).
+
         # Obtener datos del dashboard
         dashboard_response = obtener_datos_dashboard_productos(request)
         dashboard_data = json.loads(dashboard_response.content)['dashboard']

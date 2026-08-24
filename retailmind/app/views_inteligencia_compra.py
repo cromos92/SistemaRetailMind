@@ -19,8 +19,8 @@ import re
 from datetime import timedelta
 
 from django.db.models import (
-    BigIntegerField, Case, CharField, Count, F, Max, OuterRef, Q, Subquery,
-    Sum, Value, When,
+    BigIntegerField, Case, CharField, Count, F, Max, Min, OuterRef, Q,
+    Subquery, Sum, Value, When,
 )
 from django.db.models.functions import Abs, Coalesce, ExtractMonth, ExtractYear
 from django.db.utils import ProgrammingError
@@ -599,7 +599,8 @@ def _descuento_sugerido(dias):
 
 def _tramo_de_dias(dias):
     """Clave de TRAMOS_ANTIGUEDAD para una antigüedad en días exactos.
-    Espeja el orden del Case de `_tramo_case` (None => sin dato)."""
+    Rama por rama en el mismo orden que los cortes de la escala de descuento
+    (730 / 365 / 180); sin fecha => None (sin dato), fecha futura => 't0'."""
     if dias is None:
         return None
     if dias >= 730:
@@ -978,23 +979,108 @@ ORDENES_DETALLE = {
     'dias_antiguedad': F('aging_dt'), 'dias_sin_venta': F('ultima_venta'),
     'u365': F('u365'),
 }
+# Órdenes que dependen del kardex: se resuelven con la pasada agrupada de
+# `_ventas_bulk` + orden en Python (ver `_ordenar_ids_por_ventas`).
+ORDENES_VENTAS = ('dias_sin_venta', 'u365')
 
 
-def _detalle_query(base_pt, mov_base, hoy, q=None, con_ventas=True):
+def _ventas_bulk(mov_base, hoy, producto_ids=None, con_ultima=True, con_u365=True):
+    """(venta_map, u365_map) por producto en UNA pasada agrupada del kardex.
+
+    Equivalencias exactas con los Subquery correlacionados de `_detalle_query`:
+      · venta_map[pid] = Max(fecha)      ≡ order_by('-fecha').values('fecha')[:1]
+      · u365_map[pid]  = Σ|cantidad| 365d ≡ el subquery agrupado (ausente => 0,
+        igual que el Coalesce(..., 0) que envuelve al Subquery).
+    `producto_ids` acota la pasada cuando solo hace falta una página.
+
+    `con_ultima=False` devuelve solo u365: la última venta obliga a recorrer
+    TODO el kardex de ventas (2,5M movimientos) mientras que u365 se acota en
+    el WHERE a los últimos 365 días (~1/5). Cuando sí se pide la última venta,
+    u365 viaja gratis como agregado condicional de la misma pasada.
+    """
+    qs = mov_base if producto_ids is None else mov_base.filter(
+        ProductoTalla__producto_id__in=producto_ids)
+    d365 = hoy - timedelta(days=365)
+    venta_map, u365_map = {}, {}
+    if not con_ultima:
+        for r in (qs.filter(fecha__gte=d365).values('ProductoTalla__producto_id')
+                  .annotate(s=Sum(Abs('cantidad'), output_field=BI))):
+            if r['s']:
+                u365_map[r['ProductoTalla__producto_id']] = r['s']
+        return venta_map, u365_map
+    annots = {'f': Max('fecha')}
+    if con_u365:
+        annots['s'] = Sum(Abs('cantidad'), filter=Q(fecha__gte=d365),
+                          output_field=BI)
+    for r in qs.values('ProductoTalla__producto_id').annotate(**annots):
+        pid = r['ProductoTalla__producto_id']
+        venta_map[pid] = r['f']
+        if con_u365 and r['s']:
+            u365_map[pid] = r['s']
+    return venta_map, u365_map
+
+
+def _lote_map(base_pt, producto_ids=None):
+    """{producto_id: fecha del lote vivo más antiguo} en UNA pasada agrupada.
+
+    `Min(fecha_ingreso)` ≡ el Subquery `order_by('fecha_ingreso')[:1]` de
+    `_detalle_query` (mismo filtro de lote vivo, y ambos ignoran NULLs).
+    Sustituye ~15k subconsultas correlacionadas cuando la antigüedad solo se
+    muestra (no se filtra ni se ordena por ella en el DB).
+    `producto_ids` acota a los productos que realmente se van a leer (con la
+    lista explícita Postgres elige mejor plan que con el subquery).
+    """
+    ids = base_pt.values('producto_id') if producto_ids is None else producto_ids
+    return {r['producto_talla__producto_id']: r['f'] for r in
+            LoteProducto.objects.filter(
+                activo=True, agotado=False, cantidad_disponible__gt=0,
+                producto_talla__producto_id__in=ids)
+            .values('producto_talla__producto_id')
+            .annotate(f=Min('fecha_ingreso'))}
+
+
+def _ordenar_ids_por_ventas(ids, key, rev, ventas_bulk):
+    """Orden EXACTO de `ORDENES_DETALLE` para las claves del kardex, en Python.
+
+    Espeja el `order_by(...)` de la vista, desempate por id ascendente:
+      · '-dias_sin_venta' -> ultima_venta ASC  NULLS FIRST, id ASC
+      · 'dias_sin_venta'  -> ultima_venta DESC NULLS LAST,  id ASC
+      · '-u365' / 'u365'  -> u365 DESC / ASC (Coalesce 0: nunca NULL), id ASC
+    """
+    venta_map, u365_map = ventas_bulk
+    if key == 'dias_sin_venta':
+        if rev:
+            return sorted(ids, key=lambda i: (
+                0 if venta_map.get(i) is None else 1,
+                venta_map[i].toordinal() if venta_map.get(i) else 0, i))
+        return sorted(ids, key=lambda i: (
+            1 if venta_map.get(i) is None else 0,
+            -venta_map[i].toordinal() if venta_map.get(i) else 0, i))
+    if rev:
+        return sorted(ids, key=lambda i: (-u365_map.get(i, 0), i))
+    return sorted(ids, key=lambda i: (u365_map.get(i, 0), i))
+
+
+def _detalle_query(base_pt, mov_base, hoy, q=None, con_ventas=True,
+                   con_aging=True):
     """Queryset de Producto anotado para el drill-down, paginable en el DB.
 
-    Todo el cálculo pesado (agregados + antigüedad FIFO + última venta) se
-    resuelve con anotaciones/Subquery para que Postgres ordene y pagine
-    (LIMIT/OFFSET) sin materializar los ~15k productos del catálogo en Python.
+    Agregados de stock/tallas y, según los flags, antigüedad FIFO y ventas.
+    Postgres sigue ordenando y paginando (LIMIT/OFFSET) por las columnas de
+    ficha; solo las del kardex se ordenan en Python (ver la vista).
     Antigüedad = lote vivo más antiguo; si el producto no tiene lotes (stock
     migrado), `fecha_creacion` (corregida en prod desde el kardex el
     2026-05-20). Ventas siempre solo tiendas (mov_base ya viene acotado).
 
     `con_ventas=False` (Fase C perf): omite los Subquery correlacionados de
-    última venta y u365 — el EXPORT los resuelve con 2 pasadas agrupadas en
-    `_filas_export` (con ~15k filas los 2 subqueries por fila eran el grueso
-    de los 33s del Excel); el detalle paginado los sigue usando porque
-    ordena/pagina por ellos en el DB.
+    última venta y u365 — se resuelven con la pasada agrupada de
+    `_ventas_bulk` (con ~15k filas los 2 subqueries por fila eran el grueso
+    de los 33s del Excel).
+
+    `con_aging=False` (Fase D perf): omite además el Subquery del lote FIFO;
+    la fecha sale de `_lote_map` (Min agrupado). Solo válido cuando NADIE
+    filtra ni ordena por antigüedad — `aging_dt` no queda anotado y
+    `_bucket_filter`/`_tramo_filter`/`orden=dias_antiguedad` lo necesitan.
     """
     prod = Producto.objects.filter(id__in=base_pt.values('producto_id'))
     if q:
@@ -1002,17 +1088,17 @@ def _detalle_query(base_pt, mov_base, hoy, q=None, con_ventas=True):
                            Q(descripcion__icontains=q) |
                            Q(atributo1__valor__icontains=q))
 
-    lote_sq = (LoteProducto.objects.filter(
-        producto_talla__producto=OuterRef('pk'),
-        activo=True, agotado=False, cantidad_disponible__gt=0,
-    ).order_by('fecha_ingreso').values('fecha_ingreso')[:1])
-
     stock_f = Q(producto_talla__stock__gt=0)
     annots = dict(
         stock_u=Coalesce(Sum('producto_talla__stock', filter=stock_f, output_field=BI), 0),
         tallas=Count('producto_talla', filter=stock_f),
-        fecha_lote=Subquery(lote_sq),
     )
+    if con_aging:
+        lote_sq = (LoteProducto.objects.filter(
+            producto_talla__producto=OuterRef('pk'),
+            activo=True, agotado=False, cantidad_disponible__gt=0,
+        ).order_by('fecha_ingreso').values('fecha_ingreso')[:1])
+        annots['fecha_lote'] = Subquery(lote_sq)
     if con_ventas:
         venta_sq = (mov_base.filter(ProductoTalla__producto=OuterRef('pk'))
                     .order_by('-fecha').values('fecha')[:1])
@@ -1023,10 +1109,10 @@ def _detalle_query(base_pt, mov_base, hoy, q=None, con_ventas=True):
         annots['ultima_venta'] = Subquery(venta_sq)
         annots['u365'] = Coalesce(Subquery(u365_sq, output_field=BI), 0)
 
-    return prod.annotate(**annots).annotate(
-        aging_dt=Coalesce('fecha_lote', 'fecha_creacion'),
-        valor_ord=F('costo') * F('stock_u'),
-    )
+    extra = {'valor_ord': F('costo') * F('stock_u')}
+    if con_aging:
+        extra['aging_dt'] = Coalesce('fecha_lote', 'fecha_creacion')
+    return prod.annotate(**annots).annotate(**extra)
 
 
 def _bucket_filter(qs, bucket, hoy):
@@ -1068,27 +1154,109 @@ def _tramo_filter(qs, tramos, hoy):
     return qs.filter(cond)
 
 
-def _serializar_detalle(qs, hoy, ventas_bulk=None):
+# Campos de ficha que el serializador del detalle necesita de Producto
+# (stock_u/tallas son agregados y fecha_lote/ultima_venta/u365 pueden venir
+# de mapas en bloque).
+CAMPOS_FICHA_DETALLE = (
+    'id', 'articulo', 'descripcion', 'atributo1__valor', 'atributo2__valor',
+    'categoria__nombre', 'categoria__padre__nombre', 'sucursal_id',
+    'sucursal__alias', 'sucursal__es_centro_distribucion', 'precioventa',
+    'costo', 'fecha_creacion')
+
+
+def _rows_producto_planas(base_pt, q=None):
+    """Filas de Producto del alcance SIN agregar en el join (Fase D perf).
+
+    El queryset anotado de `_detalle_query` agrupa Producto ⋈ Producto_Talla
+    con 5 joins de ficha en la misma pasada (10s para ~15k productos). Acá se
+    parte en dos queries baratas: los agregados sobre `base_pt` (que ya está
+    filtrado por stock>0, así que sus filas por producto son EXACTAMENTE las
+    tallas del `filter=stock__gt=0`) y un SELECT plano de la ficha.
+
+    Orden idéntico al `order_by(F('valor_ord').desc(nulls_last=True), 'id')`:
+    `costo` es NOT NULL y `stock_u` viene de un Coalesce, así que valor_ord
+    nunca es NULL y `nulls_last` no cambia nada.
+    """
+    agg = {r['producto_id']: r for r in
+           base_pt.values('producto_id')
+           .annotate(stock_u=Sum('stock', output_field=BI),
+                     tallas=Count('id'))}
+    prod = Producto.objects.filter(id__in=base_pt.values('producto_id'))
+    if q:
+        prod = prod.filter(Q(articulo__icontains=q) |
+                           Q(descripcion__icontains=q) |
+                           Q(atributo1__valor__icontains=q))
+    filas = list(prod.values(*CAMPOS_FICHA_DETALLE))
+    for r in filas:
+        a = agg.get(r['id'])
+        r['stock_u'] = (a['stock_u'] or 0) if a else 0
+        r['tallas'] = a['tallas'] if a else 0
+    filas.sort(key=lambda r: (-((r['costo'] or 0) * r['stock_u']), r['id']))
+    return filas
+
+
+def _dias_aging(fila, lote_bulk, hoy):
+    """Antigüedad en días de una fila plana (misma fórmula que el
+    serializador: lote vivo más antiguo, si no fecha_creacion, si no None)."""
+    f = lote_bulk.get(fila['id']) or fila['fecha_creacion']
+    return (hoy - timezone.localtime(f).date()).days if f else None
+
+
+def _filtrar_antiguedad(filas, lote_bulk, hoy, bucket, tramos):
+    """`_bucket_filter` + `_tramo_filter` sobre filas ya materializadas.
+
+    Mismos bordes que los lookups `__date` del queryset:
+      dias >= lo  <=>  aging_date <= hoy-lo    ·    dias < hi  <=>  aging_date > hoy-hi
+    'sin-dato' es aging NULL, un bucket desconocido no filtra (igual que
+    `_bucket_filter`), y para los tramos `_tramo_de_dias` particiona
+    EXACTAMENTE los mismos rangos que el OR de condiciones (t0 incluye los
+    días negativos, como el `aging_dt__isnull=False` de la rama d0=0).
+    """
+    claves = {t[0] for t in tramos}
+    rango = BUCKETS_ANTIGUEDAD.get(bucket) if bucket else None
+    out = []
+    for f in filas:
+        dias = _dias_aging(f, lote_bulk, hoy)
+        if bucket == 'sin-dato':
+            if dias is not None:
+                continue
+        elif rango:
+            lo, hi = rango
+            if dias is None or dias < lo or (hi is not None and dias >= hi):
+                continue
+        if claves and _tramo_de_dias(dias) not in claves:
+            continue
+        out.append(f)
+    return out
+
+
+def _serializar_detalle(qs, hoy, ventas_bulk=None, lote_bulk=None, filas=None):
     """Convierte una página del queryset (ya sliceada) en dicts JSON.
 
     `ventas_bulk=(venta_map, u365_map)` (Fase C perf): última venta y u365
-    resueltos por mapas {producto_id: valor} de 2 queries agrupadas, para el
+    resueltos por mapas {producto_id: valor} de 1 query agrupada, para el
     queryset liviano de `_detalle_query(..., con_ventas=False)`. Sin mapas,
     se leen de las anotaciones (comportamiento original del detalle paginado).
+
+    `lote_bulk` (Fase D perf): ídem para la fecha del lote FIFO, con el
+    queryset de `_detalle_query(..., con_aging=False)`.
+    `filas` (Fase D perf): dicts ya materializados (`_rows_producto_planas`)
+    en vez de un queryset — mismas claves, misma serialización.
     """
-    campos = [
-        'id', 'articulo', 'descripcion', 'atributo1__valor', 'atributo2__valor',
-        'categoria__nombre', 'categoria__padre__nombre', 'sucursal_id',
-        'sucursal__alias', 'sucursal__es_centro_distribucion', 'precioventa',
-        'costo', 'stock_u', 'tallas', 'fecha_lote', 'fecha_creacion']
-    if ventas_bulk is None:
-        campos += ['ultima_venta', 'u365']
-    filas = list(qs.values(*campos))
+    if filas is None:
+        campos = list(CAMPOS_FICHA_DETALLE) + ['stock_u', 'tallas']
+        if ventas_bulk is None:
+            campos += ['ultima_venta', 'u365']
+        if lote_bulk is None:
+            campos += ['fecha_lote']
+        filas = list(qs.values(*campos))
     out = []
     for r in filas:
         if ventas_bulk is not None:
             r['ultima_venta'] = ventas_bulk[0].get(r['id'])
             r['u365'] = ventas_bulk[1].get(r['id'], 0)
+        if lote_bulk is not None:
+            r['fecha_lote'] = lote_bulk.get(r['id'])
         f = r['fecha_lote'] or r['fecha_creacion']
         fuente = 'lote' if r['fecha_lote'] else ('creacion' if r['fecha_creacion'] else None)
         fecha_fifo = timezone.localtime(f).date() if f else None
@@ -1128,37 +1296,74 @@ def obtener_plan_liquidacion_detalle(request):
     sin-dato), q (artículo/descripción/marca), orden (dias_antiguedad|
     dias_sin_venta|valor_costo|stock_u|u365|precioventa|articulo, prefijo
     '-' = descendente), page, page_size (máx 200).
+
+    Fase D (perf, sin cambiar ningún número): se resuelve en DOS fases —
+    (1) obtener los ids de la página en el orden pedido y (2) hidratar solo
+    esas ≤200 filas. Los Subquery correlacionados de última venta / u365
+    NUNCA entran en la query que ordena y pagina: Postgres los evaluaba para
+    los ~15k candidatos (14s ordenando por última venta, 28s por valor). El
+    orden es el MISMO: por columnas de la ficha lo sigue haciendo el DB; por
+    columnas del kardex se hace en Python sobre una pasada agrupada, con la
+    misma clave y el mismo desempate por id (`_ordenar_ids_por_ventas`).
     """
     try:
         hoy = timezone.localdate()
         base_pt, mov_base, ctx = _scope_plan(request)
-        qs = _detalle_query(base_pt, mov_base, hoy, q=request.GET.get('q') or None)
-
+        q = request.GET.get('q') or None
         bucket = request.GET.get('antiguedad') or None
-        if bucket:
-            qs = _bucket_filter(qs, bucket, hoy)
-        qs = _tramo_filter(qs, _parse_tramos(request.GET.get('tramo')), hoy)
+        tramos = _parse_tramos(request.GET.get('tramo'))
 
         orden = request.GET.get('orden') or '-valor_costo'
         rev = orden.startswith('-')
         key = orden.lstrip('-')
-        expr = ORDENES_DETALLE.get(key, F('valor_ord'))
-        # nulls_last para no llenar la primera página de productos sin dato,
-        # salvo dias_sin_venta desc (nunca vendido = más días => va primero).
-        if key == 'dias_sin_venta':
-            ordering = expr.asc(nulls_first=True) if rev else expr.desc(nulls_last=True)
-        else:
-            ordering = expr.desc(nulls_last=True) if rev else expr.asc(nulls_last=True)
-        qs = qs.order_by(ordering, 'id')
 
-        total = qs.count()
+        # El Subquery del lote FIFO solo hace falta si se filtra u ordena por
+        # antigüedad; si únicamente se muestra, sale del Min agrupado.
+        con_aging = bool(bucket or tramos) or key == 'dias_antiguedad'
+        qs = _detalle_query(base_pt, mov_base, hoy, q=q,
+                            con_ventas=False, con_aging=con_aging)
+        if bucket:
+            qs = _bucket_filter(qs, bucket, hoy)
+        qs = _tramo_filter(qs, tramos, hoy)
+
         try:
             page = max(int(request.GET.get('page') or 1), 1)
             page_size = min(max(int(request.GET.get('page_size') or 50), 10), 200)
         except (TypeError, ValueError):
             page, page_size = 1, 50
         ini = (page - 1) * page_size
-        pagina = _serializar_detalle(qs[ini:ini + page_size], hoy)
+
+        if key == 'u365':
+            # Ordenar por u365 solo mira los últimos 365 días del kardex; la
+            # última venta de la página sale de una pasada acotada a sus ids.
+            ids = list(qs.order_by().values_list('id', flat=True))
+            total = len(ids)
+            ids_pagina = _ordenar_ids_por_ventas(
+                ids, key, rev,
+                _ventas_bulk(mov_base, hoy, con_ultima=False))[ini:ini + page_size]
+            ventas_bulk = _ventas_bulk(mov_base, hoy, producto_ids=ids_pagina)
+        elif key in ORDENES_VENTAS:
+            ids = list(qs.order_by().values_list('id', flat=True))
+            total = len(ids)
+            ventas_bulk = _ventas_bulk(mov_base, hoy)
+            ids_pagina = _ordenar_ids_por_ventas(
+                ids, key, rev, ventas_bulk)[ini:ini + page_size]
+        else:
+            expr = ORDENES_DETALLE.get(key, F('valor_ord'))
+            # nulls_last para no llenar la primera página de productos sin dato.
+            ordering = expr.desc(nulls_last=True) if rev else expr.asc(nulls_last=True)
+            total = qs.count()
+            ids_pagina = list(qs.order_by(ordering, 'id')
+                              .values_list('id', flat=True)[ini:ini + page_size])
+            ventas_bulk = _ventas_bulk(mov_base, hoy, producto_ids=ids_pagina)
+
+        # Fase 2: hidratar SOLO la página (el aging por subquery sobre ≤200
+        # productos es trivial) y devolverla en el orden ya resuelto.
+        posicion = {pid: i for i, pid in enumerate(ids_pagina)}
+        qs_pagina = _detalle_query(base_pt, mov_base, hoy, q=q,
+                                   con_ventas=False).filter(id__in=ids_pagina)
+        pagina = _serializar_detalle(qs_pagina, hoy, ventas_bulk=ventas_bulk)
+        pagina.sort(key=lambda f: posicion[f['producto_id']])
 
         # Badge "en campaña activa" solo para los productos de la página.
         # Tolerante a que la migración 0188 aún no esté aplicada (si el código
@@ -1183,46 +1388,74 @@ def obtener_plan_liquidacion_detalle(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-def _aging_dt_expr():
-    """Antigüedad FIFO como fecha (lote vivo más antiguo o creación)."""
-    lote_sq = (LoteProducto.objects.filter(
-        producto_talla__producto=OuterRef('pk'),
-        activo=True, agotado=False, cantidad_disponible__gt=0,
-    ).order_by('fecha_ingreso').values('fecha_ingreso')[:1])
-    return Coalesce(Subquery(lote_sq), F('fecha_creacion'))
+def _rows_liquidacion(base_pt, hoy):
+    """Una fila por PRODUCTO del alcance: id, tramo de antigüedad, marca,
+    capital a costo y pares. Base común de los gráficos de `por-anio`.
+
+    Fase D (perf, sin cambiar ningún número): reemplaza el Subquery
+    correlacionado de antigüedad (Postgres lo resolvía ~15k veces: 20-22s por
+    pasada, y `dim=especialidad` necesitaba DOS) por dos pasadas agrupadas
+    baratas — stock/valor sobre `base_pt` y `Min(fecha_ingreso)` del lote vivo
+    (`_lote_map`) — con el tramo calculado en Python.
+
+    Equivalencias con la versión por queries:
+      · `base_pt` ya viene filtrado por `stock__gt=0`, así que sus filas de un
+        producto son EXACTAMENTE las tallas que sumaba el `filter=stock_f`
+        sobre el join Producto→Producto_Talla.
+      · `Min(fecha_ingreso)` == el lote vivo más antiguo del Subquery, y el
+        fallback a `fecha_creacion` == el Coalesce que lo envolvía.
+      · `_tramo_de_dias` espeja rama por rama el Case SQL que clasificaba los
+        tramos (incluido "sin fecha => None" y "fecha futura => t0"), y
+        localizar la fecha reproduce el lookup `__date` de Postgres (que
+        convierte a la zona horaria activa antes de comparar).
+    """
+    agrupado = list(base_pt.values('producto_id', 'producto__fecha_creacion',
+                                   'producto__atributo1__valor')
+                    .annotate(pares=Sum('stock', output_field=BI),
+                              valor=Sum(F('stock') * F('producto__costo'),
+                                        output_field=BI)))
+    lote = _lote_map(base_pt, [r['producto_id'] for r in agrupado])
+    rows = []
+    for r in agrupado:
+        pid = r['producto_id']
+        f = lote.get(pid) or r['producto__fecha_creacion']
+        dias = (hoy - timezone.localtime(f).date()).days if f else None
+        rows.append({'id': pid, 'tramo': _tramo_de_dias(dias),
+                     'marca': r['producto__atributo1__valor'],
+                     'valor': r['valor'] or 0, 'pares': r['pares'] or 0})
+    return rows
 
 
-def _tramo_case(hoy):
-    """Case SQL: aging_dt (anotado) -> clave de TRAMOS_ANTIGUEDAD por días
-    exactos desde hoy. Sin fecha => NULL (queda fuera, igual que antes)."""
-    return Case(
-        When(aging_dt__date__lte=hoy - timedelta(days=730), then=Value('t3')),
-        When(aging_dt__date__lte=hoy - timedelta(days=365), then=Value('t2')),
-        When(aging_dt__date__lte=hoy - timedelta(days=180), then=Value('t1')),
-        When(aging_dt__isnull=False, then=Value('t0')),
-        default=Value(None),
-        output_field=CharField(),
-    )
+def _especialidades_por_producto(base_pt):
+    """{producto_id: [valor, ...]} de la especialidad v1.2 (multi-etiqueta).
+
+    Sin `distinct`: el join de la versión por queries contaba dos veces a un
+    producto con la MISMA opción repetida en `ProductoAtributoValor`, y acá
+    también — la igualdad tiene que ser exacta, patologías de datos incluidas.
+    """
+    esp = {}
+    for pid, valor in (ProductoAtributoValor.objects.filter(
+            atributo__nombre__iexact=NOMBRE_ATRIBUTO_ESPECIALIDAD,
+            producto_id__in=base_pt.values('producto_id'))
+            .values_list('producto_id', 'opcion__valor')):
+        esp.setdefault(pid, []).append(valor)
+    return esp
 
 
-def _tramos_liquidacion(base_pt, hoy):
-    """Capital + pares por TRAMO de antigüedad (días exactos desde hoy).
+def _tramos_desde_productos(rows):
+    """Capital + pares + productos por TRAMO de antigüedad (días exactos).
 
-    Reemplaza el bucket por año calendario: "todo 2025 = 1 año = 25%"
-    metía en '≥1 año' stock con lote de <365 días. Los cortes son los de
-    ESCALA_DESCUENTO_LIQUIDACION, así el % del tramo coincide 1:1 con el
-    % de cada fila del detalle y del Excel."""
-    stock_f = Q(producto_talla__stock__gt=0)
-    rows = (Producto.objects.filter(id__in=base_pt.values('producto_id'))
-            .annotate(aging_dt=_aging_dt_expr())
-            .annotate(tramo=_tramo_case(hoy))
-            .values('tramo')
-            .annotate(
-                valor=Coalesce(Sum(F('producto_talla__stock') * F('costo'),
-                                   filter=stock_f, output_field=BI), 0),
-                pares=Coalesce(Sum('producto_talla__stock', filter=stock_f, output_field=BI), 0),
-                productos=Count('id', distinct=True)))
-    por_tramo = {r['tramo']: r for r in rows}
+    Cada producto vive en exactamente UN tramo, así que contar filas de
+    `_rows_liquidacion` equivale al `Count('id', distinct=True)` de la query
+    dedicada. Los cortes son los de ESCALA_DESCUENTO_LIQUIDACION, así el %
+    del tramo coincide 1:1 con el % de cada fila del detalle y del Excel."""
+    por_tramo = {}
+    for r in rows:
+        acc = por_tramo.setdefault(r['tramo'],
+                                   {'valor': 0, 'pares': 0, 'productos': 0})
+        acc['valor'] += r['valor']
+        acc['pares'] += r['pares']
+        acc['productos'] += 1
     tramos = []
     for clave, label, d0, d1 in TRAMOS_ANTIGUEDAD:
         r = por_tramo.get(clave)
@@ -1232,54 +1465,36 @@ def _tramos_liquidacion(base_pt, hoy):
             'tramo': clave, 'label': label,
             'dias_desde': d0, 'dias_hasta': d1,
             'antiguedad_anios': d0 // 365,
-            'valor': r['valor'] or 0, 'pares': r['pares'] or 0,
-            'productos': r['productos'] or 0,
+            'valor': r['valor'], 'pares': r['pares'],
+            'productos': r['productos'],
             'descuento_sugerido': _descuento_sugerido(d0)})
     return tramos
 
 
-def _dimension_liquidacion(base_pt, hoy, dim='marca', top_n=10, con_productos=False):
+def _dimension_desde_productos(rows, dim='marca', esp_map=None, top_n=10):
     """Top items de una dimensión (marca|especialidad) con su capital dividido
     en buckets de urgencia por DÍAS EXACTOS del lote (<1 año / 1-2 años /
     2+ años — mismo criterio que los tramos y el detalle). Especialidad es
-    multi-etiqueta (atribución): un producto suma en cada una que tenga.
-
-    `con_productos=True` (Fase C perf): agrega Count(distinct) de productos
-    por grupo y devuelve (top, rows) para que `obtener_plan_liquidacion_por_anio`
-    derive los tramos de ESTA misma pasada (el costo está en el subquery de
-    aging por producto) en vez de re-escanear con `_tramos_liquidacion`.
-    """
-    stock_f = Q(producto_talla__stock__gt=0)
-    qs = (Producto.objects.filter(id__in=base_pt.values('producto_id'))
-          .annotate(aging_dt=_aging_dt_expr())
-          .annotate(tramo=_tramo_case(hoy)))
-    if dim == 'especialidad':
-        qs = qs.filter(atributos__atributo__nombre__iexact=NOMBRE_ATRIBUTO_ESPECIALIDAD)
-        campo, etiqueta = 'atributos__opcion__valor', 'especialidad'
-    else:
-        campo, etiqueta = 'atributo1__valor', 'marca'
-    annots = dict(
-        valor=Coalesce(Sum(F('producto_talla__stock') * F('costo'),
-                           filter=stock_f, output_field=BI), 0),
-        pares=Coalesce(Sum('producto_talla__stock', filter=stock_f, output_field=BI), 0))
-    if con_productos:
-        annots['productos'] = Count('id', distinct=True)
-    rows = list(qs.values(campo, 'tramo').annotate(**annots))
+    multi-etiqueta (atribución): un producto suma en cada una que tenga, y el
+    que no tenga ninguna queda fuera de la tabla (igual que el join)."""
     acc = {}
     for r in rows:
-        nombre = r[campo] or f'Sin {etiqueta}'
-        tramo = r['tramo']
-        valor, pares = r['valor'] or 0, r['pares'] or 0
-        it = acc.setdefault(nombre, {'nombre': nombre, 'val_reciente': 0,
-                                     'val_1anio': 0, 'val_2mas': 0, 'valor': 0, 'pares': 0})
-        it['valor'] += valor
-        it['pares'] += pares
-        if tramo in (None, 't0', 't1'):   # <1 año (o sin dato)
-            it['val_reciente'] += valor
-        elif tramo == 't2':               # 1-2 años
-            it['val_1anio'] += valor
-        else:                             # 't3' => 2+ años
-            it['val_2mas'] += valor
+        if dim == 'especialidad':
+            nombres = [v or 'Sin especialidad' for v in (esp_map.get(r['id']) or ())]
+        else:
+            nombres = [r['marca'] or 'Sin marca']
+        for nombre in nombres:
+            it = acc.setdefault(nombre, {'nombre': nombre, 'val_reciente': 0,
+                                         'val_1anio': 0, 'val_2mas': 0,
+                                         'valor': 0, 'pares': 0})
+            it['valor'] += r['valor']
+            it['pares'] += r['pares']
+            if r['tramo'] in (None, 't0', 't1'):   # <1 año (o sin dato)
+                it['val_reciente'] += r['valor']
+            elif r['tramo'] == 't2':               # 1-2 años
+                it['val_1anio'] += r['valor']
+            else:                                  # 't3' => 2+ años
+                it['val_2mas'] += r['valor']
     items = sorted(acc.values(), key=lambda x: -x['valor'])
     top = items[:top_n]
     if len(items) > top_n:
@@ -1289,39 +1504,7 @@ def _dimension_liquidacion(base_pt, hoy, dim='marca', top_n=10, con_productos=Fa
             for k in ('val_reciente', 'val_1anio', 'val_2mas', 'valor', 'pares'):
                 otras[k] += m[k]
         top.append(otras)
-    if con_productos:
-        return top, rows
     return top
-
-
-def _tramos_desde_rows(rows):
-    """Tramos de antigüedad derivados de las filas (grupo, tramo) de
-    `_dimension_liquidacion(..., con_productos=True)`.
-
-    Cada producto vive en exactamente UN (grupo, tramo) — atributo1 es una FK
-    simple, no multi-etiqueta — así que sumar los parciales (valor, pares y
-    Count distinct de productos) reproduce 1:1 la query dedicada de
-    `_tramos_liquidacion` sin re-escanear el aging por producto."""
-    por_tramo = {}
-    for r in rows:
-        acc = por_tramo.setdefault(r['tramo'],
-                                   {'valor': 0, 'pares': 0, 'productos': 0})
-        acc['valor'] += r['valor'] or 0
-        acc['pares'] += r['pares'] or 0
-        acc['productos'] += r.get('productos') or 0
-    tramos = []
-    for clave, label, d0, d1 in TRAMOS_ANTIGUEDAD:
-        r = por_tramo.get(clave)
-        if not r:
-            continue
-        tramos.append({
-            'tramo': clave, 'label': label,
-            'dias_desde': d0, 'dias_hasta': d1,
-            'antiguedad_anios': d0 // 365,
-            'valor': r['valor'] or 0, 'pares': r['pares'] or 0,
-            'productos': r['productos'] or 0,
-            'descuento_sugerido': _descuento_sugerido(d0)})
-    return tramos
 
 
 @require_GET
@@ -1331,25 +1514,23 @@ def obtener_plan_liquidacion_por_anio(request):
     días exactos y por dimensión (marca|especialidad, param `dim`).
     `solo=dim` omite los tramos (para el toggle de dimensión, que no
     recalcula el gráfico de antigüedad). Era la única ruta del plan sin
-    @requiere_permiso (auditoría 2026-08, P1-7a)."""
+    @requiere_permiso (auditoría 2026-08, P1-7a).
+
+    Fase D (perf): dimensión y tramos se derivan SIEMPRE de la misma pasada
+    por producto (`_rows_liquidacion`), también con `dim=especialidad` — el
+    join multi-etiqueta duplicaba filas y obligaba a una segunda pasada de
+    aging solo para los tramos (11,6s extra)."""
     try:
         hoy = timezone.localdate()
         base_pt, mov_base, ctx = _scope_plan(request)
         dim = request.GET.get('dim') or 'marca'
         solo = request.GET.get('solo')
+        rows = _rows_liquidacion(base_pt, hoy)
+        esp_map = _especialidades_por_producto(base_pt) if dim == 'especialidad' else None
+        por_dimension = _dimension_desde_productos(rows, dim=dim, esp_map=esp_map)
         if solo == 'dim':
-            por_dimension = _dimension_liquidacion(base_pt, hoy, dim=dim)
             return JsonResponse({'success': True, 'dim': dim, 'por_dimension': por_dimension})
-        if dim == 'especialidad':
-            # multi-etiqueta: sus filas duplican productos — tramos aparte.
-            por_dimension = _dimension_liquidacion(base_pt, hoy, dim=dim)
-            tramos = _tramos_liquidacion(base_pt, hoy)
-        else:
-            # Fase C (perf): dimensión y tramos comparten la MISMA pasada de
-            # aging por producto (1 query en vez de 2, resultado idéntico).
-            por_dimension, rows_dim = _dimension_liquidacion(
-                base_pt, hoy, dim=dim, con_productos=True)
-            tramos = _tramos_desde_rows(rows_dim)
+        tramos = _tramos_desde_productos(rows)
         total_valor = sum(t['valor'] for t in tramos)
         total_pares = sum(t['pares'] for t in tramos)
         # "A liquidar" = tramos con descuento sugerido (≥6 meses)…
@@ -1378,30 +1559,34 @@ def _filas_export(request, hoy):
 
     Fase C (perf): el export NO usa los Subquery por fila de última venta /
     u365 (con ~15k filas eran el grueso de los 33s del Excel): las mismas
-    cifras salen de 2 pasadas agrupadas por producto sobre `mov_base`
+    cifras salen de pasadas agrupadas por producto sobre `mov_base`
     (Max(fecha) ≡ subquery order_by -fecha [:1]; Sum(|cantidad|) 365d ≡
     subquery agrupado) y se cruzan por id en la serialización.
+
+    Fase D (perf): esas dos pasadas se fusionan en UNA (`_ventas_bulk`) y el
+    queryset anotado desaparece del export — ni la fecha del lote FIFO ni los
+    agregados de stock pasan por él: salen de un Min agrupado (`_lote_map`) y
+    de `_rows_producto_planas`, en vez de ~15k subconsultas por fila y un
+    GROUP BY con 5 joins de ficha. Los filtros de antigüedad se aplican sobre
+    esas filas con `_filtrar_antiguedad` (mismos bordes que los lookups
+    `__date`), así el export con tramo no vuelve a pagar el subquery de aging.
     """
     base_pt, mov_base, ctx = _scope_plan(request)
-    qs = _detalle_query(base_pt, mov_base, hoy, q=request.GET.get('q') or None,
-                        con_ventas=False)
     bucket = request.GET.get('antiguedad') or None
-    if bucket:
-        qs = _bucket_filter(qs, bucket, hoy)
-    qs = _tramo_filter(qs, _parse_tramos(request.GET.get('tramo')), hoy)
-    # valor desc SOLO para que el cap priorice lo más valioso; el orden final
-    # (marca → año → artículo asc) se aplica en Python por sucursal.
-    qs = qs.order_by(F('valor_ord').desc(nulls_last=True), 'id')
-    venta_map = {r['ProductoTalla__producto_id']: r['f'] for r in
-                 mov_base.values('ProductoTalla__producto_id')
-                 .annotate(f=Max('fecha'))}
-    u365_map = {r['ProductoTalla__producto_id']: (r['s'] or 0) for r in
-                mov_base.filter(fecha__gte=hoy - timedelta(days=365))
-                .values('ProductoTalla__producto_id')
-                .annotate(s=Sum(Abs('cantidad'), output_field=BI))}
+    tramos = _parse_tramos(request.GET.get('tramo'))
+    q = request.GET.get('q') or None
+    ventas_bulk = _ventas_bulk(mov_base, hoy)
+    # El orden (valor a costo desc, id) es SOLO para que el cap priorice lo
+    # más valioso; el orden final (marca → año → artículo asc) se aplica en
+    # Python por sucursal en `_agrupar_por_sucursal`.
+    planas = _rows_producto_planas(base_pt, q=q)
+    lote_bulk = _lote_map(base_pt, [f['id'] for f in planas])
+    if bucket or tramos:
+        planas = _filtrar_antiguedad(planas, lote_bulk, hoy, bucket, tramos)
     # truncado sin COUNT aparte: se pide UNA fila extra y se descarta.
-    filas = _serializar_detalle(qs[:MAX_EXPORT_FILAS + 1], hoy,
-                                ventas_bulk=(venta_map, u365_map))
+    filas = _serializar_detalle(None, hoy, ventas_bulk=ventas_bulk,
+                                lote_bulk=lote_bulk,
+                                filas=planas[:MAX_EXPORT_FILAS + 1])
     truncado = len(filas) > MAX_EXPORT_FILAS
     if truncado:
         filas = filas[:MAX_EXPORT_FILAS]
@@ -1447,10 +1632,17 @@ def exportar_plan_liquidacion_excel(request):
     artículo asc), con columnas en blanco para la verificación física
     (Precio caja / ¿Coincide? / Observación) y SIN costo en las hojas de
     tienda. Hoja Resumen (con costo, para el analista) + hoja Filtros.
-    Mismos GET params que el detalle; cap MAX_EXPORT_FILAS."""
+    Mismos GET params que el detalle; cap MAX_EXPORT_FILAS.
+
+    Fase D (perf): el cuerpo se escribe con `ws.append` + una StyleArray de
+    borde COMPARTIDA por todas las celdas, en vez de `ws.cell()` y
+    `cell.border = ...` una por una (~253k celdas = 6-8s de openpyxl). El
+    .xlsx resultante es byte a byte el mismo (verificado miembro por miembro
+    del ZIP: solo cambia el timestamp de docProps/core.xml)."""
     try:
         from openpyxl import Workbook
         from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+        from openpyxl.styles.cell_style import StyleArray
         from openpyxl.utils import get_column_letter
         from openpyxl.worksheet.properties import PageSetupProperties
 
@@ -1471,6 +1663,8 @@ def exportar_plan_liquidacion_excel(request):
 
         resumen_suc = {}    # (alias, anio) -> {pares, costo, lista, liq}
         resumen_tramo = {}  # clave de tramo (días exactos) -> {pares, costo, liq}
+        n_cols = len(HEADERS_VERIFICACION)
+        estilo_borde = None  # StyleArray compartida del cuerpo (ver docstring)
         for (es_cd, alias), items in grupos.items():
             ws = wb.create_sheet(_titulo_hoja(alias, es_cd))
             for i, ancho in enumerate(ANCHOS_VERIFICACION, start=1):
@@ -1498,14 +1692,23 @@ def exportar_plan_liquidacion_excel(request):
                 cell.fill = head_fill
                 cell.border = borde
                 cell.alignment = centrado
+            if estilo_borde is None:
+                # El borde se registra UNA vez en el libro y todas las celdas
+                # del cuerpo comparten el mismo objeto de estilo: el id que
+                # termina en styles.xml es idéntico al que producía
+                # `cell.border = borde` celda por celda (solo borde, sin
+                # fuente/relleno/alineación propias).
+                estilo_borde = StyleArray()
+                estilo_borde.borderId = wb._borders.add(borde)
 
             tot_pares = tot_lista = tot_liq = 0
             fila_n = 3
+            celdas = ws._cells
             for n, f in enumerate(items, start=1):
                 pares = f['stock_u'] or 0
                 lista = f['precioventa'] or 0
                 liq = f['precio_liquidacion'] or 0
-                valores = [
+                ws.append([
                     f['producto_id'], n, f['marca'] or '—', f['anio'] or 's/d',
                     f['articulo'], f['descripcion'], f['color'] or '',
                     f['tallas'], pares,
@@ -1513,9 +1716,9 @@ def exportar_plan_liquidacion_excel(request):
                     f['ultima_venta'].strftime('%d-%m-%Y') if f['ultima_venta'] else 'Nunca',
                     lista, f['descuento_sugerido'] or 0, liq,
                     '', '', '',  # Precio caja / ¿Coincide? / Observación (a mano)
-                ]
-                for c, v in enumerate(valores, start=1):
-                    ws.cell(row=fila_n, column=c, value=v).border = borde
+                ])
+                for c in range(1, n_cols + 1):
+                    celdas[(fila_n, c)]._style = estilo_borde
                 tot_pares += pares
                 tot_lista += lista * pares
                 tot_liq += liq * pares
