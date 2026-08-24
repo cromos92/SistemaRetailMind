@@ -8061,13 +8061,18 @@ function copiarDatosProductoManual(producto) {
         $selectGenero.val(producto.genero_id).trigger('change');
     }
     
-    // Seleccionar Categoría por ID
-    if (producto.categoria_id) {
-        const $selectCategoria = $modal.find('[name="categoria"]');
-        if ($selectCategoria.find(`option[value="${producto.categoria_id}"]`).length === 0) {
-            $selectCategoria.append(`<option value="${producto.categoria_id}">${producto.categoria}</option>`);
-        }
-        $selectCategoria.val(producto.categoria_id).trigger('change');
+    // Categoría y Especialidad viven en los pickers v1.2, no en un <select>:
+    // `[name="categoria"]` es un input hidden, así que escribirle .val() dejaba
+    // el botón del picker diciendo "Elige categoría…" con un valor invisible
+    // detrás. Se usa la API del picker para que la UI y el hidden queden en
+    // sincronía, igual que hacen los otros 4 flujos que copian un producto.
+    if (producto.categoria_id && window.NexoManualPicker) {
+        NexoManualPicker.setCat(producto.categoria_id, producto.categoria);
+    }
+    if (window.NexoManualPicker) {
+        // Puede venir vacío: setEsp([]) limpia, que es lo correcto si el
+        // producto copiado no tiene especialidad.
+        NexoManualPicker.setEsp(producto.especialidades || []);
     }
     
     // Copiar precios SOLO si el formulario aún no tiene valores propios
@@ -8098,6 +8103,13 @@ function copiarDatosProductoManual(producto) {
         icon: 'success',
         title: 'Datos copiados',
         html: `<p>Se copió la identificación de <strong>${producto.articulo}</strong></p>
+               <p class="small text-muted mb-1">${[
+                   producto.marca ? 'marca' : null,
+                   producto.color ? 'color' : null,
+                   producto.genero ? 'género' : null,
+                   producto.categoria ? 'categoría' : null,
+                   (producto.especialidades || []).length ? 'especialidad' : null,
+                 ].filter(Boolean).join(' · ') || 'sin atributos que copiar'}</p>
                <p class="small text-muted">
                  ${copiarPreciosManual
                     ? 'Precios también copiados (formulario vacío).'
@@ -10168,6 +10180,121 @@ $(document).on('change', '#selectProveedorManual, #selectDteManual', function() 
     }
 });
 
+// ====== SUGERENCIAS SEGÚN EL PROVEEDOR (marca / categoría / especialidad) ======
+// ADIDAS vende ADIDAS: al elegir proveedor casi siempre ya se sabe la marca, y
+// la categoría/especialidad se repiten. Se consulta lo que ESE proveedor nos ha
+// vendido históricamente y se ofrece como sugerencia.
+// Regla: sólo se aplica solo si es inequívoco (una única marca) y el campo está
+// vacío. Nunca se pisa algo que el usuario ya eligió; el resto son chips.
+window._sugerenciasProveedorCache = window._sugerenciasProveedorCache || {};
+
+function contenedorSugerenciasManual() {
+    let $c = $('#sugerenciasProveedorManual');
+    if (!$c.length) {
+        $c = $('<div id="sugerenciasProveedorManual" class="small mt-1 d-none"></div>');
+        const $sel = $('#selectProveedorManual');
+        ($sel.next('.select2-container').length ? $sel.next('.select2-container') : $sel).after($c);
+    }
+    return $c;
+}
+
+function aplicarMarcaSugerida(id, valor) {
+    const $m = $('#formCrearProductoManual select[name="atributo1"]');
+    if (!$m.length) return;
+    if ($m.find('option[value="' + id + '"]').length === 0) {
+        $m.append($('<option>').val(id).text(valor));
+    }
+    $m.val(String(id)).trigger('change');
+}
+
+function renderSugerenciasProveedor(data) {
+    const $c = contenedorSugerenciasManual();
+    const marcas = data.marcas || [];
+    const cats = data.categorias || [];
+    const esps = data.especialidades || [];
+    if (!marcas.length && !cats.length && !esps.length) {
+        $c.addClass('d-none').empty();
+        return;
+    }
+
+    // Auto-aplicar la marca sólo si hay UNA y el campo está vacío.
+    const $marcaSel = $('#formCrearProductoManual select[name="atributo1"]');
+    let autoTexto = '';
+    if (marcas.length === 1 && !$marcaSel.val()) {
+        aplicarMarcaSugerida(marcas[0].id, marcas[0].valor);
+        autoTexto = '<span class="text-success"><i class="bi bi-check2 me-1"></i>Marca <strong>' +
+                    $('<div>').text(marcas[0].valor).html() + '</strong> aplicada</span>';
+    }
+
+    const chip = function(tipo, id, texto, extra) {
+        return '<button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 me-1 mb-1 chip-sugerencia"' +
+               ' data-tipo="' + tipo + '" data-id="' + id + '"' +
+               ' data-valor="' + $('<div>').text(texto).html() + '"' +
+               ' style="font-size:.7rem;">' + $('<div>').text(texto).html() +
+               (extra ? ' <span class="text-muted">' + extra + '</span>' : '') + '</button>';
+    };
+
+    let h = '<div class="text-muted mb-1" style="font-size:.7rem;">' +
+            '<i class="bi bi-lightbulb me-1"></i>Según lo que este proveedor nos ha vendido' +
+            (data.fuente === 'orden_compra' ? ' <span class="text-muted">(desde órdenes de compra)</span>' : '') +
+            (autoTexto ? ' · ' + autoTexto : '') + '</div>';
+    if (marcas.length > (autoTexto ? 1 : 0)) {
+        h += '<div>' + marcas.map(function(m){ return chip('marca', m.id, m.valor, m.n); }).join('') + '</div>';
+    }
+    if (cats.length) {
+        h += '<div>' + cats.map(function(c){ return chip('categoria', c.id, c.nombre, c.n); }).join('') + '</div>';
+    }
+    if (esps.length) {
+        h += '<div>' + esps.map(function(e){ return chip('especialidad', e.id, e.valor, e.n); }).join('') + '</div>';
+    }
+    $c.html(h).removeClass('d-none');
+}
+
+function cargarSugerenciasProveedor() {
+    const provId = $('#selectProveedorManual').val();
+    const $c = contenedorSugerenciasManual();
+    if (!provId) { $c.addClass('d-none').empty(); return; }
+    if (window._sugerenciasProveedorCache[provId]) {
+        renderSugerenciasProveedor(window._sugerenciasProveedorCache[provId]);
+        return;
+    }
+    $c.removeClass('d-none').html('<span class="text-muted" style="font-size:.7rem;">' +
+        '<i class="bi bi-hourglass-split me-1"></i>Buscando lo habitual de este proveedor…</span>');
+    $.get('/app/api/sugerencias-proveedor/', { proveedor_id: provId })
+        .done(function(data) {
+            if (!data || !data.success) { $c.addClass('d-none').empty(); return; }
+            window._sugerenciasProveedorCache[provId] = data;
+            // El usuario pudo cambiar de proveedor mientras respondía.
+            if (String($('#selectProveedorManual').val()) === String(provId)) {
+                renderSugerenciasProveedor(data);
+            }
+        })
+        .fail(function() { $c.addClass('d-none').empty(); });
+}
+
+$(document).on('change', '#selectProveedorManual', function() {
+    cargarSugerenciasProveedor();
+});
+
+$(document).on('click', '.chip-sugerencia', function() {
+    const tipo = $(this).data('tipo');
+    const id = $(this).data('id');
+    const valor = String($(this).data('valor') || '');
+    if (tipo === 'marca') {
+        aplicarMarcaSugerida(id, valor);
+    } else if (tipo === 'categoria' && window.NexoManualPicker) {
+        NexoManualPicker.setCat(id, valor);
+    } else if (tipo === 'especialidad' && window.NexoManualPicker) {
+        // Multi-etiqueta: se suma a lo ya elegido sin duplicar.
+        const actuales = (NexoManualPicker.getEsp() || []).slice();
+        if (!actuales.some(function(e){ return String(e.id) === String(id); })) {
+            actuales.push({ id: id, valor: valor });
+        }
+        NexoManualPicker.setEsp(actuales);
+    }
+    $(this).removeClass('btn-outline-secondary').addClass('btn-success text-white');
+});
+
 // Botón "Crear y seguir": mismo submit, pero al confirmar deja el modal
 // abierto y listo para el siguiente producto de la misma factura.
 $(document).on('click', '#btnCrearYSeguirManual', function() {
@@ -11006,6 +11133,9 @@ $(document).on('change', '#modalCrearProductoManual select[name="tipo_talla"]', 
 
 // Evento para cambio de guía de talla en modal manual
 $('#selectGuiaTallaManual').on('change', function() {
+    // Foco al ELEGIR la guía (no dentro del callback): el servidor puede tardar
+    // y para entonces el usuario ya puede estar escribiendo el costo.
+    const _focoAlElegirGuia = document.activeElement;
     const guiaId = $(this).val();
     const tipoTalla = $('#modalCrearProductoManual select[name="tipo_talla"]').val();
 
@@ -11064,8 +11194,11 @@ $('#selectGuiaTallaManual').on('change', function() {
                 // Cambiar al tab de Tallas para que el usuario ingrese stock
                 const $tabTallas = document.querySelector('[data-bs-target="#tabTallasStock"]');
                 if ($tabTallas) bootstrap.Tab.getOrCreateInstance($tabTallas).show();
-                // Enfocar primer stock
-                $('#tablaTallasManual tbody tr:first .stock-input').focus().select();
+                // Enfocar primer stock (salvo que el usuario ya esté tipeando)
+                enfocarSiElUsuarioSigueDonde(
+                    _focoAlElegirGuia,
+                    $('#tablaTallasManual tbody tr:first .stock-input'),
+                );
             }, 200);
         };
 
@@ -11126,6 +11259,28 @@ function canonTalla(v) {
 
 // Reordena las filas de la tabla por talla (numéricas primero) y reasigna el
 // tabindex de los stocks para que Tab siga el orden visual
+/**
+ * Enfoca un campo SIN robarle el foco al usuario.
+ *
+ * Los tres puntos que enfocaban el primer stock viven en callbacks AJAX o en
+ * `setTimeout`: para cuando llegan, el usuario ya puede estar tipeando el costo
+ * o el precio, y el cursor le saltaba a la tabla de tallas a media palabra
+ * (reportado al aplicar una guía de talla y pasar a Costo).
+ *
+ * Regla: se toma el foco sólo si el usuario sigue donde estaba cuando arrancó
+ * la operación (el select o el botón que la disparó) o si no hay nada
+ * enfocado. Si se movió a otro campo, es suyo y no se toca.
+ */
+function enfocarSiElUsuarioSigueDonde(refInicial, $destino) {
+    if (!$destino || !$destino.length) return false;
+    const act = document.activeElement;
+    const puedoTomarlo = !act || act === document.body || act === refInicial ||
+                         (act.tagName === 'BUTTON');
+    if (!puedoTomarlo) return false;
+    $destino.focus().select();
+    return true;
+}
+
 function reordenarTablaTallasManual() {
     const $tbody = $('#tablaTallasManual tbody');
     const filas = $tbody.children('tr').get();
@@ -11145,6 +11300,9 @@ function reordenarTablaTallasManual() {
 }
 
 $('#btnCompletarDesdeGuia').on('click', function() {
+    // Dónde estaba el foco al pedir la guía: si el usuario se mueve a Costo
+    // mientras responde el servidor, no se lo quitamos.
+    const _focoAlPedirGuia = document.activeElement;
     const guiaId = $('#selectGuiaTallaManual').val();
     if (!guiaId || guiaId === 'SIN_GUIA') return;
     const tipoTalla = $('#modalCrearProductoManual select[name="tipo_talla"]').val() || 'CL';
@@ -11197,7 +11355,10 @@ $('#btnCompletarDesdeGuia').on('click', function() {
         actualizarResumenTallasManual();
         generarTodosLosSkusManual();
         actualizarEquivalenciasTallasManual(res.tallas, tipoTalla);
-        $('#tablaTallasManual tbody tr.talla-de-guia .stock-input').first().focus().select();
+        enfocarSiElUsuarioSigueDonde(
+            _focoAlPedirGuia,
+            $('#tablaTallasManual tbody tr.talla-de-guia .stock-input').first(),
+        );
 
         if (typeof Toastify !== 'undefined') {
             Toastify({
@@ -12072,8 +12233,13 @@ function verificarProductoExistenteManual() {
                     });
                     
                     // Enfocar el primer campo de stock para facilitar ingreso
+                    // (nunca si el usuario ya se fue a otro campo).
+                    const _focoAlCopiar = document.activeElement;
                     setTimeout(() => {
-                        $('#tablaTallasManual tbody tr:first .stock-input').focus().select();
+                        enfocarSiElUsuarioSigueDonde(
+                            _focoAlCopiar,
+                            $('#tablaTallasManual tbody tr:first .stock-input'),
+                        );
                     }, 100);
                     
                     // ✅ Actualizar resumen de tallas
@@ -17001,59 +17167,18 @@ $('#btnConfirmarActualizacion').on('click', function() {
         });
     }
 
-    // Cargar atributos para el modal de edición
-    function cargarAtributosModal() {
-        // Cargar marcas (atributo1)
-        $.ajax({
-            url: '/app/opciones_atributo/?atributo=marca',
-            method: 'GET',
-            success: function(response) {
-                const select = $('#edit_atributo1_id');
-                select.empty().append('<option value="">Seleccionar marca...</option>');
-                if (response.opciones) {
-                    response.opciones.forEach(opt => {
-                        select.append(`<option value="${opt.id}">${opt.valor}</option>`);
-                    });
-                }
-            }
-        });
-
-        // Cargar colores (atributo2)
-        $.ajax({
-            url: '/app/opciones_atributo/?atributo=color',
-            method: 'GET',
-            success: function(response) {
-                const select = $('#edit_atributo2_id');
-                select.empty().append('<option value="">Seleccionar color...</option>');
-                if (response.opciones) {
-                    response.opciones.forEach(opt => {
-                        select.append(`<option value="${opt.id}">${opt.valor}</option>`);
-                    });
-                }
-            }
-        });
-
-        // Cargar géneros (atributo3)
-        $.ajax({
-            url: '/app/opciones_atributo/?atributo=genero',
-            method: 'GET',
-            success: function(response) {
-                const select = $('#edit_atributo3_id');
-                select.empty().append('<option value="">Seleccionar género...</option>');
-                if (response.opciones) {
-                    response.opciones.forEach(opt => {
-                        select.append(`<option value="${opt.id}">${opt.valor}</option>`);
-                    });
-                }
-            }
-        });
-    }
+    // NOTA: aquí vivía `cargarAtributosModal()`. Llamaba a
+    // /app/opciones_atributo/?atributo=marca|color|genero, pero la vista espera
+    // `atributo_id`, así que devolvía [] siempre; encima el JS leía
+    // `response.opciones` cuando la respuesta es una lista pelada. Resultado:
+    // vaciaba los tres selects en cada carga de página a cambio de 3 requests
+    // inútiles. Los selects de edición se llenan al ABRIR el modal, con el
+    // parámetro correcto (ver la carga de MARCAS/COLORES/GÉNEROS más arriba).
 
     // Inicializar cuando el documento esté listo
     $(document).ready(function() {
         // Cargar datos para los selects del modal
         cargarCategoriasModal();
-        cargarAtributosModal();
         
         // Event listener para tab de variaciones
         $('#tab-variaciones').on('click', function() {

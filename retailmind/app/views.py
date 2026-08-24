@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect
 from .models import (
+    ProductoAtributoValor,
     AtributoOpcion,
     Categoria,
     Compras,
@@ -43,7 +44,7 @@ from django.contrib.sessions.models import Session
 from django.http import JsonResponse,Http404, HttpResponseBadRequest, HttpResponse
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.shortcuts import get_object_or_404
-from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg, Min, Max, Case, When, Value, IntegerField, CharField, Window
+from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg, Min, Max, Case, When, Value, IntegerField, CharField, Window, Prefetch
 from django.db.models.functions import Cast
 from django.core.paginator import Paginator
 from django.utils import timezone
@@ -10003,16 +10004,29 @@ def verGestionProducto(request):
     """
     Vista para gestión de productos con inicialización automática de atributos
     """
+    atributos = {}
+
+    def _leer_atributos():
+        """Los 5 atributos del modal en UNA consulta (antes: 4 consultas
+        separadas contra una BD con RTT de ~200 ms)."""
+        buscados = ('marca', 'color', 'sexo', 'género', 'genero', 'especialidad')
+        por_nombre = {}
+        for a in Productos_Atributos.objects.all().only('id', 'nombre'):
+            por_nombre[(a.nombre or '').strip().lower()] = a
+        faltan = [n for n in ('marca', 'color') if n not in por_nombre]
+        if faltan:
+            raise Productos_Atributos.DoesNotExist(', '.join(faltan))
+        return por_nombre
+
     try:
-        # Intentar obtener los atributos básicos
-        marca = Productos_Atributos.objects.get(nombre__iexact='Marca')
-        color = Productos_Atributos.objects.get(nombre__iexact='Color')
+        atributos = _leer_atributos()
+        marca = atributos.get('marca')
+        color = atributos.get('color')
         # IMPORTANTE: Usar "Sexo" que es el atributo real usado en productos (ID 3)
         # "Género" (ID 4) tiene valores diferentes y no coincide
-        genero = Productos_Atributos.objects.filter(nombre__iexact='Sexo').first()
-        if not genero:
-            genero = Productos_Atributos.objects.filter(nombre__iexact='Género').first()
-        
+        genero = (atributos.get('sexo') or atributos.get('género')
+                  or atributos.get('genero'))
+
     except Productos_Atributos.DoesNotExist:
         # Si no existen los atributos, ejecutar inicialización automática
         from django.core.management import call_command
@@ -10023,21 +10037,22 @@ def verGestionProducto(request):
             messages.success(request, 'Atributos básicos inicializados correctamente.')
             
             # Intentar obtener los atributos nuevamente
-            marca = Productos_Atributos.objects.get(nombre__iexact='Marca')
-            color = Productos_Atributos.objects.get(nombre__iexact='Color')
-            genero = Productos_Atributos.objects.filter(nombre__iexact='Sexo').first()
-            if not genero:
-                genero = Productos_Atributos.objects.filter(nombre__iexact='Género').first()
+            atributos = _leer_atributos()
+            marca = atributos.get('marca')
+            color = atributos.get('color')
+            genero = (atributos.get('sexo') or atributos.get('género')
+                      or atributos.get('genero'))
             
         except Exception as e:
             messages.error(request, f'Error al inicializar atributos: {str(e)}')
             # Valores por defecto en caso de error
+            atributos = {}
             marca = color = genero = None
 
     # Atributo transversal "Especialidad" (deporte/uso, multi-etiqueta) de la
     # taxonomía v1.2. Se pasa su id para que el modal Crear Manual cargue sus
     # opciones con el mismo mecanismo select2-atributo que Marca/Color/Género.
-    especialidad = Productos_Atributos.objects.filter(nombre__iexact='Especialidad').first()
+    especialidad = atributos.get('especialidad')
 
     context = {
         'id_atributo_marca': marca.id if marca else 0,
@@ -23846,41 +23861,86 @@ def buscar_productos_existentes(request):
             logger.debug("Busqueda de productos existentes sin termino")
             return JsonResponse({'success': False, 'error': 'Término de búsqueda requerido'}, status=400)
         
-        # Buscar productos que coincidan con el término
-        productos = Producto.objects.filter(
+        # Universo acotado a las empresas del usuario: este endpoint alimenta
+        # el "Copiar datos" del modal Crear Manual y exponía el catálogo de
+        # TODO el holding (costo y PVP incluidos) a cualquier autenticado.
+        sucursales_usuario = Sucursal.objects.filter(
+            empresa_id__in=EmpresaUser.objects.filter(
+                user=request.user, status=True
+            ).values_list('empresa_id', flat=True)
+        ).values_list('id', flat=True)
+
+        # `prefetch_related` con Prefetch explícito: antes se hacía
+        # `producto.producto_talla.values(...)` DENTRO del bucle, lo que ignora
+        # el prefetch y dispara una query por producto (20 de más por búsqueda).
+        productos = list(Producto.objects.filter(
             Q(articulo__icontains=termino) |
-            Q(descripcion__icontains=termino)
+            Q(descripcion__icontains=termino),
+            sucursal_id__in=sucursales_usuario,
         ).select_related(
             'categoria',
             'atributo1',
             'atributo2',
-            'atributo3'
-        ).prefetch_related('producto_talla')[:20]
+            'atributo3',
+        ).prefetch_related(
+            Prefetch(
+                'producto_talla',
+                queryset=Producto_Talla.objects.only(
+                    'id', 'producto_id', 'talla', 'sku', 'stock'
+                ),
+            )
+        )[:20])
 
-        logger.debug("Productos encontrados en busqueda existente: total=%s", productos.count())
+        # Especialidades (taxonomía v1.2, multi-etiqueta) de los 20 productos
+        # en UNA query. Sin esto el modal no puede precargar la especialidad al
+        # copiar, que es justo lo que el usuario no veía llegar.
+        esp_por_producto = {}
+        attr_esp = Productos_Atributos.objects.filter(nombre__iexact='Especialidad').first()
+        if attr_esp and productos:
+            for pav in ProductoAtributoValor.objects.filter(
+                producto_id__in=[p.id for p in productos],
+                atributo_id=attr_esp.id,
+            ).select_related('opcion'):
+                if pav.opcion_id:
+                    esp_por_producto.setdefault(pav.producto_id, []).append(
+                        {'id': pav.opcion_id, 'valor': pav.opcion.valor}
+                    )
+
+        def _orden_talla(t):
+            try:
+                return (0, float(str(t['talla']).replace(',', '.')))
+            except (ValueError, TypeError):
+                return (1, 0.0)
 
         resultados = []
         for producto in productos:
-            tallas_qs = list(producto.producto_talla.values('talla', 'sku', 'stock'))
-            try:
-                tallas_ordenadas = sorted(tallas_qs, key=lambda x: float(str(x['talla']).replace(',', '.') or 0))
-            except (ValueError, TypeError):
-                tallas_ordenadas = tallas_qs
+            tallas_qs = [
+                {'talla': pt.talla, 'sku': pt.sku, 'stock': pt.stock}
+                for pt in producto.producto_talla.all()
+            ]
+            tallas_ordenadas = sorted(tallas_qs, key=_orden_talla)
             resultado = {
                 'id': producto.id,
                 'articulo': producto.articulo,
                 'descripcion': producto.descripcion,
+                # Nombre + ID de cada atributo: el modal selecciona por ID y
+                # antes sólo se enviaba el nombre, así que "Copiar datos" no
+                # rellenaba marca/color/género/categoría (llegaban undefined).
                 'categoria': producto.categoria.nombre if producto.categoria else '',
+                'categoria_id': producto.categoria_id,
                 'marca': producto.atributo1.valor if producto.atributo1 else '',
+                'marca_id': producto.atributo1_id,
                 'color': producto.atributo2.valor if producto.atributo2 else '',
+                'color_id': producto.atributo2_id,
                 'genero': producto.atributo3.valor if producto.atributo3 else '',
+                'genero_id': producto.atributo3_id,
+                'especialidades': esp_por_producto.get(producto.id, []),
                 'costo': float(producto.costo),
                 'sobreprecio': float(producto.sobreprecio),
                 'precioventa': float(producto.precioventa),
                 'tallas': tallas_ordenadas,
             }
             resultados.append(resultado)
-            logger.debug("Producto procesado para busqueda existente: producto_id=%s articulo=%s", producto.id, resultado['articulo'])
         
         response_data = {
             'success': True,
@@ -23893,6 +23953,116 @@ def buscar_productos_existentes(request):
     except Exception as e:
         logger.exception("Error en busqueda de productos existentes")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@require_GET
+@login_required
+def sugerencias_por_proveedor(request):
+    """Sugiere marca, categoría y especialidad a partir del proveedor elegido.
+
+    Alimenta el modal "Crear Producto Manual": al elegir proveedor, el 90% de
+    las veces la marca es una sola (ADIDAS vende ADIDAS) y la categoría se
+    repite, así que tipearlas a mano es trabajo perdido.
+
+    Dos fuentes, en cascada:
+      1. Líneas de DTE de compra de ese proveedor (dato exacto, con IDs).
+      2. Si el proveedor no tiene líneas en sus DTE — pasa en el 74% de las
+         compras 2026 por la migración de Laravel — se cae a las líneas de la
+         orden de compra, donde la marca vive como TEXTO y se resuelve contra
+         AtributoOpcion.
+
+    Sólo lectura. El alcance se acota a las empresas del usuario: son sus
+    compras las que definen la sugerencia.
+    """
+    try:
+        proveedor_id = request.GET.get('proveedor_id')
+        if not proveedor_id:
+            return JsonResponse({'success': False, 'error': 'proveedor_id requerido'}, status=400)
+        try:
+            proveedor_id = int(proveedor_id)
+        except (TypeError, ValueError):
+            return JsonResponse({'success': False, 'error': 'proveedor_id inválido'}, status=400)
+
+        empresas_usuario = list(EmpresaUser.objects.filter(
+            user=request.user, status=True
+        ).values_list('empresa_id', flat=True))
+
+        TOPE = 4
+        base_dte = Dte_Productos.objects.filter(
+            dte__tipo_transaccion='COMPRA',
+            dte__emisor_id=proveedor_id,
+            dte__descartado=False,
+        )
+        if empresas_usuario:
+            base_dte = base_dte.filter(dte__receptor_id__in=empresas_usuario)
+
+        marcas = [
+            {'id': r['productoTalla__producto__atributo1_id'],
+             'valor': r['productoTalla__producto__atributo1__valor'],
+             'n': r['n']}
+            for r in base_dte.filter(productoTalla__producto__atributo1__isnull=False)
+            .values('productoTalla__producto__atributo1_id',
+                    'productoTalla__producto__atributo1__valor')
+            .annotate(n=Count('id')).order_by('-n')[:TOPE]
+        ]
+        categorias = [
+            {'id': r['productoTalla__producto__categoria_id'],
+             'nombre': r['productoTalla__producto__categoria__nombre'],
+             'n': r['n']}
+            for r in base_dte.filter(productoTalla__producto__categoria__isnull=False)
+            .values('productoTalla__producto__categoria_id',
+                    'productoTalla__producto__categoria__nombre')
+            .annotate(n=Count('id')).order_by('-n')[:TOPE]
+        ]
+
+        especialidades = []
+        attr_esp = Productos_Atributos.objects.filter(nombre__iexact='Especialidad').first()
+        if attr_esp:
+            prod_ids = base_dte.values_list('productoTalla__producto_id', flat=True)
+            especialidades = [
+                {'id': r['opcion_id'], 'valor': r['opcion__valor'], 'n': r['n']}
+                for r in ProductoAtributoValor.objects.filter(
+                    producto_id__in=prod_ids, atributo_id=attr_esp.id,
+                ).values('opcion_id', 'opcion__valor')
+                .annotate(n=Count('id')).order_by('-n')[:TOPE]
+            ]
+
+        fuente = 'dte'
+        if not marcas:
+            # Fallback: marca como texto en las líneas de la orden de compra.
+            fuente = 'orden_compra'
+            textos = [
+                r for r in Compras_Producto.objects.filter(compras__empresa_id=proveedor_id)
+                .exclude(atributo1__isnull=True).exclude(atributo1='')
+                .values('atributo1').annotate(n=Count('id')).order_by('-n')[:TOPE]
+            ]
+            if textos:
+                attr_marca = Productos_Atributos.objects.filter(nombre__iexact='Marca').first()
+                opciones = {}
+                if attr_marca:
+                    opciones = {
+                        o.valor.strip().upper(): o.id
+                        for o in AtributoOpcion.objects.filter(
+                            atributo_id=attr_marca.id,
+                            valor__in=[t['atributo1'].strip() for t in textos],
+                        )
+                    }
+                for t in textos:
+                    val = (t['atributo1'] or '').strip()
+                    oid = opciones.get(val.upper())
+                    if oid:
+                        marcas.append({'id': oid, 'valor': val, 'n': t['n']})
+
+        return JsonResponse({
+            'success': True,
+            'fuente': fuente,
+            'marcas': marcas,
+            'categorias': categorias,
+            'especialidades': especialidades,
+        })
+    except Exception as e:
+        logger.exception("Error en sugerencias_por_proveedor")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
 
 @require_GET
 @login_required

@@ -106,6 +106,39 @@ def _permisos(request, user):
     return cache
 
 
+def _modulos_del_request(request):
+    """Todos los módulos activos en UNA consulta, cacheados en el request.
+
+    `mostrar_modulo` hacía `ModuloSistema.objects.get(codigo=...)` por módulo:
+    con 10 módulos en el menú son 10 consultas idénticas en CADA página del ERP.
+    """
+    if request is None:
+        return None
+    mods = getattr(request, '_cache_modulos_menu', None)
+    if mods is None:
+        mods = {m.codigo: m for m in ModuloSistema.objects.filter(activo=True)}
+        request._cache_modulos_menu = mods
+    return mods
+
+
+def _opciones_raiz_del_request(request):
+    """Opciones activas de primer nivel, en UNA consulta, agrupadas por módulo.
+
+    Antes se filtraba `modulo.opciones.filter(...)` módulo por módulo (otras 10
+    consultas). El universo completo son decenas de filas: sale más barato
+    traerlo una vez y repartirlo en memoria.
+    """
+    if request is None:
+        return None
+    por_modulo = getattr(request, '_cache_opciones_menu', None)
+    if por_modulo is None:
+        por_modulo = {}
+        for op in OpcionMenu.objects.filter(activo=True, padre__isnull=True):
+            por_modulo.setdefault(op.modulo_id, []).append(op)
+        request._cache_opciones_menu = por_modulo
+    return por_modulo
+
+
 def _opciones_ids_usuario(user, modulo=None, padre=None, sucursal_id=None, cache=None):
     """
     Helper: retorna IDs de OpcionMenu que un usuario puede ver,
@@ -291,16 +324,32 @@ def mostrar_modulo(context, modulo_codigo):
     user = request.user if request else None
     
     try:
-        modulo = ModuloSistema.objects.get(codigo=modulo_codigo, activo=True)
-        
+        # Módulos y opciones salen de la caché por request (1 consulta cada
+        # una para TODO el menú) en vez de una consulta por módulo.
+        modulos = _modulos_del_request(request)
+        if modulos is not None:
+            modulo = modulos.get(modulo_codigo)
+            if modulo is None:
+                raise ModuloSistema.DoesNotExist
+        else:
+            modulo = ModuloSistema.objects.get(codigo=modulo_codigo, activo=True)
+
         if user and user.is_authenticated:
-            sucursal_id = request.session.get('idSucursalActual') if request else None
-            opciones_ids = _opciones_ids_usuario(user, modulo=modulo, padre=None, sucursal_id=sucursal_id)
-            opciones = modulo.opciones.filter(
-                id__in=opciones_ids,
-                activo=True,
-                padre__isnull=True
-            )
+            cache = _permisos(request, user)
+            por_modulo = _opciones_raiz_del_request(request)
+            if por_modulo is not None and cache is not None:
+                candidatas = por_modulo.get(modulo.id, [])
+                visibles = cache.ids_visibles([o.id for o in candidatas])
+                opciones = [o for o in candidatas if o.id in visibles]
+            else:
+                sucursal_id = request.session.get('idSucursalActual') if request else None
+                opciones_ids = _opciones_ids_usuario(
+                    user, modulo=modulo, padre=None,
+                    sucursal_id=sucursal_id, cache=cache,
+                )
+                opciones = modulo.opciones.filter(
+                    id__in=opciones_ids, activo=True, padre__isnull=True,
+                )
         else:
             opciones = []
         
@@ -488,9 +537,23 @@ def contar_opciones_disponibles(context, user, modulo_codigo):
     if not user or not user.is_authenticated:
         return 0
     
+    request = context.get('request')
     try:
+        # El menú llama a este tag una vez por módulo (10 veces por página).
+        # Con las cachés por request son 0 consultas extra: antes cada llamada
+        # hacía un `get` de ModuloSistema + un filter de OpcionMenu, o sea 20
+        # consultas en CADA pantalla del ERP.
+        modulos = _modulos_del_request(request)
+        por_modulo = _opciones_raiz_del_request(request)
+        cache = _permisos(request, user)
+        if modulos is not None and por_modulo is not None and cache is not None:
+            modulo = modulos.get(modulo_codigo)
+            if modulo is None:
+                return 0
+            candidatas = [o.id for o in por_modulo.get(modulo.id, [])]
+            return len(cache.ids_visibles(candidatas))
+
         modulo = ModuloSistema.objects.get(codigo=modulo_codigo, activo=True)
-        request = context.get('request')
         sucursal_id = request.session.get('idSucursalActual') if request else None
         return len(_opciones_ids_usuario(
             user, modulo=modulo, sucursal_id=sucursal_id,

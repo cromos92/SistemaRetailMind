@@ -790,6 +790,9 @@ urlpatterns = [
      
      # ========== URLs PARA BUSCADOR DE PRODUCTOS EXISTENTES ==========
      path('buscar_productos_existentes/', views.buscar_productos_existentes, name='buscar_productos_existentes'),
+    # Sugerencia de marca/categoria/especialidad segun el proveedor elegido
+    # (modal Crear Producto Manual). Solo lectura.
+    path('api/sugerencias-proveedor/', views.sugerencias_por_proveedor, name='sugerencias_por_proveedor'),
      path('detalle_producto_para_copiar/<int:producto_id>/', views.detalle_producto_para_copiar, name='detalle_producto_para_copiar'),
      path('tallas_producto/<int:producto_id>/', views.tallas_producto, name='tallas_producto'),
 
