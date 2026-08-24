@@ -12123,6 +12123,8 @@ $(document).on('input', '.articulo-autocomplete', function() {
     }
 });
 
+window._seqVerifManual = window._seqVerifManual || 0;
+
 function verificarProductoExistenteManual() {
     // ✅ No reconstruir la tabla mientras el usuario decide en el Swal de
     // confirmación: un rebuild en esa ventana pisaba el stock tipeado y el
@@ -12151,7 +12153,28 @@ function verificarProductoExistenteManual() {
         // Feedback inmediato en el panel único mientras responde el backend
         renderEstadoCodigoManual('verificando');
 
+        // Token anti-respuesta-vieja. Tipear "1BM00838-001" dispara la consulta
+        // del código completo, pero si antes salió una por "1" (primer
+        // carácter, con el debounce ya vencido) esa es MÁS PESADA -- devuelve
+        // las 25 fichas basura con articulo='1' que dejó la migración -- y
+        // llega DESPUÉS, pisando el panel con un producto que no tiene nada que
+        // ver (XU SHAO FA, Botines, $390) y con sus tallas. Sólo se pinta la
+        // respuesta de la última consulta pedida.
+        const _miSeq = ++window._seqVerifManual;
+        const _articuloPedido = articulo;
+
         $.get('/app/verificar_producto_existente/', params, function(response) {
+            if (_miSeq !== window._seqVerifManual) {
+                console.log('⏭️ Respuesta obsoleta descartada para:', _articuloPedido);
+                return;
+            }
+            // Cinturón: si el campo cambió mientras respondía, tampoco sirve.
+            const _articuloActual = $('#modalCrearProductoManual input[name="articulo"]').val().trim();
+            if (_articuloActual !== _articuloPedido) {
+                console.log('⏭️ Respuesta descartada: el artículo cambió de',
+                            _articuloPedido, 'a', _articuloActual);
+                return;
+            }
             if (response.existe && response.producto_encontrado) {
                 console.log('✅ Producto existente encontrado en modal manual');
                 console.log('📦 Producto:', response.producto_encontrado);
