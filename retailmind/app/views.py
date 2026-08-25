@@ -20831,11 +20831,45 @@ def verificar_producto_existente(request):
         except Exception as e:
             logger.exception("Error buscando producto en otras sucursales")
         # =========================================================
-        
+
+        # ¿La "identificación" tecleada es en realidad un SKU? Pasa cuando
+        # alguien escanea o copia un SKU en el campo Identificación: el sistema
+        # decía "código NUEVO / se crea producto" y nacía un duplicado. La
+        # búsqueda es por SKU EXACTO, que usa índice.
+        sugerencia_sku = None
+        if articulo and articulo.isdigit():
+            try:
+                _pt = (Producto_Talla.objects
+                       .filter(sku=int(articulo))
+                       .select_related('producto', 'producto__sucursal',
+                                       'producto__atributo1', 'producto__atributo2',
+                                       'producto__categoria')
+                       .first())
+            except (ValueError, OverflowError):
+                _pt = None
+            if _pt and _pt.producto:
+                _p = _pt.producto
+                sugerencia_sku = {
+                    'sku': _pt.sku,
+                    'talla': _pt.talla,
+                    'producto_id': _p.id,
+                    'articulo': _p.articulo,
+                    'marca': getattr(_p.atributo1, 'valor', '') or '',
+                    'color': getattr(_p.atributo2, 'valor', '') or '',
+                    'categoria': getattr(_p.categoria, 'nombre', '') or '',
+                    'sucursal': getattr(_p.sucursal, 'alias', '') or '',
+                    'es_de_esta_sucursal': bool(sucursal_id) and _p.sucursal_id == int(sucursal_id),
+                }
+                logger.info(
+                    "Identificacion tecleada es un SKU existente: sku=%s producto=%s articulo=%r",
+                    _pt.sku, _p.id, _p.articulo,
+                )
+
         return JsonResponse({
             'existe': False,
             'tallas_existentes': [],
             'producto_encontrado': None,
+            'sugerencia_sku': sugerencia_sku,
             'producto_categoria_distinta': producto_categoria_distinta,
             'productos_similares_sku': productos_similares_sku,
             'productos_similares_nombre': productos_similares_nombre,
@@ -23870,14 +23904,99 @@ def buscar_productos_existentes(request):
             ).values_list('empresa_id', flat=True)
         ).values_list('id', flat=True)
 
+        # Marca opcional para acotar (el modal manda la del formulario si ya
+        # está elegida) y tope configurable.
+        marca_id = request.GET.get('marca') or None
+        try:
+            limite = min(max(int(request.GET.get('limite') or 20), 1), 100)
+        except (TypeError, ValueError):
+            limite = 20
+
+        # Cuántos resultados se cuentan antes de decir "200+". Contar TODO el
+        # universo costaba ~1,9 s (5.581 coincidencias para "419"): al usuario
+        # le basta saber que hay muchos más.
+        TOPE_CONTEO = 200
+        # Un fragmento corto de SKU (3 dígitos) devuelve miles de filas y no es
+        # una búsqueda útil; el SKU exacto sí, y usa índice.
+        MIN_CHARS_SKU_PARCIAL = 5
+        TOPE_IDS_SKU = 1500
+
+        def _ids_por_sku(parte):
+            """IDs de productos cuyo SKU calza. Exacto primero (usa índice);
+            parcial sólo para términos largos y acotado."""
+            ids = set()
+            if parte.isdigit():
+                try:
+                    ids.update(
+                        Producto_Talla.objects.filter(sku=int(parte))
+                        .values_list('producto_id', flat=True)[:TOPE_IDS_SKU]
+                    )
+                except (ValueError, OverflowError):
+                    pass
+            # Sólo tiene sentido escanear SKUs si el término es numérico: el
+            # SKU es un entero, así que "PREDATOR" jamás va a calzar y ese
+            # escaneo con cast cuesta ~0,4 s por término de texto.
+            if (not ids and parte.isdigit()
+                    and len(parte) >= MIN_CHARS_SKU_PARCIAL):
+                ids.update(
+                    Producto_Talla.objects
+                    .annotate(sku_texto=Cast('sku', CharField()))
+                    .filter(sku_texto__icontains=parte)
+                    .values_list('producto_id', flat=True)[:TOPE_IDS_SKU]
+                )
+            return ids
+
+        # Búsqueda por CÓDIGO, DESCRIPCIÓN, MARCA y **SKU**. Antes sólo miraba
+        # artículo y descripción: buscar por SKU no encontraba nada, y como el
+        # campo Identificación tampoco lo consulta, teclear un SKU existente
+        # daba "código NUEVO" y se creaba un duplicado.
+        # Multi-término: todas las palabras deben aparecer en alguna parte, así
+        # "passer 419" encuentra el 419 de la marca PASSER.
+        # Los SKU se resuelven aparte (no como JOIN) porque el join multiplica
+        # filas y obliga a un DISTINCT cuyo COUNT costaba ~1,9 s.
+        qs = Producto.objects.filter(sucursal_id__in=sucursales_usuario)
+
+        for parte in termino.split():
+            condicion = (
+                Q(articulo__icontains=parte) |
+                Q(descripcion__icontains=parte) |
+                Q(atributo1__valor__icontains=parte)
+            )
+            ids_sku = _ids_por_sku(parte)
+            if ids_sku:
+                condicion |= Q(id__in=ids_sku)
+            qs = qs.filter(condicion)
+
+        if marca_id:
+            try:
+                qs = qs.filter(atributo1_id=int(marca_id))
+            except (TypeError, ValueError):
+                pass
+
+        # Relevancia: primero el código exacto, después los que empiezan igual.
+        qs = qs.annotate(
+            _relevancia=Case(
+                When(articulo__iexact=termino, then=Value(0)),
+                When(articulo__istartswith=termino, then=Value(1)),
+                default=Value(2),
+                output_field=IntegerField(),
+            )
+        )
+
+        # Conteo acotado: sólo hace falta saber si pasa del tope.
+        total_encontrados = qs.values('id')[:TOPE_CONTEO + 1].count()
+        conteo_parcial = total_encontrados > TOPE_CONTEO
+
+        # Dentro de cada tramo de relevancia manda la ficha creada MÁS RECIENTE
+        # (mismo orden canónico que la verificación de identidad): al copiar
+        # datos interesa la ficha viva, no la basura de la migración que queda
+        # primera si se ordena alfabéticamente.
+        from .utils_producto_match import _ORDEN_RECIENTE
+
         # `prefetch_related` con Prefetch explícito: antes se hacía
         # `producto.producto_talla.values(...)` DENTRO del bucle, lo que ignora
         # el prefetch y dispara una query por producto (20 de más por búsqueda).
-        productos = list(Producto.objects.filter(
-            Q(articulo__icontains=termino) |
-            Q(descripcion__icontains=termino),
-            sucursal_id__in=sucursales_usuario,
-        ).select_related(
+        productos = list(qs.order_by('_relevancia', *_ORDEN_RECIENTE).select_related(
             'categoria',
             'atributo1',
             'atributo2',
@@ -23889,7 +24008,7 @@ def buscar_productos_existentes(request):
                     'id', 'producto_id', 'talla', 'sku', 'stock'
                 ),
             )
-        )[:20])
+        )[:limite])
 
         # Especialidades (taxonomía v1.2, multi-etiqueta) de los 20 productos
         # en UNA query. Sin esto el modal no puede precargar la especialidad al
@@ -23944,7 +24063,13 @@ def buscar_productos_existentes(request):
         
         response_data = {
             'success': True,
-            'productos': resultados
+            'productos': resultados,
+            # La UI mostraba "20 resultados" sin decir que era un tope: si había
+            # 200 coincidencias, las otras 180 no existían para el usuario.
+            'total': total_encontrados,
+            'conteo_parcial': conteo_parcial,
+            'limite': limite,
+            'hay_mas': total_encontrados > len(resultados),
         }
         
         logger.debug("Busqueda de productos existentes preparada: total=%s", len(resultados))

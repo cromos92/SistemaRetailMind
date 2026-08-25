@@ -13,6 +13,10 @@ producto de la lista, y la sugerencia por proveedor:
 3. `sugerencias_por_proveedor` es nuevo: propone marca/categoría/especialidad
    con lo que ese proveedor ya nos vendió, con fallback a las órdenes de compra
    para los proveedores cuyos DTE no traen líneas.
+4. Búsqueda avanzada del buscador del modal: multi-término (AND sobre
+   artículo/descripción/marca/SKU), marca como filtro adicional, totales
+   honestos y "ficha más reciente primero"; y `sugerencia_sku` cuando lo
+   tecleado en Identificación es un SKU y no un código de artículo.
 """
 import json
 from unittest import mock
@@ -123,18 +127,20 @@ class BuscarProductosExistentesTest(BaseModalManual):
         self.assertNotIn('PREDATOR AJENO', articulos)
 
     def test_sin_n_mas_uno_al_crecer_el_catalogo(self):
-        """Las tallas salen del prefetch: más productos no son más queries."""
+        """Las tallas salen del prefetch: más productos no son más queries.
+        (7 = sesión+user, conteo acotado, productos, tallas, atributo
+        Especialidad y sus valores.)"""
         self.client.force_login(self.user_a)
         with _patch_permisos():
             self.client.get(self.URL, {'q': 'PREDATOR ELITE'})  # calienta sesión
-            with self.assertNumQueries(6):
+            with self.assertNumQueries(7):
                 self.client.get(self.URL, {'q': 'PREDATOR ELITE'})
             for i in range(8):
                 crear_producto_con_talla(
                     self.sucursal_a, articulo='PREDATOR ELITE %d' % i,
                     sku=1000100 + i, stock=1,
                 )
-            with self.assertNumQueries(6):
+            with self.assertNumQueries(7):
                 self.client.get(self.URL, {'q': 'PREDATOR ELITE'})
 
     def test_termino_vacio_400(self):
@@ -212,3 +218,105 @@ class SugerenciasPorProveedorTest(BaseModalManual):
     def test_proveedor_id_invalido_400(self):
         status, _ = self._get(self.user_a, self.URL, proveedor_id='abc')
         self.assertEqual(status, 400)
+
+
+class BusquedaAvanzadaModalTest(BaseModalManual):
+    """Multi-término, SKU, filtro por marca, totales y orden por reciente."""
+
+    URL = '/app/buscar_productos_existentes/'
+
+    def setUp(self):
+        super().setUp()
+        self.op_passer = AtributoOpcion.objects.create(atributo=self.attr_marca,
+                                                       valor='PASSER')
+        self.op_nike = AtributoOpcion.objects.create(atributo=self.attr_marca,
+                                                     valor='NIKE')
+        # El caso real del usuario: "419" es un código de PASSER, pero también
+        # aparece DENTRO de códigos de otras marcas (CW3419-006 de NIKE).
+        self.prod_419, self.talla_419 = crear_producto_con_talla(
+            self.sucursal_a, articulo='419', sku=4800769, stock=3,
+        )
+        self.prod_419.atributo1 = self.op_passer
+        self.prod_419.save()
+        self.prod_nike, _ = crear_producto_con_talla(
+            self.sucursal_a, articulo='CW3419-006', sku=4800100, stock=2,
+        )
+        self.prod_nike.atributo1 = self.op_nike
+        self.prod_nike.save()
+
+    def test_multi_termino_cruza_marca_y_codigo(self):
+        """"passer 419" encuentra el 419 de PASSER aunque 'PASSER' no esté en
+        el artículo ni en la descripción (la marca es un atributo)."""
+        status, data = self._get(self.user_a, self.URL, q='passer 419')
+        self.assertEqual(status, 200)
+        self.assertEqual([p['articulo'] for p in data['productos']], ['419'])
+
+    def test_marca_como_filtro_adicional(self):
+        status, data = self._get(self.user_a, self.URL, q='419',
+                                 marca=self.op_passer.id)
+        self.assertEqual([p['articulo'] for p in data['productos']], ['419'])
+
+    def test_sin_marca_trae_todas_las_coincidencias(self):
+        status, data = self._get(self.user_a, self.URL, q='419')
+        self.assertEqual({p['articulo'] for p in data['productos']},
+                         {'419', 'CW3419-006'})
+
+    def test_busca_por_sku_exacto(self):
+        """Antes buscar un SKU no encontraba nada (sólo miraba artículo y
+        descripción)."""
+        status, data = self._get(self.user_a, self.URL, q='4800769')
+        self.assertEqual([p['articulo'] for p in data['productos']], ['419'])
+
+    def test_codigo_exacto_primero_luego_mas_recientes(self):
+        """El código exacto manda; dentro del mismo tramo de relevancia va
+        primero la ficha creada MÁS recientemente (orden canónico, el mismo de
+        la verificación de identidad)."""
+        crear_producto_con_talla(
+            self.sucursal_a, articulo='419 CLASICO', sku=4800200, stock=1,
+        )
+        crear_producto_con_talla(
+            self.sucursal_a, articulo='419 REEDICION', sku=4800300, stock=1,
+        )
+        status, data = self._get(self.user_a, self.URL, q='419')
+        articulos = [p['articulo'] for p in data['productos']]
+        self.assertEqual(articulos[0], '419')
+        self.assertLess(articulos.index('419 REEDICION'),
+                        articulos.index('419 CLASICO'))
+
+    def test_total_y_hay_mas_con_limite(self):
+        for i in range(5):
+            crear_producto_con_talla(
+                self.sucursal_a, articulo='419-%d' % i, sku=4801000 + i, stock=1,
+            )
+        status, data = self._get(self.user_a, self.URL, q='419', limite=3)
+        self.assertEqual(len(data['productos']), 3)
+        self.assertEqual(data['total'], 7)  # 419, CW3419-006 y los 5 nuevos
+        self.assertTrue(data['hay_mas'])
+        self.assertFalse(data['conteo_parcial'])
+
+
+class SugerenciaSkuEnIdentificacionTest(BaseModalManual):
+    """Teclear/escanear un SKU en "Identificación" decía "código NUEVO" y
+    nacía un duplicado con el SKU como código: ahora el backend avisa a qué
+    artículo pertenece ese SKU."""
+
+    URL = '/app/verificar_producto_existente/'
+
+    def test_sku_tecleado_sugiere_el_articulo_real(self):
+        status, data = self._get(self.user_a, self.URL, articulo='1000001')
+        self.assertEqual(status, 200)
+        self.assertFalse(data['existe'])
+        s = data['sugerencia_sku']
+        self.assertEqual(s['articulo'], 'PREDATOR ELITE')
+        self.assertEqual(s['sku'], 1000001)
+        self.assertEqual(s['talla'], '42')
+
+    def test_numero_que_no_es_sku_no_sugiere_nada(self):
+        status, data = self._get(self.user_a, self.URL, articulo='999999999')
+        self.assertFalse(data['existe'])
+        self.assertIsNone(data['sugerencia_sku'])
+
+    def test_codigo_no_numerico_no_consulta_skus(self):
+        status, data = self._get(self.user_a, self.URL, articulo='INEXISTENTE-XL')
+        self.assertFalse(data['existe'])
+        self.assertIsNone(data['sugerencia_sku'])

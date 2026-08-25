@@ -11822,6 +11822,7 @@ function renderEstadoCodigoManual(estado, response) {
         body = _ecSeccionVariantesLocales(response);
     } else if (estado === 'nuevo') {
         body = '<div class="ec-nota py-1"><i class="bi bi-check-circle text-success me-1"></i>No hay ningún producto con este código en tus bodegas. Se generarán SKUs nuevos.</div>';
+        body += _ecSeccionSugerenciaSku(response);
     }
     if (estado === 'existe' || estado === 'catdif' || estado === 'variante' || estado === 'otras' || estado === 'nuevo') {
         body += _ecSeccionBodegas(response, estado);
@@ -11838,6 +11839,32 @@ function renderEstadoCodigoManual(estado, response) {
             ${body ? `<div class="ec-body">${body}</div>` : ''}
         </div>`);
     actualizarComparePrecioManual();
+}
+
+// esc() del template vive DENTRO de otros ámbitos y NO es visible desde
+// renderEstadoCodigoManual (global): helper propio para escapar HTML.
+function escManual(v) {
+    return String(v == null ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// El número tecleado en "Identificación" puede ser un SKU (escaneado o
+// copiado). Si el backend lo encontró como SKU exacto, avisar ANTES de que
+// nazca un duplicado con el SKU como código de artículo.
+function _ecSeccionSugerenciaSku(r) {
+    const s = r && r.sugerencia_sku;
+    if (!s) return '';
+    return `
+        <div class="alert alert-warning py-1 px-2 mt-2 mb-0" style="font-size:.76rem;">
+            <i class="bi bi-upc-scan me-1"></i>Ojo: <b>${escManual(s.sku)}</b> es un <b>SKU</b>
+            (talla ${escManual(s.talla)}${s.sucursal ? ' · ' + escManual(s.sucursal) : ''}), no un código de artículo.
+            El artículo real es <b>${escManual(s.articulo)}</b>${s.marca ? ' de ' + escManual(s.marca) : ''}${s.categoria ? ' · ' + escManual(s.categoria) : ''}.
+            <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 ms-1" id="btnUsarArticuloDeSku"
+                    data-articulo="${escManual(s.articulo)}" style="font-size:.74rem;">
+                Usar ${escManual(s.articulo)} como código
+            </button>
+        </div>`;
 }
 
 // Sección estado "existe": identidad + tallas/SKUs/stock + precios + duplicados
@@ -12109,6 +12136,14 @@ $(document).on('click', '.chipSimilarManual', function() {
     const art = $(this).data('articulo');
     if (!art) return;
     $('#modalCrearProductoManual input[name="articulo"]').val(art).trigger('change');
+});
+
+// Botón del aviso "eso es un SKU": reemplaza el SKU tecleado por el código de
+// artículo real y re-verifica ('change' para no abrir el autocomplete).
+$(document).on('click', '#btnUsarArticuloDeSku', function() {
+    const art = $(this).data('articulo');
+    if (!art) return;
+    $('#modalCrearProductoManual input[name="articulo"]').val(String(art)).trigger('change');
 });
 
 // ✅ CÓDIGO SIEMPRE EN MAYÚSCULAS: fuerza el VALOR (no solo el estilo) en el
@@ -14855,11 +14890,19 @@ $('#btnConfirmarActualizacion').on('click', function() {
         $('#resultadosBusqueda').hide();
         $('#loadingBusquedaProducto').show();
         
-        $.get('/app/buscar_productos_existentes/', { q: termino }, function(response) {
+        // Si ya hay marca elegida en el formulario, acota la búsqueda: escribir
+        // "419" con PASSER puesta debe traer el 419 de PASSER, no 5.581 filas.
+        const _marcaForm = $('#modalCrearProductoManual select[name="atributo1"]').val();
+        const _params = { q: termino, limite: 60 };
+        if (_marcaForm) _params.marca = _marcaForm;
+
+        $.get('/app/buscar_productos_existentes/', _params, function(response) {
             console.log('📋 Respuesta del servidor:', response);
-            
+
+            window._totalBusquedaManual = response ? response.total : null;
+            window._conteoParcialBusquedaManual = response ? response.conteo_parcial : false;
             if (response.success && response.productos && response.productos.length > 0) {
-                console.log(`✅ Encontrados ${response.productos.length} productos`);
+                console.log(`✅ Encontrados ${response.productos.length} de ${response.total} productos`);
                 productosEncontrados = response.productos;
                 productosFiltrados = [...productosEncontrados];
                 paginaActualBusqueda = 1;
@@ -14884,7 +14927,16 @@ $('#btnConfirmarActualizacion').on('click', function() {
     // Función para mostrar resultados en tabla
     function mostrarResultadosTabla() {
         $('#loadingBusquedaProducto').hide();
-        $('#contadorResultados').text(productosFiltrados.length + ' resultado' + (productosFiltrados.length !== 1 ? 's' : ''));
+        // El backend devuelve el total real: antes decía "20 resultados" sin
+        // avisar que era un tope y el resto no existía para el usuario.
+        const _tot = window._totalBusquedaManual;
+        const _parcial = window._conteoParcialBusquedaManual;
+        let _txt = productosFiltrados.length + ' resultado' + (productosFiltrados.length !== 1 ? 's' : '');
+        if (_tot != null && _tot > productosFiltrados.length) {
+            _txt = 'mostrando ' + productosFiltrados.length + ' de ' +
+                   (_parcial ? _tot + '+' : _tot) + ' — afiná la búsqueda (agregá la marca)';
+        }
+        $('#contadorResultados').text(_txt);
         mostrarResultadosPaginados();
         $('#resultadosBusqueda').show();
     }
