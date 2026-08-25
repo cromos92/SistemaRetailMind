@@ -350,6 +350,10 @@
                             <label class="btn btn-outline-light d-none" for="dg-metodo-efectivo"><i class="ri-cash-line me-1"></i> Efectivo (caja)</label>
                         </div>
                         <div id="dg-aviso-credito" class="alert alert-warning py-1 px-2 small mb-2 d-none"></div>
+                        {# Cobro con tarjeta por la máquina Transbank: un error de
+                           cobro se anula en la MISMA máquina (el dinero vuelve a la
+                           tarjeta), no con esta devolución. #}
+                        <div id="dg-aviso-transbank" class="alert alert-warning py-1 px-2 small mb-2 d-none"></div>
                         <div id="dg-transf-fields" class="row g-2 d-none">
                             <div class="col-md-6"><input type="text" id="dg-banco" class="form-control form-control-sm" placeholder="Banco"></div>
                             <div class="col-md-6">
@@ -475,7 +479,7 @@
     const urlCon = (plantilla, id) => plantilla.replace('/0/', '/' + id + '/');
 
     // Estado del wizard
-    let dgWizard = { paso: 1, dte: null, seleccion: {}, requerimientoId: null, condicionPago: null };
+    let dgWizard = { paso: 1, dte: null, seleccion: {}, requerimientoId: null, condicionPago: null, pagoTransbank: null };
 
     function getCookie(name) {
         let v = null;
@@ -550,7 +554,7 @@
 
     // ===================== WIZARD =====================
     function resetModalDevolucionGarantia() {
-        dgWizard = { paso: 1, dte: null, seleccion: {}, requerimientoId: null, condicionPago: null };
+        dgWizard = { paso: 1, dte: null, seleccion: {}, requerimientoId: null, condicionPago: null, pagoTransbank: null };
         $('#dg-folio').val('');
         $('#dg-doc-info').addClass('d-none').empty();
         $('#dg-lista-productos').empty();
@@ -562,7 +566,7 @@
         // Transferencia es el método primario (efectivo está oculto).
         $('#dg-metodo-transf').prop('checked', true);
         $('#dg-metodo-credito, #dg-lbl-credito').addClass('d-none');
-        $('#dg-aviso-credito').addClass('d-none').empty();
+        $('#dg-aviso-credito, #dg-aviso-transbank').addClass('d-none').empty();
         $('#dg-banco, #dg-num-cuenta, #dg-titular-rut').val('');
         $('#dg-tipo-cuenta').val('');
         $('#dg-titular-mismo').prop('checked', true);
@@ -628,6 +632,15 @@
             // Si editó el folio sin re-buscar, no avanzar con el documento viejo.
             if (String(dgWizard.dte.folio) !== $('#dg-folio').val().trim()) {
                 buscarDteDevolucionGarantia();
+                return false;
+            }
+            // Cobro con tarjeta ya anulado por la máquina Transbank: el dinero
+            // vuelve a la tarjeta por esa vía — devolver aquí sería pagar 2 veces.
+            if (dgWizard.pagoTransbank && dgWizard.pagoTransbank.anulado_completo) {
+                Swal.fire({
+                    icon: 'error', title: 'Cobro anulado por la máquina Transbank',
+                    text: 'El dinero de este cobro vuelve a la tarjeta del cliente vía la anulación hecha en la máquina. No corresponde crear una devolución de dinero adicional.',
+                });
                 return false;
             }
             return true;
@@ -708,8 +721,28 @@
             dgWizard.dte = resp.dte;
             dgWizard.seleccion = {};
             dgWizard.condicionPago = resp.condicion_pago || null;
+            dgWizard.pagoTransbank = resp.pago_transbank || null;
 
             const cp = dgWizard.condicionPago;
+            const tbk = dgWizard.pagoTransbank;
+            // Cobro con tarjeta por la máquina Transbank: un ERROR DE COBRO se
+            // corrige anulando en la MISMA máquina (el dinero vuelve a la
+            // tarjeta). Si esa anulación ya está registrada, esta devolución
+            // sería un segundo pago → se bloquea desde el paso 1.
+            const tbkAnulado = !!(tbk && tbk.anulado_completo);
+            let tbkInfo = '';
+            if (tbkAnulado) {
+                const ult = tbk.anulaciones_pos[tbk.anulaciones_pos.length - 1] || {};
+                tbkInfo = `<br><span class="text-danger"><i class="ri-forbid-2-line me-1"></i>` +
+                    `Cobro con tarjeta YA ANULADO por la máquina Transbank (${clp(tbk.monto_anulado_pos)}` +
+                    (ult.fecha ? ` el ${esc(ult.fecha)}` : '') + `). El dinero vuelve a la tarjeta por esa vía: ` +
+                    `NO corresponde una devolución de dinero (sería doble devolución).</span>`;
+            } else if (tbk && tbk.es_transbank) {
+                tbkInfo = `<br><span class="text-warning"><i class="ri-bank-card-line me-1"></i>` +
+                    `Cobrada con TARJETA por máquina Transbank (${clp(tbk.monto_tarjeta)}). ` +
+                    `Si es un ERROR DE COBRO, no se devuelve por aquí: se ANULA en la misma máquina ` +
+                    `y el dinero vuelve a la tarjeta. Continúa solo si es una garantía real.</span>`;
+            }
             // Venta a crédito → se ofrece (y preselecciona) "Rebaja de crédito":
             // no hay plata que transferir, se descuenta la cuenta por cobrar.
             const esCredito = !!(cp && cp.es_credito);
@@ -725,7 +758,8 @@
                 (cp && cp.es_credito
                     ? `<br><span class="text-warning"><i class="ri-error-warning-line me-1"></i>` +
                       `Vendida A CRÉDITO — ${esc(cp.motivos.join('; '))}</span>`
-                    : '')
+                    : '') +
+                tbkInfo
             );
 
             const $lista = $('#dg-lista-productos').empty();
@@ -778,6 +812,15 @@
                 $('#dg-cliente-nombre').val(resp.receptor_actual.nombre);
             }
 
+            // Cobro anulado por la máquina: se queda en el paso 1 (el backend
+            // igual rechaza crear, esto solo evita el wizard-callejón).
+            if (tbkAnulado) {
+                Swal.fire({
+                    icon: 'error', title: 'Cobro anulado por la máquina Transbank',
+                    text: 'El dinero de este cobro vuelve a la tarjeta del cliente vía la anulación hecha en la máquina. No corresponde crear una devolución de dinero adicional.',
+                });
+                return;
+            }
             dgIrPaso(2);
         }).fail(function (xhr) {
             Swal.fire({ icon: 'error', title: 'No encontrado', text: errMsg(xhr, 'Error al buscar el documento') });
@@ -908,6 +951,19 @@
         } else {
             $av.addClass('d-none').empty();
         }
+        // Aviso Transbank: si el cobro fue con tarjeta por la máquina, un
+        // error de cobro se corrige ANULANDO en esa máquina, no por aquí.
+        const tbk = dgWizard.pagoTransbank;
+        const $avT = $('#dg-aviso-transbank');
+        if (tbk && tbk.es_transbank) {
+            $avT.removeClass('d-none').html(
+                `<i class="ri-bank-card-line me-1"></i>Cobrada con <strong>tarjeta por máquina Transbank</strong> ` +
+                `(${clp(tbk.monto_tarjeta)}). Un <strong>error de cobro</strong> se corrige anulando en la misma ` +
+                `máquina (el dinero vuelve a la tarjeta) — no con esta devolución. Continúa solo si es una garantía real.`
+            );
+        } else {
+            $avT.addClass('d-none').empty();
+        }
         let filas = '';
         Object.values(dgWizard.seleccion).forEach(function (s) {
             if (s.modo === 'CANTIDAD') {
@@ -948,10 +1004,17 @@
             cuenta_titular_rut: titularRut,
         };
 
+        // Última confirmación del caso Transbank: que quien crea la solicitud
+        // declare que NO es un error de cobro (eso se anula en la máquina).
+        const tbkConfirm = (dgWizard.pagoTransbank && dgWizard.pagoTransbank.es_transbank)
+            ? `<br><small class="text-warning"><i class="ri-bank-card-line me-1"></i>Cobro con tarjeta ` +
+              `Transbank: confirma que NO es un error de cobro (eso se anula en la máquina, no aquí).</small>`
+            : '';
         Swal.fire({
             title: 'Crear solicitud de devolución',
             html: `Quedará <strong>pendiente de aprobación</strong> por un administrador.<br>` +
-                  `Total: <strong>${clp(dgTotalNC())}</strong> a nombre de <strong>${$('#dg-cliente-nombre').val()}</strong>.`,
+                  `Total: <strong>${clp(dgTotalNC())}</strong> a nombre de <strong>${$('#dg-cliente-nombre').val()}</strong>.` +
+                  tbkConfirm,
             icon: 'question', showCancelButton: true, confirmButtonColor: '#00A080',
             confirmButtonText: '<i class="ri-check-line me-1"></i> Crear', cancelButtonText: 'Cancelar',
         }).then(function (result) {
@@ -1121,6 +1184,24 @@
                   `(${esc((cp.motivos || []).join('; '))}). El cliente no puso esta plata en la caja: ` +
                   `corresponde <strong>Rebaja crédito del cliente</strong>.</div>`
                 : '';
+            // Cobro con tarjeta por la máquina Transbank: un error de cobro se
+            // anula en la MISMA máquina; si esa anulación ya existe, aprobar
+            // esto sería una doble devolución (el preview bloquea Aprobar).
+            const tbk = d.pago_transbank || {};
+            let tbkHtml = '';
+            if (tbk.anulado_completo) {
+                tbkHtml = `<div class="alert alert-danger py-1 px-2 small mt-2 mb-0">` +
+                    `<i class="ri-forbid-2-line me-1"></i>El cobro con tarjeta ya fue ` +
+                    `<strong>ANULADO por la máquina Transbank</strong> (${clp(tbk.monto_anulado_pos)}): ` +
+                    `el dinero vuelve a la tarjeta por esa vía. Aprobar sería una ` +
+                    `<strong>doble devolución</strong> — rechaza la solicitud.</div>`;
+            } else if (tbk.es_transbank) {
+                tbkHtml = `<div class="alert alert-warning py-1 px-2 small mt-2 mb-0">` +
+                    `<i class="ri-bank-card-line me-1"></i>Cobrada con <strong>tarjeta por máquina Transbank</strong> ` +
+                    `(${clp(tbk.monto_tarjeta)}). Si el motivo es un <strong>error de cobro</strong>, ` +
+                    `corresponde anular en la máquina (no esta NC): rechaza la solicitud. ` +
+                    `Aprueba solo si es una garantía real.</div>`;
+            }
             $('#apr-resumen').html(
                 `<div class="mb-1"><strong>Solicitante:</strong> ${esc(d.solicitado_por)} · ${esc(d.fecha_solicitud)}${d.sucursal ? ' · ' + esc(d.sucursal) : ''}</div>` +
                 `<div class="mb-1"><strong>Documento:</strong> ${esc(d.dte.tipo)} #${esc(d.dte.folio)} (${esc(d.dte.fecha)}) — Total ${clp(d.dte.total)}</div>` +
@@ -1128,7 +1209,7 @@
                 `<div class="mb-1"><strong>Motivo:</strong> ${esc(d.motivo)}</div>` +
                 `<hr class="my-1" style="border-color:#2a3045;">` + lineas +
                 `<div class="mt-1"><strong>Total NC:</strong> ${clp(d.monto_total)}</div>` +
-                metodoHtml + credHtml +
+                metodoHtml + credHtml + tbkHtml +
                 (d.hay_conflicto ? `<div class="alert alert-danger py-1 px-2 small mt-2 mb-0">Alguna línea ya no tiene disponibilidad suficiente. Si apruebas puede fallar; considera rechazar.</div>` : '')
             );
             // Preselección: manda la sugerencia del backend (REBAJA_CREDITO si

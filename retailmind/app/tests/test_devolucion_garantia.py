@@ -16,6 +16,7 @@ from django.utils import timezone
 from app.models import (
     Dte, Dte_Productos, Dte_Detalle_Pago, Empresa, Correlativo,
     DevolucionGarantia, ModuloSistema, OpcionMenu, PermisoRol,
+    Ticket, ConfiguracionPOS, TransaccionPOS,
 )
 from app.services import devolucion_garantia_service as service
 from app.views_modulo_ventas import _calcular_cuadratura_data
@@ -846,3 +847,117 @@ class DevolucionGarantiaFiltroSucursalTest(TestCase):
         resp = client.get(reverse('api_ticket_devolucion_garantia', args=[self.dev_b.id]))
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()['data']['numero_operacion'], self.dev_b.numero_operacion)
+
+
+class DevolucionGarantiaTransbankTest(TestCase):
+    """Cobros con tarjeta por la máquina Transbank.
+
+    Un error de cobro con tarjeta se corrige ANULANDO en la misma máquina (el
+    dinero vuelve a la tarjeta), no con una devolución de dinero por este
+    módulo. Se advierte siempre que hubo tarjeta, y se bloquea (crear, aprobar
+    y preview) cuando la anulación por máquina ya está registrada y cubre todo
+    lo pagado con tarjeta: encima de ella la NC pagaría dos veces.
+    """
+
+    def setUp(self):
+        self.env = setup_entorno_completo()
+        self.user = self.env['user']
+        self.sucursal = self.env['sucursal']
+        self.pt = self.env['producto_talla']
+        crear_correlativo(self.sucursal, tipo_dte='NOTA DE CREDITO')
+        self.hoy = timezone.localdate()
+
+    def _boleta_tarjeta(self, numero, metodo='TBK_CREDITO_POS'):
+        return _crear_documento(self.env, numero, [(self.pt, 2, 11900)], metodo_pago=metodo)
+
+    def _anulacion_pos(self, dte, monto, tipo_dte_ticket='BOLETA_ELECTRONICA'):
+        """Registra la venta POS (Ticket con folio_dte) y una ANULACION
+        APROBADA por la máquina, como la deja anular_transaccion_pos."""
+        ticket = Ticket.objects.create(
+            vendedor=self.env['vendedor'], sucursal=self.sucursal,
+            correlativo=dte.numero_documento, estado='PAGADO',
+            subTotal=int(dte.monto_con_iva), total=int(dte.monto_con_iva),
+            responsable=self.user.username, tipo_dte=tipo_dte_ticket,
+            folio_dte=dte.numero_documento, dte_generado=True,
+        )
+        cfg, _ = ConfiguracionPOS.objects.get_or_create(
+            sucursal=self.sucursal, nombre='POS TEST',
+            defaults={'tipo_pos': 'INGENICO_3500', 'puerto_conexion': 'COM1'},
+        )
+        return TransaccionPOS.objects.create(
+            configuracion_pos=cfg, ticket=ticket,
+            ticket_pos=f'TPOS-ANU-{dte.numero_documento}-{monto}',
+            monto=monto, tipo_transaccion='ANULACION', estado='APROBADA',
+        )
+
+    def _solicitud(self, dte):
+        return service.crear_solicitud_devolucion(
+            dte_original=dte, sucursal=self.sucursal, receptor=_receptor(self.env),
+            motivo='Garantía', usuario=self.user,
+            detalles=[{'dte_producto_id': dte.dte_productos.first().id,
+                       'modo': 'CANTIDAD', 'cantidad': 1}],
+        )
+
+    def test_deteccion_pago_tarjeta_vs_efectivo(self):
+        tarjeta = self._boleta_tarjeta(5400)
+        efectivo = _crear_documento(self.env, 5401, [(self.pt, 1, 11900)], metodo_pago='EFECTIVO')
+
+        tbk = service.pago_transbank_dte(tarjeta)
+        self.assertTrue(tbk['es_transbank'])
+        self.assertEqual(tbk['monto_tarjeta'], 23800)
+        self.assertFalse(tbk['anulado_completo'])
+
+        self.assertFalse(service.pago_transbank_dte(efectivo)['es_transbank'])
+
+    def test_tarjeta_sin_anulacion_solo_advierte(self):
+        boleta = self._boleta_tarjeta(5402)
+        dev = self._solicitud(boleta)  # crear NO se bloquea
+        preview = service.impacto_caja_preview(
+            devolucion=dev, metodo='TRANSFERENCIA_BANCARIA', fecha_imputacion=self.hoy)
+        self.assertFalse(preview['bloqueado'])
+        self.assertTrue(preview['pago_transbank']['es_transbank'])
+        self.assertTrue(any('Transbank' in a for a in preview['advertencias']))
+
+    def test_anulacion_maquina_bloquea_crear(self):
+        boleta = self._boleta_tarjeta(5403)
+        self._anulacion_pos(boleta, 23800)
+        with self.assertRaisesMessage(service.DevolucionGarantiaError,
+                                      'ANULADO por la máquina Transbank'):
+            self._solicitud(boleta)
+
+    def test_anulacion_maquina_bloquea_aprobar_y_preview(self):
+        boleta = self._boleta_tarjeta(5404)
+        dev = self._solicitud(boleta)          # la anulación llega DESPUÉS
+        self._anulacion_pos(boleta, 23800)
+
+        preview = service.impacto_caja_preview(
+            devolucion=dev, metodo='TRANSFERENCIA_BANCARIA', fecha_imputacion=self.hoy)
+        self.assertTrue(preview['bloqueado'])
+        self.assertTrue(preview['pago_transbank']['anulado_completo'])
+
+        with self.assertRaisesMessage(service.DevolucionGarantiaError,
+                                      'ANULADO por la máquina Transbank'):
+            service.aprobar_devolucion(
+                devolucion_id=dev.id, aprobador=self.user,
+                metodo_devolucion='TRANSFERENCIA_BANCARIA', fecha_imputacion=self.hoy)
+        dev.refresh_from_db()
+        self.assertEqual(dev.estado, 'PENDIENTE')  # sin NC, sigue pendiente
+        self.assertIsNone(dev.nota_credito_id)
+
+    def test_anulacion_parcial_no_bloquea(self):
+        boleta = self._boleta_tarjeta(5405)
+        self._anulacion_pos(boleta, 10000)  # < monto pagado con tarjeta
+        dev = self._solicitud(boleta)
+        preview = service.impacto_caja_preview(
+            devolucion=dev, metodo='TRANSFERENCIA_BANCARIA', fecha_imputacion=self.hoy)
+        self.assertFalse(preview['bloqueado'])
+        self.assertTrue(any('PARCIAL' in a for a in preview['advertencias']))
+
+    def test_anulacion_de_otro_folio_no_afecta(self):
+        """El vínculo es por folio+sucursal+tipo: la anulación de OTRA venta
+        no contamina este documento."""
+        boleta = self._boleta_tarjeta(5406)
+        otra = self._boleta_tarjeta(5407)
+        self._anulacion_pos(otra, 23800)
+        self.assertEqual(service.pago_transbank_dte(boleta)['monto_anulado_pos'], 0)
+        self._solicitud(boleta)  # no se bloquea

@@ -56,6 +56,16 @@ GIRO_PARTICULAR_DEFAULT = 'PARTICULAR'
 # (el que decide forma_pago_dte = 2/Crédito al emitir el DTE del ticket).
 METODOS_PAGO_CREDITO = {'CREDITO_TRABAJADOR', 'CREDITO_EXTERNO', 'CONVENIO', 'ORDEN_COMPRA'}
 
+# Métodos de pago que entraron por la MÁQUINA Transbank (tarjeta). Mismo
+# universo que suma `total_transbank` la cuadratura de views_modulo_ventas.
+# Importan porque un ERROR DE COBRO con tarjeta se corrige ANULANDO en la
+# misma máquina (el dinero vuelve solo a la tarjeta del cliente): una NC de
+# devolución de dinero encima de esa anulación paga dos veces.
+METODOS_PAGO_TRANSBANK = {
+    'TBK_DEBITO_POS', 'TBK_CREDITO_POS', 'TBK_PREPAGO_POS',
+    'TBK_POS_INTEGRADO', 'TBK_MANUAL', 'TARJETA_DEBITO', 'TARJETA_CREDITO',
+}
+
 # Métodos de devolución que se imputan a un día de cuadratura (llevan
 # Dte_Detalle_Pago con fecha_pago). NO_AFECTA_CAJA queda fuera a propósito.
 METODOS_DG_CON_IMPUTACION = ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA', 'REBAJA_CREDITO')
@@ -124,6 +134,94 @@ def condicion_pago_dte(dte):
 def metodo_devolucion_sugerido(dte):
     """Método que la UI debe preseleccionar según cómo se vendió el documento."""
     return 'REBAJA_CREDITO' if condicion_pago_dte(dte)['es_credito'] else 'TRANSFERENCIA_BANCARIA'
+
+
+def pago_transbank_dte(dte):
+    """
+    ¿El documento se cobró (total o parcialmente) con tarjeta por la máquina
+    Transbank, y esa venta registra una ANULACIÓN hecha en la máquina?
+
+    Un error de cobro con tarjeta NO se corrige por este módulo: se anula en
+    la misma máquina Transbank y el dinero vuelve a la tarjeta. Si además se
+    aprueba aquí una devolución de dinero, el cliente cobra dos veces. La UI
+    advierte siempre que hubo tarjeta, y se bloquea cuando la anulación por
+    máquina ya está registrada (`TransaccionPOS` tipo ANULACION APROBADA,
+    vía anular_transaccion_pos) y cubre todo lo pagado con tarjeta.
+
+    El vínculo Dte→Ticket es por folio (`Ticket.folio_dte` no es FK ni único):
+    se acota por sucursal + tipo de documento, el mismo criterio que usa el
+    resto del sistema (ej. referencia ANULACION_DTE_{folio}).
+    """
+    from app.models import Ticket, TransaccionPOS
+
+    monto_tarjeta = 0
+    metodos = set()
+    for p in dte.dte_asociado.all():
+        m = (p.metodo_pago or '').upper()
+        if m in METODOS_PAGO_TRANSBANK:
+            metodos.add(m)
+            monto_tarjeta += int(p.monto or 0)
+
+    resultado = {
+        'es_transbank': bool(metodos),
+        'metodos_tarjeta': sorted(metodos),
+        'monto_tarjeta': monto_tarjeta,
+        'monto_anulado_pos': 0,
+        'anulaciones_pos': [],
+        'anulado_completo': False,
+    }
+    if not metodos:
+        return resultado
+
+    tipo_doc = (dte.tipo_documento or '').upper()
+    tipos_ticket = (
+        ['FACTURA_ELECTRONICA', 'FACTURA_EXENTA'] if 'FACTURA' in tipo_doc
+        else ['BOLETA_ELECTRONICA', 'BOLETA']
+    )
+    ticket_ids = list(Ticket.objects.filter(
+        sucursal_id=dte.sucursal_id,
+        folio_dte=dte.numero_documento,
+        tipo_dte__in=tipos_ticket,
+    ).values_list('id', flat=True))
+    if not ticket_ids:
+        return resultado
+
+    monto_anulado = 0
+    detalle = []
+    anulaciones = TransaccionPOS.objects.select_related('usuario_operador').filter(
+        ticket_id__in=ticket_ids, tipo_transaccion='ANULACION', estado='APROBADA',
+    ).order_by('fecha_inicio')
+    for a in anulaciones:
+        monto_anulado += int(a.monto or 0)
+        detalle.append({
+            'fecha': timezone.localtime(a.fecha_inicio).strftime('%d/%m/%Y %H:%M'),
+            'monto': int(a.monto or 0),
+            'operador': a.usuario_operador.username if a.usuario_operador_id else '',
+        })
+    resultado['monto_anulado_pos'] = monto_anulado
+    resultado['anulaciones_pos'] = detalle
+    resultado['anulado_completo'] = 0 < monto_tarjeta <= monto_anulado
+    return resultado
+
+
+def _validar_cobro_transbank_no_anulado(dte, tbk=None):
+    """
+    Bloquea la doble devolución: si el cobro con tarjeta de este documento ya
+    fue ANULADO por la máquina Transbank, el dinero vuelve a la tarjeta por
+    esa vía y no corresponde además una devolución de dinero por aquí. Se
+    valida en el service (no solo en la UI) porque los endpoints reciben el
+    folio/método por JSON.
+    """
+    tbk = tbk or pago_transbank_dte(dte)
+    if tbk['anulado_completo']:
+        ultima = tbk['anulaciones_pos'][-1]
+        raise DevolucionGarantiaError(
+            f'El cobro con tarjeta del documento #{dte.numero_documento} '
+            f'(${tbk["monto_tarjeta"]:,}) ya fue ANULADO por la máquina Transbank '
+            f'(${tbk["monto_anulado_pos"]:,} el {ultima["fecha"]}). El dinero vuelve '
+            f'a la tarjeta del cliente por esa vía: no corresponde una devolución '
+            f'de dinero adicional (sería pagarle dos veces).'
+        )
 
 
 def _validar_metodo_vs_condicion_pago(dte, metodo_devolucion):
@@ -593,6 +691,9 @@ def crear_solicitud_devolucion(*, dte_original, sucursal, receptor, motivo,
         metodo_solicitado, banco, tipo_cuenta, numero_cuenta, cuenta_titular_rut,
     )
 
+    # Cobro con tarjeta ya anulado por la máquina Transbank → doble devolución.
+    _validar_cobro_transbank_no_anulado(dte_original)
+
     lineas, monto_total = _validar_lineas(dte_original, detalles, lock=True)
 
     saldo = saldo_documento(dte_original)
@@ -713,6 +814,10 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
     # nunca la puso ahí. Se valida acá (no solo en la UI) porque el endpoint
     # acepta el método por JSON.
     _validar_metodo_vs_condicion_pago(dte_original, metodo_devolucion)
+
+    # Re-chequeo al aprobar: la anulación por la máquina Transbank pudo
+    # registrarse DESPUÉS de creada la solicitud.
+    _validar_cobro_transbank_no_anulado(dte_original)
 
     fecha_imp = None
     if afecta_caja:
@@ -1011,6 +1116,33 @@ def impacto_caja_preview(*, devolucion, metodo, fecha_imputacion=None):
                 f'corresponde "Rebaja crédito del cliente".'
             )
 
+    # === COBRO POR MÁQUINA TRANSBANK ===
+    # Un error de cobro con tarjeta se corrige anulando en la MISMA máquina
+    # (el dinero vuelve a la tarjeta); esta NC encima sería pagar dos veces.
+    tbk = pago_transbank_dte(devolucion.dte_original)
+    if tbk['anulado_completo']:
+        bloqueado = True
+        ultima = tbk['anulaciones_pos'][-1]
+        advertencias.append(
+            f'BLOQUEADO: el cobro con tarjeta (${tbk["monto_tarjeta"]:,}) ya fue '
+            f'ANULADO por la máquina Transbank (${tbk["monto_anulado_pos"]:,} el '
+            f'{ultima["fecha"]}). El dinero vuelve a la tarjeta por esa vía: aprobar '
+            f'esta devolución pagaría dos veces. Rechace la solicitud.'
+        )
+    elif tbk['es_transbank']:
+        if tbk['monto_anulado_pos']:
+            advertencias.append(
+                f'Esta venta ya registra una anulación PARCIAL por la máquina Transbank '
+                f'(${tbk["monto_anulado_pos"]:,} de ${tbk["monto_tarjeta"]:,} cobrados con '
+                f'tarjeta). Verifique que la devolución no duplique ese monto.'
+            )
+        advertencias.append(
+            f'El documento se cobró con TARJETA por la máquina Transbank '
+            f'(${tbk["monto_tarjeta"]:,}). Si el motivo real es un ERROR DE COBRO, la '
+            f'corrección es anular en la misma máquina (el dinero vuelve a la tarjeta), '
+            f'no esta NC. Apruebe solo si se trata de una garantía.'
+        )
+
     if afecta:
         fecha = fecha_imputacion or timezone.localdate()
         fecha_str = fecha.strftime('%Y-%m-%d')
@@ -1075,6 +1207,7 @@ def impacto_caja_preview(*, devolucion, metodo, fecha_imputacion=None):
         # deshabilita "Aprobar" con cualquiera de las dos.
         'bloqueado': bloqueado,
         'condicion_pago': cond,
+        'pago_transbank': tbk,
         'metodo_sugerido': 'REBAJA_CREDITO' if cond['es_credito'] else 'TRANSFERENCIA_BANCARIA',
     }
 

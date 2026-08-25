@@ -11900,8 +11900,18 @@ function _ecSeccionExistente(r) {
             <div class="ec-chips">${otrasLocales.map(_ecChipVariante).join('')}</div>
         </div>` : '';
 
+    // Tallas repetidas dentro de la MISMA ficha (fusión/consolidación de
+    // códigos, ej. CUECA): avisar y explicar la marca ★ vigente de abajo.
+    const tallasRepetidas = [...new Set(tallas.filter(t => t.talla_repetida).map(t => String(t.talla)))];
+    const avisoRepetidas = tallasRepetidas.length ? `
+        <div class="alert alert-warning py-1 px-2 mb-2" style="font-size:.74rem;">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>Esta ficha tiene talla(s) con SKUs repetidos (<b>${tallasRepetidas.join(', ')}</b>) — herencia de la fusión de códigos.
+            Abajo, la fila <span class="badge bg-success" style="font-size:.62rem;">★ vigente</span> de cada talla es la que tiene más stock o movimiento más reciente: <b>carga el stock ahí</b>.
+        </div>` : '';
+
     return `
         ${dup}
+        ${avisoRepetidas}
         <div class="ec-chips mb-2">
             <span class="badge bg-dark">${p.marca || '-'}</span>
             <span class="badge bg-info text-dark">${p.color || '-'}</span>
@@ -12245,19 +12255,33 @@ function verificarProductoExistenteManual() {
 
                     $('#tablaTallasManual tbody').empty();
                     
-                    // ✅ ORDENAR tallas de menor a mayor
+                    // ✅ ORDENAR tallas de menor a mayor; si la talla está
+                    // repetida en la ficha (fusión de códigos), la fila
+                    // vigente va primero dentro de la misma talla
                     const tallasOrdenadas = [...tallas].sort((a, b) => {
                         const tallaA = parseFloat(String(a.talla).replace(',', '.')) || 0;
                         const tallaB = parseFloat(String(b.talla).replace(',', '.')) || 0;
-                        return tallaA - tallaB;
+                        if (tallaA !== tallaB) return tallaA - tallaB;
+                        return ((b.recomendada ? 1 : 0) - (a.recomendada ? 1 : 0)) ||
+                               ((b.stock || 0) - (a.stock || 0));
                     });
-                    
+
                     tallasOrdenadas.forEach((t, idx) => {
                         console.log(`   ✅ Talla ${t.talla}: SKU=${t.sku}`);
                         const tabIdx = 100 + idx; // TAB solo en stock
                         // Recuperar el stock que el usuario ya haya tipeado para esta
                         // talla/SKU (ver captura arriba); si no hay, arranca en 0.
                         const stockPre = stockPrevioDe(stockPrevioManual, t.sku, t.talla);
+                        // Talla repetida en la ficha (consolidación de códigos):
+                        // marcar la fila vigente y advertir en las demás.
+                        let badgeRepetida = '';
+                        if (t.talla_repetida) {
+                            const infoMov = (t.ultimo_mov ? 'últ. mov ' + t.ultimo_mov : 'sin movimientos') +
+                                            ' · ' + (t.unidades_12m || 0) + ' u movidas en 12 meses';
+                            badgeRepetida = t.recomendada
+                                ? `<span class="badge bg-success" style="font-size:.62rem;" title="Talla repetida en esta ficha (fusión de códigos). Esta fila es la VIGENTE: más stock o movimiento más reciente (${infoMov}). Carga el stock aquí.">★ vigente</span>`
+                                : `<span class="badge bg-secondary" style="font-size:.62rem;" title="Talla repetida en esta ficha (fusión de códigos). SKU sin uso: ${infoMov}. Evita cargar stock aquí.">repetida</span>`;
+                        }
                         const fila = `
                             <tr class="talla-existente">
                                 <td>
@@ -12269,6 +12293,7 @@ function verificarProductoExistenteManual() {
                                                 title="Corregir talla mal registrada — se cambia en TODAS las bodegas">
                                             <i class="bi bi-pencil"></i>
                                         </button>
+                                        ${badgeRepetida}
                                     </div>
                                 </td>
                                 <td>

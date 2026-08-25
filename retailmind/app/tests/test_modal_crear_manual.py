@@ -19,6 +19,7 @@ producto de la lista, y la sugerencia por proveedor:
    tecleado en Identificación es un SKU y no un código de artículo.
 """
 import json
+from datetime import timedelta
 from unittest import mock
 
 from django.test import Client, TestCase
@@ -26,7 +27,8 @@ from django.utils import timezone
 
 from app.models import (
     AtributoOpcion, Categoria, Compras, Compras_Producto, Dte, Dte_Productos,
-    ProductoAtributoValor, Productos_Atributos,
+    Movimientos_Producto, Producto_Talla, ProductoAtributoValor,
+    Productos_Atributos,
 )
 from .factories import (
     crear_empresa, crear_empresa_user, crear_producto_con_talla,
@@ -320,3 +322,80 @@ class SugerenciaSkuEnIdentificacionTest(BaseModalManual):
         status, data = self._get(self.user_a, self.URL, articulo='INEXISTENTE-XL')
         self.assertFalse(data['existe'])
         self.assertIsNone(data['sugerencia_sku'])
+
+
+class TallasRepetidasVerificacionTest(BaseModalManual):
+    """La consolidación de códigos (consolidar_cueca) dejó fichas con la MISMA
+    talla varias veces con SKUs distintos: el backend debe marcar cuál fila es
+    la vigente (más stock; si todo está en 0, la de kardex más reciente) para
+    que el operador sepa en cuál cargar el stock."""
+
+    URL = '/app/verificar_producto_existente/'
+
+    def setUp(self):
+        super().setUp()
+        self.prod_cueca, self.t35_a = crear_producto_con_talla(
+            self.sucursal_a, articulo='CUECA NEGRA', talla='35',
+            sku=4900001, stock=0,
+        )
+        self.t35_b = Producto_Talla.objects.create(
+            producto=self.prod_cueca, talla='35', sku=4900002, stock=4,
+        )
+        self.t36 = Producto_Talla.objects.create(
+            producto=self.prod_cueca, talla='36', sku=4900003, stock=1,
+        )
+
+    def _tallas(self):
+        status, data = self._get(self.user_a, self.URL, articulo='CUECA NEGRA')
+        self.assertEqual(status, 200)
+        self.assertTrue(data['existe'])
+        return {t['sku']: t for t in data['tallas_existentes']}
+
+    def test_marca_la_repetida_con_mas_stock(self):
+        tallas = self._tallas()
+        self.assertTrue(tallas[4900001]['talla_repetida'])
+        self.assertTrue(tallas[4900002]['talla_repetida'])
+        self.assertFalse(tallas[4900001]['recomendada'])
+        self.assertTrue(tallas[4900002]['recomendada'])
+        # La talla única no se marca
+        self.assertFalse(tallas[4900003]['talla_repetida'])
+        self.assertFalse(tallas[4900003]['recomendada'])
+
+    def test_con_todo_en_cero_gana_el_movimiento_mas_reciente(self):
+        Producto_Talla.objects.filter(id=self.t35_b.id).update(stock=0)
+        hoy = timezone.localdate()
+        Movimientos_Producto.objects.create(
+            ProductoTalla=self.t35_a, cantidad=-1,
+            fecha=hoy - timedelta(days=10), tipo_movimiento='EGRESO',
+        )
+        Movimientos_Producto.objects.create(
+            ProductoTalla=self.t35_b, cantidad=-1,
+            fecha=hoy - timedelta(days=200), tipo_movimiento='EGRESO',
+        )
+        tallas = self._tallas()
+        self.assertTrue(tallas[4900001]['recomendada'])
+        self.assertFalse(tallas[4900002]['recomendada'])
+
+    def test_unidades_12m_ignora_movimientos_viejos(self):
+        hoy = timezone.localdate()
+        Movimientos_Producto.objects.create(
+            ProductoTalla=self.t35_b, cantidad=-3,
+            fecha=hoy - timedelta(days=30), tipo_movimiento='EGRESO',
+        )
+        Movimientos_Producto.objects.create(
+            ProductoTalla=self.t35_b, cantidad=-9,
+            fecha=hoy - timedelta(days=400), tipo_movimiento='EGRESO',
+        )
+        tallas = self._tallas()
+        self.assertEqual(tallas[4900002]['unidades_12m'], 3)
+        self.assertEqual(
+            tallas[4900002]['ultimo_mov'],
+            (hoy - timedelta(days=30)).strftime('%d/%m/%Y'),
+        )
+
+    def test_ficha_sin_repetidas_no_marca_nada(self):
+        status, data = self._get(self.user_a, self.URL, articulo='PREDATOR ELITE')
+        self.assertTrue(data['existe'])
+        t = data['tallas_existentes'][0]
+        self.assertFalse(t['talla_repetida'])
+        self.assertFalse(t['recomendada'])

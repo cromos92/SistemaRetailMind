@@ -851,6 +851,9 @@ urlpatterns = [
     path('dte/ajustar_emitido/', views.ajustar_dte_emisor_api, name='ajustar_dte_emisor_api'),
     # Alias semántico: mismo endpoint, detecta pre/post recepción automáticamente.
     path('dte/ajustar_traspaso/', views.ajustar_dte_emisor_api, name='ajustar_traspaso_api'),
+    # Cambio de talla pre-recepcion: mueve unidades entre tallas DENTRO del
+    # mismo folio, sin emitir documento hijo ni mover los totales.
+    path('dte/cambiar_talla/', views.cambiar_talla_dte_traspaso_api, name='cambiar_talla_dte_traspaso_api'),
     # === LIMBO INBOX ===
     path('dtes-en-limbo/', views.dtes_en_limbo, name='dtes_en_limbo'),
     path('dte/obtener_limbo_emisor/', views.obtener_dtes_limbo_emisor_api, name='obtener_dtes_limbo_emisor_api'),

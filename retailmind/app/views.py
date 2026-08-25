@@ -4059,6 +4059,588 @@ def ajustar_dte_emisor_api(request):
         )
 
 
+def _validar_cambio_talla_linea(dp_origen, talla_origen, talla_destino, cantidad,
+                                linea_destino, sucursal_emisora_id):
+    """Valida UN cambio de talla sobre una línea de traspaso pre-recepción.
+
+    Mismo idioma que `_validar_disponible_nc_linea`: devuelve un str con el
+    error, o None si el cambio es válido. Las validaciones AGREGADAS (stock
+    neto por talla, total movido por línea) viven en la vista, porque dependen
+    de todo el payload y no de un cambio aislado.
+    """
+    if talla_destino.id == talla_origen.id:
+        return f'{dp_origen.descripcion}: la talla destino es la misma que la de origen.'
+
+    if talla_destino.producto_id != talla_origen.producto_id:
+        return (
+            f'{dp_origen.descripcion}: solo se puede cambiar a otra talla del MISMO '
+            f'producto. Para cambiar de artículo use Ajustar y emita un DTE nuevo.'
+        )
+
+    if talla_destino.producto.sucursal_id != sucursal_emisora_id:
+        return (
+            f'{dp_origen.descripcion}: la talla {talla_destino.talla} no pertenece a la '
+            f'sucursal emisora del documento.'
+        )
+
+    if cantidad <= 0:
+        return f'{dp_origen.descripcion}: la cantidad a mover debe ser mayor que cero.'
+
+    # Fusionar contra una línea con OTRO precio movería el neto del folio, que
+    # es justamente el invariante que este endpoint promete no tocar.
+    if linea_destino is not None and int(linea_destino.precio or 0) != int(dp_origen.precio or 0):
+        return (
+            f'La talla {talla_destino.talla} ya está en el documento con otro precio '
+            f'(${int(linea_destino.precio or 0):,} vs ${int(dp_origen.precio or 0):,}). '
+            f'Fusionarlas cambiaría el total del folio. Use Ajustar para bajar esta '
+            f'talla y emita un DTE nuevo por la talla correcta.'
+        )
+
+    return None
+
+
+@login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
+@require_http_methods(["POST"])
+def cambiar_talla_dte_traspaso_api(request):
+    """Mueve unidades de una talla a otra DENTRO de un traspaso NO recepcionado.
+
+    Caso real: EDEL despacha 45 pares talla 37 en el folio 17117 y 10 de esos
+    debían ser talla 38. Hasta ahora la única herramienta del emisor era
+    "Ajustar", que solo permite BAJAR cantidades (views.py:3534-3539), así que
+    corregir una talla obligaba a acreditar la línea y emitir un documento
+    nuevo.
+
+    DISEÑO (por qué in-place y no un documento hijo):
+    - El swap es de SUMA CERO: la línea destino hereda `precio`, `costo` y
+      `sobreprecio` de la línea origen, así que monto_neto, monto_con_iva y
+      unidades_productos del folio quedan INVARIANTES. Lo que el SII cruza son
+      los totales, y no se mueven. Hay un assert que lo verifica y revierte
+      toda la transacción si alguna vez dejara de cumplirse.
+    - A diferencia del vecino, este endpoint NO reescribe el cabezal: solo
+      toca `referencias`. Si un DTE legacy ya traía divergencia entre su
+      cabezal y la suma de sus líneas, no la "arreglamos" de callada.
+    - Un documento hijo obligaría a re-fechar el egreso a HOY (saltando de
+      período en los reportes fechados por kardex), quemaría un folio, y
+      dejaría a la sucursal destino recepcionando DOS documentos por UN
+      despacho físico.
+
+    KARDEX: se reutiliza el concepto TRASPASO_SALIDA y se copian `fecha` y
+    `hora` del movimiento original. Sin esa copia el despacho se re-fecha a hoy
+    y los números saltan de período sin que nada falle visiblemente.
+
+    LOTES FIFO: el reingreso de la talla origen CREA lote y la salida de la
+    talla destino CONSUME lotes, en best-effort. El botón Ajustar actual solo
+    suma stock plano sin tocar lotes, y por eso agranda el drift en cada uso;
+    acá el swap es simétrico.
+
+    Body JSON:
+        {"dte_id": int, "motivo": str, "token_operacion": str,
+         "cambios": [{"dte_producto_id": int, "talla_destino_id": int,
+                      "cantidad": int}, ...]}
+
+    `cantidad` es lo que se MUEVE (al revés que Ajustar, que manda la cantidad
+    que queda).
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    dte_id = data.get('dte_id')
+    cambios = data.get('cambios') or []
+    motivo = (data.get('motivo') or '').strip()
+    token_operacion = (data.get('token_operacion') or '').strip()
+
+    if not dte_id:
+        return JsonResponse({'success': False, 'error': 'Falta dte_id.'}, status=400)
+    if not cambios:
+        return JsonResponse({'success': False, 'error': 'Debe indicar al menos un cambio de talla.'}, status=400)
+    if not motivo:
+        return JsonResponse({'success': False, 'error': 'Debe ingresar el motivo del cambio.'}, status=400)
+    if not token_operacion:
+        return JsonResponse({'success': False, 'error': 'Falta token_operacion.'}, status=400)
+
+    sucursal_actual_id = request.session.get('idSucursalActual')
+    if not sucursal_actual_id:
+        return JsonResponse({'success': False, 'error': 'No hay sucursal activa en la sesión.'}, status=400)
+    sucursal_actual_id = int(sucursal_actual_id)
+
+    from decimal import Decimal
+    from .models.dte import NotificacionDTE
+    from .services.inventario_service import consumir_lotes_fifo, crear_lote
+
+    tag_idempotencia = f'[CT:{token_operacion}]'
+
+    try:
+        with transaction.atomic():
+            # -- PASO 1: lock del documento --
+            # Mismo lock que confirmar_recepcion_api, así que esto serializa de
+            # verdad contra la recepción del destino, contra
+            # ajustar_dte_emisor_api y contra un doble submit de sí mismo.
+            try:
+                dte = (
+                    Dte.objects
+                    .select_for_update(of=('self',))
+                    .select_related('emisor', 'receptor', 'sucursal')
+                    .get(id=dte_id)
+                )
+            except Dte.DoesNotExist:
+                return JsonResponse({'success': False, 'error': 'DTE no encontrado.'}, status=404)
+
+            # -- PASO 2: idempotencia (bajo el lock) --
+            if tag_idempotencia in (dte.referencias or ''):
+                return JsonResponse({
+                    'success': True,
+                    'ya_aplicado': True,
+                    'message': f'Este cambio de talla ya fue aplicado al DTE #{dte.numero_documento}.',
+                    'dte_id': dte.id,
+                    'dte_actualizado': {
+                        'monto_neto': float(dte.monto_neto or 0),
+                        'monto_con_iva': float(dte.monto_con_iva or 0),
+                        'unidades_productos': int(dte.unidades_productos or 0),
+                    },
+                    'cambios_aplicados': [],
+                    'stock_delta': [],
+                })
+
+            # -- PASO 3: guards (re-evaluados DESPUÉS del lock) --
+            if dte.tipo_transaccion != 'TRASPASO':
+                return JsonResponse({'success': False, 'error': 'Solo aplica a DTEs de traspaso.'}, status=400)
+            if dte.sucursal_id != sucursal_actual_id:
+                return JsonResponse(
+                    {'success': False, 'error': 'Solo la sucursal emisora puede cambiar tallas de este DTE.'},
+                    status=403,
+                )
+            if dte.estado_dte not in ('EMITIDO', 'ACEPTADO'):
+                return JsonResponse({
+                    'success': False,
+                    'error': f'El DTE está en estado {dte.get_estado_dte_display()}. No se pueden cambiar tallas.',
+                }, status=409)
+            if dte.fecha_recepcion is not None:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'El DTE ya fue recepcionado. Use Ajustar para emitir la NC correspondiente.',
+                }, status=409)
+
+            # -- PASO 4: lock de TODAS las líneas del DTE --
+            # Se bloquean todas (no solo las del payload) porque hay que saber
+            # si la talla destino ya existe como línea, para fusionar en vez de
+            # duplicar: dos Dte_Productos con la misma productoTalla colapsan el
+            # lookup de movimientos, que va indexado por ProductoTalla_id.
+            lineas = list(
+                Dte_Productos.objects
+                .select_for_update(of=('self',))
+                .filter(dte=dte)
+                .select_related('productoTalla__producto')
+                .order_by('id')
+            )
+            lineas_por_id = {l.id: l for l in lineas}
+
+            linea_por_talla = {}
+            for l in lineas:
+                if not l.productoTalla_id:
+                    continue
+                previa = linea_por_talla.get(l.productoTalla_id)
+                if previa is not None and previa.activo and l.activo:
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            f'El DTE tiene dos líneas activas para la misma talla '
+                            f'({l.descripcion}). Corrija el documento antes de cambiar tallas.'
+                        ),
+                    }, status=409)
+                # Preferimos la línea ACTIVA como candidata de fusión.
+                if previa is None or (l.activo and not previa.activo):
+                    linea_por_talla[l.productoTalla_id] = l
+
+            # -- PASO 5: lock del kardex del documento --
+            movs = {
+                m.ProductoTalla_id: m
+                for m in Movimientos_Producto.objects
+                    .select_for_update()
+                    .filter(dte=dte, concepto='TRASPASO_SALIDA', tipo_movimiento='EGRESO')
+                    .order_by('id')
+            }
+
+            # -- PASO 6: destino real del traspaso --
+            sucursal_destino_traspaso = _sucursal_destino_traspaso(dte)
+            if sucursal_destino_traspaso is None:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No se pudo identificar la sucursal destino del traspaso. Revise los movimientos asociados.',
+                }, status=400)
+
+            # -- PASO 7: lock de stock, en UN solo queryset ordenado por id --
+            # El order_by('id') es lo que evita el deadlock entre dos swaps
+            # concurrentes que toquen las mismas tallas.
+            ids_tallas = set()
+            for c in cambios:
+                try:
+                    dp_id = int(c.get('dte_producto_id'))
+                    talla_destino_id = int(c.get('talla_destino_id'))
+                except (TypeError, ValueError):
+                    return JsonResponse({'success': False, 'error': 'Cambio con formato inválido.'}, status=400)
+                dp = lineas_por_id.get(dp_id)
+                if dp is None:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Alguna de las líneas indicadas no pertenece a este DTE.',
+                    }, status=400)
+                if dp.productoTalla_id:
+                    ids_tallas.add(dp.productoTalla_id)
+                ids_tallas.add(talla_destino_id)
+
+            tallas = {
+                t.id: t
+                for t in Producto_Talla.objects
+                    .select_for_update(of=('self',))
+                    .select_related('producto')
+                    .filter(id__in=ids_tallas)
+                    .order_by('id')
+            }
+
+            # -- PASO 8: PRIMERA PASADA, valida todo sin escribir nada --
+            normalizados = []
+            mover_por_linea = {}
+            neto_por_talla = {}
+
+            for c in cambios:
+                dp_id = int(c.get('dte_producto_id'))
+                talla_destino_id = int(c.get('talla_destino_id'))
+                try:
+                    cantidad = int(c.get('cantidad', 0))
+                except (TypeError, ValueError):
+                    return JsonResponse({'success': False, 'error': 'Cantidad inválida en un cambio.'}, status=400)
+
+                dp_origen = lineas_por_id[dp_id]
+                if not dp_origen.activo:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'La línea {dp_origen.descripcion} está desactivada; no se puede cambiar su talla.',
+                    }, status=400)
+
+                talla_origen = tallas.get(dp_origen.productoTalla_id)
+                talla_destino = tallas.get(talla_destino_id)
+                if talla_origen is None:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'La línea {dp_origen.descripcion} no tiene talla asociada.',
+                    }, status=400)
+                if talla_destino is None:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'La talla destino indicada no existe.',
+                    }, status=400)
+
+                linea_destino = linea_por_talla.get(talla_destino_id)
+                err = _validar_cambio_talla_linea(
+                    dp_origen, talla_origen, talla_destino, cantidad,
+                    linea_destino, dte.sucursal_id,
+                )
+                if err:
+                    payload_err = {'success': False, 'error': err}
+                    if 'otro precio' in err:
+                        payload_err['precio_distinto'] = True
+                    return JsonResponse(payload_err, status=409)
+
+                # Fail-closed: sin movimiento de despacho no sabemos qué se
+                # despachó realmente. El vecino acredita stock a ciegas en este
+                # mismo caso (views.py:3612-3617, fuera del `if mov is not None`)
+                # y produce doble crédito silencioso.
+                if talla_origen.id not in movs:
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            f'La línea {dp_origen.descripcion} no tiene movimiento de despacho '
+                            f'asociado (traspaso legacy). No se puede cambiar la talla.'
+                        ),
+                    }, status=409)
+
+                mover_por_linea[dp_id] = mover_por_linea.get(dp_id, 0) + cantidad
+                neto_por_talla[talla_origen.id] = neto_por_talla.get(talla_origen.id, 0) + cantidad
+                neto_por_talla[talla_destino.id] = neto_por_talla.get(talla_destino.id, 0) - cantidad
+
+                normalizados.append({
+                    'dp_origen': dp_origen,
+                    'talla_origen': talla_origen,
+                    'talla_destino': talla_destino,
+                    'cantidad': cantidad,
+                })
+
+            # Agregado por línea: dos cambios sobre la misma línea no pueden
+            # sobregirarla entre ambos.
+            for dp_id, total in mover_por_linea.items():
+                dp = lineas_por_id[dp_id]
+                if total > int(dp.stock or 0):
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            f'{dp.descripcion}: se intenta mover {total} unidades pero la línea '
+                            f'solo tiene {int(dp.stock or 0)}.'
+                        ),
+                    }, status=400)
+
+            # Agregado por talla: se valida el NETO, no el bruto, para que una
+            # rotación 37->38 y 38->39 en la misma pasada no falle contra stock
+            # que el propio request está liberando.
+            for talla_id, neto in neto_por_talla.items():
+                if neto >= 0:
+                    continue
+                talla = tallas[talla_id]
+                disponible = int(talla.stock or 0)
+                if disponible + neto < 0:
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            f'Stock insuficiente en la talla {talla.talla} (SKU {talla.sku}). '
+                            f'Disponible: {disponible}, se necesitan: {abs(neto)}.'
+                        ),
+                        'stock_insuficiente': True,
+                        'sku': talla.sku,
+                        'disponible_origen': disponible,
+                        'solicitado': abs(neto),
+                    }, status=409)
+
+            # Invariante ANTES: se mide sobre las líneas, no sobre el cabezal,
+            # para no arrastrar una divergencia previa del documento.
+            def _totales_lineas():
+                agg = (
+                    Dte_Productos.objects
+                    .filter(dte=dte, activo=True)
+                    .aggregate(neto=Sum(F('stock') * F('precio')), uds=Sum('stock'))
+                )
+                return Decimal(str(agg['neto'] or 0)), int(agg['uds'] or 0)
+
+            neto_antes, uds_antes = _totales_lineas()
+
+            # -- PASO 9: SEGUNDA PASADA, aplica --
+            hoy = timezone.now()
+            usuario = request.user.username
+            marca = hoy.strftime('%Y-%m-%d %H:%M')
+            cambios_aplicados = []
+
+            for n in normalizados:
+                dp_origen = n['dp_origen']
+                talla_origen = n['talla_origen']
+                talla_destino = n['talla_destino']
+                cantidad = n['cantidad']
+                mov_origen = movs[talla_origen.id]
+
+                # (a) baja la línea origen. NUNCA se borra: un modal ya abierto
+                # en la sucursal destino manda dte_producto_id viejos y
+                # confirmar_recepcion_api descarta en silencio los que no
+                # resuelven.
+                dp_origen.stock = int(dp_origen.stock or 0) - cantidad
+                if dp_origen.stock <= 0:
+                    dp_origen.stock = 0
+                    dp_origen.activo = False
+                dp_origen.save(update_fields=['stock', 'activo'])
+
+                # (b) línea destino: fusionar / reactivar / crear
+                linea_destino = linea_por_talla.get(talla_destino.id)
+                linea_creada = False
+                if linea_destino is not None:
+                    if linea_destino.activo:
+                        linea_destino.stock = int(linea_destino.stock or 0) + cantidad
+                        linea_destino.save(update_fields=['stock'])
+                    else:
+                        linea_destino.stock = cantidad
+                        linea_destino.activo = True
+                        linea_destino.save(update_fields=['stock', 'activo'])
+                else:
+                    linea_destino = Dte_Productos.objects.create(
+                        dte=dte,
+                        productoTalla=talla_destino,
+                        descripcion=f"{talla_destino.producto.articulo} - Talla {talla_destino.talla}",
+                        costo=dp_origen.costo,
+                        sobreprecio=dp_origen.sobreprecio,
+                        precio=dp_origen.precio,
+                        stock=cantidad,
+                        activo=True,
+                    )
+                    linea_creada = True
+                    linea_por_talla[talla_destino.id] = linea_destino
+                    lineas_por_id[linea_destino.id] = linea_destino
+
+                # (c) stock plano: devuelve al origen, saca del destino
+                Producto_Talla.objects.filter(id=talla_origen.id).update(stock=F('stock') + cantidad)
+                Producto_Talla.objects.filter(id=talla_destino.id).update(stock=F('stock') - cantidad)
+
+                # (d) lotes FIFO, simétrico y best-effort (un fallo de lotes
+                # nunca es un 500 en este repo; queda para reconciliación).
+                try:
+                    consumir_lotes_fifo(talla_destino, cantidad)
+                    crear_lote(
+                        talla_origen,
+                        cantidad,
+                        costo_unitario=dp_origen.costo,
+                        sobreprecio_unitario=dp_origen.sobreprecio,
+                        precio_venta_unitario=dp_origen.precio,
+                        dte=dte,
+                        movimiento=mov_origen,
+                        fecha_ingreso=mov_origen.fecha,
+                        observaciones=f'CAMBIO TALLA reingreso DTE #{dte.numero_documento}',
+                    )
+                except Exception:
+                    logger.warning(
+                        "Cambio de talla DTE %s: falló la capa de lotes FIFO (sku_origen=%s sku_destino=%s cantidad=%s)",
+                        dte.numero_documento, talla_origen.sku, talla_destino.sku, cantidad,
+                        exc_info=True,
+                    )
+
+                nota = f' [CAMBIO TALLA {marca} por {usuario}: {talla_origen.talla}->{talla_destino.talla} x{cantidad}]'
+
+                # (e) kardex origen: menos egreso (la cantidad es negativa)
+                mov_origen.cantidad = int(mov_origen.cantidad or 0) + cantidad
+                mov_origen.observaciones = ((mov_origen.observaciones or '') + nota)[:500]
+                if mov_origen.cantidad == 0:
+                    # Se deja la fila como evidencia de que esa talla estuvo en
+                    # el despacho, pero CANCELADA para que las vistas de kardex
+                    # que filtran estado='COMPLETADO' no la cuenten.
+                    mov_origen.estado = 'CANCELADO'
+                    mov_origen.save(update_fields=['cantidad', 'observaciones', 'estado'])
+                else:
+                    mov_origen.save(update_fields=['cantidad', 'observaciones'])
+
+                # (f) kardex destino: más egreso, con la fecha/hora del despacho
+                # ORIGINAL. Sin esa copia el movimiento se re-fecha a hoy y salta
+                # de período en todos los reportes fechados por kardex.
+                mov_destino = movs.get(talla_destino.id)
+                if mov_destino is not None:
+                    mov_destino.cantidad = int(mov_destino.cantidad or 0) - cantidad
+                    mov_destino.observaciones = ((mov_destino.observaciones or '') + nota)[:500]
+                    if mov_destino.estado == 'CANCELADO' and mov_destino.cantidad != 0:
+                        mov_destino.estado = 'COMPLETADO'
+                        mov_destino.save(update_fields=['cantidad', 'observaciones', 'estado'])
+                    else:
+                        mov_destino.save(update_fields=['cantidad', 'observaciones'])
+                else:
+                    mov_destino = Movimientos_Producto.objects.create(
+                        dte=dte,
+                        ProductoTalla=talla_destino,
+                        sucursal_origen=dte.sucursal,
+                        sucursal_destino=sucursal_destino_traspaso,
+                        cantidad=-cantidad,
+                        costo=dp_origen.costo,
+                        sobreprecio=dp_origen.sobreprecio,
+                        precio=dp_origen.precio,
+                        concepto='TRASPASO_SALIDA',
+                        tipo_movimiento='EGRESO',
+                        estado='COMPLETADO',
+                        responsable=usuario,
+                        fecha=mov_origen.fecha,
+                        hora=mov_origen.hora,
+                        observaciones=(
+                            f'Traspaso DTE #{dte.numero_documento} - Origen: {dte.sucursal.alias}'
+                            f' -> Destino: {sucursal_destino_traspaso.alias}.{nota}'
+                        )[:500],
+                    )
+                    movs[talla_destino.id] = mov_destino
+
+                cambios_aplicados.append({
+                    'dte_producto_id_origen': dp_origen.id,
+                    'talla_origen': talla_origen.talla,
+                    'sku_origen': talla_origen.sku,
+                    'dte_producto_id_destino': linea_destino.id,
+                    'talla_destino': talla_destino.talla,
+                    'sku_destino': talla_destino.sku,
+                    'cantidad': cantidad,
+                    'linea_destino_creada': linea_creada,
+                })
+
+            # -- PASO 10: assert de invariante --
+            # Un swap es de suma cero por construcción. Si esta igualdad se
+            # rompe, el folio declarado cambió de valor: se revierte TODO.
+            neto_despues, uds_despues = _totales_lineas()
+            if neto_despues != neto_antes or uds_despues != uds_antes:
+                raise ValueError(
+                    f'El cambio de talla alteró el total del documento '
+                    f'(neto {neto_antes} -> {neto_despues}, unidades {uds_antes} -> {uds_despues}). '
+                    f'Operación revertida.'
+                )
+
+            # -- PASO 11: traza --
+            # Solo se toca `referencias`. El cabezal (monto_neto, monto_con_iva,
+            # unidades_productos) queda EXACTAMENTE como estaba: es lo que se
+            # declaró y el swap no lo mueve.
+            resumen = ', '.join(
+                f"{c['talla_origen']}->{c['talla_destino']} x{c['cantidad']}"
+                for c in cambios_aplicados
+            )
+            registro = (
+                f"\n[CAMBIO TALLA] {marca} {usuario}: {resumen}."
+                f" Motivo: {motivo} {tag_idempotencia}"
+            )
+            dte.referencias = ((dte.referencias or '') + registro).strip()
+            dte.save(update_fields=['referencias'])
+
+            # -- PASO 12: aviso al receptor (best-effort) --
+            try:
+                if dte.receptor:
+                    NotificacionDTE.objects.create(
+                        dte=dte,
+                        empresa_receptora=dte.receptor,
+                        tipo='CORRECCION_RECEPCION',
+                        sucursal=sucursal_destino_traspaso,
+                        sucursal_reportante=dte.sucursal,
+                        usuario_que_proceso=request.user,
+                        titulo=f"Tallas corregidas en DTE #{dte.numero_documento}",
+                        mensaje=(
+                            f"{dte.sucursal.alias} corrigió tallas antes de la recepción: {resumen}. "
+                            f"Motivo: {motivo}. Revise el detalle actualizado antes de recepcionar."
+                        ),
+                    )
+            except Exception:
+                logger.warning(
+                    "Cambio de talla DTE %s: no se pudo crear la notificación al receptor",
+                    dte.numero_documento, exc_info=True,
+                )
+
+            # Stock resultante de las tallas tocadas, para el panel de resultado.
+            stock_delta = [
+                {
+                    'sku': row['sku'],
+                    'talla': row['talla'],
+                    'sucursal_id': dte.sucursal_id,
+                    'sucursal_alias': dte.sucursal.alias,
+                    'stock': int(row['stock'] or 0),
+                }
+                for row in Producto_Talla.objects
+                    .filter(id__in=list(neto_por_talla.keys()))
+                    .order_by('sku')
+                    .values('sku', 'talla', 'stock')
+            ]
+
+            logger.info(
+                "Cambio de talla aplicado: dte=%s sucursal=%s usuario=%s cambios=%s",
+                dte.numero_documento, dte.sucursal.alias, usuario, resumen,
+            )
+
+            return JsonResponse({
+                'success': True,
+                'ya_aplicado': False,
+                'message': f'Tallas corregidas en el DTE #{dte.numero_documento}: {resumen}.',
+                'dte_id': dte.id,
+                'dte_actualizado': {
+                    'monto_neto': float(dte.monto_neto or 0),
+                    'monto_con_iva': float(dte.monto_con_iva or 0),
+                    'unidades_productos': int(dte.unidades_productos or 0),
+                },
+                'cambios_aplicados': cambios_aplicados,
+                'stock_delta': stock_delta,
+            })
+
+    except ValueError as ve:
+        logger.warning("Cambio de talla rechazado: %s", ve)
+        return JsonResponse({'success': False, 'error': str(ve)}, status=409)
+    except Exception as e:
+        logger.exception("Error al cambiar talla de DTE traspaso")
+        return JsonResponse(
+            {'success': False, 'error': f'Error al cambiar talla: {e}'},
+            status=500,
+        )
+
 # ========== VISTAS PARA REGULARIZACIÓN DE RECEPCIONES ==========
 
 @login_required
@@ -16823,6 +17405,10 @@ def api_detalle_dte_completo(request, dte_id):
                     'producto': producto.articulo if producto else detalle.descripcion,
                     'sku': sku,
                     'talla': detalle.productoTalla.talla if detalle.productoTalla else None,
+                    # PKs necesarios para el selector de talla del modal
+                    # "Cambiar talla"; aditivos, ningun consumidor los pisa.
+                    'producto_talla_id': detalle.productoTalla_id,
+                    'producto_id': producto.id if producto else None,
                     'descripcion': detalle.descripcion,
                     'cantidad': detalle.stock,
                     'precio_unitario': detalle.precio,
@@ -20609,9 +21195,13 @@ def verificar_producto_existente(request):
         logger.warning("Error calculando bodegas_codigo: %s", e)
 
     if producto:
-        # Obtener las tallas existentes con sus SKUs
-        tallas_existentes = Producto_Talla.objects.filter(producto=producto).values('talla', 'sku', 'stock')
-        tallas_lista = list(Producto_Talla.objects.filter(producto=producto).values_list('talla', flat=True))
+        # Obtener las tallas existentes con sus SKUs (con id para poder cruzar
+        # contra el kardex cuando la ficha trae tallas repetidas)
+        tallas_existentes = list(
+            Producto_Talla.objects.filter(producto=producto)
+            .values('id', 'talla', 'sku', 'stock')
+        )
+        tallas_lista = [t['talla'] for t in tallas_existentes]
         
         # ========== NORMALIZACIÓN DE TALLAS PARA COMPARACIÓN FLEXIBLE ==========
         def normalizar_talla_verificacion(talla_str):
@@ -20646,7 +21236,54 @@ def verificar_producto_existente(request):
                 except (ValueError, TypeError):
                     pass
         # ==========================================================================
-        
+
+        # ========== TALLAS REPETIDAS (consolidación CUECA y similares) ==========
+        # Una ficha puede traer la MISMA talla varias veces con SKUs distintos
+        # (consolidar_cueca fusionó familias enteras en una ficha): en pantalla
+        # salen dos filas "35" iguales y no se sabe en cuál cargar el stock.
+        # Se marca la fila "viva" de cada talla repetida: la de más stock; si
+        # todas están en 0, la de movimiento de kardex más reciente.
+        _grupos_talla = {}
+        for _t in tallas_existentes:
+            _clave = normalizar_talla_verificacion(_t['talla']) or str(_t['talla'])
+            _grupos_talla.setdefault(_clave, []).append(_t)
+        _ids_repetidos = [_t['id'] for _g in _grupos_talla.values()
+                          if len(_g) > 1 for _t in _g]
+        _movs_talla = {}
+        if _ids_repetidos:
+            from django.db.models.functions import Abs
+            _hace_1_ano = timezone.localdate() - timedelta(days=365)
+            for _r in (Movimientos_Producto.objects
+                       .filter(ProductoTalla_id__in=_ids_repetidos)
+                       .values('ProductoTalla_id')
+                       .annotate(ultimo=Max('fecha'),
+                                 u12m=Sum(Abs('cantidad'),
+                                          filter=Q(fecha__gte=_hace_1_ano)))):
+                _movs_talla[_r['ProductoTalla_id']] = _r
+        for _t in tallas_existentes:
+            _m = _movs_talla.get(_t['id'])
+            _t['talla_repetida'] = False
+            _t['recomendada'] = False
+            _t['ultimo_mov'] = (_m['ultimo'].strftime('%d/%m/%Y')
+                                if _m and _m['ultimo'] else None)
+            _t['unidades_12m'] = int(_m['u12m'] or 0) if _m else 0
+        for _g in _grupos_talla.values():
+            if len(_g) < 2:
+                continue
+            for _t in _g:
+                _t['talla_repetida'] = True
+
+            def _clave_viva(t):
+                _u = _movs_talla.get(t['id'], {}).get('ultimo')
+                return ((t['stock'] or 0), _u.toordinal() if _u else 0, t['id'])
+            max(_g, key=_clave_viva)['recomendada'] = True
+        if _ids_repetidos:
+            logger.info(
+                "Codigo con tallas repetidas en la ficha: articulo=%r producto=%s filas=%s",
+                articulo, producto.id, len(_ids_repetidos),
+            )
+        # ==========================================================================
+
         # ✅ Incluir info del producto encontrado (incluyendo precios para comparación)
         producto_encontrado = {
             'id': producto.id,

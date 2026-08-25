@@ -229,6 +229,10 @@ def api_buscar_dte_devolucion_garantia(request):
         # quien crea la solicitud no le prometa efectivo a un cliente que
         # compró a crédito.
         'condicion_pago': service.condicion_pago_dte(dte),
+        # Cobro con tarjeta por la máquina Transbank: un error de cobro se
+        # ANULA en la misma máquina, no por este módulo. Si la anulación por
+        # máquina ya está registrada, el wizard bloquea la solicitud.
+        'pago_transbank': service.pago_transbank_dte(dte),
         'receptor_actual': {
             'rut': receptor.rut if receptor else '',
             'nombre': receptor.nombre if receptor else '',
@@ -550,6 +554,9 @@ def api_detalle_solicitud_devolucion_garantia(request, devolucion_id):
             # cliente nunca la puso ahí). El front preselecciona
             # `metodo_sugerido` con esto.
             'condicion_pago': service.condicion_pago_dte(dte),
+            # Cobro por máquina Transbank: si registra anulación por la máquina,
+            # aprobar sería doble devolución (el preview de impacto lo bloquea).
+            'pago_transbank': service.pago_transbank_dte(dte),
             'metodo_sugerido': service.metodo_devolucion_sugerido(dte),
             'sucursal': devolucion.sucursal.alias if devolucion.sucursal else '',
             'transferencia': {
