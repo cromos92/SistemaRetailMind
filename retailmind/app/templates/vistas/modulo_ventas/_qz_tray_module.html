@@ -6,7 +6,7 @@
     - nombre_impresora: str
   Expone globalmente: imprimirConQZ(ticketData) → Promise<bool>
   El formato se elige por ticketData.modulo_origen:
-    CAMBIO_DEVOLUCION | DEVOLUCION_GARANTIA | ECOMMERCE | (default) venta
+    CAMBIO_DEVOLUCION | DEVOLUCION_GARANTIA | ECOMMERCE | RETIRO_ECOMMERCE | (default) venta
 {% endcomment %}
 <script>
 /* ================================================================
@@ -463,6 +463,102 @@ function _generarEscPosEcommerce(td) {
     return c;
 }
 
+/* ── Generar comandos ESC/POS — modo RETIRO ECOMMERCE ───────── */
+/* Comprobante de retiro en tienda: lo firma quien retira y la tienda archiva
+   el ORIGINAL. Sale en DOBLE copia (original tienda + copia cliente) dentro
+   del mismo trabajo de impresión — por eso se arma acá con dos cortes y no
+   con copies:2 en la config (que es compartida por todos los formatos).
+   El código de retiro llega ya ENMASCARADO desde AllConnected (****20):
+   este módulo jamás ve ni imprime el código completo. */
+function _generarEscPosRetiroEcommerce(td) {
+    const suc   = td.sucursal_info || {};
+    const items = td.items || [];
+
+    const empNombre = String(suc.empresa || 'MI EMPRESA');
+    const empRut    = String(suc.rut_empresa || '');
+    const numRM     = String(td.ticket_rm || '');
+    const numCanal  = String(td.numero_pedido || '');
+    const fechaStr  = td.fecha || new Date().toLocaleString('es-CL');
+
+    const c = [];
+    c.push(_EP.INIT, _EP.CP1252);
+
+    function _copia(rotulo) {
+        // Cabecera empresa / sucursal
+        c.push(_EP.CENTER, _EP.BOLD_ON);
+        c.push(empNombre.toUpperCase().substring(0, _COLS) + _N);
+        c.push(_EP.BOLD_OFF);
+        const aliasSuc = String(suc.alias || td.sucursal || '');
+        if (aliasSuc)      c.push(aliasSuc.toUpperCase().substring(0, _COLS) + _N);
+        if (suc.direccion) c.push(String(suc.direccion).substring(0, _COLS) + _N);
+        if (empRut)        c.push('RUT: ' + empRut + _N);
+        c.push(_sep('='));
+
+        // Título
+        c.push(_EP.CENTER, _EP.DBL_ON, _EP.BOLD_ON);
+        c.push('COMPROBANTE DE RETIRO' + _N);
+        c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
+        c.push(rotulo + _N);
+        c.push(_sep('-'));
+
+        // Ticket RM en doble tamaño (el dato que se escanea/busca en el mesón)
+        c.push(_EP.CENTER, _EP.DBL_ON, _EP.BOLD_ON);
+        c.push(numRM + _N);
+        c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
+        if (numCanal) c.push('Pedido: ' + numCanal + _N);
+        c.push(_sep('='));
+
+        // Datos del retiro
+        c.push(_EP.LEFT);
+        c.push(_row('Fecha:', fechaStr));
+        if (td.cliente)             c.push(_row('Cliente:', String(td.cliente)));
+        if (td.retirador_nombre)    c.push(_row('Retira:', String(td.retirador_nombre)));
+        if (td.retirador_documento) c.push(_row('Documento:', String(td.retirador_documento)));
+        if (td.usuario_pos)         c.push(_row('Atendio:', String(td.usuario_pos)));
+        if (td.codigo_enmascarado)  c.push(_row('Codigo:', String(td.codigo_enmascarado)));
+        c.push(_sep('-'));
+
+        // Ítems entregados (sin precios: NO es boleta)
+        c.push(_EP.BOLD_ON);
+        c.push(_pL('CANT', 5) + _pL('PRODUCTO', 43) + _N);
+        c.push(_EP.BOLD_OFF);
+        let totalUnidades = 0;
+        items.forEach(function (p) {
+            const cant = parseInt(p.cantidad, 10) || 1;
+            totalUnidades += cant;
+            const nom   = String(p.nombre || p.sku || 'Item').toUpperCase().substring(0, 43);
+            const talla = p.talla ? ' TALLA:' + String(p.talla).toUpperCase() : '';
+            const sku   = p.sku ? 'SKU:' + p.sku : '';
+            c.push(_pR(String(cant), 4) + ' ' + _pL(nom, 43) + _N);
+            if (sku || talla) c.push('     ' + _pL((sku + talla).substring(0, 43), 43) + _N);
+        });
+        c.push(_sep('='));
+        c.push(_EP.CENTER, _EP.BOLD_ON);
+        c.push('TOTAL: ' + totalUnidades + ' UNIDAD' + (totalUnidades === 1 ? '' : 'ES') + _N);
+        c.push(_EP.BOLD_OFF);
+        c.push(_sep('='));
+
+        // Barcode del ticket (sin el prefijo RM-, igual que el resto del módulo)
+        if (numRM) c.push(..._escBarcode128(numRM.replace('RM-', '')));
+        c.push(_sep('-'));
+
+        // Firma — el papel que reemplaza al que se perdía
+        c.push(_EP.LEFT);
+        c.push(_N, _N, _N);
+        c.push('________________________________' + _N);
+        c.push('        Firma del retirador' + _N);
+        c.push(_N);
+        c.push(_EP.CENTER);
+        c.push('Acta digital registrada en el sistema' + _N);
+        c.push(_EP.FEED3, _EP.CUT);
+    }
+
+    _copia('ORIGINAL - TIENDA');
+    _copia('COPIA - CLIENTE');
+
+    return c;
+}
+
 /* ── Generar comandos ESC/POS — modo DEVOLUCION POR GARANTIA ── */
 function _generarEscPosDevolucionGarantia(td) {
     const suc  = td.sucursal || {};
@@ -731,6 +827,9 @@ function _generarEscPos(td) {
     }
     if (td.modulo_origen === 'ECOMMERCE') {
         return _generarEscPosEcommerce(td);
+    }
+    if (td.modulo_origen === 'RETIRO_ECOMMERCE') {
+        return _generarEscPosRetiroEcommerce(td);
     }
     return _generarEscPosVenta(td);
 }

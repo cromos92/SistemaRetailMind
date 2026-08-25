@@ -17,6 +17,7 @@ from django.utils import timezone
 from django.views.generic import ListView
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
 from django.db import models as django_models
 
 from app.models import (
@@ -323,12 +324,19 @@ def _generar_numero_ticket_rm():
     return f'RM-{base}'
 
 
-def _respuesta_pedido_existente(existente, correlativo_in='', correlativo_numero_in=None):
+def _respuesta_pedido_existente(existente, correlativo_in='', correlativo_numero_in=None,
+                                es_retiro_local_in=None):
     """Respuesta idempotente para un pedido ya ingresado."""
     if correlativo_in and correlativo_in != (existente.correlativo or ''):
         existente.correlativo = correlativo_in
         existente.correlativo_numero = correlativo_numero_in
         existente.save(update_fields=['correlativo', 'correlativo_numero'])
+    # Retiro en tienda: si el flag llega en un pull posterior (p. ej. el pedido
+    # entró antes del deploy de AllConnected que lo manda) se actualiza.
+    # ``None`` = la clave NO vino en el payload (orquestador viejo): no tocar.
+    if es_retiro_local_in is not None and bool(es_retiro_local_in) != existente.es_retiro_local:
+        existente.es_retiro_local = bool(es_retiro_local_in)
+        existente.save(update_fields=['es_retiro_local'])
     return {
         'ok': True,
         'numero_ticket_rm': existente.numero_ticket_rm,
@@ -397,6 +405,11 @@ def _ingestar_pedido_dict(data):
     except (TypeError, ValueError):
         correlativo_numero_in = None
 
+    # Retiro en tienda (CONTRATO AllConnected→ERP): tolerante a deploy
+    # asimétrico — si la clave no viene (orquestador viejo) queda None y el
+    # pedido se crea con el default False, sin romper la ingesta.
+    es_retiro_local_in = data.get('es_retiro_local', None)
+
     # Verificar si ya existe un pedido para este canal+número (idempotente)
     existente = PedidoEcommerce.objects.filter(
         numero_pedido_canal=numero_pedido_canal,
@@ -405,7 +418,8 @@ def _ingestar_pedido_dict(data):
     if existente:
         # Actualizar el folio si AllConnected ya lo asignó y antes estaba vacío
         # (o cambió). NUNCA pisar un folio ya seteado con un valor vacío entrante.
-        return _respuesta_pedido_existente(existente, correlativo_in, correlativo_numero_in)
+        return _respuesta_pedido_existente(existente, correlativo_in, correlativo_numero_in,
+                                           es_retiro_local_in)
 
     try:
         # Validar stock en la sucursal para determinar sub-estado inicial
@@ -425,6 +439,7 @@ def _ingestar_pedido_dict(data):
             cliente_documento=data.get('cliente_documento', ''),
             coupon_code=(data.get('coupon_code', '') or ''),
             from_app=bool(data.get('from_app')),
+            es_retiro_local=bool(es_retiro_local_in),
             subtotal=data.get('subtotal', 0),
             descuento=data.get('descuento', 0),
             impuestos=data.get('impuestos', 0),
@@ -487,7 +502,8 @@ def _ingestar_pedido_dict(data):
             canal_origen=canal_origen,
         ).first()
         if existente:
-            return _respuesta_pedido_existente(existente, correlativo_in, correlativo_numero_in)
+            return _respuesta_pedido_existente(existente, correlativo_in, correlativo_numero_in,
+                                               es_retiro_local_in)
         return {'ok': False, 'error': 'Pedido duplicado no pudo recuperarse', 'status': 409}
     except Exception as e:
         return {'ok': False, 'error': str(e), 'status': 500}
@@ -3927,4 +3943,296 @@ def exportar_pedidos_csv(request):
             p.minutos_espera_factura if p.minutos_espera_factura is not None else '',
         ])
 
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Retiro de pedido en tienda (mesón PAO1) — valida contra AllConnected
+# ---------------------------------------------------------------------------
+# El código de retiro vive SOLO en AllConnected (nunca se ingesta acá): estas
+# vistas son el frontend del POS. Son vistas INTERNAS con login del ERP a
+# propósito — la API Bearer anónima no registraría QUÉ VENDEDOR entregó.
+
+def _verificar_permiso_retiro(request, tipo_permiso):
+    """Permiso sobre la opción de menú ``retiro_pedido_local`` (fail-closed)."""
+    sucursal_id = request.session.get('idSucursalActual')
+    if not PermisoRol.tiene_permiso(request.user, 'retiro_pedido_local',
+                                    tipo_permiso, sucursal_id=sucursal_id):
+        return JsonResponse({
+            'ok': False,
+            'error': f'No tiene permiso para esta acción (requiere {tipo_permiso})',
+        }, status=403)
+    return None
+
+
+def _enmascarar_documento(documento):
+    """RUT/documento para bitácora: solo los últimos 4 caracteres visibles.
+
+    El documento COMPLETO queda en el ActaRetiro de AllConnected (la prueba de
+    entrega); en el historial local va enmascarado para no regar el dato.
+    """
+    d = str(documento or '').strip()
+    if len(d) <= 4:
+        return '*' * len(d)
+    return '*' * (len(d) - 4) + d[-4:]
+
+
+@login_required
+@require_http_methods(["GET"])
+def retiro_pedido_local(request):
+    """GET /app/ecommerce/retiro-local/ — pantalla del mesón.
+
+    Lista los pedidos de retiro (es_retiro_local=True) que AllConnected ya
+    liberó (estado_logistica_canal=LISTO_RETIRO) para la sucursal en sesión,
+    con un input autofocus para escanear/teclear (patrón ajuste_stock_rapido):
+    acepta el código de 6 dígitos, el ticket RM o el QR RETIRO|numero|codigo.
+    """
+    if not PermisoRol.tiene_permiso(request.user, 'retiro_pedido_local', 'puede_ver',
+                                    sucursal_id=request.session.get('idSucursalActual')):
+        messages.error(request, 'No tiene permiso para acceder al retiro de pedidos.')
+        return redirect('verHome')
+
+    session_suc = (
+        request.session.get('idSucursalActual')
+        or request.session.get('sucursalActual')
+    )
+    sucursal = None
+    if session_suc:
+        sucursal = Sucursal.objects.select_related('empresa').filter(id=session_suc).first()
+
+    pedidos = PedidoEcommerce.objects.none()
+    if sucursal is not None:
+        # LISTO_RETIRO = AllConnected ya lo liberó a retiro (pasó la espera de
+        # pago). CANCELADO fuera; el resto de advertencias (sin boleta,
+        # bloqueado, ya retirado) las decide AllConnected en la validación.
+        pedidos = (
+            PedidoEcommerce.objects
+            .filter(
+                es_retiro_local=True,
+                estado_logistica_canal='LISTO_RETIRO',
+                sucursal=sucursal,
+            )
+            .exclude(estado='CANCELADO')
+            .select_related('sucursal')
+            .order_by('fecha_recepcion')
+        )
+        pedidos = _scope_empresa_pedidos(pedidos, request.user)
+
+    from app.views_modulo_ventas import _get_qz_config
+    context = {
+        'pedidos': pedidos,
+        'sucursal': sucursal,
+        'sin_sucursal': sucursal is None,
+        'qz_config': _get_qz_config(session_suc),
+    }
+    return render(request, 'app/ecommerce/retiro_pedido_local.html', context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_retiro_validar(request):
+    """POST /app/ecommerce/retiro-local/validar/ — preview del retiro.
+
+    Reenvía la validación a AllConnected (timeout 3s, NO consume el código).
+    Body: {"numero_ticket_rm" o "numero_pedido_canal", "codigo": "483920"}.
+    """
+    denegado = _verificar_permiso_retiro(request, 'puede_ver')
+    if denegado:
+        return denegado
+
+    try:
+        data = json.loads(request.body or '{}')
+    except (TypeError, ValueError):
+        return JsonResponse({'ok': False, 'code': 'BAD_REQUEST',
+                             'message': 'Body JSON inválido'}, status=400)
+
+    numero_ticket_rm = str(data.get('numero_ticket_rm') or '').strip()
+    numero_pedido_canal = str(data.get('numero_pedido_canal') or '').strip()
+    codigo = str(data.get('codigo') or '').strip()
+
+    if not codigo or not codigo.isdigit() or len(codigo) != 6:
+        return JsonResponse({'ok': False, 'code': 'BAD_REQUEST',
+                             'message': 'El código de retiro son 6 dígitos.'}, status=400)
+    if not numero_ticket_rm and not numero_pedido_canal:
+        return JsonResponse({'ok': False, 'code': 'BAD_REQUEST',
+                             'message': 'Falta el número de pedido (ticket RM o N° canal).'},
+                            status=400)
+
+    from app.services.allconnected_pedidos_service import validar_retiro
+    resultado = validar_retiro(
+        numero_ticket_rm=numero_ticket_rm,
+        numero_pedido_canal=numero_pedido_canal,
+        codigo=codigo,
+    )
+    # El status HTTP siempre es 200: el front decide por resultado['ok'] y
+    # resultado['code'] (CODIGO_INVALIDO / NO_ENCONTRADO / LOCK / NO_DISPONIBLE).
+    return JsonResponse(resultado)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_retiro_confirmar(request):
+    """POST /app/ecommerce/retiro-local/confirmar/ — registra el retiro.
+
+    Reenvía la confirmación a AllConnected (que crea el ActaRetiro, marca el
+    código USADO y avisa al ecommerce) y deja rastro local en
+    HistorialPedidoEcommerce con el vendedor de la sesión.
+
+    CONFIRMAR ≠ IMPRIMIR: si esta llamada responde ok, el acta ya quedó en
+    AllConnected aunque después falle la impresora.
+    """
+    denegado = _verificar_permiso_retiro(request, 'puede_crear')
+    if denegado:
+        return denegado
+
+    sucursal, error_resp = _get_session_sucursal(request)
+    if error_resp:
+        return error_resp
+
+    try:
+        data = json.loads(request.body or '{}')
+    except (TypeError, ValueError):
+        return JsonResponse({'ok': False, 'code': 'BAD_REQUEST',
+                             'message': 'Body JSON inválido'}, status=400)
+
+    numero_ticket_rm = str(data.get('numero_ticket_rm') or '').strip()
+    numero_pedido_canal = str(data.get('numero_pedido_canal') or '').strip()
+    codigo = str(data.get('codigo') or '').strip()
+    retirador_nombre = str(data.get('retirador_nombre') or '').strip()
+    retirador_documento = str(data.get('retirador_documento') or '').strip()
+    tipo_documento = str(data.get('tipo_documento') or 'RUT').strip().upper()
+    es_titular = bool(data.get('es_titular'))
+
+    if not codigo or not codigo.isdigit() or len(codigo) != 6:
+        return JsonResponse({'ok': False, 'code': 'BAD_REQUEST',
+                             'message': 'El código de retiro son 6 dígitos.'}, status=400)
+    if not numero_ticket_rm and not numero_pedido_canal:
+        return JsonResponse({'ok': False, 'code': 'BAD_REQUEST',
+                             'message': 'Falta el número de pedido.'}, status=400)
+    if not retirador_documento:
+        return JsonResponse({'ok': False, 'code': 'BAD_REQUEST',
+                             'message': 'Falta el documento de quien retira.'}, status=400)
+    if not retirador_nombre:
+        return JsonResponse({'ok': False, 'code': 'BAD_REQUEST',
+                             'message': 'Falta el nombre de quien retira.'}, status=400)
+    if tipo_documento not in ('RUT', 'PASAPORTE', 'OTRO'):
+        return JsonResponse({'ok': False, 'code': 'BAD_REQUEST',
+                             'message': 'Tipo de documento inválido (RUT/PASAPORTE/OTRO).'},
+                            status=400)
+    if tipo_documento == 'RUT':
+        # Módulo 11 SOLO para RUT (el front ya avisa; acá es el cinturón).
+        from app.models.base import validar_rut_chileno
+        if not validar_rut_chileno(retirador_documento):
+            return JsonResponse({'ok': False, 'code': 'BAD_REQUEST',
+                                 'message': f'El RUT {retirador_documento} no es válido '
+                                            '(dígito verificador).'}, status=400)
+
+    usuario_pos = (request.user.get_full_name() or request.user.username or '').strip()
+    nombre_sucursal = (sucursal.alias or sucursal.nombre or '').strip()
+
+    from app.services.allconnected_pedidos_service import confirmar_retiro
+    resultado = confirmar_retiro(
+        numero_ticket_rm=numero_ticket_rm,
+        numero_pedido_canal=numero_pedido_canal,
+        codigo=codigo,
+        retirador_nombre=retirador_nombre,
+        retirador_documento=retirador_documento,
+        tipo_documento=tipo_documento,
+        es_titular=es_titular,
+        usuario_pos=usuario_pos,
+        sucursal=nombre_sucursal,
+    )
+
+    if resultado.get('ok'):
+        # Rastro local best-effort: el acta YA existe en AllConnected; si esto
+        # falla no se le puede decir al vendedor que el retiro no ocurrió.
+        try:
+            pedido_local = None
+            if numero_ticket_rm:
+                pedido_local = PedidoEcommerce.objects.filter(
+                    numero_ticket_rm=numero_ticket_rm).first()
+            if pedido_local is None and numero_pedido_canal:
+                pedido_local = PedidoEcommerce.objects.filter(
+                    numero_pedido_canal=numero_pedido_canal).first()
+            if pedido_local is not None:
+                titular_txt = ', titular' if es_titular else ', tercero'
+                HistorialPedidoEcommerce.objects.create(
+                    pedido=pedido_local,
+                    estado_anterior=pedido_local.estado,
+                    estado_nuevo=pedido_local.estado,
+                    sub_estado_anterior=pedido_local.sub_estado,
+                    sub_estado_nuevo=pedido_local.sub_estado,
+                    usuario=request.user,
+                    tipo_evento='CAMBIO_ESTADO',
+                    motivo=(
+                        f"Retiro en tienda confirmado (acta AllConnected "
+                        f"#{resultado.get('acta_id')}). Retiró: {retirador_nombre} "
+                        f"({tipo_documento} {_enmascarar_documento(retirador_documento)}"
+                        f"{titular_txt})."
+                    ),
+                )
+                # Espejo local del estado del canal: AllConnected acaba de
+                # marcar ENTREGADO — reflejarlo saca el pedido de la lista del
+                # mesón sin esperar la próxima sync de estados.
+                pedido_local.estado_logistica_canal = 'ENTREGADO'
+                pedido_local.fecha_sync_estado_canal = timezone.now()
+                pedido_local.save(update_fields=['estado_logistica_canal',
+                                                 'fecha_sync_estado_canal'])
+        except Exception:
+            logger.exception('Retiro confirmado pero falló el rastro local (%s)',
+                             numero_ticket_rm or numero_pedido_canal)
+
+        # Enriquecer print_data con la sucursal REAL de la sesión para la
+        # cabecera del comprobante (el contrato solo trae el nombre corto).
+        try:
+            empresa = getattr(sucursal, 'empresa', None)
+            pd = resultado.get('print_data') or {}
+            pd.setdefault('sucursal_info', {
+                'empresa': (empresa.nombre if empresa else '') or '',
+                'rut_empresa': (empresa.rut if empresa else '') or '',
+                'alias': sucursal.alias or '',
+                'direccion': sucursal.direccion or '',
+            })
+            resultado['print_data'] = pd
+        except Exception:
+            logger.exception('No se pudo enriquecer print_data del retiro')
+
+    return JsonResponse(resultado)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_retiro_comprobante_pdf(request):
+    """POST /app/ecommerce/retiro-local/comprobante-pdf/ — fallback sin QZ.
+
+    Recibe el ``print_data`` que devolvió la confirmación y responde el
+    comprobante en PDF térmico 80mm (mismo enfoque que la guía de preparación:
+    abre en cualquier navegador, imprime sin QZ Tray).
+    """
+    denegado = _verificar_permiso_retiro(request, 'puede_ver')
+    if denegado:
+        return denegado
+
+    try:
+        data = json.loads(request.body or '{}')
+    except (TypeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'Body JSON inválido'}, status=400)
+
+    print_data = data.get('print_data') or {}
+    if not isinstance(print_data, dict) or not print_data.get('ticket_rm'):
+        return JsonResponse({'ok': False, 'error': 'print_data incompleto'}, status=400)
+
+    from django.http import HttpResponse
+
+    from app.services.pdf_comprobante_retiro import generar_comprobante_retiro_pdf
+
+    try:
+        contenido = generar_comprobante_retiro_pdf(print_data)
+    except Exception:
+        logger.exception('No se pudo generar el PDF del comprobante de retiro')
+        return JsonResponse({'ok': False, 'error': 'No se pudo generar el PDF'}, status=500)
+
+    response = HttpResponse(contenido, content_type='application/pdf')
+    nombre = f"retiro-{print_data.get('ticket_rm', 'pedido')}.pdf"
+    response['Content-Disposition'] = f'inline; filename="{nombre}"'
     return response

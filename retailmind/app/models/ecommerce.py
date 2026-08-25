@@ -173,6 +173,18 @@ class PedidoEcommerce(models.Model):
         help_text='RUT o documento para emisión de DTE',
     )
 
+    # Retiro en tienda (flag que viene en la ingesta de AllConnected).
+    # El pedido NO se despacha por courier: el cliente lo retira en el mesón
+    # de la sucursal validando un código de 6 dígitos que le llegó por correo.
+    # El CÓDIGO NUNCA viaja a este ERP (decisión de seguridad): el POS lo
+    # valida en vivo contra AllConnected, que es la única fuente de verdad.
+    es_retiro_local = models.BooleanField(
+        default=False, db_index=True,
+        verbose_name='Retiro en tienda',
+        help_text='El cliente retira en la sucursal (no se despacha). '
+                  'Flag informado por AllConnected en la ingesta.',
+    )
+
     # Compra desde la app móvil de fidelización (puntos + dinero)
     coupon_code = models.CharField(
         max_length=50, blank=True, default='', db_index=True,

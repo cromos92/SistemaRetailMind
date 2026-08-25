@@ -1,0 +1,756 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+{% csrf_token %}
+
+{% comment %}
+  Retiro pedido local — pantalla del mesón (PAO1).
+  Flujo teclado-céntrico (patrón ajuste_stock_rapido): input AUTOFOCUS que
+  acepta el código de 6 dígitos, el ticket RM o el QR RETIRO|numero|codigo.
+  La validación y la confirmación viajan al orquestador AllConnected (timeout
+  3s del lado servidor): el código de retiro NUNCA vive en este ERP.
+  CONFIRMAR ≠ IMPRIMIR: si la confirmación respondió ok, el acta ya quedó
+  registrada aunque la impresora falle (hay reimpresión y fallback PDF).
+{% endcomment %}
+
+<style>
+    :root {
+        --rt-primary: #1A1A2E;
+        --rt-primary-2: #2a2a4e;
+        --rt-ok: #047857;
+        --rt-ok-bg: #ecfdf5;
+        --rt-ok-br: #a7f3d0;
+        --rt-warn: #9a3412;
+        --rt-warn-bg: #fff7ed;
+        --rt-warn-br: #fed7aa;
+        --rt-err: #991b1b;
+        --rt-err-bg: #fef2f2;
+        --rt-err-br: #fecaca;
+    }
+
+    .retiro-card { border-radius: 16px; overflow: hidden; box-shadow: 0 12px 28px rgba(26,26,46,.12); }
+    .retiro-header {
+        background: linear-gradient(135deg, var(--rt-primary) 0%, var(--rt-primary-2) 100%);
+        color: #fff; padding: 1rem 1.25rem;
+    }
+    .retiro-header h5 { margin: 0; font-weight: 600; font-size: 1.05rem; }
+    .retiro-card .card-body { padding: 1rem 1.25rem 1.25rem; }
+
+    .retiro-input { min-height: 52px; font-size: 18px !important; letter-spacing: .06em; }
+    .form-label { font-weight: 600; font-size: .92rem; margin-bottom: .35rem; }
+
+    /* Panel de estado (debajo del input) */
+    .scan-panel { border-radius: 12px; padding: 12px 14px; margin-top: 10px; display: none; font-size: .95rem; }
+    .scan-panel.is-ok   { background: var(--rt-ok-bg);   border: 1px solid var(--rt-ok-br);   color: var(--rt-ok);   display: block; }
+    .scan-panel.is-warn { background: var(--rt-warn-bg); border: 1px solid var(--rt-warn-br); color: var(--rt-warn); display: block; }
+    .scan-panel.is-err  { background: var(--rt-err-bg);  border: 1px solid var(--rt-err-br);  color: var(--rt-err);  display: block; }
+
+    /* Advertencias EN GRANDE: la vendedora tiene al cliente enfrente */
+    .advertencia-grande {
+        border-radius: 14px; padding: 18px 16px; margin-bottom: 10px;
+        font-size: 1.2rem; font-weight: 800; text-align: center;
+        background: var(--rt-err-bg); border: 2px solid var(--rt-err); color: var(--rt-err);
+    }
+    .advertencia-grande.is-warn { background: var(--rt-warn-bg); border-color: var(--rt-warn); color: var(--rt-warn); }
+    .advertencia-grande .adv-detalle { display: block; font-size: .95rem; font-weight: 500; margin-top: 4px; }
+
+    /* Lista de retiros pendientes */
+    .tabla-retiros tbody tr { cursor: pointer; }
+    .tabla-retiros tbody tr:hover { background: #f5f5f7; }
+    .tabla-retiros tbody tr.is-selected { background: #eef2ff; outline: 2px solid #6366f1; }
+    .badge-listo { background: #ecfdf5; color: var(--rt-ok); border: 1px solid var(--rt-ok-br); border-radius: 999px; padding: 3px 10px; font-weight: 700; font-size: .75rem; }
+
+    /* Preview del pedido */
+    .preview-items { border: 1px dashed #cbd5e1; border-radius: 12px; padding: 10px 12px; background: #f8fafc; }
+    .preview-items .item-linea { padding: 4px 0; border-bottom: 1px dotted #e2e8f0; font-size: .95rem; }
+    .preview-items .item-linea:last-child { border-bottom: none; }
+
+    .confirm-actions .btn { min-height: 48px; font-size: .95rem; }
+    .paso-oculto { display: none; }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0">
+                        <i class="ri-qr-scan-2-line me-1"></i> Retiro pedido local
+                        {% if sucursal %}<span class="text-muted fs-6">— {{ sucursal.alias|default:sucursal.nombre }}</span>{% endif %}
+                    </h4>
+                    <div class="page-title-right d-none d-md-block">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="{% url 'verHome' %}">Inicio</a></li>
+                            <li class="breadcrumb-item"><a href="{% url 'pedidos_ecommerce_list' %}">Ecommerce</a></li>
+                            <li class="breadcrumb-item active">Retiro local</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if sin_sucursal %}
+        <div class="alert alert-warning">
+            <i class="ri-error-warning-line me-1"></i>
+            No hay sucursal activa en la sesión. Selecciona una sucursal para operar el retiro.
+        </div>
+        {% endif %}
+
+        <div class="row justify-content-center">
+            <div class="col-xl-8 col-lg-10 col-md-12">
+
+                <!-- ══════ PASO 1: escanear / validar ══════ -->
+                <div class="card retiro-card" id="cardScan">
+                    <div class="retiro-header">
+                        <h5><i class="ri-barcode-line me-2"></i>Validar retiro</h5>
+                    </div>
+                    <div class="card-body">
+                        <label for="scanInput" class="form-label">
+                            Escanea el QR del correo, o teclea el código de 6 dígitos / el ticket RM
+                        </label>
+                        <input type="text" class="form-control retiro-input" id="scanInput"
+                               placeholder="483920  ·  RM-1A2B3C4D  ·  QR del correo"
+                               autocomplete="off" spellcheck="false">
+                        <div id="scanPanel" class="scan-panel"></div>
+
+                        <div class="mt-3">
+                            <span class="text-muted" style="font-size:.85rem;">
+                                <i class="ri-information-line"></i>
+                                El código lo dicta el cliente (le llegó por correo). Si solo tienes el
+                                código, primero selecciona el pedido en la lista de abajo.
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ══════ PASO 2: preview + confirmación ══════ -->
+                <div class="card retiro-card mt-3 paso-oculto" id="cardPreview">
+                    <div class="retiro-header">
+                        <h5><i class="ri-shopping-bag-3-line me-2"></i>Pedido <span id="pvTicket"></span></h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="pvAdvertencias"></div>
+
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-6"><b>Cliente:</b> <span id="pvCliente"></span></div>
+                            <div class="col-md-6"><b>Documento:</b> <span id="pvClienteDoc"></span></div>
+                            <div class="col-md-6"><b>Pedido canal:</b> <span id="pvNumeroCanal"></span></div>
+                            <div class="col-md-6"><b>Total:</b> <span id="pvTotal"></span></div>
+                        </div>
+                        <div class="preview-items mb-3" id="pvItems"></div>
+
+                        <!-- Datos del retirador (documento PRIMERO) -->
+                        <div id="bloqueRetirador">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Tipo documento</label>
+                                    <select class="form-select retiro-input" id="tipoDocumento">
+                                        <option value="RUT" selected>RUT</option>
+                                        <option value="PASAPORTE">Pasaporte</option>
+                                        <option value="OTRO">Otro</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-8">
+                                    <label for="docRetirador" class="form-label">
+                                        Documento de quien retira
+                                        <span class="text-muted" style="font-weight:400;">(Enter vacío = es el titular)</span>
+                                    </label>
+                                    <input type="text" class="form-control retiro-input" id="docRetirador"
+                                           placeholder="12.345.678-9" autocomplete="off">
+                                    <div id="docPanel" class="scan-panel"></div>
+                                </div>
+                                <div class="col-12" id="wrapNombre" style="display:none;">
+                                    <label for="nombreRetirador" class="form-label">Nombre de quien retira (tercero)</label>
+                                    <input type="text" class="form-control retiro-input" id="nombreRetirador"
+                                           placeholder="Nombre y apellido" autocomplete="off">
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="chkTitular" checked disabled>
+                                        <label class="form-check-label" for="chkTitular" id="lblTitular">
+                                            Retira el titular del pedido
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 d-flex gap-2 confirm-actions">
+                            <button type="button" class="btn btn-soft-secondary" id="btnCancelarPreview">
+                                <i class="ri-arrow-left-line"></i> Volver
+                            </button>
+                            <button type="button" class="btn btn-success flex-grow-1" id="btnConfirmar" disabled>
+                                <i class="ri-check-double-line me-1"></i> Confirmar retiro e imprimir
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ══════ PASO 3: retiro registrado ══════ -->
+                <div class="card retiro-card mt-3 paso-oculto" id="cardExito">
+                    <div class="retiro-header" style="background:linear-gradient(135deg,#047857 0%,#059669 100%);">
+                        <h5><i class="ri-checkbox-circle-line me-2"></i>Retiro registrado</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="scan-panel is-ok" style="display:block;" id="exitoDetalle"></div>
+                        <div class="scan-panel is-warn" id="exitoAvisoImpresion"></div>
+                        <div class="mt-3 d-flex gap-2 flex-wrap confirm-actions">
+                            <button type="button" class="btn btn-outline-primary" id="btnReimprimir">
+                                <i class="ri-printer-line me-1"></i> Reimprimir comprobante
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="btnPdf">
+                                <i class="ri-file-pdf-2-line me-1"></i> Comprobante PDF
+                            </button>
+                            <button type="button" class="btn btn-success flex-grow-1" id="btnNuevoRetiro">
+                                <i class="ri-add-line me-1"></i> Nuevo retiro
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ══════ Retiros pendientes de la sucursal ══════ -->
+                <div class="card retiro-card mt-3" id="cardLista">
+                    <div class="retiro-header">
+                        <h5><i class="ri-store-2-line me-2"></i>Listos para retiro en esta sucursal
+                            <span class="badge bg-light text-dark ms-2">{{ pedidos|length }}</span>
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0 tabla-retiros align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Ticket RM</th>
+                                        <th>Pedido canal</th>
+                                        <th>Cliente</th>
+                                        <th class="text-end">Total</th>
+                                        <th>Recibido</th>
+                                        <th>Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyRetiros">
+                                    {% for p in pedidos %}
+                                    <tr data-ticket="{{ p.numero_ticket_rm }}"
+                                        data-numero-canal="{{ p.numero_pedido_canal }}"
+                                        data-cliente="{{ p.cliente_nombre }}"
+                                        data-doc="{{ p.cliente_documento }}">
+                                        <td class="fw-bold">{{ p.numero_ticket_rm }}</td>
+                                        <td>{{ p.numero_pedido_canal }}</td>
+                                        <td>{{ p.cliente_nombre }}</td>
+                                        <td class="text-end">${{ p.total|floatformat:0 }}</td>
+                                        <td>{{ p.fecha_recepcion|date:"d/m H:i" }}</td>
+                                        <td><span class="badge-listo">LISTO RETIRO</span></td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr><td colspan="6" class="text-center text-muted py-4">
+                                        No hay pedidos de retiro liberados para esta sucursal.
+                                        <br><span style="font-size:.85rem;">Un pedido aparece acá cuando central lo libera
+                                        (LISTO_RETIRO). Si el cliente insiste, escanea igual su QR: la validación
+                                        consulta al sistema central en vivo.</span>
+                                    </td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    const URL_VALIDAR   = "{% url 'api_retiro_validar' %}";
+    const URL_CONFIRMAR = "{% url 'api_retiro_confirmar' %}";
+    const URL_PDF       = "{% url 'api_retiro_comprobante_pdf' %}";
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    const scanInput  = document.getElementById('scanInput');
+    const scanPanel  = document.getElementById('scanPanel');
+    const cardScan    = document.getElementById('cardScan');
+    const cardPreview = document.getElementById('cardPreview');
+    const cardExito   = document.getElementById('cardExito');
+    const cardLista   = document.getElementById('cardLista');
+
+    // Estado del flujo
+    let seleccion = null;        // {ticket, numeroCanal, cliente, doc} de la fila elegida
+    let validado  = null;        // respuesta ok de /validar (pedido, items, advertencias)
+    let pendiente = null;        // {numero_ticket_rm, numero_pedido_canal, codigo} en curso
+    let printData = null;        // print_data del último retiro confirmado (reimpresión)
+    let bloqueadoPorAdvertencia = false;
+
+    /* ── helpers UI ─────────────────────────────────────────── */
+    function panel(el, tipo, html) {
+        el.className = 'scan-panel is-' + tipo;
+        el.innerHTML = html;
+    }
+    function limpiarPanel(el) { el.className = 'scan-panel'; el.innerHTML = ''; }
+    function clp(v) { return '$' + (parseInt(v, 10) || 0).toLocaleString('es-CL'); }
+    function esc(t) {
+        return String(t == null ? '' : t).replace(/[&<>"']/g, function (ch) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+        });
+    }
+    function normalizarDoc(d) {
+        return String(d || '').replace(/\./g, '').replace(/\s/g, '').replace(/-/g, '').toUpperCase();
+    }
+
+    // Módulo 11 SOLO para RUT (mismo algoritmo que el backend)
+    function rutValido(rut) {
+        const limpio = normalizarDoc(rut);
+        if (limpio.length < 2) return false;
+        const cuerpo = limpio.slice(0, -1);
+        const dv = limpio.slice(-1);
+        if (!/^\d+$/.test(cuerpo)) return false;
+        let suma = 0, mult = 2;
+        for (let i = cuerpo.length - 1; i >= 0; i--) {
+            suma += parseInt(cuerpo[i], 10) * mult;
+            mult = (mult < 7) ? mult + 1 : 2;
+        }
+        const resto = 11 - (suma % 11);
+        const dvCalc = (resto === 11) ? '0' : (resto === 10) ? 'K' : String(resto);
+        return dv === dvCalc;
+    }
+
+    /* ── fetch con timeout: JAMÁS un spinner infinito frente al cliente ── */
+    function fetchConTimeout(url, body, ms) {
+        const ctrl = new AbortController();
+        const timer = setTimeout(function () { ctrl.abort(); }, ms || 10000);
+        return fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify(body),
+            signal: ctrl.signal
+        }).finally(function () { clearTimeout(timer); });
+    }
+
+    const MSG_CONTINGENCIA =
+        '<b>Sistema de validación no disponible.</b><br>' +
+        'Usar el procedimiento manual de contingencia (hoja del mesón: pedido, ' +
+        'nombre, documento, hora y código dictado) y registrar el retiro después.';
+
+    /* ── selección de fila ──────────────────────────────────── */
+    const filas = document.querySelectorAll('#tbodyRetiros tr[data-ticket]');
+    function seleccionarFila(tr) {
+        filas.forEach(function (f) { f.classList.remove('is-selected'); });
+        if (!tr) { seleccion = null; return; }
+        tr.classList.add('is-selected');
+        seleccion = {
+            ticket: tr.dataset.ticket,
+            numeroCanal: tr.dataset.numeroCanal,
+            cliente: tr.dataset.cliente,
+            doc: tr.dataset.doc
+        };
+        panel(scanPanel, 'ok',
+            '<b>' + esc(seleccion.ticket) + '</b> — ' + esc(seleccion.cliente) +
+            '. Ahora ingresa el <b>código de 6 dígitos</b> que dicta el cliente.');
+        scanInput.focus();
+    }
+    filas.forEach(function (tr) {
+        tr.addEventListener('click', function () { seleccionarFila(tr); });
+    });
+
+    /* ── parseo del input: QR | ticket RM | código 6 dígitos ── */
+    function procesarEntrada(valor) {
+        const v = String(valor || '').trim();
+        if (!v) return;
+
+        // 1) QR del correo: RETIRO|<numero>|<codigo>
+        if (/^retiro\|/i.test(v)) {
+            const partes = v.split('|');
+            if (partes.length >= 3) {
+                const numero = partes[1].trim();
+                const codigo = partes[2].trim();
+                if (!/^\d{6}$/.test(codigo)) {
+                    panel(scanPanel, 'err', 'QR inválido: el código no son 6 dígitos.');
+                    return;
+                }
+                if (/^RM-?/i.test(numero)) {
+                    validar({ numero_ticket_rm: numero.toUpperCase(), codigo: codigo });
+                } else {
+                    validar({ numero_pedido_canal: numero, codigo: codigo });
+                }
+                return;
+            }
+            panel(scanPanel, 'err', 'QR inválido (formato RETIRO|numero|codigo).');
+            return;
+        }
+
+        // 2) Ticket RM (escaneado del papel o tecleado): selecciona el pedido
+        if (/^RM-?[A-Z0-9]{4,}$/i.test(v)) {
+            const ticket = v.toUpperCase().startsWith('RM-') ? v.toUpperCase() : 'RM-' + v.toUpperCase().slice(2);
+            let fila = null;
+            filas.forEach(function (tr) {
+                if (tr.dataset.ticket.toUpperCase() === ticket) fila = tr;
+            });
+            if (fila) {
+                seleccionarFila(fila);
+            } else {
+                // No está en la lista local: igual se permite (la verdad la
+                // tiene AllConnected). Queda seleccionado "a mano".
+                seleccion = { ticket: ticket, numeroCanal: '', cliente: '', doc: '' };
+                filas.forEach(function (f) { f.classList.remove('is-selected'); });
+                panel(scanPanel, 'warn',
+                    '<b>' + esc(ticket) + '</b> no aparece en la lista local, pero se validará ' +
+                    'contra el sistema central. Ingresa el <b>código de 6 dígitos</b>.');
+            }
+            scanInput.value = '';
+            scanInput.focus();
+            return;
+        }
+
+        // 3) Código de 6 dígitos: necesita saber DE QUÉ pedido es
+        if (/^\d{6}$/.test(v)) {
+            let objetivo = seleccion;
+            if (!objetivo && filas.length === 1) {
+                seleccionarFila(filas[0]);
+                objetivo = seleccion;
+            }
+            if (!objetivo) {
+                panel(scanPanel, 'warn',
+                    'Primero selecciona el pedido en la lista (o escanea el QR del correo, ' +
+                    'que trae pedido y código juntos).');
+                return;
+            }
+            validar({
+                numero_ticket_rm: objetivo.ticket || '',
+                numero_pedido_canal: objetivo.ticket ? '' : (objetivo.numeroCanal || ''),
+                codigo: v
+            });
+            return;
+        }
+
+        // 4) Último intento: ¿coincide con un N° de pedido del canal?
+        let filaCanal = null;
+        filas.forEach(function (tr) {
+            if (tr.dataset.numeroCanal === v) filaCanal = tr;
+        });
+        if (filaCanal) { seleccionarFila(filaCanal); scanInput.value = ''; return; }
+
+        panel(scanPanel, 'err',
+            'No se reconoce el formato. Acepta: código de 6 dígitos, ticket RM (RM-XXXXXXXX) ' +
+            'o el QR del correo.');
+    }
+
+    scanInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            procesarEntrada(scanInput.value);
+        }
+    });
+
+    /* ── PASO 2: validar (preview, NO consume el código) ────── */
+    const MAPA_ADVERTENCIAS = {
+        'ya_retirado': ['ESTE PEDIDO YA FUE RETIRADO', 'NO ENTREGAR. Revisa el detalle con central antes de hacer nada.', true],
+        'cancelado':   ['PEDIDO CANCELADO', 'NO ENTREGAR. El pedido fue cancelado en el canal.', true],
+        'sin_boleta':  ['PEDIDO SIN BOLETA', 'NO ENTREGAR. Primero debe facturarse en el módulo ecommerce.', true],
+        'bloqueado':   ['PEDIDO BLOQUEADO', 'NO ENTREGAR. Hay una incidencia abierta en el sistema central.', true]
+    };
+
+    function validar(datos) {
+        pendiente = {
+            numero_ticket_rm: datos.numero_ticket_rm || '',
+            numero_pedido_canal: datos.numero_pedido_canal || '',
+            codigo: datos.codigo
+        };
+        panel(scanPanel, 'warn', '<i class="ri-loader-4-line"></i> Validando contra el sistema central...');
+
+        fetchConTimeout(URL_VALIDAR, pendiente, 10000)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.ok) {
+                    pendiente = null;
+                    const code = data.code || '';
+                    if (code === 'NO_DISPONIBLE' || code === 'NO_CONFIGURADO') {
+                        panel(scanPanel, 'err', MSG_CONTINGENCIA);
+                    } else if (code === 'LOCK') {
+                        panel(scanPanel, 'err', '<b>Pedido bloqueado por intentos fallidos.</b><br>' +
+                            esc(data.message || 'Espera 15 minutos y reintenta.'));
+                    } else if (code === 'CODIGO_INVALIDO') {
+                        panel(scanPanel, 'err', '<b>Código incorrecto.</b> ' +
+                            esc(data.message || 'Verifica con el cliente y reintenta.'));
+                    } else {
+                        panel(scanPanel, 'err', esc(data.message || data.error || 'No se pudo validar.'));
+                    }
+                    scanInput.value = '';
+                    scanInput.focus();
+                    return;
+                }
+                validado = data;
+                mostrarPreview(data);
+            })
+            .catch(function () {
+                pendiente = null;
+                panel(scanPanel, 'err', MSG_CONTINGENCIA);
+                scanInput.focus();
+            });
+    }
+
+    function mostrarPreview(data) {
+        const ped = data.pedido || {};
+        document.getElementById('pvTicket').textContent = pendiente.numero_ticket_rm || ped.numero_pedido_canal || '';
+        document.getElementById('pvCliente').textContent = ped.cliente_nombre || '—';
+        document.getElementById('pvClienteDoc').textContent = ped.cliente_documento || '—';
+        document.getElementById('pvNumeroCanal').textContent = ped.numero_pedido_canal || '—';
+        document.getElementById('pvTotal').textContent = clp(ped.total);
+
+        // Ítems
+        const cont = document.getElementById('pvItems');
+        cont.innerHTML = '';
+        (data.items || []).forEach(function (it) {
+            const div = document.createElement('div');
+            div.className = 'item-linea';
+            div.innerHTML = '<b>' + (parseInt(it.cantidad, 10) || 1) + ' x</b> ' + esc(it.nombre || it.sku || 'Ítem') +
+                (it.talla ? ' — Talla <b>' + esc(it.talla) + '</b>' : '') +
+                (it.sku ? ' <span class="text-muted">(SKU ' + esc(it.sku) + ')</span>' : '');
+            cont.appendChild(div);
+        });
+        if (!(data.items || []).length) {
+            cont.innerHTML = '<span class="text-muted">Sin detalle de ítems.</span>';
+        }
+
+        // Advertencias EN GRANDE — las bloqueantes apagan el botón confirmar
+        const advCont = document.getElementById('pvAdvertencias');
+        advCont.innerHTML = '';
+        bloqueadoPorAdvertencia = false;
+        (data.advertencias || []).forEach(function (adv) {
+            const info = MAPA_ADVERTENCIAS[adv] || ['ADVERTENCIA: ' + adv.toUpperCase(), 'Confirma con central antes de entregar.', false];
+            const div = document.createElement('div');
+            div.className = 'advertencia-grande' + (info[2] ? '' : ' is-warn');
+            div.innerHTML = '<i class="ri-alarm-warning-line"></i> ' + esc(info[0]) +
+                '<span class="adv-detalle">' + esc(info[1]) + '</span>';
+            advCont.appendChild(div);
+            if (info[2]) bloqueadoPorAdvertencia = true;
+        });
+
+        // Reset del bloque retirador
+        document.getElementById('docRetirador').value = '';
+        document.getElementById('nombreRetirador').value = '';
+        document.getElementById('wrapNombre').style.display = 'none';
+        document.getElementById('chkTitular').checked = true;
+        document.getElementById('tipoDocumento').value = 'RUT';
+        limpiarPanel(document.getElementById('docPanel'));
+        actualizarBotonConfirmar();
+
+        cardScan.classList.add('paso-oculto');
+        cardLista.classList.add('paso-oculto');
+        cardPreview.classList.remove('paso-oculto');
+        limpiarPanel(scanPanel);
+        scanInput.value = '';
+        setTimeout(function () { document.getElementById('docRetirador').focus(); }, 100);
+    }
+
+    /* ── documento del retirador (PRIMERO) ──────────────────── */
+    const docInput = document.getElementById('docRetirador');
+    const docPanel = document.getElementById('docPanel');
+    const tipoSel  = document.getElementById('tipoDocumento');
+    const chkTitular = document.getElementById('chkTitular');
+    const wrapNombre = document.getElementById('wrapNombre');
+    const nombreInput = document.getElementById('nombreRetirador');
+    const btnConfirmar = document.getElementById('btnConfirmar');
+
+    function datosCliente() {
+        const ped = (validado && validado.pedido) || {};
+        return { nombre: ped.cliente_nombre || '', doc: ped.cliente_documento || '' };
+    }
+
+    function evaluarDocumento() {
+        const cli = datosCliente();
+        const doc = docInput.value.trim();
+        limpiarPanel(docPanel);
+
+        // Enter vacío o mismo documento del cliente → titular (el 90% de los casos)
+        if (!doc || (normalizarDoc(doc) && normalizarDoc(doc) === normalizarDoc(cli.doc))) {
+            chkTitular.checked = true;
+            wrapNombre.style.display = 'none';
+            nombreInput.value = cli.nombre;
+            if (!doc && cli.doc) docInput.value = cli.doc;
+            panel(docPanel, 'ok', 'Retira el <b>titular</b>: ' + esc(cli.nombre || 'cliente del pedido') + '.');
+        } else {
+            chkTitular.checked = false;
+            wrapNombre.style.display = 'block';
+            if (nombreInput.value === cli.nombre) nombreInput.value = '';
+            panel(docPanel, 'warn', 'Documento distinto al del pedido: retira un <b>tercero</b>. Ingresa su nombre.');
+        }
+
+        // Módulo 11 solo si el tipo es RUT
+        const docFinal = docInput.value.trim();
+        if (docFinal && tipoSel.value === 'RUT' && !rutValido(docFinal)) {
+            panel(docPanel, 'err', 'El RUT <b>' + esc(docFinal) + '</b> no es válido (dígito verificador). ' +
+                'Si es un pasaporte u otro documento, cambia el tipo.');
+        }
+        actualizarBotonConfirmar();
+    }
+
+    docInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            evaluarDocumento();
+            if (!chkTitular.checked) {
+                nombreInput.focus();
+            } else if (!btnConfirmar.disabled) {
+                btnConfirmar.focus();
+            }
+        }
+    });
+    docInput.addEventListener('blur', evaluarDocumento);
+    tipoSel.addEventListener('change', evaluarDocumento);
+    nombreInput.addEventListener('input', actualizarBotonConfirmar);
+    nombreInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !btnConfirmar.disabled) { e.preventDefault(); btnConfirmar.focus(); }
+    });
+
+    function actualizarBotonConfirmar() {
+        const doc = docInput.value.trim();
+        const nombreOk = chkTitular.checked || nombreInput.value.trim().length > 2;
+        const rutOk = tipoSel.value !== 'RUT' || (doc && rutValido(doc));
+        btnConfirmar.disabled = bloqueadoPorAdvertencia || !doc || !rutOk || !nombreOk || !pendiente;
+    }
+
+    document.getElementById('btnCancelarPreview').addEventListener('click', volverAScan);
+
+    function volverAScan() {
+        pendiente = null;
+        validado = null;
+        cardPreview.classList.add('paso-oculto');
+        cardExito.classList.add('paso-oculto');
+        cardScan.classList.remove('paso-oculto');
+        cardLista.classList.remove('paso-oculto');
+        scanInput.value = '';
+        setTimeout(function () { scanInput.focus(); }, 100);
+    }
+
+    /* ── PASO 3: confirmar (atómico en el orquestador) ──────── */
+    btnConfirmar.addEventListener('click', function () {
+        if (btnConfirmar.disabled || !pendiente) return;
+        const cli = datosCliente();
+        const body = {
+            numero_ticket_rm: pendiente.numero_ticket_rm,
+            numero_pedido_canal: pendiente.numero_pedido_canal,
+            codigo: pendiente.codigo,
+            retirador_nombre: chkTitular.checked ? (cli.nombre || nombreInput.value.trim()) : nombreInput.value.trim(),
+            retirador_documento: docInput.value.trim(),
+            tipo_documento: tipoSel.value,
+            es_titular: chkTitular.checked
+        };
+        btnConfirmar.disabled = true;
+        btnConfirmar.innerHTML = '<i class="ri-loader-4-line"></i> Registrando...';
+
+        fetchConTimeout(URL_CONFIRMAR, body, 12000)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                btnConfirmar.innerHTML = '<i class="ri-check-double-line me-1"></i> Confirmar retiro e imprimir';
+                if (!data.ok) {
+                    actualizarBotonConfirmar();
+                    if (data.code === 'YA_RETIRADO') {
+                        Swal.fire('Ya retirado', esc(data.message ||
+                            'Este pedido ya fue retirado. NO volver a entregar.'), 'error');
+                    } else if (data.code === 'NO_DISPONIBLE' || data.code === 'NO_CONFIGURADO') {
+                        Swal.fire({ icon: 'error', title: 'Sistema no disponible', html: MSG_CONTINGENCIA });
+                    } else {
+                        Swal.fire('No se pudo registrar', esc(data.message || data.error || 'Reintenta.'), 'error');
+                    }
+                    return;
+                }
+                printData = data.print_data || null;
+                mostrarExito(data);
+                imprimirComprobante(true);
+            })
+            .catch(function () {
+                btnConfirmar.innerHTML = '<i class="ri-check-double-line me-1"></i> Confirmar retiro e imprimir';
+                actualizarBotonConfirmar();
+                // Timeout en la CONFIRMACIÓN: puede haber quedado registrada.
+                // Nunca reintentar a ciegas — verificar antes de volver a entregar.
+                Swal.fire({
+                    icon: 'error', title: 'Sin respuesta del sistema central',
+                    html: 'La confirmación no respondió. <b>Puede haber quedado registrada:</b> ' +
+                          'vuelve a validar el mismo código — si dice "ya retirado", el registro existe. ' +
+                          'Si el sistema sigue caído: procedimiento manual de contingencia.'
+                });
+            });
+    });
+
+    function mostrarExito(data) {
+        const pd = data.print_data || {};
+        document.getElementById('exitoDetalle').innerHTML =
+            '<b>Acta #' + esc(data.acta_id) + '</b> — ' + esc(pd.ticket_rm || '') +
+            '<br>Retiró: <b>' + esc(pd.retirador_nombre || '') + '</b> (' + esc(pd.retirador_documento || '') + ')' +
+            '<br>El acta digital quedó registrada en el sistema central. El papel es el respaldo firmado.';
+        limpiarPanel(document.getElementById('exitoAvisoImpresion'));
+        cardPreview.classList.add('paso-oculto');
+        cardExito.classList.remove('paso-oculto');
+
+        // Sacar la fila de la lista (el pedido ya se entregó)
+        filas.forEach(function (tr) {
+            if (tr.dataset.ticket === (pd.ticket_rm || pendiente.numero_ticket_rm)) tr.remove();
+        });
+        seleccion = null;
+    }
+
+    /* ── impresión: CONFIRMAR ≠ IMPRIMIR ────────────────────── */
+    function imprimirComprobante(primeraVez) {
+        const aviso = document.getElementById('exitoAvisoImpresion');
+        if (!printData) {
+            panel(aviso, 'warn', 'Sin datos de impresión. Usa el botón PDF.');
+            return;
+        }
+        const td = Object.assign({ modulo_origen: 'RETIRO_ECOMMERCE' }, printData);
+        imprimirConQZ(td).then(function (ok) {
+            if (ok) {
+                if (!primeraVez) panel(aviso, 'ok', 'Comprobante reenviado a la impresora.');
+                return;
+            }
+            panel(aviso, 'warn',
+                '<b>El registro quedó OK, pero la impresión falló.</b> ' +
+                'Usa "Reimprimir" cuando la impresora vuelva, o el comprobante PDF.');
+        }).catch(function () {
+            panel(aviso, 'warn',
+                '<b>El registro quedó OK, pero la impresión falló.</b> ' +
+                'Usa "Reimprimir" o el comprobante PDF.');
+        });
+    }
+
+    document.getElementById('btnReimprimir').addEventListener('click', function () {
+        imprimirComprobante(false);
+    });
+
+    document.getElementById('btnPdf').addEventListener('click', function () {
+        if (!printData) return;
+        fetchConTimeout(URL_PDF, { print_data: printData }, 15000)
+            .then(function (r) {
+                if (!r.ok) throw new Error('pdf');
+                return r.blob();
+            })
+            .then(function (blob) {
+                const url = URL.createObjectURL(blob);
+                window.open(url, '_blank');
+                setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+            })
+            .catch(function () {
+                Swal.fire('Error', 'No se pudo generar el comprobante PDF.', 'error');
+            });
+    });
+
+    document.getElementById('btnNuevoRetiro').addEventListener('click', function () {
+        printData = null;
+        volverAScan();
+    });
+
+    // Estado inicial: foco en el input de escaneo
+    setTimeout(function () { scanInput.focus(); }, 150);
+})();
+</script>
+
+{% include 'vistas/modulo_ventas/_qz_tray_module.html' %}
+
+{% include 'layout/footer.html' %}

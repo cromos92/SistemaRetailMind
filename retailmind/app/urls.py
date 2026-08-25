@@ -1755,4 +1755,12 @@ urlpatterns = [
     path('ecommerce/dte/<int:dte_id>/txt/', views_ecommerce.descargar_txt_dte_ecommerce, name='descargar_txt_dte_ecommerce'),
     path('ecommerce/dte/txts-zip/', views_ecommerce.descargar_txts_zip_ecommerce, name='descargar_txts_zip_ecommerce'),
 
+    # Retiro de pedido en tienda (meson PAO1): pantalla interna con login del
+    # ERP que valida el codigo de retiro contra AllConnected e imprime el
+    # comprobante. El codigo NUNCA vive en este ERP.
+    path('ecommerce/retiro-local/', views_ecommerce.retiro_pedido_local, name='retiro_pedido_local'),
+    path('ecommerce/retiro-local/validar/', views_ecommerce.api_retiro_validar, name='api_retiro_validar'),
+    path('ecommerce/retiro-local/confirmar/', views_ecommerce.api_retiro_confirmar, name='api_retiro_confirmar'),
+    path('ecommerce/retiro-local/comprobante-pdf/', views_ecommerce.api_retiro_comprobante_pdf, name='api_retiro_comprobante_pdf'),
+
 ]

@@ -742,3 +742,155 @@ def reportar_sin_stock(pedido, motivo: str = '', items=None) -> dict:
         'detalle': ('AllConnected ya tenía la incidencia abierta.' if ya_existia
                     else 'AllConnected registró la incidencia de sin stock.'),
     }
+
+
+# ---------------------------------------------------------------------------
+# Retiro en tienda (POS RM → AllConnected)
+# ---------------------------------------------------------------------------
+
+# Timeout corto A PROPÓSITO: estas llamadas corren con el CLIENTE parado en el
+# mesón. Si AllConnected no contesta en 3s, la pantalla debe decir "usar
+# procedimiento manual de contingencia" — jamás un spinner infinito. El código
+# de retiro vive SOLO en AllConnected (nunca se ingesta acá), por eso el POS
+# valida en vivo contra él.
+TIMEOUT_RETIRO_SEGUNDOS = 3
+
+_MSG_RETIRO_NO_DISPONIBLE = (
+    'Sistema de validación no disponible. Usar el procedimiento manual de '
+    'contingencia (hoja del mesón) y registrar el retiro después.'
+)
+
+
+def _enmascarar_codigo(codigo):
+    """Enmascara el código de retiro para logs/UI: '483920' → '****20'.
+
+    El código completo NUNCA debe quedar en un log (es lo único que protege
+    el pedido en el mesón).
+    """
+    c = str(codigo or '')
+    if len(c) <= 2:
+        return '*' * len(c)
+    return '*' * (len(c) - 2) + c[-2:]
+
+
+def _llamar_retiro(path, payload, codigo_para_log=''):
+    """POST JSON a un endpoint de retiro de AllConnected. NUNCA lanza.
+
+    Devuelve el dict de la respuesta remota (contrato: siempre trae ``ok``;
+    en error trae ``code`` y ``message``) o un dict de error local con
+    ``code='NO_DISPONIBLE'`` / ``'NO_CONFIGURADO'`` cuando el transporte falla.
+    Se parsea el body JSON aunque el HTTP status no sea 200: el contrato
+    devuelve errores de negocio (CODIGO_INVALIDO/LOCK/YA_RETIRADO) como JSON.
+    """
+    cfg = _config()
+    if not cfg['base_url']:
+        return {
+            'ok': False, 'configurado': False, 'code': 'NO_CONFIGURADO',
+            'message': 'AllConnected no está configurado en este entorno '
+                       '(ALLCONNECTED_API_BASE_URL vacío).',
+        }
+    if not _REQUESTS_OK:
+        return {'ok': False, 'configurado': True, 'code': 'NO_DISPONIBLE',
+                'message': "Falta el paquete 'requests' en este entorno."}
+
+    url = f"{cfg['base_url']}{path}"
+    headers = {
+        cfg['header_name']: cfg['api_key'],
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'RetailMind-RetiroPOS/1.0',
+    }
+    try:
+        r = requests.post(url, json=payload, headers=headers,
+                          timeout=TIMEOUT_RETIRO_SEGUNDOS)
+    except requests.RequestException as exc:
+        # Solo el código ENMASCARADO en el log — jamás el completo.
+        logger.warning('retiro: %s sin respuesta (codigo %s): %s',
+                       path, _enmascarar_codigo(codigo_para_log), exc)
+        return {'ok': False, 'configurado': True, 'code': 'NO_DISPONIBLE',
+                'message': _MSG_RETIRO_NO_DISPONIBLE}
+
+    if r.status_code == 404:
+        # Distinguir "endpoint no deployado" de un 404 de negocio: el contrato
+        # de negocio siempre responde JSON con la clave 'ok'.
+        try:
+            data = r.json()
+        except ValueError:
+            data = None
+        if isinstance(data, dict) and 'ok' in data:
+            data.setdefault('configurado', True)
+            return data
+        return {'ok': False, 'configurado': True, 'code': 'NO_DISPONIBLE',
+                'message': 'AllConnected todavía no expone el endpoint de retiro '
+                           '(deploy pendiente).'}
+
+    try:
+        data = r.json()
+    except ValueError:
+        logger.warning('retiro: respuesta ilegible de %s (HTTP %s)', path, r.status_code)
+        return {'ok': False, 'configurado': True, 'code': 'NO_DISPONIBLE',
+                'message': f'AllConnected respondió HTTP {r.status_code} sin JSON.'}
+
+    if not isinstance(data, dict):
+        return {'ok': False, 'configurado': True, 'code': 'NO_DISPONIBLE',
+                'message': 'Respuesta de AllConnected con formato inesperado.'}
+    data.setdefault('configurado', True)
+    data.setdefault('ok', False)
+    return data
+
+
+def validar_retiro(numero_ticket_rm='', numero_pedido_canal='', codigo='') -> dict:
+    """Pregunta a AllConnected si el código de retiro corresponde al pedido.
+
+    Es un PREVIEW: no consume el código ni registra el retiro. Devuelve
+    (contrato AllConnected):
+      ok:    {ok: True, pedido: {...}, items: [...], advertencias: [...]}
+      error: {ok: False, code: CODIGO_INVALIDO|NO_ENCONTRADO|LOCK|NO_DISPONIBLE,
+              message: '...'}
+    """
+    path = (getattr(settings, 'ALLCONNECTED_RETIRO_VALIDAR_PATH', '')
+            or '/system/api/retiro/validar/')
+    payload = {'codigo': str(codigo or '').strip()}
+    if numero_ticket_rm:
+        payload['numero_ticket_rm'] = str(numero_ticket_rm).strip()
+    if numero_pedido_canal:
+        payload['numero_pedido_canal'] = str(numero_pedido_canal).strip()
+    return _llamar_retiro(path, payload, codigo_para_log=codigo)
+
+
+def confirmar_retiro(numero_ticket_rm='', numero_pedido_canal='', codigo='',
+                     retirador_nombre='', retirador_documento='',
+                     tipo_documento='RUT', es_titular=True,
+                     usuario_pos='', sucursal='') -> dict:
+    """Confirma el retiro en AllConnected (atómico e idempotente allá).
+
+    AllConnected crea el ActaRetiro, marca el código USADO, escribe
+    fecha_entrega + ENTREGADO y avisa al ecommerce. Devuelve
+    {ok: True, acta_id, print_data: {...}} — el print_data va directo al
+    formato RETIRO_ECOMMERCE de QZ Tray. Un 2º intento devuelve
+    {ok: False, code: 'YA_RETIRADO', message: 'ya retirado el ... por ...'}.
+    """
+    path = (getattr(settings, 'ALLCONNECTED_RETIRO_CONFIRMAR_PATH', '')
+            or '/system/api/retiro/confirmar/')
+    payload = {
+        'codigo': str(codigo or '').strip(),
+        'retirador_nombre': str(retirador_nombre or '').strip()[:255],
+        'retirador_documento': str(retirador_documento or '').strip()[:20],
+        'tipo_documento': str(tipo_documento or 'RUT').strip().upper(),
+        'es_titular': bool(es_titular),
+        'origen': 'POS_RM',
+        'usuario_pos': str(usuario_pos or '').strip()[:150],
+        'sucursal': str(sucursal or '').strip()[:100],
+    }
+    if numero_ticket_rm:
+        payload['numero_ticket_rm'] = str(numero_ticket_rm).strip()
+    if numero_pedido_canal:
+        payload['numero_pedido_canal'] = str(numero_pedido_canal).strip()
+    resultado = _llamar_retiro(path, payload, codigo_para_log=codigo)
+    if resultado.get('ok'):
+        logger.info('Retiro confirmado en AllConnected: pedido %s, acta %s, '
+                    'retirador %s (codigo %s)',
+                    numero_ticket_rm or numero_pedido_canal,
+                    resultado.get('acta_id'), payload['retirador_nombre'],
+                    _enmascarar_codigo(codigo))
+    return resultado
