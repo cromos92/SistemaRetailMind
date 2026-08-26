@@ -3504,6 +3504,17 @@ def construir_detalle_txt_desde_dte_productos(dte_productos, tipo_numerico, es_e
     })
 
     for dte_producto in dte_productos:
+        # Linea muerta: vaciada por un ajuste del emisor o por un cambio de
+        # talla, quedo en stock 0 y desactivada. Incluirla producia un item
+        # fantasma "0:<talla>" en el TXT y, al sumar un SKU mas al grupo,
+        # cambiaba el CdgItem declarado del folio (deja de ser el SKU y pasa a
+        # ser el codigo de articulo). No se filtra `activo` en el queryset
+        # porque hay flujos que necesitan leer lineas inactivas con su
+        # monto_item intacto.
+        # getattr con default: esta funcion tambien recibe objetos duck-typed
+        # (stubs de tests, filas armadas a mano) que no traen el campo.
+        if not getattr(dte_producto, 'activo', True) and int(dte_producto.stock or 0) <= 0:
+            continue
         if dte_producto.productoTalla is None:
             # Item de concepto (sin mercadería)
             detalle.append({

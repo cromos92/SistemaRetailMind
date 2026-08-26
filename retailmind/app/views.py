@@ -4151,6 +4151,12 @@ def cambiar_talla_dte_traspaso_api(request):
     cambios = data.get('cambios') or []
     motivo = (data.get('motivo') or '').strip()
     token_operacion = (data.get('token_operacion') or '').strip()
+    # La mercadería YA salió de la bodega: el swap re-etiqueta un despacho que
+    # ocurrió, no autoriza uno nuevo. Si la talla destino marca 0 en el sistema
+    # es que su stock ya venía mal contado (drift), no que la unidad no exista.
+    # Con este flag el operador declara que la unidad sí iba en el bulto y
+    # acepta dejar esa talla en negativo hasta la próxima reconciliación.
+    permitir_sin_stock = bool(data.get('permitir_sin_stock'))
 
     if not dte_id:
         return JsonResponse({'success': False, 'error': 'Falta dte_id.'}, status=400)
@@ -4169,6 +4175,7 @@ def cambiar_talla_dte_traspaso_api(request):
     from decimal import Decimal
     from .models.dte import NotificacionDTE
     from .services.inventario_service import consumir_lotes_fifo, crear_lote
+    from datetime import datetime as _dt_datetime
 
     tag_idempotencia = f'[CT:{token_operacion}]'
 
@@ -4303,6 +4310,8 @@ def cambiar_talla_dte_traspaso_api(request):
             # -- PASO 8: PRIMERA PASADA, valida todo sin escribir nada --
             normalizados = []
             mover_por_linea = {}
+            mover_por_talla_origen = {}
+            precio_destino_planificado = {}
             neto_por_talla = {}
 
             for c in cambios:
@@ -4334,6 +4343,25 @@ def cambiar_talla_dte_traspaso_api(request):
                     }, status=400)
 
                 linea_destino = linea_por_talla.get(talla_destino_id)
+                # Dos cambios que apuntan a una MISMA talla destino que todavia
+                # no existe como linea esquivan el guard de precio de abajo (los
+                # dos ven linea_destino=None) y solo los frenaba el assert final,
+                # con un rollback y un mensaje inutil. Se validan entre ellos.
+                if linea_destino is None:
+                    precio_previsto = precio_destino_planificado.get(talla_destino_id)
+                    if precio_previsto is not None and precio_previsto != int(dp_origen.precio or 0):
+                        return JsonResponse({
+                            'success': False,
+                            'precio_distinto': True,
+                            'error': (
+                                f'Dos lineas de precio distinto (${precio_previsto:,} y '
+                                f'${int(dp_origen.precio or 0):,}) quieren pasar a la talla '
+                                f'{talla_destino.talla}. Fusionarlas cambiaria el total del folio: '
+                                f'hazlo en dos pasadas, o usa Ajustar y emite un DTE nuevo.'
+                            ),
+                        }, status=409)
+                    precio_destino_planificado[talla_destino_id] = int(dp_origen.precio or 0)
+
                 err = _validar_cambio_talla_linea(
                     dp_origen, talla_origen, talla_destino, cantidad,
                     linea_destino, dte.sucursal_id,
@@ -4358,6 +4386,9 @@ def cambiar_talla_dte_traspaso_api(request):
                     }, status=409)
 
                 mover_por_linea[dp_id] = mover_por_linea.get(dp_id, 0) + cantidad
+                mover_por_talla_origen[talla_origen.id] = (
+                    mover_por_talla_origen.get(talla_origen.id, 0) + cantidad
+                )
                 neto_por_talla[talla_origen.id] = neto_por_talla.get(talla_origen.id, 0) + cantidad
                 neto_por_talla[talla_destino.id] = neto_por_talla.get(talla_destino.id, 0) - cantidad
 
@@ -4381,26 +4412,55 @@ def cambiar_talla_dte_traspaso_api(request):
                         ),
                     }, status=400)
 
+            # Agregado contra el KARDEX: no basta validar contra dp.stock. Si el
+            # folio esta desparejado (la linea dice 45 pero su TRASPASO_SALIDA
+            # registra 5), restarle 10 al movimiento lo cruzaria a POSITIVO y
+            # quedaria un EGRESO con cantidad positiva: una fila que ningun
+            # consumidor espera y que rechazar/cancelar leen con abs(),
+            # acreditando unidades inventadas al origen. Fail-closed, igual que
+            # el guard de "sin movimiento de despacho".
+            for talla_id, movido in mover_por_talla_origen.items():
+                despachado = abs(int(movs[talla_id].cantidad or 0))
+                if movido > despachado:
+                    talla = tallas[talla_id]
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            f'La talla {talla.talla} (SKU {talla.sku}) declara mas unidades en el '
+                            f'documento que las {despachado} que registra su movimiento de '
+                            f'despacho. El kardex de este folio esta desparejado: corrijalo antes '
+                            f'de cambiar tallas.'
+                        ),
+                        'kardex_desparejado': True,
+                    }, status=409)
+
             # Agregado por talla: se valida el NETO, no el bruto, para que una
             # rotación 37->38 y 38->39 en la misma pasada no falle contra stock
             # que el propio request está liberando.
+            tallas_forzadas = []
             for talla_id, neto in neto_por_talla.items():
                 if neto >= 0:
                     continue
                 talla = tallas[talla_id]
                 disponible = int(talla.stock or 0)
                 if disponible + neto < 0:
-                    return JsonResponse({
-                        'success': False,
-                        'error': (
-                            f'Stock insuficiente en la talla {talla.talla} (SKU {talla.sku}). '
-                            f'Disponible: {disponible}, se necesitan: {abs(neto)}.'
-                        ),
-                        'stock_insuficiente': True,
-                        'sku': talla.sku,
-                        'disponible_origen': disponible,
-                        'solicitado': abs(neto),
-                    }, status=409)
+                    if not permitir_sin_stock:
+                        return JsonResponse({
+                            'success': False,
+                            'error': (
+                                f'La talla {talla.talla} (SKU {talla.sku}) marca {disponible} '
+                                f'en el sistema y se necesitan {abs(neto)}.'
+                            ),
+                            'stock_insuficiente': True,
+                            'puede_forzar': True,
+                            'sku': talla.sku,
+                            'talla': talla.talla,
+                            'disponible_origen': disponible,
+                            'solicitado': abs(neto),
+                        }, status=409)
+                    tallas_forzadas.append(
+                        f'{talla.talla} (SKU {talla.sku}) queda en {disponible + neto}'
+                    )
 
             # Invariante ANTES: se mide sobre las líneas, no sobre el cabezal,
             # para no arrastrar una divergencia previa del documento.
@@ -4471,7 +4531,7 @@ def cambiar_talla_dte_traspaso_api(request):
                 # nunca es un 500 en este repo; queda para reconciliación).
                 try:
                     consumir_lotes_fifo(talla_destino, cantidad)
-                    crear_lote(
+                    lote_reingreso = crear_lote(
                         talla_origen,
                         cantidad,
                         costo_unitario=dp_origen.costo,
@@ -4479,8 +4539,20 @@ def cambiar_talla_dte_traspaso_api(request):
                         precio_venta_unitario=dp_origen.precio,
                         dte=dte,
                         movimiento=mov_origen,
-                        fecha_ingreso=mov_origen.fecha,
                         observaciones=f'CAMBIO TALLA reingreso DTE #{dte.numero_documento}',
+                    )
+                    # LoteProducto.fecha_ingreso es auto_now_add: el kwarg
+                    # `fecha_ingreso` de crear_lote se descarta en SILENCIO y el
+                    # lote nace con la fecha de hoy. Como Meta.ordering es
+                    # ['fecha_ingreso'] y el FIFO ordena por ahi, estas unidades
+                    # devueltas se irian al final de la cola y sobrevivirian en
+                    # aging/liquidacion como si fueran stock fresco. update()
+                    # salta pre_save, que es justo lo que hace falta.
+                    fecha_reingreso = _dt_datetime.combine(mov_origen.fecha, mov_origen.hora)
+                    if timezone.is_naive(fecha_reingreso):
+                        fecha_reingreso = timezone.make_aware(fecha_reingreso)
+                    LoteProducto.objects.filter(id=lote_reingreso.id).update(
+                        fecha_ingreso=fecha_reingreso
                     )
                 except Exception:
                     logger.warning(
@@ -4493,6 +4565,17 @@ def cambiar_talla_dte_traspaso_api(request):
 
                 # (e) kardex origen: menos egreso (la cantidad es negativa)
                 mov_origen.cantidad = int(mov_origen.cantidad or 0) + cantidad
+                if mov_origen.cantidad > 0:
+                    # Inalcanzable con el guard de arriba; si alguna vez lo fuera,
+                    # revertir es mucho mejor que persistir un EGRESO positivo.
+                    # NO se arregla anadiendo tipo_movimiento a update_fields:
+                    # quedaria un INGRESO con concepto TRASPASO_SALIDA, y
+                    # rechazar_recepcion_api (que filtra solo por concepto y
+                    # estado) lo seguiria acreditando igual.
+                    raise ValueError(
+                        f'El movimiento de despacho de la talla {talla_origen.talla} quedaria '
+                        f'positivo ({mov_origen.cantidad}). Operacion revertida.'
+                    )
                 mov_origen.observaciones = ((mov_origen.observaciones or '') + nota)[:500]
                 if mov_origen.cantidad == 0:
                     # Se deja la fila como evidencia de que esa talla estuvo en
@@ -4568,8 +4651,17 @@ def cambiar_talla_dte_traspaso_api(request):
                 f"{c['talla_origen']}->{c['talla_destino']} x{c['cantidad']}"
                 for c in cambios_aplicados
             )
+            nota_forzado = ''
+            if tallas_forzadas:
+                # Queda escrito en el propio documento: el stock de esas tallas
+                # ya venía mal contado y esta operación lo deja en negativo.
+                nota_forzado = ' [STOCK FORZADO] ' + '; '.join(tallas_forzadas) + '.'
+                logger.warning(
+                    "Cambio de talla DTE %s: stock forzado a negativo por %s ->%s",
+                    dte.numero_documento, usuario, nota_forzado,
+                )
             registro = (
-                f"\n[CAMBIO TALLA] {marca} {usuario}: {resumen}."
+                f"\n[CAMBIO TALLA] {marca} {usuario}: {resumen}.{nota_forzado}"
                 f" Motivo: {motivo} {tag_idempotencia}"
             )
             dte.referencias = ((dte.referencias or '') + registro).strip()
@@ -4629,6 +4721,7 @@ def cambiar_talla_dte_traspaso_api(request):
                 },
                 'cambios_aplicados': cambios_aplicados,
                 'stock_delta': stock_delta,
+                'tallas_forzadas': tallas_forzadas,
             })
 
     except ValueError as ve:

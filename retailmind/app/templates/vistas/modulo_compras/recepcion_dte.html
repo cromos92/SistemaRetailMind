@@ -2128,7 +2128,7 @@
      endpoints distintos. backdrop static: lo tipeado no se pierde con un click
      al fondo (el modal de ajuste sí lo pierde). -->
 <div class="modal fade" id="modalCambiarTallaDte" tabindex="-1" aria-labelledby="modalCambiarTallaLabel" aria-hidden="true"
-     data-bs-backdrop="static">
+     data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); color: #fff;">
@@ -2191,6 +2191,19 @@
 
                 <div class="border-top pt-2 mt-2">
                     <div id="cambioTallaResumen" class="small text-muted">Sin cambios indicados todavía.</div>
+                    <!-- Aparece solo si alguna talla destino marca menos stock del
+                         que se necesita. La mercadería ya salió del bulto, así que
+                         el bloqueo duro dejaría el documento mal para siempre. -->
+                    <div id="cambioTallaForzarWrap" class="d-none mt-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="cambioTallaForzar">
+                            <label class="form-check-label small" for="cambioTallaForzar">
+                                Confirmo que esas unidades <strong>sí iban en el bulto</strong>. El stock
+                                del sistema estaba mal contado y esa talla quedará en negativo hasta la
+                                próxima reconciliación.
+                            </label>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Panel de resultado -->
@@ -7020,7 +7033,7 @@ function cambiarModoVista(nuevoModoEmitidos, modo) {
     if (window.modoVista === 'emitidos') {
         $('#btnModoEmitidos').addClass('active');
         $('#tituloSeccionDocumentos').text('DTEs emitidos por mi sucursal');
-        $('#subtituloSeccionDocumentos').text('DTEs que emitiste y todavía no fueron recepcionados. Podés reducir cantidades o quitar productos.');
+        $('#subtituloSeccionDocumentos').text('DTEs que emitiste y todavía no fueron recepcionados. Puedes reducir cantidades, quitar productos o cambiar una talla por otra.');
         $('#filterEstadoDte').closest('.col-md-3').hide();
         paginaActual = 1;
         cargarEmitidos();
@@ -7955,7 +7968,9 @@ function abrirModalCambiarTalla(dteId) {
     $('#cambioTallaTipoDoc').text(dte.tipo_documento || '-');
     $('#cambioTallaDestino').text(dte.sucursal_destino || dte.receptor || '-');
     $('#cambioTallaFecha').text(dte.fecha_emision || '-');
-    $('#cambioTallaUnidades').text(dte.unidades_productos || 0);
+    // El cabezal `unidades_productos` viene en 0 en varios DTE históricos; las
+    // líneas son la verdad. Se rellena de nuevo al cargar el detalle.
+    $('#cambioTallaUnidades').text(dte.unidades_productos || '—');
     $('#cambioTallaMotivo').val('').removeClass('is-invalid');
     $('#cambioTallaResumen').html('Sin cambios indicados todavía.');
 
@@ -7965,9 +7980,12 @@ function abrirModalCambiarTalla(dteId) {
     $('#cambioTallaBanner').html(esFacturable
         ? `<div class="alert alert-warning border-0 mb-3" style="border-radius:10px;">
                <i class="bi bi-exclamation-triangle me-2"></i>
-               <strong>Documento tributario.</strong> Los <strong>totales del folio no cambian</strong>
-               (misma cantidad, mismo precio, otra talla), así que lo declarado sigue calzando.
-               El cambio queda registrado en las referencias del documento y en el kardex.
+               <strong>Documento tributario.</strong> Los <strong>totales no cambian</strong>
+               (misma cantidad, mismo precio), pero <strong>el detalle sí</strong>: el documento
+               pasa a declarar otra talla.
+               <br><strong>Si ya subiste el TXT a Acepta</strong>, el documento timbrado queda con
+               la talla vieja y habría que regenerarlo. Si todavía no lo enviaste, el TXT saldrá
+               ya corregido.
            </div>`
         : `<div class="alert alert-info border-0 mb-3" style="border-radius:10px;">
                <i class="bi bi-info-circle me-2"></i>
@@ -7991,6 +8009,9 @@ function abrirModalCambiarTalla(dteId) {
     modal.show();
 
     $.get(`/app/api/detalle_dte_completo/${dteId}/`).done(resp => {
+        // Si el operador cerró y abrió otro DTE mientras volaba este GET, la
+        // respuesta vieja pintaría las filas del documento equivocado.
+        if (!window.cambioTallaActual || window.cambioTallaActual.id !== dteId) return;
         const productos = ((resp && resp.productos) || []).filter(
             p => ((p.activo === undefined) || p.activo) && (p.cantidad || 0) > 0 && p.producto_talla_id
         );
@@ -8005,6 +8026,9 @@ function abrirModalCambiarTalla(dteId) {
             );
             return;
         }
+
+        const udsReales = productos.reduce((s, p) => s + (parseInt(p.cantidad, 10) || 0), 0);
+        $('#cambioTallaUnidades').text(udsReales);
 
         const productoIds = [...new Set(productos.map(p => p.producto_id).filter(Boolean))];
         $.when(...productoIds.map(_ctCargarTallas)).done(function () {
@@ -8031,9 +8055,12 @@ function _ctRenderFilas(productos) {
             .filter(t => t.id !== p.producto_talla_id)
             .map(t => {
                 const stock = parseInt(t.stock, 10) || 0;
-                const sinStock = stock <= 0;
-                return `<option value="${t.id}" data-stock="${stock}" ${sinStock ? 'disabled' : ''}>`
-                     + `${_escapeHtmlDte(t.talla)}${sinStock ? ' (sin stock)' : ' — ' + stock + ' disp.'}`
+                // NO se deshabilitan las de stock 0: la unidad ya salió de la
+                // bodega, así que un stock en 0 significa que esa talla venía
+                // mal contada, no que el cambio sea imposible. Se avisa y se
+                // exige confirmación explícita más abajo.
+                return `<option value="${t.id}" data-stock="${stock}" data-talla="${_escapeHtmlDte(t.talla)}">`
+                     + `${_escapeHtmlDte(t.talla)}${stock > 0 ? ' — ' + stock + ' disp.' : ' — sin stock en sistema'}`
                      + `</option>`;
             }).join('');
 
@@ -8049,6 +8076,7 @@ function _ctRenderFilas(productos) {
             data-sku="${_escapeHtmlDte(p.sku || '')}"
             data-talla="${_escapeHtmlDte(p.talla || '')}"
             data-producto-id="${p.producto_id || ''}"
+            data-stock-origen="${p.stock_origen === null || p.stock_origen === undefined ? 0 : p.stock_origen}"
             data-producto-talla-id="${p.producto_talla_id || ''}">
             <td><code class="small">${_escapeHtmlDte(p.sku || '-')}</code></td>
             <td class="small">${_escapeHtmlDte(p.producto || p.descripcion || '-')}</td>
@@ -8099,16 +8127,28 @@ function _ctRecolectar() {
             problemas.push(`${$tr.data('sku')}: elegiste talla destino pero dejaste la cantidad en 0.`);
             return;
         }
+        if (cantidad < 0) {
+            problemas.push(`${$tr.data('sku')}: la cantidad a mover no puede ser negativa.`);
+            return;
+        }
         if (cantidad > original) {
             problemas.push(`${$tr.data('sku')}: no puedes mover ${cantidad}, la línea solo tiene ${original}.`);
             return;
         }
 
-        const stockDestino = parseInt($sel.find('option:selected').data('stock'), 10) || 0;
-        netoPorTalla[tallaDestinoId] = (netoPorTalla[tallaDestinoId] || {stock: stockDestino, neto: 0});
+        const $opt = $sel.find('option:selected');
+        const stockDestino = parseInt($opt.data('stock'), 10) || 0;
+        const etiquetaDestino = String($opt.data('talla') || '').trim();
+        netoPorTalla[tallaDestinoId] = (netoPorTalla[tallaDestinoId]
+            || {stock: stockDestino, neto: 0, label: etiquetaDestino});
         netoPorTalla[tallaDestinoId].neto -= cantidad;
         if (tallaOrigenId) {
-            netoPorTalla[tallaOrigenId] = (netoPorTalla[tallaOrigenId] || {stock: 0, neto: 0});
+            // OJO: el stock de la talla origen sale de la fila, no de 0. En una
+            // rotación 37->38 y 38->39 la talla 38 es origen y destino a la vez;
+            // asumir 0 disparaba una advertencia falsa.
+            const stockOrigen = parseInt($tr.data('stock-origen'), 10) || 0;
+            netoPorTalla[tallaOrigenId] = (netoPorTalla[tallaOrigenId]
+                || {stock: stockOrigen, neto: 0, label: String($tr.data('talla') || '')});
             netoPorTalla[tallaOrigenId].neto += cantidad;
         }
 
@@ -8122,18 +8162,33 @@ function _ctRecolectar() {
         });
     });
 
+    // Stock insuficiente NO es un error: es una advertencia que exige
+    // confirmación. La mercadería ya salió del bulto.
+    const advertencias = [];
     Object.keys(netoPorTalla).forEach(id => {
         const v = netoPorTalla[id];
         if (v.neto < 0 && (v.stock + v.neto) < 0) {
-            problemas.push(`Stock insuficiente: se necesitan ${Math.abs(v.neto)} unidades y hay ${v.stock}.`);
+            advertencias.push(
+                `Talla ${v.label || id}: el sistema marca ${v.stock} y se necesitan `
+                + `${Math.abs(v.neto)} — quedaría en ${v.stock + v.neto}.`
+            );
         }
     });
 
-    return { cambios, problemas };
+    return { cambios, problemas, advertencias };
 }
 
 function actualizarResumenCambioTalla() {
-    const { cambios, problemas } = _ctRecolectar();
+    const { cambios, problemas, advertencias } = _ctRecolectar();
+
+    // El checkbox de forzado solo existe mientras haya una talla en rojo.
+    const $wrap = $('#cambioTallaForzarWrap');
+    if (advertencias.length) {
+        $wrap.removeClass('d-none');
+    } else {
+        $wrap.addClass('d-none');
+        $('#cambioTallaForzar').prop('checked', false);
+    }
 
     // El input no puede pedir más de lo que tiene la línea.
     $('#cambioTallaProductosBody tr').each(function () {
@@ -8144,7 +8199,7 @@ function actualizarResumenCambioTalla() {
         $inp.toggleClass('is-invalid', val > original);
     });
 
-    if (!cambios.length && !problemas.length) {
+    if (!cambios.length && !problemas.length && !advertencias.length) {
         $('#cambioTallaResumen').html('Sin cambios indicados todavía.');
         return;
     }
@@ -8158,8 +8213,14 @@ function actualizarResumenCambioTalla() {
         html += `<div class="mb-1"><strong>${totalUds}</strong> unidad(es) cambian de talla en ${cambios.length} línea(s):</div>${detalle}`;
         html += `<div class="mt-1 text-success"><i class="bi bi-check2 me-1"></i>El total del documento no cambia.</div>`;
     }
+    if (advertencias.length) {
+        html += `<div class="mt-2 text-warning-emphasis"><i class="bi bi-exclamation-triangle me-1"></i>`
+              + advertencias.map(_escapeHtmlDte).join('<br>')
+              + `<br><span class="text-muted">Pasa igual si esas unidades sí iban en el bulto: `
+              + `significa que el stock de esa talla ya venía mal contado.</span></div>`;
+    }
     if (problemas.length) {
-        html += `<div class="mt-2 text-danger"><i class="bi bi-exclamation-triangle me-1"></i>`
+        html += `<div class="mt-2 text-danger"><i class="bi bi-x-octagon me-1"></i>`
               + problemas.map(_escapeHtmlDte).join('<br>') + `</div>`;
     }
     $('#cambioTallaResumen').html(html);
@@ -8169,10 +8230,21 @@ function confirmarCambioTalla() {
     if (!window.cambioTallaActual) return;
 
     const motivo = ($('#cambioTallaMotivo').val() || '').trim();
-    const { cambios, problemas } = _ctRecolectar();
+    const { cambios, problemas, advertencias } = _ctRecolectar();
+    const forzar = $('#cambioTallaForzar').is(':checked');
 
+    if (advertencias.length && !forzar) {
+        Swal.fire(
+            'Falta confirmar el stock',
+            advertencias.map(_escapeHtmlDte).join('<br>')
+            + '<br><br>Si esas unidades sí iban en el bulto, marca la casilla de confirmación '
+            + 'que está bajo la tabla y vuelve a intentar.',
+            'warning',
+        );
+        return;
+    }
     if (problemas.length) {
-        Swal.fire('Revisa los datos', problemas.join('<br>'), 'warning');
+        Swal.fire('Revisa los datos', problemas.map(_escapeHtmlDte).join('<br>'), 'warning');
         return;
     }
     if (!cambios.length) {
@@ -8186,18 +8258,27 @@ function confirmarCambioTalla() {
     }
 
     const totalUds = cambios.reduce((s, c) => s + c.cantidad, 0);
+    // OJO: el `html` de SweetAlert2 renderiza HTML. `_tallaOrigen`/`_tallaDestino`
+    // salen de data-* y del texto de un <option>, y el parser los DECODIFICA al
+    // leerlos, así que vuelven crudos. Producto_Talla.talla es editable por
+    // usuarios: sin escapar acá, una talla con markup se ejecuta al confirmar.
     const listado = cambios
-        .map(c => `<li><code>${c._sku}</code>: talla <b>${c._tallaOrigen}</b> → <b>${c._tallaDestino}</b> · ${c.cantidad} u.</li>`)
+        .map(c => `<li><code>${_escapeHtmlDte(String(c._sku))}</code>: talla `
+                + `<b>${_escapeHtmlDte(String(c._tallaOrigen))}</b> → `
+                + `<b>${_escapeHtmlDte(String(c._tallaDestino))}</b> · ${c.cantidad} u.</li>`)
         .join('');
 
     Swal.fire({
         title: 'Confirmar cambio de talla',
         html: `<div class="text-start small">
                  <p class="mb-2">Se moverán <b>${totalUds}</b> unidad(es) dentro del DTE
-                 <b>#${window.cambioTallaActual.numero_documento}</b>:</p>
+                 <b>#${_escapeHtmlDte(String(window.cambioTallaActual.numero_documento))}</b>:</p>
                  <ul class="mb-2">${listado}</ul>
                  <p class="mb-0 text-muted">El total del documento no cambia. El stock se ajusta en tu bodega
                  y la sucursal destino verá el detalle corregido.</p>
+                 ${advertencias.length ? `<div class="alert alert-warning mt-2 mb-0 py-2 small">
+                    <b>Stock forzado:</b><br>${advertencias.map(_escapeHtmlDte).join('<br>')}
+                    <br>Quedará registrado en las referencias del documento.</div>` : ''}
                </div>`,
         icon: 'question',
         showCancelButton: true,
@@ -8219,6 +8300,7 @@ function confirmarCambioTalla() {
                 dte_id: window.cambioTallaActual.id,
                 token_operacion: window.cambioTallaActual.token,
                 motivo: motivo,
+                permitir_sin_stock: forzar,
                 cambios: cambios.map(c => ({
                     dte_producto_id: c.dte_producto_id,
                     talla_destino_id: c.talla_destino_id,
@@ -8257,6 +8339,10 @@ function confirmarCambioTalla() {
                 </tr>`);
             });
 
+            // El stock de esas tallas acaba de cambiar: si no se invalida, un
+            // segundo cambio en la misma sesión se decidiría con datos viejos.
+            Object.keys(_ctTallasCache).forEach(k => { delete _ctTallasCache[k]; });
+
             // Refrescar la lista de fondo para que el DTE muestre el detalle nuevo.
             if (typeof recargarVistaActiva === 'function') {
                 recargarVistaActiva(true);
@@ -8266,13 +8352,20 @@ function confirmarCambioTalla() {
             // El decorador de permisos responde {error: true, mensaje: ...},
             // NO {success:false, error:...}. Sin esta rama el modal mostraba
             // literalmente "true" en un 403 (bug que sí tiene el de al lado).
-            let msg = (r.error === true)
+            // El texto del backend embebe descripciones de producto, que son
+            // datos de usuario. Se escapa ANTES de concatenarle markup fijo.
+            let msg = _escapeHtmlDte(String((r.error === true)
                 ? (r.mensaje || 'No tienes permiso para esta acción.')
-                : (r.error || 'No se pudo aplicar el cambio de talla.');
+                : (r.error || 'No se pudo aplicar el cambio de talla.')));
 
             if (r.stock_insuficiente) {
-                msg = `Stock insuficiente en SKU ${r.sku}: disponible ${r.disponible_origen}, `
-                    + `se necesitan ${r.solicitado}.`;
+                msg = `La talla ${_escapeHtmlDte(String(r.talla || ''))} `
+                    + `(SKU ${_escapeHtmlDte(String(r.sku))}) marca ${r.disponible_origen} en el `
+                    + `sistema y se necesitan ${r.solicitado}.`;
+                if (r.puede_forzar) {
+                    msg += '<br><br>Si esas unidades sí iban en el bulto, marca la casilla de '
+                         + 'confirmación bajo la tabla y reintenta.';
+                }
             } else if (r.precio_distinto) {
                 msg += '<br><br><b>Alternativa:</b> usa <b>Ajustar</b> para bajar esta talla y emite un DTE nuevo por la talla correcta.';
             }
@@ -8290,6 +8383,10 @@ $(document).ready(function () {
     // (.input-mover-cantidad vs .input-ajuste-cantidad), así que no se pisan.
     $(document).on('input', '#cambioTallaProductosBody .input-mover-cantidad', actualizarResumenCambioTalla);
     $(document).on('change', '#cambioTallaProductosBody .select-talla-destino', actualizarResumenCambioTalla);
+
+    $(document).on('input', '#cambioTallaMotivo', function () {
+        $(this).removeClass('is-invalid');
+    });
 
     $(document).on('click', '#cambioTallaProductosBody .btn-ct-limpiar', function () {
         const $tr = $(this).closest('tr');
@@ -8314,6 +8411,8 @@ $(document).ready(function () {
             $('#ctFooterResultado').addClass('d-none');
             $('#modalCambiarTallaDte .modal-body > *').not('#cambioTallaResultadoPanel').show();
             $('#cambioTallaProductosBody').html(_ctFilaVacia('Seleccione un DTE para cargar productos...'));
+            $('#cambioTallaForzarWrap').addClass('d-none');
+            $('#cambioTallaForzar').prop('checked', false);
             window.cambioTallaActual = null;
         });
     }

@@ -6434,7 +6434,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!esCambioDevolucion) {
             const cantTotalPorSku = {};
             productos.forEach(p => {
+                // Los ítems de despacho diferido no consumen stock ahora — se
+                // despachan después — y no tienen SKU. Sin este filtro los tres
+                // caían en el MISMO bucket '' con stock 0, sus cantidades se
+                // sumaban entre sí (11+1+12=24) y el botón quedaba en "STOCK
+                // INSUFICIENTE" aunque cada línea real tuviera stock de sobra.
+                // El badge por fila y el banner de arriba ya los excluyen; acá
+                // faltaba.
+                if (p.es_pendiente_despacho === true) return;
                 const s = p.sku || '';
+                if (!s) return;
                 if (!cantTotalPorSku[s]) cantTotalPorSku[s] = { total: 0, stock: parseInt(p.stock) || 0 };
                 cantTotalPorSku[s].total += parseInt(p.cantidad) || 1;
             });

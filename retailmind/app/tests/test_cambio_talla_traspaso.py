@@ -28,6 +28,7 @@ from decimal import Decimal
 from unittest import mock
 
 from django.test import TestCase, Client
+from django.utils import timezone
 
 from app.models import (
     Dte, Dte_Productos, Producto_Talla, Movimientos_Producto,
@@ -443,3 +444,175 @@ class CambioTallaGuardsTest(_BaseCambioTalla):
         self.assertEqual(resp.status_code, 200, resp.content)
         self.assertEqual(Dte.objects.count(), dtes_antes, 'Se emitió un documento hijo')
         self.assertFalse(Dte.objects.filter(documento_afectado=dte).exists())
+
+
+class CambioTallaSinStockTest(_BaseCambioTalla):
+    """La talla destino marca 0 en el sistema.
+
+    Caso real (DTE #17110): el documento dice 3 pares de talla 10, pero en el
+    bulto iban 2 del 10 y 1 del 10.5. Esa unidad de 10.5 YA salió de la bodega
+    — al emitir se descontó del 10, no del 10.5. Si el sistema marca 0 en el
+    10.5 es que su stock ya venía mal contado, no que el cambio sea imposible.
+
+    Por eso el bloqueo no puede ser duro: sería dejar el documento mal para
+    siempre. Se avisa, se exige confirmación explícita y queda escrito.
+    """
+
+    def setUp(self):
+        super().setUp()
+        # Talla hermana SIN stock en el sistema.
+        self.t105 = Producto_Talla.objects.create(
+            producto=self.producto, sku=10501, stock=0, talla='10.5',
+        )
+
+    def test_por_defecto_bloquea_pero_ofrece_forzar(self):
+        dte, dps = self._crear_traspaso([(self.t37, 3, 1000)])
+
+        resp = self._post({
+            'dte_id': dte.id, 'token_operacion': 'tok-ss1', 'motivo': 'llego un 10.5',
+            'cambios': [{'dte_producto_id': dps[0].id, 'talla_destino_id': self.t105.id, 'cantidad': 1}],
+        })
+        self.assertEqual(resp.status_code, 409)
+        data = resp.json()
+        self.assertTrue(data['stock_insuficiente'])
+        self.assertTrue(data['puede_forzar'], 'La UI necesita saber que se puede confirmar y reintentar')
+        self.assertEqual(data['talla'], '10.5')
+        self.assertEqual(data['disponible_origen'], 0)
+        self.assertEqual(data['solicitado'], 1)
+
+        # No se escribió nada.
+        dps[0].refresh_from_db()
+        self.assertEqual(dps[0].stock, 3)
+        self.t105.refresh_from_db()
+        self.assertEqual(self.t105.stock, 0)
+
+    def test_con_permitir_sin_stock_aplica_y_deja_constancia(self):
+        dte, dps = self._crear_traspaso([(self.t37, 3, 1000)])
+        self.t37.refresh_from_db()
+        stock37_antes = self.t37.stock
+
+        resp = self._post({
+            'dte_id': dte.id, 'token_operacion': 'tok-ss2', 'motivo': 'del 10 llegaron 2, el otro era 10.5',
+            'permitir_sin_stock': True,
+            'cambios': [{'dte_producto_id': dps[0].id, 'talla_destino_id': self.t105.id, 'cantidad': 1}],
+        })
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(len(data['tallas_forzadas']), 1)
+        self.assertIn('queda en -1', data['tallas_forzadas'][0])
+
+        # La línea original baja y nace la del 10.5.
+        dps[0].refresh_from_db()
+        self.assertEqual(dps[0].stock, 2)
+        dp105 = Dte_Productos.objects.get(dte=dte, productoTalla=self.t105)
+        self.assertEqual(dp105.stock, 1)
+
+        # El stock del 10.5 queda en negativo: refleja que ya venía mal contado.
+        self.t105.refresh_from_db()
+        self.assertEqual(self.t105.stock, -1)
+        # Y el 37 recupera la unidad que nunca salió.
+        self.t37.refresh_from_db()
+        self.assertEqual(self.t37.stock, stock37_antes + 1)
+
+        # Queda escrito en el documento.
+        dte.refresh_from_db()
+        self.assertIn('[STOCK FORZADO]', dte.referencias)
+        self.assertIn('10.5', dte.referencias)
+
+        # El total del folio sigue sin moverse.
+        self.assertEqual(dte.unidades_productos, 3)
+        suma = sum(
+            dp.stock * dp.precio
+            for dp in Dte_Productos.objects.filter(dte=dte, activo=True)
+        )
+        self.assertEqual(Decimal(suma), dte.monto_neto)
+
+    def test_el_flag_no_afecta_cuando_si_hay_stock(self):
+        """Mandar el flag no debe relajar nada más: con stock suficiente el
+        camino es el normal y no se marca nada como forzado."""
+        dte, dps = self._crear_traspaso([(self.t37, 10, 1000)])
+
+        resp = self._post({
+            'dte_id': dte.id, 'token_operacion': 'tok-ss3', 'motivo': 'con stock',
+            'permitir_sin_stock': True,
+            'cambios': [{'dte_producto_id': dps[0].id, 'talla_destino_id': self.t38.id, 'cantidad': 5}],
+        })
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(resp.json()['tallas_forzadas'], [])
+        dte.refresh_from_db()
+        self.assertNotIn('[STOCK FORZADO]', dte.referencias)
+
+
+class CambioTallaHallazgosRevisionTest(_BaseCambioTalla):
+    """Casos que salieron de la revisión adversarial del endpoint."""
+
+    def test_kardex_desparejado_se_rechaza_sin_dejar_egreso_positivo(self):
+        """Si la línea declara más unidades de las que registra su movimiento de
+        despacho, restarle al movimiento lo cruzaría a POSITIVO y quedaría un
+        EGRESO con cantidad positiva. Nadie espera esa fila: `rechazar` y
+        `cancelar` la leen con abs() y acreditarían unidades inventadas."""
+        dte, dps = self._crear_traspaso([(self.t37, 45, 1000)])
+        mov = Movimientos_Producto.objects.get(dte=dte, ProductoTalla=self.t37)
+        # Folio desparejado: la línea dice 45, el kardex solo registra 5.
+        mov.cantidad = -5
+        mov.save(update_fields=['cantidad'])
+
+        resp = self._post({
+            'dte_id': dte.id, 'token_operacion': 'tok-kardex', 'motivo': 'folio desparejado',
+            'cambios': [{'dte_producto_id': dps[0].id, 'talla_destino_id': self.t38.id, 'cantidad': 10}],
+        })
+        self.assertEqual(resp.status_code, 409, resp.content)
+        self.assertTrue(resp.json().get('kardex_desparejado'))
+
+        # Nada se movió, y el movimiento sigue siendo un egreso.
+        mov.refresh_from_db()
+        self.assertEqual(mov.cantidad, -5)
+        self.assertLessEqual(mov.cantidad, 0, 'Quedó un EGRESO con cantidad positiva')
+        dps[0].refresh_from_db()
+        self.assertEqual(dps[0].stock, 45)
+
+    def test_el_lote_de_reingreso_conserva_la_fecha_del_despacho(self):
+        """`crear_lote(fecha_ingreso=...)` es un no-op porque el campo es
+        auto_now_add. Sin corregirlo a mano, las unidades devueltas nacen con
+        fecha de HOY y, como el FIFO ordena por fecha_ingreso, se van al final
+        de la cola y sobreviven en aging/liquidación como stock fresco."""
+        from app.models import LoteProducto
+
+        dte, dps = self._crear_traspaso(
+            [(self.t37, 45, 1000)], fecha='2026-08-24', hora='09:30:00',
+        )
+        resp = self._post({
+            'dte_id': dte.id, 'token_operacion': 'tok-lote', 'motivo': 'antiguedad fifo',
+            'cambios': [{'dte_producto_id': dps[0].id, 'talla_destino_id': self.t38.id, 'cantidad': 10}],
+        })
+        self.assertEqual(resp.status_code, 200, resp.content)
+
+        lote = LoteProducto.objects.filter(producto_talla=self.t37).order_by('-id').first()
+        self.assertIsNotNone(lote, 'No se creó el lote de reingreso')
+        self.assertEqual(lote.cantidad_disponible, 10)
+        self.assertEqual(
+            timezone.localtime(lote.fecha_ingreso).date().isoformat(), '2026-08-24',
+            'El lote nació con la fecha de hoy: pierde su antigüedad FIFO',
+        )
+
+    def test_dos_lineas_de_distinto_precio_a_la_misma_talla_nueva(self):
+        """Ambas ven `linea_destino=None`, así que el guard de precio por línea
+        no las frena; sin este chequeo solo saltaba el assert final, con un
+        rollback y un mensaje que no dice qué hacer."""
+        dte, dps = self._crear_traspaso([(self.t37, 10, 1000), (self.t38, 10, 2000)])
+
+        resp = self._post({
+            'dte_id': dte.id, 'token_operacion': 'tok-precios', 'motivo': 'dos precios',
+            'cambios': [
+                {'dte_producto_id': dps[0].id, 'talla_destino_id': self.t39.id, 'cantidad': 2},
+                {'dte_producto_id': dps[1].id, 'talla_destino_id': self.t39.id, 'cantidad': 2},
+            ],
+        })
+        self.assertEqual(resp.status_code, 409, resp.content)
+        data = resp.json()
+        self.assertTrue(data.get('precio_distinto'))
+        self.assertIn('dos pasadas', data['error'])
+
+        # Nada se escribió.
+        self.assertFalse(Dte_Productos.objects.filter(dte=dte, productoTalla=self.t39).exists())
