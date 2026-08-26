@@ -164,6 +164,35 @@ def _recalcular_estado_dte(dte, guardar=True):
     return nuevo
 
 
+def _filtrar_dte_por_busqueda(queryset, buscar):
+    """Búsqueda libre sobre un queryset de Dte: N° de documento o contraparte.
+
+    `numero_documento` es IntegerField, así que para que escribir "711"
+    encuentre el folio 17117 hay que castearlo a texto. El cast se comporta
+    igual en PostgreSQL (prod) que en SQLite (tests).
+
+    Busca además por nombre de emisor y receptor, porque en esta pantalla el
+    operador tanto puede acordarse del folio como de quién se lo mandó.
+    """
+    termino = (buscar or '').strip()
+    if not termino:
+        return queryset
+
+    from django.db.models import CharField as _CharField
+    from django.db.models.functions import Cast as _Cast
+
+    limpio = termino.lstrip('#').strip()
+    queryset = queryset.annotate(_num_texto=_Cast('numero_documento', _CharField()))
+    cond = Q(_num_texto__icontains=limpio)
+    if limpio.isdigit():
+        cond |= Q(numero_documento=int(limpio))
+    cond |= Q(emisor__razon_social__icontains=termino)
+    cond |= Q(emisor__nombre__icontains=termino)
+    cond |= Q(receptor__razon_social__icontains=termino)
+    cond |= Q(receptor__nombre__icontains=termino)
+    return queryset.filter(cond)
+
+
 def _sucursal_destino_traspaso(dte):
     """Sucursal destino REAL de un traspaso, derivada del movimiento de salida.
 
@@ -322,6 +351,13 @@ def recepciones_pendientes_api(request):
         fecha_inicio = request.GET.get('fecha_inicio')
         fecha_fin = request.GET.get('fecha_fin')
         estado_filtro = request.GET.get('estado', '').strip()
+        # Busqueda libre: numero de documento (parcial o exacto) o nombre del
+        # emisor. Misma convencion `buscar` que ya usa el panel de regularizar.
+        buscar = (request.GET.get('buscar') or '').strip()
+        # Atajos de la barra de filtros. Se componen con `estado` (interseccion),
+        # asi que elegir "Con problemas" + un estado concreto es coherente.
+        con_problemas = (request.GET.get('con_problemas') or '').strip() in ('1', 'true', 'True')
+        fase = (request.GET.get('fase') or '').strip()
         puede_recepcionar = _permiso_recepcion_dte(request.user, 'puede_crear', sucursal_actual_id)
         if not puede_recepcionar and estado_filtro == 'EMITIDO':
             estado_filtro = 'RECEPCIONADO_COMPLETO'
@@ -406,6 +442,27 @@ def recepciones_pendientes_api(request):
 
         if fecha_fin:
             queryset = queryset.filter(fecha_emision__lte=parse_date(fecha_fin))
+
+        # --- Atajos de estado -------------------------------------------------
+        # "Con problemas" = todo lo que exige que alguien haga algo: llego
+        # incompleto, llego de mas, esta en regularizacion o el destino lo
+        # rechazo. Es la pregunta que mas se hace en esta pantalla y hasta ahora
+        # habia que adivinarla combinando estados a mano.
+        ESTADOS_CON_PROBLEMAS = [
+            'RECEPCIONADO_PARCIAL', 'RECEPCIONADO_SOBRANTE',
+            'EN_REGULARIZACION', 'RECHAZADO',
+        ]
+        ESTADOS_YA_RECEPCIONADOS = [
+            'RECEPCIONADO_COMPLETO', 'RECEPCIONADO_PARCIAL', 'RECEPCIONADO_SOBRANTE',
+        ]
+        if con_problemas:
+            queryset = queryset.filter(estado_dte__in=ESTADOS_CON_PROBLEMAS)
+        if fase == 'pendientes':
+            queryset = queryset.filter(estado_dte__in=ESTADOS_PENDIENTES_EQUIV)
+        elif fase == 'recepcionados':
+            queryset = queryset.filter(estado_dte__in=ESTADOS_YA_RECEPCIONADOS)
+
+        queryset = _filtrar_dte_por_busqueda(queryset, buscar)
 
         queryset = queryset.order_by('-fecha_emision', '-id')
 
@@ -887,7 +944,13 @@ def confirmar_recepcion_api(request):
             if err:
                 return err
 
-            if dte.estado_dte != 'EMITIDO':
+            # ACEPTADO es el estado legado de los datos migrados desde Laravel y
+            # en todo el resto del modulo se trata como EMITIDO
+            # (ESTADOS_PENDIENTES_EQUIV, la bandeja de pendientes,
+            # rechazar_recepcion_api). Exigir 'EMITIDO' exacto SOLO aca hacia que
+            # la pantalla ofreciera "Recepcionar" sobre un ACEPTADO y el backend
+            # lo rechazara con un 400 que el operador no puede resolver.
+            if dte.estado_dte not in ('EMITIDO', 'ACEPTADO'):
                 return JsonResponse({'success': False, 'error': f'El DTE ya fue procesado (estado: {dte.estado_dte}).'}, status=400)
 
             from .models import Productos_Recepcionados
@@ -3083,6 +3146,7 @@ def emitidos_pendientes_api(request):
         tipo_documento = (request.GET.get('tipo_documento') or '').strip()
         fecha_inicio = request.GET.get('fecha_inicio')
         fecha_fin = request.GET.get('fecha_fin')
+        buscar = (request.GET.get('buscar') or '').strip()
         # Filtros nuevos:
         # - estado: '' (default = EMITIDO + RECHAZADO), 'EMITIDO', 'RECHAZADO', o 'TODOS'
         # - alcance: 'sucursal' (default) o 'todas' (todos los DTEs emitidos por las
@@ -3136,6 +3200,7 @@ def emitidos_pendientes_api(request):
             qs = qs.filter(fecha_emision__gte=fecha_inicio)
         if fecha_fin:
             qs = qs.filter(fecha_emision__lte=fecha_fin)
+        qs = _filtrar_dte_por_busqueda(qs, buscar)
 
         total = qs.count()
         inicio = (pagina - 1) * page_size
@@ -3159,6 +3224,11 @@ def emitidos_pendientes_api(request):
                 'fecha_emision': dte.fecha_emision.strftime('%d/%m/%Y') if dte.fecha_emision else '-',
                 'receptor': dte.receptor.nombre if dte.receptor else '-',
                 'sucursal_origen': dte.sucursal.alias if dte.sucursal else '-',
+                # La UI decide con estos dos si muestra los botones de escritura:
+                # con "ver todas las sucursales" llegan DTE ajenos, y los
+                # endpoints exigen ser la sucursal emisora y no estar recepcionado.
+                'sucursal_origen_id': dte.sucursal_id,
+                'fecha_recepcion': dte.fecha_recepcion.isoformat() if dte.fecha_recepcion else None,
                 'sucursal_destino': sucursal_destino_nombre,
                 'monto_neto': float(dte.monto_neto or 0),
                 'monto_con_iva': float(dte.monto_con_iva or 0),
@@ -3210,6 +3280,7 @@ def emitidos_recepcionados_api(request):
         tipo_documento = (request.GET.get('tipo_documento') or '').strip()
         fecha_inicio = request.GET.get('fecha_inicio')
         fecha_fin = request.GET.get('fecha_fin')
+        buscar = (request.GET.get('buscar') or '').strip()
 
         ESTADOS_POST_RECEPCION = [
             'RECEPCIONADO_COMPLETO', 'RECEPCIONADO_PARCIAL',
@@ -3235,6 +3306,7 @@ def emitidos_recepcionados_api(request):
             qs = qs.filter(fecha_emision__gte=fecha_inicio)
         if fecha_fin:
             qs = qs.filter(fecha_emision__lte=fecha_fin)
+        qs = _filtrar_dte_por_busqueda(qs, buscar)
 
         total = qs.count()
         inicio = (pagina - 1) * page_size
