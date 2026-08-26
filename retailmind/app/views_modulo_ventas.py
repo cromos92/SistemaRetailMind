@@ -3528,6 +3528,9 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                         'monto_item': prod_txt['total'],
                     })
 
+                # Sin SKU: la factura identifica el ítem por artículo + marca +
+                # color + desglose de tallas (ver `detalle_lleva_sku`). El SKU
+                # queda sólo en la boleta, que es la que se lleva el cliente.
                 datos_txt['detalle'].extend(agrupar_lineas_detalle_txt([
                     dict(
                         prod_txt['agrupacion'],
@@ -3538,7 +3541,7 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                         descuento_pct=prod_txt.get('descuento_pct', 0),
                     )
                     for prod_txt in lineas_agrupables
-                ]))
+                ], incluir_sku=False))
 
                 logger.info(
                     "TXT factura consolidado por articulo: ticket_id=%s lineas_ticket=%s "

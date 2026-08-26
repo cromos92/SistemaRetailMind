@@ -1510,27 +1510,38 @@ def construir_nombre_y_descripcion_item(item, max_nmb=80, max_dsc=1000):
         tuple[str, str]: (NmbItem, DscItem). DscItem puede ser ''.
     """
     # --- NmbItem (prioridad SKU) ---
-    sku_raw = (item.get('codigo') or item.get('sku') or 'Item')
-    sku = limpiar_texto(sku_raw, max_nmb)
-    if not sku:
-        sku = 'Item'
+    sku = limpiar_texto(item.get('codigo') or item.get('sku') or '', max_nmb)
 
     # Nombre y descripción completos, sin truncar todavía
     nombre_full = limpiar_texto(item.get('nombre', ''))
     descripcion_full = limpiar_texto(item.get('descripcion', ''))
 
-    espacio_nombre_en_nmb = max_nmb - len(sku) - 1  # -1 por el espacio separador
-    if espacio_nombre_en_nmb <= 0:
-        nmb = sku[:max_nmb]
-        nombre_que_cabe = ''
-        nombre_overflow = nombre_full
+    # NmbItem es obligatorio en el XSD: si no hay ni código ni nombre, algo hay
+    # que escribir.
+    if not sku and not nombre_full:
+        sku = 'Item'
+
+    if not sku:
+        # Hay nombre pero no código (ej. una factura de un Producto sin
+        # `articulo` cargado). El nombre YA identifica el ítem: anteponerle el
+        # literal 'Item' sólo ensuciaba el documento impreso ("Item ACME AZUL
+        # 2:42") y comía 5 de los 80 chars del campo.
+        nombre_que_cabe = nombre_full[:max_nmb]
+        nombre_overflow = nombre_full[max_nmb:]
+        nmb = nombre_que_cabe
     else:
-        nombre_que_cabe = nombre_full[:espacio_nombre_en_nmb]
-        nombre_overflow = nombre_full[espacio_nombre_en_nmb:]
-        if nombre_que_cabe:
-            nmb = f"{sku} {nombre_que_cabe}".strip()[:max_nmb]
-        else:
+        espacio_nombre_en_nmb = max_nmb - len(sku) - 1  # -1 por el espacio separador
+        if espacio_nombre_en_nmb <= 0:
             nmb = sku[:max_nmb]
+            nombre_que_cabe = ''
+            nombre_overflow = nombre_full
+        else:
+            nombre_que_cabe = nombre_full[:espacio_nombre_en_nmb]
+            nombre_overflow = nombre_full[espacio_nombre_en_nmb:]
+            if nombre_que_cabe:
+                nmb = f"{sku} {nombre_que_cabe}".strip()[:max_nmb]
+            else:
+                nmb = sku[:max_nmb]
 
     # --- DscItem (overflow nombre + descripción original) ---
     if max_dsc <= 0:
@@ -3286,7 +3297,9 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
         })
 
     if lineas_factura:
-        detalle.extend(agrupar_lineas_detalle_txt(lineas_factura))
+        # Factura: sin SKU (ver `detalle_lleva_sku`) — artículo + marca + color
+        # + desglose de tallas, igual que el TXT canónico del mismo folio.
+        detalle.extend(agrupar_lineas_detalle_txt(lineas_factura, incluir_sku=False))
 
     # Calcular totales
     # ticket.total is always the NET amount the customer pays (IVA-inclusive).
@@ -3530,7 +3543,26 @@ def max_detalle_para_tipo(tipo_numerico):
         return 60
 
 
-def agrupar_lineas_detalle_txt(lineas, es_exenta=False):
+#: Tipos de DTE cuyo detalle lleva el SKU (el `codigo_asociado` de
+#: `Producto_Talla`) del producto. Sólo la BOLETA (39/41): es el comprobante que
+#: se lleva el cliente y ahí el SKU sirve para cambios y devoluciones en tienda
+#: —las boletas de ecommerce lo perdían al agrupar y se restituyó a propósito
+#: (ver `TestSkuEnDetalleTxt` y `TxtEcommerceLlevaSkuTest`).
+#: Factura, Guía y NC/ND (33/34/52/56/61) NO lo llevan: ahí el ítem se identifica
+#: por artículo + marca + color + desglose de tallas, que es como salen las notas
+#: de crédito desde siempre y como lo pide el operador para emisionDTE.
+TIPOS_CON_SKU_EN_DETALLE = frozenset({39, 41})
+
+
+def detalle_lleva_sku(tipo_numerico):
+    """¿El detalle del TXT de este tipo de DTE debe llevar el SKU del producto?"""
+    try:
+        return int(tipo_numerico) in TIPOS_CON_SKU_EN_DETALLE
+    except (TypeError, ValueError):
+        return False
+
+
+def agrupar_lineas_detalle_txt(lineas, es_exenta=False, incluir_sku=True):
     """
     Consolida líneas sueltas (una por SKU/talla) en una línea de detalle por
     variante real de producto: `(articulo, marca, color, costo, precio)`.
@@ -3550,6 +3582,13 @@ def agrupar_lineas_detalle_txt(lineas, es_exenta=False):
     glosas distintas y encabeza el NmbItem resultante en vez del artículo.
 
     `es_exenta` marca cada línea con IndExe=1 (exención de IVA).
+
+    `incluir_sku=False` deja el SKU del producto FUERA del TXT por completo: ni
+    como CdgItem, ni en el prefijo del NmbItem, ni entre paréntesis en el
+    desglose de tallas, ni como "SKUs: ..." en el DscItem. El ítem queda
+    identificado por artículo + marca + color + tallas
+    ("ZAP01 ACME AZUL 2:38 1:39"). Es lo que corresponde a factura, guía y NC
+    (ver `detalle_lleva_sku`); la boleta sí lo lleva.
     """
     from collections import defaultdict
 
@@ -3599,16 +3638,19 @@ def agrupar_lineas_detalle_txt(lineas, es_exenta=False):
         # código del ítem y el artículo pasa al nombre para no perderse; con
         # varios SKUs, el código sigue siendo el artículo y cada tramo del
         # desglose de tallas lleva su SKU entre paréntesis.
+        # Con `incluir_sku=False` (factura/guía/NC) la lista queda vacía y cae
+        # todo por la rama del artículo: ni CdgItem, ni "(sku)", ni "SKUs:".
         skus_grupo = list(dict.fromkeys(
             str(sku) for _, _, sku in grupo['tallas'] if sku is not None
-        ))
+        )) if incluir_sku else []
         # Glosa propia (p. ej. la descripción de un ítem de cotización):
         # encabeza el NmbItem en lugar del código de artículo.
         nombre_base = limpiar_texto(grupo['nombre'] or '')
         descripcion_txt = ''
+        tallas_sin_sku = ' '.join(f"{cant}:{talla}" for cant, talla, _ in grupo['tallas'])
         if len(skus_grupo) == 1:
             codigo_txt = skus_grupo[0]
-            tallas_str = ' '.join(f"{cant}:{talla}" for cant, talla, _ in grupo['tallas'])
+            tallas_str = tallas_sin_sku
             prefijo_articulo = nombre_base or limpiar_texto(grupo['articulo'] or '')
         else:
             codigo_txt = limpiar_texto(grupo['articulo'] or '')
@@ -3622,7 +3664,7 @@ def agrupar_lineas_detalle_txt(lineas, es_exenta=False):
                 # Con 4+ tallas los "(sku)" inflan el NmbItem sobre los 80 chars
                 # del SII y el nombre impreso saldría cortado a mitad de un SKU:
                 # el desglose queda limpio y los SKUs van completos al DscItem.
-                tallas_str = ' '.join(f"{cant}:{talla}" for cant, talla, _ in grupo['tallas'])
+                tallas_str = tallas_sin_sku
                 if skus_grupo:
                     descripcion_txt = 'SKUs: ' + ' '.join(skus_grupo)
 
@@ -3656,6 +3698,9 @@ def construir_detalle_txt_desde_dte_productos(dte_productos, tipo_numerico, es_e
     Normaliza las filas de `Dte_Productos` y delega la consolidación en
     `agrupar_lineas_detalle_txt` (compartida con la ruta POS/ticket, para que
     un mismo folio produzca el mismo detalle por cualquiera de las dos vías).
+
+    El SKU sólo se emite en boleta (ver `detalle_lleva_sku`): en factura, guía y
+    NC el ítem va como artículo + marca + color + desglose de tallas.
 
     `es_exenta` marca cada línea con IndExe=1 (exención de IVA). Necesario para
     NC/ND que referencian documentos exentos, donde el tipo (56/61) no basta para
@@ -3711,7 +3756,11 @@ def construir_detalle_txt_desde_dte_productos(dte_productos, tipo_numerico, es_e
             'descuento_pct': float(dte_producto.descuento_pct) if dte_producto.descuento_pct else 0,
         })
 
-    detalle.extend(agrupar_lineas_detalle_txt(lineas, es_exenta=es_exenta))
+    detalle.extend(agrupar_lineas_detalle_txt(
+        lineas,
+        es_exenta=es_exenta,
+        incluir_sku=detalle_lleva_sku(tipo_numerico),
+    ))
     return detalle
 
 

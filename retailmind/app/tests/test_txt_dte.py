@@ -14,6 +14,7 @@ from app.views_modulo_documentos import (
     generar_txt_nota_credito_acepta,
     agrupar_lineas_detalle_txt,
     construir_datos_txt_desde_dte,
+    detalle_lleva_sku,
     max_detalle_para_tipo,
     parsear_txt_acepta,
     construir_nombre_y_descripcion_item,
@@ -22,6 +23,16 @@ from app.views_modulo_documentos import (
     truncar_campo_sii,
     MAX_LENGTHS_SII,
 )
+
+
+def nombre_impreso(item):
+    """
+    El NmbItem tal como saldrá en el TXT. No basta con mirar `item['nombre']`:
+    los tres generadores anteponen el código del ítem al nombre (ver
+    `construir_nombre_y_descripcion_item`), así que el artículo llega al
+    documento por la vía del `codigo` cuando el detalle va sin SKU.
+    """
+    return construir_nombre_y_descripcion_item(item, max_nmb=80, max_dsc=1000)[0]
 
 
 def _datos_factura_base():
@@ -284,6 +295,198 @@ class TestAgrupacionDetalleDteExistente(TestCase):
         self.assertIn('AZUL 1:XL', detalle[2]['nombre'])
 
 
+class TestConsolidacionDetalleFactura(SimpleTestCase):
+    """
+    Un ticket de 100 productos sale sin problema como BOLETA (su esquema
+    admite 1.000 <Detalle>) pero la FACTURA sólo admite 60: hay que consolidar
+    por artículo, igual que emisionDTE, o Acepta rechaza el TXT.
+    """
+
+    def _linea(self, articulo, talla, sku, precio=8403, **extra):
+        base = {
+            'articulo': articulo, 'marca': 'ACME', 'color': 'NEGRO',
+            'costo': 5000, 'precio_unitario': precio, 'talla': talla,
+            'sku': sku, 'cantidad': 1, 'monto_item': precio,
+            'descuento_monto': 0, 'descuento_pct': 0,
+        }
+        base.update(extra)
+        return base
+
+    def test_tope_de_detalle_por_tipo_de_documento(self):
+        for tipo in (33, 34, 52, 56, 61):
+            self.assertEqual(max_detalle_para_tipo(tipo), 60)
+        for tipo in (39, 41):
+            self.assertEqual(max_detalle_para_tipo(tipo), 1000)
+        # El tipo llega como string desde varios callers.
+        self.assertEqual(max_detalle_para_tipo('33'), 60)
+        self.assertEqual(max_detalle_para_tipo(None), 60)
+
+    def test_cien_lineas_de_ticket_caben_en_una_factura(self):
+        # 20 artículos × 5 tallas = las 100 líneas del ticket.
+        lineas = [
+            self._linea(f'ART{art:03d}', str(38 + t), 900000 + art * 10 + t)
+            for art in range(20) for t in range(5)
+        ]
+
+        detalle = agrupar_lineas_detalle_txt(lineas, incluir_sku=False)
+
+        self.assertEqual(len(detalle), 20)
+        self.assertLessEqual(len(detalle), max_detalle_para_tipo(33))
+        self.assertEqual(sum(d['cantidad'] for d in detalle), 100,
+                         'la consolidación no puede perder unidades')
+        self.assertEqual(sum(d['monto_item'] for d in detalle), 100 * 8403,
+                         'la consolidación no puede mover plata')
+        # NmbItem tiene tope 80 en el XSD y acá entra completo.
+        self.assertTrue(all(len(nombre_impreso(d)) <= 80 for d in detalle))
+
+    def test_txt_factura_emite_una_linea_por_articulo(self):
+        datos = _datos_factura_base()
+        datos['totales'].update({'monto_neto': 840300, 'iva': 159657,
+                                 'monto_total': 999957})
+        datos['detalle'] = agrupar_lineas_detalle_txt([
+            self._linea(f'ART{art:03d}', str(38 + t), 900000 + art * 10 + t)
+            for art in range(20) for t in range(5)
+        ], incluir_sku=False)
+
+        txt = generar_txt_dte_acepta(datos)
+
+        lineas = txt.split('\n')
+        ini = lineas.index('~')
+        fin = lineas.index('~', ini + 1)
+        detalle_txt = [l for l in lineas[ini + 1:fin] if l.strip()]
+        self.assertEqual(len(detalle_txt), 20)
+        self.assertEqual(sum(int(l.split('|')[8]) for l in detalle_txt), 840300,
+                         'sum(MontoItem) debe seguir cuadrando con MntNeto')
+
+    def test_glosa_propia_no_se_fusiona_con_otra(self):
+        """
+        Las líneas que vienen de una cotización traen su propia glosa: dos
+        glosas distintas del mismo artículo no pueden colapsar en un renglón.
+        """
+        detalle = agrupar_lineas_detalle_txt([
+            self._linea('ART001', '38', 1, nombre='Zapato de seguridad'),
+            self._linea('ART001', '39', 2, nombre='Zapato de seguridad'),
+            self._linea('ART001', '40', 3, nombre='Zapato dielectrico'),
+        ], incluir_sku=False)
+
+        self.assertEqual(len(detalle), 2)
+        self.assertTrue(detalle[0]['nombre'].startswith('Zapato de seguridad'),
+                        detalle[0]['nombre'])
+        self.assertTrue(detalle[1]['nombre'].startswith('Zapato dielectrico'),
+                        detalle[1]['nombre'])
+
+
+class TestFacturaSinSkuEnDetalle(SimpleTestCase):
+    """
+    En FACTURA / GUÍA / NC el ítem se identifica por artículo + marca + color +
+    desglose de tallas. El SKU (el `codigo_asociado` de `Producto_Talla`) NO
+    debe aparecer en ningún campo del TXT: ni CdgItem, ni prefijo del NmbItem,
+    ni "(sku)" en el desglose, ni "SKUs: ..." en el DscItem. La BOLETA sí lo
+    lleva — ver `TestSkuEnDetalleTxt`.
+    """
+
+    def _dp(self, articulo='ZAP01', marca='ACME', color='AZUL', talla='42',
+            sku=784512, stock=1, precio=10000):
+        producto = SimpleNamespace(
+            articulo=articulo, costo=5000,
+            atributo1=SimpleNamespace(valor=marca),
+            atributo2=SimpleNamespace(valor=color),
+        )
+        pt = SimpleNamespace(producto=producto, talla=talla, sku=sku)
+        return SimpleNamespace(
+            productoTalla=pt, descripcion='', costo=5000, precio=precio,
+            precio_unitario=precio, descuento_pct=0, descuento_monto=0,
+            monto_item=stock * precio, stock=stock,
+        )
+
+    def test_la_regla_es_por_tipo_de_documento(self):
+        for tipo in (39, 41):
+            self.assertTrue(detalle_lleva_sku(tipo), f'boleta {tipo} lleva SKU')
+        for tipo in (33, 34, 52, 56, 61):
+            self.assertFalse(detalle_lleva_sku(tipo), f'tipo {tipo} no lleva SKU')
+        # El tipo llega como string desde varios callers.
+        self.assertTrue(detalle_lleva_sku('39'))
+        self.assertFalse(detalle_lleva_sku(None))
+
+    def test_una_sola_talla_usa_el_articulo_como_codigo(self):
+        detalle = construir_detalle_txt_desde_dte_productos(
+            [self._dp(sku=784512, talla='42', stock=2)], tipo_numerico=33)
+
+        self.assertEqual(detalle[0]['codigo'], 'ZAP01',
+                         'el CdgItem debe ser el artículo, no el SKU')
+        self.assertEqual(nombre_impreso(detalle[0]), 'ZAP01 ACME AZUL 2:42')
+
+    def test_varias_tallas_no_anotan_el_sku(self):
+        detalle = construir_detalle_txt_desde_dte_productos([
+            self._dp(sku=784512, talla='42', stock=2),
+            self._dp(sku=784513, talla='43', stock=1),
+        ], tipo_numerico=33)
+
+        self.assertEqual(len(detalle), 1)
+        self.assertEqual(nombre_impreso(detalle[0]), 'ZAP01 ACME AZUL 2:42 1:43')
+        self.assertEqual(detalle[0]['descripcion'], '')
+
+    def test_muchas_tallas_no_mandan_skus_a_la_descripcion(self):
+        detalle = construir_detalle_txt_desde_dte_productos(
+            [self._dp(sku=784510 + i, talla=str(39 + i)) for i in range(5)],
+            tipo_numerico=33)
+
+        self.assertEqual(detalle[0]['descripcion'], '',
+                         'el DscItem no puede traer "SKUs: ..."')
+        self.assertEqual(nombre_impreso(detalle[0]),
+                         'ZAP01 ACME AZUL 1:39 1:40 1:41 1:42 1:43')
+
+    def test_el_txt_de_factura_no_contiene_el_sku_en_ningun_campo(self):
+        datos = _datos_factura_base()
+        datos['totales'].update({'monto_neto': 42015, 'iva': 7983,
+                                 'monto_total': 49998})
+        datos['detalle'] = construir_detalle_txt_desde_dte_productos(
+            [self._dp(sku=784510 + i, talla=str(39 + i), precio=8403)
+             for i in range(5)],
+            tipo_numerico=33)
+
+        txt = generar_txt_dte_acepta(datos)
+
+        for i in range(5):
+            self.assertNotIn(str(784510 + i), txt,
+                             'ningún SKU puede aparecer en el TXT de la factura')
+        lineas = txt.split('\n')
+        ini = lineas.index('~')
+        campos = [l for l in lineas[ini + 1:] if l.strip()][0].split('|')
+        self.assertEqual(campos[1], 'ZAP01 ACME AZUL 1:39 1:40 1:41 1:42 1:43')
+        self.assertEqual(campos[2], '', 'DscItem vacío')
+        self.assertEqual(campos[9], 'ZAP01', 'CdgItem = artículo')
+
+    def test_guia_y_nota_de_credito_tampoco_llevan_sku(self):
+        for tipo in (34, 52, 56, 61):
+            detalle = construir_detalle_txt_desde_dte_productos(
+                [self._dp(sku=784512, talla='42')], tipo_numerico=tipo)
+            self.assertEqual(detalle[0]['codigo'], 'ZAP01', f'tipo {tipo}')
+            self.assertNotIn('784512', nombre_impreso(detalle[0]), f'tipo {tipo}')
+
+    def test_producto_sin_articulo_no_imprime_el_literal_item(self):
+        """
+        `Producto.articulo` puede venir vacío (datos migrados del sistema
+        legacy). Al sacar el SKU no queda código que lo reemplace, y el
+        NmbItem salía impreso como "Item ACME AZUL 2:42": el placeholder se
+        comía 5 de los 80 chars y no identificaba nada.
+        """
+        detalle = construir_detalle_txt_desde_dte_productos(
+            [self._dp(articulo='', sku=784512, talla='42', stock=2)],
+            tipo_numerico=33)
+
+        self.assertEqual(detalle[0]['codigo'], '')
+        self.assertEqual(nombre_impreso(detalle[0]), 'ACME AZUL 2:42')
+
+    def test_sin_codigo_ni_nombre_se_conserva_el_placeholder(self):
+        # NmbItem es obligatorio en el XSD: si no hay nada, 'Item' sigue siendo
+        # mejor que un campo vacío.
+        self.assertEqual(
+            construir_nombre_y_descripcion_item({'codigo': '', 'nombre': ''})[0],
+            'Item',
+        )
+
+
 class TestSkuEnDetalleTxt(TestCase):
     """El TXT canónico lleva el SKU del producto (paridad con el POS).
 
@@ -293,6 +496,10 @@ class TestSkuEnDetalleTxt(TestCase):
     grupo con UN solo SKU → el SKU es el código del ítem y el artículo
     pasa al nombre; varios SKUs → código = artículo y cada tramo del
     desglose de tallas lleva su SKU entre paréntesis.
+
+    OJO: esto aplica sólo a BOLETA (39/41) — por eso todos los casos de acá
+    pasan `tipo_numerico=39`. En factura, guía y NC el SKU se omite a propósito
+    (ver `TestFacturaSinSkuEnDetalle` y `detalle_lleva_sku`).
     """
 
     def _dp(self, articulo='ZAP01', marca='ACME', color='AZUL', costo=5000,
