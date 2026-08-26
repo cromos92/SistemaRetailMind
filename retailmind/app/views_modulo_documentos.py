@@ -3224,17 +3224,23 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
         }
     
     # Preparar productos - ✅ Aplicar limpiar_texto para eliminar acentos y Ñ
+    # La FACTURA consolida el detalle por variante de artículo (ver
+    # `agrupar_lineas_detalle_txt`): el XSD del SII solo admite 60 <Detalle>
+    # en factura, y un ticket de 100 tallas no cabe. La BOLETA mantiene la
+    # línea por SKU — su esquema admite 1.000 y es lo que el cliente ve impreso.
+    es_factura_txt = 'FACTURA' in tipo_dte
     detalle = []
+    lineas_factura = []
     for item in ticket.ticket_productos.all():
         producto_talla = item.ProductoTalla
         producto = producto_talla.producto
-        
+
         # Construir nombre limpio sin caracteres especiales
         articulo_limpio = limpiar_texto(producto.articulo or '')
         marca_limpia = limpiar_texto(producto.atributo1.valor if producto.atributo1 else '')
         talla_limpia = limpiar_texto(str(producto_talla.talla) if producto_talla.talla else '')
         nombre_limpio = f"{articulo_limpio} {marca_limpia} {talla_limpia}".strip()
-        
+
         # Precios almacenados en BD son IVA-inclusive (precio de venta al público).
         # Política unificada: el descuento NO se aplica por línea, va como
         # DscRcgGlobal (Tabla 3 factura / Tabla 4 boleta) para que aparezca
@@ -3242,13 +3248,29 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
         # el precio ORIGINAL (sin descontar).
         # - Facturas: requieren NETO por línea (BD está IVA-inclusive → /1.19).
         # - Boletas: usan precio IVA-inclusive tal cual.
-        if 'FACTURA' in tipo_dte:
+        if es_factura_txt:
             precio_unitario_txt = int(round(Decimal(item.precio) / Decimal('1.19')))
             monto_item_txt = int(round(Decimal(item.precio * item.stock) / Decimal('1.19')))
         else:
             precio_unitario_txt = int(item.precio)
             monto_item_txt = int(item.precio * item.stock)
         monto_descuento_txt = 0  # se reporta como DscRcgGlobal global, no por línea
+
+        if es_factura_txt:
+            lineas_factura.append({
+                'articulo': producto.articulo or f'PROD{producto.id}',
+                'marca': producto.atributo1.valor if producto.atributo1 else '',
+                'color': producto.atributo2.valor if producto.atributo2 else '',
+                'costo': int(producto.costo or 0),
+                'precio_unitario': precio_unitario_txt,
+                'talla': str(producto_talla.talla) if producto_talla.talla else 'U',
+                'sku': producto_talla.sku,
+                'cantidad': item.stock,
+                'monto_item': monto_item_txt,
+                'descuento_monto': monto_descuento_txt,
+                'descuento_pct': 0,
+            })
+            continue
 
         detalle.append({
             'codigo': limpiar_texto(producto.articulo or f'PROD{producto.id}'),
@@ -3262,7 +3284,10 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
             'monto_descuento': monto_descuento_txt,
             'monto_item': monto_item_txt,
         })
-    
+
+    if lineas_factura:
+        detalle.extend(agrupar_lineas_detalle_txt(lineas_factura))
+
     # Calcular totales
     # ticket.total is always the NET amount the customer pays (IVA-inclusive).
     # Per-item discounts are already reflected in tp.subtotal, so we must NOT
@@ -3378,10 +3403,21 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
         'referencias': referencias,
         'descuentos_recargos': descuentos_recargos,
     }
-    
+
+    # Aun consolidado por artículo, un ticket con más artículos distintos que el
+    # tope del SII no cabe en el documento. Se corta acá —antes de quemar el
+    # folio y marcar el ticket— en vez de entregar un TXT que Acepta rechaza.
+    tope_detalle = max_detalle_para_tipo(documento['tipo_documento'])
+    if len(detalle) > tope_detalle:
+        raise ValidationError(
+            f'El documento quedó con {len(detalle)} líneas de detalle y el SII '
+            f'admite {tope_detalle} para este tipo. Divide la venta en más de un '
+            f'documento.'
+        )
+
     # Generar TXT
     contenido_txt = generar_txt_dte_acepta(datos)
-    
+
     # Actualizar ticket
     ticket.tipo_dte = tipo_dte
     ticket.folio_dte = siguiente_folio
@@ -3475,19 +3511,46 @@ def generar_txt_acepta_api(request):
         }, status=500)
 
 
-def construir_detalle_txt_desde_dte_productos(dte_productos, tipo_numerico, es_exenta=False):
+#: Tope de líneas de <Detalle> por documento según el XSD del SII.
+#: Factura, Factura exenta, Guía, Nota de débito y Nota de crédito
+#: (33/34/52/56/61) admiten 60. La Boleta (39/41) viaja en EnvioBOLETA, cuyo
+#: esquema permite 1.000 — por eso un ticket de 100 productos sale como boleta
+#: sin problema y como factura lo rechaza Acepta.
+MAX_DETALLE_TXT_POR_TIPO = {
+    33: 60, 34: 60, 52: 60, 56: 60, 61: 60,
+    39: 1000, 41: 1000,
+}
+
+
+def max_detalle_para_tipo(tipo_numerico):
+    """Cuántas líneas de detalle admite el SII para ese tipo de DTE."""
+    try:
+        return MAX_DETALLE_TXT_POR_TIPO.get(int(tipo_numerico), 60)
+    except (TypeError, ValueError):
+        return 60
+
+
+def agrupar_lineas_detalle_txt(lineas, es_exenta=False):
     """
-    Agrupa el detalle para TXT Acepta por variante real de producto.
+    Consolida líneas sueltas (una por SKU/talla) en una línea de detalle por
+    variante real de producto: `(articulo, marca, color, costo, precio)`.
 
     El articulo por si solo no identifica una variante en inventario: un mismo
     articulo puede existir con distinta marca, color o costo.
 
-    `es_exenta` marca cada línea con IndExe=1 (exención de IVA). Necesario para
-    NC/ND que referencian documentos exentos, donde el tipo (56/61) no basta para
-    inferir la exención. Por compatibilidad, Factura Exenta (34) sigue siendo
-    exenta aunque el caller no pase el flag.
+    Es la misma consolidación que muestra `emisionDTE` en pantalla —un renglón
+    por artículo con el desglose de tallas— y es lo que hace que un ticket de
+    100 SKUs quepa en los 60 <Detalle> que el XSD del SII admite para factura.
+
+    Cada elemento de `lineas` es un dict normalizado con las claves
+    `articulo`, `marca`, `color`, `costo`, `precio_unitario`, `talla`, `sku`,
+    `cantidad`, `monto_item`, `descuento_monto` y `descuento_pct`. Opcionalmente
+    acepta `nombre` para las líneas cuyo texto impreso no se deriva del artículo
+    (glosas de cotización): entra en la clave de agrupación para no fusionar dos
+    glosas distintas y encabeza el NmbItem resultante en vez del artículo.
+
+    `es_exenta` marca cada línea con IndExe=1 (exención de IVA).
     """
-    es_exenta = es_exenta or tipo_numerico == 34
     from collections import defaultdict
 
     detalle = []
@@ -3501,63 +3564,33 @@ def construir_detalle_txt_desde_dte_productos(dte_productos, tipo_numerico, es_e
         'articulo': '',
         'marca': '',
         'color': '',
+        'nombre': '',
     })
 
-    for dte_producto in dte_productos:
-        # Linea muerta: vaciada por un ajuste del emisor o por un cambio de
-        # talla, quedo en stock 0 y desactivada. Incluirla producia un item
-        # fantasma "0:<talla>" en el TXT y, al sumar un SKU mas al grupo,
-        # cambiaba el CdgItem declarado del folio (deja de ser el SKU y pasa a
-        # ser el codigo de articulo). No se filtra `activo` en el queryset
-        # porque hay flujos que necesitan leer lineas inactivas con su
-        # monto_item intacto.
-        # getattr con default: esta funcion tambien recibe objetos duck-typed
-        # (stubs de tests, filas armadas a mano) que no traen el campo.
-        if not getattr(dte_producto, 'activo', True) and int(dte_producto.stock or 0) <= 0:
-            continue
-        if dte_producto.productoTalla is None:
-            # Item de concepto (sin mercadería)
-            detalle.append({
-                'nombre': limpiar_texto(dte_producto.descripcion or 'Concepto'),
-                'descripcion': '',
-                'cantidad': dte_producto.stock,
-                'unidad': 'UN',
-                'precio_unitario': dte_producto.precio_unitario or dte_producto.precio,
-                'descuento_pct': float(dte_producto.descuento_pct) if dte_producto.descuento_pct else 0,
-                'monto_descuento': int(dte_producto.descuento_monto or 0),
-                'monto_item': dte_producto.monto_item or (dte_producto.stock * dte_producto.precio),
-                'codigo': 'SRV',
-                'indicador_exencion': 1 if es_exenta else '',
-            })
-            continue
-
-        producto_talla = dte_producto.productoTalla
-        producto = producto_talla.producto
-        marca = producto.atributo1.valor if producto.atributo1 else ''
-        color = producto.atributo2.valor if producto.atributo2 else ''
-        costo = int(dte_producto.costo if dte_producto.costo is not None else (producto.costo or 0))
-        precio_unitario = dte_producto.precio_unitario or dte_producto.precio
-
+    for linea in lineas:
+        precio_unitario = linea.get('precio_unitario') or 0
         agrupacion_key = (
-            producto.articulo or '',
-            marca or '',
-            color or '',
-            costo,
+            linea.get('articulo') or '',
+            linea.get('marca') or '',
+            linea.get('color') or '',
+            int(linea.get('costo') or 0),
             precio_unitario,
+            linea.get('nombre') or '',
         )
         grupo = productos_agrupados[agrupacion_key]
 
-        talla_nombre = str(producto_talla.talla) if getattr(producto_talla, 'talla', None) else 'U'
-        grupo['tallas'].append((dte_producto.stock, talla_nombre, getattr(producto_talla, 'sku', None)))
-        grupo['cantidad_total'] += dte_producto.stock
+        cantidad = linea.get('cantidad') or 0
+        grupo['tallas'].append((cantidad, linea.get('talla') or 'U', linea.get('sku')))
+        grupo['cantidad_total'] += cantidad
         grupo['precio'] = precio_unitario
-        grupo['monto_total'] += dte_producto.monto_item or (dte_producto.stock * dte_producto.precio)
-        grupo['descuento_monto_total'] += int(dte_producto.descuento_monto or 0)
-        if dte_producto.descuento_pct:
-            grupo['descuento_pct'] = float(dte_producto.descuento_pct)
-        grupo['articulo'] = producto.articulo
-        grupo['marca'] = marca
-        grupo['color'] = color
+        grupo['monto_total'] += linea.get('monto_item') or 0
+        grupo['descuento_monto_total'] += int(linea.get('descuento_monto') or 0)
+        if linea.get('descuento_pct'):
+            grupo['descuento_pct'] = float(linea['descuento_pct'])
+        grupo['articulo'] = linea.get('articulo') or ''
+        grupo['marca'] = linea.get('marca') or ''
+        grupo['color'] = linea.get('color') or ''
+        grupo['nombre'] = linea.get('nombre') or ''
 
     for grupo in productos_agrupados.values():
         # SKU en el TXT: el POS emite el SKU por línea (CdgItem + prefijo del
@@ -3569,14 +3602,17 @@ def construir_detalle_txt_desde_dte_productos(dte_productos, tipo_numerico, es_e
         skus_grupo = list(dict.fromkeys(
             str(sku) for _, _, sku in grupo['tallas'] if sku is not None
         ))
+        # Glosa propia (p. ej. la descripción de un ítem de cotización):
+        # encabeza el NmbItem en lugar del código de artículo.
+        nombre_base = limpiar_texto(grupo['nombre'] or '')
         descripcion_txt = ''
         if len(skus_grupo) == 1:
             codigo_txt = skus_grupo[0]
             tallas_str = ' '.join(f"{cant}:{talla}" for cant, talla, _ in grupo['tallas'])
-            prefijo_articulo = limpiar_texto(grupo['articulo'] or '')
+            prefijo_articulo = nombre_base or limpiar_texto(grupo['articulo'] or '')
         else:
-            codigo_txt = limpiar_texto(grupo['articulo'])
-            prefijo_articulo = ''
+            codigo_txt = limpiar_texto(grupo['articulo'] or '')
+            prefijo_articulo = nombre_base
             if skus_grupo and len(grupo['tallas']) <= 3:
                 tallas_str = ' '.join(
                     f"{cant}:{talla}({sku})" if sku is not None else f"{cant}:{talla}"
@@ -3610,6 +3646,72 @@ def construir_detalle_txt_desde_dte_productos(dte_productos, tipo_numerico, es_e
             'indicador_exencion': 1 if es_exenta else '',
         })
 
+    return detalle
+
+
+def construir_detalle_txt_desde_dte_productos(dte_productos, tipo_numerico, es_exenta=False):
+    """
+    Agrupa el detalle para TXT Acepta por variante real de producto.
+
+    Normaliza las filas de `Dte_Productos` y delega la consolidación en
+    `agrupar_lineas_detalle_txt` (compartida con la ruta POS/ticket, para que
+    un mismo folio produzca el mismo detalle por cualquiera de las dos vías).
+
+    `es_exenta` marca cada línea con IndExe=1 (exención de IVA). Necesario para
+    NC/ND que referencian documentos exentos, donde el tipo (56/61) no basta para
+    inferir la exención. Por compatibilidad, Factura Exenta (34) sigue siendo
+    exenta aunque el caller no pase el flag.
+    """
+    es_exenta = es_exenta or tipo_numerico == 34
+
+    detalle = []
+    lineas = []
+
+    for dte_producto in dte_productos:
+        # Linea muerta: vaciada por un ajuste del emisor o por un cambio de
+        # talla, quedo en stock 0 y desactivada. Incluirla producia un item
+        # fantasma "0:<talla>" en el TXT y, al sumar un SKU mas al grupo,
+        # cambiaba el CdgItem declarado del folio (deja de ser el SKU y pasa a
+        # ser el codigo de articulo). No se filtra `activo` en el queryset
+        # porque hay flujos que necesitan leer lineas inactivas con su
+        # monto_item intacto.
+        # getattr con default: esta funcion tambien recibe objetos duck-typed
+        # (stubs de tests, filas armadas a mano) que no traen el campo.
+        if not getattr(dte_producto, 'activo', True) and int(dte_producto.stock or 0) <= 0:
+            continue
+        if dte_producto.productoTalla is None:
+            # Item de concepto (sin mercadería)
+            detalle.append({
+                'nombre': limpiar_texto(dte_producto.descripcion or 'Concepto'),
+                'descripcion': '',
+                'cantidad': dte_producto.stock,
+                'unidad': 'UN',
+                'precio_unitario': dte_producto.precio_unitario or dte_producto.precio,
+                'descuento_pct': float(dte_producto.descuento_pct) if dte_producto.descuento_pct else 0,
+                'monto_descuento': int(dte_producto.descuento_monto or 0),
+                'monto_item': dte_producto.monto_item or (dte_producto.stock * dte_producto.precio),
+                'codigo': 'SRV',
+                'indicador_exencion': 1 if es_exenta else '',
+            })
+            continue
+
+        producto_talla = dte_producto.productoTalla
+        producto = producto_talla.producto
+        lineas.append({
+            'articulo': producto.articulo or '',
+            'marca': producto.atributo1.valor if producto.atributo1 else '',
+            'color': producto.atributo2.valor if producto.atributo2 else '',
+            'costo': int(dte_producto.costo if dte_producto.costo is not None else (producto.costo or 0)),
+            'precio_unitario': dte_producto.precio_unitario or dte_producto.precio,
+            'talla': str(producto_talla.talla) if getattr(producto_talla, 'talla', None) else 'U',
+            'sku': getattr(producto_talla, 'sku', None),
+            'cantidad': dte_producto.stock,
+            'monto_item': dte_producto.monto_item or (dte_producto.stock * dte_producto.precio),
+            'descuento_monto': int(dte_producto.descuento_monto or 0),
+            'descuento_pct': float(dte_producto.descuento_pct) if dte_producto.descuento_pct else 0,
+        })
+
+    detalle.extend(agrupar_lineas_detalle_txt(lineas, es_exenta=es_exenta))
     return detalle
 
 

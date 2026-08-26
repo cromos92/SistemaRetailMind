@@ -9601,6 +9601,17 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <small class="text-muted">Detalle: ${data.archivo_txt_error}</small>
                                 </div>`;
                         }
+
+                        // El TXT existe pero excede el tope de líneas del SII:
+                        // Acepta lo rechazaría recién al subirlo.
+                        if (data.archivo_txt_advertencia) {
+                            htmlMensaje += `
+                                <div class="alert alert-danger text-start mb-0 mt-2 py-2">
+                                    <i class="ri-error-warning-line"></i>
+                                    <strong>El TXT excede el máximo de líneas del SII</strong><br>
+                                    <small>${data.archivo_txt_advertencia}</small>
+                                </div>`;
+                        }
                     } else {
                         // Sin DTE - mostrar número de ticket
                         htmlMensaje = `<p><strong>Ticket #${ticketActual.ticket_id}</strong> procesado exitosamente</p>`;

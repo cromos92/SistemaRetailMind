@@ -3204,7 +3204,12 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
             #    el ámbito, importarlo recién antes de los datos del emisor causaba
             #    UnboundLocalError ("referenced before assignment") y el TXT no se
             #    generaba (archivo_txt_data quedaba None → no se descargaba el TXT).
-            from .views_modulo_documentos import generar_txt_dte_acepta, limpiar_texto
+            from .views_modulo_documentos import (
+                agrupar_lineas_detalle_txt,
+                generar_txt_dte_acepta,
+                limpiar_texto,
+                max_detalle_para_tipo,
+            )
 
             # Preparar datos para TXT
             empresa = ticket.sucursal.empresa
@@ -3336,6 +3341,7 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                             skus_pendientes_cot[item.id] = item.sku_producto_pendiente
 
                 for tp in ticket.ticket_productos.all():
+                    agrupacion = None
                     if tp.ProductoTalla is None:
                         # Ítem manual / pendiente de despacho — usar descripción de línea.
                         # El código del ítem debe ser algo trazable: el SKU esperado
@@ -3350,10 +3356,11 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                     else:
                         producto = tp.ProductoTalla.producto
                         sku = tp.ProductoTalla.sku
-                        
+                        glosa_cotizacion = descripciones_cotizacion.get(sku) or ''
+
                         # ✅ PRIORIDAD: 1) Descripción de cotización, 2) Descripción del producto, 3) Artículo
-                        if sku in descripciones_cotizacion and descripciones_cotizacion[sku]:
-                            nombre_producto = descripciones_cotizacion[sku]
+                        if glosa_cotizacion:
+                            nombre_producto = glosa_cotizacion
                             logger.debug(
                                 "TXT ticket_id=%s sku=%s usando descripcion de cotizacion: %s",
                                 ticket.id,
@@ -3364,7 +3371,23 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                             nombre_producto = producto.descripcion
                         else:
                             nombre_producto = producto.articulo if producto else str(sku)
-                    
+
+                        # Metadatos de variante para consolidar el detalle de la
+                        # factura (ver más abajo). La glosa de cotización entra en
+                        # la clave para no fusionar dos glosas distintas.
+                        agrupacion = {
+                            'articulo': (producto.articulo or '') if producto else '',
+                            'marca': (producto.atributo1.valor
+                                      if producto and producto.atributo1 else ''),
+                            'color': (producto.atributo2.valor
+                                      if producto and producto.atributo2 else ''),
+                            'costo': int((producto.costo or 0) if producto else 0),
+                            'talla': (str(tp.ProductoTalla.talla)
+                                      if getattr(tp.ProductoTalla, 'talla', None) else 'U'),
+                            'sku': sku,
+                            'nombre': glosa_cotizacion,
+                        }
+
                     if not es_boleta:
                         # Factura: precio completo neto por unidad; el descuento
                         # va como DscRcgGlobal (tabla 3) para que aparezca como
@@ -3387,7 +3410,8 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                         'precio_unitario': precio_unitario_txt,
                         'descuento_pct': 0,          # el descuento va en DscRcgGlobal
                         'monto_descuento': monto_descuento_txt,
-                        'total': monto_item_txt
+                        'total': monto_item_txt,
+                        'agrupacion': agrupacion,
                     })
             
             # (limpiar_texto ya fue importado al inicio del try, junto a generar_txt_dte_acepta)
@@ -3473,21 +3497,88 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                     })
                 datos_txt['referencias'] = referencias_txt
             
-            for prod_txt in productos_txt:
-                sku_str = str(prod_txt.get('sku', ''))
-                datos_txt['detalle'].append({
-                    'codigo': limpiar_texto(sku_str[:35]),
-                    'sku': limpiar_texto(sku_str),
-                    'nombre': limpiar_texto(prod_txt['nombre']),
-                    'descripcion': limpiar_texto(prod_txt.get('descripcion', '')),
-                    'cantidad': prod_txt['cantidad'],
-                    'unidad': 'UN',
-                    'precio_unitario': prod_txt['precio_unitario'],
-                    'descuento_pct': prod_txt.get('descuento_pct', 0),
-                    'monto_descuento': prod_txt.get('monto_descuento', 0),
-                    'monto_item': prod_txt['total']
-                })
-            
+            # ── Detalle: una línea por SKU (boleta) o consolidado (factura) ──
+            # El XSD del SII admite 60 <Detalle> en factura/guía/NC y 1.000 en
+            # boleta (viaja en EnvioBOLETA). Por eso un ticket de 100 productos
+            # sale sin problema como boleta, pero como factura Acepta lo rechaza
+            # si se emite una línea por talla. La factura se consolida por
+            # variante —un renglón por artículo con el desglose "2:38 1:39",
+            # igual que emisionDTE y que el TXT canónico que se regenera desde
+            # el DTE ya guardado—, así el mismo folio da el mismo detalle por
+            # cualquiera de las dos vías. La boleta conserva la línea por SKU:
+            # es lo que el cliente ve impreso y no tiene tope que la apriete.
+            lineas_agrupables = [p for p in productos_txt if p.get('agrupacion')]
+            if not es_boleta and lineas_agrupables:
+                for prod_txt in productos_txt:
+                    if prod_txt.get('agrupacion'):
+                        continue
+                    # Ítems sin variante (pendientes de despacho, diferencia de
+                    # cambio) no se agrupan: van tal cual y en su orden.
+                    sku_str = str(prod_txt.get('sku', ''))
+                    datos_txt['detalle'].append({
+                        'codigo': limpiar_texto(sku_str[:35]),
+                        'sku': limpiar_texto(sku_str),
+                        'nombre': limpiar_texto(prod_txt['nombre']),
+                        'descripcion': limpiar_texto(prod_txt.get('descripcion', '')),
+                        'cantidad': prod_txt['cantidad'],
+                        'unidad': 'UN',
+                        'precio_unitario': prod_txt['precio_unitario'],
+                        'descuento_pct': prod_txt.get('descuento_pct', 0),
+                        'monto_descuento': prod_txt.get('monto_descuento', 0),
+                        'monto_item': prod_txt['total'],
+                    })
+
+                datos_txt['detalle'].extend(agrupar_lineas_detalle_txt([
+                    dict(
+                        prod_txt['agrupacion'],
+                        precio_unitario=prod_txt['precio_unitario'],
+                        cantidad=prod_txt['cantidad'],
+                        monto_item=prod_txt['total'],
+                        descuento_monto=prod_txt.get('monto_descuento', 0),
+                        descuento_pct=prod_txt.get('descuento_pct', 0),
+                    )
+                    for prod_txt in lineas_agrupables
+                ]))
+
+                logger.info(
+                    "TXT factura consolidado por articulo: ticket_id=%s lineas_ticket=%s "
+                    "lineas_detalle=%s",
+                    ticket.id, len(productos_txt), len(datos_txt['detalle']),
+                )
+            else:
+                for prod_txt in productos_txt:
+                    sku_str = str(prod_txt.get('sku', ''))
+                    datos_txt['detalle'].append({
+                        'codigo': limpiar_texto(sku_str[:35]),
+                        'sku': limpiar_texto(sku_str),
+                        'nombre': limpiar_texto(prod_txt['nombre']),
+                        'descripcion': limpiar_texto(prod_txt.get('descripcion', '')),
+                        'cantidad': prod_txt['cantidad'],
+                        'unidad': 'UN',
+                        'precio_unitario': prod_txt['precio_unitario'],
+                        'descuento_pct': prod_txt.get('descuento_pct', 0),
+                        'monto_descuento': prod_txt.get('monto_descuento', 0),
+                        'monto_item': prod_txt['total']
+                    })
+
+            # Aun consolidado, un ticket con más de 60 artículos distintos no
+            # cabe en una factura. Acepta lo rechaza recién al subir el TXT, así
+            # que el aviso se emite acá para que el cajero lo sepa en la venta.
+            tipo_numerico_txt = datos_txt['documento']['tipo_documento']
+            tope_detalle = max_detalle_para_tipo(tipo_numerico_txt)
+            if len(datos_txt['detalle']) > tope_detalle:
+                dte._txt_exceso_lineas = (
+                    f"El documento quedó con {len(datos_txt['detalle'])} líneas de detalle "
+                    f"y el SII admite {tope_detalle} para este tipo. Acepta lo va a rechazar: "
+                    f"divide la venta en más de un documento."
+                )
+                logger.error(
+                    "TXT %s excede el tope SII de detalle: ticket_id=%s dte=%s "
+                    "lineas=%s tope=%s",
+                    tipo_dte, ticket.id, dte.numero_documento,
+                    len(datos_txt['detalle']), tope_detalle,
+                )
+
             # Detect discounts (per-item or global) and add Tabla 4 block + fix total.
             #
             # IMPORTANTE: El único descuento "real" es el que está materializado
@@ -5281,7 +5372,14 @@ def registrar_pagos_ticket(request, correlativo):
                 'se pudo generar el archivo TXT para Acepta. Reintente desde '
                 'Consulta de Documentos.'
             )
-    
+
+        # El TXT se generó, pero supera el tope de líneas de detalle del SII:
+        # Acepta lo rechazaría recién al subirlo. Se avisa acá, en la venta.
+        _txt_exceso = getattr(dte_generado, '_txt_exceso_lineas', None)
+        if _txt_exceso:
+            response_data['archivo_txt_advertencia'] = _txt_exceso
+
+
     # Incluir info de cotización si fue facturada desde una cotización
     if cotizacion_obj:
         response_data['cotizacion_facturada'] = {
