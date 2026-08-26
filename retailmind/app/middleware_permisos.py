@@ -401,6 +401,10 @@ URLS_SIN_VERIFICACION = [
 # Si la sucursal activa NO está en la lista, se deniega el acceso con un mensaje claro.
 URL_SOLO_SUCURSALES = {
     '/app/verGestionProducto/': ['EDEL', 'GILD', 'IMP', 'PA00'],
+    # Retiro de pedidos ecommerce: la entrega física ocurre únicamente en el
+    # mesón de PAO1. El match por substring cubre la pantalla y sus 3 APIs
+    # (retiro-local/, validar/, confirmar/, comprobante-pdf/).
+    '/app/ecommerce/retiro-local/': ['PAO1'],
 }
 
 # URLs que siempre están permitidas (login, logout, static, etc.)

@@ -16,6 +16,7 @@
 {% puede_ver_opcion_tag 'despacho_sucursales' as permiso_despacho_sucursales %}
 {% puede_ver_opcion_tag 'devolucion_garantia' as permiso_devolucion_garantia %}
 {% puede_ver_opcion_tag 'ecommerce_pedidos_todos' as permiso_ecommerce_pedidos_todos %}
+{% puede_ver_opcion_tag 'retiro_pedido_local' as permiso_retiro_pedido_local %}
 {% puede_ver_opcion_tag 'edicion_rapida_precios' as permiso_edicion_rapida_precios %}
 {% puede_ver_opcion_tag 'emision_dte' as permiso_emision_dte %}
 {% puede_ver_opcion_tag 'gestion_clientes' as permiso_gestion_clientes %}
@@ -2479,6 +2480,14 @@
                                             {% if pedidos_pendientes %}
                                             <span class="badge bg-warning text-dark rounded-pill ms-1" style="font-size:10px;">{{ pedidos_pendientes }}</span>
                                             {% endif %}
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {# Retiro pedido local: SOLO en PAO1 (el middleware ademas bloquea la URL en otras sucursales) #}
+                                    {% if permiso_retiro_pedido_local and request.session.alias|upper == 'PAO1' %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'retiro_pedido_local' %}" class="nav-link" data-key="t-retiro-pedido-local">
+                                            <i class="ri-qr-scan-2-line"></i> Retiro pedido local
                                         </a>
                                     </li>
                                     {% endif %}

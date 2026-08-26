@@ -3953,8 +3953,21 @@ def exportar_pedidos_csv(request):
 # vistas son el frontend del POS. Son vistas INTERNAS con login del ERP a
 # propósito — la API Bearer anónima no registraría QUÉ VENDEDOR entregó.
 
+# La entrega física de retiros ecommerce ocurre solo en este mesón. El
+# middleware (URL_SOLO_SUCURSALES) ya bloquea la URL en otras sucursales;
+# esto es el cinturón por si esa capa cambia.
+SUCURSALES_RETIRO_ECOMMERCE = ('PAO1',)
+
+
 def _verificar_permiso_retiro(request, tipo_permiso):
     """Permiso sobre la opción de menú ``retiro_pedido_local`` (fail-closed)."""
+    alias = (request.session.get('alias') or '').strip().upper()
+    if alias not in SUCURSALES_RETIRO_ECOMMERCE:
+        return JsonResponse({
+            'ok': False,
+            'error': 'El retiro de pedidos ecommerce solo se opera en PAO1 '
+                     f'(sucursal activa: {alias or "sin sucursal"}).',
+        }, status=403)
     sucursal_id = request.session.get('idSucursalActual')
     if not PermisoRol.tiene_permiso(request.user, 'retiro_pedido_local',
                                     tipo_permiso, sucursal_id=sucursal_id):
