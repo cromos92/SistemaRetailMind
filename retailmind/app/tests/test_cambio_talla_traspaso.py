@@ -616,3 +616,69 @@ class CambioTallaHallazgosRevisionTest(_BaseCambioTalla):
 
         # Nada se escribió.
         self.assertFalse(Dte_Productos.objects.filter(dte=dte, productoTalla=self.t39).exists())
+
+
+class CambioTallaVisibleParaElReceptorTest(_BaseCambioTalla):
+    """Quien recepciona abre el detalle y debe VER qué líneas se corrigieron.
+
+    El papel que trae el chofer dice la talla vieja: sin esta marca, el
+    receptor cuenta contra un documento que cambió y no tiene forma de saberlo.
+    La traza sale de las observaciones del movimiento de despacho, así que no
+    hizo falta campo nuevo ni migración.
+    """
+
+    def _detalle_para_receptor(self, dte):
+        """Lo que ve la sucursal destino en su bandeja de recepción."""
+        cli = Client()
+        cli.force_login(self.user)
+        s = cli.session
+        s['idSucursalActual'] = self.destino.id
+        s['idEmpresaActual'] = self.empresa.id
+        s.save()
+        p1, p2 = _patch_permisos()
+        with p1, p2:
+            resp = cli.get('/app/dte/recepciones_pendientes/', {'buscar': str(dte.numero_documento)})
+        self.assertEqual(resp.status_code, 200, resp.content)
+        items = resp.json().get('items', [])
+        self.assertTrue(items, 'El receptor no ve el documento')
+        return items[0].get('detalle', [])
+
+    def test_las_lineas_corregidas_quedan_marcadas_para_el_receptor(self):
+        dte, dps = self._crear_traspaso([(self.t37, 45, 1000)])
+
+        # Antes del cambio no hay ninguna marca.
+        for linea in self._detalle_para_receptor(dte):
+            self.assertFalse(linea.get('correccion_talla'))
+
+        resp = self._post({
+            'dte_id': dte.id, 'token_operacion': 'tok-visible', 'motivo': 'se picó mal',
+            'cambios': [{'dte_producto_id': dps[0].id, 'talla_destino_id': self.t38.id, 'cantidad': 10}],
+        })
+        self.assertEqual(resp.status_code, 200, resp.content)
+
+        detalle = self._detalle_para_receptor(dte)
+        marcadas = [l for l in detalle if l.get('correccion_talla')]
+        self.assertEqual(
+            len(marcadas), 2,
+            'Deben quedar marcadas AMBAS puntas: la talla que baja y la que sube',
+        )
+        for linea in marcadas:
+            self.assertIn('[CAMBIO TALLA', linea['correccion_talla'])
+            self.assertIn('37->38', linea['correccion_talla'])
+
+    def test_el_detalle_completo_tambien_trae_la_marca(self):
+        """Mismo dato en /app/api/detalle_dte_completo/, que alimenta el modal
+        de solo lectura y el propio modal de corregir talla."""
+        dte, dps = self._crear_traspaso([(self.t37, 45, 1000)])
+        self._post({
+            'dte_id': dte.id, 'token_operacion': 'tok-det', 'motivo': 'test',
+            'cambios': [{'dte_producto_id': dps[0].id, 'talla_destino_id': self.t38.id, 'cantidad': 10}],
+        })
+
+        p1, p2 = _patch_permisos()
+        with p1, p2:
+            resp = self.client.get(f'/app/api/detalle_dte_completo/{dte.id}/')
+        self.assertEqual(resp.status_code, 200, resp.content)
+        productos = resp.json().get('productos', [])
+        marcadas = [p for p in productos if p.get('correccion_talla')]
+        self.assertEqual(len(marcadas), 2)

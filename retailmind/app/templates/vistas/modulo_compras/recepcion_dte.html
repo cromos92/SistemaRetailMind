@@ -2307,9 +2307,11 @@
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="cambioTallaForzar">
                             <label class="form-check-label small" for="cambioTallaForzar">
-                                Confirmo que esas unidades <strong>sí iban en el bulto</strong>. El stock
-                                del sistema estaba mal contado y esa talla quedará en negativo hasta la
-                                próxima reconciliación.
+                                Confirmo que esas unidades <strong>sí iban en el bulto</strong>.
+                                <span class="text-muted">
+                                    La talla quedará en negativo hasta la próxima reconciliación: es la
+                                    huella de un conteo que ya venía corrido, no algo que cause este cambio.
+                                </span>
                             </label>
                         </div>
                     </div>
@@ -5005,6 +5007,7 @@ function llenarDetalleDocumento(doc) {
             // esta pantalla y el papel del chofer dicen cosas distintas.
             descripcion_documento: item.descripcion_documento || '',
             ficha_editada: !!item.ficha_editada,
+            correccion_talla: item.correccion_talla || '',
             marca: item.marca || '',
             color: item.color || '',
             talla: item.talla,
@@ -5092,6 +5095,11 @@ function renderizarProductosVerificacion() {
         const avisoFichaEditada = prod.ficha_editada
             ? `<span class="badge bg-warning text-dark ms-1" title="La ficha se editó después de emitir la guía. El documento decía: ${_escapeHtmlDte(prod.descripcion_documento || '-')}"><i class="bi bi-pencil-square me-1"></i>Ficha editada</span>`
             : '';
+        // Talla corregida por el emisor DESPUÉS de emitir el documento. El que
+        // recepciona tiene que verlo: el papel del chofer dice la talla vieja.
+        const avisoTallaCorregida = prod.correccion_talla
+            ? `<span class="badge bg-info text-dark ms-1" title="${_escapeHtmlDte(prod.correccion_talla)}"><i class="bi bi-arrow-left-right me-1"></i>Talla corregida</span>`
+            : '';
         const articuloMostrar = prod.articulo || '-';
         const colorMostrar = prod.color || '-';
         const marcaMostrar = prod.marca || '-';
@@ -5122,9 +5130,10 @@ function renderizarProductosVerificacion() {
                 </td>
                 <td><small class="font-monospace">${skuMostrar}</small></td>
                 <td>
-                    <small class="d-block fw-semibold">${descripcionMostrar}${avisoFichaEditada}</small>
+                    <small class="d-block fw-semibold">${descripcionMostrar}${avisoFichaEditada}${avisoTallaCorregida}</small>
                     <small class="text-muted">${articuloMostrar !== '-' ? articuloMostrar : ''}${colorMostrar !== '-' ? ' · ' + colorMostrar : ''}${marcaMostrar !== '-' ? ' · ' + marcaMostrar : ''}</small>
                     ${prod.ficha_editada ? `<small class="d-block text-warning-emphasis" style="font-size:.72rem;"><i class="bi bi-file-earmark-text me-1"></i>Según el documento: ${_escapeHtmlDte(prod.descripcion_documento || '-')}</small>` : ''}
+                    ${prod.correccion_talla ? `<small class="d-block text-info-emphasis" style="font-size:.72rem;"><i class="bi bi-arrow-left-right me-1"></i>${_escapeHtmlDte(prod.correccion_talla)}</small>` : ''}
                 </td>
                 <td class="text-center"><span class="badge bg-secondary">${tallaMostrar}</span></td>
                 <td class="text-center">
@@ -8195,6 +8204,16 @@ function abrirModalCambiarTalla(dteId) {
 }
 
 function _ctRenderFilas(productos) {
+    // Cuántas unidades de cada talla trae YA este documento. Es el dato que
+    // importa al mover unidades de una talla a otra.
+    const enDocumentoPorTalla = {};
+    productos.forEach(p => {
+        if (p.producto_talla_id) {
+            enDocumentoPorTalla[p.producto_talla_id] =
+                (enDocumentoPorTalla[p.producto_talla_id] || 0) + (parseInt(p.cantidad, 10) || 0);
+        }
+    });
+
     const filas = productos.map(p => {
         const tallas = _ctTallasCache[p.producto_id] || [];
         // Se excluye la talla de la propia línea; las sin stock quedan
@@ -8203,13 +8222,16 @@ function _ctRenderFilas(productos) {
             .filter(t => t.id !== p.producto_talla_id)
             .map(t => {
                 const stock = parseInt(t.stock, 10) || 0;
-                // NO se deshabilitan las de stock 0: la unidad ya salió de la
-                // bodega, así que un stock en 0 significa que esa talla venía
-                // mal contada, no que el cambio sea imposible. Se avisa y se
-                // exige confirmación explícita más abajo.
+                const enDoc = enDocumentoPorTalla[t.id] || 0;
+                // Se etiqueta por lo que hay EN EL DOCUMENTO. El stock de bodega
+                // viaja igual en data-stock (lo necesita la validación), pero no
+                // se muestra: al emitir el traspaso ya se descontó, así que sale
+                // 0 casi siempre y leerlo como "no se puede" es justo al revés.
+                const etiqueta = enDoc > 0
+                    ? `${_escapeHtmlDte(t.talla)} — ya está en el documento (${enDoc} u.)`
+                    : `${_escapeHtmlDte(t.talla)} — se agrega al documento`;
                 return `<option value="${t.id}" data-stock="${stock}" data-talla="${_escapeHtmlDte(t.talla)}">`
-                     + `${_escapeHtmlDte(t.talla)}${stock > 0 ? ' — ' + stock + ' disp.' : ' — sin stock en sistema'}`
-                     + `</option>`;
+                     + etiqueta + `</option>`;
             }).join('');
 
         const selectHtml = opciones
@@ -8321,8 +8343,9 @@ function _ctRecolectar() {
         const v = netoPorTalla[id];
         if (v.neto < 0 && (v.stock + v.neto) < 0) {
             advertencias.push(
-                `Talla ${v.label || id}: el sistema marca ${v.stock} y se necesitan `
-                + `${Math.abs(v.neto)} — quedaría en ${v.stock + v.neto}.`
+                `Talla ${v.label || id}: en bodega figura ${v.stock}, así que el sistema `
+                + `quedará en ${v.stock + v.neto}. Es lo esperable si el par ya salió `
+                + `en este despacho — el conteo de esa talla venía corrido.`
             );
         }
     });
@@ -8409,8 +8432,8 @@ function confirmarCambioTalla() {
         Swal.fire(
             'Falta confirmar el stock',
             advertencias.map(_escapeHtmlDte).join('<br>')
-            + '<br><br>Si esas unidades sí iban en el bulto, marca la casilla de confirmación '
-            + 'que está bajo la tabla y vuelve a intentar.',
+            + '<br><br>Esto es normal cuando el par ya salió en el despacho. Si te consta que '
+            + 'esas unidades iban en el bulto, marca la casilla bajo la tabla y confirma.',
             'warning',
         );
         return;

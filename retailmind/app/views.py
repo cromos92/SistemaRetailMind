@@ -601,6 +601,18 @@ def recepciones_pendientes_api(request):
             resumen_tallas = {}
             detalle_completo = []
             lineas_editadas_doc = 0
+            # Líneas tocadas por "Corregir talla". La traza ya vive en las
+            # observaciones del movimiento de despacho, así que se puede marcar
+            # la línea sin campo nuevo ni migración. Importa: quien recepciona
+            # abre este detalle y hasta ahora no tenía forma de saber que el
+            # emisor cambió una talla después de emitir.
+            correccion_por_talla = {}
+            for _mov in dte.dte_movimientos.all():
+                if _mov.concepto != 'TRASPASO_SALIDA' or not _mov.ProductoTalla_id:
+                    continue
+                _notas = re.findall(r'\[CAMBIO TALLA[^\]]*\]', _mov.observaciones or '')
+                if _notas:
+                    correccion_por_talla[_mov.ProductoTalla_id] = ' · '.join(_notas)
             # Saldo por talla de NC aún no descontadas: se va consumiendo entre
             # las líneas que comparten la misma productoTalla para no imputar
             # la misma unidad acreditada a dos líneas distintas.
@@ -651,6 +663,8 @@ def recepciones_pendientes_api(request):
                     # impreso el chofer). Solo difiere si editaron la ficha.
                     'descripcion_documento': descripcion_documento,
                     'ficha_editada': ficha_editada,
+                    # Texto legible de la corrección de talla, o None.
+                    'correccion_talla': correccion_por_talla.get(detalle.productoTalla_id),
                     'marca': marca,
                     'color': color,
                     'talla': talla,
@@ -17555,6 +17569,15 @@ def api_detalle_dte_completo(request, dte_id):
             for t in qs_stocks:
                 stock_por_sku.setdefault(t.sku, {})[t.producto.sucursal_id] = int(t.stock or 0)
 
+        # Mismo marcado de líneas corregidas que la bandeja de recepción.
+        correccion_por_talla_det = {}
+        for _mov in dte.dte_movimientos.all():
+            if _mov.concepto != 'TRASPASO_SALIDA' or not _mov.ProductoTalla_id:
+                continue
+            _notas = re.findall(r'\[CAMBIO TALLA[^\]]*\]', _mov.observaciones or '')
+            if _notas:
+                correccion_por_talla_det[_mov.ProductoTalla_id] = ' · '.join(_notas)
+
         if dte_productos_qs.exists():
             for detalle in dte_productos_qs:
                 producto = detalle.productoTalla.producto if detalle.productoTalla else None
@@ -17574,6 +17597,7 @@ def api_detalle_dte_completo(request, dte_id):
                     # "Cambiar talla"; aditivos, ningun consumidor los pisa.
                     'producto_talla_id': detalle.productoTalla_id,
                     'producto_id': producto.id if producto else None,
+                    'correccion_talla': correccion_por_talla_det.get(detalle.productoTalla_id),
                     'descripcion': detalle.descripcion,
                     'cantidad': detalle.stock,
                     'precio_unitario': detalle.precio,
