@@ -6830,9 +6830,30 @@ def anular_documento_venta(request):
                 _liberar_cupon_de_venta(
                     ticket_del_dte, 'anulación de DTE de venta')
 
+            # Anular saca el documento de la cuadratura del día, así que el
+            # `Ef. Teórico` del arqueo (snapshot congelado al cerrar caja)
+            # queda mostrando plata que ya no corresponde. Se re-snapshotea
+            # en el acto en vez de dejarlo para un recálculo manual.
+            fecha_afectada = (
+                documento.fecha_emision
+                if tipo_documento != 'TICKET'
+                else documento.fecha
+            )
+            arqueos_resincronizados = resincronizar_arqueos_por_fechas(
+                {fecha_afectada},
+                documento.sucursal_id,
+                usuario=request.user,
+                razon=(
+                    f'anulación de {tipo_documento} '
+                    f'#{getattr(documento, "numero_documento", None) or getattr(documento, "correlativo", "?")} '
+                    'desde gestión de documentos'
+                ),
+            )
+
         return JsonResponse({
             'success': True,
-            'message': 'Documento anulado exitosamente'
+            'message': 'Documento anulado exitosamente',
+            'arqueos_resincronizados': arqueos_resincronizados,
         })
 
     except json.JSONDecodeError:
@@ -7155,6 +7176,21 @@ def eliminar_documento_venta(request):
                 dte, request.user, motivo, 'eliminado',
             )
 
+            # El soft delete saca el DTE (y su ticket) de la cuadratura del
+            # día — ambos filtran por `descartado=False` / estado ANULADO —,
+            # así que el `Ef. Teórico` congelado en el arqueo queda contando
+            # una venta que ya no existe. Se re-snapshotea en el acto.
+            arqueos_resincronizados = resincronizar_arqueos_por_fechas(
+                {dte.fecha_emision},
+                dte.sucursal_id,
+                usuario=request.user,
+                razon=(
+                    f'eliminación del {dte.tipo_documento} '
+                    f'#{dte.numero_documento} desde gestión de documentos'
+                    + (f': {motivo}' if motivo else '')
+                ),
+            )
+
         mensaje = (
             f'DTE #{dte.numero_documento} eliminado. '
             f'Stock devuelto: {len(stock_devuelto)} línea(s).'
@@ -7179,6 +7215,7 @@ def eliminar_documento_venta(request):
             'stock_devuelto': stock_devuelto,
             'cotizaciones_afectadas': cotizaciones_afectadas,
             'requiere_reapertura_cotizacion': bool(cotizaciones_afectadas),
+            'arqueos_resincronizados': arqueos_resincronizados,
         })
 
     except json.JSONDecodeError:
@@ -7201,7 +7238,7 @@ def eliminar_documento_venta(request):
 _TIPO_DTE_A_TIPO_TICKET = TIPO_DTE_A_TIPO_TICKET
 
 
-def _validar_folio_destino_dte(dte, tipo_destino, folio):
+def _validar_folio_destino_dte(dte, tipo_destino, folio, fecha_ref=None):
     """Valida que `folio` esté libre para el RUT del emisor + `tipo_destino`.
 
     Devuelve `(ok, mensaje_error, advertencias)`.
@@ -7212,8 +7249,17 @@ def _validar_folio_destino_dte(dte, tipo_destino, folio):
     asigna los folios por RUT + tipo de documento (CAF), no por sucursal, así
     que la unicidad hay que buscarla sobre todas las fichas de `Empresa` que
     comparten el RUT del emisor.
+
+    `fecha_ref` es la fecha con la que quedará el documento (si la edición
+    también mueve `fecha_emision`, hay que pasar la NUEVA). Se usa para
+    centrar la ventana de unicidad de los tipos de talonario físico
+    (BOLETA PAPEL): ahí el folio sólo tiene que ser único dentro de
+    ±`VENTANA_MESES_FOLIO_REUSABLE` meses, no en todo el historial.
     """
-    from .utils_folio_dte import validar_folio_dte, empresas_con_mismo_rut
+    from .utils_folio_dte import (
+        validar_folio_dte, buscar_colisiones_folio, mensajes_por_colisiones,
+        empresas_con_mismo_rut,
+    )
 
     tipo_actual = (dte.tipo_documento or '').upper().strip()
     tipo_destino = (tipo_destino or '').upper().strip()
@@ -7221,7 +7267,7 @@ def _validar_folio_destino_dte(dte, tipo_destino, folio):
     if tipo_destino == tipo_actual:
         # Mismo tipo: el helper además compara contra el rango del
         # `Correlativo` de la sucursal y devuelve advertencias informativas.
-        resultado = validar_folio_dte(dte, folio)
+        resultado = validar_folio_dte(dte, folio, fecha_ref=fecha_ref)
         return (
             resultado['ok'],
             ' '.join(resultado['errores']),
@@ -7229,23 +7275,31 @@ def _validar_folio_destino_dte(dte, tipo_destino, folio):
         )
 
     emisor_ids = empresas_con_mismo_rut(getattr(dte, 'emisor', None))
-    qs = (
+    if emisor_ids:
+        # Camino normal: se delega en el helper, que aplica la ventana de
+        # unicidad cuando el tipo destino es de talonario físico.
+        colisiones = buscar_colisiones_folio(
+            dte, folio, tipo_destino=tipo_destino, fecha_ref=fecha_ref,
+        )
+        errores, advertencias = mensajes_por_colisiones(
+            dte, folio, colisiones,
+            tipo_destino=tipo_destino, fecha_ref=fecha_ref,
+        )
+        return (not errores), ' '.join(errores), advertencias
+
+    # Sin emisor conocido no se puede razonar por RUT: se conserva el
+    # criterio antiguo (misma sucursal) para no dejar el folio sin chequeo.
+    choques = list(
         Dte.objects
         .filter(
             tipo_documento=tipo_destino,
             numero_documento=folio,
             descartado=False,
+            sucursal_id=dte.sucursal_id,
         )
         .exclude(id=dte.id)
-        .select_related('sucursal')
+        .select_related('sucursal')[:5]
     )
-    # Sin emisor conocido no se puede razonar por RUT: se conserva el
-    # criterio antiguo (misma sucursal) para no dejar el folio sin chequeo.
-    qs = (
-        qs.filter(emisor_id__in=emisor_ids) if emisor_ids
-        else qs.filter(sucursal_id=dte.sucursal_id)
-    )
-    choques = list(qs[:5])
     if not choques:
         return True, '', []
 
@@ -7683,9 +7737,15 @@ def editar_dte_boleta_papel(request):
             # el tipo, la validación se pospone a cuando ya se asignó el folio
             # del nuevo tipo (más abajo).
             advertencias_folio = []
+            # Fecha con la que quedará el documento tras esta edición: es la
+            # que centra la ventana de unicidad de los folios de talonario
+            # (BOLETA PAPEL). Si la misma llamada mueve `fecha_emision`, la
+            # ventana tiene que mirar el período DESTINO, no el actual.
+            fecha_ref_folio = fecha_parsed or dte.fecha_emision
             if tiene_numero and not cambiar_tipo and nuevo_numero != dte.numero_documento:
                 ok_folio, error_folio, advertencias_folio = _validar_folio_destino_dte(
-                    dte, dte.tipo_documento, nuevo_numero
+                    dte, dte.tipo_documento, nuevo_numero,
+                    fecha_ref=fecha_ref_folio,
                 )
                 if not ok_folio:
                     return JsonResponse({
@@ -7812,7 +7872,10 @@ def editar_dte_boleta_papel(request):
             if cambiar_tipo:
                 if tiene_numero:
                     ok_folio, error_folio, advertencias_folio = (
-                        _validar_folio_destino_dte(dte, nuevo_tipo, nuevo_numero)
+                        _validar_folio_destino_dte(
+                            dte, nuevo_tipo, nuevo_numero,
+                            fecha_ref=fecha_ref_folio,
+                        )
                     )
                     if not ok_folio:
                         return JsonResponse({
@@ -7839,7 +7902,10 @@ def editar_dte_boleta_papel(request):
                     # generar un duplicado silencioso de folio, que es un
                     # problema tributario y no sólo de datos.
                     ok_folio, error_folio, advertencias_folio = (
-                        _validar_folio_destino_dte(dte, nuevo_tipo, numero_asignado)
+                        _validar_folio_destino_dte(
+                            dte, nuevo_tipo, numero_asignado,
+                            fecha_ref=fecha_ref_folio,
+                        )
                     )
                     if not ok_folio:
                         return JsonResponse({
@@ -8008,44 +8074,52 @@ def editar_dte_boleta_papel(request):
                 else:
                     ticket_pagos_resync_modo = 'none'
 
-            # Dejar traza en la bitácora de los arqueos afectados cuando
-            # cambia la fecha y el día origen o destino ya tiene arqueo
-            # cerrado / con diferencias: sus snapshots de teóricos quedaron
-            # desalineados respecto al recálculo en vivo del modal.
-            arqueos_afectados_info = []
+            # Resincronizar los teóricos de los arqueos afectados.
+            #
+            # Antes acá sólo se escribía una observación diciendo "los
+            # teóricos guardados pueden no coincidir": el `Ef. Teórico` del
+            # arqueo seguía congelado en el snapshot del cierre y había que
+            # ir a recalcularlo a mano. Ahora se recalcula en el acto.
+            #
+            # Se dispara ante cualquiera de los tres cambios que mueven la
+            # cuadratura del día, no sólo la fecha:
+            #   - fecha    -> el documento (y sus pagos) cambian de día
+            #   - pagos    -> cambia el reparto por medio de pago
+            #   - tipo     -> cambian los buckets de documentos (boleta
+            #                 electrónica vs papel) y el VENTA TOTAL
             cambio_fecha_real = (
                 tiene_fecha
                 and fecha_anterior
                 and fecha_anterior != dte.fecha_emision
             )
-            if cambio_fecha_real and dte.sucursal_id:
-                fechas_a_revisar = {fecha_anterior, dte.fecha_emision}
-                arqueos_afectados_qs = ArqueoCaja.objects.filter(
-                    sucursal_id=dte.sucursal_id,
-                    fecha_arqueo__in=fechas_a_revisar,
-                ).exclude(estado='ABIERTO')
+            fechas_a_resincronizar = set()
+            if cambio_fecha_real:
+                fechas_a_resincronizar.update({fecha_anterior, dte.fecha_emision})
+            elif tiene_pagos or cambiar_tipo:
+                fechas_a_resincronizar.add(dte.fecha_emision)
 
-                for arq in arqueos_afectados_qs:
-                    ObservacionArqueo.objects.create(
-                        arqueo=arq,
-                        usuario=request.user,
-                        tipo='SISTEMA',
-                        texto=(
-                            f'DTE #{dte.numero_documento} '
-                            f'({dte.tipo_documento}) editado desde gestión '
-                            f'de documentos. Fecha: '
-                            f'{fecha_anterior.strftime("%d/%m/%Y")} → '
-                            f'{dte.fecha_emision.strftime("%d/%m/%Y")}. '
-                            'Los teóricos guardados del arqueo pueden no '
-                            'coincidir con el recálculo en vivo.'
-                        ),
-                        visible_para_cajera=True,
+            if fechas_a_resincronizar:
+                if cambio_fecha_real:
+                    _detalle_cambio = (
+                        f'fecha {fecha_anterior.strftime("%d/%m/%Y")} → '
+                        f'{dte.fecha_emision.strftime("%d/%m/%Y")}'
                     )
-                    arqueos_afectados_info.append({
-                        'id': arq.id,
-                        'fecha': arq.fecha_arqueo.strftime('%Y-%m-%d'),
-                        'estado': arq.estado,
-                    })
+                elif cambiar_tipo:
+                    _detalle_cambio = f'tipo {tipo_anterior} → {dte.tipo_documento}'
+                else:
+                    _detalle_cambio = 'pagos editados'
+                arqueos_afectados_info = resincronizar_arqueos_por_fechas(
+                    fechas_a_resincronizar,
+                    dte.sucursal_id,
+                    usuario=request.user,
+                    razon=(
+                        f'edición del DTE #{dte.numero_documento} '
+                        f'({dte.tipo_documento}) desde gestión de documentos: '
+                        f'{_detalle_cambio}'
+                    ),
+                )
+            else:
+                arqueos_afectados_info = []
 
             # ================= AUDITORÍA =================
             # Hasta ahora este endpoint cambiaba folio, fecha, tipo, vendedor
@@ -8478,6 +8552,11 @@ def revision_arqueos(request):
 
     return render(request, 'vistas/modulo_ventas/revisionArqueos.html', {
         'sucursal_actual': sucursal_actual,
+        # Habilita el botón "Actualizar Teórico" del modal de detalle. Se
+        # expone con el MISMO criterio que aplica `recalcular_teoricos_arqueo`
+        # sobre arqueos en estado final (administrador/administración); si
+        # mostráramos el botón a otro rol, el POST volvería 403.
+        'es_supervisor': es_supervisor,
     })
 
 
@@ -9181,6 +9260,87 @@ def _recalcular_teoricos_arqueo(
         'cuadratura': cuadratura,
         'hay_cambios': bool(update_fields),
     }
+
+
+def resincronizar_arqueos_por_fechas(fechas, sucursal_id, usuario=None,
+                                     razon='', incluir_abiertos=True):
+    """Re-snapshotea los teóricos de los arqueos de `fechas` en una sucursal.
+
+    Sirve para que un hecho posterior al cierre de caja —editar la fecha /
+    los pagos / el tipo de un DTE, emitir una NC de anulación o de
+    devolución— quede reflejado en el `Ef. Teórico` del arqueo en vez de
+    dejarlo congelado en el snapshot que se grabó al cerrar.
+
+    Antes de esto, el único efecto era una observación diciendo "los
+    teóricos pueden no coincidir": el número seguía mal y había que
+    recalcular a mano desde Cuadratura de Caja.
+
+    Devuelve una lista de dicts (uno por arqueo tocado) con el estado y los
+    cambios aplicados, apta para incluir en la respuesta JSON del endpoint.
+    Cada recálculo deja observación SISTEMA en la bitácora del arqueo con el
+    antes/después, así que el cambio automático queda auditado.
+
+    Nunca propaga excepciones: si el recálculo de un arqueo falla, se
+    registra en el log y se sigue con los demás. Reventar acá abortaría la
+    transacción de la operación principal (la edición del DTE), que ya es
+    válida por sí sola.
+    """
+    resultado = []
+    if not sucursal_id:
+        return resultado
+
+    fechas_validas = {f for f in (fechas or []) if f}
+    if not fechas_validas:
+        return resultado
+
+    qs = ArqueoCaja.objects.filter(
+        sucursal_id=sucursal_id,
+        fecha_arqueo__in=fechas_validas,
+    )
+    if not incluir_abiertos:
+        qs = qs.exclude(estado='ABIERTO')
+
+    for arq in qs:
+        try:
+            # Savepoint por arqueo: casi todas las llamadas ocurren DENTRO de
+            # la transacción de la operación principal (editar/anular el DTE,
+            # emitir la NC). Si el recálculo revienta con un error de base de
+            # datos y sólo lo atrapáramos con `except`, PostgreSQL deja la
+            # transacción abortada y la operación principal —que ya era
+            # válida— muere después con "current transaction is aborted".
+            # El savepoint acota el daño a este arqueo.
+            with transaction.atomic():
+                recalc = _recalcular_teoricos_arqueo(
+                    arq,
+                    usuario=usuario,
+                    registrar_bitacora=True,
+                    razon=razon or 'sincronización automática',
+                )
+        except Exception:
+            logger.exception(
+                'No se pudo resincronizar el arqueo id=%s (%s) tras "%s"',
+                arq.id, arq.fecha_arqueo, razon,
+            )
+            resultado.append({
+                'id': arq.id,
+                'fecha': arq.fecha_arqueo.strftime('%Y-%m-%d'),
+                'estado': arq.estado,
+                'recalculado': False,
+                'error': True,
+            })
+            continue
+
+        resultado.append({
+            'id': arq.id,
+            'fecha': arq.fecha_arqueo.strftime('%Y-%m-%d'),
+            'estado': arq.estado,
+            'recalculado': recalc['hay_cambios'],
+            'cambios': recalc['cambios'],
+            'efectivo_teorico': arq.total_efectivo_teorico,
+            'diferencia_efectivo': arq.diferencia_efectivo,
+        })
+
+    return resultado
 
 
 @login_required
@@ -22005,6 +22165,27 @@ def generar_nc_devolucion(request):
     cambio.metodo_devolucion = metodo_devolucion
     cambio.fecha_nc = timezone.now()
     cambio.save(update_fields=['nota_credito', 'nc_generada', 'metodo_devolucion', 'fecha_nc'])
+
+    # Resincronizar el arqueo del día al que la cuadratura imputa esta NC.
+    # Ese día es el de `Dte_Detalle_Pago.fecha_pago` y, como acá se crea sin
+    # fecha (queda NULL), `_calcular_cuadratura_data` cae a `fecha_emision`
+    # = hoy. Sin esto, el `Ef. Teórico` del arqueo de hoy seguía sin
+    # descontar la devolución hasta que alguien lo recalculara a mano.
+    try:
+        resincronizar_arqueos_por_fechas(
+            {nc.fecha_emision},
+            nc.sucursal_id,
+            usuario=request.user,
+            razon=(
+                f'NC #{numero_nc} de {cambio.get_tipo_operacion_display()} '
+                f'({cambio.numero_operacion}) vía {metodo_pago_nc}'
+            ),
+        )
+    except Exception:
+        logger.exception(
+            'No se pudo resincronizar el arqueo tras la NC #%s del cambio %s',
+            numero_nc, cambio.numero_operacion,
+        )
 
     # Registrar en historial
     HistorialCambioDevolucion.objects.create(

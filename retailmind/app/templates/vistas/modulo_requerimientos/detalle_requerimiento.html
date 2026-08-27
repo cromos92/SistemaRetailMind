@@ -796,6 +796,30 @@ function pintarSeguimientoCorreo(s) {
         h += '</ul>';
     }
 
+    // El proveedor contestó y su respuesta ya está guardada, pero nadie dijo
+    // todavía si eso es un sí o un no. Es el punto donde el caso se queda
+    // trabado sin que nadie lo note.
+    if (s.falta_clasificar) {
+        h += `<div class="alert alert-warning py-1 px-2 mt-2 mb-0" style="font-size:.72rem">
+            <i class="ri-question-answer-line me-1"></i><strong>Respondió el proveedor.</strong>
+            Falta registrar si aprueba, rechaza o aprueba parcial.</div>`;
+    }
+
+    if (s.respuestas && s.respuestas.length) {
+        for (const r of s.respuestas) {
+            h += `<div class="border rounded p-2 mt-2" style="font-size:.72rem;background:#f8f9fb">
+                <div class="text-muted mb-1"><i class="ri-mail-line me-1"></i>${reqEsc(r.remitente)}
+                    · ${reqEsc(r.recibido_en)}</div>
+                <div style="white-space:pre-wrap">${reqEsc(r.cuerpo)}</div>
+                ${(r.adjuntos && r.adjuntos.length)
+                    ? `<div class="mt-1 text-muted"><i class="ri-attachment-2 me-1"></i>${
+                        r.adjuntos.map(a => reqEsc(a.nombre)).join(', ')}
+                        <em>(en el correo, no en el sistema)</em></div>`
+                    : ''}
+            </div>`;
+        }
+    }
+
     // Decirlo explícitamente evita que "Abierto" se lea como "lo leyó": Apple
     // Mail precarga las imágenes de todos los correos y Outlook las bloquea.
     if (s.es_indicativo) {

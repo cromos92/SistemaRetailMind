@@ -371,7 +371,7 @@ Esto es lo que responde de verdad a *"cómo hago seguimiento sí o sí"*.
 | 0.b · Reset proactivo de conexión en gift cards | Evita el 421 previsible cada 6 destinatarios | 1 h | ✅ **hecho 27-ago** |
 | 1 · Bitácora + honestidad del envío | Saber qué salió y qué falló | 4-6 h | ✅ **hecho 27-ago** |
 | 2 · Webhook unificado + píxel | Entregado / rebotado / abierto | 3-4 h | ✅ **hecho 27-ago** |
-| 3 · Buzón genérico + captura de respuestas | Respuestas que no se pierden | 6-8 h | ⏳ falta crear el buzón |
+| 3 · Captura de respuestas por IMAP | Respuestas que no se pierden | 6-8 h | ✅ **hecho 27-ago** |
 | 4 · Portal del proveedor | Prueba dura de recepción y decisión | 8-10 h | ⏳ falta tu OK |
 | 5 · UI de seguimiento + recordatorios | Que el equipo lo use sin explicación | 4-5 h | ✅ **hecho 27-ago** |
 
@@ -390,6 +390,20 @@ Esto es lo que responde de verdad a *"cómo hago seguimiento sí o sí"*.
 | `detalle_requerimiento.html` + `_estilos_requerimientos.html` | Línea de tiempo del correo en la ficha, con la salvedad de que "abierto" no es prueba |
 | `gestion_requerimientos.html` | Badge de entrega en la columna Proveedor (el rebote manda sobre la fecha) + filtro "Correo" |
 | `management/commands/enviar_recordatorios_requerimientos.py` | Reenvío automático a los atrasados. **Simula por defecto**, `--enviar` para mandar |
+| `app/services/captura_respuestas.py` | Parseo de la respuesta: token, hilo citado, adjuntos, fecha real |
+| `management/commands/capturar_respuestas_correo.py` | Poller IMAP del buzón → pega la respuesta en la ficha |
+
+### Decisión de buzón (confirmada 27-ago)
+
+Se usa la casilla que **ya existía**: `calzadospaolafallados@gmail.com`, que históricamente recibía
+todos los fallados. Sirve para las dos cadenas, así que no hace falta ruteo por empresa. Ventaja
+sobre estrenar una dirección: los proveedores ya la tienen en su libreta.
+
+Gmail común soporta plus-addressing igual que Workspace, así que el `Reply-To` es
+`calzadospaolafallados+<token>@gmail.com` sin configurar ningún alias.
+
+Lo que esa casilla **no** puede ser es el remitente: MailerSend exige dominio verificado y
+`gmail.com` no se puede verificar. El `From` sigue en `webappsolutions.cl`.
 
 Verificado contra el relay real: el id se captura (`6a906add4a930fc33c6c7358`).
 

@@ -305,6 +305,17 @@
                             Cambiar el folio <strong>no mueve el correlativo</strong> del talonario:
                             el número que digites puede quedar fuera del rango del CAF.
                         </small>
+                        <!-- Sólo visible al convertir a BOLETA PAPEL: ahí el
+                             folio sale del talonario físico y la unicidad se
+                             valida en una ventana de ±2 meses, no contra todo
+                             el historial (el talonario reinicia numeración). -->
+                        <small id="editarFolioManualHint" class="text-info d-none d-block mt-1" style="font-size:11px;">
+                            <i class="ri-information-line"></i>
+                            Digita el <strong>N° del talonario</strong> o déjalo vacío para que lo
+                            asigne el correlativo. Se rechaza si ese número ya está usado en otra
+                            Boleta Papel de la misma empresa dentro de <strong>±2 meses</strong>
+                            de la fecha del documento.
+                        </small>
                     </div>
                     <div class="col-md-6" data-campo="fecha">
                         <label class="form-label mb-1">
@@ -1919,24 +1930,36 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (hintDest) hintDest.textContent = labelTipoDocumento(tipoNuevo);
 
-        // Al cambiar el tipo se reasigna folio automáticamente: bloqueamos
-        // el input de número y lo vaciamos para no confundir.
+        // Al cambiar el tipo el folio se puede dejar en blanco (lo asigna el
+        // correlativo del tipo destino) o digitarlo a mano — necesario para
+        // BOLETA PAPEL, donde el número sale del talonario físico y no de
+        // ningún correlativo del sistema. El input sólo queda habilitado si
+        // el usuario tiene permiso de editar el N° de documento.
+        const puedeNumero = puedeEditarCampoEnTipo('numero_documento', tipoOriginal);
+        const hintFolio = document.getElementById('editarFolioManualHint');
         if (inputNumero) {
             if (cambia) {
-                inputNumero.dataset.valorOriginal = inputNumero.value;
+                if (inputNumero.dataset.valorOriginal === undefined) {
+                    inputNumero.dataset.valorOriginal = inputNumero.value;
+                }
                 inputNumero.value = '';
-                inputNumero.placeholder = 'Se asignará automáticamente';
-                inputNumero.disabled = true;
+                inputNumero.placeholder = puedeNumero
+                    ? 'Vacío = automático · o digita el N° del talonario'
+                    : 'Se asignará automáticamente';
+                inputNumero.disabled = !puedeNumero;
             } else {
                 if (inputNumero.dataset.valorOriginal !== undefined) {
                     inputNumero.value = inputNumero.dataset.valorOriginal;
+                    delete inputNumero.dataset.valorOriginal;
                 }
                 inputNumero.placeholder = 'Ej: 12345';
                 // Sólo re-habilitar si el permiso lo permitía originalmente.
-                inputNumero.disabled = !puedeEditarCampoEnTipo(
-                    'numero_documento', tipoOriginal
-                );
+                inputNumero.disabled = !puedeNumero;
             }
+        }
+        if (hintFolio) {
+            const esPapel = cambia && tipoNuevo === 'BOLETA PAPEL' && puedeNumero;
+            hintFolio.classList.toggle('d-none', !esPapel);
         }
     }
 
@@ -2159,6 +2182,10 @@ document.addEventListener('DOMContentLoaded', function() {
             delete inputNumeroEdit.dataset.valorOriginal;
             inputNumeroEdit.placeholder = 'Ej: 12345';
         }
+        // El hint del folio de talonario sólo aparece al elegir BOLETA PAPEL
+        // en el selector de tipo; al reabrir el modal parte oculto.
+        const hintFolioManualEdit = document.getElementById('editarFolioManualHint');
+        if (hintFolioManualEdit) hintFolioManualEdit.classList.add('d-none');
         document.getElementById('editarBoletaPapelFecha').value = formatearFechaParaInput(doc.fecha);
 
         // Pre-seleccionar el vendedor actual del DTE. Se guarda también
@@ -2233,15 +2260,33 @@ document.addEventListener('DOMContentLoaded', function() {
         // Lista legible de cambios (para la confirmación previa).
         const cambios = [];
         const original = dteEdicionOriginal || {};
+        // Al cambiar de tipo el folio puede venir digitado (talonario físico
+        // de la Boleta Papel) o quedar vacío para que lo asigne el correlativo
+        // del tipo destino. El backend valida el duplicado contra el universo
+        // del tipo DESTINO en ambos casos.
+        let folioManualTipo = null;
+        if (cambiaTipo && puedeEditarCampoEnTipo('numero_documento', tipoDte)) {
+            const numTipo = (document.getElementById('editarBoletaPapelNumero').value || '').trim();
+            if (numTipo !== '') {
+                const n = parseInt(numTipo, 10);
+                if (!Number.isFinite(n) || n <= 0) {
+                    mostrarError('El N° de documento debe ser un entero positivo');
+                    return;
+                }
+                folioManualTipo = n;
+                payload.numero_documento = n;
+            }
+        }
+
         if (cambiaTipo) {
             cambios.push(`Tipo: <strong>${labelTipoDocumento(tipoDte)}</strong> → `
                 + `<strong>${labelTipoDocumento(tipoSeleccionado)}</strong> `
-                + '(folio nuevo del correlativo destino; el actual queda saltado)');
+                + (folioManualTipo !== null
+                    ? `(folio digitado: <strong>${folioManualTipo}</strong>; el actual queda saltado)`
+                    : '(folio nuevo del correlativo destino; el actual queda saltado)'));
         }
 
-        // Si cambia el tipo, el folio se reasigna automáticamente
-        // (backend: obtener_siguiente_correlativo del tipo destino), así
-        // que NO enviamos numero_documento desde acá.
+        // Sin cambio de tipo, el folio se envía sólo si efectivamente cambió.
         if (!cambiaTipo && puedeEditarCampoEnTipo('numero_documento', tipoDte)) {
             const numero = document.getElementById('editarBoletaPapelNumero').value;
             if (!numero || parseInt(numero, 10) <= 0) {
@@ -2487,6 +2532,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 mostrarExito('Documento actualizado correctamente'
                     + (detalle.length ? ` · ${detalle.join(' · ')}` : ''));
+
+                // El backend devuelve `advertencias` desde que existe el
+                // chequeo de folio (folio fuera del rango del CAF, documento
+                // ACEPTADO por el SII, folio reusado de un talonario
+                // anterior…). Nunca se mostraban: el usuario guardaba y no se
+                // enteraba de nada.
+                const avisos = data.advertencias || [];
+                if (avisos.length && typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Guardado, con advertencias',
+                        html: '<ul style="text-align:left;font-size:.85rem;padding-left:1.1rem;margin:0;">'
+                            + avisos.map(a => `<li class="mb-1">${escaparHtml(a)}</li>`).join('')
+                            + '</ul>',
+                        confirmButtonColor: '#0066FF',
+                    });
+                }
                 cargarDocumentos();
             } else {
                 mostrarError(data.error || 'No se pudo actualizar el documento');
@@ -2670,6 +2732,15 @@ document.addEventListener('DOMContentLoaded', function() {
             'ANULADO': 'bg-danger'
         };
         return clases[estado] || 'bg-secondary';
+    }
+
+    // Los textos que vienen del backend (advertencias de folio, alias de
+    // sucursal, RUT del emisor) son datos, no markup: se escapan antes de
+    // concatenarlos a `innerHTML`/`html` de SweetAlert.
+    function escaparHtml(v) {
+        const d = document.createElement('div');
+        d.textContent = (v === null || v === undefined) ? '' : String(v);
+        return d.innerHTML;
     }
 
     function mostrarExito(mensaje) {

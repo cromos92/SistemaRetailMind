@@ -12,6 +12,10 @@
   // opción "Revisión Arqueos y Depósitos" → flags Editar / Eliminar por rol.
   window.PUEDE_EDITAR_DEP = {{ puede_editar_dep|yesno:"true,false" }};
   window.PUEDE_ELIMINAR_DEP = {{ puede_eliminar_dep|yesno:"true,false" }};
+  // Gate del botón "Actualizar Teórico" (re-snapshot de los total_*_teorico
+  // desde los DTE/Tickets del día). Mismo criterio que el backend en
+  // `recalcular_teoricos_arqueo`: administrador o administración.
+  window.PUEDE_RECALCULAR_TEORICO = {{ es_supervisor|yesno:"true,false" }};
 </script>
 
 <style>
@@ -372,7 +376,23 @@
                     <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
                 </div>
                 <div class="modal-footer py-2 d-flex justify-content-between">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                        <!--
+                            Re-snapshotea los `total_*_teorico` del arqueo leyendo
+                            de nuevo los DTE/Tickets del día. Necesario cuando se
+                            emite una NC de devolución o se corrige la fecha de un
+                            DTE DESPUÉS de cerrar la caja: el teórico guardado es
+                            un snapshot y no se entera solo.
+                            Visibilidad por `window.PUEDE_RECALCULAR_TEORICO`.
+                        -->
+                        <button type="button" class="btn btn-outline-primary btn-sm d-none" id="btnActualizarTeorico"
+                                onclick="actualizarTeoricoDetalle()"
+                                title="Vuelve a calcular el Ef. Teórico y los demás teóricos leyendo los DTE y Tickets del día. Úsalo si emitiste una NC o corregiste fechas después de cerrar la caja.">
+                            <span id="spinnerActualizarTeorico" class="spinner-border spinner-border-sm me-1" role="status" style="display:none;"></span>
+                            <i class="ri-refresh-line me-1"></i>Actualizar Teórico
+                        </button>
+                    </div>
                     <div class="d-flex gap-2">
                         <button type="button" class="btn btn-outline-danger btn-sm" id="btnRequiereAccion" onclick="revisarConResultado('REQUIERE_ACCION')" style="display:none;">
                             <i class="ri-alarm-warning-line me-1"></i>Requiere Acción
@@ -1192,6 +1212,12 @@ function verDetalle(id) {
             document.getElementById('btnOkConObs').style.display = showApprove ? '' : 'none';
             document.getElementById('btnRequiereAccion').style.display = showApprove || a.estado === 'REVISADO' ? '' : 'none';
 
+            // "Actualizar Teórico": disponible en cualquier estado para
+            // supervisores. En estados finales el backend deja constancia
+            // obligatoria en la bitácora (observación tipo SISTEMA).
+            var _btnTeo = document.getElementById('btnActualizarTeorico');
+            if (_btnTeo) _btnTeo.classList.toggle('d-none', !window.PUEDE_RECALCULAR_TEORICO);
+
             let dep_html = '';
             const deps = a.depositos || [];
             if (deps.length > 0) {
@@ -1274,6 +1300,128 @@ function agregarObsDetalle() {
     }).then(r => r.json()).then(res => {
         if (res.success) { verDetalle(arqueoDetalleId); }
         else Swal.fire('Error', res.error, 'error');
+    });
+}
+
+// ===== ACTUALIZAR TEÓRICO (re-snapshot desde DTEs/Tickets del día) =====
+// `ArqueoCaja.total_*_teorico` es un snapshot congelado al cerrar la caja: si
+// después se emite una NC de devolución o se corrige la fecha de un DTE, el
+// arqueo NO se entera solo. Este botón vuelve a llamar a la cuadratura del día
+// y re-escribe los teóricos + las diferencias físico-teórico.
+var TEORICO_LABELS = {
+    total_efectivo_teorico: 'Efectivo',
+    total_transbank_teorico: 'Transbank',
+    total_tarjeta_debito_teorico: 'Tarjeta Débito',
+    total_tarjeta_credito_teorico: 'Tarjeta Crédito',
+    total_transferencia_teorico: 'Transferencia',
+    total_cheque_teorico: 'Cheque',
+    total_convenio_teorico: 'Convenio',
+    total_credito_trabajador_teorico: 'Crédito Trabajador',
+    total_giftcard_teorico: 'Gift Card',
+    total_hites_teorico: 'Hites',
+    total_tarjetas_comerciales_teorico: 'Tarjetas Comerciales',
+    total_falabella_teorico: 'Falabella',
+    total_paris_teorico: 'Paris',
+    total_ripley_teorico: 'Ripley',
+    total_mercadopago_teorico: 'MercadoPago',
+    total_klap_teorico: 'Klap',
+    total_venta_internet_teorico: 'Venta Internet',
+    total_tickets_teorico: 'Tickets',
+    total_boletas_electronicas_teorico: 'Boletas Electrónicas',
+    total_facturas_teorico: 'Facturas',
+    total_facturas_exentas_teorico: 'Facturas Exentas',
+    total_notas_credito_teorico: 'Notas de Crédito',
+    total_descuento_puntos_teorico: 'Descuento Puntos',
+    venta_total_teorica: 'Venta Total',
+    cantidad_tickets: 'Cant. Tickets',
+    cantidad_boletas_electronicas: 'Cant. Boletas Electrónicas',
+    cantidad_facturas: 'Cant. Facturas',
+    cantidad_facturas_exentas: 'Cant. Facturas Exentas'
+};
+
+function actualizarTeoricoDetalle() {
+    if (!arqueoDetalleId) return;
+    Swal.fire({
+        title: 'Actualizar teóricos del arqueo',
+        html: '<p style="font-size:.85rem;text-align:left;color:#6c757d;margin-bottom:.6rem;">' +
+              'Vuelve a calcular el Ef. Teórico y los demás montos esperados leyendo los DTE y Tickets del día. ' +
+              'Úsalo si emitiste una <b>NC de devolución</b> o corregiste la fecha de un documento <b>después</b> de cerrar la caja.<br><br>' +
+              '<b>Ojo:</b> una NC sólo entra al día si su <i>fecha de cuadratura</i> apunta a este arqueo. ' +
+              'Si la NC se emitió otro día, primero corrige su fecha de pago desde Cuadratura de Caja.</p>' +
+              '<textarea id="swalRazonTeorico" class="form-control" rows="2" ' +
+              'placeholder="Motivo (queda en la bitácora del arqueo)"></textarea>',
+        showCancelButton: true,
+        confirmButtonText: '<i class="ri-refresh-line me-1"></i>Recalcular',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0066FF',
+        preConfirm: () => {
+            const v = (document.getElementById('swalRazonTeorico').value || '').trim();
+            if (v.length && v.length < 5) { Swal.showValidationMessage('El motivo debe tener al menos 5 caracteres'); return false; }
+            return v;
+        }
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        const btn = document.getElementById('btnActualizarTeorico');
+        const spin = document.getElementById('spinnerActualizarTeorico');
+        if (btn) btn.disabled = true;
+        if (spin) spin.style.display = '';
+        fetch('/app/api/arqueo/' + arqueoDetalleId + '/recalcular-teoricos/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ razon: r.value || '' })
+        })
+        .then(res => res.json())
+        .then(res => {
+            if (btn) btn.disabled = false;
+            if (spin) spin.style.display = 'none';
+            if (!res.success) { Swal.fire('Error', res.error || 'No se pudo recalcular', 'error'); return; }
+
+            if (!res.hay_cambios) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Sin cambios',
+                    html: '<p style="font-size:.88rem;">Los teóricos guardados ya coinciden con los DTE y Tickets del día. ' +
+                          'Si esperabas ver el efecto de una NC, revisa su fecha de cuadratura en Cuadratura de Caja.</p>'
+                });
+                verDetalle(arqueoDetalleId);
+                cargarDatos();
+                return;
+            }
+
+            var filas = '';
+            Object.keys(res.cambios || {}).forEach(function(campo) {
+                var c = res.cambios[campo];
+                var esCantidad = campo.indexOf('cantidad_') === 0;
+                var f = esCantidad ? fmtN : fmt;
+                var delta = (c.despues || 0) - (c.antes || 0);
+                filas += '<tr><td style="text-align:left;">' + escHtml(TEORICO_LABELS[campo] || campo) + '</td>' +
+                         '<td style="text-align:right;font-family:monospace;color:#6c757d;">' + f(c.antes) + '</td>' +
+                         '<td style="text-align:right;font-family:monospace;font-weight:700;">' + f(c.despues) + '</td>' +
+                         '<td style="text-align:right;font-family:monospace;color:' + (delta < 0 ? '#FF4D4D' : '#00D4AA') + ';">' +
+                         (delta > 0 ? '+' : '') + f(delta) + '</td></tr>';
+            });
+            var arq = res.arqueo || {};
+            Swal.fire({
+                icon: 'success',
+                title: 'Teóricos actualizados',
+                width: 640,
+                html: '<div class="table-responsive"><table class="table table-sm" style="font-size:.82rem;">' +
+                      '<thead><tr><th style="text-align:left;">Concepto</th><th style="text-align:right;">Antes</th>' +
+                      '<th style="text-align:right;">Ahora</th><th style="text-align:right;">Δ</th></tr></thead>' +
+                      '<tbody>' + filas + '</tbody></table></div>' +
+                      '<p style="font-size:.8rem;color:#6c757d;text-align:left;margin:0;">' +
+                      'Nueva diferencia de conteo: <b style="font-family:monospace;">' + fmt(arq.diferencia_efectivo) + '</b>' +
+                      ' · Dif. Transbank: <b style="font-family:monospace;">' + fmt(arq.diferencia_transbank) + '</b><br>' +
+                      'El cambio quedó registrado en la bitácora del arqueo.</p>'
+            });
+            verDetalle(arqueoDetalleId);
+            cargarDatos();
+        })
+        .catch(() => {
+            if (btn) btn.disabled = false;
+            if (spin) spin.style.display = 'none';
+            Swal.fire('Error', 'Error de conexión al recalcular los teóricos.', 'error');
+        });
     });
 }
 

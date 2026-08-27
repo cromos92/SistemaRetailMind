@@ -32301,6 +32301,10 @@ def anular_factura_dte(request):
     }
     tipo_sii_original = MAPA_TIPO_SII.get(dte.tipo_documento, 33)
 
+    # Arqueos cuyos teóricos se re-snapshotearon por efecto de esta NC
+    # (se llena dentro de la transacción; viaja en la respuesta JSON).
+    arqueos_resincronizados = []
+
     with transaction.atomic():
         # Re-validación bajo lock (anti doble-emisión concurrente): la validación
         # de saldo de arriba se hace sin lock, así que dos requests simultáneas
@@ -32922,6 +32926,40 @@ def anular_factura_dte(request):
                         "Error al registrar reapertura pendiente de cotización dte=%s",
                         dte.numero_documento)
 
+        # Resincronizar el arqueo del día al que se imputa la NC.
+        #
+        # `ArqueoCaja.total_*_teorico` es un snapshot congelado al cerrar la
+        # caja: emitir la NC después dejaba el `Ef. Teórico` mostrando la
+        # venta original sin descontar la devolución, y había que recalcular
+        # a mano desde Cuadratura de Caja. Se toca el día de
+        # `fecha_devolucion_caja` (que es el que usa `_calcular_cuadratura_data`
+        # vía `Dte_Detalle_Pago.fecha_pago`) y, si la anulación cambia el
+        # estado del original, también el día de su emisión.
+        #
+        # Una NC OCULTA (`descartado=True`) no entra a la cuadratura, pero el
+        # recálculo se corre igual: es idempotente y deja el arqueo alineado.
+        if metodo_devolucion in ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA'):
+            try:
+                from .views_modulo_ventas import resincronizar_arqueos_por_fechas
+                arqueos_resincronizados = resincronizar_arqueos_por_fechas(
+                    {fecha_devolucion_caja, dte.fecha_emision},
+                    nc.sucursal_id or dte.sucursal_id,
+                    usuario=request.user,
+                    razon=(
+                        f'NC #{nc.numero_documento} emitida sobre '
+                        f'{dte.tipo_documento} #{dte.numero_documento} '
+                        f'(devolución vía {metodo_devolucion})'
+                    ),
+                )
+            except Exception:
+                # Nunca abortar la emisión de la NC porque el recálculo del
+                # arqueo falle: la NC ya es válida y el arqueo se puede
+                # recalcular a mano desde Revisión de Arqueos.
+                logger.exception(
+                    "No se pudieron resincronizar los arqueos tras la NC #%s",
+                    nc.numero_documento,
+                )
+
     # 6. Construir datos para TXT NC
     from collections import defaultdict
     iva_calculado = int(nc.monto_con_iva - nc.monto_neto)
@@ -33072,6 +33110,8 @@ def anular_factura_dte(request):
             # reabrirlas antes de poder volver a facturar.
             'cotizaciones_sin_documento': cotizaciones_sin_documento,
             'requiere_reapertura_cotizacion': bool(cotizaciones_sin_documento),
+            # Arqueos cuyo Ef. Teórico se actualizó solo por esta NC.
+            'arqueos_resincronizados': arqueos_resincronizados,
         })
 
     response = HttpResponse(contenido_txt, content_type='text/plain; charset=utf-8')

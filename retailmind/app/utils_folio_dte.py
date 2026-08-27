@@ -55,6 +55,36 @@ TIPOS_CON_FOLIO_SII = {
     'GUIA DESPACHO',
 }
 
+# Tipos cuyo folio NO es único para siempre: la BOLETA PAPEL sale de un
+# talonario físico y su numeración se reinicia con cada talonario, así que el
+# mismo número reaparece legítimamente año a año. Validar contra todo el
+# historial bloquea cargas correctas; lo que sí es un error real es repetir el
+# folio dentro del mismo período contable.
+#
+# Para estos tipos la colisión se busca en una ventana de
+# `VENTANA_MESES_FOLIO_REUSABLE` meses **a cada lado** de la fecha de emisión
+# del documento (no sólo hacia atrás: el duplicado puede haberse cargado
+# después). Fuera de la ventana la colisión se reporta como advertencia, no
+# como error.
+TIPOS_FOLIO_REUSABLE = {
+    'BOLETA PAPEL',
+}
+VENTANA_MESES_FOLIO_REUSABLE = 2
+
+
+def ventana_folio_reusable(tipo_documento, fecha_ref):
+    """`(desde, hasta)` de la ventana de unicidad, o None si no aplica.
+
+    None significa "el folio es único para siempre" (folios CAF del SII).
+    """
+    from dateutil.relativedelta import relativedelta
+
+    tipo = (tipo_documento or '').upper().strip()
+    if tipo not in TIPOS_FOLIO_REUSABLE or not fecha_ref:
+        return None
+    delta = relativedelta(months=VENTANA_MESES_FOLIO_REUSABLE)
+    return (fecha_ref - delta, fecha_ref + delta)
+
 
 def normalizar_rut(rut) -> str:
     """Deja el RUT en formato comparable: sin puntos, sin espacios, upper.
@@ -97,11 +127,21 @@ def empresas_con_mismo_rut(empresa):
     return ids
 
 
-def buscar_colisiones_folio(dte, nuevo_folio, *, incluir_descartados=False):
+def buscar_colisiones_folio(dte, nuevo_folio, *, incluir_descartados=False,
+                            tipo_destino=None, fecha_ref=None):
     """DTEs que ya ocupan `nuevo_folio` para el mismo RUT emisor + tipo.
 
     Devuelve una lista de dicts (vacía si no hay colisión). **No** filtra
     por sucursal: el folio es único por RUT + tipo ante el SII.
+
+    `tipo_destino` permite consultar por un tipo distinto al actual del DTE
+    (caso: convertir una BOLETA ELECTRONICA en BOLETA PAPEL, donde el folio
+    hay que contrastarlo contra el universo del tipo destino).
+
+    Cada colisión trae `dentro_ventana`: True si cae dentro de la ventana de
+    unicidad del tipo (ver `ventana_folio_reusable`). Para los tipos con folio
+    CAF la ventana no existe y `dentro_ventana` es siempre True — el folio es
+    único para siempre.
     """
     from app.models import Dte
 
@@ -109,11 +149,16 @@ def buscar_colisiones_folio(dte, nuevo_folio, *, incluir_descartados=False):
     if not emisor_ids:
         return []
 
+    tipo = (tipo_destino or dte.tipo_documento or '').upper().strip()
+    if fecha_ref is None:
+        fecha_ref = dte.fecha_emision
+    ventana = ventana_folio_reusable(tipo, fecha_ref)
+
     qs = (
         Dte.objects
         .filter(
             emisor_id__in=emisor_ids,
-            tipo_documento=dte.tipo_documento,
+            tipo_documento=tipo,
             numero_documento=nuevo_folio,
         )
         .exclude(id=dte.id)
@@ -122,7 +167,22 @@ def buscar_colisiones_folio(dte, nuevo_folio, *, incluir_descartados=False):
     if not incluir_descartados:
         qs = qs.filter(descartado=False)
 
-    return [
+    # Con ventana se priorizan las colisiones que caen dentro (son las
+    # bloqueantes): el corte a 20 filas no puede dejarlas fuera por culpa
+    # de un montón de reusos antiguos legítimos del talonario.
+    if ventana:
+        qs = qs.order_by('-fecha_emision')
+
+    def _dentro(fecha):
+        if not ventana:
+            return True
+        if fecha is None:
+            # Sin fecha no se puede ubicar en el tiempo: se trata como
+            # dentro de la ventana para no dejar pasar un duplicado real.
+            return True
+        return ventana[0] <= fecha <= ventana[1]
+
+    resultado = [
         {
             'dte_id': o.id,
             'tipo_documento': o.tipo_documento,
@@ -136,9 +196,70 @@ def buscar_colisiones_folio(dte, nuevo_folio, *, incluir_descartados=False):
             ),
             'monto_con_iva': int(o.monto_con_iva or 0),
             'estado_dte': o.estado_dte,
+            'dentro_ventana': _dentro(o.fecha_emision),
         }
-        for o in qs[:20]
+        for o in qs[:40]
     ]
+    # Las bloqueantes primero, para que el detalle del error las muestre.
+    resultado.sort(key=lambda c: not c['dentro_ventana'])
+    return resultado[:20]
+
+
+def _detalle_colisiones(colisiones, limite=5):
+    """Texto legible con los DTE que chocan (`DTE #id (sucursal, fecha, $monto)`)."""
+    detalle = '; '.join(
+        "DTE #{id} ({suc}, {fec}, ${monto})".format(
+            id=c['dte_id'], suc=c['sucursal'], fec=c['fecha_emision'] or '?',
+            monto=f"{c['monto_con_iva']:,}".replace(',', '.'),
+        )
+        for c in colisiones[:limite]
+    )
+    if len(colisiones) > limite:
+        detalle += f' y {len(colisiones) - limite} más'
+    return detalle
+
+
+def mensajes_por_colisiones(dte, folio, colisiones, *, tipo_destino=None,
+                            fecha_ref=None):
+    """`(errores, advertencias)` a partir de las colisiones de folio.
+
+    Para los tipos con folio CAF toda colisión es error. Para los tipos de
+    `TIPOS_FOLIO_REUSABLE` (talonario físico) sólo bloquean las que caen
+    dentro de la ventana; las de fuera se informan como advertencia porque
+    reusar el número de un talonario viejo es legítimo.
+    """
+    tipo = (tipo_destino or dte.tipo_documento or '').upper().strip()
+    rut = getattr(getattr(dte, 'emisor', None), 'rut', '?')
+    if fecha_ref is None:
+        fecha_ref = dte.fecha_emision
+    ventana = ventana_folio_reusable(tipo, fecha_ref)
+
+    dentro = [c for c in colisiones if c.get('dentro_ventana', True)]
+    fuera = [c for c in colisiones if not c.get('dentro_ventana', True)]
+
+    errores, advertencias = [], []
+    if dentro:
+        if ventana:
+            errores.append(
+                f'El folio {folio} ya está usado en otra {tipo} del RUT {rut} '
+                f'dentro de los {VENTANA_MESES_FOLIO_REUSABLE} meses previos o '
+                f'posteriores al {fecha_ref.strftime("%d/%m/%Y")} '
+                f'({ventana[0].strftime("%d/%m/%Y")} a '
+                f'{ventana[1].strftime("%d/%m/%Y")}): '
+                + _detalle_colisiones(dentro)
+            )
+        else:
+            errores.append(
+                f'El folio {folio} ya está emitido para {tipo} bajo el RUT '
+                f'{rut}: ' + _detalle_colisiones(dentro)
+            )
+    if fuera:
+        advertencias.append(
+            f'El folio {folio} ya se usó en otra {tipo} del RUT {rut}, pero '
+            f'fuera de la ventana de {VENTANA_MESES_FOLIO_REUSABLE} meses '
+            f'(talonario anterior): ' + _detalle_colisiones(fuera)
+        )
+    return errores, advertencias
 
 
 def rango_correlativo_de(dte, folio=None):
@@ -187,7 +308,8 @@ def rango_correlativo_de(dte, folio=None):
     return (corr.base_inicial, corr.termino, corr.inicio)
 
 
-def validar_folio_dte(dte, nuevo_folio, *, incluir_descartados=False) -> dict:
+def validar_folio_dte(dte, nuevo_folio, *, incluir_descartados=False,
+                      fecha_ref=None) -> dict:
     """Valida un folio de destino antes de escribirlo.
 
     Devuelve::
@@ -233,23 +355,23 @@ def validar_folio_dte(dte, nuevo_folio, *, incluir_descartados=False) -> dict:
             'colisiones': [], 'rango': None,
         }
 
+    # `fecha_ref`: fecha con la que quedará el documento. Si la misma
+    # edición mueve `fecha_emision`, hay que pasar la NUEVA — si no, la
+    # ventana de unicidad de los tipos de talonario se centra en la fecha
+    # vieja y puede dejar pasar (o bloquear de más) un folio del período
+    # al que el documento realmente se va a mover.
+    if fecha_ref is None:
+        fecha_ref = dte.fecha_emision
     colisiones = buscar_colisiones_folio(
-        dte, nuevo_folio, incluir_descartados=incluir_descartados
+        dte, nuevo_folio, incluir_descartados=incluir_descartados,
+        fecha_ref=fecha_ref,
     )
-    if colisiones:
-        detalle = '; '.join(
-            "DTE #{id} ({suc}, {fec}, ${monto})".format(
-                id=c['dte_id'], suc=c['sucursal'], fec=c['fecha_emision'],
-                monto=f"{c['monto_con_iva']:,}".replace(',', '.'),
-            )
-            for c in colisiones[:5]
-        )
-        errores.append(
-            f'El folio {nuevo_folio} ya está emitido para '
-            f'{dte.tipo_documento} bajo el RUT '
-            f'{getattr(dte.emisor, "rut", "?")}: {detalle}'
-            + (f' y {len(colisiones) - 5} más' if len(colisiones) > 5 else '')
-        )
+    errores_col, advertencias_col = mensajes_por_colisiones(
+        dte, nuevo_folio, colisiones,
+        tipo_destino=dte.tipo_documento, fecha_ref=fecha_ref,
+    )
+    errores.extend(errores_col)
+    advertencias.extend(advertencias_col)
 
     rango = None
     tipo = (dte.tipo_documento or '').upper().strip()

@@ -249,7 +249,7 @@ def _badge_correo(envio):
     }
 
 
-def _seguimiento_correo(requerimiento_id):
+def _seguimiento_correo(requerimiento):
     """Estado de entrega del último correo enviado al proveedor.
 
     Devuelve None si el requerimiento es anterior a la bitácora (los casos
@@ -257,7 +257,7 @@ def _seguimiento_correo(requerimiento_id):
     sección, en vez de inventar un estado).
     """
     envio = (EnvioCorreo.objects
-             .filter(modulo='REQUERIMIENTO', objeto_id=requerimiento_id,
+             .filter(modulo='REQUERIMIENTO', objeto_id=requerimiento.id,
                      es_copia_control=False)
              .order_by('-creado_en')
              .first())
@@ -290,6 +290,20 @@ def _seguimiento_correo(requerimiento_id):
                              'fecha': _fmt(envio.click_en),
                              'clase': 'primary', 'icono': 'ri-cursor-line',
                              'nota': 'Evidencia fuerte: alguien hizo clic'})
+    respuestas = [{
+        'remitente': r.remitente,
+        'recibido_en': _fmt(r.recibido_en),
+        'cuerpo': r.cuerpo[:1500],
+        'adjuntos': r.adjuntos or [],
+    } for r in envio.respuestas.all()[:5]]
+    for r in respuestas:
+        adjuntos = r['adjuntos']
+        linea_tiempo.append({
+            'titulo': f"Respondió {r['remitente']}", 'fecha': r['recibido_en'],
+            'clase': 'success', 'icono': 'ri-reply-line',
+            'nota': (f'{len(adjuntos)} adjunto(s) en el correo' if adjuntos else ''),
+        })
+
     if envio.estado in ('REBOTADO', 'SPAM', 'FALLIDO'):
         linea_tiempo.append({'titulo': etiqueta, 'fecha': _fmt(envio.estado_en),
                              'clase': 'danger', 'icono': icono,
@@ -310,6 +324,11 @@ def _seguimiento_correo(requerimiento_id):
         'clicks': envio.clicks,
         'detalle': envio.estado_detalle or (envio.error[:255] if envio.error else ''),
         'linea_tiempo': linea_tiempo,
+        'respuestas': respuestas,
+        # Contestó por correo pero nadie dijo todavía si eso es un sí o un no.
+        # La captura automática NO decide por el proveedor: interpretar un
+        # "lo vemos" como aprobación sería inventar.
+        'falta_clasificar': bool(respuestas) and not requerimiento.decision_proveedor,
         # Si nunca hubo confirmación de entrega puede ser que el proveedor no
         # reporte eventos (webhook sin configurar) o que el correo se haya
         # perdido. No es lo mismo y no hay que afirmar ninguna de las dos.
@@ -661,6 +680,18 @@ def listar_requerimientos(request):
             requerimientos = requerimientos.filter(
                 correo_enviado_proveedor=True
             ).exclude(id__in=list(ids_confirmados))
+        elif correo_filtro == 'respondido':
+            # El proveedor contestó por correo y la respuesta ya está en la
+            # ficha, pero nadie dijo todavía si es un sí o un no. Sin este
+            # filtro esos casos se pierden: dejan de aparecer como atrasados
+            # y no aparecen como resueltos.
+            ids_respondidos = (EnvioCorreo.objects
+                               .filter(modulo='REQUERIMIENTO', es_copia_control=False,
+                                       respuestas__isnull=False)
+                               .values_list('objeto_id', flat=True))
+            requerimientos = requerimientos.filter(
+                id__in=list(ids_respondidos),
+                decision_proveedor__isnull=True)
 
         # Etapa del circuito: "quién tiene la pelota" es la pregunta real del
         # analista, y no se contestaba sin conocer los 10 estados de memoria.
@@ -992,7 +1023,7 @@ def detalle_requerimiento(request, requerimiento_id):
             'intentos_envio': requerimiento.intentos_envio,
             # Estado de entrega del último correo: si llegó, si rebotó, si lo
             # abrieron. None en los casos anteriores a la bitácora.
-            'seguimiento_correo': _seguimiento_correo(requerimiento.id),
+            'seguimiento_correo': _seguimiento_correo(requerimiento),
             'dias_sin_respuesta': requerimiento.dias_sin_respuesta,
             'requiere_recordatorio': requerimiento.requiere_recordatorio,
             'respuesta_proveedor': requerimiento.respuesta_proveedor or '',

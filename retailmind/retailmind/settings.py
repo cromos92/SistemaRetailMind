@@ -371,6 +371,17 @@ REQUERIMIENTOS_FROM_EMAIL = os.environ.get(
     'REQUERIMIENTOS_FROM_EMAIL', DEFAULT_FROM_EMAIL or ''
 )
 
+# ===== Lectura del buzón de respuestas (comando capturar_respuestas_correo) =====
+# El buzón puede ser un Gmail común: el plus-addressing funciona igual que en
+# Workspace, así que el token viaja en la dirección sin configurar alias.
+# La contraseña NO es la del correo: es una "contraseña de aplicación" de 16
+# caracteres, y para generarla la cuenta necesita 2FA activo.
+CORREO_IMAP_HOST = os.environ.get('CORREO_IMAP_HOST', 'imap.gmail.com')
+CORREO_IMAP_PORT = int(os.environ.get('CORREO_IMAP_PORT', '993'))
+CORREO_IMAP_USER = os.environ.get('CORREO_IMAP_USER', '')
+CORREO_IMAP_PASSWORD = os.environ.get('CORREO_IMAP_PASSWORD', '')
+CORREO_IMAP_CARPETA = os.environ.get('CORREO_IMAP_CARPETA', 'INBOX')
+
 # ========== LOGGING ==========
 # En producción subimos los loggers internos a WARNING para dejar de escribir
 # a disco en cada AJAX del POS (los INFO se iban acumulando en app.log).
