@@ -61,7 +61,13 @@ logger = logging.getLogger('app')
 # ---------------------------------------------------------------------------
 
 # Conceptos que representan una venta al público / mayorista (egresos de venta).
-CONCEPTOS_VENTA = ['VENTA_PUBLICO', 'VENTA_MAYORISTA', 'VENTA_DIRECTA']
+CONCEPTOS_VENTA = [
+    'VENTA_PUBLICO', 'VENTA_MAYORISTA', 'VENTA_DIRECTA',
+    # DESPACHO_COTIZACION: entrega diferida de una cotización facturada y
+    # cobrada. Es venta (ver app/constants_kardex.py). Esta lista es una
+    # copia local: sin agregarlo acá, este módulo seguiría sin contarlo.
+    'DESPACHO_COTIZACION',
+]
 
 # Conceptos que dan por RECIBIDA la mercadería de un traspaso.
 CONCEPTOS_ENTRADA_TRASPASO = [

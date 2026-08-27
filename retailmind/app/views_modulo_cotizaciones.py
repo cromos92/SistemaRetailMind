@@ -119,6 +119,88 @@ def _cuadratura_despacho(cotizacion):
     return facturadas, pendientes, post_factura
 
 
+def _resolver_skus_esperados(textos_sku, sucursal_id):
+    """{texto_sku: {datos del Producto_Talla}} para los que existen de verdad.
+
+    `Cotizacion_Empresa_Detalle.sku_producto_pendiente` es texto libre: se
+    escribe a mano al cotizar y nadie lo cruza con el catálogo. Resultado: el
+    operador del despacho diferido ve "SKU esperado: 40312" sin saber si ese SKU
+    existe, y tiene que buscarlo a mano de nuevo.
+
+    Resuelve TODOS los textos en una sola consulta (los ítems de una cotización
+    son pocos, pero una query por ítem contra la base remota se nota) y solo
+    devuelve los que pertenecen a la sucursal consultada — el stock es por
+    sucursal, así que un SKU de otra no sirve para despachar.
+    """
+    from app.models import Producto_Talla as _PT
+
+    numericos = {}
+    for texto in textos_sku:
+        limpio = (texto or '').strip()
+        if limpio and limpio.isdigit():
+            numericos[int(limpio)] = limpio
+
+    if not numericos:
+        return {}
+
+    qs = (
+        _PT.objects
+        .filter(sku__in=list(numericos.keys()))
+        .select_related('producto', 'producto__atributo1')
+    )
+    if sucursal_id:
+        qs = qs.filter(producto__sucursal_id=int(sucursal_id))
+
+    resultado = {}
+    for pt in qs:
+        texto = numericos.get(pt.sku)
+        if not texto or texto in resultado:
+            continue
+        producto = pt.producto
+        resultado[texto] = {
+            'producto_talla_id': pt.id,
+            'sku': str(pt.sku),
+            'nombre': producto.articulo if producto else 'Sin nombre',
+            'talla': pt.talla or 'N/A',
+            'marca': (
+                producto.atributo1.valor
+                if producto and producto.atributo1 else ''
+            ),
+            'stock': pt.stock_sucursal(sucursal_id) if sucursal_id else (pt.stock or 0),
+        }
+    return resultado
+
+
+def _documento_vivo(cotizacion):
+    """(ok, mensaje) — ¿el DTE de la cotización sigue respaldando la venta?
+
+    Ni `asignar_sku_pendiente` ni `revertir_sku_despachado` miraban el estado
+    del documento: bastaba que la cotización estuviera FACTURADA. Con el flujo
+    de eliminación de documentos eso es concreto — el DTE puede estar
+    descartado o ANULADO y el sistema seguiría sacando stock "para completarlo",
+    dejando mercadería entregada sin ningún documento que la respalde.
+    """
+    dte = cotizacion.dte
+    if dte is None:
+        return False, (
+            'La cotización no tiene documento tributario enlazado: no se puede '
+            'mover stock contra ella. Verifique en Gestión de DTE.'
+        )
+    if getattr(dte, 'descartado', False):
+        return False, (
+            f'El documento {dte.tipo_documento} #{dte.numero_documento} fue '
+            f'ELIMINADO. Reabra la cotización y vuelva a facturarla antes de '
+            f'despachar.'
+        )
+    if (dte.estado_dte or '').upper().strip() == 'ANULADO':
+        return False, (
+            f'El documento {dte.tipo_documento} #{dte.numero_documento} está '
+            f'ANULADO. Reabra la cotización y vuelva a facturarla antes de '
+            f'despachar.'
+        )
+    return True, ''
+
+
 def _puede_validar_despacho(request):
     """¿El usuario puede dar el OK final al despacho de una cotización?
 
@@ -247,24 +329,24 @@ def evaluar_items_cotizacion(cotizacion, sucursal_id):
         items_con_sku += 1
 
         if skus_asociados:
-            # Unidades del ítem realmente cubiertas por SKUs. Si no cubren la
-            # cantidad cotizada, `cargar_cotizacion_como_ticket` igual carga
-            # item.cantidad sobre el PRIMER SKU: el pre-flight tiene que
-            # validar ESO, no la cantidad declarada en la relación.
-            # Caso real en producción: COT-202607-0001 tenía 5 uds con un solo
-            # SKU en cantidad 1; se validó stock para 1 y el POS descontó 5.
+            # Unidades del ítem realmente cubiertas por SKUs.
+            #
+            # Antes este bloque replicaba el bug del POS: si la cobertura era
+            # parcial, validaba el stock del PRIMER SKU por `item.cantidad`
+            # (porque eso era lo que el POS descontaba). Ya no: el POS respeta la
+            # cantidad de cada fila y las unidades sin respaldo se facturan como
+            # despacho diferido, así que el pre-flight valida lo mismo —
+            # `sku_rel.cantidad` por fila. La cobertura parcial se sigue
+            # contando para avisarla en la grilla.
             cubiertas = sum(s.cantidad for s in skus_asociados)
             cobertura_parcial = cubiertas != item.cantidad
             if cobertura_parcial:
                 items_cobertura_parcial += 1
 
-            for idx, sku_rel in enumerate(skus_asociados):
+            for sku_rel in skus_asociados:
                 if not sku_rel.producto_talla:
                     continue
-                requerido = sku_rel.cantidad
-                if cobertura_parcial:
-                    # El POS ignora los SKUs siguientes y le carga TODO al primero.
-                    requerido = item.cantidad if idx == 0 else 0
+                requerido = sku_rel.cantidad or 0
                 if requerido <= 0:
                     continue
                 stock_actual = sku_rel.producto_talla.stock_sucursal(sucursal_id)
@@ -462,6 +544,10 @@ def listar_cotizaciones(request):
         
         # Permiso de validación (una sola vez, aplica a toda la lista)
         puede_validar = _puede_validar_despacho(request)
+        # Reabrir una cotización facturada es corrección documental: solo
+        # administrador. Se resuelve una vez y no por fila.
+        from .views_modulo_ventas import _usuario_es_administrador_activo
+        es_administrador = _usuario_es_administrador_activo(request.user)
 
         # Serializar datos
         cotizaciones_data = []
@@ -533,6 +619,20 @@ def listar_cotizaciones(request):
                     if cot.dte_id else ''
                 ),
                 'sin_dte_enlazado': bool(esta_facturada and not cot.dte_id),
+                # ¿El documento que la respalda dejó de existir? Se resuelve
+                # sobre el `dte` ya traído por select_related: cero queries
+                # extra. Es la señal que habilita el botón "Reabrir"; los guards
+                # duros (stock devuelto, despachos revertidos) los revalida
+                # `reabrir_cotizacion` bajo lock, no el listado.
+                'documento_muerto': bool(
+                    esta_facturada and (
+                        not cot.dte_id
+                        or cot.dte.descartado
+                        or (cot.dte.estado_dte or '').upper().strip() == 'ANULADO'
+                    )
+                ),
+                'documento_estado_dte': (cot.dte.estado_dte or '') if cot.dte_id else '',
+                'documento_descartado': bool(cot.dte_id and cot.dte.descartado),
                 'items_cobertura_parcial': _eval['items_cobertura_parcial'],
                 'monto_total': float(cot.total),
                 'total_items': total_items,
@@ -596,6 +696,14 @@ def listar_cotizaciones(request):
                         puede_validar and not cot.despacho_validado
                         and uds_pendientes == 0
                     ),
+                    # Botón "Reabrir para re-facturar": documento muerto +
+                    # administrador + sin unidades de despacho diferido afuera.
+                    # Lo último se puede evaluar acá porque `uds_post_factura`
+                    # ya está calculado sobre los ítems prefetcheados.
+                    'puede_reabrir': (
+                        es_administrador
+                        and cotizaciones_data[-1]['documento_muerto']
+                    ),
                 })
             else:
                 cotizaciones_data[-1].update({
@@ -607,6 +715,7 @@ def listar_cotizaciones(request):
                     'despacho_validado': False,
                     'despacho_validado_por': '',
                     'puede_validar_despacho': False,
+                    'puede_reabrir': False,
                 })
         
         return JsonResponse({
@@ -651,6 +760,15 @@ def detalle_cotizacion(request, cotizacion_id):
         # Serializar items
         items_data = []
         logger.debug("Cargando detalle de cotizacion %s", cotizacion.numero_cotizacion)
+
+        # ¿Los "SKU esperado" anotados a mano existen en el catálogo de esta
+        # sucursal? Se resuelve de una sola vez para toda la cotización. El
+        # modal de despacho lo usa para ofrecer el SKU directamente en vez de
+        # obligar a buscarlo a ciegas.
+        skus_esperados_match = _resolver_skus_esperados(
+            [i.sku_producto_pendiente for i in cotizacion.items.all()],
+            sucursal_id,
+        )
 
         # sorted() en Python sobre el prefetch: .order_by() dispararía una
         # consulta nueva por ítem y tiraría el prefetch a la basura.
@@ -750,9 +868,16 @@ def detalle_cotizacion(request, cotizacion_id):
                 # Cuadratura por unidades (despacho diferido parcial)
                 'unidades_despachadas': uds_despachadas_item,
                 'unidades_pendientes': uds_pendientes_item,
-                # Unidades del ítem realmente cubiertas por SKUs: si no llegan a
-                # `cantidad`, al facturar el POS le carga todo al primer SKU.
+                # Unidades del ítem realmente cubiertas por SKUs. Si no llegan
+                # a `cantidad`, la diferencia se factura como despacho diferido
+                # (el POS ya NO le carga el excedente al primer SKU).
                 'unidades_cubiertas_sku': sum(s.cantidad for s in filas_sku),
+                # El SKU anotado a mano al cotizar, si resultó existir de verdad
+                # en el catálogo de esta sucursal. None = no existe o no se
+                # escribió: hay que buscarlo.
+                'sku_esperado_match': skus_esperados_match.get(
+                    (item.sku_producto_pendiente or '').strip()
+                ),
             })
         
         _uds_fact, _uds_pend, _uds_post = _cuadratura_despacho(cotizacion)
@@ -1219,6 +1344,98 @@ def anular_cotizacion(request):
 
 @login_required
 @require_http_methods(["POST"])
+def reabrir_cotizacion(request):
+    """
+    Devuelve a VIGENTE una cotización FACTURADA cuyo documento tributario ya
+    fue eliminado o anulado, para poder re-facturarla.
+
+    Body JSON:
+        cotizacion_id – ID de Cotizacion_Empresa
+        motivo        – texto obligatorio (5+ caracteres), queda en el historial
+        dias_validez  – opcional, días de vigencia a devolverle si ya venció
+
+    Por qué existe: el módulo no factura (lo hace el POS al cobrar), así que
+    cuando el DTE se elimina o se anula por NC total la cotización queda
+    marcada FACTURADA apuntando a un documento muerto — y desde ahí no se puede
+    re-facturar (`cargar_cotizacion_como_ticket` exige `esta_vigente`), ni
+    editar, ni anular. Era un callejón sin salida sin herramienta de salida.
+
+    Solo administradores: es una corrección sobre el árbol documental. Los
+    guards que impiden reabrir con stock afuera viven en
+    `app/services/cotizacion_reapertura.py` y se revalidan bajo lock.
+    """
+    try:
+        from .views_modulo_ventas import _usuario_es_administrador_activo
+        from .services.cotizacion_reapertura import (
+            evaluar_reapertura, reabrir_cotizacion as _reabrir,
+        )
+
+        if not _usuario_es_administrador_activo(request.user):
+            return JsonResponse({
+                'success': False,
+                'error': 'Solo un administrador puede reabrir una cotización facturada'
+            }, status=403)
+
+        data = json.loads(request.body)
+        cotizacion_id = data.get('cotizacion_id')
+        motivo = (data.get('motivo') or '').strip()
+        dias_validez = data.get('dias_validez')
+
+        if not cotizacion_id:
+            return JsonResponse({'success': False, 'error': 'Falta cotizacion_id'}, status=400)
+        if len(motivo) < 5:
+            return JsonResponse({
+                'success': False,
+                'error': 'Debe indicar el motivo de la reapertura (mínimo 5 caracteres)'
+            }, status=400)
+
+        cotizacion = get_object_or_404(
+            Cotizacion_Empresa.objects
+            .select_related('dte', 'sucursal', 'cliente')
+            .prefetch_related('items__skus_asociados'),
+            pk=cotizacion_id,
+        )
+
+        sucursal_id = _sucursal_activa_id(request)
+        if sucursal_id and cotizacion.sucursal_id != int(sucursal_id):
+            return JsonResponse({
+                'success': False,
+                'error': 'No tiene permisos sobre esta cotización'
+            }, status=403)
+
+        evaluacion = evaluar_reapertura(cotizacion)
+        if not evaluacion['ok']:
+            return JsonResponse({
+                'success': False,
+                'error': evaluacion['bloqueos'][0],
+                'bloqueos': evaluacion['bloqueos'],
+            }, status=400)
+
+        ok, payload = _reabrir(cotizacion, request.user, motivo, dias_validez=dias_validez)
+        if not ok:
+            return JsonResponse({
+                'success': False,
+                'error': (payload.get('bloqueos') or ['No se pudo reabrir'])[0],
+                'bloqueos': payload.get('bloqueos', []),
+            }, status=400)
+
+        return JsonResponse({
+            'success': True,
+            'message': (
+                f'{payload["numero_cotizacion"]} reabierta: vuelve a estar '
+                f'{payload["estado"]} hasta el {payload["fecha_validez"]}. '
+                f'Ya se puede facturar de nuevo desde el POS.'
+            ),
+            **payload,
+        })
+
+    except Exception as e:
+        logger.exception("Error al reabrir cotizacion")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
 def convertir_cotizacion_factura(request):
     """
     Pre-flight de facturación: valida que la cotización se pueda facturar y
@@ -1421,17 +1638,34 @@ def cargar_cotizacion_como_ticket(request, cotizacion_id):
             filas_sku = [s for s in item.skus_asociados.all() if s.producto_talla]
 
             if filas_sku:
-                # Con UN solo SKU se mantiene el comportamiento histórico
-                # (la línea lleva la cantidad del ítem). Con VARIOS, cada SKU
-                # va en su propia línea con SU cantidad: antes se tomaba
-                # `skus_asociados.first()` y se le cargaban TODAS las unidades
-                # del ítem, así que el segundo SKU nunca salía de stock y el
-                # primero se descontaba de más.
-                multi = len(filas_sku) > 1
+                # Cada SKU va en su propia línea con SU cantidad.
+                #
+                # Antes, con UNA sola fila de SKU se le cargaba `item.cantidad`
+                # completa "por compatibilidad histórica". Eso es exactamente el
+                # bug de la cobertura parcial: un ítem de 5 uds respaldado por 1
+                # sola unidad de un SKU hacía que el POS descontara 5 de ese SKU
+                # y, además, `unidades_cubiertas_al_facturar` leía 1 — así que el
+                # módulo seguía ofreciendo despachar las 4 restantes y las mismas
+                # unidades salían dos veces. Caso real: COT-202607-0001.
+                #
+                # `_validar_cobertura_skus` ya impide crear/editar cotizaciones
+                # con cobertura parcial, así que esto solo cambia el
+                # comportamiento sobre datos históricos — que es justo donde
+                # estaba el descuadre.
+                cubiertas = sum((s.cantidad or 0) for s in filas_sku)
+                # Cobertura exacta con una sola fila: se conserva el subtotal
+                # cotizado tal cual (incluye el descuento de línea), en vez de
+                # recalcularlo por unidad.
+                cobertura_exacta_simple = (
+                    len(filas_sku) == 1 and cubiertas == item.cantidad
+                )
                 for sku_rel in filas_sku:
                     pt = sku_rel.producto_talla
                     producto = pt.producto
-                    cantidad_linea = sku_rel.cantidad if multi else item.cantidad
+                    cantidad_linea = (
+                        item.cantidad if cobertura_exacta_simple
+                        else (sku_rel.cantidad or 0)
+                    )
                     if cantidad_linea <= 0:
                         continue
 
@@ -1455,8 +1689,8 @@ def cargar_cotizacion_como_ticket(request, cotizacion_id):
                         'precio': float(item.precio_unitario),
                         'precio_unitario': float(item.precio_unitario),
                         'subtotal': (
-                            float(item.precio_unitario) * cantidad_linea
-                            if multi else float(item.subtotal)
+                            float(item.subtotal) if cobertura_exacta_simple
+                            else float(item.precio_unitario) * cantidad_linea
                         ),
                         'stock': stock_actual,
                         'descuento_unitario': 0,
@@ -1467,9 +1701,10 @@ def cargar_cotizacion_como_ticket(request, cotizacion_id):
 
                 # Datos antiguos: SKUs que no cubren toda la cantidad del ítem.
                 # Las unidades sin respaldo van como despacho diferido en vez de
-                # descontarse de un SKU que no las tiene.
-                cubiertas = sum(s.cantidad for s in filas_sku)
-                if multi and cubiertas < item.cantidad:
+                # descontarse de un SKU que no las tiene. Ya no se exige `multi`:
+                # el caso de UNA sola fila que cubre de menos era precisamente el
+                # que quedaba sin línea de pendiente y sobrevendía el SKU.
+                if cubiertas < item.cantidad:
                     faltantes = item.cantidad - cubiertas
                     items_pendientes.append({
                         'detalle_id': item.id,
@@ -1691,6 +1926,13 @@ def asignar_sku_pendiente(request):
                 'success': False,
                 'error': 'Solo se puede asignar SKU a cotizaciones ya facturadas'
             }, status=400)
+
+        # ...y que el documento que la respalda siga vivo. Sin este guard se
+        # podía sacar stock contra un DTE eliminado o anulado: mercadería
+        # entregada sin documento y sin forma de facturarla.
+        doc_ok, doc_error = _documento_vivo(cotizacion)
+        if not doc_ok:
+            return JsonResponse({'success': False, 'error': doc_error}, status=400)
 
         # Validar contra el SALDO pendiente en unidades, no contra flags.
         # Antes un despacho parcial (facturado 5, despachado 2) cerraba el
@@ -1947,14 +2189,27 @@ def revertir_sku_despachado(request):
     Body JSON:
         detalle_id – ID de Cotizacion_Empresa_Detalle
         motivo     – texto obligatorio, queda en el historial
+        sku_id     – opcional: ID de Cotizacion_Empresa_Detalle_SKU a revertir.
+                     Sin él se revierten TODOS los despachos post-factura del
+                     ítem (comportamiento histórico).
 
     No existía forma de corregir un SKU asignado por error: `editar_cotizacion`
     bloquea las cotizaciones facturadas y `asignar_sku_pendiente` solo acepta
     ítems sin SKU. Esta vista devuelve el ítem a "pendiente" para poder volver a
     asignarlo con el flujo normal.
 
+    Reversa SELECTIVA (`sku_id`): un ítem despachado en dos tandas con SKUs
+    distintos obligaba a revertir las dos para corregir una, y había que rehacer
+    el despacho que estaba bien. Con `sku_id` se revierte solo esa fila y el
+    ítem queda con el saldo pendiente correspondiente.
+
     Compensa en vez de borrar: crea un Movimientos_Producto de INGRESO que
     revierte el egreso (los movimientos son base de auditoría, no se eliminan).
+
+    OJO: acá NO se exige que el DTE siga vivo, al revés que en
+    `asignar_sku_pendiente`. Revertir los despachos es justamente el paso previo
+    obligatorio para reabrir una cotización cuyo documento se eliminó; exigir un
+    documento vivo dejaría esa mercadería trabada para siempre.
 
     Solo administradores: es una corrección sobre un documento ya emitido.
     """
@@ -1970,6 +2225,7 @@ def revertir_sku_despachado(request):
         data = json.loads(request.body)
         detalle_id = data.get('detalle_id')
         motivo = (data.get('motivo') or '').strip()
+        sku_id = data.get('sku_id')
 
         if not detalle_id:
             return JsonResponse({'success': False, 'error': 'Falta detalle_id'}, status=400)
@@ -2004,11 +2260,23 @@ def revertir_sku_despachado(request):
         with transaction.atomic():
             # Solo las filas post-factura: las asociaciones creadas al cotizar
             # no movieron stock y no deben reintegrarse.
-            filas_sku = list(
+            filas_qs = (
                 Cotizacion_Empresa_Detalle_SKU.objects
                 .filter(detalle=detalle, asignado_post_factura=True)
                 .select_related('producto_talla__producto')
             )
+            if sku_id:
+                filas_qs = filas_qs.filter(pk=sku_id)
+            filas_sku = list(filas_qs)
+
+            if sku_id and not filas_sku:
+                return JsonResponse({
+                    'success': False,
+                    'error': (
+                        'Ese despacho no existe o no pertenece a este ítem '
+                        '(puede haberse revertido ya).'
+                    )
+                }, status=400)
 
             reintegrados = []
             for fila in filas_sku:
@@ -2047,7 +2315,11 @@ def revertir_sku_despachado(request):
                 )
                 reintegrados.append({'sku': str(pt_lock.sku), 'cantidad': fila.cantidad})
 
-            # Volver la línea del DTE a "pendiente de despacho"
+            # Volver la línea del DTE a "pendiente de despacho".
+            # Se hace SIEMPRE que se revierta algo: la línea se completa (con
+            # SKU principal y costo ponderado) recién cuando el ítem queda
+            # totalmente despachado, así que mientras haya saldo tiene que
+            # estar marcada como pendiente.
             if cotizacion.dte:
                 Dte_Productos.objects.filter(
                     dte=cotizacion.dte,
@@ -2060,26 +2332,59 @@ def revertir_sku_despachado(request):
                 )
 
             # Los vínculos SKU no son auditoría (el historial guarda el rastro):
-            # se eliminan SOLO los post-factura para que el ítem vuelva a estar
-            # realmente pendiente (las asociaciones originales de la cotización
-            # no movieron stock y se conservan).
+            # se eliminan SOLO los post-factura revertidos para que esas
+            # unidades vuelvan a estar realmente pendientes (las asociaciones
+            # originales de la cotización no movieron stock y se conservan).
             Cotizacion_Empresa_Detalle_SKU.objects.filter(
-                detalle=detalle, asignado_post_factura=True
+                pk__in=[f.pk for f in filas_sku]
             ).delete()
 
-            detalle.producto_existente = None
-            detalle.es_producto_pendiente = True
-            detalle.sku_asignado_post_factura = False
-            detalle.fecha_asignacion_sku = None
-            detalle.usuario_asignacion_sku = None
-            detalle.save(
-                update_fields=[
-                    'producto_existente', 'es_producto_pendiente',
-                    'sku_asignado_post_factura', 'fecha_asignacion_sku',
-                    'usuario_asignacion_sku',
-                ],
-                recalcular_cotizacion=False,
+            # ¿Quedó algún despacho post-factura vivo? Con reversa selectiva el
+            # ítem puede seguir parcialmente despachado: en ese caso NO se lo
+            # devuelve entero a "pendiente", solo se reabre el saldo revertido.
+            # Marcarlo pendiente igual borraría el rastro del despacho que sigue
+            # siendo válido y descuadraría la cuadratura por unidades.
+            quedan_despachos = (
+                Cotizacion_Empresa_Detalle_SKU.objects
+                .filter(detalle=detalle, asignado_post_factura=True)
+                .exists()
             )
+
+            if quedan_despachos:
+                # El ítem vuelve a tener saldo pero sigue teniendo despachos
+                # vigentes.
+                #
+                # `sku_asignado_post_factura` NO se toca: junto con
+                # `es_producto_pendiente` forma `nacio_pendiente`, que es lo que
+                # le dice a la cuadratura "este ítem se facturó SIN SKU, así que
+                # con el ticket no salió nada". Bajarlo acá hacía que
+                # `unidades_cubiertas_al_facturar` cayera en la rama legacy y
+                # devolviera `cantidad` completa (porque `producto_existente`
+                # estaba seteado): el saldo pendiente salía 0 y las unidades
+                # revertidas quedaban invisibles.
+                #
+                # `producto_existente` sí se limpia: apuntaba al SKU que se
+                # acaba de revertir.
+                detalle.producto_existente = None
+                detalle.es_producto_pendiente = True
+                detalle.save(
+                    update_fields=['producto_existente', 'es_producto_pendiente'],
+                    recalcular_cotizacion=False,
+                )
+            else:
+                detalle.producto_existente = None
+                detalle.es_producto_pendiente = True
+                detalle.sku_asignado_post_factura = False
+                detalle.fecha_asignacion_sku = None
+                detalle.usuario_asignacion_sku = None
+                detalle.save(
+                    update_fields=[
+                        'producto_existente', 'es_producto_pendiente',
+                        'sku_asignado_post_factura', 'fecha_asignacion_sku',
+                        'usuario_asignacion_sku',
+                    ],
+                    recalcular_cotizacion=False,
+                )
 
             # Si el despacho ya tenía el OK del administrador, la reversa lo
             # invalida: la cuadratura dejó de estar vigente.
@@ -2263,20 +2568,36 @@ def buscar_productos_cotizacion(request):
                 'productos': []
             })
 
-        # Construir filtros de búsqueda
-        # SKU es BigIntegerField, así que buscamos si es numérico
-        filtros = Q(producto__articulo__icontains=query) | Q(producto__descripcion__icontains=query)
-
-        # Si el query es numérico, buscar también por SKU
-        if query.isdigit():
-            filtros |= Q(sku=int(query))  # Búsqueda exacta
-            filtros |= Q(sku__gte=int(query), sku__lt=int(query) + 10000)  # Rango aproximado
-
-        # Buscar por marca (atributo1)
-        filtros |= Q(producto__atributo1__valor__icontains=query)
-
-        # Buscar por talla
-        filtros |= Q(talla__icontains=query)
+        # ------------------------------------------------------------------
+        # Búsqueda MULTI-TÉRMINO.
+        #
+        # Antes el query entero se buscaba como una sola cadena, así que
+        # "nike 38" o "zapatilla running negro" no encontraban nada: ningún
+        # campo contiene los dos términos juntos. Ahora cada término tiene que
+        # calzar en ALGÚN campo (AND entre términos, OR entre campos), que es
+        # como busca el modal de "Crear Manual".
+        #
+        # Importa especialmente en el despacho diferido: el operador tiene la
+        # descripción libre del ítem cotizado ("BALON FUTBOL Nº5") y necesita
+        # llegar al SKU real con esas palabras.
+        # ------------------------------------------------------------------
+        terminos = [t for t in query.split() if t]
+        filtros = Q()
+        for termino in terminos:
+            por_termino = (
+                Q(producto__articulo__icontains=termino)
+                | Q(producto__descripcion__icontains=termino)
+                # Marca
+                | Q(producto__atributo1__valor__icontains=termino)
+                | Q(talla__icontains=termino)
+            )
+            # SKU es BigIntegerField: solo tiene sentido si el término es numérico.
+            if termino.isdigit():
+                por_termino |= Q(sku=int(termino))  # exacta
+                por_termino |= Q(
+                    sku__gte=int(termino), sku__lt=int(termino) + 10000
+                )  # rango aproximado (prefijo)
+            filtros &= por_termino
 
         # ✅ FILTRAR SOLO PRODUCTOS DE LA SUCURSAL ACTIVA
         if sucursal_id:
@@ -2306,8 +2627,15 @@ def buscar_productos_cotizacion(request):
         elif filtro_stock == 'sin_stock':
             productos_con_stock = [p for p in productos_con_stock if p['stock_sucursal'] <= 0]
         
-        # Ordenar: primero los que tienen stock en la sucursal, luego por nombre
-        productos_con_stock.sort(key=lambda x: (-x['stock_sucursal'], x['producto_talla'].producto.articulo if x['producto_talla'].producto else ''))
+        # Ordenar: el SKU exacto primero (si el operador lo pegó tal cual, es
+        # lo que busca), después los que tienen stock en la sucursal, después
+        # por nombre.
+        sku_exacto = int(query) if query.isdigit() else None
+        productos_con_stock.sort(key=lambda x: (
+            0 if (sku_exacto is not None and x['producto_talla'].sku == sku_exacto) else 1,
+            -x['stock_sucursal'],
+            x['producto_talla'].producto.articulo if x['producto_talla'].producto else '',
+        ))
         
         # Paginación
         pagina = int(request.GET.get('pagina', 1))

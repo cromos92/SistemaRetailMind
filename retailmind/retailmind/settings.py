@@ -319,7 +319,13 @@ PIN_2FA_MODE = 'session'
 
 # ========== CONFIGURACIÓN DE EMAIL ==========
 # Ahora usa variables de entorno para mayor seguridad
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+#
+# El backend por defecto es el SMTP normal de Django MÁS la captura del
+# identificador que devuelve el relay en su respuesta final ("Message queued
+# as ..."). Es un reemplazo directo: no cambia cómo se envía, solo permite
+# correlacionar después los webhooks de entrega con el correo que los originó.
+# Se puede volver al backend estándar con la env var EMAIL_BACKEND.
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'app.mail_backends.TrazableEmailBackend')
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
@@ -345,6 +351,25 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 #   EMAIL_HOST_USER=tu-email@gmail.com
 #   EMAIL_HOST_PASSWORD=xxxx-xxxx-xxxx-xxxx  # App Password de Gmail
 #   DEFAULT_FROM_EMAIL=tu-email@gmail.com
+
+# ========== SEGUIMIENTO DE CORREO ==========
+# URL pública del sistema. La necesitan el píxel de apertura y los enlaces que
+# van dentro de los correos: sin ella el correo sale igual, pero sin rastreo.
+CORREO_BASE_URL = os.environ.get('CORREO_BASE_URL', '')
+
+# Buzón genérico que recibe las respuestas de los proveedores. Cuando está
+# definido, el Reply-To de los correos pasa a ser `buzon+<token>@dominio`
+# (plus-addressing: Google Workspace lo entrega al buzón base sin configurar
+# alias) y eso permite pegar cada respuesta en la ficha que la originó.
+# Mientras esté vacío, el Reply-To sigue siendo el del usuario que envía.
+CORREO_BUZON_RESPUESTAS = os.environ.get('CORREO_BUZON_RESPUESTAS', '')
+
+# Remitente del módulo de requerimientos. Conviene que sea un buzón que exista
+# de verdad: con `noreply@`, el proveedor que responde al remitente en vez de
+# usar "Responder" escribe a un buzón que nadie lee.
+REQUERIMIENTOS_FROM_EMAIL = os.environ.get(
+    'REQUERIMIENTOS_FROM_EMAIL', DEFAULT_FROM_EMAIL or ''
+)
 
 # ========== LOGGING ==========
 # En producción subimos los loggers internos a WARNING para dejar de escribir

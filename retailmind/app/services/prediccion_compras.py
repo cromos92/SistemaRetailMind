@@ -22,7 +22,13 @@ from ..models.ventas import Ticket_Productos, Ticket
 from ..models.inventario import Movimientos_Producto
 from ..models.compras import Compras, Compras_Producto_Talla
 
-CONCEPTOS_VENTA = ['VENTA_PUBLICO', 'VENTA_MAYORISTA', 'VENTA_DIRECTA', 'VENTA_TICKET']
+CONCEPTOS_VENTA = [
+    'VENTA_PUBLICO', 'VENTA_MAYORISTA', 'VENTA_DIRECTA', 'VENTA_TICKET',
+    # DESPACHO_COTIZACION: entrega diferida de una cotización facturada y
+    # cobrada. Es venta (ver app/constants_kardex.py). Esta lista es una
+    # copia local: sin agregarlo acá, este módulo seguiría sin contarlo.
+    'DESPACHO_COTIZACION',
+]
 TIPOS_SUCURSAL_VENTA = ['VENDEDORA', 'MIXTA']
 
 from ..models.predicciones import (

@@ -317,6 +317,11 @@ class Command(BaseCommand):
         # entre envíos para no gatillar el límite.
         pausa = float(os.environ.get('GIFTCARD_EMAIL_PAUSA_SEG', '1'))
         intentos_max = int(os.environ.get('GIFTCARD_EMAIL_REINTENTOS', '3'))
+        # MailerSend acepta 5 mensajes por conexión y cierra el sexto con un
+        # 421. El reintento de abajo lo resuelve, pero pagando un envío fallido
+        # + su espera cada 6 destinatarios. Reabrir ANTES de llegar al tope
+        # convierte ese fallo previsible en una reconexión limpia.
+        max_por_conexion = int(os.environ.get('GIFTCARD_EMAIL_MAX_POR_CONEXION', '5'))
         estado = {'conn': connection}
 
         def _reabrir():
@@ -376,6 +381,16 @@ class Command(BaseCommand):
             for i, (correo, gcs, nombre, benef) in enumerate(lotes):
                 if i and pausa:
                     time.sleep(pausa)   # no gatillar el tope de envío del proveedor
+                if i and max_por_conexion and i % max_por_conexion == 0:
+                    try:
+                        _reabrir()
+                    except Exception as e:
+                        # Si no se puede reabrir acá, el reintento de
+                        # `_enviar_con_reintento` lo vuelve a intentar; no
+                        # tiene sentido abortar el lote entero por esto.
+                        self.stdout.write(self.style.WARNING(
+                            f'  … no se pudo renovar la conexión SMTP: {e}'
+                        ))
                 try:
                     _enviar_con_reintento(gcs, correo, nombre, benef)
                     enviados_ok += 1

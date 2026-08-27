@@ -283,6 +283,62 @@ TIPOS_DTE_INTERCAMBIABLES: tuple[frozenset, ...] = (
 )
 
 
+# Mapa `Dte.tipo_documento` -> `Ticket.tipo_dte` (choices del modelo Ticket).
+#
+# Vive acá, y no en `views_modulo_ventas`, porque lo necesitan tres consumidores
+# que no deben importarse entre sí: la edición de DTE, la eliminación de
+# documentos y el servicio de reapertura de cotizaciones. Todos resuelven el
+# MISMO problema: `Ticket.folio_dte` no es único (las series se numeran por tipo
+# de documento y en producción hay 6 pares (sucursal, folio_dte) con más de un
+# ticket), así que buscar por sucursal + folio sin el tipo puede devolver el
+# ticket de otra venta.
+TIPO_DTE_A_TIPO_TICKET = {
+    'BOLETA ELECTRONICA': 'BOLETA_ELECTRONICA',
+    'BOLETA PAPEL': 'BOLETA',
+    'FACTURA ELECTRONICA': 'FACTURA_ELECTRONICA',
+    'FACTURA EXENTA': 'FACTURA_EXENTA',
+}
+
+
+def tipo_ticket_para_dte(tipo_documento) -> str | None:
+    """`Ticket.tipo_dte` esperado para un `Dte.tipo_documento`, o None."""
+    return TIPO_DTE_A_TIPO_TICKET.get((tipo_documento or '').upper().strip())
+
+
+# Valores de `Ticket.tipo_dte` que dicen algo sobre QUÉ SERIE de documento
+# tributario respalda el ticket. Son exactamente los del mapa de arriba.
+#
+# El resto de los choices NO es informativo para desambiguar series:
+#   * 'TICKET' es el **default del modelo** ("Ticket (sin DTE)"): lo trae todo
+#     ticket al que nadie le escribió el tipo, y `registrar_pagos_ticket` nunca
+#     lo actualiza al emitir el DTE. Medido en producción: de 18.964 tickets con
+#     `folio_dte`, 18.673 están en 'TICKET' y 291 en 'TICKET_COBRO_CAMBIO' —
+#     o sea CERO traen el tipo específico.
+#   * 'TICKET_COBRO_CAMBIO' / 'TICKET_DEVOLUCION' / 'TICKET_CAMBIO_DIRECTO'
+#     describen el flujo de cambio/devolución, no la serie: la diferencia de un
+#     cambio se cobra con una boleta o una factura indistintamente.
+#
+# Tratar el default como si contradijera al DTE bloquearía TODAS las
+# operaciones sobre tickets reales, así que hay que distinguir "tipo que
+# contradice" de "tipo que no dice nada".
+TIPOS_TICKET_DOCUMENTALES = frozenset(TIPO_DTE_A_TIPO_TICKET.values())
+
+
+def tipo_ticket_contradice_dte(tipo_ticket, tipo_documento) -> bool:
+    """True solo si el `tipo_dte` del ticket NIEGA al tipo del DTE.
+
+    Devuelve False cuando el tipo del ticket es neutro (None, '', 'TICKET',
+    'TICKET_*'), porque en ese caso no hay información con la que contradecir.
+    """
+    t = (tipo_ticket or '').upper().strip()
+    if t not in TIPOS_TICKET_DOCUMENTALES:
+        return False
+    esperado = tipo_ticket_para_dte(tipo_documento)
+    if not esperado:
+        return False
+    return t != esperado
+
+
 def son_tipos_compatibles(origen: str, destino: str) -> bool:
     """True si los dos tipos pertenecen al mismo grupo intercambiable.
 

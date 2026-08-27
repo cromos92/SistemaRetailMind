@@ -41,6 +41,16 @@ casos la protección es el criterio 2.
 NO borra nada: solo revierte campos de estado y deja un `Historial_Cotizacion`
 explicando la reparación.
 
+Lo que este comando NO cubre (a propósito)
+------------------------------------------
+Una cotización que SÍ se facturó de verdad y cuyo DTE se eliminó o se anuló
+después queda igual de atascada, pero su `numero_factura` es un folio numérico
+real, así que el criterio 2 no la detecta — y reabrirla exige verificar que el
+stock volvió a bodega y que no queden despachos diferidos afuera. Para ese caso
+está `reabrir_cotizacion_facturada` (o el botón "Reabrir" de la pantalla), que
+aplica esos guards. Este comando las LISTA al final para que no queden
+invisibles.
+
 Uso:
     python manage.py reparar_cotizaciones_zombi                  # dry-run
     python manage.py reparar_cotizaciones_zombi --sucursal 5     # una sucursal
@@ -138,6 +148,9 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(
                 'No hay cotizaciones zombi que reparar.'
             ))
+            # El otro tipo de cotización atascada se reporta igual: es
+            # justamente cuando no hay zombis que conviene verla.
+            self._reportar_documento_muerto(sucursal_id)
             return
 
         # Guard adicional: descartar las que ya despacharon stock contra la
@@ -168,6 +181,7 @@ class Command(BaseCommand):
 
         if not a_reparar:
             self.stdout.write(self.style.SUCCESS('Nada que reparar.'))
+            self._reportar_documento_muerto(sucursal_id)
             return
 
         reparadas = 0
@@ -257,3 +271,50 @@ class Command(BaseCommand):
                 f'Dry-run: {len(a_reparar)} cotizaciones se repararían. '
                 'Volvé a correr con --apply para aplicar.'
             ))
+
+        self._reportar_documento_muerto(sucursal_id)
+
+    # ------------------------------------------------------------------
+    def _reportar_documento_muerto(self, sucursal_id):
+        """Lista las facturadas cuyo DTE fue eliminado/anulado (no las toca).
+
+        Son el OTRO tipo de cotización sin salida: se facturaron de verdad, así
+        que tienen folio numérico y este comando no las considera zombi, pero el
+        documento que las respaldaba ya no existe. Reabrirlas requiere los
+        guards de inventario de `reabrir_cotizacion_facturada`.
+        """
+        qs = (
+            Cotizacion_Empresa.objects
+            .filter(Q(facturada=True) | Q(estado=Cotizacion_Empresa.ESTADO_FACTURADA))
+            .filter(Q(dte__descartado=True) | Q(dte__estado_dte='ANULADO'))
+            .select_related('dte', 'sucursal')
+            .order_by('sucursal__alias', '-fecha_facturacion')
+        )
+        if sucursal_id:
+            qs = qs.filter(sucursal_id=sucursal_id)
+
+        filas = list(qs[:50])
+        if not filas:
+            return
+
+        self.stdout.write('')
+        self.stdout.write(self.style.WARNING(
+            f'=== {len(filas)} cotización(es) FACTURADA(s) con documento eliminado/anulado ==='
+        ))
+        self.stdout.write(
+            'Este comando NO las toca (tienen folio real). Para reabrirlas:'
+        )
+        for cot in filas:
+            dte = cot.dte
+            self.stdout.write(
+                f'  · {cot.numero_cotizacion} ({cot.sucursal.alias if cot.sucursal else "?"}) '
+                f'— {dte.tipo_documento} #{dte.numero_documento} '
+                f'{"eliminado" if dte.descartado else "anulado"} '
+                f'— folio en cotización: {cot.numero_factura!r}'
+            )
+        self.stdout.write('')
+        self.stdout.write(
+            '  python manage.py reabrir_cotizacion_facturada --listar'
+        )
+        self.stdout.write('')
+

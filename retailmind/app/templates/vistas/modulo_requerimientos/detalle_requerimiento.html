@@ -763,6 +763,49 @@ function pintarSiguientePaso(r) {
         </div>`;
 }
 
+// Qué pasó con el correo DESPUÉS de mandarlo. Devuelve '' cuando el caso es
+// anterior a la bitácora: mejor no mostrar la sección que inventar un estado.
+function pintarSeguimientoCorreo(s) {
+    if (!s) return '';
+
+    let h = `<div class="d-flex justify-content-between align-items-center mt-2">
+        <span class="text-muted">Entrega</span>
+        <span class="badge badge-soft-${s.clase}"><i class="${s.icono} me-1"></i>${reqEsc(s.etiqueta)}</span>
+    </div>`;
+
+    // Un rebote es lo único que exige actuar YA: el proveedor nunca recibió el
+    // reclamo y los recordatorios que se le manden tampoco van a llegar.
+    if (s.hay_problema) {
+        h += `<div class="alert alert-danger py-1 px-2 mt-2 mb-0" style="font-size:.72rem">
+            <i class="ri-error-warning-line me-1"></i><strong>El correo no llegó.</strong>
+            ${s.detalle ? reqEsc(s.detalle) + '. ' : ''}Corrige la dirección en la ficha
+            del proveedor y vuelve a enviarlo.</div>`;
+    } else if (s.sin_confirmacion) {
+        h += `<div class="req-correo-salvedad">Sin confirmación de entrega todavía.</div>`;
+    }
+
+    if (s.linea_tiempo && s.linea_tiempo.length) {
+        h += '<ul class="req-correo-hitos">';
+        for (const hito of s.linea_tiempo) {
+            h += `<li class="req-correo-hito is-${hito.clase}">
+                <i class="${hito.icono} me-1"></i>${reqEsc(hito.titulo)}
+                <span class="req-correo-hito-fecha">· ${reqEsc(hito.fecha)}</span>
+                ${hito.nota ? `<span class="req-correo-hito-nota">${reqEsc(hito.nota)}</span>` : ''}
+            </li>`;
+        }
+        h += '</ul>';
+    }
+
+    // Decirlo explícitamente evita que "Abierto" se lea como "lo leyó": Apple
+    // Mail precarga las imágenes de todos los correos y Outlook las bloquea.
+    if (s.es_indicativo) {
+        h += `<div class="req-correo-salvedad">
+            La apertura es indicativa: algunos clientes de correo cargan las
+            imágenes solos y otros las bloquean.</div>`;
+    }
+    return h;
+}
+
 function pintarProveedor(r) {
     if (r.proveedor.id) {
         $id('proveedor-nombre').textContent = r.proveedor.nombre;
@@ -787,6 +830,8 @@ function pintarProveedor(r) {
         <div class="d-flex justify-content-between"><span class="text-muted">Al correo</span>
             <span class="text-truncate ms-2" style="max-width:65%" title="${reqEsc(r.correo_proveedor_destino || '')}">${reqEsc(r.correo_proveedor_destino) || '<span class="text-muted">no registrado (envío antiguo)</span>'}</span></div>
         <div class="d-flex justify-content-between"><span class="text-muted">Intentos</span><span class="badge badge-soft-info">${r.intentos_envio || 0}</span></div>`;
+
+    h += pintarSeguimientoCorreo(r.seguimiento_correo);
 
     if (!r.fecha_respuesta_proveedor) {
         const d = r.dias_sin_respuesta || 0;

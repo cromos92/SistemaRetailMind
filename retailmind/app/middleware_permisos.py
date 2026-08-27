@@ -108,6 +108,27 @@ URL_PERMISO_MAP = {
     '/app/recepcion-dte/': 'recepcion_dte',
     '/app/regularizar-recepciones/': 'recepcion_dte',
     '/app/cotizaciones/': 'gestion_cotizaciones',
+
+    # --- Cotizaciones: endpoints de ESCRITURA ---
+    # Toda la API '/app/api/cotizaciones/*' colgaba solo de @login_required, así
+    # que cualquier usuario autenticado podía crear, anular, despachar stock o
+    # validar despachos por POST directo aunque la pantalla estuviera vedada
+    # para su rol. El permiso protegía el HTML, no el stock.
+    #
+    # ⚠️ NO se usa la clave genérica '/app/api/cotizaciones/': taparía por
+    # substring a '/app/api/cotizaciones/cargar-como-ticket/<id>/', que consume
+    # el POS (generacionVentas.html). Cajero y vendedor tienen
+    # gestion_cotizaciones.puede_ver=False, así que gatearlo rompería la
+    # facturación de cotizaciones en caja. Mismo criterio que los créditos.
+    # Tampoco se mapea 'crear-cliente/' (alta de cliente desde el POS) ni
+    # 'buscar-productos/' (lectura auxiliar del modal de despacho).
+    '/app/api/cotizaciones/crear/': 'gestion_cotizaciones',
+    '/app/api/cotizaciones/anular/': 'gestion_cotizaciones',
+    '/app/api/cotizaciones/convertir-factura/': 'gestion_cotizaciones',
+    '/app/api/cotizaciones/reabrir/': 'gestion_cotizaciones',
+    '/app/api/cotizaciones/asignar-sku-pendiente/': 'gestion_cotizaciones',
+    '/app/api/cotizaciones/revertir-sku-despachado/': 'gestion_cotizaciones',
+    '/app/api/cotizaciones/validar-despacho/': 'gestion_cotizaciones',
     '/app/documentos/gestion-correlativos/': 'gestion_correlativos',
     '/app/documentos/gestion-creditos/': 'gestion_creditos',
 

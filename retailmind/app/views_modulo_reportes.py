@@ -6051,7 +6051,13 @@ CONCEPTOS_ENTRADA = ['RECEPCION_COMPRA', 'INGRESO_INICIAL', 'INGRESO_MANUAL']
 # en datos migrados es la pata de ENTRADA a la tienda (tipo INGRESO), así que
 # sumarlo mezclaba signos y el "despachado" salía negativo.
 CONCEPTOS_DESPACHO = ['TRASPASO_SALIDA']
-CONCEPTOS_VENTA = ['VENTA_PUBLICO', 'VENTA_MAYORISTA']
+CONCEPTOS_VENTA = [
+    'VENTA_PUBLICO', 'VENTA_MAYORISTA',
+    # DESPACHO_COTIZACION: entrega diferida de una cotización facturada y
+    # cobrada. Es venta (ver app/constants_kardex.py). Esta lista es una
+    # copia local: sin agregarlo acá, este módulo seguiría sin contarlo.
+    'DESPACHO_COTIZACION',
+]
 # Egresos que NO son venta ni traspaso interno: mermas, ajustes a la baja,
 # devoluciones a proveedor y salida por cambio. Se cuentan aparte para cerrar la
 # reconciliación entrada → (venta + despacho + otros egresos + remanente), en vez

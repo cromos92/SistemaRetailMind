@@ -276,3 +276,14 @@ from .cliente_app import (  # noqa: F401
     CodigoOTPCliente,
     RefreshTokenClienteApp,
 )
+
+from .comunicaciones import (  # noqa: F401
+    MODULO_CORREO_CHOICES,
+    ESTADO_ENVIO_CORREO_CHOICES,
+    PRIORIDAD_ESTADO_ENVIO,
+    ESTADOS_ENVIO_PROBLEMA,
+    ESTADOS_ENVIO_OK,
+    nuevo_token_correo,
+    EnvioCorreo,
+    RespuestaCorreo,
+)

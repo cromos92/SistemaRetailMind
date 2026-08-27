@@ -31,7 +31,7 @@ from datetime import datetime, timedelta
 from .models import (
     Producto, Producto_Talla, Sucursal, EmpresaUser, Empresa,
     Requerimiento, FotoRequerimiento, HistorialRequerimiento,
-    TipoFotoRequerimiento, MAX_FOTOS_POR_TIPO,
+    TipoFotoRequerimiento, MAX_FOTOS_POR_TIPO, EnvioCorreo,
     ESTADO_REQUERIMIENTO_CHOICES, TIPO_REQUERIMIENTO_CHOICES,
     ORIGEN_REQUERIMIENTO_CHOICES, ETAPA_POR_ESTADO, ESTADOS_CERRADOS,
     Ticket, Dte, Dte_Productos, Movimientos_Producto, LoteProducto,
@@ -40,6 +40,7 @@ from .models import (
 from .services.pdf_requerimiento_proveedor import (
     generar_pdf_requerimiento, nombre_archivo_pdf,
 )
+from .services.correo_service import enviar_correo_trazado, CorreoError
 
 logger = logging.getLogger('app')
 
@@ -208,6 +209,112 @@ def _correo_copia_default(user):
         os.environ.get('REQUERIMIENTOS_CORREO_COPIA', '').strip()
         or (user.email or '').strip()
     )
+
+
+# Cómo se pinta cada estado de entrega. `indicativo` marca los estados que NO
+# prueban nada: una apertura puede ser Apple Mail precargando imágenes, no el
+# proveedor leyendo. La interfaz tiene que decirlo, no dar por leído algo que
+# no lo está.
+ESTILO_ESTADO_CORREO = {
+    'ENVIADO':    ('Enviado',            'secondary', 'ri-send-plane-line',   False),
+    'ENTREGADO':  ('Entregado',          'success',   'ri-mail-check-line',   False),
+    'ABIERTO':    ('Abierto',            'info',      'ri-eye-line',          True),
+    'CLICK':      ('Abrió el enlace',    'primary',   'ri-cursor-line',       False),
+    'RESPONDIDO': ('Respondió',          'success',   'ri-reply-line',        False),
+    'REBOTADO':   ('REBOTÓ (no llegó)',  'danger',    'ri-mail-close-line',   False),
+    'SPAM':       ('Marcado como spam',  'danger',    'ri-spam-2-line',       False),
+    'FALLIDO':    ('Falló el envío',     'danger',    'ri-error-warning-line', False),
+}
+
+
+def _fmt(fecha):
+    return timezone.localtime(fecha).strftime('%d/%m/%Y %H:%M') if fecha else ''
+
+
+def _badge_correo(envio):
+    """Versión compacta del estado de entrega, para el listado."""
+    if not envio:
+        return None
+    etiqueta, clase, icono, indicativo = ESTILO_ESTADO_CORREO.get(
+        envio.estado, (envio.estado, 'secondary', 'ri-mail-line', False))
+    return {
+        'estado': envio.estado,
+        'etiqueta': etiqueta,
+        'clase': clase,
+        'icono': icono,
+        'es_indicativo': indicativo,
+        'hay_problema': envio.estado in ('REBOTADO', 'SPAM', 'FALLIDO'),
+        'detalle': envio.estado_detalle or '',
+        'destinatario': envio.destinatario,
+    }
+
+
+def _seguimiento_correo(requerimiento_id):
+    """Estado de entrega del último correo enviado al proveedor.
+
+    Devuelve None si el requerimiento es anterior a la bitácora (los casos
+    viejos no tienen envío registrado y la ficha simplemente no muestra la
+    sección, en vez de inventar un estado).
+    """
+    envio = (EnvioCorreo.objects
+             .filter(modulo='REQUERIMIENTO', objeto_id=requerimiento_id,
+                     es_copia_control=False)
+             .order_by('-creado_en')
+             .first())
+    if not envio:
+        return None
+
+    etiqueta, clase, icono, indicativo = ESTILO_ESTADO_CORREO.get(
+        envio.estado, (envio.estado, 'secondary', 'ri-mail-line', False))
+
+    # La línea de tiempo solo incluye hitos que REALMENTE ocurrieron: un paso
+    # sin fecha no se dibuja "en gris", se omite. Prometer un dato que no
+    # tenemos es peor que no mostrarlo.
+    linea_tiempo = []
+    if envio.enviado_en:
+        linea_tiempo.append({'titulo': 'Enviado', 'fecha': _fmt(envio.enviado_en),
+                             'clase': 'secondary', 'icono': 'ri-send-plane-line',
+                             'nota': envio.destinatario})
+    if envio.entregado_en:
+        linea_tiempo.append({'titulo': 'Entregado en el buzón',
+                             'fecha': _fmt(envio.entregado_en),
+                             'clase': 'success', 'icono': 'ri-mail-check-line',
+                             'nota': 'Confirmado por el servidor del proveedor'})
+    if envio.abierto_en:
+        veces = f' ({envio.aperturas} veces)' if envio.aperturas > 1 else ''
+        linea_tiempo.append({'titulo': f'Abierto{veces}', 'fecha': _fmt(envio.abierto_en),
+                             'clase': 'info', 'icono': 'ri-eye-line',
+                             'nota': 'Indicativo: no prueba que lo hayan leído'})
+    if envio.click_en:
+        linea_tiempo.append({'titulo': 'Abrió el enlace del correo',
+                             'fecha': _fmt(envio.click_en),
+                             'clase': 'primary', 'icono': 'ri-cursor-line',
+                             'nota': 'Evidencia fuerte: alguien hizo clic'})
+    if envio.estado in ('REBOTADO', 'SPAM', 'FALLIDO'):
+        linea_tiempo.append({'titulo': etiqueta, 'fecha': _fmt(envio.estado_en),
+                             'clase': 'danger', 'icono': icono,
+                             'nota': envio.estado_detalle or envio.error[:255] or ''})
+
+    return {
+        'envio_id': envio.id,
+        'estado': envio.estado,
+        'etiqueta': etiqueta,
+        'clase': clase,
+        'icono': icono,
+        'es_indicativo': indicativo,
+        'hay_problema': envio.hubo_problema,
+        'llego': envio.llego,
+        'destinatario': envio.destinatario,
+        'enviado_en': _fmt(envio.enviado_en),
+        'aperturas': envio.aperturas,
+        'clicks': envio.clicks,
+        'detalle': envio.estado_detalle or (envio.error[:255] if envio.error else ''),
+        'linea_tiempo': linea_tiempo,
+        # Si nunca hubo confirmación de entrega puede ser que el proveedor no
+        # reporte eventos (webhook sin configurar) o que el correo se haya
+        # perdido. No es lo mismo y no hay que afirmar ninguna de las dos.
+        'sin_confirmacion': envio.estado == 'ENVIADO',
+    }
 
 
 # ========== VISTAS PRINCIPALES ==========
@@ -534,6 +641,27 @@ def listar_requerimientos(request):
                 Q(numero_boleta__icontains=busqueda)
             )
         
+        # Correo que NO llegó. Es el filtro más urgente del módulo: un caso
+        # "esperando respuesta" cuyo correo rebotó no está esperando nada, y
+        # hasta ahora se veía idéntico a uno que sí llegó.
+        correo_filtro = (request.GET.get('correo') or '').strip()
+        if correo_filtro == 'problema':
+            ids_problema = (EnvioCorreo.objects
+                            .filter(modulo='REQUERIMIENTO', es_copia_control=False,
+                                    estado__in=('REBOTADO', 'SPAM', 'FALLIDO'))
+                            .values_list('objeto_id', flat=True))
+            requerimientos = requerimientos.filter(id__in=list(ids_problema))
+        elif correo_filtro == 'sin_confirmar':
+            # Salió, pero nadie confirmó que llegara.
+            ids_confirmados = (EnvioCorreo.objects
+                               .filter(modulo='REQUERIMIENTO', es_copia_control=False,
+                                       estado__in=('ENTREGADO', 'ABIERTO', 'CLICK',
+                                                   'RESPONDIDO'))
+                               .values_list('objeto_id', flat=True))
+            requerimientos = requerimientos.filter(
+                correo_enviado_proveedor=True
+            ).exclude(id__in=list(ids_confirmados))
+
         # Etapa del circuito: "quién tiene la pelota" es la pregunta real del
         # analista, y no se contestaba sin conocer los 10 estados de memoria.
         if etapa:
@@ -566,7 +694,22 @@ def listar_requerimientos(request):
         # Paginación
         paginator = Paginator(requerimientos, page_size)
         page_obj = paginator.get_page(page)
-        
+
+        # Estado de entrega de toda la página en UNA consulta: pedirlo por
+        # fila sería un N+1 de 25 queries por listado.
+        ids_pagina = [r.id for r in page_obj]
+        envio_por_req = {}
+        if ids_pagina:
+            for envio in (EnvioCorreo.objects
+                          .filter(modulo='REQUERIMIENTO', objeto_id__in=ids_pagina,
+                                  es_copia_control=False)
+                          .only('objeto_id', 'estado', 'estado_detalle',
+                                'destinatario', 'creado_en')
+                          .order_by('objeto_id', '-creado_en')):
+                # El primero de cada grupo es el más reciente: los siguientes
+                # del mismo requerimiento son reenvíos anteriores.
+                envio_por_req.setdefault(envio.objeto_id, envio)
+
         # Serializar resultados
         requerimientos_data = []
         for req in page_obj:
@@ -613,6 +756,9 @@ def listar_requerimientos(request):
                 'dias_sin_respuesta': req.dias_sin_respuesta,
                 'requiere_recordatorio': req.requiere_recordatorio,
                 'nivel_urgencia': req.nivel_urgencia,
+                # Badge de entrega: lo urgente de la lista es distinguir "sin
+                # respuesta" de "nunca le llegó", que antes se veían igual.
+                'correo_estado': _badge_correo(envio_por_req.get(req.id)),
             })
         
         return JsonResponse({
@@ -844,6 +990,9 @@ def detalle_requerimiento(request, requerimiento_id):
             'fecha_envio_proveedor': requerimiento.fecha_envio_proveedor.strftime('%d/%m/%Y %H:%M') if requerimiento.fecha_envio_proveedor else '',
             'correo_proveedor_destino': requerimiento.correo_proveedor_destino or '',
             'intentos_envio': requerimiento.intentos_envio,
+            # Estado de entrega del último correo: si llegó, si rebotó, si lo
+            # abrieron. None en los casos anteriores a la bitácora.
+            'seguimiento_correo': _seguimiento_correo(requerimiento.id),
             'dias_sin_respuesta': requerimiento.dias_sin_respuesta,
             'requiere_recordatorio': requerimiento.requiere_recordatorio,
             'respuesta_proveedor': requerimiento.respuesta_proveedor or '',
@@ -1456,36 +1605,24 @@ def enviar_a_proveedor(request, requerimiento_id):
     # usuario pagaba dos handshakes completos por envío.
     connection = get_connection(timeout=EMAIL_TIMEOUT_SEGUNDOS)
 
-    # Reply-To con el usuario que envía Y la casilla de control: cuando el
-    # proveedor aprieta "Responder", su respuesta les llega a ambos (Reply-To
-    # admite varias direcciones y Gmail/Outlook las precargan todas). Solo con
-    # el usuario, la respuesta se quedaba en su casilla personal y la copia de
-    # control nunca se enteraba.
+    # Reply-To adicional: el usuario que envía y la casilla de control. La
+    # casilla genérica con el token la antepone `enviar_correo_trazado` cuando
+    # está configurada (CORREO_BUZON_RESPUESTAS), de modo que la respuesta del
+    # proveedor pueda pegarse sola en esta ficha en vez de morir en el correo
+    # personal de quien lo mandó.
     reply_to = []
     for direccion in ((request.user.email or '').strip(), correo_copia):
         if direccion and direccion.lower() not in (d.lower() for d in reply_to):
             reply_to.append(direccion)
 
-    email = EmailMultiAlternatives(
-        subject=asunto,
-        body=texto_plano,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[correo_destino],
-        cc=cc,
-        reply_to=reply_to,
-        connection=connection,
-    )
-    email.attach_alternative(html_message, 'text/html')
-
-    # 1) El formato propio (siempre primero: es el documento del reclamo)
+    # 1) El formato propio va primero: es el documento del reclamo.
+    # 2) Después las fotos originales que entraron en el presupuesto, ya leídas
+    #    más arriba (por el storage del campo y no por `.path`: con
+    #    almacenamiento remoto `.path` lanza NotImplementedError).
+    adjuntos = []
     if pdf_bytes:
-        email.attach(nombre_archivo_pdf(requerimiento), pdf_bytes, 'application/pdf')
-
-    # 2) Las fotos originales que entraron en el presupuesto, ya leídas más
-    #    arriba (por el storage del campo y no por `.path`: con almacenamiento
-    #    remoto `.path` lanza NotImplementedError y el envío se caía entero).
-    for nombre_archivo, contenido in adjuntos_fotos:
-        email.attach(nombre_archivo, contenido)
+        adjuntos.append((nombre_archivo_pdf(requerimiento), pdf_bytes, 'application/pdf'))
+    adjuntos += [(nombre, contenido) for nombre, contenido in adjuntos_fotos]
 
     if fotos_omitidas:
         logger.info(
@@ -1498,16 +1635,39 @@ def enviar_a_proveedor(request, requerimiento_id):
         # Abrir a mano: si la abre send(), Django la cierra al terminar ese
         # send() y la copia vuelve a pagar la conexión completa.
         connection.open()
-        email.send(fail_silently=False)
-    except Exception as e:
-        logger.exception("Error al enviar requerimiento %s al proveedor %s", requerimiento.id, correo_destino)
+        envio = enviar_correo_trazado(
+            modulo='REQUERIMIENTO',
+            objeto_id=requerimiento.id,
+            asunto=asunto,
+            texto=texto_plano,
+            html=html_message,
+            destinatario=correo_destino,
+            cc=cc,
+            reply_to=reply_to,
+            adjuntos=adjuntos,
+            from_email=(getattr(settings, 'REQUERIMIENTOS_FROM_EMAIL', '')
+                        or settings.DEFAULT_FROM_EMAIL),
+            usuario=request.user,
+            connection=connection,
+            tags=['requerimiento', requerimiento.tipo.lower()],
+        )
+    except CorreoError as e:
         try:
             connection.close()
         except Exception:
             pass
+        # El fallo queda en el historial, no solo en el log: sin esto, mañana
+        # nadie sabe que este requerimiento nunca le llegó al proveedor.
+        HistorialRequerimiento.objects.create(
+            requerimiento=requerimiento,
+            accion='ENVIO_FALLIDO',
+            comentario=(f'NO se pudo enviar a {requerimiento.proveedor.nombre} '
+                        f'({correo_destino}): {e}'),
+            usuario=request.user,
+        )
         return JsonResponse({
             'success': False,
-            'error': f'Error al enviar correo al proveedor: {str(e)}'
+            'error': f'Error al enviar correo al proveedor: {e}'
         }, status=500)
 
     # Actualizar requerimiento + historial
@@ -1532,6 +1692,7 @@ def enviar_a_proveedor(request, requerimiento_id):
                 f'- Intento #{requerimiento.intentos_envio} '
                 f'- {"con" if pdf_bytes else "SIN"} formato PDF '
                 f'- {fotos_enviadas} foto(s) adjuntas'
+                + (f' [envio #{envio.id}]' if envio else '')
             ),
             usuario=request.user
         )
@@ -1560,15 +1721,25 @@ def enviar_a_proveedor(request, requerimiento_id):
                 f'Formato PDF adjuntado: {"si" if pdf_bytes else "NO"}\n'
                 f'Fotos adjuntadas al proveedor: {fotos_enviadas} (esta copia no incluye adjuntos).'
             )
-            email_copia = EmailMultiAlternatives(
-                subject=f'[COPIA] {asunto} → {correo_destino}',
-                body=texto_copia,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[correo_copia],
+            # La copia va sin píxel ni token de respuesta: es correo interno,
+            # medir su apertura no aporta nada y el token debe apuntar al
+            # correo del proveedor, no a este.
+            enviar_correo_trazado(
+                modulo='REQUERIMIENTO',
+                objeto_id=requerimiento.id,
+                asunto=f'[COPIA] {asunto} → {correo_destino}',
+                texto=texto_copia,
+                html=html_copia,
+                destinatario=correo_copia,
+                from_email=(getattr(settings, 'REQUERIMIENTOS_FROM_EMAIL', '')
+                            or settings.DEFAULT_FROM_EMAIL),
+                usuario=request.user,
                 connection=connection,
+                tags=['requerimiento', 'copia-control'],
+                con_pixel=False,
+                con_token_respuesta=False,
+                es_copia_control=True,
             )
-            email_copia.attach_alternative(html_copia, 'text/html')
-            email_copia.send(fail_silently=False)
             copia_enviada = True
 
             HistorialRequerimiento.objects.create(
@@ -1609,6 +1780,10 @@ def enviar_a_proveedor(request, requerimiento_id):
         'fotos_adjuntas': fotos_enviadas,
         'fotos_omitidas': len(fotos_omitidas),
         'formato_pdf_adjunto': bool(pdf_bytes),
+        # Para que la ficha pueda mostrar después si llegó, si rebotó o si lo
+        # abrieron, sin tener que volver a buscar el envío.
+        'envio_id': envio.id,
+        'relay_id': envio.proveedor_message_id or '',
     })
 
 

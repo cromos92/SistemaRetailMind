@@ -324,6 +324,52 @@ nexo-design-system.css --nexo-*). No se inventa nada nuevo.
     .req-visor-tiras img { width: 44px; height: 34px; }
 }
 
+/* ══════════ Línea de tiempo del correo ══════════
+   Qué pasó con el mensaje después de mandarlo: entregado, abierto, rebotado.
+   Se dibuja solo con los hitos que realmente ocurrieron. */
+.req-correo-hitos {
+    list-style: none;
+    margin: .4rem 0 0;
+    padding: 0 0 0 .85rem;
+    border-left: 2px solid #e9eaef;
+}
+.req-correo-hito {
+    position: relative;
+    padding: 0 0 .45rem .35rem;
+    font-size: .72rem;
+    line-height: 1.25;
+}
+.req-correo-hito:last-child { padding-bottom: 0; }
+.req-correo-hito::before {
+    content: '';
+    position: absolute;
+    left: -1.22rem;
+    top: .3rem;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--vz-secondary, #878a99);
+    box-shadow: 0 0 0 2px #fff;
+}
+.req-correo-hito.is-success::before { background: var(--vz-success, #0ab39c); }
+.req-correo-hito.is-info::before    { background: var(--vz-info, #299cdb); }
+.req-correo-hito.is-primary::before { background: var(--vz-primary, #405189); }
+.req-correo-hito.is-danger::before  { background: var(--vz-danger, #f06548); }
+.req-correo-hito-fecha { color: #878a99; }
+.req-correo-hito-nota {
+    display: block;
+    color: #878a99;
+    font-size: .66rem;
+    margin-top: 1px;
+}
+/* El aviso de que "abierto" no es prueba. Va discreto pero presente: si no se
+   dice, el usuario lee "Abierto" como "el proveedor lo leyó" y no es lo mismo. */
+.req-correo-salvedad {
+    font-size: .65rem;
+    color: #878a99;
+    font-style: italic;
+    margin-top: .25rem;
+}
+
 /* Impresión: el detalle se imprime para el archivador de la tienda */
 @media print {
     .req-visor, .dt-sticky, .app-menu, .navbar-header, .footer { display: none !important; }

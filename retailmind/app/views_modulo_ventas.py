@@ -42,6 +42,8 @@ from .utils_ventas import (
     son_tipos_compatibles,
     tipos_compatibles_para,
     CODIGO_PERMISO_TIPO_DTE,
+    TIPO_DTE_A_TIPO_TICKET,
+    tipo_ticket_contradice_dte,
     ONLY_DTE_PRODUCTO,
     ONLY_DTE_PAGO,
     ONLY_TICKET_PRODUCTO_POS,
@@ -6933,17 +6935,97 @@ def eliminar_documento_venta(request):
                 + (f'. Motivo: {motivo}' if motivo else '')
             )
 
+            # Resolver el ticket vinculado SIN ambigüedad.
+            #
+            # `folio_dte` NO es único: las series se numeran por tipo de
+            # documento (una BOLETA PAPEL #1234 y una BOLETA ELECTRONICA #1234
+            # pueden convivir en la misma sucursal) y en producción hay 6 pares
+            # (sucursal, folio_dte) con más de un ticket. Buscar solo por
+            # sucursal + folio con `.first()` y sin `order_by` podía devolver el
+            # ticket de OTRA venta y devolverle el stock a ella. Por eso se
+            # desambigua con `_TIPO_DTE_A_TIPO_TICKET` y, si sigue habiendo más
+            # de un candidato, se ABORTA en vez de elegir uno al azar.
             ticket_vinculado = None
             if dte.numero_documento:
-                ticket_vinculado = (
+                candidatos = list(
                     Ticket.objects
                     .select_for_update()
                     .filter(
                         sucursal_id=dte.sucursal_id,
                         folio_dte=dte.numero_documento,
                     )
-                    .first()
+                    .order_by('id')
                 )
+
+                tipo_ticket_esperado = _TIPO_DTE_A_TIPO_TICKET.get(
+                    (dte.tipo_documento or '').upper().strip()
+                )
+
+                if len(candidatos) > 1 and tipo_ticket_esperado:
+                    # Solo se descarta un candidato cuando su `tipo_dte`
+                    # CONTRADICE al del DTE. Los neutros ('TICKET' —el default
+                    # del modelo—, 'TICKET_*' y NULL) se conservan: en
+                    # producción el 100% de los tickets con folio está en un
+                    # valor neutro, así que descartarlos dejaría el stock sin
+                    # devolver en todos los casos reales.
+                    filtrados = [
+                        t for t in candidatos
+                        if not tipo_ticket_contradice_dte(t.tipo_dte, dte.tipo_documento)
+                    ]
+                    if filtrados:
+                        candidatos = filtrados
+
+                if len(candidatos) > 1:
+                    detalle = '; '.join(
+                        f'Ticket #{t.correlativo} (id={t.id}, tipo_dte={t.tipo_dte or "—"}, '
+                        f'estado={t.estado}, total={t.total})'
+                        for t in candidatos[:5]
+                    )
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            f'El folio {dte.numero_documento} de esta sucursal '
+                            f'tiene {len(candidatos)} tickets asociados y no se puede '
+                            f'determinar cuál corresponde a este {dte.tipo_documento}. '
+                            f'Devolver el stock del ticket equivocado descuadraría el '
+                            f'inventario, así que la eliminación se detuvo. '
+                            f'Candidatos: {detalle}'
+                        ),
+                        'ambiguedad_ticket': True,
+                        'tickets_candidatos': [
+                            {
+                                'id': t.id,
+                                'correlativo': t.correlativo,
+                                'tipo_dte': t.tipo_dte or '',
+                                'estado': t.estado,
+                                'total': int(t.total or 0),
+                            }
+                            for t in candidatos
+                        ],
+                    }, status=409)
+
+                if candidatos:
+                    unico = candidatos[0]
+                    # Un único candidato cuyo tipo CONTRADICE al del DTE es
+                    # señal de que el folio pertenece a otra serie: mejor
+                    # detenerse que devolver stock ajeno.
+                    #
+                    # "Contradice" ≠ "es distinto": el default del modelo es
+                    # 'TICKET' y nadie lo actualiza al emitir, así que comparar
+                    # contra el tipo esperado a secas bloqueaba todas las
+                    # eliminaciones reales. Ver `tipo_ticket_contradice_dte`.
+                    if tipo_ticket_contradice_dte(unico.tipo_dte, dte.tipo_documento):
+                        return JsonResponse({
+                            'success': False,
+                            'error': (
+                                f'El único ticket con folio {dte.numero_documento} en esta '
+                                f'sucursal es de tipo "{unico.tipo_dte}", que no corresponde a '
+                                f'un {dte.tipo_documento}. No se elimina para no devolver el '
+                                f'stock de otra venta. Revise el folio del documento.'
+                            ),
+                            'ambiguedad_ticket': True,
+                        }, status=409)
+                    ticket_vinculado = unico
 
             stock_devuelto = []  # [{sku, cantidad}, ...]
             movimientos_creados = 0
@@ -7061,12 +7143,31 @@ def eliminar_documento_venta(request):
                 'estado_dte',
             ])
 
+            # Si el documento venía de una cotización, dejar el rastro: la
+            # cotización sigue marcada FACTURADA con un folio que ya no
+            # respalda nada, y hasta ahora nadie se enteraba. Queda en su
+            # historial y se informa en la respuesta para que el operador sepa
+            # que tiene que reabrirla antes de re-facturar.
+            from .services.cotizacion_reapertura import (
+                registrar_dte_anulado_en_cotizaciones,
+            )
+            cotizaciones_afectadas = registrar_dte_anulado_en_cotizaciones(
+                dte, request.user, motivo, 'eliminado',
+            )
+
+        mensaje = (
+            f'DTE #{dte.numero_documento} eliminado. '
+            f'Stock devuelto: {len(stock_devuelto)} línea(s).'
+        )
+        if cotizaciones_afectadas:
+            mensaje += (
+                f' Cotización(es) {", ".join(cotizaciones_afectadas)} quedaron sin '
+                f'documento: reabrirlas para poder facturar de nuevo.'
+            )
+
         return JsonResponse({
             'success': True,
-            'message': (
-                f'DTE #{dte.numero_documento} eliminado. '
-                f'Stock devuelto: {len(stock_devuelto)} línea(s).'
-            ),
+            'message': mensaje,
             'documento': {
                 'id': dte.id,
                 'tipo_documento': dte.tipo_documento,
@@ -7076,6 +7177,8 @@ def eliminar_documento_venta(request):
             'ticket_id': ticket_vinculado.id if ticket_vinculado else None,
             'movimientos_creados': movimientos_creados,
             'stock_devuelto': stock_devuelto,
+            'cotizaciones_afectadas': cotizaciones_afectadas,
+            'requiere_reapertura_cotizacion': bool(cotizaciones_afectadas),
         })
 
     except json.JSONDecodeError:
@@ -7090,17 +7193,12 @@ def eliminar_documento_venta(request):
         })
 
 
-# Mapa `Dte.tipo_documento` -> `Ticket.tipo_dte` (choices del modelo Ticket).
-# Se usa para (a) resolver el ticket vinculado sin ambigüedad y (b) propagar
-# el cambio de tipo al ticket. Sin esto, la búsqueda del ticket sólo miraba
-# sucursal + folio, y hay 6 pares (sucursal, folio_dte) con más de un ticket
-# en producción: `.first()` sin `order_by` podía tomar cualquiera de ellos.
-_TIPO_DTE_A_TIPO_TICKET = {
-    'BOLETA ELECTRONICA': 'BOLETA_ELECTRONICA',
-    'BOLETA PAPEL': 'BOLETA',
-    'FACTURA ELECTRONICA': 'FACTURA_ELECTRONICA',
-    'FACTURA EXENTA': 'FACTURA_EXENTA',
-}
+# Mapa `Dte.tipo_documento` -> `Ticket.tipo_dte`. Se usa para (a) resolver el
+# ticket vinculado sin ambigüedad y (b) propagar el cambio de tipo al ticket.
+# La definición vive en `utils_ventas` porque el servicio de reapertura de
+# cotizaciones necesita el mismo mapa sin importar este módulo; el alias local
+# se mantiene para los consumidores existentes.
+_TIPO_DTE_A_TIPO_TICKET = TIPO_DTE_A_TIPO_TICKET
 
 
 def _validar_folio_destino_dte(dte, tipo_destino, folio):

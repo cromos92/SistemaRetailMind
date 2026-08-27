@@ -31844,6 +31844,10 @@ def anular_factura_dte(request):
         'BOLETA ELECTRONICA', 'BOLETA_ELECTRONICA',
     ]
 
+    # Cotizaciones cuyo documento queda sin efecto por una NC total. Se llena
+    # más abajo; se inicializa acá para que la respuesta siempre lo traiga.
+    cotizaciones_sin_documento = []
+
     try:
         dte = Dte.objects.select_related('emisor', 'receptor', 'sucursal').get(
             id=dte_id,
@@ -32895,6 +32899,29 @@ def anular_factura_dte(request):
                     logger.exception(
                         "Error al liberar cupón por NC total dte=%s", dte.numero_documento)
 
+            # ── Cotizaciones que quedan sin documento ────────────────────────
+            # Una NC total deja el documento acreditado por completo: si venía
+            # de una cotización, esa cotización sigue marcada FACTURADA
+            # apuntando a un DTE que ya no respalda nada, y no se puede
+            # re-facturar (flag) ni anular (`anular_cotizacion` bloquea las
+            # facturadas). Antes ese estado era silencioso; ahora queda en el
+            # historial de la cotización y se informa en la respuesta para que
+            # el operador sepa que debe reabrirla.
+            if es_anulacion_total:
+                try:
+                    from .services.cotizacion_reapertura import (
+                        registrar_dte_anulado_en_cotizaciones,
+                    )
+                    cotizaciones_sin_documento = registrar_dte_anulado_en_cotizaciones(
+                        dte, request.user,
+                        f'NC total #{nc.numero_documento}',
+                        'anulado por Nota de Crédito',
+                    )
+                except Exception:
+                    logger.exception(
+                        "Error al registrar reapertura pendiente de cotización dte=%s",
+                        dte.numero_documento)
+
     # 6. Construir datos para TXT NC
     from collections import defaultdict
     iva_calculado = int(nc.monto_con_iva - nc.monto_neto)
@@ -33040,6 +33067,11 @@ def anular_factura_dte(request):
             'monto_total': int(nc.monto_con_iva) if nc.monto_con_iva else 0,
             'txt_acepta_url': f'/app/dte/{nc.id}/txt-acepta/',
             'nombre_archivo': nombre_archivo,
+            # Cotizaciones que quedaron marcadas FACTURADA sin documento vivo.
+            # El wizard las muestra para que el operador sepa que hay que
+            # reabrirlas antes de poder volver a facturar.
+            'cotizaciones_sin_documento': cotizaciones_sin_documento,
+            'requiere_reapertura_cotizacion': bool(cotizaciones_sin_documento),
         })
 
     response = HttpResponse(contenido_txt, content_type='text/plain; charset=utf-8')
@@ -33937,29 +33969,61 @@ def cargar_dte_ventas(request):
         page = data.get('page', 1)
         page_size = data.get('page_size', 20)
         search = data.get('search', '').strip()
-        
-        # Obtener la sucursal del usuario actual
-        try:
-            empresa_user = EmpresaUser.objects.get(user=request.user, active=True)
-            sucursal_usuario = empresa_user.sucursal
-            
-            if not sucursal_usuario:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Usuario no tiene sucursal asignada'
-                })
-        except EmpresaUser.DoesNotExist:
+        # Los documentos eliminados lógicamente se esconden por defecto, igual
+        # que en /app/ventas/documentos/ y en la cuadratura. Antes esta vista NO
+        # los filtraba, así que un DTE eliminado seguía figurando acá (y solo
+        # acá) — la pantalla no cuadraba con ninguna otra.
+        incluir_descartados = bool(data.get('incluir_descartados', False))
+
+        # ------------------------------------------------------------------
+        # Sucursal: la ACTIVA de la sesión, igual que el resto del sistema.
+        #
+        # Antes se tomaba de `EmpresaUser.sucursal` (la sucursal "de casa" del
+        # usuario) ignorando `idSucursalActual`. Consecuencia: un documento
+        # emitido en otra sucursal era INVISIBLE en esta pantalla y cambiar de
+        # sucursal en el menú no cambiaba nada. Se conserva EmpresaUser como
+        # fallback para usuarios sin sucursal en sesión.
+        # ------------------------------------------------------------------
+        sucursal_id = (
+            request.session.get('idSucursalActual')
+            or request.session.get('sucursalActual')
+        )
+        sucursal_usuario = None
+        if sucursal_id:
+            sucursal_usuario = Sucursal.objects.filter(pk=sucursal_id).first()
+
+        if not sucursal_usuario:
+            # `.get()` explotaba con MultipleObjectsReturned cuando el usuario
+            # tenía más de un EmpresaUser activo, y ese error caía al except
+            # genérico como "Error al cargar DTEs" sin decir qué pasaba.
+            empresa_user = (
+                EmpresaUser.objects
+                .filter(user=request.user, active=True, sucursal__isnull=False)
+                .select_related('sucursal')
+                .order_by('id')
+                .first()
+            )
+            if empresa_user:
+                sucursal_usuario = empresa_user.sucursal
+
+        if not sucursal_usuario:
             return JsonResponse({
                 'success': False,
-                'error': 'Usuario no tiene empresa asignada'
+                'error': (
+                    'No hay sucursal activa en la sesión y el usuario no tiene '
+                    'una sucursal asignada. Seleccione una sucursal en el menú.'
+                )
             })
-        
-        # Construir query base - DTEs de venta de la sucursal del usuario
+
+        # Construir query base - DTEs de venta de la sucursal activa
         query = Dte.objects.filter(
             sucursal=sucursal_usuario,
             tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO', 'TRASPASO', 'DEVOLUCION', 'ANULACION']
         ).select_related('receptor', 'vendedor', 'sucursal')
-        
+
+        if not incluir_descartados:
+            query = query.filter(descartado=False)
+
         # Aplicar filtros de fecha
         if fecha_inicio:
             try:
@@ -34129,8 +34193,18 @@ def cargar_dte_ventas(request):
                 'ajustes_asociados': ajustes_asociados,
                 'total_nc_acumulado': total_nc_acumulado,
                 'origen_devolucion': origen_devolucion,
+                # Eliminación lógica: solo llega cuando se pidió
+                # `incluir_descartados`, y la fila se pinta distinto para que no
+                # se confunda con un documento vivo.
+                'descartado': bool(dte.descartado),
+                'motivo_descarte': dte.motivo_descarte or '',
+                'descartado_por': dte.descartado_por or '',
+                # Una BOLETA PAPEL no tiene TXT ni admite Nota de Crédito: el
+                # frontend lo dice en la fila en vez de dejarla sin acciones y
+                # sin explicación.
+                'es_boleta_papel': (dte.tipo_documento or '').upper().strip() == 'BOLETA PAPEL',
             })
-        
+
         return JsonResponse({
             'success': True,
             'items': items,

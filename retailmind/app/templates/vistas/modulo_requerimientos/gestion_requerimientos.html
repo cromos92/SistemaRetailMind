@@ -140,6 +140,17 @@
                                 <option value="BAJA">Baja</option>
                             </select>
                         </div>
+                        <!-- Entrega del correo: un caso "esperando respuesta" cuyo
+                             correo rebotó no está esperando nada, y sin este filtro
+                             se ve igual que uno que sí llegó. -->
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <label class="form-label small mb-1">Correo</label>
+                            <select class="form-select form-select-sm" id="filtro-correo" name="correo">
+                                <option value="">Cualquiera</option>
+                                <option value="problema">No llegó (rebotó / falló)</option>
+                                <option value="sin_confirmar">Sin confirmación de entrega</option>
+                            </select>
+                        </div>
                         <div class="col-6 col-md-4 col-xl-2">
                             <label class="form-label small mb-1">Desde</label>
                             <input type="date" class="form-control form-control-sm" id="filtro-fecha-inicio">
@@ -409,9 +420,15 @@ function mostrarRequerimientos(requerimientos) {
                 ? `<span class="text-truncate d-inline-block" style="max-width:140px" title="${reqEsc(req.proveedor)}">${reqEsc(req.proveedor)}</span>`
                 : '<span class="text-danger" style="font-size:.75rem"><i class="ri-error-warning-line me-1"></i>sin asignar</span>'}
                 ${req.correo_enviado_proveedor
-                    ? `<div class="text-success text-truncate" style="font-size:.68rem;max-width:150px"
-                          title="Correo enviado el ${reqEsc(req.fecha_envio_proveedor)}${req.correo_proveedor_destino ? ` a ${reqEsc(req.correo_proveedor_destino)}` : ''}">
-                          <i class="ri-mail-check-line me-1"></i>${reqEsc((req.fecha_envio_proveedor || '').split(' ')[0]) || 'enviado'}${req.correo_proveedor_destino ? ` · ${reqEsc(req.correo_proveedor_destino)}` : ''}</div>`
+                    ? `<div class="${req.correo_estado && req.correo_estado.hay_problema ? 'text-danger fw-semibold' : 'text-success'} text-truncate" style="font-size:.68rem;max-width:150px"
+                          title="Correo enviado el ${reqEsc(req.fecha_envio_proveedor)}${req.correo_proveedor_destino ? ` a ${reqEsc(req.correo_proveedor_destino)}` : ''}${req.correo_estado ? ` — ${reqEsc(req.correo_estado.etiqueta)}${req.correo_estado.detalle ? ': ' + reqEsc(req.correo_estado.detalle) : ''}` : ''}">
+                          <i class="${req.correo_estado ? req.correo_estado.icono : 'ri-mail-check-line'} me-1"></i>${
+                              // Un rebote manda sobre la fecha: es lo único de
+                              // esta celda que obliga a hacer algo hoy.
+                              req.correo_estado && req.correo_estado.hay_problema
+                                ? reqEsc(req.correo_estado.etiqueta)
+                                : `${reqEsc((req.fecha_envio_proveedor || '').split(' ')[0]) || 'enviado'}${req.correo_proveedor_destino ? ` · ${reqEsc(req.correo_proveedor_destino)}` : ''}`
+                          }</div>`
                     : ''}</td>
             <td data-col="Sucursal" class="d-none d-xxl-table-cell"><span class="badge badge-soft-secondary">${reqEsc(req.sucursal)}</span></td>
             <td data-col="Evidencia" class="text-center">
@@ -480,6 +497,7 @@ function aplicarFiltrosDesdeFormulario() {
         estado: document.getElementById('filtro-estado').value,
         tipo: document.getElementById('filtro-tipo').value,
         prioridad: document.getElementById('filtro-prioridad').value,
+        correo: document.getElementById('filtro-correo').value,
         busqueda: document.getElementById('filtro-busqueda').value,
         fecha_inicio: document.getElementById('filtro-fecha-inicio').value,
         fecha_fin: document.getElementById('filtro-fecha-fin').value,

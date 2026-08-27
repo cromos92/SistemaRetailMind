@@ -18,6 +18,20 @@ CONCEPTOS_VENTA = (
     'VENTA_DIRECTA',
     'VENTA',
     'VENTA_TICKET',
+    # Entrega diferida de una cotización YA FACTURADA y cobrada: el cliente
+    # pagó, el DTE se emitió y la mercadería salió. Es una venta, aunque el
+    # stock salga días después del documento.
+    #
+    # Estaba SOLO en CONCEPTOS_PERDIDA (junto a robo y deterioro) y ausente de
+    # acá, así que todo lo entregado por despacho diferido quedaba fuera de los
+    # reportes de venta y la predicción de compras lo leía como merma:
+    # subestimaba la demanda del SKU y engrosaba la merma con mercadería
+    # facturada. Ver `medir_impacto_despacho_cotizacion` para la magnitud.
+    #
+    # La reversa (`revertir_sku_despachado`) usa el MISMO concepto con
+    # tipo_movimiento='INGRESO' y cantidad positiva, así que los agregados por
+    # SUM(cantidad) netean solo y no hace falta excluirla.
+    'DESPACHO_COTIZACION',
 )
 
 # Abastecimiento real de una sucursal (compras y reposiciones externas).
@@ -81,5 +95,6 @@ CONCEPTOS_PERDIDA = (
     'DEVOLUCION_PROVEEDOR',
     'SOBRANTE_DEVUELTO',
     'CAMBIO_PRODUCTO_SALIDA',
-    'DESPACHO_COTIZACION',
+    # 'DESPACHO_COTIZACION' se movió a CONCEPTOS_VENTA: es la entrega de una
+    # cotización facturada y cobrada, no una pérdida. Ver la nota allá.
 )

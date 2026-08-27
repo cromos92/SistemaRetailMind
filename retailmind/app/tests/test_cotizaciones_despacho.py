@@ -111,6 +111,11 @@ class DespachoDiferidoBase(TestCase):
         session['idSucursalActual'] = self.sucursal.id
         session.save()
 
+        # Los endpoints de escritura de cotizaciones pasan por el middleware de
+        # permisos: sin `gestion_cotizaciones.puede_ver` responden 403 antes de
+        # entrar a la vista.
+        self._dar_permiso_cotizaciones()
+
     # -- helpers --------------------------------------------------------
 
     def _asignar(self, producto_talla, cantidad):
@@ -131,7 +136,15 @@ class DespachoDiferidoBase(TestCase):
             content_type='application/json',
         )
 
-    def _dar_permiso_aprobar(self, rol='vendedor'):
+    def _dar_permiso_cotizaciones(self, rol=None, aprobar=False):
+        """Concede `gestion_cotizaciones` al rol indicado.
+
+        Los endpoints de escritura de cotizaciones están en `URL_PERMISO_MAP`
+        (antes colgaban solo de @login_required y cualquier autenticado podía
+        despachar stock por POST directo), así que sin este permiso el
+        middleware responde 403 antes de llegar a la vista.
+        """
+        rol = rol or getattr(self.user, 'rol', 'vendedor')
         modulo, _ = ModuloSistema.objects.get_or_create(
             codigo='documentos', defaults={'nombre': 'Documentos', 'orden': 1})
         opcion, _ = OpcionMenu.objects.get_or_create(
@@ -139,8 +152,13 @@ class DespachoDiferidoBase(TestCase):
             defaults={'modulo': modulo, 'nombre': 'Gestion Cotizaciones', 'orden': 5})
         permiso, _ = PermisoRol.objects.get_or_create(rol=rol, opcion_menu=opcion)
         permiso.puede_ver = True
-        permiso.puede_aprobar = True
+        if aprobar:
+            permiso.puede_aprobar = True
         permiso.save()
+        return permiso
+
+    def _dar_permiso_aprobar(self, rol='vendedor'):
+        return self._dar_permiso_cotizaciones(rol=rol, aprobar=True)
 
 
 class DespachoParcialTest(DespachoDiferidoBase):
@@ -286,6 +304,9 @@ class ValidacionDespachoTest(DespachoDiferidoBase):
         # revertir exige rol administrador
         admin = crear_usuario(username='admin_rev', rol='administrador')
         crear_empresa_user(admin, self.empresa, self.sucursal)
+        # El permiso del middleware es por ROL: hay que concederlo también para
+        # 'administrador', no solo para el rol del usuario de la base.
+        self._dar_permiso_cotizaciones(rol='administrador')
         self.client.force_login(admin)
         session = self.client.session
         session['idSucursalActual'] = self.sucursal.id

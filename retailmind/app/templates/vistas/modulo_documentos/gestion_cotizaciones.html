@@ -1739,6 +1739,7 @@ document.addEventListener('DOMContentLoaded', function() {
         convertirFactura: '{% url "convertir_cotizacion_factura" %}',
         listarVendedores: '{% url "listar_vendedores_cotizacion" %}',
         asignarSkuPendiente: '{% url "asignar_sku_pendiente" %}',
+        reabrirCotizacion: '{% url "reabrir_cotizacion" %}',
         buscarProductos: '{% url "buscar_productos_cotizacion" %}',
         listarClientes: '{% url "empresas_clientes" %}',
         crearCliente: '{% url "crear_cliente_cotizacion" %}',
@@ -2352,6 +2353,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                         <i class="ri-error-warning-fill"></i> Sin DTE enlazado
                                     </span>
                                 </div>` : ''}
+                            ${(cot.documento_muerto && !cot.sin_dte_enlazado) ? `
+                                <div style="margin-top:3px;">
+                                    <span class="nexo-badge" style="background:rgba(255,77,77,.15);color:#CC2200;font-size:10px;"
+                                          title="El documento que la respaldaba fue ${cot.documento_descartado ? 'eliminado' : 'anulado'}. La cotización sigue marcada FACTURADA y no se puede volver a facturar hasta reabrirla.">
+                                        <i class="ri-file-forbid-line"></i> Documento ${cot.documento_descartado ? 'eliminado' : 'anulado'}
+                                    </span>
+                                </div>` : ''}
                             ${badgeCuadraturaDespacho(cot)}
                         ` : `
                             <span class="${obtenerClaseEstado(cot.estado_efectivo || cot.estado)}">${cot.estado_efectivo || cot.estado}</span>
@@ -2387,6 +2395,11 @@ document.addEventListener('DOMContentLoaded', function() {
                             ${cot.puede_validar_despacho ? `
                                 <button class="btn btn-action" style="background-color: var(--nexo-success); color: white; border-color: var(--nexo-success);" onclick="validarDespacho(${cot.id}, '${cot.numero_cotizacion}', ${cot.unidades_facturadas})" title="Dar OK al despacho (cuadratura facturado = despachado)">
                                     <i class="ri-shield-check-line"></i>
+                                </button>
+                            ` : ''}
+                            ${cot.puede_reabrir ? `
+                                <button class="btn btn-action" style="background-color:#8A4FFF;color:white;border-color:#8A4FFF;" onclick="reabrirCotizacion(${cot.id}, '${cot.numero_cotizacion}')" title="El documento que la respaldaba ya no existe: reabrir para poder facturarla de nuevo">
+                                    <i class="ri-arrow-go-back-line"></i>
                                 </button>
                             ` : ''}
                         </div>
@@ -4224,6 +4237,92 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     };
 
+    // Reabrir una cotización FACTURADA cuyo documento tributario ya no existe.
+    //
+    // El módulo no factura (lo hace el POS al cobrar), así que cuando el DTE se
+    // elimina o se anula por NC total la cotización queda marcada FACTURADA
+    // apuntando a un documento muerto: no se puede volver a facturar
+    // (`cargar_cotizacion_como_ticket` exige vigencia), ni editar, ni anular.
+    // Este botón es la única salida. Los guards duros (stock devuelto, despachos
+    // diferidos revertidos) los valida el backend bajo lock.
+    window.reabrirCotizacion = function(cotizacionId, numeroCotizacion) {
+        const cot = cotizacionesData.find(c => c.id === cotizacionId);
+        const docTxt = cot && cot.documento ? cot.documento : (cot && cot.numero_factura ? `folio ${cot.numero_factura}` : 'sin documento enlazado');
+        const pend = cot ? (cot.unidades_pendientes || 0) : 0;
+
+        Swal.fire({
+            icon: 'question',
+            title: 'Reabrir para re-facturar',
+            html: `
+                <div class="text-start">
+                    <p class="mb-2">La cotización <strong>${numeroCotizacion}</strong> volverá a estar <strong>VIGENTE</strong> para poder facturarla de nuevo desde el POS.</p>
+                    <p class="mb-2" style="font-size:13px;color:#6c757d;">Documento que se libera: <strong>${docTxt}</strong>.</p>
+                    ${pend > 0 ? `<p class="mb-2" style="font-size:13px;color:#CC2200;"><i class="ri-error-warning-line"></i> Tiene ${pend} unidad(es) de despacho diferido: si aún no se revirtieron, el backend va a rechazar la reapertura.</p>` : ''}
+                    <label class="form-label mb-1" style="font-size:13px;">Motivo <span style="color:#CC2200;">*</span></label>
+                    <input type="text" id="swalMotivoReabrir" class="form-control" placeholder="Ej: facturada por error con boleta de papel, se re-emite factura">
+                    <label class="form-label mb-1 mt-2" style="font-size:13px;">Días de validez a devolverle</label>
+                    <input type="number" id="swalDiasReabrir" class="form-control" value="15" min="1" max="365">
+                </div>`,
+            showCancelButton: true,
+            confirmButtonText: 'Reabrir',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#8A4FFF',
+            preConfirm: () => {
+                const motivo = (document.getElementById('swalMotivoReabrir').value || '').trim();
+                if (motivo.length < 5) {
+                    Swal.showValidationMessage('Indique el motivo (mínimo 5 caracteres)');
+                    return false;
+                }
+                const dias = parseInt(document.getElementById('swalDiasReabrir').value, 10);
+                return { motivo, dias: (dias > 0 ? dias : 15) };
+            },
+        }).then(result => {
+            if (!result.isConfirmed) return;
+            fetch(apiUrls.reabrirCotizacion, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                },
+                body: JSON.stringify({
+                    cotizacion_id: cotizacionId,
+                    motivo: result.value.motivo,
+                    dias_validez: result.value.dias,
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Cotización reabierta',
+                        html: `
+                            <div class="text-start">
+                                <p class="mb-2">${data.message || ''}</p>
+                                <p class="mb-0" style="font-size:13px;color:#6c757d;">Siguiente paso: abrir el POS, cargar la cotización y facturarla con el tipo de documento correcto.</p>
+                            </div>`,
+                        confirmButtonColor: '#8A4FFF',
+                    });
+                    cargarCotizaciones();
+                } else {
+                    // El backend devuelve la lista completa de bloqueos: mostrarlos
+                    // todos evita el ping-pong de arreglar uno y descubrir el
+                    // siguiente en el intento siguiente.
+                    const bloqueos = Array.isArray(data.bloqueos) ? data.bloqueos : [data.error];
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'No se puede reabrir',
+                        html: `<div class="text-start"><ul class="mb-0" style="padding-left:18px;">${bloqueos.map(b => `<li style="font-size:13px;margin-bottom:6px;">${b}</li>`).join('')}</ul></div>`,
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarError('Error de conexión al reabrir la cotización');
+            });
+        });
+    };
+
     // Editar cotización existente
     window.editarCotizacion = function(cotizacionId) {
         // Cargar datos de la cotización
@@ -5337,7 +5436,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div>
                         <strong style="font-size:14px;">${item.descripcion || item.nombre_producto_pendiente || 'Ítem sin nombre'}</strong>
                         ${item.sku_producto_pendiente && item.sku_producto_pendiente !== 'N/A'
-                            ? `<span class="nexo-badge ms-1" style="background:var(--nexo-gray-100);color:var(--nexo-text-secondary);">SKU esperado: ${item.sku_producto_pendiente}</span>`
+                            ? (item.sku_esperado_match
+                                ? `<span class="nexo-badge ms-1" style="background:rgba(34,197,94,.15);color:#16a34a;" title="El SKU anotado al cotizar existe en el catalogo de esta sucursal">
+                                       <i class="ri-checkbox-circle-line"></i> SKU esperado ${item.sku_producto_pendiente} existe
+                                   </span>`
+                                : `<span class="nexo-badge ms-1" style="background:rgba(255,140,0,.15);color:#FF8C00;" title="El SKU anotado al cotizar no existe en el catalogo de esta sucursal: hay que buscar el real">
+                                       <i class="ri-question-line"></i> SKU esperado ${item.sku_producto_pendiente} no existe aqui
+                                   </span>`)
                             : ''}
                     </div>
                     <div class="text-end">
@@ -5353,12 +5458,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         </span>
                     </div>
                 </div>
-                <div class="input-group input-group-sm mb-2">
+                <div class="input-group input-group-sm mb-1">
                     <span class="input-group-text"><i class="ri-search-line"></i></span>
-                    <input type="text" class="form-control" placeholder="Buscar SKU, nombre, marca, talla..."
+                    <input type="text" class="form-control" placeholder="Buscar por SKU, nombre, marca, talla (se pueden combinar: nike 38)"
                            id="search-${item.id}"
                            oninput="buscarSkuParaItem(${item.id}, this.value)">
                 </div>
+                <!-- Atajos de busqueda. El operador tenia que tipear de memoria
+                     el nombre del producto para llegar al SKU: estos chips
+                     disparan la busqueda con lo que la cotizacion YA sabe (el SKU
+                     esperado y la descripcion del item). -->
+                ${sugerenciasBusquedaSku(item)}
                 <div id="results-${item.id}" class="mb-2" style="max-height:160px;overflow-y:auto;"></div>
                 <div id="selected-${item.id}" style="display:none;" class="p-2 mb-2" style="background:var(--nexo-primary-light);border-radius:var(--nexo-radius-sm);">
                     <!-- Producto seleccionado -->
@@ -5458,6 +5568,64 @@ document.addEventListener('DOMContentLoaded', function() {
                 mostrarError('Error de conexión al revertir el despacho');
             });
         });
+    };
+
+    // Atajos de busqueda para el modal de despacho diferido.
+    //
+    // La cotizacion guarda `sku_producto_pendiente` (el SKU que se esperaba) y
+    // la descripcion libre del item. Los dos son la mejor pista disponible para
+    // encontrar el SKU real, y hasta ahora el operador tenia que volver a
+    // tipearlos a mano. `sku_producto_pendiente` es texto libre sin validar
+    // contra el catalogo, asi que el chip BUSCA (no asume que existe).
+    function sugerenciasBusquedaSku(item) {
+        const chips = [];
+        const m = item.sku_esperado_match;
+        // El SKU anotado al cotizar EXISTE: se puede seleccionar de una, sin
+        // pasar por el buscador. Es el caso comun cuando el producto llego a
+        // bodega despues de emitir la cotizacion.
+        const botonDirecto = m ? `
+            <button type="button" class="btn btn-sm"
+                    style="font-size:11px;padding:1px 8px;background:rgba(34,197,94,.15);color:#16a34a;border:1px solid rgba(34,197,94,.35);border-radius:12px;"
+                    onclick="seleccionarSkuItem(${item.id}, ${m.producto_talla_id}, ${JSON.stringify(m.sku)}, ${JSON.stringify(m.nombre)}, ${m.stock})">
+                <i class="ri-check-double-line me-1"></i>Usar ${_escSku(m.sku)} (stock ${m.stock})
+            </button>` : '';
+        const skuEsperado = (item.sku_producto_pendiente || '').trim();
+        if (!m && skuEsperado && skuEsperado !== 'N/A') {
+            chips.push({ texto: skuEsperado, etiqueta: `SKU ${skuEsperado}`, icono: 'ri-barcode-line' });
+        }
+        // De la descripcion se toman las palabras utiles (3+ letras, hasta 3):
+        // la busqueda es multi-termino, asi que "BALON FUTBOL N5" funciona.
+        const desc = (item.descripcion || item.nombre_producto_pendiente || '').trim();
+        const palabras = desc.split(/[\s,.;\/()-]+/).filter(w => w.length >= 3).slice(0, 3);
+        if (palabras.length) {
+            const termino = palabras.join(' ');
+            chips.push({ texto: termino, etiqueta: termino, icono: 'ri-text' });
+        }
+        if (!chips.length && !botonDirecto) return '';
+        return `<div class="d-flex flex-wrap gap-1 mb-2">
+            ${botonDirecto}
+            ${chips.length ? `<span class="text-muted" style="font-size:11px;align-self:center;">Buscar:</span>` : ''}
+            ${chips.map(c => `
+                <button type="button" class="btn btn-sm"
+                        style="font-size:11px;padding:1px 8px;background:var(--nexo-gray-100);color:var(--nexo-text-secondary);border:1px solid var(--nexo-gray-200);border-radius:12px;"
+                        onclick="usarSugerenciaSku(${item.id}, ${JSON.stringify(c.texto)})">
+                    <i class="${c.icono} me-1"></i>${_escSku(c.etiqueta)}
+                </button>`).join('')}
+        </div>`;
+    }
+
+    function _escSku(v) {
+        return String(v == null ? '' : v)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    window.usarSugerenciaSku = function(itemId, termino) {
+        const input = document.getElementById(`search-${itemId}`);
+        if (!input) return;
+        input.value = termino;
+        input.focus();
+        buscarSkuParaItem(itemId, termino);
     };
 
     // Debounce para búsqueda en modal

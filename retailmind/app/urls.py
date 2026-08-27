@@ -290,6 +290,7 @@ from .views_modulo_cotizaciones import (
     # APIs de acciones
     anular_cotizacion,
     convertir_cotizacion_factura,
+    reabrir_cotizacion,
     # APIs de búsqueda
     buscar_productos_cotizacion,
     # APIs de vendedores
@@ -409,6 +410,11 @@ from .views_modulo_giftcards import (
     api_trazabilidad_giftcards,
     api_exportar_giftcards,
     api_exportar_trazabilidad,
+)
+
+from .views_modulo_correo import (
+    pixel_apertura,
+    webhook_correo,
 )
 from .views_modulo_devolucion_garantia import (
     # Vistas HTML
@@ -1170,6 +1176,10 @@ urlpatterns = [
     # APIs de acciones
     path('api/cotizaciones/anular/', anular_cotizacion, name='anular_cotizacion'),
     path('api/cotizaciones/convertir-factura/', convertir_cotizacion_factura, name='convertir_cotizacion_factura'),
+    # Reabrir una cotización FACTURADA cuyo DTE fue eliminado/anulado, para
+    # poder re-facturarla. Sin esto la cotización queda sin salida (no se puede
+    # facturar, ni editar, ni anular).
+    path('api/cotizaciones/reabrir/', reabrir_cotizacion, name='reabrir_cotizacion'),
     path('api/cotizaciones/asignar-sku-pendiente/', asignar_sku_pendiente, name='asignar_sku_pendiente'),
     path('api/cotizaciones/revertir-sku-despachado/', revertir_sku_despachado, name='revertir_sku_despachado'),
     path('api/cotizaciones/validar-despacho/', validar_despacho_cotizacion, name='validar_despacho_cotizacion'),
@@ -1515,6 +1525,14 @@ urlpatterns = [
     path('api/giftcards/confirmar-entrega/', api_confirmar_entrega_giftcard, name='api_confirmar_entrega_giftcard'),
     # Público: lo llama el proveedor de correo. Autenticado por firma HMAC.
     path('api/giftcards/webhook-correo/', webhook_correo_giftcard, name='webhook_correo_giftcard'),
+
+    # ===== SEGUIMIENTO DE CORREO (público a propósito) =====
+    # El píxel lo pide el cliente de correo del destinatario y el webhook lo
+    # llama el proveedor de envío: ninguno de los dos puede autenticarse con
+    # sesión. El píxel solo escribe si el token existe; el webhook exige firma
+    # HMAC. Rutas cortas porque viajan dentro del cuerpo del correo.
+    path('c/a/<str:token>.png', pixel_apertura, name='pixel_apertura_correo'),
+    path('api/correo/webhook/', webhook_correo, name='webhook_correo'),
     path('api/giftcards/reporte/', api_reporte_giftcards, name='api_reporte_giftcards'),
     path('api/giftcards/trazabilidad/', api_trazabilidad_giftcards, name='api_trazabilidad_giftcards'),
     path('api/giftcards/trazabilidad/exportar/', api_exportar_trazabilidad, name='api_exportar_trazabilidad'),
