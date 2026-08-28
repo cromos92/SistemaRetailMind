@@ -1101,8 +1101,34 @@
                             <div class="col-md-3">
                                 <input type="text" class="form-control nexo-input" id="filtro-trabajador-texto" placeholder="Nombre/RUT/pasaporte beneficiario">
                             </div>
+                            <!--
+                                Tienda: antes era un `input` de texto libre con
+                                `icontains` sobre alias/direccion. Escribir "nick 1"
+                                o dejar un espacio devolvia cero resultados sin
+                                explicar por que, y no habia forma de saber que
+                                tiendas tienen creditos. Ahora es la lista real,
+                                y el selector de al lado decide QUE se pregunta:
+                                la tienda que EMITIO el cupo (cartera) o la que
+                                lo vio GASTAR (consumo). No son lo mismo: en
+                                produccion 17 de 24 usos ocurrieron en una tienda
+                                distinta a la emisora.
+                            -->
                             <div class="col-md-3">
-                                <input type="text" class="form-control nexo-input" id="filtro-sucursal-texto" placeholder="Sucursal...">
+                                <label class="nexo-form-label">Tienda</label>
+                                <select class="form-select nexo-input" id="filtro-sucursal">
+                                    <option value="">Todas las tiendas</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="nexo-form-label">Criterio de tienda</label>
+                                <select class="form-select nexo-input" id="filtro-criterio-sucursal">
+                                    <option value="usada" selected>Donde se USÓ el crédito</option>
+                                    <option value="emitida">Donde se EMITIÓ el crédito</option>
+                                </select>
+                                <small class="d-block mt-1" style="font-size:11px; color: var(--nexo-text-muted);">
+                                    <i class="ri-information-line"></i>
+                                    <span id="hint-criterio-sucursal">Consumo real en el POS de esa tienda.</span>
+                                </small>
                             </div>
                             {% if puede_ver_todas_sucursales %}
                             <div class="col-md-3">
@@ -1912,9 +1938,53 @@ $(document).ready(function() {
     });
     $('#filtro-alcance').on('change', function() {
         currentPage = 1;
+        // El alcance cambia el universo de tiendas visibles: hay que recargar
+        // la lista o quedaria ofreciendo tiendas fuera del alcance elegido.
+        cargarTiendasFiltro();
         loadCreditos();
         loadEstadisticas();
     });
+
+    $('#filtro-sucursal, #filtro-criterio-sucursal').on('change', function() {
+        currentPage = 1;
+        actualizarHintCriterioTienda();
+        loadCreditos();
+        loadEstadisticas();
+    });
+
+    // ===== FILTRO DE TIENDA (lista real + criterio emitida/usada) =====
+    function actualizarHintCriterioTienda() {
+        const usada = $('#filtro-criterio-sucursal').val() === 'usada';
+        $('#hint-criterio-sucursal').text(usada
+            ? 'Consumo real en el POS de esa tienda.'
+            : 'Cupos otorgados por esa tienda (cartera), se hayan gastado donde se hayan gastado.');
+    }
+
+    function cargarTiendasFiltro() {
+        const $sel = $('#filtro-sucursal');
+        if (!$sel.length) return;
+        const seleccionado = $sel.val();
+        const alcance = $('#filtro-alcance').length ? $('#filtro-alcance').val() : 'actual';
+        $.get('/app/api/creditos/sucursales-filtro/', { alcance: alcance })
+            .done(function(res) {
+                if (!res || !res.success) return;
+                let html = '<option value="">Todas las tiendas</option>';
+                (res.sucursales || []).forEach(function(s) {
+                    // El contador deja ver de entrada que "emitidos" y "usados"
+                    // no coinciden, que es justo la confusion que motivo esto.
+                    const label = s.label || s.alias;
+                    html += '<option value="' + s.id + '">'
+                         + $('<div>').text(label).html()
+                         + ' (' + s.creditos_emitidos + ' emit. / ' + s.usos_recibidos + ' usos)'
+                         + '</option>';
+                });
+                $sel.html(html);
+                if (seleccionado) $sel.val(seleccionado);
+            });
+    }
+
+    cargarTiendasFiltro();
+    actualizarHintCriterioTienda();
     
     $('#btn-limpiar').click(function() {
         limpiarFiltros();
@@ -3337,6 +3407,10 @@ $(document).ready(function() {
         $('#form-filtros')[0].reset();
         setFiltrosMesActual();
         sincronizarFiltrosRapidos();
+        // `reset()` devuelve los selects a su opcion `selected` pero no dispara
+        // `change`, asi que el texto de ayuda se quedaria describiendo el
+        // criterio anterior.
+        actualizarHintCriterioTienda();
         currentPage = 1;
         loadCreditos();
         loadEstadisticas();
@@ -3699,7 +3773,8 @@ $(document).ready(function() {
             tipo_credito: $('#filtro-tipo').val(),
             numero_credito: $('#filtro-numero').val(),
             trabajador_texto: $('#filtro-trabajador-texto').val(),
-            sucursal_texto: $('#filtro-sucursal-texto').val(),
+            sucursal_id: $('#filtro-sucursal').val(),
+            criterio_sucursal: $('#filtro-criterio-sucursal').val(),
             alcance: $('#filtro-alcance').length ? $('#filtro-alcance').val() : 'actual',
             saldo_min: $('#filtro-saldo-min').val(),
             saldo_max: $('#filtro-saldo-max').val()

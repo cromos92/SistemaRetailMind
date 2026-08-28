@@ -225,6 +225,7 @@ from .views_modulo_creditos import (
     obtener_empresas_disponibles,
     reporte_creditos_trabajadores,
     exportar_creditos_pdf,
+    listar_sucursales_creditos,
     # Voucher e Integración POS
     imprimir_voucher_credito,
     validar_codigo_credito,
@@ -1062,6 +1063,7 @@ urlpatterns = [
     path('api/creditos/trabajadores/actualizar/', actualizar_trabajador_credito, name='actualizar_trabajador_credito'),
     path('api/creditos/trabajadores/validar-codigo/', validar_codigo_trabajador, name='validar_codigo_trabajador'),
     path('api/creditos/sucursales/', obtener_sucursales_empresa, name='obtener_sucursales_empresa'),
+    path('api/creditos/sucursales-filtro/', listar_sucursales_creditos, name='listar_sucursales_creditos'),
     path('api/empresas/', obtener_empresas_disponibles, name='obtener_empresas_disponibles'),
     path('api/creditos/reporte/', reporte_creditos_trabajadores, name='reporte_creditos_trabajadores'),
     path('api/creditos/exportar-pdf/', exportar_creditos_pdf, name='exportar_creditos_pdf'),

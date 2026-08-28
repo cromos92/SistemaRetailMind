@@ -144,7 +144,13 @@ def _alcance_creditos_usuario(request, alcance='actual'):
         # ven todas las empresas/sucursales que tengan asignadas por EmpresaUser.
         if request.user.is_superuser or getattr(request.user, 'rol', '') == 'administrador':
             empresa_ids = list(Empresa.objects.values_list('id', flat=True))
-            sucursal_ids = list(Sucursal.objects.filter(activa=True).values_list('id', flat=True))
+            # Lista VACIA = "sin filtro de sucursal", que es lo que significa
+            # "todas" para un administrador. Antes se enumeraban las sucursales
+            # `activa=True`, y eso escondia dos casos sin avisar: un credito de
+            # una sucursal desactivada y uno con `sucursal` nula quedaban fuera
+            # del listado, del PDF y de la cartera incluso con el alcance en
+            # "Todas las sucursales" — invisibles sin ningun mensaje.
+            sucursal_ids = []
         else:
             asignaciones = EmpresaUser.objects.filter(
                 user=request.user,
@@ -817,8 +823,24 @@ def _normalizar_fecha_filtro(fecha_str):
 FILTROS_CREDITOS = (
     'fecha_inicio', 'fecha_fin', 'estado', 'trabajador_id', 'tipo_credito',
     'numero_credito', 'trabajador_texto', 'sucursal_texto', 'saldo_min',
-    'saldo_max', 'alcance',
+    'saldo_max', 'alcance', 'sucursal_id', 'criterio_sucursal',
 )
+
+# Que significa filtrar por tienda. Un credito tiene DOS sucursales distintas y
+# hasta ahora solo se podia consultar por una de ellas:
+#
+#   * EMITIDA (`CreditoTrabajador.sucursal`): donde se otorgo el cupo. Es la
+#     vista de cartera — "que entrego esta tienda y quien se lo debe".
+#   * USADA (`PagoCreditoTrabajador.sucursal_cobro`): donde se gasto en el POS.
+#     Es la vista de consumo — "que se vendio con credito en esta tienda".
+#
+# No son la misma pregunta y en produccion casi nunca coinciden: 17 de los 24
+# usos registrados ocurrieron en una tienda distinta a la emisora. Filtrar solo
+# por la emisora (lo que se hacia) dejaba fuera del PDF los usos reales de la
+# tienda consultada.
+CRITERIO_SUCURSAL_EMITIDA = 'emitida'
+CRITERIO_SUCURSAL_USADA = 'usada'
+CRITERIOS_SUCURSAL = (CRITERIO_SUCURSAL_EMITIDA, CRITERIO_SUCURSAL_USADA)
 
 
 def _queryset_creditos_filtrado(request, data):
@@ -888,6 +910,31 @@ def _queryset_creditos_filtrado(request, data):
             Q(sucursal__alias__icontains=texto) |
             Q(sucursal__direccion__icontains=texto)
         )
+
+    # Filtro por tienda concreta. `criterio_sucursal` decide si se pregunta por
+    # la tienda que EMITIO el cupo o por la que lo VIO GASTAR (ver
+    # CRITERIOS_SUCURSAL). Por compatibilidad, sin criterio explicito se
+    # conserva el comportamiento historico (emitida).
+    sucursal_filtro = data.get('sucursal_id')
+    if sucursal_filtro not in (None, '', 'todas'):
+        try:
+            sucursal_filtro_id = int(sucursal_filtro)
+        except (TypeError, ValueError):
+            return None, alcance_info, 'Sucursal inválida'
+        criterio = str(data.get('criterio_sucursal') or CRITERIO_SUCURSAL_EMITIDA).strip().lower()
+        if criterio not in CRITERIOS_SUCURSAL:
+            criterio = CRITERIO_SUCURSAL_EMITIDA
+        if criterio == CRITERIO_SUCURSAL_USADA:
+            # `distinct()` obligatorio: el join contra `pagos` duplica el
+            # credito una vez por uso, y sin esto un credito gastado dos veces
+            # en la misma tienda salia dos veces en el listado y contaba doble
+            # en los totales.
+            queryset = queryset.filter(
+                pagos__sucursal_cobro_id=sucursal_filtro_id,
+                pagos__metodo_pago__in=METODOS_CONSUMO_CREDITO,
+            ).distinct()
+        else:
+            queryset = queryset.filter(sucursal_id=sucursal_filtro_id)
 
     saldo_min = data.get('saldo_min')
     saldo_max = data.get('saldo_max')
@@ -2771,6 +2818,17 @@ def _formatear_boleta(referencia, observaciones=''):
     return crudo
 
 
+def _tienda_label(sucursal):
+    """'ALIAS — Dirección' para el PDF; solo el alias si no hay dirección."""
+    if sucursal is None:
+        return ''
+    alias = (sucursal.alias or '').strip()
+    direccion = (getattr(sucursal, 'direccion', '') or '').strip()
+    if alias and direccion:
+        return f'{alias} — {direccion}'
+    return alias or direccion
+
+
 def _clave_mes(fecha):
     """(año, mes) para agrupar. Sin fecha va al final, no al principio."""
     if not fecha:
@@ -2821,6 +2879,7 @@ def _filas_pdf_creditos(queryset):
         filas.append({
             'numero_credito': '', 'beneficiario': '', 'rut': '', 'empresa': '',
             'mes_solicitud': '', 'tipo': 'subtotal_mes', 'monto': mes_monto,
+            'solicitado': None, 'consumido': None,
             'sucursal': f'Total {mes_actual} · {mes_creditos} créditos · {mes_usos} usos',
             'boleta': '', 'fecha_boleta': '',
         })
@@ -2839,6 +2898,7 @@ def _filas_pdf_creditos(queryset):
                 'numero_credito': '', 'beneficiario': etiqueta_mes.upper(),
                 'rut': '', 'empresa': '', 'mes_solicitud': '',
                 'tipo': 'encabezado_mes', 'monto': Decimal('0'),
+                'solicitado': None, 'consumido': None,
                 'sucursal': '', 'boleta': '', 'fecha_boleta': '',
             })
 
@@ -2854,12 +2914,24 @@ def _filas_pdf_creditos(queryset):
             # el crédito, que es quien termina cobrándolo.
             empresa_beneficiaria = credito.empresa_origen.nombre or ''
 
+        # `solicitado` = lo aprobado si existe, si no lo pedido: es el cupo que
+        # realmente quedo disponible. `consumido` = suma de los usos en POS del
+        # credito completo, para que cada linea muestre cuanto se gasto del cupo
+        # y no solo el monto de ese uso suelto.
+        solicitado = Decimal(str(
+            credito.monto_aprobado if credito.monto_aprobado is not None
+            else (credito.monto_solicitado or 0)
+        ))
+        consumido_credito, _ = _consumo_de_credito(credito)
+
         base = {
             'numero_credito': credito.numero_credito or '',
             'beneficiario': credito.nombre_beneficiario,
             'rut': (beneficiario.documento_display if beneficiario else '') or '',
             'empresa': empresa_beneficiaria,
             'mes_solicitud': _mes_solicitud_label(credito.fecha_solicitud),
+            'solicitado': solicitado,
+            'consumido': consumido_credito,
         }
 
         usos = [p for p in credito.pagos.all() if p.metodo_pago in METODOS_CONSUMO_CREDITO]
@@ -2880,7 +2952,9 @@ def _filas_pdf_creditos(queryset):
             mes_usos += 1
             filas.append(dict(
                 base, tipo='uso', monto=monto,
-                sucursal=(pago.sucursal_cobro.alias if pago.sucursal_cobro_id else ''),
+                # Alias + direccion: el alias solo ("PAO4") no dice donde
+                # queda la tienda, y el reporte se lee fuera del sistema.
+                sucursal=_tienda_label(pago.sucursal_cobro if pago.sucursal_cobro_id else None),
                 boleta=_formatear_boleta(pago.referencia_pago, pago.observaciones or ''),
                 fecha_boleta=pago.fecha_pago.strftime('%d/%m/%Y') if pago.fecha_pago else '',
             ))
@@ -2893,6 +2967,7 @@ def _filas_pdf_creditos(queryset):
                 'numero_credito': base['numero_credito'], 'beneficiario': '',
                 'rut': '', 'empresa': '', 'mes_solicitud': '',
                 'tipo': 'subtotal', 'monto': subtotal,
+                'solicitado': None, 'consumido': None,
                 'sucursal': f'Subtotal {len(usos)} usos', 'boleta': '', 'fecha_boleta': '',
             })
 
@@ -2926,9 +3001,86 @@ def _descripcion_filtros_creditos(data, alcance_info):
         nombre = Cliente.objects.filter(id=data['trabajador_id']).values_list('nombre', 'apellido').first()
         if nombre:
             partes.append('Beneficiario: ' + ' '.join(x for x in nombre if x))
+    # La tienda va con su criterio pegado: un PDF que dice solo "Tienda: PAO4"
+    # es ambiguo, porque los creditos EMITIDOS por PAO4 y los USADOS en PAO4
+    # son conjuntos casi disjuntos.
+    if data.get('sucursal_id') not in (None, '', 'todas'):
+        suc = Sucursal.objects.filter(id=data['sucursal_id']).first()
+        if suc:
+            criterio = str(data.get('criterio_sucursal') or CRITERIO_SUCURSAL_EMITIDA).strip().lower()
+            etiqueta = ('usado en' if criterio == CRITERIO_SUCURSAL_USADA else 'emitido en')
+            partes.append(f'Tienda ({etiqueta}): {_tienda_label(suc)}')
     partes.append('Alcance: ' + ('todas las sucursales visibles' if alcance_info['alcance'] == 'todas'
                                  else 'sucursal actual'))
     return ' | '.join(partes)
+
+
+@login_required
+@require_GET
+def listar_sucursales_creditos(request):
+    """Tiendas disponibles para el filtro de la pantalla de créditos.
+
+    Existe porque el filtro de tienda era un `<input type="text">` con
+    `icontains` sobre alias/dirección: escribir "nick 1" o "Nick1 " devolvía
+    cero resultados sin decir por qué, y no había forma de saber qué tiendas
+    tienen créditos. Ahora la pantalla ofrece la lista real.
+
+    Devuelve, por cada tienda del alcance del usuario, cuántos créditos EMITIÓ
+    y cuántos usos se GASTARON en ella — los dos números que el filtro puede
+    consultar, para que se vea de entrada que no son lo mismo.
+    """
+    try:
+        alcance = request.GET.get('alcance') or 'actual'
+        alcance_info = _alcance_creditos_usuario(request, alcance)
+        if not alcance_info['empresa_ids']:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay empresas disponibles para consultar créditos',
+            }, status=400)
+
+        sucursales = Sucursal.objects.filter(empresa_id__in=alcance_info['empresa_ids'])
+        if alcance_info['sucursal_ids']:
+            sucursales = sucursales.filter(id__in=alcance_info['sucursal_ids'])
+
+        # Conteos en 2 agregaciones, no una query por tienda.
+        emitidos = dict(
+            CreditoTrabajador.objects
+            .filter(empresa_origen_id__in=alcance_info['empresa_ids'])
+            .values_list('sucursal_id')
+            .annotate(n=Count('id'))
+        )
+        usados = dict(
+            PagoCreditoTrabajador.objects
+            .filter(
+                metodo_pago__in=METODOS_CONSUMO_CREDITO,
+                credito__empresa_origen_id__in=alcance_info['empresa_ids'],
+            )
+            .values_list('sucursal_cobro_id')
+            .annotate(n=Count('id'))
+        )
+
+        data = []
+        for suc in sucursales.order_by('alias'):
+            direccion = (suc.direccion or '').strip()
+            data.append({
+                'id': suc.id,
+                'alias': suc.alias or '',
+                'direccion': direccion,
+                'activa': bool(suc.activa),
+                'label': f'{suc.alias} — {direccion}' if direccion else (suc.alias or ''),
+                'creditos_emitidos': emitidos.get(suc.id, 0),
+                'usos_recibidos': usados.get(suc.id, 0),
+            })
+
+        return JsonResponse({
+            'success': True,
+            'sucursales': data,
+            'alcance': alcance_info['alcance'],
+            'puede_todas': alcance_info['puede_todas'],
+        })
+    except Exception as exc:
+        logger.exception('Error al listar sucursales para el filtro de créditos')
+        return JsonResponse({'success': False, 'error': str(exc)}, status=500)
 
 
 @login_required
@@ -3006,9 +3158,16 @@ def exportar_creditos_pdf(request):
                 f'Acote los filtros para exportarlo completo.', sub_style))
         elementos.append(Spacer(1, 0.25 * cm))
 
-        encabezados = ['N° Crédito', 'Beneficiario', 'Documento', 'Empresa Beneficiaria',
-                       'Monto Usado', 'Mes Solicitud', 'Sucursal Uso', 'N° Boleta', 'Fecha Boleta']
-        anchos = [2.7 * cm, 5.2 * cm, 2.4 * cm, 4.4 * cm, 2.4 * cm, 2.6 * cm, 3.4 * cm, 2.2 * cm, 2.0 * cm]
+        # 8 columnas que suman los 27,3 cm utiles del A4 apaisado. Salieron
+        # 'Documento' (RUT) y 'Empresa Beneficiaria' para que entraran
+        # 'Solicitado', 'Consumido' y la direccion de la tienda: el reporte se
+        # usa para leer CONSUMO, y sin el cupo al lado del gasto no se puede
+        # saber cuanto queda. 'Mes Solicitud' tampoco va como columna porque la
+        # banda de mes que separa los bloques ya lo dice.
+        encabezados = ['N° Crédito', 'Beneficiario', 'Solicitado', 'Consumido',
+                       'Monto Uso', 'N° Boleta', 'Fecha', 'Tienda donde se usó']
+        anchos = [2.7 * cm, 4.6 * cm, 2.3 * cm, 2.3 * cm,
+                  2.3 * cm, 2.4 * cm, 1.9 * cm, 8.8 * cm]
 
         tabla_datos = [encabezados]
         filas_subtotal = []
@@ -3024,27 +3183,26 @@ def exportar_creditos_pdf(request):
                 # Banda de mes: el nombre ocupa todo el ancho, así el corte
                 # entre períodos se ve de un vistazo al hojear el reporte.
                 filas_mes.append(indice)
-                tabla_datos.append([fila['beneficiario'], '', '', '', '', '', '', '', ''])
+                tabla_datos.append([fila['beneficiario'], '', '', '', '', '', '', ''])
                 continue
             elif fila['tipo'] == 'subtotal_mes':
                 filas_subtotal_mes.append(indice)
                 tabla_datos.append([
-                    '', '', '', '', _fmt_clp(fila['monto']), '',
-                    Paragraph(fila['sucursal'] or '', cell_style), '', '',
+                    '', '', '', '', _fmt_clp(fila['monto']), '', '',
+                    Paragraph(fila['sucursal'] or '', cell_style),
                 ])
                 continue
             tabla_datos.append([
                 fila['numero_credito'],
                 Paragraph(fila['beneficiario'] or '', cell_style),
-                # Paragraph y no texto plano: "Pasaporte XXXXXX" no cabe en una
-                # línea de 2,4 cm y se desbordaba sobre la columna siguiente.
-                Paragraph(fila['rut'] or '', cell_style),
-                Paragraph(fila['empresa'] or '', cell_style),
+                _fmt_clp(fila['solicitado']) if fila.get('solicitado') is not None else '',
+                _fmt_clp(fila['consumido']) if fila.get('consumido') is not None else '',
                 _fmt_clp(fila['monto']) if fila['tipo'] != 'sin_uso' else '-',
-                fila['mes_solicitud'],
-                Paragraph(fila['sucursal'] or '', cell_style),
                 fila['boleta'],
                 fila['fecha_boleta'],
+                # Paragraph y no texto plano: "ALIAS — Dirección larga" no cabe
+                # en una línea y se desbordaba sobre la columna siguiente.
+                Paragraph(fila['sucursal'] or '', cell_style),
             ])
 
         # Fila de totales
@@ -3052,9 +3210,10 @@ def exportar_creditos_pdf(request):
             'TOTAL',
             f"{resultado['total_creditos']} créditos",
             '',
-            f"{resultado['total_usos']} usos",
+            '',
             _fmt_clp(resultado['total_monto']),
-            '', '', '', '',
+            '', '',
+            f"{resultado['total_usos']} usos registrados",
         ])
         fila_total = len(tabla_datos) - 1
 
@@ -3071,8 +3230,11 @@ def exportar_creditos_pdf(request):
             ('GRID', (0, 0), (-1, -1), 0.4, gris_borde),
             ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, gris_claro]),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ALIGN', (4, 1), (4, -1), 'RIGHT'),
-            ('ALIGN', (8, 1), (8, -1), 'CENTER'),
+            # Columnas 2-4 son montos -> derecha; 5-6 (boleta y fecha) centradas.
+            # Ojo al tocar esto: la 8 del layout anterior ya no existe y un
+            # indice fuera de rango revienta el render entero del PDF.
+            ('ALIGN', (2, 1), (4, -1), 'RIGHT'),
+            ('ALIGN', (5, 1), (6, -1), 'CENTER'),
             ('TOPPADDING', (0, 0), (-1, -1), 2.5),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
             ('BACKGROUND', (0, fila_total), (-1, fila_total), azul),
@@ -3083,9 +3245,9 @@ def exportar_creditos_pdf(request):
         for indice in filas_subtotal:
             estilos_tabla.append(('BACKGROUND', (0, indice), (-1, indice), colors.HexColor('#E8F5F2')))
             estilos_tabla.append(('FONTNAME', (0, indice), (-1, indice), 'Helvetica-Bold'))
-            estilos_tabla.append(('TEXTCOLOR', (6, indice), (6, indice), verde))
+            estilos_tabla.append(('TEXTCOLOR', (7, indice), (7, indice), verde))
         for indice in filas_sin_uso:
-            estilos_tabla.append(('TEXTCOLOR', (6, indice), (6, indice), colors.HexColor('#9A9A9A')))
+            estilos_tabla.append(('TEXTCOLOR', (7, indice), (7, indice), colors.HexColor('#9A9A9A')))
         for indice in filas_mes:
             # La banda del mes va DESPUÉS de ROWBACKGROUNDS en la lista de
             # estilos para que el rayado cebra no la pise.
