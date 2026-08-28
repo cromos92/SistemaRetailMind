@@ -297,7 +297,21 @@ class ArqueoCaja(models.Model):
 
     @property
     def diferencia_efectivo_real(self):
-        """Diferencia de efectivo considerando depósitos: (Efectivo en caja - Teórico)"""
+        """(Efectivo en caja - Teórico). NO sirve para decidir si el día cuadra.
+
+        `efectivo_en_caja` ya descontó los depósitos, así que esta resta vuelve
+        a quitar el teórico y lo descuenta DOS VECES. Un día perfecto
+        (teórico 122.460, fondo fijo 20.000, contado 142.460) da 0 antes de
+        depositar y -122.460 después, sin que haya cambiado nada del conteo.
+
+        Los tres endpoints de depósito decidían CERRADO/CON_DIFERENCIAS con
+        esto y marcaban descuadrado un arqueo que cuadraba. Para el veredicto
+        del día usar `diferencia_efectivo` (físico - (teórico + fondo fijo)),
+        que es lo que muestra "Dif. Conteo" y lo que aplica
+        `_reevaluar_estado_arqueo_por_deposito`.
+
+        Se conserva porque viaja informativamente en varias respuestas JSON.
+        """
         return self.efectivo_en_caja - self.total_efectivo_teorico
 
     @property

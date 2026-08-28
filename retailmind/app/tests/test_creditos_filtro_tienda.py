@@ -21,6 +21,10 @@ from django.utils import timezone
 
 from app.models import Cliente, CreditoTrabajador, PagoCreditoTrabajador, Sucursal
 from app.views_modulo_creditos import (
+    CONSUMO_CON,
+    CONSUMO_PARCIAL,
+    CONSUMO_SIN,
+    CONSUMO_TOTAL,
     CRITERIO_SUCURSAL_EMITIDA,
     CRITERIO_SUCURSAL_USADA,
     _queryset_creditos_filtrado,
@@ -313,3 +317,130 @@ class ExportarPdfCreditosTest(TestCase):
         self.assertEqual(por_alias['PAO4']['usos_recibidos'], 1)
         self.assertEqual(por_alias['PAO4']['creditos_emitidos'], 0)
         self.assertIn('Calle Comercio 45', por_alias['PAO4']['label'])
+
+
+@override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)
+class FiltroConsumoCupoTest(TestCase):
+    """Filtrar por lo CONSUMIDO del cupo, aunque no se haya gastado entero.
+
+    Antes no existía: `estado` habla del ciclo del crédito y `saldo` de la
+    deuda por cobrar, así que "exportar solo lo consumido" era imposible — el
+    PDF salía con todos los créditos y cientos de filas "Sin uso registrado".
+    """
+
+    def setUp(self):
+        self.env = setup_entorno_completo()
+        self.user = self.env['user']
+        self.user.rol = 'administrador'
+        self.user.save(update_fields=['rol'])
+        self.cliente = Cliente.objects.create(
+            nombre='Juan', apellido='Perez', rut='11.111.111-1')
+        self.sucursal = self.env['sucursal']
+        self.session = {
+            'idEmpresaActual': self.env['empresa'].id,
+            'idSucursalActual': self.sucursal.id,
+        }
+
+    def _credito(self, numero, cupo, consumido=0):
+        credito = CreditoTrabajador.objects.create(
+            numero_credito=numero,
+            beneficiario=self.cliente,
+            empresa_origen=self.env['empresa'],
+            sucursal=self.sucursal,
+            monto_solicitado=Decimal(cupo),
+            monto_aprobado=Decimal(cupo),
+            estado='ACTIVO',
+            solicitado_por=self.user,
+            fecha_vencimiento=timezone.localdate() + timedelta(days=30),
+        )
+        if consumido:
+            PagoCreditoTrabajador.objects.create(
+                credito=credito, numero_pago=f'{numero}-U',
+                monto_pago=Decimal(consumido), fecha_pago=timezone.localdate(),
+                metodo_pago='CREDITO_TRABAJADOR',
+                referencia_pago='BOLETA ELECTRONICA-1',
+                registrado_por=self.user, sucursal_cobro=self.sucursal,
+            )
+        return credito
+
+    def _numeros(self, consumo):
+        req = _FakeRequest(self.user, self.session)
+        qs, _, error = _queryset_creditos_filtrado(
+            req, {'alcance': 'todas', 'consumo': consumo})
+        self.assertIsNone(error, error)
+        return sorted(c.numero_credito for c in qs)
+
+    def test_separa_sin_usar_parcial_y_agotado(self):
+        self._credito('C-SIN', 100000, 0)
+        self._credito('C-PARCIAL', 100000, 40000)
+        self._credito('C-TOTAL', 100000, 100000)
+
+        self.assertEqual(self._numeros(CONSUMO_SIN), ['C-SIN'])
+        self.assertEqual(self._numeros(CONSUMO_PARCIAL), ['C-PARCIAL'])
+        self.assertEqual(self._numeros(CONSUMO_TOTAL), ['C-TOTAL'])
+        # "Consumidos" es lo que el usuario pidió: parcial Y total juntos.
+        self.assertEqual(self._numeros(CONSUMO_CON), ['C-PARCIAL', 'C-TOTAL'])
+
+    def test_cupo_gastado_al_peso_cuenta_como_agotado(self):
+        """$70.000 de cupo gastados en $69.990 está agotado, no 'parcial'."""
+        self._credito('C-CASI', 70000, 69990)
+        self.assertEqual(self._numeros(CONSUMO_TOTAL), ['C-CASI'])
+        self.assertEqual(self._numeros(CONSUMO_PARCIAL), [])
+
+    def test_abono_en_efectivo_no_cuenta_como_consumo(self):
+        credito = self._credito('C-ABONO', 100000, 0)
+        PagoCreditoTrabajador.objects.create(
+            credito=credito, numero_pago='ABONO', monto_pago=Decimal(50000),
+            fecha_pago=timezone.localdate(), metodo_pago='EFECTIVO',
+            registrado_por=self.user, sucursal_cobro=self.sucursal,
+        )
+        self.assertEqual(self._numeros(CONSUMO_SIN), ['C-ABONO'])
+        self.assertEqual(self._numeros(CONSUMO_CON), [])
+
+    def test_dos_usos_suman_para_decidir_si_se_agoto(self):
+        credito = self._credito('C-DOBLE', 100000, 60000)
+        PagoCreditoTrabajador.objects.create(
+            credito=credito, numero_pago='C-DOBLE-U2', monto_pago=Decimal(40000),
+            fecha_pago=timezone.localdate(), metodo_pago='CREDITO_TRABAJADOR',
+            referencia_pago='BOLETA ELECTRONICA-2',
+            registrado_por=self.user, sucursal_cobro=self.sucursal,
+        )
+        self.assertEqual(self._numeros(CONSUMO_TOTAL), ['C-DOBLE'])
+        # Y no se duplica por tener dos pagos.
+        req = _FakeRequest(self.user, self.session)
+        qs, _, _ = _queryset_creditos_filtrado(
+            req, {'alcance': 'todas', 'consumo': CONSUMO_CON})
+        self.assertEqual(qs.count(), 1)
+
+    def test_cupo_sin_aprobar_usa_el_monto_solicitado(self):
+        credito = CreditoTrabajador.objects.create(
+            numero_credito='C-SINAPROB', beneficiario=self.cliente,
+            empresa_origen=self.env['empresa'], sucursal=self.sucursal,
+            monto_solicitado=Decimal(50000), estado='PENDIENTE',
+            solicitado_por=self.user,
+            fecha_vencimiento=timezone.localdate() + timedelta(days=30),
+        )
+        PagoCreditoTrabajador.objects.create(
+            credito=credito, numero_pago='U', monto_pago=Decimal(50000),
+            fecha_pago=timezone.localdate(), metodo_pago='CREDITO_TRABAJADOR',
+            referencia_pago='BOLETA ELECTRONICA-3',
+            registrado_por=self.user, sucursal_cobro=self.sucursal,
+        )
+        self.assertEqual(self._numeros(CONSUMO_TOTAL), ['C-SINAPROB'])
+
+    def test_valor_desconocido_se_ignora_y_no_filtra(self):
+        self._credito('C-A', 100000, 0)
+        self._credito('C-B', 100000, 50000)
+        self.assertEqual(self._numeros('cualquier_cosa'), ['C-A', 'C-B'])
+
+    def test_pdf_de_consumidos_solo_trae_filas_de_uso(self):
+        self._credito('C-SIN', 100000, 0)
+        self._credito('C-USADO', 100000, 40000)
+        req = _FakeRequest(self.user, self.session)
+        qs, _, _ = _queryset_creditos_filtrado(
+            req, {'alcance': 'todas', 'consumo': CONSUMO_CON})
+        res = _filas_pdf_creditos(qs)
+        self.assertEqual(res['total_creditos'], 1)
+        self.assertEqual(res['total_usos'], 1)
+        # Lo que motivó el filtro: ni una sola fila "Sin uso registrado".
+        self.assertEqual([f for f in res['filas'] if f['tipo'] == 'sin_uso'], [])

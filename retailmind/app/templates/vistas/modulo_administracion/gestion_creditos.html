@@ -1113,6 +1113,23 @@
                                 produccion 17 de 24 usos ocurrieron en una tienda
                                 distinta a la emisora.
                             -->
+                            <!--
+                                Consumo del cupo: distinto del `estado` del
+                                credito y del saldo por cobrar. Sin esto no se
+                                podia exportar "solo lo consumido" — el PDF
+                                salia con los 1.022 creditos y 998 filas
+                                "Sin uso registrado" para llegar a 24 usos.
+                            -->
+                            <div class="col-md-3">
+                                <label class="nexo-form-label">Consumo del cupo</label>
+                                <select class="form-select nexo-input" id="filtro-consumo">
+                                    <option value="">Todos</option>
+                                    <option value="con_consumo">Consumidos (total o parcial)</option>
+                                    <option value="parcial">Consumo parcial (queda cupo)</option>
+                                    <option value="total">Cupo agotado</option>
+                                    <option value="sin_consumo">Sin usar</option>
+                                </select>
+                            </div>
                             <div class="col-md-3">
                                 <label class="nexo-form-label">Tienda</label>
                                 <select class="form-select nexo-input" id="filtro-sucursal">
@@ -1945,7 +1962,7 @@ $(document).ready(function() {
         loadEstadisticas();
     });
 
-    $('#filtro-sucursal, #filtro-criterio-sucursal').on('change', function() {
+    $('#filtro-consumo, #filtro-sucursal, #filtro-criterio-sucursal').on('change', function() {
         currentPage = 1;
         actualizarHintCriterioTienda();
         loadCreditos();
@@ -3773,6 +3790,7 @@ $(document).ready(function() {
             tipo_credito: $('#filtro-tipo').val(),
             numero_credito: $('#filtro-numero').val(),
             trabajador_texto: $('#filtro-trabajador-texto').val(),
+            consumo: $('#filtro-consumo').val(),
             sucursal_id: $('#filtro-sucursal').val(),
             criterio_sucursal: $('#filtro-criterio-sucursal').val(),
             alcance: $('#filtro-alcance').length ? $('#filtro-alcance').val() : 'actual',

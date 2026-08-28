@@ -9262,6 +9262,52 @@ def _recalcular_teoricos_arqueo(
     }
 
 
+# Estados sobre los que tiene sentido recalcular CERRADO/CON_DIFERENCIAS al
+# tocar un depósito. `DEPOSITO_DECLARADO`, `DEPOSITO_CONFIRMADO` y `REVISADO`
+# quedan fuera a propósito: son avance del supervisor y sobrescribirlos con el
+# veredicto automático borra ese trabajo.
+ESTADOS_ARQUEO_RECALCULABLES_POR_DEPOSITO = ('ABIERTO', 'CERRADO', 'CON_DIFERENCIAS')
+
+
+def _reevaluar_estado_arqueo_por_deposito(arqueo):
+    """Re-evalúa CERRADO / CON_DIFERENCIAS tras registrar o borrar un depósito.
+
+    El veredicto se toma con la DIFERENCIA DE CONTEO (`diferencia_efectivo` =
+    físico - (teórico + fondo fijo)), que es el mismo criterio de
+    `guardar_cuadratura_completa` y del listado de Revisión de Arqueos.
+
+    Los tres endpoints de depósito usaban `diferencia_efectivo_real`, que resta
+    el teórico DOS VECES en cuanto existe un depósito::
+
+        efectivo_en_caja         = físico - depósitos - fondo_fijo
+        diferencia_efectivo_real = efectivo_en_caja - teórico   # <-- doble resta
+
+    Con un día perfecto (teórico 122.460, fondo fijo 20.000, contado 142.460 ->
+    diferencia de conteo $0), al depositar los 122.460 esa property daba
+    -122.460 y el arqueo quedaba marcado CON_DIFERENCIAS. Es decir: registrar el
+    depósito que cuadraba el día lo dejaba señalado como descuadrado.
+
+    Depositar no cambia lo que se contó, así que esto normalmente reafirma el
+    estado que el arqueo ya tenía; lo que se corrige es que dejara de mentir.
+
+    Devuelve el estado final (sin cambios si el arqueo ya venía en un estado de
+    avance del supervisor).
+    """
+    estado_actual = arqueo.estado
+    if estado_actual not in ESTADOS_ARQUEO_RECALCULABLES_POR_DEPOSITO:
+        return estado_actual
+
+    cuadra = (
+        abs(_to_int(arqueo.diferencia_efectivo)) <= TOLERANCIA_ARQUEO_EFECTIVO
+        and abs(_to_int(arqueo.diferencia_transbank)) <= TOLERANCIA_ARQUEO_EFECTIVO
+    )
+    nuevo_estado = 'CERRADO' if cuadra else 'CON_DIFERENCIAS'
+    if nuevo_estado != estado_actual:
+        ArqueoCaja.objects.filter(id=arqueo.id).update(estado=nuevo_estado)
+        arqueo.estado = nuevo_estado
+    return nuevo_estado
+
+
 def resincronizar_arqueos_por_fechas(fechas, sucursal_id, usuario=None,
                                      razon='', incluir_abiertos=True):
     """Re-snapshotea los teóricos de los arqueos de `fechas` en una sucursal.
@@ -10992,13 +11038,11 @@ def agregar_deposito_arqueo(request):
         diferencia_efectivo_real = arqueo.diferencia_efectivo_real
         diferencia_total_real = arqueo.diferencia_total_real
         
-        # Recalcular estado basado en la diferencia REAL (considerando depósitos)
-        if abs(diferencia_efectivo_real) <= 1000 and abs(arqueo.diferencia_transbank) <= 1000:
-            arqueo.estado = 'CERRADO'
-        else:
-            arqueo.estado = 'CON_DIFERENCIAS'
-        
-        ArqueoCaja.objects.filter(id=arqueo.id).update(estado=arqueo.estado)
+        # Estado según la diferencia de CONTEO, no `diferencia_efectivo_real`
+        # (ver `_reevaluar_estado_arqueo_por_deposito`): esa property descuenta
+        # los depósitos del efectivo físico y, como el conteo se hace ANTES de
+        # depositar, marcaba CON_DIFERENCIAS un día perfectamente cuadrado.
+        _reevaluar_estado_arqueo_por_deposito(arqueo)
         
         logger.info(
             "Deposito agregado al arqueo %s: monto=%s, total_depositos=%s, efectivo_fisico=%s, "
@@ -11465,11 +11509,11 @@ def confirmar_deposito(request, deposito_id):
             ArqueoCaja.objects.filter(id=arqueo.id).update(estado='DEPOSITO_CONFIRMADO')
             arqueo.refresh_from_db()
         elif todos_confirmados:
-            # Flujo legacy: si no pasó por DEPOSITO_DECLARADO, usar lógica original
-            if abs(diferencia_efectivo_real) <= 1000 and abs(arqueo.diferencia_transbank) <= 1000:
-                ArqueoCaja.objects.filter(id=arqueo.id).update(estado='CERRADO')
-            else:
-                ArqueoCaja.objects.filter(id=arqueo.id).update(estado='CON_DIFERENCIAS')
+            # Flujo legacy: si no pasó por DEPOSITO_DECLARADO se re-evalúa el
+            # estado, pero con la diferencia de CONTEO — antes se usaba
+            # `diferencia_efectivo_real`, que descuenta los depósitos del
+            # físico y dejaba CON_DIFERENCIAS un arqueo que cuadraba.
+            _reevaluar_estado_arqueo_por_deposito(arqueo)
             arqueo.refresh_from_db()
 
         return JsonResponse({
@@ -11697,11 +11741,28 @@ def crear_deposito_multidia(request):
             })
 
             arqueo.refresh_from_db()
-            if abs(arqueo.diferencia_efectivo_real) <= 1000 and abs(arqueo.diferencia_transbank) <= 1000:
-                estado_actualizado = 'CERRADO'
-            else:
-                estado_actualizado = 'CON_DIFERENCIAS'
-            ArqueoCaja.objects.filter(id=arqueo.id).update(estado=estado_actualizado)
+
+            # Re-evaluar el estado del arqueo con la DIFERENCIA DE CONTEO
+            # (`diferencia_efectivo` = físico - (teórico + fondo fijo)), que es
+            # el mismo criterio que usa `guardar_cuadratura_completa` al cerrar
+            # la caja.
+            #
+            # Antes se usaba `diferencia_efectivo_real`, que resta el teórico
+            # DOS VECES en cuanto existe un depósito:
+            #
+            #     efectivo_en_caja         = físico - depósitos - fondo_fijo
+            #     diferencia_efectivo_real = efectivo_en_caja - teórico
+            #
+            # Con un día perfecto (teórico 122.460, fondo 20.000, contado
+            # 142.460 -> diferencia de conteo $0) y depositando los 122.460,
+            # `diferencia_efectivo_real` daba -122.460 y este bloque marcaba el
+            # arqueo CON_DIFERENCIAS. Es decir: registrar el depósito que cuadra
+            # el día lo dejaba señalado como descuadrado.
+            #
+            # Depositar no cambia lo que se contó, así que en la práctica esto
+            # reafirma el estado que el arqueo ya tenía; lo que se corrige es
+            # que dejara de mentir.
+            _reevaluar_estado_arqueo_por_deposito(arqueo)
 
         return JsonResponse({
             'success': True,

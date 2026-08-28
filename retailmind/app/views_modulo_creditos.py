@@ -200,6 +200,59 @@ def _usuario_puede_acceder_credito(request, credito):
     return str(credito.sucursal_id) == str(sucursal_actual_id)
 
 
+def _debito_respaldado_por_venta(credito, monto_usado, ticket_correlativo):
+    """True si existe una venta del POS ya COBRADA con este crédito por este
+    monto exacto: un pago de ticket con método de crédito cuyas notas
+    mencionan el `numero_credito`.
+
+    Se usa para aceptar el débito post-venta de `usar_credito_en_venta` aunque
+    la sesión del cajero sea de otra empresa/tienda que la emisora del crédito:
+    el uso cross-tienda es la norma (17 de 24 usos medidos ocurren en otra
+    tienda) y este endpoint corre DESPUÉS de emitida la boleta, así que
+    rechazarlo deja un consumo huérfano. El 403 de alcance queda solo para
+    débitos SIN venta que los respalde (un `credito_id` arbitrario), que era
+    el hueco que motivó el guard. `correlativo` no es único global (lo es por
+    sucursal), pero la triple coincidencia correlativo + monto + número de
+    crédito en las notas deja la ambigüedad sin efecto práctico.
+    """
+    from .models import TicketDetallePago
+
+    try:
+        correlativo = int(ticket_correlativo)
+    except (TypeError, ValueError):
+        return False
+    # El POS opera en pesos enteros; un monto con decimales no puede venir de
+    # una venta real y el lookup contra el IntegerField lo truncaría (49990.99
+    # "respaldado" por un pago de 49990).
+    if monto_usado != monto_usado.to_integral_value():
+        return False
+    return TicketDetallePago.objects.filter(
+        ticket__correlativo=correlativo,
+        ticket__estado='PAGADO',
+        metodo_pago__in=METODOS_CONSUMO_CREDITO,
+        monto=monto_usado,
+        notas__contains=credito.numero_credito,
+    ).exists()
+
+
+def _venta_ya_debitada(credito, ticket_correlativo):
+    """True si el crédito ya tiene un pago que menciona este ticket en las
+    observaciones, con el número COMPLETO (borde no-dígito o fin de texto,
+    para que 'Ticket #12298' no matchee con 'Ticket #122980'). Evita que la
+    misma venta se debite dos veces cambiando la referencia."""
+    try:
+        correlativo = int(ticket_correlativo)
+    except (TypeError, ValueError):
+        return False
+    # Solo cuentan los pagos de CONSUMO: un abono manual (EFECTIVO, etc.) cuyas
+    # observaciones libres mencionen el ticket no debe bloquear el débito.
+    return PagoCreditoTrabajador.objects.filter(
+        credito=credito,
+        metodo_pago__in=METODOS_CONSUMO_CREDITO,
+        observaciones__regex=rf'Ticket #{correlativo}(\D|$)',
+    ).exists()
+
+
 # ========== CARTERA POR COBRAR ==========
 #
 # Un `CreditoTrabajador` puede significar dos cosas OPUESTAS según su origen:
@@ -823,8 +876,25 @@ def _normalizar_fecha_filtro(fecha_str):
 FILTROS_CREDITOS = (
     'fecha_inicio', 'fecha_fin', 'estado', 'trabajador_id', 'tipo_credito',
     'numero_credito', 'trabajador_texto', 'sucursal_texto', 'saldo_min',
-    'saldo_max', 'alcance', 'sucursal_id', 'criterio_sucursal',
+    'saldo_max', 'alcance', 'sucursal_id', 'criterio_sucursal', 'consumo',
 )
+
+# Filtro por CONSUMO del cupo (lo que se gastó en el POS), distinto del
+# `estado` del crédito y del `saldo` (que es la deuda por cobrar).
+#
+# Sin esto no había forma de exportar "solo lo consumido": el PDF salía con
+# los 1.022 créditos y 998 filas que dicen "Sin uso registrado" para llegar a
+# los 24 usos reales. Un cupo puede estar ACTIVO y no haberse tocado nunca, o
+# haberse gastado a medias — ninguna de las dos cosas se podía preguntar.
+CONSUMO_CON = 'con_consumo'      # se usó algo, aunque sea parte
+CONSUMO_SIN = 'sin_consumo'      # cupo intacto
+CONSUMO_PARCIAL = 'parcial'      # se usó algo pero quedó saldo de cupo
+CONSUMO_TOTAL = 'total'          # se agotó el cupo
+FILTROS_CONSUMO = (CONSUMO_CON, CONSUMO_SIN, CONSUMO_PARCIAL, CONSUMO_TOTAL)
+
+# Holgura al comparar consumido contra cupo: el POS cobra al peso y un cupo de
+# $70.000 gastado en $69.990 está agotado en la práctica, no "parcial".
+TOLERANCIA_CUPO_AGOTADO = Decimal('1000')
 
 # Que significa filtrar por tienda. Un credito tiene DOS sucursales distintas y
 # hasta ahora solo se podia consultar por una de ellas:
@@ -935,6 +1005,42 @@ def _queryset_creditos_filtrado(request, data):
             ).distinct()
         else:
             queryset = queryset.filter(sucursal_id=sucursal_filtro_id)
+
+    consumo = (data.get('consumo') or '').strip()
+    if consumo in FILTROS_CONSUMO:
+        # `filter=` dentro del Sum en vez de filtrar el queryset: filtrar
+        # rompería el resto de agregados y, sobre todo, un crédito sin ningún
+        # uso desaparecería en vez de sumar 0 (que es justo lo que
+        # `sin_consumo` necesita ver).
+        queryset = queryset.annotate(
+            consumido_calc=Coalesce(
+                Sum(
+                    'pagos__monto_pago',
+                    filter=Q(pagos__metodo_pago__in=METODOS_CONSUMO_CREDITO),
+                ),
+                Decimal('0'),
+                output_field=DecimalField(max_digits=12, decimal_places=2),
+            ),
+            cupo_calc=Coalesce(
+                'monto_aprobado', 'monto_solicitado',
+                output_field=DecimalField(max_digits=12, decimal_places=2),
+            ),
+        )
+        if consumo == CONSUMO_SIN:
+            queryset = queryset.filter(consumido_calc__lte=0)
+        elif consumo == CONSUMO_CON:
+            queryset = queryset.filter(consumido_calc__gt=0)
+        elif consumo == CONSUMO_PARCIAL:
+            # Se gastó algo pero sobró cupo por encima de la holgura.
+            queryset = queryset.filter(
+                consumido_calc__gt=0,
+                consumido_calc__lt=F('cupo_calc') - TOLERANCIA_CUPO_AGOTADO,
+            )
+        elif consumo == CONSUMO_TOTAL:
+            queryset = queryset.filter(
+                consumido_calc__gt=0,
+                consumido_calc__gte=F('cupo_calc') - TOLERANCIA_CUPO_AGOTADO,
+            )
 
     saldo_min = data.get('saldo_min')
     saldo_max = data.get('saldo_max')
@@ -2596,7 +2702,17 @@ def usar_credito_en_venta(request):
         ticket_id = data.get('ticket_id')  # Opcional al crear
         numero_boleta = data.get('numero_boleta', '')  # Número de boleta/documento
         folio_documento = data.get('folio_documento', '')  # Folio del documento
-        
+
+        # `ticket_id` es el CORRELATIVO del ticket. Se canoniza a int UNA vez
+        # y esa forma se usa en referencia, observaciones y helpers: registrar
+        # el valor crudo ("0122980", " 122980", "1_22980") mientras los
+        # chequeos normalizan a int permitía debitar la misma venta N veces
+        # variando solo el texto del número.
+        try:
+            ticket_id = int(str(ticket_id).strip()) if ticket_id not in (None, '') else None
+        except (TypeError, ValueError):
+            ticket_id = None
+
         if not all([credito_id, monto_usado]):
             return JsonResponse({
                 'success': False,
@@ -2617,14 +2733,78 @@ def usar_credito_en_venta(request):
         # Obtener crédito
         credito = get_object_or_404(CreditoTrabajador, id=credito_id)
 
+        # Construir referencia de pago (número de boleta o ticket)
+        referencia = numero_boleta or folio_documento or (f'TKT-{ticket_id}' if ticket_id else '')
+
+        # Idempotencia ANTES que cualquier otra validación: el POS llama a este
+        # endpoint DESPUÉS de cerrar la venta, y un reintento (doble click,
+        # reenvío del navegador, retry de red) volvía a descontar el mismo
+        # consumo dos veces. Si ya existe un uso idéntico (mismo crédito, misma
+        # referencia y mismo monto) se responde OK sin duplicar el débito. Va
+        # primero porque, cuando el débito original agotó el cupo, el reintento
+        # caía en "estado PAGADO"/"monto excede el saldo" (400) antes de llegar
+        # a este bloque, en vez de responder que ya estaba registrado.
+        if referencia:
+            existente = PagoCreditoTrabajador.objects.filter(
+                credito_id=credito.id,
+                referencia_pago=referencia,
+                monto_pago=monto_usado,
+            ).first()
+            if existente:
+                logger.warning(
+                    'usar_credito_en_venta: uso duplicado ignorado credito=%s ref=%s monto=%s',
+                    credito.numero_credito, referencia, monto_usado,
+                )
+                return JsonResponse({
+                    'success': True,
+                    'message': 'El uso del crédito ya estaba registrado',
+                    'nuevo_saldo': float(credito.saldo_pendiente),
+                    'estado_credito': credito.estado,
+                    'estado_display': credito.get_estado_display(),
+                    'pago_id': existente.id,
+                    'credito_pagado_completo': credito.estado == 'PAGADO',
+                    'duplicado': True,
+                })
+
         # Mismo control de alcance que el resto del módulo: era el único endpoint
         # que no lo aplicaba, así que se podía debitar el crédito de otra empresa
-        # pasando un credito_id arbitrario.
-        if not _usuario_puede_acceder_credito(request, credito):
-            return JsonResponse({
-                'success': False,
-                'error': 'No tiene acceso a este crédito'
-            }, status=403)
+        # pasando un credito_id arbitrario. PERO este endpoint corre DESPUÉS de
+        # que el POS cerró la venta, y el uso cross-tienda es la norma: rechazar
+        # aquí deja la boleta emitida y el crédito sin debitar, sin log y con un
+        # toast de 3 segundos como único aviso (consumos huérfanos del
+        # 06/07/25-08-2026). Fuera del alcance de la sesión el débito se acepta
+        # SOLO si una venta real ya cobrada lo respalda y esa venta no fue
+        # debitada antes; el 403 queda para el caso original.
+        fuera_de_alcance = not _usuario_puede_acceder_credito(request, credito)
+        if fuera_de_alcance:
+            if not _debito_respaldado_por_venta(credito, monto_usado, ticket_id):
+                logger.warning(
+                    'usar_credito_en_venta 403: usuario=%s sin alcance sobre %s '
+                    'y sin venta que respalde el debito (ticket=%s boleta=%s monto=%s)',
+                    request.user.username, credito.numero_credito,
+                    ticket_id, numero_boleta, monto_usado,
+                )
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No tiene acceso a este crédito'
+                }, status=403)
+            if _venta_ya_debitada(credito, ticket_id):
+                logger.warning(
+                    'usar_credito_en_venta 403: intento de segundo debito de la '
+                    'misma venta con otra referencia (usuario=%s credito=%s '
+                    'ticket=%s boleta=%s monto=%s)',
+                    request.user.username, credito.numero_credito,
+                    ticket_id, numero_boleta, monto_usado,
+                )
+                return JsonResponse({
+                    'success': False,
+                    'error': 'El consumo de esta venta ya fue registrado'
+                }, status=403)
+            logger.info(
+                'usar_credito_en_venta: debito cross-tienda aceptado con venta '
+                'que lo respalda (credito=%s ticket=%s usuario=%s)',
+                credito.numero_credito, ticket_id, request.user.username,
+            )
 
         # Validar estado
         if credito.estado != 'ACTIVO':
@@ -2650,42 +2830,54 @@ def usar_credito_en_venta(request):
             except Sucursal.DoesNotExist:
                 pass
         
-        # Construir referencia de pago (número de boleta o ticket)
-        referencia = numero_boleta or folio_documento or (f'TKT-{ticket_id}' if ticket_id else '')
-
-        # Idempotencia: el POS llama a este endpoint DESPUÉS de cerrar la venta.
-        # Un reintento (doble click, reenvío del navegador, retry de red) volvía
-        # a descontar el mismo consumo dos veces. Si ya existe un uso idéntico
-        # (mismo crédito, misma referencia y mismo monto) se responde OK sin
-        # duplicar el débito.
-        if referencia:
-            existente = PagoCreditoTrabajador.objects.filter(
-                credito_id=credito.id,
-                referencia_pago=referencia,
-                monto_pago=monto_usado,
-            ).first()
-            if existente:
-                credito.refresh_from_db()
-                logger.warning(
-                    'usar_credito_en_venta: uso duplicado ignorado credito=%s ref=%s monto=%s',
-                    credito.numero_credito, referencia, monto_usado,
-                )
-                return JsonResponse({
-                    'success': True,
-                    'message': 'El uso del crédito ya estaba registrado',
-                    'nuevo_saldo': float(credito.saldo_pendiente),
-                    'estado_credito': credito.estado,
-                    'estado_display': credito.get_estado_display(),
-                    'pago_id': existente.id,
-                    'credito_pagado_completo': credito.estado == 'PAGADO',
-                    'duplicado': True,
-                })
-
         # Registrar el uso del crédito
         with transaction.atomic():
             # Se bloquea la fila para que dos ventas simultáneas contra el mismo
             # crédito no lean el mismo saldo y lo sobregiren.
             credito = CreditoTrabajador.objects.select_for_update().get(id=credito.id)
+
+            # Re-chequeo de idempotencia DENTRO del lock: dos disparos
+            # simultáneos del mismo débito pasaban ambos el chequeo temprano
+            # (todavía sin pago creado) y el segundo volvía a debitar al
+            # liberarse el lock del primero.
+            if referencia:
+                existente = PagoCreditoTrabajador.objects.filter(
+                    credito_id=credito.id,
+                    referencia_pago=referencia,
+                    monto_pago=monto_usado,
+                ).first()
+                if existente:
+                    logger.warning(
+                        'usar_credito_en_venta: uso duplicado concurrente ignorado '
+                        'credito=%s ref=%s monto=%s',
+                        credito.numero_credito, referencia, monto_usado,
+                    )
+                    return JsonResponse({
+                        'success': True,
+                        'message': 'El uso del crédito ya estaba registrado',
+                        'nuevo_saldo': float(credito.saldo_pendiente),
+                        'estado_credito': credito.estado,
+                        'estado_display': credito.get_estado_display(),
+                        'pago_id': existente.id,
+                        'credito_pagado_completo': credito.estado == 'PAGADO',
+                        'duplicado': True,
+                    })
+
+            # Re-chequeo de venta-ya-debitada DENTRO del lock (solo la rama
+            # fuera de alcance): dos disparos simultáneos de la MISMA venta con
+            # referencias DISTINTAS pasaban ambos el chequeo temprano (aún sin
+            # pago creado) y el segundo debitaba igual al liberarse el lock.
+            if fuera_de_alcance and _venta_ya_debitada(credito, ticket_id):
+                logger.warning(
+                    'usar_credito_en_venta 403: segundo debito concurrente de la '
+                    'misma venta (usuario=%s credito=%s ticket=%s boleta=%s monto=%s)',
+                    request.user.username, credito.numero_credito,
+                    ticket_id, numero_boleta, monto_usado,
+                )
+                return JsonResponse({
+                    'success': False,
+                    'error': 'El consumo de esta venta ya fue registrado'
+                }, status=403)
 
             # CADUCIDAD: se evalúa DENTRO del lock y justo antes de debitar, que
             # es el único punto donde el bloqueo es real. La validación previa
@@ -2992,11 +3184,19 @@ def _descripcion_filtros_creditos(data, alcance_info):
         ('trabajador_texto', 'Beneficiario'), ('sucursal_texto', 'Sucursal'),
         ('saldo_min', 'Saldo min.'), ('saldo_max', 'Saldo max.'),
     )
+    etiquetas_consumo = {
+        CONSUMO_CON: 'con consumo (total o parcial)',
+        CONSUMO_SIN: 'cupo sin usar',
+        CONSUMO_PARCIAL: 'consumo parcial (queda cupo)',
+        CONSUMO_TOTAL: 'cupo agotado',
+    }
     partes = []
     for clave, etiqueta in etiquetas:
         valor = data.get(clave)
         if valor not in (None, ''):
             partes.append(f'{etiqueta}: {valor}')
+    if data.get('consumo') in etiquetas_consumo:
+        partes.append('Consumo: ' + etiquetas_consumo[data['consumo']])
     if data.get('trabajador_id'):
         nombre = Cliente.objects.filter(id=data['trabajador_id']).values_list('nombre', 'apellido').first()
         if nombre:
