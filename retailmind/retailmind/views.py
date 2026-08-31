@@ -1,6 +1,7 @@
 import logging
 import re
 from datetime import datetime
+from functools import wraps
 
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
@@ -247,6 +248,31 @@ def _login_context(request, **extra):
     return ctx
 
 
+def _permitir_popup_google(vista):
+    """Afloja COOP y Referrer-Policy SOLO en las pantallas de login.
+
+    Django 4.x manda `Cross-Origin-Opener-Policy: same-origin` en todas las
+    respuestas. Eso deja en `null` el `window.opener` del popup de Google, que
+    entonces no puede devolver el token: el popup se queda colgado en
+    `accounts.google.com/gsi/transform` sin cerrarse. `same-origin-allow-popups`
+    mantiene el aislamiento frente a ventanas ajenas que nos abran a nosotros,
+    pero conserva el `opener` en los popups que abrimos nosotros.
+
+    El Referrer-Policy por defecto (`same-origin`) tampoco manda referrer a
+    Google, que lo usa para validar el origen autorizado.
+
+    `SecurityMiddleware` fija ambos con `setdefault`, así que lo que se ponga
+    acá manda y el resto del sitio conserva la política estricta.
+    """
+    @wraps(vista)
+    def _envoltorio(request, *args, **kwargs):
+        respuesta = vista(request, *args, **kwargs)
+        respuesta.setdefault('Cross-Origin-Opener-Policy', 'same-origin-allow-popups')
+        respuesta.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+        return respuesta
+    return _envoltorio
+
+
 # ---------------------------------------------------------------------------
 #  Estado del PIN 2FA en la sesión
 # ---------------------------------------------------------------------------
@@ -405,6 +431,7 @@ def check_login_method_view(request):
     })
 
 
+@_permitir_popup_google
 @ensure_csrf_cookie
 def login_view(request):
     # Si el usuario ya está autenticado, mostrar opción de continuar o cambiar cuenta
@@ -461,6 +488,7 @@ def login_view(request):
     return render(request, 'registration/login.html', _login_context(request))
 
 
+@_permitir_popup_google
 @ensure_csrf_cookie
 def login_pin_request_view(request):
     """

@@ -192,6 +192,20 @@ class LoginGoogleTest(TestCase):
                 reverse('login_google'), {'credential': 'token-falso'}, **AJAX
             )
 
+    def test_login_permite_el_popup_de_google(self):
+        """Con el COOP 'same-origin' de Django el popup se cuelga en /gsi/transform."""
+        respuesta = self.client.get(reverse('login'))
+        self.assertEqual(
+            respuesta['Cross-Origin-Opener-Policy'], 'same-origin-allow-popups'
+        )
+        self.assertEqual(
+            respuesta['Referrer-Policy'], 'strict-origin-when-cross-origin'
+        )
+
+    def test_el_resto_del_sitio_conserva_el_coop_estricto(self):
+        respuesta = self.client.get(reverse('login_2fa'))
+        self.assertEqual(respuesta['Cross-Origin-Opener-Policy'], 'same-origin')
+
     def test_boton_google_aparece_en_el_login(self):
         respuesta = self.client.get(reverse('login'))
         self.assertContains(respuesta, 'clientdeprueba.apps.googleusercontent.com')
