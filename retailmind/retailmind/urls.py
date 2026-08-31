@@ -32,6 +32,8 @@ urlpatterns = [
     path('', views.login_view, name='login'),
     path('login-pin/', views.login_pin_request_view, name='login_pin_request'),
     path('login-2fa/', views.login_2fa_view, name='login_2fa'),
+    path('login-2fa/reenviar/', views.login_2fa_resend_view, name='login_2fa_resend'),
+    path('login-google/', views.google_login_view, name='login_google'),
     path('logout/', views.logout_view, name='logout'),
 
     # Landing pública "Mis Puntos" — URL CORTA EN RAÍZ porque es la que va

@@ -316,6 +316,24 @@ REQUIRE_2FA_FOR_ALL = False
 # 'session' → el PIN expira a los 10 minutos
 # 'daily'   → el mismo PIN sirve durante todo el día
 PIN_2FA_MODE = 'session'
+# Intentos fallidos permitidos antes de invalidar el PIN y devolver al login
+PIN_2FA_MAX_INTENTOS = int(os.environ.get('PIN_2FA_MAX_INTENTOS', 5))
+# Segundos de espera obligatoria entre un envío de PIN y el siguiente
+PIN_2FA_REENVIO_COOLDOWN = int(os.environ.get('PIN_2FA_REENVIO_COOLDOWN', 60))
+
+# ========== INGRESO CON GOOGLE (Google Identity Services) ==========
+# Client ID OAuth 2.0 de tipo "Aplicación web" de Google Cloud Console.
+# Vacío → el botón de Google no se muestra y el endpoint responde error.
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '')
+# Dominios de correo autorizados, separados por coma (vacío = cualquiera).
+GOOGLE_OAUTH_ALLOWED_DOMAINS = [
+    d.strip().lower()
+    for d in os.environ.get('GOOGLE_OAUTH_ALLOWED_DOMAINS', '').split(',')
+    if d.strip()
+]
+# El PIN por correo prueba que controlas el buzón; Google ya lo probó con ese
+# mismo correo verificado, así que por defecto no se vuelve a pedir.
+GOOGLE_OAUTH_BYPASS_2FA = os.environ.get('GOOGLE_OAUTH_BYPASS_2FA', 'True').lower() == 'true'
 
 # ========== CONFIGURACIÓN DE EMAIL ==========
 # Ahora usa variables de entorno para mayor seguridad

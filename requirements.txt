@@ -14,6 +14,15 @@ Pillow==11.1.0
 openpyxl==3.1.5
 reportlab==4.4.3
 num2words==0.5.14
+# QR del cobro Mercado Pago presencial (render server-side en
+# services/mercadopago_service.qr_png_base64; usa Pillow, ya presente).
+# Es OPCIONAL en runtime: sin la lib el cobro funciona igual pero el modal
+# muestra el qr_data como texto en vez de imagen.
+qrcode==8.2
+# Cifrado en reposo de credenciales Mercado Pago guardadas en BD
+# (services/mp_credenciales.py). Ya estaba declarada en requirements-railway;
+# se alinea aquí para el entorno base.
+cryptography>=42.0.0
 # Evidencia de requerimientos en DigitalOcean Spaces: el disco del contenedor
 # es efímero y las fotos se perdían en cada deploy. Solo se activa si están
 # definidas las env vars SPACES_* (si no, sigue guardando en MEDIA_ROOT).

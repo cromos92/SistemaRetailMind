@@ -92,6 +92,15 @@ VALIDAR_COBERTURA_PAGOS = os.environ.get('VALIDAR_COBERTURA_PAGOS', '1') != '0'
 # Holgura en pesos para redondeos entre el front y el backend.
 TOLERANCIA_COBERTURA_PAGOS = int(os.environ.get('TOLERANCIA_COBERTURA_PAGOS', '1'))
 
+# Mercado Pago presencial: familia de métodos del cobro integrado vía API.
+# A diferencia de Transbank (donde el navegador es la fuente de verdad), acá
+# el servidor SÍ puede verificar el pago: un pago MP_* con origen POS_INTEGRADO
+# exige una TransaccionMercadoPago APROBADA no consumida (guard más abajo).
+# Con origen MANUAL (contingencia Point Tap / app MP) queda exento, mismo nivel
+# de confianza que TBK_MANUAL — la conciliación diaria lo cruza igual.
+METODOS_MP_PRESENCIAL = {'MP_QR', 'MP_POINT', 'MP_POINT_DEBITO', 'MP_POINT_CREDITO'}
+MP_VALIDAR_PAGO_SERVER = os.environ.get('MP_VALIDAR_PAGO_SERVER', '1') != '0'
+
 
 ACCIONES_TEMPORALES_CAMBIO = {
     PermisoTemporalCambio.ACCION_CANCELAR,
@@ -1738,12 +1747,23 @@ def pos_dashboard(request):
     # Verificar si el usuario es administrador
     es_admin = getattr(request.user, 'rol', '') in ['administrador', 'administracion']
 
+    # Mercado Pago presencial: el botón "MP QR" del paso 3 solo se muestra si
+    # la sucursal tiene config habilitada (a diferencia del botón TBK, que se
+    # renderiza incondicionalmente por razones históricas).
+    mp_habilitado = False
+    if sucursal_id:
+        from .models import MercadoPagoConfig
+        mp_habilitado = MercadoPagoConfig.objects.filter(
+            sucursal_id=sucursal_id, habilitado=True
+        ).exists()
+
     context = {
         'metodo_pago_choices': METODO_PAGO_TICKET_CHOICES,
         'estado_ticket_choices': ESTADO_TICKET_CHOICES,
         'config_pos': config_pos,
         'limite_descuento_rol': limite_descuento_rol,
         'es_admin': es_admin,
+        'mp_habilitado': mp_habilitado,
         'qz_config': _get_qz_config(sucursal_id),
     }
     return render(request, 'vistas/modulo_ventas/generacionVentas.html', context)
@@ -2263,6 +2283,24 @@ def anular_ticket_pendiente(request):
                         )
             except Exception:
                 logger.exception("Error al reversar gift cards ticket=%s", ticket.correlativo)
+            # Mercado Pago: devolver por API los cobros aprobados del ticket.
+            # Si el refund falla queda la venta MP APROBADA sobre un ticket
+            # anulado — la conciliación diaria (conciliar_mercadopago) la
+            # levanta como caso a devolver a mano; no se oculta.
+            try:
+                from .services import mercadopago_service as _mp_srv
+                _devoluciones_mp = _mp_srv.reembolsar_pagos_de_ticket(ticket, usuario=request.user)
+                if _devoluciones_mp:
+                    logger.info(
+                        "MP: %s refund(s) por anulación de ticket=%s",
+                        len(_devoluciones_mp), ticket.correlativo,
+                    )
+            except Exception:
+                logger.exception(
+                    "Error al devolver pagos Mercado Pago ticket=%s — "
+                    "REQUIERE devolución manual (ver conciliación MP)",
+                    ticket.correlativo,
+                )
             # El cupón vuelve a estar disponible para el cliente: si la venta se
             # anuló, el beneficio no se consumió.
             _liberar_cupon_de_venta(ticket, f'anulación: {motivo}')
@@ -4723,6 +4761,56 @@ def registrar_pagos_ticket(request, correlativo):
             }, status=400)
     # ─────────────────────────────────────────────────────────────────────────
 
+    # ── Pre-validación Mercado Pago (server-side, ANTES del candado) ─────────
+    # Cada pago MP_* de origen integrado debe tener respaldo real: una
+    # TransaccionMercadoPago APROBADA sin consumir para (sucursal, correlativo)
+    # con monto suficiente. Corre acá porque todavía no se escribió nada: el
+    # 400 sale con el ticket intacto. El consumo (marcar usada) ocurre más
+    # abajo, al crear cada TicketDetallePago.
+    if MP_VALIDAR_PAGO_SERVER:
+        _pagos_mp = []
+        for _p in pagos:
+            if _p.get('metodo_pago') not in METODOS_MP_PRESENCIAL:
+                continue
+            _origen_mp = (_p.get('origen_pago') or 'POS_INTEGRADO').strip().upper()
+            if _origen_mp == 'MANUAL':
+                continue  # contingencia manual: exenta del guard
+            try:
+                _monto_mp = int(_p.get('monto', 0))
+            except (TypeError, ValueError):
+                continue
+            if _monto_mp > 0:
+                _pagos_mp.append(_monto_mp)
+        if _pagos_mp:
+            from .models import TransaccionMercadoPago
+            _disponibles = sorted(TransaccionMercadoPago.objects.filter(
+                sucursal_id=ticket.sucursal_id,
+                correlativo_ticket=str(correlativo),
+                tipo='VENTA', estado='APROBADA', consumida=False,
+            ).values_list('monto', flat=True))
+            # Matching greedy: al pago más grande la transacción más chica que
+            # lo cubra (los cobros MP se crean 1:1 con cada pago del POS).
+            _sin_respaldo = []
+            for _monto_mp in sorted(_pagos_mp, reverse=True):
+                _idx = next((i for i, d in enumerate(_disponibles) if d >= _monto_mp), None)
+                if _idx is None:
+                    _sin_respaldo.append(_monto_mp)
+                else:
+                    _disponibles.pop(_idx)
+            if _sin_respaldo:
+                logger.warning(
+                    "Cobro MP sin respaldo ticket=%s montos=%s usuario=%s",
+                    correlativo, _sin_respaldo, request.user.username,
+                )
+                return JsonResponse({
+                    'success': False,
+                    'error': ('Mercado Pago no confirma un pago aprobado por '
+                              f'${_sin_respaldo[0]:,} para este ticket. Espere la '
+                              'confirmación del QR o reintente el cobro.').replace(',', '.'),
+                    'error_tipo': 'MP_SIN_RESPALDO',
+                }, status=400)
+    # ─────────────────────────────────────────────────────────────────────────
+
     # ── Candado anti doble cobro (compare-and-set atómico) ──────────────────
     # El guard de estado del inicio lee el ticket ANTES de que el otro POST
     # commitee PAGADO, así que dos cobros simultáneos (doble click / reintento
@@ -4798,7 +4886,14 @@ def registrar_pagos_ticket(request, correlativo):
         }
         origen_pago_raw = (pago.get('origen_pago') or '').strip().upper()
         if origen_pago_raw not in dict(ORIGEN_PAGO_CHOICES):
-            origen_pago_raw = 'MANUAL' if metodo_pago in METODOS_TBK_TARJETA else ''
+            if metodo_pago in METODOS_MP_PRESENCIAL:
+                # MP sin origen explícito asume INTEGRADO: así el guard aplica
+                # por defecto y la contingencia manual debe declararse.
+                origen_pago_raw = 'POS_INTEGRADO'
+            elif metodo_pago in METODOS_TBK_TARJETA:
+                origen_pago_raw = 'MANUAL'
+            else:
+                origen_pago_raw = ''
         origen_pago_val = origen_pago_raw or None
 
         if pago_id and pago_id in ids_existentes:
@@ -4812,8 +4907,10 @@ def registrar_pagos_ticket(request, correlativo):
                 origen_pago=origen_pago_val,
             )
             ids_existentes.remove(pago_id)
+            _detalle_mp = (TicketDetallePago.objects.filter(id=pago_id).first()
+                           if metodo_pago in METODOS_MP_PRESENCIAL else None)
         else:
-            TicketDetallePago.objects.create(
+            _detalle_nuevo = TicketDetallePago.objects.create(
                 ticket=ticket,
                 metodo_pago=metodo_pago,
                 tipo_tarjeta=pago.get('tipo_tarjeta'),
@@ -4823,6 +4920,23 @@ def registrar_pagos_ticket(request, correlativo):
                 notas=pago.get('notas', ''),
                 origen_pago=origen_pago_val,
             )
+            _detalle_mp = _detalle_nuevo if metodo_pago in METODOS_MP_PRESENCIAL else None
+
+        # Consumir la transacción MP que respalda este pago (deja el vínculo
+        # detalle_pago↔transacción y evita que el mismo cobro respalde dos
+        # tickets). Si la pre-validación pasó, acá no debería faltar; si por
+        # carrera falta, se loggea y la conciliación diaria lo levanta.
+        if _detalle_mp is not None and origen_pago_val == 'POS_INTEGRADO' and MP_VALIDAR_PAGO_SERVER:
+            from .services import mercadopago_service as _mp_srv
+            _consumida = _mp_srv.consumir_transaccion_aprobada(
+                ticket.sucursal_id, correlativo, monto, detalle_pago=_detalle_mp,
+            )
+            if _consumida is None:
+                logger.error(
+                    "MP: no se pudo consumir transacción para ticket=%s monto=%s "
+                    "(carrera post-prevalidación) — revisar en conciliación",
+                    correlativo, monto,
+                )
 
     if ids_existentes:
         TicketDetallePago.objects.filter(id__in=ids_existentes, ticket=ticket).delete()
@@ -5775,6 +5889,13 @@ def listar_documentos_ventas(request):
                         'TBK_CREDITO_POS',
                         'TBK_PREPAGO_POS',
                     ],
+                    # "Mercado Pago QR" agrupa toda la familia MP presencial
+                    'MP_QR': [
+                        'MP_QR',
+                        'MP_POINT',
+                        'MP_POINT_DEBITO',
+                        'MP_POINT_CREDITO',
+                    ],
                 }
                 valores = metodo_pago_grupos.get(metodo_pago, [metodo_pago])
                 dtes_filtrados = dtes_filtrados.filter(
@@ -6072,29 +6193,10 @@ def exportar_documentos_ventas_excel(request):
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         from openpyxl.utils import get_column_letter
         
-        # Función helper para convertir códigos de método de pago
-        def obtener_nombre_metodo_pago(codigo):
-            nombres_metodos = {
-                'EFECTIVO': 'Efectivo',
-                'TARJETA_DEBITO': 'Tarjeta Débito',
-                'TARJETA_CREDITO': 'Tarjeta Crédito',
-                'TRANSFERENCIA': 'Transferencia',
-                'CHEQUE': 'Cheque',
-                'OTRO': 'Otro',
-                'TBK_POS_INTEGRADO': 'Transbank POS',
-                'TBK_MANUAL': 'Transbank Manual',
-                'TBK_DEBITO_POS': 'TBK Débito POS',
-                'TBK_CREDITO_POS': 'TBK Crédito POS',
-                'TBK_PREPAGO_POS': 'TBK Prepago POS',
-                'TARJETA_COMERCIAL': 'Tarjeta Comercial',
-                'VENTA_INTERNET': 'Venta por Internet',
-                'ORDEN_COMPRA': 'Orden de Compra',
-                'CREDITO_TRABAJADOR': 'Crédito Trabajador',
-                'CREDITO_EXTERNO': 'Crédito Externo',
-                'GIFTCARD': 'Gift Card',
-            }
-            return nombres_metodos.get(codigo, codigo)
-        
+        # Display de métodos de pago: helper canónico (antes había una copia
+        # local desactualizada que shadowaba al de utils_ventas)
+        from .utils_ventas import obtener_nombre_metodo_pago
+
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         if not sucursal_id:
             return JsonResponse({
@@ -6534,28 +6636,10 @@ def detalle_documento_venta(request, documento_id):
     try:
         tipo_documento = request.GET.get('tipo', 'TICKET')
 
-        def obtener_nombre_metodo_pago(codigo):
-            nombres_metodos = {
-                'EFECTIVO': 'Efectivo',
-                'TARJETA_DEBITO': 'Tarjeta Débito',
-                'TARJETA_CREDITO': 'Tarjeta Crédito',
-                'TRANSFERENCIA': 'Transferencia',
-                'CHEQUE': 'Cheque',
-                'OTRO': 'Otro',
-                'TBK_POS_INTEGRADO': 'Transbank POS',
-                'TBK_MANUAL': 'Transbank Manual',
-                'TBK_DEBITO_POS': 'TBK Débito POS',
-                'TBK_CREDITO_POS': 'TBK Crédito POS',
-                'TBK_PREPAGO_POS': 'TBK Prepago POS',
-                'TARJETA_COMERCIAL': 'Tarjeta Comercial',
-                'VENTA_INTERNET': 'Venta por Internet',
-                'ORDEN_COMPRA': 'Orden de Compra',
-                'CREDITO_TRABAJADOR': 'Crédito Trabajador',
-                'CREDITO_EXTERNO': 'Crédito Externo',
-                'GIFTCARD': 'Gift Card',
-            }
-            return nombres_metodos.get(codigo, codigo)
-        
+        # Display de métodos de pago: helper canónico (antes había una copia
+        # local desactualizada que shadowaba al de utils_ventas)
+        from .utils_ventas import obtener_nombre_metodo_pago
+
         if tipo_documento == 'TICKET':
             documento = get_object_or_404(Ticket, id=documento_id)
             
@@ -8683,6 +8767,11 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         # emitir la tarjeta). Sin este bucket cada canje encendía la alerta
         # "documentos vs medios" del Resumen de Caja.
         'total_giftcard': 0,
+        # Mercado Pago PRESENCIAL (QR/Point integrado). Bucket propio: el
+        # 'total_mercadopago' de más arriba es marketplace (Venta Internet por
+        # tipo_tarjeta) y mezclarlos descuadraría la caja.
+        'total_mercadopago_pos': 0,
+        'total_nc_mercadopago_pos': 0,
         'total_nota_credito': 0,
         'total_descuentos': 0,  # Descuentos aplicados
         'total_descuento_puntos': 0,  # Descuentos por canje de puntos de fidelización
@@ -8772,6 +8861,10 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
             elif metodo == 'TBK_POS_INTEGRADO' or metodo == 'TBK_MANUAL':
                 # ✅ Transbank genérico (datos históricos)
                 cuadratura_data['total_transbank'] += monto
+            elif metodo.startswith('MP_'):
+                # ✅ Mercado Pago presencial (MP_QR / MP_POINT*): bucket propio,
+                # NO va a total_transbank ni a total_mercadopago (marketplace)
+                cuadratura_data['total_mercadopago_pos'] += monto
             elif metodo == 'TRANSFERENCIA':
                 cuadratura_data['total_transferencia'] += monto
             elif metodo == 'CHEQUE':
@@ -8958,7 +9051,11 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
                 # Transbank genérico
                 elif metodo_upper in ['TBK_POS_INTEGRADO', 'TBK_MANUAL']:
                     cuadratura_data['total_transbank'] += monto
-                
+
+                # Mercado Pago presencial (bucket propio, no marketplace)
+                elif metodo_upper.startswith('MP_'):
+                    cuadratura_data['total_mercadopago_pos'] += monto
+
                 # Transferencia
                 elif 'TRANSFERENCIA' in metodo_upper:
                     cuadratura_data['total_transferencia'] += monto
@@ -9052,6 +9149,10 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
             cuadratura_data['total_nc_efectivo'] += monto_nc
         elif any((p.metodo_pago or '').upper() == 'TRANSFERENCIA' for p in pagos_nc):
             cuadratura_data['total_nc_transferencia'] += monto_nc
+        elif any((p.metodo_pago or '').upper().startswith('MP_') for p in pagos_nc):
+            # Devolución hecha por la API de MP (refund): resta del teórico MP
+            # presencial del día, simétrico al tratamiento de transferencias.
+            cuadratura_data['total_nc_mercadopago_pos'] += monto_nc
         elif any((p.metodo_pago or '').upper() in _METODOS_PAGO_CREDITO_NC for p in pagos_nc):
             # Devolución sobre una venta A CRÉDITO: no salió plata de ningún
             # medio de caja, se rebajó la cuenta por cobrar. Se descuenta del
@@ -9098,6 +9199,8 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
     # venta a crédito original es de otro día — es correcto: representa plata
     # que se dejó de cobrar, no un ingreso.
     cuadratura_data['total_credito_externo'] -= cuadratura_data['total_nc_credito']
+    # NC devueltas vía API de Mercado Pago restan del teórico MP presencial.
+    cuadratura_data['total_mercadopago_pos'] -= cuadratura_data['total_nc_mercadopago_pos']
 
     return cuadratura_data
 
@@ -9124,6 +9227,7 @@ _MAPEO_TEORICOS_ARQUEO = (
     ('total_convenio_teorico', 'total_convenio'),
     ('total_credito_trabajador_teorico', 'total_credito_trabajador'),
     ('total_giftcard_teorico', 'total_giftcard'),
+    ('total_mercadopago_pos_teorico', 'total_mercadopago_pos'),
     ('total_tickets_teorico', 'total_tickets'),
     ('total_boletas_electronicas_teorico', 'total_boletas_electronicas'),
     ('total_facturas_teorico', 'total_facturas'),
@@ -9224,6 +9328,16 @@ def _recalcular_teoricos_arqueo(
     if arqueo.diferencia_credito != nueva_dif_credito:
         arqueo.diferencia_credito = nueva_dif_credito
         update_fields.append('diferencia_credito')
+    # Mercado Pago presencial: no hay cierre de máquina obligatorio (se
+    # verifica contra la API). La diferencia solo se calcula si se digitó un
+    # cierre (>0), para no marcar descuadres fantasma en tiendas con MP.
+    nueva_dif_mp = (
+        _to_int(arqueo.cierre_mp_fisico) - _to_int(arqueo.total_mercadopago_pos_teorico)
+        if _to_int(arqueo.cierre_mp_fisico) > 0 else 0
+    )
+    if arqueo.diferencia_mercadopago_pos != nueva_dif_mp:
+        arqueo.diferencia_mercadopago_pos = nueva_dif_mp
+        update_fields.append('diferencia_mercadopago_pos')
 
     # Usamos `QuerySet.update()` para NO disparar `ArqueoCaja.save()`, que
     # recomputa `total_efectivo_fisico` desde billetes/monedas y pisaría
@@ -9466,6 +9580,11 @@ _CATEGORIAS_METODO_PAGO = {
     'TBK_PREPAGO_POS': 'tarjetas',
     'TBK_POS_INTEGRADO': 'tarjetas',
     'TBK_MANUAL': 'tarjetas',
+    # Mercado Pago presencial (QR/Point): pestaña tarjetas del Resumen
+    'MP_QR': 'tarjetas',
+    'MP_POINT': 'tarjetas',
+    'MP_POINT_DEBITO': 'tarjetas',
+    'MP_POINT_CREDITO': 'tarjetas',
     'TARJETA_COMERCIAL': 'tarjetas',
     # Efectivo y equivalentes (incluye transferencia, convenio, crédito,
     # cheque y orden de compra: son los que se agrupan en la tarjeta
@@ -10344,6 +10463,8 @@ def guardar_cuadratura_completa(request):
             total_mercadopago_teorico=cuadratura_completa.get('total_mercadopago', 0),
             total_klap_teorico=cuadratura_completa.get('total_klap', 0),
             total_venta_internet_teorico=cuadratura_completa.get('total_venta_internet', 0),
+            # Mercado Pago presencial (bucket propio, no marketplace)
+            total_mercadopago_pos_teorico=cuadratura_completa.get('total_mercadopago_pos', 0),
             # Otros
             total_transferencia_teorico=cuadratura_completa.get('total_transferencia', 0),
             total_credito_trabajador_teorico=cuadratura_completa.get('total_credito_trabajador', 0),
@@ -10739,7 +10860,15 @@ def listar_cuadraturas(request):
                 pagos_por_fecha[f].get(row['metodo_pago'], 0) + (row['total'] or 0)
             )
 
-        METODOS_TRANSBANK = {'TARJETA_DEBITO', 'TARJETA_CREDITO', 'TARJETA'}
+        # 🔧 FIX: el set omitía los métodos TBK_* del POS integrado/manual, así
+        # que el teórico Transbank de este listado no coincidía con el del
+        # arqueo (_calcular_cuadratura_data) en ninguna venta post-SDK.
+        METODOS_TRANSBANK = {
+            'TARJETA_DEBITO', 'TARJETA_CREDITO', 'TARJETA',
+            'TBK_DEBITO_POS', 'TBK_CREDITO_POS', 'TBK_PREPAGO_POS',
+            'TBK_POS_INTEGRADO', 'TBK_MANUAL',
+        }
+        METODOS_MP_POS = {'MP_QR', 'MP_POINT', 'MP_POINT_DEBITO', 'MP_POINT_CREDITO'}
 
         datos = []
         for arqueo in arqueos_page.object_list:
@@ -10752,6 +10881,9 @@ def listar_cuadraturas(request):
             convenio_teo = por_metodo.get('CONVENIO', 0)
             credito_trab_teo = por_metodo.get('CREDITO_TRABAJADOR', 0)
             credito_ext_teo = por_metodo.get('CREDITO_EXTERNO', 0)
+            mercadopago_pos_teo = sum(
+                por_metodo.get(m, 0) for m in METODOS_MP_POS
+            )
 
             total_depositos = arqueo.ann_total_depositos or 0
             efectivo_fisico = arqueo.total_efectivo_fisico or 0
@@ -10783,6 +10915,7 @@ def listar_cuadraturas(request):
                 'total_convenio_teorico': convenio_teo,
                 'total_credito_trabajador_teorico': credito_trab_teo,
                 'total_credito_externo_teorico': credito_ext_teo,
+                'total_mercadopago_pos_teorico': mercadopago_pos_teo,
                 'cierre_pos_fisico': arqueo.cierre_pos_fisico,
                 'numero_lote_pos': arqueo.numero_lote_pos or '',
                 'diferencia_transbank': diferencia_transbank,
@@ -10861,10 +10994,15 @@ def obtener_detalle_arqueo(request, arqueo_id):
         total_convenio_teorico = cuadratura['total_convenio']
         total_credito_externo_teorico = cuadratura['total_credito_externo']
         total_tarjetas_comerciales_teorico = cuadratura['total_tarjetas_comerciales']
+        total_mercadopago_pos_teorico = cuadratura['total_mercadopago_pos']
 
         # Calcular diferencias ACTUALIZADAS
         diferencia_efectivo = arqueo.total_efectivo_fisico - total_efectivo_teorico
         diferencia_transbank = arqueo.cierre_pos_fisico - total_transbank_teorico
+        diferencia_mercadopago_pos = (
+            (arqueo.cierre_mp_fisico or 0) - total_mercadopago_pos_teorico
+            if (arqueo.cierre_mp_fisico or 0) > 0 else 0
+        )
         
         # Serializar depositos
         depositos_data = []
@@ -10935,7 +11073,13 @@ def obtener_detalle_arqueo(request, arqueo_id):
             'total_credito_trabajador_teorico': total_credito_trabajador_teorico,
             'total_convenio_teorico': total_convenio_teorico,
             'total_credito_externo_teorico': total_credito_externo_teorico,
-            
+
+            # Mercado Pago presencial RECALCULADO
+            'total_mercadopago_pos_teorico': total_mercadopago_pos_teorico,
+            'cierre_mp_fisico': arqueo.cierre_mp_fisico or 0,
+            'diferencia_mercadopago_pos': diferencia_mercadopago_pos,
+
+
             # Depósitos
             'depositos': depositos_data,
             # Revisión
@@ -12018,14 +12162,22 @@ def exportar_cuadratura_excel(request):
             ('Cheque', cuadratura_data.get('total_cheque', 0)),
             ('Convenio', cuadratura_data.get('total_convenio', 0)),
             ('Gift Card', cuadratura_data.get('total_giftcard', 0)),
+            ('Mercado Pago POS', cuadratura_data.get('total_mercadopago_pos', 0)),
             ('VISA/MC/AMEX', cuadratura_data.get('total_visa_mc_amex', 0)),
             ('Presto', cuadratura_data.get('total_presto', 0)),
-            ('AbcDin', cuadratura_data.get('total_abcdin', 0)),
-            ('Tricot', cuadratura_data.get('total_tricot', 0)),
+            # 🔧 FIX: se eliminan 'AbcDin'/'Tricot' (claves total_abcdin y
+            # total_tricot que NUNCA existieron en la cuadratura: siempre 0)
+            # y se agregan los buckets que el exportador omitía.
             ('Hites', cuadratura_data.get('total_hites', 0)),
             ('Ripley', cuadratura_data.get('total_ripley', 0)),
             ('Falabella', cuadratura_data.get('total_falabella', 0)),
             ('Paris', cuadratura_data.get('total_paris', 0)),
+            ('Mercado Pago (internet)', cuadratura_data.get('total_mercadopago', 0)),
+            ('Klap', cuadratura_data.get('total_klap', 0)),
+            ('Venta Internet (total)', cuadratura_data.get('total_venta_internet', 0)),
+            ('Crédito Trabajador', cuadratura_data.get('total_credito_trabajador', 0)),
+            ('Crédito Externo', cuadratura_data.get('total_credito_externo', 0)),
+            ('Orden de Compra', cuadratura_data.get('total_orden_compra', 0)),
         ]
         
         for metodo, monto in metodos_pago:
@@ -13296,7 +13448,9 @@ def crear_arqueo(request):
             total_mercadopago_teorico=to_int(cuadratura_data.get('total_mercadopago', 0)),
             total_klap_teorico=to_int(cuadratura_data.get('total_klap', 0)),
             total_venta_internet_teorico=to_int(cuadratura_data.get('total_venta_internet', 0)),
-            
+            # Mercado Pago presencial (bucket propio, no marketplace)
+            total_mercadopago_pos_teorico=to_int(cuadratura_data.get('total_mercadopago_pos', 0)),
+
             total_tarjeta_debito_teorico=to_int(cuadratura_data.get('total_tarjeta_debito', 0)),
             total_tarjeta_credito_teorico=to_int(cuadratura_data.get('total_tarjeta_credito', 0)),
             total_transbank_teorico=to_int(cuadratura_data.get('total_transbank', 0)),

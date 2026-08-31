@@ -1,6 +1,9 @@
+from django import forms
 from django.contrib import admin
 from .models import (
-    Solicitud_Regularizacion, 
+    MercadoPagoConfig,
+    MercadoPagoCuenta,
+    Solicitud_Regularizacion,
     Productos_Recepcionados,
     CambioPrecioPendiente,
     NotificacionCambioPrecio,
@@ -472,3 +475,72 @@ class DispositivoClienteAdmin(admin.ModelAdmin):
     list_filter = ['plataforma', 'activo']
     search_fields = ['cliente__nombre', 'cliente__rut']
     readonly_fields = ['token', 'created_at', 'last_seen']
+
+
+# ========== MERCADO PAGO (CUENTAS POR EMPRESA/RUT + CONFIG POR SUCURSAL) ==========
+
+class MercadoPagoCuentaForm(forms.ModelForm):
+    """Los secretos se escriben por campos write-only y se guardan CIFRADOS
+    (services/mp_credenciales.py). El valor almacenado nunca se muestra:
+    dejar vacío conserva el actual."""
+    access_token = forms.CharField(
+        required=False, label='Access token (nuevo)',
+        widget=forms.PasswordInput(render_value=False),
+        help_text='Se guarda cifrado. Vacío = mantener el actual.',
+    )
+    webhook_secret = forms.CharField(
+        required=False, label='Webhook secret (nuevo)',
+        widget=forms.PasswordInput(render_value=False),
+        help_text='Clave de firma x-signature del panel de developers. Vacío = mantener el actual.',
+    )
+
+    class Meta:
+        model = MercadoPagoCuenta
+        fields = ['empresa', 'mp_user_id', 'activo']
+
+    def save(self, commit=True):
+        cuenta = super().save(commit=False)
+        if self.cleaned_data.get('access_token'):
+            cuenta.set_access_token(self.cleaned_data['access_token'])
+        if self.cleaned_data.get('webhook_secret'):
+            cuenta.set_webhook_secret(self.cleaned_data['webhook_secret'])
+        if commit:
+            cuenta.save()
+        return cuenta
+
+
+@admin.register(MercadoPagoCuenta)
+class MercadoPagoCuentaAdmin(admin.ModelAdmin):
+    form = MercadoPagoCuentaForm
+    list_display = ['empresa', 'mp_user_id', 'activo', 'tiene_token', 'tiene_secret', 'actualizado_en']
+    list_filter = ['activo']
+    search_fields = ['empresa__razon_social', 'empresa__rut']
+
+    @admin.display(boolean=True, description='Token cargado')
+    def tiene_token(self, obj):
+        return bool(obj.access_token_cifrado)
+
+    @admin.display(boolean=True, description='Secret cargado')
+    def tiene_secret(self, obj):
+        return bool(obj.webhook_secret_cifrado)
+
+
+@admin.register(MercadoPagoConfig)
+class MercadoPagoConfigAdmin(admin.ModelAdmin):
+    list_display = ['sucursal', 'nombre', 'modo', 'habilitado', 'es_principal',
+                    'external_store_id', 'external_pos_id', 'cuenta']
+    list_filter = ['habilitado', 'modo']
+    search_fields = ['sucursal__alias', 'external_pos_id', 'external_store_id']
+    fieldsets = (
+        ('Sucursal y estado', {
+            'fields': ('sucursal', 'cuenta', 'nombre', 'habilitado', 'modo', 'es_principal')
+        }),
+        ('Identificadores en Mercado Pago', {
+            'fields': ('mp_user_id', 'external_store_id', 'store_id',
+                       'external_pos_id', 'pos_id', 'device_id')
+        }),
+        ('Fallback legacy por variables de entorno', {
+            'classes': ('collapse',),
+            'fields': ('token_env', 'webhook_secret_env'),
+        }),
+    )

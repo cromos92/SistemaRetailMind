@@ -2812,6 +2812,7 @@ def obtener_documentos_emitidos(request):
             'efectivo': 0,
             'tbk_credito': 0,
             'tbk_debito': 0,
+            'mercado_pago': 0,
             'tarjeta_comercial': 0,
             'convenio': 0,
             'descuentos': 0,
@@ -2841,6 +2842,10 @@ def obtener_documentos_emitidos(request):
             if not m:
                 return 'otros'
             # Específicos primero
+            if m.startswith('MP_'):
+                # Mercado Pago presencial: ANTES de los checks por substring
+                # de DEBITO/CREDITO, que se tragarían MP_POINT_DEBITO/CREDITO
+                return 'mercado_pago'
             if 'TRABAJADOR' in m:
                 return 'credito_trabajador'
             if 'INTERNET' in m or 'WEB' in m:

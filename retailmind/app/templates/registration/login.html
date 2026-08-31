@@ -434,6 +434,44 @@
         .pulse-icon { animation: pulse 2s ease-in-out infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 
+        /* Ingreso con Google */
+        .google-btn-holder { display: flex; justify-content: center; min-height: 44px; }
+        .google-btn-holder > div { max-width: 100%; }
+
+        .divider-o {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin: 1.5rem 0;
+            color: var(--gray-400);
+            font-size: 0.8rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .divider-o::before,
+        .divider-o::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--gray-300);
+        }
+
+        /* Aviso de Bloq Mayús sobre la contraseña */
+        .caps-hint {
+            display: none;
+            align-items: center;
+            gap: 0.4rem;
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #b45309;
+        }
+
+        .caps-hint.visible { display: flex; }
+        .caps-hint i { font-size: 0.95rem; }
+
         /* Responsive */
         @media (max-width: 992px) {
             .login-wrapper { flex-direction: column; }
@@ -572,6 +610,16 @@
                     <span id="client-alert-text"></span>
                 </div>
 
+                {% if google_client_id %}
+                <!-- Ingreso con Google (Google Identity Services). El botón solo
+                     aparece si el servidor tiene configurado GOOGLE_OAUTH_CLIENT_ID;
+                     se dibuja por JS para que el ancho siga al del formulario. -->
+                <div class="google-block" id="google-block" style="display:none;">
+                    <div class="google-btn-holder" id="google-btn-holder"></div>
+                    <div class="divider-o">o con tu correo</div>
+                </div>
+                {% endif %}
+
                 <form method="POST" id="loginForm"
                       action="{% url 'login' %}"
                       data-stage="email">
@@ -623,6 +671,10 @@
                             <button type="button" class="password-toggle" id="password-toggle">
                                 <i class="ri-eye-line" id="toggle-icon"></i>
                             </button>
+                        </div>
+                        <div class="caps-hint" id="caps-hint">
+                            <i class="ri-arrow-up-line"></i>
+                            <span>Tienes activado Bloq Mayús</span>
                         </div>
                     </div>
 
@@ -801,6 +853,7 @@
         const clientAlert     = document.getElementById('client-alert');
         const clientAlertText = document.getElementById('client-alert-text');
         const serverAlert     = document.getElementById('server-alert');
+        const capsHint        = document.getElementById('caps-hint');
         const csrfInput       = loginForm.querySelector('input[name=csrfmiddlewaretoken]');
 
         let isSubmittingFinal = false;  // evita bucle en fetch vs submit real
@@ -815,6 +868,19 @@
                     passwordInput.type = 'password';
                     toggleIcon.className = 'ri-eye-line';
                 }
+            });
+        }
+
+        // ---- Aviso de Bloq Mayús: la causa #1 de "credenciales incorrectas" ----
+        if (passwordInput && capsHint) {
+            const revisarCaps = function(e) {
+                if (typeof e.getModifierState !== 'function') return;
+                capsHint.classList.toggle('visible', e.getModifierState('CapsLock'));
+            };
+            passwordInput.addEventListener('keyup', revisarCaps);
+            passwordInput.addEventListener('keydown', revisarCaps);
+            passwordInput.addEventListener('blur', function() {
+                capsHint.classList.remove('visible');
             });
         }
 
@@ -873,6 +939,7 @@
             emailGroup.style.display = 'none';
             emailInput.setAttribute('readonly', 'readonly');
             summaryName.textContent = info && info.nombre ? info.nombre : '';
+            summaryName.style.display = summaryName.textContent ? '' : 'none';
             summaryEmail.textContent = emailInput.value;
             emailSummary.style.display = '';
             passwordGroup.style.display = '';
@@ -893,6 +960,7 @@
             emailGroup.style.display = 'none';
             emailInput.setAttribute('readonly', 'readonly');
             summaryName.textContent = info && info.nombre ? info.nombre : '';
+            summaryName.style.display = summaryName.textContent ? '' : 'none';
             summaryEmail.textContent = emailInput.value;
             emailSummary.style.display = '';
             passwordGroup.style.display = 'none';
@@ -940,6 +1008,12 @@
         loginForm.addEventListener('submit', async function(e) {
             const stage = loginForm.dataset.stage;
 
+            // Doble click / Enter repetido: el primer envío ya va en camino.
+            if (isSubmittingFinal) {
+                e.preventDefault();
+                return;
+            }
+
             if (stage === 'email') {
                 e.preventDefault();
                 hideClientAlert();
@@ -980,6 +1054,27 @@
                 setBtnLoading(true, 'Iniciando sesión...');
             }
         });
+
+        // Volver con el botón "atrás" restaura la página desde caché con el
+        // botón deshabilitado: hay que devolverlo a un estado usable.
+        window.addEventListener('pageshow', function(evt) {
+            if (evt.persisted) {
+                isSubmittingFinal = false;
+                setBtnLoading(false);
+            }
+        });
+
+        // ---- Restaurar el paso tras un error del servidor ----
+        // Sin esto, un error de contraseña devolvía al usuario al paso 1 a
+        // teclear otra vez su correo.
+        {% if stage_previo and email_previo %}
+        emailInput.value = "{{ email_previo|escapejs }}";
+        {% if stage_previo == 'pin' %}
+        goToStagePin(null);
+        {% else %}
+        goToStagePassword(null);
+        {% endif %}
+        {% endif %}
         {% endif %}
 
         if (window.history.replaceState) {
@@ -1002,6 +1097,116 @@
             }
         })();
     </script>
+
+    {% if google_client_id and not session_active %}
+    <script>
+        // ==========================================================
+        //  Ingreso con Google (Google Identity Services)
+        //  El botón entrega un ID token firmado; el servidor lo valida y
+        //  autentica al usuario que tenga ese mismo correo en NEXO.
+        // ==========================================================
+        (function() {
+            var GOOGLE_LOGIN_URL = "{% url 'login_google' %}";
+            var GOOGLE_CLIENT_ID = "{{ google_client_id|escapejs }}";
+            var enCurso = false;
+
+            function alertaGoogle(msg) {
+                var serverAlert = document.getElementById('server-alert');
+                var clientAlert = document.getElementById('client-alert');
+                var clientText  = document.getElementById('client-alert-text');
+                if (serverAlert) serverAlert.style.display = 'none';
+                if (clientAlert && clientText) {
+                    clientText.textContent = msg;
+                    clientAlert.style.display = '';
+                } else {
+                    alert(msg);
+                }
+            }
+
+            function bloquearBoton(bloquear) {
+                var bloque = document.getElementById('google-block');
+                if (!bloque) return;
+                bloque.style.opacity = bloquear ? '0.55' : '';
+                bloque.style.pointerEvents = bloquear ? 'none' : '';
+            }
+
+            // GIS invoca esta función por nombre: tiene que vivir en window.
+            window.handleGoogleCredential = function(respuesta) {
+                if (enCurso) return;           // doble click sobre el botón
+                if (!respuesta || !respuesta.credential) {
+                    alertaGoogle('Google no entregó las credenciales. Intenta nuevamente.');
+                    return;
+                }
+
+                enCurso = true;
+                bloquearBoton(true);
+
+                var csrf = document.querySelector('#loginForm input[name=csrfmiddlewaretoken]');
+                var datos = new FormData();
+                datos.append('credential', respuesta.credential);
+                datos.append('csrfmiddlewaretoken', csrf ? csrf.value : '');
+
+                fetch(GOOGLE_LOGIN_URL, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: datos
+                }).then(function(r) {
+                    if (!r.ok) throw new Error('No pudimos validar tu cuenta de Google.');
+                    return r.json();
+                }).then(function(data) {
+                    if (data.ok) {
+                        window.location.href = data.redirect || '/';
+                        return;
+                    }
+                    enCurso = false;
+                    bloquearBoton(false);
+                    alertaGoogle(data.error || 'No pudimos iniciar sesión con Google.');
+                }).catch(function(err) {
+                    enCurso = false;
+                    bloquearBoton(false);
+                    alertaGoogle(err.message || 'Error de conexión. Intenta nuevamente.');
+                });
+            };
+
+            // GIS llama a este hook cuando termina de cargar su librería. Se
+            // dibuja el botón acá (y no con los data-* del HTML) para poder
+            // ajustar el ancho al del formulario: en un teléfono angosto un
+            // ancho fijo se sale de la pantalla.
+            window.onGoogleLibraryLoad = function() {
+                var bloque = document.getElementById('google-block');
+                var holder = document.getElementById('google-btn-holder');
+                if (!bloque || !holder || !window.google || !google.accounts) return;
+
+                google.accounts.id.initialize({
+                    client_id: GOOGLE_CLIENT_ID,
+                    callback: window.handleGoogleCredential,
+                    auto_select: false,
+                    cancel_on_tap_outside: true,
+                    itp_support: true,
+                    ux_mode: 'popup'
+                });
+
+                // El botón solo aparece cuando ya se pudo dibujar: si Google
+                // está bloqueado, el login se ve limpio y sin hueco.
+                bloque.style.display = '';
+                // renderButton acepta anchos entre 200 y 400 px.
+                var ancho = Math.max(200, Math.min(400, Math.floor(holder.clientWidth) || 380));
+                google.accounts.id.renderButton(holder, {
+                    type: 'standard',
+                    theme: 'outline',
+                    size: 'large',
+                    shape: 'rectangular',
+                    text: 'continue_with',
+                    logo_alignment: 'center',
+                    locale: 'es',
+                    width: ancho
+                });
+            };
+        })();
+    </script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    {% endif %}
 </body>
 
 </html>

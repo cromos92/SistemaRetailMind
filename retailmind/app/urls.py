@@ -517,6 +517,14 @@ from .views_transbank_sdk import (
     detalles,
     cerrar_dia,
 )
+from .views_mercadopago import (
+    crear_pago_qr_mp,
+    estado_pago_mp,
+    cancelar_pago_mp,
+    webhook_mercadopago,
+    dineros_mercadopago,
+    api_dineros_mercadopago,
+)
 from .views_dashboards_kpi import (
     dashboard_documentos,
     api_dashboard_documentos,
@@ -1119,6 +1127,17 @@ urlpatterns = [
     path('pos/transbank/totales/', totales, name='transbank_sdk_totales'),
     path('pos/transbank/detalles/', detalles, name='transbank_sdk_detalles'),
     path('pos/transbank/cerrar-dia/', cerrar_dia, name='transbank_sdk_cerrar_dia'),
+
+    # ========== MÓDULO POS MERCADO PAGO (QR/POINT VÍA API) ==========
+    # Cobro desde el paso 3 del POS (server-side: el navegador solo hace polling)
+    path('pos/mercadopago/qr/crear/', crear_pago_qr_mp, name='mp_crear_pago_qr'),
+    path('pos/mercadopago/estado/<int:transaccion_id>/', estado_pago_mp, name='mp_estado_pago'),
+    path('pos/mercadopago/cancelar/<int:transaccion_id>/', cancelar_pago_mp, name='mp_cancelar_pago'),
+    # Webhook firmado (sin sesión — viene de los servidores de MP)
+    path('pos/mercadopago/webhook/', webhook_mercadopago, name='mp_webhook'),
+    # Pantalla Dineros MP (pendiente de liberación / liberado / depositado)
+    path('ventas/dineros-mercadopago/', dineros_mercadopago, name='dineros_mercadopago'),
+    path('api/mercadopago/dineros/', api_dineros_mercadopago, name='api_dineros_mercadopago'),
 
     # ========== MÓDULO DE CAMBIOS Y DEVOLUCIONES ==========
     # Vista principal

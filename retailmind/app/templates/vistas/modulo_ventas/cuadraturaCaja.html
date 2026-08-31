@@ -1258,6 +1258,7 @@
                                         <tr class="row-detalle" data-categoria="tarjetas" data-metodos="TARJETA_DEBITO,TBK_DEBITO_POS,TBK_PREPAGO_POS" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">REDCOMPRA DÉB.</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="debito">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="tarjetas" data-metodos="TARJETA_COMERCIAL" data-tipo-tarjeta="PRESTO" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">PRESTO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="presto">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="tarjetas" data-metodos="TARJETA_COMERCIAL" data-tipo-tarjeta="HITES" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">HITES</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="hites">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="tarjetas" data-metodos="MP_QR,MP_POINT,MP_POINT_DEBITO,MP_POINT_CREDITO" title="Ver detalle — Mercado Pago presencial (QR/Point), distinto del MP de Venta Internet"><td style="font-size:.75rem;color:var(--nexo-primary);">MERCADO PAGO POS</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;color:var(--nexo-primary);"><span id="mercadopago_pos">$0</span></td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -3565,6 +3566,7 @@ function cargarDatosCuadratura(c) {
     $('#convenio').text(fmCLP(c.total_convenio||0));
     $('#credito_trabajador').text(fmCLP(c.total_credito_trabajador||0)); $('#credito_externo').text(fmCLP(c.total_credito_externo||0));
     $('#giftcard').text(fmCLP(c.total_giftcard||0));
+    $('#mercadopago_pos').text(fmCLP(c.total_mercadopago_pos||0));
     $('#cheque').text(fmCLP(c.total_cheque||0)); $('#orden_compra').text(fmCLP(c.total_orden_compra||0));
     $('#falabella').text(fmCLP(c.total_falabella||0)); $('#paris').text(fmCLP(c.total_paris||0));
     $('#ripley').text(fmCLP(c.total_ripley||0)); $('#mercadopago').text(fmCLP(c.total_mercadopago||0));
@@ -3600,7 +3602,7 @@ function cargarDatosCuadratura(c) {
     // JSON, y un `string + string` en JS CONCATENA en vez de sumar (ej. el VENTA
     // TOTAL salía "935.030.155.460" = "935030"+"155460"). _n() garantiza la suma.
     const _n = v => Number(v) || 0;
-    const sumTarjetas = _n(c.total_visa_mc_amex) + _n(c.total_tarjeta_debito) + _n(c.total_presto) + _n(c.total_hites);
+    const sumTarjetas = _n(c.total_visa_mc_amex) + _n(c.total_tarjeta_debito) + _n(c.total_presto) + _n(c.total_hites) + _n(c.total_mercadopago_pos);
     const sumEfectivo = _n(c.total_efectivo) + _n(c.total_transferencia) + _n(c.total_convenio) + _n(c.total_credito_trabajador) + _n(c.total_credito_externo) + _n(c.total_giftcard) + _n(c.total_cheque) + _n(c.total_orden_compra);
     const sumInternet = _n(c.total_falabella) + _n(c.total_paris) + _n(c.total_ripley) + _n(c.total_mercadopago) + _n(c.total_klap);
     const sumTotal    = sumTarjetas + sumEfectivo + sumInternet;

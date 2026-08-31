@@ -21,6 +21,12 @@ METODO_PAGO_TICKET_CHOICES = [
     ('TBK_DEBITO_POS', 'Transbank Débito POS'),
     ('TBK_CREDITO_POS', 'Transbank Crédito POS'),
     ('TBK_PREPAGO_POS', 'Transbank Prepago POS'),
+    # Métodos Mercado Pago presencial (cobro integrado vía API — NO confundir
+    # con VENTA_INTERNET + tipo_tarjeta MERCADOPAGO, que es marketplace/ecommerce)
+    ('MP_QR', 'Mercado Pago QR'),
+    ('MP_POINT', 'Mercado Pago Point'),
+    ('MP_POINT_DEBITO', 'Mercado Pago Point Débito'),
+    ('MP_POINT_CREDITO', 'Mercado Pago Point Crédito'),
     # Otros métodos de pago
     ('TARJETA_COMERCIAL', 'Tarjeta Comercial'),
     ('VENTA_INTERNET', 'Venta por Internet'),

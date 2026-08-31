@@ -189,8 +189,10 @@ class Usuario(AbstractUser):
         if self.fecha_codigo_2fa < tiempo_expiracion:
             return False
         
-        # Verificar código
-        return self.codigo_2fa == codigo
+        # Verificar código (comparación en tiempo constante: el PIN es un
+        # secreto de 6 dígitos y el endpoint es público)
+        from django.utils.crypto import constant_time_compare
+        return constant_time_compare(self.codigo_2fa, codigo)
     
     def generar_password_temporal(self):
         """

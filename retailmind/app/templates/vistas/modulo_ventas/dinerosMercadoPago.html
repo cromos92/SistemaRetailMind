@@ -1,0 +1,190 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<style>
+    .nexo-page-header { background: linear-gradient(135deg, var(--nexo-secondary), #2a2a4a); color: #fff; border-radius: var(--nexo-radius-lg); padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }
+    .nexo-page-header h4 { margin: 0; font-weight: 700; font-size: 1.15rem; }
+    .nexo-page-header p { margin: 0; font-size: .85rem; opacity: .75; }
+    .kpi-card { border-radius: var(--nexo-radius-md); padding: 1rem; text-align: center; border: 1px solid var(--nexo-gray-300); background: #fff; height: 100%; }
+    .kpi-card .kpi-value { font-size: 1.35rem; font-weight: 800; font-family: monospace; }
+    .kpi-card .kpi-label { font-size: .72rem; color: var(--nexo-gray-700); text-transform: uppercase; letter-spacing: .04em; }
+    .kpi-card.kpi-pendiente { border-left: 4px solid var(--nexo-warning); }
+    .kpi-card.kpi-liberado { border-left: 4px solid var(--nexo-primary); }
+    .kpi-card.kpi-depositado { border-left: 4px solid var(--nexo-success); }
+    .kpi-card.kpi-alerta { border-left: 4px solid var(--nexo-error, #FF4D4D); }
+    .filtro-tab { cursor: pointer; padding: .35rem .9rem; border-radius: 2rem; font-size: .8rem; font-weight: 600; border: 1px solid var(--nexo-gray-300); background: #fff; color: var(--nexo-gray-700); transition: all .15s; }
+    .filtro-tab.active { background: var(--nexo-primary); color: #fff; border-color: var(--nexo-primary); }
+    .estado-badge { display:inline-block; padding:.15rem .5rem; border-radius:999px; font-size:.7rem; font-weight:700; }
+    .estado-APROBADA { background: rgba(0,212,170,.14); color: var(--nexo-success); }
+    .estado-PENDIENTE, .estado-CREADA { background: rgba(255,176,32,.16); color: #996B00; }
+    .estado-DEVUELTA, .estado-CONTRACARGO { background: rgba(255,77,77,.12); color: var(--nexo-error, #FF4D4D); }
+    .estado-RECHAZADA, .estado-EXPIRADA, .estado-CANCELADA, .estado-ERROR { background: var(--nexo-gray-100); color: var(--nexo-gray-700); }
+    .tabla-mp td, .tabla-mp th { font-size: .8rem; vertical-align: middle; }
+    .monto-mono { font-family: monospace; font-weight: 700; }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+
+        <div class="nexo-page-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <div>
+                <h4><i class="ri-money-dollar-circle-line me-1"></i> Dineros Mercado Pago</h4>
+                <p>Ciclo del dinero presencial: cobrado → pendiente de liberación → liberado → depositado en banco</p>
+            </div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <input type="date" id="mpFechaDesde" class="form-control form-control-sm" style="width:auto;">
+                <input type="date" id="mpFechaHasta" class="form-control form-control-sm" style="width:auto;">
+                <button class="btn btn-sm btn-light" onclick="cargarDinerosMP()"><i class="ri-refresh-line"></i> Actualizar</button>
+            </div>
+        </div>
+
+        <!-- KPIs -->
+        <div class="row g-2 mb-3">
+            <div class="col-6 col-md-2"><div class="kpi-card"><div class="kpi-value" id="kpiCobrado">$0</div><div class="kpi-label">Cobrado (<span id="kpiCantidad">0</span>)</div></div></div>
+            <div class="col-6 col-md-2"><div class="kpi-card kpi-pendiente"><div class="kpi-value" id="kpiPendiente">$0</div><div class="kpi-label">Pendiente liberación</div></div></div>
+            <div class="col-6 col-md-2"><div class="kpi-card kpi-liberado"><div class="kpi-value" id="kpiLiberado">$0</div><div class="kpi-label">Liberado sin retirar</div></div></div>
+            <div class="col-6 col-md-2"><div class="kpi-card kpi-depositado"><div class="kpi-value" id="kpiDepositado">$0</div><div class="kpi-label">Depositado en banco</div></div></div>
+            <div class="col-6 col-md-2"><div class="kpi-card"><div class="kpi-value" id="kpiComisiones">$0</div><div class="kpi-label">Comisiones MP</div></div></div>
+            <div class="col-6 col-md-2"><div class="kpi-card kpi-alerta"><div class="kpi-value" id="kpiHuerfanas">$0</div><div class="kpi-label">Aprobadas sin venta (<span id="kpiCantHuerfanas">0</span>)</div></div></div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="d-flex gap-2 mb-2">
+            <span class="filtro-tab active" data-tab="transacciones" onclick="cambiarTabMP(this)">Transacciones</span>
+            <span class="filtro-tab" data-tab="retiros" onclick="cambiarTabMP(this)">Depósitos al banco</span>
+            <span class="filtro-tab" data-tab="sucursales" onclick="cambiarTabMP(this)">Por sucursal</span>
+        </div>
+
+        <!-- Tab: Transacciones -->
+        <div class="card tab-mp" id="tab-transacciones">
+            <div class="card-body p-2">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover tabla-mp mb-0">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th><th>Sucursal</th><th>Ticket</th>
+                                <th class="text-end">Monto</th><th class="text-end">Neto</th>
+                                <th>Estado</th><th>Medio</th><th>Liberación</th><th>Retiro</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyTransaccionesMP">
+                            <tr><td colspan="9" class="text-center text-muted py-3">Cargando…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Retiros -->
+        <div class="card tab-mp" id="tab-retiros" style="display:none;">
+            <div class="card-body p-2">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover tabla-mp mb-0">
+                        <thead>
+                            <tr>
+                                <th>Retiro MP</th><th>Fecha</th>
+                                <th class="text-end">Monto</th>
+                                <th class="text-center">Pagos incluidos</th>
+                                <th>Estado</th><th class="text-center">Visto en cartola</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyRetirosMP">
+                            <tr><td colspan="6" class="text-center text-muted py-3">Sin retiros registrados — se cargan con el comando <code>conciliar_mercadopago</code></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Por sucursal -->
+        <div class="card tab-mp" id="tab-sucursales" style="display:none;">
+            <div class="card-body p-2">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover tabla-mp mb-0" style="max-width:520px;">
+                        <thead><tr><th>Sucursal</th><th class="text-end">Cobrado</th><th class="text-center">Cobros</th></tr></thead>
+                        <tbody id="tbodySucursalesMP"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+// El footer carga jQuery: este bloque debe ir DESPUÉS del include (gotcha
+// conocido de las plantillas de este proyecto).
+function fmtCLP(v) { return '$' + (Number(v) || 0).toLocaleString('es-CL'); }
+
+function cambiarTabMP(el) {
+    document.querySelectorAll('.filtro-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    document.querySelectorAll('.tab-mp').forEach(c => c.style.display = 'none');
+    document.getElementById('tab-' + el.dataset.tab).style.display = '';
+}
+
+function cargarDinerosMP() {
+    const desde = $('#mpFechaDesde').val();
+    const hasta = $('#mpFechaHasta').val();
+    const params = new URLSearchParams();
+    if (desde) params.set('fecha_desde', desde);
+    if (hasta) params.set('fecha_hasta', hasta);
+    fetch('/app/api/mercadopago/dineros/?' + params.toString())
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return;
+            $('#mpFechaDesde').val(data.fecha_desde);
+            $('#mpFechaHasta').val(data.fecha_hasta);
+            const k = data.kpis || {};
+            $('#kpiCobrado').text(fmtCLP(k.cobrado));
+            $('#kpiCantidad').text(k.cantidad_cobros || 0);
+            $('#kpiPendiente').text(fmtCLP(k.pendiente_liberacion));
+            $('#kpiLiberado').text(fmtCLP(k.liberado_sin_retirar));
+            $('#kpiDepositado').text(fmtCLP(k.depositado));
+            $('#kpiComisiones').text(fmtCLP(k.comisiones));
+            $('#kpiHuerfanas').text(fmtCLP(k.huerfanas));
+            $('#kpiCantHuerfanas').text(k.cantidad_huerfanas || 0);
+
+            const filasT = (data.transacciones || []).map(t => `
+                <tr${t.consumida ? '' : ' class="table-warning" title="Cobro aprobado que no quedó amarrado a una venta finalizada"'}>
+                    <td>${t.fecha}</td>
+                    <td>${t.sucursal || '-'}</td>
+                    <td class="monto-mono">${t.correlativo || '-'}</td>
+                    <td class="text-end monto-mono">${fmtCLP(t.monto)}</td>
+                    <td class="text-end monto-mono text-muted">${t.monto_neto != null ? fmtCLP(t.monto_neto) : '-'}</td>
+                    <td><span class="estado-badge estado-${t.estado}">${t.estado}</span></td>
+                    <td>${t.metodo_pago_mp || '-'}</td>
+                    <td>${t.liberacion ? (t.liberado ? '✅ ' : '⏳ ') + t.liberacion : '-'}</td>
+                    <td class="monto-mono">${t.retiro || '-'}</td>
+                </tr>`).join('');
+            $('#tbodyTransaccionesMP').html(filasT || '<tr><td colspan="9" class="text-center text-muted py-3">Sin transacciones en el período</td></tr>');
+
+            const filasR = (data.retiros || []).map(r => `
+                <tr>
+                    <td class="monto-mono">${r.withdrawal_id}</td>
+                    <td>${r.fecha}</td>
+                    <td class="text-end monto-mono">${fmtCLP(r.monto)}</td>
+                    <td class="text-center">${r.transacciones}</td>
+                    <td><span class="estado-badge ${r.estado === 'CONCILIADO' ? 'estado-APROBADA' : (r.estado === 'CON_DIFERENCIA' ? 'estado-CONTRACARGO' : 'estado-PENDIENTE')}">${r.estado}</span></td>
+                    <td class="text-center">${r.visto_en_cartola ? '✅' : '—'}</td>
+                </tr>`).join('');
+            if (filasR) $('#tbodyRetirosMP').html(filasR);
+
+            const filasS = (data.por_sucursal || []).map(s => `
+                <tr><td>${s.sucursal__alias || s.sucursal_id}</td>
+                <td class="text-end monto-mono">${fmtCLP(s.total)}</td>
+                <td class="text-center">${s.cantidad}</td></tr>`).join('');
+            $('#tbodySucursalesMP').html(filasS || '<tr><td colspan="3" class="text-center text-muted py-3">Sin datos</td></tr>');
+        })
+        .catch(() => {
+            $('#tbodyTransaccionesMP').html('<tr><td colspan="9" class="text-center text-danger py-3">Error al cargar los datos</td></tr>');
+        });
+}
+
+document.addEventListener('DOMContentLoaded', cargarDinerosMP);
+</script>

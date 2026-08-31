@@ -1,174 +1,876 @@
 {% load static %}
 <!doctype html>
 <html lang="es">
+
 <head>
     <meta charset="utf-8" />
     <title>NEXO - Verificación de PIN</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta content="Sistema de Gestión Retail Avanzado - RetailMind" name="description" />
+
+    <!-- App favicon -->
     <link rel="shortcut icon" href="{% static 'images/favicon.ico' %}">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap Css -->
     <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet" type="text/css" />
+    <!-- Icons Css -->
     <link href="{% static 'css/icons.min.css' %}" rel="stylesheet" type="text/css" />
+
+    <noscript>
+        <style>
+            /* Sin JS las cajitas del PIN no se pueden sincronizar: se muestra
+               un input simple que postea el formulario tal cual. */
+            #otp-group { display: none !important; }
+            #noscript-group { display: block !important; }
+        </style>
+    </noscript>
+
     <style>
         :root {
+            /* NEXO Design System Colors */
             --primary: #0066FF;
             --primary-dark: #0052CC;
+            --primary-light: #E6F0FF;
+            --accent: #00D4AA;
+            --dark: #1A1A2E;
             --gray-100: #F5F5F7;
+            --gray-200: #EBEBF0;
+            --gray-300: #D1D1D9;
+            --gray-400: #A8A8B8;
             --gray-500: #8A8A9A;
             --gray-700: #4A4A5A;
-            --dark: #1A1A2E;
+            --success: #00D4AA;
+            --warning: #FFB020;
+            --error: #FF4D4D;
             --white: #FFFFFF;
         }
 
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body, html {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            height: 100%;
-            background: var(--gray-100);
+            min-height: 100vh;
+            background: var(--dark);
         }
 
-        .page-wrapper {
+        .login-wrapper {
             min-height: 100vh;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* ===== Panel izquierdo (branding) ===== */
+        .brand-panel {
+            flex: 1;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 50%, var(--dark) 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 3rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .brand-panel::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            opacity: 0.5;
+        }
+
+        .bg-shapes { position: absolute; width: 100%; height: 100%; overflow: hidden; z-index: 0; }
+
+        .shape {
+            position: absolute;
+            border-radius: 50%;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+            animation: float 15s ease-in-out infinite;
+        }
+
+        .shape-1 { width: 300px; height: 300px; top: -100px; left: -100px; animation-delay: 0s; }
+        .shape-2 { width: 200px; height: 200px; bottom: 10%; right: -50px; animation-delay: -5s; }
+        .shape-3 { width: 150px; height: 150px; bottom: 30%; left: 10%; animation-delay: -10s; }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+            33% { transform: translateY(-20px) rotate(120deg) scale(1.05); }
+            66% { transform: translateY(10px) rotate(240deg) scale(0.95); }
+        }
+
+        .brand-content { position: relative; z-index: 1; text-align: center; max-width: 400px; }
+
+        .brand-logo-container {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 2rem;
+            margin: 0 auto 2rem;
+            padding: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
         }
 
-        .card-2fa {
-            width: 100%;
-            max-width: 420px;
+        .brand-logo-container img { width: 100%; height: 100%; }
+        .brand-title { font-size: 2.5rem; font-weight: 800; color: var(--white); margin-bottom: 0.75rem; letter-spacing: -0.02em; }
+        .brand-subtitle { font-size: 1.1rem; color: rgba(255, 255, 255, 0.8); margin-bottom: 2.5rem; line-height: 1.6; }
+
+        .brand-features { display: flex; flex-direction: column; gap: 1rem; }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 1.25rem;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .feature-icon {
+            width: 44px;
+            height: 44px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .feature-icon i { font-size: 1.25rem; color: var(--white); }
+        .feature-text { text-align: left; }
+        .feature-text h4 { font-size: 0.95rem; font-weight: 600; color: var(--white); margin-bottom: 2px; }
+        .feature-text p { font-size: 0.8rem; color: rgba(255, 255, 255, 0.7); margin: 0; }
+
+        /* ===== Panel derecho (formulario) ===== */
+        .form-panel {
+            flex: 1;
             background: var(--white);
-            border-radius: 16px;
-            box-shadow: 0 20px 45px rgba(26, 26, 46, 0.12);
-            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 3rem;
+            position: relative;
         }
 
-        .card-2fa h1 {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--dark);
-            margin-bottom: 0.5rem;
-        }
+        .form-container { width: 100%; max-width: 440px; }
 
-        .card-2fa p {
-            color: var(--gray-700);
+        .form-header { margin-bottom: 2rem; }
+        .form-header h2 { font-size: 1.875rem; font-weight: 700; color: var(--dark); margin-bottom: 0.5rem; letter-spacing: -0.02em; }
+        .form-header p { font-size: 0.95rem; color: var(--gray-500); margin: 0; line-height: 1.5; }
+        .form-header strong { color: var(--dark); font-weight: 600; }
+
+        .destino-card {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+            padding: 0.9rem 1.1rem;
+            background: var(--gray-100);
+            border-radius: 12px;
             margin-bottom: 1.5rem;
         }
 
-        .form-label {
-            font-weight: 600;
-            color: var(--dark);
+        .destino-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-light);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
         }
 
-        .form-input {
+        .destino-avatar i { color: var(--primary); font-size: 1.2rem; }
+        .destino-texto { min-width: 0; }
+        .destino-texto .nombre { font-size: 0.9rem; font-weight: 600; color: var(--dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .destino-texto .correo { font-size: 0.82rem; color: var(--gray-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* ===== Alertas ===== */
+        .alert-custom {
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 1.25rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .alert-error { background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border: 1px solid #fecaca; }
+        .alert-error i { color: #dc2626; font-size: 1.25rem; margin-top: 1px; }
+        .alert-error span { color: #991b1b; font-size: 0.9rem; font-weight: 500; line-height: 1.5; }
+
+        .alert-ok { background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border: 1px solid #a7f3d0; }
+        .alert-ok i { color: #059669; font-size: 1.25rem; margin-top: 1px; }
+        .alert-ok span { color: #065f46; font-size: 0.9rem; font-weight: 500; line-height: 1.5; }
+
+        /* ===== Cajitas del PIN ===== */
+        .form-label { display: block; font-size: 0.875rem; font-weight: 600; color: var(--dark); margin-bottom: 0.75rem; }
+
+        .otp-inputs { display: flex; gap: 0.6rem; justify-content: space-between; }
+
+        .otp-digit {
+            flex: 1;
+            min-width: 0;
+            height: 62px;
+            font-family: inherit;
+            font-size: 1.65rem;
+            font-weight: 700;
+            text-align: center;
+            color: var(--dark);
+            background: var(--gray-100);
+            border: 2px solid transparent;
+            border-radius: 12px;
+            outline: none;
+            transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+            -moz-appearance: textfield;
+        }
+
+        .otp-digit::-webkit-outer-spin-button,
+        .otp-digit::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+        .otp-digit:focus {
+            background: var(--white);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(0, 102, 255, 0.12);
+        }
+
+        .otp-digit.filled { background: var(--white); border-color: var(--gray-300); }
+
+        /* `error` pinta las cajitas y se mantiene hasta que el usuario vuelve a
+           escribir; `shake` es solo la sacudida y se quita al terminar. */
+        .otp-inputs.error .otp-digit { border-color: var(--error); background: #fff5f5; }
+        .otp-inputs.shake { animation: shake 0.35s ease; }
+        .otp-inputs.success .otp-digit { border-color: var(--success); background: #f0fdfa; }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-8px); }
+            40% { transform: translateX(8px); }
+            60% { transform: translateX(-5px); }
+            80% { transform: translateX(5px); }
+        }
+
+        .otp-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+            font-size: 0.8rem;
+            color: var(--gray-500);
+            min-height: 20px;
+        }
+
+        .otp-meta .intentos { color: var(--warning); font-weight: 600; }
+
+        /* ===== Botones ===== */
+        .btn-submit {
+            width: 100%;
+            margin-top: 1.5rem;
+            padding: 1rem;
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: inherit;
+            color: var(--white);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-submit:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0, 102, 255, 0.45); }
+        .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-submit i { font-size: 1.25rem; }
+
+        .btn-link {
+            background: none;
+            border: none;
+            padding: 0;
+            font-family: inherit;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--primary);
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .btn-link:hover:not(:disabled) { color: var(--primary-dark); text-decoration: underline; }
+        .btn-link:disabled { color: var(--gray-400); cursor: not-allowed; text-decoration: none; }
+
+        .links { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-top: 1.5rem; flex-wrap: wrap; }
+
+        .security-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+            padding: 0.75rem;
+            background: var(--gray-100);
+            border-radius: 10px;
+        }
+
+        .security-badge i { color: var(--success); font-size: 1rem; }
+        .security-badge span { font-size: 0.8rem; color: var(--gray-500); }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: var(--white);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .pulse-icon { animation: pulse 2s ease-in-out infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+        .form-footer { margin-top: 2rem; text-align: center; }
+        .form-footer p { font-size: 0.8rem; color: var(--gray-400); }
+        .form-footer a { color: var(--primary); text-decoration: none; font-weight: 500; }
+
+        /* Input de respaldo sin JS */
+        #noscript-group { display: none; }
+        #noscript-group input {
             width: 100%;
             padding: 1.1rem 1rem;
             border-radius: 12px;
-            border: 2px solid transparent;
+            border: 2px solid var(--gray-300);
             background: var(--gray-100);
             outline: none;
-            transition: border-color 0.2s ease;
             font-size: 1.4rem;
-            letter-spacing: 0.15rem;
+            letter-spacing: 0.4rem;
             text-align: center;
+            font-family: inherit;
         }
 
-        .form-input:focus {
-            border-color: var(--primary);
-            background: var(--white);
-        }
-
-        .btn-submit {
-            width: 100%;
-            padding: 0.9rem;
-            border: none;
-            border-radius: 12px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            color: var(--white);
-            font-weight: 600;
-        }
-
-        .links {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 1rem;
-            font-size: 0.9rem;
-        }
-
-        .links a {
-            color: var(--primary);
-            text-decoration: none;
-        }
-
-        .alert-custom {
-            background: #fff1f2;
-            border: 1px solid #fecdd3;
-            color: #9f1239;
-            border-radius: 12px;
-            padding: 0.75rem 1rem;
-            margin-bottom: 1rem;
-            font-size: 0.9rem;
-        }
-
-        .alert-info {
-            background: #eef2ff;
-            border: 1px solid #c7d2fe;
-            color: #3730a3;
+        /* ===== Responsive ===== */
+        @media (max-width: 992px) {
+            .login-wrapper { flex-direction: column; }
+            .brand-panel { padding: 2rem; min-height: auto; }
+            .brand-title { font-size: 2rem; }
+            .brand-features { display: none; }
+            .brand-subtitle { margin-bottom: 0; }
+            .form-panel { padding: 2rem; }
         }
 
         @media (max-width: 576px) {
-            .page-wrapper { padding: 1rem; }
-            .card-2fa { padding: 1.25rem; margin: 0.5rem; border-radius: 12px; }
-            .card-2fa h1 { font-size: 1.125rem; }
-            .form-input { min-height: 44px; font-size: 16px; }
-            .btn-submit { min-height: 48px; font-size: 1rem; }
+            .brand-panel { padding: 1.5rem; }
+            .brand-logo-container { width: 70px; height: 70px; border-radius: 18px; padding: 10px; margin-bottom: 1rem; }
+            .brand-title { font-size: 1.5rem; }
+            .brand-subtitle { font-size: 0.9rem; }
+            .form-panel { padding: 1.5rem; }
+            .form-header h2 { font-size: 1.5rem; }
+            .otp-inputs { gap: 0.4rem; }
+            .otp-digit { height: 54px; font-size: 1.35rem; }
+            .btn-submit { min-height: 48px; }
         }
     </style>
 </head>
+
 <body>
-    <div class="page-wrapper">
-        <div class="card-2fa">
-            <h1>Verificación de PIN</h1>
-            <p>Enviamos un PIN a tu correo <strong>{{ email }}</strong>. Ingresa el código para continuar.</p>
+    <div class="login-wrapper">
+        <!-- Panel izquierdo - Branding -->
+        <div class="brand-panel">
+            <div class="bg-shapes">
+                <div class="shape shape-1"></div>
+                <div class="shape shape-2"></div>
+                <div class="shape shape-3"></div>
+            </div>
 
-            {% if messages %}
-                {% for message in messages %}
-                    <div class="alert-custom{% if message.tags == 'info' %} alert-info{% endif %}">
-                        {{ message }}
-                    </div>
-                {% endfor %}
-            {% endif %}
-
-            <form method="POST">
-                {% csrf_token %}
-                <div class="mb-3">
-                    <label class="form-label" for="pin">PIN</label>
-                    <input type="text" id="pin" name="pin" class="form-input" maxlength="6" inputmode="numeric" autocomplete="one-time-code" required>
+            <div class="brand-content">
+                <div class="brand-logo-container">
+                    <img src="{% static 'images/nexo-icon.svg' %}" alt="NEXO">
                 </div>
-                <button type="submit" class="btn-submit">Verificar PIN</button>
-            </form>
+                <h1 class="brand-title">NEXO</h1>
+                <p class="brand-subtitle">Un paso más y estás dentro. Revisa tu correo para obtener el código de acceso.</p>
 
-            <div class="links">
-                <a href="?resend=true">Reenviar PIN</a>
-                <a href="{% url 'login' %}">Volver al inicio</a>
+                <div class="brand-features">
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="ri-mail-check-line"></i></div>
+                        <div class="feature-text">
+                            <h4>Código enviado</h4>
+                            <p>Revisa tu bandeja de entrada y el spam</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="ri-timer-line"></i></div>
+                        <div class="feature-text">
+                            <h4>Vigencia limitada</h4>
+                            <p>El código sirve por {{ minutos_expiracion }} minutos</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="ri-shield-keyhole-line"></i></div>
+                        <div class="feature-text">
+                            <h4>Un solo uso</h4>
+                            <p>Se invalida apenas lo utilizas</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel derecho - Verificación -->
+        <div class="form-panel">
+            <div class="form-container">
+                <div class="form-header">
+                    <h2>Verificación en 2 pasos</h2>
+                    <p>Escribe el código de 6 dígitos que enviamos a tu correo.</p>
+                </div>
+
+                <div class="destino-card">
+                    <div class="destino-avatar"><i class="ri-mail-send-line"></i></div>
+                    <div class="destino-texto">
+                        <div class="nombre">{{ nombre }}</div>
+                        <div class="correo">{{ email }}</div>
+                    </div>
+                </div>
+
+                {% if messages %}
+                <div class="alert-custom alert-error" id="server-alert">
+                    <i class="ri-error-warning-line"></i>
+                    <span>
+                        {% for message in messages %}{{ message }}{% if not forloop.last %}<br>{% endif %}{% endfor %}
+                    </span>
+                </div>
+                {% endif %}
+
+                <div class="alert-custom alert-error" id="client-alert" style="display:none;">
+                    <i class="ri-error-warning-line"></i>
+                    <span id="client-alert-text"></span>
+                </div>
+
+                <div class="alert-custom alert-ok" id="ok-alert" style="display:none;">
+                    <i class="ri-checkbox-circle-line"></i>
+                    <span id="ok-alert-text"></span>
+                </div>
+
+                <form method="POST" id="pinForm" action="{% url 'login_2fa' %}" novalidate>
+                    {% csrf_token %}
+
+                    <div id="otp-group">
+                        <label class="form-label" for="otp-0">Código de acceso</label>
+                        <div class="otp-inputs" id="otp-inputs">
+                            <input class="otp-digit" id="otp-0" type="text" inputmode="numeric" pattern="[0-9]*"
+                                   maxlength="6" autocomplete="one-time-code" aria-label="Dígito 1" autofocus>
+                            <input class="otp-digit" id="otp-1" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Dígito 2">
+                            <input class="otp-digit" id="otp-2" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Dígito 3">
+                            <input class="otp-digit" id="otp-3" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Dígito 4">
+                            <input class="otp-digit" id="otp-4" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Dígito 5">
+                            <input class="otp-digit" id="otp-5" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Dígito 6">
+                        </div>
+                        <div class="otp-meta">
+                            <span id="expira-texto"></span>
+                            <span class="intentos" id="intentos-texto">
+                                {% if intentos_restantes < max_intentos %}Te quedan {{ intentos_restantes }} intentos{% endif %}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div id="noscript-group">
+                        <label class="form-label" for="pin-plano">Código de acceso</label>
+                        <input type="text" id="pin-plano" name="pin" maxlength="6" inputmode="numeric" placeholder="······">
+                    </div>
+
+                    <button type="submit" class="btn-submit" id="btn-verify">
+                        <span id="btn-text">Verificar código</span>
+                        <i class="ri-arrow-right-line" id="btn-icon"></i>
+                    </button>
+                </form>
+
+                <div class="links">
+                    <button type="button" class="btn-link" id="btn-resend">
+                        <i class="ri-refresh-line"></i>
+                        <span id="resend-text">Reenviar código</span>
+                    </button>
+                    <a href="{% url 'login' %}?switch=true" class="btn-link">
+                        <i class="ri-arrow-left-line"></i> Usar otra cuenta
+                    </a>
+                </div>
+
+                <div class="security-badge">
+                    <i class="ri-shield-check-line pulse-icon"></i>
+                    <span>Verificación en 2 pasos activa en tu cuenta</span>
+                </div>
+
+                <div class="form-footer">
+                    <p>© <span id="currentYear"></span> NEXO · Desarrollado por
+                        <a href="https://webappsolutions.cl" target="_blank" rel="noopener">WebAppSolutions</a>
+                    </p>
+                </div>
             </div>
         </div>
     </div>
+
     <script>
-        // Si el formulario lleva más de 15 minutos cargado, recargar para CSRF token fresco
-        (function() {
-            var PAGE_LOADED_AT = Date.now();
-            var MAX_FORM_AGE_MS = 15 * 60 * 1000;
-            var form = document.querySelector('form');
-            if (form) {
-                form.addEventListener('submit', function(e) {
-                    if (Date.now() - PAGE_LOADED_AT > MAX_FORM_AGE_MS) {
-                        e.preventDefault();
-                        window.location.reload();
-                    }
-                });
+    (function () {
+        'use strict';
+
+        document.getElementById('currentYear').textContent = new Date().getFullYear();
+
+        var VERIFY_URL = "{% url 'login_2fa' %}";
+        var RESEND_URL = "{% url 'login_2fa_resend' %}";
+        var LARGO_PIN  = 6;
+
+        var form          = document.getElementById('pinForm');
+        var otpGroup      = document.getElementById('otp-group');
+        var otpInputs     = document.getElementById('otp-inputs');
+        var digitos       = Array.prototype.slice.call(document.querySelectorAll('.otp-digit'));
+        var pinPlano      = document.getElementById('pin-plano');
+        var btnVerify     = document.getElementById('btn-verify');
+        var btnText       = document.getElementById('btn-text');
+        var btnIcon       = document.getElementById('btn-icon');
+        var btnResend     = document.getElementById('btn-resend');
+        var resendText    = document.getElementById('resend-text');
+        var expiraTexto   = document.getElementById('expira-texto');
+        var intentosTexto = document.getElementById('intentos-texto');
+        var serverAlert   = document.getElementById('server-alert');
+        var clientAlert   = document.getElementById('client-alert');
+        var clientAlertTx = document.getElementById('client-alert-text');
+        var okAlert       = document.getElementById('ok-alert');
+        var okAlertTx     = document.getElementById('ok-alert-text');
+        var csrfInput     = form.querySelector('input[name=csrfmiddlewaretoken]');
+
+        // El input plano solo existe para el fallback sin JS: acá estorba porque
+        // duplicaría el campo `pin` en el POST.
+        if (pinPlano) { pinPlano.removeAttribute('name'); pinPlano.disabled = true; }
+
+        // ------------------------------------------------------------------
+        //  Anti doble envío: el bug original era que el segundo POST llegaba
+        //  cuando el primero ya había consumido el PIN y cerrado la sesión
+        //  pendiente, y el servidor respondía "verificación no activa".
+        // ------------------------------------------------------------------
+        var verificando = false;
+        var terminado   = false;   // ya se validó: no se acepta nada más
+
+        // ---- Alertas ----
+        function ocultarAlertas() {
+            if (serverAlert) serverAlert.style.display = 'none';
+            clientAlert.style.display = 'none';
+            okAlert.style.display = 'none';
+            otpInputs.classList.remove('error');
+        }
+
+        function mostrarError(msg) {
+            ocultarAlertas();
+            clientAlertTx.textContent = msg;
+            clientAlert.style.display = '';
+            otpInputs.classList.remove('success');
+            otpInputs.classList.add('error', 'shake');
+            setTimeout(function () { otpInputs.classList.remove('shake'); }, 400);
+        }
+
+        function mostrarOk(msg) {
+            ocultarAlertas();
+            okAlertTx.textContent = msg;
+            okAlert.style.display = '';
+        }
+
+        // ---- Estado del botón ----
+        function setCargando(cargando, etiqueta) {
+            btnVerify.disabled = cargando;
+            if (cargando) {
+                btnText.textContent = etiqueta || 'Verificando...';
+                btnIcon.style.display = 'none';
+                if (!document.getElementById('btn-spinner')) {
+                    var sp = document.createElement('div');
+                    sp.className = 'spinner';
+                    sp.id = 'btn-spinner';
+                    btnVerify.appendChild(sp);
+                }
+            } else {
+                btnText.textContent = 'Verificar código';
+                btnIcon.style.display = '';
+                var viejo = document.getElementById('btn-spinner');
+                if (viejo) viejo.remove();
             }
-        })();
+        }
+
+        // ---- Cajitas del PIN ----
+        function valorPin() {
+            return digitos.map(function (d) { return d.value.replace(/\D/g, ''); }).join('');
+        }
+
+        function pintarLlenos() {
+            digitos.forEach(function (d) {
+                d.classList.toggle('filled', d.value.length > 0);
+            });
+        }
+
+        function repartir(texto, desde) {
+            var limpio = (texto || '').replace(/\D/g, '');
+            if (!limpio) return;
+            for (var i = 0; i < limpio.length && (desde + i) < LARGO_PIN; i++) {
+                digitos[desde + i].value = limpio.charAt(i);
+            }
+            var siguiente = Math.min(desde + limpio.length, LARGO_PIN - 1);
+            digitos[siguiente].focus();
+            digitos[siguiente].select();
+            pintarLlenos();
+        }
+
+        function limpiarPin(enfocar) {
+            digitos.forEach(function (d) { d.value = ''; });
+            pintarLlenos();
+            if (enfocar) digitos[0].focus();
+        }
+
+        digitos.forEach(function (input, idx) {
+            input.addEventListener('input', function () {
+                if (terminado) return;
+                ocultarAlertas();
+                // Autocompletado del navegador / Android: llega el código entero
+                // en una sola caja, hay que repartirlo.
+                if (input.value.length > 1) {
+                    repartir(input.value, idx);
+                } else {
+                    input.value = input.value.replace(/\D/g, '');
+                    if (input.value && idx < LARGO_PIN - 1) {
+                        digitos[idx + 1].focus();
+                        digitos[idx + 1].select();
+                    }
+                }
+                pintarLlenos();
+                if (valorPin().length === LARGO_PIN) verificar();
+            });
+
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Backspace' && !input.value && idx > 0) {
+                    e.preventDefault();
+                    digitos[idx - 1].value = '';
+                    digitos[idx - 1].focus();
+                    pintarLlenos();
+                } else if (e.key === 'ArrowLeft' && idx > 0) {
+                    e.preventDefault();
+                    digitos[idx - 1].focus();
+                    digitos[idx - 1].select();
+                } else if (e.key === 'ArrowRight' && idx < LARGO_PIN - 1) {
+                    e.preventDefault();
+                    digitos[idx + 1].focus();
+                    digitos[idx + 1].select();
+                }
+            });
+
+            input.addEventListener('paste', function (e) {
+                e.preventDefault();
+                var pegado = (e.clipboardData || window.clipboardData).getData('text');
+                repartir(pegado, idx);
+                if (valorPin().length === LARGO_PIN) verificar();
+            });
+
+            input.addEventListener('focus', function () { input.select(); });
+        });
+
+        // ------------------------------------------------------------------
+        //  Verificación por AJAX (sin recargar, sin reenviar el formulario)
+        // ------------------------------------------------------------------
+        function verificar() {
+            if (verificando || terminado) return;
+
+            var pin = valorPin();
+            if (pin.length !== LARGO_PIN) {
+                mostrarError('Ingresa los ' + LARGO_PIN + ' dígitos del código.');
+                digitos[Math.min(pin.length, LARGO_PIN - 1)].focus();
+                return;
+            }
+
+            verificando = true;
+            setCargando(true);
+            ocultarAlertas();
+
+            var datos = new FormData();
+            datos.append('pin', pin);
+            datos.append('csrfmiddlewaretoken', csrfInput ? csrfInput.value : '');
+
+            fetch(VERIFY_URL, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: datos
+            }).then(function (r) {
+                if (!r.ok) throw new Error('No pudimos verificar el código. Intenta nuevamente.');
+                return r.json();
+            }).then(function (data) {
+                if (data.ok) {
+                    terminado = true;
+                    otpInputs.classList.remove('error');
+                    otpInputs.classList.add('success');
+                    setCargando(true, 'Ingresando...');
+                    mostrarOk('Código correcto. Entrando al sistema...');
+                    window.location.href = data.redirect || '/';
+                    return;
+                }
+
+                verificando = false;
+                setCargando(false);
+                mostrarError(data.error || 'El código no es válido.');
+
+                if (typeof data.intentos_restantes === 'number') {
+                    intentosTexto.textContent = data.intentos_restantes === 1
+                        ? 'Te queda 1 intento'
+                        : 'Te quedan ' + data.intentos_restantes + ' intentos';
+                }
+
+                if (data.expirado) {
+                    // Ya no hay verificación viva: se vuelve al login.
+                    terminado = true;
+                    btnVerify.disabled = true;
+                    btnResend.disabled = true;
+                    setTimeout(function () {
+                        window.location.href = data.redirect || "{% url 'login' %}";
+                    }, 2500);
+                    return;
+                }
+
+                limpiarPin(true);
+            }).catch(function (err) {
+                verificando = false;
+                setCargando(false);
+                mostrarError(err.message || 'Error de conexión. Intenta nuevamente.');
+            });
+        }
+
+        form.addEventListener('submit', function (e) {
+            // El envío real se hace por fetch; se corta el submit nativo para
+            // que ni el doble click ni un Enter repetido generen dos POST.
+            e.preventDefault();
+            verificar();
+        });
+
+        // ------------------------------------------------------------------
+        //  Reenvío con cooldown
+        // ------------------------------------------------------------------
+        var esperaReenvio = {{ segundos_reenvio|default:0 }};
+        var tickReenvio = null;
+
+        function pintarReenvio() {
+            if (esperaReenvio > 0) {
+                btnResend.disabled = true;
+                resendText.textContent = 'Reenviar en ' + esperaReenvio + 's';
+            } else {
+                btnResend.disabled = terminado;
+                resendText.textContent = 'Reenviar código';
+                if (tickReenvio) { clearInterval(tickReenvio); tickReenvio = null; }
+            }
+        }
+
+        function arrancarCooldown(segundos) {
+            esperaReenvio = segundos || 0;
+            pintarReenvio();
+            if (esperaReenvio > 0 && !tickReenvio) {
+                tickReenvio = setInterval(function () {
+                    esperaReenvio -= 1;
+                    pintarReenvio();
+                }, 1000);
+            }
+        }
+
+        btnResend.addEventListener('click', function () {
+            if (btnResend.disabled || terminado) return;
+            btnResend.disabled = true;
+            resendText.textContent = 'Enviando...';
+
+            var datos = new FormData();
+            datos.append('csrfmiddlewaretoken', csrfInput ? csrfInput.value : '');
+
+            fetch(RESEND_URL, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: datos
+            }).then(function (r) {
+                if (!r.ok) throw new Error('No pudimos reenviar el código.');
+                return r.json();
+            }).then(function (data) {
+                if (data.ok) {
+                    mostrarOk(data.mensaje || 'Se envió un nuevo código a tu correo.');
+                    limpiarPin(true);
+                    intentosTexto.textContent = '';
+                    arrancarExpiracion({{ minutos_expiracion }} * 60);
+                } else {
+                    mostrarError(data.error || 'No pudimos reenviar el código.');
+                    if (data.expirado) {
+                        terminado = true;
+                        btnVerify.disabled = true;
+                        setTimeout(function () {
+                            window.location.href = data.redirect || "{% url 'login' %}";
+                        }, 2500);
+                        return;
+                    }
+                }
+                arrancarCooldown(data.espera || {{ segundos_reenvio|default:0 }});
+            }).catch(function (err) {
+                mostrarError(err.message || 'Error de conexión. Intenta nuevamente.');
+                arrancarCooldown(5);
+            });
+        });
+
+        arrancarCooldown(esperaReenvio);
+
+        // ------------------------------------------------------------------
+        //  Cuenta regresiva de vigencia del código
+        // ------------------------------------------------------------------
+        var restanteExpira = {{ segundos_expiracion|default:0 }};
+        var tickExpira = null;
+
+        function pintarExpiracion() {
+            if (restanteExpira <= 0) {
+                expiraTexto.textContent = 'El código expiró';
+                expiraTexto.style.color = 'var(--error)';
+                if (tickExpira) { clearInterval(tickExpira); tickExpira = null; }
+                return;
+            }
+            var m = Math.floor(restanteExpira / 60);
+            var s = restanteExpira % 60;
+            expiraTexto.style.color = '';
+            expiraTexto.textContent = 'Expira en ' + m + ':' + (s < 10 ? '0' + s : s);
+        }
+
+        function arrancarExpiracion(segundos) {
+            restanteExpira = segundos || 0;
+            if (tickExpira) { clearInterval(tickExpira); tickExpira = null; }
+            // Sobre una hora (modo 'daily') la cuenta regresiva no aporta nada.
+            if (restanteExpira <= 0 || restanteExpira > 3600) {
+                expiraTexto.textContent = '';
+                return;
+            }
+            pintarExpiracion();
+            tickExpira = setInterval(function () {
+                restanteExpira -= 1;
+                pintarExpiracion();
+            }, 1000);
+        }
+
+        arrancarExpiracion(restanteExpira);
+
+        // Foco inicial en la primera cajita
+        setTimeout(function () { digitos[0].focus(); }, 80);
+    })();
     </script>
 </body>
+
 </html>

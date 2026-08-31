@@ -59,6 +59,10 @@ class ArqueoCaja(models.Model):
     # creó al emitir la tarjeta); se registra para que el desglose de medios
     # cuadre con la venta total sin exigir plata en el conteo físico.
     total_giftcard_teorico = models.IntegerField(default=0)
+    # Mercado Pago presencial (QR/Point integrado vía API). Bucket PROPIO,
+    # separado de total_mercadopago_teorico que es el sub-bucket marketplace
+    # de Venta Internet (tipo_tarjeta MERCADO/SHOPIFY).
+    total_mercadopago_pos_teorico = models.IntegerField(default=0)
 
     # Documentos
     total_tickets_teorico = models.IntegerField(default=0)
@@ -110,7 +114,15 @@ class ArqueoCaja(models.Model):
     diferencia_transbank = models.IntegerField(default=0, help_text="Diferencia entre cierre POS físico y teórico")
     diferencia_debito = models.IntegerField(default=0, help_text="Diferencia débito: físico - teórico")
     diferencia_credito = models.IntegerField(default=0, help_text="Diferencia crédito: físico - teórico")
-    
+
+    # === CIERRE MERCADO PAGO POS (presencial) ===
+    # A diferencia de Transbank no hay cierre de máquina obligatorio: el monto
+    # se contrasta contra la app/panel de MP. La diferencia solo se calcula si
+    # se digitó un cierre (>0) para no marcar descuadres fantasma; la
+    # verificación dura la hace la conciliación vía API (módulo Dineros MP).
+    cierre_mp_fisico = models.IntegerField(default=0, help_text="Monto según app/panel Mercado Pago al cierre (opcional)")
+    diferencia_mercadopago_pos = models.IntegerField(default=0, help_text="Diferencia MP presencial: cierre digitado - teórico (0 si no se digitó cierre)")
+
     # === CAJA CHICA / FONDO FIJO ===
     fondo_fijo_snapshot = models.IntegerField(
         default=0,

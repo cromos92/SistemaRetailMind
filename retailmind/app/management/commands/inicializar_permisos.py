@@ -95,6 +95,7 @@ class Command(BaseCommand):
             ('cuadratura_caja', 'Cuadratura y Arqueo', 'cuadratura_caja', 'ri-calculator-line', 6),
             ('pos_transbank', 'POS Transbank', 'gestion_transbank_pos_sdk', 'ri-bank-card-line', 7),
             ('revision_arqueos', 'Revisi?n Arqueos y Dep?sitos', 'revision_arqueos', 'ri-shield-check-line', 8),
+            ('dineros_mercadopago', 'Dineros Mercado Pago', 'dineros_mercadopago', 'ri-money-dollar-circle-line', 9),
         ]
         
         for codigo, nombre, url_name, icono, orden in opciones:

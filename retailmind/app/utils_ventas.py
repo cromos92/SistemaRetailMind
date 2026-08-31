@@ -71,12 +71,20 @@ NOMBRES_METODOS_PAGO = {
     'TBK_DEBITO_POS': 'TBK Débito POS',
     'TBK_CREDITO_POS': 'TBK Crédito POS',
     'TBK_PREPAGO_POS': 'TBK Prepago POS',
+    'MP_QR': 'Mercado Pago QR',
+    'MP_POINT': 'Mercado Pago Point',
+    'MP_POINT_DEBITO': 'MP Point Débito',
+    'MP_POINT_CREDITO': 'MP Point Crédito',
     'TARJETA_COMERCIAL': 'Tarjeta Comercial',
     'VENTA_INTERNET': 'Venta por Internet',
     'ORDEN_COMPRA': 'Orden de Compra',
     'CREDITO_TRABAJADOR': 'Crédito Trabajador',
     'CREDITO_EXTERNO': 'Crédito Externo',
     'CONVENIO': 'Convenio',
+    # 🔧 FIX: faltaban desde que se agregaron los choices — el display caía
+    # al código crudo en documentos de venta y detalle de DTE.
+    'GIFTCARD': 'Gift Card',
+    'MULTIPLE': 'Pagos Combinados',
 }
 
 

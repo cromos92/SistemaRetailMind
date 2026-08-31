@@ -920,6 +920,16 @@
                                                     <small class="label-sub">Automático</small>
                                                 </button>
                                             </div>
+                                            {% if mp_habilitado %}
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-info w-100 pos-pago-btn pos-pago-btn-lg pos-pago-btn-integrado" onclick="pagarConMercadoPago()" id="btn-mercadopago-qr" title="Cobro con QR Mercado Pago — el cliente escanea y paga desde su app (integrado vía API)">
+                                                    <span class="pos-badge-integrado">INTEGRADO</span>
+                                                    <i class="ri-qr-code-line"></i>
+                                                    <span class="label-principal">MP QR</span>
+                                                    <small class="label-sub">Mercado Pago</small>
+                                                </button>
+                                            </div>
+                                            {% endif %}
                                         </div>
 
                                         <!-- Grupo 2: MANUALES (digitación de voucher) -->
@@ -11243,6 +11253,10 @@ body {
             'TBK_DEBITO_POS': 'Débito Manual',
             'TBK_CREDITO_POS': 'Crédito Manual',
             'TBK_PREPAGO_POS': 'Prepago Manual',
+            'MP_QR': 'Mercado Pago QR',
+            'MP_POINT': 'Mercado Pago Point',
+            'MP_POINT_DEBITO': 'MP Point Débito',
+            'MP_POINT_CREDITO': 'MP Point Crédito',
             'VENTA_INTERNET': 'Venta Internet',
             'ORDEN_COMPRA': 'Orden de Compra',
             'TARJETA_COMERCIAL': 'Tarjeta Comercial',
@@ -12572,6 +12586,235 @@ body {
     
     // ========== INTEGRACIÓN POS TRANSBANK (WEB SERIAL API) ==========
     
+    // ==================== COBRO MERCADO PAGO QR (INTEGRADO VÍA API) ====================
+    // A diferencia de Transbank (Web Serial en el navegador), acá el servidor
+    // habla con la API de MP: este JS solo crea la orden, muestra el QR y hace
+    // polling a Django hasta estado terminal. El pago contable se registra
+    // igual que TBK: push a pagosActuales y luego registrar_pagos_ticket.
+    function beepAprobacionMP() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.value = 880; gain.gain.value = 0.08;
+            osc.start();
+            setTimeout(() => { osc.stop(); ctx.close(); }, 180);
+        } catch (e) { /* sin audio no pasa nada */ }
+    }
+
+    window.pagarConMercadoPago = async function() {
+        if (!ticketActual) {
+            Swal.fire({ icon: 'warning', title: 'Sin Ticket', text: 'Debe buscar o crear un ticket primero' });
+            return;
+        }
+        const saldoPendiente = calcularSaldoPendiente();
+        if (saldoPendiente <= 0) {
+            Swal.fire({ icon: 'info', title: 'Ticket Pagado', text: 'El ticket ya está completamente pagado' });
+            return;
+        }
+
+        // Monto a cobrar (pre-cargado con el saldo: Enter = cobrar todo)
+        const { value: montoCobrar } = await Swal.fire({
+            title: 'Pago con Mercado Pago QR',
+            html: `
+                <div class="text-start mb-3">
+                    <p><strong>Saldo pendiente:</strong> <span class="text-danger fs-5">${formatearMoneda(saldoPendiente)}</span></p>
+                    <hr>
+                    <p class="text-muted small">Ingrese el monto a cobrar (puede ser parcial):</p>
+                </div>
+                <input type="number" id="monto-mp-input" class="swal2-input"
+                       placeholder="Monto a cobrar"
+                       value="${saldoPendiente}"
+                       min="50"
+                       max="${saldoPendiente}"
+                       style="font-size: 1.5rem; text-align: center; font-weight: bold;">
+            `,
+            showCancelButton: true,
+            confirmButtonText: '📱 Generar QR',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#0066FF',
+            width: '500px',
+            preConfirm: () => {
+                const monto = parseInt(document.getElementById('monto-mp-input').value);
+                if (!monto || monto < 50) {
+                    Swal.showValidationMessage('El monto mínimo es $50');
+                    return false;
+                }
+                if (monto > saldoPendiente) {
+                    Swal.showValidationMessage('El monto no puede ser mayor al saldo pendiente');
+                    return false;
+                }
+                return monto;
+            }
+        });
+        if (!montoCobrar) return;
+
+        // El mismo correlativo que luego recibe registrar_pagos_ticket (el
+        // guard server-side matchea por sucursal+correlativo).
+        const correlativoMP = ticketActual.es_cotizacion ? ticketActual.correlativo : ticketActual.ticket_id;
+
+        // Crear la orden QR en el servidor
+        Swal.fire({
+            title: 'Generando QR...',
+            html: '<div class="spinner-border text-primary" role="status"></div>',
+            allowOutsideClick: false, showConfirmButton: false,
+            didOpen: () => Swal.showLoading()
+        });
+        let creacion;
+        try {
+            const resp = await fetch('/app/pos/mercadopago/qr/crear/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify({ correlativo: correlativoMP, monto: montoCobrar })
+            });
+            creacion = await resp.json();
+        } catch (e) {
+            creacion = { success: false, error: 'No se pudo contactar al servidor' };
+        }
+        if (!creacion || !creacion.success) {
+            Swal.fire({ icon: 'error', title: 'Mercado Pago', text: (creacion && creacion.error) || 'Error al generar el QR' });
+            return;
+        }
+
+        const transaccionId = creacion.transaccion_id;
+        const expiraEn = creacion.expira_en_segundos || 120;
+        let segundosRestantes = expiraEn;
+        let pollTimer = null;
+        let cuentaTimer = null;
+        let finalizado = false;
+
+        const detenerTimers = () => {
+            if (pollTimer) clearInterval(pollTimer);
+            if (cuentaTimer) clearInterval(cuentaTimer);
+            pollTimer = null; cuentaTimer = null;
+        };
+
+        const cancelarEnServidor = () => {
+            fetch(`/app/pos/mercadopago/cancelar/${transaccionId}/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+            }).catch(() => {});
+        };
+
+        const qrHtml = creacion.qr_base64
+            ? `<img src="data:image/png;base64,${creacion.qr_base64}" alt="QR Mercado Pago" style="width:300px; max-width:100%; image-rendering:pixelated;">`
+            : `<div class="alert alert-warning small text-start">No se pudo renderizar la imagen del QR (falta la librería <code>qrcode</code> en el servidor).</div>
+               <textarea class="form-control small" rows="3" readonly style="font-size:0.7rem;">${creacion.qr_data || ''}</textarea>`;
+
+        // Modal QR con contador; el polling resuelve el cierre
+        Swal.fire({
+            title: 'Escanee para pagar',
+            html: `
+                <div class="text-center">
+                    <p class="mb-1"><strong>Monto:</strong> <span class="fs-4 text-primary">${formatearMoneda(montoCobrar)}</span></p>
+                    ${qrHtml}
+                    <p class="small text-muted mt-2 mb-1">El cliente escanea con la app de Mercado Pago</p>
+                    <p class="small mb-0">Expira en <strong><span id="mp-countdown">${segundosRestantes}</span>s</strong></p>
+                </div>
+            `,
+            showCancelButton: true,
+            showConfirmButton: false,
+            cancelButtonText: 'Cancelar cobro',
+            allowOutsideClick: false,
+            width: '420px'
+        }).then((result) => {
+            // Solo llega aquí por el botón Cancelar (los estados terminales
+            // cierran el modal desde el polling con finalizado=true)
+            if (!finalizado && result.dismiss === Swal.DismissReason.cancel) {
+                finalizado = true;
+                detenerTimers();
+                cancelarEnServidor();
+                mostrarNotificacion('Cobro Mercado Pago cancelado', 'warning');
+            }
+        });
+
+        cuentaTimer = setInterval(() => {
+            segundosRestantes -= 1;
+            const el = document.getElementById('mp-countdown');
+            if (el) el.textContent = Math.max(segundosRestantes, 0);
+        }, 1000);
+
+        const manejarEstadoFinal = (data) => {
+            finalizado = true;
+            detenerTimers();
+            if (data.estado === 'APROBADA') {
+                const pago = {
+                    metodo_pago: 'MP_QR',
+                    monto: montoCobrar,
+                    tipo_tarjeta: data.metodo_pago_mp || 'MERCADO PAGO',
+                    voucher: data.payment_id || '',
+                    notas: `MP Aut: ${data.codigo_autorizacion || '-'}${data.ultimos_4_digitos ? ' | ****' + data.ultimos_4_digitos : ''}`,
+                    origen_pago: 'POS_INTEGRADO'
+                };
+                pagosActuales.push(pago);
+                actualizarListaPagos();
+                actualizarResumenVenta();
+                beepAprobacionMP();
+                const nuevoSaldo = calcularSaldoPendiente();
+                const ticketCompletado = nuevoSaldo <= 0;
+                Swal.fire({
+                    icon: 'success',
+                    title: '🎉 Pago Aprobado',
+                    html: `
+                        <div class="text-start">
+                            <h5 class="text-center mb-3 text-success">
+                                ${ticketCompletado ? '✅ Ticket Pagado' : `⚠️ Saldo: ${formatearMoneda(nuevoSaldo)}`}
+                            </h5>
+                            <hr>
+                            <p><strong>Monto:</strong> ${formatearMoneda(montoCobrar)}</p>
+                            <p><strong>Medio:</strong> Mercado Pago (${data.metodo_pago_mp || 'app'})</p>
+                            <p><strong>Pago MP:</strong> ${data.payment_id || '-'}</p>
+                        </div>
+                    `,
+                    confirmButtonText: 'OK'
+                });
+                mostrarNotificacion(
+                    ticketCompletado ? 'Ticket completamente pagado' : `Pago parcial - Saldo: ${formatearMoneda(nuevoSaldo)}`,
+                    'success'
+                );
+            } else {
+                const titulos = {
+                    'RECHAZADA': 'Pago Rechazado',
+                    'EXPIRADA': 'QR Expirado',
+                    'CANCELADA': 'Cobro Cancelado',
+                    'ERROR': 'Error en el Cobro'
+                };
+                Swal.fire({
+                    icon: 'error',
+                    title: titulos[data.estado] || 'Cobro no completado',
+                    text: data.estado_detalle || 'El pago no se concretó.',
+                    showCancelButton: true,
+                    confirmButtonText: '🔁 Reintentar',
+                    cancelButtonText: 'Cerrar'
+                }).then((r) => {
+                    // Reintento = orden NUEVA (nunca se reutiliza una expirada)
+                    if (r.isConfirmed) window.pagarConMercadoPago();
+                });
+            }
+        };
+
+        pollTimer = setInterval(async () => {
+            if (finalizado) return;
+            // Timeout duro del lado cliente (margen sobre la expiración)
+            if (segundosRestantes < -15) {
+                manejarEstadoFinal({ estado: 'EXPIRADA', estado_detalle: 'Sin respuesta de Mercado Pago' });
+                cancelarEnServidor();
+                return;
+            }
+            try {
+                const resp = await fetch(`/app/pos/mercadopago/estado/${transaccionId}/`);
+                const data = await resp.json();
+                if (!data.success) return;
+                if (data.estado !== 'PENDIENTE' && data.estado !== 'CREADA') {
+                    manejarEstadoFinal(data);
+                }
+            } catch (e) {
+                // Error transitorio de red: el próximo tick reintenta
+            }
+        }, 2500);
+    };
+
     window.pagarConPOSTransbank = async function() {
         // Verificar que haya un ticket activo
         if (!ticketActual) {

@@ -80,6 +80,14 @@ URL_PERMISO_MAP = {
     '/app/pos/transbank-websocket/': 'pos_transbank',
     '/app/pos/transbank-manual/': 'pos_transbank',
     '/app/pos/detectar-terminales/': 'pos_transbank',
+    # Mercado Pago presencial:
+    # ⚠️ NO mapear '/app/pos/mercadopago/' — bajo ese prefijo viven los
+    # endpoints de COBRO (qr/crear, estado, cancelar) que llama el POS de venta
+    # con rol vendedor/cajero (misma razón que Transbank arriba), y el webhook
+    # que llega SIN sesión desde los servidores de MP (gatearlo lo rompería).
+    # La pantalla Dineros y su API sí se gatean (información financiera).
+    '/app/ventas/dineros-mercadopago/': 'dineros_mercadopago',
+    '/app/api/mercadopago/dineros/': 'dineros_mercadopago',
 
     # Fidelización (GiftCards + Puntos)
     # El match es por substring y gana la clave más larga (ver
