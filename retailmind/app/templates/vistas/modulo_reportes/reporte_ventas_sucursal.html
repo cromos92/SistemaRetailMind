@@ -100,7 +100,7 @@
                                 <!-- completo está protegido por el permiso                        -->
                                 <!-- `reporte_comisiones_vendedor` (acción `puede_ver`).           -->
                                 <button type="button" class="btn btn-warning w-100" id="btnAbrirComisiones"
-                                        title="Reporte de comisiones por vendedor (calculado sobre venta neta sin IVA × % comisión del vendedor)">
+                                        title="Reporte de comisiones por vendedor (venta neta sin IVA × % comisión del vendedor; 1.5% por defecto si no tiene % configurado) + bono 1% de ventas netas por sucursal">
                                     <i class="ri-percent-line"></i> Comisiones
                                 </button>
                             </div>
@@ -1606,6 +1606,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // `vendedores` (no debería ocurrir).
             : [];
         const t = data.totales || {};
+        // % del bono por sucursal (viene del backend; fallback 1%).
+        const bonoPct = (typeof t.bono_sucursal_pct === 'number') ? t.bono_sucursal_pct : 1;
 
         document.getElementById('kpiComCantEmpresas').textContent =
             (t.cantidad_empresas || empresas.length || 0).toString();
@@ -1693,6 +1695,19 @@ document.addEventListener('DOMContentLoaded', function() {
                         <td class="text-end">$${formatearNumero(ssub.total_ventas_netas_sin_iva || 0)}</td>
                         <td class="text-center">—</td>
                         <td class="text-end text-success">$${formatearNumero(ssub.total_comisiones || 0)}</td>
+                    </tr>`;
+
+                // Bono por sucursal: 1% de las ventas netas s/IVA del local
+                // (calculado en el backend; fallback local por si el JSON
+                // viene de una versión anterior cacheada).
+                const bonoSuc = (typeof ssub.bono_sucursal === 'number')
+                    ? ssub.bono_sucursal
+                    : Math.round((ssub.total_ventas_netas_sin_iva || 0) * bonoPct / 100);
+                html += `
+                    <tr class="table-light">
+                        <td colspan="6" class="text-end ps-4 text-muted">↳ ${bonoPct}% Ventas Netas ${labelSuc}:</td>
+                        <td class="text-center text-muted">${bonoPct.toFixed(2)}%</td>
+                        <td class="text-end fw-semibold text-primary">$${formatearNumero(bonoSuc)}</td>
                     </tr>`;
             });
 

@@ -485,6 +485,51 @@ class ComisionesVendedorTest(_BaseReportesTest):
         self.assertLess(fila['comision_monto'], 0)
         self.assertLess(data['totales']['total_comisiones'], 0)
 
+    def test_vendedor_sin_pct_configurado_usa_default_1_5(self):
+        """comision=0 (el valor que dejó la migración Laravel) → 1.5%."""
+        sin_pct = crear_vendedor(
+            nombre='Vendedor Sin Pct', empresa=self.empresa,
+            codigo_vendedor='V-03', rut='7.654.321-0', comision=Decimal('0'),
+        )
+        sin_pct.sucursales.add(self.sucursal)
+        self._dte(119000, vendedor=sin_pct)
+
+        data = self._calcular()
+        fila = self._fila(data, sin_pct.id)
+
+        self.assertIsNotNone(fila)
+        neto = int((Decimal('119000') / Decimal('1.19')).quantize(Decimal('1')))
+        self.assertEqual(fila['comision_pct'], 1.5)
+        self.assertEqual(fila['comision_monto'], int(round(neto * 1.5 / 100)))
+
+    def test_bono_sucursal_es_1pct_de_ventas_netas(self):
+        """Cada sucursal expone el 1% de sus ventas netas s/IVA, con TODAS
+        las NC descontadas (incluidas las huérfanas sin vendedor)."""
+        venta = self._dte(119000)
+        self._nc(59500, documento_afectado=venta)  # NC imputada al vendedor
+        self._nc(11900)                            # NC huérfana (sin vendedor)
+
+        data = self._calcular()
+
+        neto_venta = int((Decimal('119000') / Decimal('1.19')).quantize(Decimal('1')))
+        neto_nc1 = int((Decimal('59500') / Decimal('1.19')).quantize(Decimal('1')))
+        neto_nc2 = int((Decimal('11900') / Decimal('1.19')).quantize(Decimal('1')))
+        netas_sucursal = neto_venta - neto_nc1 - neto_nc2
+
+        suc = data['empresas'][0]['sucursales'][0]
+        self.assertEqual(
+            suc['subtotales']['total_ventas_netas_sin_iva'], netas_sucursal,
+        )
+        self.assertEqual(
+            suc['subtotales']['bono_sucursal'],
+            int(round(netas_sucursal * 1 / 100.0)),
+        )
+        self.assertEqual(data['totales']['bono_sucursal_pct'], 1.0)
+        self.assertEqual(
+            data['totales']['total_bono_sucursal'],
+            suc['subtotales']['bono_sucursal'],
+        )
+
     def test_filtro_por_vendedor_conserva_sus_devoluciones(self):
         otro = crear_vendedor(
             nombre='Vendedor Dos', empresa=self.empresa,

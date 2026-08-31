@@ -499,6 +499,25 @@ def obtener_ventas_por_vendedor_reporte(request):
 # de permisos. Lo crea la migración 0150_permiso_reporte_comisiones_vendedor.
 CODIGO_PERMISO_COMISIONES = 'reporte_comisiones_vendedor'
 
+# % de comisión por defecto cuando `Vendedor.comision` viene en 0/NULL.
+# La migración desde Laravel dejó comision=0 en todos los vendedores, así
+# que sin este default el reporte y el Excel salían con 0% y comisión $0.
+# Un % > 0 configurado en Gestión de Vendedores manda sobre el default.
+COMISION_PCT_DEFAULT = 1.5
+
+# Bono por sucursal: % sobre las ventas netas sin IVA de cada sucursal
+# (ventas neto − TODAS sus NC, incluidas las "Sin vendedor asignado").
+BONO_SUCURSAL_PCT = 1.0
+
+
+def _pct_comision_vendedor(valor) -> float:
+    """`Vendedor.comision` como float, o `COMISION_PCT_DEFAULT` si es 0/NULL."""
+    try:
+        pct = float(valor or 0)
+    except (TypeError, ValueError):
+        pct = 0.0
+    return pct if pct > 0 else COMISION_PCT_DEFAULT
+
 
 def _puede_ver_reporte_comisiones(user, sucursal_id=None) -> bool:
     """Atajo para chequear el permiso del reporte de comisiones.
@@ -591,6 +610,15 @@ def _calcular_comisiones_vendedor(request):
     imputadas al mismo vendedor, empresa y sucursal en el período.
 
     La comisión se calcula como `venta_neta_sin_iva * (Vendedor.comision / 100)`.
+    Si el vendedor no tiene % configurado (comision en 0/NULL, el valor que
+    dejó la migración desde Laravel) se usa `COMISION_PCT_DEFAULT` (1.5%).
+
+    Además, cada sucursal expone `subtotales['bono_sucursal']`: el
+    `BONO_SUCURSAL_PCT`% (1%) de sus ventas netas sin IVA, descontando
+    TODAS las NC del período (incluidas las de la fila "Sin vendedor
+    asignado", que no descuentan comisión personal pero sí restan del
+    neto del local). El total global va en `totales['total_bono_sucursal']`
+    (redondeado por sucursal y luego sumado).
 
     El resultado se agrupa por **(vendedor, empresa emisora, sucursal)**: si
     un vendedor operó para más de una empresa o en más de una sucursal en el
@@ -838,10 +866,7 @@ def _calcular_comisiones_vendedor(request):
         ncs_consumidas.add((vid, eid, sid))
         ventas_netas_iva = ventas_brutas_iva - nc['total']
         ventas_netas_neto = ventas_brutas_neto - nc['neto']
-        try:
-            comision_pct = float(item['vendedor__comision'] or 0)
-        except (TypeError, ValueError):
-            comision_pct = 0.0
+        comision_pct = _pct_comision_vendedor(item['vendedor__comision'])
         comision_monto = int(round(ventas_netas_neto * comision_pct / 100.0))
 
         _registrar_fila({
@@ -892,10 +917,7 @@ def _calcular_comisiones_vendedor(request):
             vend = vendedores_meta.get(vid)
             emp_obj = empresas_meta.get(eid)
             suc_obj = sucursales_meta.get(sid)
-            try:
-                comision_pct = float(getattr(vend, 'comision', 0) or 0)
-            except (TypeError, ValueError):
-                comision_pct = 0.0
+            comision_pct = _pct_comision_vendedor(getattr(vend, 'comision', 0))
             _registrar_fila({
                 'id': vid,
                 'nombre': getattr(vend, 'nombre', None) or '(sin nombre)',
@@ -978,11 +1000,21 @@ def _calcular_comisiones_vendedor(request):
             suc['vendedores'].sort(
                 key=lambda v: v['ventas_netas_sin_iva'], reverse=True,
             )
+            # Bono por sucursal: 1% de las ventas netas sin IVA del local.
+            # El subtotal ya descuenta TODAS las NC, incluidas las de la
+            # fila "Sin vendedor asignado".
+            suc['subtotales']['bono_sucursal'] = int(round(
+                suc['subtotales']['total_ventas_netas_sin_iva']
+                * BONO_SUCURSAL_PCT / 100.0
+            ))
         sucursales_lista.sort(
             key=lambda s: ((s['alias'] or '').lower(), (s['direccion'] or '').lower()),
         )
         emp['sucursales'] = sucursales_lista
         emp['subtotales']['cantidad_sucursales'] = len(sucursales_lista)
+        emp['subtotales']['bono_sucursal'] = sum(
+            s['subtotales']['bono_sucursal'] for s in sucursales_lista
+        )
         del emp['sucursales_map']
 
     empresas_data = sorted(
@@ -1026,6 +1058,13 @@ def _calcular_comisiones_vendedor(request):
             ),
             'cantidad_ncs_sin_vendedor': sum(
                 v['cantidad'] for v in ncs_sin_vendedor.values()
+            ),
+            # Bono por sucursal: BONO_SUCURSAL_PCT% de las ventas netas sin
+            # IVA de cada sucursal, redondeado por sucursal y luego sumado
+            # (así el total calza con la suma de las filas del Excel).
+            'bono_sucursal_pct': BONO_SUCURSAL_PCT,
+            'total_bono_sucursal': sum(
+                e['subtotales']['bono_sucursal'] for e in empresas_data
             ),
         },
     }
@@ -1365,6 +1404,37 @@ def exportar_comisiones_vendedor_excel(request):
                 ws.row_dimensions[row].height = 18
                 row += 1
 
+                # Bono por sucursal: 1% de las ventas netas (s/IVA) del
+                # local, con todas las NC ya descontadas del neto.
+                ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=6)
+                bono_lbl = ws.cell(
+                    row=row, column=1,
+                    value=(
+                        f"↳ {BONO_SUCURSAL_PCT:g}% Ventas Netas (s/IVA) "
+                        f"{label_suc}"
+                    ),
+                )
+                bono_lbl.fill = subtotal_suc_fill
+                bono_lbl.font = subtotal_suc_font
+                bono_lbl.alignment = right
+
+                b7 = ws.cell(row=row, column=7, value=BONO_SUCURSAL_PCT)
+                b7.number_format = pct_fmt
+                b7.fill = subtotal_suc_fill
+                b7.font = subtotal_suc_font
+                b7.alignment = center
+
+                b8 = ws.cell(row=row, column=8, value=ssub.get('bono_sucursal', 0))
+                b8.number_format = money_fmt
+                b8.fill = subtotal_suc_fill
+                b8.font = Font(bold=True, color='0052CC', size=10)
+                b8.alignment = right
+
+                for col in range(1, N_COLS + 1):
+                    ws.cell(row=row, column=col).border = border
+                ws.row_dimensions[row].height = 18
+                row += 1
+
             # Subtotal por empresa (suma de sus sucursales).
             ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
             cell_lbl = ws.cell(
@@ -1455,6 +1525,38 @@ def exportar_comisiones_vendedor_excel(request):
             for col in range(1, N_COLS + 1):
                 ws.cell(row=row, column=col).border = border
             ws.row_dimensions[row].height = 22
+            row += 1
+
+            # Total del bono por sucursal (suma de los 1% de cada local).
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=6)
+            tb_lbl = ws.cell(
+                row=row, column=1,
+                value=(
+                    f"TOTAL {BONO_SUCURSAL_PCT:g}% VENTAS NETAS POR SUCURSAL"
+                ),
+            )
+            tb_lbl.fill = total_fill
+            tb_lbl.font = total_font
+            tb_lbl.alignment = right
+
+            tb7 = ws.cell(row=row, column=7, value=BONO_SUCURSAL_PCT)
+            tb7.number_format = pct_fmt
+            tb7.fill = total_fill
+            tb7.font = total_font
+            tb7.alignment = center
+
+            tb8 = ws.cell(
+                row=row, column=8,
+                value=data['totales'].get('total_bono_sucursal', 0),
+            )
+            tb8.number_format = money_fmt
+            tb8.fill = total_fill
+            tb8.font = total_font
+            tb8.alignment = right
+
+            for col in range(1, N_COLS + 1):
+                ws.cell(row=row, column=col).border = border
+            ws.row_dimensions[row].height = 20
 
         # ===== Anchos =====
         # #, Vendedor, Código, Brutas, Dev, Netas, %, Comisión.
