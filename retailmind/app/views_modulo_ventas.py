@@ -11763,10 +11763,28 @@ def listar_arqueos_para_deposito(request):
         if not sucursal_id:
             return JsonResponse({'success': False, 'error': 'Sin sucursal'})
 
-        arqueos = ArqueoCaja.objects.filter(
+        arqueos = list(ArqueoCaja.objects.filter(
             sucursal_id=sucursal_id,
             estado__in=['CERRADO', 'CON_DIFERENCIAS', 'ABIERTO'],
+        ).order_by('-fecha_arqueo')[:60])
+
+        # Un arqueo ya REVISADO (o con depósito declarado/confirmado) puede
+        # quedar con efectivo pendiente si después se le eliminó un depósito:
+        # `eliminar_deposito_bancario` NO degrada REVISADO a propósito (la
+        # revisión del supervisor es un hecho auditado). Sin este bloque ese
+        # día quedaba invisible para el multi-día, y el modal de comprobante
+        # único tampoco lo acepta porque ya tiene un comprobante verificado
+        # (el del depósito que no se borró) — o sea, no había NINGUNA vía
+        # para asignarle el saldo. Solo se agregan los que aún deben plata.
+        avanzados = ArqueoCaja.objects.filter(
+            sucursal_id=sucursal_id,
+            estado__in=['REVISADO', 'DEPOSITO_DECLARADO', 'DEPOSITO_CONFIRMADO'],
         ).order_by('-fecha_arqueo')[:60]
+        arqueos.extend(
+            a for a in avanzados
+            if (a.total_efectivo_teorico - a.total_depositos) > 0
+        )
+        arqueos.sort(key=lambda a: a.fecha_arqueo, reverse=True)
 
         resultado = []
         for a in arqueos:

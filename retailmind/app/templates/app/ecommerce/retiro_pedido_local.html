@@ -109,9 +109,12 @@
                         <label for="scanInput" class="form-label">
                             Escanea el QR del correo, o teclea el código de 6 dígitos / el ticket RM
                         </label>
+                        <!-- Nace deshabilitado: el script principal lo habilita al final.
+                             Si el JS muere al cargar, el input queda bloqueado y el panel
+                             de abajo muestra el error — nunca más un Enter mudo. -->
                         <input type="text" class="form-control retiro-input" id="scanInput"
-                               placeholder="483920  ·  RM-1A2B3C4D  ·  QR del correo"
-                               autocomplete="off" spellcheck="false">
+                               placeholder="Cargando pantalla..."
+                               autocomplete="off" spellcheck="false" disabled>
                         <div id="scanPanel" class="scan-panel"></div>
 
                         <div class="mt-3">
@@ -262,13 +265,37 @@
 </div>
 
 <script>
+/* Reporte visible de errores JS: en el mesón nadie anda con F12 abierto.
+   Cualquier error no capturado (incluido un error de sintaxis del script
+   principal en un navegador viejo) se pinta bajo el input, y el input
+   queda deshabilitado porque solo el script principal lo habilita. */
+window.addEventListener('error', function (ev) {
+    var p = document.getElementById('scanPanel');
+    if (!p) return;
+    // Solo errores del script inline de ESTA pantalla, o de cualquier
+    // origen mientras el input siga bloqueado (= el script principal no
+    // terminó). El JS del tema (.js del footer) no debe pintar alarmas.
+    var esInline = !ev.filename || ev.filename.indexOf('.js') === -1;
+    var inp = document.getElementById('scanInput');
+    if (!esInline && !(inp && inp.disabled)) return;
+    p.className = 'scan-panel is-err';
+    p.textContent = 'Error de la pantalla: ' + (ev.message || 'desconocido') +
+        (ev.lineno ? ' (linea ' + ev.lineno + ')' : '') +
+        '. Saca una foto de este mensaje y avisa a soporte.';
+});
+</script>
+
+<script>
 (function () {
     'use strict';
 
     const URL_VALIDAR   = "{% url 'api_retiro_validar' %}";
     const URL_CONFIRMAR = "{% url 'api_retiro_confirmar' %}";
     const URL_PDF       = "{% url 'api_retiro_comprobante_pdf' %}";
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    // Defensivo: si el token no está en el DOM, que falle el POST con
+    // mensaje visible, no la carga completa de la pantalla.
+    const csrfEl = document.querySelector('[name=csrfmiddlewaretoken]');
+    const csrfToken = csrfEl ? csrfEl.value : '';
 
     const scanInput  = document.getElementById('scanInput');
     const scanPanel  = document.getElementById('scanPanel');
@@ -340,7 +367,11 @@
         'nombre, documento, hora y código dictado) y registrar el retiro después.';
 
     /* ── selección de fila ──────────────────────────────────── */
-    const filas = document.querySelectorAll('#tbodyRetiros tr[data-ticket]');
+    // Array real, no NodeList: `NodeList.forEach` no existe en navegadores
+    // viejos de mesón y mataba TODO el script antes de enganchar el Enter.
+    const filas = Array.prototype.slice.call(
+        document.querySelectorAll('#tbodyRetiros tr[data-ticket]')
+    );
     function seleccionarFila(tr) {
         filas.forEach(function (f) { f.classList.remove('is-selected'); });
         if (!tr) { seleccion = null; return; }
@@ -417,9 +448,20 @@
                 objetivo = seleccion;
             }
             if (!objetivo) {
-                panel(scanPanel, 'warn',
-                    'Primero selecciona el pedido en la lista (o escanea el QR del correo, ' +
-                    'que trae pedido y código juntos).');
+                if (!filas.length) {
+                    // Lista vacía: "selecciona de la lista" sería un callejón
+                    // sin salida. El código solo NUNCA basta (el central
+                    // valida pedido+código): dictar las alternativas reales.
+                    panel(scanPanel, 'warn',
+                        'El código solo no basta: falta saber de qué pedido es y no hay ' +
+                        'pedidos en la lista local. Escanea el <b>QR del correo</b> del ' +
+                        'cliente, o teclea primero el <b>ticket RM</b> del pedido ' +
+                        '(RM-XXXXXXXX) y después el código.');
+                } else {
+                    panel(scanPanel, 'warn',
+                        'Primero selecciona el pedido en la lista (o escanea el QR del correo, ' +
+                        'que trae pedido y código juntos).');
+                }
                 return;
             }
             validar({
@@ -442,12 +484,14 @@
             'o el QR del correo.');
     }
 
-    scanInput.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            procesarEntrada(scanInput.value);
-        }
-    });
+    // Delegado en document con CAPTURE: sobrevive aunque otro script
+    // reemplace el nodo del input o intercepte el evento río arriba.
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.keyCode !== 13) return;
+        if (!e.target || e.target.id !== 'scanInput') return;
+        e.preventDefault();
+        procesarEntrada(e.target.value);
+    }, true);
 
     /* ── PASO 2: validar (preview, NO consume el código) ────── */
     const MAPA_ADVERTENCIAS = {
@@ -692,7 +736,9 @@
 
         // Sacar la fila de la lista (el pedido ya se entregó)
         filas.forEach(function (tr) {
-            if (tr.dataset.ticket === (pd.ticket_rm || pendiente.numero_ticket_rm)) tr.remove();
+            if (tr.dataset.ticket === (pd.ticket_rm || pendiente.numero_ticket_rm) && tr.parentNode) {
+                tr.parentNode.removeChild(tr);
+            }
         });
         seleccion = null;
     }
@@ -746,7 +792,11 @@
         volverAScan();
     });
 
-    // Estado inicial: foco en el input de escaneo
+    // Señal de vida: solo si TODO el script cargó sin errores se habilita
+    // el input. Si quedó deshabilitado con "Cargando pantalla...", el JS
+    // murió y el panel rojo de arriba dice por qué.
+    scanInput.disabled = false;
+    scanInput.placeholder = '483920  ·  RM-1A2B3C4D  ·  QR del correo';
     setTimeout(function () { scanInput.focus(); }, 150);
 })();
 </script>
