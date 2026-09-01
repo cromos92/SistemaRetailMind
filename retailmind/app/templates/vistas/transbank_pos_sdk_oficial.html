@@ -1575,6 +1575,7 @@ function buscarCajasMP() {
                     <td>${c.caja_nombre || '-'}<br><code style="font-size:.68rem;">${c.external_pos_id || 'SIN ID EXTERNO'}</code></td>
                 </tr>`).join('');
             window.__cajasMP = cajas;
+            window.__cajasMPEmpresa = empresaId;
             Swal.fire({
                 title: 'Cajas creadas en Mercado Pago',
                 html: `<p class="small text-muted mb-1">Clic en una fila para llenar el formulario</p>
@@ -1590,15 +1591,60 @@ function buscarCajasMP() {
 function usarCajaMP(i) {
     const c = (window.__cajasMP || [])[i];
     if (!c) return;
-    if (!c.external_pos_id) {
-        Swal.fire({ icon: 'warning', title: 'Caja sin ID externo',
-            text: 'Esa caja no tiene external_id en MP: créala de nuevo con identificador o usa la API.' });
+    if (c.external_pos_id) {
+        _llenarFormCaja(c.external_store_id, c.external_pos_id, c.caja_nombre);
+        Swal.close();
         return;
     }
-    document.getElementById('mpCfgStore').value = c.external_store_id || '';
-    document.getElementById('mpCfgPos').value = c.external_pos_id;
-    if (c.caja_nombre) document.getElementById('mpCfgNombre').value = c.caja_nombre;
-    Swal.close();
+    // Caja creada desde el panel de MP sin ID externo: se lo asignamos por
+    // API acá mismo (la Orders API lo exige para emitir el QR).
+    const limpiar = s => (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 40);
+    const propStore = c.external_store_id || limpiar(c.store_nombre) || 'SUCURSAL';
+    const propPos = (c.external_store_id || limpiar(c.store_nombre)) + limpiar(c.caja_nombre || 'CAJA1');
+    Swal.fire({
+        title: 'Caja sin ID externo — asignar ahora',
+        html: `<p class="small text-muted mb-2">"${c.store_nombre} / ${c.caja_nombre}" no tiene
+               identificador externo en MP (el panel web no lo crea). Se le asignará por API:</p>
+               <label class="form-label-sm" style="display:block;text-align:left;">ID sucursal (external_store_id)</label>
+               <input id="swalExtStore" class="form-control form-control-sm mb-2" value="${propStore}" ${c.external_store_id ? 'readonly' : ''}>
+               <label class="form-label-sm" style="display:block;text-align:left;">ID caja (external_pos_id)</label>
+               <input id="swalExtPos" class="form-control form-control-sm" value="${propPos}">
+               <p class="small text-muted mt-2 mb-0">Solo letras y números, sin espacios ni guiones.</p>`,
+        showCancelButton: true, confirmButtonText: 'Asignar en Mercado Pago', cancelButtonText: 'Cancelar',
+        preConfirm: () => {
+            const extPos = limpiar(document.getElementById('swalExtPos').value);
+            const extStore = limpiar(document.getElementById('swalExtStore').value);
+            if (!extPos) { Swal.showValidationMessage('El ID de la caja es obligatorio'); return false; }
+            return { extStore, extPos };
+        }
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        const fd = new FormData();
+        fd.append('empresa_id', window.__cajasMPEmpresa);
+        fd.append('pos_id', c.pos_id || '');
+        fd.append('store_id', c.store_id || '');
+        // Si la sucursal ya tenía ID, no se re-asigna (MP rechaza duplicados)
+        fd.append('external_store_id', c.external_store_id ? '' : r.value.extStore);
+        fd.append('external_pos_id', r.value.extPos);
+        fd.append('csrfmiddlewaretoken', _csrfMP());
+        Swal.fire({ title: 'Asignando IDs en Mercado Pago…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
+        fetch('/app/pos/mercadopago/gestion/cajas-mp/asignar/', { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(resp => resp.json())
+            .then(data => {
+                if (!data.success) { Swal.fire({ icon: 'error', title: 'MP rechazó la asignación', text: data.error }); return; }
+                _llenarFormCaja(c.external_store_id || data.external_store_id, data.external_pos_id, c.caja_nombre);
+                Swal.fire({ icon: 'success', title: 'IDs asignados y formulario llenado',
+                    html: `<code>${data.external_pos_id}</code> quedó registrado en MP.<br>
+                           <span class="small text-muted">Ahora marca "Habilitada" y guarda la asociación.</span>` });
+            })
+            .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
+    });
+}
+
+function _llenarFormCaja(extStore, extPos, nombre) {
+    document.getElementById('mpCfgStore').value = extStore || '';
+    document.getElementById('mpCfgPos').value = extPos || '';
+    if (nombre) document.getElementById('mpCfgNombre').value = nombre;
 }
 
 function eliminarConfigMP(configId, sucursal) {

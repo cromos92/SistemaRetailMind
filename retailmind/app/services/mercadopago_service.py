@@ -229,12 +229,53 @@ def listar_cajas(cuenta):
     for pos in (data_p.get('results') or []):
         store = stores.get(str(pos.get('store_id')), {})
         cajas.append({
+            'pos_id': pos.get('id'),
+            'store_id': pos.get('store_id'),
             'caja_nombre': pos.get('name') or '',
             'external_pos_id': pos.get('external_id') or '',
             'store_nombre': store.get('name') or '',
             'external_store_id': store.get('external_id') or '',
         })
     return cajas
+
+
+def asignar_external_ids(cuenta, pos_id, store_id, external_store_id, external_pos_id):
+    """Asigna external_id a una caja (y su sucursal) YA CREADAS en MP.
+
+    Las cajas creadas desde el panel web de MP suelen quedar SIN external_id,
+    y la Orders API lo exige para emitir el QR. PUT /pos/{id} y
+    PUT /users/{uid}/stores/{id} lo aceptan. MP rechaza duplicados.
+    """
+    token = cuenta.get_access_token()
+    if not token:
+        raise MercadoPagoError('La cuenta no tiene access token guardado.')
+    headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+
+    def _put(path, body, contexto):
+        try:
+            resp = requests.put(MP_API_BASE + path, headers=headers,
+                                json=body, timeout=REQUEST_TIMEOUT)
+        except requests.RequestException as e:
+            raise MercadoPagoError('No se pudo contactar a Mercado Pago.', detalle=str(e))
+        try:
+            data = resp.json()
+        except ValueError:
+            data = {}
+        if resp.status_code >= 400:
+            mensaje = data.get('message') or f'HTTP {resp.status_code}'
+            raise MercadoPagoError(f'MP rechazó {contexto}: {mensaje}', detalle=data)
+        return data
+
+    if external_store_id and store_id:
+        _put(f'/users/{cuenta.mp_user_id}/stores/{store_id}',
+             {'external_id': external_store_id}, 'el ID de la sucursal')
+    if external_pos_id and pos_id:
+        _put(f'/pos/{pos_id}', {'external_id': external_pos_id}, 'el ID de la caja')
+    logger.info(
+        "MP: external_ids asignados (store %s -> %s, pos %s -> %s)",
+        store_id, external_store_id, pos_id, external_pos_id,
+    )
+    return True
 
 
 # ==================== QR (imagen) ====================

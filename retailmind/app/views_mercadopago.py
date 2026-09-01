@@ -319,6 +319,34 @@ def gestion_listar_cajas_mp(request):
 
 @login_required
 @require_POST
+def gestion_asignar_ids_mp(request):
+    """POST gestion/cajas-mp/asignar/ — asigna external_id a una caja/sucursal
+    ya creadas en MP (el panel web las crea sin ID externo). Admin."""
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
+    cuenta = _cuenta_por_empresa(request)
+    if not cuenta:
+        return JsonResponse({'success': False, 'error': 'La empresa no tiene cuenta MP guardada.'}, status=404)
+    ext_store = (request.POST.get('external_store_id') or '').strip()[:60]
+    ext_pos = (request.POST.get('external_pos_id') or '').strip()[:60]
+    if not ext_pos:
+        return JsonResponse({'success': False, 'error': 'Falta el ID externo de la caja.'}, status=400)
+    try:
+        mp.asignar_external_ids(
+            cuenta,
+            pos_id=request.POST.get('pos_id'),
+            store_id=request.POST.get('store_id'),
+            external_store_id=ext_store,
+            external_pos_id=ext_pos,
+        )
+    except mp.MercadoPagoError as e:
+        return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
+    return JsonResponse({'success': True,
+                         'external_store_id': ext_store, 'external_pos_id': ext_pos})
+
+
+@login_required
+@require_POST
 def gestion_eliminar_config_mp(request):
     """POST gestion/config/eliminar/ — elimina una asociación de caja (admin).
     Si ya tiene transacciones, no se puede borrar: deshabilitarla."""
