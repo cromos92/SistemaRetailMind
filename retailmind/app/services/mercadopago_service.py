@@ -297,6 +297,67 @@ def asignar_external_ids(cuenta, pos_id, store_id, external_store_id, external_p
     return True
 
 
+def listar_devices_point(cuenta):
+    """Máquinas Point de la cuenta (GET /point/integration-api/devices):
+    id del device y su operating_mode (PDV = esclava del sistema,
+    STANDALONE = cobra sola desde su pantalla)."""
+    token = cuenta.get_access_token()
+    if not token:
+        raise MercadoPagoError('La cuenta no tiene access token guardado.')
+    try:
+        resp = requests.get(
+            MP_API_BASE + '/point/integration-api/devices',
+            headers={'Authorization': f'Bearer {token}'},
+            params={'limit': 50}, timeout=REQUEST_TIMEOUT,
+        )
+    except requests.RequestException as e:
+        raise MercadoPagoError('No se pudo contactar a Mercado Pago.', detalle=str(e))
+    try:
+        data = resp.json()
+    except ValueError:
+        data = {}
+    if resp.status_code != 200:
+        raise MercadoPagoError(
+            f'No se pudieron listar las máquinas Point (HTTP {resp.status_code}).',
+            detalle=data,
+        )
+    return [{
+        'device_id': d.get('id'),
+        'operating_mode': d.get('operating_mode'),
+        'pos_id': d.get('pos_id'),
+        'store_id': d.get('store_id'),
+    } for d in (data.get('devices') or [])]
+
+
+def cambiar_modo_device(cuenta, device_id, modo):
+    """Cambia el operating_mode de una Point (PATCH
+    /point/integration-api/devices/{id}). PDV la deja esclava del sistema
+    (no acepta cobros digitados en su pantalla); STANDALONE la libera."""
+    if modo not in ('PDV', 'STANDALONE'):
+        raise MercadoPagoError('Modo inválido (PDV o STANDALONE).')
+    token = cuenta.get_access_token()
+    if not token:
+        raise MercadoPagoError('La cuenta no tiene access token guardado.')
+    try:
+        resp = requests.patch(
+            MP_API_BASE + f'/point/integration-api/devices/{device_id}',
+            headers={'Authorization': f'Bearer {token}',
+                     'Content-Type': 'application/json'},
+            json={'operating_mode': modo}, timeout=REQUEST_TIMEOUT,
+        )
+    except requests.RequestException as e:
+        raise MercadoPagoError('No se pudo contactar a Mercado Pago.', detalle=str(e))
+    try:
+        data = resp.json()
+    except ValueError:
+        data = {}
+    if resp.status_code >= 400:
+        mensaje = data.get('message') or f'HTTP {resp.status_code}'
+        raise MercadoPagoError(f'MP rechazó el cambio de modo: {mensaje}', detalle=data)
+    logger.info(f"MP: device {device_id} -> modo {modo}")
+    return data.get('operating_mode') or modo
+
+
 # ==================== QR (imagen) ====================
 
 def qr_png_base64(qr_data):
@@ -338,9 +399,11 @@ def crear_orden(config, correlativo, monto, descripcion='', canal='QR', usuario=
         raise MercadoPagoError('La configuración MP de la sucursal no tiene caja (external_pos_id).')
 
     external_reference = f"RM-{config.sucursal_id}-{correlativo}-{uuid.uuid4().hex[:8]}"
+    # Payload mínimo del create-order QR. OJO: la Orders API presencial
+    # rechaza propiedades extra con 'unsupported_properties' (processing_mode,
+    # p.ej., es de pagos online y NO va aquí — comprobado contra prod CL).
     body = {
         'type': 'qr',
-        'processing_mode': 'automatic',
         'external_reference': external_reference,
         'description': (descripcion or f'Venta {correlativo}')[:120],
         'expiration_time': f'PT{QR_TIMEOUT_SEGUNDOS}S',
@@ -355,9 +418,29 @@ def crear_orden(config, correlativo, monto, descripcion='', canal='QR', usuario=
             'payments': [{'amount': str(monto)}],
         },
     }
-    resp = _request(config, 'POST', '/v1/orders', json_body=body,
-                    idempotency_key=external_reference)
-    data = _json_o_error(resp, f'crear orden QR {external_reference}')
+
+    def _crear(cuerpo, sufijo=''):
+        resp = _request(config, 'POST', '/v1/orders', json_body=cuerpo,
+                        idempotency_key=external_reference + sufijo)
+        return _json_o_error(resp, f'crear orden QR {external_reference}')
+
+    try:
+        data = _crear(body)
+    except MercadoPagoError as e:
+        # Auto-corrección: si MP rechaza propiedades puntuales, quitarlas y
+        # reintentar UNA vez (la API cambia el contrato entre sitios/versiones).
+        detalle = e.detalle if isinstance(e.detalle, dict) else {}
+        props = []
+        for err in (detalle.get('errors') or []):
+            if isinstance(err, dict) and err.get('code') == 'unsupported_properties':
+                for d in (err.get('details') or []):
+                    props.append(str(d).lstrip('$.').split('.')[0].strip())
+        props = [p for p in props if p and p in body and p not in ('type', 'transactions', 'config')]
+        if not props:
+            raise
+        logger.warning(f"MP: reintento de orden sin propiedades no soportadas: {props}")
+        body_min = {k: v for k, v in body.items() if k not in props}
+        data = _crear(body_min, sufijo='-r')
 
     qr_data = (data.get('type_response') or {}).get('qr_data') or data.get('qr_data')
     if not qr_data:

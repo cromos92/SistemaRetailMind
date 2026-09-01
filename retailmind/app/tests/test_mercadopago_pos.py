@@ -91,10 +91,12 @@ class CrearOrdenTests(BaseMPTest):
         headers = m_req.call_args.kwargs['headers']
         self.assertEqual(headers['X-Idempotency-Key'], trx.external_reference)
         self.assertIn('Bearer token-de-prueba', headers['Authorization'])
-        # processing_mode automatic (una sola etapa)
         body = m_req.call_args.kwargs['json']
-        self.assertEqual(body['processing_mode'], 'automatic')
         self.assertEqual(body['type'], 'qr')
+        # processing_mode NO va: la Orders API presencial lo rechaza con
+        # unsupported_properties (comprobado contra producción CL)
+        self.assertNotIn('processing_mode', body)
+        self.assertEqual(body['config']['qr']['external_pos_id'], 'POS001')
 
     @mock.patch('app.services.mercadopago_service.requests.request')
     def test_orden_sin_qr_data_falla_sin_crear_transaccion(self, m_req):
@@ -111,6 +113,27 @@ class CrearOrdenTests(BaseMPTest):
         config_malo = _config(self.sucursal, nombre='Otra', token_env='NO_EXISTE_ENV')
         with self.assertRaises(mp.MercadoPagoError):
             mp.crear_orden(config_malo, '126', 1000)
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_reintento_sin_propiedades_no_soportadas(self, m_req):
+        """Si MP rechaza propiedades (unsupported_properties), se quitan y se
+        reintenta una vez — el caso real fue expiration_time/description."""
+        rechazo = mock.MagicMock()
+        rechazo.status_code = 400
+        rechazo.json.return_value = {
+            'errors': [{'code': 'unsupported_properties',
+                        'message': 'Properties not supported',
+                        'details': ['expiration_time', 'description']}],
+        }
+        exito = self._mock_resp()
+        m_req.side_effect = [rechazo, exito]
+        trx, qr = mp.crear_orden(self.config, '127', 5000)
+        self.assertEqual(trx.estado, 'PENDIENTE')
+        self.assertEqual(m_req.call_count, 2)
+        body_reintento = m_req.call_args.kwargs['json']
+        self.assertNotIn('expiration_time', body_reintento)
+        self.assertNotIn('description', body_reintento)
+        self.assertIn('transactions', body_reintento)
 
 
 # ==================== CREDENCIALES EN BD (CIFRADAS) ====================
@@ -363,6 +386,86 @@ class CuadraturaMPTests(BaseMPTest):
         from app.views_modulo_ventas import _categoria_metodo_pago
         for metodo in ('MP_QR', 'MP_POINT', 'MP_POINT_DEBITO', 'MP_POINT_CREDITO'):
             self.assertEqual(_categoria_metodo_pago(metodo), 'tarjetas')
+
+
+# ==================== PESTAÑA DE GESTIÓN (render + endpoints) ====================
+
+@mock.patch.dict('os.environ', ENV_TEST)
+class GestionTabMPTests(BaseMPTest):
+    """Smoke end-to-end de /app/pos/transbank/ (pestaña MP) y sus endpoints:
+    el template renderiza de verdad y los gates de rol funcionan."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        from app.tests.factories import crear_usuario
+        cls.admin = crear_usuario(username='admin_mp', rol='administrador')
+        cls.cajero = crear_usuario(username='cajero_mp', rol='cajero')
+
+    def test_pagina_renderiza_para_admin(self):
+        self.client.force_login(self.admin)
+        resp = self.client.get('/app/pos/transbank/')
+        self.assertEqual(resp.status_code, 200)
+        contenido = resp.content.decode('utf-8')
+        self.assertIn('tab-mp', contenido)
+        self.assertIn('Buscar cajas creadas en Mercado Pago', contenido)
+        self.assertIn('/app/pos/mercadopago/webhook/', contenido)
+        self.assertIn('MP_ES_ADMIN = true', contenido)
+
+    def test_pagina_renderiza_para_cajero_solo_lectura(self):
+        self.client.force_login(self.cajero)
+        resp = self.client.get('/app/pos/transbank/')
+        self.assertEqual(resp.status_code, 200)
+        contenido = resp.content.decode('utf-8')
+        self.assertIn('MP_ES_ADMIN = false', contenido)
+        self.assertIn('Solo lectura', contenido)
+        self.assertNotIn('Buscar cajas creadas en Mercado Pago', contenido)
+
+    def test_guardar_cuenta_admin_ok_y_cifrada(self):
+        self.client.force_login(self.admin)
+        resp = self.client.post('/app/pos/mercadopago/gestion/cuenta/', {
+            'empresa_id': self.empresa.id,
+            'mp_user_id': '757112306794',
+            'access_token': 'APP_USR-token-prueba',
+            'webhook_secret': 'clave-firma',
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['success'])
+        cuenta = MercadoPagoCuenta.objects.get(empresa=self.empresa)
+        self.assertTrue(cuenta.access_token_cifrado.startswith('enc:'))
+        self.assertEqual(cuenta.get_access_token(), 'APP_USR-token-prueba')
+        self.assertEqual(cuenta.get_webhook_secret(), 'clave-firma')
+
+    def test_guardar_cuenta_cajero_403(self):
+        self.client.force_login(self.cajero)
+        resp = self.client.post('/app/pos/mercadopago/gestion/cuenta/', {
+            'empresa_id': self.empresa.id, 'access_token': 'x',
+        })
+        self.assertEqual(resp.status_code, 403)
+
+    def test_guardar_config_admin_ok(self):
+        self.client.force_login(self.admin)
+        resp = self.client.post('/app/pos/mercadopago/gestion/config/', {
+            'sucursal_id': self.sucursal.id,
+            'nombre': 'Caja test',
+            'external_store_id': 'NICK2',
+            'external_pos_id': 'NICK2CAJA1',
+            'habilitado': '1',
+        })
+        self.assertEqual(resp.status_code, 200, resp.content)
+        cfg = MercadoPagoConfig.objects.get(sucursal=self.sucursal, nombre='Caja test')
+        self.assertTrue(cfg.habilitado)
+        self.assertTrue(cfg.es_principal)
+        self.assertEqual(cfg.external_pos_id, 'NICK2CAJA1')
+
+    def test_datos_endpoint(self):
+        self.client.force_login(self.admin)
+        resp = self.client.get('/app/pos/mercadopago/gestion/datos/')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['success'])
+        self.assertIn('cuentas', data)
+        self.assertIn('configs', data)
 
 
 # ==================== REEMBOLSOS ====================

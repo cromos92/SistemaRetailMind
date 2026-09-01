@@ -523,6 +523,8 @@
                                     onclick="editarCuentaMP({{ c.empresa_id }}, '{{ c.mp_user_id|escapejs }}')"><i class="bi bi-pencil"></i></button>
                             <button class="btn btn-sm btn-outline-success py-0 px-1" style="font-size:.68rem;" title="Probar conexión (valida el token contra MP)"
                                     onclick="probarCuentaMP({{ c.empresa_id }}, '{{ c.empresa_nombre|escapejs }}')"><i class="bi bi-plug"></i></button>
+                            <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:.68rem;" title="Máquinas Point: ver y cambiar modo PDV/Standalone"
+                                    onclick="verDevicesMP({{ c.empresa_id }}, '{{ c.empresa_nombre|escapejs }}')"><i class="bi bi-phone"></i></button>
                             <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:.68rem;" title="Eliminar cuenta"
                                     onclick="eliminarCuentaMP({{ c.empresa_id }}, '{{ c.empresa_nombre|escapejs }}')"><i class="bi bi-trash"></i></button>
                         </td>
@@ -1489,6 +1491,7 @@ function _renderCuentasMP(cuentas) {
             ${MP_ES_ADMIN ? `<td class="text-center text-nowrap">
                 <button class="btn btn-sm btn-outline-primary py-0 px-1" style="font-size:.68rem;" title="Editar" onclick="cuentaAccionMP(${i},'editar')"><i class="bi bi-pencil"></i></button>
                 <button class="btn btn-sm btn-outline-success py-0 px-1" style="font-size:.68rem;" title="Probar conexión" onclick="cuentaAccionMP(${i},'probar')"><i class="bi bi-plug"></i></button>
+                <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:.68rem;" title="Máquinas Point" onclick="cuentaAccionMP(${i},'devices')"><i class="bi bi-phone"></i></button>
                 <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:.68rem;" title="Eliminar" onclick="cuentaAccionMP(${i},'eliminar')"><i class="bi bi-trash"></i></button>
             </td>` : ''}
         </tr>`).join('');
@@ -1499,6 +1502,7 @@ function cuentaAccionMP(i, accion) {
     if (!c) return;
     if (accion === 'editar') editarCuentaMP(c.empresa_id, c.mp_user_id);
     else if (accion === 'probar') probarCuentaMP(c.empresa_id, c.empresa_nombre);
+    else if (accion === 'devices') verDevicesMP(c.empresa_id, c.empresa_nombre);
     else if (accion === 'eliminar') eliminarCuentaMP(c.empresa_id, c.empresa_nombre);
 }
 
@@ -1653,6 +1657,81 @@ function eliminarCuentaMP(empresaId, nombre) {
     }).then(r => {
         if (!r.isConfirmed) return;
         _postGestionMP('/app/pos/mercadopago/gestion/cuenta/eliminar/', { empresa_id: empresaId }, 'Cuenta eliminada');
+    });
+}
+
+// ── Máquinas Point: ver / cambiar modo PDV-Standalone ──
+
+function verDevicesMP(empresaId, nombre) {
+    Swal.fire({ title: 'Buscando máquinas Point…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
+    const fd = new FormData();
+    fd.append('empresa_id', empresaId);
+    fd.append('csrfmiddlewaretoken', _csrfMP());
+    fetch('/app/pos/mercadopago/gestion/devices/', { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) { Swal.fire({ icon: 'error', title: 'No se pudo listar', text: data.error }); return; }
+            const devices = data.devices || [];
+            if (!devices.length) {
+                Swal.fire({ icon: 'info', title: 'Sin máquinas Point', text: 'Esta cuenta no tiene terminales Point vinculadas.' });
+                return;
+            }
+            const filas = devices.map(d => {
+                const esPDV = (d.operating_mode || '').toUpperCase() === 'PDV';
+                return `<tr>
+                    <td style="word-break:break-all;"><code style="font-size:.66rem;">${_escMP(d.device_id)}</code></td>
+                    <td class="text-center"><span class="badge ${esPDV ? 'bg-primary' : 'bg-secondary'}" style="font-size:.62rem;">${esPDV ? 'PDV (integrada)' : 'STANDALONE'}</span></td>
+                    <td class="text-center">
+                        <button class="btn btn-sm ${esPDV ? 'btn-outline-secondary' : 'btn-outline-primary'} py-0 px-2" style="font-size:.66rem;"
+                                onclick="cambiarModoDeviceMP(${empresaId}, '${_escMP(d.device_id)}', '${esPDV ? 'STANDALONE' : 'PDV'}', '${_escMP(nombre)}')">
+                            ${esPDV ? 'Volver a Standalone' : 'Activar modo PDV'}
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+            Swal.fire({
+                title: `Máquinas Point — ${nombre}`,
+                html: `<p class="small text-muted mb-1"><strong>PDV</strong>: la máquina queda integrada al sistema
+                       (NO acepta cobros digitados en su pantalla). <strong>Standalone</strong>: cobra sola, sin integración.</p>
+                       <table class="table table-sm" style="font-size:.72rem;">
+                       <thead><tr><th>Device</th><th class="text-center">Modo</th><th class="text-center">Acción</th></tr></thead>
+                       <tbody>${filas}</tbody></table>`,
+                width: 620, showConfirmButton: false, showCloseButton: true
+            });
+        })
+        .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
+}
+
+function cambiarModoDeviceMP(empresaId, deviceId, modoNuevo, nombre) {
+    const aPDV = modoNuevo === 'PDV';
+    Swal.fire({
+        icon: 'warning',
+        title: aPDV ? '¿Activar modo PDV?' : '¿Volver a Standalone?',
+        html: aPDV
+            ? '<div class="text-start small">La máquina quedará <strong>esclava del sistema</strong>: ' +
+              'NO se podrán digitar cobros en su pantalla hasta volver a Standalone. ' +
+              'Úsalo solo cuando la integración Point esté operativa o para probar.</div>'
+            : '<div class="text-start small">La máquina volverá a cobrar de forma independiente desde su pantalla.</div>',
+        showCancelButton: true,
+        confirmButtonText: aPDV ? 'Sí, activar PDV' : 'Sí, volver a Standalone',
+        confirmButtonColor: aPDV ? '#FFB020' : '#0066FF',
+        cancelButtonText: 'Cancelar'
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        const fd = new FormData();
+        fd.append('empresa_id', empresaId);
+        fd.append('device_id', deviceId);
+        fd.append('modo', modoNuevo);
+        fd.append('csrfmiddlewaretoken', _csrfMP());
+        Swal.fire({ title: 'Cambiando modo…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
+        fetch('/app/pos/mercadopago/gestion/devices/modo/', { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(resp => resp.json())
+            .then(data => {
+                if (!data.success) { Swal.fire({ icon: 'error', title: 'MP rechazó el cambio', text: data.error }); return; }
+                Swal.fire({ icon: 'success', title: `Modo ${data.operating_mode}`, timer: 1500, showConfirmButton: false })
+                    .then(() => verDevicesMP(empresaId, nombre));
+            })
+            .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
     });
 }
 

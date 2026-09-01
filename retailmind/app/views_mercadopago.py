@@ -305,6 +305,47 @@ def gestion_probar_cuenta_mp(request):
 
 @login_required
 @require_POST
+def gestion_devices_point_mp(request):
+    """POST gestion/devices/ — lista las máquinas Point de la cuenta (admin)."""
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
+    cuenta = _cuenta_por_empresa(request)
+    if not cuenta:
+        return JsonResponse({'success': False, 'error': 'La empresa no tiene cuenta MP guardada.'}, status=404)
+    try:
+        devices = mp.listar_devices_point(cuenta)
+    except mp.MercadoPagoError as e:
+        return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
+    return JsonResponse({'success': True, 'devices': devices})
+
+
+@login_required
+@require_POST
+def gestion_modo_device_mp(request):
+    """POST gestion/devices/modo/ — cambia PDV/STANDALONE de una Point (admin).
+
+    PDV: la máquina queda esclava del sistema (no cobra desde su pantalla).
+    STANDALONE: vuelve a operar sola. El cambio es reversible al instante.
+    """
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
+    cuenta = _cuenta_por_empresa(request)
+    if not cuenta:
+        return JsonResponse({'success': False, 'error': 'La empresa no tiene cuenta MP guardada.'}, status=404)
+    device_id = (request.POST.get('device_id') or '').strip()
+    modo = (request.POST.get('modo') or '').strip().upper()
+    if not device_id:
+        return JsonResponse({'success': False, 'error': 'Falta el device_id.'}, status=400)
+    try:
+        modo_final = mp.cambiar_modo_device(cuenta, device_id, modo)
+    except mp.MercadoPagoError as e:
+        return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
+    logger.warning("MP gestión: device %s -> %s por %s", device_id, modo_final, request.user.username)
+    return JsonResponse({'success': True, 'operating_mode': modo_final})
+
+
+@login_required
+@require_POST
 def gestion_eliminar_cuenta_mp(request):
     """POST gestion/cuenta/eliminar/ — borra la cuenta de una empresa (admin)."""
     if not _es_admin(request):
