@@ -1439,6 +1439,10 @@ function guardarConfigMP() {
 function editarConfigMP(id, sucursalId, nombre, storeId, posId, habilitado) {
     document.getElementById('mpCfgId').value = id;
     document.getElementById('mpCfgSucursal').value = sucursalId;
+    // Con Select2 activo hay que notificar el cambio para que se pinte
+    if (window.jQuery && jQuery.fn.select2) {
+        jQuery('#mpCfgSucursal').val(String(sucursalId)).trigger('change');
+    }
     document.getElementById('mpCfgNombre').value = nombre;
     document.getElementById('mpCfgStore').value = storeId;
     document.getElementById('mpCfgPos').value = posId;
@@ -1471,3 +1475,30 @@ window.addEventListener('load', function () {
 </script>
 
 {% include 'layout/footer.html' %}
+
+<script>
+// Select2 en los selects de la pestaña Mercado Pago (búsqueda por nombre o
+// RUT: el texto de cada opción es "Nombre (RUT)" y el matcher default busca
+// sobre el texto completo). Va DESPUÉS del footer: jQuery y select2 cargan ahí.
+// width:'100%' explícito: inicializado dentro de una pestaña oculta, Select2
+// mediría ancho 0 y el control quedaría colapsado.
+$(function () {
+    if (!$.fn.select2) return;
+    var $empresa = $('#mpCuentaEmpresa');
+    if ($empresa.length) {
+        $empresa.select2({
+            width: '100%',
+            placeholder: 'Buscar empresa por nombre o RUT…',
+            language: { noResults: function () { return 'Sin resultados'; } }
+        });
+    }
+    var $sucursal = $('#mpCfgSucursal');
+    if ($sucursal.length) {
+        $sucursal.select2({
+            width: '100%',
+            placeholder: 'Buscar sucursal…',
+            language: { noResults: function () { return 'Sin resultados'; } }
+        });
+    }
+});
+</script>
