@@ -367,7 +367,8 @@ def _liberar_retencion_canal(pedido):
     return True
 
 
-def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
+def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS,
+                                solo_retiros: bool = False) -> dict:
     """
     Pregunta a AllConnected el estado actual de TODOS los PENDIENTES locales
     del lookback (sin filtro de empresa: los zombies de todas las cadenas se
@@ -384,6 +385,14 @@ def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
 
     Los FACTURADOS locales no se tocan (cancelado en el canal + boleta emitida
     = nota de crédito, decisión humana — mismo criterio que el endpoint push).
+    Excepción acotada (fix 01-sep-2026): los retiros locales
+    (``es_retiro_local=True``) FACTURADOS sí se CONSULTAN — el LISTO_RETIRO
+    nace en AllConnected DESPUÉS de la boleta (su gate de liberación la
+    exige), o sea siempre con el pedido local ya FACTURADO; sin esta rama el
+    espejo ``estado_logistica_canal`` quedaba '' para siempre y la pantalla
+    del mesón salía estructuralmente vacía. Para ellos se refresca SOLO el
+    espejo (estado_canal / estado_logistica_canal / fecha_sync) y JAMÁS se
+    ejecutan las ramas de transición (cancelar, cerrar, retener).
 
     Devuelve {ok, consultados, cancelados, cerrados_despachados, sin_pago,
     no_encontrados, lotes_caidos}.
@@ -406,11 +415,25 @@ def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
                 'retenidos_canal': 0, 'liberados_canal': 0,
                 'no_encontrados': 0, 'lotes_caidos': 0}
 
+    from django.db.models import Q
+
     desde_dt = timezone.now() - timedelta(days=dias)
+    # PENDIENTES (universo histórico del sync) + retiros locales FACTURADOS
+    # aún no entregados: son los que reciben LISTO_RETIRO desde AC y de los
+    # que vive la pantalla del mesón (ver docstring, "Excepción acotada").
     qs = PedidoEcommerce.objects.filter(
-        estado='PENDIENTE', fecha_recepcion__gte=desde_dt,
+        Q(estado='PENDIENTE')
+        | (Q(estado='FACTURADO', es_retiro_local=True)
+           & ~Q(estado_logistica_canal='ENTREGADO')),
+        fecha_recepcion__gte=desde_dt,
     ).only('id', 'numero_pedido_canal', 'canal_origen', 'estado', 'sub_estado',
-           'estado_canal', 'numero_ticket_rm')
+           'estado_canal', 'numero_ticket_rm', 'es_retiro_local',
+           'estado_logistica_canal')
+    if solo_retiros:
+        # Modo liviano para el mesón: refresca SOLO los pedidos de retiro
+        # (la pantalla se abre con cliente al frente; no arrastra el universo
+        # completo de PENDIENTES).
+        qs = qs.filter(es_retiro_local=True)
     pendientes = list(qs)
     if not pendientes:
         return {'ok': True, 'configurado': True, 'consultados': 0,
@@ -483,6 +506,14 @@ def sincronizar_estados_pedidos(dias: int = SYNC_ESTADOS_LOOKBACK_DIAS) -> dict:
             pedido.fecha_sync_estado_canal = ahora
             pedido.save(update_fields=['estado_canal', 'estado_logistica_canal',
                                        'fecha_sync_estado_canal'])
+
+            # Retiros locales ya FACTURADOS: SOLO el espejo de arriba. Las
+            # ramas de abajo son transiciones de PENDIENTES (cancelar, cerrar
+            # por despacho, retener): sobre un FACTURADO pisarían estado y
+            # sub_estado violando la regla "los FACTURADOS locales no se
+            # tocan" (nota de crédito = decisión humana).
+            if pedido.estado != 'PENDIENTE':
+                continue
 
             # `despachado` lo calcula AllConnected mirando SUS dos campos de
             # estado; el fallback local cubre respuestas de versiones viejas

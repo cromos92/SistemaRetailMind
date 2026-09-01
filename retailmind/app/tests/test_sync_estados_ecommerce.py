@@ -155,8 +155,86 @@ class SincronizarEstadosTest(TestCase):
             self.assertIn('por concepto', h.motivo)
             self.assertEqual(h.sub_estado_nuevo, 'FACTURADO_EXTERNO')
 
-    def test_facturados_no_se_consultan(self):
+    def test_facturados_no_retiro_no_se_consultan(self):
+        """Un FACTURADO de despacho normal sigue fuera del universo del sync.
+        (Los retiros locales FACTURADOS sí entran — ver tests siguientes.)"""
         _pedido(self.sucursal, 'RIP-3', estado='FACTURADO', sub_estado='FACTURADO_OK')
+        with mock.patch.object(ac_service.requests, 'post') as m:
+            res = ac_service.sincronizar_estados_pedidos()
+        m.assert_not_called()
+        self.assertEqual(res['consultados'], 0)
+
+    def test_facturado_retiro_local_espeja_listo_retiro(self):
+        """El candado del caso 393582: el LISTO_RETIRO nace en AC DESPUÉS de
+        la boleta (gate de liberación), o sea con el pedido local ya
+        FACTURADO. El sync debe consultarlo igual y espejar
+        estado_logistica_canal para que el mesón lo liste."""
+        p = _pedido(self.sucursal, 'ORD-2026-00001', canal='REALSPORT',
+                    estado='FACTURADO', sub_estado='FACTURADO_OK',
+                    es_retiro_local=True)
+        with mock.patch.object(ac_service.requests, 'post') as m:
+            m.return_value = _respuesta_ac([{
+                'canal_origen': 'REALSPORT', 'numero_pedido_canal': 'ORD-2026-00001',
+                'estado': 'PAGADO', 'estado_logistica': 'LISTO_RETIRO',
+                'cancelado': False, 'despachado': False, 'pagado': True,
+            }])
+            res = ac_service.sincronizar_estados_pedidos()
+
+        self.assertEqual(res['consultados'], 1)
+        p.refresh_from_db()
+        self.assertEqual(p.estado_logistica_canal, 'LISTO_RETIRO')
+        self.assertEqual(p.estado, 'FACTURADO', 'el espejo no toca el estado local')
+        self.assertEqual(p.sub_estado, 'FACTURADO_OK')
+
+    def test_facturado_retiro_local_nunca_entra_a_ramas_de_transicion(self):
+        """Aunque AC reporte cancelado o despachado, un FACTURADO solo espeja:
+        cancelarlo o cerrarlo FACTURADO_EXTERNO con boleta emitida es decisión
+        humana (nota de crédito), no del sync."""
+        p = _pedido(self.sucursal, 'ORD-2026-00002', canal='REALSPORT',
+                    estado='FACTURADO', sub_estado='FACTURADO_OK',
+                    es_retiro_local=True)
+        with mock.patch.object(ac_service.requests, 'post') as m:
+            m.return_value = _respuesta_ac([{
+                'canal_origen': 'REALSPORT', 'numero_pedido_canal': 'ORD-2026-00002',
+                'estado': 'CANCELADO', 'cancelado': True, 'pagado': True,
+            }])
+            res = ac_service.sincronizar_estados_pedidos()
+
+        self.assertEqual(res['cancelados'], 0)
+        self.assertEqual(res['cerrados_despachados'], 0)
+        p.refresh_from_db()
+        self.assertEqual(p.estado, 'FACTURADO', 'jamás se cancela un facturado')
+        self.assertEqual(p.sub_estado, 'FACTURADO_OK')
+        self.assertEqual(p.estado_canal, 'CANCELADO', 'el espejo sí queda visible')
+        self.assertFalse(HistorialPedidoEcommerce.objects.filter(pedido=p).exists())
+
+    def test_solo_retiros_excluye_pendientes_normales(self):
+        """Modo liviano del mesón: con solo_retiros=True el sync no arrastra
+        el universo de PENDIENTES de despacho."""
+        _pedido(self.sucursal, 'RIP-8')  # PENDIENTE normal, sin retiro
+        retiro = _pedido(self.sucursal, 'ORD-2026-00004', canal='REALSPORT',
+                         estado='FACTURADO', sub_estado='FACTURADO_OK',
+                         es_retiro_local=True)
+        with mock.patch.object(ac_service.requests, 'post') as m:
+            m.return_value = _respuesta_ac([{
+                'canal_origen': 'REALSPORT', 'numero_pedido_canal': 'ORD-2026-00004',
+                'estado': 'PAGADO', 'estado_logistica': 'LISTO_RETIRO',
+                'cancelado': False, 'pagado': True,
+            }])
+            res = ac_service.sincronizar_estados_pedidos(solo_retiros=True)
+
+        enviados = m.call_args.kwargs['json']['pedidos']
+        self.assertEqual({p['numero_pedido_canal'] for p in enviados},
+                         {'ORD-2026-00004'})
+        self.assertEqual(res['consultados'], 1)
+        retiro.refresh_from_db()
+        self.assertEqual(retiro.estado_logistica_canal, 'LISTO_RETIRO')
+
+    def test_retiro_entregado_deja_de_consultarse(self):
+        """ENTREGADO es terminal para el mesón: el pedido sale del sync."""
+        _pedido(self.sucursal, 'ORD-2026-00003', canal='REALSPORT',
+                estado='FACTURADO', sub_estado='FACTURADO_OK',
+                es_retiro_local=True, estado_logistica_canal='ENTREGADO')
         with mock.patch.object(ac_service.requests, 'post') as m:
             res = ac_service.sincronizar_estados_pedidos()
         m.assert_not_called()

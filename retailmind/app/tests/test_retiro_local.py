@@ -90,26 +90,32 @@ class RetiroLocalBase(TestCase):
 
 
 class PantallaRetiroTest(RetiroLocalBase):
-    def test_lista_solo_listo_retiro_de_la_sucursal(self):
-        """La pantalla lista únicamente los retiros liberados (LISTO_RETIRO)
-        de la sucursal en sesión; fuera quedan los no liberados, los
-        cancelados y los de otras sucursales."""
+    def test_lista_listo_retiro_de_todas_las_sucursales(self):
+        """La pantalla lista TODOS los retiros liberados (LISTO_RETIRO),
+        INCLUIDOS los preparados en otra sucursal: el retiro se entrega
+        siempre en el mesón PAO1 pero la venta puede ser de NICK2 o
+        cualquier otra (regla 01-sep — antes el filtro por sucursal de
+        sesión dejaba la lista vacía con el cliente al frente). Fuera
+        quedan solo los no liberados y los cancelados."""
         from app.tests.factories import crear_sucursal
         visible = self._pedido()
         self._pedido(numero_ticket_rm='RM-NOLIB01', numero_pedido_canal='SHOP-9002',
                      estado_logistica_canal='')
         self._pedido(numero_ticket_rm='RM-CANCEL1', numero_pedido_canal='SHOP-9003',
                      estado='CANCELADO')
-        otra = crear_sucursal(empresa=self.entorno['empresa'], alias='PAO3')
-        self._pedido(numero_ticket_rm='RM-OTRASUC', numero_pedido_canal='SHOP-9004',
-                     sucursal=otra)
+        otra = crear_sucursal(empresa=self.entorno['empresa'], alias='NICK2')
+        de_otra = self._pedido(numero_ticket_rm='RM-OTRASUC',
+                               numero_pedido_canal='SHOP-9004', sucursal=otra)
 
         self._sesion()
         with _permiso_ok():
             resp = self.client.get(URL_PANTALLA)
         self.assertEqual(resp.status_code, 200)
-        tickets = [p.numero_ticket_rm for p in resp.context['pedidos']]
-        self.assertEqual(tickets, [visible.numero_ticket_rm])
+        tickets = {p.numero_ticket_rm for p in resp.context['pedidos']}
+        self.assertEqual(
+            tickets,
+            {visible.numero_ticket_rm, de_otra.numero_ticket_rm},
+        )
 
     def test_middleware_bloquea_fuera_de_pao1(self):
         """Con otra sucursal activa el middleware corta antes de la vista."""

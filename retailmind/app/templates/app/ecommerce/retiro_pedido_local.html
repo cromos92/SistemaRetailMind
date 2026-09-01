@@ -227,6 +227,7 @@
                                         <th>Ticket RM</th>
                                         <th>Pedido canal</th>
                                         <th>Cliente</th>
+                                        <th>Preparado en</th>
                                         <th class="text-end">Total</th>
                                         <th>Recibido</th>
                                         <th>Estado</th>
@@ -241,12 +242,15 @@
                                         <td class="fw-bold">{{ p.numero_ticket_rm }}</td>
                                         <td>{{ p.numero_pedido_canal }}</td>
                                         <td>{{ p.cliente_nombre }}</td>
+                                        <!-- La venta puede ser de otra sucursal (p.ej. NICK2);
+                                             el retiro siempre se entrega acá. -->
+                                        <td>{{ p.sucursal.alias|default:"—" }}</td>
                                         <td class="text-end">${{ p.total|floatformat:0 }}</td>
                                         <td>{{ p.fecha_recepcion|date:"d/m H:i" }}</td>
                                         <td><span class="badge-listo">LISTO RETIRO</span></td>
                                     </tr>
                                     {% empty %}
-                                    <tr><td colspan="6" class="text-center text-muted py-4">
+                                    <tr><td colspan="7" class="text-center text-muted py-4">
                                         No hay pedidos de retiro liberados para esta sucursal.
                                         <br><span style="font-size:.85rem;">Un pedido aparece acá cuando central lo libera
                                         (LISTO_RETIRO). Si el cliente insiste, escanea igual su QR: la validación

@@ -4015,21 +4015,44 @@ def retiro_pedido_local(request):
 
     pedidos = PedidoEcommerce.objects.none()
     if sucursal is not None:
+        # El LISTO_RETIRO llega SOLO por pull (no existe push AC→RM), y el
+        # botón "Traer pedidos" vive en otra pantalla: refrescar el espejo al
+        # abrir el mesón, con throttle en cache para no golpear AllConnected
+        # en cada F5. Si AC no responde, la pantalla carga igual con lo
+        # último espejado.
+        from django.core.cache import cache
+        if cache.add('sync_retiros_meson', 1, 300):
+            try:
+                from app.services.allconnected_pedidos_service import (
+                    sincronizar_estados_pedidos,
+                )
+                sincronizar_estados_pedidos(solo_retiros=True)
+            except Exception:
+                logger.exception(
+                    'Mesón retiro: sync de estados falló; se lista el espejo local'
+                )
+
         # LISTO_RETIRO = AllConnected ya lo liberó a retiro (pasó la espera de
         # pago). CANCELADO fuera; el resto de advertencias (sin boleta,
         # bloqueado, ya retirado) las decide AllConnected en la validación.
+        #
+        # SIN filtro por pedido.sucursal NI scope de empresa: el retiro se
+        # entrega SIEMPRE en el mesón (SUCURSALES_RETIRO_ECOMMERCE), pero la
+        # venta/preparación puede ser de CUALQUIER sucursal de cualquiera de
+        # las cadenas (p.ej. NICK2). Filtrar por la sucursal de sesión dejaba
+        # invisible todo pedido preparado fuera de PAO1 — la lista salía
+        # vacía con el cliente al frente. El acceso a la pantalla ya está
+        # acotado a PAO1 por middleware + permiso.
         pedidos = (
             PedidoEcommerce.objects
             .filter(
                 es_retiro_local=True,
                 estado_logistica_canal='LISTO_RETIRO',
-                sucursal=sucursal,
             )
             .exclude(estado='CANCELADO')
             .select_related('sucursal')
             .order_by('fecha_recepcion')
         )
-        pedidos = _scope_empresa_pedidos(pedidos, request.user)
 
     from app.views_modulo_ventas import _get_qz_config
     context = {
