@@ -525,6 +525,7 @@ from .views_mercadopago import (
     webhook_mercadopago,
     dineros_mercadopago,
     api_dineros_mercadopago,
+    gestion_datos_mp,
     gestion_guardar_cuenta_mp,
     gestion_probar_cuenta_mp,
     gestion_eliminar_cuenta_mp,
@@ -1147,6 +1148,7 @@ urlpatterns = [
     path('pos/mercadopago/webhook/', webhook_mercadopago, name='mp_webhook'),
     # Gestión (pestaña MP de /app/pos/transbank/) — endpoints SOLO ADMIN
     # (el gate de rol está en la vista, no en URL_PERMISO_MAP)
+    path('pos/mercadopago/gestion/datos/', gestion_datos_mp, name='mp_gestion_datos'),
     path('pos/mercadopago/gestion/cuenta/', gestion_guardar_cuenta_mp, name='mp_gestion_cuenta'),
     path('pos/mercadopago/gestion/cuenta/probar/', gestion_probar_cuenta_mp, name='mp_gestion_cuenta_probar'),
     path('pos/mercadopago/gestion/cuenta/eliminar/', gestion_eliminar_cuenta_mp, name='mp_gestion_cuenta_eliminar'),

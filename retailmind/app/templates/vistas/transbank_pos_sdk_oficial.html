@@ -69,6 +69,23 @@
         margin-bottom: 6px;
         color: #333;
     }
+    .mp-chip-admin {
+        display: inline-block;
+        background: var(--tbk-warning);
+        color: #1A1A2E;
+        border-radius: 50px;
+        font-size: 0.58rem;
+        font-weight: 800;
+        padding: 2px 8px;
+        margin-left: 6px;
+        vertical-align: middle;
+        letter-spacing: .03em;
+    }
+    .mp-card-bloqueada {
+        opacity: .7;
+        border: 1px dashed #ced4da;
+        background: #fbfbfd;
+    }
     .tbk-card hr { margin: 4px 0 8px; }
 
     /* Botones compactos */
@@ -494,7 +511,7 @@
             <hr>
             <table class="table table-sm mb-0" style="font-size:.74rem;">
                 <thead><tr><th>Empresa</th><th class="text-center">Token</th><th class="text-center">Clave webhook</th>{% if es_admin_mp %}<th class="text-center">Acciones</th>{% endif %}</tr></thead>
-                <tbody>
+                <tbody id="mpCuentasBody">
                 {% for c in cuentas_mp %}
                     <tr>
                         <td title="{{ c.empresa_rut }}">{{ c.empresa_nombre }}</td>
@@ -514,7 +531,7 @@
                 {% empty %}
                     <tr><td colspan="4" class="text-muted text-center">Sin cuentas cargadas</td></tr>
                 {% endfor %}
-                </tbody>
+                </tbody><!-- mpCuentasBody -->
             </table>
         </div>
 
@@ -536,7 +553,7 @@
     <div class="col-md-4">
         {% if es_admin_mp %}
         <div class="tbk-card">
-            <h6><i class="bi bi-key-fill"></i> Ingreso de credenciales (por empresa/RUT)</h6>
+            <h6><i class="bi bi-key-fill"></i> Ingreso de credenciales (por empresa/RUT)<span class="mp-chip-admin">SOLO ADMIN</span></h6>
             <hr>
             <label class="form-label-sm">Empresa (RUT dueño de la cuenta MP)</label>
             <select class="form-control-sm-pos mb-2" id="mpCuentaEmpresa">
@@ -556,17 +573,25 @@
             <p class="tbk-tech-body mt-1 mb-0">Los valores guardados nunca se vuelven a
             mostrar. Dejar un campo vacío conserva el que ya está.</p>
         </div>
+        {% else %}
+        <div class="tbk-card mp-card-bloqueada text-center">
+            <h6><i class="bi bi-lock-fill"></i> Ingreso de credenciales</h6>
+            <hr>
+            <p class="tbk-tech-body mb-0">Esta sección la gestiona un
+            <strong>Administrador</strong>.<br>Tu rol puede ver el estado de cuentas,
+            cajas y el resumen del día, pero no modificar credenciales ni asociaciones.</p>
+        </div>
         {% endif %}
     </div>
 
     <!-- Col 3: Asociación de máquinas/cajas -->
     <div class="col-md-4">
         <div class="tbk-card">
-            <h6><i class="bi bi-pc-display"></i> Asociación de máquinas (cajas QR)</h6>
+            <h6><i class="bi bi-pc-display"></i> Asociación de máquinas (cajas QR){% if es_admin_mp %}<span class="mp-chip-admin">EDICIÓN: SOLO ADMIN</span>{% endif %}</h6>
             <hr>
             <table class="table table-sm mb-2" style="font-size:.72rem;">
                 <thead><tr><th>Sucursal</th><th>Caja MP (external_pos_id)</th><th class="text-center">Habilitada</th>{% if es_admin_mp %}<th class="text-center">Acciones</th>{% endif %}</tr></thead>
-                <tbody>
+                <tbody id="mpConfigsBody">
                 {% for cfg in configs_mp %}
                     <tr {% if es_admin_mp %}style="cursor:pointer;" title="Clic para editar"
                         onclick="editarConfigMP({{ cfg.id }}, {{ cfg.sucursal_id }}, '{{ cfg.nombre|escapejs }}', '{{ cfg.external_store_id|escapejs }}', '{{ cfg.external_pos_id|escapejs }}', {{ cfg.habilitado|yesno:'true,false' }}){% endif %}">
@@ -1423,9 +1448,86 @@ function agregarLogTransaccion(resultado, montoEnviado) {
 
 // ==================== PESTAÑA MERCADO PAGO ====================
 
+var MP_ES_ADMIN = {{ es_admin_mp|yesno:"true,false" }};
+
 function _csrfMP() {
     const el = document.querySelector('#tab-mp input[name=csrfmiddlewaretoken]');
     return el ? el.value : '';
+}
+
+function _escMP(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ── Refresco AJAX de las tablas (sin recargar la página) ──
+
+function refrescarDatosMP() {
+    fetch('/app/pos/mercadopago/gestion/datos/', { credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return;
+            _renderCuentasMP(data.cuentas || []);
+            _renderConfigsMP(data.configs || []);
+        }).catch(() => {});
+}
+
+function _renderCuentasMP(cuentas) {
+    const body = document.getElementById('mpCuentasBody');
+    if (!body) return;
+    window.__mpCuentas = cuentas;
+    if (!cuentas.length) {
+        body.innerHTML = '<tr><td colspan="4" class="text-muted text-center">Sin cuentas cargadas</td></tr>';
+        return;
+    }
+    body.innerHTML = cuentas.map((c, i) => `
+        <tr>
+            <td title="${_escMP(c.empresa_rut)}">${_escMP(c.empresa_nombre)}</td>
+            <td class="text-center">${c.tiene_token ? '✅' : '❌'}</td>
+            <td class="text-center">${c.tiene_secret ? '✅' : '❌'}</td>
+            ${MP_ES_ADMIN ? `<td class="text-center text-nowrap">
+                <button class="btn btn-sm btn-outline-primary py-0 px-1" style="font-size:.68rem;" title="Editar" onclick="cuentaAccionMP(${i},'editar')"><i class="bi bi-pencil"></i></button>
+                <button class="btn btn-sm btn-outline-success py-0 px-1" style="font-size:.68rem;" title="Probar conexión" onclick="cuentaAccionMP(${i},'probar')"><i class="bi bi-plug"></i></button>
+                <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:.68rem;" title="Eliminar" onclick="cuentaAccionMP(${i},'eliminar')"><i class="bi bi-trash"></i></button>
+            </td>` : ''}
+        </tr>`).join('');
+}
+
+function cuentaAccionMP(i, accion) {
+    const c = (window.__mpCuentas || [])[i];
+    if (!c) return;
+    if (accion === 'editar') editarCuentaMP(c.empresa_id, c.mp_user_id);
+    else if (accion === 'probar') probarCuentaMP(c.empresa_id, c.empresa_nombre);
+    else if (accion === 'eliminar') eliminarCuentaMP(c.empresa_id, c.empresa_nombre);
+}
+
+function _renderConfigsMP(configs) {
+    const body = document.getElementById('mpConfigsBody');
+    if (!body) return;
+    window.__mpConfigs = configs;
+    if (!configs.length) {
+        body.innerHTML = '<tr><td colspan="4" class="text-muted text-center">Sin cajas asociadas</td></tr>';
+        return;
+    }
+    body.innerHTML = configs.map((cfg, i) => `
+        <tr ${MP_ES_ADMIN ? `style="cursor:pointer;" title="Clic para editar" onclick="configAccionMP(${i},'editar')"` : ''}>
+            <td>${_escMP(cfg.sucursal_alias)}${cfg.es_principal ? ' ⭐' : ''}</td>
+            <td class="font-monospace">${_escMP(cfg.external_pos_id) || '—'}</td>
+            <td class="text-center">${cfg.habilitado ? '✅' : '❌'}</td>
+            ${MP_ES_ADMIN ? `<td class="text-center text-nowrap">
+                <button class="btn btn-sm btn-outline-success py-0 px-1" style="font-size:.68rem;" title="Transacción de PRUEBA" onclick="event.stopPropagation();configAccionMP(${i},'probar')"><i class="bi bi-qr-code-scan"></i></button>
+                <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:.68rem;" title="Eliminar" onclick="event.stopPropagation();configAccionMP(${i},'eliminar')"><i class="bi bi-trash"></i></button>
+            </td>` : ''}
+        </tr>`).join('');
+}
+
+function configAccionMP(i, accion) {
+    const cfg = (window.__mpConfigs || [])[i];
+    if (!cfg) return;
+    if (accion === 'editar') editarConfigMP(cfg.id, cfg.sucursal_id, cfg.nombre, cfg.external_store_id, cfg.external_pos_id, cfg.habilitado);
+    else if (accion === 'probar') probarConfigMP(cfg.id, cfg.sucursal_alias);
+    else if (accion === 'eliminar') eliminarConfigMP(cfg.id, cfg.sucursal_alias);
 }
 
 function copiarWebhookMP() {
@@ -1447,8 +1549,14 @@ function _postGestionMP(url, datos, exitoMsg) {
         .then(r => r.json())
         .then(data => {
             if (data.success) {
-                Swal.fire({ icon: 'success', title: exitoMsg, timer: 1400, showConfirmButton: false })
-                    .then(() => window.location.reload());
+                // Sin recargar la página: toast + refresco AJAX de las tablas
+                Swal.fire({ icon: 'success', title: exitoMsg, toast: true,
+                            position: 'top-end', timer: 1800, showConfirmButton: false });
+                const tok = document.getElementById('mpCuentaToken');
+                const sec = document.getElementById('mpCuentaSecret');
+                if (tok) tok.value = '';
+                if (sec) sec.value = '';
+                refrescarDatosMP();
             } else {
                 Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: data.error || 'Error desconocido' });
             }
@@ -1675,7 +1783,16 @@ function probarConfigMP(configId, sucursal) {
         fetch('/app/pos/mercadopago/gestion/config/probar/', { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(resp => resp.json())
             .then(data => {
-                if (!data.success) { Swal.fire({ icon: 'error', title: 'Falló la prueba', text: data.error }); return; }
+                if (!data.success) {
+                    // El detalle crudo de MP es la única forma de saber POR QUÉ
+                    // rechazó (external_pos_id inexistente, monto, feature no
+                    // habilitada en la cuenta, etc.)
+                    Swal.fire({ icon: 'error', title: 'Falló la prueba',
+                        html: `<div class="text-start small">${_escMP(data.error)}</div>` +
+                              (data.detalle ? `<pre class="text-start mt-2" style="font-size:.62rem;max-height:160px;overflow:auto;background:#f4f4f7;padding:6px;border-radius:6px;">${_escMP(data.detalle)}</pre>` : ''),
+                        width: 560 });
+                    return;
+                }
                 _modalQRPruebaMP(data);
             })
             .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));

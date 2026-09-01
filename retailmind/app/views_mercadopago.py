@@ -254,6 +254,32 @@ def gestion_guardar_config_mp(request):
     return JsonResponse({'success': True, 'config_id': config.id})
 
 
+@login_required
+def gestion_datos_mp(request):
+    """GET gestion/datos/ — cuentas y cajas actuales para refrescar las tablas
+    de la pestaña MP por AJAX (sin recargar la página)."""
+    cuentas = [{
+        'empresa_id': c.empresa_id,
+        'empresa_nombre': c.empresa.nombre or c.empresa.razon_social,
+        'empresa_rut': c.empresa.rut,
+        'mp_user_id': c.mp_user_id,
+        'tiene_token': bool(c.access_token_cifrado),
+        'tiene_secret': bool(c.webhook_secret_cifrado),
+        'activo': c.activo,
+    } for c in MercadoPagoCuenta.objects.select_related('empresa').all()]
+    configs = [{
+        'id': cfg.id,
+        'sucursal_id': cfg.sucursal_id,
+        'sucursal_alias': cfg.sucursal.alias,
+        'nombre': cfg.nombre,
+        'external_store_id': cfg.external_store_id,
+        'external_pos_id': cfg.external_pos_id,
+        'habilitado': cfg.habilitado,
+        'es_principal': cfg.es_principal,
+    } for cfg in MercadoPagoConfig.objects.select_related('sucursal').order_by('sucursal__alias', 'nombre')]
+    return JsonResponse({'success': True, 'cuentas': cuentas, 'configs': configs})
+
+
 def _cuenta_por_empresa(request):
     try:
         return MercadoPagoCuenta.objects.get(empresa_id=int(request.POST.get('empresa_id', 0)))
@@ -391,7 +417,14 @@ def gestion_probar_config_mp(request):
             descripcion=f'PRUEBA caja {config.external_pos_id}', usuario=request.user,
         )
     except mp.MercadoPagoError as e:
-        return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
+        # Al admin se le muestra el payload crudo de MP: es la única forma de
+        # diagnosticar un 400 de la Orders API sin ir a los logs.
+        detalle = ''
+        try:
+            detalle = json.dumps(e.detalle, ensure_ascii=False)[:1200] if e.detalle else ''
+        except (TypeError, ValueError):
+            detalle = str(e.detalle)[:1200]
+        return JsonResponse({'success': False, 'error': e.mensaje, 'detalle': detalle}, status=400)
     return JsonResponse({
         'success': True,
         'transaccion_id': transaccion.id,

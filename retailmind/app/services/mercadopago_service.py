@@ -140,8 +140,27 @@ def _json_o_error(resp, contexto):
     except ValueError:
         data = {}
     if resp.status_code >= 400:
-        mensaje_api = data.get('message') or data.get('error') or f'HTTP {resp.status_code}'
-        logger.error(f"MP: {contexto} falló ({resp.status_code}): {json.dumps(data)[:500]}")
+        # MP entrega el motivo en distintas formas según el endpoint: message,
+        # error, o una lista errors[]. Juntar todo para que el admin vea el
+        # porqué real y no un "HTTP 400" mudo.
+        partes = []
+        if data.get('message'):
+            partes.append(str(data['message']))
+        if data.get('error') and str(data.get('error')) not in partes:
+            partes.append(str(data['error']))
+        for err in (data.get('errors') or [])[:3]:
+            if isinstance(err, dict):
+                texto = err.get('message') or err.get('code') or ''
+                if err.get('code') and err.get('message'):
+                    texto = f"{err['code']}: {err['message']}"
+                if texto:
+                    partes.append(texto)
+            elif err:
+                partes.append(str(err))
+        if data.get('cause'):
+            partes.append(str(data['cause'])[:200])
+        mensaje_api = ' | '.join(partes) or f'HTTP {resp.status_code}'
+        logger.error(f"MP: {contexto} falló ({resp.status_code}): {json.dumps(data)[:800]}")
         raise MercadoPagoError(f'Mercado Pago rechazó la operación: {mensaje_api}', detalle=data)
     return data
 
