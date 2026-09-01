@@ -160,6 +160,7 @@ from .views_modulo_ventas import (
     registrar_pago_diferencia,
     condonar_diferencia_cobro,
     ajustar_diferencia_cobro,
+    aplicar_descuento_diferencia_cambio,
     completar_cambio_devolucion,
     buscar_ticket_para_cambio,
     buscar_documento_cambio,
@@ -524,6 +525,8 @@ from .views_mercadopago import (
     webhook_mercadopago,
     dineros_mercadopago,
     api_dineros_mercadopago,
+    gestion_guardar_cuenta_mp,
+    gestion_guardar_config_mp,
 )
 from .views_dashboards_kpi import (
     dashboard_documentos,
@@ -1135,6 +1138,10 @@ urlpatterns = [
     path('pos/mercadopago/cancelar/<int:transaccion_id>/', cancelar_pago_mp, name='mp_cancelar_pago'),
     # Webhook firmado (sin sesión — viene de los servidores de MP)
     path('pos/mercadopago/webhook/', webhook_mercadopago, name='mp_webhook'),
+    # Gestión (pestaña MP de /app/pos/transbank/) — endpoints SOLO ADMIN
+    # (el gate de rol está en la vista, no en URL_PERMISO_MAP)
+    path('pos/mercadopago/gestion/cuenta/', gestion_guardar_cuenta_mp, name='mp_gestion_cuenta'),
+    path('pos/mercadopago/gestion/config/', gestion_guardar_config_mp, name='mp_gestion_config'),
     # Pantalla Dineros MP (pendiente de liberación / liberado / depositado)
     path('ventas/dineros-mercadopago/', dineros_mercadopago, name='dineros_mercadopago'),
     path('api/mercadopago/dineros/', api_dineros_mercadopago, name='api_dineros_mercadopago'),
@@ -1160,6 +1167,7 @@ urlpatterns = [
     path('ventas/api/registrar-pago-diferencia/', registrar_pago_diferencia, name='registrar_pago_diferencia'),
     path('ventas/api/condonar-diferencia-cobro/', condonar_diferencia_cobro, name='condonar_diferencia_cobro'),
     path('ventas/api/ajustar-diferencia-cobro/', ajustar_diferencia_cobro, name='ajustar_diferencia_cobro'),
+    path('ventas/api/descuento-diferencia-cambio/', aplicar_descuento_diferencia_cambio, name='aplicar_descuento_diferencia_cambio'),
     path('ventas/api/completar-cambio-devolucion/', completar_cambio_devolucion, name='completar_cambio_devolucion'),
     
     # APIs de búsqueda

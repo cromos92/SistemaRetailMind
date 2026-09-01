@@ -20,7 +20,14 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from .models import MercadoPagoConfig, RetiroMercadoPago, TransaccionMercadoPago
+from .models import (
+    Empresa,
+    MercadoPagoConfig,
+    MercadoPagoCuenta,
+    RetiroMercadoPago,
+    Sucursal,
+    TransaccionMercadoPago,
+)
 from .services import mercadopago_service as mp
 from .services.mercadopago_service import MercadoPagoError
 
@@ -151,6 +158,97 @@ def webhook_mercadopago(request):
     except Exception as e:  # noqa: BLE001 — jamás devolver 500 a MP
         logger.error(f"MP webhook: error no controlado: {e}")
     return HttpResponse(status=200)
+
+
+# ==================== GESTIÓN (pestaña MP de /app/pos/transbank/) ====================
+
+def _es_admin(request):
+    return getattr(request.user, 'rol', '') in ('administrador', 'administracion')
+
+
+@login_required
+@require_POST
+def gestion_guardar_cuenta_mp(request):
+    """POST /app/pos/mercadopago/gestion/cuenta/ — SOLO ADMINISTRADOR.
+
+    Crea/actualiza la MercadoPagoCuenta de una empresa. Token y secret se
+    guardan CIFRADOS; campo vacío = conservar el valor actual.
+    """
+    if not _es_admin(request):
+        return JsonResponse({'success': False,
+                             'error': 'Solo un Administrador puede modificar credenciales de Mercado Pago.'},
+                            status=403)
+    try:
+        empresa = Empresa.objects.get(id=int(request.POST.get('empresa_id', 0)))
+    except (Empresa.DoesNotExist, TypeError, ValueError):
+        return JsonResponse({'success': False, 'error': 'Empresa inválida'}, status=400)
+
+    cuenta, creada = MercadoPagoCuenta.objects.get_or_create(empresa=empresa)
+    mp_user_id = (request.POST.get('mp_user_id') or '').strip()
+    if mp_user_id:
+        cuenta.mp_user_id = mp_user_id[:30]
+    token = (request.POST.get('access_token') or '').strip()
+    if token:
+        cuenta.set_access_token(token)
+    secret = (request.POST.get('webhook_secret') or '').strip()
+    if secret:
+        cuenta.set_webhook_secret(secret)
+    cuenta.activo = True
+    cuenta.save()
+    logger.info(
+        "MP gestión: cuenta %s de empresa %s por %s (token %s, secret %s)",
+        'creada' if creada else 'actualizada', empresa.rut, request.user.username,
+        'actualizado' if token else 'sin cambio', 'actualizado' if secret else 'sin cambio',
+    )
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
+def gestion_guardar_config_mp(request):
+    """POST /app/pos/mercadopago/gestion/config/ — SOLO ADMINISTRADOR.
+
+    Crea/edita la asociación de una caja QR (MercadoPagoConfig) a una
+    sucursal: external_store_id/external_pos_id definidos en el panel de MP.
+    """
+    if not _es_admin(request):
+        return JsonResponse({'success': False,
+                             'error': 'Solo un Administrador puede asociar máquinas de Mercado Pago.'},
+                            status=403)
+    try:
+        sucursal = Sucursal.objects.get(id=int(request.POST.get('sucursal_id', 0)))
+    except (Sucursal.DoesNotExist, TypeError, ValueError):
+        return JsonResponse({'success': False, 'error': 'Sucursal inválida'}, status=400)
+
+    nombre = (request.POST.get('nombre') or 'Caja principal').strip()[:100]
+    config_id = (request.POST.get('config_id') or '').strip()
+    if config_id:
+        config = MercadoPagoConfig.objects.filter(id=int(config_id)).first()
+        if not config:
+            return JsonResponse({'success': False, 'error': 'Configuración no encontrada'}, status=404)
+        config.sucursal = sucursal
+        config.nombre = nombre
+    else:
+        config = MercadoPagoConfig.objects.filter(sucursal=sucursal, nombre=nombre).first() \
+            or MercadoPagoConfig(sucursal=sucursal, nombre=nombre)
+
+    config.external_store_id = (request.POST.get('external_store_id') or '').strip()[:60]
+    config.external_pos_id = (request.POST.get('external_pos_id') or '').strip()[:60]
+    config.habilitado = request.POST.get('habilitado') == '1'
+    config.modo = 'QR'
+    # Primera caja de la sucursal = principal; si ya hay otra principal se respeta
+    if not MercadoPagoConfig.objects.filter(sucursal=sucursal, es_principal=True).exclude(id=config.id).exists():
+        config.es_principal = True
+    try:
+        config.save()
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'No se pudo guardar: {e}'}, status=400)
+    logger.info(
+        "MP gestión: caja '%s' de sucursal %s guardada por %s (pos_id=%s, habilitada=%s)",
+        nombre, sucursal.alias, request.user.username,
+        config.external_pos_id, config.habilitado,
+    )
+    return JsonResponse({'success': True, 'config_id': config.id})
 
 
 # ==================== PANTALLA DINEROS ====================

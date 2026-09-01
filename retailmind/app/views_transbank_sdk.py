@@ -21,14 +21,15 @@ persistence_service = TransbankPersistenceService()
 @login_required
 def gestion_transbank_pos_sdk(request):
     """
-    Vista principal de gestión Transbank POS con Web Serial API
-    La conexión al POS se hace desde el navegador
+    Vista principal de gestión POS Integrado (pestañas Transbank y Mercado Pago).
+    La conexión al POS Transbank se hace desde el navegador; la pestaña MP
+    gestiona credenciales/webhook (solo admin) y asociación de cajas QR.
     """
     context = {}
-    
+
     try:
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        
+
         if sucursal_id:
             # Obtener configuración guardada si existe
             config_guardada = ConfiguracionPOS.objects.filter(
@@ -40,7 +41,40 @@ def gestion_transbank_pos_sdk(request):
     except Exception as e:
         logger.warning(f"No se pudo cargar configuración: {e}")
         context['config_guardada'] = None
-    
+
+    # ── Pestaña Mercado Pago ──
+    # Todos ven el estado; el ingreso de credenciales/webhook y la asociación
+    # de cajas queda restringido a roles administrativos (el guard duro está
+    # en los endpoints de views_mercadopago, esto solo controla la UI).
+    try:
+        from .models import Empresa, MercadoPagoConfig, MercadoPagoCuenta, Sucursal
+        context['es_admin_mp'] = getattr(request.user, 'rol', '') in ('administrador', 'administracion')
+        context['cuentas_mp'] = [{
+            'empresa_nombre': c.empresa.nombre or c.empresa.razon_social,
+            'tiene_token': bool(c.access_token_cifrado),
+            'tiene_secret': bool(c.webhook_secret_cifrado),
+            'activo': c.activo,
+        } for c in MercadoPagoCuenta.objects.select_related('empresa').all()]
+        context['empresas_mp'] = Empresa.objects.filter(esProveedor=False).order_by('nombre')
+        context['configs_mp'] = [{
+            'id': cfg.id,
+            'sucursal_id': cfg.sucursal_id,
+            'sucursal_alias': cfg.sucursal.alias,
+            'nombre': cfg.nombre,
+            'external_store_id': cfg.external_store_id,
+            'external_pos_id': cfg.external_pos_id,
+            'habilitado': cfg.habilitado,
+            'es_principal': cfg.es_principal,
+        } for cfg in MercadoPagoConfig.objects.select_related('sucursal').order_by('sucursal__alias', 'nombre')]
+        context['sucursales_mp'] = Sucursal.objects.order_by('alias')
+    except Exception as e:
+        logger.warning(f"No se pudo cargar datos Mercado Pago: {e}")
+        context.setdefault('es_admin_mp', False)
+        context.setdefault('cuentas_mp', [])
+        context.setdefault('empresas_mp', [])
+        context.setdefault('configs_mp', [])
+        context.setdefault('sucursales_mp', [])
+
     return render(request, 'vistas/transbank_pos_sdk_oficial.html', context)
 
 

@@ -18240,6 +18240,337 @@ def ajustar_diferencia_cobro(request):
         return JsonResponse({'success': False, 'error': f'Error al ajustar la diferencia: {str(e)}'})
 
 
+# ========== DESCUENTO SOBRE LA DIFERENCIA DE UN TICKET DE CAMBIO ==========
+# Tope de intentos con PIN incorrecto antes de bloquear al cajero.
+MAX_INTENTOS_PIN_DESCUENTO = 5
+VENTANA_INTENTOS_PIN_MINUTOS = 15
+
+
+def _clp(monto):
+    """Formatea pesos chilenos con punto de miles, sin decimales."""
+    return f"${int(monto):,}".replace(',', '.')
+
+
+@login_required
+@require_POST
+def aplicar_descuento_diferencia_cambio(request):
+    """
+    Rebaja la diferencia a cobrar de un ticket de CAMBIO_DEVOLUCION desde el POS,
+    autorizada con el PIN de un administrador (`Usuario.pin_autorizacion`).
+
+    Es el UNICO descuento admitido en un ticket de cambio. El descuento por linea
+    y el global siguen bloqueados a proposito: las lineas ya no son editables (el
+    stock se movio al aprobar el cambio) y `registrar_pagos_ticket` ignora el
+    payload de productos para este modulo, asi que un descuento aplicado solo en
+    el navegador nunca llegaria a la BD ni al DTE.
+
+    La rebaja se materializa igual que en `ajustar_diferencia_cobro`: una linea
+    manual negativa. La emision del DTE recalcula el total desde la suma de
+    lineas (ver `generar_dte_desde_ticket`), por lo que un `ticket.total` editado
+    sin linea de respaldo seria revertido al emitir la boleta.
+
+    Diferencia con `ajustar_diferencia_cobro`: alli opera un administrador
+    logueado desde el modulo de Cambios y Devoluciones; aca opera el cajero en la
+    caja y la autorizacion la aporta el PIN del administrador, sin que este tenga
+    que iniciar sesion en el POS.
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'}, status=400)
+
+    correlativo = data.get('correlativo')
+    tipo = str(data.get('tipo') or 'PORCENTAJE').upper()
+    pin = str(data.get('pin') or '').strip()
+    motivo = str(data.get('motivo') or '').strip()
+
+    if not correlativo:
+        return JsonResponse({'success': False, 'error': 'Falta el número de ticket'}, status=400)
+
+    try:
+        correlativo = int(correlativo)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'error': 'Número de ticket inválido'}, status=400)
+
+    if len(motivo) < 5:
+        return JsonResponse({
+            'success': False,
+            'error': 'Debe indicar una justificación (mínimo 5 caracteres) para el descuento'
+        }, status=400)
+
+    if not re.fullmatch(r'\d{6}', pin):
+        return JsonResponse({
+            'success': False,
+            'error': 'El PIN de autorización debe tener 6 dígitos',
+            'error_tipo': 'PIN_FORMATO',
+        }, status=400)
+
+    try:
+        valor = float(data.get('valor'))
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'error': 'El valor del descuento debe ser numérico'}, status=400)
+
+    if valor <= 0:
+        return JsonResponse({'success': False, 'error': 'El valor del descuento debe ser mayor que cero'}, status=400)
+
+    sucursal_id = (
+        request.session.get('idSucursalActual')
+        or request.session.get('sucursalActual')
+        or request.session.get('idSucursalActualPOS')
+    )
+    if not sucursal_id:
+        return JsonResponse({'success': False, 'error': 'No hay sucursal activa en la sesión'}, status=400)
+
+    # Anti brute-force del PIN, acotado a esta operación: un código de
+    # autorización fallido en otro flujo no debe bloquear la caja, ni al revés.
+    desde = timezone.now() - timedelta(minutes=VENTANA_INTENTOS_PIN_MINUTOS)
+    intentos_fallidos = RegistroAutorizacion.objects.filter(
+        usuario_solicitante=request.user,
+        tipo_operacion='DESCUENTO_ESPECIAL',
+        exitoso=False,
+        fecha_hora__gte=desde,
+    ).count()
+    if intentos_fallidos >= MAX_INTENTOS_PIN_DESCUENTO:
+        return JsonResponse({
+            'success': False,
+            'error': (f'Demasiados intentos con PIN incorrecto. '
+                      f'Intente nuevamente en {VENTANA_INTENTOS_PIN_MINUTOS} minutos.'),
+            'error_tipo': 'PIN_BLOQUEADO',
+        }, status=429)
+
+    admin_autorizador = User.buscar_admin_por_pin(pin)
+    if admin_autorizador is None:
+        RegistroAutorizacion.objects.create(
+            usuario_solicitante=request.user,
+            tipo_operacion='DESCUENTO_ESPECIAL',
+            descripcion=(f'PIN incorrecto al intentar descontar la diferencia '
+                         f'del ticket de cambio #{correlativo}'),
+            ip_origen=request.META.get('REMOTE_ADDR'),
+            exitoso=False,
+            sucursal_solicitante_id=sucursal_id,
+            datos_adicionales={
+                'correlativo': correlativo,
+                'tipo': tipo,
+                'motivo': motivo,
+                'intentos_previos': intentos_fallidos,
+            },
+        )
+        logger.warning(
+            "PIN de administrador incorrecto para descuento de cambio ticket=%s usuario=%s intentos_previos=%s",
+            correlativo, request.user.username, intentos_fallidos,
+        )
+        return JsonResponse({
+            'success': False,
+            'error': 'PIN de administrador incorrecto, o ese administrador no tiene PIN configurado.',
+            'error_tipo': 'PIN_INVALIDO',
+            'intentos_restantes': max(0, MAX_INTENTOS_PIN_DESCUENTO - intentos_fallidos - 1),
+        }, status=403)
+
+    try:
+        with transaction.atomic():
+            # Lock del ticket: evita la carrera con el cobro (que lo marca
+            # PAGADO) y con un ajuste simultáneo desde el módulo de cambios.
+            ticket = (
+                Ticket.objects
+                .select_for_update()
+                .filter(sucursal_id=sucursal_id, correlativo=correlativo)
+                .first()
+            )
+            if not ticket:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Ticket {correlativo} no encontrado en esta sucursal'
+                }, status=404)
+
+            if ticket.modulo_origen != 'CAMBIO_DEVOLUCION':
+                return JsonResponse({
+                    'success': False,
+                    'error': ('Este descuento solo aplica a tickets de cambio/devolución. '
+                              'En una venta normal use el descuento por producto o el global.'),
+                    'error_tipo': 'NO_ES_CAMBIO',
+                }, status=400)
+
+            if ticket.estado != 'PENDIENTE':
+                return JsonResponse({
+                    'success': False,
+                    'error': (f'El ticket #{ticket.correlativo} ya no está pendiente '
+                              f'(estado: {ticket.estado}). No se puede descontar.'),
+                    'error_tipo': 'TICKET_NO_PENDIENTE',
+                }, status=400)
+
+            total_actual = int(ticket.total or 0)
+            if total_actual <= 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Este ticket no tiene diferencia a cobrar: no hay nada que descontar.',
+                    'error_tipo': 'SIN_DIFERENCIA',
+                }, status=400)
+
+            if tipo == 'PORCENTAJE':
+                if valor > 100:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'El porcentaje de descuento no puede superar el 100%'
+                    }, status=400)
+                rebaja = int(round(total_actual * valor / 100))
+                etiqueta = f'{valor:g}%'
+            elif tipo == 'MONTO':
+                rebaja = int(round(valor))
+                etiqueta = _clp(rebaja)
+            elif tipo == 'PRECIO_FINAL':
+                nuevo_solicitado = int(round(valor))
+                rebaja = total_actual - nuevo_solicitado
+                etiqueta = f'total {_clp(nuevo_solicitado)}'
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Tipo de descuento inválido (use PORCENTAJE, MONTO o PRECIO_FINAL)'
+                }, status=400)
+
+            if rebaja <= 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'El descuento debe rebajar al menos $1 sobre {_clp(total_actual)}.'
+                }, status=400)
+
+            if rebaja >= total_actual:
+                return JsonResponse({
+                    'success': False,
+                    'error': (f'El descuento ({_clp(rebaja)}) dejaría la diferencia en $0 o menos. '
+                              f'Para perdonar el cobro completo use "Condonar" en Cambios y Devoluciones.'),
+                    'error_tipo': 'DESCUENTO_TOTAL',
+                }, status=400)
+
+            nuevo_total = total_actual - rebaja
+
+            # Línea manual negativa: respalda la rebaja para que la suma de
+            # líneas siga cuadrando con `ticket.total` al emitir el DTE.
+            Ticket_Productos.objects.create(
+                idTicket=ticket,
+                ProductoTalla=None,
+                stock=1,
+                precio=-rebaja,
+                precio_original=-rebaja,
+                descuento_unitario=0,
+                subtotal=-rebaja,
+                porcentaje_descuento=0,
+                descripcion_linea=(
+                    f'DESCUENTO DIFERENCIA DE CAMBIO ({etiqueta}) '
+                    f'- aut. {admin_autorizador.username}'
+                )[:255],
+            )
+
+            nota = (
+                f'[DESCUENTO DIFERENCIA] {_clp(total_actual)} -> {_clp(nuevo_total)} '
+                f'({etiqueta}) por {request.user.username}, autorizado con PIN de '
+                f'{admin_autorizador.username}. Motivo: {motivo}'
+            )
+            ticket.total = nuevo_total
+            ticket.subTotal = int(ticket.subTotal or 0) - rebaja
+            ticket.observaciones = ((ticket.observaciones or '') + f'\n{nota}').strip()
+            ticket.save(update_fields=['total', 'subTotal', 'observaciones'])
+
+            # Sincronizar el cambio asociado para que el módulo de Cambios y la
+            # detección de fraude vean el mismo monto que la caja va a cobrar.
+            cambio = (
+                CambioDevolucion.objects
+                .select_for_update()
+                .filter(Q(ticket_diferencia=ticket) | Q(ticket_nuevo=ticket))
+                .order_by('-id')
+                .first()
+            )
+            if cambio:
+                if cambio.monto_diferencia_original is None:
+                    cambio.monto_diferencia_original = cambio.diferencia_monto
+                cambio.diferencia_monto = nuevo_total
+                cambio.diferencia_ajustada = True
+                cambio.motivo_ajuste = motivo
+                cambio.ajustada_por = admin_autorizador
+                cambio.fecha_ajuste = timezone.now()
+                cambio.save(update_fields=[
+                    'monto_diferencia_original', 'diferencia_monto', 'diferencia_ajustada',
+                    'motivo_ajuste', 'ajustada_por', 'fecha_ajuste',
+                ])
+
+                HistorialCambioDevolucion.objects.create(
+                    cambio_devolucion=cambio,
+                    accion='AJUSTE_DIFERENCIA',
+                    estado_anterior=cambio.estado,
+                    estado_nuevo=cambio.estado,
+                    usuario=request.user,
+                    descripcion=(
+                        f'Descuento en caja sobre la diferencia: {_clp(total_actual)} -> '
+                        f'{_clp(nuevo_total)} ({etiqueta}) aplicado por {request.user.username} '
+                        f'con PIN de {admin_autorizador.username}. Motivo: {motivo}'
+                    ),
+                    datos_adicionales={
+                        'origen': 'POS_DESCUENTO_PIN',
+                        'monto_anterior': total_actual,
+                        'monto_nuevo': nuevo_total,
+                        'monto_rebajado': rebaja,
+                        'tipo_descuento': tipo,
+                        'valor_ingresado': valor,
+                        'motivo': motivo,
+                        'cajero': request.user.username,
+                        'autorizado_por': admin_autorizador.username,
+                        'ticket_correlativo': ticket.correlativo,
+                        'fecha': timezone.now().isoformat(),
+                    },
+                )
+            else:
+                logger.warning(
+                    "Descuento de diferencia sin CambioDevolucion asociado ticket=%s",
+                    ticket.correlativo,
+                )
+
+            RegistroAutorizacion.objects.create(
+                usuario_solicitante=request.user,
+                usuario_autorizador=admin_autorizador,
+                tipo_operacion='DESCUENTO_ESPECIAL',
+                descripcion=(
+                    f'Descuento de {_clp(rebaja)} ({etiqueta}) sobre la diferencia del '
+                    f'ticket de cambio #{ticket.correlativo}: {_clp(total_actual)} -> '
+                    f'{_clp(nuevo_total)}. Motivo: {motivo}'
+                ),
+                ip_origen=request.META.get('REMOTE_ADDR'),
+                exitoso=True,
+                cambio_devolucion=cambio,
+                sucursal_solicitante_id=sucursal_id,
+                datos_adicionales={
+                    'correlativo': ticket.correlativo,
+                    'tipo_descuento': tipo,
+                    'valor_ingresado': valor,
+                    'monto_anterior': total_actual,
+                    'monto_rebajado': rebaja,
+                    'monto_nuevo': nuevo_total,
+                    'motivo': motivo,
+                },
+            )
+
+        logger.info(
+            "Descuento de diferencia aplicado ticket=%s cajero=%s admin=%s rebaja=%s nuevo_total=%s",
+            correlativo, request.user.username, admin_autorizador.username, rebaja, nuevo_total,
+        )
+
+        return JsonResponse({
+            'success': True,
+            'message': (
+                f'Descuento de {_clp(rebaja)} aplicado. La diferencia a cobrar quedó en '
+                f'{_clp(nuevo_total)} '
+                f'(autorizó {admin_autorizador.get_full_name() or admin_autorizador.username}).'
+            ),
+            'correlativo': ticket.correlativo,
+            'total_anterior': total_actual,
+            'descuento_aplicado': rebaja,
+            'nuevo_total': nuevo_total,
+            'autorizado_por': admin_autorizador.get_full_name() or admin_autorizador.username,
+        })
+
+    except Exception as e:
+        logger.exception("Error al aplicar descuento a la diferencia del ticket=%s", correlativo)
+        return JsonResponse({'success': False, 'error': f'Error al aplicar el descuento: {str(e)}'}, status=500)
+
+
 @login_required
 @require_POST
 def aprobar_cambio_generar_ticket(request):

@@ -232,8 +232,8 @@
 <!-- Header compacto -->
 <div class="tbk-hero">
     <div>
-        <p class="tbk-hero-title"><i class="bi bi-credit-card-2-front"></i> Transbank POS Integrado</p>
-        <p class="tbk-hero-sub">Web Serial API · Verifone &amp; Ingenico · Chrome/Edge 89+</p>
+        <p class="tbk-hero-title"><i class="bi bi-credit-card-2-front"></i> POS Integrado · Transbank y Mercado Pago</p>
+        <p class="tbk-hero-sub">Transbank: Web Serial · Verifone &amp; Ingenico &nbsp;|&nbsp; Mercado Pago: QR vía API</p>
     </div>
     <div class="tbk-badges">
         <span class="tbk-badge tbk-badge-error" id="estado_pos"><i class="bi bi-circle-fill"></i> Desconectado</span>
@@ -250,6 +250,23 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Pestañas Transbank / Mercado Pago -->
+<ul class="nav nav-tabs mb-2" id="tabsPosIntegrado" role="tablist" style="font-size:.82rem;">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active fw-bold" id="tab-tbk-btn" data-bs-toggle="tab" data-bs-target="#tab-tbk" type="button" role="tab">
+            <i class="bi bi-credit-card-2-front"></i> Transbank
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-bold" id="tab-mp-btn" data-bs-toggle="tab" data-bs-target="#tab-mp" type="button" role="tab">
+            <i class="bi bi-qr-code"></i> Mercado Pago
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+<div class="tab-pane fade show active" id="tab-tbk" role="tabpanel">
 
 <!-- Layout 3 columnas -->
 <div class="row g-2">
@@ -428,6 +445,142 @@
     </div>
 
 </div><!-- /row -->
+
+</div><!-- /tab-tbk -->
+
+<!-- ==================== PESTAÑA MERCADO PAGO ==================== -->
+<div class="tab-pane fade" id="tab-mp" role="tabpanel">
+{% csrf_token %}
+
+{% if not es_admin_mp %}
+<div class="alert alert-warning py-2 px-3 mb-2" style="font-size:.78rem;">
+    <i class="bi bi-lock-fill"></i> <strong>Solo lectura.</strong>
+    El ingreso de credenciales/webhook y la asociación de máquinas requieren rol
+    <strong>Administrador</strong>.
+</div>
+{% endif %}
+
+<div class="row g-2">
+    <!-- Col 1: Webhook -->
+    <div class="col-md-4">
+        <div class="tbk-card">
+            <h6><i class="bi bi-broadcast-pin"></i> Webhook (respuesta de la máquina)</h6>
+            <hr>
+            <p class="tbk-tech-body mb-1">Configura esta URL en el panel de developers de
+            Mercado Pago (Tus integraciones → tu aplicación → Webhooks), eventos
+            <strong>Pagos</strong> y <strong>Órdenes</strong>:</p>
+            <div class="d-flex gap-1 mb-2">
+                <input type="text" class="form-control-sm-pos" id="mpWebhookUrl" readonly
+                       value="https://{{ request.get_host }}{% url 'mp_webhook' %}">
+                <button class="btn btn-sm btn-outline-primary" type="button" style="font-size:.72rem;"
+                        onclick="copiarWebhookMP()"><i class="bi bi-clipboard"></i></button>
+            </div>
+            <p class="tbk-tech-body mb-0">Al guardarla, MP te entrega la <strong>clave
+            secreta de firma</strong>: pégala en la cuenta de la empresa (columna derecha).
+            Sin la clave, las notificaciones se descartan por firma inválida y el cobro
+            queda solo con el respaldo del polling.</p>
+        </div>
+
+        <div class="tbk-card">
+            <h6><i class="bi bi-shield-check"></i> Estado de cuentas por empresa</h6>
+            <hr>
+            <table class="table table-sm mb-0" style="font-size:.74rem;">
+                <thead><tr><th>Empresa</th><th class="text-center">Token</th><th class="text-center">Clave webhook</th><th class="text-center">Activa</th></tr></thead>
+                <tbody>
+                {% for c in cuentas_mp %}
+                    <tr>
+                        <td>{{ c.empresa_nombre }}</td>
+                        <td class="text-center">{% if c.tiene_token %}✅{% else %}❌{% endif %}</td>
+                        <td class="text-center">{% if c.tiene_secret %}✅{% else %}❌{% endif %}</td>
+                        <td class="text-center">{% if c.activo %}✅{% else %}—{% endif %}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="4" class="text-muted text-center">Sin cuentas cargadas</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Col 2: Credenciales (solo admin) -->
+    <div class="col-md-4">
+        {% if es_admin_mp %}
+        <div class="tbk-card">
+            <h6><i class="bi bi-key-fill"></i> Ingreso de credenciales (por empresa/RUT)</h6>
+            <hr>
+            <label class="form-label-sm">Empresa (RUT dueño de la cuenta MP)</label>
+            <select class="form-control-sm-pos mb-2" id="mpCuentaEmpresa">
+                {% for e in empresas_mp %}<option value="{{ e.id }}">{{ e.nombre }} ({{ e.rut }})</option>{% endfor %}
+            </select>
+            <label class="form-label-sm">User ID (collector, opcional)</label>
+            <input type="text" class="form-control-sm-pos mb-2" id="mpCuentaUserId" placeholder="757112306794">
+            <label class="form-label-sm">Access Token</label>
+            <input type="password" class="form-control-sm-pos mb-2" id="mpCuentaToken"
+                   placeholder="APP_USR-… (vacío = mantener el actual)" autocomplete="new-password">
+            <label class="form-label-sm">Clave secreta del webhook</label>
+            <input type="password" class="form-control-sm-pos mb-2" id="mpCuentaSecret"
+                   placeholder="del panel de Webhooks (vacío = mantener)" autocomplete="new-password">
+            <button class="tbk-btn tbk-btn-primary" onclick="guardarCuentaMP()">
+                <i class="bi bi-save"></i> Guardar cuenta (se cifra en BD)
+            </button>
+            <p class="tbk-tech-body mt-1 mb-0">Los valores guardados nunca se vuelven a
+            mostrar. Dejar un campo vacío conserva el que ya está.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Col 3: Asociación de máquinas/cajas -->
+    <div class="col-md-4">
+        <div class="tbk-card">
+            <h6><i class="bi bi-pc-display"></i> Asociación de máquinas (cajas QR)</h6>
+            <hr>
+            <table class="table table-sm mb-2" style="font-size:.72rem;">
+                <thead><tr><th>Sucursal</th><th>Caja MP (external_pos_id)</th><th class="text-center">Habilitada</th></tr></thead>
+                <tbody>
+                {% for cfg in configs_mp %}
+                    <tr {% if es_admin_mp %}style="cursor:pointer;" title="Clic para editar"
+                        onclick="editarConfigMP({{ cfg.id }}, {{ cfg.sucursal_id }}, '{{ cfg.nombre|escapejs }}', '{{ cfg.external_store_id|escapejs }}', '{{ cfg.external_pos_id|escapejs }}', {{ cfg.habilitado|yesno:'true,false' }}){% endif %}">
+                        <td>{{ cfg.sucursal_alias }}{% if cfg.es_principal %} ⭐{% endif %}</td>
+                        <td class="font-monospace">{{ cfg.external_pos_id|default:'—' }}</td>
+                        <td class="text-center">{% if cfg.habilitado %}✅{% else %}❌{% endif %}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="3" class="text-muted text-center">Sin cajas asociadas</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+
+            {% if es_admin_mp %}
+            <hr>
+            <input type="hidden" id="mpCfgId" value="">
+            <label class="form-label-sm">Sucursal</label>
+            <select class="form-control-sm-pos mb-2" id="mpCfgSucursal">
+                {% for s in sucursales_mp %}<option value="{{ s.id }}">{{ s.alias }}</option>{% endfor %}
+            </select>
+            <label class="form-label-sm">Nombre de la caja</label>
+            <input type="text" class="form-control-sm-pos mb-2" id="mpCfgNombre" value="Caja principal">
+            <label class="form-label-sm">external_store_id (sucursal en MP)</label>
+            <input type="text" class="form-control-sm-pos mb-2" id="mpCfgStore" placeholder="RETAIL-SUC5">
+            <label class="form-label-sm">external_pos_id (caja en MP)</label>
+            <input type="text" class="form-control-sm-pos mb-2" id="mpCfgPos" placeholder="RETAIL-SUC5-CAJA1">
+            <div class="form-check mb-2" style="font-size:.76rem;">
+                <input class="form-check-input" type="checkbox" id="mpCfgHabilitado">
+                <label class="form-check-label" for="mpCfgHabilitado">Habilitada (muestra el botón MP QR en el POS)</label>
+            </div>
+            <button class="tbk-btn tbk-btn-primary" onclick="guardarConfigMP()">
+                <i class="bi bi-save"></i> Guardar asociación
+            </button>
+            <button class="tbk-btn btn-secondary" onclick="limpiarFormConfigMP()">
+                <i class="bi bi-eraser"></i> Nueva
+            </button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+</div><!-- /tab-mp -->
+</div><!-- /tab-content -->
+
 </div>
 </div>
 
@@ -1224,6 +1377,81 @@ function agregarLogTransaccion(resultado, montoEnviado) {
         </div>
     `;
     log.innerHTML = item + log.innerHTML;
+}
+
+// ==================== PESTAÑA MERCADO PAGO ====================
+
+function _csrfMP() {
+    const el = document.querySelector('#tab-mp input[name=csrfmiddlewaretoken]');
+    return el ? el.value : '';
+}
+
+function copiarWebhookMP() {
+    const input = document.getElementById('mpWebhookUrl');
+    if (!input) return;
+    navigator.clipboard.writeText(input.value).then(function () {
+        Swal.fire({ icon: 'success', title: 'URL copiada', timer: 1200, showConfirmButton: false });
+    }).catch(function () {
+        input.select();
+        document.execCommand('copy');
+    });
+}
+
+function _postGestionMP(url, datos, exitoMsg) {
+    const fd = new FormData();
+    Object.keys(datos).forEach(k => fd.append(k, datos[k]));
+    fd.append('csrfmiddlewaretoken', _csrfMP());
+    fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                Swal.fire({ icon: 'success', title: exitoMsg, timer: 1400, showConfirmButton: false })
+                    .then(() => window.location.reload());
+            } else {
+                Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: data.error || 'Error desconocido' });
+            }
+        })
+        .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
+}
+
+function guardarCuentaMP() {
+    const token = document.getElementById('mpCuentaToken').value.trim();
+    const secret = document.getElementById('mpCuentaSecret').value.trim();
+    _postGestionMP('/app/pos/mercadopago/gestion/cuenta/', {
+        empresa_id: document.getElementById('mpCuentaEmpresa').value,
+        mp_user_id: document.getElementById('mpCuentaUserId').value.trim(),
+        access_token: token,
+        webhook_secret: secret
+    }, 'Cuenta guardada (credenciales cifradas)');
+}
+
+function guardarConfigMP() {
+    _postGestionMP('/app/pos/mercadopago/gestion/config/', {
+        config_id: document.getElementById('mpCfgId').value,
+        sucursal_id: document.getElementById('mpCfgSucursal').value,
+        nombre: document.getElementById('mpCfgNombre').value.trim() || 'Caja principal',
+        external_store_id: document.getElementById('mpCfgStore').value.trim(),
+        external_pos_id: document.getElementById('mpCfgPos').value.trim(),
+        habilitado: document.getElementById('mpCfgHabilitado').checked ? '1' : '0'
+    }, 'Asociación de caja guardada');
+}
+
+function editarConfigMP(id, sucursalId, nombre, storeId, posId, habilitado) {
+    document.getElementById('mpCfgId').value = id;
+    document.getElementById('mpCfgSucursal').value = sucursalId;
+    document.getElementById('mpCfgNombre').value = nombre;
+    document.getElementById('mpCfgStore').value = storeId;
+    document.getElementById('mpCfgPos').value = posId;
+    document.getElementById('mpCfgHabilitado').checked = habilitado;
+    document.getElementById('tab-mp-btn').click();
+}
+
+function limpiarFormConfigMP() {
+    document.getElementById('mpCfgId').value = '';
+    document.getElementById('mpCfgNombre').value = 'Caja principal';
+    document.getElementById('mpCfgStore').value = '';
+    document.getElementById('mpCfgPos').value = '';
+    document.getElementById('mpCfgHabilitado').checked = false;
 }
 
 window.addEventListener('load', function () {

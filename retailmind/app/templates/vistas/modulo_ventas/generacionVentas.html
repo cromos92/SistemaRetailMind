@@ -1770,6 +1770,101 @@
     </div>
 </div>
 
+
+<!-- Modal Descuento a la Diferencia de un Ticket de Cambio (PIN de administrador) -->
+<div class="modal fade" id="modalDescuentoCambio" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="ri-exchange-line"></i> Descuento a la Diferencia de Cambio
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info border-0 py-2 small mb-3">
+                    <i class="ri-information-line me-1"></i>
+                    En un ticket de cambio los productos no se editan (el stock ya se movió al
+                    aprobar). Solo se puede rebajar <strong>la diferencia a cobrar</strong>, y
+                    requiere el <strong>PIN de un administrador</strong>.
+                </div>
+
+                <div class="card bg-light mb-3">
+                    <div class="card-body py-2">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <small class="text-muted d-block">Diferencia actual</small>
+                                <strong class="fs-5 text-primary" id="dctoCambioTotalActual">$0</strong>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block">Queda a cobrar</small>
+                                <strong class="fs-5 text-success" id="dctoCambioTotalFinal">$0</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Tipo de Descuento</label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="tipoDescuentoCambio" id="dctoCambioPorcentaje" value="PORCENTAJE" checked>
+                        <label class="btn btn-outline-warning" for="dctoCambioPorcentaje">
+                            <i class="ri-percent-line"></i> Porcentaje
+                        </label>
+                        <input type="radio" class="btn-check" name="tipoDescuentoCambio" id="dctoCambioMonto" value="MONTO">
+                        <label class="btn btn-outline-warning" for="dctoCambioMonto">
+                            <i class="ri-money-dollar-circle-line"></i> Monto
+                        </label>
+                        <input type="radio" class="btn-check" name="tipoDescuentoCambio" id="dctoCambioPrecioFinal" value="PRECIO_FINAL">
+                        <label class="btn btn-outline-success" for="dctoCambioPrecioFinal">
+                            <i class="ri-price-tag-line"></i> Total Final
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold" id="labelDescuentoCambio">Porcentaje de Descuento</label>
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text" id="dctoCambioSimbolo">%</span>
+                        <input type="number" class="form-control form-control-lg" id="valorDescuentoCambio"
+                               placeholder="0" min="0" step="1" oninput="actualizarPreviewDescuentoCambio()">
+                    </div>
+                    <small class="text-muted" id="dctoCambioAyuda">Porcentaje a descontar de la diferencia</small>
+                    <div id="advertenciaDescuentoCambio" class="text-danger fw-bold mt-1" style="display: none;"></div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">
+                        <i class="ri-chat-quote-line"></i> Justificación (obligatoria)
+                    </label>
+                    <textarea class="form-control" id="motivoDescuentoCambio" rows="2" maxlength="500"
+                              placeholder="Ej: acuerdo con el cliente por la demora en el cambio."></textarea>
+                </div>
+
+                <div class="alert alert-warning py-2 mb-2">
+                    <i class="ri-shield-keyhole-line"></i> <strong>Autorización de administrador</strong>
+                </div>
+                <label class="form-label fw-bold">
+                    <i class="ri-lock-password-line"></i> PIN de 6 dígitos:
+                </label>
+                <input type="password" class="form-control form-control-lg text-center" id="pinDescuentoCambio"
+                       inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••"
+                       style="letter-spacing: 6px; border: 2px solid #ffc107;">
+                <small class="text-muted">
+                    El administrador lo configura en <strong>Mi Perfil &rarr; PIN de Autorización</strong>.
+                </small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning btn-lg" id="btnConfirmarDescuentoCambio"
+                        onclick="confirmarDescuentoCambio()">
+                    <i class="ri-check-line"></i> Aplicar Descuento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Nueva Empresa -->
 <div class="modal fade" id="modalNuevaEmpresa" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -4297,6 +4392,7 @@ document.addEventListener('DOMContentLoaded', function() {
         buscarCliente: '{% url "buscar_cliente_rut" %}',
         verificarCorrelativos: '{% url "verificar_correlativos_disponibles" %}',
         anularTicket: '{% url "anular_ticket_pendiente" %}',
+        descuentoDiferenciaCambio: '{% url "aplicar_descuento_diferencia_cambio" %}',
         // APIs de cotizaciones
         listarCotizaciones: '{% url "listar_cotizaciones" %}',
         cargarCotizacionComoTicket: (id) => `/app/api/cotizaciones/cargar-como-ticket/${id}/`
@@ -6175,13 +6271,23 @@ document.addEventListener('DOMContentLoaded', function() {
             if (quickAddQty)   { quickAddQty.disabled = true; }
             if (quickAddBtn)   { quickAddBtn.disabled = true; }
             if (btnAvanzado)   { btnAvanzado.disabled = true; btnAvanzado.title = 'No se pueden agregar productos a un ticket de cambio'; }
-            if (btnDctoGlobal) { btnDctoGlobal.disabled = true; btnDctoGlobal.title = 'No se pueden aplicar descuentos a un ticket de cambio'; }
+            // Sí se puede descontar, pero solo sobre la DIFERENCIA y con PIN de
+            // administrador: mostrarModalDescuentoGlobal() deriva al modal correcto.
+            if (btnDctoGlobal) {
+                btnDctoGlobal.disabled = false;
+                btnDctoGlobal.title = 'Descontar sobre la diferencia a cobrar (requiere PIN de administrador)';
+                btnDctoGlobal.innerHTML = '<i class="ri-price-tag-3-line me-1"></i> Dcto. Diferencia <i class="ri-lock-2-line" style="font-size:0.7rem;opacity:0.8"></i>';
+            }
         } else {
             if (quickAddInput) { quickAddInput.disabled = false; quickAddInput.placeholder = 'Escanea código de barras o escribe SKU / nombre…'; }
             if (quickAddQty)   { quickAddQty.disabled = false; }
             if (quickAddBtn)   { quickAddBtn.disabled = false; }
             if (btnAvanzado)   { btnAvanzado.disabled = false; btnAvanzado.title = 'Búsqueda avanzada con filtros (F3)'; }
-            if (btnDctoGlobal) { btnDctoGlobal.disabled = false; btnDctoGlobal.title = 'Aplicar descuento distribuido a toda la venta (Ctrl+D)'; }
+            if (btnDctoGlobal) {
+                btnDctoGlobal.disabled = false;
+                btnDctoGlobal.title = 'Aplicar descuento distribuido a toda la venta (Ctrl+D)';
+                btnDctoGlobal.innerHTML = '<i class="ri-price-tag-3-line me-1"></i> Dcto. Global <kbd style="font-size:0.55rem;opacity:0.7">Ctrl+D</kbd>';
+            }
         }
         // ──────────────────────────────────────────────────────────────────────
 
@@ -6225,11 +6331,19 @@ document.addEventListener('DOMContentLoaded', function() {
         let htmlHeader = htmlStockAlert;
         if (esCambioDevolucion) {
             // Separar productos devueltos (precio negativo) de nuevos (precio positivo)
-            const productosDevueltos = productos.filter(p => (p.precio_unitario || p.precio) < 0);
+            // Rebajas de administrador (descuento a la diferencia, ajuste desde el
+            // módulo de cambios): son líneas manuales negativas SIN producto, así
+            // que no son mercadería devuelta y van en su propio badge — si se
+            // sumaran a "Devuelve", el encabezado diría que el cliente entregó
+            // más ropa de la que entregó.
+            const esRebajaAdmin = p => !p.producto_talla_id && (p.precio_unitario || p.precio) < 0;
+            const productosDevueltos = productos.filter(p => (p.precio_unitario || p.precio) < 0 && !esRebajaAdmin(p));
             const productosNuevos = productos.filter(p => (p.precio_unitario || p.precio) >= 0);
             const totalDevuelto = productosDevueltos.reduce((sum, p) => sum + Math.abs((p.precio_unitario || p.precio) * p.cantidad), 0);
             const totalNuevo = productosNuevos.reduce((sum, p) => sum + ((p.precio_unitario || p.precio) * p.cantidad), 0);
-            const diferencia = totalNuevo - totalDevuelto;
+            const totalRebajas = productos.filter(esRebajaAdmin)
+                .reduce((sum, p) => sum + Math.abs((p.precio_unitario || p.precio) * p.cantidad), 0);
+            const diferencia = totalNuevo - totalDevuelto - totalRebajas;
             
             htmlHeader += `
                 <tr class="table-warning">
@@ -6243,6 +6357,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <div class="d-flex gap-3">
                                 <span class="badge bg-danger">↓ Devuelve: ${formatearMoneda(totalDevuelto)}</span>
                                 <span class="badge bg-success">↑ Recibe: ${formatearMoneda(totalNuevo)}</span>
+                                ${totalRebajas > 0 ? `<span class="badge bg-warning text-dark">🏷️ Descuento: ${formatearMoneda(totalRebajas)}</span>` : ''}
                                 <span class="badge ${diferencia > 0 ? 'bg-primary' : diferencia < 0 ? 'bg-info' : 'bg-secondary'}">
                                     ${diferencia > 0 ? '💰 Cobrar: ' : diferencia < 0 ? '💵 Devolver: ' : '✓ Sin diferencia: '}${formatearMoneda(Math.abs(diferencia))}
                                 </span>
@@ -6290,9 +6405,14 @@ document.addEventListener('DOMContentLoaded', function() {
             // ✅ Ítem pendiente de despacho (sin SKU asignado)
             const esPendienteDespacho = producto.es_pendiente_despacho === true;
             
-            // ✅ Para tickets de cambio: detectar si es producto devuelto o nuevo
-            const esProductoDevuelto = esCambioDevolucion && precioOriginal < 0;
+            // ✅ Para tickets de cambio: detectar si es producto devuelto o nuevo.
+            //    La rebaja de administrador (descuento a la diferencia / ajuste)
+            //    también es una línea negativa, pero NO es mercadería devuelta:
+            //    va sin producto asociado y se pinta como descuento.
+            const esRebajaAdminLinea = esCambioDevolucion && !producto.producto_talla_id && precioOriginal < 0;
+            const esProductoDevuelto = esCambioDevolucion && precioOriginal < 0 && !esRebajaAdminLinea;
             const esProductoNuevo = esCambioDevolucion && precioOriginal >= 0;
+            const esLineaNegativa = esProductoDevuelto || esRebajaAdminLinea;
             
             // ─── Stock check (solo tickets normales, no pendientes) ──────────────
             const stockDisp    = (!esCambioDevolucion && !esPendienteDespacho) ? (parseInt(producto.stock) || 0) : Infinity;
@@ -6321,6 +6441,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (esPendienteDespacho) {
                 rowClass = 'table-warning bg-opacity-25';
                 tipoProductoBadge = '<span class="badge bg-warning text-dark me-2">📦 Pend.</span>';
+            } else if (esRebajaAdminLinea) {
+                rowClass = 'table-warning bg-opacity-25';
+                tipoProductoBadge = '<span class="badge bg-warning text-dark me-2">🏷️ DESCUENTO</span>';
             } else if (esProductoDevuelto) {
                 rowClass = 'table-danger bg-opacity-25';
                 tipoProductoBadge = '<span class="badge bg-danger me-2">↓ DEVUELVE</span>';
@@ -6386,8 +6509,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     `;})()}
                 </td>
                 <td class="text-end">
-                    ${esProductoDevuelto ? `
-                        <span class="text-danger fw-bold">-${formatearMoneda(precioMostrar)}</span>
+                    ${esLineaNegativa ? `
+                        <span class="fw-bold ${esRebajaAdminLinea ? 'text-warning' : 'text-danger'}">-${formatearMoneda(precioMostrar)}</span>
                     ` : (descuento > 0 ? `
                         <span class="text-decoration-line-through text-muted small">${formatearMoneda(precioOriginal)}</span><br>
                         <span class="text-success fw-bold">${formatearMoneda(precioConDescuento)}</span>
@@ -6399,8 +6522,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     ` : formatearMoneda(precioMostrar)))}
                 </td>
                 <td class="text-end">
-                    ${esProductoDevuelto ? `
-                        <span class="badge bg-danger">Devolución</span>
+                    ${esLineaNegativa ? `
+                        <span class="badge ${esRebajaAdminLinea ? 'bg-warning text-dark' : 'bg-danger'}">${esRebajaAdminLinea ? 'Descuento' : 'Devolución'}</span>
                     ` : (descuento > 0 ? `
                         <div>
                             <span class="badge bg-warning text-dark">-${formatearMoneda(descuento * producto.cantidad)}</span>
@@ -6408,8 +6531,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     ` : '-')}
                 </td>
-                <td class="text-end fw-medium ${esProductoDevuelto ? 'text-danger' : ''}">
-                    ${esProductoDevuelto ? '-' : ''}${formatearMoneda(subtotalMostrar)}
+                <td class="text-end fw-medium ${esRebajaAdminLinea ? 'text-warning' : (esProductoDevuelto ? 'text-danger' : '')}">
+                    ${esLineaNegativa ? '-' : ''}${formatearMoneda(subtotalMostrar)}
                 </td>
                 <td class="text-center">
                     ${esCambioDevolucion ? `
@@ -9008,8 +9131,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // === FUNCIONES DE DESCUENTO GLOBAL ===
 
     function mostrarModalDescuentoGlobal() {
-        if (ticketActual && ticketActual.modulo_origen === 'CAMBIO_DEVOLUCION') {
-            mostrarNotificacion('No se pueden aplicar descuentos en un ticket de cambio/devolución', 'warning');
+        if (esTicketCambio()) {
+            // En un ticket de cambio no hay descuento que repartir entre líneas:
+            // se rebaja la diferencia a cobrar, y eso exige PIN de administrador.
+            mostrarModalDescuentoCambio();
             return;
         }
         if (!ticketActual || !ticketActual.productos || ticketActual.productos.length === 0) {
@@ -9265,6 +9390,246 @@ document.addEventListener('DOMContentLoaded', function() {
                 guardarEstadoPOS();
             }
         });
+    }
+
+
+    // === DESCUENTO A LA DIFERENCIA DE UN TICKET DE CAMBIO (PIN de admin) ===
+    //
+    // En un ticket de cambio las líneas NO se editan: el stock ya se movió al
+    // aprobar el cambio y `registrar_pagos_ticket` ignora el payload de
+    // productos para este módulo, así que un descuento aplicado solo en el
+    // navegador se perdería al cobrar (y el DTE saldría por el monto original).
+    // Por eso este flujo va entero al servidor: allá se materializa como una
+    // línea negativa del ticket y después se recarga el ticket desde la BD.
+
+    function mostrarModalDescuentoCambio() {
+        if (!esTicketCambio()) {
+            mostrarNotificacion('Este descuento solo aplica a tickets de cambio/devolución', 'warning');
+            return;
+        }
+        const total = Math.round((ticketActual.totales && ticketActual.totales.total) || 0);
+        if (total <= 0) {
+            mostrarNotificacion(
+                'Este ticket no tiene diferencia a cobrar: no hay nada que descontar',
+                'warning'
+            );
+            return;
+        }
+
+        document.getElementById('valorDescuentoCambio').value = '';
+        document.getElementById('motivoDescuentoCambio').value = '';
+        document.getElementById('pinDescuentoCambio').value = '';
+        document.getElementById('dctoCambioPorcentaje').checked = true;
+
+        document.querySelectorAll('input[name="tipoDescuentoCambio"]').forEach(radio => {
+            radio.onchange = actualizarPreviewDescuentoCambio;
+        });
+
+        actualizarPreviewDescuentoCambio();
+        new bootstrap.Modal(document.getElementById('modalDescuentoCambio')).show();
+    }
+
+    /** Traduce lo tecleado en el modal a pesos de rebaja. Mismo cálculo que el backend. */
+    function calcularRebajaDescuentoCambio() {
+        const total = Math.round((ticketActual && ticketActual.totales && ticketActual.totales.total) || 0);
+        const tipoEl = document.querySelector('input[name="tipoDescuentoCambio"]:checked');
+        const tipo = tipoEl ? tipoEl.value : 'PORCENTAJE';
+        const valor = parseFloat(document.getElementById('valorDescuentoCambio').value) || 0;
+
+        let rebaja = 0;
+        if (tipo === 'PORCENTAJE') {
+            rebaja = Math.round(total * Math.min(valor, 100) / 100);
+        } else if (tipo === 'MONTO') {
+            rebaja = Math.round(valor);
+        } else {
+            rebaja = total - Math.round(valor);
+        }
+        return { total, tipo, valor, rebaja };
+    }
+
+    function actualizarPreviewDescuentoCambio() {
+        const { total, tipo, valor, rebaja } = calcularRebajaDescuentoCambio();
+
+        const simbolo = document.getElementById('dctoCambioSimbolo');
+        const label = document.getElementById('labelDescuentoCambio');
+        const ayuda = document.getElementById('dctoCambioAyuda');
+
+        if (tipo === 'PORCENTAJE') {
+            simbolo.textContent = '%';
+            label.textContent = 'Porcentaje de Descuento';
+            ayuda.textContent = 'Porcentaje a descontar de la diferencia';
+        } else if (tipo === 'MONTO') {
+            simbolo.textContent = '$';
+            label.textContent = 'Monto a Descontar';
+            ayuda.textContent = 'Pesos a rebajar de la diferencia';
+        } else {
+            simbolo.textContent = '$';
+            label.textContent = 'Total Final a Cobrar';
+            ayuda.textContent = 'Monto que el cliente terminará pagando';
+        }
+
+        document.getElementById('dctoCambioTotalActual').textContent = formatearMoneda(total);
+        document.getElementById('dctoCambioTotalFinal').textContent =
+            formatearMoneda(Math.max(total - rebaja, 0));
+
+        // Los mismos dos cortes que aplica el backend, adelantados acá para que
+        // el cajero no tenga que gastar un intento de PIN para enterarse.
+        let error = '';
+        if (valor > 0) {
+            if (rebaja <= 0) {
+                error = 'El descuento debe rebajar al menos $1.';
+            } else if (rebaja >= total) {
+                error = 'No puede dejar la diferencia en $0. Para perdonar el cobro completo use "Condonar" en Cambios y Devoluciones.';
+            }
+        }
+        const aviso = document.getElementById('advertenciaDescuentoCambio');
+        aviso.textContent = error;
+        aviso.style.display = error ? 'block' : 'none';
+
+        const btn = document.getElementById('btnConfirmarDescuentoCambio');
+        if (btn) btn.disabled = !!error;
+    }
+
+    async function confirmarDescuentoCambio() {
+        if (!esTicketCambio()) {
+            mostrarNotificacion('Este descuento solo aplica a tickets de cambio/devolución', 'warning');
+            return;
+        }
+
+        const { total, tipo, valor, rebaja } = calcularRebajaDescuentoCambio();
+        const motivo = (document.getElementById('motivoDescuentoCambio').value || '').trim();
+        const pin = (document.getElementById('pinDescuentoCambio').value || '').trim();
+
+        if (valor <= 0) {
+            mostrarNotificacion('Ingrese el valor del descuento', 'warning');
+            document.getElementById('valorDescuentoCambio').focus();
+            return;
+        }
+        if (rebaja <= 0) {
+            mostrarNotificacion('El descuento debe rebajar al menos $1', 'warning');
+            return;
+        }
+        if (rebaja >= total) {
+            mostrarNotificacion(
+                'El descuento no puede dejar la diferencia en $0. Para perdonar todo el cobro use "Condonar" en Cambios y Devoluciones.',
+                'warning'
+            );
+            return;
+        }
+        if (motivo.length < 5) {
+            mostrarNotificacion('Escriba una justificación (mínimo 5 caracteres)', 'warning');
+            document.getElementById('motivoDescuentoCambio').focus();
+            return;
+        }
+        if (!/^\d{6}$/.test(pin)) {
+            mostrarNotificacion('El PIN de autorización debe tener 6 dígitos', 'warning');
+            document.getElementById('pinDescuentoCambio').focus();
+            return;
+        }
+
+        const btn = document.getElementById('btnConfirmarDescuentoCambio');
+        const htmlPrevio = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="ri-loader-4-line"></i> Aplicando…';
+        }
+
+        try {
+            const response = await fetch(apiUrls.descuentoDiferenciaCambio, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                },
+                body: JSON.stringify({
+                    correlativo: ticketActual.ticket_id || ticketActual.correlativo,
+                    tipo: tipo,
+                    valor: valor,
+                    motivo: motivo,
+                    pin: pin,
+                }),
+            });
+            const data = await response.json();
+
+            if (!data.success) {
+                mostrarNotificacion(data.error || 'No se pudo aplicar el descuento', 'error');
+                const inputPin = document.getElementById('pinDescuentoCambio');
+                inputPin.value = '';
+                inputPin.focus();
+                return;
+            }
+
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalDescuentoCambio'));
+            if (modal) modal.hide();
+
+            mostrarNotificacion(data.message, 'success', 6000);
+            await recargarTicketCambioDesdeServidor(data.correlativo);
+
+        } catch (error) {
+            console.error('Error al aplicar descuento a la diferencia:', error);
+            mostrarNotificacion('Error de conexión al aplicar el descuento', 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = htmlPrevio;
+            }
+        }
+    }
+
+    /**
+     * Relee el ticket de cambio desde la BD tras el descuento.
+     *
+     * No usa `cargarTicket()` a propósito: esa función dispara el diálogo de
+     * borrador y la rama de cotizaciones, que acá no aplican. Y conserva
+     * `pagosActuales`, porque los pagos que el cajero ya tecleó en el paso 3
+     * viven solo en el navegador hasta finalizar la venta.
+     */
+    async function recargarTicketCambioDesdeServidor(correlativo) {
+        try {
+            const response = await fetch(apiUrls.buscarTicket, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                },
+                body: JSON.stringify({ correlativo }),
+            });
+            const data = await response.json();
+            if (!data.success) {
+                mostrarNotificacion(
+                    'El descuento se aplicó, pero no se pudo refrescar el ticket. Vuelva a cargarlo.',
+                    'warning'
+                );
+                return;
+            }
+
+            const pagosEnCurso = pagosActuales;
+            ticketActual = data.ticket;
+            pagosActuales = pagosEnCurso;
+
+            recalcularTotalesTicket();
+            cargarProductosTicket(ticketActual.productos);
+            actualizarListaPagos();
+            actualizarResumenVenta();
+
+            // Si ya había pagos tecleados, el descuento pudo dejarlos por sobre
+            // el nuevo total: avisar acá y no en el 400 del cobro.
+            const totalPagado = pagosActuales.reduce((sum, p) => sum + (p.monto || 0), 0);
+            const nuevoTotal = (ticketActual.totales && ticketActual.totales.total) || 0;
+            if (totalPagado > nuevoTotal) {
+                mostrarNotificacion(
+                    `Los pagos registrados (${formatearMoneda(totalPagado)}) exceden el nuevo total (${formatearMoneda(nuevoTotal)}). Ajústelos antes de finalizar.`,
+                    'warning',
+                    8000
+                );
+            }
+        } catch (error) {
+            console.error('Error al recargar el ticket de cambio:', error);
+            mostrarNotificacion(
+                'El descuento se aplicó, pero no se pudo refrescar el ticket. Vuelva a cargarlo.',
+                'warning'
+            );
+        }
     }
 
     // === FUNCIONES DE FINALIZACIÓN ===
@@ -11806,6 +12171,11 @@ body {
     window.actualizarPreviewDescuentoGlobal = actualizarPreviewDescuentoGlobal;
     window.confirmarDescuentoGlobal = confirmarDescuentoGlobal;
     window.quitarTodosLosDescuentos = quitarTodosLosDescuentos;
+
+    // Descuento a la diferencia de un ticket de cambio (PIN de administrador)
+    window.mostrarModalDescuentoCambio = mostrarModalDescuentoCambio;
+    window.actualizarPreviewDescuentoCambio = actualizarPreviewDescuentoCambio;
+    window.confirmarDescuentoCambio = confirmarDescuentoCambio;
     
     // Funciones de pago rápido y denominaciones
     window.pagoRapidoEfectivoTotal = pagoRapidoEfectivoTotal;
