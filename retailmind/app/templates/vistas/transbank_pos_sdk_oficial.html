@@ -452,6 +452,14 @@
 <div class="tab-pane fade" id="tab-mp" role="tabpanel">
 {% csrf_token %}
 
+{% if mp_migraciones_pendientes %}
+<div class="alert alert-danger py-2 px-3 mb-2" style="font-size:.78rem;">
+    <i class="bi bi-database-x"></i> <strong>Faltan las migraciones de Mercado Pago
+    (0222→0226) en esta base de datos.</strong> Hasta aplicarlas no se pueden guardar
+    cuentas ni asociar cajas: <code>python manage.py migrate app</code>.
+</div>
+{% endif %}
+
 {% if not es_admin_mp %}
 <div class="alert alert-warning py-2 px-3 mb-2" style="font-size:.78rem;">
     <i class="bi bi-lock-fill"></i> <strong>Solo lectura.</strong>

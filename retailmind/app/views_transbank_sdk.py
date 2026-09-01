@@ -46,16 +46,30 @@ def gestion_transbank_pos_sdk(request):
     # Todos ven el estado; el ingreso de credenciales/webhook y la asociación
     # de cajas queda restringido a roles administrativos (el guard duro está
     # en los endpoints de views_mercadopago, esto solo controla la UI).
+    from .models import Empresa, Sucursal
+    context['es_admin_mp'] = getattr(request.user, 'rol', '') in ('administrador', 'administracion')
+    # Empresas candidatas a cuenta MP: las que tienen sucursales (dueñas de
+    # tiendas). NO filtrar por esProveedor: las empresas madre de las cadenas
+    # (ej. Nicole Andrea) también operan como CD/proveedoras y ese flag las
+    # dejaba fuera del select. Estas tablas existen siempre — se cargan FUERA
+    # del try de las tablas MP para que el select no quede vacío si las
+    # migraciones 0222-0226 aún no están aplicadas.
+    context['empresas_mp'] = (
+        Empresa.objects.filter(sucursales_app__isnull=False)
+        .distinct().order_by('nombre')
+    )
+    context['sucursales_mp'] = Sucursal.objects.order_by('alias')
+    context['cuentas_mp'] = []
+    context['configs_mp'] = []
+    context['mp_migraciones_pendientes'] = False
     try:
-        from .models import Empresa, MercadoPagoConfig, MercadoPagoCuenta, Sucursal
-        context['es_admin_mp'] = getattr(request.user, 'rol', '') in ('administrador', 'administracion')
+        from .models import MercadoPagoConfig, MercadoPagoCuenta
         context['cuentas_mp'] = [{
             'empresa_nombre': c.empresa.nombre or c.empresa.razon_social,
             'tiene_token': bool(c.access_token_cifrado),
             'tiene_secret': bool(c.webhook_secret_cifrado),
             'activo': c.activo,
         } for c in MercadoPagoCuenta.objects.select_related('empresa').all()]
-        context['empresas_mp'] = Empresa.objects.filter(esProveedor=False).order_by('nombre')
         context['configs_mp'] = [{
             'id': cfg.id,
             'sucursal_id': cfg.sucursal_id,
@@ -66,14 +80,11 @@ def gestion_transbank_pos_sdk(request):
             'habilitado': cfg.habilitado,
             'es_principal': cfg.es_principal,
         } for cfg in MercadoPagoConfig.objects.select_related('sucursal').order_by('sucursal__alias', 'nombre')]
-        context['sucursales_mp'] = Sucursal.objects.order_by('alias')
     except Exception as e:
-        logger.warning(f"No se pudo cargar datos Mercado Pago: {e}")
-        context.setdefault('es_admin_mp', False)
-        context.setdefault('cuentas_mp', [])
-        context.setdefault('empresas_mp', [])
-        context.setdefault('configs_mp', [])
-        context.setdefault('sucursales_mp', [])
+        # Tablas MP inexistentes (migraciones sin aplicar) u otro error de BD:
+        # la pestaña avisa en vez de mostrar selects vacíos sin explicación.
+        logger.warning(f"No se pudo cargar datos Mercado Pago (¿migraciones pendientes?): {e}")
+        context['mp_migraciones_pendientes'] = True
 
     return render(request, 'vistas/transbank_pos_sdk_oficial.html', context)
 
